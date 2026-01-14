@@ -96,7 +96,7 @@ export default function Home() {
       {/* Query Form */}
       <div
         style={{
-          backgroundColor: 'var(--nyc-gray-90)',
+          backgroundColor: 'var(--card-background)',
           borderRadius: '4px',
           padding: '32px',
           marginBottom: '48px',

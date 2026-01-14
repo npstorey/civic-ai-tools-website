@@ -45,6 +45,7 @@
   --accent: var(--nyc-blue-40);
   --accent-hover: var(--nyc-blue-10);
   --accent-light: var(--nyc-blue-80);
+  --card-background: var(--nyc-gray-90);
 }
 
 @theme inline {
@@ -63,6 +64,7 @@
     --text-secondary: var(--nyc-gray-90);
     --text-muted: var(--nyc-gray-70);
     --border-color: var(--nyc-gray-30);
+    --card-background: var(--nyc-gray-60);
   }
 }
 

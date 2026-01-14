@@ -36,7 +36,7 @@ export default function AboutPage() {
       >
         <div
           style={{
-            backgroundColor: 'var(--nyc-gray-90)',
+            backgroundColor: 'var(--card-background)',
             borderRadius: '4px',
             padding: '24px',
           }}
@@ -110,7 +110,7 @@ export default function AboutPage() {
 
       <div
         style={{
-          backgroundColor: 'var(--nyc-gray-90)',
+          backgroundColor: 'var(--card-background)',
           borderRadius: '4px',
           padding: '24px',
           marginBottom: '64px',

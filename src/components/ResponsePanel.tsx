@@ -43,7 +43,7 @@ export default function ResponsePanel({
       <div
         style={{
           padding: '16px 24px',
-          backgroundColor: isMcp ? 'rgba(0, 183, 3, 0.1)' : 'var(--nyc-gray-90)',
+          backgroundColor: isMcp ? 'rgba(0, 183, 3, 0.1)' : 'var(--card-background)',
           borderBottom: `1px solid ${isMcp ? 'var(--nyc-success)' : 'var(--border-color)'}`,
         }}
       >
@@ -125,7 +125,7 @@ export default function ResponsePanel({
           style={{
             borderTop: `1px solid ${isMcp ? 'var(--nyc-success)' : 'var(--border-color)'}`,
             padding: '16px 24px',
-            backgroundColor: isMcp ? 'rgba(0, 183, 3, 0.05)' : 'var(--nyc-gray-90)',
+            backgroundColor: isMcp ? 'rgba(0, 183, 3, 0.05)' : 'var(--card-background)',
           }}
         >
           <div

@@ -98,7 +98,7 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
                 fontSize: '14px',
                 padding: '6px 12px',
                 borderRadius: '4px',
-                backgroundColor: 'var(--nyc-gray-90)',
+                backgroundColor: 'var(--card-background)',
                 color: 'var(--text-secondary)',
                 border: 'none',
                 cursor: isLoading ? 'not-allowed' : 'pointer',
@@ -108,7 +108,7 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
                 if (!isLoading) e.currentTarget.style.backgroundColor = 'var(--nyc-gray-80)';
               }}
               onMouseOut={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--nyc-gray-90)';
+                e.currentTarget.style.backgroundColor = 'var(--card-background)';
               }}
             >
               {example.length > 45 ? example.slice(0, 45) + '...' : example}
