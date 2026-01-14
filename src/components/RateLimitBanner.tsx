@@ -41,18 +41,18 @@ export default function RateLimitBanner() {
   const isLow = rateLimit.remaining <= 2;
   const isExhausted = rateLimit.remaining === 0;
 
-  // NYC Design System semantic colors
-  const bgColor = isExhausted
-    ? 'rgba(236, 19, 30, 0.1)' // Error red background
+  // Use card background with border for status indication
+  const borderColor = isExhausted
+    ? 'var(--nyc-error)'
     : isLow
-    ? 'rgba(255, 179, 32, 0.15)' // Caution yellow background
-    : 'rgba(112, 186, 255, 0.15)'; // Info blue background
+    ? 'var(--nyc-caution)'
+    : 'var(--nyc-info)';
 
   const textColor = isExhausted
     ? 'var(--nyc-error)'
     : isLow
-    ? '#996B00' // Darker caution for contrast
-    : 'var(--nyc-blue-10)';
+    ? 'var(--nyc-caution)'
+    : 'var(--nyc-info)';
 
   return (
     <div
@@ -60,7 +60,8 @@ export default function RateLimitBanner() {
         borderRadius: '4px',
         padding: '12px 16px',
         fontSize: '16px',
-        backgroundColor: bgColor,
+        backgroundColor: 'var(--card-background)',
+        border: `1px solid ${borderColor}`,
         color: textColor,
       }}
     >
