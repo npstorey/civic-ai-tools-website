@@ -26,7 +26,13 @@ export default function ComparisonDisplay({
   isLoading,
 }: ComparisonDisplayProps) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gap: '24px',
+      }}
+    >
       <ResponsePanel
         title="Without MCP"
         subtitle="LLM using only training data"

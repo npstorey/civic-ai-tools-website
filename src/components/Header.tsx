@@ -8,22 +8,47 @@ export default function Header() {
   const { data: session, status } = useSession();
 
   return (
-    <header className="border-b border-zinc-200 dark:border-zinc-800">
-      <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <Link href="/" className="font-semibold text-lg">
+    <header
+      className="border-b"
+      style={{
+        borderColor: 'var(--border-color)',
+        backgroundColor: 'var(--background)',
+      }}
+    >
+      <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-8">
+          <Link
+            href="/"
+            className="no-link-style"
+            style={{
+              fontFamily: 'var(--font-space-grotesk), Space Grotesk, sans-serif',
+              fontWeight: 600,
+              fontSize: '24px',
+              color: 'var(--text-primary)',
+            }}
+          >
             Civic AI Tools
           </Link>
-          <nav className="hidden sm:flex items-center gap-4 text-sm">
+          <nav className="hidden sm:flex items-center gap-6">
             <Link
               href="/"
-              className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              className="no-link-style"
+              style={{
+                color: 'var(--text-secondary)',
+                fontWeight: 500,
+                fontSize: '16px',
+              }}
             >
               Demo
             </Link>
             <Link
               href="/about"
-              className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              className="no-link-style"
+              style={{
+                color: 'var(--text-secondary)',
+                fontWeight: 500,
+                fontSize: '16px',
+              }}
             >
               About MCP
             </Link>
@@ -31,7 +56,12 @@ export default function Header() {
               href="https://github.com/npstorey/civic-ai-tools"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              style={{
+                color: 'var(--text-secondary)',
+                fontWeight: 500,
+                fontSize: '16px',
+                textDecoration: 'none',
+              }}
             >
               GitHub
             </a>
@@ -40,24 +70,34 @@ export default function Header() {
 
         <div className="flex items-center gap-4">
           {status === 'loading' ? (
-            <div className="h-8 w-20 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse" />
+            <div
+              className="h-10 w-24 rounded animate-pulse"
+              style={{ backgroundColor: 'var(--nyc-gray-80)' }}
+            />
           ) : session ? (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
               {session.user?.image && (
                 <Image
                   src={session.user.image}
                   alt={session.user.name || 'User'}
-                  width={32}
-                  height={32}
+                  width={36}
+                  height={36}
                   className="rounded-full"
                 />
               )}
-              <span className="text-sm text-zinc-600 dark:text-zinc-400 hidden sm:inline">
+              <span
+                className="hidden sm:inline"
+                style={{
+                  color: 'var(--text-secondary)',
+                  fontSize: '16px',
+                }}
+              >
                 {session.user?.name}
               </span>
               <button
                 onClick={() => signOut()}
-                className="text-sm px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="nyc-button nyc-button-secondary"
+                style={{ padding: '8px 16px', fontSize: '14px' }}
               >
                 Sign out
               </button>
@@ -65,7 +105,8 @@ export default function Header() {
           ) : (
             <button
               onClick={() => signIn('github')}
-              className="text-sm px-4 py-2 rounded-md bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 transition-colors"
+              className="nyc-button nyc-button-primary"
+              style={{ padding: '8px 16px', fontSize: '14px' }}
             >
               Sign in with GitHub
             </button>

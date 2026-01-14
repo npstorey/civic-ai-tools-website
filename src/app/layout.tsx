@@ -1,17 +1,19 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Space_Grotesk, Noto_Sans } from 'next/font/google';
 import './globals.css';
 import Providers from '@/components/Providers';
 import Header from '@/components/Header';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const spaceGrotesk = Space_Grotesk({
+  variable: '--font-space-grotesk',
   subsets: ['latin'],
+  weight: ['500', '600', '700'],
 });
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+const notoSans = Noto_Sans({
+  variable: '--font-noto-sans',
   subsets: ['latin'],
+  weight: ['400', '500', '600'],
 });
 
 export const metadata: Metadata = {
@@ -39,21 +41,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100`}
-      >
+      <body className={`${spaceGrotesk.variable} ${notoSans.variable}`}>
         <Providers>
           <div className="min-h-screen flex flex-col">
             <Header />
             <main className="flex-1">{children}</main>
-            <footer className="border-t border-zinc-200 dark:border-zinc-800 py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-              <p>
+            <footer className="border-t py-8 text-center" style={{ borderColor: 'var(--border-color)' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '16px' }}>
                 Built with{' '}
                 <a
                   href="https://github.com/npstorey/civic-ai-tools"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="underline hover:text-zinc-700 dark:hover:text-zinc-300"
                 >
                   civic-ai-tools
                 </a>{' '}
@@ -62,7 +61,6 @@ export default function RootLayout({
                   href="https://modelcontextprotocol.io"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="underline hover:text-zinc-700 dark:hover:text-zinc-300"
                 >
                   MCP
                 </a>

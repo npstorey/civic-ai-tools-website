@@ -26,45 +26,117 @@ export default function ResponsePanel({
   isLoading,
   variant,
 }: ResponsePanelProps) {
-  const borderColor =
-    variant === 'with-mcp'
-      ? 'border-green-500 dark:border-green-400'
-      : 'border-zinc-300 dark:border-zinc-700';
-  const headerBg =
-    variant === 'with-mcp'
-      ? 'bg-green-50 dark:bg-green-900/20'
-      : 'bg-zinc-50 dark:bg-zinc-800/50';
+  const isMcp = variant === 'with-mcp';
 
   return (
     <div
-      className={`border-2 rounded-lg overflow-hidden ${borderColor} flex flex-col h-full`}
+      style={{
+        border: `2px solid ${isMcp ? 'var(--nyc-success)' : 'var(--border-color)'}`,
+        borderRadius: '4px',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        overflow: 'hidden',
+      }}
     >
-      <div className={`px-4 py-3 ${headerBg}`}>
-        <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">
+      {/* Header */}
+      <div
+        style={{
+          padding: '16px 24px',
+          backgroundColor: isMcp ? 'rgba(0, 183, 3, 0.1)' : 'var(--nyc-gray-90)',
+          borderBottom: `1px solid ${isMcp ? 'var(--nyc-success)' : 'var(--border-color)'}`,
+        }}
+      >
+        <h3
+          style={{
+            fontSize: '20px',
+            fontWeight: 600,
+            margin: 0,
+            color: 'var(--text-primary)',
+          }}
+        >
           {title}
         </h3>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{subtitle}</p>
+        <p
+          style={{
+            fontSize: '14px',
+            color: 'var(--text-muted)',
+            margin: '4px 0 0 0',
+          }}
+        >
+          {subtitle}
+        </p>
       </div>
 
-      <div className="flex-1 p-4 overflow-auto">
+      {/* Content */}
+      <div
+        style={{
+          flex: 1,
+          padding: '24px',
+          overflow: 'auto',
+        }}
+      >
         {isLoading ? (
-          <div className="space-y-3">
-            <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse" />
-            <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse w-5/6" />
-            <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse w-4/6" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div
+              style={{
+                height: '16px',
+                backgroundColor: 'var(--nyc-gray-80)',
+                borderRadius: '4px',
+                animation: 'pulse 2s infinite',
+              }}
+            />
+            <div
+              style={{
+                height: '16px',
+                backgroundColor: 'var(--nyc-gray-80)',
+                borderRadius: '4px',
+                width: '85%',
+                animation: 'pulse 2s infinite',
+              }}
+            />
+            <div
+              style={{
+                height: '16px',
+                backgroundColor: 'var(--nyc-gray-80)',
+                borderRadius: '4px',
+                width: '70%',
+                animation: 'pulse 2s infinite',
+              }}
+            />
           </div>
         ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            <div className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
-              {content}
-            </div>
+          <div
+            style={{
+              whiteSpace: 'pre-wrap',
+              fontSize: '16px',
+              lineHeight: '160%',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            {content}
           </div>
         )}
       </div>
 
+      {/* Footer with metadata */}
       {!isLoading && (duration_ms || tokens_used || tools_called) && (
-        <div className="border-t border-zinc-200 dark:border-zinc-700 px-4 py-3 bg-zinc-50 dark:bg-zinc-800/50">
-          <div className="flex flex-wrap gap-4 text-xs text-zinc-500 dark:text-zinc-400">
+        <div
+          style={{
+            borderTop: `1px solid ${isMcp ? 'var(--nyc-success)' : 'var(--border-color)'}`,
+            padding: '16px 24px',
+            backgroundColor: isMcp ? 'rgba(0, 183, 3, 0.05)' : 'var(--nyc-gray-90)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '16px',
+              fontSize: '14px',
+              color: 'var(--text-muted)',
+            }}
+          >
             {duration_ms && (
               <span>
                 <strong>Time:</strong> {(duration_ms / 1000).toFixed(2)}s
@@ -78,20 +150,46 @@ export default function ResponsePanel({
           </div>
 
           {tools_called && tools_called.length > 0 && (
-            <div className="mt-3">
-              <h4 className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2">
-                MCP Tools Used:
+            <div style={{ marginTop: '16px' }}>
+              <h4
+                style={{
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: 'var(--text-secondary)',
+                  marginBottom: '8px',
+                }}
+              >
+                MCP tools used:
               </h4>
-              <div className="space-y-2">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {tools_called.map((tool, idx) => (
                   <div
                     key={idx}
-                    className="bg-green-100 dark:bg-green-900/30 rounded px-2 py-1.5"
+                    style={{
+                      backgroundColor: 'rgba(0, 183, 3, 0.15)',
+                      borderRadius: '4px',
+                      padding: '8px 12px',
+                    }}
                   >
-                    <code className="text-xs font-mono text-green-800 dark:text-green-300">
+                    <code
+                      style={{
+                        fontSize: '14px',
+                        fontFamily: 'monospace',
+                        color: 'var(--nyc-success)',
+                        fontWeight: 600,
+                      }}
+                    >
                       {tool.name}
                     </code>
-                    <div className="text-xs text-green-700 dark:text-green-400 mt-1 font-mono overflow-x-auto">
+                    <div
+                      style={{
+                        fontSize: '12px',
+                        fontFamily: 'monospace',
+                        color: 'var(--text-muted)',
+                        marginTop: '4px',
+                        overflowX: 'auto',
+                      }}
+                    >
                       {JSON.stringify(tool.args, null, 2)}
                     </div>
                   </div>
@@ -101,6 +199,13 @@ export default function ResponsePanel({
           )}
         </div>
       )}
+
+      <style jsx>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `}</style>
     </div>
   );
 }

@@ -7,35 +7,41 @@ export const opengovMcpTools: ChatCompletionTool[] = [
     function: {
       name: 'get_data',
       description: `Unified Socrata open data access tool. Supports multiple operation types:
-- search: Search for datasets matching a query on a Socrata portal
-- fetch: Fetch rows from a specific dataset by ID
-- query: Execute a SoQL query against a dataset
-- metadata: Get detailed metadata about a dataset
+- catalog: Search the catalog for datasets matching a query on a Socrata portal
+- metadata: Get detailed metadata about a specific dataset (IMPORTANT: pass dataset_id in the "query" parameter, not "dataset_id")
+- query: Execute a SoQL query against a dataset to fetch and filter data
+- metrics: Get metrics/statistics about a dataset
+
+IMPORTANT TIPS:
+1. For type=metadata, pass the dataset ID in the "query" parameter (e.g., "query": "erm2-nwe9")
+2. For type=query, ALWAYS start by fetching a sample with no WHERE clause to see actual column values
+3. NYC 311 data uses field names like: complaint_type, descriptor, created_date, community_board
+4. Field values are case-sensitive - fetch sample data first to see exact formats
 
 Examples:
-- Search for datasets: { "type": "search", "portal": "data.sfgov.org", "query": "311 complaints" }
-- Fetch data: { "type": "fetch", "portal": "data.sfgov.org", "dataset_id": "abc123", "limit": 10 }
-- Query data: { "type": "query", "portal": "data.sfgov.org", "dataset_id": "abc123", "select": "category, COUNT(*)", "group": "category" }
-- Get metadata: { "type": "metadata", "portal": "data.sfgov.org", "dataset_id": "abc123" }`,
+- Search catalog: { "type": "catalog", "portal": "data.cityofnewyork.us", "query": "311 complaints" }
+- Get metadata: { "type": "metadata", "portal": "data.cityofnewyork.us", "query": "erm2-nwe9" }
+- Fetch sample data first: { "type": "query", "portal": "data.cityofnewyork.us", "dataset_id": "erm2-nwe9", "limit": 5 }
+- Query with filter: { "type": "query", "portal": "data.cityofnewyork.us", "dataset_id": "erm2-nwe9", "select": "complaint_type, COUNT(*) as count", "group": "complaint_type", "order": "count DESC", "limit": 10 }`,
       parameters: {
         type: 'object',
         properties: {
           type: {
             type: 'string',
-            enum: ['search', 'fetch', 'query', 'metadata'],
+            enum: ['catalog', 'metadata', 'query', 'metrics'],
             description: 'The type of operation to perform',
           },
           portal: {
             type: 'string',
-            description: 'Socrata portal domain (e.g., data.sfgov.org, data.cityofchicago.org)',
+            description: 'Socrata portal domain (e.g., data.cityofnewyork.us, data.sfgov.org)',
           },
           query: {
             type: 'string',
-            description: 'Search query (required for type=search)',
+            description: 'For type=catalog: search query. For type=metadata: the dataset ID. For type=query: optional full-text search within data.',
           },
           dataset_id: {
             type: 'string',
-            description: 'Dataset identifier (required for fetch/query/metadata)',
+            description: 'Dataset identifier (required for type=query)',
           },
           limit: {
             type: 'number',

@@ -15,31 +15,46 @@ interface QueryFormProps {
 }
 
 const EXAMPLE_QUERIES = [
-  'What are the most common 311 complaints in San Francisco?',
-  'Show me recent building permits in Chicago',
-  'What are the top crime types in New York City?',
-  'Find datasets about public transportation in San Francisco',
+  'What are the most common 311 complaints in NYC?',
+  'Show me restaurant inspection grades in Manhattan',
+  'What are the top noise complaint types?',
+  'Find datasets about housing violations',
 ];
 
 const PORTALS = [
-  { id: 'data.sfgov.org', name: 'San Francisco' },
-  { id: 'data.cityofchicago.org', name: 'Chicago' },
-  { id: 'data.ny.gov', name: 'New York State' },
   { id: 'data.cityofnewyork.us', name: 'New York City' },
+  { id: 'data.cityofchicago.org', name: 'Chicago' },
+  { id: 'data.sfgov.org', name: 'San Francisco' },
   { id: 'data.lacity.org', name: 'Los Angeles' },
+  { id: 'data.seattle.gov', name: 'Seattle' },
 ];
 
 export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
   const [query, setQuery] = useState('');
   const [model, setModel] = useState('openai/gpt-4o-mini');
-  const [portal, setPortal] = useState('data.sfgov.org');
+  const [portal, setPortal] = useState('data.cityofnewyork.us');
   const [models, setModels] = useState<Model[]>([]);
 
   useEffect(() => {
-    fetch('/api/models')
-      .then((res) => res.json())
-      .then((data) => setModels(data.models))
-      .catch(console.error);
+    let isMounted = true;
+
+    const fetchModels = async () => {
+      try {
+        const res = await fetch('/api/models');
+        const data = await res.json();
+        if (isMounted) {
+          setModels(data.models);
+        }
+      } catch (error) {
+        console.error('Failed to fetch models:', error);
+      }
+    };
+
+    fetchModels();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -54,55 +69,61 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label
-          htmlFor="query"
-          className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
-        >
-          Ask a question about civic data
-        </label>
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div className="nyc-field">
+        <label htmlFor="query">Ask a question about civic data</label>
         <textarea
           id="query"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="e.g., What are the most common 311 complaints in San Francisco?"
-          className="w-full px-4 py-3 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 resize-none"
           rows={3}
           disabled={isLoading}
+          style={{ resize: 'none' }}
         />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <span className="text-xs text-zinc-500 dark:text-zinc-400 w-full mb-1">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
           Try an example:
         </span>
-        {EXAMPLE_QUERIES.map((example, idx) => (
-          <button
-            key={idx}
-            type="button"
-            onClick={() => handleExampleClick(example)}
-            className="text-xs px-2 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-            disabled={isLoading}
-          >
-            {example.length > 40 ? example.slice(0, 40) + '...' : example}
-          </button>
-        ))}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {EXAMPLE_QUERIES.map((example, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => handleExampleClick(example)}
+              disabled={isLoading}
+              style={{
+                fontSize: '14px',
+                padding: '6px 12px',
+                borderRadius: '4px',
+                backgroundColor: 'var(--nyc-gray-90)',
+                color: 'var(--text-secondary)',
+                border: 'none',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                transition: 'background-color 0.15s ease',
+              }}
+              onMouseOver={(e) => {
+                if (!isLoading) e.currentTarget.style.backgroundColor = 'var(--nyc-gray-80)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--nyc-gray-90)';
+              }}
+            >
+              {example.length > 45 ? example.slice(0, 45) + '...' : example}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label
-            htmlFor="model"
-            className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
-          >
-            Model
-          </label>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px' }}>
+        <div className="nyc-field">
+          <label htmlFor="model">Model</label>
           <select
             id="model"
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
             disabled={isLoading}
           >
             {models.map((m) => (
@@ -113,18 +134,12 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
           </select>
         </div>
 
-        <div>
-          <label
-            htmlFor="portal"
-            className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
-          >
-            Data Portal
-          </label>
+        <div className="nyc-field">
+          <label htmlFor="portal">Data portal</label>
           <select
             id="portal"
             value={portal}
             onChange={(e) => setPortal(e.target.value)}
-            className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
             disabled={isLoading}
           >
             {PORTALS.map((p) => (
@@ -139,9 +154,14 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
       <button
         type="submit"
         disabled={isLoading || !query.trim()}
-        className="w-full py-3 px-4 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="nyc-button nyc-button-primary"
+        style={{
+          width: '100%',
+          padding: '16px 24px',
+          fontSize: '18px',
+        }}
       >
-        {isLoading ? 'Comparing responses...' : 'Compare Responses'}
+        {isLoading ? 'Comparing responses...' : 'Compare responses'}
       </button>
     </form>
   );

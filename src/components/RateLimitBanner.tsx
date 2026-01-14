@@ -15,7 +15,6 @@ export default function RateLimitBanner() {
   const [rateLimit, setRateLimit] = useState<RateLimitInfo | null>(null);
 
   useEffect(() => {
-    // Using an IIFE to handle the async operation
     let isMounted = true;
 
     const doFetch = async () => {
@@ -42,22 +41,43 @@ export default function RateLimitBanner() {
   const isLow = rateLimit.remaining <= 2;
   const isExhausted = rateLimit.remaining === 0;
 
+  // NYC Design System semantic colors
+  const bgColor = isExhausted
+    ? 'rgba(236, 19, 30, 0.1)' // Error red background
+    : isLow
+    ? 'rgba(255, 179, 32, 0.15)' // Caution yellow background
+    : 'rgba(112, 186, 255, 0.15)'; // Info blue background
+
+  const textColor = isExhausted
+    ? 'var(--nyc-error)'
+    : isLow
+    ? '#996B00' // Darker caution for contrast
+    : 'var(--nyc-blue-10)';
+
   return (
     <div
-      className={`rounded-lg px-4 py-3 text-sm ${
-        isExhausted
-          ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200'
-          : isLow
-          ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200'
-          : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200'
-      }`}
+      style={{
+        borderRadius: '4px',
+        padding: '12px 16px',
+        fontSize: '16px',
+        backgroundColor: bgColor,
+        color: textColor,
+      }}
     >
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '8px',
+        }}
+      >
         <span>
           <strong>{rateLimit.remaining}</strong> of {rateLimit.limit} requests
           remaining today
           {!rateLimit.authenticated && (
-            <span className="ml-2 text-xs opacity-75">
+            <span style={{ marginLeft: '8px', fontSize: '14px', opacity: 0.8 }}>
               (Sign in for more)
             </span>
           )}
@@ -66,7 +86,11 @@ export default function RateLimitBanner() {
         {!session && rateLimit.remaining < rateLimit.limit && (
           <button
             onClick={() => signIn('github')}
-            className="text-xs px-3 py-1 rounded-full bg-white/50 hover:bg-white/70 dark:bg-black/30 dark:hover:bg-black/50 transition-colors"
+            className="nyc-button nyc-button-secondary"
+            style={{
+              padding: '6px 12px',
+              fontSize: '14px',
+            }}
           >
             Sign in for 25/day
           </button>

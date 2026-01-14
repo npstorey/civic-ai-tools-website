@@ -33,6 +33,7 @@ export async function queryWithoutMcp(
   const response = await openrouter.chat.completions.create({
     model,
     messages,
+    max_tokens: 2000,
   });
 
   const duration_ms = Date.now() - startTime;
@@ -68,6 +69,7 @@ export async function queryWithMcp(
     messages,
     tools,
     tool_choice: 'auto',
+    max_tokens: 2000,
   });
 
   // Handle tool calls iteratively
@@ -110,6 +112,7 @@ export async function queryWithMcp(
       messages,
       tools,
       tool_choice: 'auto',
+      max_tokens: 2000,
     });
 
     iterations++;

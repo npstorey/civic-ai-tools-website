@@ -52,15 +52,35 @@ External Services
 
 ### MCP Server Communication
 ```typescript
-// POST to ${OPENGOV_MCP_URL}/mcp with JSON-RPC:
-{
+// 1. Initialize session first:
+POST ${OPENGOV_MCP_URL}/mcp
+Headers: { 'Accept': 'application/json, text/event-stream' }
+Body: {
+  jsonrpc: '2.0',
+  id: Date.now(),
+  method: 'initialize',
+  params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: {...} }
+}
+// Response header contains: mcp-session-id
+
+// 2. Make tool calls with session ID:
+POST ${OPENGOV_MCP_URL}/mcp
+Headers: { 'Accept': 'application/json, text/event-stream', 'mcp-session-id': sessionId }
+Body: {
   jsonrpc: '2.0',
   id: Date.now(),
   method: 'tools/call',
-  params: { name: toolName, arguments: args }
+  params: { name: 'get_data', arguments: { type: 'catalog', portal: '...', query: '...' } }
 }
 // Response is SSE format: "event: message\ndata: {...}\n\n"
 ```
+
+### MCP Tool Types
+The `get_data` tool supports these operation types:
+- `catalog`: Search for datasets matching a query
+- `metadata`: Get metadata about a specific dataset
+- `query`: Execute a SoQL query against a dataset
+- `metrics`: Get metrics/statistics about a dataset
 
 ### Rate Limiting
 - Anonymous: 5 requests/day (tracked by IP)
@@ -94,9 +114,28 @@ KV_REST_API_READ_ONLY_TOKEN=
 - `lib/` - Utilities (openrouter.ts, mcp/client.ts, mcp/tools.ts, rate-limit.ts, auth.ts)
 - `public/` - Static assets
 
+## OpenGov Skill Module
+
+The `lib/mcp/opengov-skill.ts` file contains domain knowledge for querying Socrata portals:
+- Known dataset IDs and their key fields
+- SoQL query patterns and syntax
+- Anti-hallucination guidelines
+- Portal-specific workarounds
+
+This skill is injected into the LLM system prompt via `buildSystemPrompt(portal)`.
+
+### Key Datasets
+| Portal | Dataset | ID | Key Fields |
+|--------|---------|-----|------------|
+| NYC | 311 Service Requests | erm2-nwe9 | complaint_type, borough, created_date |
+| NYC | Restaurant Inspections | 43nn-pn8j | boro, grade, inspection_date |
+| Chicago | 311 Service Requests | v6vf-nfxy | sr_type, created_date |
+| SF | 311 Cases | vw6y-z8j6 | service_name, opened, neighborhood |
+
 ## Implementation Notes
 
 - The opengov-mcp-server only supports HTTP transport (not stdio)
 - Tool definitions in `lib/mcp/tools.ts` map to OpenRouter function schemas
+- Skill/domain knowledge in `lib/mcp/opengov-skill.ts` guides LLM queries
 - Alternative MCP SDK approach available using `@modelcontextprotocol/sdk` with SSEClientTransport
 - Budget cap should be set in OpenRouter dashboard (~$30/month)

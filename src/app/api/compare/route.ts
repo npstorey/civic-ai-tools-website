@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { queryWithoutMcp, queryWithMcp } from '@/lib/openrouter';
 import { opengovMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
+import { buildSystemPrompt } from '@/lib/mcp/opengov-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 
@@ -16,7 +17,7 @@ interface CompareRequest {
 export async function POST(request: NextRequest) {
   try {
     const body: CompareRequest = await request.json();
-    const { query, model, portal = 'data.sfgov.org' } = body;
+    const { query, model, portal = 'data.cityofnewyork.us' } = body;
 
     if (!query || !model) {
       return NextResponse.json(
@@ -48,11 +49,8 @@ export async function POST(request: NextRequest) {
     // Increment rate limit
     await incrementRateLimit(identifier, isAuthenticated);
 
-    // System prompt for the MCP-enabled query
-    const systemPromptWithMcp = `You are a helpful assistant with access to Socrata open data portals.
-When answering questions about civic data, government statistics, or local information,
-use the get_data tool to search for and retrieve relevant datasets from ${portal}.
-Always cite the specific datasets you used and provide accurate, up-to-date information.`;
+    // System prompt for the MCP-enabled query - uses skill module
+    const systemPromptWithMcp = buildSystemPrompt(portal);
 
     // System prompt for the non-MCP query (to make it fair)
     const systemPromptWithoutMcp = `You are a helpful assistant.
