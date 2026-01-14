@@ -20,6 +20,10 @@ export const metadata: Metadata = {
   title: 'Civic AI Tools - MCP Demo',
   description:
     'See the difference MCP (Model Context Protocol) makes when querying civic data. Compare LLM responses with and without live data access.',
+  robots: {
+    index: false,
+    follow: false,
+  },
   openGraph: {
     title: 'Civic AI Tools - MCP Demo',
     description:
