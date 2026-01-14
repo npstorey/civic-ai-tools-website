@@ -186,7 +186,7 @@ export default function AboutPage() {
             opengov-mcp-server
           </a>
           , which provides access to Socrata open data portals from cities
-          like San Francisco, Chicago, and New York.
+          like New York City, Chicago, and San Francisco.
         </li>
       </ol>
 

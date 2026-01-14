@@ -76,7 +76,7 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
           id="query"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="e.g., What are the most common 311 complaints in San Francisco?"
+          placeholder="e.g., What are the most common 311 complaints in NYC?"
           rows={3}
           disabled={isLoading}
           style={{ resize: 'none' }}
