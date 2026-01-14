@@ -273,11 +273,26 @@ a:focus {
   .nyc-field input:focus,
   .nyc-field textarea:focus,
   .nyc-field select:focus {
-    background-color: var(--nyc-blue-10);
+    background-color: var(--nyc-gray-60);
+    border-color: var(--nyc-blue-40);
   }
 
   .nyc-button-secondary {
     background-color: var(--nyc-black);
     border-color: var(--nyc-gray-30);
+  }
+
+  .nyc-button-primary {
+    background-color: var(--nyc-blue-40);
+    color: var(--nyc-white);
+  }
+
+  .nyc-button-primary:hover {
+    background-color: var(--nyc-blue-10);
+  }
+
+  .nyc-button-primary:disabled {
+    background-color: var(--nyc-gray-30);
+    color: var(--nyc-gray-70);
   }
 }
