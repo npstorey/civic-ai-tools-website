@@ -45,62 +45,46 @@ export default function RateLimitBanner({ refreshTrigger = 0 }: RateLimitBannerP
   const isLow = rateLimit.remaining <= 2;
   const isExhausted = rateLimit.remaining === 0;
 
-  // Use card background with border for status indication
-  const borderColor = isExhausted
-    ? 'var(--nyc-error)'
-    : isLow
-    ? 'var(--nyc-caution)'
-    : 'var(--nyc-info)';
-
   const textColor = isExhausted
     ? 'var(--nyc-error)'
     : isLow
     ? 'var(--nyc-caution)'
-    : 'var(--nyc-info)';
+    : 'var(--text-muted)';
 
   return (
     <div
       style={{
-        borderRadius: '4px',
-        padding: '12px 16px',
-        fontSize: '16px',
-        backgroundColor: 'var(--card-background)',
-        border: `1px solid ${borderColor}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '8px',
+        fontSize: '14px',
         color: textColor,
       }}
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '8px',
-        }}
-      >
-        <span>
-          <strong>{rateLimit.remaining}</strong> of {rateLimit.limit} requests
-          remaining today
-          {!rateLimit.authenticated && (
-            <span style={{ marginLeft: '8px', fontSize: '14px', opacity: 0.8 }}>
-              (Sign in for more)
-            </span>
-          )}
-        </span>
-
-        {!session && rateLimit.remaining < rateLimit.limit && (
-          <button
-            onClick={() => signIn('github')}
-            className="nyc-button nyc-button-secondary"
-            style={{
-              padding: '6px 12px',
-              fontSize: '14px',
-            }}
-          >
-            Sign in for 25/day
-          </button>
+      <span>
+        <strong>{rateLimit.remaining}</strong>/{rateLimit.limit} requests remaining today
+        {!rateLimit.authenticated && !session && (
+          <span style={{ marginLeft: '4px' }}>
+            ·{' '}
+            <button
+              onClick={() => signIn('github')}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                color: 'var(--nyc-blue-40)',
+                textDecoration: 'underline',
+                cursor: 'pointer',
+                fontSize: 'inherit',
+              }}
+            >
+              Sign in for 25/day
+            </button>
+          </span>
         )}
-      </div>
+      </span>
     </div>
   );
 }

@@ -63,18 +63,18 @@ export default function Home() {
   };
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
+    <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px 24px' }}>
       {/* Hero Section */}
-      <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-        <h1 style={{ marginBottom: '16px' }}>
+      <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+        <h1 style={{ marginBottom: '12px', fontSize: '42px' }}>
           See what MCP can do
         </h1>
         <p
           style={{
-            fontSize: '22px',
+            fontSize: '18px',
             lineHeight: '150%',
             color: 'var(--text-secondary)',
-            maxWidth: '700px',
+            maxWidth: '650px',
             margin: '0 auto',
           }}
         >
@@ -84,15 +84,10 @@ export default function Home() {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Model Context Protocol (MCP)
+            MCP
           </a>{' '}
-          providing live access to Socrata open data portals.
+          providing live access to open data.
         </p>
-      </div>
-
-      {/* Rate Limit Banner */}
-      <div style={{ marginBottom: '32px' }}>
-        <RateLimitBanner refreshTrigger={queryCount} />
       </div>
 
       {/* Query Form */}
@@ -100,11 +95,15 @@ export default function Home() {
         style={{
           backgroundColor: 'var(--card-background)',
           borderRadius: '4px',
-          padding: '32px',
-          marginBottom: '48px',
+          padding: '24px',
+          marginBottom: '24px',
         }}
       >
         <QueryForm onSubmit={handleSubmit} isLoading={isLoading} />
+        {/* Rate Limit - inline at bottom of form */}
+        <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+          <RateLimitBanner refreshTrigger={queryCount} />
+        </div>
       </div>
 
       {/* Error Message */}

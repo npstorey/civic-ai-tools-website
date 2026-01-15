@@ -69,7 +69,7 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div className="nyc-field">
         <label htmlFor="query">Ask a question about civic data</label>
         <textarea
@@ -77,47 +77,49 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="e.g., What are the most common 311 complaints in NYC?"
-          rows={3}
+          rows={2}
           disabled={isLoading}
           style={{ resize: 'none' }}
         />
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-          Try an example:
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
+        <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+          Examples:
         </span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-          {EXAMPLE_QUERIES.map((example, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => handleExampleClick(example)}
-              disabled={isLoading}
-              style={{
-                fontSize: '14px',
-                padding: '6px 12px',
-                borderRadius: '4px',
-                backgroundColor: 'var(--card-background)',
-                color: 'var(--text-secondary)',
-                border: 'none',
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-                transition: 'background-color 0.15s ease',
-              }}
-              onMouseOver={(e) => {
-                if (!isLoading) e.currentTarget.style.backgroundColor = 'var(--border-color)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--card-background)';
-              }}
-            >
-              {example.length > 45 ? example.slice(0, 45) + '...' : example}
-            </button>
-          ))}
-        </div>
+        {EXAMPLE_QUERIES.map((example, idx) => (
+          <button
+            key={idx}
+            type="button"
+            onClick={() => handleExampleClick(example)}
+            disabled={isLoading}
+            style={{
+              fontSize: '13px',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              backgroundColor: 'var(--nyc-white)',
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border-color)',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseOver={(e) => {
+              if (!isLoading) {
+                e.currentTarget.style.backgroundColor = 'var(--nyc-blue-80)';
+                e.currentTarget.style.borderColor = 'var(--nyc-blue-40)';
+              }
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--nyc-white)';
+              e.currentTarget.style.borderColor = 'var(--border-color)';
+            }}
+          >
+            {example.length > 35 ? example.slice(0, 35) + '...' : example}
+          </button>
+        ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '16px', alignItems: 'end' }}>
         <div className="nyc-field">
           <label htmlFor="model">Model</label>
           <select
@@ -149,20 +151,20 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
             ))}
           </select>
         </div>
-      </div>
 
-      <button
-        type="submit"
-        disabled={isLoading || !query.trim()}
-        className="nyc-button nyc-button-primary"
-        style={{
-          width: '100%',
-          padding: '16px 24px',
-          fontSize: '18px',
-        }}
-      >
-        {isLoading ? 'Comparing responses...' : 'Compare responses'}
-      </button>
+        <button
+          type="submit"
+          disabled={isLoading || !query.trim()}
+          className="nyc-button nyc-button-primary"
+          style={{
+            padding: '12px 32px',
+            fontSize: '16px',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {isLoading ? 'Comparing...' : 'Compare'}
+        </button>
+      </div>
     </form>
   );
 }
