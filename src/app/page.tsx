@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import QueryForm from '@/components/QueryForm';
 import ComparisonDisplay from '@/components/ComparisonDisplay';
 import RateLimitBanner from '@/components/RateLimitBanner';
@@ -27,11 +27,17 @@ export default function Home() {
   const [result, setResult] = useState<ComparisonResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [queryCount, setQueryCount] = useState(0);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   const handleSubmit = async (query: string, model: string, portal: string) => {
     setIsLoading(true);
     setError(null);
     setResult(null);
+
+    // Scroll to results after a brief delay to let the loading state render
+    setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
 
     try {
       const response = await fetch('/api/compare', {
@@ -65,8 +71,8 @@ export default function Home() {
   return (
     <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px 24px' }}>
       {/* Hero Section */}
-      <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-        <h1 style={{ marginBottom: '12px', fontSize: '42px' }}>
+      <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+        <h1 style={{ marginBottom: '8px', fontSize: '36px' }}>
           See what MCP can do
         </h1>
         <p
@@ -95,13 +101,13 @@ export default function Home() {
         style={{
           backgroundColor: 'var(--card-background)',
           borderRadius: '4px',
-          padding: '24px',
-          marginBottom: '24px',
+          padding: '16px',
+          marginBottom: '16px',
         }}
       >
         <QueryForm onSubmit={handleSubmit} isLoading={isLoading} />
         {/* Rate Limit - inline at bottom of form */}
-        <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+        <div style={{ marginTop: '8px' }}>
           <RateLimitBanner refreshTrigger={queryCount} />
         </div>
       </div>
@@ -124,8 +130,8 @@ export default function Home() {
 
       {/* Results */}
       {(isLoading || result) && (
-        <div style={{ marginBottom: '48px' }}>
-          <h2 style={{ marginBottom: '24px' }}>Results</h2>
+        <div ref={resultsRef} style={{ marginBottom: '24px' }}>
+          <h2 style={{ marginBottom: '16px' }}>Results</h2>
           <ComparisonDisplay
             withoutMcp={result?.withoutMcp || null}
             withMcp={result?.withMcp || null}

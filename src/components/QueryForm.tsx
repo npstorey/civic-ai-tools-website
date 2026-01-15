@@ -15,10 +15,9 @@ interface QueryFormProps {
 }
 
 const EXAMPLE_QUERIES = [
-  'What are the most common 311 complaints in NYC?',
-  'Show me restaurant inspection grades in Manhattan',
-  'What are the top noise complaint types?',
-  'Find datasets about housing violations',
+  'Most common 311 complaints in NYC',
+  'Restaurant inspection grades in Manhattan',
+  'Top noise complaint types',
 ];
 
 const PORTALS = [
@@ -69,7 +68,7 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       <div className="nyc-field">
         <label htmlFor="query">Ask a question about civic data</label>
         <textarea
@@ -77,9 +76,9 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="e.g., What are the most common 311 complaints in NYC?"
-          rows={2}
+          rows={1}
           disabled={isLoading}
-          style={{ resize: 'none' }}
+          style={{ resize: 'none', minHeight: '44px' }}
         />
       </div>
 

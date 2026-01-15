@@ -1,19 +1,60 @@
 # Backlog
 
-## To Do
+## To Do (High Priority)
 
-_(Empty - add new items here)_
+- [x] **Fix layout: results below fold on laptops** (2025-01-15)
+  - Reduced hero, form padding, margins throughout
+  - Shortened examples to fit one line
+  - Added scroll-to-results on Compare click
 
-## To Consider
+- [ ] **Model audit**
+  - Review available OpenRouter models
+  - Select appropriate models to include in dropdown
+  - Choose best default model (balance of quality, speed, cost)
+  - Consider enabling more powerful models (GPT-4, Claude Opus) for testing
 
-- [ ] **Is the comparison fair?**
+- [ ] **Update About page with educational content**
+  - Explain factors that affect AI response quality:
+    - Model selection
+    - System prompts / Skills
+    - Orchestration framework (browser vs IDE vs CLI)
+    - Tool calls / MCPs
+  - Position civic-ai-tools as educational resource, not just demo
+  - Keep concise but informative
+
+## To Consider (Future Features)
+
+- [ ] **Fairer comparison: "No MCP + web search" option**
   - Current "Without MCP" shows model with NO tools (just training data)
-  - A model with web search + general SQL knowledge might perform better
-  - Options to consider:
-    - Add disclaimer: "Without MCP = no external tools, just training data"
-    - Add a third column: "With Web Search" to show MCP is still better
-    - Keep as-is but clarify the comparison is "training data vs live data access"
-  - The point of the demo is showing value of structured data access, not raw capability
+  - Add option to compare: MCP vs web search vs no tools
+  - Could be "Advanced" toggle or third column
+  - The point: show value of *structured* data access vs general web search
+
+- [ ] **Streaming response animation**
+  - Show tokens as they generate (like ChatGPT)
+  - Requires refactoring API to use SSE
+  - Would significantly improve perceived performance
+
+- [ ] **Progress indicator for tool calls**
+  - Show which tool is being called during MCP execution
+  - Visual feedback during the 10+ second waits
+
+- [ ] **Model vs model comparison**
+  - Compare two different models, both using MCP
+  - Demonstrate how model choice affects quality
+  - UI: third column? toggle? separate mode?
+
+- [ ] **Welcome page / landing redesign**
+  - Hero with clearer value prop:
+    "Civic AI Tools is a curated collection of system prompts and tools (MCP servers) to help users get better results using agentic AI to explore civic data."
+  - Multiple CTAs: "Try the Demo", "View on GitHub", "Set up in Claude/ChatGPT"
+  - Consider moving demo to `/demo` route
+  - Long-term: position as educational resource + demo
+
+- [ ] **Embedded video demo**
+  - Show complex multi-step analysis in IDE/CLI
+  - Demonstrates what's possible beyond web demo limits
+  - Need to create the video first
 
 - [ ] **Add setup instructions for Claude/ChatGPT browser**
   - Show how to enable MCP in Claude Desktop app
