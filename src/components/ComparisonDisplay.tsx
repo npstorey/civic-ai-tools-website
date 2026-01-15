@@ -18,12 +18,14 @@ interface ComparisonDisplayProps {
   withoutMcp: ResponseData | null;
   withMcp: ResponseData | null;
   isLoading: boolean;
+  modelName?: string;
 }
 
 export default function ComparisonDisplay({
   withoutMcp,
   withMcp,
   isLoading,
+  modelName = 'LLM',
 }: ComparisonDisplayProps) {
   return (
     <div
@@ -35,7 +37,7 @@ export default function ComparisonDisplay({
     >
       <ResponsePanel
         title="Without MCP"
-        subtitle="LLM using only training data"
+        subtitle={`${modelName} using only training data`}
         content={withoutMcp?.content || ''}
         duration_ms={withoutMcp?.duration_ms}
         tokens_used={withoutMcp?.tokens_used}
@@ -44,7 +46,7 @@ export default function ComparisonDisplay({
       />
       <ResponsePanel
         title="With MCP"
-        subtitle="LLM + live Socrata data access"
+        subtitle={`${modelName} + live Socrata data access`}
         content={withMcp?.content || ''}
         duration_ms={withMcp?.duration_ms}
         tokens_used={withMcp?.tokens_used}

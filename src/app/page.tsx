@@ -27,12 +27,23 @@ export default function Home() {
   const [result, setResult] = useState<ComparisonResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [queryCount, setQueryCount] = useState(0);
+  const [usedModel, setUsedModel] = useState<string>('');
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Extract display name from model ID (e.g., "anthropic/claude-sonnet-4" -> "Claude Sonnet 4")
+  const getModelDisplayName = (modelId: string) => {
+    const name = modelId.split('/')[1] || modelId;
+    return name
+      .split('-')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
 
   const handleSubmit = async (query: string, model: string, portal: string) => {
     setIsLoading(true);
     setError(null);
     setResult(null);
+    setUsedModel(model);
 
     // Scroll to results after a brief delay to let the loading state render
     setTimeout(() => {
@@ -136,6 +147,7 @@ export default function Home() {
             withoutMcp={result?.withoutMcp || null}
             withMcp={result?.withMcp || null}
             isLoading={isLoading}
+            modelName={getModelDisplayName(usedModel)}
           />
           {/* Hint for complex queries */}
           {result && (
