@@ -124,13 +124,34 @@ export default function Home() {
 
       {/* Results */}
       {(isLoading || result) && (
-        <div style={{ marginBottom: '64px' }}>
+        <div style={{ marginBottom: '48px' }}>
           <h2 style={{ marginBottom: '24px' }}>Results</h2>
           <ComparisonDisplay
             withoutMcp={result?.withoutMcp || null}
             withMcp={result?.withMcp || null}
             isLoading={isLoading}
           />
+          {/* Hint for complex queries */}
+          {result && (
+            <p
+              style={{
+                marginTop: '16px',
+                fontSize: '14px',
+                color: 'var(--text-muted)',
+                textAlign: 'center',
+              }}
+            >
+              For complex multi-step analysis, try{' '}
+              <a
+                href="https://github.com/npstorey/civic-ai-tools"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                opengov-mcp
+              </a>{' '}
+              locally with Claude Code or Cursor.
+            </p>
+          )}
         </div>
       )}
 
