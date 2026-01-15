@@ -21,6 +21,14 @@
   - Position civic-ai-tools as educational resource, not just demo
   - Keep concise but informative
 
+## To Do (Medium Priority)
+
+- [ ] **Add token cost safeguards**
+  - Track cumulative tokens across all iterations (current display only shows last call)
+  - Add total token limit per request (e.g., abort if > 50K tokens)
+  - Truncate large Socrata API responses to limit input token growth
+  - Worst case with 10 iterations could cost $0.50-$2.00 per query
+
 ## To Consider (Future Features)
 
 - [ ] **Fairer comparison: "No MCP + web search" option**
