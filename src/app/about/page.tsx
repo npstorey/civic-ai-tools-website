@@ -1,39 +1,39 @@
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'About MCP - Civic AI Tools',
-  description: 'Learn how Model Context Protocol (MCP) enables LLMs to access live civic data.',
+  title: 'About - Civic AI Tools',
+  description: 'Learn how to get better results from AI when working with civic data.',
 };
 
 export default function AboutPage() {
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 24px' }}>
-      <h1 style={{ marginBottom: '32px' }}>What is MCP?</h1>
+      <h1 style={{ marginBottom: '16px' }}>Getting Better Results from AI</h1>
 
       <p
         style={{
-          fontSize: '22px',
+          fontSize: '20px',
           lineHeight: '150%',
           color: 'var(--text-secondary)',
           marginBottom: '48px',
         }}
       >
-        Model Context Protocol (MCP) is an open standard that allows Large Language
-        Models to securely connect to external data sources and tools. Think of it
-        as giving AI assistants the ability to &quot;see&quot; and interact with real-world
-        data instead of relying solely on their training data.
+        When using AI to explore civic data, several factors affect the quality of
+        responses. Understanding these factors helps you get more accurate, useful results.
       </p>
 
-      <h2 style={{ marginBottom: '24px' }}>The problem MCP solves</h2>
+      {/* Factors Section */}
+      <h2 style={{ marginBottom: '24px' }}>What Affects AI Response Quality?</h2>
 
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: '24px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '32px',
           marginBottom: '64px',
         }}
       >
+        {/* Factor 1: Model Selection */}
         <div
           style={{
             backgroundColor: 'var(--card-background)',
@@ -41,72 +41,271 @@ export default function AboutPage() {
             padding: '24px',
           }}
         >
-          <h3
+          <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>
+            1. Model Selection
+          </h3>
+          <p
             style={{
-              fontSize: '20px',
-              color: 'var(--nyc-error)',
-              marginBottom: '16px',
+              fontSize: '16px',
+              color: 'var(--text-secondary)',
+              marginBottom: '12px',
             }}
           >
-            Without MCP
-          </h3>
+            Different AI models have different strengths. When choosing a model, consider:
+          </p>
           <ul
             style={{
-              listStyle: 'none',
-              padding: 0,
+              paddingLeft: '20px',
               margin: 0,
               display: 'flex',
               flexDirection: 'column',
-              gap: '8px',
+              gap: '6px',
               fontSize: '16px',
               color: 'var(--text-secondary)',
             }}
           >
-            <li>- Limited to training data (outdated)</li>
-            <li>- Cannot access current information</li>
-            <li>- May hallucinate statistics</li>
-            <li>- No way to verify claims</li>
+            <li><strong>Speed vs. quality</strong> - Faster models may sacrifice accuracy</li>
+            <li><strong>Cost</strong> - Premium models cost more per query</li>
+            <li><strong>Reasoning ability</strong> - Complex queries need capable models</li>
+            <li><strong>Tool calling</strong> - Not all models reliably use external tools</li>
           </ul>
+          <p
+            style={{
+              fontSize: '14px',
+              color: 'var(--text-muted)',
+              marginTop: '12px',
+              fontStyle: 'italic',
+            }}
+          >
+            This demo lets you compare different models on the same query.
+          </p>
         </div>
 
+        {/* Factor 2: System Prompts & Skills */}
         <div
           style={{
-            backgroundColor: 'rgba(0, 183, 3, 0.1)',
+            backgroundColor: 'var(--card-background)',
             borderRadius: '4px',
             padding: '24px',
-            border: '1px solid var(--nyc-success)',
           }}
         >
-          <h3
+          <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>
+            2. System Prompts &amp; Skills
+          </h3>
+          <p
             style={{
-              fontSize: '20px',
-              color: 'var(--nyc-success)',
-              marginBottom: '16px',
+              fontSize: '16px',
+              color: 'var(--text-secondary)',
+              marginBottom: '12px',
             }}
           >
-            With MCP
-          </h3>
+            System prompts provide domain knowledge that guides the AI. A &quot;skill&quot; is
+            a curated prompt that teaches the model about a specific domain:
+          </p>
           <ul
             style={{
-              listStyle: 'none',
-              padding: 0,
+              paddingLeft: '20px',
               margin: 0,
               display: 'flex',
               flexDirection: 'column',
-              gap: '8px',
+              gap: '6px',
               fontSize: '16px',
               color: 'var(--text-secondary)',
             }}
           >
-            <li>- Access to live, real-time data</li>
-            <li>- Can query actual databases</li>
-            <li>- Provides sourced, accurate info</li>
-            <li>- Cites specific datasets</li>
+            <li><strong>Dataset IDs</strong> - Known identifiers for common datasets</li>
+            <li><strong>Query syntax</strong> - SoQL functions that Socrata supports</li>
+            <li><strong>Field names</strong> - Exact column names (case-sensitive)</li>
+            <li><strong>Anti-hallucination rules</strong> - &quot;Never make up data&quot;</li>
           </ul>
+          <p
+            style={{
+              fontSize: '14px',
+              color: 'var(--text-muted)',
+              marginTop: '12px',
+              fontStyle: 'italic',
+            }}
+          >
+            The opengov-mcp skill teaches models how to query Socrata APIs correctly.
+          </p>
+        </div>
+
+        {/* Factor 3: Orchestration Environment */}
+        <div
+          style={{
+            backgroundColor: 'var(--card-background)',
+            borderRadius: '4px',
+            padding: '24px',
+          }}
+        >
+          <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>
+            3. Orchestration Environment
+          </h3>
+          <p
+            style={{
+              fontSize: '16px',
+              color: 'var(--text-secondary)',
+              marginBottom: '16px',
+            }}
+          >
+            Where you run AI affects what&apos;s possible:
+          </p>
+          <div style={{ overflowX: 'auto' }}>
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: '15px',
+              }}
+            >
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--border-color)' }}>
+                  <th style={{ textAlign: 'left', padding: '8px 12px' }}>Environment</th>
+                  <th style={{ textAlign: 'left', padding: '8px 12px' }}>Best For</th>
+                  <th style={{ textAlign: 'left', padding: '8px 12px' }}>Limitations</th>
+                </tr>
+              </thead>
+              <tbody style={{ color: 'var(--text-secondary)' }}>
+                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                  <td style={{ padding: '8px 12px' }}>Browser (this demo)</td>
+                  <td style={{ padding: '8px 12px' }}>Quick queries, exploration</td>
+                  <td style={{ padding: '8px 12px' }}>Rate limits, simple queries only</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                  <td style={{ padding: '8px 12px' }}>IDE (Cursor)</td>
+                  <td style={{ padding: '8px 12px' }}>Code integration, analysis</td>
+                  <td style={{ padding: '8px 12px' }}>Requires local setup</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '8px 12px' }}>CLI (Claude Code)</td>
+                  <td style={{ padding: '8px 12px' }}>Complex multi-step analysis</td>
+                  <td style={{ padding: '8px 12px' }}>Requires local setup</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p
+            style={{
+              fontSize: '14px',
+              color: 'var(--text-muted)',
+              marginTop: '12px',
+              fontStyle: 'italic',
+            }}
+          >
+            For complex, multi-step analysis, use an IDE or CLI environment.
+          </p>
+        </div>
+
+        {/* Factor 4: Tools & MCPs */}
+        <div
+          style={{
+            backgroundColor: 'var(--card-background)',
+            borderRadius: '4px',
+            padding: '24px',
+          }}
+        >
+          <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>
+            4. Tools &amp; MCPs
+          </h3>
+          <p
+            style={{
+              fontSize: '16px',
+              color: 'var(--text-secondary)',
+              marginBottom: '16px',
+            }}
+          >
+            <a
+              href="https://modelcontextprotocol.io"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Model Context Protocol (MCP)
+            </a>{' '}
+            allows AI to connect to external data sources instead of relying on training data:
+          </p>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+              gap: '16px',
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: 'var(--background)',
+                borderRadius: '4px',
+                padding: '16px',
+                border: '1px solid var(--nyc-error)',
+              }}
+            >
+              <h4
+                style={{
+                  fontSize: '16px',
+                  color: 'var(--nyc-error)',
+                  marginBottom: '8px',
+                }}
+              >
+                Without MCP
+              </h4>
+              <ul
+                style={{
+                  listStyle: 'none',
+                  padding: 0,
+                  margin: 0,
+                  fontSize: '14px',
+                  color: 'var(--text-secondary)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                }}
+              >
+                <li>- Limited to training data</li>
+                <li>- May hallucinate statistics</li>
+                <li>- Cannot verify claims</li>
+              </ul>
+            </div>
+
+            <div
+              style={{
+                backgroundColor: 'rgba(0, 183, 3, 0.1)',
+                borderRadius: '4px',
+                padding: '16px',
+                border: '1px solid var(--nyc-success)',
+              }}
+            >
+              <h4
+                style={{
+                  fontSize: '16px',
+                  color: 'var(--nyc-success)',
+                  marginBottom: '8px',
+                }}
+              >
+                With MCP
+              </h4>
+              <ul
+                style={{
+                  listStyle: 'none',
+                  padding: 0,
+                  margin: 0,
+                  fontSize: '14px',
+                  color: 'var(--text-secondary)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                }}
+              >
+                <li>- Access to live data</li>
+                <li>- Queries actual databases</li>
+                <li>- Cites specific datasets</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
 
-      <h2 style={{ marginBottom: '24px' }}>How it works</h2>
+      {/* How MCP Works */}
+      <h2 style={{ marginBottom: '24px' }}>How MCP Works</h2>
 
       <div
         style={{
@@ -148,49 +347,31 @@ export default function AboutPage() {
         </pre>
       </div>
 
-      <h2 style={{ marginBottom: '24px' }}>About this demo</h2>
+      {/* About This Demo */}
+      <h2 style={{ marginBottom: '24px' }}>About This Demo</h2>
 
       <p
         style={{
           fontSize: '18px',
           color: 'var(--text-secondary)',
-          marginBottom: '16px',
+          marginBottom: '64px',
         }}
       >
-        This website demonstrates the value of MCP by showing side-by-side
-        comparisons of the same question answered:
+        This demo shows side-by-side comparisons of the same question answered
+        with and without MCP. The &quot;With MCP&quot; response connects to the{' '}
+        <a
+          href="https://github.com/npstorey/civic-ai-tools"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          opengov-mcp-server
+        </a>
+        , which provides access to Socrata open data portals from cities
+        like New York, Chicago, and San Francisco.
       </p>
 
-      <ol
-        style={{
-          paddingLeft: '24px',
-          marginBottom: '64px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-          fontSize: '18px',
-          color: 'var(--text-secondary)',
-        }}
-      >
-        <li>
-          <strong>Without MCP:</strong> The LLM can only use its training data,
-          which may be outdated or incomplete for specific civic datasets.
-        </li>
-        <li>
-          <strong>With MCP:</strong> The LLM connects to the{' '}
-          <a
-            href="https://github.com/npstorey/civic-ai-tools"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            opengov-mcp-server
-          </a>
-          , which provides access to Socrata open data portals from cities
-          like New York City, Chicago, and San Francisco.
-        </li>
-      </ol>
-
-      <h2 style={{ marginBottom: '24px' }}>Use MCP locally</h2>
+      {/* Try It Yourself */}
+      <h2 style={{ marginBottom: '24px' }}>Try It Yourself</h2>
 
       <p
         style={{
@@ -199,8 +380,8 @@ export default function AboutPage() {
           marginBottom: '24px',
         }}
       >
-        This demo has rate limits to manage costs. For unlimited access,
-        set up MCP locally with your favorite AI tool:
+        This demo has rate limits. For unlimited access and complex analysis,
+        set up MCP locally:
       </p>
 
       <div
@@ -212,7 +393,7 @@ export default function AboutPage() {
         }}
       >
         {[
-          { title: 'Claude Code', desc: 'Add opengov-mcp to your ~/.claude/settings.json' },
+          { title: 'Claude Code', desc: 'Add opengov-mcp to ~/.claude/settings.json' },
           { title: 'Cursor', desc: 'Configure MCP servers in Cursor settings' },
           { title: 'Other tools', desc: 'Any MCP-compatible client works' },
         ].map((item, idx) => (
@@ -240,7 +421,7 @@ export default function AboutPage() {
           marginBottom: '64px',
         }}
       >
-        <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>Get started</h3>
+        <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>Get Started</h3>
         <p
           style={{
             fontSize: '16px',
@@ -248,8 +429,7 @@ export default function AboutPage() {
             marginBottom: '16px',
           }}
         >
-          Check out the civic-ai-tools repository for setup instructions
-          and documentation.
+          Check out the civic-ai-tools repository for setup instructions and documentation.
         </p>
         <a
           href="https://github.com/npstorey/civic-ai-tools"
@@ -262,7 +442,8 @@ export default function AboutPage() {
         </a>
       </div>
 
-      <h2 style={{ marginBottom: '24px' }}>Learn more about MCP</h2>
+      {/* Learn More */}
+      <h2 style={{ marginBottom: '24px' }}>Learn More</h2>
 
       <ul
         style={{
@@ -294,6 +475,16 @@ export default function AboutPage() {
             MCP GitHub
           </a>
           {' '}- SDKs and specifications
+        </li>
+        <li>
+          <a
+            href="https://github.com/npstorey/civic-ai-tools"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            civic-ai-tools
+          </a>
+          {' '}- OpenGov MCP server and skills
         </li>
       </ul>
 
