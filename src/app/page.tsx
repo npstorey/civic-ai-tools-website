@@ -26,6 +26,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ComparisonResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [queryCount, setQueryCount] = useState(0);
 
   const handleSubmit = async (query: string, model: string, portal: string) => {
     setIsLoading(true);
@@ -57,6 +58,7 @@ export default function Home() {
       setError('Failed to connect to the server. Please try again.');
     } finally {
       setIsLoading(false);
+      setQueryCount((c) => c + 1); // Trigger rate limit banner refresh
     }
   };
 
@@ -90,7 +92,7 @@ export default function Home() {
 
       {/* Rate Limit Banner */}
       <div style={{ marginBottom: '32px' }}>
-        <RateLimitBanner />
+        <RateLimitBanner refreshTrigger={queryCount} />
       </div>
 
       {/* Query Form */}

@@ -72,7 +72,7 @@ export default function Header() {
           {status === 'loading' ? (
             <div
               className="h-10 w-24 rounded animate-pulse"
-              style={{ backgroundColor: 'var(--nyc-gray-80)' }}
+              style={{ backgroundColor: 'var(--skeleton-color)' }}
             />
           ) : session ? (
             <div className="flex items-center gap-4">

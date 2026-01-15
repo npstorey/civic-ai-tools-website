@@ -74,7 +74,7 @@ export async function queryWithMcp(
 
   // Handle tool calls iteratively
   let iterations = 0;
-  const maxIterations = 5; // Prevent infinite loops
+  const maxIterations = 10; // Prevent infinite loops
 
   while (response.choices[0]?.message?.tool_calls && iterations < maxIterations) {
     const assistantMessage = response.choices[0].message;
@@ -116,6 +116,38 @@ export async function queryWithMcp(
     });
 
     iterations++;
+  }
+
+  // If we hit max iterations or the response still has tool_calls but no content,
+  // force a final response without tools
+  const lastMessage = response.choices[0]?.message;
+  if (!lastMessage?.content && (iterations >= maxIterations || lastMessage?.tool_calls)) {
+    // Add the last assistant message if it has tool calls
+    if (lastMessage?.tool_calls) {
+      messages.push(lastMessage);
+      // Add placeholder tool responses for any pending calls
+      for (const toolCall of lastMessage.tool_calls) {
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: 'Tool call limit reached. Please provide a summary based on the data already collected.',
+        });
+      }
+    }
+
+    // Make final call without tools to force a text response
+    response = await openrouter.chat.completions.create({
+      model,
+      messages: [
+        ...messages,
+        {
+          role: 'user',
+          content: 'Based on all the data you have collected from the tool calls above, please provide a comprehensive answer to my original question. Summarize the key findings.',
+        },
+      ],
+      max_tokens: 2000,
+      // No tools - forces text response
+    });
   }
 
   const duration_ms = Date.now() - startTime;

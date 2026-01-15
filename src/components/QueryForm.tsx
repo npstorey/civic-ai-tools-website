@@ -105,7 +105,7 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
                 transition: 'background-color 0.15s ease',
               }}
               onMouseOver={(e) => {
-                if (!isLoading) e.currentTarget.style.backgroundColor = 'var(--nyc-gray-80)';
+                if (!isLoading) e.currentTarget.style.backgroundColor = 'var(--border-color)';
               }}
               onMouseOut={(e) => {
                 e.currentTarget.style.backgroundColor = 'var(--card-background)';

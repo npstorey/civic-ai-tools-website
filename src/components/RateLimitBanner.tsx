@@ -10,7 +10,11 @@ interface RateLimitInfo {
   authenticated: boolean;
 }
 
-export default function RateLimitBanner() {
+interface RateLimitBannerProps {
+  refreshTrigger?: number;
+}
+
+export default function RateLimitBanner({ refreshTrigger = 0 }: RateLimitBannerProps) {
   const { data: session } = useSession();
   const [rateLimit, setRateLimit] = useState<RateLimitInfo | null>(null);
 
@@ -34,7 +38,7 @@ export default function RateLimitBanner() {
     return () => {
       isMounted = false;
     };
-  }, [session]);
+  }, [session, refreshTrigger]);
 
   if (!rateLimit) return null;
 

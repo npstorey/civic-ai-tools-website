@@ -19,9 +19,6 @@
   --nyc-gray-80: #DDDDDD;
   --nyc-gray-90: #EEEEEE;
 
-  /* Background Colors */
-  --nyc-gray-60: #222222;
-
   /* Semantic/Auxiliary Colors */
   --nyc-info: #70BAFF;
   --nyc-success: #00B703;
@@ -35,7 +32,7 @@
   --space-lg: 32px;
   --space-xl: 64px;
 
-  /* Applied colors */
+  /* Applied colors - Light mode only */
   --background: var(--nyc-white);
   --foreground: var(--nyc-black);
   --text-primary: var(--nyc-black);
@@ -46,6 +43,7 @@
   --accent-hover: var(--nyc-blue-10);
   --accent-light: var(--nyc-blue-80);
   --card-background: var(--nyc-gray-90);
+  --skeleton-color: var(--nyc-gray-80);
 }
 
 @theme inline {
@@ -53,19 +51,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-noto-sans);
   --font-display: var(--font-space-grotesk);
-}
-
-/* Dark mode - NYC Design System uses black backgrounds */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: var(--nyc-black);
-    --foreground: var(--nyc-white);
-    --text-primary: var(--nyc-white);
-    --text-secondary: var(--nyc-gray-90);
-    --text-muted: var(--nyc-gray-70);
-    --border-color: var(--nyc-gray-30);
-    --card-background: var(--nyc-gray-60);
-  }
 }
 
 body {
@@ -147,7 +132,7 @@ a:hover {
 }
 
 a:visited {
-  color: #7B3FA0; /* Purple for visited */
+  color: #6B35A0;
 }
 
 a:focus {
@@ -157,10 +142,12 @@ a:focus {
 
 /* Remove default link styling for navigation and buttons */
 .no-link-style,
+.no-link-style:link,
 .no-link-style:hover,
-.no-link-style:visited {
-  color: inherit;
-  text-decoration: none;
+.no-link-style:visited,
+.no-link-style:active {
+  color: inherit !important;
+  text-decoration: none !important;
 }
 
 /* NYC Design System Button Base */
@@ -260,39 +247,19 @@ a:focus {
   border-color: var(--nyc-error);
 }
 
-/* Dark mode form adjustments */
-@media (prefers-color-scheme: dark) {
-  .nyc-field input,
-  .nyc-field textarea,
-  .nyc-field select {
-    background-color: var(--nyc-gray-60);
-    border-color: var(--nyc-gray-30);
-    color: var(--nyc-white);
-  }
+/* Skeleton loading animation */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
 
-  .nyc-field input:focus,
-  .nyc-field textarea:focus,
-  .nyc-field select:focus {
-    background-color: var(--nyc-gray-60);
-    border-color: var(--nyc-blue-40);
-  }
+.skeleton {
+  background-color: var(--skeleton-color);
+  animation: skeleton-pulse 2s infinite;
+}
 
-  .nyc-button-secondary {
-    background-color: var(--nyc-black);
-    border-color: var(--nyc-gray-30);
-  }
-
-  .nyc-button-primary {
-    background-color: var(--nyc-blue-40);
-    color: var(--nyc-white);
-  }
-
-  .nyc-button-primary:hover {
-    background-color: var(--nyc-blue-10);
-  }
-
-  .nyc-button-primary:disabled {
-    background-color: var(--nyc-gray-30);
-    color: var(--nyc-gray-70);
-  }
+/* Footer link styling */
+footer a,
+footer a:visited {
+  color: var(--nyc-blue-40);
 }

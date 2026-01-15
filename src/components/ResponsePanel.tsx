@@ -81,7 +81,7 @@ export default function ResponsePanel({
             <div
               style={{
                 height: '16px',
-                backgroundColor: 'var(--nyc-gray-80)',
+                backgroundColor: 'var(--skeleton-color)',
                 borderRadius: '4px',
                 animation: 'pulse 2s infinite',
               }}
@@ -89,7 +89,7 @@ export default function ResponsePanel({
             <div
               style={{
                 height: '16px',
-                backgroundColor: 'var(--nyc-gray-80)',
+                backgroundColor: 'var(--skeleton-color)',
                 borderRadius: '4px',
                 width: '85%',
                 animation: 'pulse 2s infinite',
@@ -98,7 +98,7 @@ export default function ResponsePanel({
             <div
               style={{
                 height: '16px',
-                backgroundColor: 'var(--nyc-gray-80)',
+                backgroundColor: 'var(--skeleton-color)',
                 borderRadius: '4px',
                 width: '70%',
                 animation: 'pulse 2s infinite',
