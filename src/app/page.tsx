@@ -92,7 +92,7 @@ export default function Home() {
           >
             MCP
           </a>
-          —and see how model choice affects results.
+          —and see how model choice and tool access affect results.
         </p>
       </div>
 
