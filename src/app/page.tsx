@@ -73,7 +73,7 @@ export default function Home() {
       {/* Hero Section */}
       <div style={{ textAlign: 'center', marginBottom: '16px' }}>
         <h1 style={{ marginBottom: '8px', fontSize: '36px' }}>
-          See how AI performs with civic data
+          See how AI performs with open data
         </h1>
         <p
           style={{
