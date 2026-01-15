@@ -39,6 +39,15 @@ export const OPENGOV_SKILL = `
 - Multiple values: "where": "borough IN ('BROOKLYN', 'MANHATTAN')"
 - Date range: "where": "created_date >= '2024-01-01' AND created_date < '2024-02-01'"
 
+## SoQL DATE FUNCTIONS (NOT standard SQL!)
+- Monthly aggregation: "select": "date_trunc_ym(created_date) as month, COUNT(*) as count", "group": "month", "order": "month"
+- Year truncation: date_trunc_y(date_field)
+- Year-month truncation: date_trunc_ym(date_field) - returns YYYY-MM-01T00:00:00
+- Extract year: date_extract_y(date_field)
+- Extract month: date_extract_m(date_field)
+- Extract day: date_extract_d(date_field)
+- IMPORTANT: Do NOT use DATE_TRUNC(), EXTRACT(), MONTH(), YEAR() - these are NOT supported!
+
 ## TOOL PARAMETERS
 - For type=metadata, pass dataset_id in "query" parameter: {"type": "metadata", "query": "erm2-nwe9"}
 - For type=query, use dataset_id parameter
