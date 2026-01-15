@@ -2,11 +2,7 @@
 
 ## To Do
 
-- [ ] **Set up Vercel KV for persistent rate limiting**
-  - Currently using in-memory fallback which resets on each deploy
-  - Go to Vercel dashboard → Project → Storage → Create KV Database
-  - This will auto-add KV_URL, KV_REST_API_URL, KV_REST_API_TOKEN env vars
-  - Rate limits will then persist across deploys
+_(Empty - add new items here)_
 
 ## To Consider
 
@@ -36,6 +32,37 @@
     - Link to civic-ai-tools repo with examples
     - "This query is complex - try it locally" messaging
   - Maybe detect query complexity and show a hint?
+  - **Note:** Already added basic hint below results linking to repo
 
 ## Done
 
+- [x] **Set up Vercel KV for persistent rate limiting** (2025-01-15)
+  - Using Upstash Redis via Vercel Marketplace
+  - Rate limits now persist across deploys
+
+- [x] **Fix empty MCP responses when hitting tool iteration limit**
+  - Added logic to force a final text response if model keeps requesting tools
+  - Increased max iterations from 5 to 10
+
+- [x] **Add SoQL date function guidance to skill module**
+  - Socrata uses `date_trunc_ym()`, `date_extract_m()` etc., NOT standard SQL
+  - LLM now uses correct syntax for monthly/yearly aggregations
+
+- [x] **Make layout compact - button visible above fold**
+  - Reduced hero size, form padding, moved rate limit inline
+  - Model/Portal/Compare button on same row
+
+- [x] **Remove dark mode - light mode only**
+  - Simplified styling for demo purposes
+
+- [x] **Add hint below results for complex queries**
+  - Links to civic-ai-tools repo, suggests Claude Code or Cursor
+
+- [x] **Simplify header navigation**
+  - Removed "Demo" link (redundant with homepage)
+  - Renamed "About MCP" to "About"
+
+- [x] **Rate limit banner refresh after queries**
+  - Counter now updates immediately after each query
+
+- [x] **NYC as default portal with updated examples**

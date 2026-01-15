@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Civic AI Tools Website
 
-## Getting Started
+A demo website showcasing the value of [Model Context Protocol (MCP)](https://modelcontextprotocol.io) by displaying side-by-side LLM responses with and without MCP integration for civic data queries.
 
-First, run the development server:
+**Live demo:** [civic-ai-tools-website.vercel.app](https://civic-ai-tools-website.vercel.app/)
+
+## What it does
+
+Users enter a question about civic data (e.g., "What are the most common 311 complaints in Brooklyn?") and see two responses:
+
+- **Without MCP:** LLM responds using only training data (often outdated or vague)
+- **With MCP:** LLM connects to live Socrata open data portals via [opengov-mcp-server](https://github.com/npstorey/civic-ai-tools) and returns real, current data
+
+## Tech Stack
+
+- **Frontend:** Next.js 16+ (App Router), Tailwind CSS
+- **LLM API:** OpenRouter (supports GPT-4o, Claude, etc.)
+- **MCP Server:** opengov-mcp-server (Socrata data access)
+- **Auth:** NextAuth.js with GitHub OAuth
+- **Rate Limiting:** Upstash Redis via @vercel/kv
+- **Hosting:** Vercel
+
+## Local Development
 
 ```bash
+# Install dependencies
+npm install
+
+# Set up environment variables (see .env.example or CLAUDE.md)
+cp .env.example .env.local
+
+# Start dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Required:
+```
+OPENROUTER_API_KEY=sk-or-...
+OPENGOV_MCP_URL=https://opengov-mcp-server.onrender.com
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+NEXTAUTH_SECRET=        # openssl rand -base64 32
+NEXTAUTH_URL=http://localhost:3000
+```
 
-## Learn More
+For persistent rate limiting (optional locally, required in production):
+```
+KV_REST_API_URL=
+KV_REST_API_TOKEN=
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Rate Limits
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Anonymous users: 5 requests/day
+- Signed-in users (GitHub): 25 requests/day
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Related
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [civic-ai-tools](https://github.com/npstorey/civic-ai-tools) - The opengov-mcp-server and related tools
+- [Model Context Protocol](https://modelcontextprotocol.io) - Official MCP documentation
