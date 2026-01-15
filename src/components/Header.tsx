@@ -31,17 +31,6 @@ export default function Header() {
           </Link>
           <nav className="hidden sm:flex items-center gap-6">
             <Link
-              href="/"
-              className="no-link-style"
-              style={{
-                color: 'var(--text-secondary)',
-                fontWeight: 500,
-                fontSize: '16px',
-              }}
-            >
-              Demo
-            </Link>
-            <Link
               href="/about"
               className="no-link-style"
               style={{
@@ -50,7 +39,7 @@ export default function Header() {
                 fontSize: '16px',
               }}
             >
-              About MCP
+              About
             </Link>
             <a
               href="https://github.com/npstorey/civic-ai-tools"
