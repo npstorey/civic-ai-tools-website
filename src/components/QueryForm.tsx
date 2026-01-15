@@ -30,7 +30,7 @@ const PORTALS = [
 
 export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
   const [query, setQuery] = useState('');
-  const [model, setModel] = useState('openai/gpt-4o-mini');
+  const [model, setModel] = useState('anthropic/claude-sonnet-4');
   const [portal, setPortal] = useState('data.cityofnewyork.us');
   const [models, setModels] = useState<Model[]>([]);
 
