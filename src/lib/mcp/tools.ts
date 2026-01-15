@@ -89,7 +89,7 @@ export const availableModels: ModelDefinition[] = [
     name: 'GPT-4o Mini',
     provider: 'OpenAI',
     supports_tools: true,
-    description: 'Fast and affordable for most tasks',
+    description: 'Fast and affordable (recommended)',
   },
   {
     id: 'openai/gpt-4o',
@@ -99,17 +99,17 @@ export const availableModels: ModelDefinition[] = [
     description: 'Most capable OpenAI model',
   },
   {
-    id: 'anthropic/claude-3.5-sonnet',
-    name: 'Claude 3.5 Sonnet',
+    id: 'anthropic/claude-sonnet-4',
+    name: 'Claude Sonnet 4',
     provider: 'Anthropic',
     supports_tools: true,
     description: 'Excellent reasoning and analysis',
   },
   {
-    id: 'meta-llama/llama-3.1-70b-instruct',
-    name: 'Llama 3.1 70B',
-    provider: 'Meta',
+    id: 'google/gemini-2.0-flash-001',
+    name: 'Gemini 2.0 Flash',
+    provider: 'Google',
     supports_tools: true,
-    description: 'Open source alternative',
+    description: 'Fast and cost-effective',
   },
 ];

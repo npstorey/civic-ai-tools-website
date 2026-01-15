@@ -7,11 +7,10 @@
   - Shortened examples to fit one line
   - Added scroll-to-results on Compare click
 
-- [ ] **Model audit**
-  - Review available OpenRouter models
-  - Select appropriate models to include in dropdown
-  - Choose best default model (balance of quality, speed, cost)
-  - Consider enabling more powerful models (GPT-4, Claude Opus) for testing
+- [x] **Model audit** (2025-01-15)
+  - Updated to 4 models with reliable tool support
+  - GPT-4o Mini (default), GPT-4o, Claude Sonnet 4, Gemini 2.0 Flash
+  - Removed Llama 3.1 (inconsistent tool calling)
 
 - [ ] **Update About page with educational content**
   - Explain factors that affect AI response quality:
