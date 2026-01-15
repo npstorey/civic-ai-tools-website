@@ -73,7 +73,7 @@ export default function Home() {
       {/* Hero Section */}
       <div style={{ textAlign: 'center', marginBottom: '16px' }}>
         <h1 style={{ marginBottom: '8px', fontSize: '36px' }}>
-          See what MCP can do
+          See how AI performs with civic data
         </h1>
         <p
           style={{
@@ -84,15 +84,15 @@ export default function Home() {
             margin: '0 auto',
           }}
         >
-          Compare how LLMs respond to civic data questions with and without{' '}
+          Compare LLM responses with and without live data access via{' '}
           <a
             href="https://modelcontextprotocol.io"
             target="_blank"
             rel="noopener noreferrer"
           >
             MCP
-          </a>{' '}
-          providing live access to open data.
+          </a>
+          —and see how model choice affects results.
         </p>
       </div>
 
@@ -169,7 +169,7 @@ export default function Home() {
           borderTop: '1px solid var(--border-color)',
         }}
       >
-        <h2 style={{ marginBottom: '16px' }}>Want to use MCP locally?</h2>
+        <h2 style={{ marginBottom: '16px' }}>Want better results?</h2>
         <p
           style={{
             fontSize: '18px',
@@ -179,8 +179,8 @@ export default function Home() {
             margin: '0 auto 24px',
           }}
         >
-          Set up the opengov-mcp-server with Claude Code, Cursor, or other MCP-compatible
-          tools for unlimited access to civic data.
+          Set up civic-ai-tools locally with Claude Code, Cursor, or other MCP-compatible
+          tools for unlimited access and complex multi-step analysis.
         </p>
         <a
           href="https://github.com/npstorey/civic-ai-tools"
