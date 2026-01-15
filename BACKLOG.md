@@ -8,18 +8,14 @@
   - Added scroll-to-results on Compare click
 
 - [x] **Model audit** (2025-01-15)
-  - Updated to 4 models with reliable tool support
-  - GPT-4o Mini (default), GPT-4o, Claude Sonnet 4, Gemini 2.0 Flash
-  - Removed Llama 3.1 (inconsistent tool calling)
+  - Claude Sonnet 4 (default), GPT-4o, Claude 3.5 Haiku, GPT-4o Mini
+  - Removed Gemini (tool calling issues via OpenRouter)
+  - Based on comprehensive reliability research
 
-- [ ] **Update About page with educational content**
-  - Explain factors that affect AI response quality:
-    - Model selection
-    - System prompts / Skills
-    - Orchestration framework (browser vs IDE vs CLI)
-    - Tool calls / MCPs
-  - Position civic-ai-tools as educational resource, not just demo
-  - Keep concise but informative
+- [x] **Update About page with educational content** (2025-01-15)
+  - Added 4 factors affecting AI quality: Model, Skills, Environment, Tools
+  - Includes environment comparison table
+  - Positioned as educational resource + demo
 
 ## To Do (Medium Priority)
 
