@@ -118,7 +118,7 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '16px', alignItems: 'end' }}>
+      <div className="form-controls-row">
         <div className="nyc-field">
           <label htmlFor="model">Model</label>
           <select

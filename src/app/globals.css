@@ -263,3 +263,22 @@ footer a,
 footer a:visited {
   color: var(--nyc-blue-40);
 }
+
+/* Query form controls row - responsive layout */
+.form-controls-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 16px;
+  align-items: end;
+}
+
+@media (max-width: 640px) {
+  .form-controls-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .form-controls-row .nyc-button {
+    width: 100%;
+  }
+}
