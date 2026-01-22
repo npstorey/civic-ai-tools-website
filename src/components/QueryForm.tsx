@@ -33,7 +33,7 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
   const [model, setModel] = useState('anthropic/claude-sonnet-4');
   const [portal, setPortal] = useState('data.cityofnewyork.us');
   const [models, setModels] = useState<Model[]>([]);
-  const [useStreaming, setUseStreaming] = useState(false);
+  const [useStreaming, setUseStreaming] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
