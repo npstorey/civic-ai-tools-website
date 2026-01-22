@@ -1,7 +1,7 @@
 import { kv } from '@vercel/kv';
 
-const ANONYMOUS_LIMIT = 5;
-const AUTHENTICATED_LIMIT = 25;
+const ANONYMOUS_LIMIT = 50;
+const AUTHENTICATED_LIMIT = 100;
 
 // In-memory fallback for local development without Vercel KV
 const memoryStore = new Map<string, number>();
