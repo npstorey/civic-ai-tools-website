@@ -48,13 +48,13 @@ export function formatToolProgress(name: string, args: Record<string, unknown>):
     case 'catalog':
       return `Searching ${cityName} data catalog${query ? `: "${query}"` : ''}`;
     case 'metadata':
-      return `Getting metadata for ${datasetName}`;
+      return `Getting metadata for ${query || datasetName}`;
     case 'query':
-      // Show the actual SoQL query being executed
-      if (query) {
-        // Truncate very long queries but show the key parts
-        const truncatedQuery = query.length > 120 ? query.slice(0, 120) + '...' : query;
-        return `Querying ${datasetName}: ${truncatedQuery}`;
+      // Build SoQL query string from separate parameters
+      const soqlQuery = buildSoqlDisplay(args);
+      if (soqlQuery) {
+        const truncated = soqlQuery.length > 100 ? soqlQuery.slice(0, 100) + '...' : soqlQuery;
+        return `Querying ${datasetName}: ${truncated}`;
       }
       return `Querying ${datasetName}`;
     case 'metrics':
@@ -62,6 +62,35 @@ export function formatToolProgress(name: string, args: Record<string, unknown>):
     default:
       return `Calling ${name}...`;
   }
+}
+
+// Build a display string showing the SoQL query being executed
+function buildSoqlDisplay(args: Record<string, unknown>): string {
+  const parts: string[] = [];
+
+  const select = args.select as string | undefined;
+  const where = args.where as string | undefined;
+  const group = args.group as string | undefined;
+  const order = args.order as string | undefined;
+  const limit = args.limit as number | undefined;
+
+  if (select) {
+    parts.push(`SELECT ${select}`);
+  }
+  if (where) {
+    parts.push(`WHERE ${where}`);
+  }
+  if (group) {
+    parts.push(`GROUP BY ${group}`);
+  }
+  if (order) {
+    parts.push(`ORDER BY ${order}`);
+  }
+  if (limit) {
+    parts.push(`LIMIT ${limit}`);
+  }
+
+  return parts.join(' ');
 }
 
 function getPortalCity(portal: string | undefined): string {
