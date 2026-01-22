@@ -1,6 +1,6 @@
 import { kv } from '@vercel/kv';
 
-const ANONYMOUS_LIMIT = 5;
+const ANONYMOUS_LIMIT = 10;
 const AUTHENTICATED_LIMIT = 25;
 
 // In-memory fallback for local development without Vercel KV
