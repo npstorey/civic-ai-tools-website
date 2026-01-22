@@ -5,6 +5,12 @@ interface ToolCall {
   args: Record<string, unknown>;
 }
 
+interface ProgressLogEntry {
+  message: string;
+  timestamp: number;
+  isComplete?: boolean;
+}
+
 interface ResponsePanelProps {
   title: string;
   subtitle: string;
@@ -15,7 +21,7 @@ interface ResponsePanelProps {
   isLoading?: boolean;
   variant: 'without-mcp' | 'with-mcp';
   // Streaming props
-  progress?: string | null;
+  progressLog?: ProgressLogEntry[];
   isStreaming?: boolean;
 }
 
@@ -28,11 +34,12 @@ export default function ResponsePanel({
   tools_called,
   isLoading,
   variant,
-  progress,
+  progressLog,
   isStreaming,
 }: ResponsePanelProps) {
   const isMcp = variant === 'with-mcp';
-  const showProgress = isStreaming && progress && !content;
+  const hasProgressLog = isStreaming && progressLog && progressLog.length > 0;
+  const showProgressLog = hasProgressLog && !content;
   const showStreamingContent = isStreaming && content;
   const showStaticContent = !isStreaming && !isLoading && content;
 
@@ -116,55 +123,120 @@ export default function ResponsePanel({
           </div>
         )}
 
-        {/* Streaming progress message */}
-        {showProgress && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              color: 'var(--text-muted)',
-              fontSize: '15px',
-            }}
-          >
-            <span
-              style={{
-                width: '16px',
-                height: '16px',
-                border: '2px solid var(--border-color)',
-                borderTopColor: isMcp ? 'var(--nyc-success)' : 'var(--nyc-blue)',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-              }}
-            />
-            {progress}
+        {/* Streaming progress log */}
+        {showProgressLog && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {progressLog!.map((entry, idx) => (
+              <div
+                key={idx}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  color: entry.isComplete ? 'var(--text-muted)' : 'var(--text-secondary)',
+                  fontSize: '14px',
+                  opacity: entry.isComplete ? 0.7 : 1,
+                }}
+              >
+                {entry.isComplete ? (
+                  <span
+                    style={{
+                      width: '16px',
+                      height: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: isMcp ? 'var(--nyc-success)' : 'var(--nyc-blue)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+                    </svg>
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      width: '16px',
+                      height: '16px',
+                      border: '2px solid var(--border-color)',
+                      borderTopColor: isMcp ? 'var(--nyc-success)' : 'var(--nyc-blue)',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite',
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+                <span style={{ textDecoration: entry.isComplete ? 'none' : 'none' }}>
+                  {entry.message}
+                </span>
+              </div>
+            ))}
           </div>
         )}
 
         {/* Streaming content (with cursor) */}
         {showStreamingContent && (
-          <div
-            style={{
-              whiteSpace: 'pre-wrap',
-              fontSize: '16px',
-              lineHeight: '160%',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            {content}
-            {!duration_ms && (
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: '2px',
-                  height: '1em',
-                  backgroundColor: 'var(--text-secondary)',
-                  marginLeft: '2px',
-                  animation: 'blink 1s step-end infinite',
-                  verticalAlign: 'text-bottom',
-                }}
-              />
+          <div>
+            {/* Show completed progress log above content */}
+            {hasProgressLog && (
+              <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {progressLog!.map((entry, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        color: 'var(--text-muted)',
+                        fontSize: '13px',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: '14px',
+                          height: '14px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: isMcp ? 'var(--nyc-success)' : 'var(--nyc-blue)',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                          <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+                        </svg>
+                      </span>
+                      <span>{entry.message}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
+            <div
+              style={{
+                whiteSpace: 'pre-wrap',
+                fontSize: '16px',
+                lineHeight: '160%',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              {content}
+              {!duration_ms && (
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: '2px',
+                    height: '1em',
+                    backgroundColor: 'var(--text-secondary)',
+                    marginLeft: '2px',
+                    animation: 'blink 1s step-end infinite',
+                    verticalAlign: 'text-bottom',
+                  }}
+                />
+              )}
+            </div>
           </div>
         )}
 

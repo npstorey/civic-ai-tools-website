@@ -7,9 +7,16 @@ interface ToolCall {
   args: Record<string, unknown>;
 }
 
+interface ProgressLogEntry {
+  message: string;
+  timestamp: number;
+  isComplete?: boolean;
+}
+
 interface PanelState {
   content: string;
   progress: string | null;
+  progressLog: ProgressLogEntry[];
   isComplete: boolean;
   duration_ms?: number;
   tokens_used?: number;
@@ -27,6 +34,7 @@ interface StreamingState {
 const initialPanelState: PanelState = {
   content: '',
   progress: null,
+  progressLog: [],
   isComplete: false,
 };
 
@@ -155,24 +163,47 @@ function handleEvent(
 
   switch (type) {
     case 'progress':
-      setState(prev => ({
-        ...prev,
-        [panel]: {
-          ...prev[panel],
-          progress: event.message as string,
-        },
-      }));
+      setState(prev => {
+        const message = event.message as string;
+        const newLog = [...prev[panel].progressLog];
+
+        // Mark previous entry as complete if it exists
+        if (newLog.length > 0) {
+          newLog[newLog.length - 1] = { ...newLog[newLog.length - 1], isComplete: true };
+        }
+
+        // Add new progress entry
+        newLog.push({ message, timestamp: Date.now() });
+
+        return {
+          ...prev,
+          [panel]: {
+            ...prev[panel],
+            progress: message,
+            progressLog: newLog,
+          },
+        };
+      });
       break;
 
     case 'token':
-      setState(prev => ({
-        ...prev,
-        [panel]: {
-          ...prev[panel],
-          content: prev[panel].content + (event.content as string),
-          progress: null, // Clear progress when tokens start
-        },
-      }));
+      setState(prev => {
+        // Mark any in-progress log entry as complete when tokens start
+        const newLog = [...prev[panel].progressLog];
+        if (newLog.length > 0 && !newLog[newLog.length - 1].isComplete) {
+          newLog[newLog.length - 1] = { ...newLog[newLog.length - 1], isComplete: true };
+        }
+
+        return {
+          ...prev,
+          [panel]: {
+            ...prev[panel],
+            content: prev[panel].content + (event.content as string),
+            progress: null,
+            progressLog: newLog,
+          },
+        };
+      });
       break;
 
     case 'complete':
@@ -183,6 +214,9 @@ function handleEvent(
         tools_called?: ToolCall[];
       };
       setState(prev => {
+        // Mark all log entries as complete
+        const newLog = prev[panel].progressLog.map(entry => ({ ...entry, isComplete: true }));
+
         const newState = {
           ...prev,
           [panel]: {
@@ -193,6 +227,7 @@ function handleEvent(
             tools_called: data.tools_called,
             isComplete: true,
             progress: null,
+            progressLog: newLog,
           },
         };
         // Check if both are complete
