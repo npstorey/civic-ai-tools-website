@@ -42,16 +42,23 @@ export function formatToolProgress(name: string, args: Record<string, unknown>):
 
   // Get city name from portal
   const cityName = getPortalCity(portal);
+  const datasetName = getDatasetName(datasetId);
 
   switch (type) {
     case 'catalog':
-      return `Searching ${cityName} data catalog${query ? ` for "${query}"` : ''}...`;
+      return `Searching ${cityName} data catalog${query ? `: "${query}"` : ''}`;
     case 'metadata':
-      return `Getting metadata for dataset ${datasetId || 'unknown'}...`;
+      return `Getting metadata for ${datasetName}`;
     case 'query':
-      return `Querying ${cityName} ${getDatasetName(datasetId)}...`;
+      // Show the actual SoQL query being executed
+      if (query) {
+        // Truncate very long queries but show the key parts
+        const truncatedQuery = query.length > 120 ? query.slice(0, 120) + '...' : query;
+        return `Querying ${datasetName}: ${truncatedQuery}`;
+      }
+      return `Querying ${datasetName}`;
     case 'metrics':
-      return `Fetching metrics for ${datasetId || 'dataset'}...`;
+      return `Fetching metrics for ${datasetName}`;
     default:
       return `Calling ${name}...`;
   }
