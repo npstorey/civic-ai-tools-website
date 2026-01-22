@@ -14,9 +14,16 @@ interface ResponseData {
   tools_called?: ToolCall[];
 }
 
+interface ProgressLogEntry {
+  message: string;
+  timestamp: number;
+  isComplete?: boolean;
+}
+
 interface StreamingPanelState {
   content: string;
   progress: string | null;
+  progressLog: ProgressLogEntry[];
   isComplete: boolean;
   duration_ms?: number;
   tokens_used?: number;
@@ -68,7 +75,7 @@ export default function ComparisonDisplay({
         isLoading={isLoading && !isStreaming}
         variant="without-mcp"
         isStreaming={isStreaming}
-        progress={streamingWithoutMcp?.progress}
+        progressLog={streamingWithoutMcp?.progressLog}
       />
       <ResponsePanel
         title="With MCP"
@@ -80,7 +87,7 @@ export default function ComparisonDisplay({
         isLoading={isLoading && !isStreaming}
         variant="with-mcp"
         isStreaming={isStreaming}
-        progress={streamingWithMcp?.progress}
+        progressLog={streamingWithMcp?.progressLog}
       />
     </div>
   );
