@@ -10,7 +10,7 @@ interface Model {
 }
 
 interface QueryFormProps {
-  onSubmit: (query: string, model: string, portal: string) => void;
+  onSubmit: (query: string, model: string, portal: string, useStreaming: boolean) => void;
   isLoading: boolean;
 }
 
@@ -33,6 +33,7 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
   const [model, setModel] = useState('anthropic/claude-sonnet-4');
   const [portal, setPortal] = useState('data.cityofnewyork.us');
   const [models, setModels] = useState<Model[]>([]);
+  const [useStreaming, setUseStreaming] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -59,7 +60,7 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim() && !isLoading) {
-      onSubmit(query.trim(), model, portal);
+      onSubmit(query.trim(), model, portal, useStreaming);
     }
   };
 
@@ -150,6 +151,27 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
             ))}
           </select>
         </div>
+
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '14px',
+            color: 'var(--text-secondary)',
+            cursor: isLoading ? 'not-allowed' : 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={useStreaming}
+            onChange={(e) => setUseStreaming(e.target.checked)}
+            disabled={isLoading}
+            style={{ cursor: isLoading ? 'not-allowed' : 'pointer' }}
+          />
+          Stream responses (beta)
+        </label>
 
         <button
           type="submit"
