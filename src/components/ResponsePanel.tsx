@@ -14,6 +14,9 @@ interface ResponsePanelProps {
   tools_called?: ToolCall[];
   isLoading?: boolean;
   variant: 'without-mcp' | 'with-mcp';
+  // Streaming props
+  progress?: string | null;
+  isStreaming?: boolean;
 }
 
 export default function ResponsePanel({
@@ -25,8 +28,13 @@ export default function ResponsePanel({
   tools_called,
   isLoading,
   variant,
+  progress,
+  isStreaming,
 }: ResponsePanelProps) {
   const isMcp = variant === 'with-mcp';
+  const showProgress = isStreaming && progress && !content;
+  const showStreamingContent = isStreaming && content;
+  const showStaticContent = !isStreaming && !isLoading && content;
 
   return (
     <div
@@ -76,7 +84,8 @@ export default function ResponsePanel({
           overflow: 'auto',
         }}
       >
-        {isLoading ? (
+        {/* Non-streaming loading state */}
+        {isLoading && !isStreaming && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div
               style={{
@@ -105,7 +114,62 @@ export default function ResponsePanel({
               }}
             />
           </div>
-        ) : (
+        )}
+
+        {/* Streaming progress message */}
+        {showProgress && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              color: 'var(--text-muted)',
+              fontSize: '15px',
+            }}
+          >
+            <span
+              style={{
+                width: '16px',
+                height: '16px',
+                border: '2px solid var(--border-color)',
+                borderTopColor: isMcp ? 'var(--nyc-success)' : 'var(--nyc-blue)',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+              }}
+            />
+            {progress}
+          </div>
+        )}
+
+        {/* Streaming content (with cursor) */}
+        {showStreamingContent && (
+          <div
+            style={{
+              whiteSpace: 'pre-wrap',
+              fontSize: '16px',
+              lineHeight: '160%',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            {content}
+            {!duration_ms && (
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: '2px',
+                  height: '1em',
+                  backgroundColor: 'var(--text-secondary)',
+                  marginLeft: '2px',
+                  animation: 'blink 1s step-end infinite',
+                  verticalAlign: 'text-bottom',
+                }}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Static content (non-streaming) */}
+        {showStaticContent && (
           <div
             style={{
               whiteSpace: 'pre-wrap',
@@ -204,6 +268,13 @@ export default function ResponsePanel({
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
         }
       `}</style>
     </div>
