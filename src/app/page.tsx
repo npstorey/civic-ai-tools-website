@@ -6,33 +6,11 @@ import ComparisonDisplay from '@/components/ComparisonDisplay';
 import RateLimitBanner from '@/components/RateLimitBanner';
 import { useStreamingComparison } from '@/hooks/useStreamingComparison';
 
-interface ToolCall {
-  name: string;
-  args: Record<string, unknown>;
-}
-
-interface ResponseData {
-  content: string;
-  duration_ms: number;
-  tokens_used: number;
-  tools_called?: ToolCall[];
-}
-
-interface ComparisonResult {
-  withoutMcp: ResponseData;
-  withMcp: ResponseData;
-}
-
 export default function Home() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<ComparisonResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [queryCount, setQueryCount] = useState(0);
   const [usedModel, setUsedModel] = useState<string>('');
-  const [isStreamingMode, setIsStreamingMode] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // Streaming hook
   const streaming = useStreamingComparison();
 
   // Extract display name from model ID (e.g., "anthropic/claude-sonnet-4" -> "Claude Sonnet 4")
@@ -44,56 +22,16 @@ export default function Home() {
       .join(' ');
   };
 
-  const handleSubmit = async (query: string, model: string, portal: string, useStreaming: boolean) => {
+  const handleSubmit = async (query: string, model: string, portal: string) => {
     setUsedModel(model);
-    setIsStreamingMode(useStreaming);
 
     // Scroll to results after a brief delay to let the loading state render
     setTimeout(() => {
       resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
 
-    if (useStreaming) {
-      // Use streaming mode
-      setIsLoading(false);
-      setResult(null);
-      setError(null);
-      streaming.startComparison(query, model, portal);
-      setQueryCount((c) => c + 1); // Trigger rate limit banner refresh
-    } else {
-      // Use original non-streaming mode
-      setIsLoading(true);
-      setError(null);
-      setResult(null);
-
-      try {
-        const response = await fetch('/api/compare', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ query, model, portal }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          if (response.status === 429) {
-            setError('Rate limit exceeded. Please try again tomorrow or sign in for more requests.');
-          } else {
-            setError(data.error || 'An error occurred');
-          }
-          return;
-        }
-
-        setResult(data);
-      } catch {
-        setError('Failed to connect to the server. Please try again.');
-      } finally {
-        setIsLoading(false);
-        setQueryCount((c) => c + 1); // Trigger rate limit banner refresh
-      }
-    }
+    streaming.startComparison(query, model, portal);
+    setQueryCount((c) => c + 1);
   };
 
   return (
@@ -133,7 +71,7 @@ export default function Home() {
           marginBottom: '16px',
         }}
       >
-        <QueryForm onSubmit={handleSubmit} isLoading={isLoading || streaming.isLoading} />
+        <QueryForm onSubmit={handleSubmit} isLoading={streaming.isLoading} />
         {/* Rate Limit - inline at bottom of form */}
         <div style={{ marginTop: '8px' }}>
           <RateLimitBanner refreshTrigger={queryCount} />
@@ -141,7 +79,7 @@ export default function Home() {
       </div>
 
       {/* Error Message */}
-      {(error || streaming.error) && (
+      {streaming.error && (
         <div
           style={{
             marginBottom: '32px',
@@ -152,25 +90,24 @@ export default function Home() {
             border: '1px solid var(--nyc-error)',
           }}
         >
-          {error || streaming.error}
+          {streaming.error}
         </div>
       )}
 
       {/* Results */}
-      {(isLoading || result || streaming.isLoading || streaming.withoutMcp.content || streaming.withMcp.content) && (
+      {(streaming.isLoading || streaming.withoutMcp.content || streaming.withMcp.content) && (
         <div ref={resultsRef} style={{ marginBottom: '24px' }}>
           <h2 style={{ marginBottom: '16px' }}>Results</h2>
           <ComparisonDisplay
-            withoutMcp={result?.withoutMcp || null}
-            withMcp={result?.withMcp || null}
-            isLoading={isLoading || streaming.isLoading}
+            withoutMcp={null}
+            withMcp={null}
+            isLoading={streaming.isLoading}
             modelName={getModelDisplayName(usedModel)}
-            isStreaming={isStreamingMode}
+            isStreaming={true}
             streamingWithoutMcp={streaming.withoutMcp}
             streamingWithMcp={streaming.withMcp}
           />
-          {/* Hint for complex queries */}
-          {(result || (streaming.withoutMcp.isComplete && streaming.withMcp.isComplete)) && (
+          {(streaming.withoutMcp.isComplete && streaming.withMcp.isComplete) && (
             <p
               style={{
                 marginTop: '16px',

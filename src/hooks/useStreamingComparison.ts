@@ -5,6 +5,7 @@ import { useState, useCallback, useRef } from 'react';
 interface ToolCall {
   name: string;
   args: Record<string, unknown>;
+  resultSummary?: { rows: number; columns: number };
 }
 
 interface ProgressLogEntry {
