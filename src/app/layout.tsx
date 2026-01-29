@@ -68,6 +68,14 @@ export default function RootLayout({
                 >
                   MCP
                 </a>
+                {' '}by{' '}
+                <a
+                  href="https://nathanstorey.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Nathan Storey
+                </a>
               </p>
             </footer>
           </div>
