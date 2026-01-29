@@ -173,7 +173,8 @@ a:focus {
 }
 
 /* Primary Button */
-.nyc-button-primary {
+.nyc-button-primary,
+.nyc-button-primary:visited {
   background-color: var(--nyc-blue-40);
   color: var(--nyc-white);
   border: none;
