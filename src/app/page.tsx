@@ -144,12 +144,14 @@ export default function Home() {
             fontSize: '18px',
             color: 'var(--text-secondary)',
             marginBottom: '24px',
-            maxWidth: '600px',
+            maxWidth: '650px',
             margin: '0 auto 24px',
           }}
         >
-          Set up civic-ai-tools locally with Claude Code, Cursor, or other MCP-compatible
-          tools for unlimited access and complex multi-step analysis.
+          The civic-ai-tools repo includes the OpenGov MCP server (Socrata open data)
+          and the Data Commons MCP (Google demographics, economics, and health data),
+          with more MCP servers coming soon. Set up locally with Claude Code, Cursor,
+          or any MCP-compatible tool for unlimited access and complex multi-step analysis.
         </p>
         <a
           href="https://github.com/npstorey/civic-ai-tools"

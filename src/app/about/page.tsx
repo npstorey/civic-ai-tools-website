@@ -196,7 +196,7 @@ export default function AboutPage() {
           </p>
         </div>
 
-        {/* Factor 4: Tools & MCPs */}
+        {/* Factor 4: Tools & Data Access */}
         <div
           style={{
             backgroundColor: 'var(--card-background)',
@@ -205,8 +205,34 @@ export default function AboutPage() {
           }}
         >
           <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>
-            4. Tools &amp; MCPs
+            4. Tools &amp; Data Access
           </h3>
+          <p
+            style={{
+              fontSize: '16px',
+              color: 'var(--text-secondary)',
+              marginBottom: '12px',
+            }}
+          >
+            LLMs can access external information in several ways. Many models now include
+            built-in tools like web search, which can find general information about a topic.
+            But for structured civic data, general-purpose tools have limits:
+          </p>
+          <ul
+            style={{
+              paddingLeft: '20px',
+              margin: '0 0 16px 0',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              fontSize: '16px',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <li><strong>Web search</strong> - Can find articles <em>about</em> data, but not query the data itself</li>
+            <li><strong>RAG (retrieval)</strong> - Searches pre-indexed documents, not live databases</li>
+            <li><strong>MCP tools</strong> - Execute structured API calls against specific data sources</li>
+          </ul>
           <p
             style={{
               fontSize: '16px',
@@ -221,7 +247,10 @@ export default function AboutPage() {
             >
               Model Context Protocol (MCP)
             </a>{' '}
-            allows AI to connect to external data sources instead of relying on training data:
+            gives AI direct, structured access to APIs and databases. The difference
+            is precision: web search might find a news article mentioning 311 complaint
+            trends, while an MCP server queries the actual Socrata database and returns
+            verifiable results.
           </p>
 
           <div
@@ -246,7 +275,7 @@ export default function AboutPage() {
                   marginBottom: '8px',
                 }}
               >
-                Without MCP
+                Without Data Tools
               </h4>
               <ul
                 style={{
@@ -295,12 +324,63 @@ export default function AboutPage() {
                   gap: '4px',
                 }}
               >
-                <li>- Access to live data</li>
-                <li>- Queries actual databases</li>
-                <li>- Cites specific datasets</li>
+                <li>- Queries live databases directly</li>
+                <li>- Returns structured, verifiable data</li>
+                <li>- Cites specific datasets and records</li>
               </ul>
             </div>
           </div>
+        </div>
+
+        {/* Factor 5: Context Management */}
+        <div
+          style={{
+            backgroundColor: 'var(--card-background)',
+            borderRadius: '4px',
+            padding: '24px',
+          }}
+        >
+          <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>
+            5. Context Management
+          </h3>
+          <p
+            style={{
+              fontSize: '16px',
+              color: 'var(--text-secondary)',
+              marginBottom: '12px',
+            }}
+          >
+            LLMs have a finite context window — the total amount of text they can consider
+            at once. System prompts, conversation history, tool results, and the response
+            itself all compete for that space. How this context is managed affects result quality:
+          </p>
+          <ul
+            style={{
+              paddingLeft: '20px',
+              margin: '0 0 12px 0',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              fontSize: '16px',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <li><strong>Fresh context</strong> - A new conversation has maximum room for reasoning (this demo uses a fresh context for each query)</li>
+            <li><strong>Accumulated context</strong> - In a long session, earlier messages take up space, potentially reducing quality on later queries</li>
+            <li><strong>Large tool results</strong> - A query returning thousands of rows consumes significant context, leaving less room for analysis</li>
+            <li><strong>Auto-compacting</strong> - Many tools (Claude Code, Cursor, and others) now automatically summarize older context when the window fills up, preserving the most relevant information while freeing space</li>
+          </ul>
+          <p
+            style={{
+              fontSize: '14px',
+              color: 'var(--text-muted)',
+              marginTop: '12px',
+              fontStyle: 'italic',
+            }}
+          >
+            This is one reason the same query can produce different results in this demo
+            versus a long-running session in Claude Code or Cursor — context state matters.
+          </p>
         </div>
       </div>
 
