@@ -1,8 +1,12 @@
 'use client';
 
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
 interface ToolCall {
   name: string;
   args: Record<string, unknown>;
+  resultSummary?: { rows: number; columns: number };
 }
 
 interface ProgressLogEntry {
@@ -25,6 +29,45 @@ interface ResponsePanelProps {
   isStreaming?: boolean;
 }
 
+function buildSocrataUrl(args: Record<string, unknown>): { json: string; csv: string } | null {
+  const type = args.type as string;
+  const portal = args.portal as string;
+  const datasetId = args.dataset_id as string;
+
+  if (!portal || !datasetId) return null;
+
+  const base = `https://${portal}/resource/${datasetId}`;
+
+  if (type === 'query') {
+    const params = new URLSearchParams();
+    if (args.select) params.set('$select', args.select as string);
+    if (args.where) params.set('$where', args.where as string);
+    if (args.group) params.set('$group', args.group as string);
+    if (args.order) params.set('$order', args.order as string);
+    if (args.limit) params.set('$limit', String(args.limit));
+    const qs = params.toString();
+    return {
+      json: `${base}.json${qs ? `?${qs}` : ''}`,
+      csv: `${base}.csv${qs ? `?${qs}` : ''}`,
+    };
+  }
+
+  if (type === 'catalog') {
+    const query = args.query as string | undefined;
+    const catalogUrl = `https://${portal}/api/catalog/v1${query ? `?q=${encodeURIComponent(query)}` : ''}`;
+    return { json: catalogUrl, csv: catalogUrl };
+  }
+
+  if (type === 'metadata') {
+    return {
+      json: `https://${portal}/api/views/${datasetId}.json`,
+      csv: `https://${portal}/api/views/${datasetId}.json`,
+    };
+  }
+
+  return null;
+}
+
 export default function ResponsePanel({
   title,
   subtitle,
@@ -42,6 +85,25 @@ export default function ResponsePanel({
   const showProgressLog = hasProgressLog && !content;
   const showStreamingContent = isStreaming && content;
   const showStaticContent = !isStreaming && !isLoading && content;
+
+  const markdownContent = (text: string, showCursor?: boolean) => (
+    <div className="response-markdown">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+      {showCursor && (
+        <span
+          style={{
+            display: 'inline-block',
+            width: '2px',
+            height: '1em',
+            backgroundColor: 'var(--text-secondary)',
+            marginLeft: '2px',
+            animation: 'blink 1s step-end infinite',
+            verticalAlign: 'text-bottom',
+          }}
+        />
+      )}
+    </div>
+  );
 
   return (
     <div
@@ -214,45 +276,12 @@ export default function ResponsePanel({
                 </div>
               </div>
             )}
-            <div
-              style={{
-                whiteSpace: 'pre-wrap',
-                fontSize: '16px',
-                lineHeight: '160%',
-                color: 'var(--text-secondary)',
-              }}
-            >
-              {content}
-              {!duration_ms && (
-                <span
-                  style={{
-                    display: 'inline-block',
-                    width: '2px',
-                    height: '1em',
-                    backgroundColor: 'var(--text-secondary)',
-                    marginLeft: '2px',
-                    animation: 'blink 1s step-end infinite',
-                    verticalAlign: 'text-bottom',
-                  }}
-                />
-              )}
-            </div>
+            {markdownContent(content, !duration_ms)}
           </div>
         )}
 
         {/* Static content (non-streaming) */}
-        {showStaticContent && (
-          <div
-            style={{
-              whiteSpace: 'pre-wrap',
-              fontSize: '16px',
-              lineHeight: '160%',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            {content}
-          </div>
-        )}
+        {showStaticContent && markdownContent(content)}
       </div>
 
       {/* Footer with metadata */}
@@ -298,38 +327,71 @@ export default function ResponsePanel({
                 MCP tools used:
               </h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {tools_called.map((tool, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      backgroundColor: 'rgba(0, 183, 3, 0.15)',
-                      borderRadius: '4px',
-                      padding: '8px 12px',
-                    }}
-                  >
-                    <code
-                      style={{
-                        fontSize: '14px',
-                        fontFamily: 'monospace',
-                        color: 'var(--nyc-success)',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {tool.name}
-                    </code>
+                {tools_called.map((tool, idx) => {
+                  const urls = buildSocrataUrl(tool.args);
+                  return (
                     <div
+                      key={idx}
                       style={{
-                        fontSize: '12px',
-                        fontFamily: 'monospace',
-                        color: 'var(--text-muted)',
-                        marginTop: '4px',
-                        overflowX: 'auto',
+                        backgroundColor: 'rgba(0, 183, 3, 0.15)',
+                        borderRadius: '4px',
+                        padding: '8px 12px',
                       }}
                     >
-                      {JSON.stringify(tool.args, null, 2)}
+                      <code
+                        style={{
+                          fontSize: '14px',
+                          fontFamily: 'monospace',
+                          color: 'var(--nyc-success)',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {tool.name}
+                      </code>
+                      {tool.resultSummary && (
+                        <span
+                          style={{
+                            fontSize: '12px',
+                            color: 'var(--text-muted)',
+                            marginLeft: '8px',
+                          }}
+                        >
+                          Returned {tool.resultSummary.rows} rows x {tool.resultSummary.columns} columns
+                        </span>
+                      )}
+                      <div
+                        style={{
+                          fontSize: '12px',
+                          fontFamily: 'monospace',
+                          color: 'var(--text-muted)',
+                          marginTop: '4px',
+                          overflowX: 'auto',
+                        }}
+                      >
+                        {JSON.stringify(tool.args, null, 2)}
+                      </div>
+                      {urls && (
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            marginTop: '6px',
+                            display: 'flex',
+                            gap: '12px',
+                          }}
+                        >
+                          <a href={urls.json} target="_blank" rel="noopener noreferrer">
+                            View JSON
+                          </a>
+                          {(tool.args.type as string) === 'query' && (
+                            <a href={urls.csv} target="_blank" rel="noopener noreferrer">
+                              View CSV
+                            </a>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

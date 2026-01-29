@@ -24,7 +24,7 @@ export interface CompleteEvent extends StreamEvent {
     content: string;
     duration_ms: number;
     tokens_used: number;
-    tools_called?: { name: string; args: Record<string, unknown> }[];
+    tools_called?: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number } }[];
   };
 }
 

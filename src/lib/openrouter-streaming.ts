@@ -21,6 +21,7 @@ export interface CompletionResult {
   tools_called?: {
     name: string;
     args: Record<string, unknown>;
+    resultSummary?: { rows: number; columns: number };
   }[];
 }
 
@@ -86,7 +87,7 @@ export async function queryWithMcpStreaming(
 ): Promise<void> {
   const startTime = Date.now();
   const panel: PanelType = 'withMcp';
-  const toolsCalled: { name: string; args: Record<string, unknown> }[] = [];
+  const toolsCalled: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number } }[] = [];
 
   try {
     callbacks.onProgress(panel, 'Analyzing query...');
@@ -120,7 +121,8 @@ export async function queryWithMcpStreaming(
       for (const toolCall of toolCalls) {
         if (toolCall.type === 'function') {
           const args = JSON.parse(toolCall.function.arguments);
-          toolsCalled.push({ name: toolCall.function.name, args });
+          const toolEntry: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number } } = { name: toolCall.function.name, args };
+          toolsCalled.push(toolEntry);
 
           // Send progress update with human-readable message
           const progressMessage = formatToolProgress(toolCall.function.name, args);
@@ -128,6 +130,20 @@ export async function queryWithMcpStreaming(
 
           try {
             const result = await executeToolCall(toolCall.function.name, args);
+
+            // Parse result to extract row/column counts
+            try {
+              const parsed = JSON.parse(result);
+              if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object') {
+                toolEntry.resultSummary = {
+                  rows: parsed.length,
+                  columns: Object.keys(parsed[0]).length,
+                };
+              }
+            } catch {
+              // Not JSON or not an array - skip
+            }
+
             messages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
