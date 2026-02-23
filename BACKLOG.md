@@ -17,6 +17,12 @@
   - Includes environment comparison table
   - Positioned as educational resource + demo
 
+## Active Sprint
+
+See [`sprints/sprint-001-mcp-messaging-ux.md`](sprints/sprint-001-mcp-messaging-ux.md) — MCP messaging UX improvements for the "With MCP" panel. Supersedes the "Streaming response animation" and "Progress indicator for tool calls" items below.
+
+---
+
 ## To Do (Medium Priority)
 
 - [ ] **Add token cost safeguards**

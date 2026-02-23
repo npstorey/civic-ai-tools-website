@@ -159,6 +159,23 @@ src/
 | Chicago | 311 Service Requests | v6vf-nfxy | sr_type, created_date |
 | SF | 311 Cases | vw6y-z8j6 | service_name, opened, neighborhood |
 
+## Sprint Workflow
+
+Active work is organized into lightweight sprints in [`/sprints/`](sprints/).
+
+- **Naming:** `sprint-NNN-short-description.md`
+- **Format:** Goal, checkboxed task list (grouped by priority), acceptance criteria
+- **Current sprint:** Check `/sprints/` for the latest active sprint before starting work
+- **Backlog:** Longer-term priorities and deferred items live in [`BACKLOG.md`](BACKLOG.md)
+
+## Related Repos
+
+| Repo | Purpose |
+|------|---------|
+| [civic-ai-tools](https://github.com/npstorey/civic-ai-tools) | MCP server configs, skill docs (`opengov-skill.md`), setup scripts |
+| [opengov-mcp-server](https://github.com/npstorey/opengov-mcp-server) | The MCP server itself (Socrata/OpenGov data) |
+| [opengov-mcp-server-vercel-nextjs](https://github.com/npstorey/opengov-mcp-server-vercel-nextjs) | Vercel deployment wrapper for the MCP server |
+
 ## Design Notes
 
 - **Light mode only** - Simplified styling, no dark mode
