@@ -2,6 +2,8 @@
 
 import ResponsePanel from './ResponsePanel';
 
+import type { ProgressLogEntry, ProgressGroup } from '@/hooks/useStreamingComparison';
+
 interface ToolCall {
   name: string;
   args: Record<string, unknown>;
@@ -14,16 +16,11 @@ interface ResponseData {
   tools_called?: ToolCall[];
 }
 
-interface ProgressLogEntry {
-  message: string;
-  timestamp: number;
-  isComplete?: boolean;
-}
-
 interface StreamingPanelState {
   content: string;
   progress: string | null;
   progressLog: ProgressLogEntry[];
+  progressGroups: ProgressGroup[];
   isComplete: boolean;
   duration_ms?: number;
   tokens_used?: number;
@@ -76,10 +73,22 @@ export default function ComparisonDisplay({
         variant="without-mcp"
         isStreaming={isStreaming}
         progressLog={streamingWithoutMcp?.progressLog}
+        progressGroups={streamingWithoutMcp?.progressGroups}
       />
       <ResponsePanel
         title="With MCP"
-        subtitle={`${modelName} + live Socrata data access`}
+        subtitle={
+          <>
+            {modelName} + live{' '}
+            <span data-tooltip="Open data platform used by 300+ government agencies" style={{ cursor: 'help', position: 'relative', borderBottom: '1px dotted var(--text-muted)' }}>
+              Socrata
+            </span>{' '}
+            data via{' '}
+            <span data-tooltip="Model Context Protocol — a standard for connecting AI to external tools" style={{ cursor: 'help', position: 'relative', borderBottom: '1px dotted var(--text-muted)' }}>
+              MCP
+            </span>
+          </>
+        }
         content={withMcpContent}
         duration_ms={isStreaming ? streamingWithMcp?.duration_ms : withMcp?.duration_ms}
         tokens_used={isStreaming ? streamingWithMcp?.tokens_used : withMcp?.tokens_used}
@@ -88,6 +97,7 @@ export default function ComparisonDisplay({
         variant="with-mcp"
         isStreaming={isStreaming}
         progressLog={streamingWithMcp?.progressLog}
+        progressGroups={streamingWithMcp?.progressGroups}
       />
     </div>
   );

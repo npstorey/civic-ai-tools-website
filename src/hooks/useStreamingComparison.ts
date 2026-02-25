@@ -6,18 +6,33 @@ interface ToolCall {
   name: string;
   args: Record<string, unknown>;
   resultSummary?: { rows: number; columns: number };
+  duration_ms?: number;
+  operationType?: string;
+  reason?: string;
 }
 
-interface ProgressLogEntry {
+export interface ProgressLogEntry {
   message: string;
   timestamp: number;
   isComplete?: boolean;
+  duration_ms?: number;
+  phase?: string;
+  iteration?: number;
+}
+
+export interface ProgressGroup {
+  iteration: number;
+  label: string;
+  entries: ProgressLogEntry[];
+  isComplete: boolean;
+  totalDuration_ms?: number;
 }
 
 interface PanelState {
   content: string;
   progress: string | null;
   progressLog: ProgressLogEntry[];
+  progressGroups: ProgressGroup[];
   isComplete: boolean;
   duration_ms?: number;
   tokens_used?: number;
@@ -36,6 +51,7 @@ const initialPanelState: PanelState = {
   content: '',
   progress: null,
   progressLog: [],
+  progressGroups: [],
   isComplete: false,
 };
 
@@ -156,6 +172,27 @@ export function useStreamingComparison() {
   };
 }
 
+// Generate a human-readable label for a group of tool calls within an iteration
+function generateGroupLabel(entries: ProgressLogEntry[]): string {
+  const toolStarts = entries.filter(e => e.phase === 'tool_start');
+  if (toolStarts.length === 0) return 'Processing';
+
+  // Extract operation types from messages
+  const messages = toolStarts.map(e => e.message.toLowerCase());
+  const hasCatalog = messages.some(m => m.includes('searching') && m.includes('catalog'));
+  const hasMetadata = messages.some(m => m.includes('metadata'));
+  const hasQuery = messages.some(m => m.includes('querying'));
+  const hasMetrics = messages.some(m => m.includes('metrics'));
+
+  if (hasCatalog && !hasQuery && !hasMetadata) return 'Finding relevant datasets';
+  if (hasMetadata && !hasQuery && !hasCatalog) return 'Understanding dataset structure';
+  if (hasQuery && toolStarts.length > 1) return 'Querying multiple datasets';
+  if (hasQuery) return 'Querying data';
+  if (hasMetrics) return 'Checking dataset statistics';
+
+  return 'Gathering data';
+}
+
 function handleEvent(
   event: { type: string; panel: 'withMcp' | 'withoutMcp'; [key: string]: unknown },
   setState: React.Dispatch<React.SetStateAction<StreamingState>>
@@ -166,23 +203,97 @@ function handleEvent(
     case 'progress':
       setState(prev => {
         const message = event.message as string;
+        const duration_ms = event.duration_ms as number | undefined;
+        const phase = event.phase as string | undefined;
+        const iteration = event.iteration as number | undefined;
         const newLog = [...prev[panel].progressLog];
+        const newGroups = prev[panel].progressGroups.map(g => ({ ...g, entries: [...g.entries] }));
+        const entry: ProgressLogEntry = { message, timestamp: Date.now(), duration_ms, phase, iteration };
 
-        // Mark previous entry as complete if it exists
+        if (phase === 'tool_complete' && iteration !== undefined) {
+          // Update the matching tool_start entry in-place within its group
+          const group = newGroups.find(g => g.iteration === iteration);
+          if (group) {
+            const startIdx = group.entries.findIndex(
+              e => e.phase === 'tool_start' && e.message === message && !e.isComplete
+            );
+            if (startIdx !== -1) {
+              group.entries[startIdx] = { ...group.entries[startIdx], isComplete: true, duration_ms };
+            }
+          }
+          // Also update in flat log
+          const flatIdx = newLog.findIndex(
+            e => e.phase === 'tool_start' && e.message === message && !e.isComplete
+          );
+          if (flatIdx !== -1) {
+            newLog[flatIdx] = { ...newLog[flatIdx], isComplete: true, duration_ms };
+          }
+          return {
+            ...prev,
+            [panel]: { ...prev[panel], progress: message, progressLog: newLog, progressGroups: newGroups },
+          };
+        }
+
+        if (phase === 'tool_result' && iteration !== undefined) {
+          // Append result narration to the group
+          entry.isComplete = true;
+          const group = newGroups.find(g => g.iteration === iteration);
+          if (group) {
+            group.entries.push(entry);
+          }
+          newLog.push(entry);
+          return {
+            ...prev,
+            [panel]: { ...prev[panel], progress: message, progressLog: newLog, progressGroups: newGroups },
+          };
+        }
+
+        if (phase === 'thinking' && iteration !== undefined) {
+          // Mark the current group as complete
+          const group = newGroups.find(g => g.iteration === iteration);
+          if (group) {
+            group.isComplete = true;
+            // Compute total duration from completed tool entries
+            const durations = group.entries
+              .filter(e => e.phase === 'tool_start' && e.duration_ms !== undefined)
+              .map(e => e.duration_ms!);
+            if (durations.length > 0) {
+              group.totalDuration_ms = durations.reduce((a, b) => a + b, 0);
+            }
+            group.label = generateGroupLabel(group.entries);
+          }
+          // Don't add thinking to flat log or as standalone — it just closes the group
+          return {
+            ...prev,
+            [panel]: { ...prev[panel], progress: message, progressGroups: newGroups },
+          };
+        }
+
+        if (phase === 'tool_start' && iteration !== undefined) {
+          // Find or create group for this iteration
+          let group = newGroups.find(g => g.iteration === iteration);
+          if (!group) {
+            group = { iteration, label: 'Gathering data', entries: [], isComplete: false };
+            newGroups.push(group);
+          }
+          group.entries.push(entry);
+          newLog.push(entry);
+          return {
+            ...prev,
+            [panel]: { ...prev[panel], progress: message, progressLog: newLog, progressGroups: newGroups },
+          };
+        }
+
+        // Standalone entries (analyze, synthesize, or no phase)
+        // Mark previous entry as complete
         if (newLog.length > 0) {
           newLog[newLog.length - 1] = { ...newLog[newLog.length - 1], isComplete: true };
         }
-
-        // Add new progress entry
-        newLog.push({ message, timestamp: Date.now() });
+        newLog.push(entry);
 
         return {
           ...prev,
-          [panel]: {
-            ...prev[panel],
-            progress: message,
-            progressLog: newLog,
-          },
+          [panel]: { ...prev[panel], progress: message, progressLog: newLog, progressGroups: newGroups },
         };
       });
       break;
@@ -195,6 +306,24 @@ function handleEvent(
           newLog[newLog.length - 1] = { ...newLog[newLog.length - 1], isComplete: true };
         }
 
+        // Mark all groups as complete
+        const newGroups = prev[panel].progressGroups.map(g => {
+          if (!g.isComplete) {
+            const entries = g.entries.map(e => ({ ...e, isComplete: true }));
+            const durations = entries
+              .filter(e => e.phase === 'tool_start' && e.duration_ms !== undefined)
+              .map(e => e.duration_ms!);
+            return {
+              ...g,
+              entries,
+              isComplete: true,
+              label: generateGroupLabel(entries),
+              totalDuration_ms: durations.length > 0 ? durations.reduce((a, b) => a + b, 0) : undefined,
+            };
+          }
+          return g;
+        });
+
         return {
           ...prev,
           [panel]: {
@@ -202,6 +331,7 @@ function handleEvent(
             content: prev[panel].content + (event.content as string),
             progress: null,
             progressLog: newLog,
+            progressGroups: newGroups,
           },
         };
       });
@@ -218,6 +348,21 @@ function handleEvent(
         // Mark all log entries as complete
         const newLog = prev[panel].progressLog.map(entry => ({ ...entry, isComplete: true }));
 
+        // Mark all groups as complete
+        const newGroups = prev[panel].progressGroups.map(g => {
+          const entries = g.entries.map(e => ({ ...e, isComplete: true }));
+          const durations = entries
+            .filter(e => e.phase === 'tool_start' && e.duration_ms !== undefined)
+            .map(e => e.duration_ms!);
+          return {
+            ...g,
+            entries,
+            isComplete: true,
+            label: generateGroupLabel(entries),
+            totalDuration_ms: g.totalDuration_ms ?? (durations.length > 0 ? durations.reduce((a, b) => a + b, 0) : undefined),
+          };
+        });
+
         const newState = {
           ...prev,
           [panel]: {
@@ -229,6 +374,7 @@ function handleEvent(
             isComplete: true,
             progress: null,
             progressLog: newLog,
+            progressGroups: newGroups,
           },
         };
         // Check if both are complete

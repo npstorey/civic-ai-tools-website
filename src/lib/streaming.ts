@@ -8,9 +8,14 @@ export interface StreamEvent {
   data?: unknown;
 }
 
+export type ProgressPhase = 'analyze' | 'tool_start' | 'tool_complete' | 'tool_result' | 'thinking' | 'synthesize';
+
 export interface ProgressEvent extends StreamEvent {
   type: 'progress';
   message: string;
+  duration_ms?: number;
+  phase?: ProgressPhase;
+  iteration?: number;
 }
 
 export interface TokenEvent extends StreamEvent {
@@ -24,7 +29,7 @@ export interface CompleteEvent extends StreamEvent {
     content: string;
     duration_ms: number;
     tokens_used: number;
-    tools_called?: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number } }[];
+    tools_called?: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string }[];
   };
 }
 
@@ -66,7 +71,12 @@ export function formatToolProgress(name: string, args: Record<string, unknown>):
 
 // Build a display string showing the SoQL query being executed
 function buildSoqlDisplay(args: Record<string, unknown>): string {
-  const parts: string[] = [];
+  return buildSoqlClauses(args).map(c => `${c.keyword} ${c.value}`).join(' ');
+}
+
+// Build structured SoQL clauses from tool args
+export function buildSoqlClauses(args: Record<string, unknown>): { keyword: string; value: string }[] {
+  const clauses: { keyword: string; value: string }[] = [];
 
   const select = args.select as string | undefined;
   const where = args.where as string | undefined;
@@ -74,23 +84,13 @@ function buildSoqlDisplay(args: Record<string, unknown>): string {
   const order = args.order as string | undefined;
   const limit = args.limit as number | undefined;
 
-  if (select) {
-    parts.push(`SELECT ${select}`);
-  }
-  if (where) {
-    parts.push(`WHERE ${where}`);
-  }
-  if (group) {
-    parts.push(`GROUP BY ${group}`);
-  }
-  if (order) {
-    parts.push(`ORDER BY ${order}`);
-  }
-  if (limit) {
-    parts.push(`LIMIT ${limit}`);
-  }
+  if (select) clauses.push({ keyword: 'SELECT', value: select });
+  if (where) clauses.push({ keyword: 'WHERE', value: where });
+  if (group) clauses.push({ keyword: 'GROUP BY', value: group });
+  if (order) clauses.push({ keyword: 'ORDER BY', value: order });
+  if (limit) clauses.push({ keyword: 'LIMIT', value: String(limit) });
 
-  return parts.join(' ');
+  return clauses;
 }
 
 function getPortalCity(portal: string | undefined): string {
@@ -120,6 +120,60 @@ function getDatasetName(datasetId: string | undefined): string {
   };
 
   return datasetNames[datasetId] || `dataset ${datasetId}`;
+}
+
+// Format a human-readable message describing tool results
+export function formatToolResult(
+  args: Record<string, unknown>,
+  resultSummary?: { rows: number; columns: number }
+): string | null {
+  const type = args.type as string;
+  const datasetId = args.dataset_id as string | undefined;
+  const datasetName = getDatasetName(datasetId);
+
+  switch (type) {
+    case 'catalog':
+      return resultSummary
+        ? `Found ${resultSummary.rows} dataset${resultSummary.rows !== 1 ? 's' : ''} matching the search`
+        : 'Catalog search complete';
+    case 'query':
+      return resultSummary
+        ? `Retrieved ${resultSummary.rows} record${resultSummary.rows !== 1 ? 's' : ''} from ${datasetName}`
+        : `Query to ${datasetName} complete`;
+    case 'metadata':
+      return `Loaded metadata for ${datasetName}`;
+    case 'metrics':
+      return `Loaded metrics for ${datasetName}`;
+    default:
+      return null;
+  }
+}
+
+// Generate a brief "why" reason from tool args for display in progress log and tool cards
+export function generateToolReason(args: Record<string, unknown>): string {
+  const type = args.type as string;
+  const datasetId = args.dataset_id as string | undefined;
+  const query = args.query as string | undefined;
+  const datasetName = getDatasetName(datasetId);
+  const group = args.group as string | undefined;
+  const where = args.where as string | undefined;
+  const select = args.select as string | undefined;
+
+  switch (type) {
+    case 'catalog':
+      return query ? `to find datasets about "${query}"` : 'to search for relevant datasets';
+    case 'metadata':
+      return `to understand ${datasetName} structure`;
+    case 'query':
+      if (group) return `to aggregate ${datasetName} by ${group}`;
+      if (where) return `to filter ${datasetName} records`;
+      if (select) return `to retrieve specific fields from ${datasetName}`;
+      return `to query ${datasetName}`;
+    case 'metrics':
+      return `to check ${datasetName} statistics`;
+    default:
+      return 'to gather data';
+  }
 }
 
 // Encode a stream event as SSE format

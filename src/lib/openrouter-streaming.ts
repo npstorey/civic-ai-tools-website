@@ -1,14 +1,20 @@
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
-import { formatToolProgress, type PanelType } from './streaming';
+import { formatToolProgress, formatToolResult, generateToolReason, type PanelType, type ProgressPhase } from './streaming';
 
 const openrouter = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.OPENROUTER_API_KEY,
 });
 
+export interface ProgressOpts {
+  duration_ms?: number;
+  phase?: ProgressPhase;
+  iteration?: number;
+}
+
 export interface StreamCallbacks {
-  onProgress: (panel: PanelType, message: string) => void;
+  onProgress: (panel: PanelType, message: string, opts?: ProgressOpts) => void;
   onToken: (panel: PanelType, content: string) => void;
   onComplete: (panel: PanelType, result: CompletionResult) => void;
   onError: (panel: PanelType, error: string) => void;
@@ -22,6 +28,9 @@ export interface CompletionResult {
     name: string;
     args: Record<string, unknown>;
     resultSummary?: { rows: number; columns: number };
+    duration_ms?: number;
+    operationType?: string;
+    reason?: string;
   }[];
 }
 
@@ -35,7 +44,7 @@ export async function queryWithoutMcpStreaming(
   const panel: PanelType = 'withoutMcp';
 
   try {
-    callbacks.onProgress(panel, 'Generating response...');
+    callbacks.onProgress(panel, 'Generating response...', { phase: 'analyze' });
 
     const messages: ChatCompletionMessageParam[] = [];
     if (systemPrompt) {
@@ -87,10 +96,10 @@ export async function queryWithMcpStreaming(
 ): Promise<void> {
   const startTime = Date.now();
   const panel: PanelType = 'withMcp';
-  const toolsCalled: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number } }[] = [];
+  const toolsCalled: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string }[] = [];
 
   try {
-    callbacks.onProgress(panel, 'Analyzing query...');
+    callbacks.onProgress(panel, 'Analyzing query...', { phase: 'analyze' });
 
     const messages: ChatCompletionMessageParam[] = [];
     if (systemPrompt) {
@@ -118,18 +127,25 @@ export async function queryWithMcpStreaming(
 
       if (!toolCalls) break;
 
+      const currentIteration = iterations + 1;
+
       for (const toolCall of toolCalls) {
         if (toolCall.type === 'function') {
           const args = JSON.parse(toolCall.function.arguments);
-          const toolEntry: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number } } = { name: toolCall.function.name, args };
+          const operationType = (args.type as string) || undefined;
+          const reason = generateToolReason(args);
+          const toolEntry: typeof toolsCalled[number] = { name: toolCall.function.name, args, operationType, reason };
           toolsCalled.push(toolEntry);
 
           // Send progress update with human-readable message
           const progressMessage = formatToolProgress(toolCall.function.name, args);
-          callbacks.onProgress(panel, progressMessage);
+          callbacks.onProgress(panel, progressMessage, { phase: 'tool_start', iteration: currentIteration });
 
           try {
+            const toolStartTime = Date.now();
             const result = await executeToolCall(toolCall.function.name, args);
+            const toolDuration = Date.now() - toolStartTime;
+            toolEntry.duration_ms = toolDuration;
 
             // Parse result to extract row/column counts
             try {
@@ -142,6 +158,15 @@ export async function queryWithMcpStreaming(
               }
             } catch {
               // Not JSON or not an array - skip
+            }
+
+            // Send a completion progress event with timing
+            callbacks.onProgress(panel, progressMessage, { phase: 'tool_complete', iteration: currentIteration, duration_ms: toolDuration });
+
+            // Send a result narration message
+            const resultMessage = formatToolResult(args, toolEntry.resultSummary);
+            if (resultMessage) {
+              callbacks.onProgress(panel, resultMessage, { phase: 'tool_result', iteration: currentIteration });
             }
 
             messages.push({
@@ -158,6 +183,9 @@ export async function queryWithMcpStreaming(
           }
         }
       }
+
+      // Narrate the thinking step
+      callbacks.onProgress(panel, 'Analyzing results and deciding next step...', { phase: 'thinking', iteration: currentIteration });
 
       // Get next response
       response = await openrouter.chat.completions.create({
@@ -185,7 +213,7 @@ export async function queryWithMcpStreaming(
         }
       }
 
-      callbacks.onProgress(panel, 'Generating final response...');
+      callbacks.onProgress(panel, 'Generating final response...', { phase: 'synthesize' });
 
       // Make final streaming call without tools
       const finalStream = await openrouter.chat.completions.create({
@@ -228,7 +256,7 @@ export async function queryWithMcpStreaming(
     // If we have content, stream the final response
     if (lastMessage?.content) {
       // We already have the content from non-streaming call, send it as tokens
-      callbacks.onProgress(panel, 'Generating response...');
+      callbacks.onProgress(panel, 'Synthesizing findings into response...', { phase: 'synthesize' });
 
       // Send the content in chunks to simulate streaming
       const content = lastMessage.content;
@@ -249,7 +277,7 @@ export async function queryWithMcpStreaming(
       });
     } else {
       // No content - make a final streaming call
-      callbacks.onProgress(panel, 'Generating response...');
+      callbacks.onProgress(panel, 'Synthesizing findings into response...', { phase: 'synthesize' });
 
       const finalStream = await openrouter.chat.completions.create({
         model,

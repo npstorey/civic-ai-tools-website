@@ -2,22 +2,22 @@
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import ToolCallCard from './ToolCallCard';
+import ProgressLog from './ProgressLog';
+import type { ProgressLogEntry, ProgressGroup } from '@/hooks/useStreamingComparison';
 
 interface ToolCall {
   name: string;
   args: Record<string, unknown>;
   resultSummary?: { rows: number; columns: number };
-}
-
-interface ProgressLogEntry {
-  message: string;
-  timestamp: number;
-  isComplete?: boolean;
+  duration_ms?: number;
+  operationType?: string;
+  reason?: string;
 }
 
 interface ResponsePanelProps {
   title: string;
-  subtitle: string;
+  subtitle: React.ReactNode;
   content: string;
   duration_ms?: number;
   tokens_used?: number;
@@ -26,46 +26,35 @@ interface ResponsePanelProps {
   variant: 'without-mcp' | 'with-mcp';
   // Streaming props
   progressLog?: ProgressLogEntry[];
+  progressGroups?: ProgressGroup[];
   isStreaming?: boolean;
 }
 
-function buildSocrataUrl(args: Record<string, unknown>): { json: string; csv: string } | null {
-  const type = args.type as string;
-  const portal = args.portal as string;
-  const datasetId = args.dataset_id as string;
+function buildToolSummary(tools: ToolCall[], totalDuration?: number): string {
+  const counts: Record<string, number> = {};
+  let totalRows = 0;
 
-  if (!portal || !datasetId) return null;
-
-  const base = `https://${portal}/resource/${datasetId}`;
-
-  if (type === 'query') {
-    const params = new URLSearchParams();
-    if (args.select) params.set('$select', args.select as string);
-    if (args.where) params.set('$where', args.where as string);
-    if (args.group) params.set('$group', args.group as string);
-    if (args.order) params.set('$order', args.order as string);
-    if (args.limit) params.set('$limit', String(args.limit));
-    const qs = params.toString();
-    return {
-      json: `${base}.json${qs ? `?${qs}` : ''}`,
-      csv: `${base}.csv${qs ? `?${qs}` : ''}`,
-    };
+  for (const tool of tools) {
+    const opType = tool.operationType || 'call';
+    counts[opType] = (counts[opType] || 0) + 1;
+    if (tool.resultSummary?.rows) {
+      totalRows += tool.resultSummary.rows;
+    }
   }
 
-  if (type === 'catalog') {
-    const query = args.query as string | undefined;
-    const catalogUrl = `https://${portal}/api/catalog/v1${query ? `?q=${encodeURIComponent(query)}` : ''}`;
-    return { json: catalogUrl, csv: catalogUrl };
+  const parts: string[] = [];
+  if (counts.catalog) parts.push(`Searched ${counts.catalog} catalog${counts.catalog > 1 ? 's' : ''}`);
+  if (counts.metadata) parts.push(`checked ${counts.metadata} metadata`);
+  if (counts.query) parts.push(`ran ${counts.query} quer${counts.query > 1 ? 'ies' : 'y'}`);
+  if (counts.metrics) parts.push(`fetched ${counts.metrics} metric${counts.metrics > 1 ? 's' : ''}`);
+  if (totalRows > 0) parts.push(`examined ${totalRows.toLocaleString()} records`);
+
+  let summary = parts.length > 0 ? parts.join(', ') : `Made ${tools.length} tool call${tools.length > 1 ? 's' : ''}`;
+  if (totalDuration) {
+    summary += ` in ${(totalDuration / 1000).toFixed(1)}s`;
   }
 
-  if (type === 'metadata') {
-    return {
-      json: `https://${portal}/api/views/${datasetId}.json`,
-      csv: `https://${portal}/api/views/${datasetId}.json`,
-    };
-  }
-
-  return null;
+  return summary;
 }
 
 export default function ResponsePanel({
@@ -78,13 +67,19 @@ export default function ResponsePanel({
   isLoading,
   variant,
   progressLog,
+  progressGroups,
   isStreaming,
 }: ResponsePanelProps) {
   const isMcp = variant === 'with-mcp';
   const hasProgressLog = isStreaming && progressLog && progressLog.length > 0;
-  const showProgressLog = hasProgressLog && !content;
+  const hasGroups = isStreaming && progressGroups && progressGroups.length > 0;
+  const showProgressLog = (hasProgressLog || hasGroups) && !content;
   const showStreamingContent = isStreaming && content;
   const showStaticContent = !isStreaming && !isLoading && content;
+
+  const toolSummary = isMcp && tools_called && tools_called.length > 0
+    ? buildToolSummary(tools_called, duration_ms)
+    : null;
 
   const markdownContent = (text: string, showCursor?: boolean) => (
     <div className="response-markdown">
@@ -186,9 +181,17 @@ export default function ResponsePanel({
         )}
 
         {/* Streaming progress log */}
-        {showProgressLog && (
+        {showProgressLog && hasGroups && (
+          <ProgressLog
+            groups={progressGroups!}
+            standaloneEntries={(progressLog || []).filter(e => !e.iteration)}
+            variant={variant}
+            isActive={!content}
+          />
+        )}
+        {showProgressLog && !hasGroups && progressLog && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {progressLog!.map((entry, idx) => (
+            {progressLog.map((entry, idx) => (
               <div
                 key={idx}
                 style={{
@@ -229,9 +232,12 @@ export default function ResponsePanel({
                     }}
                   />
                 )}
-                <span style={{ textDecoration: entry.isComplete ? 'none' : 'none' }}>
-                  {entry.message}
-                </span>
+                <span>{entry.message}</span>
+                {entry.duration_ms !== undefined && (
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: '4px' }}>
+                    {(entry.duration_ms / 1000).toFixed(1)}s
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -241,39 +247,68 @@ export default function ResponsePanel({
         {showStreamingContent && (
           <div>
             {/* Show completed progress log above content */}
-            {hasProgressLog && (
+            {(hasProgressLog || hasGroups) && (
               <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {progressLog!.map((entry, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        color: 'var(--text-muted)',
-                        fontSize: '13px',
-                      }}
-                    >
-                      <span
+                {hasGroups ? (
+                  <ProgressLog
+                    groups={progressGroups!}
+                    standaloneEntries={(progressLog || []).filter(e => !e.iteration)}
+                    variant={variant}
+                    isActive={false}
+                  />
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {progressLog!.map((entry, idx) => (
+                      <div
+                        key={idx}
                         style={{
-                          width: '14px',
-                          height: '14px',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                          color: isMcp ? 'var(--nyc-success)' : 'var(--nyc-blue)',
-                          flexShrink: 0,
+                          gap: '8px',
+                          color: 'var(--text-muted)',
+                          fontSize: '13px',
                         }}
                       >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                          <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
-                        </svg>
-                      </span>
-                      <span>{entry.message}</span>
-                    </div>
-                  ))}
-                </div>
+                        <span
+                          style={{
+                            width: '14px',
+                            height: '14px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: isMcp ? 'var(--nyc-success)' : 'var(--nyc-blue)',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+                          </svg>
+                        </span>
+                        <span>{entry.message}</span>
+                        {entry.duration_ms !== undefined && (
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '4px' }}>
+                            {(entry.duration_ms / 1000).toFixed(1)}s
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {toolSummary && (
+              <div
+                style={{
+                  borderLeft: '3px solid var(--nyc-success)',
+                  backgroundColor: 'rgba(0, 183, 3, 0.06)',
+                  padding: '8px 12px',
+                  marginBottom: '16px',
+                  fontSize: '14px',
+                  color: 'var(--text-secondary)',
+                  borderRadius: '0 4px 4px 0',
+                }}
+              >
+                {toolSummary}
               </div>
             )}
             {markdownContent(content, !duration_ms)}
@@ -293,6 +328,39 @@ export default function ResponsePanel({
             backgroundColor: isMcp ? 'rgba(0, 183, 3, 0.05)' : 'var(--card-background)',
           }}
         >
+          {tools_called && tools_called.length > 0 && (
+            <div style={{ marginBottom: '16px' }}>
+              <h4
+                data-tooltip="Model Context Protocol — lets the AI call external data tools"
+                style={{
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: 'var(--text-secondary)',
+                  marginBottom: '8px',
+                  cursor: 'help',
+                  position: 'relative',
+                  width: 'fit-content',
+                }}
+              >
+                MCP tools used:
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {tools_called.map((tool, idx) => (
+                  <ToolCallCard
+                    key={idx}
+                    stepNumber={idx + 1}
+                    name={tool.name}
+                    args={tool.args}
+                    resultSummary={tool.resultSummary}
+                    duration_ms={tool.duration_ms}
+                    operationType={tool.operationType}
+                    reason={tool.reason}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
           <div
             style={{
               display: 'flex',
@@ -313,88 +381,6 @@ export default function ResponsePanel({
               </span>
             )}
           </div>
-
-          {tools_called && tools_called.length > 0 && (
-            <div style={{ marginTop: '16px' }}>
-              <h4
-                style={{
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  color: 'var(--text-secondary)',
-                  marginBottom: '8px',
-                }}
-              >
-                MCP tools used:
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {tools_called.map((tool, idx) => {
-                  const urls = buildSocrataUrl(tool.args);
-                  return (
-                    <div
-                      key={idx}
-                      style={{
-                        backgroundColor: 'rgba(0, 183, 3, 0.15)',
-                        borderRadius: '4px',
-                        padding: '8px 12px',
-                      }}
-                    >
-                      <code
-                        style={{
-                          fontSize: '14px',
-                          fontFamily: 'monospace',
-                          color: 'var(--nyc-success)',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {tool.name}
-                      </code>
-                      {tool.resultSummary && (
-                        <span
-                          style={{
-                            fontSize: '12px',
-                            color: 'var(--text-muted)',
-                            marginLeft: '8px',
-                          }}
-                        >
-                          Returned {tool.resultSummary.rows} rows x {tool.resultSummary.columns} columns
-                        </span>
-                      )}
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          fontFamily: 'monospace',
-                          color: 'var(--text-muted)',
-                          marginTop: '4px',
-                          overflowX: 'auto',
-                        }}
-                      >
-                        {JSON.stringify(tool.args, null, 2)}
-                      </div>
-                      {urls && (
-                        <div
-                          style={{
-                            fontSize: '12px',
-                            marginTop: '6px',
-                            display: 'flex',
-                            gap: '12px',
-                          }}
-                        >
-                          <a href={urls.json} target="_blank" rel="noopener noreferrer">
-                            View JSON
-                          </a>
-                          {(tool.args.type as string) === 'query' && (
-                            <a href={urls.csv} target="_blank" rel="noopener noreferrer">
-                              View CSV
-                            </a>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       )}
 

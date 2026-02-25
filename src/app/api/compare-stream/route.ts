@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks } from '@/lib/openrouter-streaming';
+import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks, type ProgressOpts } from '@/lib/openrouter-streaming';
 import { opengovMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
 import { buildSystemPrompt } from '@/lib/mcp/opengov-skill';
@@ -66,8 +66,8 @@ Be honest if you don't have access to current or real-time data.`;
 
     // Create callbacks for streaming
     const callbacks: StreamCallbacks = {
-      onProgress: (panel: PanelType, message: string) => {
-        writeEvent({ type: 'progress', panel, message } as StreamEvent & { message: string });
+      onProgress: (panel: PanelType, message: string, opts?: ProgressOpts) => {
+        writeEvent({ type: 'progress', panel, message, ...opts } as StreamEvent & { message: string });
       },
       onToken: (panel: PanelType, content: string) => {
         writeEvent({ type: 'token', panel, content } as StreamEvent & { content: string });

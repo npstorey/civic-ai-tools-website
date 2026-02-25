@@ -356,6 +356,57 @@ footer a:visited {
   color: var(--nyc-blue-40);
 }
 
+/* CSS-only tooltip system */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--nyc-gray-20);
+  color: var(--nyc-white);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 10;
+}
+
+[data-tooltip]::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: var(--nyc-gray-20);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 10;
+}
+
+[data-tooltip]:hover::after,
+[data-tooltip]:hover::before {
+  opacity: 1;
+}
+
+@media (max-width: 768px) {
+  [data-tooltip]::after,
+  [data-tooltip]::before {
+    display: none;
+  }
+}
+
 /* Query form controls row - responsive layout */
 .form-controls-row {
   display: grid;
