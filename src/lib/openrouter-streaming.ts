@@ -11,6 +11,7 @@ export interface ProgressOpts {
   duration_ms?: number;
   phase?: ProgressPhase;
   iteration?: number;
+  args?: Record<string, unknown>;
 }
 
 export interface StreamCallbacks {
@@ -99,7 +100,7 @@ export async function queryWithMcpStreaming(
   const toolsCalled: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string }[] = [];
 
   try {
-    callbacks.onProgress(panel, 'Analyzing query...', { phase: 'analyze' });
+    callbacks.onProgress(panel, 'Reading your question...', { phase: 'analyze' });
 
     const messages: ChatCompletionMessageParam[] = [];
     if (systemPrompt) {
@@ -135,11 +136,11 @@ export async function queryWithMcpStreaming(
           const operationType = (args.type as string) || undefined;
           const reason = generateToolReason(args);
           const toolEntry: typeof toolsCalled[number] = { name: toolCall.function.name, args, operationType, reason };
-          toolsCalled.push(toolEntry);
 
-          // Send progress update with human-readable message
-          const progressMessage = formatToolProgress(toolCall.function.name, args);
-          callbacks.onProgress(panel, progressMessage, { phase: 'tool_start', iteration: currentIteration });
+          // Send progress update with human-readable message (pass previous calls for context)
+          const progressMessage = formatToolProgress(toolCall.function.name, args, toolsCalled);
+          toolsCalled.push(toolEntry);
+          callbacks.onProgress(panel, progressMessage, { phase: 'tool_start', iteration: currentIteration, args });
 
           try {
             const toolStartTime = Date.now();
@@ -166,7 +167,7 @@ export async function queryWithMcpStreaming(
             // Send a result narration message
             const resultMessage = formatToolResult(args, toolEntry.resultSummary);
             if (resultMessage) {
-              callbacks.onProgress(panel, resultMessage, { phase: 'tool_result', iteration: currentIteration });
+              callbacks.onProgress(panel, resultMessage, { phase: 'tool_result', iteration: currentIteration, args });
             }
 
             messages.push({

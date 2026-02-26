@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import SoqlDisplay from './SoqlDisplay';
+import { generatePlainEnglishQuery } from '@/lib/streaming';
 
 interface ToolCallCardProps {
   stepNumber: number;
@@ -18,6 +19,13 @@ const OP_BADGE_COLORS: Record<string, { bg: string; text: string }> = {
   query: { bg: '#ECFEFF', text: '#0E7490' },
   metadata: { bg: '#FFFBEB', text: '#B45309' },
   metrics: { bg: '#F5F3FF', text: '#7C3AED' },
+};
+
+const OP_BADGE_TOOLTIPS: Record<string, string> = {
+  catalog: "Searching the portal's directory of available datasets",
+  query: 'Running a structured query against the dataset — filtering and aggregating records',
+  metadata: 'Reading the data dictionary — the list of columns and what each one contains',
+  metrics: 'Fetching summary statistics about the dataset (row count, update frequency, etc.)',
 };
 
 function buildSocrataUrl(args: Record<string, unknown>): { json: string; csv: string } | null {
@@ -84,6 +92,7 @@ export default function ToolCallCard({
   const badgeColors = OP_BADGE_COLORS[opType] || { bg: 'var(--card-background)', text: 'var(--text-secondary)' };
   const urls = buildSocrataUrl(args);
   const datasetId = args.dataset_id as string | undefined;
+  const plainEnglish = opType === 'query' ? generatePlainEnglishQuery(args) : null;
 
   return (
     <div
@@ -131,6 +140,7 @@ export default function ToolCallCard({
 
         {/* Operation type badge */}
         <span
+          data-tooltip={OP_BADGE_TOOLTIPS[opType]}
           style={{
             padding: '1px 6px',
             borderRadius: '3px',
@@ -140,6 +150,8 @@ export default function ToolCallCard({
             backgroundColor: badgeColors.bg,
             color: badgeColors.text,
             flexShrink: 0,
+            cursor: OP_BADGE_TOOLTIPS[opType] ? 'help' : undefined,
+            position: 'relative',
           }}
         >
           {opType}
@@ -223,6 +235,23 @@ export default function ToolCallCard({
           {opType === 'query' && (
             <div style={{ marginBottom: '8px' }}>
               <SoqlDisplay args={args} />
+              {plainEnglish && (
+                <div
+                  style={{
+                    borderLeft: '3px solid var(--nyc-info)',
+                    backgroundColor: 'rgba(112, 186, 255, 0.08)',
+                    padding: '6px 10px',
+                    marginTop: '6px',
+                    fontSize: '12px',
+                    fontStyle: 'italic',
+                    color: 'var(--text-secondary)',
+                    borderRadius: '0 4px 4px 0',
+                    lineHeight: '1.5',
+                  }}
+                >
+                  {plainEnglish}
+                </div>
+              )}
             </div>
           )}
 
@@ -250,7 +279,7 @@ export default function ToolCallCard({
           {/* Dataset ID with tooltip */}
           {datasetId && (
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>
-              <span data-tooltip="Unique Socrata dataset identifier">Dataset: </span>
+              <span data-tooltip="Every Socrata dataset has a unique 4x4 code (like a library call number) that identifies it across the portal">Dataset: </span>
               <code style={{ fontFamily: 'monospace' }}>{datasetId}</code>
             </div>
           )}

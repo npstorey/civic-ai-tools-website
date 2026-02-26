@@ -1,11 +1,11 @@
 'use client';
 
 const CLAUSE_TOOLTIPS: Record<string, string> = {
-  'SELECT': 'Chooses which columns to return',
-  'WHERE': 'Filters which rows to include',
-  'GROUP BY': 'Groups rows that share a value',
-  'ORDER BY': 'Sorts the results',
-  'LIMIT': 'Caps the number of rows returned',
+  'SELECT': 'Chooses which columns to return — like picking which fields to show on a spreadsheet',
+  'WHERE': 'Filters to only matching rows — like using a search filter to narrow results',
+  'GROUP BY': 'Organizes rows into categories before counting or summing — like sorting mail into bins before tallying each bin',
+  'ORDER BY': 'Sorts the results — like arranging a list from highest to lowest (or vice versa)',
+  'LIMIT': 'Caps the number of rows returned — like asking for just the top 10 results',
 };
 
 interface SoqlDisplayProps {

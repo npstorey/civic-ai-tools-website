@@ -2,13 +2,18 @@
 
 import { useState, useCallback, useRef } from 'react';
 
-interface ToolCall {
+export interface ToolCall {
   name: string;
   args: Record<string, unknown>;
   resultSummary?: { rows: number; columns: number };
   duration_ms?: number;
   operationType?: string;
   reason?: string;
+}
+
+export interface EnrichedGroup {
+  group: ProgressGroup;
+  toolCalls: ToolCall[];
 }
 
 export interface ProgressLogEntry {
@@ -18,6 +23,7 @@ export interface ProgressLogEntry {
   duration_ms?: number;
   phase?: string;
   iteration?: number;
+  args?: Record<string, unknown>;
 }
 
 export interface ProgressGroup {
@@ -172,16 +178,83 @@ export function useStreamingComparison() {
   };
 }
 
+// Map progress groups to their corresponding tool calls from the complete event
+export function mapGroupsToToolCalls(groups: ProgressGroup[], toolsCalled: ToolCall[]): EnrichedGroup[] {
+  const result: EnrichedGroup[] = [];
+  let toolIndex = 0;
+
+  for (const group of groups) {
+    // Count tool_start entries in this group to know how many tool calls it contains
+    const toolStartCount = group.entries.filter(e => e.phase === 'tool_start').length;
+    const groupToolCalls = toolsCalled.slice(toolIndex, toolIndex + toolStartCount);
+    toolIndex += toolStartCount;
+    result.push({ group, toolCalls: groupToolCalls });
+  }
+
+  return result;
+}
+
+import { generateQueryIntentLabel, getDatasetName as getDatasetNameFromStreaming } from '@/lib/streaming';
+
+// Known dataset names for rich labels
+const DATASET_NAMES: Record<string, string> = {
+  'erm2-nwe9': '311 Service Requests',
+  '43nn-pn8j': 'Restaurant Inspections',
+  'wvxf-dwi5': 'Housing Violations',
+  'v6vf-nfxy': '311 Service Requests',
+  'vw6y-z8j6': '311 Cases',
+};
+
+// Generate a rich label from structured args when available
+function generateRichLabel(entries: ProgressLogEntry[], previousEntries?: ProgressLogEntry[]): string | null {
+  const toolStarts = entries.filter(e => e.phase === 'tool_start' && e.args);
+  if (toolStarts.length === 0) return null;
+
+  const firstArgs = toolStarts[0].args!;
+  const opType = firstArgs.type as string | undefined;
+  const datasetId = firstArgs.dataset_id as string | undefined;
+  const datasetName = datasetId ? (DATASET_NAMES[datasetId] || getDatasetNameFromStreaming(datasetId)) : null;
+
+  if (opType === 'catalog') {
+    const query = firstArgs.query as string | undefined;
+    return query ? `Searching for datasets about "${query}"` : 'Searching the data catalog';
+  }
+
+  if (opType === 'metadata' && datasetName) {
+    return `Understanding ${datasetName} structure`;
+  }
+
+  if (opType === 'query') {
+    if (toolStarts.length > 1) {
+      return 'Querying multiple datasets';
+    }
+    // Use intent label system with previous context
+    const previousCalls = (previousEntries || [])
+      .filter(e => e.phase === 'tool_start' && e.args)
+      .map(e => ({ args: e.args! }));
+    return generateQueryIntentLabel(firstArgs, previousCalls).label;
+  }
+
+  if (opType === 'metrics' && datasetName) {
+    return `Checking ${datasetName} statistics`;
+  }
+
+  return null;
+}
+
 // Generate a human-readable label for a group of tool calls within an iteration
-function generateGroupLabel(entries: ProgressLogEntry[]): string {
+function generateGroupLabel(entries: ProgressLogEntry[], previousEntries?: ProgressLogEntry[]): string {
+  const richLabel = generateRichLabel(entries, previousEntries);
+  if (richLabel) return richLabel;
+
   const toolStarts = entries.filter(e => e.phase === 'tool_start');
   if (toolStarts.length === 0) return 'Processing';
 
-  // Extract operation types from messages
+  // Fallback: extract operation types from messages
   const messages = toolStarts.map(e => e.message.toLowerCase());
   const hasCatalog = messages.some(m => m.includes('searching') && m.includes('catalog'));
   const hasMetadata = messages.some(m => m.includes('metadata'));
-  const hasQuery = messages.some(m => m.includes('querying'));
+  const hasQuery = messages.some(m => m.includes('querying') || m.includes('counting') || m.includes('previewing') || m.includes('refining') || m.includes('top'));
   const hasMetrics = messages.some(m => m.includes('metrics'));
 
   if (hasCatalog && !hasQuery && !hasMetadata) return 'Finding relevant datasets';
@@ -190,7 +263,7 @@ function generateGroupLabel(entries: ProgressLogEntry[]): string {
   if (hasQuery) return 'Querying data';
   if (hasMetrics) return 'Checking dataset statistics';
 
-  return 'Gathering data';
+  return 'Running query...';
 }
 
 function handleEvent(
@@ -206,9 +279,10 @@ function handleEvent(
         const duration_ms = event.duration_ms as number | undefined;
         const phase = event.phase as string | undefined;
         const iteration = event.iteration as number | undefined;
+        const args = event.args as Record<string, unknown> | undefined;
         const newLog = [...prev[panel].progressLog];
         const newGroups = prev[panel].progressGroups.map(g => ({ ...g, entries: [...g.entries] }));
-        const entry: ProgressLogEntry = { message, timestamp: Date.now(), duration_ms, phase, iteration };
+        const entry: ProgressLogEntry = { message, timestamp: Date.now(), duration_ms, phase, iteration, args };
 
         if (phase === 'tool_complete' && iteration !== undefined) {
           // Update the matching tool_start entry in-place within its group
@@ -260,7 +334,10 @@ function handleEvent(
             if (durations.length > 0) {
               group.totalDuration_ms = durations.reduce((a, b) => a + b, 0);
             }
-            group.label = generateGroupLabel(group.entries);
+            const prevEntries = newGroups
+              .filter(g => g.iteration < iteration!)
+              .flatMap(g => g.entries);
+            group.label = generateGroupLabel(group.entries, prevEntries);
           }
           // Don't add thinking to flat log or as standalone — it just closes the group
           return {
@@ -307,17 +384,19 @@ function handleEvent(
         }
 
         // Mark all groups as complete
-        const newGroups = prev[panel].progressGroups.map(g => {
+        const allGroups = prev[panel].progressGroups;
+        const newGroups = allGroups.map((g, gIdx) => {
           if (!g.isComplete) {
             const entries = g.entries.map(e => ({ ...e, isComplete: true }));
             const durations = entries
               .filter(e => e.phase === 'tool_start' && e.duration_ms !== undefined)
               .map(e => e.duration_ms!);
+            const prevEntries = allGroups.slice(0, gIdx).flatMap(pg => pg.entries);
             return {
               ...g,
               entries,
               isComplete: true,
-              label: generateGroupLabel(entries),
+              label: generateGroupLabel(entries, prevEntries),
               totalDuration_ms: durations.length > 0 ? durations.reduce((a, b) => a + b, 0) : undefined,
             };
           }
@@ -349,16 +428,18 @@ function handleEvent(
         const newLog = prev[panel].progressLog.map(entry => ({ ...entry, isComplete: true }));
 
         // Mark all groups as complete
-        const newGroups = prev[panel].progressGroups.map(g => {
+        const completeAllGroups = prev[panel].progressGroups;
+        const newGroups = completeAllGroups.map((g, gIdx) => {
           const entries = g.entries.map(e => ({ ...e, isComplete: true }));
           const durations = entries
             .filter(e => e.phase === 'tool_start' && e.duration_ms !== undefined)
             .map(e => e.duration_ms!);
+          const prevEntries = completeAllGroups.slice(0, gIdx).flatMap(pg => pg.entries);
           return {
             ...g,
             entries,
             isComplete: true,
-            label: generateGroupLabel(entries),
+            label: generateGroupLabel(entries, prevEntries),
             totalDuration_ms: g.totalDuration_ms ?? (durations.length > 0 ? durations.reduce((a, b) => a + b, 0) : undefined),
           };
         });

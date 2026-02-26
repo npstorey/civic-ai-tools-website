@@ -2,18 +2,9 @@
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import ToolCallCard from './ToolCallCard';
 import ProgressLog from './ProgressLog';
-import type { ProgressLogEntry, ProgressGroup } from '@/hooks/useStreamingComparison';
-
-interface ToolCall {
-  name: string;
-  args: Record<string, unknown>;
-  resultSummary?: { rows: number; columns: number };
-  duration_ms?: number;
-  operationType?: string;
-  reason?: string;
-}
+import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
+import { getPortalCity, getDatasetName } from '@/lib/streaming';
 
 interface ResponsePanelProps {
   title: string;
@@ -30,31 +21,104 @@ interface ResponsePanelProps {
   isStreaming?: boolean;
 }
 
-function buildToolSummary(tools: ToolCall[], totalDuration?: number): string {
-  const counts: Record<string, number> = {};
-  let totalRows = 0;
+function TimingBar({ tools, totalDuration }: { tools: ToolCall[]; totalDuration: number }) {
+  const dataRetrievalMs = tools.reduce((sum, t) => sum + (t.duration_ms || 0), 0);
+  const remainingMs = Math.max(0, totalDuration - dataRetrievalMs);
+  // Split remaining time: 40% analysis, 60% synthesis (rough estimate)
+  const analysisMs = Math.round(remainingMs * 0.4);
+  const synthesisMs = remainingMs - analysisMs;
 
-  for (const tool of tools) {
-    const opType = tool.operationType || 'call';
-    counts[opType] = (counts[opType] || 0) + 1;
-    if (tool.resultSummary?.rows) {
-      totalRows += tool.resultSummary.rows;
+  const segments = [
+    { label: 'AI reasoning', ms: analysisMs, color: 'var(--nyc-info)' },
+    { label: 'Data Retrieval', ms: dataRetrievalMs, color: 'var(--nyc-success)' },
+    { label: 'Synthesis', ms: synthesisMs, color: 'var(--nyc-caution)' },
+  ];
+
+  return (
+    <div style={{ marginBottom: '12px' }}>
+      {/* Stacked bar */}
+      <div
+        style={{
+          display: 'flex',
+          height: '8px',
+          borderRadius: '4px',
+          overflow: 'hidden',
+          backgroundColor: 'var(--card-background)',
+        }}
+      >
+        {segments.map((seg) => (
+          <div
+            key={seg.label}
+            style={{
+              width: `${(seg.ms / totalDuration) * 100}%`,
+              backgroundColor: seg.color,
+              minWidth: seg.ms > 0 ? '2px' : 0,
+            }}
+          />
+        ))}
+      </div>
+      {/* Legend */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '12px',
+          marginTop: '4px',
+          fontSize: '11px',
+          color: 'var(--text-muted)',
+          flexWrap: 'wrap',
+        }}
+      >
+        {segments.map((seg) => (
+          <span key={seg.label} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '2px',
+                backgroundColor: seg.color,
+                flexShrink: 0,
+              }}
+            />
+            {seg.label}: {(seg.ms / 1000).toFixed(1)}s
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function buildProvenanceLine(tools: ToolCall[]): string | null {
+  // Find query-type tools with results
+  const queryTools = tools.filter(t => t.operationType === 'query');
+  if (queryTools.length === 0) return null;
+
+  const parts: string[] = [];
+
+  // Get portal city from first tool with a portal arg
+  const firstPortal = tools.find(t => t.args.portal)?.args.portal as string | undefined;
+  if (firstPortal) {
+    const city = getPortalCity(firstPortal);
+    parts.push(`${city} Open Data`);
+  }
+
+  // Dataset names and IDs (deduplicated)
+  const seen = new Set<string>();
+  for (const tool of queryTools) {
+    const datasetId = tool.args.dataset_id as string | undefined;
+    if (datasetId && !seen.has(datasetId)) {
+      seen.add(datasetId);
+      const name = getDatasetName(datasetId);
+      parts.push(`${name} (${datasetId})`);
     }
   }
 
-  const parts: string[] = [];
-  if (counts.catalog) parts.push(`Searched ${counts.catalog} catalog${counts.catalog > 1 ? 's' : ''}`);
-  if (counts.metadata) parts.push(`checked ${counts.metadata} metadata`);
-  if (counts.query) parts.push(`ran ${counts.query} quer${counts.query > 1 ? 'ies' : 'y'}`);
-  if (counts.metrics) parts.push(`fetched ${counts.metrics} metric${counts.metrics > 1 ? 's' : ''}`);
-  if (totalRows > 0) parts.push(`examined ${totalRows.toLocaleString()} records`);
-
-  let summary = parts.length > 0 ? parts.join(', ') : `Made ${tools.length} tool call${tools.length > 1 ? 's' : ''}`;
-  if (totalDuration) {
-    summary += ` in ${(totalDuration / 1000).toFixed(1)}s`;
+  // Total rows
+  const totalRows = queryTools.reduce((sum, t) => sum + (t.resultSummary?.rows || 0), 0);
+  if (totalRows > 0) {
+    parts.push(`${totalRows.toLocaleString()} rows returned`);
   }
 
-  return summary;
+  return parts.length > 0 ? `Source: ${parts.join(' · ')}` : null;
 }
 
 export default function ResponsePanel({
@@ -76,10 +140,6 @@ export default function ResponsePanel({
   const showProgressLog = (hasProgressLog || hasGroups) && !content;
   const showStreamingContent = isStreaming && content;
   const showStaticContent = !isStreaming && !isLoading && content;
-
-  const toolSummary = isMcp && tools_called && tools_called.length > 0
-    ? buildToolSummary(tools_called, duration_ms)
-    : null;
 
   const markdownContent = (text: string, showCursor?: boolean) => (
     <div className="response-markdown">
@@ -151,6 +211,23 @@ export default function ResponsePanel({
         {/* Non-streaming loading state */}
         {isLoading && !isStreaming && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* Without-MCP contextual label */}
+            {!isMcp && (
+              <div
+                style={{
+                  borderLeft: '3px solid var(--nyc-caution)',
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  fontStyle: 'italic',
+                  color: 'var(--text-secondary)',
+                  backgroundColor: 'rgba(255, 179, 32, 0.08)',
+                  borderRadius: '0 4px 4px 0',
+                  marginBottom: '4px',
+                }}
+              >
+                Answering from training data only — no access to current databases.
+              </div>
+            )}
             <div
               style={{
                 height: '16px',
@@ -189,6 +266,24 @@ export default function ResponsePanel({
             isActive={!content}
           />
         )}
+        {/* Without-MCP contextual label during streaming */}
+        {isStreaming && !content && !isMcp && (
+          <div
+            style={{
+              borderLeft: '3px solid var(--nyc-caution)',
+              padding: '8px 12px',
+              fontSize: '14px',
+              fontStyle: 'italic',
+              color: 'var(--text-secondary)',
+              backgroundColor: 'rgba(255, 179, 32, 0.08)',
+              borderRadius: '0 4px 4px 0',
+              marginBottom: '12px',
+            }}
+          >
+            Answering from training data only — no access to current databases.
+          </div>
+        )}
+
         {showProgressLog && !hasGroups && progressLog && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {progressLog.map((entry, idx) => (
@@ -249,78 +344,94 @@ export default function ResponsePanel({
             {/* Show completed progress log above content */}
             {(hasProgressLog || hasGroups) && (
               <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
-                {hasGroups ? (
-                  <ProgressLog
-                    groups={progressGroups!}
-                    standaloneEntries={(progressLog || []).filter(e => !e.iteration)}
-                    variant={variant}
-                    isActive={false}
-                  />
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {progressLog!.map((entry, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          color: 'var(--text-muted)',
-                          fontSize: '13px',
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: '14px',
-                            height: '14px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: isMcp ? 'var(--nyc-success)' : 'var(--nyc-blue)',
-                            flexShrink: 0,
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
-                          </svg>
-                        </span>
-                        <span>{entry.message}</span>
-                        {entry.duration_ms !== undefined && (
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '4px' }}>
-                            {(entry.duration_ms / 1000).toFixed(1)}s
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-            {toolSummary && (
-              <div
-                style={{
-                  borderLeft: '3px solid var(--nyc-success)',
-                  backgroundColor: 'rgba(0, 183, 3, 0.06)',
-                  padding: '8px 12px',
-                  marginBottom: '16px',
-                  fontSize: '14px',
-                  color: 'var(--text-secondary)',
-                  borderRadius: '0 4px 4px 0',
-                }}
-              >
-                {toolSummary}
+                <ProgressLog
+                  groups={progressGroups || []}
+                  standaloneEntries={(progressLog || []).filter(e => !e.iteration)}
+                  variant={variant}
+                  isActive={false}
+                  isComplete={!!(tools_called && tools_called.length > 0)}
+                  toolsCalled={tools_called}
+                  totalDuration_ms={duration_ms}
+                />
               </div>
             )}
             {markdownContent(content, !duration_ms)}
+            {/* MCP source provenance */}
+            {isMcp && tools_called && tools_called.length > 0 && (() => {
+              const provenance = buildProvenanceLine(tools_called);
+              return provenance ? (
+                <div
+                  style={{
+                    borderLeft: '3px solid var(--nyc-success)',
+                    backgroundColor: 'rgba(0, 183, 3, 0.05)',
+                    padding: '6px 10px',
+                    marginTop: '16px',
+                    fontSize: '13px',
+                    color: 'var(--text-secondary)',
+                    borderRadius: '0 4px 4px 0',
+                  }}
+                >
+                  {provenance}
+                </div>
+              ) : null;
+            })()}
+            {/* Without-MCP training data annotation */}
+            {!isMcp && content && (
+              <div
+                style={{
+                  borderTop: '1px solid var(--border-color)',
+                  marginTop: '16px',
+                  paddingTop: '12px',
+                  fontSize: '13px',
+                  fontStyle: 'italic',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                This response is based on the model&apos;s training data (cutoff: ~early 2025). It cannot access current government records.
+              </div>
+            )}
           </div>
         )}
 
         {/* Static content (non-streaming) */}
-        {showStaticContent && markdownContent(content)}
+        {showStaticContent && (
+          <div>
+            {/* Completed summary for MCP panel with tools */}
+            {isMcp && tools_called && tools_called.length > 0 && (
+              <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
+                <ProgressLog
+                  groups={progressGroups || []}
+                  standaloneEntries={(progressLog || []).filter(e => !e.iteration)}
+                  variant={variant}
+                  isActive={false}
+                  isComplete={true}
+                  toolsCalled={tools_called}
+                  totalDuration_ms={duration_ms}
+                />
+              </div>
+            )}
+            {markdownContent(content)}
+            {/* Without-MCP training data annotation */}
+            {!isMcp && content && (
+              <div
+                style={{
+                  borderTop: '1px solid var(--border-color)',
+                  marginTop: '16px',
+                  paddingTop: '12px',
+                  fontSize: '13px',
+                  fontStyle: 'italic',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                This response is based on the model&apos;s training data (cutoff: ~early 2025). It cannot access current government records.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Footer with metadata */}
-      {!isLoading && (duration_ms || tokens_used || tools_called) && (
+      {!isLoading && (duration_ms || tokens_used) && (
         <div
           style={{
             borderTop: `1px solid ${isMcp ? 'var(--nyc-success)' : 'var(--border-color)'}`,
@@ -328,37 +439,9 @@ export default function ResponsePanel({
             backgroundColor: isMcp ? 'rgba(0, 183, 3, 0.05)' : 'var(--card-background)',
           }}
         >
-          {tools_called && tools_called.length > 0 && (
-            <div style={{ marginBottom: '16px' }}>
-              <h4
-                data-tooltip="Model Context Protocol — lets the AI call external data tools"
-                style={{
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  color: 'var(--text-secondary)',
-                  marginBottom: '8px',
-                  cursor: 'help',
-                  position: 'relative',
-                  width: 'fit-content',
-                }}
-              >
-                MCP tools used:
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {tools_called.map((tool, idx) => (
-                  <ToolCallCard
-                    key={idx}
-                    stepNumber={idx + 1}
-                    name={tool.name}
-                    args={tool.args}
-                    resultSummary={tool.resultSummary}
-                    duration_ms={tool.duration_ms}
-                    operationType={tool.operationType}
-                    reason={tool.reason}
-                  />
-                ))}
-              </div>
-            </div>
+          {/* Timing breakdown bar for MCP panel */}
+          {isMcp && tools_called && tools_called.length > 0 && duration_ms && (
+            <TimingBar tools={tools_called} totalDuration={duration_ms} />
           )}
 
           <div
