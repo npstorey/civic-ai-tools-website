@@ -99,8 +99,6 @@ export default function TraceControls({
     if (suggestedQuery) setLiveQuery(suggestedQuery);
   }, [suggestedQuery]);
   const selectedTrace = traces.find(t => t.id === selectedTraceId);
-  const totalEvents = selectedTrace?.events.length ?? 0;
-  const currentStep = replayState.currentEventIndex + 1;
 
   // Complexity indicator: count tool_start events and format duration
   const toolCallCount = selectedTrace?.events.filter(e => e.phase === 'tool_start').length ?? 0;
@@ -237,21 +235,9 @@ export default function TraceControls({
             />
           </div>
 
-          {/* Status line */}
-          <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-            {replayState.isComplete ? (
-              <span>Complete &mdash; {selectedTrace?.responseSummary || 'Trace finished'}</span>
-            ) : replayState.isPlaying || replayState.isPaused ? (
-              <span>
-                Step {currentStep} of {totalEvents}
-                {replayState.currentIteration > 0 && (
-                  <> &middot; Iteration {replayState.currentIteration}</>
-                )}
-                {replayState.currentEvent && (
-                  <> &middot; {replayState.currentEvent.message}</>
-                )}
-              </span>
-            ) : (
+          {/* Status line — pre-play info only (playing/complete status is in the side panel) */}
+          {!replayState.isPlaying && !replayState.isPaused && !replayState.isComplete && (
+            <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
               <span>
                 {selectedTrace?.title || 'Select a trace to begin'}
                 {selectedTrace && toolCallCount > 0 && (
@@ -260,8 +246,8 @@ export default function TraceControls({
                   </span>
                 )}
               </span>
-            )}
-          </div>
+            </div>
+          )}
         </>
       )}
 

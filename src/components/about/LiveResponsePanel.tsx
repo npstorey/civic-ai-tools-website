@@ -3,6 +3,12 @@
 import McpResponseDisplay from '@/components/shared/McpResponseDisplay';
 import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
 
+interface ExampleStatus {
+  currentStep: number;
+  totalSteps: number;
+  currentMessage?: string;
+}
+
 interface LiveResponsePanelProps {
   content: string;
   elapsedMs: number;
@@ -13,6 +19,8 @@ interface LiveResponsePanelProps {
   progressGroups: ProgressGroup[];
   toolsCalled: ToolCall[];
   queryText?: string;
+  exampleStatus?: ExampleStatus;
+  completionCta?: React.ReactNode;
 }
 
 export default function LiveResponsePanel({
@@ -25,6 +33,8 @@ export default function LiveResponsePanel({
   progressGroups,
   toolsCalled,
   queryText,
+  exampleStatus,
+  completionCta,
 }: LiveResponsePanelProps) {
   return (
     <div style={{
@@ -45,9 +55,31 @@ export default function LiveResponsePanel({
         color: 'var(--text-muted)',
         background: 'var(--card-background)',
       }}>
-        <span>{(elapsedMs / 1000).toFixed(1)}s</span>
-        {iterationCount > 0 && (
-          <span>{iterationCount} {iterationCount === 1 ? 'iteration' : 'iterations'}</span>
+        {exampleStatus ? (
+          <>
+            <span>Step {exampleStatus.currentStep} of {exampleStatus.totalSteps}</span>
+            {iterationCount > 0 && (
+              <span>Iteration {iterationCount}</span>
+            )}
+            {exampleStatus.currentMessage && !isComplete && (
+              <span style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flex: 1,
+                opacity: 0.8,
+              }}>
+                {exampleStatus.currentMessage}
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            <span>{(elapsedMs / 1000).toFixed(1)}s</span>
+            {iterationCount > 0 && (
+              <span>{iterationCount} {iterationCount === 1 ? 'iteration' : 'iterations'}</span>
+            )}
+          </>
         )}
         {isComplete && toolsCalled.length > 0 && (
           <span style={{ marginLeft: 'auto', fontWeight: 500 }}>
@@ -69,6 +101,17 @@ export default function LiveResponsePanel({
         showFooter={isComplete && toolsCalled.length > 0}
         autoScroll
       />
+
+      {isComplete && completionCta && (
+        <div style={{
+          flexShrink: 0,
+          padding: '10px 14px',
+          borderTop: '1px solid var(--border-color)',
+          background: 'var(--card-background)',
+        }}>
+          {completionCta}
+        </div>
+      )}
     </div>
   );
 }

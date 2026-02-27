@@ -4,6 +4,49 @@ Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ---
 
+## 2026-02-27 — Unify Example Trace Replays with Side-by-Side Layout
+
+**Scope:** 5 files changed (1 new, 3 modified, 1 deleted), replacing NarrativePanel with the same side-panel step cards used by live queries.
+
+### What we did
+
+Example trace replays now use the same 55fr/45fr side-by-side layout as live queries. Clicking Play opens the split view with the BPMN diagram on the left and an incrementally-building step card panel on the right — identical to what live queries show. The old `NarrativePanel` (full-width educational text per phase) is deleted.
+
+**Key pieces:**
+- **`trace-progress.ts`** — Pure utility that derives `ProgressGroup[]`, `ProgressLogEntry[]`, and `ToolCall[]` from a slice of `TraceEvent[]`. Mirrors the grouping logic from `useLiveTrace.handleProgressEvent` but runs as a stateless function via `useMemo`, avoiding any changes to `useTraceReplay`.
+- **`LiveResponsePanel`** gained two optional props: `exampleStatus` (step counter instead of elapsed time) and `completionCta` (footer action slot). Both modes now use the same component.
+- **`McpFlowDiagram`** — `showSplit` expanded to activate during example playback. `exampleProgressData` derived via `useMemo`. "Try this query yourself" CTA switches to live mode with the example query pre-filled.
+- **`TraceControls`** — Removed playing/complete status line (now in the side panel). Pre-play info (title + tool count + duration) remains.
+
+### What went well
+
+- **Plan-first paid off** — The plan was detailed enough that implementation was mechanical. No backtracking, no surprises. Build passed on first attempt.
+- **Derived state via useMemo was the right call** — The largest trace has ~30 events, so recomputing on each index change is instant. This avoided modifying `useTraceReplay` or adding new state management.
+- **Reusing `LiveResponsePanel`** — Adding two optional props was far cleaner than creating a new component. The shared `McpResponseDisplay` underneath means both modes get identical rendering (breadcrumbs, markdown, provenance, footer) for free.
+- **Clean deletion** — `NarrativePanel` was fully replaced with zero fallback needed. No other code imported it.
+
+### What to watch
+
+- **No runtime testing** — Verified via build + lint only. The split transition animation, step card progressive reveal, pause/resume fidelity, and "Try this query yourself" flow all need manual testing.
+- **`onModeChangeTo` duplicates `handleModeChange`** — The new helper is nearly identical to `handleModeChange` but adds `setSuggestedQuery`. Could be consolidated, but kept separate for clarity since the CTA path has different intent.
+
+### Lessons
+
+- **Derived state > duplicated state** — Rather than making `useTraceReplay` track progress groups (adding complexity to an already-tested hook), deriving them from the event index via a pure function was simpler and risk-free.
+- **Optional props for mode variants** — Adding `exampleStatus?` and `completionCta?` to an existing component is cleaner than branching into separate components. The panel stays unified while each mode customizes its header and footer.
+
+### Files changed
+
+| File | Action |
+|------|--------|
+| `src/lib/bpmn/trace-progress.ts` | **New** — Pure function to convert TraceEvent[] → progress data |
+| `src/components/about/LiveResponsePanel.tsx` | Add `exampleStatus` and `completionCta` optional props |
+| `src/components/about/McpFlowDiagram.tsx` | Expand `showSplit`, add `useMemo` for derived data, render side panel for both modes, remove NarrativePanel |
+| `src/components/about/TraceControls.tsx` | Remove playing/complete status line, clean up unused vars |
+| `src/components/about/NarrativePanel.tsx` | **Deleted** — replaced by side panel |
+
+---
+
 ## 2026-02-27 — Unify MCP Display, Controls Polish, Trace Labels
 
 **Scope:** 3 tasks across 10 files (1 new), net -187 lines.

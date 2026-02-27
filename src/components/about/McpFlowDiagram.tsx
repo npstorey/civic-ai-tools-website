@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import BpmnViewerComponent, { type BpmnViewerHandle } from './BpmnViewer';
 import TraceControls, { type DiagramMode } from './TraceControls';
-import NarrativePanel from './NarrativePanel';
 import LiveResponsePanel from './LiveResponsePanel';
 import DiagramAnnotations from './DiagramAnnotations';
 import { TRACES, getTraceById } from '@/lib/bpmn/traces';
@@ -11,6 +10,7 @@ import type { PreRecordedTrace } from '@/lib/bpmn/traces';
 import { useTraceReplay } from '@/hooks/useTraceReplay';
 import { useLiveTrace } from '@/hooks/useLiveTrace';
 import type { ReplayState } from '@/lib/bpmn/animation';
+import { traceEventsToProgressData } from '@/lib/bpmn/trace-progress';
 
 const DEFAULT_MODEL = 'anthropic/claude-sonnet-4';
 const DEFAULT_PORTAL = 'data.cityofnewyork.us';
@@ -45,11 +45,26 @@ export default function McpFlowDiagram() {
     activeState = replayState;
   }
 
-  // Side-by-side split when live query is active
-  const showSplit = mode === 'live' && (
+  // Side-by-side split when example replay or live query is active
+  const exampleIsActive = mode === 'examples' && (
+    replayState.isPlaying || replayState.isPaused || replayState.isComplete
+  );
+  const showSplit = exampleIsActive || (mode === 'live' && (
     liveTrace.status === 'running' || liveTrace.status === 'complete'
     || liveTrace.status === 'cancelled' || isReplayingCapture
-  );
+  ));
+
+  // Derive progress data from example trace events for the side panel
+  const exampleProgressData = useMemo(() => {
+    if (mode !== 'examples' || !exampleTrace) {
+      return { progressLog: [], progressGroups: [], toolsCalled: [] };
+    }
+    return traceEventsToProgressData(
+      exampleTrace.events,
+      replayState.currentEventIndex,
+      replayState.isComplete,
+    );
+  }, [mode, exampleTrace, replayState.currentEventIndex, replayState.isComplete]);
 
   const [suggestedQuery, setSuggestedQuery] = useState<string | undefined>(undefined);
   const [liveQueryText, setLiveQueryText] = useState<string>('');
@@ -97,6 +112,21 @@ export default function McpFlowDiagram() {
     setLiveReplayTrace(null);
     if (newMode === 'examples') {
       liveTrace.reset();
+    }
+    setMode(newMode);
+  }, [reset, liveTrace]);
+
+  // Switch to live mode with an optional pre-filled query (used by "Try this query" CTA)
+  const onModeChangeTo = useCallback((newMode: DiagramMode, prefillQuery?: string) => {
+    reset();
+    viewerRef.current?.resetAll();
+    setIsReplayingCapture(false);
+    setLiveReplayTrace(null);
+    if (newMode === 'examples') {
+      liveTrace.reset();
+    }
+    if (prefillQuery) {
+      setSuggestedQuery(prefillQuery);
     }
     setMode(newMode);
   }, [reset, liveTrace]);
@@ -308,7 +338,7 @@ export default function McpFlowDiagram() {
           )}
         </div>
 
-        {/* Right cell: live response panel */}
+        {/* Right cell: response panel (both example and live modes) */}
         {showSplit && (
           <div style={{
             overflow: 'hidden',
@@ -317,27 +347,60 @@ export default function McpFlowDiagram() {
             background: 'white',
             minWidth: 0,
           }}>
-            <LiveResponsePanel
-              content={liveTrace.responseContent}
-              elapsedMs={liveTrace.elapsedMs}
-              iterationCount={liveTrace.currentIteration}
-              isComplete={liveTrace.status === 'complete' || liveTrace.status === 'cancelled'}
-              isRunning={liveTrace.status === 'running'}
-              progressLog={liveTrace.progressLog}
-              progressGroups={liveTrace.progressGroups}
-              toolsCalled={liveTrace.toolsCalled}
-              queryText={liveQueryText}
-            />
+            {exampleIsActive ? (
+              <LiveResponsePanel
+                content={replayState.isComplete ? (exampleTrace?.responseSummary || '') : ''}
+                elapsedMs={exampleTrace?.totalDuration_ms ?? 0}
+                iterationCount={replayState.currentIteration}
+                isComplete={replayState.isComplete}
+                isRunning={replayState.isPlaying}
+                progressLog={exampleProgressData.progressLog}
+                progressGroups={exampleProgressData.progressGroups}
+                toolsCalled={exampleProgressData.toolsCalled}
+                queryText={exampleTrace?.query}
+                exampleStatus={{
+                  currentStep: replayState.currentEventIndex + 1,
+                  totalSteps: exampleTrace?.events.length ?? 0,
+                  currentMessage: replayState.currentEvent?.message,
+                }}
+                completionCta={
+                  <button
+                    onClick={() => {
+                      onModeChangeTo('live', exampleTrace?.query);
+                    }}
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      color: 'var(--nyc-blue-40)',
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      textDecoration: 'underline',
+                      textUnderlineOffset: '2px',
+                    }}
+                  >
+                    Try this query yourself &rarr;
+                  </button>
+                }
+              />
+            ) : (
+              <LiveResponsePanel
+                content={liveTrace.responseContent}
+                elapsedMs={liveTrace.elapsedMs}
+                iterationCount={liveTrace.currentIteration}
+                isComplete={liveTrace.status === 'complete' || liveTrace.status === 'cancelled'}
+                isRunning={liveTrace.status === 'running'}
+                progressLog={liveTrace.progressLog}
+                progressGroups={liveTrace.progressGroups}
+                toolsCalled={liveTrace.toolsCalled}
+                queryText={liveQueryText}
+              />
+            )}
           </div>
         )}
       </div>
-
-      {/* Narrative panel — only during example traces (in live mode, the response panel handles narration) */}
-      {!showSplit && (
-        <div style={{ flexShrink: 0 }}>
-          <NarrativePanel replayState={activeState} />
-        </div>
-      )}
     </>
   );
 
