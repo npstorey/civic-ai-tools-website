@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Definitions_1"
+                  targetNamespace="http://civicai.tools/bpmn"
+                  exporter="Civic AI Tools"
+                  exporterVersion="1.0">
+
+  <bpmn:collaboration id="Collaboration_1">
+    <bpmn:participant id="Participant_Browser" name="Your Browser" processRef="Process_Browser" />
+    <bpmn:participant id="Participant_AI" name="AI Model" processRef="Process_AI" />
+    <bpmn:participant id="Participant_MCP" name="MCP Infrastructure" processRef="Process_MCP" />
+    <bpmn:participant id="Participant_Socrata" name="NYC Open Data (Socrata)" processRef="Process_Socrata" />
+    <bpmn:participant id="Participant_Narration" name="Narration Layer" processRef="Process_Narration" />
+
+    <bpmn:messageFlow id="flow_construct_to_mcp" name="" sourceRef="task_ai_constructs_call" targetRef="task_mcp_translates" />
+    <bpmn:messageFlow id="flow_socrata_to_return" name="" sourceRef="task_socrata_executes" targetRef="task_results_return" />
+    <bpmn:messageFlow id="flow_tool_to_narration" name="" sourceRef="task_ai_constructs_call" targetRef="task_narration_translate" />
+  </bpmn:collaboration>
+
+  <!-- Browser Process -->
+  <bpmn:process id="Process_Browser" isExecutable="false">
+    <bpmn:startEvent id="event_start" name="User submits question">
+      <bpmn:outgoing>flow_start_to_reads</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:endEvent id="event_end" name="Response displayed">
+      <bpmn:incoming>flow_synthesis_to_end</bpmn:incoming>
+    </bpmn:endEvent>
+  </bpmn:process>
+
+  <!-- AI Model Process -->
+  <bpmn:process id="Process_AI" isExecutable="false">
+    <bpmn:task id="task_ai_reads" name="AI reads question &amp; skill prompt">
+      <bpmn:incoming>flow_start_to_reads</bpmn:incoming>
+      <bpmn:outgoing>flow_reads_to_plans</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="task_ai_plans" name="AI plans approach">
+      <bpmn:incoming>flow_reads_to_plans</bpmn:incoming>
+      <bpmn:outgoing>flow_plans_to_construct</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="task_ai_constructs_call" name="AI constructs tool call">
+      <bpmn:incoming>flow_plans_to_construct</bpmn:incoming>
+      <bpmn:incoming>flow_loop_back</bpmn:incoming>
+      <bpmn:outgoing>flow_construct_out</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="task_results_return" name="Results return to AI">
+      <bpmn:outgoing>flow_return_to_gateway</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="gateway_enough_data" name="Enough data?">
+      <bpmn:incoming>flow_return_to_gateway</bpmn:incoming>
+      <bpmn:outgoing>flow_loop_back</bpmn:outgoing>
+      <bpmn:outgoing>flow_to_synthesis</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="task_ai_synthesizes" name="AI synthesizes response">
+      <bpmn:incoming>flow_to_synthesis</bpmn:incoming>
+      <bpmn:outgoing>flow_synthesis_to_end</bpmn:outgoing>
+    </bpmn:task>
+
+    <bpmn:sequenceFlow id="flow_reads_to_plans" sourceRef="task_ai_reads" targetRef="task_ai_plans" />
+    <bpmn:sequenceFlow id="flow_plans_to_construct" sourceRef="task_ai_plans" targetRef="task_ai_constructs_call" />
+    <bpmn:sequenceFlow id="flow_construct_out" sourceRef="task_ai_constructs_call" targetRef="task_results_return" />
+    <bpmn:sequenceFlow id="flow_return_to_gateway" sourceRef="task_results_return" targetRef="gateway_enough_data" />
+    <bpmn:sequenceFlow id="flow_loop_back" name="Need more data" sourceRef="gateway_enough_data" targetRef="task_ai_constructs_call" />
+    <bpmn:sequenceFlow id="flow_to_synthesis" name="Ready" sourceRef="gateway_enough_data" targetRef="task_ai_synthesizes" />
+    <bpmn:sequenceFlow id="flow_synthesis_to_end" sourceRef="task_ai_synthesizes" targetRef="event_end" />
+  </bpmn:process>
+
+  <!-- MCP Process -->
+  <bpmn:process id="Process_MCP" isExecutable="false">
+    <bpmn:task id="task_mcp_translates" name="MCP server translates request" />
+    <bpmn:sequenceFlow id="flow_mcp_to_socrata" sourceRef="task_mcp_translates" targetRef="task_socrata_executes" />
+  </bpmn:process>
+
+  <!-- Socrata Process -->
+  <bpmn:process id="Process_Socrata" isExecutable="false">
+    <bpmn:task id="task_socrata_executes" name="Socrata executes query">
+      <bpmn:incoming>flow_mcp_to_socrata</bpmn:incoming>
+    </bpmn:task>
+  </bpmn:process>
+
+  <!-- Narration Process -->
+  <bpmn:process id="Process_Narration" isExecutable="false">
+    <bpmn:task id="task_narration_translate" name="Generate step description" />
+  </bpmn:process>
+
+  <!-- Cross-process sequence flows (defined at collaboration level via message flows above) -->
+  <bpmn:sequenceFlow id="flow_start_to_reads" sourceRef="event_start" targetRef="task_ai_reads" />
+
+  <!-- Diagram -->
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_1">
+
+      <!-- Browser Lane -->
+      <bpmndi:BPMNShape id="Participant_Browser_di" bpmnElement="Participant_Browser" isHorizontal="true">
+        <dc:Bounds x="120" y="20" width="1080" height="100" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="event_start_di" bpmnElement="event_start">
+        <dc:Bounds x="182" y="52" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="155" y="95" width="90" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="event_end_di" bpmnElement="event_end">
+        <dc:Bounds x="1102" y="52" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1075" y="95" width="90" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- AI Model Lane -->
+      <bpmndi:BPMNShape id="Participant_AI_di" bpmnElement="Participant_AI" isHorizontal="true">
+        <dc:Bounds x="120" y="140" width="1080" height="200" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_ai_reads_di" bpmnElement="task_ai_reads">
+        <dc:Bounds x="230" y="190" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_ai_plans_di" bpmnElement="task_ai_plans">
+        <dc:Bounds x="380" y="190" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_ai_constructs_call_di" bpmnElement="task_ai_constructs_call">
+        <dc:Bounds x="530" y="190" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_results_return_di" bpmnElement="task_results_return">
+        <dc:Bounds x="730" y="190" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="gateway_enough_data_di" bpmnElement="gateway_enough_data" isMarkerVisible="true">
+        <dc:Bounds x="875" y="205" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="862" y="262" width="76" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_ai_synthesizes_di" bpmnElement="task_ai_synthesizes">
+        <dc:Bounds x="960" y="190" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- MCP Infrastructure Lane -->
+      <bpmndi:BPMNShape id="Participant_MCP_di" bpmnElement="Participant_MCP" isHorizontal="true">
+        <dc:Bounds x="120" y="360" width="1080" height="100" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_mcp_translates_di" bpmnElement="task_mcp_translates">
+        <dc:Bounds x="530" y="375" width="140" height="60" />
+      </bpmndi:BPMNShape>
+
+      <!-- Socrata Lane -->
+      <bpmndi:BPMNShape id="Participant_Socrata_di" bpmnElement="Participant_Socrata" isHorizontal="true">
+        <dc:Bounds x="120" y="480" width="1080" height="100" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_socrata_executes_di" bpmnElement="task_socrata_executes">
+        <dc:Bounds x="700" y="495" width="140" height="60" />
+      </bpmndi:BPMNShape>
+
+      <!-- Narration Lane -->
+      <bpmndi:BPMNShape id="Participant_Narration_di" bpmnElement="Participant_Narration" isHorizontal="true">
+        <dc:Bounds x="120" y="600" width="1080" height="100" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_narration_translate_di" bpmnElement="task_narration_translate">
+        <dc:Bounds x="530" y="620" width="140" height="60" />
+      </bpmndi:BPMNShape>
+
+      <!-- Sequence Flows within AI Model -->
+      <bpmndi:BPMNEdge id="flow_start_to_reads_di" bpmnElement="flow_start_to_reads">
+        <di:waypoint x="200" y="88" />
+        <di:waypoint x="200" y="230" />
+        <di:waypoint x="230" y="230" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_reads_to_plans_di" bpmnElement="flow_reads_to_plans">
+        <di:waypoint x="350" y="230" />
+        <di:waypoint x="380" y="230" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_plans_to_construct_di" bpmnElement="flow_plans_to_construct">
+        <di:waypoint x="500" y="230" />
+        <di:waypoint x="530" y="230" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_construct_out_di" bpmnElement="flow_construct_out">
+        <di:waypoint x="650" y="230" />
+        <di:waypoint x="730" y="230" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_return_to_gateway_di" bpmnElement="flow_return_to_gateway">
+        <di:waypoint x="850" y="230" />
+        <di:waypoint x="875" y="230" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_loop_back_di" bpmnElement="flow_loop_back">
+        <di:waypoint x="900" y="205" />
+        <di:waypoint x="900" y="160" />
+        <di:waypoint x="590" y="160" />
+        <di:waypoint x="590" y="190" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="710" y="142" width="80" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_to_synthesis_di" bpmnElement="flow_to_synthesis">
+        <di:waypoint x="925" y="230" />
+        <di:waypoint x="960" y="230" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="929" y="212" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_synthesis_to_end_di" bpmnElement="flow_synthesis_to_end">
+        <di:waypoint x="1080" y="230" />
+        <di:waypoint x="1120" y="230" />
+        <di:waypoint x="1120" y="88" />
+      </bpmndi:BPMNEdge>
+
+      <!-- Message Flows (dashed cross-pool) -->
+      <bpmndi:BPMNEdge id="flow_construct_to_mcp_di" bpmnElement="flow_construct_to_mcp">
+        <di:waypoint x="590" y="270" />
+        <di:waypoint x="590" y="375" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_mcp_to_socrata_di" bpmnElement="flow_mcp_to_socrata">
+        <di:waypoint x="670" y="405" />
+        <di:waypoint x="700" y="525" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_socrata_to_return_di" bpmnElement="flow_socrata_to_return">
+        <di:waypoint x="790" y="495" />
+        <di:waypoint x="790" y="270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_tool_to_narration_di" bpmnElement="flow_tool_to_narration">
+        <di:waypoint x="570" y="270" />
+        <di:waypoint x="570" y="620" />
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

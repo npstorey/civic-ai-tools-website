@@ -345,6 +345,30 @@ a:focus {
   50% { opacity: 0.5; }
 }
 
+/* BPMN active node pulse animation */
+@keyframes bpmn-pulse {
+  0%, 100% { filter: drop-shadow(0 0 8px rgba(34, 197, 94, 0.4)); }
+  50% { filter: drop-shadow(0 0 14px rgba(34, 197, 94, 0.7)); }
+}
+
+.bpmn-active .djs-visual > rect,
+.bpmn-active .djs-visual > circle,
+.bpmn-active .djs-visual > polygon {
+  animation: bpmn-pulse 1.5s ease-in-out infinite;
+}
+
+/* BPMN fullscreen enter animation */
+@keyframes bpmn-fullscreen-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .skeleton {
   background-color: var(--skeleton-color);
   animation: skeleton-pulse 2s infinite;

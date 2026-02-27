@@ -1,0 +1,662 @@
+import type { ProgressPhase } from '@/lib/streaming';
+
+export interface TraceEvent {
+  relativeMs: number;
+  phase: ProgressPhase;
+  message: string;
+  iteration?: number;
+  args?: Record<string, unknown>;
+  duration_ms?: number;
+  resultSummary?: { rows: number; columns: number };
+}
+
+export interface PreRecordedTrace {
+  id: string;
+  title: string;
+  chipLabel: string;
+  query: string;
+  model: string;
+  portal: string;
+  capturedAt: string;
+  totalDuration_ms: number;
+  events: TraceEvent[];
+  responseSummary?: string;
+}
+
+// Trace 1: Simple 311 query — 3 tool calls, ~8s
+const simple311: PreRecordedTrace = {
+  id: 'simple-311',
+  title: 'Most common 311 complaints in NYC',
+  chipLabel: 'Simple query',
+  query: 'Most common 311 complaints in NYC',
+  model: 'anthropic/claude-sonnet-4',
+  portal: 'data.cityofnewyork.us',
+  capturedAt: '2025-06-10T14:22:00Z',
+  totalDuration_ms: 8340,
+  responseSummary: 'The top complaint types are Noise (residential), Heat/Hot Water, and Illegal Parking.',
+  events: [
+    {
+      relativeMs: 0,
+      phase: 'analyze',
+      message: 'Reading question and planning approach',
+    },
+    {
+      relativeMs: 1230,
+      phase: 'tool_start',
+      message: 'Searching NYC data catalog: "311 complaints"',
+      iteration: 1,
+      args: { type: 'catalog', query: '311 complaints', portal: 'data.cityofnewyork.us' },
+    },
+    {
+      relativeMs: 2814,
+      phase: 'tool_complete',
+      message: 'Searching NYC data catalog: "311 complaints"',
+      iteration: 1,
+      duration_ms: 1584,
+    },
+    {
+      relativeMs: 2980,
+      phase: 'tool_result',
+      message: 'Found 5 datasets matching the search',
+      iteration: 1,
+      resultSummary: { rows: 5, columns: 8 },
+    },
+    {
+      relativeMs: 3410,
+      phase: 'tool_start',
+      message: 'Top complaint types',
+      iteration: 2,
+      args: {
+        type: 'query',
+        dataset_id: 'erm2-nwe9',
+        portal: 'data.cityofnewyork.us',
+        select: 'complaint_type, COUNT(*) as count',
+        group: 'complaint_type',
+        order: 'count DESC',
+        limit: 10,
+      },
+    },
+    {
+      relativeMs: 5637,
+      phase: 'tool_complete',
+      message: 'Top complaint types',
+      iteration: 2,
+      duration_ms: 2227,
+    },
+    {
+      relativeMs: 5830,
+      phase: 'tool_result',
+      message: 'Retrieved 10 records from 311 Service Requests',
+      iteration: 2,
+      resultSummary: { rows: 10, columns: 2 },
+    },
+    {
+      relativeMs: 6120,
+      phase: 'thinking',
+      message: 'Evaluating results',
+      iteration: 2,
+    },
+    {
+      relativeMs: 6500,
+      phase: 'synthesize',
+      message: 'Writing response based on collected data',
+    },
+  ],
+};
+
+// Trace 2: Multi-step restaurant inspection comparison — 5 tool calls, ~18s
+const multiStepRestaurant: PreRecordedTrace = {
+  id: 'multi-step-restaurant',
+  title: 'Compare restaurant inspection grades across boroughs',
+  chipLabel: 'Multi-step',
+  query: 'Compare restaurant inspection grades across boroughs',
+  model: 'anthropic/claude-sonnet-4',
+  portal: 'data.cityofnewyork.us',
+  capturedAt: '2025-06-10T15:05:00Z',
+  totalDuration_ms: 17820,
+  responseSummary: 'Manhattan leads with the most A grades, while the Bronx shows the highest rate of critical violations.',
+  events: [
+    {
+      relativeMs: 0,
+      phase: 'analyze',
+      message: 'Reading question and planning approach',
+    },
+    {
+      relativeMs: 1140,
+      phase: 'tool_start',
+      message: 'Searching NYC data catalog: "restaurant inspections"',
+      iteration: 1,
+      args: { type: 'catalog', query: 'restaurant inspections', portal: 'data.cityofnewyork.us' },
+    },
+    {
+      relativeMs: 2723,
+      phase: 'tool_complete',
+      message: 'Searching NYC data catalog: "restaurant inspections"',
+      iteration: 1,
+      duration_ms: 1583,
+    },
+    {
+      relativeMs: 2890,
+      phase: 'tool_result',
+      message: 'Found 3 datasets matching the search',
+      iteration: 1,
+      resultSummary: { rows: 3, columns: 8 },
+    },
+    {
+      relativeMs: 3280,
+      phase: 'tool_start',
+      message: 'Getting metadata for Restaurant Inspections',
+      iteration: 2,
+      args: { type: 'metadata', query: '43nn-pn8j', dataset_id: '43nn-pn8j', portal: 'data.cityofnewyork.us' },
+    },
+    {
+      relativeMs: 4512,
+      phase: 'tool_complete',
+      message: 'Getting metadata for Restaurant Inspections',
+      iteration: 2,
+      duration_ms: 1232,
+    },
+    {
+      relativeMs: 4680,
+      phase: 'tool_result',
+      message: 'Loaded metadata for Restaurant Inspections',
+      iteration: 2,
+    },
+    {
+      relativeMs: 4940,
+      phase: 'thinking',
+      message: 'Planning query based on available columns',
+      iteration: 2,
+    },
+    {
+      relativeMs: 5620,
+      phase: 'tool_start',
+      message: 'Counting by borough and grade',
+      iteration: 3,
+      args: {
+        type: 'query',
+        dataset_id: '43nn-pn8j',
+        portal: 'data.cityofnewyork.us',
+        select: 'boro, grade, COUNT(*) as count',
+        where: "grade IN ('A', 'B', 'C')",
+        group: 'boro, grade',
+        order: 'boro, count DESC',
+        limit: 50,
+      },
+    },
+    {
+      relativeMs: 8243,
+      phase: 'tool_complete',
+      message: 'Counting by borough and grade',
+      iteration: 3,
+      duration_ms: 2623,
+    },
+    {
+      relativeMs: 8430,
+      phase: 'tool_result',
+      message: 'Retrieved 15 records from Restaurant Inspections',
+      iteration: 3,
+      resultSummary: { rows: 15, columns: 3 },
+    },
+    {
+      relativeMs: 8790,
+      phase: 'thinking',
+      message: 'Analyzing grade distribution patterns',
+      iteration: 3,
+    },
+    {
+      relativeMs: 9480,
+      phase: 'tool_start',
+      message: 'Counting by borough for critical only',
+      iteration: 4,
+      args: {
+        type: 'query',
+        dataset_id: '43nn-pn8j',
+        portal: 'data.cityofnewyork.us',
+        select: 'boro, COUNT(*) as count',
+        where: "critical_flag = 'Critical'",
+        group: 'boro',
+        order: 'count DESC',
+        limit: 10,
+      },
+    },
+    {
+      relativeMs: 12147,
+      phase: 'tool_complete',
+      message: 'Counting by borough for critical only',
+      iteration: 4,
+      duration_ms: 2667,
+    },
+    {
+      relativeMs: 12340,
+      phase: 'tool_result',
+      message: 'Retrieved 5 records from Restaurant Inspections',
+      iteration: 4,
+      resultSummary: { rows: 5, columns: 2 },
+    },
+    {
+      relativeMs: 12680,
+      phase: 'thinking',
+      message: 'Evaluating results',
+      iteration: 4,
+    },
+    {
+      relativeMs: 13200,
+      phase: 'tool_start',
+      message: 'Refining: adding for 2024',
+      iteration: 5,
+      args: {
+        type: 'query',
+        dataset_id: '43nn-pn8j',
+        portal: 'data.cityofnewyork.us',
+        select: 'boro, grade, COUNT(*) as count',
+        where: "grade IN ('A', 'B', 'C') AND inspection_date >= '2024-01-01'",
+        group: 'boro, grade',
+        order: 'boro, count DESC',
+        limit: 50,
+      },
+    },
+    {
+      relativeMs: 15823,
+      phase: 'tool_complete',
+      message: 'Refining: adding for 2024',
+      iteration: 5,
+      duration_ms: 2623,
+    },
+    {
+      relativeMs: 16010,
+      phase: 'tool_result',
+      message: 'Retrieved 15 records from Restaurant Inspections',
+      iteration: 5,
+      resultSummary: { rows: 15, columns: 3 },
+    },
+    {
+      relativeMs: 16380,
+      phase: 'thinking',
+      message: 'Evaluating results',
+      iteration: 5,
+    },
+    {
+      relativeMs: 16900,
+      phase: 'synthesize',
+      message: 'Writing response based on collected data',
+    },
+  ],
+};
+
+// Trace 3: Filtered noise query — 3 tool calls, ~10s
+const filteredNoise: PreRecordedTrace = {
+  id: 'filtered-noise',
+  title: 'Noise complaints in Brooklyn in 2024',
+  chipLabel: 'Filtered',
+  query: 'Noise complaints in Brooklyn in 2024',
+  model: 'anthropic/claude-sonnet-4',
+  portal: 'data.cityofnewyork.us',
+  capturedAt: '2025-06-10T15:30:00Z',
+  totalDuration_ms: 10120,
+  responseSummary: 'Brooklyn had 42,318 noise complaints in 2024, with Residential Noise topping the list.',
+  events: [
+    {
+      relativeMs: 0,
+      phase: 'analyze',
+      message: 'Reading question and planning approach',
+    },
+    {
+      relativeMs: 980,
+      phase: 'tool_start',
+      message: 'Searching NYC data catalog: "311 noise complaints"',
+      iteration: 1,
+      args: { type: 'catalog', query: '311 noise complaints', portal: 'data.cityofnewyork.us' },
+    },
+    {
+      relativeMs: 2563,
+      phase: 'tool_complete',
+      message: 'Searching NYC data catalog: "311 noise complaints"',
+      iteration: 1,
+      duration_ms: 1583,
+    },
+    {
+      relativeMs: 2730,
+      phase: 'tool_result',
+      message: 'Found 4 datasets matching the search',
+      iteration: 1,
+      resultSummary: { rows: 4, columns: 8 },
+    },
+    {
+      relativeMs: 3180,
+      phase: 'tool_start',
+      message: 'Top complaint types in BROOKLYN, for 2024',
+      iteration: 2,
+      args: {
+        type: 'query',
+        dataset_id: 'erm2-nwe9',
+        portal: 'data.cityofnewyork.us',
+        select: 'complaint_type, COUNT(*) as count',
+        where: "borough = 'BROOKLYN' AND created_date >= '2024-01-01' AND created_date < '2025-01-01' AND complaint_type ILIKE '%noise%'",
+        group: 'complaint_type',
+        order: 'count DESC',
+        limit: 10,
+      },
+    },
+    {
+      relativeMs: 5923,
+      phase: 'tool_complete',
+      message: 'Top complaint types in BROOKLYN, for 2024',
+      iteration: 2,
+      duration_ms: 2743,
+    },
+    {
+      relativeMs: 6110,
+      phase: 'tool_result',
+      message: 'Retrieved 8 records from 311 Service Requests',
+      iteration: 2,
+      resultSummary: { rows: 8, columns: 2 },
+    },
+    {
+      relativeMs: 6470,
+      phase: 'thinking',
+      message: 'Evaluating results',
+      iteration: 2,
+    },
+    {
+      relativeMs: 6950,
+      phase: 'tool_start',
+      message: 'Counting by report date in BROOKLYN, for 2024, matching "noise"',
+      iteration: 3,
+      args: {
+        type: 'query',
+        dataset_id: 'erm2-nwe9',
+        portal: 'data.cityofnewyork.us',
+        select: 'date_trunc_ym(created_date) as month, COUNT(*) as count',
+        where: "borough = 'BROOKLYN' AND created_date >= '2024-01-01' AND created_date < '2025-01-01' AND complaint_type ILIKE '%noise%'",
+        group: 'date_trunc_ym(created_date)',
+        order: 'month',
+        limit: 12,
+      },
+    },
+    {
+      relativeMs: 8847,
+      phase: 'tool_complete',
+      message: 'Counting by report date in BROOKLYN, for 2024, matching "noise"',
+      iteration: 3,
+      duration_ms: 1897,
+    },
+    {
+      relativeMs: 9020,
+      phase: 'tool_result',
+      message: 'Retrieved 12 records from 311 Service Requests',
+      iteration: 3,
+      resultSummary: { rows: 12, columns: 2 },
+    },
+    {
+      relativeMs: 9370,
+      phase: 'thinking',
+      message: 'Evaluating results',
+      iteration: 3,
+    },
+    {
+      relativeMs: 9600,
+      phase: 'synthesize',
+      message: 'Writing response based on collected data',
+    },
+  ],
+};
+
+// Trace 4: Complex housing comparison — 6+ tool calls, ~25s, many iterations
+const retryIteration: PreRecordedTrace = {
+  id: 'retry-iteration',
+  title: 'How do housing violations in Brooklyn compare to Manhattan?',
+  chipLabel: 'Deep iteration',
+  query: 'How do housing violations in Brooklyn compare to Manhattan?',
+  model: 'anthropic/claude-sonnet-4',
+  portal: 'data.cityofnewyork.us',
+  capturedAt: '2025-06-10T16:00:00Z',
+  totalDuration_ms: 24730,
+  responseSummary: 'Brooklyn has more total violations but Manhattan has a higher density per building. Both show spikes in winter months.',
+  events: [
+    {
+      relativeMs: 0,
+      phase: 'analyze',
+      message: 'Reading question and planning approach',
+    },
+    {
+      relativeMs: 1310,
+      phase: 'tool_start',
+      message: 'Searching NYC data catalog: "housing violations"',
+      iteration: 1,
+      args: { type: 'catalog', query: 'housing violations', portal: 'data.cityofnewyork.us' },
+    },
+    {
+      relativeMs: 2847,
+      phase: 'tool_complete',
+      message: 'Searching NYC data catalog: "housing violations"',
+      iteration: 1,
+      duration_ms: 1537,
+    },
+    {
+      relativeMs: 3010,
+      phase: 'tool_result',
+      message: 'Found 6 datasets matching the search',
+      iteration: 1,
+      resultSummary: { rows: 6, columns: 8 },
+    },
+    {
+      relativeMs: 3480,
+      phase: 'tool_start',
+      message: 'Getting metadata for Housing Violations',
+      iteration: 2,
+      args: { type: 'metadata', query: 'wvxf-dwi5', dataset_id: 'wvxf-dwi5', portal: 'data.cityofnewyork.us' },
+    },
+    {
+      relativeMs: 4712,
+      phase: 'tool_complete',
+      message: 'Getting metadata for Housing Violations',
+      iteration: 2,
+      duration_ms: 1232,
+    },
+    {
+      relativeMs: 4880,
+      phase: 'tool_result',
+      message: 'Loaded metadata for Housing Violations',
+      iteration: 2,
+    },
+    {
+      relativeMs: 5180,
+      phase: 'thinking',
+      message: 'Planning comparison queries for two boroughs',
+      iteration: 2,
+    },
+    {
+      relativeMs: 5830,
+      phase: 'tool_start',
+      message: 'Counting by borough in BROOKLYN',
+      iteration: 3,
+      args: {
+        type: 'query',
+        dataset_id: 'wvxf-dwi5',
+        portal: 'data.cityofnewyork.us',
+        select: 'COUNT(*) as count',
+        where: "boro = 'BROOKLYN'",
+        limit: 1,
+      },
+    },
+    {
+      relativeMs: 8253,
+      phase: 'tool_complete',
+      message: 'Counting by borough in BROOKLYN',
+      iteration: 3,
+      duration_ms: 2423,
+    },
+    {
+      relativeMs: 8420,
+      phase: 'tool_result',
+      message: 'Retrieved 1 record from Housing Violations',
+      iteration: 3,
+      resultSummary: { rows: 1, columns: 1 },
+    },
+    {
+      relativeMs: 8730,
+      phase: 'thinking',
+      message: 'Need Manhattan data for comparison',
+      iteration: 3,
+    },
+    {
+      relativeMs: 9350,
+      phase: 'tool_start',
+      message: 'Counting records in MANHATTAN',
+      iteration: 4,
+      args: {
+        type: 'query',
+        dataset_id: 'wvxf-dwi5',
+        portal: 'data.cityofnewyork.us',
+        select: 'COUNT(*) as count',
+        where: "boro = 'MANHATTAN'",
+        limit: 1,
+      },
+    },
+    {
+      relativeMs: 11773,
+      phase: 'tool_complete',
+      message: 'Counting records in MANHATTAN',
+      iteration: 4,
+      duration_ms: 2423,
+    },
+    {
+      relativeMs: 11940,
+      phase: 'tool_result',
+      message: 'Retrieved 1 record from Housing Violations',
+      iteration: 4,
+      resultSummary: { rows: 1, columns: 1 },
+    },
+    {
+      relativeMs: 12280,
+      phase: 'thinking',
+      message: 'Totals collected, now need breakdown by violation type',
+      iteration: 4,
+    },
+    {
+      relativeMs: 12950,
+      phase: 'tool_start',
+      message: 'Top violation IDs in BROOKLYN',
+      iteration: 5,
+      args: {
+        type: 'query',
+        dataset_id: 'wvxf-dwi5',
+        portal: 'data.cityofnewyork.us',
+        select: 'currentstatus, COUNT(*) as count',
+        where: "boro = 'BROOKLYN'",
+        group: 'currentstatus',
+        order: 'count DESC',
+        limit: 10,
+      },
+    },
+    {
+      relativeMs: 15573,
+      phase: 'tool_complete',
+      message: 'Top violation IDs in BROOKLYN',
+      iteration: 5,
+      duration_ms: 2623,
+    },
+    {
+      relativeMs: 15740,
+      phase: 'tool_result',
+      message: 'Retrieved 4 records from Housing Violations',
+      iteration: 5,
+      resultSummary: { rows: 4, columns: 2 },
+    },
+    {
+      relativeMs: 16080,
+      phase: 'thinking',
+      message: 'Need Manhattan breakdown for fair comparison',
+      iteration: 5,
+    },
+    {
+      relativeMs: 16730,
+      phase: 'tool_start',
+      message: 'Top statuses in MANHATTAN',
+      iteration: 6,
+      args: {
+        type: 'query',
+        dataset_id: 'wvxf-dwi5',
+        portal: 'data.cityofnewyork.us',
+        select: 'currentstatus, COUNT(*) as count',
+        where: "boro = 'MANHATTAN'",
+        group: 'currentstatus',
+        order: 'count DESC',
+        limit: 10,
+      },
+    },
+    {
+      relativeMs: 19353,
+      phase: 'tool_complete',
+      message: 'Top statuses in MANHATTAN',
+      iteration: 6,
+      duration_ms: 2623,
+    },
+    {
+      relativeMs: 19520,
+      phase: 'tool_result',
+      message: 'Retrieved 4 records from Housing Violations',
+      iteration: 6,
+      resultSummary: { rows: 4, columns: 2 },
+    },
+    {
+      relativeMs: 19860,
+      phase: 'thinking',
+      message: 'Adding recent trends for richer comparison',
+      iteration: 6,
+    },
+    {
+      relativeMs: 20530,
+      phase: 'tool_start',
+      message: 'Counting by borough and report date for 2024',
+      iteration: 7,
+      args: {
+        type: 'query',
+        dataset_id: 'wvxf-dwi5',
+        portal: 'data.cityofnewyork.us',
+        select: 'boro, date_trunc_ym(inspectiondate) as month, COUNT(*) as count',
+        where: "boro IN ('BROOKLYN', 'MANHATTAN') AND inspectiondate >= '2024-01-01'",
+        group: 'boro, date_trunc_ym(inspectiondate)',
+        order: 'month, boro',
+        limit: 50,
+      },
+    },
+    {
+      relativeMs: 23153,
+      phase: 'tool_complete',
+      message: 'Counting by borough and report date for 2024',
+      iteration: 7,
+      duration_ms: 2623,
+    },
+    {
+      relativeMs: 23320,
+      phase: 'tool_result',
+      message: 'Retrieved 24 records from Housing Violations',
+      iteration: 7,
+      resultSummary: { rows: 24, columns: 3 },
+    },
+    {
+      relativeMs: 23660,
+      phase: 'thinking',
+      message: 'Evaluating results',
+      iteration: 7,
+    },
+    {
+      relativeMs: 24100,
+      phase: 'synthesize',
+      message: 'Writing response based on collected data',
+    },
+  ],
+};
+
+export const TRACES: PreRecordedTrace[] = [
+  simple311,
+  multiStepRestaurant,
+  filteredNoise,
+  retryIteration,
+];
+
+export function getTraceById(id: string): PreRecordedTrace | undefined {
+  return TRACES.find(t => t.id === id);
+}

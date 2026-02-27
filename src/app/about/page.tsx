@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import McpFlowDiagramWrapper from '@/components/about/McpFlowDiagramWrapper';
 
 export const metadata = {
   title: 'About - Civic AI Tools',
@@ -182,90 +183,19 @@ export default function AboutPage() {
       <section id="how-mcp-works" style={sectionSpacing}>
         <h2 style={sectionHeading}>How MCP Connects AI to Data</h2>
 
-        {/* Flow diagram */}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '0',
-            marginBottom: '32px',
-          }}
-        >
-          {/* Step 1 */}
-          <FlowBox
-            label="Your question"
-            annotation="e.g. &ldquo;Most common 311 complaints in NYC&rdquo;"
-            color="var(--text-primary)"
-            borderColor="var(--border-color)"
-          />
-          <FlowArrow />
-
-          {/* Step 2 */}
-          <FlowBox
-            label="AI reads question and plans approach"
-            annotation="The model decides which datasets to search and what queries to run"
-            color="var(--nyc-blue)"
-            borderColor="var(--nyc-blue)"
-          />
-          <FlowArrow />
-
-          {/* Step 3 — side by side */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%', maxWidth: '600px' }}>
-            <FlowBox
-              label="MCP Server receives tool calls"
-              annotation="Translates AI requests into Socrata API queries"
-              color="var(--nyc-success)"
-              borderColor="var(--nyc-success)"
-              flex
-            />
-            <span style={{ fontSize: '20px', color: 'var(--text-muted)', flexShrink: 0 }}>&rarr;</span>
-            <FlowBox
-              label="Socrata API returns live data"
-              annotation="Real government records from city open data portals"
-              color="var(--nyc-success)"
-              borderColor="var(--nyc-success)"
-              flex
-            />
-          </div>
-          <FlowArrow />
-
-          {/* Step 4 — with loop */}
-          <div style={{ position: 'relative', width: '100%', maxWidth: '600px' }}>
-            <FlowBox
-              label="AI receives real data, decides if it needs more"
-              annotation="May refine queries or request additional datasets"
-              color="var(--nyc-caution)"
-              borderColor="var(--nyc-caution)"
-            />
-            {/* Loop-back arrow */}
-            <div
-              style={{
-                position: 'absolute',
-                right: '-40px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                color: 'var(--text-muted)',
-                fontSize: '11px',
-              }}
-            >
-              <span style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>loop</span>
-              <span style={{ fontSize: '16px' }}>&uarr;</span>
-            </div>
-          </div>
-          <FlowArrow />
-
-          {/* Step 5 */}
-          <FlowBox
-            label="AI writes answer grounded in actual records"
-            annotation="Cites dataset IDs and row counts for every claim"
-            color="var(--nyc-success)"
-            borderColor="var(--nyc-success)"
-          />
+        {/* Interactive BPMN flow diagram */}
+        <div style={{ marginBottom: '32px' }}>
+          <McpFlowDiagramWrapper />
         </div>
+
+        <p style={{
+          fontSize: '14px',
+          color: 'var(--text-muted)',
+          fontStyle: 'italic',
+          marginBottom: '16px',
+        }}>
+          This visualization shows the same process that powers the main demo.
+        </p>
 
         <p style={prose}>
           <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer">
@@ -710,49 +640,6 @@ export default function AboutPage() {
 /* ================================================================
    Helper components (server components — no 'use client' needed)
    ================================================================ */
-
-function FlowBox({
-  label,
-  annotation,
-  color,
-  borderColor,
-  flex,
-}: {
-  label: string;
-  annotation: string;
-  color: string;
-  borderColor: string;
-  flex?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        border: `1px solid ${borderColor}`,
-        borderRadius: '6px',
-        padding: '12px 16px',
-        textAlign: 'center',
-        width: flex ? undefined : '100%',
-        maxWidth: flex ? undefined : '600px',
-        flex: flex ? 1 : undefined,
-        minWidth: flex ? 0 : undefined,
-      }}
-    >
-      <div style={{ fontSize: '15px', fontWeight: 600, color, marginBottom: '4px' }}>{label}</div>
-      <div
-        style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.4' }}
-        dangerouslySetInnerHTML={{ __html: annotation }}
-      />
-    </div>
-  );
-}
-
-function FlowArrow() {
-  return (
-    <div style={{ fontSize: '18px', color: 'var(--text-muted)', lineHeight: 1, padding: '4px 0' }}>
-      &darr;
-    </div>
-  );
-}
 
 function SkillCategory({
   title,
