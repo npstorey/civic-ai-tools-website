@@ -77,10 +77,17 @@ export default function NarrationExplainer() {
             ))}
           </ul>
 
-          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+          <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
             This is similar to how a chart is an interpretation of raw numbers &mdash; the data is real,
             but the presentation is a design choice.
           </p>
+
+          <a
+            href="/about#narration"
+            style={{ fontSize: '12px', color: 'var(--nyc-blue)', textDecoration: 'underline' }}
+          >
+            Learn more about how the demo works &rarr;
+          </a>
         </div>
       )}
     </div>

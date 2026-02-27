@@ -236,19 +236,30 @@ export default function SkillPromptDisclosure() {
             );
           })}
 
-          <a
-            href={GITHUB_SKILL_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontSize: '12px',
-              color: 'var(--nyc-blue)',
-              textDecoration: 'underline',
-              marginTop: '4px',
-            }}
-          >
-            View the full system prompt on GitHub &rarr;
-          </a>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+            <a
+              href="/about#system-prompt"
+              style={{
+                fontSize: '12px',
+                color: 'var(--nyc-blue)',
+                textDecoration: 'underline',
+              }}
+            >
+              See the full system prompt breakdown &rarr;
+            </a>
+            <a
+              href={GITHUB_SKILL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                fontSize: '12px',
+                color: 'var(--nyc-blue)',
+                textDecoration: 'underline',
+              }}
+            >
+              View on GitHub &rarr;
+            </a>
+          </div>
         </div>
       )}
     </div>
