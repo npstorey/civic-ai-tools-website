@@ -198,6 +198,18 @@
    Responsive
    ================================================================ */
 
+@media (max-width: 1024px) {
+  /* Force single-column on tablets and below */
+  .bpmn-split-grid {
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+  }
+
+  .bpmn-split-grid > div:first-child {
+    height: 400px;
+  }
+}
+
 @media (max-width: 768px) {
   .bpmn-container {
     height: 400px !important;

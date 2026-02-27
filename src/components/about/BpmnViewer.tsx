@@ -262,11 +262,11 @@ const BpmnViewerComponent = forwardRef<BpmnViewerHandle, BpmnViewerProps>(
     }, []);
 
     return (
-      <div className={`bpmn-container-wrapper${isFullscreen ? ' bpmn-fullscreen' : ''}`} style={{ position: 'relative', height: isFullscreen ? '100%' : undefined }}>
+      <div className={`bpmn-container-wrapper${isFullscreen ? ' bpmn-fullscreen' : ''}`} style={{ position: 'relative', height: '100%' }}>
         <div
           ref={containerRef}
           className="bpmn-container"
-          style={{ width: '100%', height: isFullscreen ? '100%' : '650px' }}
+          style={{ width: '100%', height: '100%' }}
         />
 
         {/* Zoom controls — top right of diagram */}

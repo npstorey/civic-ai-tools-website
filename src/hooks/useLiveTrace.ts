@@ -6,6 +6,8 @@ import { createTraceCapture } from '@/lib/bpmn/capture-trace';
 import { mapEventToNodes } from '@/lib/bpmn/node-mapping';
 import type { TraceEvent, PreRecordedTrace } from '@/lib/bpmn/traces';
 import type { ProgressPhase } from '@/lib/streaming';
+import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
+import { generateGroupLabel } from '@/hooks/useStreamingComparison';
 import {
   type ReplayState,
   initialReplayState,
@@ -14,7 +16,13 @@ import {
   applyCascadeStep,
 } from '@/lib/bpmn/animation';
 
-export type LiveTraceStatus = 'idle' | 'running' | 'complete' | 'error';
+export type LiveTraceStatus = 'idle' | 'running' | 'complete' | 'error' | 'cancelled';
+
+export interface SlowQueryMessage {
+  text: string;
+  tier: 1 | 2 | 3 | 4 | 5;
+  suggestedQuery?: string;
+}
 
 export interface UseLiveTraceReturn {
   state: ReplayState;
@@ -23,8 +31,11 @@ export interface UseLiveTraceReturn {
   elapsedMs: number;
   responseContent: string;
   capturedTrace: PreRecordedTrace | null;
+  progressLog: ProgressLogEntry[];
+  progressGroups: ProgressGroup[];
+  toolsCalled: ToolCall[];
   error: string | null;
-  slowMessage: string | null;
+  slowMessage: SlowQueryMessage | null;
   start: (query: string, model: string, portal: string) => void;
   cancel: () => void;
   reset: () => void;
@@ -38,7 +49,11 @@ export function useLiveTrace(): UseLiveTraceReturn {
   const [responseContent, setResponseContent] = useState('');
   const [capturedTrace, setCapturedTrace] = useState<PreRecordedTrace | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [slowMessage, setSlowMessage] = useState<string | null>(null);
+  const [slowMessage, setSlowMessage] = useState<SlowQueryMessage | null>(null);
+  const [progressLog, setProgressLog] = useState<ProgressLogEntry[]>([]);
+  const [progressGroups, setProgressGroups] = useState<ProgressGroup[]>([]);
+  const [toolsCalled, setToolsCalled] = useState<ToolCall[]>([]);
+  const queryRef = useRef('');
 
   const abortRef = useRef<AbortController | null>(null);
   const traceCaptureRef = useRef<ReturnType<typeof createTraceCapture> | null>(null);
@@ -74,6 +89,9 @@ export function useLiveTrace(): UseLiveTraceReturn {
     setCapturedTrace(null);
     setError(null);
     setSlowMessage(null);
+    setProgressLog([]);
+    setProgressGroups([]);
+    setToolsCalled([]);
     eventIndexRef.current = 0;
     receivedCompleteRef.current = false;
     traceCaptureRef.current = null;
@@ -82,8 +100,147 @@ export function useLiveTrace(): UseLiveTraceReturn {
   const cancel = useCallback(() => {
     if (abortRef.current) abortRef.current.abort();
     clearTimers();
-    setStatus('idle');
+    setElapsedMs(Date.now() - startTimeRef.current);
+    setStatus('cancelled');
+    // Export partial trace
+    if (traceCaptureRef.current) {
+      const trace = traceCaptureRef.current.exportTrace();
+      setCapturedTrace(trace);
+      traceCaptureRef.current = null;
+    }
   }, [clearTimers]);
+
+  // Process progress events into ProgressLogEntry[] and ProgressGroup[]
+  // This replicates the same logic from useStreamingComparison's handleEvent
+  const handleProgressEvent = useCallback((
+    phase: ProgressPhase,
+    message: string,
+    iteration: number | undefined,
+    args: Record<string, unknown> | undefined,
+    duration_ms: number | undefined,
+  ) => {
+    const entry: ProgressLogEntry = {
+      message,
+      timestamp: Date.now(),
+      duration_ms,
+      phase,
+      iteration,
+      args,
+    };
+
+    if (phase === 'tool_complete' && iteration !== undefined) {
+      // Update the matching tool_start entry in-place within its group
+      setProgressGroups(prev => {
+        const newGroups = prev.map(g => ({ ...g, entries: [...g.entries] }));
+        const group = newGroups.find(g => g.iteration === iteration);
+        if (group) {
+          const startIdx = group.entries.findIndex(
+            e => e.phase === 'tool_start' && e.message === message && !e.isComplete
+          );
+          if (startIdx !== -1) {
+            group.entries[startIdx] = { ...group.entries[startIdx], isComplete: true, duration_ms };
+          }
+        }
+        return newGroups;
+      });
+      // Also update in flat log
+      setProgressLog(prev => {
+        const newLog = [...prev];
+        const flatIdx = newLog.findIndex(
+          e => e.phase === 'tool_start' && e.message === message && !e.isComplete
+        );
+        if (flatIdx !== -1) {
+          newLog[flatIdx] = { ...newLog[flatIdx], isComplete: true, duration_ms };
+        }
+        return newLog;
+      });
+      return;
+    }
+
+    if (phase === 'tool_result' && iteration !== undefined) {
+      entry.isComplete = true;
+      setProgressGroups(prev => {
+        const newGroups = prev.map(g => ({ ...g, entries: [...g.entries] }));
+        const group = newGroups.find(g => g.iteration === iteration);
+        if (group) {
+          group.entries.push(entry);
+        }
+        return newGroups;
+      });
+      setProgressLog(prev => [...prev, entry]);
+      return;
+    }
+
+    if (phase === 'thinking' && iteration !== undefined) {
+      // Mark the current group as complete
+      setProgressGroups(prev => {
+        const newGroups = prev.map(g => ({ ...g, entries: [...g.entries] }));
+        const group = newGroups.find(g => g.iteration === iteration);
+        if (group) {
+          group.isComplete = true;
+          const durations = group.entries
+            .filter(e => e.phase === 'tool_start' && e.duration_ms !== undefined)
+            .map(e => e.duration_ms!);
+          if (durations.length > 0) {
+            group.totalDuration_ms = durations.reduce((a, b) => a + b, 0);
+          }
+          const prevEntries = newGroups
+            .filter(g => g.iteration < iteration!)
+            .flatMap(g => g.entries);
+          group.label = generateGroupLabel(group.entries, prevEntries);
+        }
+        return newGroups;
+      });
+      return;
+    }
+
+    if (phase === 'tool_start' && iteration !== undefined) {
+      setProgressGroups(prev => {
+        const newGroups = prev.map(g => ({ ...g, entries: [...g.entries] }));
+        let group = newGroups.find(g => g.iteration === iteration);
+        if (!group) {
+          group = { iteration, label: 'Gathering data', entries: [], isComplete: false };
+          newGroups.push(group);
+        }
+        group.entries.push(entry);
+        return newGroups;
+      });
+      setProgressLog(prev => [...prev, entry]);
+      return;
+    }
+
+    // Standalone entries (analyze, synthesize, or no phase)
+    setProgressLog(prev => {
+      const newLog = [...prev];
+      if (newLog.length > 0) {
+        newLog[newLog.length - 1] = { ...newLog[newLog.length - 1], isComplete: true };
+      }
+      newLog.push(entry);
+      return newLog;
+    });
+  }, []);
+
+  // Finalize all progress state (mark entries/groups complete, generate labels)
+  const finalizeProgress = useCallback(() => {
+    setProgressLog(prev => prev.map(entry => ({ ...entry, isComplete: true })));
+    setProgressGroups(prev => prev.map((g, gIdx, allGroups) => {
+      if (!g.isComplete) {
+        const entries = g.entries.map(e => ({ ...e, isComplete: true }));
+        const durations = entries
+          .filter(e => e.phase === 'tool_start' && e.duration_ms !== undefined)
+          .map(e => e.duration_ms!);
+        const prevEntries = allGroups.slice(0, gIdx).flatMap(pg => pg.entries);
+        return {
+          ...g,
+          entries,
+          isComplete: true,
+          label: generateGroupLabel(entries, prevEntries),
+          totalDuration_ms: durations.length > 0 ? durations.reduce((a, b) => a + b, 0) : undefined,
+        };
+      }
+      return g;
+    }));
+  }, []);
 
   const start = useCallback((query: string, model: string, portal: string) => {
     // Abort any existing
@@ -99,6 +256,9 @@ export function useLiveTrace(): UseLiveTraceReturn {
     setCapturedTrace(null);
     setError(null);
     setSlowMessage(null);
+    setProgressLog([]);
+    setProgressGroups([]);
+    setToolsCalled([]);
     eventIndexRef.current = 0;
     receivedCompleteRef.current = false;
 
@@ -109,14 +269,38 @@ export function useLiveTrace(): UseLiveTraceReturn {
     // Initialize trace capture
     traceCaptureRef.current = createTraceCapture(query, model, portal);
 
-    // Elapsed timer (ticks every 500ms)
+    queryRef.current = query;
+
+    // Elapsed timer (ticks every 500ms) with 5-tier slow messages
     timerRef.current = setInterval(() => {
       const elapsed = Date.now() - startTimeRef.current;
       setElapsedMs(elapsed);
-      if (elapsed > 90_000) {
-        setSlowMessage('This is taking longer than usual. Complex queries can take 1-2 minutes.');
+      if (elapsed > 180_000) {
+        setSlowMessage({
+          text: 'This query may be too broad. Try a more specific question.',
+          tier: 5,
+          suggestedQuery: `${queryRef.current} in 2024`,
+        });
+      } else if (elapsed > 120_000) {
+        setSlowMessage({
+          text: 'This is taking unusually long. You can cancel and try a simpler query.',
+          tier: 4,
+        });
+      } else if (elapsed > 90_000) {
+        setSlowMessage({
+          text: 'Tip: Adding a date range (e.g. "in 2024") can speed up queries significantly.',
+          tier: 3,
+        });
+      } else if (elapsed > 60_000) {
+        setSlowMessage({
+          text: 'Complex queries can take 1\u20132 minutes when iterating through large datasets.',
+          tier: 2,
+        });
       } else if (elapsed > 30_000) {
-        setSlowMessage('Still working \u2014 the AI is iterating through the data...');
+        setSlowMessage({
+          text: 'Still working \u2014 the AI is iterating through the data...',
+          tier: 1,
+        });
       }
     }, 500);
 
@@ -149,6 +333,9 @@ export function useLiveTrace(): UseLiveTraceReturn {
 
           // Record for trace capture
           traceCaptureRef.current?.recordEvent({ phase, message, iteration, args, duration_ms, resultSummary });
+
+          // Build progress log entries (same as home page)
+          handleProgressEvent(phase, message, iteration, args, duration_ms);
 
           if (iteration !== undefined) {
             setCurrentIteration(iteration);
@@ -188,15 +375,23 @@ export function useLiveTrace(): UseLiveTraceReturn {
         }
 
         if (type === 'token') {
+          // Mark all progress as complete when tokens start
+          finalizeProgress();
           setResponseContent(prev => prev + (eventData.content as string));
         }
 
         if (type === 'complete') {
           receivedCompleteRef.current = true;
-          const data = eventData.data as { content: string; duration_ms: number } | undefined;
+          const data = eventData.data as { content: string; duration_ms: number; tokens_used?: number; tools_called?: ToolCall[] } | undefined;
           if (data?.content) {
             setResponseContent(data.content);
           }
+          if (data?.tools_called) {
+            setToolsCalled(data.tools_called);
+          }
+
+          // Finalize all progress
+          finalizeProgress();
 
           // Export captured trace
           if (traceCaptureRef.current) {
@@ -214,6 +409,7 @@ export function useLiveTrace(): UseLiveTraceReturn {
       },
       onComplete: () => {
         clearTimers();
+        finalizeProgress();
         if (statusRef.current === 'running') {
           // Finalize diagram state
           setState(prev => ({
@@ -251,7 +447,7 @@ export function useLiveTrace(): UseLiveTraceReturn {
       }
       setStatus('error');
     });
-  }, [clearTimers]);
+  }, [clearTimers, handleProgressEvent, finalizeProgress]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -268,6 +464,9 @@ export function useLiveTrace(): UseLiveTraceReturn {
     elapsedMs,
     responseContent,
     capturedTrace,
+    progressLog,
+    progressGroups,
+    toolsCalled,
     error,
     slowMessage,
     start,

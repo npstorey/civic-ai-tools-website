@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { PreRecordedTrace } from '@/lib/bpmn/traces';
 import type { PlaybackSpeed, ReplayState } from '@/lib/bpmn/animation';
-import type { LiveTraceStatus } from '@/hooks/useLiveTrace';
+import type { LiveTraceStatus, SlowQueryMessage } from '@/hooks/useLiveTrace';
 
 export type DiagramMode = 'examples' | 'live';
 
@@ -24,12 +24,14 @@ interface TraceControlsProps {
   liveStatus: LiveTraceStatus;
   liveError: string | null;
   liveElapsedMs: number;
-  liveSlowMessage: string | null;
+  liveSlowMessage: SlowQueryMessage | null;
   onLiveStart: (query: string) => void;
   onLiveCancel: () => void;
   onLiveReplay: () => void;
   onLiveReset: () => void;
   isReplayingCapture: boolean;
+  suggestedQuery?: string;
+  onSuggestedQuery?: (query: string) => void;
 }
 
 const speeds: PlaybackSpeed[] = [1, 2, 4];
@@ -55,8 +57,15 @@ export default function TraceControls({
   onLiveReplay,
   onLiveReset,
   isReplayingCapture,
+  suggestedQuery,
+  onSuggestedQuery,
 }: TraceControlsProps) {
   const [liveQuery, setLiveQuery] = useState('');
+
+  // Update query input when a suggestion comes in
+  useEffect(() => {
+    if (suggestedQuery) setLiveQuery(suggestedQuery);
+  }, [suggestedQuery]);
   const selectedTrace = traces.find(t => t.id === selectedTraceId);
   const totalEvents = selectedTrace?.events.length ?? 0;
   const currentStep = replayState.currentEventIndex + 1;
@@ -237,7 +246,7 @@ export default function TraceControls({
       {mode === 'live' && (
         <>
           {/* Live query input */}
-          {(liveStatus === 'idle' || liveStatus === 'error') && !isReplayingCapture && (
+          {(liveStatus === 'idle' || liveStatus === 'error' || liveStatus === 'cancelled') && !isReplayingCapture && (
             <form onSubmit={handleLiveSubmit} style={{ display: 'flex', gap: '8px' }}>
               <input
                 type="text"
@@ -274,6 +283,12 @@ export default function TraceControls({
           {liveStatus === 'idle' && !isReplayingCapture && (
             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
               Uses one of your daily queries. Watch the diagram animate in real time.
+            </div>
+          )}
+
+          {liveStatus === 'cancelled' && !isReplayingCapture && (
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Query was cancelled. Try another query or refine your question.
             </div>
           )}
 
@@ -335,11 +350,58 @@ export default function TraceControls({
               </div>
 
               {liveSlowMessage && (
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                  {liveSlowMessage}
+                <div style={{
+                  fontSize: '12px',
+                  ...(liveSlowMessage.tier <= 2
+                    ? { color: 'var(--text-muted)', fontStyle: 'italic' }
+                    : liveSlowMessage.tier === 3
+                    ? {
+                        color: 'var(--nyc-blue-40)',
+                        padding: '8px 12px',
+                        background: 'rgba(16, 63, 239, 0.06)',
+                        border: '1px solid rgba(16, 63, 239, 0.15)',
+                        borderRadius: '4px',
+                      }
+                    : {
+                        color: '#92400e',
+                        padding: '8px 12px',
+                        background: 'rgba(245, 158, 11, 0.08)',
+                        border: '1px solid rgba(245, 158, 11, 0.25)',
+                        borderRadius: '4px',
+                        fontWeight: 500,
+                      }),
+                }}>
+                  {liveSlowMessage.text}
+                  {liveSlowMessage.tier === 5 && liveSlowMessage.suggestedQuery && onSuggestedQuery && (
+                    <button
+                      onClick={() => onSuggestedQuery(liveSlowMessage.suggestedQuery!)}
+                      style={{
+                        display: 'block',
+                        marginTop: '6px',
+                        padding: '4px 12px',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        fontFamily: 'inherit',
+                        border: '1px solid rgba(245, 158, 11, 0.4)',
+                        borderRadius: '4px',
+                        background: 'white',
+                        color: '#92400e',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Try: &ldquo;{liveSlowMessage.suggestedQuery}&rdquo;
+                    </button>
+                  )}
                 </div>
               )}
             </>
+          )}
+
+          {/* Cancelled state */}
+          {liveStatus === 'cancelled' && !isReplayingCapture && (
+            <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+              Cancelled after {(liveElapsedMs / 1000).toFixed(1)}s
+            </div>
           )}
 
           {/* Complete state */}

@@ -39,11 +39,19 @@ export default function McpFlowDiagram() {
     activeState = replayState;
   } else if (isReplayingCapture) {
     activeState = replayState;
-  } else if (liveTrace.status === 'running' || liveTrace.status === 'complete') {
+  } else if (liveTrace.status === 'running' || liveTrace.status === 'complete' || liveTrace.status === 'cancelled') {
     activeState = liveTrace.state;
   } else {
     activeState = replayState;
   }
+
+  // Side-by-side split when live query is active
+  const showSplit = mode === 'live' && (
+    liveTrace.status === 'running' || liveTrace.status === 'complete'
+    || liveTrace.status === 'cancelled' || isReplayingCapture
+  );
+
+  const [suggestedQuery, setSuggestedQuery] = useState<string | undefined>(undefined);
 
   const handleViewerReady = useCallback(() => {
     setViewerReady(true);
@@ -111,7 +119,12 @@ export default function McpFlowDiagram() {
 
   const handleLiveCancel = useCallback(() => {
     liveTrace.cancel();
-    viewerRef.current?.resetAll();
+    // Don't reset viewer — preserve diagram state on cancel
+  }, [liveTrace]);
+
+  const handleSuggestedQuery = useCallback((query: string) => {
+    liveTrace.cancel();
+    setSuggestedQuery(query);
   }, [liveTrace]);
 
   const handleLiveReplay = useCallback(() => {
@@ -149,10 +162,18 @@ export default function McpFlowDiagram() {
   // Re-fit diagram when fullscreen toggles
   useEffect(() => {
     if (viewerReady) {
-      const t = setTimeout(() => viewerRef.current?.fitToView(), 150);
+      const t = setTimeout(() => viewerRef.current?.fitToView(), 350);
       return () => clearTimeout(t);
     }
   }, [isFullscreen, viewerReady]);
+
+  // Re-fit diagram when split layout changes
+  useEffect(() => {
+    if (viewerReady) {
+      const t = setTimeout(() => viewerRef.current?.fitToView(), 350);
+      return () => clearTimeout(t);
+    }
+  }, [showSplit, viewerReady]);
 
   // Sync active state to bpmn-js viewer
   useEffect(() => {
@@ -228,58 +249,88 @@ export default function McpFlowDiagram() {
           onLiveReplay={handleLiveReplay}
           onLiveReset={handleLiveReset}
           isReplayingCapture={isReplayingCapture}
+          suggestedQuery={suggestedQuery}
+          onSuggestedQuery={handleSuggestedQuery}
         />
       </div>
 
-      <div style={{ position: 'relative', flex: isFullscreen ? 1 : undefined, minHeight: isFullscreen ? 0 : undefined }}>
-        <BpmnViewerComponent
-          ref={viewerRef}
-          onReady={handleViewerReady}
-          isFullscreen={isFullscreen}
-        />
+      {/* Split grid container: diagram (left) + response panel (right) */}
+      <div
+        className="bpmn-split-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: showSplit ? '55fr 45fr' : '1fr',
+          gap: showSplit ? '16px' : '0',
+          transition: 'grid-template-columns 300ms ease, gap 300ms ease',
+          height: isFullscreen ? undefined : '650px',
+          flex: isFullscreen ? 1 : undefined,
+          minHeight: isFullscreen ? 0 : undefined,
+        }}
+      >
+        {/* Left cell: diagram */}
+        <div style={{ position: 'relative', overflow: 'hidden', minWidth: 0 }}>
+          <BpmnViewerComponent
+            ref={viewerRef}
+            onReady={handleViewerReady}
+            isFullscreen={isFullscreen}
+          />
 
-        {/* Fullscreen toggle */}
-        <button
-          onClick={toggleFullscreen}
-          title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen view'}
-          aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-          style={{
-            position: 'absolute',
-            top: '12px',
-            right: isFullscreen ? '12px' : '160px',
-            width: '32px',
-            height: '32px',
+          {/* Fullscreen toggle */}
+          <button
+            onClick={toggleFullscreen}
+            title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen view'}
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            style={{
+              position: 'absolute',
+              top: '12px',
+              right: isFullscreen ? '12px' : '160px',
+              width: '32px',
+              height: '32px',
+              border: '1px solid var(--border-color)',
+              borderRadius: '4px',
+              background: 'white',
+              color: 'var(--text-secondary)',
+              fontSize: '16px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 6,
+              transition: 'all 0.15s ease',
+              fontFamily: 'inherit',
+            }}
+          >
+            {isFullscreen ? '\u2715' : '\u26F6'}
+          </button>
+        </div>
+
+        {/* Right cell: live response panel */}
+        {showSplit && (
+          <div style={{
+            overflow: 'hidden',
             border: '1px solid var(--border-color)',
             borderRadius: '4px',
             background: 'white',
-            color: 'var(--text-secondary)',
-            fontSize: '16px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 6,
-            transition: 'all 0.15s ease',
-            fontFamily: 'inherit',
-          }}
-        >
-          {isFullscreen ? '\u2715' : '\u26F6'}
-        </button>
+            minWidth: 0,
+          }}>
+            <LiveResponsePanel
+              content={liveTrace.responseContent}
+              elapsedMs={liveTrace.elapsedMs}
+              iterationCount={liveTrace.currentIteration}
+              isComplete={liveTrace.status === 'complete' || liveTrace.status === 'cancelled'}
+              isRunning={liveTrace.status === 'running'}
+              progressLog={liveTrace.progressLog}
+              progressGroups={liveTrace.progressGroups}
+              toolsCalled={liveTrace.toolsCalled}
+            />
+          </div>
+        )}
       </div>
 
-      <div style={{ flexShrink: 0 }}>
-        <NarrativePanel replayState={activeState} />
-      </div>
-
-      {/* Live response panel (below narrative, only in live mode) */}
-      {mode === 'live' && (liveTrace.status === 'running' || liveTrace.status === 'complete') && !isReplayingCapture && (
+      {/* Narrative panel — only during example traces (in live mode, the response panel handles narration) */}
+      {!showSplit && (
         <div style={{ flexShrink: 0 }}>
-          <LiveResponsePanel
-            content={liveTrace.responseContent}
-            elapsedMs={liveTrace.elapsedMs}
-            iterationCount={liveTrace.currentIteration}
-            isComplete={liveTrace.status === 'complete'}
-          />
+          <NarrativePanel replayState={activeState} />
         </div>
       )}
     </>

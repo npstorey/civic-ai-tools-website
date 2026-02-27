@@ -241,7 +241,7 @@ function generateRichLabel(entries: ProgressLogEntry[], previousEntries?: Progre
 }
 
 // Generate a human-readable label for a group of tool calls within an iteration
-function generateGroupLabel(entries: ProgressLogEntry[], previousEntries?: ProgressLogEntry[]): string {
+export function generateGroupLabel(entries: ProgressLogEntry[], previousEntries?: ProgressLogEntry[]): string {
   const richLabel = generateRichLabel(entries, previousEntries);
   if (richLabel) return richLabel;
 
