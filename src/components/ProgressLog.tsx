@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
 import { mapGroupsToToolCalls } from '@/hooks/useStreamingComparison';
 import { getEducationalAnnotation, buildNarrativeSummary, buildStatsSummary, buildBreadcrumbLabel, generateQueryIntentLabel } from '@/lib/streaming';
@@ -339,17 +340,39 @@ function CompletedSummary({
 
   return (
     <div className="completed-summary-enter" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      {/* Layer A: Narrative summary */}
-      <p
-        style={{
-          margin: 0,
-          fontSize: '13px',
-          lineHeight: '1.5',
-          color: 'var(--text-muted)',
+      {/* Layer A: Narrative summary (rendered via ReactMarkdown for dataset links) */}
+      <ReactMarkdown
+        components={{
+          p: ({ children }) => (
+            <p
+              style={{
+                margin: 0,
+                fontSize: '13px',
+                lineHeight: '1.5',
+                color: 'var(--text-muted)',
+              }}
+            >
+              {children}
+            </p>
+          ),
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                color: 'var(--nyc-blue)',
+                textDecoration: 'underline',
+                textUnderlineOffset: '2px',
+              }}
+            >
+              {children}
+            </a>
+          ),
         }}
       >
         {narrative}
-      </p>
+      </ReactMarkdown>
       {stats && (
         <p
           style={{

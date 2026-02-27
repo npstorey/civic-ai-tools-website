@@ -52,6 +52,7 @@ export default function McpFlowDiagram() {
   );
 
   const [suggestedQuery, setSuggestedQuery] = useState<string | undefined>(undefined);
+  const [liveQueryText, setLiveQueryText] = useState<string>('');
 
   const handleViewerReady = useCallback(() => {
     setViewerReady(true);
@@ -101,6 +102,7 @@ export default function McpFlowDiagram() {
   }, [reset, liveTrace]);
 
   const handleLiveStart = useCallback((query: string) => {
+    setLiveQueryText(query);
     setIsReplayingCapture(false);
     setLiveReplayTrace(null);
     reset();
@@ -275,33 +277,35 @@ export default function McpFlowDiagram() {
             isFullscreen={isFullscreen}
           />
 
-          {/* Fullscreen toggle */}
-          <button
-            onClick={toggleFullscreen}
-            title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen view'}
-            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-            style={{
-              position: 'absolute',
-              top: '12px',
-              right: isFullscreen ? '12px' : '160px',
-              width: '32px',
-              height: '32px',
-              border: '1px solid var(--border-color)',
-              borderRadius: '4px',
-              background: 'white',
-              color: 'var(--text-secondary)',
-              fontSize: '16px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 6,
-              transition: 'all 0.15s ease',
-              fontFamily: 'inherit',
-            }}
-          >
-            {isFullscreen ? '\u2715' : '\u26F6'}
-          </button>
+          {/* Enter fullscreen — only in non-fullscreen mode */}
+          {!isFullscreen && (
+            <button
+              onClick={toggleFullscreen}
+              title="Fullscreen view"
+              aria-label="Enter fullscreen"
+              style={{
+                position: 'absolute',
+                top: '12px',
+                right: '160px',
+                width: '32px',
+                height: '32px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                background: 'white',
+                color: 'var(--text-secondary)',
+                fontSize: '16px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 6,
+                transition: 'all 0.15s ease',
+                fontFamily: 'inherit',
+              }}
+            >
+              {'\u26F6'}
+            </button>
+          )}
         </div>
 
         {/* Right cell: live response panel */}
@@ -322,6 +326,7 @@ export default function McpFlowDiagram() {
               progressLog={liveTrace.progressLog}
               progressGroups={liveTrace.progressGroups}
               toolsCalled={liveTrace.toolsCalled}
+              queryText={liveQueryText}
             />
           </div>
         )}
@@ -355,6 +360,38 @@ export default function McpFlowDiagram() {
           animation: 'bpmn-fullscreen-in 300ms ease-out',
         }}
       >
+        {/* Close fullscreen — prominent page-level button */}
+        <button
+          onClick={() => setIsFullscreen(false)}
+          title="Exit fullscreen (ESC)"
+          aria-label="Exit fullscreen"
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '24px',
+            zIndex: 1010,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 16px',
+            height: '40px',
+            borderRadius: '8px',
+            border: 'none',
+            background: 'var(--text-primary, #1a1a1a)',
+            color: 'white',
+            fontSize: '13px',
+            fontWeight: 600,
+            fontFamily: 'inherit',
+            cursor: 'pointer',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            transition: 'opacity 0.15s ease',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+        >
+          <span style={{ fontSize: '16px', lineHeight: 1 }}>{'\u2715'}</span>
+          Exit fullscreen
+        </button>
         {content}
       </div>
     );

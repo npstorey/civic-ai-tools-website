@@ -36,6 +36,38 @@ interface TraceControlsProps {
 
 const speeds: PlaybackSpeed[] = [1, 2, 4];
 
+function SpeedSelector({ speed, onSetSpeed }: { speed: PlaybackSpeed; onSetSpeed: (s: PlaybackSpeed) => void }) {
+  return (
+    <div style={{ display: 'flex', gap: '4px' }}>
+      {speeds.map(s => (
+        <button
+          key={s}
+          onClick={() => onSetSpeed(s)}
+          style={{
+            padding: '4px 10px',
+            borderRadius: '4px',
+            border: s === speed
+              ? '1px solid var(--nyc-blue-40)'
+              : '1px solid var(--border-color)',
+            background: s === speed
+              ? 'rgba(16, 63, 239, 0.1)'
+              : 'var(--background)',
+            color: s === speed
+              ? 'var(--nyc-blue-40)'
+              : 'var(--text-muted)',
+            fontSize: '12px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          {s}x
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function TraceControls({
   traces,
   selectedTraceId,
@@ -69,6 +101,13 @@ export default function TraceControls({
   const selectedTrace = traces.find(t => t.id === selectedTraceId);
   const totalEvents = selectedTrace?.events.length ?? 0;
   const currentStep = replayState.currentEventIndex + 1;
+
+  // Complexity indicator: count tool_start events and format duration
+  const toolCallCount = selectedTrace?.events.filter(e => e.phase === 'tool_start').length ?? 0;
+  const approxDuration = selectedTrace ? Math.round(selectedTrace.totalDuration_ms / 1000) : 0;
+
+  // Speed controls are relevant during active playback or when replay is available
+  const showExampleSpeed = replayState.isPlaying || replayState.isPaused || replayState.isComplete;
 
   const handleLiveSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,8 +191,8 @@ export default function TraceControls({
             ))}
           </div>
 
-          {/* Playback bar */}
-          <div className="playback-bar" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Playback bar: [Play/Pause/Replay] [speed (conditional)] [Reset (conditional)] */}
+          <div className="playback-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
               onClick={replayState.isPlaying ? onPause : onPlay}
               className="nyc-button nyc-button-secondary"
@@ -161,6 +200,10 @@ export default function TraceControls({
             >
               {replayState.isPlaying ? 'Pause' : replayState.isComplete ? 'Replay' : 'Play'}
             </button>
+
+            {showExampleSpeed && (
+              <SpeedSelector speed={speed} onSetSpeed={onSetSpeed} />
+            )}
 
             {(replayState.isPlaying || replayState.isPaused || replayState.isComplete) && (
               <button
@@ -179,34 +222,6 @@ export default function TraceControls({
                 Reset
               </button>
             )}
-
-            <div className="speed-selector" style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
-              {speeds.map(s => (
-                <button
-                  key={s}
-                  onClick={() => onSetSpeed(s)}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '4px',
-                    border: s === speed
-                      ? '1px solid var(--nyc-blue-40)'
-                      : '1px solid var(--border-color)',
-                    background: s === speed
-                      ? 'rgba(16, 63, 239, 0.1)'
-                      : 'var(--background)',
-                    color: s === speed
-                      ? 'var(--nyc-blue-40)'
-                      : 'var(--text-muted)',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  {s}x
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Progress bar */}
@@ -237,7 +252,14 @@ export default function TraceControls({
                 )}
               </span>
             ) : (
-              <span>{selectedTrace?.title || 'Select a trace to begin'}</span>
+              <span>
+                {selectedTrace?.title || 'Select a trace to begin'}
+                {selectedTrace && toolCallCount > 0 && (
+                  <span style={{ opacity: 0.7 }}>
+                    {' '}&middot; {toolCallCount} tool {toolCallCount === 1 ? 'call' : 'calls'} &middot; ~{approxDuration}s
+                  </span>
+                )}
+              </span>
             )}
           </div>
         </>
@@ -292,7 +314,7 @@ export default function TraceControls({
             </div>
           )}
 
-          {/* Running state */}
+          {/* Running state — no speed controls (they don't apply to live queries) */}
           {liveStatus === 'running' && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -404,9 +426,9 @@ export default function TraceControls({
             </div>
           )}
 
-          {/* Complete state */}
+          {/* Complete state: [✓ status] [Replay] [speed] [New query] */}
           {liveStatus === 'complete' && !isReplayingCapture && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '13px', color: 'var(--nyc-success)', fontWeight: 500 }}>
                 Complete in {(liveElapsedMs / 1000).toFixed(1)}s
               </span>
@@ -417,6 +439,7 @@ export default function TraceControls({
               >
                 Replay
               </button>
+              <SpeedSelector speed={speed} onSetSpeed={onSetSpeed} />
               <button
                 onClick={onLiveReset}
                 style={{
@@ -432,39 +455,12 @@ export default function TraceControls({
               >
                 New query
               </button>
-              <div className="speed-selector" style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
-                {speeds.map(s => (
-                  <button
-                    key={s}
-                    onClick={() => onSetSpeed(s)}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: '4px',
-                      border: s === speed
-                        ? '1px solid var(--nyc-blue-40)'
-                        : '1px solid var(--border-color)',
-                      background: s === speed
-                        ? 'rgba(16, 63, 239, 0.1)'
-                        : 'var(--background)',
-                      color: s === speed
-                        ? 'var(--nyc-blue-40)'
-                        : 'var(--text-muted)',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    {s}x
-                  </button>
-                ))}
-              </div>
             </div>
           )}
 
-          {/* Replaying captured trace */}
+          {/* Replaying captured trace: [Play/Pause] [speed] [New query] */}
           {isReplayingCapture && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 onClick={replayState.isPlaying ? onPause : onLiveReplay}
                 className="nyc-button nyc-button-secondary"
@@ -473,6 +469,8 @@ export default function TraceControls({
                 {replayState.isPlaying ? 'Pause' : replayState.isComplete ? 'Replay' : 'Play'}
               </button>
 
+              <SpeedSelector speed={speed} onSetSpeed={onSetSpeed} />
+
               <button
                 onClick={onLiveReset}
                 style={{
@@ -488,34 +486,6 @@ export default function TraceControls({
               >
                 New query
               </button>
-
-              <div className="speed-selector" style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
-                {speeds.map(s => (
-                  <button
-                    key={s}
-                    onClick={() => onSetSpeed(s)}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: '4px',
-                      border: s === speed
-                        ? '1px solid var(--nyc-blue-40)'
-                        : '1px solid var(--border-color)',
-                      background: s === speed
-                        ? 'rgba(16, 63, 239, 0.1)'
-                        : 'var(--background)',
-                      color: s === speed
-                        ? 'var(--nyc-blue-40)'
-                        : 'var(--text-muted)',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    {s}x
-                  </button>
-                ))}
-              </div>
             </div>
           )}
 

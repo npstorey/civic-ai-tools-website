@@ -23,14 +23,15 @@ npm run lint         # Run ESLint
 ```
 Frontend (Next.js App Router + Tailwind CSS)
     │
-    ├── / (home)           → Query form + side-by-side results
-    └── /about             → About MCP page
+    ├── / (home)           → Query form + side-by-side streaming results
+    ├── /about             → About MCP page + interactive BPMN diagram
     │
 API Routes (Serverless)
-    ├── POST /api/compare     → Runs parallel LLM calls (with/without MCP)
-    ├── GET  /api/models      → Available models list
-    ├── GET  /api/rate-limit  → User quota status
-    └── /api/auth/[...nextauth] → GitHub OAuth
+    ├── POST /api/compare        → Runs parallel LLM calls (with/without MCP)
+    ├── GET  /api/compare-stream → SSE streaming endpoint for live queries
+    ├── GET  /api/models         → Available models list
+    ├── GET  /api/rate-limit     → User quota status
+    └── /api/auth/[...nextauth]  → GitHub OAuth
     │
 External Services
     ├── OpenRouter (LLM API, OpenAI-compatible)
@@ -98,6 +99,60 @@ Domain knowledge injected into the LLM system prompt:
 - Key format in Upstash: `rate:{user_id_or_ip}:{YYYY-MM-DD}`
 - Falls back to in-memory store if KV not configured (resets on deploy)
 
+### Streaming & SSE (`lib/streaming.ts`, `lib/sse-client.ts`, `lib/openrouter-streaming.ts`)
+- Home page uses SSE via `/api/compare-stream` for real-time progress updates
+- Progress phases: `analyze`, `tool_start`, `tool_complete`, `tool_result`, `thinking`, `synthesize`
+- `streaming.ts` is the shared utility hub — exports event types, `buildNarrativeSummary()`, `buildProvenanceLine()`, `datasetUrl()`, `getEducationalAnnotation()`
+- `sse-client.ts` handles client-side SSE connection with reconnect
+- Dataset IDs are auto-linked to Socrata pages: `https://{portal}/d/{datasetId}`
+
+### Shared MCP Response Display (`components/shared/McpResponseDisplay.tsx`)
+Both the home page and About page delegate MCP response rendering to this shared component. It renders (in order):
+1. **Query text** — blue left border quote
+2. **ProgressLog** — narrative summary, breadcrumbs, expandable steps
+3. **Markdown content** — via ReactMarkdown with auto-linked dataset IDs
+4. **Source provenance** — green left border with linked dataset names
+5. **Footer** — TimingBar, Time/Tokens, SkillPromptDisclosure
+
+`linkDatasetIds()` inside this component replaces bare dataset IDs in markdown with clickable `[id](url)` links, avoiding double-linking inside existing markdown links.
+
+### BPMN Diagram (`components/about/`, `lib/bpmn/`)
+Interactive BPMN 2.0 diagram on the About page visualizing MCP query execution. Two modes:
+
+**Examples mode** — replays 4 pre-recorded traces through the diagram with animation:
+- Traces defined in `lib/bpmn/traces.ts` (hand-authored with realistic SoQL and timing)
+- Replay state machine in `hooks/useTraceReplay.ts` (setTimeout-chain, speed control, dramatic pauses)
+- Node mapping in `lib/bpmn/node-mapping.ts` (ProgressPhase → BPMN element IDs)
+
+**Live mode** — runs a real MCP query and animates the diagram in real-time:
+- `hooks/useLiveTrace.ts` manages SSE connection, diagram animation, progress logs, trace capture
+- Side-by-side layout: CSS grid `55fr 45fr` with transition; diagram left, response panel right
+- 5-tier slow query messaging (30s neutral → 180s clickable suggestion)
+- Cancelled queries preserve diagram state and partial response
+- Captured traces can be replayed after completion
+
+Key architectural decisions:
+- **bpmn-js NavigatedViewer** — bundles zoom/pan/keyboard; ~400KB gzipped, dynamically loaded on About page only
+- **CSS markers** (`canvas.addMarker()`) for animation states, not direct SVG manipulation
+- **Overlay API** (`overlays.add()`) for SoQL previews and result annotations
+- **Client wrapper** (`McpFlowDiagramWrapper.tsx`) for Next.js App Router SSR boundary
+
+```
+about/page.tsx
+  └── McpFlowDiagramWrapper.tsx (client, dynamic import)
+        └── McpFlowDiagram.tsx (orchestrator)
+              ├── TraceControls.tsx (mode toggle, trace pills, playback, speed, live query input)
+              ├── BpmnViewer.tsx ← bpmn-diagram.css
+              │     └── fetches /bpmn/mcp-query-flow.bpmn
+              ├── NarrativePanel.tsx (example mode: "what's happening now")
+              ├── LiveResponsePanel.tsx → McpResponseDisplay (live mode: response panel)
+              ├── DiagramAnnotations.tsx (educational text, non-fullscreen only)
+              └── hooks/useTraceReplay.ts + hooks/useLiveTrace.ts
+                    ├── lib/bpmn/traces.ts
+                    ├── lib/bpmn/node-mapping.ts
+                    └── lib/bpmn/animation.ts
+```
+
 ## Environment Variables
 
 Required in `.env.local`:
@@ -123,30 +178,64 @@ KV_REST_API_READ_ONLY_TOKEN=
 ```
 src/
 ├── app/
-│   ├── page.tsx              # Home page with query form
-│   ├── about/page.tsx        # About MCP page
-│   ├── layout.tsx            # Root layout with header/footer
-│   ├── globals.css           # NYC Design System styles (light mode only)
+│   ├── page.tsx                  # Home page with query form + streaming results
+│   ├── about/page.tsx            # About MCP page + BPMN diagram
+│   ├── layout.tsx                # Root layout with header/footer
+│   ├── globals.css               # NYC Design System styles (light mode only)
 │   └── api/
-│       ├── compare/route.ts  # Main comparison endpoint
-│       ├── models/route.ts   # Available models
+│       ├── compare/route.ts      # Main comparison endpoint (non-streaming)
+│       ├── compare-stream/route.ts # SSE streaming comparison endpoint
+│       ├── models/route.ts       # Available models
 │       ├── rate-limit/route.ts
 │       └── auth/[...nextauth]/route.ts
 ├── components/
+│   ├── shared/
+│   │   └── McpResponseDisplay.tsx # Shared MCP response rendering (both pages use this)
+│   ├── about/
+│   │   ├── McpFlowDiagram.tsx     # BPMN orchestrator (fullscreen, state sync)
+│   │   ├── McpFlowDiagramWrapper.tsx # Client-side dynamic import wrapper
+│   │   ├── BpmnViewer.tsx         # bpmn-js NavigatedViewer wrapper
+│   │   ├── bpmn-diagram.css       # CSS markers, overlays, zoom controls
+│   │   ├── TraceControls.tsx      # Mode toggle, trace pills, playback, live input
+│   │   ├── LiveResponsePanel.tsx  # Live query response (delegates to McpResponseDisplay)
+│   │   ├── NarrativePanel.tsx     # "What's happening now" during example replay
+│   │   └── DiagramAnnotations.tsx # Educational text panel
 │   ├── Header.tsx
-│   ├── QueryForm.tsx         # Query input + model/portal selectors
-│   ├── ComparisonDisplay.tsx # Side-by-side results wrapper
-│   ├── ResponsePanel.tsx     # Individual result panel
-│   ├── RateLimitBanner.tsx   # Inline rate limit display
-│   └── Providers.tsx         # NextAuth SessionProvider
+│   ├── QueryForm.tsx              # Query input + model/portal selectors
+│   ├── ComparisonDisplay.tsx      # Side-by-side results wrapper
+│   ├── ResponsePanel.tsx          # Individual result panel (MCP variant → McpResponseDisplay)
+│   ├── ProgressLog.tsx            # Narrative summary + expandable tool call steps
+│   ├── SkillPromptDisclosure.tsx  # Expandable system prompt viewer
+│   ├── NarrationExplainer.tsx     # "What am I looking at?" tooltip
+│   ├── SoqlDisplay.tsx            # SoQL query syntax highlighting
+│   ├── ToolCallCard.tsx           # Individual tool call display
+│   ├── LoadingSpinner.tsx
+│   ├── RateLimitBanner.tsx        # Inline rate limit display
+│   └── Providers.tsx              # NextAuth SessionProvider
+├── hooks/
+│   ├── useStreamingComparison.ts  # SSE streaming for home page (both panels)
+│   ├── useLiveTrace.ts            # SSE + diagram animation for About page live queries
+│   └── useTraceReplay.ts          # Replay state machine for pre-recorded traces
 └── lib/
-    ├── openrouter.ts         # LLM API client
-    ├── rate-limit.ts         # Rate limiting logic
-    ├── auth.ts               # NextAuth config
+    ├── openrouter.ts              # LLM API client (non-streaming)
+    ├── openrouter-streaming.ts    # LLM API client (streaming with SSE events)
+    ├── streaming.ts               # Shared: event types, narrative, provenance, dataset URLs
+    ├── sse-client.ts              # Client-side SSE connection helper
+    ├── rate-limit.ts              # Rate limiting logic
+    ├── auth.ts                    # NextAuth config
+    ├── bpmn/
+    │   ├── traces.ts              # 4 pre-recorded traces with SoQL and timing
+    │   ├── node-mapping.ts        # ProgressPhase → BPMN element IDs
+    │   ├── animation.ts           # ReplayState type, animation utilities
+    │   └── capture-trace.ts       # Dev utility (NEXT_PUBLIC_CAPTURE_TRACES=true)
     └── mcp/
-        ├── client.ts         # MCP server HTTP client
-        ├── tools.ts          # Tool definitions for OpenRouter
-        └── opengov-skill.ts  # Domain knowledge for Socrata queries
+        ├── client.ts              # MCP server HTTP client
+        ├── tools.ts               # Tool definitions for OpenRouter
+        └── opengov-skill.ts       # Domain knowledge for Socrata queries
+
+public/
+└── bpmn/
+    └── mcp-query-flow.bpmn       # BPMN 2.0 XML: 5-lane MCP query flow process
 ```
 
 ## Key Datasets
@@ -182,3 +271,45 @@ Active work is organized into lightweight sprints in [`/sprints/`](sprints/).
 - **NYC Design System colors** - Blue (#103FEF), grays, semantic colors
 - **Compact layout** - Form and button visible above fold on laptop screens
 - **Not indexed** - robots.txt blocks crawlers during demo phase
+
+## Patterns & Conventions
+
+These patterns are established across the codebase. Follow them when making changes.
+
+### Read before reimplementing
+When told "make X behave like Y," always read Y's implementation first. Importing an existing component is almost always better than building a parallel version. This was learned the hard way — see RETROSPECTIVE.md for details.
+
+### Shared utilities live in `streaming.ts`
+Cross-cutting formatting functions (`buildProvenanceLine`, `buildNarrativeSummary`, `datasetUrl`, `getEducationalAnnotation`, `getPortalCity`, `getDatasetName`) all live in `lib/streaming.ts`. Don't duplicate these in component files. If a new utility is needed by multiple components, add it here.
+
+### Export utilities proactively
+When building a utility for one module, consider whether other modules will need it. Export from the start rather than having to refactor later (e.g., `generateGroupLabel` needed export for cross-module reuse).
+
+### Component composition over duplication
+The `McpResponseDisplay` shared component is the canonical example — both `ResponsePanel` (home) and `LiveResponsePanel` (About) delegate to it. When adding MCP response features, add them to the shared component so both pages benefit.
+
+### Prop threading for context
+Query text, progress state, and tool call data are threaded from page → wrapper → panel → shared component. Follow the existing prop chains when adding new data:
+- Home: `page.tsx → ComparisonDisplay → ResponsePanel → McpResponseDisplay`
+- About: `McpFlowDiagram → LiveResponsePanel → McpResponseDisplay`
+
+### styled-jsx for component-scoped CSS
+CSS keyframes (`blink`, `spin`, `pulse`) and component-specific styles use styled-jsx blocks within components. Global styles are in `globals.css`.
+
+### bpmn-js patterns
+- Use `canvas.addMarker()`/`removeMarker()` for animation states — don't manipulate SVG directly
+- Use `overlays.add()` for positioned HTML content on diagram nodes
+- Always call `fitToView()` after layout changes (fullscreen toggle, split panel transition) with a ~350ms delay for transition completion
+
+## Known Tech Debt
+
+1. **Duplicated SSE event handling** — `useLiveTrace` and `useStreamingComparison` both build progress groups from SSE events. A shared utility could extract the group-building logic.
+2. **`@keyframes` duplication** — `blink` is defined in multiple styled-jsx blocks and could move to `globals.css`. `spin` exists in both `globals.css` and component styles.
+3. **`useLiveTrace` responsibility accumulation** — Manages SSE connection, diagram animation, progress logs, tool tracking, trace capture, slow timers, elapsed time, and abort control. Works but is a code smell.
+4. **bpmn-js type gaps** — 4 `@typescript-eslint/no-explicit-any` suppressions for untyped bpmn-js APIs.
+5. **BPMN XML hand-authored** — Should be round-tripped through bpmn.io visual modeler for maintainability.
+6. **Pre-existing lint warnings** — TraceControls setState-in-effect, unused `mapEventToNodes` in animation.ts, unused `onError` in sse-client.ts.
+
+## Retrospectives
+
+Session retrospectives are kept in [`RETROSPECTIVE.md`](RETROSPECTIVE.md) (reverse-chronological). Review before starting work to understand recent decisions and lessons learned.

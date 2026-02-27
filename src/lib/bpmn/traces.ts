@@ -27,7 +27,7 @@ export interface PreRecordedTrace {
 const simple311: PreRecordedTrace = {
   id: 'simple-311',
   title: 'Most common 311 complaints in NYC',
-  chipLabel: 'Simple query',
+  chipLabel: '311 complaints in NYC',
   query: 'Most common 311 complaints in NYC',
   model: 'anthropic/claude-sonnet-4',
   portal: 'data.cityofnewyork.us',
@@ -108,7 +108,7 @@ const simple311: PreRecordedTrace = {
 const multiStepRestaurant: PreRecordedTrace = {
   id: 'multi-step-restaurant',
   title: 'Compare restaurant inspection grades across boroughs',
-  chipLabel: 'Multi-step',
+  chipLabel: 'Restaurant grades by borough',
   query: 'Compare restaurant inspection grades across boroughs',
   model: 'anthropic/claude-sonnet-4',
   portal: 'data.cityofnewyork.us',
@@ -288,7 +288,7 @@ const multiStepRestaurant: PreRecordedTrace = {
 const filteredNoise: PreRecordedTrace = {
   id: 'filtered-noise',
   title: 'Noise complaints in Brooklyn in 2024',
-  chipLabel: 'Filtered',
+  chipLabel: 'Noise in Brooklyn, 2024',
   query: 'Noise complaints in Brooklyn in 2024',
   model: 'anthropic/claude-sonnet-4',
   portal: 'data.cityofnewyork.us',
@@ -406,7 +406,7 @@ const filteredNoise: PreRecordedTrace = {
 const retryIteration: PreRecordedTrace = {
   id: 'retry-iteration',
   title: 'How do housing violations in Brooklyn compare to Manhattan?',
-  chipLabel: 'Deep iteration',
+  chipLabel: 'Housing violations: BK vs Manhattan',
   query: 'How do housing violations in Brooklyn compare to Manhattan?',
   model: 'anthropic/claude-sonnet-4',
   portal: 'data.cityofnewyork.us',

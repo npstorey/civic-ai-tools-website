@@ -36,6 +36,7 @@ interface ComparisonDisplayProps {
   isStreaming?: boolean;
   streamingWithoutMcp?: StreamingPanelState;
   streamingWithMcp?: StreamingPanelState;
+  queryText?: string;
 }
 
 export default function ComparisonDisplay({
@@ -46,6 +47,7 @@ export default function ComparisonDisplay({
   isStreaming,
   streamingWithoutMcp,
   streamingWithMcp,
+  queryText,
 }: ComparisonDisplayProps) {
   // Use streaming data if available, otherwise fall back to static data
   const withoutMcpContent = isStreaming && streamingWithoutMcp
@@ -98,6 +100,7 @@ export default function ComparisonDisplay({
         isStreaming={isStreaming}
         progressLog={streamingWithMcp?.progressLog}
         progressGroups={streamingWithMcp?.progressGroups}
+        queryText={queryText}
       />
     </div>
   );

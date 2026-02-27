@@ -9,6 +9,7 @@ import { useStreamingComparison } from '@/hooks/useStreamingComparison';
 export default function Home() {
   const [queryCount, setQueryCount] = useState(0);
   const [usedModel, setUsedModel] = useState<string>('');
+  const [lastQuery, setLastQuery] = useState<string>('');
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const streaming = useStreamingComparison();
@@ -24,6 +25,7 @@ export default function Home() {
 
   const handleSubmit = async (query: string, model: string, portal: string) => {
     setUsedModel(model);
+    setLastQuery(query);
 
     // Scroll to results after a brief delay to let the loading state render
     setTimeout(() => {
@@ -106,6 +108,7 @@ export default function Home() {
             isStreaming={true}
             streamingWithoutMcp={streaming.withoutMcp}
             streamingWithMcp={streaming.withMcp}
+            queryText={lastQuery}
           />
           {(streaming.withoutMcp.isComplete && streaming.withMcp.isComplete) && (
             <p

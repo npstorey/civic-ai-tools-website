@@ -635,14 +635,20 @@ export function buildNarrativeSummary(
   }
   const parts = deduped.map(a => a.count > 1 ? `${a.text} (${a.count} times)` : a.text);
 
-  // Build prefix with dataset context
+  // Build prefix with dataset context (includes markdown links when portal is known)
   let prefix = '';
   if (datasets.size === 1) {
     const [id, name] = [...datasets.entries()][0];
-    prefix = `Using ${cityName}'s ${name} dataset (${id}), the AI `;
+    const url = datasetUrl(firstPortal, id);
+    const datasetRef = url ? `[${name} (${id})](${url})` : `${name} (${id})`;
+    prefix = `Using ${cityName}'s ${datasetRef}, the AI `;
   } else if (datasets.size > 1) {
-    const names = [...datasets.values()];
-    prefix = `Using ${names.length} ${cityName} datasets, the AI `;
+    const entries = [...datasets.entries()];
+    const linkedNames = entries.map(([id, name]) => {
+      const url = datasetUrl(firstPortal, id);
+      return url ? `[${name} (${id})](${url})` : `${name} (${id})`;
+    });
+    prefix = `Using ${linkedNames.length} ${cityName} datasets (${linkedNames.join(', ')}), the AI `;
   } else {
     prefix = 'The AI ';
   }
@@ -682,6 +688,51 @@ export function buildStatsSummary(
   }
 
   return statParts.join(' \u00b7 ');
+}
+
+// Generate a Socrata dataset URL from portal and dataset ID
+export function datasetUrl(portal: string | undefined, datasetId: string | undefined): string | null {
+  if (!portal || !datasetId) return null;
+  return `https://${portal}/d/${datasetId}`;
+}
+
+// Build source provenance line with markdown links for dataset references
+export function buildProvenanceLine(
+  tools: { args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; operationType?: string }[]
+): string | null {
+  const queryTools = tools.filter(t => t.operationType === 'query');
+  if (queryTools.length === 0) return null;
+
+  const parts: string[] = [];
+
+  const firstPortal = tools.find(t => t.args.portal)?.args.portal as string | undefined;
+  if (firstPortal) {
+    const city = getPortalCity(firstPortal);
+    parts.push(`${city} Open Data`);
+  }
+
+  const seen = new Set<string>();
+  for (const tool of queryTools) {
+    const did = tool.args.dataset_id as string | undefined;
+    const portal = (tool.args.portal as string | undefined) || firstPortal;
+    if (did && !seen.has(did)) {
+      seen.add(did);
+      const name = getDatasetName(did);
+      const url = datasetUrl(portal, did);
+      if (url) {
+        parts.push(`[${name} (${did})](${url})`);
+      } else {
+        parts.push(`${name} (${did})`);
+      }
+    }
+  }
+
+  const totalRows = queryTools.reduce((sum, t) => sum + (t.resultSummary?.rows || 0), 0);
+  if (totalRows > 0) {
+    parts.push(`${totalRows.toLocaleString()} rows returned`);
+  }
+
+  return parts.length > 0 ? `Source: ${parts.join(' \u00b7 ')}` : null;
 }
 
 // Encode a stream event as SSE format
