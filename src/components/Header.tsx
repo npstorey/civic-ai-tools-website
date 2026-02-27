@@ -1,14 +1,31 @@
 'use client';
 
+import { useRef, useEffect } from 'react';
 import { signIn, signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
 
 export default function Header() {
   const { data: session, status } = useSession();
+  const headerRef = useRef<HTMLElement>(null);
+
+  // Publish header height as a CSS variable so other components can offset below it
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      document.documentElement.style.setProperty(
+        '--header-height',
+        `${el.offsetHeight}px`,
+      );
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <header
+      ref={headerRef}
       className="border-b"
       style={{
         borderColor: 'var(--border-color)',

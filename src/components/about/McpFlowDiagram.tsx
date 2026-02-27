@@ -409,11 +409,11 @@ export default function McpFlowDiagram() {
       <div
         style={{
           position: 'fixed',
-          top: 0,
+          top: 'var(--header-height, 0px)',
           left: 0,
           width: '100vw',
-          height: '100dvh',
-          zIndex: 1000,
+          height: 'calc(100dvh - var(--header-height, 0px))',
+          zIndex: 40,
           background: 'white',
           display: 'flex',
           flexDirection: 'column',
@@ -432,7 +432,7 @@ export default function McpFlowDiagram() {
             position: 'absolute',
             top: '16px',
             right: '24px',
-            zIndex: 1010,
+            zIndex: 45,
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
