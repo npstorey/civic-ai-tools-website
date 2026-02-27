@@ -6,6 +6,7 @@
   --nyc-black: #000000;
   --nyc-white: #FFFFFF;
   --nyc-blue-40: #103FEF;
+  --nyc-blue: #103FEF;
 
   /* Interactive State Colors */
   --nyc-blue-80: #B5DBFF;
@@ -21,7 +22,7 @@
 
   /* Semantic/Auxiliary Colors */
   --nyc-info: #70BAFF;
-  --nyc-success: #00B703;
+  --nyc-success: #008A02;
   --nyc-caution: #FFB320;
   --nyc-error: #EC131E;
 
@@ -66,6 +67,10 @@ h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-space-grotesk), 'Space Grotesk', Arial, sans-serif;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+button {
+  font-family: inherit;
 }
 
 /* Desktop Type Scale */
@@ -287,6 +292,8 @@ a:focus {
   margin: 0.75em 0;
   width: 100%;
   font-size: 14px;
+  display: block;
+  overflow-x: auto;
 }
 
 .response-markdown th,

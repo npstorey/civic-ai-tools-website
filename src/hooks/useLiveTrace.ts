@@ -443,7 +443,7 @@ export function useLiveTrace(): UseLiveTraceReturn {
       if (err instanceof SSEError && err.status === 429) {
         setError('Rate limit exceeded. Please try again tomorrow or sign in for more requests.');
       } else {
-        setError(err instanceof Error ? err.message : 'Failed to connect to the server.');
+        setError(err instanceof Error ? err.message : 'Failed to connect to the server. Please try again.');
       }
       setStatus('error');
     });

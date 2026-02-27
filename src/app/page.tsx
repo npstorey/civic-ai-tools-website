@@ -52,13 +52,13 @@ export default function Home() {
             margin: '0 auto',
           }}
         >
-          Compare LLM responses with and without live data access via{' '}
+          Compare AI responses with and without live data access via the{' '}
           <a
             href="https://modelcontextprotocol.io"
             target="_blank"
             rel="noopener noreferrer"
           >
-            MCP
+            Model Context Protocol (MCP)
           </a>
           —and see how model choice and tool access affect results.
         </p>

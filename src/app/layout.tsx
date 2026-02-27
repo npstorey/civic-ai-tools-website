@@ -19,7 +19,7 @@ const notoSans = Noto_Sans({
 export const metadata: Metadata = {
   title: 'Civic AI Tools - MCP Demo',
   description:
-    'See the difference MCP (Model Context Protocol) makes when querying civic data. Compare LLM responses with and without live data access.',
+    'See the difference MCP (Model Context Protocol) makes when querying civic data. Compare AI responses with and without live data access.',
   robots: {
     index: false,
     follow: false,
@@ -27,14 +27,14 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Civic AI Tools - MCP Demo',
     description:
-      'See the difference MCP makes when querying civic data. Compare LLM responses with and without live data access.',
+      'See the difference MCP makes when querying civic data. Compare AI responses with and without live data access.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Civic AI Tools - MCP Demo',
     description:
-      'See the difference MCP makes when querying civic data. Compare LLM responses with and without live data access.',
+      'See the difference MCP makes when querying civic data. Compare AI responses with and without live data access.',
   },
 };
 

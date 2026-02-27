@@ -4,6 +4,57 @@ Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ---
 
+## 2026-02-27 — Quick Polish: Broken Colors, Accessibility, Copy, Input Overflow
+
+**Scope:** 10 fixes across 7 files, zero new files. All single-line or few-line changes addressing broken CSS variables, WCAG contrast failures, copy inconsistencies, and a UX bug.
+
+### What we did
+
+Implemented the top 10 issues from the polish audit (`sprints/sprint-003-polish-audit.md`):
+
+1. **`--nyc-blue` CSS variable** — Added alias for `#103FEF`, fixing 14 broken `var(--nyc-blue)` references across 6 files
+2. **Markdown table overflow** — Added `display: block` + `overflow-x: auto` to `.response-markdown table`
+3. **Green success contrast** — Darkened `--nyc-success` from `#00B703` to `#008A02` (~4.6:1 on white, WCAG AA pass)
+4. **TimingBar capitalization** — `'Data Retrieval'` → `'Data retrieval'` to match sentence case
+5. **Connection error message** — Appended "Please try again." to match home page pattern
+6. **Expand "LLM" and "MCP"** — Hero text: "Compare AI responses" + "Model Context Protocol (MCP)"; meta descriptions updated
+7. **Panel titles** — `"Without MCP"` / `"With MCP"` → `"Without Data Tools"` / `"With Data Tools"`
+8. **Button font-family** — Global `button { font-family: inherit; }` reset for unstyled buttons
+9. **Error red mismatch** — Replaced Bootstrap `#dc3545` with `var(--nyc-error)` in TraceControls
+10. **Query input auto-expand** — Textarea auto-resizes via `useRef` + `autoResize` callback, capped at 120px
+
+### What went well
+
+- **All 10 fixes were independent** — No ordering constraints, no cascading side effects. Applied in one pass with no iteration.
+- **Build passed first try** — No type errors, no lint regressions. The changes were minimal enough that risk was near zero.
+- **CSS variable alias was the right call** — Adding `--nyc-blue` as an alias fixed 14 references without touching any component files, versus a find-and-replace that would have touched 6 files.
+- **Design system consistency** — Fixes 3 and 9 bring error/success colors fully in line with the NYC Design System variables instead of ad-hoc hex values.
+
+### What to watch
+
+- **No runtime testing** — All verification was build-only. The textarea auto-resize, table overflow scroll, and button font rendering should be manually tested.
+- **`--nyc-success` darkening is global** — 26 usages affected. Most are decorative (borders, backgrounds) where the slightly darker green is imperceptible, but worth a visual pass.
+
+### Lessons
+
+- **Polish audits produce high-ROI work** — 10 fixes, 7 files, minimal risk, measurable UX improvement. Good pattern for future sprints.
+- **CSS variable aliases prevent drift** — When component code naturally reaches for `--nyc-blue`, having both `--nyc-blue` and `--nyc-blue-40` point to the same value avoids broken references without enforcing a naming convention.
+
+### Files changed
+
+| File | Changes |
+|------|---------|
+| `src/app/globals.css` | Add `--nyc-blue` alias, darken `--nyc-success`, table overflow, button font reset |
+| `src/components/shared/McpResponseDisplay.tsx` | TimingBar label sentence case |
+| `src/hooks/useLiveTrace.ts` | Error message copy |
+| `src/app/page.tsx` | Hero copy: "AI responses" + "Model Context Protocol (MCP)" |
+| `src/app/layout.tsx` | Meta descriptions: "AI" not "LLM" |
+| `src/components/ComparisonDisplay.tsx` | Panel titles: "Without/With Data Tools" |
+| `src/components/about/TraceControls.tsx` | Error state uses design system red |
+| `src/components/QueryForm.tsx` | Textarea auto-expand with ref + autoResize |
+
+---
+
 ## 2026-02-27 — Unify Example Trace Replays with Side-by-Side Layout
 
 **Scope:** 5 files changed (1 new, 3 modified, 1 deleted), replacing NarrativePanel with the same side-panel step cards used by live queries.

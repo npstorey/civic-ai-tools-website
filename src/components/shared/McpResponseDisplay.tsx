@@ -30,7 +30,7 @@ function TimingBar({ tools, totalDuration }: { tools: ToolCall[]; totalDuration:
 
   const segments = [
     { label: 'AI reasoning', ms: analysisMs, color: 'var(--nyc-info)' },
-    { label: 'Data Retrieval', ms: dataRetrievalMs, color: 'var(--nyc-success)' },
+    { label: 'Data retrieval', ms: dataRetrievalMs, color: 'var(--nyc-success)' },
     { label: 'Synthesis', ms: synthesisMs, color: 'var(--nyc-caution)' },
   ];
 

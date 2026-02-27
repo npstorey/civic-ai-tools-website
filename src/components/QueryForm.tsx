@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface Model {
   id: string;
@@ -33,6 +33,17 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
   const [model, setModel] = useState('anthropic/claude-sonnet-4');
   const [portal, setPortal] = useState('data.cityofnewyork.us');
   const [models, setModels] = useState<Model[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const autoResize = useCallback(() => {
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    }
+  }, []);
+
+  useEffect(() => { autoResize(); }, [query, autoResize]);
 
   useEffect(() => {
     let isMounted = true;
@@ -73,12 +84,14 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
         <label htmlFor="query">Ask a question about civic data</label>
         <textarea
           id="query"
+          ref={textareaRef}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onInput={autoResize}
           placeholder="e.g., What are the most common 311 complaints in NYC?"
           rows={1}
           disabled={isLoading}
-          style={{ resize: 'none', minHeight: '44px' }}
+          style={{ resize: 'none', minHeight: '44px', maxHeight: '120px', overflowY: 'auto' }}
         />
       </div>
 

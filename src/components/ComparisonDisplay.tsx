@@ -66,7 +66,7 @@ export default function ComparisonDisplay({
       }}
     >
       <ResponsePanel
-        title="Without MCP"
+        title="Without Data Tools"
         subtitle={`${modelName} using only training data`}
         content={withoutMcpContent}
         duration_ms={isStreaming ? streamingWithoutMcp?.duration_ms : withoutMcp?.duration_ms}
@@ -78,7 +78,7 @@ export default function ComparisonDisplay({
         progressGroups={streamingWithoutMcp?.progressGroups}
       />
       <ResponsePanel
-        title="With MCP"
+        title="With Data Tools"
         subtitle={
           <>
             {modelName} + live{' '}

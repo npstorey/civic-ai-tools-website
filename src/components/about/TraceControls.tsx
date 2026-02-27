@@ -499,11 +499,11 @@ export default function TraceControls({
           {liveStatus === 'error' && liveError && (
             <div style={{
               padding: '10px 14px',
-              background: 'rgba(220, 53, 69, 0.06)',
-              border: '1px solid rgba(220, 53, 69, 0.2)',
+              background: 'rgba(236, 19, 30, 0.06)',
+              border: '1px solid rgba(236, 19, 30, 0.2)',
               borderRadius: '4px',
               fontSize: '13px',
-              color: '#dc3545',
+              color: 'var(--nyc-error)',
             }}>
               {liveError}
             </div>
