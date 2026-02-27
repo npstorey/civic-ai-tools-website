@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import ProgressLog from './ProgressLog';
 import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
 import { getPortalCity, getDatasetName } from '@/lib/streaming';
+import SkillPromptDisclosure from './SkillPromptDisclosure';
 
 interface ResponsePanelProps {
   title: string;
@@ -464,6 +465,10 @@ export default function ResponsePanel({
               </span>
             )}
           </div>
+
+          {isMcp && tools_called && tools_called.length > 0 && (
+            <SkillPromptDisclosure />
+          )}
         </div>
       )}
 

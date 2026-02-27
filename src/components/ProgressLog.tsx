@@ -5,6 +5,7 @@ import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStrea
 import { mapGroupsToToolCalls } from '@/hooks/useStreamingComparison';
 import { getEducationalAnnotation, buildNarrativeSummary, buildStatsSummary, buildBreadcrumbLabel, generateQueryIntentLabel } from '@/lib/streaming';
 import ToolCallCard from './ToolCallCard';
+import NarrationExplainer from './NarrationExplainer';
 
 interface ProgressLogProps {
   groups: ProgressGroup[];
@@ -522,6 +523,8 @@ function CompletedSummary({
           {showAll ? 'Hide steps' : 'Show all steps'}
         </button>
       )}
+
+      <NarrationExplainer />
     </div>
   );
 }
