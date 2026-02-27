@@ -125,7 +125,7 @@ export default function Home() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                opengov-mcp
+                civic-ai-tools
               </a>{' '}
               locally with Claude Code or Cursor.
             </p>

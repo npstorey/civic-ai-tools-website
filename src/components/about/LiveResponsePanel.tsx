@@ -56,23 +56,27 @@ export default function LiveResponsePanel({
         background: 'var(--card-background)',
       }}>
         {exampleStatus ? (
-          <>
-            <span>Step {exampleStatus.currentStep} of {exampleStatus.totalSteps}</span>
-            {iterationCount > 0 && (
-              <span>Iteration {iterationCount}</span>
-            )}
-            {exampleStatus.currentMessage && !isComplete && (
-              <span style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                flex: 1,
-                opacity: 0.8,
-              }}>
-                {exampleStatus.currentMessage}
-              </span>
-            )}
-          </>
+          isComplete ? (
+            <>
+              <span>{(elapsedMs / 1000).toFixed(1)}s</span>
+              {toolsCalled.length > 0 && (
+                <span>{toolsCalled.length} {toolsCalled.length === 1 ? 'tool call' : 'tool calls'}</span>
+              )}
+            </>
+          ) : (
+            <>
+              {exampleStatus.currentMessage && (
+                <span style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  flex: 1,
+                }}>
+                  {exampleStatus.currentMessage}
+                </span>
+              )}
+            </>
+          )
         ) : (
           <>
             <span>{(elapsedMs / 1000).toFixed(1)}s</span>
@@ -81,7 +85,7 @@ export default function LiveResponsePanel({
             )}
           </>
         )}
-        {isComplete && toolsCalled.length > 0 && (
+        {!exampleStatus && isComplete && toolsCalled.length > 0 && (
           <span style={{ marginLeft: 'auto', fontWeight: 500 }}>
             {toolsCalled.length} {toolsCalled.length === 1 ? 'tool call' : 'tool calls'}
           </span>

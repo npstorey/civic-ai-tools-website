@@ -261,7 +261,7 @@ export function generateGroupLabel(entries: ProgressLogEntry[], previousEntries?
   if (hasQuery) return 'Querying data';
   if (hasMetrics) return 'Checking dataset statistics';
 
-  return 'Running query...';
+  return 'Running query';
 }
 
 function handleEvent(

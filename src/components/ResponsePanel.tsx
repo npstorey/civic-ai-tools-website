@@ -273,7 +273,7 @@ export default function ResponsePanel({
                       color: 'var(--text-muted)',
                     }}
                   >
-                    This response is based on the model&apos;s training data (cutoff: ~early 2025). It cannot access current government records.
+                    This response is based on the model&apos;s training data only. It cannot access current government records.
                   </div>
                 )}
               </div>
@@ -294,7 +294,7 @@ export default function ResponsePanel({
                       color: 'var(--text-muted)',
                     }}
                   >
-                    This response is based on the model&apos;s training data (cutoff: ~early 2025). It cannot access current government records.
+                    This response is based on the model&apos;s training data only. It cannot access current government records.
                   </div>
                 )}
               </div>

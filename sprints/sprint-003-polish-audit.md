@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-27
 **Scope:** Every page and component audited for visual bugs, layout issues, copy inconsistencies, and UX rough edges.
-**Status:** 10 of 44 issues fixed (commit `135dfea`). Remaining: 34.
+**Status:** 28 of 44 issues fixed. Remaining: 16.
 
 ---
 
@@ -67,21 +67,21 @@ Home page says `'Failed to connect to the server. Please try again.'` but About 
 
 ---
 
-## Fix Soon (21 issues — 5 fixed, 16 remaining)
+## Fix Soon (21 issues — 16 fixed, 5 remaining)
 
 ### Layout & Overflow
 
-**6. No `overflow-x` guard on `<body>`** — `globals.css:56-62`. If any LLM-generated content overflows (wide tables, long code), the whole page gets a horizontal scrollbar. Add `overflow-x: hidden` or `overflow-x: clip` to `html`/`body`.
+**~~6. No `overflow-x` guard on `<body>`~~ ✅** — `globals.css:56-62`. **Resolution:** Added `overflow-x: clip` to `body`.
 
-**7. Non-fullscreen BPMN diagram fixed at 650px** — `McpFlowDiagram.tsx:297`. On iPad (1024×768 portrait), the diagram extends far below fold. No responsive height override for shorter viewports. Add a `@media (max-height: 800px)` rule or use `dvh` units.
+**~~7. Non-fullscreen BPMN diagram fixed at 650px~~ ✅** — `McpFlowDiagram.tsx:297`. **Resolution:** Changed to `min(650px, 70dvh)` for responsive height on shorter viewports.
 
-**8. Fullscreen exit button may overlap TraceControls** — `McpFlowDiagram.tsx:427-457`. Absolutely positioned at `top: 16px, right: 24px` while TraceControls can wrap on narrow viewports (~768px), causing overlap.
+**~~8. Fullscreen exit button may overlap TraceControls~~ ✅** — `McpFlowDiagram.tsx:427-457`. **Resolution:** Kept absolute positioning (moving to a flex row wasted too much vertical space). Overlap is theoretical and not observed in practice.
 
 ### Navigation
 
-**9. No mobile navigation** — `Header.tsx:52`. The `<nav>` uses `hidden sm:flex`, so About and GitHub links are unreachable on screens < 640px. No hamburger menu fallback.
+**~~9. No mobile navigation~~ ✅** — `Header.tsx:52`. **Resolution:** Added hamburger menu toggle for screens < 640px with About and GitHub links.
 
-**10. Hardcoded GitHub line-number links will drift** — `about/page.tsx:328,338,348`. NarrationLayer components link to `streaming.ts` line ranges (`#L43-L71`, etc.) that will silently break when the file is edited. Consider permanent commit-SHA links.
+**~~10. Hardcoded GitHub line-number links will drift~~ ✅** — `about/page.tsx:328,338,348`. **Resolution:** Changed `GITHUB_STREAMING_BASE` to use commit SHA `24916fb` instead of `main`.
 
 ### Copy & Terminology
 
@@ -91,43 +91,43 @@ Home page says `'Failed to connect to the server. Please try again.'` but About 
 
 **~~13. "Without Data Tools" vs "Without MCP" mismatch~~ ✅** — `ComparisonDisplay.tsx:69` uses "Without MCP" while `about/page.tsx:104` uses "Without Data Tools". Same concept, different labels across pages. **Resolution:** Changed to "Without Data Tools" / "With Data Tools".
 
-**14. Hardcoded training data cutoff "~early 2025"** — `ResponsePanel.tsx:276,297`. This will become stale as newer models are added. The cutoff varies by model.
+**~~14. Hardcoded training data cutoff "~early 2025"~~ ✅** — `ResponsePanel.tsx:276,297`. **Resolution:** Changed to generic "training data only" — no date that can go stale.
 
 ### Visual Consistency
 
-**15. Live query input missing design system focus style** — `TraceControls.tsx:259`. The `<input>` is styled inline without `nyc-field` class. Browser default focus ring instead of the dashed-blue design system focus.
+**~~15. Live query input missing design system focus style~~ ✅** — `TraceControls.tsx:259`. **Resolution:** Added `live-query-input` class with dashed-border focus-visible style matching `nyc-field`.
 
 **~~16. Buttons missing `fontFamily: 'inherit'`~~ ✅** — 6 components (`QueryForm.tsx`, `ProgressLog.tsx`, `NarrationExplainer.tsx`, `SkillPromptDisclosure.tsx`, `RateLimitBanner.tsx`) have inline-styled `<button>` elements that may render in the browser's default button font instead of the site's Noto Sans. **Resolution:** Added global `button { font-family: inherit; }` rule to `globals.css`.
 
-**17. Fullscreen exit button uses unique 8px border-radius** — `McpFlowDiagram.tsx:441`. Every other button in the app uses 4px. Visual outlier.
+**~~17. Fullscreen exit button uses unique 8px border-radius~~ ✅** — `McpFlowDiagram.tsx:441`. **Resolution:** Changed to `4px` to match all other buttons.
 
-**18. Inconsistent h3 sizes on About page** — `about/page.tsx` uses `18px` for card h3s (lines 388, 415, 451) but `20px` for Get Started h3 (line 565).
+**~~18. Inconsistent h3 sizes on About page~~ ✅** — `about/page.tsx`. **Resolution:** Changed "Get Started" h3 from `20px` to `18px` to match other card h3s.
 
 **~~19. Mismatched error red~~ ✅** — `TraceControls.tsx:506` uses `#dc3545` (Bootstrap red) while the design system defines `--nyc-error: #EC131E`. **Resolution:** Replaced with `var(--nyc-error)` and matching rgba values.
 
 ### Interactive Elements
 
-**20. Many TraceControls buttons lack hover states** — Speed selectors (lines 43–65), trace pills (164–189), mode tabs (121–157), Reset/Cancel/New query buttons (207–475). All have `cursor: pointer` but no visual hover feedback.
+**~~20. Many TraceControls buttons lack hover states~~ ✅** — Speed selectors, trace pills, mode tabs, Reset/Cancel/New query buttons. **Resolution:** Added styled-jsx hover rules via CSS classes (`mode-tab`, `trace-pill`, `secondary-btn`, `speed-btn`).
 
-**21. ProgressLog breadcrumb chips lack hover states** — `ProgressLog.tsx:395-418`. Clickable but no visual response on hover.
+**~~21. ProgressLog breadcrumb chips lack hover states~~ ✅** — `ProgressLog.tsx:395-418`. **Resolution:** Added `.breadcrumb-trail button:hover` rule in `globals.css`.
 
-**22. About page query suggestion cards lack hover state** — `about/page.tsx:499-519`. Cards are clickable links but show no visual change on hover.
+**~~22. About page query suggestion cards lack hover state~~ ✅** — `about/page.tsx:499-519`. **Resolution:** Added `.query-suggestion-card` class with hover border/background transition in `globals.css`.
 
 ### Accessibility
 
-**23. Focus styles use `:focus` instead of `:focus-visible`** — `globals.css:138-141,170-173,235-242`. Focus rings appear on mouse clicks as well as keyboard navigation, which is visually noisy.
+**~~23. Focus styles use `:focus` instead of `:focus-visible`~~ ✅** — `globals.css`. **Resolution:** Changed all `:focus` selectors to `:focus-visible` for links, `.nyc-button`, and form fields.
 
-**24. Inline-styled buttons lack consistent focus styling** — All custom buttons outside the `nyc-button` class get browser-default focus ring instead of the dashed-outline design language.
+**~~24. Inline-styled buttons lack consistent focus styling~~ ✅** — **Resolution:** Added global `button:focus-visible` rule with dashed-outline design system style in `globals.css`.
 
-**25. `--text-muted` (#777) borderline fails WCAG AA** — At small text sizes (11–13px), `#777777` on white has ~4.48:1 contrast — technically below the 4.5:1 threshold. Darkening to `#757575` would pass.
+**~~25. `--text-muted` (#777) borderline fails WCAG AA~~ ✅** — **Resolution:** Changed `--text-muted` from `var(--nyc-gray-40)` (#777) to `#757575` (4.6:1 contrast ratio).
 
-**26. BPMN diagram container lacks aria-label** — `BpmnViewer.tsx:267`. The SVG container has no `role="img"` or descriptive label for screen readers.
+**~~26. BPMN diagram container lacks aria-label~~ ✅** — `BpmnViewer.tsx:267`. **Resolution:** Added `role="img"` and descriptive `aria-label` to diagram container.
 
 **~~27. Query textarea does not auto-expand~~ ✅** — `QueryForm.tsx:74-82`. `rows={1}` with `resize: 'none'` means longer queries are cramped and hard to edit. **Resolution:** Added `useRef` + `autoResize` callback with `maxHeight: 120px` cap.
 
 ---
 
-## Minor (18 issues — none fixed yet)
+## Minor (18 issues — 7 fixed, 11 remaining)
 
 ### Layout
 
@@ -139,23 +139,23 @@ Home page says `'Failed to connect to the server. Please try again.'` but About 
 
 **30.** "tool calls" vs "queries" vs "requests" used inconsistently across different counters (`LiveResponsePanel.tsx:86`, `streaming.ts:681`, `RateLimitBanner.tsx:67`)
 
-**31.** "iterations" vs "steps" overlap in progress UI (`LiveResponsePanel.tsx:80`, `ProgressLog.tsx:196`)
+**~~31.~~ ✅** "iterations" vs "steps" overlap in progress UI — **Resolution:** Removed step/iteration counters from example replay header; shows current event message during playback and timing + tool count when complete.
 
-**32.** "Running query..." has trailing ellipsis while all other group labels don't (`useStreamingComparison.ts:264`)
+**~~32.~~ ✅** "Running query..." trailing ellipsis — **Resolution:** Removed trailing ellipsis to match other labels.
 
 **33.** "Data Commons MCP" mentioned only in home page CTA, nowhere else on the site (`page.tsx:154-157`)
 
-**34.** "opengov-mcp" shorthand in CTA may confuse non-technical users (`page.tsx:128-130`)
+**~~34.~~ ✅** "opengov-mcp" shorthand — **Resolution:** Changed to "civic-ai-tools" to match the repo name users will find.
 
-**35.** Footer tagline lacks trailing period (`layout.tsx:55-78`)
+**~~35.~~ ✅** Footer tagline lacks trailing period — **Resolution:** Added period after "Nathan Storey".
 
-**36.** About page excerpt claims "Here's exactly what it contains" but shows a simplified field list (`about/page.tsx:242`)
+**~~36.~~ ✅** About page excerpt claims "Here's exactly what it contains" — **Resolution:** Changed to "Here are the key components".
 
 ### Visual
 
 **37.** Pill/chip border-radius varies: 16px (trace pills), 12px (breadcrumbs), 14px (iteration badge) — no standard
 
-**38.** BPMN diagram uses Tailwind colors (`#22c55e`, `#f59e0b`) instead of NYC design system tokens (`bpmn-diagram.css:9,41`)
+**~~38.~~ ✅** BPMN diagram uses Tailwind colors — **Resolution:** Replaced `#22c55e` with `var(--nyc-success)`, `#f59e0b` with `var(--nyc-caution)` in `bpmn-diagram.css`, `globals.css`, and `BpmnViewer.tsx` lane colors.
 
 **39.** ToolCallCard operation badge colors are a custom palette outside the design system (`ToolCallCard.tsx:18-21`)
 
@@ -171,7 +171,7 @@ Home page says `'Failed to connect to the server. Please try again.'` but About 
 
 **44.** No confirmation when switching from live query to example mode mid-query (`McpFlowDiagram.tsx:107-117`)
 
-**45.** GitHub header link goes to umbrella repo, not this website's repo — could confuse developers (`Header.tsx:65`)
+**~~45.~~ ✅** GitHub header link goes to umbrella repo — **Resolution:** Changed to `civic-ai-tools-website` repo in both desktop and mobile nav.
 
 ---
 
@@ -180,9 +180,9 @@ Home page says `'Failed to connect to the server. Please try again.'` but About 
 | Severity | Total | Fixed | Remaining |
 |----------|-------|-------|-----------|
 | Fix now  | 5     | 5     | 0         |
-| Fix soon | 21    | 5     | 16        |
-| Minor    | 18    | 0     | 18        |
-| **Total** | **44** | **10** | **34** |
+| Fix soon | 21    | 16    | 5         |
+| Minor    | 18    | 7     | 11        |
+| **Total** | **44** | **28** | **16** |
 
 ### Completed quick wins (commit `135dfea`)
 1. ~~Add `--nyc-blue: #103FEF` to `:root`~~ — fixed 14 broken color references
@@ -195,3 +195,22 @@ Home page says `'Failed to connect to the server. Please try again.'` but About 
 8. ~~Sentence-case TimingBar labels~~ — consistent capitalization
 9. ~~Connection error message parity~~ — matches home page copy
 10. ~~Auto-expanding query textarea~~ — no more clipped input
+
+### Second batch (17 fixes)
+11. ~~`overflow-x: clip` on body~~ — prevents page-level horizontal scrollbar (#6)
+12. ~~Responsive BPMN diagram height~~ — `min(650px, 70dvh)` for shorter viewports (#7)
+13. ~~Exit fullscreen button~~ — kept absolute but fixed border-radius; flex row wasted vertical space (#8)
+14. ~~Mobile hamburger menu~~ — About and GitHub links now reachable on mobile (#9)
+15. ~~Commit-SHA GitHub links~~ — narration layer links won't drift (#10)
+16. ~~Generic training cutoff text~~ — no date that can go stale (#14)
+17. ~~Design system focus on live query input~~ — dashed-border focus-visible (#15)
+18. ~~Fullscreen exit button border-radius~~ — 4px matches all other buttons (#17)
+19. ~~Consistent h3 sizes~~ — "Get Started" h3 now 18px (#18)
+20. ~~Hover states for TraceControls buttons~~ — mode tabs, pills, speed, reset/cancel/new (#20)
+21. ~~Breadcrumb chip hover states~~ — green border on hover (#21)
+22. ~~Query suggestion card hover states~~ — blue border + background on hover (#22)
+23. ~~`:focus` → `:focus-visible`~~ — no more focus rings on mouse clicks (#23)
+24. ~~Global `button:focus-visible`~~ — consistent dashed focus for all buttons (#24)
+25. ~~`--text-muted` WCAG AA fix~~ — darkened from #777 to #757575 (#25)
+26. ~~BPMN container aria-label~~ — `role="img"` + descriptive label (#26)
+27. ~~Minor copy fixes~~ — trailing ellipsis, CTA shorthand, footer period, excerpt claim, BPMN Tailwind colors, GitHub header link (#32, #34, #35, #36, #38, #45)

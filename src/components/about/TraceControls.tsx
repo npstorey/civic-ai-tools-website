@@ -42,6 +42,7 @@ function SpeedSelector({ speed, onSetSpeed }: { speed: PlaybackSpeed; onSetSpeed
       {speeds.map(s => (
         <button
           key={s}
+          className="speed-btn"
           onClick={() => onSetSpeed(s)}
           style={{
             padding: '4px 10px',
@@ -119,6 +120,7 @@ export default function TraceControls({
       {/* Mode tabs */}
       <div style={{ display: 'flex', gap: '0', borderBottom: '2px solid var(--border-color)' }}>
         <button
+          className="mode-tab"
           onClick={() => onModeChange('examples')}
           style={{
             padding: '8px 20px',
@@ -137,6 +139,7 @@ export default function TraceControls({
           Example traces
         </button>
         <button
+          className="mode-tab"
           onClick={() => onModeChange('live')}
           style={{
             padding: '8px 20px',
@@ -205,6 +208,7 @@ export default function TraceControls({
 
             {(replayState.isPlaying || replayState.isPaused || replayState.isComplete) && (
               <button
+                className="secondary-btn"
                 onClick={onReset}
                 style={{
                   padding: '6px 12px',
@@ -215,6 +219,7 @@ export default function TraceControls({
                   fontSize: '13px',
                   cursor: 'pointer',
                   fontFamily: 'inherit',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 Reset
@@ -261,6 +266,7 @@ export default function TraceControls({
                 value={liveQuery}
                 onChange={e => setLiveQuery(e.target.value)}
                 placeholder="e.g. Most common 311 complaints in Brooklyn"
+                className="live-query-input"
                 style={{
                   flex: 1,
                   padding: '8px 12px',
@@ -319,6 +325,7 @@ export default function TraceControls({
                   {liveQuery}
                 </div>
                 <button
+                  className="secondary-btn"
                   onClick={onLiveCancel}
                   style={{
                     padding: '8px 16px',
@@ -329,6 +336,7 @@ export default function TraceControls({
                     color: 'var(--text-muted)',
                     cursor: 'pointer',
                     fontFamily: 'inherit',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   Cancel
@@ -427,6 +435,7 @@ export default function TraceControls({
               </button>
               <SpeedSelector speed={speed} onSetSpeed={onSetSpeed} />
               <button
+                className="secondary-btn"
                 onClick={onLiveReset}
                 style={{
                   padding: '6px 12px',
@@ -437,6 +446,7 @@ export default function TraceControls({
                   fontSize: '13px',
                   cursor: 'pointer',
                   fontFamily: 'inherit',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 New query
@@ -458,6 +468,7 @@ export default function TraceControls({
               <SpeedSelector speed={speed} onSetSpeed={onSetSpeed} />
 
               <button
+                className="secondary-btn"
                 onClick={onLiveReset}
                 style={{
                   padding: '6px 12px',
@@ -468,6 +479,7 @@ export default function TraceControls({
                   fontSize: '13px',
                   cursor: 'pointer',
                   fontFamily: 'inherit',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 New query
@@ -510,6 +522,27 @@ export default function TraceControls({
           )}
         </>
       )}
+      <style jsx>{`
+        .live-query-input:focus-visible {
+          outline: none;
+          border-style: dashed;
+          border-color: var(--nyc-blue-40);
+          background-color: var(--nyc-blue-80);
+        }
+        .trace-pill:hover {
+          border-color: var(--nyc-blue-40) !important;
+        }
+        .mode-tab:hover {
+          color: var(--nyc-blue-40) !important;
+        }
+        .secondary-btn:hover {
+          border-color: var(--nyc-gray-70) !important;
+          color: var(--text-secondary) !important;
+        }
+        .speed-btn:hover {
+          border-color: var(--nyc-blue-40) !important;
+        }
+      `}</style>
     </div>
   );
 }

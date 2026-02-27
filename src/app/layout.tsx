@@ -75,7 +75,7 @@ export default function RootLayout({
                   rel="noopener noreferrer"
                 >
                   Nathan Storey
-                </a>
+                </a>.
               </p>
             </footer>
           </div>

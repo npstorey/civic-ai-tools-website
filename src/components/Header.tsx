@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { signIn, signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -8,6 +8,7 @@ import Link from 'next/link';
 export default function Header() {
   const { data: session, status } = useSession();
   const headerRef = useRef<HTMLElement>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Publish header height as a CSS variable so other components can offset below it
   useEffect(() => {
@@ -62,7 +63,7 @@ export default function Header() {
               About
             </Link>
             <a
-              href="https://github.com/npstorey/civic-ai-tools"
+              href="https://github.com/npstorey/civic-ai-tools-website"
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -78,6 +79,23 @@ export default function Header() {
         </div>
 
         <div className="flex items-center gap-4">
+          {/* Mobile hamburger */}
+          <button
+            className="sm:hidden"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle menu"
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: '4px',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              fontSize: '24px',
+              lineHeight: 1,
+            }}
+          >
+            {mobileMenuOpen ? '\u2715' : '\u2630'}
+          </button>
           {status === 'loading' ? (
             <div
               className="h-10 w-24 rounded animate-pulse"
@@ -122,6 +140,46 @@ export default function Header() {
           )}
         </div>
       </div>
+
+      {/* Mobile menu dropdown */}
+      {mobileMenuOpen && (
+        <div
+          className="sm:hidden"
+          style={{
+            borderTop: '1px solid var(--border-color)',
+            padding: '12px 24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+          }}
+        >
+          <Link
+            href="/about"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              color: 'var(--text-secondary)',
+              fontWeight: 500,
+              fontSize: '16px',
+              textDecoration: 'none',
+            }}
+          >
+            About
+          </Link>
+          <a
+            href="https://github.com/npstorey/civic-ai-tools-website"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: 'var(--text-secondary)',
+              fontWeight: 500,
+              fontSize: '16px',
+              textDecoration: 'none',
+            }}
+          >
+            GitHub
+          </a>
+        </div>
+      )}
     </header>
   );
 }

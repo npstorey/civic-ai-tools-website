@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 const GITHUB_SKILL_URL = 'https://github.com/npstorey/civic-ai-tools-website/blob/main/src/lib/mcp/opengov-skill.ts';
-const GITHUB_STREAMING_BASE = 'https://github.com/npstorey/civic-ai-tools-website/blob/main/src/lib/streaming.ts';
+const GITHUB_STREAMING_BASE = 'https://github.com/npstorey/civic-ai-tools-website/blob/24916fb/src/lib/streaming.ts';
 
 const sectionHeading = {
   marginBottom: '16px',
@@ -225,7 +225,7 @@ export default function AboutPage() {
         <p style={prose}>
           Every AI response is shaped by instructions most users never see.
           In this demo, the AI receives a detailed &ldquo;skill prompt&rdquo; that provides
-          domain knowledge and behavioral rules. Here&apos;s exactly what it contains
+          domain knowledge and behavioral rules. Here are the key components
           and why each part matters.
         </p>
 
@@ -499,6 +499,7 @@ export default function AboutPage() {
             <Link
               key={idx}
               href={`/?q=${encodeURIComponent(item.query)}`}
+              className="query-suggestion-card"
               style={{
                 display: 'block',
                 border: '1px solid var(--border-color)',
@@ -506,7 +507,7 @@ export default function AboutPage() {
                 padding: '14px 16px',
                 textDecoration: 'none',
                 color: 'inherit',
-                transition: 'border-color 0.15s',
+                transition: 'border-color 0.15s, background-color 0.15s',
               }}
             >
               <p style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: 600, color: 'var(--nyc-blue)' }}>
@@ -562,7 +563,7 @@ export default function AboutPage() {
             padding: '24px',
           }}
         >
-          <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>Get Started</h3>
+          <h3 style={{ fontSize: '18px', marginBottom: '12px' }}>Get Started</h3>
           <p style={{ fontSize: '16px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
             Check out the civic-ai-tools repository for setup instructions and documentation.
           </p>

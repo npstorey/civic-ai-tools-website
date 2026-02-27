@@ -4,6 +4,63 @@ Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ---
 
+## 2026-02-27 — Sprint 003 Bulk Polish: 18 Fixes Across Layout, A11y, Hover States, Copy
+
+**Scope:** 18 additional fixes from the polish audit across 13 files. Focused on accessibility, interactive feedback, mobile navigation, and design system consistency.
+
+### What we did
+
+Implemented the remaining "Fix Soon" items and several "Minor" items from `sprint-003-polish-audit.md`, bringing the sprint from 10/44 to 28/44 fixed.
+
+**Accessibility (4 fixes):** `:focus` → `:focus-visible` on all selectors, global `button:focus-visible` rule, `--text-muted` darkened from #777 to #757575 for WCAG AA, BPMN container `role="img"` + `aria-label`.
+
+**Interactive feedback (4 fixes):** Hover states for TraceControls buttons (mode tabs, trace pills, speed, reset/cancel/new query via styled-jsx classes), breadcrumb chip hover, query suggestion card hover, design system focus style on live query input.
+
+**Layout (3 fixes):** `overflow-x: clip` on body, responsive BPMN height `min(650px, 70dvh)`, mobile hamburger menu for screens < 640px.
+
+**Visual consistency (2 fixes):** Fullscreen exit button border-radius 8px → 4px, About page h3 sizes standardized to 18px.
+
+**Copy & content (5 fixes):** Generic training cutoff (removed stale date), commit-SHA GitHub links, "Running query" ellipsis removed, CTA shorthand clarified, footer period, excerpt claim softened, BPMN Tailwind colors → design system tokens, GitHub header link → website repo.
+
+**Example replay header:** Removed unreliable step/iteration counters from the side panel header. Now shows the current event message during playback, and timing + tool call count when complete.
+
+### What went well
+
+- **Batch efficiency** — 18 fixes in one pass with zero build failures. Grouping by file minimized context switches.
+- **CSS-class approach for hover states** — Adding classes like `mode-tab`, `trace-pill`, `secondary-btn` and defining hover rules in styled-jsx was cleaner than inline `onMouseEnter`/`onMouseLeave` handlers.
+- **Global `button:focus-visible`** — One rule fixed focus styling across every custom button in the app.
+
+### What didn't go well
+
+- **Exit fullscreen button layout** — Moved from absolute positioning to a flex row to fix theoretical overlap, but this wasted ~52px of vertical space in fullscreen mode. Reverted to absolute after seeing the spacing issue in practice. Lesson: test layout changes visually before committing to a different approach.
+- **Step counter was unreliable** — "Step 9 of 9" counted raw trace events, not user-visible steps. Attempted to fix by filtering to visible phases, but the mapping was still fragile. Removed entirely — simpler is better when the data model doesn't cleanly support the UX.
+
+### Lessons
+
+- **Absolute positioning is fine when overlap is theoretical.** Don't "fix" something that works by introducing a worse problem.
+- **Remove unreliable UI rather than patching it.** A step counter that doesn't match what users see is worse than no counter.
+- **Design system tokens prevent color drift.** Replacing Tailwind hex values (`#22c55e`, `#f59e0b`) with CSS variables (`--nyc-success`, `--nyc-caution`) means future palette changes propagate automatically.
+
+### Files changed
+
+| File | Changes |
+|------|---------|
+| `src/app/globals.css` | `overflow-x: clip`, `--text-muted` WCAG fix, `:focus-visible`, `button:focus-visible`, breadcrumb hover, query card hover, BPMN pulse colors |
+| `src/components/Header.tsx` | Mobile hamburger menu, GitHub link → website repo |
+| `src/components/about/McpFlowDiagram.tsx` | Responsive height, exit button border-radius, step counter removal |
+| `src/components/about/TraceControls.tsx` | Focus style on live input, hover classes on tabs/pills/buttons |
+| `src/components/about/LiveResponsePanel.tsx` | Simplified header: removed step/iteration, shows message or timing |
+| `src/components/about/BpmnViewer.tsx` | `role="img"` + `aria-label`, lane colors → design system |
+| `src/components/about/bpmn-diagram.css` | Active/loop/success colors → CSS variables |
+| `src/components/ResponsePanel.tsx` | Generic training cutoff text |
+| `src/components/ProgressLog.tsx` | (breadcrumb hover via globals.css) |
+| `src/app/about/page.tsx` | h3 consistency, query card class, commit-SHA links, copy fix |
+| `src/app/layout.tsx` | Footer trailing period |
+| `src/app/page.tsx` | CTA shorthand → "civic-ai-tools" |
+| `src/hooks/useStreamingComparison.ts` | Remove trailing ellipsis from group label |
+
+---
+
 ## 2026-02-27 — Quick Polish: Broken Colors, Accessibility, Copy, Input Overflow
 
 **Scope:** 10 fixes across 7 files, zero new files. All single-line or few-line changes addressing broken CSS variables, WCAG contrast failures, copy inconsistencies, and a UX bug.

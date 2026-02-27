@@ -20,11 +20,11 @@ interface BpmnViewerProps {
 }
 
 const LANE_COLORS: Record<string, string> = {
-  Participant_Browser: 'rgba(59, 130, 246, 0.06)',   // light blue
-  Participant_AI: 'rgba(147, 51, 234, 0.06)',          // light purple
-  Participant_MCP: 'rgba(34, 197, 94, 0.06)',          // light green
-  Participant_Socrata: 'rgba(245, 158, 11, 0.06)',     // light amber
-  Participant_Narration: 'rgba(107, 114, 128, 0.06)',  // light gray
+  Participant_Browser: 'rgba(16, 63, 239, 0.06)',      // nyc-blue-40
+  Participant_AI: 'rgba(147, 51, 234, 0.06)',           // light purple (no NYC equivalent)
+  Participant_MCP: 'rgba(0, 138, 2, 0.06)',             // nyc-success
+  Participant_Socrata: 'rgba(255, 179, 32, 0.06)',      // nyc-caution
+  Participant_Narration: 'rgba(117, 117, 117, 0.06)',   // text-muted
 };
 
 const ALL_ELEMENTS = [
@@ -266,6 +266,8 @@ const BpmnViewerComponent = forwardRef<BpmnViewerHandle, BpmnViewerProps>(
         <div
           ref={containerRef}
           className="bpmn-container"
+          role="img"
+          aria-label="BPMN diagram showing how an MCP query flows from the browser through the AI model, MCP server, and data source"
           style={{ width: '100%', height: '100%' }}
         />
 

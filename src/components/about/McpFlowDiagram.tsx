@@ -294,7 +294,7 @@ export default function McpFlowDiagram() {
           gridTemplateColumns: showSplit ? '55fr 45fr' : '1fr',
           gap: showSplit ? '16px' : '0',
           transition: 'grid-template-columns 300ms ease, gap 300ms ease',
-          height: isFullscreen ? undefined : '650px',
+          height: isFullscreen ? undefined : 'min(650px, 70dvh)',
           flex: isFullscreen ? 1 : undefined,
           minHeight: isFullscreen ? 0 : undefined,
         }}
@@ -359,8 +359,8 @@ export default function McpFlowDiagram() {
                 toolsCalled={exampleProgressData.toolsCalled}
                 queryText={exampleTrace?.query}
                 exampleStatus={{
-                  currentStep: replayState.currentEventIndex + 1,
-                  totalSteps: exampleTrace?.events.length ?? 0,
+                  currentStep: 0,
+                  totalSteps: 0,
                   currentMessage: replayState.currentEvent?.message,
                 }}
                 completionCta={
@@ -423,7 +423,7 @@ export default function McpFlowDiagram() {
           animation: 'bpmn-fullscreen-in 300ms ease-out',
         }}
       >
-        {/* Close fullscreen — prominent page-level button */}
+        {/* Close fullscreen — absolutely positioned to avoid taking layout space */}
         <button
           onClick={() => setIsFullscreen(false)}
           title="Exit fullscreen (ESC)"
@@ -438,7 +438,7 @@ export default function McpFlowDiagram() {
             gap: '6px',
             padding: '8px 16px',
             height: '40px',
-            borderRadius: '8px',
+            borderRadius: '4px',
             border: 'none',
             background: 'var(--text-primary, #1a1a1a)',
             color: 'white',
