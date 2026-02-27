@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import { createTraceCapture } from '@/lib/bpmn/capture-trace';
 
 export interface ToolCall {
   name: string;
@@ -71,6 +72,7 @@ const initialState: StreamingState = {
 export function useStreamingComparison() {
   const [state, setState] = useState<StreamingState>(initialState);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const traceCaptureRef = useRef<ReturnType<typeof createTraceCapture> | null>(null);
 
   const startComparison = useCallback(async (query: string, model: string, portal: string) => {
     // Abort any existing request
@@ -88,6 +90,13 @@ export function useStreamingComparison() {
       isLoading: true,
       error: null,
     });
+
+    // Initialize trace capture if enabled
+    if (process.env.NEXT_PUBLIC_CAPTURE_TRACES === 'true') {
+      traceCaptureRef.current = createTraceCapture(query, model, portal);
+    } else {
+      traceCaptureRef.current = null;
+    }
 
     try {
       const response = await fetch('/api/compare-stream', {
@@ -137,6 +146,25 @@ export function useStreamingComparison() {
           if (line.startsWith('data: ')) {
             try {
               const eventData = JSON.parse(line.slice(6));
+
+              // Record MCP-panel events for trace capture
+              if (traceCaptureRef.current && eventData.panel === 'withMcp') {
+                if (eventData.type === 'progress') {
+                  traceCaptureRef.current.recordEvent({
+                    phase: eventData.phase,
+                    message: eventData.message,
+                    iteration: eventData.iteration,
+                    args: eventData.args,
+                    duration_ms: eventData.duration_ms,
+                  });
+                } else if (eventData.type === 'complete') {
+                  const trace = traceCaptureRef.current.exportTrace();
+                  console.log('[Trace Capture] MCP panel trace captured. Copy the JSON below into src/lib/bpmn/traces.ts:');
+                  console.log(JSON.stringify(trace, null, 2));
+                  traceCaptureRef.current = null;
+                }
+              }
+
               handleEvent(eventData, setState);
             } catch (e) {
               console.error('Failed to parse SSE event:', e);

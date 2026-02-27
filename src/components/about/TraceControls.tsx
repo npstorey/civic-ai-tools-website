@@ -35,9 +35,10 @@ export default function TraceControls({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {/* Trace selector pills */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+      <div className="trace-pills" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
         {traces.map(trace => (
           <button
+            className="trace-pill"
             key={trace.id}
             onClick={() => onSelectTrace(trace.id)}
             style={{
@@ -65,7 +66,7 @@ export default function TraceControls({
       </div>
 
       {/* Playback bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div className="playback-bar" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         {/* Play/Pause button */}
         <button
           onClick={replayState.isPlaying ? onPause : onPlay}
@@ -99,7 +100,7 @@ export default function TraceControls({
         )}
 
         {/* Speed toggle */}
-        <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
+        <div className="speed-selector" style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
           {speeds.map(s => (
             <button
               key={s}

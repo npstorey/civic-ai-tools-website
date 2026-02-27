@@ -262,7 +262,7 @@ const BpmnViewerComponent = forwardRef<BpmnViewerHandle, BpmnViewerProps>(
     }, []);
 
     return (
-      <div style={{ position: 'relative' }}>
+      <div className={`bpmn-container-wrapper${isFullscreen ? ' bpmn-fullscreen' : ''}`} style={{ position: 'relative', height: isFullscreen ? '100%' : undefined }}>
         <div
           ref={containerRef}
           className="bpmn-container"

@@ -205,7 +205,62 @@
     -webkit-overflow-scrolling: touch;
   }
 
+  /* Fix: fullscreen should fill the viewport, not 400px */
+  .bpmn-fullscreen .bpmn-container {
+    height: 100% !important;
+    overflow: hidden;
+  }
+
   .bpmn-interaction-hint {
     display: none;
+  }
+
+  /* Scroll fade hints on left/right edges */
+  .bpmn-container-wrapper:not(.bpmn-fullscreen) {
+    position: relative;
+  }
+
+  .bpmn-container-wrapper:not(.bpmn-fullscreen)::before,
+  .bpmn-container-wrapper:not(.bpmn-fullscreen)::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 24px;
+    z-index: 4;
+    pointer-events: none;
+  }
+
+  .bpmn-container-wrapper:not(.bpmn-fullscreen)::before {
+    left: 0;
+    background: linear-gradient(to right, white, transparent);
+  }
+
+  .bpmn-container-wrapper:not(.bpmn-fullscreen)::after {
+    right: 0;
+    background: linear-gradient(to left, white, transparent);
+  }
+}
+
+@media (max-width: 640px) {
+  /* Trace selector pills → 2x2 grid */
+  .trace-pills {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .trace-pill {
+    width: 100%;
+    text-align: center;
+  }
+
+  /* Stacked playback controls */
+  .playback-bar {
+    flex-wrap: wrap !important;
+  }
+
+  .speed-selector {
+    margin-left: 0 !important;
+    width: 100%;
   }
 }

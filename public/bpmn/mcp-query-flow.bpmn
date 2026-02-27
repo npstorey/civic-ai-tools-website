@@ -6,7 +6,7 @@
                   id="Definitions_1"
                   targetNamespace="http://civicai.tools/bpmn"
                   exporter="Civic AI Tools"
-                  exporterVersion="1.0">
+                  exporterVersion="1.1">
 
   <bpmn:collaboration id="Collaboration_1">
     <bpmn:participant id="Participant_Browser" name="Your Browser" processRef="Process_Browser" />
@@ -88,137 +88,161 @@
   <!-- Cross-process sequence flows (defined at collaboration level via message flows above) -->
   <bpmn:sequenceFlow id="flow_start_to_reads" sourceRef="event_start" targetRef="task_ai_reads" />
 
-  <!-- Diagram -->
+  <!-- ============================================================
+       Diagram layout — improved spacing, right-angle cross-lane
+       routing, and vertical alignment of cross-lane tasks.
+       ============================================================ -->
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_1">
 
-      <!-- Browser Lane -->
+      <!-- ======== Browser Lane ======== -->
       <bpmndi:BPMNShape id="Participant_Browser_di" bpmnElement="Participant_Browser" isHorizontal="true">
-        <dc:Bounds x="120" y="20" width="1080" height="100" />
+        <dc:Bounds x="120" y="20" width="1200" height="100" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="event_start_di" bpmnElement="event_start">
-        <dc:Bounds x="182" y="52" width="36" height="36" />
+        <dc:Bounds x="192" y="52" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="155" y="95" width="90" height="14" />
+          <dc:Bounds x="165" y="95" width="90" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="event_end_di" bpmnElement="event_end">
-        <dc:Bounds x="1102" y="52" width="36" height="36" />
+        <dc:Bounds x="1222" y="52" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1075" y="95" width="90" height="14" />
+          <dc:Bounds x="1195" y="95" width="90" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
-      <!-- AI Model Lane -->
+      <!-- ======== AI Model Lane (taller for loop-back headroom) ======== -->
       <bpmndi:BPMNShape id="Participant_AI_di" bpmnElement="Participant_AI" isHorizontal="true">
-        <dc:Bounds x="120" y="140" width="1080" height="200" />
+        <dc:Bounds x="120" y="140" width="1200" height="220" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="task_ai_reads_di" bpmnElement="task_ai_reads">
-        <dc:Bounds x="230" y="190" width="120" height="80" />
+        <dc:Bounds x="250" y="210" width="120" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="task_ai_plans_di" bpmnElement="task_ai_plans">
-        <dc:Bounds x="380" y="190" width="120" height="80" />
+        <dc:Bounds x="420" y="210" width="120" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="task_ai_constructs_call_di" bpmnElement="task_ai_constructs_call">
-        <dc:Bounds x="530" y="190" width="120" height="80" />
+        <dc:Bounds x="590" y="210" width="120" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="task_results_return_di" bpmnElement="task_results_return">
-        <dc:Bounds x="730" y="190" width="120" height="80" />
+        <dc:Bounds x="800" y="210" width="120" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="gateway_enough_data_di" bpmnElement="gateway_enough_data" isMarkerVisible="true">
-        <dc:Bounds x="875" y="205" width="50" height="50" />
+        <dc:Bounds x="960" y="225" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="862" y="262" width="76" height="14" />
+          <dc:Bounds x="947" y="282" width="76" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="task_ai_synthesizes_di" bpmnElement="task_ai_synthesizes">
-        <dc:Bounds x="960" y="190" width="120" height="80" />
+        <dc:Bounds x="1060" y="210" width="120" height="80" />
       </bpmndi:BPMNShape>
 
-      <!-- MCP Infrastructure Lane -->
+      <!-- ======== MCP Infrastructure Lane ======== -->
       <bpmndi:BPMNShape id="Participant_MCP_di" bpmnElement="Participant_MCP" isHorizontal="true">
-        <dc:Bounds x="120" y="360" width="1080" height="100" />
+        <dc:Bounds x="120" y="380" width="1200" height="100" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="task_mcp_translates_di" bpmnElement="task_mcp_translates">
-        <dc:Bounds x="530" y="375" width="140" height="60" />
+        <dc:Bounds x="580" y="400" width="140" height="60" />
       </bpmndi:BPMNShape>
 
-      <!-- Socrata Lane -->
+      <!-- ======== Socrata Lane (aligned with AI results return for vertical flow) ======== -->
       <bpmndi:BPMNShape id="Participant_Socrata_di" bpmnElement="Participant_Socrata" isHorizontal="true">
-        <dc:Bounds x="120" y="480" width="1080" height="100" />
+        <dc:Bounds x="120" y="500" width="1200" height="100" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="task_socrata_executes_di" bpmnElement="task_socrata_executes">
-        <dc:Bounds x="700" y="495" width="140" height="60" />
+        <dc:Bounds x="790" y="520" width="140" height="60" />
       </bpmndi:BPMNShape>
 
-      <!-- Narration Lane -->
+      <!-- ======== Narration Lane ======== -->
       <bpmndi:BPMNShape id="Participant_Narration_di" bpmnElement="Participant_Narration" isHorizontal="true">
-        <dc:Bounds x="120" y="600" width="1080" height="100" />
+        <dc:Bounds x="120" y="620" width="1200" height="100" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="task_narration_translate_di" bpmnElement="task_narration_translate">
-        <dc:Bounds x="530" y="620" width="140" height="60" />
+        <dc:Bounds x="580" y="640" width="140" height="60" />
       </bpmndi:BPMNShape>
 
-      <!-- Sequence Flows within AI Model -->
+      <!-- ======== Sequence Flows within AI Model ======== -->
+
+      <!-- Start event down to first AI task -->
       <bpmndi:BPMNEdge id="flow_start_to_reads_di" bpmnElement="flow_start_to_reads">
-        <di:waypoint x="200" y="88" />
-        <di:waypoint x="200" y="230" />
-        <di:waypoint x="230" y="230" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="flow_reads_to_plans_di" bpmnElement="flow_reads_to_plans">
-        <di:waypoint x="350" y="230" />
-        <di:waypoint x="380" y="230" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="flow_plans_to_construct_di" bpmnElement="flow_plans_to_construct">
-        <di:waypoint x="500" y="230" />
-        <di:waypoint x="530" y="230" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="flow_construct_out_di" bpmnElement="flow_construct_out">
-        <di:waypoint x="650" y="230" />
-        <di:waypoint x="730" y="230" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="flow_return_to_gateway_di" bpmnElement="flow_return_to_gateway">
-        <di:waypoint x="850" y="230" />
-        <di:waypoint x="875" y="230" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="flow_loop_back_di" bpmnElement="flow_loop_back">
-        <di:waypoint x="900" y="205" />
-        <di:waypoint x="900" y="160" />
-        <di:waypoint x="590" y="160" />
-        <di:waypoint x="590" y="190" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="710" y="142" width="80" height="14" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="flow_to_synthesis_di" bpmnElement="flow_to_synthesis">
-        <di:waypoint x="925" y="230" />
-        <di:waypoint x="960" y="230" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="929" y="212" width="32" height="14" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="flow_synthesis_to_end_di" bpmnElement="flow_synthesis_to_end">
-        <di:waypoint x="1080" y="230" />
-        <di:waypoint x="1120" y="230" />
-        <di:waypoint x="1120" y="88" />
+        <di:waypoint x="210" y="88" />
+        <di:waypoint x="210" y="250" />
+        <di:waypoint x="250" y="250" />
       </bpmndi:BPMNEdge>
 
-      <!-- Message Flows (dashed cross-pool) -->
+      <bpmndi:BPMNEdge id="flow_reads_to_plans_di" bpmnElement="flow_reads_to_plans">
+        <di:waypoint x="370" y="250" />
+        <di:waypoint x="420" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="flow_plans_to_construct_di" bpmnElement="flow_plans_to_construct">
+        <di:waypoint x="540" y="250" />
+        <di:waypoint x="590" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="flow_construct_out_di" bpmnElement="flow_construct_out">
+        <di:waypoint x="710" y="250" />
+        <di:waypoint x="800" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="flow_return_to_gateway_di" bpmnElement="flow_return_to_gateway">
+        <di:waypoint x="920" y="250" />
+        <di:waypoint x="960" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <!-- Loop-back: gateway top → above tasks → back to construct call top -->
+      <bpmndi:BPMNEdge id="flow_loop_back_di" bpmnElement="flow_loop_back">
+        <di:waypoint x="985" y="225" />
+        <di:waypoint x="985" y="170" />
+        <di:waypoint x="650" y="170" />
+        <di:waypoint x="650" y="210" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="777" y="152" width="80" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <!-- Gateway → synthesis (right exit) -->
+      <bpmndi:BPMNEdge id="flow_to_synthesis_di" bpmnElement="flow_to_synthesis">
+        <di:waypoint x="1010" y="250" />
+        <di:waypoint x="1060" y="250" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1019" y="232" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <!-- Synthesis → end event (up to Browser lane) -->
+      <bpmndi:BPMNEdge id="flow_synthesis_to_end_di" bpmnElement="flow_synthesis_to_end">
+        <di:waypoint x="1180" y="250" />
+        <di:waypoint x="1240" y="250" />
+        <di:waypoint x="1240" y="88" />
+      </bpmndi:BPMNEdge>
+
+      <!-- ======== Message Flows (cross-lane) ======== -->
+
+      <!-- AI construct call → MCP (vertical drop, right of center) -->
       <bpmndi:BPMNEdge id="flow_construct_to_mcp_di" bpmnElement="flow_construct_to_mcp">
-        <di:waypoint x="590" y="270" />
-        <di:waypoint x="590" y="375" />
+        <di:waypoint x="660" y="290" />
+        <di:waypoint x="660" y="400" />
       </bpmndi:BPMNEdge>
+
+      <!-- MCP → Socrata (right-angle routing through inter-lane gap) -->
       <bpmndi:BPMNEdge id="flow_mcp_to_socrata_di" bpmnElement="flow_mcp_to_socrata">
-        <di:waypoint x="670" y="405" />
-        <di:waypoint x="700" y="525" />
+        <di:waypoint x="720" y="430" />
+        <di:waypoint x="860" y="430" />
+        <di:waypoint x="860" y="520" />
       </bpmndi:BPMNEdge>
+
+      <!-- Socrata → AI results return (vertical rise, aligned centers) -->
       <bpmndi:BPMNEdge id="flow_socrata_to_return_di" bpmnElement="flow_socrata_to_return">
-        <di:waypoint x="790" y="495" />
-        <di:waypoint x="790" y="270" />
+        <di:waypoint x="860" y="520" />
+        <di:waypoint x="860" y="290" />
       </bpmndi:BPMNEdge>
+
+      <!-- AI construct call → Narration (vertical drop, left of center) -->
       <bpmndi:BPMNEdge id="flow_tool_to_narration_di" bpmnElement="flow_tool_to_narration">
-        <di:waypoint x="570" y="270" />
-        <di:waypoint x="570" y="620" />
+        <di:waypoint x="640" y="290" />
+        <di:waypoint x="640" y="640" />
       </bpmndi:BPMNEdge>
 
     </bpmndi:BPMNPlane>

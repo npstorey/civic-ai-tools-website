@@ -32,6 +32,52 @@
 | `src/app/globals.css` | Added `@keyframes bpmn-pulse` (active node glow), `@keyframes bpmn-fullscreen-in` (scale+opacity transition) |
 | `package.json` | Added `bpmn-js` dependency |
 
+### Post-Commit Changes (Uncommitted)
+
+The following work was done after the initial commit (`cd86f6b`) and is not yet committed.
+
+#### BPMN Layout Improvements (`public/bpmn/mcp-query-flow.bpmn`)
+
+Improved the hand-authored XML coordinates to address spacing and alignment issues flagged in the initial retro:
+- Widened all lanes from 1080px to 1200px for more breathing room
+- Increased AI Model lane height from 200px to 220px to give the loop-back flow more headroom
+- Adjusted all task and event positions for better vertical alignment across lanes
+- Changed MCP→Socrata message flow from a diagonal line to right-angle routing (horizontal then vertical) for readability
+- Aligned Socrata task center with AI "Results Return" task for cleaner vertical flow
+- Bumped exporter version from 1.0 to 1.1
+- Added descriptive XML comments for each layout section
+
+#### Fullscreen Stability Fixes (`McpFlowDiagram.tsx`, `BpmnViewer.tsx`)
+
+Several fixes to make fullscreen mode robust, especially on mobile:
+- Wrapped `TraceControls` and `NarrativePanel` in `flexShrink: 0` divs so they hold their size when the diagram flexes to fill available space
+- Changed fullscreen container from `right: 0; bottom: 0` to `width: 100vw; height: 100dvh` — `100dvh` handles mobile browser chrome (address bar) correctly
+- Added `overflow: hidden` on the fullscreen container to prevent content spill
+- Made `minHeight: 0` conditional on fullscreen mode only (prevents flex layout issues in the diagram's flex child)
+- Added `height: isFullscreen ? '100%' : undefined` on the BpmnViewer wrapper div and a `bpmn-container-wrapper` / `bpmn-fullscreen` className for CSS targeting
+
+#### Trace Capture Integration (`useStreamingComparison.ts`)
+
+Wired the `capture-trace.ts` dev utility into the streaming comparison hook — previously flagged as deferred Step 12:
+- On comparison start, if `NEXT_PUBLIC_CAPTURE_TRACES=true`, creates a `createTraceCapture()` instance
+- Records all MCP-panel `progress` events (phase, message, iteration, args, duration_ms)
+- On MCP-panel `complete` event, exports the full trace JSON to console with instructions to copy into `src/lib/bpmn/traces.ts`
+- Cleans up the capture ref after export
+
+#### Mobile Polish (`bpmn-diagram.css`, `TraceControls.tsx`, `BpmnViewer.tsx`)
+
+Implemented the responsive improvements flagged as deferred Step 13:
+
+**CSS changes (`bpmn-diagram.css`):**
+- **≤768px — Fullscreen height fix**: Added `.bpmn-fullscreen .bpmn-container { height: 100% !important }` to override the existing `400px !important` rule that was clobbering fullscreen on mobile
+- **≤768px — Scroll fade hints**: Left/right 24px white-to-transparent gradient pseudo-elements on `.bpmn-container-wrapper`, scoped to `:not(.bpmn-fullscreen)` so they don't appear in fullscreen
+- **≤640px — 2x2 pill grid**: `.trace-pills` switches from flex to `grid` with `grid-template-columns: 1fr 1fr`; `.trace-pill` gets `width: 100%` and `text-align: center`
+- **≤640px — Stacked playback controls**: `.playback-bar` gets `flex-wrap: wrap`; `.speed-selector` gets `margin-left: 0` and `width: 100%` to drop to a second row
+
+**Component className hooks:**
+- `TraceControls.tsx`: Added `className` on 4 elements — `trace-pills` (pill container), `trace-pill` (each pill button), `playback-bar` (playback container), `speed-selector` (speed toggle div)
+- `BpmnViewer.tsx`: Added conditional `className` on wrapper div — always `bpmn-container-wrapper`, plus `bpmn-fullscreen` when in fullscreen mode
+
 ---
 
 ## 2. Architecture Decisions and Rationale
@@ -65,15 +111,19 @@ bpmn-js does not ship complete TypeScript definitions. The `Viewer`/`NavigatedVi
 ## 3. Known Issues and Incomplete Work
 
 ### Known Issues
-- **BPMN XML authored by hand**: The XML coordinates were manually calculated rather than exported from the bpmn.io visual modeler. Lane heights, task positions, and message flow waypoints may need adjustment if the diagram doesn't render cleanly on all screen sizes. Opening `public/bpmn/mcp-query-flow.bpmn` in https://demo.bpmn.io/ and re-exporting would improve layout.
+- **BPMN XML still hand-authored**: The layout coordinates were manually improved (wider lanes, right-angle routing, better alignment) but still haven't been round-tripped through the bpmn.io visual modeler. Opening `public/bpmn/mcp-query-flow.bpmn` in https://demo.bpmn.io/ and re-exporting would catch any remaining edge cases.
 - **Overlay positioning at extreme zoom levels**: At very low zoom, overlay cards may overlap or extend beyond the container. The `pointer-events: none` rule prevents interaction issues but overlays can visually clip.
-- **Mobile experience is basic**: The diagram is horizontally scrollable on mobile (`overflow-x: auto`) but the trace controls and narrative panel don't have mobile-optimized layouts. The interaction hint ("Scroll to zoom...") is hidden on mobile.
 - **bpmn-js bundle size**: bpmn-js adds ~400KB gzipped to the client bundle. The dynamic import with `ssr: false` ensures it's only loaded on the About page, but it's still a significant chunk for users who visit that page.
 
-### Incomplete/Deferred Work
-- **Step 12 (Trace Capture integration)**: The `capture-trace.ts` utility exists but is not wired into `useStreamingComparison.ts`. The plan called for adding a `NEXT_PUBLIC_CAPTURE_TRACES=true` check in the streaming hook that creates a capture instance and logs JSON to console. This integration was deferred.
-- **Step 13 (Responsive polish)**: Basic mobile responsiveness (scrollable container, hidden hint) is in place, but the plan called for: fade hints on horizontal scroll edges, 2x2 grid for trace selector pills on mobile, and annotations panel below diagram instead of floating overlays. These are not implemented.
-- **Live trace mode**: The plan mentioned connecting to the live SSE stream so the diagram animates during actual queries. Only pre-recorded trace replay is implemented.
+### Resolved Since Initial Commit
+- ~~**Step 12 (Trace Capture integration)**~~: Now wired into `useStreamingComparison.ts`. Enable with `NEXT_PUBLIC_CAPTURE_TRACES=true` — MCP panel events are recorded and exported as JSON on completion.
+- ~~**Step 13 (Responsive polish)**~~: Scroll fade hints, 2x2 pill grid, stacked playback controls, and fullscreen height fix are all implemented. The "annotations panel below diagram" sub-item was not done (the floating overlay approach was kept).
+- ~~**Mobile experience is basic**~~: Mobile now has scroll affordance (fade gradients), properly responsive controls at ≤640px, and correct fullscreen behavior on phones.
+
+### Remaining Deferred Work
+- **Live trace mode**: Connecting to the live SSE stream so the diagram animates during actual queries. Only pre-recorded trace replay is implemented. The trace capture integration is a prerequisite that is now complete.
+- **Test with real captured traces**: The hand-authored traces use realistic timing but haven't been validated against actual API response patterns. Now that capture is wired in, this can be done.
+- **Annotations panel mobile layout**: On mobile, the `DiagramAnnotations` educational text panel still renders the same as desktop. Could be collapsed or moved below the diagram.
 
 ---
 
@@ -90,19 +140,18 @@ bpmn-js pulls in `diagram-js`, `bpmn-moddle`, and `min-dash` as transitive depen
 ## 5. Next Developer Priorities
 
 ### High Priority
-1. **Open the BPMN XML in bpmn.io modeler and re-export** — The hand-authored XML coordinates work but may have suboptimal spacing. Opening in https://demo.bpmn.io/, adjusting layout visually, and re-exporting will produce cleaner rendering.
-2. **Wire trace capture into useStreamingComparison** — Add the `NEXT_PUBLIC_CAPTURE_TRACES=true` env check so developers can capture real traces from the home page demo and replace/supplement the hand-authored ones.
-3. **Test with real captured traces** — The hand-authored traces use realistic timing but haven't been validated against actual API response patterns. Capture 4-5 real traces and compare.
+1. **Test with real captured traces** — Trace capture is now wired in. Run `NEXT_PUBLIC_CAPTURE_TRACES=true npm run dev`, execute 4-5 queries on the home page, and compare the captured JSON against the hand-authored traces in `src/lib/bpmn/traces.ts`. Replace or supplement as needed.
+2. **Live trace mode** — Connect the BPMN viewer to the live SSE stream so the diagram animates during actual queries (not just pre-recorded replays). The trace capture integration and fullscreen stability fixes are prerequisites that are now complete.
+3. **Sprint 002 (Reasoning UX & Data Literacy)** — All 8 tasks are still pending. See `sprints/sprint-002-reasoning-ux-data-literacy.md`.
 
 ### Medium Priority
-4. **Mobile polish** — Trace selector pills in 2x2 grid, scroll fade hints, stacked layout for controls.
-5. **Overlay clipping** — Add bounds checking so overlays don't extend beyond the visible container area.
-6. **Accessibility** — Add `aria-live` region for narrative panel updates, keyboard shortcuts for playback controls, screen reader descriptions for diagram state changes.
+4. **Overlay clipping** — Add bounds checking so overlays don't extend beyond the visible container area at extreme zoom levels.
+5. **Accessibility** — Add `aria-live` region for narrative panel updates, keyboard shortcuts for playback controls, screen reader descriptions for diagram state changes.
+6. **Annotations panel mobile layout** — `DiagramAnnotations` educational text panel doesn't have a mobile-specific layout. Could collapse or move below diagram on small screens.
 
 ### Lower Priority
-7. **Live trace mode** — Connect to the SSE stream from the home page demo so the diagram animates during actual queries.
-8. **Bundle optimization** — Investigate whether a lighter bpmn-js build (without BPMN font, without keyboard module) could reduce the ~400KB payload.
-9. **Replace hand-authored BPMN XML with modeler-exported version** — If the diagram layout needs significant changes, use the visual modeler rather than editing XML coordinates by hand.
+7. **Bundle optimization** — Investigate whether a lighter bpmn-js build (without BPMN font, without keyboard module) could reduce the ~400KB payload.
+8. **Round-trip BPMN XML through visual modeler** — The hand-authored coordinates were improved but still haven't been validated in https://demo.bpmn.io/. Opening, adjusting, and re-exporting would catch edge cases.
 
 ---
 
@@ -128,7 +177,8 @@ npx next build 2>&1 | grep -A5 "about"
 
 # Enable trace capture in development
 NEXT_PUBLIC_CAPTURE_TRACES=true npm run dev
-# (Note: capture utility exists but is not yet wired into useStreamingComparison)
+# Run a query on the home page — MCP panel events are captured and logged as JSON on completion
+# Copy the console output into src/lib/bpmn/traces.ts to add/replace traces
 
 # Key files to edit for diagram changes
 # Layout/elements:  public/bpmn/mcp-query-flow.bpmn

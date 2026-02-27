@@ -128,19 +128,21 @@ export default function McpFlowDiagram() {
 
   const content = (
     <>
-      <TraceControls
-        traces={TRACES}
-        selectedTraceId={selectedTraceId}
-        onSelectTrace={handleSelectTrace}
-        replayState={replayState}
-        speed={speed}
-        onPlay={handlePlay}
-        onPause={handlePause}
-        onReset={handleReset}
-        onSetSpeed={setSpeed}
-      />
+      <div style={{ flexShrink: 0 }}>
+        <TraceControls
+          traces={TRACES}
+          selectedTraceId={selectedTraceId}
+          onSelectTrace={handleSelectTrace}
+          replayState={replayState}
+          speed={speed}
+          onPlay={handlePlay}
+          onPause={handlePause}
+          onReset={handleReset}
+          onSetSpeed={setSpeed}
+        />
+      </div>
 
-      <div style={{ position: 'relative', flex: isFullscreen ? 1 : undefined, minHeight: 0 }}>
+      <div style={{ position: 'relative', flex: isFullscreen ? 1 : undefined, minHeight: isFullscreen ? 0 : undefined }}>
         <BpmnViewerComponent
           ref={viewerRef}
           onReady={handleViewerReady}
@@ -176,7 +178,9 @@ export default function McpFlowDiagram() {
         </button>
       </div>
 
-      <NarrativePanel replayState={replayState} />
+      <div style={{ flexShrink: 0 }}>
+        <NarrativePanel replayState={replayState} />
+      </div>
     </>
   );
 
@@ -187,14 +191,15 @@ export default function McpFlowDiagram() {
           position: 'fixed',
           top: 0,
           left: 0,
-          right: 0,
-          bottom: 0,
+          width: '100vw',
+          height: '100dvh',
           zIndex: 1000,
           background: 'white',
           display: 'flex',
           flexDirection: 'column',
           gap: '12px',
           padding: '16px 24px',
+          overflow: 'hidden',
           animation: 'bpmn-fullscreen-in 300ms ease-out',
         }}
       >
