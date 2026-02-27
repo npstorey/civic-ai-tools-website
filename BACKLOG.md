@@ -19,11 +19,15 @@
 
 ## Active Sprint
 
-See [`sprints/sprint-001-mcp-messaging-ux.md`](sprints/sprint-001-mcp-messaging-ux.md) — MCP messaging UX improvements for the "With MCP" panel. Supersedes the "Streaming response animation" and "Progress indicator for tool calls" items below.
+See [`sprints/SPRINT-community-trace-gallery.md`](sprints/SPRINT-community-trace-gallery.md) — Community trace gallery (next up, unblocked by live query mode).
+
+**Recently completed:** [`sprints/SPRINT-live-query-bpmn.md`](sprints/SPRINT-live-query-bpmn.md) — Live query mode for BPMN diagram (Tickets 1-7 shipped; Ticket 8 manual trace capture remaining).
 
 ---
 
 ## To Do (Medium Priority)
+
+- [ ] **Tighten skill prompt date range guidance** — The AI ran a 194-second query on the full 311 dataset (~30M rows) without a date filter. The skill prompt has date range guidance but it's not directive enough. Make the instruction explicit: "ALWAYS add a date filter (last 1-2 years) when querying datasets with more than 1M rows unless the user explicitly asks for all-time data." Test with broad queries like "most common 311 complaints in Brooklyn" and verify the AI adds date filters unprompted. See `lib/mcp/opengov-skill.ts`.
 
 - [ ] **Add token cost safeguards**
   - Track cumulative tokens across all iterations (current display only shows last call)

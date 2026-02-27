@@ -472,6 +472,12 @@ footer a:visited {
   animation: summary-fade-in 300ms ease-out;
 }
 
+@keyframes live-progress-slide {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(233%); }
+  100% { transform: translateX(-100%); }
+}
+
 /* Query form controls row - responsive layout */
 .form-controls-row {
   display: grid;

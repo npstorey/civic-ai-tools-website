@@ -2,20 +2,48 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import BpmnViewerComponent, { type BpmnViewerHandle } from './BpmnViewer';
-import TraceControls from './TraceControls';
+import TraceControls, { type DiagramMode } from './TraceControls';
 import NarrativePanel from './NarrativePanel';
+import LiveResponsePanel from './LiveResponsePanel';
 import DiagramAnnotations from './DiagramAnnotations';
 import { TRACES, getTraceById } from '@/lib/bpmn/traces';
+import type { PreRecordedTrace } from '@/lib/bpmn/traces';
 import { useTraceReplay } from '@/hooks/useTraceReplay';
+import { useLiveTrace } from '@/hooks/useLiveTrace';
+import type { ReplayState } from '@/lib/bpmn/animation';
+
+const DEFAULT_MODEL = 'anthropic/claude-sonnet-4';
+const DEFAULT_PORTAL = 'data.cityofnewyork.us';
 
 export default function McpFlowDiagram() {
+  const [mode, setMode] = useState<DiagramMode>('examples');
   const [selectedTraceId, setSelectedTraceId] = useState(TRACES[0].id);
   const [viewerReady, setViewerReady] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [hasPlayedOnce, setHasPlayedOnce] = useState(false);
+  const [isReplayingCapture, setIsReplayingCapture] = useState(false);
+  const [liveReplayTrace, setLiveReplayTrace] = useState<PreRecordedTrace | null>(null);
   const viewerRef = useRef<BpmnViewerHandle>(null);
-  const trace = getTraceById(selectedTraceId) ?? null;
-  const { state: replayState, speed, play, pause, reset, setSpeed } = useTraceReplay(trace);
+
+  // Example trace replay
+  const exampleTrace = getTraceById(selectedTraceId) ?? null;
+  const activeReplayTrace = mode === 'live' && isReplayingCapture ? liveReplayTrace : exampleTrace;
+  const { state: replayState, speed, play, pause, reset, setSpeed } = useTraceReplay(activeReplayTrace);
+
+  // Live trace
+  const liveTrace = useLiveTrace();
+
+  // Derive which state drives the viewer
+  let activeState: ReplayState;
+  if (mode === 'examples') {
+    activeState = replayState;
+  } else if (isReplayingCapture) {
+    activeState = replayState;
+  } else if (liveTrace.status === 'running' || liveTrace.status === 'complete') {
+    activeState = liveTrace.state;
+  } else {
+    activeState = replayState;
+  }
 
   const handleViewerReady = useCallback(() => {
     setViewerReady(true);
@@ -33,11 +61,9 @@ export default function McpFlowDiagram() {
       viewerRef.current?.resetAll();
       setTimeout(() => play(), 50);
     } else {
-      // Auto-enter fullscreen on first play
       if (!hasPlayedOnce && !isFullscreen) {
         setIsFullscreen(true);
         setHasPlayedOnce(true);
-        // Delay play slightly so fullscreen transition + re-fit happens first
         setTimeout(() => play(), 400);
         return;
       }
@@ -53,6 +79,58 @@ export default function McpFlowDiagram() {
     reset();
     viewerRef.current?.resetAll();
   }, [reset]);
+
+  const handleModeChange = useCallback((newMode: DiagramMode) => {
+    // Reset everything when switching modes
+    reset();
+    viewerRef.current?.resetAll();
+    setIsReplayingCapture(false);
+    setLiveReplayTrace(null);
+    if (newMode === 'examples') {
+      liveTrace.reset();
+    }
+    setMode(newMode);
+  }, [reset, liveTrace]);
+
+  const handleLiveStart = useCallback((query: string) => {
+    setIsReplayingCapture(false);
+    setLiveReplayTrace(null);
+    reset();
+    viewerRef.current?.resetAll();
+    // Auto-enter fullscreen on first live query
+    if (!isFullscreen) {
+      setIsFullscreen(true);
+      setHasPlayedOnce(true);
+      setTimeout(() => {
+        liveTrace.start(query, DEFAULT_MODEL, DEFAULT_PORTAL);
+      }, 400);
+    } else {
+      liveTrace.start(query, DEFAULT_MODEL, DEFAULT_PORTAL);
+    }
+  }, [reset, liveTrace, isFullscreen]);
+
+  const handleLiveCancel = useCallback(() => {
+    liveTrace.cancel();
+    viewerRef.current?.resetAll();
+  }, [liveTrace]);
+
+  const handleLiveReplay = useCallback(() => {
+    if (!liveTrace.capturedTrace) return;
+    setLiveReplayTrace(liveTrace.capturedTrace);
+    setIsReplayingCapture(true);
+    // The useTraceReplay hook will reset when liveReplayTrace changes (via activeReplayTrace).
+    // We need to wait a tick then play.
+    viewerRef.current?.resetAll();
+    setTimeout(() => play(), 100);
+  }, [liveTrace.capturedTrace, play]);
+
+  const handleLiveReset = useCallback(() => {
+    liveTrace.reset();
+    setIsReplayingCapture(false);
+    setLiveReplayTrace(null);
+    reset();
+    viewerRef.current?.resetAll();
+  }, [liveTrace, reset]);
 
   const toggleFullscreen = useCallback(() => {
     setIsFullscreen(prev => !prev);
@@ -76,29 +154,29 @@ export default function McpFlowDiagram() {
     }
   }, [isFullscreen, viewerReady]);
 
-  // Sync replay state to bpmn-js viewer
+  // Sync active state to bpmn-js viewer
   useEffect(() => {
     if (!viewerReady || !viewerRef.current) return;
     const viewer = viewerRef.current;
 
     viewer.resetAll();
 
-    for (const nodeId of replayState.completedNodes) {
+    for (const nodeId of activeState.completedNodes) {
       viewer.completeNode(nodeId);
     }
-    for (const nodeId of replayState.activeNodes) {
+    for (const nodeId of activeState.activeNodes) {
       viewer.activateNode(nodeId);
     }
-    for (const edgeId of replayState.activeEdges) {
+    for (const edgeId of activeState.activeEdges) {
       viewer.activateEdge(edgeId);
     }
-    for (const [edgeId, marker] of replayState.markedEdges) {
+    for (const [edgeId, marker] of activeState.markedEdges) {
       viewer.highlightEdge(edgeId, marker);
     }
 
     viewer.clearOverlays();
-    if (replayState.currentOverlay) {
-      const o = replayState.currentOverlay;
+    if (activeState.currentOverlay) {
+      const o = activeState.currentOverlay;
       let html = '';
       switch (o.type) {
         case 'soql':
@@ -108,7 +186,7 @@ export default function McpFlowDiagram() {
           html = `<span class="result-text">${escapeHtml(o.content)}</span>`;
           break;
         case 'iteration':
-          html = `<span class="iteration-badge">${replayState.currentIteration}</span><br/><span class="info-text">${escapeHtml(o.content)}</span>`;
+          html = `<span class="iteration-badge">${activeState.currentIteration}</span><br/><span class="info-text">${escapeHtml(o.content)}</span>`;
           break;
         case 'info':
           html = `<span class="info-text">${escapeHtml(o.content)}</span>`;
@@ -118,12 +196,12 @@ export default function McpFlowDiagram() {
     }
   }, [
     viewerReady,
-    replayState.activeNodes,
-    replayState.completedNodes,
-    replayState.activeEdges,
-    replayState.markedEdges,
-    replayState.currentOverlay,
-    replayState.currentIteration,
+    activeState.activeNodes,
+    activeState.completedNodes,
+    activeState.activeEdges,
+    activeState.markedEdges,
+    activeState.currentOverlay,
+    activeState.currentIteration,
   ]);
 
   const content = (
@@ -139,6 +217,17 @@ export default function McpFlowDiagram() {
           onPause={handlePause}
           onReset={handleReset}
           onSetSpeed={setSpeed}
+          mode={mode}
+          onModeChange={handleModeChange}
+          liveStatus={liveTrace.status}
+          liveError={liveTrace.error}
+          liveElapsedMs={liveTrace.elapsedMs}
+          liveSlowMessage={liveTrace.slowMessage}
+          onLiveStart={handleLiveStart}
+          onLiveCancel={handleLiveCancel}
+          onLiveReplay={handleLiveReplay}
+          onLiveReset={handleLiveReset}
+          isReplayingCapture={isReplayingCapture}
         />
       </div>
 
@@ -157,7 +246,7 @@ export default function McpFlowDiagram() {
           style={{
             position: 'absolute',
             top: '12px',
-            right: isFullscreen ? '12px' : '160px', // offset from zoom controls
+            right: isFullscreen ? '12px' : '160px',
             width: '32px',
             height: '32px',
             border: '1px solid var(--border-color)',
@@ -179,8 +268,20 @@ export default function McpFlowDiagram() {
       </div>
 
       <div style={{ flexShrink: 0 }}>
-        <NarrativePanel replayState={replayState} />
+        <NarrativePanel replayState={activeState} />
       </div>
+
+      {/* Live response panel (below narrative, only in live mode) */}
+      {mode === 'live' && (liveTrace.status === 'running' || liveTrace.status === 'complete') && !isReplayingCapture && (
+        <div style={{ flexShrink: 0 }}>
+          <LiveResponsePanel
+            content={liveTrace.responseContent}
+            elapsedMs={liveTrace.elapsedMs}
+            iterationCount={liveTrace.currentIteration}
+            isComplete={liveTrace.status === 'complete'}
+          />
+        </div>
+      )}
     </>
   );
 
@@ -212,7 +313,7 @@ export default function McpFlowDiagram() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {content}
 
-      <DiagramAnnotations replayState={replayState} />
+      <DiagramAnnotations replayState={activeState} />
 
       {/* Download link */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '14px' }}>

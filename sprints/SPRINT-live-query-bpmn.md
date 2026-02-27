@@ -1,6 +1,6 @@
 # Sprint Plan: Live Query Mode for BPMN Diagram
 
-**Status:** Ready to start  
+**Status:** Complete (Tickets 1-7 shipped; Ticket 8 manual step remaining)
 **Prerequisite:** BPMN diagram with pre-recorded trace replay working on About page (done)  
 **Estimated effort:** 1–1.5 days  
 **Location:** `/about` page (will move to `/explore` in a future sprint)
@@ -330,10 +330,40 @@ Tickets 5, 6, and 7 can be done in any order after Ticket 4. Ticket 8 is a manua
 
 ## Definition of Done
 
-- [ ] A user can type a query on the About page and watch the BPMN diagram animate with real SSE events
-- [ ] The animation quality (timing, overlays, narrative panel) is identical to pre-recorded replay
-- [ ] After completion, the user can replay their query at 1x/2x/4x speed
-- [ ] A compact response with source attribution appears after completion
-- [ ] Rate limits, connection errors, and slow queries are handled gracefully
-- [ ] Example traces still work exactly as before (no regressions)
-- [ ] All 4 example traces are replaced with real captured data
+- [x] A user can type a query on the About page and watch the BPMN diagram animate with real SSE events
+- [x] The animation quality (timing, overlays, narrative panel) is identical to pre-recorded replay
+- [x] After completion, the user can replay their query at 1x/2x/4x speed
+- [x] A compact response with source attribution appears after completion
+- [x] Rate limits, connection errors, and slow queries are handled gracefully
+- [x] Example traces still work exactly as before (no regressions)
+- [ ] All 4 example traces are replaced with real captured data (Ticket 8 — manual step)
+
+---
+
+## Retrospective
+
+### What went well
+- **Clean extraction pattern**: Pulling `animation.ts` out of `useTraceReplay` and having both hooks import from the same source guarantees identical animation behavior between live and replay. Zero drift risk.
+- **SSE client reuse**: `connectSSE()` replaced ~70 lines of fetch/reader/buffer code in `useStreamingComparison` and was immediately reusable in `useLiveTrace`. Two consumers, one parser.
+- **Backward compatibility**: `mcpOnly` defaults to `false` so the home page request shape is unchanged. `useTraceReplay` re-exports types so `DiagramAnnotations` and `NarrativePanel` imports didn't need touching.
+- **Build stability**: Only one type error on first build (`string` vs `ProgressPhase` cast). Fixed in under a minute.
+
+### What could be better
+- **TraceControls grew large** (~300 lines of inline-styled JSX handling 5 distinct UI states). A future pass could extract `LiveControls` as a sub-component.
+- **No integration test coverage** — manually verified only. The SSE client and animation transforms are pure functions that would be easy to unit test.
+- **Hardcoded model/portal** — live mode uses `claude-sonnet-4` and NYC. Fine for now, but portal selection would need UI work in TraceControls.
+- **Replay trigger timing** — `handleLiveReplay` sets `liveReplayTrace` then calls `play()` after a 100ms timeout to let `useTraceReplay` reset from the trace ID change. Works, but a more explicit "ready" signal would be cleaner.
+
+### Stats
+| | |
+|---|---|
+| New files | 4 (`sse-client.ts`, `animation.ts`, `useLiveTrace.ts`, `LiveResponsePanel.tsx`) |
+| Modified files | 6 |
+| Lines changed | +659 / -409 |
+| Build errors | 1 (fixed immediately) |
+| Tickets shipped | 1, 2, 3, 4, 5, 6, 7 |
+
+### Open items
+- **Ticket 8**: Run 4 queries with `NEXT_PUBLIC_CAPTURE_TRACES=true`, copy JSON from console, replace hand-authored traces in `traces.ts`
+- Style polish after testing — tab spacing, mobile behavior, fullscreen layout with response panel
+- Could add suggested-queries dropdown to the live input to lower friction

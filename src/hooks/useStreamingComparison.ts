@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { createTraceCapture } from '@/lib/bpmn/capture-trace';
+import { connectSSE, SSEError } from '@/lib/sse-client';
+import type { ProgressPhase } from '@/lib/streaming';
 
 export interface ToolCall {
   name: string;
@@ -99,16 +101,45 @@ export function useStreamingComparison() {
     }
 
     try {
-      const response = await fetch('/api/compare-stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, model, portal }),
+      await connectSSE({
+        url: '/api/compare-stream',
+        body: { query, model, portal },
         signal: abortControllerRef.current.signal,
-      });
+        onEvent: (eventData) => {
+          // Record MCP-panel events for trace capture
+          if (traceCaptureRef.current && eventData.panel === 'withMcp') {
+            if (eventData.type === 'progress') {
+              traceCaptureRef.current.recordEvent({
+                phase: eventData.phase as ProgressPhase,
+                message: eventData.message as string,
+                iteration: eventData.iteration as number | undefined,
+                args: eventData.args as Record<string, unknown> | undefined,
+                duration_ms: eventData.duration_ms as number | undefined,
+              });
+            } else if (eventData.type === 'complete') {
+              const trace = traceCaptureRef.current.exportTrace();
+              console.log('[Trace Capture] MCP panel trace captured. Copy the JSON below into src/lib/bpmn/traces.ts:');
+              console.log(JSON.stringify(trace, null, 2));
+              traceCaptureRef.current = null;
+            }
+          }
 
-      if (!response.ok) {
-        const data = await response.json();
-        if (response.status === 429) {
+          handleEvent(eventData as { type: string; panel: 'withMcp' | 'withoutMcp'; [key: string]: unknown }, setState);
+        },
+        onComplete: () => {
+          // Check if both panels are complete
+          setState(prev => ({
+            ...prev,
+            isLoading: !(prev.withoutMcp.isComplete && prev.withMcp.isComplete),
+          }));
+        },
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return;
+      }
+      if (error instanceof SSEError) {
+        if (error.status === 429) {
           setState(prev => ({
             ...prev,
             isLoading: false,
@@ -118,70 +149,9 @@ export function useStreamingComparison() {
           setState(prev => ({
             ...prev,
             isLoading: false,
-            error: data.error || 'An error occurred',
+            error: error.message || 'An error occurred',
           }));
         }
-        return;
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('No response body');
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        // Process complete SSE events
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || ''; // Keep incomplete event in buffer
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const eventData = JSON.parse(line.slice(6));
-
-              // Record MCP-panel events for trace capture
-              if (traceCaptureRef.current && eventData.panel === 'withMcp') {
-                if (eventData.type === 'progress') {
-                  traceCaptureRef.current.recordEvent({
-                    phase: eventData.phase,
-                    message: eventData.message,
-                    iteration: eventData.iteration,
-                    args: eventData.args,
-                    duration_ms: eventData.duration_ms,
-                  });
-                } else if (eventData.type === 'complete') {
-                  const trace = traceCaptureRef.current.exportTrace();
-                  console.log('[Trace Capture] MCP panel trace captured. Copy the JSON below into src/lib/bpmn/traces.ts:');
-                  console.log(JSON.stringify(trace, null, 2));
-                  traceCaptureRef.current = null;
-                }
-              }
-
-              handleEvent(eventData, setState);
-            } catch (e) {
-              console.error('Failed to parse SSE event:', e);
-            }
-          }
-        }
-      }
-
-      // Check if both panels are complete
-      setState(prev => ({
-        ...prev,
-        isLoading: !(prev.withoutMcp.isComplete && prev.withMcp.isComplete),
-      }));
-
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        // Request was aborted, ignore
         return;
       }
       setState(prev => ({

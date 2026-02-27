@@ -13,12 +13,13 @@ interface CompareRequest {
   query: string;
   model: string;
   portal?: string;
+  mcpOnly?: boolean;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: CompareRequest = await request.json();
-    const { query, model, portal = 'data.cityofnewyork.us' } = body;
+    const { query, model, portal = 'data.cityofnewyork.us', mcpOnly = false } = body;
 
     if (!query || !model) {
       return new Response(
@@ -80,25 +81,31 @@ Be honest if you don't have access to current or real-time data.`;
       },
     };
 
-    // Run both queries in parallel (don't await here - let them stream)
+    // Run queries (both in parallel, or MCP-only when mcpOnly flag is set)
     const runQueries = async () => {
       try {
-        await Promise.all([
-          queryWithoutMcpStreaming(query, model, systemPromptWithoutMcp, callbacks),
-          queryWithMcpStreaming(
-            query,
-            model,
-            opengovMcpTools,
-            async (name, args) => {
-              if (!args.portal) {
-                args.portal = portal;
-              }
-              return callMcpTool(name, args);
-            },
-            systemPromptWithMcp,
-            callbacks
-          ),
-        ]);
+        const mcpQuery = queryWithMcpStreaming(
+          query,
+          model,
+          opengovMcpTools,
+          async (name, args) => {
+            if (!args.portal) {
+              args.portal = portal;
+            }
+            return callMcpTool(name, args);
+          },
+          systemPromptWithMcp,
+          callbacks
+        );
+
+        if (mcpOnly) {
+          await mcpQuery;
+        } else {
+          await Promise.all([
+            queryWithoutMcpStreaming(query, model, systemPromptWithoutMcp, callbacks),
+            mcpQuery,
+          ]);
+        }
       } catch (error) {
         console.error('Stream error:', error);
       } finally {
