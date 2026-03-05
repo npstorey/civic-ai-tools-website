@@ -1,8 +1,8 @@
 # Sprint Plan: Community Trace Gallery
 
-**Status:** Not started — blocked on live query feature  
-**Prerequisite:** Live SSE → BPMN animation pipeline must be working first  
-**Estimated effort:** 2–3 days  
+**Status:** Not started — blocked on sprint 004
+**Prerequisite:** Sprint 004 (explore page migration) must be complete first
+**Estimated effort:** 2–3 days
 **Page:** `/explore`
 
 ---
@@ -17,9 +17,9 @@ After completing a demo query (on the home page or the /explore page), users can
 
 Before starting this sprint:
 
-- [ ] Live query mode on `/explore` is working (SSE events drive BPMN animation in real time)
+- [ ] Sprint 004 complete — `/explore` page exists with BPMN diagram, example traces, and live query mode
+- [ ] Header nav includes "Explore" link, About page restructured with CTA to `/explore`
 - [ ] Trace capture utility (`src/lib/bpmn/capture-trace.ts`) is wired into `useStreamingComparison` and records live query events
-- [ ] The `/explore` page exists with the BPMN diagram, example traces tab, and live query tab
 
 ---
 
@@ -334,21 +334,6 @@ data/traces/index.json       → manifest: array of CommunityTraceMeta sorted by
 
 ---
 
-### 10. Navigation Update
-
-**What:** Add "Explore" to the site header.
-
-- Add "Explore" link between "About" and "GitHub" in the site header nav
-- Update About page: replace the BPMN diagram section with a brief description + prominent link to `/explore`
-- Update any cross-reference links that pointed to the BPMN diagram on `/about` — redirect to `/explore`
-
-**Acceptance criteria:**
-- [ ] "Explore" appears in the header nav on all pages
-- [ ] About page links to `/explore` where the BPMN diagram used to be
-- [ ] No broken internal links
-
----
-
 ## Out of Scope (Future Sprints)
 
 These are explicitly deferred. Do not build them in this sprint:
@@ -374,4 +359,4 @@ These are explicitly deferred. Do not build them in this sprint:
 - [ ] Rate limiting prevents spam (3 saves/user/day)
 - [ ] Moderation gate can be toggled on via env variable if needed
 - [ ] Gallery is empty-state friendly and works with 0, 1, and 100+ traces
-- [ ] Navigation includes Explore link and About page cross-references work
+- [ ] Navigation and About page cross-references work (delivered by sprint 004)

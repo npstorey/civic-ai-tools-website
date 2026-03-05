@@ -4,6 +4,49 @@ Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ---
 
+## 2026-03-05 — Sprint 004: Migrate BPMN to /explore, Restructure About
+
+**Scope:** Page reorganization — moved BPMN visualization from `/about` to a new `/explore` route, restructured About as educational prose, added Explore to header nav. Plus one ad hoc UX fix (Enter to submit).
+
+### What we did
+
+**1. Created `/explore` route** — New `src/app/explore/page.tsx` with the BPMN diagram as primary content. Brief intro text + the existing `McpFlowDiagramWrapper`.
+
+**2. Renamed `components/about/` → `components/explore/`** — `git mv` preserved history. All internal relative imports (e.g., `./BpmnViewer`, `./TraceControls`) continued working with no changes.
+
+**3. Restructured About page** — Removed `McpFlowDiagramWrapper` import. Replaced BPMN section with prose explaining MCP + a "Watch it in action" CTA button linking to `/explore`. All other educational sections preserved.
+
+**4. Added Explore to header** — Desktop nav and mobile hamburger menu both show About | Explore | GitHub.
+
+**5. Updated CLAUDE.md** — Architecture diagram, directory structure, prop threading paths, component references, sprint index all updated. Removed the "About page post-migration plan" section (migration complete).
+
+**6. Enter to submit (ad hoc)** — Added `onKeyDown` handler to home page `<textarea>` so Enter submits, Shift+Enter inserts newline.
+
+### What went well
+
+- **Zero iteration** — Rename via `git mv`, create new page, edit About, update Header — all straightforward. Build passed on first attempt after `npm install`.
+- **Relative imports survived the rename** — Since all BPMN components moved together, none of the internal imports needed updating. Only the one external import in `about/page.tsx` needed removal.
+- **Cross-reference audit was quick** — `SkillPromptDisclosure` links to `/about#system-prompt` and `NarrationExplainer` links to `/about#narration` — both sections stayed on About, so no changes needed.
+
+### What to watch
+
+- **No runtime testing by Claude** — User tested manually and confirmed it looks good.
+- **bpmn-js wasn't installed locally** — `npm install` was needed despite `bpmn-js` being in `package.json`. Build failed without it.
+
+### Files changed
+
+| File | Action |
+|------|--------|
+| `src/app/explore/page.tsx` | **New** — Explore page with BPMN diagram |
+| `src/components/about/*` → `src/components/explore/*` | **Renamed** — 7 files moved |
+| `src/app/about/page.tsx` | Removed BPMN import, replaced with prose + CTA |
+| `src/components/Header.tsx` | Added Explore link (desktop + mobile) |
+| `src/components/QueryForm.tsx` | Enter to submit, Shift+Enter for newline |
+| `CLAUDE.md` | Updated architecture, directory structure, references |
+| `sprints/completed/sprint-004-explore-page-migration.md` | Marked done, moved to completed/ |
+
+---
+
 ## 2026-02-27 — Sprint 003 Bulk Polish: 18 Fixes Across Layout, A11y, Hover States, Copy
 
 **Scope:** 18 additional fixes from the polish audit across 13 files. Focused on accessibility, interactive feedback, mobile navigation, and design system consistency.
@@ -67,7 +110,7 @@ Implemented the remaining "Fix Soon" items and several "Minor" items from `sprin
 
 ### What we did
 
-Implemented the top 10 issues from the polish audit (`sprints/sprint-003-polish-audit.md`):
+Implemented the top 10 issues from the polish audit (`sprints/completed/sprint-003-polish-audit.md`):
 
 1. **`--nyc-blue` CSS variable** — Added alias for `#103FEF`, fixing 14 broken `var(--nyc-blue)` references across 6 files
 2. **Markdown table overflow** — Added `display: block` + `overflow-x: auto` to `.response-markdown table`

@@ -18,13 +18,26 @@ npm run start        # Start production server
 npm run lint         # Run ESLint
 ```
 
+## Information Architecture
+
+Three pages, each with a distinct purpose. Use this framing to decide where new features belong:
+
+| Page | Route | Star of the page | User goal |
+|------|-------|-------------------|-----------|
+| **Home** | `/` | The result content | "Show me why MCP matters" |
+| **Explore** | `/explore` | The process | "Show me how this works" |
+| **About** | `/about` | The prose | "Explain this to me" |
+
+The BPMN visualization lives on `/explore`. The About page is purely educational prose with a CTA linking to `/explore`.
+
 ## Architecture
 
 ```
 Frontend (Next.js App Router + Tailwind CSS)
     │
     ├── / (home)           → Query form + side-by-side streaming results
-    ├── /about             → About MCP page + interactive BPMN diagram
+    ├── /explore           → BPMN diagram + trace replay + live queries
+    ├── /about             → Educational prose, system prompt disclosure, CTA to /explore
     │
 API Routes (Serverless)
     ├── POST /api/compare        → Runs parallel LLM calls (with/without MCP)
@@ -107,7 +120,7 @@ Domain knowledge injected into the LLM system prompt:
 - Dataset IDs are auto-linked to Socrata pages: `https://{portal}/d/{datasetId}`
 
 ### Shared MCP Response Display (`components/shared/McpResponseDisplay.tsx`)
-Both the home page and About page delegate MCP response rendering to this shared component. It renders (in order):
+Both the home page and Explore page delegate MCP response rendering to this shared component. It renders (in order):
 1. **Query text** — blue left border quote
 2. **ProgressLog** — narrative summary, breadcrumbs, expandable steps
 3. **Markdown content** — via ReactMarkdown with auto-linked dataset IDs
@@ -116,8 +129,8 @@ Both the home page and About page delegate MCP response rendering to this shared
 
 `linkDatasetIds()` inside this component replaces bare dataset IDs in markdown with clickable `[id](url)` links, avoiding double-linking inside existing markdown links.
 
-### BPMN Diagram (`components/about/`, `lib/bpmn/`)
-Interactive BPMN 2.0 diagram on the About page visualizing MCP query execution. Two modes:
+### BPMN Diagram (`components/explore/`, `lib/bpmn/`)
+Interactive BPMN 2.0 diagram on the Explore page visualizing MCP query execution. Two modes:
 
 **Examples mode** — replays 4 pre-recorded traces through the diagram with animation:
 - Traces defined in `lib/bpmn/traces.ts` (hand-authored with realistic SoQL and timing)
@@ -132,20 +145,19 @@ Interactive BPMN 2.0 diagram on the About page visualizing MCP query execution. 
 - Captured traces can be replayed after completion
 
 Key architectural decisions:
-- **bpmn-js NavigatedViewer** — bundles zoom/pan/keyboard; ~400KB gzipped, dynamically loaded on About page only
+- **bpmn-js NavigatedViewer** — bundles zoom/pan/keyboard; ~400KB gzipped, dynamically loaded on Explore page only
 - **CSS markers** (`canvas.addMarker()`) for animation states, not direct SVG manipulation
 - **Overlay API** (`overlays.add()`) for SoQL previews and result annotations
 - **Client wrapper** (`McpFlowDiagramWrapper.tsx`) for Next.js App Router SSR boundary
 
 ```
-about/page.tsx
+explore/page.tsx
   └── McpFlowDiagramWrapper.tsx (client, dynamic import)
         └── McpFlowDiagram.tsx (orchestrator)
               ├── TraceControls.tsx (mode toggle, trace pills, playback, speed, live query input)
               ├── BpmnViewer.tsx ← bpmn-diagram.css
               │     └── fetches /bpmn/mcp-query-flow.bpmn
-              ├── NarrativePanel.tsx (example mode: "what's happening now")
-              ├── LiveResponsePanel.tsx → McpResponseDisplay (live mode: response panel)
+              ├── LiveResponsePanel.tsx → McpResponseDisplay (both modes: response panel)
               ├── DiagramAnnotations.tsx (educational text, non-fullscreen only)
               └── hooks/useTraceReplay.ts + hooks/useLiveTrace.ts
                     ├── lib/bpmn/traces.ts
@@ -179,7 +191,8 @@ KV_REST_API_READ_ONLY_TOKEN=
 src/
 ├── app/
 │   ├── page.tsx                  # Home page with query form + streaming results
-│   ├── about/page.tsx            # About MCP page + BPMN diagram
+│   ├── about/page.tsx            # About MCP page (educational prose)
+│   ├── explore/page.tsx          # Explore page (BPMN diagram + trace replay + live queries)
 │   ├── layout.tsx                # Root layout with header/footer
 │   ├── globals.css               # NYC Design System styles (light mode only)
 │   └── api/
@@ -191,14 +204,13 @@ src/
 ├── components/
 │   ├── shared/
 │   │   └── McpResponseDisplay.tsx # Shared MCP response rendering (both pages use this)
-│   ├── about/
+│   ├── explore/
 │   │   ├── McpFlowDiagram.tsx     # BPMN orchestrator (fullscreen, state sync)
 │   │   ├── McpFlowDiagramWrapper.tsx # Client-side dynamic import wrapper
 │   │   ├── BpmnViewer.tsx         # bpmn-js NavigatedViewer wrapper
 │   │   ├── bpmn-diagram.css       # CSS markers, overlays, zoom controls
 │   │   ├── TraceControls.tsx      # Mode toggle, trace pills, playback, live input
-│   │   ├── LiveResponsePanel.tsx  # Live query response (delegates to McpResponseDisplay)
-│   │   ├── NarrativePanel.tsx     # "What's happening now" during example replay
+│   │   ├── LiveResponsePanel.tsx  # Response panel (delegates to McpResponseDisplay)
 │   │   └── DiagramAnnotations.tsx # Educational text panel
 │   ├── Header.tsx
 │   ├── QueryForm.tsx              # Query input + model/portal selectors
@@ -214,7 +226,7 @@ src/
 │   └── Providers.tsx              # NextAuth SessionProvider
 ├── hooks/
 │   ├── useStreamingComparison.ts  # SSE streaming for home page (both panels)
-│   ├── useLiveTrace.ts            # SSE + diagram animation for About page live queries
+│   ├── useLiveTrace.ts            # SSE + diagram animation for Explore page live queries
 │   └── useTraceReplay.ts          # Replay state machine for pre-recorded traces
 └── lib/
     ├── openrouter.ts              # LLM API client (non-streaming)
@@ -257,6 +269,18 @@ Active work is organized into lightweight sprints in [`/sprints/`](sprints/).
 - **Current sprint:** Check `/sprints/` for the latest active sprint before starting work
 - **Backlog:** Longer-term priorities and deferred items live in [`BACKLOG.md`](BACKLOG.md)
 
+### Sprint Index
+
+| Sprint | Description | Status |
+|--------|-------------|--------|
+| [001](sprints/completed/sprint-001-mcp-messaging-ux.md) | MCP messaging UX (progress logs, narrative) | Done |
+| [002](sprints/completed/sprint-002-reasoning-ux-data-literacy.md) | Reasoning UX & data literacy | Done |
+| [003](sprints/completed/sprint-003-polish-audit.md) | Polish audit (a11y, contrast, mobile) | Done |
+| [SPRINT-live-query-bpmn](sprints/completed/SPRINT-live-query-bpmn.md) | Live query mode for BPMN diagram | Done (ticket 8 remaining) |
+| [SPRINT-side-by-side-layout](sprints/completed/SPRINT-side-by-side-layout.md) | Side-by-side layout for live queries | Done |
+| [004](sprints/completed/sprint-004-explore-page-migration.md) | Migrate BPMN to `/explore`, restructure About | Done |
+| [SPRINT-community-trace-gallery](sprints/SPRINT-community-trace-gallery.md) | Community trace gallery on `/explore` | Not started (after 004) |
+
 ## Related Repos
 
 | Repo | Purpose |
@@ -267,10 +291,17 @@ Active work is organized into lightweight sprints in [`/sprints/`](sprints/).
 
 ## Design Notes
 
-- **Light mode only** - Simplified styling, no dark mode
-- **NYC Design System colors** - Blue (#103FEF), grays, semantic colors
-- **Compact layout** - Form and button visible above fold on laptop screens
-- **Not indexed** - robots.txt blocks crawlers during demo phase
+- **Light mode only** — Simplified styling, no dark mode
+- **NYC Design System colors** — Blue (#103FEF), grays, semantic colors
+- **Compact layout** — Form and button visible above fold on laptop screens
+- **Not indexed** — robots.txt blocks crawlers during demo phase
+- **Mobile out of scope for BPMN side-by-side** — Desktop only for now; mobile polish (stacked layout, 2x2 trace pills, scroll fade) is a future item
+- **Fullscreen keeps site header** — Overlay renders below the header so users retain navigation context; uses `100dvh`
+
+### Deep linking
+
+- `/explore?trace={id}` — Auto-loads and replays a specific trace (reserved, not yet wired up)
+- Header nav order: Home | About | Explore | GitHub
 
 ## Patterns & Conventions
 
@@ -286,12 +317,12 @@ Cross-cutting formatting functions (`buildProvenanceLine`, `buildNarrativeSummar
 When building a utility for one module, consider whether other modules will need it. Export from the start rather than having to refactor later (e.g., `generateGroupLabel` needed export for cross-module reuse).
 
 ### Component composition over duplication
-The `McpResponseDisplay` shared component is the canonical example — both `ResponsePanel` (home) and `LiveResponsePanel` (About) delegate to it. When adding MCP response features, add them to the shared component so both pages benefit.
+The `McpResponseDisplay` shared component is the canonical example — both `ResponsePanel` (home) and `LiveResponsePanel` (Explore) delegate to it. When adding MCP response features, add them to the shared component so both pages benefit.
 
 ### Prop threading for context
 Query text, progress state, and tool call data are threaded from page → wrapper → panel → shared component. Follow the existing prop chains when adding new data:
 - Home: `page.tsx → ComparisonDisplay → ResponsePanel → McpResponseDisplay`
-- About: `McpFlowDiagram → LiveResponsePanel → McpResponseDisplay`
+- Explore: `McpFlowDiagram → LiveResponsePanel → McpResponseDisplay`
 
 ### styled-jsx for component-scoped CSS
 CSS keyframes (`blink`, `spin`, `pulse`) and component-specific styles use styled-jsx blocks within components. Global styles are in `globals.css`.

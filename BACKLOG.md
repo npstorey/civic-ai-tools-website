@@ -19,9 +19,11 @@
 
 ## Active Sprint
 
-See [`sprints/SPRINT-community-trace-gallery.md`](sprints/SPRINT-community-trace-gallery.md) — Community trace gallery (next up, unblocked by live query mode).
+See [`sprints/sprint-004-explore-page-migration.md`](sprints/sprint-004-explore-page-migration.md) — Migrate BPMN to `/explore`, restructure About page.
 
-**Recently completed:** [`sprints/SPRINT-live-query-bpmn.md`](sprints/SPRINT-live-query-bpmn.md) — Live query mode for BPMN diagram (Tickets 1-7 shipped; Ticket 8 manual trace capture remaining).
+**Next up:** [`sprints/SPRINT-community-trace-gallery.md`](sprints/SPRINT-community-trace-gallery.md) — Community trace gallery (blocked on sprint 004).
+
+**Recently completed:** [`sprints/completed/SPRINT-live-query-bpmn.md`](sprints/completed/SPRINT-live-query-bpmn.md) — Live query mode for BPMN diagram (Tickets 1-7 shipped; Ticket 8 manual trace capture remaining).
 
 ---
 

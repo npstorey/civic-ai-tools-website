@@ -88,6 +88,14 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onInput={autoResize}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              if (query.trim() && !isLoading) {
+                onSubmit(query.trim(), model, portal);
+              }
+            }
+          }}
           placeholder="e.g., What are the most common 311 complaints in NYC?"
           rows={1}
           disabled={isLoading}

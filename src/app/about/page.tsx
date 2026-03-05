@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import McpFlowDiagramWrapper from '@/components/about/McpFlowDiagramWrapper';
 
 export const metadata = {
   title: 'About - Civic AI Tools',
@@ -183,20 +182,6 @@ export default function AboutPage() {
       <section id="how-mcp-works" style={sectionSpacing}>
         <h2 style={sectionHeading}>How MCP Connects AI to Data</h2>
 
-        {/* Interactive BPMN flow diagram */}
-        <div style={{ marginBottom: '32px' }}>
-          <McpFlowDiagramWrapper />
-        </div>
-
-        <p style={{
-          fontSize: '14px',
-          color: 'var(--text-muted)',
-          fontStyle: 'italic',
-          marginBottom: '16px',
-        }}>
-          This visualization shows the same process that powers the main demo.
-        </p>
-
         <p style={prose}>
           <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer">
             MCP (Model Context Protocol)
@@ -207,13 +192,29 @@ export default function AboutPage() {
           would write.
         </p>
         <p style={prose}>
-          The demo connects to the{' '}
+          When you ask a question in the demo, the AI searches a catalog of civic datasets, examines
+          their structure, then constructs targeted queries &mdash; all through a series of tool calls
+          that flow between the AI, the MCP server, and the underlying Socrata data portals. The demo
+          connects to the{' '}
           <a href="https://github.com/npstorey/opengov-mcp-server" target="_blank" rel="noopener noreferrer">
             OpenGov MCP server
           </a>
-          , which provides access to Socrata open data portals for cities including
-          New York, Chicago, and San Francisco.
+          , which provides access to open data portals for New York, Chicago, and San Francisco.
         </p>
+
+        <Link
+          href="/explore"
+          className="nyc-button nyc-button-primary"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            textDecoration: 'none',
+            marginTop: '8px',
+          }}
+        >
+          Watch it in action &rarr;
+        </Link>
       </section>
 
       {/* ============================================================

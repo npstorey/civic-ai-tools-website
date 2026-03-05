@@ -62,6 +62,17 @@ export default function Header() {
             >
               About
             </Link>
+            <Link
+              href="/explore"
+              className="no-link-style"
+              style={{
+                color: 'var(--text-secondary)',
+                fontWeight: 500,
+                fontSize: '16px',
+              }}
+            >
+              Explore
+            </Link>
             <a
               href="https://github.com/npstorey/civic-ai-tools-website"
               target="_blank"
@@ -164,6 +175,18 @@ export default function Header() {
             }}
           >
             About
+          </Link>
+          <Link
+            href="/explore"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              color: 'var(--text-secondary)',
+              fontWeight: 500,
+              fontSize: '16px',
+              textDecoration: 'none',
+            }}
+          >
+            Explore
           </Link>
           <a
             href="https://github.com/npstorey/civic-ai-tools-website"
