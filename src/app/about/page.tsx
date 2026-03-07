@@ -196,8 +196,8 @@ export default function AboutPage() {
           their structure, then constructs targeted queries &mdash; all through a series of tool calls
           that flow between the AI, the MCP server, and the underlying Socrata data portals. The demo
           connects to the{' '}
-          <a href="https://github.com/npstorey/opengov-mcp-server" target="_blank" rel="noopener noreferrer">
-            OpenGov MCP server
+          <a href="https://github.com/npstorey/socrata-mcp-server" target="_blank" rel="noopener noreferrer">
+            Socrata MCP server
           </a>
           , which provides access to open data portals for New York, Chicago, and San Francisco.
         </p>
@@ -537,7 +537,7 @@ export default function AboutPage() {
           }}
         >
           {[
-            { title: 'Claude Code', desc: 'Add opengov-mcp to ~/.claude/settings.json' },
+            { title: 'Claude Code', desc: 'Add socrata-mcp to ~/.claude/settings.json' },
             { title: 'Cursor', desc: 'Configure MCP servers in Cursor settings' },
             { title: 'Other tools', desc: 'Any MCP-compatible client works' },
           ].map((item, idx) => (
@@ -613,11 +613,11 @@ export default function AboutPage() {
             <a href="https://github.com/npstorey/civic-ai-tools" target="_blank" rel="noopener noreferrer">
               civic-ai-tools
             </a>
-            {' '}&mdash; OpenGov MCP server configs and skills
+            {' '}&mdash; Socrata MCP server configs and skills
           </li>
           <li>
-            <a href="https://github.com/npstorey/opengov-mcp-server" target="_blank" rel="noopener noreferrer">
-              opengov-mcp-server
+            <a href="https://github.com/npstorey/socrata-mcp-server" target="_blank" rel="noopener noreferrer">
+              socrata-mcp-server
             </a>
             {' '}&mdash; The MCP server itself (Socrata data)
           </li>

@@ -9,13 +9,13 @@ A demo website showcasing the value of [Model Context Protocol (MCP)](https://mo
 Users enter a question about civic data (e.g., "What are the most common 311 complaints in Brooklyn?") and see two responses:
 
 - **Without MCP:** LLM responds using only training data (often outdated or vague)
-- **With MCP:** LLM connects to live Socrata open data portals via [opengov-mcp-server](https://github.com/npstorey/civic-ai-tools) and returns real, current data
+- **With MCP:** LLM connects to live Socrata open data portals via [socrata-mcp-server](https://github.com/npstorey/socrata-mcp-server) and returns real, current data
 
 ## Tech Stack
 
 - **Frontend:** Next.js 16+ (App Router), Tailwind CSS
 - **LLM API:** OpenRouter (supports GPT-4o, Claude, etc.)
-- **MCP Server:** opengov-mcp-server (Socrata data access)
+- **MCP Server:** socrata-mcp-server (Socrata data access)
 - **Auth:** NextAuth.js with GitHub OAuth
 - **Rate Limiting:** Upstash Redis via @vercel/kv
 - **Hosting:** Vercel
@@ -40,7 +40,7 @@ Open [http://localhost:3000](http://localhost:3000)
 Required:
 ```
 OPENROUTER_API_KEY=sk-or-...
-OPENGOV_MCP_URL=https://opengov-mcp-server.onrender.com
+OPENGOV_MCP_URL=https://opengov-mcp-server.onrender.com  # env var name kept for backwards compat
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
 NEXTAUTH_SECRET=        # openssl rand -base64 32
@@ -60,5 +60,6 @@ KV_REST_API_TOKEN=
 
 ## Related
 
-- [civic-ai-tools](https://github.com/npstorey/civic-ai-tools) - The opengov-mcp-server and related tools
+- [civic-ai-tools](https://github.com/npstorey/civic-ai-tools) - Starter project for querying civic data with MCP servers
+- [socrata-mcp-server](https://github.com/npstorey/socrata-mcp-server) - The MCP server for Socrata open data portals
 - [Model Context Protocol](https://modelcontextprotocol.io) - Official MCP documentation

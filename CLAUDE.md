@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A demo website showcasing MCP (Model Context Protocol) value by displaying side-by-side LLM responses with and without MCP integration for civic data queries. Built with Next.js 16+ on Vercel, it connects to OpenRouter for LLM access and opengov-mcp-server for live Socrata civic data.
+A demo website showcasing MCP (Model Context Protocol) value by displaying side-by-side LLM responses with and without MCP integration for civic data queries. Built with Next.js 16+ on Vercel, it connects to OpenRouter for LLM access and socrata-mcp-server for live Socrata civic data.
 
 **Production URL:** https://civic-ai-tools-website.vercel.app/
 
@@ -48,7 +48,7 @@ API Routes (Serverless)
     │
 External Services
     ├── OpenRouter (LLM API, OpenAI-compatible)
-    ├── opengov-mcp-server (Socrata data via HTTP/SSE at /mcp endpoint)
+    ├── socrata-mcp-server (Socrata data via HTTP/SSE at /mcp endpoint)
     └── Upstash Redis via @vercel/kv (Rate limiting)
 ```
 
@@ -63,7 +63,7 @@ External Services
 
 ### MCP Tool Execution Flow
 1. OpenRouter returns `tool_calls` in response
-2. Backend intercepts and calls opengov-mcp-server via HTTP POST to `/mcp`
+2. Backend intercepts and calls socrata-mcp-server via HTTP POST to `/mcp`
 3. Server uses JSON-RPC format with SSE response
 4. Tool results returned to model for final response
 
@@ -170,7 +170,7 @@ explore/page.tsx
 Required in `.env.local`:
 ```
 OPENROUTER_API_KEY=sk-or-...
-OPENGOV_MCP_URL=https://opengov-mcp-server.onrender.com
+OPENGOV_MCP_URL=https://socrata-mcp-server.onrender.com
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
 NEXTAUTH_SECRET=        # openssl rand -base64 32
@@ -286,8 +286,8 @@ Active work is organized into lightweight sprints in [`/sprints/`](sprints/).
 | Repo | Purpose |
 |------|---------|
 | [civic-ai-tools](https://github.com/npstorey/civic-ai-tools) | MCP server configs, skill docs (`opengov-skill.md`), setup scripts |
-| [opengov-mcp-server](https://github.com/npstorey/opengov-mcp-server) | The MCP server itself (Socrata/OpenGov data) |
-| [opengov-mcp-server-vercel-nextjs](https://github.com/npstorey/opengov-mcp-server-vercel-nextjs) | Vercel deployment wrapper for the MCP server |
+| [socrata-mcp-server](https://github.com/npstorey/socrata-mcp-server) | The MCP server itself (Socrata/OpenGov data) |
+| [socrata-mcp-server-vercel-nextjs](https://github.com/npstorey/socrata-mcp-server-vercel-nextjs) | Vercel deployment wrapper for the MCP server |
 
 ## Design Notes
 

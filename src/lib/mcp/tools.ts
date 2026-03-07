@@ -1,6 +1,6 @@
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 
-// Tool definitions for OpenRouter that map to opengov-mcp-server tools
+// Tool definitions for OpenRouter that map to socrata-mcp-server tools
 export const opengovMcpTools: ChatCompletionTool[] = [
   {
     type: 'function',
