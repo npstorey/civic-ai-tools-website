@@ -58,8 +58,20 @@ KV_REST_API_TOKEN=
 - Anonymous users: 5 requests/day
 - Signed-in users (GitHub): 25 requests/day
 
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
 ## Related
 
 - [civic-ai-tools](https://github.com/npstorey/civic-ai-tools) - Starter project for querying civic data with MCP servers
 - [socrata-mcp-server](https://github.com/npstorey/socrata-mcp-server) - The MCP server for Socrata open data portals
 - [Model Context Protocol](https://modelcontextprotocol.io) - Official MCP documentation
+
+## Disclaimer
+
+This is a personal project and is not affiliated with, endorsed by, or representative of any employer or organization.
+
+## License
+
+MIT
