@@ -31,6 +31,10 @@ Thank you for your interest in contributing! This is the demo website for the ci
 - Update documentation if your change affects setup or usage
 - Be respectful in issues and pull requests
 
+## This is a multi-repo project
+
+This website is one part of a larger project. If you're unsure where to contribute, see the [civic-ai-tools CONTRIBUTING guide](https://github.com/npstorey/civic-ai-tools/blob/main/CONTRIBUTING.md) for an overview of all three repos.
+
 ## Questions?
 
 Open an issue with your question — there are no bad questions here.
