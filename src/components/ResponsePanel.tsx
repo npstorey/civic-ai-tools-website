@@ -12,6 +12,7 @@ interface ResponsePanelProps {
   content: string;
   duration_ms?: number;
   tokens_used?: number;
+  token_limit_exceeded?: boolean;
   tools_called?: ToolCall[];
   isLoading?: boolean;
   variant: 'without-mcp' | 'with-mcp';
@@ -28,6 +29,7 @@ export default function ResponsePanel({
   content,
   duration_ms,
   tokens_used,
+  token_limit_exceeded,
   tools_called,
   isLoading,
   variant,
@@ -114,6 +116,7 @@ export default function ResponsePanel({
           toolsCalled={tools_called}
           duration_ms={duration_ms}
           tokens_used={tokens_used}
+          token_limit_exceeded={token_limit_exceeded}
           isComplete={isStreaming ? !!duration_ms : !!content}
           isActive={!!isStreaming && !duration_ms}
           showFooter={!isLoading && !!(duration_ms || tokens_used)}

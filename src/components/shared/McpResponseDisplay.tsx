@@ -16,6 +16,7 @@ interface McpResponseDisplayProps {
   toolsCalled?: ToolCall[];
   duration_ms?: number;
   tokens_used?: number;
+  token_limit_exceeded?: boolean;
   isComplete?: boolean;
   isActive?: boolean;
   showFooter?: boolean;
@@ -177,6 +178,7 @@ export default function McpResponseDisplay({
   toolsCalled = [],
   duration_ms,
   tokens_used,
+  token_limit_exceeded,
   isComplete,
   isActive,
   showFooter,
@@ -361,7 +363,12 @@ export default function McpResponseDisplay({
             )}
             {tokens_used && (
               <span>
-                <strong>Tokens:</strong> {tokens_used}
+                <strong>Tokens:</strong> {tokens_used.toLocaleString()}
+                {token_limit_exceeded && (
+                  <span style={{ color: 'var(--nyc-caution)', marginLeft: '6px' }}>
+                    (limit reached)
+                  </span>
+                )}
               </span>
             )}
           </div>
