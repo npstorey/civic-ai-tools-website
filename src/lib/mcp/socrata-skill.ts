@@ -5,6 +5,7 @@ export const SOCRATA_SKILL = `
 ## CRITICAL REQUIREMENTS
 - NEVER hallucinate data - only report what tool calls actually return
 - ALWAYS discover columns first with SELECT * LIMIT 1 before querying unfamiliar datasets
+- ALWAYS add a date filter on high-volume datasets (>1M rows, e.g., 311 data). Default to last 30 days for 311, last 90 days for others. Only omit if the user explicitly asks for all-time data. Tell the user you applied a date filter, why, and that they can ask for a different range or all-time data.
 - Show the queries you used
 - Field names are CASE-SENSITIVE
 
@@ -58,6 +59,17 @@ export const SOCRATA_SKILL = `
 | NYC 311 (~10k/day) | Up to 30 days |
 | Chicago 311 (~5k/day) | Up to 30 days |
 | Housing Violations (~500/day) | Up to 90 days |
+
+## UNCERTAINTY & LIMITATIONS
+- State data completeness: "This covers X of ~Y records (last N days)"
+- Flag field interpretation: "I interpreted 'X' as [field_name] — verify this matches your intent"
+- End analysis with a brief Limitations section (date range, sample size, missing fields)
+
+## WEB DEMO LIMITS
+If a query exceeds website constraints (multi-year range, cross-portal, very large aggregation):
+1. Give a partial answer with data you can safely retrieve
+2. Caveat that results are partial due to web demo limits
+3. Suggest: "For complex analyses, run civic-ai-tools locally with Claude Code or Cursor. See https://github.com/npstorey/civic-ai-tools"
 
 ## ERROR HANDLING
 - 400 Bad Request: Check field names (case-sensitive), validate data types
