@@ -40,7 +40,7 @@ Open [http://localhost:3000](http://localhost:3000)
 Required:
 ```
 OPENROUTER_API_KEY=sk-or-...
-OPENGOV_MCP_URL=https://opengov-mcp-server.onrender.com  # env var name kept for backwards compat
+SOCRATA_MCP_URL=https://socrata-mcp-server.onrender.com
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
 NEXTAUTH_SECRET=        # openssl rand -base64 32

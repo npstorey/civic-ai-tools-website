@@ -1,7 +1,7 @@
-// OpenGov MCP Skill - Domain knowledge for querying Socrata open data portals
+// Socrata MCP Skill - Domain knowledge for querying Socrata open data portals
 // Based on: civic-ai-tools/docs/opengov-skill.md
 
-export const OPENGOV_SKILL = `
+export const SOCRATA_SKILL = `
 ## CRITICAL REQUIREMENTS
 - NEVER hallucinate data - only report what tool calls actually return
 - ALWAYS discover columns first with SELECT * LIMIT 1 before querying unfamiliar datasets
@@ -88,7 +88,7 @@ export const buildSystemPrompt = (portal: string): string => {
 
   return `You are a helpful assistant with access to Socrata open data portals via the get_data tool.
 
-${OPENGOV_SKILL}
+${SOCRATA_SKILL}
 
 ## PORTAL-SPECIFIC GUIDANCE
 Default portal: ${portal}

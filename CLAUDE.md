@@ -70,7 +70,7 @@ External Services
 ### MCP Server Communication (`lib/mcp/client.ts`)
 ```typescript
 // 1. Initialize session first:
-POST ${OPENGOV_MCP_URL}/mcp
+POST ${SOCRATA_MCP_URL}/mcp
 Headers: { 'Accept': 'application/json, text/event-stream' }
 Body: {
   jsonrpc: '2.0',
@@ -81,7 +81,7 @@ Body: {
 // Response header contains: mcp-session-id
 
 // 2. Make tool calls with session ID:
-POST ${OPENGOV_MCP_URL}/mcp
+POST ${SOCRATA_MCP_URL}/mcp
 Headers: { 'mcp-session-id': sessionId }
 Body: {
   jsonrpc: '2.0',
@@ -98,7 +98,7 @@ The `get_data` tool supports these operation types:
 - `query`: Execute a SoQL query against a dataset
 - `metrics`: Get metrics/statistics about a dataset
 
-### OpenGov Skill Module (`lib/mcp/opengov-skill.ts`)
+### Socrata Skill Module (`lib/mcp/socrata-skill.ts`)
 Domain knowledge injected into the LLM system prompt:
 - Known dataset IDs and key fields for NYC, Chicago, SF
 - SoQL query patterns and syntax
@@ -170,7 +170,7 @@ explore/page.tsx
 Required in `.env.local`:
 ```
 OPENROUTER_API_KEY=sk-or-...
-OPENGOV_MCP_URL=https://socrata-mcp-server.onrender.com
+SOCRATA_MCP_URL=https://socrata-mcp-server.onrender.com
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
 NEXTAUTH_SECRET=        # openssl rand -base64 32
@@ -243,7 +243,7 @@ src/
     └── mcp/
         ├── client.ts              # MCP server HTTP client
         ├── tools.ts               # Tool definitions for OpenRouter
-        └── opengov-skill.ts       # Domain knowledge for Socrata queries
+        └── socrata-skill.ts       # Domain knowledge for Socrata queries
 
 public/
 └── bpmn/
@@ -285,7 +285,7 @@ Active work is organized into lightweight sprints in [`/sprints/`](sprints/).
 
 | Repo | Purpose |
 |------|---------|
-| [civic-ai-tools](https://github.com/npstorey/civic-ai-tools) | MCP server configs, skill docs (`opengov-skill.md`), setup scripts |
+| [civic-ai-tools](https://github.com/npstorey/civic-ai-tools) | MCP server configs, skill docs, setup scripts |
 | [socrata-mcp-server](https://github.com/npstorey/socrata-mcp-server) | The MCP server itself (Socrata/OpenGov data) |
 | [socrata-mcp-server-vercel-nextjs](https://github.com/npstorey/socrata-mcp-server-vercel-nextjs) | Vercel deployment wrapper for the MCP server |
 

@@ -1,11 +1,11 @@
 'use client';
 
-// Curated excerpts from src/lib/mcp/opengov-skill.ts (OPENGOV_SKILL constant).
+// Curated excerpts from src/lib/mcp/socrata-skill.ts (SOCRATA_SKILL constant).
 // If that file changes, update the excerpts below to stay in sync.
 
 import { useState } from 'react';
 
-const GITHUB_SKILL_URL = 'https://github.com/npstorey/civic-ai-tools-website/blob/main/src/lib/mcp/opengov-skill.ts';
+const GITHUB_SKILL_URL = 'https://github.com/npstorey/civic-ai-tools-website/blob/main/src/lib/mcp/socrata-skill.ts';
 
 interface Category {
   id: string;

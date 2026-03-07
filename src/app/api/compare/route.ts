@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { queryWithoutMcp, queryWithMcp } from '@/lib/openrouter';
-import { opengovMcpTools } from '@/lib/mcp/tools';
+import { socrataMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
-import { buildSystemPrompt } from '@/lib/mcp/opengov-skill';
+import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 
@@ -64,7 +64,7 @@ Be honest if you don't have access to current or real-time data.`;
       queryWithMcp(
         query,
         model,
-        opengovMcpTools,
+        socrataMcpTools,
         async (name, args) => {
           // Inject default portal if not specified
           if (!args.portal) {
