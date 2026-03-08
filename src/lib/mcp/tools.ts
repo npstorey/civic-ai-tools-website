@@ -82,6 +82,7 @@ export interface ModelDefinition {
   provider: string;
   supports_tools: boolean;
   description?: string;
+  maxTokenBudget?: number; // per-model token limit override
 }
 
 export const availableModels: ModelDefinition[] = [
@@ -100,11 +101,12 @@ export const availableModels: ModelDefinition[] = [
     description: 'Industry standard, excellent quality',
   },
   {
-    id: 'anthropic/claude-3.5-haiku',
-    name: 'Claude 3.5 Haiku',
+    id: 'anthropic/claude-haiku-4-5',
+    name: 'Claude Haiku 4.5',
     provider: 'Anthropic',
     supports_tools: true,
     description: 'Fast and budget-friendly',
+    maxTokenBudget: 150_000,
   },
   {
     id: 'openai/gpt-4o-mini',
@@ -112,5 +114,14 @@ export const availableModels: ModelDefinition[] = [
     provider: 'OpenAI',
     supports_tools: true,
     description: 'Cheapest option',
+    maxTokenBudget: 150_000,
+  },
+  {
+    id: 'google/gemini-2.0-flash-001',
+    name: 'Gemini 2.0 Flash',
+    provider: 'Google',
+    supports_tools: true,
+    description: 'Very fast, low cost',
+    maxTokenBudget: 150_000,
   },
 ];

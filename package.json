@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync-fallback": "node scripts/sync-fallback.mjs"
   },
   "dependencies": {
     "@vercel/kv": "^3.0.0",

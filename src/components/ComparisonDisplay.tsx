@@ -24,6 +24,8 @@ interface StreamingPanelState {
   isComplete: boolean;
   duration_ms?: number;
   tokens_used?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
   token_limit_exceeded?: boolean;
   tools_called?: ToolCall[];
 }
@@ -95,6 +97,8 @@ export default function ComparisonDisplay({
         content={withMcpContent}
         duration_ms={isStreaming ? streamingWithMcp?.duration_ms : withMcp?.duration_ms}
         tokens_used={isStreaming ? streamingWithMcp?.tokens_used : withMcp?.tokens_used}
+        prompt_tokens={isStreaming ? streamingWithMcp?.prompt_tokens : undefined}
+        completion_tokens={isStreaming ? streamingWithMcp?.completion_tokens : undefined}
         token_limit_exceeded={isStreaming ? streamingWithMcp?.token_limit_exceeded : undefined}
         tools_called={isStreaming ? streamingWithMcp?.tools_called : withMcp?.tools_called}
         isLoading={isLoading && !isStreaming}

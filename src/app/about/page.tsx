@@ -462,7 +462,75 @@ export default function AboutPage() {
       </section>
 
       {/* ============================================================
-          Section 7: See It in Action
+          Section 7: Understanding AI Limitations
+          ============================================================ */}
+      <section id="ai-limitations" style={sectionSpacing}>
+        <h2 style={sectionHeading}>Understanding AI Limitations</h2>
+
+        <p style={prose}>
+          Even with live data access, AI responses can contain errors. This is inherent
+          to how large language models work &mdash; they generate text that <em>sounds</em> right,
+          which sometimes means it <em>isn&apos;t</em> right. In AI research, this is
+          called <strong>hallucination</strong>: the model produces plausible but incorrect information.
+        </p>
+
+        <p style={prose}>
+          With civic data queries, common failure patterns include:
+        </p>
+        <ul
+          style={{
+            paddingLeft: '20px',
+            margin: '0 0 16px 0',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
+            fontSize: '15px',
+            color: 'var(--text-secondary)',
+            lineHeight: '1.6',
+          }}
+        >
+          <li><strong>Inventing data points</strong> &mdash; reporting numbers that weren&apos;t in the query results</li>
+          <li><strong>Misattributing numbers</strong> &mdash; assigning a value to the wrong column, borough, or time period</li>
+          <li><strong>False confidence from small samples</strong> &mdash; describing trends from a few data points as if they&apos;re definitive</li>
+          <li><strong>Wrong query syntax</strong> &mdash; generating SoQL with incorrect column names or unsupported functions, leading to errors or misleading results</li>
+          <li><strong>Mixing up datasets</strong> &mdash; conflating results from different datasets when multiple are queried in one session</li>
+        </ul>
+
+        <p style={prose}>
+          Our system prompt includes anti-hallucination rules (never invent data, always cite sources,
+          discover columns before querying) and uncertainty guidelines (state date ranges, flag
+          field interpretation assumptions, disclose limitations). These significantly reduce errors
+          but cannot eliminate them entirely &mdash; the model can still misread data or draw
+          unsupported conclusions.
+        </p>
+
+        <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>Best practices for users</h3>
+        <ul
+          style={{
+            paddingLeft: '20px',
+            margin: '0 0 16px 0',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
+            fontSize: '15px',
+            color: 'var(--text-secondary)',
+            lineHeight: '1.6',
+          }}
+        >
+          <li>Spot-check key numbers by clicking through to the linked dataset</li>
+          <li>Be skeptical of precise percentages &mdash; the AI may round or compute incorrectly</li>
+          <li>Verify that the date range in the response matches what you asked for</li>
+          <li>Treat AI analysis as a starting point for investigation, not a final answer</li>
+        </ul>
+
+        <div style={calloutBox}>
+          The source provenance line below each MCP response links directly to the datasets used.
+          Click through to verify the data yourself.
+        </div>
+      </section>
+
+      {/* ============================================================
+          Section 8: See It in Action
           ============================================================ */}
       <section id="try-it" style={sectionSpacing}>
         <h2 style={sectionHeading}>See It in Action</h2>
@@ -528,6 +596,50 @@ export default function AboutPage() {
           set up MCP locally:
         </p>
 
+        {/* Claude Desktop config */}
+        <div
+          style={{
+            border: '1px solid var(--border-color)',
+            borderRadius: '4px',
+            padding: '24px',
+            marginBottom: '24px',
+          }}
+        >
+          <h4 style={{ fontSize: '18px', marginBottom: '8px' }}>Claude Desktop</h4>
+          <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+            Clone and build the server first:
+          </p>
+          <pre style={{
+            ...excerptBlock,
+            margin: '0 0 12px 0',
+            fontSize: '12px',
+          }}>{`git clone https://github.com/npstorey/socrata-mcp-server
+cd socrata-mcp-server && npm install && npm run build`}</pre>
+          <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+            Then add this to your Claude Desktop MCP configuration
+            (Settings &rarr; Developer &rarr; Edit Config):
+          </p>
+          <pre style={{
+            ...excerptBlock,
+            margin: '0 0 12px 0',
+          }}>{`{
+  "mcpServers": {
+    "socrata": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["path/to/socrata-mcp-server/dist/index.js", "--stdio"],
+      "env": {
+        "DEFAULT_DOMAIN": "data.cityofnewyork.us"
+      }
+    }
+  }
+}`}</pre>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
+            Replace <code style={{ fontSize: '12px' }}>path/to/</code> with the actual path where you cloned the repo.
+            After saving, restart Claude Desktop.
+          </p>
+        </div>
+
         <div
           style={{
             display: 'grid',
@@ -556,6 +668,17 @@ export default function AboutPage() {
             </div>
           ))}
         </div>
+
+        <p style={{ ...prose, fontSize: '14px', color: 'var(--text-muted)', marginBottom: '24px' }}>
+          <strong>Note:</strong> ChatGPT does not currently support MCP natively.
+          For the full MCP experience, use{' '}
+          <a href="https://claude.ai/download" target="_blank" rel="noopener noreferrer">Claude Desktop</a>,{' '}
+          <a href="https://claude.ai/code" target="_blank" rel="noopener noreferrer">Claude Code</a>, or{' '}
+          <a href="https://cursor.com" target="_blank" rel="noopener noreferrer">Cursor</a>.
+          See the{' '}
+          <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer">MCP docs</a>{' '}
+          for the full list of compatible clients.
+        </p>
 
         <div
           style={{

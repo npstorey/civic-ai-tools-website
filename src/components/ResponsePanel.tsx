@@ -12,6 +12,8 @@ interface ResponsePanelProps {
   content: string;
   duration_ms?: number;
   tokens_used?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
   token_limit_exceeded?: boolean;
   tools_called?: ToolCall[];
   isLoading?: boolean;
@@ -29,6 +31,8 @@ export default function ResponsePanel({
   content,
   duration_ms,
   tokens_used,
+  prompt_tokens,
+  completion_tokens,
   token_limit_exceeded,
   tools_called,
   isLoading,
@@ -116,6 +120,8 @@ export default function ResponsePanel({
           toolsCalled={tools_called}
           duration_ms={duration_ms}
           tokens_used={tokens_used}
+          prompt_tokens={prompt_tokens}
+          completion_tokens={completion_tokens}
           token_limit_exceeded={token_limit_exceeded}
           isComplete={isStreaming ? !!duration_ms : !!content}
           isActive={!!isStreaming && !duration_ms}

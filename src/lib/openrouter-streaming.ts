@@ -25,6 +25,8 @@ export interface CompletionResult {
   content: string;
   duration_ms: number;
   tokens_used: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
   token_limit_exceeded?: boolean;
   tools_called?: {
     name: string;
@@ -36,9 +38,9 @@ export interface CompletionResult {
   }[];
 }
 
-// Token safety limits
-const MAX_TOKENS_PER_REQUEST = 100_000;
-const MAX_TOOL_RESULT_CHARS = 25_000;
+// Token safety limits (configurable via env vars)
+const MAX_TOKENS_PER_REQUEST = Number(process.env.TOKEN_LIMIT_PER_REQUEST) || 100_000;
+const MAX_TOOL_RESULT_CHARS = Number(process.env.MAX_TOOL_RESULT_CHARS) || 25_000;
 
 // Truncate large tool results to limit input token growth
 function truncateToolResult(result: string): string {
@@ -148,6 +150,8 @@ export async function queryWithMcpStreaming(
     let iterations = 0;
     const maxIterations = 10;
     let cumulativeTokens = response.usage?.total_tokens || 0;
+    let cumulativePromptTokens = response.usage?.prompt_tokens || 0;
+    let cumulativeCompletionTokens = response.usage?.completion_tokens || 0;
     let tokenLimitExceeded = false;
 
     // Handle tool calls iteratively
@@ -239,6 +243,8 @@ export async function queryWithMcpStreaming(
 
       // Track cumulative tokens
       cumulativeTokens += response.usage?.total_tokens || 0;
+      cumulativePromptTokens += response.usage?.prompt_tokens || 0;
+      cumulativeCompletionTokens += response.usage?.completion_tokens || 0;
 
       iterations++;
     }
@@ -280,6 +286,8 @@ export async function queryWithMcpStreaming(
 
       let content = '';
       let finalCallTokens = 0;
+      let finalPromptTokens = 0;
+      let finalCompletionTokens = 0;
 
       for await (const chunk of finalStream) {
         const delta = chunk.choices[0]?.delta?.content;
@@ -287,17 +295,23 @@ export async function queryWithMcpStreaming(
           content += delta;
           callbacks.onToken(panel, delta);
         }
-        if (chunk.usage?.total_tokens) {
-          finalCallTokens = chunk.usage.total_tokens;
+        if (chunk.usage) {
+          if (chunk.usage.total_tokens) finalCallTokens = chunk.usage.total_tokens;
+          if (chunk.usage.prompt_tokens) finalPromptTokens = chunk.usage.prompt_tokens;
+          if (chunk.usage.completion_tokens) finalCompletionTokens = chunk.usage.completion_tokens;
         }
       }
 
       cumulativeTokens += finalCallTokens;
+      cumulativePromptTokens += finalPromptTokens;
+      cumulativeCompletionTokens += finalCompletionTokens;
       const duration_ms = Date.now() - startTime;
       callbacks.onComplete(panel, {
         content,
         duration_ms,
         tokens_used: cumulativeTokens,
+        prompt_tokens: cumulativePromptTokens || undefined,
+        completion_tokens: cumulativeCompletionTokens || undefined,
         token_limit_exceeded: tokenLimitExceeded,
         tools_called: toolsCalled.length > 0 ? toolsCalled : undefined,
       });
@@ -325,6 +339,8 @@ export async function queryWithMcpStreaming(
         content,
         duration_ms,
         tokens_used: cumulativeTokens,
+        prompt_tokens: cumulativePromptTokens || undefined,
+        completion_tokens: cumulativeCompletionTokens || undefined,
         tools_called: toolsCalled.length > 0 ? toolsCalled : undefined,
       });
     } else {
@@ -340,6 +356,8 @@ export async function queryWithMcpStreaming(
 
       let content = '';
       let finalCallTokens = 0;
+      let finalPromptTokens = 0;
+      let finalCompletionTokens = 0;
 
       for await (const chunk of finalStream) {
         const delta = chunk.choices[0]?.delta?.content;
@@ -347,17 +365,23 @@ export async function queryWithMcpStreaming(
           content += delta;
           callbacks.onToken(panel, delta);
         }
-        if (chunk.usage?.total_tokens) {
-          finalCallTokens = chunk.usage.total_tokens;
+        if (chunk.usage) {
+          if (chunk.usage.total_tokens) finalCallTokens = chunk.usage.total_tokens;
+          if (chunk.usage.prompt_tokens) finalPromptTokens = chunk.usage.prompt_tokens;
+          if (chunk.usage.completion_tokens) finalCompletionTokens = chunk.usage.completion_tokens;
         }
       }
 
       cumulativeTokens += finalCallTokens;
+      cumulativePromptTokens += finalPromptTokens;
+      cumulativeCompletionTokens += finalCompletionTokens;
       const duration_ms = Date.now() - startTime;
       callbacks.onComplete(panel, {
         content,
         duration_ms,
         tokens_used: cumulativeTokens,
+        prompt_tokens: cumulativePromptTokens || undefined,
+        completion_tokens: cumulativeCompletionTokens || undefined,
         tools_called: toolsCalled.length > 0 ? toolsCalled : undefined,
       });
     }

@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ProgressLog from '@/components/ProgressLog';
 import SkillPromptDisclosure from '@/components/SkillPromptDisclosure';
-import { buildProvenanceLine } from '@/lib/streaming';
+import { buildProvenanceLine, buildNarrativeSummary, buildStatsSummary, getPortalCity } from '@/lib/streaming';
 import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
 
 interface McpResponseDisplayProps {
@@ -16,6 +16,8 @@ interface McpResponseDisplayProps {
   toolsCalled?: ToolCall[];
   duration_ms?: number;
   tokens_used?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
   token_limit_exceeded?: boolean;
   isComplete?: boolean;
   isActive?: boolean;
@@ -23,65 +25,202 @@ interface McpResponseDisplayProps {
   autoScroll?: boolean;
 }
 
-function TimingBar({ tools, totalDuration }: { tools: ToolCall[]; totalDuration: number }) {
-  const dataRetrievalMs = tools.reduce((sum, t) => sum + (t.duration_ms || 0), 0);
-  const remainingMs = Math.max(0, totalDuration - dataRetrievalMs);
-  const analysisMs = Math.round(remainingMs * 0.4);
-  const synthesisMs = remainingMs - analysisMs;
+// Segment colors: warm family (LLM) + cool (API) — Gestalt similarity groups "thinking" vs "waiting"
+const COLOR_PLANNING = '#CC3311';   // deep red-orange
+const COLOR_SYNTHESIS = '#EE7733'; // medium orange
+const COLOR_API = '#0077BB';       // cool blue
+
+function TimingFooter({
+  tools, totalDuration, tokens_used, prompt_tokens, completion_tokens, token_limit_exceeded,
+}: {
+  tools: ToolCall[];
+  totalDuration: number;
+  tokens_used?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  token_limit_exceeded?: boolean;
+}) {
+  const [activeSegment, setActiveSegment] = useState<string | null>(null);
+
+  const apiMs = tools.reduce((sum, t) => sum + (t.duration_ms || 0), 0);
+  const llmMs = Math.max(0, totalDuration - apiMs);
+  const planningMs = Math.round(llmMs * 0.4);
+  const synthesisMs = llmMs - planningMs;
+
+  const llmPct = Math.round((llmMs / totalDuration) * 100);
+  const apiPct = 100 - llmPct;
 
   const segments = [
-    { label: 'AI reasoning', ms: analysisMs, color: 'var(--nyc-info)' },
-    { label: 'Data retrieval', ms: dataRetrievalMs, color: 'var(--nyc-success)' },
-    { label: 'Synthesis', ms: synthesisMs, color: 'var(--nyc-caution)' },
+    { key: 'planning', label: 'Planning', ms: planningMs, color: COLOR_PLANNING },
+    { key: 'synthesis', label: 'Synthesis', ms: synthesisMs, color: COLOR_SYNTHESIS },
+    { key: 'api', label: 'Data', ms: apiMs, color: COLOR_API },
   ];
 
-  return (
-    <div style={{ marginBottom: '12px' }}>
+  // Build flat array of bar elements (segments + group gap)
+  const barElements: React.ReactNode[] = [];
+  for (const seg of segments) {
+    if (seg.key === 'api') {
+      barElements.push(
+        <div key="group-gap" style={{ flex: '0 0 3px', background: 'transparent' }} />
+      );
+    }
+    barElements.push(
       <div
+        key={seg.key}
+        tabIndex={0}
+        aria-label={`${seg.label}: ${(seg.ms / 1000).toFixed(1)} seconds`}
+        className="timing-segment"
+        style={{
+          flexGrow: activeSegment === seg.key ? seg.ms * 1.8 : seg.ms,
+          flexShrink: 0,
+          flexBasis: 0,
+          backgroundColor: seg.color,
+          filter: activeSegment === seg.key ? 'brightness(1.1)' : undefined,
+          transition: 'flex-grow 0.2s ease, filter 0.2s ease',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          cursor: 'default',
+          position: 'relative',
+          minWidth: seg.ms > 0 ? '2px' : 0,
+        }}
+        onMouseEnter={() => setActiveSegment(seg.key)}
+        onMouseLeave={() => setActiveSegment(null)}
+        onFocus={() => setActiveSegment(seg.key)}
+        onBlur={() => setActiveSegment(null)}
+        onClick={() => setActiveSegment(prev => prev === seg.key ? null : seg.key)}
+      >
+        <span className="segment-label" style={{
+          fontSize: '11px',
+          fontWeight: 500,
+          color: 'white',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          padding: '0 6px',
+        }}>
+          {seg.label} {(seg.ms / 1000).toFixed(1)}s
+        </span>
+
+        {/* Mobile tooltip — shown on tap via CSS */}
+        {activeSegment === seg.key && (
+          <div className="segment-tooltip" style={{
+            position: 'absolute',
+            bottom: '100%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: '#333',
+            color: 'white',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            fontSize: '11px',
+            whiteSpace: 'nowrap',
+            marginBottom: '4px',
+            pointerEvents: 'none',
+          }}>
+            {seg.label} {(seg.ms / 1000).toFixed(1)}s
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="group"
+      aria-label={`Performance breakdown: completed in ${(totalDuration / 1000).toFixed(1)} seconds`}
+      style={{ marginBottom: '12px' }}
+    >
+      {/* Row 1: Summary headline */}
+      <div style={{ fontSize: '13px', color: '#444', marginBottom: '8px' }}>
+        Completed in{' '}
+        <span style={{ fontWeight: 600 }}>{(totalDuration / 1000).toFixed(1)}s</span>
+        {' \u2014 '}
+        AI thinking{' '}
+        <span style={{ fontWeight: 600 }}>{llmPct}%</span>
+        {' \u00b7 '}
+        Data retrieval{' '}
+        <span style={{ fontWeight: 600 }}>{apiPct}%</span>
+      </div>
+
+      {/* Row 2: Single segmented bar */}
+      <div
+        role="img"
+        aria-label={`Planning ${(planningMs / 1000).toFixed(1)}s, Synthesis ${(synthesisMs / 1000).toFixed(1)}s, Data retrieval ${(apiMs / 1000).toFixed(1)}s`}
+        className="timing-bar"
         style={{
           display: 'flex',
-          height: '8px',
+          alignItems: 'stretch',
+          height: '28px',
+          gap: '1px',
+          backgroundColor: 'white',
           borderRadius: '4px',
           overflow: 'hidden',
-          backgroundColor: 'var(--card-background)',
         }}
       >
-        {segments.map((seg) => (
-          <div
-            key={seg.label}
-            style={{
-              width: `${(seg.ms / totalDuration) * 100}%`,
-              backgroundColor: seg.color,
-              minWidth: seg.ms > 0 ? '2px' : 0,
-            }}
-          />
-        ))}
+        {barElements}
       </div>
-      <div
-        style={{
-          display: 'flex',
-          gap: '12px',
-          marginTop: '4px',
+
+      {/* Row 3: Group labels */}
+      <div style={{ display: 'flex', marginTop: '4px' }}>
+        <div style={{
+          flexGrow: planningMs + synthesisMs,
+          flexShrink: 0,
+          flexBasis: 0,
           fontSize: '11px',
-          color: 'var(--text-muted)',
-          flexWrap: 'wrap',
-        }}
-      >
-        {segments.map((seg) => (
-          <span key={seg.label} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span
-              style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '2px',
-                backgroundColor: seg.color,
-                flexShrink: 0,
-              }}
-            />
-            {seg.label}: {(seg.ms / 1000).toFixed(1)}s
-          </span>
-        ))}
+          color: '#666',
+        }}>
+          AI thinking
+        </div>
+        <div style={{ flex: '0 0 4px' }} />
+        <div style={{
+          flexGrow: apiMs,
+          flexShrink: 0,
+          flexBasis: 0,
+          fontSize: '11px',
+          color: '#666',
+          textAlign: 'left',
+        }}>
+          Data retrieval
+        </div>
       </div>
+
+      {/* Token line */}
+      {tokens_used && (
+        <div style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
+          Tokens:{' '}
+          {prompt_tokens && completion_tokens ? (
+            <>{prompt_tokens.toLocaleString()} in{' \u00b7 '}{completion_tokens.toLocaleString()} out{' \u00b7 '}{tokens_used.toLocaleString()} total</>
+          ) : (
+            <>{tokens_used.toLocaleString()} total</>
+          )}
+          {token_limit_exceeded && (
+            <span style={{ color: 'var(--nyc-caution)', marginLeft: '6px' }}>(limit reached)</span>
+          )}
+        </div>
+      )}
+
+      <style jsx>{`
+        .timing-segment:focus-visible {
+          outline: 2px solid #005fcc;
+          outline-offset: -2px;
+        }
+        .segment-tooltip {
+          display: none;
+        }
+        @media (max-width: 400px) {
+          .timing-bar {
+            height: 32px !important;
+          }
+          .segment-label {
+            display: none !important;
+          }
+          .segment-tooltip {
+            display: block !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
@@ -178,6 +317,8 @@ export default function McpResponseDisplay({
   toolsCalled = [],
   duration_ms,
   tokens_used,
+  prompt_tokens,
+  completion_tokens,
   token_limit_exceeded,
   isComplete,
   isActive,
@@ -185,6 +326,7 @@ export default function McpResponseDisplay({
   autoScroll,
 }: McpResponseDisplayProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
 
   const hasGroups = progressGroups.length > 0;
   const hasProgressLog = progressLog.length > 0;
@@ -344,24 +486,33 @@ export default function McpResponseDisplay({
           }}
         >
           {toolsCalled.length > 0 && duration_ms && (
-            <TimingBar tools={toolsCalled} totalDuration={duration_ms} />
+            <TimingFooter
+              tools={toolsCalled}
+              totalDuration={duration_ms}
+              tokens_used={tokens_used}
+              prompt_tokens={prompt_tokens}
+              completion_tokens={completion_tokens}
+              token_limit_exceeded={token_limit_exceeded}
+            />
           )}
 
+          {/* Summary line with copy button */}
           <div
             style={{
               display: 'flex',
               flexWrap: 'wrap',
+              alignItems: 'center',
               gap: '16px',
               fontSize: '14px',
               color: 'var(--text-muted)',
             }}
           >
-            {duration_ms && (
+            {!(toolsCalled.length > 0 && duration_ms) && duration_ms && (
               <span>
                 <strong>Time:</strong> {(duration_ms / 1000).toFixed(2)}s
               </span>
             )}
-            {tokens_used && (
+            {!(toolsCalled.length > 0 && duration_ms) && tokens_used && (
               <span>
                 <strong>Tokens:</strong> {tokens_used.toLocaleString()}
                 {token_limit_exceeded && (
@@ -371,11 +522,92 @@ export default function McpResponseDisplay({
                 )}
               </span>
             )}
+
+            {/* Copy button */}
+            {content && (
+              <button
+                onClick={async () => {
+                  const parts: string[] = [];
+                  // Header: query and portal
+                  if (queryText) parts.push(`**Query:** ${queryText}`);
+                  const portal = toolsCalled.find(t => t.args.portal)?.args.portal as string | undefined;
+                  if (portal) parts.push(`**Portal:** ${getPortalCity(portal)}`);
+                  // Context: narrative and stats
+                  if (toolsCalled.length > 0) {
+                    const narrative = buildNarrativeSummary(toolsCalled);
+                    if (narrative) parts.push(narrative);
+                    const stats = buildStatsSummary(toolsCalled, duration_ms);
+                    if (stats) parts.push(stats);
+                  }
+                  if (parts.length > 0) parts.push('---');
+                  parts.push(content);
+                  // Attribution
+                  parts.push(`\n_Generated via civicaitools.org \u00b7 ${new Date().toLocaleDateString()}_`);
+                  await navigator.clipboard.writeText(parts.join('\n\n'));
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                style={{
+                  marginLeft: 'auto',
+                  background: 'none',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  color: copied ? 'var(--nyc-success)' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'color 0.15s, border-color 0.15s',
+                }}
+              >
+                {copied ? (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+                    </svg>
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z" />
+                      <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z" />
+                    </svg>
+                    Copy
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
           {toolsCalled.length > 0 && (
             <SkillPromptDisclosure />
           )}
+        </div>
+      )}
+
+      {/* AI accuracy disclaimer */}
+      {isComplete && content && (
+        <div
+          style={{
+            flexShrink: 0,
+            padding: '8px 24px',
+            fontSize: '11px',
+            color: 'var(--text-muted)',
+            lineHeight: '1.5',
+            borderTop: '1px solid var(--border-color)',
+          }}
+        >
+          AI-generated analysis may contain errors. Verify findings against the{' '}
+          original dataset before citing.{' '}
+          <a
+            href="/about#ai-limitations"
+            style={{ color: 'var(--text-muted)', textDecoration: 'underline' }}
+          >
+            Learn more &rarr;
+          </a>
         </div>
       )}
 
