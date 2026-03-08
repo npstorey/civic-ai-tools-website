@@ -1,4 +1,4 @@
-const MCP_URL = process.env.SOCRATA_MCP_URL || 'https://socrata-mcp-server.onrender.com';
+const MCP_URL = process.env.SOCRATA_MCP_URL || 'https://opengov-mcp-server.onrender.com';
 
 interface McpToolResult {
   content?: Array<{
@@ -135,6 +135,118 @@ async function makeToolCall(name: string, args: Record<string, unknown>): Promis
     }
     throw new Error('Failed to parse MCP response JSON');
   }
+}
+
+interface McpPromptResult {
+  messages?: Array<{
+    role: string;
+    content: { type: string; text?: string } | Array<{ type: string; text?: string }>;
+  }>;
+}
+
+export async function callMcpPrompt(name: string, args: Record<string, string>): Promise<string> {
+  // Ensure we have a session
+  if (!sessionId) {
+    sessionId = await initializeSession();
+  }
+
+  try {
+    return await makePromptCall(name, args);
+  } catch (error) {
+    // If session expired, try reinitializing
+    if (error instanceof Error && error.message.includes('session')) {
+      sessionId = await initializeSession();
+      return await makePromptCall(name, args);
+    }
+    throw error;
+  }
+}
+
+async function makePromptCall(name: string, args: Record<string, string>): Promise<string> {
+  console.log('[MCP] Getting prompt:', name, 'with args:', JSON.stringify(args));
+
+  const response = await fetch(`${MCP_URL}/mcp`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/event-stream',
+      'mcp-session-id': sessionId!,
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: Date.now(),
+      method: 'prompts/get',
+      params: { name, arguments: args },
+    }),
+    signal: AbortSignal.timeout(10_000), // 10s timeout for cold starts
+  });
+
+  if (!response.ok) {
+    throw new Error(`MCP prompt error: ${response.status} ${response.statusText}`);
+  }
+
+  const text = await response.text();
+  console.log('[MCP] Prompt raw response:', text.substring(0, 500));
+
+  // Parse SSE response format
+  const lines = text.split('\n');
+  let jsonData = '';
+
+  for (const line of lines) {
+    if (line.startsWith('data:')) {
+      jsonData = line.slice(5).trim();
+      break;
+    }
+  }
+
+  if (!jsonData) {
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.result) {
+        return formatPromptResult(parsed.result);
+      }
+      if (parsed.error) {
+        throw new Error(parsed.error.message || 'MCP prompt error');
+      }
+    } catch (e) {
+      if (e instanceof Error && !e.message.includes('parse') && !e.message.includes('Unexpected')) {
+        throw e;
+      }
+    }
+    throw new Error('Failed to parse MCP prompt response');
+  }
+
+  const parsed = JSON.parse(jsonData);
+  if (parsed.result) {
+    return formatPromptResult(parsed.result);
+  }
+  if (parsed.error) {
+    throw new Error(parsed.error.message || 'MCP prompt error');
+  }
+  throw new Error('Unexpected MCP prompt response format');
+}
+
+function formatPromptResult(result: McpPromptResult): string {
+  if (!result.messages || !Array.isArray(result.messages)) {
+    throw new Error('MCP prompt returned no messages');
+  }
+
+  return result.messages
+    .map(msg => {
+      const content = msg.content;
+      if (Array.isArray(content)) {
+        return content
+          .filter(item => item.type === 'text' && item.text)
+          .map(item => item.text)
+          .join('\n');
+      }
+      if (typeof content === 'object' && content.type === 'text' && content.text) {
+        return content.text;
+      }
+      return '';
+    })
+    .filter(Boolean)
+    .join('\n');
 }
 
 function formatMcpResult(result: McpToolResult): string {

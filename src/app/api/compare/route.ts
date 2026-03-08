@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     await incrementRateLimit(identifier, isAuthenticated);
 
     // System prompt for the MCP-enabled query - uses skill module
-    const systemPromptWithMcp = buildSystemPrompt(portal);
+    const systemPromptWithMcp = await buildSystemPrompt(portal);
 
     // System prompt for the non-MCP query (to make it fair)
     const systemPromptWithoutMcp = `You are a helpful assistant.
