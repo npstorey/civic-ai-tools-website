@@ -128,7 +128,11 @@ export const buildSystemPrompt = async (portal: string): Promise<string> => {
     Promise.resolve(getSkillForPortal(portal)),
   ]);
 
+  const today = new Date().toISOString().split('T')[0];
+
   return `You are a helpful assistant with access to Socrata open data portals via the get_data tool.
+
+Today's date is ${today}. Always use this as the current date for interpreting relative time expressions like "last year" or "past two months."
 
 ${skillGuidance}
 
