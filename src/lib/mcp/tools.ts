@@ -8,19 +8,20 @@ export const socrataMcpTools: ChatCompletionTool[] = [
       name: 'get_data',
       description: `Unified Socrata open data access tool. Supports multiple operation types:
 - catalog: Search the catalog for datasets matching a query on a Socrata portal
-- metadata: Get detailed metadata about a specific dataset (IMPORTANT: pass dataset_id in the "query" parameter, not "dataset_id")
+- metadata: Get detailed metadata about a specific dataset
 - query: Execute a SoQL query against a dataset to fetch and filter data
-- metrics: Get metrics/statistics about a dataset
+- metrics: Get row count, view count, last-updated timestamps for a dataset
 
 IMPORTANT TIPS:
-1. For type=metadata, pass the dataset ID in the "query" parameter (e.g., "query": "erm2-nwe9")
+1. For type=metadata and type=metrics, pass the dataset ID in "dataset_id"
 2. For type=query, ALWAYS start by fetching a sample with no WHERE clause to see actual column values
 3. NYC 311 data uses field names like: complaint_type, descriptor, created_date, community_board
 4. Field values are case-sensitive - fetch sample data first to see exact formats
 
 Examples:
 - Search catalog: { "type": "catalog", "portal": "data.cityofnewyork.us", "query": "311 complaints" }
-- Get metadata: { "type": "metadata", "portal": "data.cityofnewyork.us", "query": "erm2-nwe9" }
+- Get metadata: { "type": "metadata", "portal": "data.cityofnewyork.us", "dataset_id": "erm2-nwe9" }
+- Get metrics: { "type": "metrics", "portal": "data.cityofnewyork.us", "dataset_id": "erm2-nwe9" }
 - Fetch sample data first: { "type": "query", "portal": "data.cityofnewyork.us", "dataset_id": "erm2-nwe9", "limit": 5 }
 - Query with filter: { "type": "query", "portal": "data.cityofnewyork.us", "dataset_id": "erm2-nwe9", "select": "complaint_type, COUNT(*) as count", "group": "complaint_type", "order": "count DESC", "limit": 10 }`,
       parameters: {
@@ -41,7 +42,7 @@ Examples:
           },
           dataset_id: {
             type: 'string',
-            description: 'Dataset identifier (required for type=query)',
+            description: 'Dataset identifier (required for type=query, metadata, and metrics)',
           },
           limit: {
             type: 'number',

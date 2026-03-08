@@ -25,6 +25,7 @@ export interface CompletionResult {
   content: string;
   duration_ms: number;
   tokens_used: number;
+  token_limit_exceeded?: boolean;
   tools_called?: {
     name: string;
     args: Record<string, unknown>;
@@ -33,6 +34,33 @@ export interface CompletionResult {
     operationType?: string;
     reason?: string;
   }[];
+}
+
+// Token safety limits
+const MAX_TOKENS_PER_REQUEST = 100_000;
+const MAX_TOOL_RESULT_CHARS = 25_000;
+
+// Truncate large tool results to limit input token growth
+function truncateToolResult(result: string): string {
+  if (result.length <= MAX_TOOL_RESULT_CHARS) return result;
+
+  try {
+    const parsed = JSON.parse(result);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      // Keep enough rows to stay under the limit
+      const sampleRow = JSON.stringify(parsed[0]);
+      const rowSize = sampleRow.length + 2; // comma + newline
+      const maxRows = Math.max(5, Math.floor(MAX_TOOL_RESULT_CHARS / rowSize));
+      const truncated = parsed.slice(0, maxRows);
+      return JSON.stringify(truncated) +
+        `\n[Truncated: showing ${truncated.length} of ${parsed.length} rows]`;
+    }
+  } catch {
+    // Not JSON — fall through to raw truncation
+  }
+
+  return result.slice(0, MAX_TOOL_RESULT_CHARS) +
+    `\n[Truncated: result was ${result.length} characters]`;
 }
 
 export async function queryWithoutMcpStreaming(
@@ -119,6 +147,8 @@ export async function queryWithMcpStreaming(
 
     let iterations = 0;
     const maxIterations = 10;
+    let cumulativeTokens = response.usage?.total_tokens || 0;
+    let tokenLimitExceeded = false;
 
     // Handle tool calls iteratively
     while (response.choices[0]?.message?.tool_calls && iterations < maxIterations) {
@@ -170,10 +200,13 @@ export async function queryWithMcpStreaming(
               callbacks.onProgress(panel, resultMessage, { phase: 'tool_result', iteration: currentIteration, args });
             }
 
+            // Truncate large results before feeding back as context
+            const truncatedResult = truncateToolResult(result);
+
             messages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
-              content: result,
+              content: truncatedResult,
             });
           } catch (error) {
             messages.push({
@@ -183,6 +216,13 @@ export async function queryWithMcpStreaming(
             });
           }
         }
+      }
+
+      // Check token limit before making the next LLM call
+      if (cumulativeTokens >= MAX_TOKENS_PER_REQUEST) {
+        tokenLimitExceeded = true;
+        callbacks.onProgress(panel, `Token limit reached (${cumulativeTokens.toLocaleString()} tokens used). Generating response with data collected so far...`, { phase: 'synthesize' });
+        break;
       }
 
       // Narrate the thinking step
@@ -197,24 +237,32 @@ export async function queryWithMcpStreaming(
         max_tokens: 2000,
       });
 
+      // Track cumulative tokens
+      cumulativeTokens += response.usage?.total_tokens || 0;
+
       iterations++;
     }
 
-    // Handle max iterations case
+    // Handle max iterations, token limit, or pending tool calls
     const lastMessage = response.choices[0]?.message;
-    if (!lastMessage?.content && (iterations >= maxIterations || lastMessage?.tool_calls)) {
+    if (!lastMessage?.content && (iterations >= maxIterations || tokenLimitExceeded || lastMessage?.tool_calls)) {
       if (lastMessage?.tool_calls) {
         messages.push(lastMessage);
+        const abortReason = tokenLimitExceeded
+          ? 'Token budget exceeded. Please provide a summary based on the data already collected.'
+          : 'Tool call limit reached. Please provide a summary based on the data already collected.';
         for (const toolCall of lastMessage.tool_calls) {
           messages.push({
             role: 'tool',
             tool_call_id: toolCall.id,
-            content: 'Tool call limit reached. Please provide a summary based on the data already collected.',
+            content: abortReason,
           });
         }
       }
 
-      callbacks.onProgress(panel, 'Generating final response...', { phase: 'synthesize' });
+      if (!tokenLimitExceeded) {
+        callbacks.onProgress(panel, 'Generating final response...', { phase: 'synthesize' });
+      }
 
       // Make final streaming call without tools
       const finalStream = await openrouter.chat.completions.create({
@@ -231,7 +279,7 @@ export async function queryWithMcpStreaming(
       });
 
       let content = '';
-      let tokensUsed = 0;
+      let finalCallTokens = 0;
 
       for await (const chunk of finalStream) {
         const delta = chunk.choices[0]?.delta?.content;
@@ -240,15 +288,17 @@ export async function queryWithMcpStreaming(
           callbacks.onToken(panel, delta);
         }
         if (chunk.usage?.total_tokens) {
-          tokensUsed = chunk.usage.total_tokens;
+          finalCallTokens = chunk.usage.total_tokens;
         }
       }
 
+      cumulativeTokens += finalCallTokens;
       const duration_ms = Date.now() - startTime;
       callbacks.onComplete(panel, {
         content,
         duration_ms,
-        tokens_used: tokensUsed,
+        tokens_used: cumulativeTokens,
+        token_limit_exceeded: tokenLimitExceeded,
         tools_called: toolsCalled.length > 0 ? toolsCalled : undefined,
       });
       return;
@@ -270,10 +320,11 @@ export async function queryWithMcpStreaming(
       }
 
       const duration_ms = Date.now() - startTime;
+      // cumulativeTokens already includes this response's tokens from the loop
       callbacks.onComplete(panel, {
         content,
         duration_ms,
-        tokens_used: response.usage?.total_tokens || 0,
+        tokens_used: cumulativeTokens,
         tools_called: toolsCalled.length > 0 ? toolsCalled : undefined,
       });
     } else {
@@ -288,7 +339,7 @@ export async function queryWithMcpStreaming(
       });
 
       let content = '';
-      let tokensUsed = 0;
+      let finalCallTokens = 0;
 
       for await (const chunk of finalStream) {
         const delta = chunk.choices[0]?.delta?.content;
@@ -297,15 +348,16 @@ export async function queryWithMcpStreaming(
           callbacks.onToken(panel, delta);
         }
         if (chunk.usage?.total_tokens) {
-          tokensUsed = chunk.usage.total_tokens;
+          finalCallTokens = chunk.usage.total_tokens;
         }
       }
 
+      cumulativeTokens += finalCallTokens;
       const duration_ms = Date.now() - startTime;
       callbacks.onComplete(panel, {
         content,
         duration_ms,
-        tokens_used: tokensUsed,
+        tokens_used: cumulativeTokens,
         tools_called: toolsCalled.length > 0 ? toolsCalled : undefined,
       });
     }

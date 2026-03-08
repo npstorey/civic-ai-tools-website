@@ -45,6 +45,7 @@ interface PanelState {
   isComplete: boolean;
   duration_ms?: number;
   tokens_used?: number;
+  token_limit_exceeded?: boolean;
   tools_called?: ToolCall[];
   error?: string;
 }
@@ -419,6 +420,7 @@ function handleEvent(
         content: string;
         duration_ms: number;
         tokens_used: number;
+        token_limit_exceeded?: boolean;
         tools_called?: ToolCall[];
       };
       setState(prev => {
@@ -449,6 +451,7 @@ function handleEvent(
             content: data.content,
             duration_ms: data.duration_ms,
             tokens_used: data.tokens_used,
+            token_limit_exceeded: data.token_limit_exceeded,
             tools_called: data.tools_called,
             isComplete: true,
             progress: null,
