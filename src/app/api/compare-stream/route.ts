@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     await incrementRateLimit(identifier, isAuthenticated);
 
     // System prompts
-    const systemPromptWithMcp = buildSystemPrompt(portal);
+    const systemPromptWithMcp = await buildSystemPrompt(portal);
     const systemPromptWithoutMcp = `You are a helpful assistant.
 When answering questions about civic data, government statistics, or local information,
 do your best to provide helpful information based on your training data.

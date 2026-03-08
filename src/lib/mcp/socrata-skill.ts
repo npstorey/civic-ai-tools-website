@@ -1,7 +1,10 @@
 // Socrata MCP Skill - Domain knowledge for querying Socrata open data portals
-// Based on: civic-ai-tools/docs/opengov-skill.md
+// Fetched from MCP server's prompt endpoint at runtime, with hardcoded fallback.
 
-export const SOCRATA_SKILL = `
+import { callMcpPrompt } from './client';
+
+// Fallback constant used when the MCP server is unreachable
+export const SOCRATA_SKILL_FALLBACK = `
 ## CRITICAL REQUIREMENTS
 - NEVER hallucinate data - only report what tool calls actually return
 - ALWAYS discover columns first with SELECT * LIMIT 1 before querying unfamiliar datasets
@@ -95,12 +98,39 @@ Note: SF search sometimes returns incorrect results. Use dataset IDs directly:
   return portalSpecificGuidance[portal] || '';
 };
 
-export const buildSystemPrompt = (portal: string): string => {
-  const portalGuidance = getSkillForPortal(portal);
+// Cached skill guidance from MCP server
+let cachedSkillGuidance: string | null = null;
+let cacheTimestamp = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function fetchSkillGuidance(): Promise<string> {
+  const now = Date.now();
+  if (cachedSkillGuidance && now - cacheTimestamp < CACHE_TTL_MS) {
+    return cachedSkillGuidance;
+  }
+
+  try {
+    console.log('[Skill] Fetching skill guidance from MCP server...');
+    const guidance = await callMcpPrompt('skill-guidance', { modality: 'web' });
+    cachedSkillGuidance = guidance;
+    cacheTimestamp = now;
+    console.log('[Skill] Fetched skill guidance successfully (%d chars)', guidance.length);
+    return guidance;
+  } catch (error) {
+    console.warn('[Skill] Failed to fetch skill guidance, using fallback:', error instanceof Error ? error.message : error);
+    return SOCRATA_SKILL_FALLBACK;
+  }
+}
+
+export const buildSystemPrompt = async (portal: string): Promise<string> => {
+  const [skillGuidance, portalGuidance] = await Promise.all([
+    fetchSkillGuidance(),
+    Promise.resolve(getSkillForPortal(portal)),
+  ]);
 
   return `You are a helpful assistant with access to Socrata open data portals via the get_data tool.
 
-${SOCRATA_SKILL}
+${skillGuidance}
 
 ## PORTAL-SPECIFIC GUIDANCE
 Default portal: ${portal}
