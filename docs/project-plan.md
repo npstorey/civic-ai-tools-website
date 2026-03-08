@@ -8,7 +8,7 @@ A demo website that showcases the value of MCP (Model Context Protocol) servers 
 
 ### Before Creating the Website Repo
 
-1. **Finish opengov-mcp edge case fix** (in progress in separate terminal)
+1. **Finish socrata-mcp edge case fix** (in progress in separate terminal)
    - Fix `type=metadata` parameter issue
    - Investigate `type=metrics` 404 error
 
@@ -38,7 +38,7 @@ A demo website that showcases the value of MCP (Model Context Protocol) servers 
 
 ### After Website MVP is Working
 
-5. **(Optional) Add stdio transport to opengov-mcp-server**
+5. **(Optional) Add stdio transport to socrata-mcp-server**
    - Currently only supports HTTP transport
    - Claude Code and Cursor may need stdio for local use
    - Could add a CLI flag: `--transport=stdio|http`
@@ -50,7 +50,7 @@ A demo website that showcases the value of MCP (Model Context Protocol) servers 
 ### Primary Goal
 Demonstrate the tangible value of MCP by letting users see the difference between:
 - **Without MCP:** LLM responding to civic data questions with only its training data
-- **With MCP:** Same LLM + opengov-mcp-server accessing live Socrata open data
+- **With MCP:** Same LLM + socrata-mcp-server accessing live Socrata open data
 
 ### Secondary Goals
 - Drive interested developers to the civic-ai-tools GitHub repo to set up MCP locally
@@ -93,7 +93,7 @@ Demonstrate the tangible value of MCP by letting users see the difference betwee
            │                 │                 │
            ▼                 ▼                 ▼
     ┌─────────────┐  ┌─────────────────┐  ┌─────────────┐
-    │ OpenRouter  │  │ opengov-mcp     │  │ Vercel KV   │
+    │ OpenRouter  │  │ socrata-mcp     │  │ Vercel KV   │
     │ (LLM API)   │  │ (Render.com)    │  │ (Rate Limit)│
     │             │  │                 │  │             │
     │ 300+ models │  │ Socrata portal  │  │ Redis store │
@@ -110,7 +110,7 @@ Demonstrate the tangible value of MCP by letting users see the difference betwee
 | Frontend | Next.js 14+ (App Router) | Best DX, Vercel integration, React Server Components |
 | Hosting | Vercel (free tier) | Generous free tier, serverless functions included |
 | LLM API | OpenRouter | Single API for 300+ models, user can select model, pay-as-you-go |
-| MCP Server | opengov-mcp-server on Render.com ($7/mo) | Already deployed and working |
+| MCP Server | socrata-mcp-server on Render.com ($7/mo) | Already deployed and working |
 | Auth | NextAuth.js + GitHub OAuth | Simple, developer-friendly, no password management |
 | Rate Limiting | Vercel KV (Upstash Redis) | Serverless-compatible, generous free tier |
 | Styling | Tailwind CSS | Fast development, consistent design |
@@ -143,10 +143,10 @@ Demonstrate the tangible value of MCP by letting users see the difference betwee
    POST to OpenRouter
    - model: user-selected
    - messages: [{ role: "user", content: user_query }]
-   - tools: [opengov-mcp tool definitions]
+   - tools: [socrata-mcp tool definitions]
 
    If model calls a tool:
-   → Backend calls opengov-mcp-server
+   → Backend calls socrata-mcp-server
    → Returns tool result to model
    → Model generates final response
    ```
@@ -330,7 +330,7 @@ civic-ai-tools-website/
 ├── lib/
 │   ├── openrouter.ts                 # OpenRouter API client
 │   ├── mcp/
-│   │   ├── client.ts                 # MCP client for opengov-mcp
+│   │   ├── client.ts                 # MCP client for socrata-mcp
 │   │   └── tools.ts                  # Tool definitions for OpenRouter
 │   ├── rate-limit.ts                 # Rate limiting helpers
 │   └── auth.ts                       # NextAuth configuration
@@ -355,8 +355,8 @@ civic-ai-tools-website/
 # OpenRouter
 OPENROUTER_API_KEY=sk-or-...
 
-# opengov-mcp-server
-OPENGOV_MCP_URL=https://opengov-mcp-server.onrender.com
+# socrata-mcp-server
+SOCRATA_MCP_URL=https://socrata-mcp.civicaitools.org
 
 # GitHub OAuth (create at github.com/settings/developers)
 GITHUB_CLIENT_ID=
@@ -387,7 +387,7 @@ KV_REST_API_READ_ONLY_TOKEN=
 3. Implement `/api/compare` endpoint
    - OpenRouter integration (without MCP)
    - OpenRouter + tool calling (with MCP)
-   - Connect to opengov-mcp-server
+   - Connect to socrata-mcp-server
 4. Build side-by-side comparison display
 5. Add simple IP-based rate limiting (5/day)
 6. Deploy to Vercel
@@ -466,7 +466,7 @@ async function queryWithMcp(query: string, model: string) {
 
   // Handle tool calls if any
   if (response.choices[0].message.tool_calls) {
-    // Execute tools via opengov-mcp-server
+    // Execute tools via socrata-mcp-server
     // Return results to model for final response
   }
 
@@ -476,7 +476,7 @@ async function queryWithMcp(query: string, model: string) {
 
 ### MCP Tool Definitions
 
-Map opengov-mcp-server tools to OpenRouter function schemas:
+Map socrata-mcp-server tools to OpenRouter function schemas:
 
 ```typescript
 // lib/mcp/tools.ts
@@ -512,13 +512,13 @@ export const opengovMcpTools = [
       },
     },
   },
-  // ... other tools from opengov-mcp
+  // ... other tools from socrata-mcp
 ];
 ```
 
-### Calling opengov-mcp-server
+### Calling socrata-mcp-server
 
-The opengov-mcp-server already supports HTTP transport via the `/mcp` endpoint using SSE (Server-Sent Events). It uses the MCP SDK's `StreamableHTTPServerTransport`.
+The socrata-mcp-server already supports HTTP transport via the `/mcp` endpoint using SSE (Server-Sent Events). It uses the MCP SDK's `StreamableHTTPServerTransport`.
 
 **Available tools on the server:**
 - `get_data` - Unified Socrata access (search, fetch, query, metadata)
@@ -531,7 +531,7 @@ Let OpenRouter handle the tool calling flow. When the model decides to call a to
 
 ```typescript
 // lib/mcp/client.ts
-const MCP_URL = process.env.OPENGOV_MCP_URL; // e.g., https://opengov-mcp-server.onrender.com
+const MCP_URL = process.env.SOCRATA_MCP_URL; // e.g., https://socrata-mcp.civicaitools.org
 
 export async function callMcpTool(name: string, args: object) {
   // The server expects JSON-RPC format via the /mcp endpoint
@@ -574,7 +574,7 @@ let client: Client | null = null;
 export async function getMcpClient() {
   if (!client) {
     const transport = new SSEClientTransport(
-      new URL(`${process.env.OPENGOV_MCP_URL}/mcp`)
+      new URL(`${process.env.SOCRATA_MCP_URL}/mcp`)
     );
     client = new Client({ name: 'civic-ai-tools-website', version: '1.0.0' });
     await client.connect(transport);
@@ -588,7 +588,7 @@ export async function callMcpTool(name: string, args: object) {
 }
 ```
 
-**Note:** The server currently only supports HTTP transport. For local Claude Code/Cursor usage, stdio transport would need to be added to opengov-mcp-server as a future enhancement.
+**Note:** The server currently only supports HTTP transport. For local Claude Code/Cursor usage, stdio transport would need to be added to socrata-mcp-server as a future enhancement.
 
 ---
 
@@ -600,7 +600,7 @@ export async function callMcpTool(name: string, args: object) {
 |---------|------|-------|
 | Vercel | $0 | Free tier (100GB bandwidth, 100 hours serverless) |
 | OpenRouter | $20-50 | Budget cap; depends on usage |
-| opengov-mcp (Render) | $7 | Already paid |
+| socrata-mcp (Render) | $7 | Already paid |
 | Vercel KV | $0 | Free tier (30k requests/month) |
 | **Total** | **~$30-60/month** | |
 
@@ -623,8 +623,8 @@ At 5 free requests/day for anonymous users and 25/day for auth users:
 
 Before starting development:
 
-- [x] Fix opengov-mcp get_data edge cases (in progress)
-- [x] Verify opengov-mcp-server HTTP transport works - ✅ Confirmed! Uses `/mcp` endpoint with SSE
+- [x] Fix socrata-mcp get_data edge cases (in progress)
+- [x] Verify socrata-mcp-server HTTP transport works - ✅ Confirmed! Uses `/mcp` endpoint with SSE
 - [ ] Create OpenRouter account and add credits (~$20 to start)
 - [ ] Create GitHub OAuth application (github.com/settings/developers)
 - [ ] Create civic-ai-tools-website repo on GitHub
@@ -636,7 +636,7 @@ Before starting development:
 
 ## Open Questions
 
-1. ~~**opengov-mcp HTTP transport**~~ ✅ RESOLVED - Server already supports HTTP/SSE via `/mcp` endpoint
+1. ~~**socrata-mcp HTTP transport**~~ ✅ RESOLVED - Server already supports HTTP/SSE via `/mcp` endpoint
 
 2. **Default portal** - Should queries default to a specific Socrata portal (e.g., data.sfgov.org) or require user to specify? (Server currently defaults to NYC Open Data - may want to make configurable)
 
@@ -644,7 +644,7 @@ Before starting development:
 
 4. **Domain** - Use default Vercel subdomain or custom domain?
 
-5. **stdio transport for local tools** - Claude Code and Cursor typically use stdio transport. The opengov-mcp-server currently only supports HTTP. Consider adding stdio support later so users can run the server locally with Claude Code. This is NOT a blocker for the website.
+5. **stdio transport for local tools** - Claude Code and Cursor typically use stdio transport. The socrata-mcp-server currently only supports HTTP. Consider adding stdio support later so users can run the server locally with Claude Code. This is NOT a blocker for the website.
 
 ---
 

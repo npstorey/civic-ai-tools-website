@@ -1,4 +1,4 @@
-const MCP_URL = process.env.SOCRATA_MCP_URL || 'https://opengov-mcp-server.onrender.com';
+const MCP_URL = process.env.SOCRATA_MCP_URL || 'https://socrata-mcp.civicaitools.org';
 
 interface McpToolResult {
   content?: Array<{

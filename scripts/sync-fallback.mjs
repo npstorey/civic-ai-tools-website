@@ -13,7 +13,7 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const MCP_URL = process.env.SOCRATA_MCP_URL || 'https://opengov-mcp-server.onrender.com';
+const MCP_URL = process.env.SOCRATA_MCP_URL || 'https://socrata-mcp.civicaitools.org';
 
 async function fetchGuidance() {
   // 1. Initialize MCP session
