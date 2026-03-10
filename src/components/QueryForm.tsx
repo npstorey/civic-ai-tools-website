@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import Link from 'next/link';
 
 interface Model {
   id: string;
@@ -154,6 +155,12 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
               </option>
             ))}
           </select>
+          <Link
+            href="/about#model-selection"
+            style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', display: 'inline-block' }}
+          >
+            Why these models?
+          </Link>
         </div>
 
         <div className="nyc-field">

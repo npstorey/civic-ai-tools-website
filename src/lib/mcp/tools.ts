@@ -87,41 +87,25 @@ export interface ModelDefinition {
 
 export const availableModels: ModelDefinition[] = [
   {
-    id: 'anthropic/claude-sonnet-4',
-    name: 'Claude Sonnet 4',
-    provider: 'Anthropic',
-    supports_tools: true,
-    description: 'Best tool reliability (recommended)',
-  },
-  {
     id: 'openai/gpt-4o',
-    name: 'GPT-4o',
+    name: 'GPT-4o (recommended)',
     provider: 'OpenAI',
     supports_tools: true,
-    description: 'Industry standard, excellent quality',
+    description: 'Best balance of quality and speed',
   },
   {
-    id: 'anthropic/claude-haiku-4-5',
-    name: 'Claude Haiku 4.5',
-    provider: 'Anthropic',
-    supports_tools: true,
-    description: 'Fast and budget-friendly',
-    maxTokenBudget: 150_000,
-  },
-  {
-    id: 'openai/gpt-4o-mini',
-    name: 'GPT-4o Mini',
+    id: 'openai/gpt-5.4',
+    name: 'GPT-5.4 (premium)',
     provider: 'OpenAI',
     supports_tools: true,
-    description: 'Cheapest option',
-    maxTokenBudget: 150_000,
+    description: 'Highest quality analysis, newest model',
   },
   {
     id: 'google/gemini-2.0-flash-001',
-    name: 'Gemini 2.0 Flash',
+    name: 'Gemini 2.0 Flash (fastest)',
     provider: 'Google',
     supports_tools: true,
-    description: 'Very fast, low cost',
+    description: 'Fast and budget-friendly',
     maxTokenBudget: 150_000,
   },
 ];
