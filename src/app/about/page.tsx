@@ -462,6 +462,68 @@ export default function AboutPage() {
       </section>
 
       {/* ============================================================
+          Section 6b: Model Selection
+          ============================================================ */}
+      <section id="model-selection" style={sectionSpacing}>
+        <h2 style={sectionHeading}>Model Selection</h2>
+
+        <p style={prose}>
+          We evaluated 8 AI models across 15 civic data queries, scoring each on query accuracy,
+          guidance adherence, interpretation quality, cost, and speed. Based on those results,
+          the demo offers three models:
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+          <div style={{ backgroundColor: 'var(--card-background)', borderRadius: '4px', padding: '20px', border: '1px solid var(--border-color)' }}>
+            <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>GPT-4o (recommended)</h4>
+            <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
+              Best all-around. Fastest average response time (10s), zero timeouts in testing, and
+              reliable tool use. The best balance of quality and cost for a public demo.
+            </p>
+          </div>
+
+          <div style={{ backgroundColor: 'var(--card-background)', borderRadius: '4px', padding: '20px', border: '1px solid var(--border-color)' }}>
+            <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>GPT-5.4 (premium)</h4>
+            <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
+              Highest quality analysis with the most token-efficient responses, but slower and
+              more expensive per query. Worth the wait for complex or multi-step questions.
+            </p>
+          </div>
+
+          <div style={{ backgroundColor: 'var(--card-background)', borderRadius: '4px', padding: '20px', border: '1px solid var(--border-color)' }}>
+            <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>Gemini 2.0 Flash (fastest)</h4>
+            <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
+              Lowest cost per query with solid accuracy on straightforward questions.
+              Best for quick lookups when you don&apos;t need deep analysis.
+            </p>
+          </div>
+        </div>
+
+        <div style={{ backgroundColor: 'var(--card-background)', borderRadius: '4px', padding: '20px', border: '1px solid var(--border-color)', marginBottom: '24px' }}>
+          <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>Why not Claude?</h4>
+          <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
+            Claude produces the highest-quality civic data analysis in our testing, but its
+            thoroughness makes it token-intensive &mdash; too expensive for a free web demo. Claude
+            models exceeded our token budgets more frequently than GPT or Gemini models in evaluation.
+            To use Claude for civic data analysis,{' '}
+            <a href="#try-it">set up civic-ai-tools locally</a>{' '}
+            with Claude Code, Cursor, or Claude Desktop using your own API key.
+          </p>
+        </div>
+
+        <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+          Full evaluation methodology and results:{' '}
+          <a
+            href="https://github.com/npstorey/civic-ai-tools/blob/main/docs/research/model-evaluation-results.md"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            model-evaluation-results.md
+          </a>
+        </p>
+      </section>
+
+      {/* ============================================================
           Section 7: Understanding AI Limitations
           ============================================================ */}
       <section id="ai-limitations" style={sectionSpacing}>
