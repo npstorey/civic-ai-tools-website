@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 interface Model {
   id: string;
   name: string;
+  tag?: string;
   provider: string;
   description?: string;
 }
@@ -33,7 +34,9 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
   const [model, setModel] = useState('anthropic/claude-sonnet-4');
   const [portal, setPortal] = useState('data.cityofnewyork.us');
   const [models, setModels] = useState<Model[]>([]);
+  const [modelOpen, setModelOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
 
   const autoResize = useCallback(() => {
     const el = textareaRef.current;
@@ -67,6 +70,18 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
     };
   }, []);
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!modelOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target as Node)) {
+        setModelOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [modelOpen]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim() && !isLoading) {
@@ -77,6 +92,8 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
   const handleExampleClick = (example: string) => {
     setQuery(example);
   };
+
+  const selectedModel = models.find((m) => m.id === model);
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -140,20 +157,78 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
       </div>
 
       <div className="form-controls-row">
-        <div className="nyc-field">
-          <label htmlFor="model">Model</label>
-          <select
-            id="model"
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
+        {/* Custom model dropdown: shows just the name when closed, name + tag when open */}
+        <div className="nyc-field" ref={modelDropdownRef} style={{ position: 'relative' }}>
+          <label>Model</label>
+          <button
+            type="button"
+            onClick={() => !isLoading && setModelOpen(!modelOpen)}
             disabled={isLoading}
+            style={{
+              width: '100%',
+              textAlign: 'left',
+              padding: '10px 32px 10px 12px',
+              fontSize: '16px',
+              border: '1px solid var(--border-color)',
+              borderRadius: '4px',
+              backgroundColor: 'var(--nyc-white)',
+              color: 'var(--text-primary)',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              appearance: 'none',
+              position: 'relative',
+            }}
           >
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
+            {selectedModel?.name || 'Select model'}
+            <span style={{
+              position: 'absolute',
+              right: '12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              fontSize: '12px',
+              color: 'var(--text-muted)',
+              pointerEvents: 'none',
+            }}>
+              &#9662;
+            </span>
+          </button>
+          {modelOpen && (
+            <ul style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              margin: '2px 0 0 0',
+              padding: '4px 0',
+              listStyle: 'none',
+              backgroundColor: 'var(--nyc-white)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '4px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              zIndex: 10,
+            }}>
+              {models.map((m) => (
+                <li
+                  key={m.id}
+                  onClick={() => { setModel(m.id); setModelOpen(false); }}
+                  style={{
+                    padding: '8px 12px',
+                    cursor: 'pointer',
+                    fontSize: '15px',
+                    backgroundColor: m.id === model ? 'var(--card-background)' : 'transparent',
+                  }}
+                  onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
+                  onMouseOut={(e) => { e.currentTarget.style.backgroundColor = m.id === model ? 'var(--card-background)' : 'transparent'; }}
+                >
+                  {m.name}
+                  {m.tag && (
+                    <span style={{ color: 'var(--text-muted)', marginLeft: '8px', fontSize: '13px' }}>
+                      {m.tag}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="nyc-field">
