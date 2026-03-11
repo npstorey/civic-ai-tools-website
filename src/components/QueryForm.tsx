@@ -150,7 +150,7 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
           >
             {models.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.name} ({m.provider})
+                {m.name}
               </option>
             ))}
           </select>

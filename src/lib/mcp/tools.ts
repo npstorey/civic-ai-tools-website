@@ -88,21 +88,21 @@ export interface ModelDefinition {
 export const availableModels: ModelDefinition[] = [
   {
     id: 'openai/gpt-4o',
-    name: 'GPT-4o (recommended)',
+    name: 'GPT-4o \u2014 recommended',
     provider: 'OpenAI',
     supports_tools: true,
     description: 'Best balance of quality and speed',
   },
   {
     id: 'openai/gpt-5.4',
-    name: 'GPT-5.4 (premium)',
+    name: 'GPT-5.4 \u2014 premium',
     provider: 'OpenAI',
     supports_tools: true,
     description: 'Highest quality analysis, newest model',
   },
   {
     id: 'google/gemini-2.0-flash-001',
-    name: 'Gemini 2.0 Flash (fastest)',
+    name: 'Gemini 2.0 Flash \u2014 fastest',
     provider: 'Google',
     supports_tools: true,
     description: 'Fast and budget-friendly',
