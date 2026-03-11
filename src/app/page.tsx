@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import Link from 'next/link';
 import QueryForm from '@/components/QueryForm';
 import ComparisonDisplay from '@/components/ComparisonDisplay';
 import RateLimitBanner from '@/components/RateLimitBanner';
@@ -74,8 +75,13 @@ export default function Home() {
         }}
       >
         <QueryForm onSubmit={handleSubmit} isLoading={streaming.isLoading} />
-        {/* Rate Limit - inline at bottom of form */}
-        <div style={{ marginTop: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+          <Link
+            href="/about#model-selection"
+            style={{ fontSize: '12px', color: 'var(--text-muted)' }}
+          >
+            Why these models?
+          </Link>
           <RateLimitBanner refreshTrigger={queryCount} />
         </div>
       </div>
