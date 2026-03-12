@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import ProgressLog from '@/components/ProgressLog';
 import SkillPromptDisclosure from '@/components/SkillPromptDisclosure';
 import { buildProvenanceLine, buildNarrativeSummary, buildStatsSummary, getPortalCity } from '@/lib/streaming';
+import { generateNotebook, downloadNotebook } from '@/lib/notebook';
 import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
 
 interface McpResponseDisplayProps {
@@ -23,6 +24,8 @@ interface McpResponseDisplayProps {
   isActive?: boolean;
   showFooter?: boolean;
   autoScroll?: boolean;
+  portal?: string;
+  onContinue?: (continuationPrompt: string) => void;
 }
 
 // Segment colors: warm family (LLM) + cool (API) — Gestalt similarity groups "thinking" vs "waiting"
@@ -324,6 +327,8 @@ export default function McpResponseDisplay({
   isActive,
   showFooter,
   autoScroll,
+  portal,
+  onContinue,
 }: McpResponseDisplayProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
@@ -475,6 +480,71 @@ export default function McpResponseDisplay({
         )}
       </div>
 
+      {/* Truncation warning banner */}
+      {token_limit_exceeded && isComplete && content && (
+        <div
+          style={{
+            flexShrink: 0,
+            borderTop: '1px solid #e6a817',
+            padding: '12px 24px',
+            backgroundColor: 'rgba(230, 168, 23, 0.08)',
+          }}
+        >
+          <div style={{ fontSize: '13px', color: '#8a6d00', marginBottom: '8px' }}>
+            This response was cut short due to token limits.
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+            {onContinue && (
+              <button
+                onClick={() => {
+                  const narrative = buildNarrativeSummary(toolsCalled);
+                  const prompt = [
+                    'Continue the analysis below. Do NOT re-query the data \u2014 synthesize from the results already described.',
+                    '',
+                    `Original query: ${queryText}`,
+                    '',
+                    `Data collected:`,
+                    narrative,
+                    '',
+                    'Partial response so far:',
+                    content,
+                    '',
+                    'Please continue from where the previous response was cut short.',
+                  ].join('\n');
+                  onContinue(prompt);
+                }}
+                style={{
+                  background: 'none',
+                  border: '1px solid #c89b00',
+                  borderRadius: '4px',
+                  padding: '5px 12px',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  color: '#8a6d00',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.15s',
+                }}
+                onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(230, 168, 23, 0.12)'; }}
+                onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+              >
+                Continue this analysis
+              </button>
+            )}
+            <a
+              href="/about#try-it"
+              style={{
+                fontSize: '12px',
+                color: '#8a6d00',
+                textDecoration: 'underline',
+                textUnderlineOffset: '2px',
+              }}
+            >
+              Try this locally (no limits)
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
       {showFooter && !!(duration_ms || tokens_used) && (
         <div
@@ -578,6 +648,36 @@ export default function McpResponseDisplay({
                     Copy
                   </>
                 )}
+              </button>
+            )}
+
+            {/* Download notebook button */}
+            {content && toolsCalled.some(t => t.operationType === 'query') && (
+              <button
+                onClick={() => {
+                  const p = (toolsCalled.find(t => t.args.portal)?.args.portal as string) || portal || 'data.cityofnewyork.us';
+                  const notebook = generateNotebook(queryText || '', p, toolsCalled, content);
+                  downloadNotebook(notebook);
+                }}
+                style={{
+                  background: 'none',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'color 0.15s, border-color 0.15s',
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z" />
+                  <path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z" />
+                </svg>
+                Notebook
               </button>
             )}
           </div>

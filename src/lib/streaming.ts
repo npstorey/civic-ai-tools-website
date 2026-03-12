@@ -30,6 +30,9 @@ export interface CompleteEvent extends StreamEvent {
     content: string;
     duration_ms: number;
     tokens_used: number;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    token_limit_exceeded?: boolean;
     tools_called?: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string }[];
   };
 }

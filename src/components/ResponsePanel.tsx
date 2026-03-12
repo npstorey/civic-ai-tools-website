@@ -23,6 +23,8 @@ interface ResponsePanelProps {
   progressGroups?: ProgressGroup[];
   isStreaming?: boolean;
   queryText?: string;
+  portal?: string;
+  onContinue?: (continuationPrompt: string) => void;
 }
 
 export default function ResponsePanel({
@@ -41,6 +43,8 @@ export default function ResponsePanel({
   progressGroups,
   isStreaming,
   queryText,
+  portal,
+  onContinue,
 }: ResponsePanelProps) {
   const isMcp = variant === 'with-mcp';
 
@@ -126,6 +130,8 @@ export default function ResponsePanel({
           isComplete={isStreaming ? !!duration_ms : !!content}
           isActive={!!isStreaming && !duration_ms}
           showFooter={!isLoading && !!(duration_ms || tokens_used)}
+          portal={portal}
+          onContinue={onContinue}
         />
       )}
 

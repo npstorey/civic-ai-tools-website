@@ -129,6 +129,12 @@ Both the home page and Explore page delegate MCP response rendering to this shar
 
 `linkDatasetIds()` inside this component replaces bare dataset IDs in markdown with clickable `[id](url)` links, avoiding double-linking inside existing markdown links.
 
+**Truncation CTAs:** When `token_limit_exceeded` is true, an amber banner appears with two CTAs:
+1. "Continue this analysis" — builds a continuation prompt with the original query, narrative summary of data collected, and partial response, then auto-submits it as a new query
+2. "Try this locally (no limits)" — links to `/about#try-it`
+
+**Download as notebook:** When query tool calls are present, a "Notebook" button appears alongside the "Copy" button. Uses `lib/notebook.ts` to generate a `.ipynb` file client-side with Python code cells that re-execute the same Socrata API queries using `requests` + `pandas`. Only `query`-type tool calls generate code cells; catalog/metadata/metrics calls are skipped.
+
 ### BPMN Diagram (`components/explore/`, `lib/bpmn/`)
 Interactive BPMN 2.0 diagram on the Explore page visualizing MCP query execution. Two modes:
 
@@ -175,6 +181,11 @@ GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
 NEXTAUTH_SECRET=        # openssl rand -base64 32
 NEXTAUTH_URL=http://localhost:3000  # or production URL
+```
+
+Optional (production only):
+```
+NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX  # Google Analytics 4
 ```
 
 Required in production (Upstash via Vercel KV):
@@ -232,6 +243,7 @@ src/
     ├── openrouter.ts              # LLM API client (non-streaming)
     ├── openrouter-streaming.ts    # LLM API client (streaming with SSE events)
     ├── streaming.ts               # Shared: event types, narrative, provenance, dataset URLs
+    ├── notebook.ts                # Jupyter notebook generation (client-side .ipynb)
     ├── sse-client.ts              # Client-side SSE connection helper
     ├── rate-limit.ts              # Rate limiting logic
     ├── auth.ts                    # NextAuth config

@@ -11,6 +11,7 @@ export default function Home() {
   const [queryCount, setQueryCount] = useState(0);
   const [usedModel, setUsedModel] = useState<string>('');
   const [lastQuery, setLastQuery] = useState<string>('');
+  const [lastPortal, setLastPortal] = useState<string>('data.cityofnewyork.us');
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const streaming = useStreamingComparison();
@@ -27,6 +28,7 @@ export default function Home() {
   const handleSubmit = async (query: string, model: string, portal: string) => {
     setUsedModel(model);
     setLastQuery(query);
+    setLastPortal(portal);
 
     // Scroll to results after a brief delay to let the loading state render
     setTimeout(() => {
@@ -34,6 +36,14 @@ export default function Home() {
     }, 100);
 
     streaming.startComparison(query, model, portal);
+    setQueryCount((c) => c + 1);
+  };
+
+  const handleContinue = (continuationPrompt: string) => {
+    setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+    streaming.startComparison(continuationPrompt, usedModel, lastPortal);
     setQueryCount((c) => c + 1);
   };
 
@@ -115,6 +125,8 @@ export default function Home() {
             streamingWithoutMcp={streaming.withoutMcp}
             streamingWithMcp={streaming.withMcp}
             queryText={lastQuery}
+            portal={lastPortal}
+            onContinue={handleContinue}
           />
           {(streaming.withoutMcp.isComplete && streaming.withMcp.isComplete) && (
             <p
