@@ -16,9 +16,9 @@ interface QueryFormProps {
 }
 
 const EXAMPLE_QUERIES = [
-  'Most common 311 complaints in NYC',
-  'Restaurant inspection grades in Manhattan',
-  'Top noise complaint types',
+  { text: 'Most common 311 complaints in NYC', portal: 'data.cityofnewyork.us' },
+  { text: 'Restaurant inspection trends in Chicago', portal: 'data.cityofchicago.org' },
+  { text: 'Top noise complaints in San Francisco', portal: 'data.sfgov.org' },
 ];
 
 const PORTALS = [
@@ -94,8 +94,9 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
     }
   };
 
-  const handleExampleClick = (example: string) => {
-    setQuery(example);
+  const handleExampleClick = (example: { text: string; portal: string }) => {
+    setQuery(example.text);
+    setPortal(example.portal);
   };
 
   const selectedModel = models.find((m) => m.id === model);
@@ -103,7 +104,7 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       <div className="nyc-field">
-        <label htmlFor="query">Ask a question about civic data</label>
+        <label htmlFor="query">Ask a question that open data can answer</label>
         <textarea
           id="query"
           ref={textareaRef}
@@ -156,7 +157,7 @@ export default function QueryForm({ onSubmit, isLoading }: QueryFormProps) {
               e.currentTarget.style.borderColor = 'var(--border-color)';
             }}
           >
-            {example.length > 35 ? example.slice(0, 35) + '...' : example}
+            {example.text.length > 40 ? example.text.slice(0, 40) + '...' : example.text}
           </button>
         ))}
       </div>

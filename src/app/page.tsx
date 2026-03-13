@@ -6,6 +6,7 @@ import QueryForm from '@/components/QueryForm';
 import ComparisonDisplay from '@/components/ComparisonDisplay';
 import RateLimitBanner from '@/components/RateLimitBanner';
 import { useStreamingComparison } from '@/hooks/useStreamingComparison';
+import { prose, sectionSpacing, card } from '@/styles/page-styles';
 
 export default function Home() {
   const [queryCount, setQueryCount] = useState(0);
@@ -48,50 +49,49 @@ export default function Home() {
   };
 
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px 24px' }}>
+    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 24px' }}>
       {/* Hero Section */}
-      <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-        <h1 style={{ marginBottom: '8px', fontSize: '36px' }}>
-          See how AI performs with open data
+      <div style={{ textAlign: 'center', ...sectionSpacing }}>
+        <h1 style={{ marginBottom: '8px' }}>
+          Explore Open Data with AI
         </h1>
         <p
           style={{
-            fontSize: '18px',
+            fontSize: '20px',
             lineHeight: '150%',
             color: 'var(--text-secondary)',
             maxWidth: '650px',
             margin: '0 auto',
           }}
         >
-          Compare AI responses with and without live data access via the{' '}
-          <a
-            href="https://modelcontextprotocol.io"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Model Context Protocol (MCP)
-          </a>
-          —and see how model choice and tool access affect results.
+          Ask a question about open data and see how AI performs
+          with and without live access to open data portals.
         </p>
       </div>
 
       {/* Query Form */}
       <div
         style={{
-          backgroundColor: 'var(--card-background)',
-          borderRadius: '4px',
-          padding: '16px',
-          marginBottom: '16px',
+          ...card,
+          marginBottom: '64px',
         }}
       >
         <QueryForm onSubmit={handleSubmit} isLoading={streaming.isLoading} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
-          <Link
-            href="/learn#model-selection"
-            style={{ fontSize: '12px', color: 'var(--text-muted)' }}
-          >
-            Why these models?
-          </Link>
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <Link
+              href="/learn#model-selection"
+              style={{ fontSize: '12px', color: 'var(--text-muted)' }}
+            >
+              Why these models?
+            </Link>
+            <Link
+              href="/about#whats-in-the-project"
+              style={{ fontSize: '12px', color: 'var(--text-muted)' }}
+            >
+              What data is available?
+            </Link>
+          </div>
           <RateLimitBanner refreshTrigger={queryCount} />
         </div>
       </div>
@@ -159,42 +159,47 @@ export default function Home() {
           borderTop: '1px solid var(--border-color)',
         }}
       >
-        <h2 style={{ marginBottom: '16px' }}>Want better results?</h2>
+        <h2 style={{ marginBottom: '16px' }}>Go deeper</h2>
         <p
           style={{
-            fontSize: '18px',
-            color: 'var(--text-secondary)',
-            marginBottom: '24px',
+            ...prose,
             maxWidth: '650px',
             margin: '0 auto 24px',
           }}
         >
-          The civic-ai-tools repo includes the OpenGov MCP server (Socrata open data)
-          and the Data Commons MCP (Google demographics, economics, and health data),
-          with more MCP servers coming soon. Set up locally with Claude Code, Cursor,
-          or any MCP-compatible tool for unlimited access and complex multi-step analysis.
+          This demo has rate limits and runs simple queries. Set up locally for
+          unlimited access, more data sources, and complex multi-step analysis.
         </p>
-        <a
-          href="https://github.com/npstorey/civic-ai-tools"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="nyc-button nyc-button-primary"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            textDecoration: 'none',
-          }}
-        >
-          <svg style={{ width: '20px', height: '20px' }} fill="currentColor" viewBox="0 0 24 24">
-            <path
-              fillRule="evenodd"
-              d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
-              clipRule="evenodd"
-            />
-          </svg>
-          Get Started
-        </a>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <a
+            href="https://github.com/npstorey/civic-ai-tools"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="nyc-button nyc-button-primary"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              textDecoration: 'none',
+            }}
+          >
+            <svg style={{ width: '20px', height: '20px' }} fill="currentColor" viewBox="0 0 24 24">
+              <path
+                fillRule="evenodd"
+                d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+                clipRule="evenodd"
+              />
+            </svg>
+            Get Started
+          </a>
+          <Link
+            href="/learn#try-it"
+            className="nyc-button nyc-button-secondary"
+            style={{ textDecoration: 'none' }}
+          >
+            Learn how it works
+          </Link>
+        </div>
       </div>
     </div>
   );

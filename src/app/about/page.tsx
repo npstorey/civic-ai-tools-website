@@ -1,24 +1,9 @@
 import Link from 'next/link';
+import { prose, sectionHeading, sectionSpacing } from '@/styles/page-styles';
 
 export const metadata = {
   title: 'About - Civic AI Tools',
   description: 'Civic AI Tools is an open-source project that connects AI assistants to government open data using the Model Context Protocol.',
-};
-
-const prose: React.CSSProperties = {
-  fontSize: '16px',
-  lineHeight: '170%',
-  color: 'var(--text-secondary)',
-  marginBottom: '16px',
-};
-
-const sectionHeading = {
-  marginBottom: '16px',
-  marginTop: 0,
-};
-
-const sectionSpacing = {
-  marginBottom: '64px',
 };
 
 export default function AboutPage() {
@@ -41,7 +26,7 @@ export default function AboutPage() {
       </section>
 
       {/* What's in the project */}
-      <section style={sectionSpacing}>
+      <section id="whats-in-the-project" style={{ ...sectionSpacing, scrollMarginTop: '80px' }}>
         <h2 style={sectionHeading}>What&apos;s in the project</h2>
         <p style={prose}>
           The demo on this website uses a single MCP server &mdash; our Socrata connector &mdash; but
@@ -71,10 +56,26 @@ export default function AboutPage() {
                 Socrata MCP server
               </a>
             </strong>{' '}
-            &mdash; connects AI assistants to any Socrata open data portal (the platform behind most
-            major US city data portals). This is the server powering the demo on this website.
+            &mdash; Civic AI Tools connects to open data portals powered by Tyler
+            Technologies&apos; Socrata platform (formerly Socrata, now Tyler Data &amp; Insights).
+            This is the server powering the demo on this website.
             Install via <code style={{ fontSize: '14px' }}>npx socrata-mcp-server</code> or clone
-            the repo.
+            the repo. A live directory of all Socrata-hosted domains is available via the{' '}
+              <a
+                href="https://dev.socrata.com/docs/endpoints.html"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Socrata Discovery API
+              </a>
+              . For a broader directory of open data portals across all platforms, see{' '}
+              <a
+                href="https://dataportals.org"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                dataportals.org
+              </a>.
           </li>
           <li>
             <strong>Curated MCP server directory</strong> &mdash; a{' '}

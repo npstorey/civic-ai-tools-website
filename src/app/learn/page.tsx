@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { prose, sectionHeading, sectionSpacing, calloutBox, excerptBlock, card } from '@/styles/page-styles';
 
 export const metadata = {
   title: 'Learn - Civic AI Tools',
@@ -7,47 +8,6 @@ export const metadata = {
 
 const GITHUB_SKILL_URL = 'https://github.com/npstorey/civic-ai-tools-website/blob/main/src/lib/mcp/socrata-skill.ts';
 const GITHUB_STREAMING_BASE = 'https://github.com/npstorey/civic-ai-tools-website/blob/24916fb/src/lib/streaming.ts';
-
-const sectionHeading = {
-  marginBottom: '16px',
-  marginTop: 0,
-};
-
-const sectionSpacing = {
-  marginBottom: '64px',
-};
-
-const prose: React.CSSProperties = {
-  fontSize: '16px',
-  lineHeight: '170%',
-  color: 'var(--text-secondary)',
-  marginBottom: '16px',
-};
-
-const calloutBox: React.CSSProperties = {
-  backgroundColor: 'rgba(112, 186, 255, 0.12)',
-  border: '1px solid rgba(112, 186, 255, 0.3)',
-  borderRadius: '4px',
-  padding: '12px 16px',
-  fontSize: '14px',
-  color: 'var(--text-secondary)',
-  lineHeight: '1.5',
-};
-
-const excerptBlock: React.CSSProperties = {
-  backgroundColor: 'var(--card-background)',
-  border: '1px solid var(--border-color)',
-  borderRadius: '4px',
-  padding: '12px 16px',
-  fontFamily: 'monospace',
-  fontSize: '13px',
-  lineHeight: '1.5',
-  color: 'var(--text-secondary)',
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-word',
-  margin: '8px 0 0 0',
-  overflow: 'auto',
-};
 
 export default function LearnPage() {
   return (
@@ -385,7 +345,7 @@ export default function LearnPage() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Model Selection */}
-          <div style={{ backgroundColor: 'var(--card-background)', borderRadius: '4px', padding: '24px' }}>
+          <div style={card}>
             <h3 style={{ fontSize: '18px', marginBottom: '12px' }}>Model Selection</h3>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
               Different AI models have different strengths. When choosing a model, consider:
@@ -412,7 +372,7 @@ export default function LearnPage() {
           </div>
 
           {/* Orchestration Environment */}
-          <div style={{ backgroundColor: 'var(--card-background)', borderRadius: '4px', padding: '24px' }}>
+          <div style={card}>
             <h3 style={{ fontSize: '18px', marginBottom: '12px' }}>Orchestration Environment</h3>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
               Where you run AI affects what&apos;s possible:
@@ -448,7 +408,7 @@ export default function LearnPage() {
           </div>
 
           {/* Context Management */}
-          <div style={{ backgroundColor: 'var(--card-background)', borderRadius: '4px', padding: '24px' }}>
+          <div style={card}>
             <h3 style={{ fontSize: '18px', marginBottom: '12px' }}>Context Management</h3>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0 }}>
               LLMs have a finite context window. System prompts, conversation history, tool results,
@@ -474,7 +434,7 @@ export default function LearnPage() {
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
-          <div style={{ backgroundColor: 'var(--card-background)', borderRadius: '4px', padding: '20px', border: '1px solid var(--border-color)' }}>
+          <div style={card}>
             <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>GPT-4o (recommended)</h4>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
               Best all-around. Fastest average response time (10s), zero timeouts in testing, and
@@ -482,7 +442,7 @@ export default function LearnPage() {
             </p>
           </div>
 
-          <div style={{ backgroundColor: 'var(--card-background)', borderRadius: '4px', padding: '20px', border: '1px solid var(--border-color)' }}>
+          <div style={card}>
             <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>GPT-5.4 (premium)</h4>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
               Highest quality analysis with the most token-efficient responses, but slower and
@@ -490,7 +450,7 @@ export default function LearnPage() {
             </p>
           </div>
 
-          <div style={{ backgroundColor: 'var(--card-background)', borderRadius: '4px', padding: '20px', border: '1px solid var(--border-color)' }}>
+          <div style={card}>
             <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>Gemini 2.0 Flash (fastest)</h4>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
               Lowest cost per query with solid accuracy on straightforward questions.
@@ -499,7 +459,7 @@ export default function LearnPage() {
           </div>
         </div>
 
-        <div style={{ backgroundColor: 'var(--card-background)', borderRadius: '4px', padding: '20px', border: '1px solid var(--border-color)', marginBottom: '24px' }}>
+        <div style={{ ...card, marginBottom: '24px' }}>
           <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>Why not Claude?</h4>
           <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
             Claude produces the highest-quality civic data analysis in our testing, but its
@@ -862,7 +822,7 @@ function NarrationLayer({
   example: { raw: string; displayed: string };
 }) {
   return (
-    <div style={{ backgroundColor: 'var(--card-background)', borderRadius: '4px', padding: '16px' }}>
+    <div style={{ ...card, padding: '16px' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '6px' }}>
         <span style={{ fontSize: '15px', fontWeight: 600 }}>{title}</span>
         <a
