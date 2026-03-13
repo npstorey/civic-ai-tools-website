@@ -531,7 +531,7 @@ export default function McpResponseDisplay({
               </button>
             )}
             <a
-              href="/about#try-it"
+              href="/learn#try-it"
               style={{
                 fontSize: '12px',
                 color: '#8a6d00',
@@ -703,7 +703,7 @@ export default function McpResponseDisplay({
           AI-generated analysis may contain errors. Verify findings against the{' '}
           original dataset before citing.{' '}
           <a
-            href="/about#ai-limitations"
+            href="/learn#ai-limitations"
             style={{ color: 'var(--text-muted)', textDecoration: 'underline' }}
           >
             Learn more &rarr;

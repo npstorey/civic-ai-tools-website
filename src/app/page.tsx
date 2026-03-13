@@ -87,7 +87,7 @@ export default function Home() {
         <QueryForm onSubmit={handleSubmit} isLoading={streaming.isLoading} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
           <Link
-            href="/about#model-selection"
+            href="/learn#model-selection"
             style={{ fontSize: '12px', color: 'var(--text-muted)' }}
           >
             Why these models?
@@ -193,7 +193,7 @@ export default function Home() {
               clipRule="evenodd"
             />
           </svg>
-          View on GitHub
+          Get Started
         </a>
       </div>
     </div>

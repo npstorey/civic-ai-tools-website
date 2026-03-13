@@ -83,7 +83,7 @@ export default function NarrationExplainer() {
           </p>
 
           <a
-            href="/about#narration"
+            href="/learn#narration"
             style={{ fontSize: '12px', color: 'var(--nyc-blue)', textDecoration: 'underline' }}
           >
             Learn more about how the demo works &rarr;

@@ -238,7 +238,7 @@ export default function SkillPromptDisclosure() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
             <a
-              href="/about#system-prompt"
+              href="/learn#system-prompt"
               style={{
                 fontSize: '12px',
                 color: 'var(--nyc-blue)',

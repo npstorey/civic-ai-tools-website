@@ -52,17 +52,6 @@ export default function Header() {
           </Link>
           <nav className="hidden sm:flex items-center gap-6">
             <Link
-              href="/about"
-              className="no-link-style"
-              style={{
-                color: 'var(--text-secondary)',
-                fontWeight: 500,
-                fontSize: '16px',
-              }}
-            >
-              About
-            </Link>
-            <Link
               href="/explore"
               className="no-link-style"
               style={{
@@ -73,19 +62,28 @@ export default function Header() {
             >
               Explore
             </Link>
-            <a
-              href="https://github.com/npstorey/civic-ai-tools-website"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              href="/learn"
+              className="no-link-style"
               style={{
                 color: 'var(--text-secondary)',
                 fontWeight: 500,
                 fontSize: '16px',
-                textDecoration: 'none',
               }}
             >
-              GitHub
-            </a>
+              Learn
+            </Link>
+            <Link
+              href="/about"
+              className="no-link-style"
+              style={{
+                color: 'var(--text-secondary)',
+                fontWeight: 500,
+                fontSize: '16px',
+              }}
+            >
+              About
+            </Link>
           </nav>
         </div>
 
@@ -165,18 +163,6 @@ export default function Header() {
           }}
         >
           <Link
-            href="/about"
-            onClick={() => setMobileMenuOpen(false)}
-            style={{
-              color: 'var(--text-secondary)',
-              fontWeight: 500,
-              fontSize: '16px',
-              textDecoration: 'none',
-            }}
-          >
-            About
-          </Link>
-          <Link
             href="/explore"
             onClick={() => setMobileMenuOpen(false)}
             style={{
@@ -188,10 +174,9 @@ export default function Header() {
           >
             Explore
           </Link>
-          <a
-            href="https://github.com/npstorey/civic-ai-tools-website"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/learn"
+            onClick={() => setMobileMenuOpen(false)}
             style={{
               color: 'var(--text-secondary)',
               fontWeight: 500,
@@ -199,8 +184,20 @@ export default function Header() {
               textDecoration: 'none',
             }}
           >
-            GitHub
-          </a>
+            Learn
+          </Link>
+          <Link
+            href="/about"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              color: 'var(--text-secondary)',
+              fontWeight: 500,
+              fontSize: '16px',
+              textDecoration: 'none',
+            }}
+          >
+            About
+          </Link>
         </div>
       )}
     </header>
