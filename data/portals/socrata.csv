@@ -1,0 +1,560 @@
+id,name,url,platform,catalog_type,government_level,country,country_name,owner_name,owner_type,api_endpoint,dataset_count,status
+aces.data.socrata.com,,https://aces.data.socrata.com,socrata,Open data portal,,,,,,https://aces.data.socrata.com/api,10000,active
+administraciodigital.gencat.cat,Portal Datos Abiertos - Generalitat de Catalunya,https://administraciodigital.gencat.cat,socrata,Open data portal,state,ES,Spain,Portal Datos Abiertos - Generalitat de Catalunya,Regional government,https://administraciodigital.gencat.cat/api,0,active
+agtransport.usda.gov,Agricultural Transportation Open Data Platform,https://agtransport.usda.gov,socrata,Open data portal,federal,US,United States,USDA,Central government,https://agtransport.usda.gov/api,10000,active
+albany.data.socrata.com,,https://albany.data.socrata.com,socrata,Open data portal,,,,,,https://albany.data.socrata.com/api,10000,active
+albanycountyny.data.socrata.com,,https://albanycountyny.data.socrata.com,socrata,Open data portal,,,,,,https://albanycountyny.data.socrata.com/api,10000,active
+albemarlecounty.data.socrata.com,,https://albemarlecounty.data.socrata.com,socrata,Open data portal,,,,,,https://albemarlecounty.data.socrata.com/api,10000,active
+albemarlecountyva-uvaecc.data.socrata.com,,https://albemarlecountyva-uvaecc.data.socrata.com,socrata,Open data portal,,,,,,https://albemarlecountyva-uvaecc.data.socrata.com/api,10000,active
+alexandercountync.data.socrata.com,,https://alexandercountync.data.socrata.com,socrata,Open data portal,,,,,,https://alexandercountync.data.socrata.com/api,10000,active
+alpharetta.data.socrata.com,,https://alpharetta.data.socrata.com,socrata,Open data portal,,,,,,https://alpharetta.data.socrata.com/api,10000,active
+analisi.transparenciacatalunya.cat,Dades Obertes - Transparència Catalunya,https://analisi.transparenciacatalunya.cat,socrata,Open data portal,state,ES,Spain,Generalitat de Catalunya,Regional government,https://analisi.transparenciacatalunya.cat/api,5553,active
+annapolismd.data.socrata.com,,https://annapolismd.data.socrata.com,socrata,Open data portal,,,,,,https://annapolismd.data.socrata.com/api,10000,active
+anokamn.data.socrata.com,,https://anokamn.data.socrata.com,socrata,Open data portal,,,,,,https://anokamn.data.socrata.com/api,10000,active
+applevalley-ca.data.socrata.com,,https://applevalley-ca.data.socrata.com,socrata,Open data portal,,,,,,https://applevalley-ca.data.socrata.com/api,10000,active
+ascensionparishla.data.socrata.com,,https://ascensionparishla.data.socrata.com,socrata,Open data portal,,,,,,https://ascensionparishla.data.socrata.com/api,10000,active
+atlanta.data.socrata.com,,https://atlanta.data.socrata.com,socrata,Open data portal,,,,,,https://atlanta.data.socrata.com/api,10000,active
+auburnmaine.data.socrata.com,,https://auburnmaine.data.socrata.com,socrata,Open data portal,,,,,,https://auburnmaine.data.socrata.com/api,10000,active
+auditor-ca.demo.socrata.com,California State Auditor Open Data,https://auditor-ca.demo.socrata.com,socrata,Open data portal,state,US,United States,California State Auditor,Regional government,https://auditor-ca.demo.socrata.com/api,13,active
+austin-metro.demo.socrata.com,Austin Capital Metro,https://austin-metro.demo.socrata.com,socrata,Open data portal,state,US,United States,Socrata,Business,https://austin-metro.demo.socrata.com/api,46,active
+austintexas-op-beta.demo.socrata.com,,https://austintexas-op-beta.demo.socrata.com,socrata,Open data portal,,,,,,https://austintexas-op-beta.demo.socrata.com/api,10000,active
+barnstablecountyma.data.socrata.com,,https://barnstablecountyma.data.socrata.com,socrata,Open data portal,,,,,,https://barnstablecountyma.data.socrata.com/api,10000,active
+baycountymi.data.socrata.com,,https://baycountymi.data.socrata.com,socrata,Open data portal,,,,,,https://baycountymi.data.socrata.com/api,10000,active
+bcnv.data.socrata.com,,https://bcnv.data.socrata.com,socrata,Open data portal,,,,,,https://bcnv.data.socrata.com/api,10000,active
+beaufortcountysc.data.socrata.com,,https://beaufortcountysc.data.socrata.com,socrata,Open data portal,,,,,,https://beaufortcountysc.data.socrata.com/api,10000,active
+beaufortcountyschools.data.socrata.com,,https://beaufortcountyschools.data.socrata.com,socrata,Open data portal,,,,,,https://beaufortcountyschools.data.socrata.com/api,10000,active
+bentoncounty.data.socrata.com,,https://bentoncounty.data.socrata.com,socrata,Open data portal,,,,,,https://bentoncounty.data.socrata.com/api,10000,active
+bentonvillear.data.socrata.com,,https://bentonvillear.data.socrata.com,socrata,Open data portal,,,,,,https://bentonvillear.data.socrata.com/api,10000,active
+berkeleycountywv.data.socrata.com,,https://berkeleycountywv.data.socrata.com,socrata,Open data portal,,,,,,https://berkeleycountywv.data.socrata.com/api,10000,active
+bernalillocountynm.data.socrata.com,,https://bernalillocountynm.data.socrata.com,socrata,Open data portal,,,,,,https://bernalillocountynm.data.socrata.com/api,10000,active
+bloomfieldtwp.data.socrata.com,,https://bloomfieldtwp.data.socrata.com,socrata,Open data portal,,,,,,https://bloomfieldtwp.data.socrata.com/api,10000,active
+boulderco.data.socrata.com,,https://boulderco.data.socrata.com,socrata,Open data portal,,,,,,https://boulderco.data.socrata.com/api,10000,active
+brec.data.socrata.com,,https://brec.data.socrata.com,socrata,Open data portal,,,,,,https://brec.data.socrata.com/api,10000,active
+bridgeportct.data.socrata.com,,https://bridgeportct.data.socrata.com,socrata,Open data portal,,,,,,https://bridgeportct.data.socrata.com/api,10000,active
+bronx.lehman.cuny.edu,Lehman College Community Connect: Bronx Information Portal | Bronx Information Portal | Lehman College,https://bronx.lehman.cuny.edu,socrata,Open data portal,state,US,United States,"Lehman College, City University of New York",Academy,https://bronx.lehman.cuny.edu/api,352,active
+brookhavenga.data.socrata.com,,https://brookhavenga.data.socrata.com,socrata,Open data portal,,,,,,https://brookhavenga.data.socrata.com/api,10000,active
+budget-qa-reporting.data.socrata.com,,https://budget-qa-reporting.data.socrata.com,socrata,Open data portal,,,,,,https://budget-qa-reporting.data.socrata.com/api,10000,active
+byroncenterpublicschools.data.socrata.com,,https://byroncenterpublicschools.data.socrata.com,socrata,Open data portal,,,,,,https://byroncenterpublicschools.data.socrata.com/api,10000,active
+bythenumbers.sco.ca.gov,By The Numbers - CA Local Government Financial Data,https://bythenumbers.sco.ca.gov,socrata,Open data portal,state,US,United States,California State Controller's Office,State government,https://bythenumbers.sco.ca.gov/api,96,active
+ca-sco.demo.socrata.com,,https://ca-sco.demo.socrata.com,socrata,Open data portal,,,,,,https://ca-sco.demo.socrata.com/api,16,active
+calhouncountymi.data.socrata.com,,https://calhouncountymi.data.socrata.com,socrata,Open data portal,,,,,,https://calhouncountymi.data.socrata.com/api,10000,active
+cambriacounty-pa.data.socrata.com,,https://cambriacounty-pa.data.socrata.com,socrata,Open data portal,,,,,,https://cambriacounty-pa.data.socrata.com/api,10000,active
+camden.demo.socrata.com,,https://camden.demo.socrata.com,socrata,Open data portal,,,,,,https://camden.demo.socrata.com/api,11,active
+camdencountyga-sheriff.data.socrata.com,,https://camdencountyga-sheriff.data.socrata.com,socrata,Open data portal,,,,,,https://camdencountyga-sheriff.data.socrata.com/api,10000,active
+capecoral.data.socrata.com,,https://capecoral.data.socrata.com,socrata,Open data portal,,,,,,https://capecoral.data.socrata.com/api,10000,active
+carsonca.data.socrata.com,,https://carsonca.data.socrata.com,socrata,Open data portal,,,,,,https://carsonca.data.socrata.com/api,10000,active
+carsoncity.data.socrata.com,Performance Carson City Dashboard | Performance Carson City Dashboard,https://carsoncity.data.socrata.com,socrata,Open data portal,federal,US,United States,Carson City Government,Local government,https://carsoncity.data.socrata.com/api,19,active
+casagrandeaz.data.socrata.com,,https://casagrandeaz.data.socrata.com,socrata,Open data portal,,,,,,https://casagrandeaz.data.socrata.com/api,10000,active
+catalegdades.caib.cat,Catàleg Dades Obertes Illes Balears,https://catalegdades.caib.cat,socrata,Open data portal,state,ES,Spain,Govern de les Illes Baleares,Regional government,https://catalegdades.caib.cat/api,0,active
+celebratingcities.data.socrata.com,Data | Celebrating Cities | Open Data Portal,https://celebratingcities.data.socrata.com,socrata,Open data portal,federal,World,World,Celebratingcities,Central government,https://celebratingcities.data.socrata.com/api,94,active
+centennialco.data.socrata.com,,https://centennialco.data.socrata.com,socrata,Open data portal,,,,,,https://centennialco.data.socrata.com/api,10000,active
+cfschools.data.socrata.com,,https://cfschools.data.socrata.com,socrata,Open data portal,,,,,,https://cfschools.data.socrata.com/api,10000,active
+champaignil.data.socrata.com,,https://champaignil.data.socrata.com,socrata,Open data portal,,,,,,https://champaignil.data.socrata.com/api,10000,active
+chicago.socrata.com,Chicago Open Data Portal,https://chicago.socrata.com,socrata,Open data portal,local,US,United States,City of Chicago,Local government,https://chicago.socrata.com/api,903,active
+chicorec.data.socrata.com,,https://chicorec.data.socrata.com,socrata,Open data portal,,,,,,https://chicorec.data.socrata.com/api,10000,active
+chronicdata.cdc.gov,Data | Centers for Disease Control and Prevention - CDC Chronic Data,https://chronicdata.cdc.gov,socrata,Open data portal,federal,US,United States,Centers for Disease Control and Prevention,Central government,https://chronicdata.cdc.gov/api,1104,active
+citydata.mesaaz.gov,City of Mesa Internal Performance Portal,https://citydata.mesaaz.gov,socrata,Open data portal,local,US,United States,City of Mesa,Local government,https://citydata.mesaaz.gov/api,296,active
+cityofabilenetx.data.socrata.com,,https://cityofabilenetx.data.socrata.com,socrata,Open data portal,,,,,,https://cityofabilenetx.data.socrata.com/api,10000,active
+cityofalbany.data.socrata.com,,https://cityofalbany.data.socrata.com,socrata,Open data portal,,,,,,https://cityofalbany.data.socrata.com/api,10000,active
+cityofbranson-edp.data.socrata.com,,https://cityofbranson-edp.data.socrata.com,socrata,Open data portal,,,,,,https://cityofbranson-edp.data.socrata.com/api,10000,active
+cityofcamas.demo.socrata.com,,https://cityofcamas.demo.socrata.com,socrata,Open data portal,,,,,,https://cityofcamas.demo.socrata.com/api,10000,active
+cityofcharlestonwv.data.socrata.com,,https://cityofcharlestonwv.data.socrata.com,socrata,Open data portal,,,,,,https://cityofcharlestonwv.data.socrata.com/api,10000,active
+cityofchesapeake.data.socrata.com,,https://cityofchesapeake.data.socrata.com,socrata,Open data portal,,,,,,https://cityofchesapeake.data.socrata.com/api,15,active
+cityofchicago-v2.demo.socrata.com,City of Chicago | Data Portal,https://cityofchicago-v2.demo.socrata.com,socrata,Open data portal,local,US,United States,The City of Chicago,Local government,https://cityofchicago-v2.demo.socrata.com/api,10000,active
+cityofcudahy.data.socrata.com,,https://cityofcudahy.data.socrata.com,socrata,Open data portal,,,,,,https://cityofcudahy.data.socrata.com/api,10000,active
+cityofdiboll.data.socrata.com,,https://cityofdiboll.data.socrata.com,socrata,Open data portal,,,,,,https://cityofdiboll.data.socrata.com/api,10000,active
+cityofedmonds-erp.data.socrata.com,,https://cityofedmonds-erp.data.socrata.com,socrata,Open data portal,,,,,,https://cityofedmonds-erp.data.socrata.com/api,10000,active
+cityoffairbanks.data.socrata.com,,https://cityoffairbanks.data.socrata.com,socrata,Open data portal,,,,,,https://cityoffairbanks.data.socrata.com/api,10000,active
+cityoffairfaxpd.data.socrata.com,,https://cityoffairfaxpd.data.socrata.com,socrata,Open data portal,,,,,,https://cityoffairfaxpd.data.socrata.com/api,10000,active
+cityofglendoraca.data.socrata.com,,https://cityofglendoraca.data.socrata.com,socrata,Open data portal,,,,,,https://cityofglendoraca.data.socrata.com/api,10000,active
+cityofindianwells.data.socrata.com,,https://cityofindianwells.data.socrata.com,socrata,Open data portal,,,,,,https://cityofindianwells.data.socrata.com/api,10000,active
+cityofkingman.data.socrata.com,,https://cityofkingman.data.socrata.com,socrata,Open data portal,,,,,,https://cityofkingman.data.socrata.com/api,10000,active
+cityoflagunabeach-ca.data.socrata.com,,https://cityoflagunabeach-ca.data.socrata.com,socrata,Open data portal,,,,,,https://cityoflagunabeach-ca.data.socrata.com/api,10000,active
+cityoflancaster.data.socrata.com,,https://cityoflancaster.data.socrata.com,socrata,Open data portal,,,,,,https://cityoflancaster.data.socrata.com/api,10000,active
+cityoflaramie.data.socrata.com,,https://cityoflaramie.data.socrata.com,socrata,Open data portal,,,,,,https://cityoflaramie.data.socrata.com/api,10000,active
+cityofmelrose.data.socrata.com,,https://cityofmelrose.data.socrata.com,socrata,Open data portal,,,,,,https://cityofmelrose.data.socrata.com/api,10000,active
+cityofmenifee.data.socrata.com,,https://cityofmenifee.data.socrata.com,socrata,Open data portal,,,,,,https://cityofmenifee.data.socrata.com/api,10000,active
+cityofmethuenma.data.socrata.com,,https://cityofmethuenma.data.socrata.com,socrata,Open data portal,,,,,,https://cityofmethuenma.data.socrata.com/api,10000,active
+cityofmonroeoh.data.socrata.com,,https://cityofmonroeoh.data.socrata.com,socrata,Open data portal,,,,,,https://cityofmonroeoh.data.socrata.com/api,10000,active
+cityofnampa.data.socrata.com,,https://cityofnampa.data.socrata.com,socrata,Open data portal,,,,,,https://cityofnampa.data.socrata.com/api,10000,active
+cityofoakley.data.socrata.com,,https://cityofoakley.data.socrata.com,socrata,Open data portal,,,,,,https://cityofoakley.data.socrata.com/api,10000,active
+cityoforange-ca-of.data.socrata.com,,https://cityoforange-ca-of.data.socrata.com,socrata,Open data portal,,,,,,https://cityoforange-ca-of.data.socrata.com/api,10000,active
+cityofpacifica.data.socrata.com,,https://cityofpacifica.data.socrata.com,socrata,Open data portal,,,,,,https://cityofpacifica.data.socrata.com/api,10000,active
+cityofpensacolafl.data.socrata.com,,https://cityofpensacolafl.data.socrata.com,socrata,Open data portal,,,,,,https://cityofpensacolafl.data.socrata.com/api,10000,active
+cityofpflugervilletx.data.socrata.com,,https://cityofpflugervilletx.data.socrata.com,socrata,Open data portal,,,,,,https://cityofpflugervilletx.data.socrata.com/api,10000,active
+cityofrockisland.data.socrata.com,,https://cityofrockisland.data.socrata.com,socrata,Open data portal,,,,,,https://cityofrockisland.data.socrata.com/api,10000,active
+cityofsheridanwy.data.socrata.com,,https://cityofsheridanwy.data.socrata.com,socrata,Open data portal,,,,,,https://cityofsheridanwy.data.socrata.com/api,10000,active
+cityoftracyca.data.socrata.com,,https://cityoftracyca.data.socrata.com,socrata,Open data portal,,,,,,https://cityoftracyca.data.socrata.com/api,10000,active
+cityoftulare.data.socrata.com,,https://cityoftulare.data.socrata.com,socrata,Open data portal,,,,,,https://cityoftulare.data.socrata.com/api,10000,active
+cityofwestcovinaca.data.socrata.com,,https://cityofwestcovinaca.data.socrata.com,socrata,Open data portal,,,,,,https://cityofwestcovinaca.data.socrata.com/api,10000,active
+cityofwillmar-edp.data.socrata.com,,https://cityofwillmar-edp.data.socrata.com,socrata,Open data portal,,,,,,https://cityofwillmar-edp.data.socrata.com/api,10000,active
+cityofwoodland.data.socrata.com,,https://cityofwoodland.data.socrata.com,socrata,Open data portal,,,,,,https://cityofwoodland.data.socrata.com/api,10000,active
+cityofyorbalinda.data.socrata.com,,https://cityofyorbalinda.data.socrata.com,socrata,Open data portal,,,,,,https://cityofyorbalinda.data.socrata.com/api,10000,active
+citystaug.data.socrata.com,,https://citystaug.data.socrata.com,socrata,Open data portal,,,,,,https://citystaug.data.socrata.com/api,10000,active
+clatsop.data.socrata.com,,https://clatsop.data.socrata.com,socrata,Open data portal,,,,,,https://clatsop.data.socrata.com/api,10000,active
+claycountysheriff-fl.data.socrata.com,,https://claycountysheriff-fl.data.socrata.com,socrata,Open data portal,,,,,,https://claycountysheriff-fl.data.socrata.com/api,10000,active
+clemsonsc.data.socrata.com,,https://clemsonsc.data.socrata.com,socrata,Open data portal,,,,,,https://clemsonsc.data.socrata.com/api,10000,active
+co-clinton-oh.data.socrata.com,,https://co-clinton-oh.data.socrata.com,socrata,Open data portal,,,,,,https://co-clinton-oh.data.socrata.com/api,10000,active
+coa-internal.demo.socrata.com,,https://coa-internal.demo.socrata.com,socrata,Open data portal,,,,,,https://coa-internal.demo.socrata.com/api,14,active
+coconinocountyaz.data.socrata.com,,https://coconinocountyaz.data.socrata.com,socrata,Open data portal,,,,,,https://coconinocountyaz.data.socrata.com/api,10000,active
+collin-county-tx-ja.data.socrata.com,,https://collin-county-tx-ja.data.socrata.com,socrata,Open data portal,,,,,,https://collin-county-tx-ja.data.socrata.com/api,10000,active
+colonialheightsva-pd.data.socrata.com,,https://colonialheightsva-pd.data.socrata.com,socrata,Open data portal,,,,,,https://colonialheightsva-pd.data.socrata.com/api,10000,active
+coloradospringsco-pd.data.socrata.com,,https://coloradospringsco-pd.data.socrata.com,socrata,Open data portal,,,,,,https://coloradospringsco-pd.data.socrata.com/api,10000,active
+columbiasc.data.socrata.com,,https://columbiasc.data.socrata.com,socrata,Open data portal,,,,,,https://columbiasc.data.socrata.com/api,11,active
+como.data.socrata.com,,https://como.data.socrata.com,socrata,Open data portal,,,,,,https://como.data.socrata.com/api,10000,active
+controllerdata.lacity.org,Los Angeles Open Data - Controller Data,https://controllerdata.lacity.org,socrata,Open data portal,local,US,United States,"Kenneth Mejia, Los Angeles City Controller.",Local government,https://controllerdata.lacity.org/api,86,active
+conyersga.data.socrata.com,,https://conyersga.data.socrata.com,socrata,Open data portal,,,,,,https://conyersga.data.socrata.com/api,10000,active
+cookcounty.data.socrata.com,Cook County Open Data Catalog,https://cookcounty.data.socrata.com,socrata,Open data portal,local,US,United States,Cook County Government,Local government,https://cookcounty.data.socrata.com/api,10000,active
+coos-county-edp.data.socrata.com,,https://coos-county-edp.data.socrata.com,socrata,Open data portal,,,,,,https://coos-county-edp.data.socrata.com/api,10000,active
+corsicanatx.data.socrata.com,,https://corsicanatx.data.socrata.com,socrata,Open data portal,,,,,,https://corsicanatx.data.socrata.com/api,10000,active
+corstat.coronaca.gov,Open Data Portal |  Corona Open Performance,https://corstat.coronaca.gov,socrata,Open data portal,local,US,United States,Corona Open Performance,Local government,https://corstat.coronaca.gov/api,91,active
+corvallisoregon-internal.data.socrata.com,,https://corvallisoregon-internal.data.socrata.com,socrata,Open data portal,,,,,,https://corvallisoregon-internal.data.socrata.com/api,10000,active
+cos-data.seattle.gov,,https://cos-data.seattle.gov,socrata,Open data portal,,,,,,https://cos-data.seattle.gov/api,143,active
+covid19.buffalony.gov,"COVID-19 Buffalo, NY Data Catalog",https://covid19.buffalony.gov,socrata,Open data portal,local,US,United States,Unknown (likely City of Buffalo or local government),Local government,https://covid19.buffalony.gov/api,21,active
+cravencountync.data.socrata.com,,https://cravencountync.data.socrata.com,socrata,Open data portal,,,,,,https://cravencountync.data.socrata.com/api,10000,active
+cthru.data.socrata.com,,https://cthru.data.socrata.com,socrata,Open data portal,,,,,,https://cthru.data.socrata.com/api,16,active
+cudahyca.data.socrata.com,,https://cudahyca.data.socrata.com,socrata,Open data portal,,,,,,https://cudahyca.data.socrata.com/api,10000,active
+cumberlandcounty.data.socrata.com,,https://cumberlandcounty.data.socrata.com,socrata,Open data portal,,,,,,https://cumberlandcounty.data.socrata.com/api,10000,active
+dallasopendata.com,"Dallas, Tx Open Data",https://www.dallasopendata.com,socrata,Open data portal,local,US,United States,City of Dallas,Local government,https://www.dallasopendata.com/api,342,active
+dashboard.edmonton.ca,City of Edmonton Open data portal,https://dashboard.edmonton.ca,socrata,Open data portal,local,CA,Canada,City of Edmonton,Local government,https://dashboard.edmonton.ca/api,10000,active
+dashboard.plano.gov,City of Plano | Open Data Portal,https://dashboard.plano.gov,socrata,Open data portal,local,US,United States,City of Plano,Local government,https://dashboard.plano.gov/api,31,active
+dashboarddata.caloes.ca.gov,,https://dashboarddata.caloes.ca.gov,socrata,Open data portal,,,,,,https://dashboarddata.caloes.ca.gov/api,10000,active
+data-cosm.hub.arcgis.com,City of San Marcos Open Data,https://data-cosm.hub.arcgis.com,socrata,Open data portal,local,US,United States,City of San Marcos,Local government,https://data-cosm.hub.arcgis.com/api,0,active
+data.act.gov.au,Australian Capital Territory (ACT) Government Open Data Portal,https://www.data.act.gov.au,socrata,Open data portal,state,AU,Australia,ACT Government,Regional government,https://www.data.act.gov.au/api,440,active
+data.albanyny.gov,openAlbany,https://data.albanyny.gov,socrata,Open data portal,local,US,United States,City of Albany,Local government,https://data.albanyny.gov/api,0,active
+data.americorps.gov,CNCS Open Data,https://data.americorps.gov,socrata,Open data portal,federal,US,United States,AmeriCorps,Central government,https://data.americorps.gov/api,10000,active
+data.auburnwa.gov,Auburn Open Data | Auburn Open Data,https://data.auburnwa.gov,socrata,Open data portal,local,US,United States,City of Auburn,Local government,https://data.auburnwa.gov/api,31,active
+data.austintexas.gov,City of Austin Open Data Portal,https://data.austintexas.gov,socrata,Open data portal,local,US,United States,City of Austin,Local government,https://data.austintexas.gov/api,10000,active
+data.bayareametro.gov,,https://data.bayareametro.gov,socrata,Open data portal,,,,,,https://data.bayareametro.gov/api,2161,active
+data.bellevuewa.gov,City of Bellevue Open Data Portal,https://data.bellevuewa.gov,socrata,Open data portal,local,US,United States,City of Bellevue,Local government,https://data.bellevuewa.gov/api,0,active
+data.bloomington.in.gov,City of Bloomington Open Data Portal,https://data.bloomington.in.gov,socrata,Open data portal,local,US,United States,"City of Bloomington, Indiana",Local government,https://data.bloomington.in.gov/api,200,active
+data.brla.gov,Open Data Baton Rouge,https://data.brla.gov,socrata,Open data portal,local,US,United States,"City of Baton Rouge, Parish of East Baton Rouge",Local government,https://data.brla.gov/api,240,active
+data.bts.gov,BTS Data Inventory,https://data.bts.gov,socrata,Open data portal,federal,US,United States,Bureau of Transportation Statistics (BTS),Central government,https://data.bts.gov/api,149,active
+data.buffalony.gov,,https://data.buffalony.gov,socrata,Open data portal,,,,,,https://data.buffalony.gov/api,10000,active
+data.calgary.ca,City of Calgary Open Data Portal,https://data.calgary.ca,socrata,Open data portal,local,CA,Canada,City of Calgary,Local government,https://data.calgary.ca/api,426,active
+data.cambridgema.gov,"City of Cambridge, MA Open Data Catalog",https://data.cambridgema.gov,socrata,Open data portal,local,US,United States,"City of Cambridge, Ma",Local government,https://data.cambridgema.gov/api,282,active
+data.cdc.gov,Data | Centers for Disease Control and Prevention - CDC,https://data.cdc.gov,socrata,Open data portal,federal,US,United States,Centers for Disease Control and Prevention,Central government,https://data.cdc.gov/api,1104,active
+data.cdp.net,"CDP Cities, States and Regions Open Data Portal",https://data.cdp.net,socrata,Open data portal,federal,World,World,CDP Worldwide,Civil society,https://data.cdp.net/api,5553,active
+data.chattlibrary.org,Chattanooga Open Data Portal,https://data.chattlibrary.org,socrata,Open data portal,local,US,United States,City of Chattanooga,Local government,https://data.chattlibrary.org/api,0,active
+data.cincinnati-oh.gov,Cincinnati Open Data Portal | Tyler Data & Insights,https://data.cincinnati-oh.gov,socrata,Open data portal,local,US,United States,City of Cincinnati,Local government,https://data.cincinnati-oh.gov/api,100,active
+data.cityofberkeley.info,,https://data.cityofberkeley.info,socrata,Open data portal,,,,,,https://data.cityofberkeley.info/api,49,active
+data.cityofchicago.org,"Chicago, Il Open Data",https://data.cityofchicago.org,socrata,Open data portal,local,US,United States,The City of Chicago,Local government,https://data.cityofchicago.org/api,903,active
+data.cityofevanston.org,Evanston Open Data Portal,https://data.cityofevanston.org,socrata,Open data portal,local,US,United States,City of Evanston,Local government,https://data.cityofevanston.org/api,0,active
+data.cityofgainesville.org,DataGNV - Gainesville's Open Data Portal,https://data.cityofgainesville.org,socrata,Open data portal,local,US,United States,City of Gaunesville,Local government,https://data.cityofgainesville.org/api,89,active
+data.cityofnewyork.us,NYC Open Data Portal,https://data.cityofnewyork.us,socrata,Open data portal,local,US,United States,City of New York,Local government,https://data.cityofnewyork.us/api,2386,active
+data.cityoforlando.net,,https://data.cityoforlando.net,socrata,Open data portal,,,,,,https://data.cityoforlando.net/api,27,active
+data.colorado.gov,Colorado Information Marketplace,https://data.colorado.gov,socrata,Open data portal,state,US,United States,State of Colorado,Regional government,https://data.colorado.gov/api,632,active
+data.coloradosprings.gov,Colorado Springs Open Data Catalog,https://data.coloradosprings.gov,socrata,Open data portal,local,US,United States,City of Colorado Springs,Local government,https://data.coloradosprings.gov/api,10000,active
+data.countyofriverside.us,Riverside County Open Data | Riverside County Open Data,https://data.countyofriverside.us,socrata,Open data portal,state,US,United States,"County of Riverside, California",Regional government,https://data.countyofriverside.us/api,28,active
+data.cstx.gov,College Station - Open Data | CSTX Open Data,https://data.cstx.gov,socrata,Open data portal,local,US,United States,City of College Station,Local government,https://data.cstx.gov/api,15,active
+data.ct.gov,Connecticut Open Data,https://data.ct.gov,socrata,Open data portal,state,US,United States,State of Connecticut,Regional government,https://data.ct.gov/api,591,active
+data.culvercity.org,City of Culver City Open Data Catalog,https://data.culvercity.org,socrata,Open data portal,local,US,United States,Culver city,Local government,https://data.culvercity.org/api,0,active
+data.datacenterresearch.org,The Data Center Open Data,https://data.datacenterresearch.org,socrata,Open data portal,state,US,United States,The Data Center (Nonprofit Knowledge Works),Non-profit,https://data.datacenterresearch.org/api,45,active
+data.debtwatch.treasurer.ca.gov,California State Treasurer - Fiona Ma,https://data.debtwatch.treasurer.ca.gov,socrata,Open data portal,state,US,United States,California State Treasurer,Regional government,https://data.debtwatch.treasurer.ca.gov/api,0,active
+data.delaware.gov,Delaware Open Data Portal Published Assets,https://data.delaware.gov,socrata,Open data portal,state,US,United States,State of Delaware,Regional government,https://data.delaware.gov/api,168,active
+data.drpt.virginia.gov,Virginia Department of Rail and Public Transportation,https://data.drpt.virginia.gov,socrata,Open data portal,state,US,United States,Virginia Department of Rail and Public Transportation,Regional government,https://data.drpt.virginia.gov/api,0,active
+data.dumfriesva.gov,Dumfries Open Data Portal,https://data.dumfriesva.gov,socrata,Open data portal,local,US,United States,Town of Dumfries,Local government,https://data.dumfriesva.gov/api,39,active
+data.edd.ca.gov,EDD Open Data Portal,https://data.edd.ca.gov,socrata,Open data portal,state,US,United States,California Employment Development Department (EDD),Central government,https://data.edd.ca.gov/api,0,active
+data.edmonton.ca,City of Edmonton Open Data Portal,https://data.edmonton.ca,socrata,Open data portal,local,CA,Canada,City Of Edmonton,Local government,https://data.edmonton.ca/api,1370,active
+data.energystar.gov,ENERGY STAR Product Data Catalog,https://data.energystar.gov,socrata,Open data portal,federal,US,United States,EPA (U.S. Environmental Protection Agency),Central government,https://data.energystar.gov/api,52,active
+data.everettwa.gov,Everett Open Data Portal,https://data.everettwa.gov,socrata,Open data portal,local,US,United States,City of Everett,Local government,https://data.everettwa.gov/api,119,active
+data.fortworthtexas.gov,Open Data Portal for the City of Fort Worth,https://data.fortworthtexas.gov,socrata,Open data portal,local,US,United States,City of Fort Worth,Local government,https://data.fortworthtexas.gov/api,10,active
+data.framinghamma.gov,Rally | Open Data Portal | Open Data Framingham,https://data.framinghamma.gov,socrata,Open data portal,local,US,United States,City of Framingham,Local government,https://data.framinghamma.gov/api,25,active
+data.ftb.ca.gov,"Data, reports, and plans | FTB.ca.gov Open Data Portal",https://data.ftb.ca.gov,socrata,Open data portal,state,US,United States,Franchise Tax Board (FTB),Central government,https://data.ftb.ca.gov/api,10000,active
+data.fultoncountyga.gov,"Fulton County, Georgia - Open Data",https://data.fultoncountyga.gov,socrata,Open data portal,local,US,United States,Fulton County Government,Local government,https://data.fultoncountyga.gov/api,18,active
+data.grandrapidsmi.gov,Grand Rapids Open Data Portal,https://data.grandrapidsmi.gov,socrata,Open data portal,local,US,United States,City of Grand Rapids,Local government,https://data.grandrapidsmi.gov/api,10000,active
+data.hartford.gov,City of Hartford GIS Open Data Catalog,https://data.hartford.gov,socrata,Open data portal,local,US,United States,City of Hartford,Local government,https://data.hartford.gov/api,0,active
+data.honolulu.gov,"Honolulu County, Hi Open Data",https://data.honolulu.gov,socrata,Open data portal,local,US,United States,Honolulu County,Local government,https://data.honolulu.gov/api,58,active
+data.illinois.gov,,https://data.illinois.gov,socrata,Open data portal,,,,,,https://data.illinois.gov/api,10000,active
+data.internal.drpt.virginia.gov,Virginia Department of Rail and Public Transportation (internal),https://data.internal.drpt.virginia.gov,socrata,Open data portal,state,US,United States,Virginia Department of Rail and Public Transportation,Regional government,https://data.internal.drpt.virginia.gov/api,10000,active
+data.iowa.gov,Iowa Open Data,https://data.iowa.gov,socrata,Open data portal,state,US,United States,Sate of Iowa,Regional government,https://data.iowa.gov/api,10000,active
+data.kcmo.org,Open Data KC,https://data.kcmo.org,socrata,Open data portal,local,US,United States,"City of Kansas, MO",Local government,https://data.kcmo.org/api,200,active
+data.kingcounty.gov,King County GIS Center Spatial Data Catalog,https://data.kingcounty.gov,socrata,Open data portal,local,US,United States,"King County, WA",Local government,https://data.kingcounty.gov/api,265,active
+data.lacity.org,Los Angeles Open Data,https://data.lacity.org,socrata,Open data portal,local,US,United States,City of Los Angeles,Local government,https://data.lacity.org/api,358,active
+data.littlerock.gov,City of Little Rock Open Data and Performance,https://data.littlerock.gov,socrata,Open data portal,local,US,United States,City of Little Rock,Local government,https://data.littlerock.gov/api,85,active
+data.macoupincountyil.gov,Macoupin Open Data Portal | Open Data | Macoupin County,https://data.macoupincountyil.gov,socrata,Open data portal,local,US,United States,Macoupin County,Local government,https://data.macoupincountyil.gov/api,46,active
+data.marincounty.gov,County of Marin Open Data Portal,https://data.marincounty.gov,socrata,Open data portal,local,US,United States,"County of Marin, CA",Local government,https://data.marincounty.gov/api,47,active
+data.marincounty.org,County of Marin - Open Data Portal,https://data.marincounty.org,socrata,Open data portal,local,US,United States,"County of Marin, CA",Local government,https://data.marincounty.org/api,0,active
+data.maryland.gov,Maryland's GIS Data Catalog,https://data.maryland.gov,socrata,Open data portal,state,US,United States,State of Maryland,Regional government,https://data.maryland.gov/api,10000,active
+data.memphistn.gov,Memphis Data Hub,https://data.memphistn.gov,socrata,Open data portal,local,US,United States,City of Memphis,Local government,https://data.memphistn.gov/api,0,active
+data.mesaaz.gov,City of Mesa GIS Data Portal,https://data.mesaaz.gov,socrata,Open data portal,local,US,United States,City of Mesa,Local government,https://data.mesaaz.gov/api,18,active
+data.miamigov.com,,https://data.miamigov.com,socrata,Open data portal,,,,,,https://data.miamigov.com/api,12,active
+data.michigan.gov,Michigan Open Data Portal,https://data.michigan.gov,socrata,Open data portal,state,US,United States,State Of Michigan,Regional government,https://data.michigan.gov/api,261,active
+data.mmcp.ms.gov,,https://data.mmcp.ms.gov,socrata,Open data portal,,,,,,https://data.mmcp.ms.gov/api,29,active
+data.mo.gov,State of Missouri Open data portal,https://data.mo.gov,socrata,Open data portal,state,US,United States,State Of Missouri,Regional government,https://data.mo.gov/api,242,active
+data.modestogov.com,Modesto City View,https://data.modestogov.com,socrata,Open data portal,local,US,United States,City of Modesto,Local government,https://data.modestogov.com/api,29,active
+data.montgomerycountymd.gov,"Montgomery County, Md Open Data",https://data.montgomerycountymd.gov,socrata,Open data portal,local,US,United States,Montgomery County,Local government,https://data.montgomerycountymd.gov/api,455,active
+data.montgomeryschoolsmd.org,Montgomery County Public Schools data catalog,https://data.montgomeryschoolsmd.org,socrata,Open data portal,local,US,United States,Montgomery County Public Schools,Local government,https://data.montgomeryschoolsmd.org/api,47,active
+data.myneighborhooddata.org,Neighborhood Data for Social Change,https://data.myneighborhooddata.org,socrata,Open data portal,state,US,United States,USC Price Center for Social Innovation,Research institution,https://data.myneighborhooddata.org/api,160,active
+data.napacounty.gov,,https://data.napacounty.gov,socrata,Open data portal,,,,,,https://data.napacounty.gov/api,86,active
+data.nasa.gov,NASA Open Data Portal,https://data.nasa.gov,socrata,Open data portal,federal,US,United States,NASA,Central government,https://data.nasa.gov/api,23,active
+data.nashville.gov,Nashville Open Data,https://data.nashville.gov,socrata,Open data portal,local,US,United States,Metro Nashville Government,Local government,https://data.nashville.gov/api,0,active
+data.nhitc.org,,https://data.nhitc.org,socrata,Open data portal,,,,,,https://data.nhitc.org/api,2,active
+data.nj.gov,NJOIT Open Data Center,https://data.nj.gov,socrata,Open data portal,state,US,United States,State of New Jersey,Regional government,https://data.nj.gov/api,113,active
+data.nola.gov,"New Orleans, La Open Data",https://data.nola.gov,socrata,Open data portal,local,US,United States,City of New Orleans,Local government,https://data.nola.gov/api,199,active
+data.norfolk.gov,"City of Norfolk Data | Open Data Portal - City of Norfolk, VA Open Data",https://data.norfolk.gov,socrata,Open data portal,local,US,United States,City of Norfolk,Local government,https://data.norfolk.gov/api,100,active
+data.novascotia.ca,Government of Nova Scotia open data,https://data.novascotia.ca,socrata,Open data portal,state,CA,Canada,Government of Nova Scotia,Regional government,https://data.novascotia.ca/api,708,active
+data.ny.gov,New York Open Data,https://data.ny.gov,socrata,Open data portal,state,US,United States,State of New York,Regional government,https://data.ny.gov/api,1013,active
+data.oaklandca.gov,City of Oakland Open Data Platform,https://data.oaklandca.gov,socrata,Open data portal,local,US,United States,City of Oaklend,Local government,https://data.oaklandca.gov/api,313,active
+data.oce.pr.gov,OCEPR - Open Data,https://data.oce.pr.gov,socrata,Open data portal,state,US,United States,Oficina del Contralor Electoral (OCE),Central government,https://data.oce.pr.gov/api,10000,active
+data.ohiocourtofclaims.gov,Ohio Court of Claims Open Data,https://data.ohiocourtofclaims.gov,socrata,Open data portal,state,US,United States,Ohio Court of Claims,Regional government,https://data.ohiocourtofclaims.gov/api,10,active
+data.ojp.usdoj.gov,Office of Justice Programs Open Data,https://data.ojp.usdoj.gov,socrata,Open data portal,federal,US,United States,Office of Justice Programs,Central government,https://data.ojp.usdoj.gov/api,0,active
+data.orcities.org,LOC Open Data Portal,https://data.orcities.org,socrata,Open data portal,local,US,United States,League of Oregon cities,Local government,https://data.orcities.org/api,52,active
+data.oregon.gov,Oregon Open Data,https://data.oregon.gov,socrata,Open data portal,state,US,United States,State of Oregon,Regional government,https://data.oregon.gov/api,486,active
+data.oxnard.org,City of Oxnard Spatial Data Portal,https://data.oxnard.org,socrata,Open data portal,local,US,United States,City of Oxnard,Local government,https://data.oxnard.org/api,2,active
+data.pa.gov,Open Data Pennsylvania,https://data.pa.gov,socrata,Open data portal,state,US,United States,State of Pennsylvania,Regional government,https://data.pa.gov/api,377,active
+data.permits.performance.gov,Open Data Portal | FPISC Reports | Permitting Data Platform,https://data.permits.performance.gov,socrata,Open data portal,federal,US,United States,U.S. Federal Government,Central government,https://data.permits.performance.gov/api,10000,active
+data.princeedwardisland.ca,Government of Prince Edward Island open data,https://data.princeedwardisland.ca,socrata,Open data portal,state,CA,Canada,Government of Prince Edward Island,Regional government,https://data.princeedwardisland.ca/api,0,active
+data.princegeorgescountymd.gov,"Prince George County, Md - Openpgc",https://data.princegeorgescountymd.gov,socrata,Open data portal,local,US,United States,Prince George County,Local government,https://data.princegeorgescountymd.gov/api,63,active
+data.providenceri.gov,City of Providence Open Data Portal,https://data.providenceri.gov,socrata,Open data portal,local,US,United States,City of Providence,Local government,https://data.providenceri.gov/api,121,active
+data.qac.org,Queen Anne''s County - Open Data | Open Data Portal,https://data.qac.org,socrata,Open data portal,local,US,United States,Queen Anne’s County Government Maryland,Local government,https://data.qac.org/api,10000,active
+data.ramseycountymn.gov,,https://data.ramseycountymn.gov,socrata,Open data portal,,,,,,https://data.ramseycountymn.gov/api,381,active
+data.readingpa.gov,Open Reading | Open Data Reading,https://data.readingpa.gov,socrata,Open data portal,local,US,United States,"City of Reading, Pennsylvania",Local government,https://data.readingpa.gov/api,19,active
+data.redmond.gov,"Redmond, Wa Open Data",https://data.redmond.gov,socrata,Open data portal,local,US,United States,City of Redmond,Local government,https://data.redmond.gov/api,10000,active
+data.richmondgov.com,Richmond GeoHub / data.richmondgov.com,https://data.richmondgov.com,socrata,Open data portal,local,US,United States,"City of Richmond, Virginia",Local government,https://data.richmondgov.com/api,28,active
+data.roseville.ca.us,Roseville Open Data,https://data.roseville.ca.us,socrata,Open data portal,local,US,United States,City of Roseville,Local government,https://data.roseville.ca.us/api,60,active
+data.sandiegocounty.gov,San Diego County Data Portal,https://data.sandiegocounty.gov,socrata,Open data portal,local,US,United States,County of San Diego,Local government,https://data.sandiegocounty.gov/api,10000,active
+data.sccgov.org,County of Santa Clara Open Data Portal,https://data.sccgov.org,socrata,Open data portal,local,US,United States,County of Santa Clara,Local government,https://data.sccgov.org/api,151,active
+data.seattle.gov,"Seattle, Wa Open Data",https://data.seattle.gov,socrata,Open data portal,local,US,United States,City Of Seattle,Local government,https://data.seattle.gov/api,10000,active
+data.sfgov.org,San Francisco Open Data Portal,https://data.sfgov.org,socrata,Open data portal,local,US,United States,City of San Francisco,Local government,https://data.sfgov.org/api,10000,active
+data.smcgov.org,"San Mateo County, Ca Open Data",https://data.smcgov.org,socrata,Open data portal,local,US,United States,San Mateo County,Local government,https://data.smcgov.org/api,44,active
+data.somervillema.gov,"Somerville, Ma Open Data",https://data.somervillema.gov,socrata,Open data portal,local,US,United States,City of Somerville,Local government,https://data.somervillema.gov/api,29,active
+data.sonomacounty.ca.gov,County of Sonoma | Open Data | Open Data | Sonoma County,https://data.sonomacounty.ca.gov,socrata,Open data portal,local,US,United States,County of Sonoma,Local government,https://data.sonomacounty.ca.gov/api,24,active
+data.stocktonca.gov,,https://data.stocktonca.gov,socrata,Open data portal,,,,,,https://data.stocktonca.gov/api,10000,active
+data.strathcona.ca,Strathcona County Open Data,https://data.strathcona.ca,socrata,Open data portal,local,CA,Canada,Strathcona County,Local government,https://data.strathcona.ca/api,0,active
+data.sustainablesm.org,Santa Monica Sustainable City Plan,https://data.sustainablesm.org,socrata,Open data portal,local,US,United States,City of Santa Monica,Local government,https://data.sustainablesm.org/api,134,active
+data.texas.gov,Texas Open Data Portal,https://data.texas.gov,socrata,Open data portal,state,US,United States,State of Texas,Regional government,https://data.texas.gov/api,763,active
+data.tompsc.com,"Mount Pleasant, SC | eMPower | Mount Pleasant, SC | eMPower",https://data.tompsc.com,socrata,Open data portal,international,World,World,Government of Unknown,Central government,https://data.tompsc.com/api,13,active
+data.transportation.gov,Department of Transportation Open Data Portal,https://data.transportation.gov,socrata,Open data portal,federal,US,United States,U.S. Department of Transportation,Central government,https://data.transportation.gov/api,10000,active
+data.tuscaloosa.com,Open Data Tuscaloosa | City of Tuscaloosa Open Data,https://data.tuscaloosa.com,socrata,Open data portal,local,US,United States,City of Tuscaloosa,Local government,https://data.tuscaloosa.com/api,0,active
+data.urbanaillinois.us,"Data Catalog: Urbana, IL",https://data.urbanaillinois.us,socrata,Open data portal,local,US,United States,City of Urbana,Local government,https://data.urbanaillinois.us/api,15,active
+data.usaid.gov,Development Data Library,https://data.usaid.gov,socrata,Open data portal,federal,US,United States,United States Agency for International Development (USAID),Central government,https://data.usaid.gov/api,0,active
+data.va.gov,The Department of Veterans Affairs Open Data Portal,https://data.va.gov,socrata,Open data portal,federal,US,United States,The Department of Veterans Affairs,Central government,https://data.va.gov/api,10000,active
+data.vermont.gov,Vermont Open Data Portal,https://data.vermont.gov,socrata,Open data portal,state,US,United States,State of Vermont,Regional government,https://data.vermont.gov/api,168,active
+data.virginia.gov,Virginia Open Data Portal,https://data.virginia.gov,socrata,Open data portal,state,US,United States,State of Virginia,Regional government,https://data.virginia.gov/api,0,active
+data.wa.gov,Washington State Open Data Portal,https://data.wa.gov,socrata,Open data portal,state,US,United States,State of Washington,Regional government,https://data.wa.gov/api,1065,active
+data.waterpointdata.org,Water Point Data Exchange,https://data.waterpointdata.org,socrata,Open data portal,federal,US,United States,WPDx Working Group,Non-profit,https://data.waterpointdata.org/api,15,active
+data.wcad.org,WCAD Open Data,https://data.wcad.org,socrata,Open data portal,local,US,United States,Williamson Central Appraisal District,Local government,https://data.wcad.org/api,85,active
+data.weho.org,City of West Hollywood Open Data Catalog,https://data.weho.org,socrata,Open data portal,local,US,United States,City Of West Hollywood,Local government,https://data.weho.org/api,37,active
+data.winnipeg.ca,City of Winnipeg Open Data Catalogue,https://data.winnipeg.ca,socrata,Open data portal,local,CA,Canada,City of Winnipeg,Local government,https://data.winnipeg.ca/api,217,active
+dataacademy.maryland.gov,,https://dataacademy.maryland.gov,socrata,Open data portal,,,,,,https://dataacademy.maryland.gov/api,10000,active
+datacatalog.cookcountyil.gov,Cook County Government Open Data,https://datacatalog.cookcountyil.gov,socrata,Open data portal,local,US,United States,"Cook County, IL",Local government,https://datacatalog.cookcountyil.gov/api,518,active
+datadiscovery.nlm.nih.gov,National Library of Medicine | National Institutes of Health | Open Data Portal,https://datadiscovery.nlm.nih.gov,socrata,Open data portal,federal,US,United States,National Library of Medicine,Central government,https://datadiscovery.nlm.nih.gov/api,25,active
+datahub.austintexas.gov,City Data Hub | City of Austin,https://datahub.austintexas.gov,socrata,Open data portal,local,US,United States,City of Austin,Local government,https://datahub.austintexas.gov/api,707,active
+datahub.hhs.gov,,https://datahub.hhs.gov,socrata,Open data portal,,,,,,https://datahub.hhs.gov/api,141,active
+datahub.smcgov.org,San Mateo County Data Catalog,https://datahub.smcgov.org,socrata,Open data portal,local,US,United States,County of San Mateo,Local government,https://datahub.smcgov.org/api,421,active
+datahub.transportation.gov,,https://datahub.transportation.gov,socrata,Open data portal,,,,,,https://datahub.transportation.gov/api,436,active
+datahub.usac.org,USAC | Data Hub,https://datahub.usac.org,socrata,Open data portal,federal,US,United States,USAC,Central government,https://datahub.usac.org/api,32,active
+datahub.va.gov,Department of Veterans Affairs Data Hub,https://www.datahub.va.gov,socrata,Open data portal,federal,US,United States,U.S. Department of Veterans Affairs,Central government,https://www.datahub.va.gov/api,484,active
+datainsights.encinitasca.gov,Encinitas Data & Insights,https://datainsights.encinitasca.gov,socrata,Open data portal,local,US,United States,City of Encinitas,Local government,https://datainsights.encinitasca.gov/api,16,active
+datamgmt.nassaucountyny.gov,,https://datamgmt.nassaucountyny.gov,socrata,Open data portal,,,,,,https://datamgmt.nassaucountyny.gov/api,17,active
+dati.friuliveneziagiulia.it,Open Data FVG - Regione Autonoma Friuli Venezia Giulia,https://dati.friuliveneziagiulia.it,socrata,Open data portal,state,IT,Italy,Regione Autonoma Friuli Venezia Giulia,Regional government,https://dati.friuliveneziagiulia.it/api,0,active
+dati.lombardia.it,Open Data Lombardia,https://dati.lombardia.it,socrata,Open data portal,state,IT,Italy,Regione Lombaria,Regional government,https://dati.lombardia.it/api,5553,active
+datos.gov.co,Datos Abiertos Colombia,https://www.datos.gov.co,socrata,Open data portal,federal,CO,Colombia,Ministerio de Tecnologías de la Información y las Comunicaciones,Central government,https://www.datos.gov.co/api,8386,active
+dcsheriff.data.socrata.com,,https://dcsheriff.data.socrata.com,socrata,Open data portal,,,,,,https://dcsheriff.data.socrata.com/api,10000,active
+dedhamma.data.socrata.com,,https://dedhamma.data.socrata.com,socrata,Open data portal,,,,,,https://dedhamma.data.socrata.com/api,10000,active
+delawarecountyoh-sheriff.data.socrata.com,,https://delawarecountyoh-sheriff.data.socrata.com,socrata,Open data portal,,,,,,https://delawarecountyoh-sheriff.data.socrata.com/api,10000,active
+desmoinesia-pd.data.socrata.com,,https://desmoinesia-pd.data.socrata.com,socrata,Open data portal,,,,,,https://desmoinesia-pd.data.socrata.com/api,10000,active
+dixonca.data.socrata.com,,https://dixonca.data.socrata.com,socrata,Open data portal,,,,,,https://dixonca.data.socrata.com/api,10000,active
+doralfl.data.socrata.com,,https://doralfl.data.socrata.com,socrata,Open data portal,,,,,,https://doralfl.data.socrata.com/api,10000,active
+dot-edpsandbox.data.socrata.com,,https://dot-edpsandbox.data.socrata.com,socrata,Open data portal,,,,,,https://dot-edpsandbox.data.socrata.com/api,10000,active
+douglasco.data.socrata.com,,https://douglasco.data.socrata.com,socrata,Open data portal,,,,,,https://douglasco.data.socrata.com/api,10000,active
+dubuque.data.socrata.com,"Open Data Portal | Open Data Portal | Dubuque, IA",https://dubuque.data.socrata.com,socrata,Open data portal,local,US,United States,City of Dubuque,Local government,https://dubuque.data.socrata.com/api,10000,active
+eaglevalley-ta-edp.data.socrata.com,,https://eaglevalley-ta-edp.data.socrata.com,socrata,Open data portal,,,,,,https://eaglevalley-ta-edp.data.socrata.com/api,10000,active
+edinburgtx-pd.data.socrata.com,,https://edinburgtx-pd.data.socrata.com,socrata,Open data portal,,,,,,https://edinburgtx-pd.data.socrata.com/api,10000,active
+edinburgtx.data.socrata.com,,https://edinburgtx.data.socrata.com,socrata,Open data portal,,,,,,https://edinburgtx.data.socrata.com/api,10000,active
+edmondok.data.socrata.com,,https://edmondok.data.socrata.com,socrata,Open data portal,,,,,,https://edmondok.data.socrata.com/api,10,active
+edmonton.socrata.com,Edmonton Open Data,https://edmonton.socrata.com,socrata,Open data portal,local,CA,Canada,City of Edmonton,Local government,https://edmonton.socrata.com/api,1370,active
+educationtocareer.data.mass.gov,Massachusetts Education-to-Career Research and Data Hub,https://educationtocareer.data.mass.gov,socrata,Open data portal,state,US,United States,Commonwealth of Massachusetts,Regional government,https://educationtocareer.data.mass.gov/api,84,active
+edwardsvilleil.data.socrata.com,,https://edwardsvilleil.data.socrata.com,socrata,Open data portal,,,,,,https://edwardsvilleil.data.socrata.com/api,10000,active
+effinghamil.data.socrata.com,,https://effinghamil.data.socrata.com,socrata,Open data portal,,,,,,https://effinghamil.data.socrata.com/api,10000,active
+elkhartcountyin.data.socrata.com,,https://elkhartcountyin.data.socrata.com,socrata,Open data portal,,,,,,https://elkhartcountyin.data.socrata.com/api,10000,active
+emporia-kansas.data.socrata.com,,https://emporia-kansas.data.socrata.com,socrata,Open data portal,,,,,,https://emporia-kansas.data.socrata.com/api,10000,active
+encinitasca-internal.data.socrata.com,,https://encinitasca-internal.data.socrata.com,socrata,Open data portal,,,,,,https://encinitasca-internal.data.socrata.com/api,10000,active
+enforcementmobileanalytics-nvots.data.socrata.com,,https://enforcementmobileanalytics-nvots.data.socrata.com,socrata,Open data portal,,,,,,https://enforcementmobileanalytics-nvots.data.socrata.com/api,10000,active
+enterpriseal.data.socrata.com,,https://enterpriseal.data.socrata.com,socrata,Open data portal,,,,,,https://enterpriseal.data.socrata.com/api,10000,active
+erieco.data.socrata.com,,https://erieco.data.socrata.com,socrata,Open data portal,,,,,,https://erieco.data.socrata.com/api,10000,active
+farmersbranchtx.data.socrata.com,,https://farmersbranchtx.data.socrata.com,socrata,Open data portal,,,,,,https://farmersbranchtx.data.socrata.com/api,10000,active
+farmingtonmo.data.socrata.com,,https://farmingtonmo.data.socrata.com,socrata,Open data portal,,,,,,https://farmingtonmo.data.socrata.com/api,10000,active
+findlayoh-pd.data.socrata.com,,https://findlayoh-pd.data.socrata.com,socrata,Open data portal,,,,,,https://findlayoh-pd.data.socrata.com/api,10000,active
+fiscalfocus.pittsburghpa.gov,Fiscal Focus Pittsburgh,https://fiscalfocus.pittsburghpa.gov,socrata,Open data portal,local,US,United States,City of Pittsburgh,Local government,https://fiscalfocus.pittsburghpa.gov/api,15,active
+fishersin.data.socrata.com,,https://fishersin.data.socrata.com,socrata,Open data portal,,,,,,https://fishersin.data.socrata.com/api,10000,active
+flaglercofl.data.socrata.com,,https://flaglercofl.data.socrata.com,socrata,Open data portal,,,,,,https://flaglercofl.data.socrata.com/api,10000,active
+fontana.data.socrata.com,,https://fontana.data.socrata.com,socrata,Open data portal,,,,,,https://fontana.data.socrata.com/api,10000,active
+fortlauderdale.data.socrata.com,City of Fort Lauderdale Police Department | Performance Management | City of Fort Lauderdale Police Department,https://fortlauderdale.data.socrata.com,socrata,Open data portal,local,US,United States,Fort Lauderdale Police Department,Local government,https://fortlauderdale.data.socrata.com/api,25,active
+fortpiercefl.data.socrata.com,,https://fortpiercefl.data.socrata.com,socrata,Open data portal,,,,,,https://fortpiercefl.data.socrata.com/api,10000,active
+fourriverssanitationil.data.socrata.com,,https://fourriverssanitationil.data.socrata.com,socrata,Open data portal,,,,,,https://fourriverssanitationil.data.socrata.com/api,10000,active
+franklincountyohio.data.socrata.com,,https://franklincountyohio.data.socrata.com,socrata,Open data portal,,,,,,https://franklincountyohio.data.socrata.com/api,10000,active
+fusioncenter.nhit.org,NHIT Data Fusion Center®,https://fusioncenter.nhit.org,socrata,Open data portal,federal,US,United States,NHIT Data Fusion Center,Business,https://fusioncenter.nhit.org/api,112,active
+future.michigan.gov,Open Michigan,https://future.michigan.gov,socrata,Open data portal,state,US,United States,State of Michigan,Regional government,https://future.michigan.gov/api,261,active
+fwisd.data.socrata.com,,https://fwisd.data.socrata.com,socrata,Open data portal,,,,,,https://fwisd.data.socrata.com/api,10000,active
+gainesville-govstat.demo.socrata.com,Open Data Portal | statGNV,https://gainesville-govstat.demo.socrata.com,socrata,Open data portal,local,US,United States,Gainesville,Local government,https://gainesville-govstat.demo.socrata.com/api,68,active
+gallatincomt.data.socrata.com,,https://gallatincomt.data.socrata.com,socrata,Open data portal,,,,,,https://gallatincomt.data.socrata.com/api,10000,active
+gallatintn.data.socrata.com,,https://gallatintn.data.socrata.com,socrata,Open data portal,,,,,,https://gallatintn.data.socrata.com/api,10000,active
+gardencityks.data.socrata.com,,https://gardencityks.data.socrata.com,socrata,Open data portal,,,,,,https://gardencityks.data.socrata.com/api,10000,active
+georgetowndividepud.data.socrata.com,,https://georgetowndividepud.data.socrata.com,socrata,Open data portal,,,,,,https://georgetowndividepud.data.socrata.com/api,10000,active
+germantownwi.data.socrata.com,,https://germantownwi.data.socrata.com,socrata,Open data portal,,,,,,https://germantownwi.data.socrata.com/api,10000,active
+gnb.socrata.com,Open Data New Brunswick,https://gnb.socrata.com,socrata,Open data portal,state,CA,Canada,Government of New Brunswick,Regional government,https://gnb.socrata.com/api,295,active
+goochlandva.data.socrata.com,,https://goochlandva.data.socrata.com,socrata,Open data portal,,,,,,https://goochlandva.data.socrata.com/api,10000,active
+governobert.gencat.cat,Generalitat de Catalunya Open Data Portal,https://governobert.gencat.cat,socrata,Open data portal,state,ES,Spain,Generalitat de Catalunya,Regional government,https://governobert.gencat.cat/api,0,active
+grandjunctionco.data.socrata.com,,https://grandjunctionco.data.socrata.com,socrata,Open data portal,,,,,,https://grandjunctionco.data.socrata.com/api,10000,active
+grantspassor-ps.data.socrata.com,,https://grantspassor-ps.data.socrata.com,socrata,Open data portal,,,,,,https://grantspassor-ps.data.socrata.com/api,10000,active
+greenfield-ma.data.socrata.com,,https://greenfield-ma.data.socrata.com,socrata,Open data portal,,,,,,https://greenfield-ma.data.socrata.com/api,10000,active
+grovecityoh.data.socrata.com,,https://grovecityoh.data.socrata.com,socrata,Open data portal,,,,,,https://grovecityoh.data.socrata.com/api,10000,active
+grovecityohpd.data.socrata.com,,https://grovecityohpd.data.socrata.com,socrata,Open data portal,,,,,,https://grovecityohpd.data.socrata.com/api,10000,active
+hagerstownmd.data.socrata.com,,https://hagerstownmd.data.socrata.com,socrata,Open data portal,,,,,,https://hagerstownmd.data.socrata.com/api,10000,active
+hallandalebeachfl.data.socrata.com,,https://hallandalebeachfl.data.socrata.com,socrata,Open data portal,,,,,,https://hallandalebeachfl.data.socrata.com/api,10000,active
+haltomcitytx.data.socrata.com,,https://haltomcitytx.data.socrata.com,socrata,Open data portal,,,,,,https://haltomcitytx.data.socrata.com/api,10000,active
+harrisburgpa.data.socrata.com,,https://harrisburgpa.data.socrata.com,socrata,Open data portal,,,,,,https://harrisburgpa.data.socrata.com/api,10000,active
+health.data.ny.gov,Health Data NY,https://health.data.ny.gov,socrata,Open data portal,state,US,United States,New York Department of Health,Regional government,https://health.data.ny.gov/api,292,active
+healthdata.gov,U.S. Department of Health Open Data Portal,https://healthdata.gov,socrata,Open data portal,federal,US,United States,U.S. Department of Health,Central government,https://healthdata.gov/api,10000,active
+healthdata.nj.gov,New Jersey State Health Assessment Data (NJSHAD) - NJ.gov,https://healthdata.nj.gov,socrata,Open data portal,state,US,United States,New Jersey Department of Health,Regional government,https://healthdata.nj.gov/api,134,active
+healthdata.tn.gov,TDH Health Data,https://healthdata.tn.gov,socrata,Open data portal,state,US,United States,Tennessee Department of Health,Regional government,https://healthdata.tn.gov/api,261,active
+healthstat.dph.sbcounty.gov,San Bernardino County Health Statistics Data Catalog,https://healthstat.dph.sbcounty.gov,socrata,Open data portal,local,US,United States,San Bernardino County Department of Public Health,Local government,https://healthstat.dph.sbcounty.gov/api,10000,active
+hemet-ca-ei.data.socrata.com,,https://hemet-ca-ei.data.socrata.com,socrata,Open data portal,,,,,,https://hemet-ca-ei.data.socrata.com/api,10000,active
+hendersoncountync.data.socrata.com,,https://hendersoncountync.data.socrata.com,socrata,Open data portal,,,,,,https://hendersoncountync.data.socrata.com/api,10000,active
+henrycoga.data.socrata.com,,https://henrycoga.data.socrata.com,socrata,Open data portal,,,,,,https://henrycoga.data.socrata.com/api,10000,active
+hickorync.data.socrata.com,,https://hickorync.data.socrata.com,socrata,Open data portal,,,,,,https://hickorync.data.socrata.com/api,10000,active
+hicscdata.hawaii.gov,,https://hicscdata.hawaii.gov,socrata,Open data portal,,,,,,https://hicscdata.hawaii.gov/api,16,active
+hidot-contracts.data.socrata.com,Hawaii Department of Transportation Contracts Data Catalog,https://hidot-contracts.data.socrata.com,socrata,Open data portal,state,US,United States,Hawaii Department of Transportation,Regional government,https://hidot-contracts.data.socrata.com/api,10000,active
+highlandsranch.data.socrata.com,,https://highlandsranch.data.socrata.com,socrata,Open data portal,,,,,,https://highlandsranch.data.socrata.com/api,10000,active
+highways.hidot.hawaii.gov,State of Hawaii Department of Transportation,https://highways.hidot.hawaii.gov,socrata,Open data portal,state,US,United States,Hawaii Department of Transportation,Regional government,https://highways.hidot.hawaii.gov/api,753,active
+hopewellva.data.socrata.com,,https://hopewellva.data.socrata.com,socrata,Open data portal,,,,,,https://hopewellva.data.socrata.com/api,10000,active
+humboldtgov.data.socrata.com,,https://humboldtgov.data.socrata.com,socrata,Open data portal,,,,,,https://humboldtgov.data.socrata.com/api,16,active
+idaho-state-police.data.socrata.com,,https://idaho-state-police.data.socrata.com,socrata,Open data portal,,,,,,https://idaho-state-police.data.socrata.com/api,10000,active
+idp.nz,Internet Data Portal,https://idp.nz,socrata,Open data portal,federal,NZ,New Zealand,InternetNZ Inc.,Business,https://idp.nz/api,0,active
+illinois-edp.data.socrata.com,,https://illinois-edp.data.socrata.com,socrata,Open data portal,,,,,,https://illinois-edp.data.socrata.com/api,288,active
+impact.stlouisco.com,Impact STLCO,https://impact.stlouisco.com,socrata,Open data portal,local,US,United States,St. Louis County Government,Local government,https://impact.stlouisco.com/api,77,active
+independencemo.data.socrata.com,,https://independencemo.data.socrata.com,socrata,Open data portal,,,,,,https://independencemo.data.socrata.com/api,10000,active
+indianrivercountyfl.data.socrata.com,,https://indianrivercountyfl.data.socrata.com,socrata,Open data portal,,,,,,https://indianrivercountyfl.data.socrata.com/api,10000,active
+indio.data.socrata.com,,https://indio.data.socrata.com,socrata,Open data portal,,,,,,https://indio.data.socrata.com/api,10000,active
+insights.cincinnati-oh.gov,,https://insights.cincinnati-oh.gov,socrata,Open data portal,,,,,,https://insights.cincinnati-oh.gov/api,10000,active
+integration-kcmo.data.socrata.com,,https://integration-kcmo.data.socrata.com,socrata,Open data portal,,,,,,https://integration-kcmo.data.socrata.com/api,10000,active
+internal-data.ct.gov,,https://internal-data.ct.gov,socrata,Open data portal,,,,,,https://internal-data.ct.gov/api,46,active
+internal-sandiegocounty.data.socrata.com,,https://internal-sandiegocounty.data.socrata.com,socrata,Open data portal,,,,,,https://internal-sandiegocounty.data.socrata.com/api,315,active
+internal.agtransport.usda.gov,AgTransport - USDA Agricultural Transportation Data Catalog,https://internal.agtransport.usda.gov,socrata,Open data portal,federal,US,United States,US Department of Agriculture,Central government,https://internal.agtransport.usda.gov/api,10000,active
+internal.chattadata.org,Local Government of Chattadata Open Data Portal,https://internal.chattadata.org,socrata,Open data portal,federal,US,United States,Local Government of Chattadata,Local government,https://internal.chattadata.org/api,0,active
+internal.open.piercecountywa.gov,"Pierce County, WA Data Catalog",https://internal.open.piercecountywa.gov,socrata,Open data portal,local,US,United States,Pierce County,Local government,https://internal.open.piercecountywa.gov/api,898,active
+internal.opendata.clermontauditor.org,,https://internal.opendata.clermontauditor.org,socrata,Open data portal,,,,,,https://internal.opendata.clermontauditor.org/api,35,active
+internaldata.maryland.gov,,https://internaldata.maryland.gov,socrata,Open data portal,,,,,,https://internaldata.maryland.gov/api,10000,active
+iop.data.socrata.com,,https://iop.data.socrata.com,socrata,Open data portal,,,,,,https://iop.data.socrata.com/api,10000,active
+ipswich.data.socrata.com,,https://ipswich.data.socrata.com,socrata,Open data portal,,,,,,https://ipswich.data.socrata.com/api,10000,active
+ivgid.data.socrata.com,,https://ivgid.data.socrata.com,socrata,Open data portal,,,,,,https://ivgid.data.socrata.com/api,10000,active
+jacksontn.data.socrata.com,,https://jacksontn.data.socrata.com,socrata,Open data portal,,,,,,https://jacksontn.data.socrata.com/api,10000,active
+janesville.data.socrata.com,,https://janesville.data.socrata.com,socrata,Open data portal,,,,,,https://janesville.data.socrata.com/api,42,active
+jcps.data.socrata.com,,https://jcps.data.socrata.com,socrata,Open data portal,,,,,,https://jcps.data.socrata.com/api,10000,active
+jefferson-city-pd-mo.data.socrata.com,,https://jefferson-city-pd-mo.data.socrata.com,socrata,Open data portal,,,,,,https://jefferson-city-pd-mo.data.socrata.com/api,10000,active
+jerseyvillagetx.data.socrata.com,,https://jerseyvillagetx.data.socrata.com,socrata,Open data portal,,,,,,https://jerseyvillagetx.data.socrata.com/api,10000,active
+johnstonia.data.socrata.com,,https://johnstonia.data.socrata.com,socrata,Open data portal,,,,,,https://johnstonia.data.socrata.com/api,10000,active
+kalcounty.data.socrata.com,,https://kalcounty.data.socrata.com,socrata,Open data portal,,,,,,https://kalcounty.data.socrata.com/api,10000,active
+kc-performance.demo.socrata.com,Government Financial Reports App | Open Data Portal,https://kc-performance.demo.socrata.com,socrata,Open data portal,federal,US,United States,Socrata,Business,https://kc-performance.demo.socrata.com/api,10000,active
+kirklandwa-scgc.data.socrata.com,,https://kirklandwa-scgc.data.socrata.com,socrata,Open data portal,,,,,,https://kirklandwa-scgc.data.socrata.com/api,10000,active
+kirklandwa.data.socrata.com,,https://kirklandwa.data.socrata.com,socrata,Open data portal,,,,,,https://kirklandwa.data.socrata.com/api,10000,active
+klamathfallspd.data.socrata.com,,https://klamathfallspd.data.socrata.com,socrata,Open data portal,,,,,,https://klamathfallspd.data.socrata.com/api,10000,active
+lacoso.data.socrata.com,,https://lacoso.data.socrata.com,socrata,Open data portal,,,,,,https://lacoso.data.socrata.com/api,10000,active
+lafayettecsdgovla-train.data.socrata.com,,https://lafayettecsdgovla-train.data.socrata.com,socrata,Open data portal,,,,,,https://lafayettecsdgovla-train.data.socrata.com/api,10000,active
+lafayettecsdgovla.data.socrata.com,,https://lafayettecsdgovla.data.socrata.com,socrata,Open data portal,,,,,,https://lafayettecsdgovla.data.socrata.com/api,10000,active
+lafourchegov.data.socrata.com,,https://lafourchegov.data.socrata.com,socrata,Open data portal,,,,,,https://lafourchegov.data.socrata.com/api,10000,active
+lafourcheparishsheriff.data.socrata.com,,https://lafourcheparishsheriff.data.socrata.com,socrata,Open data portal,,,,,,https://lafourcheparishsheriff.data.socrata.com/api,10000,active
+lakelandfl-pd.data.socrata.com,,https://lakelandfl-pd.data.socrata.com,socrata,Open data portal,,,,,,https://lakelandfl-pd.data.socrata.com/api,10000,active
+laramiecounty-sd.data.socrata.com,,https://laramiecounty-sd.data.socrata.com,socrata,Open data portal,,,,,,https://laramiecounty-sd.data.socrata.com/api,10000,active
+laramiecounty.data.socrata.com,,https://laramiecounty.data.socrata.com,socrata,Open data portal,,,,,,https://laramiecounty.data.socrata.com/api,10000,active
+lawrenceks.data.socrata.com,,https://lawrenceks.data.socrata.com,socrata,Open data portal,,,,,,https://lawrenceks.data.socrata.com/api,10000,active
+lawtonok.data.socrata.com,,https://lawtonok.data.socrata.com,socrata,Open data portal,,,,,,https://lawtonok.data.socrata.com/api,10000,active
+lemooreca.data.socrata.com,,https://lemooreca.data.socrata.com,socrata,Open data portal,,,,,,https://lemooreca.data.socrata.com/api,10000,active
+lomalindaca.data.socrata.com,,https://lomalindaca.data.socrata.com,socrata,Open data portal,,,,,,https://lomalindaca.data.socrata.com/api,10000,active
+longviewtexas.data.socrata.com,,https://longviewtexas.data.socrata.com,socrata,Open data portal,,,,,,https://longviewtexas.data.socrata.com/api,10000,active
+losgatosca.data.socrata.com,,https://losgatosca.data.socrata.com,socrata,Open data portal,,,,,,https://losgatosca.data.socrata.com/api,10000,active
+lrstat.littlerock.gov,City of Little Rock Open Data and Performance,https://lrstat.littlerock.gov,socrata,Open data portal,local,US,United States,City of Little Rock,Local government,https://lrstat.littlerock.gov/api,85,active
+lvmwd.data.socrata.com,,https://lvmwd.data.socrata.com,socrata,Open data portal,,,,,,https://lvmwd.data.socrata.com/api,10000,active
+lynnfieldma.data.socrata.com,,https://lynnfieldma.data.socrata.com,socrata,Open data portal,,,,,,https://lynnfieldma.data.socrata.com/api,10000,active
+lynnwoodwa.data.socrata.com,,https://lynnwoodwa.data.socrata.com,socrata,Open data portal,,,,,,https://lynnwoodwa.data.socrata.com/api,10000,active
+mahoningcounty.data.socrata.com,,https://mahoningcounty.data.socrata.com,socrata,Open data portal,,,,,,https://mahoningcounty.data.socrata.com/api,10000,active
+manhattanbeach-ca.data.socrata.com,,https://manhattanbeach-ca.data.socrata.com,socrata,Open data portal,,,,,,https://manhattanbeach-ca.data.socrata.com/api,10000,active
+marysville-oh-of.data.socrata.com,,https://marysville-oh-of.data.socrata.com,socrata,Open data portal,,,,,,https://marysville-oh-of.data.socrata.com/api,10000,active
+marysvillewa.data.socrata.com,,https://marysvillewa.data.socrata.com,socrata,Open data portal,,,,,,https://marysvillewa.data.socrata.com/api,10000,active
+mercedca.data.socrata.com,,https://mercedca.data.socrata.com,socrata,Open data portal,,,,,,https://mercedca.data.socrata.com/api,10000,active
+mercedcountyca-sheriff.data.socrata.com,,https://mercedcountyca-sheriff.data.socrata.com,socrata,Open data portal,,,,,,https://mercedcountyca-sheriff.data.socrata.com/api,10000,active
+mesa-az.demo.socrata.com,,https://mesa-az.demo.socrata.com,socrata,Open data portal,,,,,,https://mesa-az.demo.socrata.com/api,30,active
+metroairports.data.socrata.com,MAC Sustainability | Sustainability - Metro Airports,https://metroairports.data.socrata.com,socrata,Open data portal,local,US,United States,Metropolitan Airports Commission (MAC),Local government,https://metroairports.data.socrata.com/api,10000,active
+mi-treasury.data.socrata.com,MICommunity Financial Dashboard,https://mi-treasury.data.socrata.com,socrata,Open data portal,state,US,United States,Michigan Treasury,Central government,https://mi-treasury.data.socrata.com/api,31,active
+miami.demo.socrata.com,,https://miami.demo.socrata.com,socrata,Open data portal,,,,,,https://miami.demo.socrata.com/api,10000,active
+michigan-data.demo.socrata.com,Rally - Open Data Portal | Open Data Portal,https://michigan-data.demo.socrata.com,socrata,Open data portal,state,US,United States,Socrata (Demo),Business,https://michigan-data.demo.socrata.com/api,22,active
+midashboard-staging-sandbox.demo.socrata.com,,https://midashboard-staging-sandbox.demo.socrata.com,socrata,Open data portal,,,,,,https://midashboard-staging-sandbox.demo.socrata.com/api,10000,active
+midashboard-staging.demo.socrata.com,Michigan - Open Performance Portal | Tyler Data & Insights,https://midashboard-staging.demo.socrata.com,socrata,Open data portal,federal,US,United States,Socrata,Business,https://midashboard-staging.demo.socrata.com/api,10000,active
+middleborough-ma.data.socrata.com,,https://middleborough-ma.data.socrata.com,socrata,Open data portal,,,,,,https://middleborough-ma.data.socrata.com/api,10000,active
+midpenopenspace.data.socrata.com,,https://midpenopenspace.data.socrata.com,socrata,Open data portal,,,,,,https://midpenopenspace.data.socrata.com/api,10000,active
+minotnd-pd.data.socrata.com,,https://minotnd-pd.data.socrata.com,socrata,Open data portal,,,,,,https://minotnd-pd.data.socrata.com/api,10000,active
+mischooldata.data.socrata.com,Open Data Portal | Rally - Open Data Portal,https://mischooldata.data.socrata.com,socrata,Open data portal,federal,UG,Uganda,African Centre for Media Excellence,Civil society,https://mischooldata.data.socrata.com/api,29,active
+mobileal.data.socrata.com,,https://mobileal.data.socrata.com,socrata,Open data portal,,,,,,https://mobileal.data.socrata.com/api,10000,active
+montebelloca-pd.data.socrata.com,,https://montebelloca-pd.data.socrata.com,socrata,Open data portal,,,,,,https://montebelloca-pd.data.socrata.com/api,10000,active
+montereyparkca.data.socrata.com,,https://montereyparkca.data.socrata.com,socrata,Open data portal,,,,,,https://montereyparkca.data.socrata.com/api,10000,active
+montgomery-al.data.socrata.com,,https://montgomery-al.data.socrata.com,socrata,Open data portal,,,,,,https://montgomery-al.data.socrata.com/api,10000,active
+montrosecounty.data.socrata.com,,https://montrosecounty.data.socrata.com,socrata,Open data portal,,,,,,https://montrosecounty.data.socrata.com/api,10000,active
+mooresvillenc.data.socrata.com,,https://mooresvillenc.data.socrata.com,socrata,Open data portal,,,,,,https://mooresvillenc.data.socrata.com/api,10000,active
+moreno-valley.data.socrata.com,Open Data | City of Moreno Valley,https://moreno-valley.data.socrata.com,socrata,Open data portal,federal,US,United States,Moreno Valley Data Catalog,Local government,https://moreno-valley.data.socrata.com/api,10000,active
+mtdesert.data.socrata.com,,https://mtdesert.data.socrata.com,socrata,Open data portal,,,,,,https://mtdesert.data.socrata.com/api,10000,active
+murfreesboro.data.socrata.com,,https://murfreesboro.data.socrata.com,socrata,Open data portal,,,,,,https://murfreesboro.data.socrata.com/api,10000,active
+mydata.iadb.org,IDB Open Data Catalog,https://mydata.iadb.org,socrata,Open data portal,international,World,World,Inter-American Development Bank,International,https://mydata.iadb.org/api,0,active
+mydata.iowa.gov,Iowa Data Catalog (mydata.iowa.gov),https://mydata.iowa.gov,socrata,Open data portal,state,US,United States,State of Iowa,Regional government,https://mydata.iowa.gov/api,390,active
+napervilleil-pd.data.socrata.com,,https://napervilleil-pd.data.socrata.com,socrata,Open data portal,,,,,,https://napervilleil-pd.data.socrata.com/api,10000,active
+nasa-test-0.demo.socrata.com,,https://nasa-test-0.demo.socrata.com,socrata,Open data portal,,,,,,https://nasa-test-0.demo.socrata.com/api,10000,active
+nassaucountycircuitcourt.data.socrata.com,,https://nassaucountycircuitcourt.data.socrata.com,socrata,Open data portal,,,,,,https://nassaucountycircuitcourt.data.socrata.com/api,10000,active
+nesed-reporting-dev.data.socrata.com,,https://nesed-reporting-dev.data.socrata.com,socrata,Open data portal,,,,,,https://nesed-reporting-dev.data.socrata.com/api,10000,active
+newcastle.data.socrata.com,,https://newcastle.data.socrata.com,socrata,Open data portal,,,,,,https://newcastle.data.socrata.com/api,10000,active
+nnps-odp.data.socrata.com,,https://nnps-odp.data.socrata.com,socrata,Open data portal,,,,,,https://nnps-odp.data.socrata.com/api,10000,active
+norfolk-performance.demo.socrata.com,Open Data Portal | Tyler Data & Insights,https://norfolk-performance.demo.socrata.com,socrata,Open data portal,local,US,United States,"City of Norfolk, VA",Local government,https://norfolk-performance.demo.socrata.com/api,10000,active
+northbayvillagefl.data.socrata.com,,https://northbayvillagefl.data.socrata.com,socrata,Open data portal,,,,,,https://northbayvillagefl.data.socrata.com/api,10000,active
+northmariana-guam.data.socrata.com,,https://northmariana-guam.data.socrata.com,socrata,Open data portal,,,,,,https://northmariana-guam.data.socrata.com/api,10000,active
+northmiamibeach-fl.data.socrata.com,,https://northmiamibeach-fl.data.socrata.com,socrata,Open data portal,,,,,,https://northmiamibeach-fl.data.socrata.com/api,10000,active
+northmiamifl.data.socrata.com,,https://northmiamifl.data.socrata.com,socrata,Open data portal,,,,,,https://northmiamifl.data.socrata.com/api,10000,active
+nvof-open.data.socrata.com,,https://nvof-open.data.socrata.com,socrata,Open data portal,,,,,,https://nvof-open.data.socrata.com/api,10,active
+nyc-scgc.data.socrata.com,,https://nyc-scgc.data.socrata.com,socrata,Open data portal,,,,,,https://nyc-scgc.data.socrata.com/api,10000,active
+ofallonmo.data.socrata.com,,https://ofallonmo.data.socrata.com,socrata,Open data portal,,,,,,https://ofallonmo.data.socrata.com/api,10000,active
+ogdencity.data.socrata.com,,https://ogdencity.data.socrata.com,socrata,Open data portal,,,,,,https://ogdencity.data.socrata.com/api,10000,active
+ogunquit.data.socrata.com,,https://ogunquit.data.socrata.com,socrata,Open data portal,,,,,,https://ogunquit.data.socrata.com/api,10000,active
+olmsteadcountymn.data.socrata.com,,https://olmsteadcountymn.data.socrata.com,socrata,Open data portal,,,,,,https://olmsteadcountymn.data.socrata.com/api,10000,active
+ometro.data.socrata.com,,https://ometro.data.socrata.com,socrata,Open data portal,,,,,,https://ometro.data.socrata.com/api,10000,active
+ontario.demo.socrata.com,Ontario Making Data Social,https://ontario.demo.socrata.com,socrata,Open data portal,state,CA,Canada,Government of Ontario,Regional government,https://ontario.demo.socrata.com/api,10000,active
+open-data-demo.mtc.ca.gov,Metropolitan Transportation Commission Open Data Portal,https://open-data-demo.mtc.ca.gov,socrata,Open data portal,state,US,United States,Metropolitan Transportation Commission,Regional government,https://open-data-demo.mtc.ca.gov/api,10000,active
+open.piercecountywa.gov,Open Pierce County,https://open.piercecountywa.gov,socrata,Open data portal,local,US,United States,"Pierce County, WA",Local government,https://open.piercecountywa.gov/api,268,active
+opendata-augusta.data.socrata.com,,https://opendata-augusta.data.socrata.com,socrata,Open data portal,,,,,,https://opendata-augusta.data.socrata.com/api,10000,active
+opendata.camden.gov.uk,Camden Open Data Portal,https://opendata.camden.gov.uk,socrata,Open data portal,local,GB,United Kingdom,Camden city,Local government,https://opendata.camden.gov.uk/api,5553,active
+opendata.cityofhenderson.com,City of Henderson Open Data,https://opendata.cityofhenderson.com,socrata,Open data portal,local,US,United States,"City of Henderson, Nevada",Local government,https://opendata.cityofhenderson.com/api,10000,active
+opendata.cityofmesquite.com,Mesquite Texas Open Data Portal,https://opendata.cityofmesquite.com,socrata,Open data portal,local,US,United States,City of Mesquite,Local government,https://opendata.cityofmesquite.com/api,10000,active
+opendata.clermontauditor.org,Clermont County Open Data,https://opendata.clermontauditor.org,socrata,Open data portal,local,US,United States,Clermont County Auditor,Local government,https://opendata.clermontauditor.org/api,10000,active
+opendata.fcc.gov,Open Data Federal Communications Comission,https://opendata.fcc.gov,socrata,Open data portal,federal,US,United States,U.S. Federal Communications Commission,Central government,https://opendata.fcc.gov/api,56,active
+opendata.fcgov.com,OpenData Fort Collins,https://opendata.fcgov.com,socrata,Open data portal,local,US,United States,City of Fort Collins,Local government,https://opendata.fcgov.com/api,79,active
+opendata.howardcountymd.gov,Howard County - Open Data Portal | Open Data Portal,https://opendata.howardcountymd.gov,socrata,Open data portal,local,US,United States,"Howard County, MD",Local government,https://opendata.howardcountymd.gov/api,119,active
+opendata.l-h.cat,extracted_data_catalog_schema,https://opendata.l-h.cat,socrata,Open data portal,local,ES,Spain,opendata.l-h.cat,Local government,https://opendata.l-h.cat/api,0,active
+opendata.maryland.gov,Open Data | opendata.maryland.gov,https://opendata.maryland.gov,socrata,Open data portal,local,US,United States,State of Maryland,Local government,https://opendata.maryland.gov/api,1559,active
+opendata.nassaucountyny.gov,Open Nassau,https://opendata.nassaucountyny.gov,socrata,Open data portal,local,US,United States,Nassau County,Local government,https://opendata.nassaucountyny.gov/api,10000,active
+opendata.ramseycounty.us,Ramsey County Open Data Portal,https://opendata.ramseycounty.us,socrata,Open data portal,local,US,United States,"Ramsey County, Minnesota",Local government,https://opendata.ramseycounty.us/api,10000,active
+opendata.ramseycountymn.gov,"Open Data Portal | Ramsey County, Minnesota",https://opendata.ramseycountymn.gov,socrata,Open data portal,local,US,United States,"Ramsey County, Minnesota",Local government,https://opendata.ramseycountymn.gov/api,10000,active
+opendata.rdw.nl,Open mobiliteitsdata,https://opendata.rdw.nl,socrata,Open data portal,federal,NL,Netherlands,Dienst Wegverkeer (RDW),Central government,https://opendata.rdw.nl/api,5553,active
+opendata.sandag.org,SANDAG Open Data Portal,https://opendata.sandag.org,socrata,Open data portal,state,US,United States,San Diego Association of Governments,Regional government,https://opendata.sandag.org/api,10000,active
+opendata.usac.org,USAC Open Data,https://opendata.usac.org,socrata,Open data portal,federal,US,United States,Universal Service Administrative Company,Central government,https://opendata.usac.org/api,10000,active
+opendata.utah.gov,Utah Open Data,https://opendata.utah.gov,socrata,Open data portal,local,US,United States,State of Utah,Local government,https://opendata.utah.gov/api,6737,active
+opendata.zerofatalitiesnv.com,Zero Fatalities NV Open Data,https://opendata.zerofatalitiesnv.com,socrata,Open data portal,federal,US,United States,Nevada Office of Traffic Safety,State government,https://opendata.zerofatalitiesnv.com/api,10000,active
+openinformation.novascotia.ca,Information Access | Nova Scotia,https://openinformation.novascotia.ca,socrata,Open data portal,state,CA,Canada,Nova Scotia Government,Central government,https://openinformation.novascotia.ca/api,10000,active
+openperformance.edmonton.ca,,https://openperformance.edmonton.ca,socrata,Open data portal,,,,,,https://openperformance.edmonton.ca/api,10000,active
+orlandofl.data.socrata.com,,https://orlandofl.data.socrata.com,socrata,Open data portal,,,,,,https://orlandofl.data.socrata.com/api,10000,active
+oroville-ca.data.socrata.com,,https://oroville-ca.data.socrata.com,socrata,Open data portal,,,,,,https://oroville-ca.data.socrata.com/api,10000,active
+paducahky-earlyadopter.data.socrata.com,,https://paducahky-earlyadopter.data.socrata.com,socrata,Open data portal,,,,,,https://paducahky-earlyadopter.data.socrata.com/api,10000,active
+paducahky.data.socrata.com,,https://paducahky.data.socrata.com,socrata,Open data portal,,,,,,https://paducahky.data.socrata.com/api,10000,active
+palmcoastfl.data.socrata.com,,https://palmcoastfl.data.socrata.com,socrata,Open data portal,,,,,,https://palmcoastfl.data.socrata.com/api,10000,active
+palmettobayfl-erp.data.socrata.com,,https://palmettobayfl-erp.data.socrata.com,socrata,Open data portal,,,,,,https://palmettobayfl-erp.data.socrata.com/api,10000,active
+parkeronline.data.socrata.com,Town of Parker Open Data,https://parkeronline.data.socrata.com,socrata,Open data portal,federal,US,United States,Town of Parker,Local government,https://parkeronline.data.socrata.com/api,10000,active
+parksreporting.parks.ca.gov,,https://parksreporting.parks.ca.gov,socrata,Open data portal,,,,,,https://parksreporting.parks.ca.gov/api,10000,active
+pasorobles-ca.data.socrata.com,,https://pasorobles-ca.data.socrata.com,socrata,Open data portal,,,,,,https://pasorobles-ca.data.socrata.com/api,10000,active
+pembrokefl.data.socrata.com,,https://pembrokefl.data.socrata.com,socrata,Open data portal,,,,,,https://pembrokefl.data.socrata.com/api,10000,active
+pennsylvania.demo.socrata.com,PennWATCH | Financial Transparency Portal | Rally - Open Data Portal,https://pennsylvania.demo.socrata.com,socrata,Open data portal,state,US,United States,Government of Pennsylvania,Regional government,https://pennsylvania.demo.socrata.com/api,10000,active
+peoriacounty-il.data.socrata.com,,https://peoriacounty-il.data.socrata.com,socrata,Open data portal,,,,,,https://peoriacounty-il.data.socrata.com/api,10000,active
+performance.ci.janesville.wi.us,City of JanesVille Open Data Portal,https://performance.ci.janesville.wi.us,socrata,Open data portal,local,US,United States,City of JanesVille,Local government,https://performance.ci.janesville.wi.us/api,73,active
+performance.cityofcamas.us,City of Camas Open Data Portal,https://performance.cityofcamas.us,socrata,Open data portal,local,US,United States,City of Camas,Local government,https://performance.cityofcamas.us/api,64,active
+performance.cityofdavenportiowa.com,,https://performance.cityofdavenportiowa.com,socrata,Open data portal,,,,,,https://performance.cityofdavenportiowa.com/api,82,active
+performance.cityofhenderson.com,,https://performance.cityofhenderson.com,socrata,Open data portal,,,,,,https://performance.cityofhenderson.com/api,66,active
+performance.cityofrc.us,,https://performance.cityofrc.us,socrata,Open data portal,,,,,,https://performance.cityofrc.us/api,35,active
+performance.commerce.gov,U.S. Department of Commerce Performance Data Pro,https://performance.commerce.gov,socrata,Open data portal,federal,US,United States,U.S. Department of Commerce,Central government,https://performance.commerce.gov/api,397,active
+performance.cookcountyil.gov,"Cook County, Illinois Open Data Portal",https://performance.cookcountyil.gov,socrata,Open data portal,local,US,United States,"Cook County, Illinois",Local government,https://performance.cookcountyil.gov/api,12,active
+performance.franklintn.gov,Franklin Performance & Financial Reports,https://performance.franklintn.gov,socrata,Open data portal,local,US,United States,City of Franklin,Local government,https://performance.franklintn.gov/api,27,active
+performance.fultoncountyga.gov,Rally | Open Data Portal | Fulton Performance,https://performance.fultoncountyga.gov,socrata,Open data portal,local,US,United States,Fulton County Government,Local government,https://performance.fultoncountyga.gov/api,78,active
+performance.princegeorgescountymd.gov,CountyStat | Prince George's CountyStat | CountyStat | Prince George's County,https://performance.princegeorgescountymd.gov,socrata,Open data portal,local,US,United States,Prince George's County,Local government,https://performance.princegeorgescountymd.gov/api,263,active
+performance.providenceri.gov,Open Data Portal,https://performance.providenceri.gov,socrata,Open data portal,local,US,United States,City of Providence,Local government,https://performance.providenceri.gov/api,26,active
+performance.seattle.gov,Seattle Performance Portal,https://performance.seattle.gov,socrata,Open data portal,local,US,United States,City Of Seattle,Local government,https://performance.seattle.gov/api,944,active
+performance.smcgov.org,San Mateo Performance Dashboards,https://performance.smcgov.org,socrata,Open data portal,local,US,United States,County of San Mateo,Local government,https://performance.smcgov.org/api,876,active
+performance.westsussex.gov.uk,West Sussex Performance Dashboard,https://performance.westsussex.gov.uk,socrata,Open data portal,federal,GB,United Kingdom,West Sussex County Council,Local government,https://performance.westsussex.gov.uk/api,0,active
+permitting.prestage.dynamo.works,Permitting Council - Where Projects See Progress,https://permitting.prestage.dynamo.works,socrata,Open data portal,federal,US,United States,Federal Permitting Improvement Steering Council,Central government,https://permitting.prestage.dynamo.works/api,0,active
+perrycounty.data.socrata.com,,https://perrycounty.data.socrata.com,socrata,Open data portal,,,,,,https://perrycounty.data.socrata.com/api,10000,active
+perspectives.dnrec.delaware.gov,DNREC: Environmental Perspectives,https://perspectives.dnrec.delaware.gov,socrata,Open data portal,state,US,United States,Delaware Department of Natural Resources and Environmental Control (DNREC),Regional government,https://perspectives.dnrec.delaware.gov/api,10000,active
+pickenscountyga.data.socrata.com,,https://pickenscountyga.data.socrata.com,socrata,Open data portal,,,,,,https://pickenscountyga.data.socrata.com/api,10000,active
+pinellasparkpd.data.socrata.com,,https://pinellasparkpd.data.socrata.com,socrata,Open data portal,,,,,,https://pinellasparkpd.data.socrata.com/api,10000,active
+pittsburg-ca.data.socrata.com,,https://pittsburg-ca.data.socrata.com,socrata,Open data portal,,,,,,https://pittsburg-ca.data.socrata.com/api,10000,active
+pivcide.pr,PIVCIDE-PR (Ley 187-2015),https://www.pivcide.pr,socrata,Open data portal,state,US,United States,Government of Puerto Rico,Regional government,https://www.pivcide.pr/api,10000,active
+platte-county.data.socrata.com,,https://platte-county.data.socrata.com,socrata,Open data portal,,,,,,https://platte-county.data.socrata.com/api,10000,active
+pleasantonpd.data.socrata.com,,https://pleasantonpd.data.socrata.com,socrata,Open data portal,,,,,,https://pleasantonpd.data.socrata.com/api,10000,active
+pleasantville-ny.data.socrata.com,,https://pleasantville-ny.data.socrata.com,socrata,Open data portal,,,,,,https://pleasantville-ny.data.socrata.com/api,10000,active
+plymouth-ma.data.socrata.com,,https://plymouth-ma.data.socrata.com,socrata,Open data portal,,,,,,https://plymouth-ma.data.socrata.com/api,10000,active
+policedata.coloradosprings.gov,Colorado Springs Police Department Open Data,https://policedata.coloradosprings.gov,socrata,Open data portal,local,US,United States,Colorado Springs Police Department,Local government,https://policedata.coloradosprings.gov/api,11,active
+policeview.johnscreekga.gov,Johns Creek Police Department,https://policeview.johnscreekga.gov,socrata,Open data portal,local,US,United States,Johns Creek Police Department,Local government,https://policeview.johnscreekga.gov/api,11,active
+polkcountytaxcollector-fl.data.socrata.com,,https://polkcountytaxcollector-fl.data.socrata.com,socrata,Open data portal,,,,,,https://polkcountytaxcollector-fl.data.socrata.com/api,10000,active
+portagecounty-oh.data.socrata.com,,https://portagecounty-oh.data.socrata.com,socrata,Open data portal,,,,,,https://portagecounty-oh.data.socrata.com/api,10000,active
+portangeleswa.data.socrata.com,,https://portangeleswa.data.socrata.com,socrata,Open data portal,,,,,,https://portangeleswa.data.socrata.com/api,10000,active
+priv-data.ojp.usdoj.gov,,https://priv-data.ojp.usdoj.gov,socrata,Open data portal,,,,,,https://priv-data.ojp.usdoj.gov/api,17,active
+prospertx.data.socrata.com,,https://prospertx.data.socrata.com,socrata,Open data portal,,,,,,https://prospertx.data.socrata.com/api,10000,active
+ptsd-va.data.socrata.com,,https://ptsd-va.data.socrata.com,socrata,Open data portal,,,,,,https://ptsd-va.data.socrata.com/api,17,active
+purcellville.data.socrata.com,,https://purcellville.data.socrata.com,socrata,Open data portal,,,,,,https://purcellville.data.socrata.com/api,10000,active
+radnortownship.data.socrata.com,,https://radnortownship.data.socrata.com,socrata,Open data portal,,,,,,https://radnortownship.data.socrata.com/api,10000,active
+ranchocordovaca.data.socrata.com,,https://ranchocordovaca.data.socrata.com,socrata,Open data portal,,,,,,https://ranchocordovaca.data.socrata.com/api,10000,active
+readingpa.data.socrata.com,,https://readingpa.data.socrata.com,socrata,Open data portal,,,,,,https://readingpa.data.socrata.com/api,10000,active
+redmond-demo.demo.socrata.com,,https://redmond-demo.demo.socrata.com,socrata,Open data portal,,,,,,https://redmond-demo.demo.socrata.com/api,10000,active
+results.iowa.gov,Iowa Enterprise Strategic Dashboards,https://results.iowa.gov,socrata,Open data portal,state,US,United States,State of Iowa,Regional government,https://results.iowa.gov/api,10000,active
+rosevillepd.data.socrata.com,,https://rosevillepd.data.socrata.com,socrata,Open data portal,,,,,,https://rosevillepd.data.socrata.com/api,10000,active
+rrps.data.socrata.com,,https://rrps.data.socrata.com,socrata,Open data portal,,,,,,https://rrps.data.socrata.com/api,10000,active
+rutah-water-consevancy.data.socrata.com,,https://rutah-water-consevancy.data.socrata.com,socrata,Open data portal,,,,,,https://rutah-water-consevancy.data.socrata.com/api,10000,active
+sacramentoareasewerdistrict.data.socrata.com,,https://sacramentoareasewerdistrict.data.socrata.com,socrata,Open data portal,,,,,,https://sacramentoareasewerdistrict.data.socrata.com/api,10000,active
+sandag.data.socrata.com,,https://sandag.data.socrata.com,socrata,Open data portal,,,,,,https://sandag.data.socrata.com/api,10000,active
+schoharie-county-of.data.socrata.com,,https://schoharie-county-of.data.socrata.com,socrata,Open data portal,,,,,,https://schoharie-county-of.data.socrata.com/api,10000,active
+sdc-stories.demo.socrata.com,,https://sdc-stories.demo.socrata.com,socrata,Open data portal,,,,,,https://sdc-stories.demo.socrata.com/api,10000,active
+seattleperformance.demo.socrata.com,Rally - Open Data Portal | Tyler Data & Insights,https://seattleperformance.demo.socrata.com,socrata,Open data portal,local,US,United States,City of Seattle,Local government,https://seattleperformance.demo.socrata.com/api,10000,active
+sharefulton.fultoncountyga.gov,Fulton County Open Data,https://sharefulton.fultoncountyga.gov,socrata,Open data portal,local,US,United States,Fulton County Board of Health,Local government,https://sharefulton.fultoncountyga.gov/api,238,active
+shawneesheriff.data.socrata.com,,https://shawneesheriff.data.socrata.com,socrata,Open data portal,,,,,,https://shawneesheriff.data.socrata.com/api,18,active
+sidneyoh.data.socrata.com,,https://sidneyoh.data.socrata.com,socrata,Open data portal,,,,,,https://sidneyoh.data.socrata.com/api,10000,active
+siouxfalls.data.socrata.com,,https://siouxfalls.data.socrata.com,socrata,Open data portal,,,,,,https://siouxfalls.data.socrata.com/api,14,active
+slo-co.data.socrata.com,,https://slo-co.data.socrata.com,socrata,Open data portal,,,,,,https://slo-co.data.socrata.com/api,10000,active
+soquelcreekwdca.data.socrata.com,,https://soquelcreekwdca.data.socrata.com,socrata,Open data portal,,,,,,https://soquelcreekwdca.data.socrata.com/api,10000,active
+southcarolina-departmentofadministration-reporting.data.socrata.com,,https://southcarolina-departmentofadministration-reporting.data.socrata.com,socrata,Open data portal,,,,,,https://southcarolina-departmentofadministration-reporting.data.socrata.com/api,10000,active
+southfultonga.data.socrata.com,,https://southfultonga.data.socrata.com,socrata,Open data portal,,,,,,https://southfultonga.data.socrata.com/api,10000,active
+spokanevalleywa.data.socrata.com,,https://spokanevalleywa.data.socrata.com,socrata,Open data portal,,,,,,https://spokanevalleywa.data.socrata.com/api,10000,active
+stat.montgomerycountymd.gov,,https://stat.montgomerycountymd.gov,socrata,Open data portal,,,,,,https://stat.montgomerycountymd.gov/api,434,active
+stat.stpete.org,Open Data Portal | StPeteStat,https://stat.stpete.org,socrata,Open data portal,federal,US,United States,Not specified in provided text,Local government,https://stat.stpete.org/api,0,active
+stateofalaska.data.socrata.com,,https://stateofalaska.data.socrata.com,socrata,Open data portal,,,,,,https://stateofalaska.data.socrata.com/api,31,active
+stlouiscounty-performance.demo.socrata.com,Government Financial Reports App | Tyler Data & Insights,https://stlouiscounty-performance.demo.socrata.com,socrata,Open data portal,federal,US,United States,Local Government of Socrata,Local government,https://stlouiscounty-performance.demo.socrata.com/api,10000,active
+stutsman.data.socrata.com,,https://stutsman.data.socrata.com,socrata,Open data portal,,,,,,https://stutsman.data.socrata.com/api,13,active
+sugarlandtx.data.socrata.com,,https://sugarlandtx.data.socrata.com,socrata,Open data portal,,,,,,https://sugarlandtx.data.socrata.com/api,10000,active
+summitcountyoh.data.socrata.com,,https://summitcountyoh.data.socrata.com,socrata,Open data portal,,,,,,https://summitcountyoh.data.socrata.com/api,10000,active
+sussexco.data.socrata.com,,https://sussexco.data.socrata.com,socrata,Open data portal,,,,,,https://sussexco.data.socrata.com/api,10000,active
+talbotcountymd.data.socrata.com,,https://talbotcountymd.data.socrata.com,socrata,Open data portal,,,,,,https://talbotcountymd.data.socrata.com/api,10000,active
+tetoncountyid.data.socrata.com,,https://tetoncountyid.data.socrata.com,socrata,Open data portal,,,,,,https://tetoncountyid.data.socrata.com/api,10000,active
+thedatazone.ca,datazONE,https://www.thedatazone.ca,socrata,Open data portal,state,CA,Canada,Property Valuation Services Corporation,Regional government,https://www.thedatazone.ca/api,21,active
+tollesonaz.data.socrata.com,,https://tollesonaz.data.socrata.com,socrata,Open data portal,,,,,,https://tollesonaz.data.socrata.com/api,10000,active
+townofblufftonsc.data.socrata.com,,https://townofblufftonsc.data.socrata.com,socrata,Open data portal,,,,,,https://townofblufftonsc.data.socrata.com/api,10000,active
+townofdennis.data.socrata.com,,https://townofdennis.data.socrata.com,socrata,Open data portal,,,,,,https://townofdennis.data.socrata.com/api,10000,active
+townofmarblehead-ma-edp.data.socrata.com,,https://townofmarblehead-ma-edp.data.socrata.com,socrata,Open data portal,,,,,,https://townofmarblehead-ma-edp.data.socrata.com/api,10000,active
+townofmiamilakes.data.socrata.com,,https://townofmiamilakes.data.socrata.com,socrata,Open data portal,,,,,,https://townofmiamilakes.data.socrata.com/api,10000,active
+townofswansboro.data.socrata.com,,https://townofswansboro.data.socrata.com,socrata,Open data portal,,,,,,https://townofswansboro.data.socrata.com/api,10000,active
+transparencyarchive.michigan.gov,MI Transparency - State Expenditures,https://transparencyarchive.michigan.gov,socrata,Open data portal,state,US,United States,State of Michigan,Central government,https://transparencyarchive.michigan.gov/api,56,active
+transparentrichmond.org,Transparent Richmond,https://www.transparentrichmond.org,socrata,Open data portal,federal,US,United States,City of Richmond,Local government,https://www.transparentrichmond.org/api,142,active
+trca-epl.data.socrata.com,,https://trca-epl.data.socrata.com,socrata,Open data portal,,,,,,https://trca-epl.data.socrata.com/api,10000,active
+tumwater.data.socrata.com,,https://tumwater.data.socrata.com,socrata,Open data portal,,,,,,https://tumwater.data.socrata.com/api,10000,active
+txcourts-reporting.data.socrata.com,,https://txcourts-reporting.data.socrata.com,socrata,Open data portal,,,,,,https://txcourts-reporting.data.socrata.com/api,10000,active
+txcourts-staging-reporting.data.socrata.com,,https://txcourts-staging-reporting.data.socrata.com,socrata,Open data portal,,,,,,https://txcourts-staging-reporting.data.socrata.com/api,10000,active
+unioncityhi-reporting.data.socrata.com,,https://unioncityhi-reporting.data.socrata.com,socrata,Open data portal,,,,,,https://unioncityhi-reporting.data.socrata.com/api,10000,active
+unioncountyoh.data.socrata.com,,https://unioncountyoh.data.socrata.com,socrata,Open data portal,,,,,,https://unioncountyoh.data.socrata.com/api,10000,active
+uppermac.data.socrata.com,,https://uppermac.data.socrata.com,socrata,Open data portal,,,,,,https://uppermac.data.socrata.com/api,10000,active
+usc.data.socrata.com,,https://usc.data.socrata.com,socrata,Open data portal,,,,,,https://usc.data.socrata.com/api,160,active
+va-cca-uat.data.socrata.com,,https://va-cca-uat.data.socrata.com,socrata,Open data portal,,,,,,https://va-cca-uat.data.socrata.com/api,10000,active
+va-cca.data.socrata.com,,https://va-cca.data.socrata.com,socrata,Open data portal,,,,,,https://va-cca.data.socrata.com/api,10000,active
+vdh-richmondcity.demo.socrata.com,Richmond City Local Health District | Richmond City Local Health District,https://vdh-richmondcity.demo.socrata.com,socrata,Open data portal,state,US,United States,Socrata,Business,https://vdh-richmondcity.demo.socrata.com/api,10000,active
+vusd.data.socrata.com,,https://vusd.data.socrata.com,socrata,Open data portal,,,,,,https://vusd.data.socrata.com/api,10000,active
+wacotexas.data.socrata.com,,https://wacotexas.data.socrata.com,socrata,Open data portal,,,,,,https://wacotexas.data.socrata.com/api,10000,active
+washoe.data.socrata.com,,https://washoe.data.socrata.com,socrata,Open data portal,,,,,,https://washoe.data.socrata.com/api,10000,active
+waterloo-ia.data.socrata.com,,https://waterloo-ia.data.socrata.com,socrata,Open data portal,,,,,,https://waterloo-ia.data.socrata.com/api,10000,active
+wccusd.data.socrata.com,,https://wccusd.data.socrata.com,socrata,Open data portal,,,,,,https://wccusd.data.socrata.com/api,10000,active
+weho.data.socrata.com,,https://weho.data.socrata.com,socrata,Open data portal,,,,,,https://weho.data.socrata.com/api,10000,active
+wenatchee-wa.data.socrata.com,,https://wenatchee-wa.data.socrata.com,socrata,Open data portal,,,,,,https://wenatchee-wa.data.socrata.com/api,10000,active
+weslacotx.data.socrata.com,,https://weslacotx.data.socrata.com,socrata,Open data portal,,,,,,https://weslacotx.data.socrata.com/api,10000,active
+westgoshenpa.data.socrata.com,,https://westgoshenpa.data.socrata.com,socrata,Open data portal,,,,,,https://westgoshenpa.data.socrata.com/api,10000,active
+westlinnoregon.data.socrata.com,,https://westlinnoregon.data.socrata.com,socrata,Open data portal,,,,,,https://westlinnoregon.data.socrata.com/api,10000,active
+westpalmbeach.data.socrata.com,,https://westpalmbeach.data.socrata.com,socrata,Open data portal,,,,,,https://westpalmbeach.data.socrata.com/api,10000,active
+wicomicocountymd.data.socrata.com,,https://wicomicocountymd.data.socrata.com,socrata,Open data portal,,,,,,https://wicomicocountymd.data.socrata.com/api,10000,active
+williamsoncountyschools.data.socrata.com,,https://williamsoncountyschools.data.socrata.com,socrata,Open data portal,,,,,,https://williamsoncountyschools.data.socrata.com/api,10000,active
+woburnma.data.socrata.com,,https://woburnma.data.socrata.com,socrata,Open data portal,,,,,,https://woburnma.data.socrata.com/api,10000,active
+woodburycountyia.data.socrata.com,,https://woodburycountyia.data.socrata.com,socrata,Open data portal,,,,,,https://woodburycountyia.data.socrata.com/api,10000,active
+wsac.demo.socrata.com,,https://wsac.demo.socrata.com,socrata,Open data portal,,,,,,https://wsac.demo.socrata.com/api,10000,active
+wyomingpels-dev-reporting.data.socrata.com,,https://wyomingpels-dev-reporting.data.socrata.com,socrata,Open data portal,,,,,,https://wyomingpels-dev-reporting.data.socrata.com/api,10000,active
+wyomingpels-reporting.data.socrata.com,,https://wyomingpels-reporting.data.socrata.com,socrata,Open data portal,,,,,,https://wyomingpels-reporting.data.socrata.com/api,10000,active
+wyomingpels-uat-reporting.data.socrata.com,,https://wyomingpels-uat-reporting.data.socrata.com,socrata,Open data portal,,,,,,https://wyomingpels-uat-reporting.data.socrata.com/api,10000,active
+yorkcountyva.data.socrata.com,,https://yorkcountyva.data.socrata.com,socrata,Open data portal,,,,,,https://yorkcountyva.data.socrata.com/api,10000,active
+youth-development-index-cs.demo.socrata.com,,https://youth-development-index-cs.demo.socrata.com,socrata,Open data portal,,,,,,https://youth-development-index-cs.demo.socrata.com/api,10000,active
+yumaaz.data.socrata.com,,https://yumaaz.data.socrata.com,socrata,Open data portal,,,,,,https://yumaaz.data.socrata.com/api,10000,active
