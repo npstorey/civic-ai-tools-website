@@ -5,10 +5,18 @@ import { signIn, signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
 
+const NAV_LINK_STYLE: React.CSSProperties = {
+  color: 'var(--text-secondary)',
+  fontWeight: 500,
+  fontSize: '16px',
+};
+
 export default function Header() {
   const { data: session, status } = useSession();
   const headerRef = useRef<HTMLElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [exploreOpen, setExploreOpen] = useState(false);
+  const exploreRef = useRef<HTMLDivElement>(null);
 
   // Publish header height as a CSS variable so other components can offset below it
   useEffect(() => {
@@ -23,6 +31,18 @@ export default function Header() {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // Close Explore dropdown on outside click
+  useEffect(() => {
+    if (!exploreOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (exploreRef.current && !exploreRef.current.contains(e.target as Node)) {
+        setExploreOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [exploreOpen]);
 
   return (
     <header
@@ -51,47 +71,87 @@ export default function Header() {
             Civic AI Tools
           </Link>
           <nav className="hidden sm:flex items-center gap-6">
-            <Link
-              href="/explore"
-              className="no-link-style"
-              style={{
-                color: 'var(--text-secondary)',
-                fontWeight: 500,
-                fontSize: '16px',
-              }}
-            >
-              Explore
-            </Link>
-            <Link
-              href="/directory"
-              className="no-link-style"
-              style={{
-                color: 'var(--text-secondary)',
-                fontWeight: 500,
-                fontSize: '16px',
-              }}
-            >
-              Directory
-            </Link>
+            {/* Explore dropdown */}
+            <div ref={exploreRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setExploreOpen(!exploreOpen)}
+                className="no-link-style"
+                style={{
+                  ...NAV_LINK_STYLE,
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Explore
+                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>&#9662;</span>
+              </button>
+              {exploreOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 8px)',
+                    left: 0,
+                    minWidth: '160px',
+                    backgroundColor: 'var(--nyc-white)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '4px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    zIndex: 10,
+                    padding: '4px 0',
+                  }}
+                >
+                  <Link
+                    href="/explore"
+                    onClick={() => setExploreOpen(false)}
+                    style={{
+                      display: 'block',
+                      padding: '8px 16px',
+                      fontSize: '15px',
+                      color: 'var(--text-secondary)',
+                      textDecoration: 'none',
+                      fontWeight: 500,
+                    }}
+                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    Data Flow
+                  </Link>
+                  <Link
+                    href="/directory"
+                    onClick={() => setExploreOpen(false)}
+                    style={{
+                      display: 'block',
+                      padding: '8px 16px',
+                      fontSize: '15px',
+                      color: 'var(--text-secondary)',
+                      textDecoration: 'none',
+                      fontWeight: 500,
+                    }}
+                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    Directory
+                  </Link>
+                </div>
+              )}
+            </div>
             <Link
               href="/learn"
               className="no-link-style"
-              style={{
-                color: 'var(--text-secondary)',
-                fontWeight: 500,
-                fontSize: '16px',
-              }}
+              style={NAV_LINK_STYLE}
             >
               Learn
             </Link>
             <Link
               href="/about"
               className="no-link-style"
-              style={{
-                color: 'var(--text-secondary)',
-                fontWeight: 500,
-                fontSize: '16px',
-              }}
+              style={NAV_LINK_STYLE}
             >
               About
             </Link>
@@ -173,6 +233,18 @@ export default function Header() {
             gap: '12px',
           }}
         >
+          {/* Explore section header */}
+          <span
+            style={{
+              color: 'var(--text-muted)',
+              fontWeight: 600,
+              fontSize: '13px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Explore
+          </span>
           <Link
             href="/explore"
             onClick={() => setMobileMenuOpen(false)}
@@ -181,9 +253,10 @@ export default function Header() {
               fontWeight: 500,
               fontSize: '16px',
               textDecoration: 'none',
+              paddingLeft: '12px',
             }}
           >
-            Explore
+            Data Flow
           </Link>
           <Link
             href="/directory"
@@ -193,10 +266,13 @@ export default function Header() {
               fontWeight: 500,
               fontSize: '16px',
               textDecoration: 'none',
+              paddingLeft: '12px',
             }}
           >
             Directory
           </Link>
+          {/* Divider */}
+          <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
           <Link
             href="/learn"
             onClick={() => setMobileMenuOpen(false)}

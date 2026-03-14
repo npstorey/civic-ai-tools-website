@@ -14,6 +14,9 @@ import {
 } from '@/lib/mcp/directory-data';
 import { sectionSpacing, prose } from '@/styles/page-styles';
 
+const SUGGEST_SERVER_URL =
+  'https://github.com/npstorey/civic-ai-tools/issues/new?template=suggest-server.yml&labels=directory-submission';
+
 // --- Helpers ---
 
 function buildGitHubProfileUrl(maintainer: string): string {
@@ -322,11 +325,24 @@ export default function DirectoryClient({ servers }: { servers: McpServerEntry[]
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '48px 24px' }}>
       {/* Header */}
       <section style={sectionSpacing}>
-        <h1 style={{ marginBottom: '12px' }}>MCP Server Directory</h1>
-        <p style={{ ...prose, marginBottom: '0' }}>
-          {servers.length} MCP servers for civic and public data &mdash; open data portals, census,
-          legislation, health, geospatial, and more.
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h1 style={{ marginBottom: '12px' }}>MCP Server Directory</h1>
+            <p style={{ ...prose, marginBottom: '0' }}>
+              {servers.length} MCP servers for civic and public data &mdash; open data portals, census,
+              legislation, health, geospatial, and more.
+            </p>
+          </div>
+          <a
+            href={SUGGEST_SERVER_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="nyc-button nyc-button-secondary"
+            style={{ fontSize: '14px', padding: '8px 16px', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}
+          >
+            Suggest a Server
+          </a>
+        </div>
       </section>
 
       {/* Filters */}
@@ -575,13 +591,21 @@ export default function DirectoryClient({ servers }: { servers: McpServerEntry[]
           ))}
         </div>
         <p style={{ fontSize: '14px' }}>
-          Want to help fill these gaps?{' '}
+          Know of a server that fills one of these gaps?{' '}
+          <a
+            href={SUGGEST_SERVER_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Suggest a server
+          </a>
+          {' '}or{' '}
           <a
             href="https://github.com/npstorey/civic-ai-tools/issues"
             target="_blank"
             rel="noopener noreferrer"
           >
-            Open an issue or contribute on GitHub
+            open an issue on GitHub
           </a>
         </p>
       </section>
