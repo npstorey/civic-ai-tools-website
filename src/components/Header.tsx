@@ -63,6 +63,17 @@ export default function Header() {
               Explore
             </Link>
             <Link
+              href="/directory"
+              className="no-link-style"
+              style={{
+                color: 'var(--text-secondary)',
+                fontWeight: 500,
+                fontSize: '16px',
+              }}
+            >
+              Directory
+            </Link>
+            <Link
               href="/learn"
               className="no-link-style"
               style={{
@@ -173,6 +184,18 @@ export default function Header() {
             }}
           >
             Explore
+          </Link>
+          <Link
+            href="/directory"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              color: 'var(--text-secondary)',
+              fontWeight: 500,
+              fontSize: '16px',
+              textDecoration: 'none',
+            }}
+          >
+            Directory
           </Link>
           <Link
             href="/learn"
