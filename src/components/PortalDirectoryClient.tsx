@@ -6,7 +6,8 @@ import type { PortalEntry } from '@/lib/mcp/portal-data';
 import { prose } from '@/styles/page-styles';
 import type { CSSProperties } from 'react';
 
-const ITEMS_PER_PAGE = 50;
+const DEFAULT_PAGE_SIZE = 25;
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 // --- Helpers ---
 
@@ -232,6 +233,7 @@ export default function PortalDirectoryClient({
   const initialOwnerType = searchParams.get('ownerType') || '';
   const initialSort = (searchParams.get('sort') as PortalSortOption) || 'name';
   const initialPage = parseInt(searchParams.get('page') || '1', 10) || 1;
+  const initialPageSize = parseInt(searchParams.get('pageSize') || '', 10) || DEFAULT_PAGE_SIZE;
 
   const [query, setQuery] = useState(initialQ);
   const [platformFilter, setPlatformFilter] = useState(initialPlatform);
@@ -240,6 +242,7 @@ export default function PortalDirectoryClient({
   const [ownerTypeFilter, setOwnerTypeFilter] = useState(initialOwnerType);
   const [sortBy, setSortBy] = useState<PortalSortOption>(initialSort);
   const [page, setPage] = useState(initialPage);
+  const [pageSize, setPageSize] = useState(initialPageSize);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // Platform counts (from full array, not filtered)
@@ -258,7 +261,7 @@ export default function PortalDirectoryClient({
       const sp = new URLSearchParams();
       sp.set('tab', 'portals');
       for (const [k, v] of Object.entries(params)) {
-        if (v && !(k === 'page' && v === '1')) sp.set(k, v);
+        if (v && !(k === 'page' && v === '1') && !(k === 'pageSize' && v === String(DEFAULT_PAGE_SIZE))) sp.set(k, v);
       }
       router.replace(`/directory?${sp.toString()}`, { scroll: false });
     },
@@ -276,10 +279,11 @@ export default function PortalDirectoryClient({
         govLevel: key === 'govLevel' ? value : govLevelFilter,
         ownerType: key === 'ownerType' ? value : ownerTypeFilter,
         sort: key === 'sort' ? value : sortBy,
+        pageSize: pageSize.toString(),
       };
       updateUrl(params);
     },
-    [query, platformFilter, countryFilter, govLevelFilter, ownerTypeFilter, sortBy, updateUrl]
+    [query, platformFilter, countryFilter, govLevelFilter, ownerTypeFilter, sortBy, pageSize, updateUrl]
   );
 
   // Filter dropdown options
@@ -378,11 +382,11 @@ export default function PortalDirectoryClient({
   }, [portals, query, platformFilter, countryFilter, govLevelFilter, ownerTypeFilter, sortBy]);
 
   // Pagination
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const clampedPage = Math.min(page, totalPages);
   const paginatedPortals = filtered.slice(
-    (clampedPage - 1) * ITEMS_PER_PAGE,
-    clampedPage * ITEMS_PER_PAGE
+    (clampedPage - 1) * pageSize,
+    clampedPage * pageSize
   );
 
   const goToPage = (newPage: number) => {
@@ -395,6 +399,22 @@ export default function PortalDirectoryClient({
       ownerType: ownerTypeFilter,
       sort: sortBy,
       page: newPage.toString(),
+      pageSize: pageSize.toString(),
+    };
+    updateUrl(params);
+  };
+
+  const changePageSize = (newSize: number) => {
+    setPageSize(newSize);
+    setPage(1);
+    const params: Record<string, string> = {
+      q: query,
+      platform: platformFilter,
+      country: countryFilter,
+      govLevel: govLevelFilter,
+      ownerType: ownerTypeFilter,
+      sort: sortBy,
+      pageSize: newSize.toString(),
     };
     updateUrl(params);
   };
@@ -407,6 +427,7 @@ export default function PortalDirectoryClient({
     setOwnerTypeFilter('');
     setSortBy('name');
     setPage(1);
+    setPageSize(DEFAULT_PAGE_SIZE);
     router.replace('/directory?tab=portals', { scroll: false });
   };
 
@@ -594,26 +615,35 @@ export default function PortalDirectoryClient({
       ) : (
         <>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
-                  <th style={thStyle}>Portal</th>
-                  <th style={thStyle}>Platform</th>
-                  <th style={thStyle}>Country</th>
-                  <th style={thStyle}>Owner</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }}>Datasets</th>
-                  <th style={thStyle}>Links</th>
+                  <th style={{ ...thStyle, minWidth: '200px' }}>Portal</th>
+                  <th style={{ ...thStyle, width: '90px' }}>Platform</th>
+                  <th style={{ ...thStyle, width: '120px' }}>Country</th>
+                  <th style={{ ...thStyle, minWidth: '150px', width: '150px' }}>Owner</th>
+                  <th style={{ ...thStyle, width: '90px', textAlign: 'right' }}>Datasets</th>
+                  <th style={{ ...thStyle, width: '80px' }}>Links</th>
                 </tr>
               </thead>
               <tbody>
                 {paginatedPortals.map((portal) => (
-                  <tr key={portal.id}>
-                    <td style={tdStyle}>
+                  <tr
+                    key={portal.id}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--card-background)';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    <td style={{ ...tdStyle, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       <a
                         href={portal.url}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{ fontWeight: 500, fontSize: '14px' }}
+                        title={portal.name || portal.id}
                       >
                         {portal.name || portal.id}
                       </a>
@@ -621,8 +651,8 @@ export default function PortalDirectoryClient({
                     <td style={tdStyle}>
                       <PlatformBadge platform={portal.platform} />
                     </td>
-                    <td style={tdStyle}>{portal.country_name || '\u2014'}</td>
-                    <td style={tdStyle}>{portal.owner_name || '\u2014'}</td>
+                    <td style={{ ...tdStyle, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{portal.country_name || '\u2014'}</td>
+                    <td style={{ ...tdStyle, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={portal.owner_name || undefined}>{portal.owner_name || '\u2014'}</td>
                     <td
                       style={{
                         ...tdStyle,
@@ -726,10 +756,75 @@ export default function PortalDirectoryClient({
               >
                 Next
               </button>
+              <span style={{ fontSize: '13px', color: 'var(--text-muted)', marginLeft: '8px' }}>
+                Show{' '}
+                {PAGE_SIZE_OPTIONS.map((size, i) => (
+                  <span key={size}>
+                    {i > 0 && ' / '}
+                    <button
+                      onClick={() => changePageSize(size)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: '2px 4px',
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        fontWeight: size === pageSize ? 700 : 400,
+                        color: size === pageSize ? 'var(--text-primary)' : 'var(--text-muted)',
+                        textDecoration: size === pageSize ? 'none' : 'underline',
+                      }}
+                    >
+                      {size}
+                    </button>
+                  </span>
+                ))}
+              </span>
             </div>
           )}
         </>
       )}
+
+      {/* Automation transparency note */}
+      <div
+        style={{
+          marginTop: '32px',
+          paddingTop: '16px',
+          borderTop: '1px solid var(--border-color)',
+          fontSize: '13px',
+          color: 'var(--text-muted)',
+          lineHeight: 1.5,
+        }}
+      >
+        <strong>How this directory is built:</strong> Portal data is automatically
+        discovered and refreshed weekly by a{' '}
+        <a
+          href="https://github.com/npstorey/civic-ai-tools-website/blob/main/.github/workflows/update-portal-registries.yml"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: 'var(--text-muted)' }}
+        >
+          GitHub Action
+        </a>{' '}
+        that queries the Socrata Discovery API and the{' '}
+        <a
+          href="https://github.com/commondataio"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: 'var(--text-muted)' }}
+        >
+          commondataio
+        </a>{' '}
+        registry.{' '}
+        <a
+          href="https://github.com/npstorey/civic-ai-tools-website/blob/main/scripts/update-portals.mjs"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: 'var(--text-muted)' }}
+        >
+          View source
+        </a>
+      </div>
 
       {/* Mobile filter styles */}
       <style jsx>{`
