@@ -19,7 +19,8 @@ interface CompareRequest {
 export async function POST(request: NextRequest) {
   try {
     const body: CompareRequest = await request.json();
-    const { query, model, portal = 'data.cityofnewyork.us', mcpOnly = false } = body;
+    const { query, model, portal: rawPortal = 'data.cityofnewyork.us', mcpOnly = false } = body;
+    const portal = rawPortal || 'data.cityofnewyork.us';
 
     if (!query || !model) {
       return new Response(

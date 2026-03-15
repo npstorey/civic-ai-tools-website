@@ -59,7 +59,7 @@ export default function RateLimitBanner({ refreshTrigger = 0 }: RateLimitBannerP
         justifyContent: 'space-between',
         flexWrap: 'wrap',
         gap: '8px',
-        fontSize: '14px',
+        fontSize: '12px',
         color: textColor,
       }}
     >

@@ -4,15 +4,14 @@ import { useState, useRef } from 'react';
 import Link from 'next/link';
 import QueryForm from '@/components/QueryForm';
 import ComparisonDisplay from '@/components/ComparisonDisplay';
-import RateLimitBanner from '@/components/RateLimitBanner';
 import { useStreamingComparison } from '@/hooks/useStreamingComparison';
-import { prose, sectionSpacing, card } from '@/styles/page-styles';
+
 
 export default function Home() {
   const [queryCount, setQueryCount] = useState(0);
   const [usedModel, setUsedModel] = useState<string>('');
   const [lastQuery, setLastQuery] = useState<string>('');
-  const [lastPortal, setLastPortal] = useState<string>('data.cityofnewyork.us');
+  const [lastPortal, setLastPortal] = useState<string>('');
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const streaming = useStreamingComparison();
@@ -27,16 +26,17 @@ export default function Home() {
   };
 
   const handleSubmit = async (query: string, model: string, portal: string) => {
+    const effectivePortal = portal || 'data.cityofnewyork.us';
     setUsedModel(model);
     setLastQuery(query);
-    setLastPortal(portal);
+    setLastPortal(effectivePortal);
 
     // Scroll to results after a brief delay to let the loading state render
     setTimeout(() => {
       resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
 
-    streaming.startComparison(query, model, portal);
+    streaming.startComparison(query, model, effectivePortal);
     setQueryCount((c) => c + 1);
   };
 
@@ -49,72 +49,54 @@ export default function Home() {
   };
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 24px' }}>
-      {/* Hero Section */}
-      <div style={{ textAlign: 'center', ...sectionSpacing }}>
-        <h1 style={{ marginBottom: '8px' }}>
-          Explore Open Data with AI
-        </h1>
-        <p
-          style={{
-            fontSize: '20px',
-            lineHeight: '150%',
-            color: 'var(--text-secondary)',
-            maxWidth: '650px',
-            margin: '0 auto',
-          }}
-        >
-          Ask a question about open data and see how AI performs
-          with and without live access to open data portals.
-        </p>
-      </div>
+    <>
+      {/* Hero + Form: narrow container */}
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 24px 0' }}>
+        {/* Hero Section */}
+        <div style={{ textAlign: 'center', marginBottom: '24px', paddingTop: '40px' }}>
+          <h1 style={{ marginBottom: '8px', fontSize: '36px', fontWeight: 500 }}>
+            Explore Open Data with AI
+          </h1>
+          <p
+            style={{
+              fontSize: '20px',
+              lineHeight: '150%',
+              color: 'var(--text-secondary)',
+              maxWidth: '650px',
+              margin: '0 auto',
+            }}
+          >
+            See how AI answers with and without access to real datasets
+          </p>
+        </div>
 
-      {/* Query Form */}
-      <div
-        style={{
-          ...card,
-          marginBottom: '64px',
-        }}
-      >
-        <QueryForm onSubmit={handleSubmit} isLoading={streaming.isLoading} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <Link
-              href="/learn#model-selection"
-              style={{ fontSize: '12px', color: 'var(--text-muted)' }}
-            >
-              Why these models?
-            </Link>
-            <Link
-              href="/about#whats-in-the-project"
-              style={{ fontSize: '12px', color: 'var(--text-muted)' }}
-            >
-              What data is available?
-            </Link>
-          </div>
-          <RateLimitBanner refreshTrigger={queryCount} />
+        {/* Query Form */}
+        <div style={{ marginBottom: '48px' }}>
+          <QueryForm onSubmit={handleSubmit} isLoading={streaming.isLoading} queryCount={queryCount} />
         </div>
       </div>
 
-      {/* Error Message */}
+      {/* Results: wide container matching header max-w-6xl */}
       {streaming.error && (
-        <div
-          style={{
-            marginBottom: '32px',
-            padding: '16px 24px',
-            backgroundColor: 'rgba(236, 19, 30, 0.1)',
-            color: 'var(--nyc-error)',
-            borderRadius: '4px',
-            border: '1px solid var(--nyc-error)',
-          }}
-        >
-          {streaming.error}
+        <div className="max-w-6xl mx-auto px-6">
+          <div
+            style={{
+              marginBottom: '32px',
+              padding: '16px 24px',
+              backgroundColor: 'rgba(236, 19, 30, 0.1)',
+              color: 'var(--nyc-error)',
+              borderRadius: '4px',
+              border: '1px solid var(--nyc-error)',
+            }}
+          >
+            {streaming.error}
+          </div>
         </div>
       )}
 
-      {/* Results */}
-      {(streaming.isLoading || streaming.withoutMcp.content || streaming.withMcp.content) && (
-        <div ref={resultsRef} style={{ marginBottom: '24px' }}>
+      {(streaming.isLoading || streaming.withoutMcp.content || streaming.withMcp.content ||
+        streaming.withoutMcp.isComplete || streaming.withMcp.isComplete || streaming.error) && (
+        <div ref={resultsRef} className="max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
           <h2 style={{ marginBottom: '16px' }}>Results</h2>
           <ComparisonDisplay
             withoutMcp={null}
@@ -151,56 +133,62 @@ export default function Home() {
         </div>
       )}
 
-      {/* CTA Section */}
-      <div
-        style={{
-          textAlign: 'center',
-          padding: '64px 24px',
-          borderTop: '1px solid var(--border-color)',
-        }}
-      >
-        <h2 style={{ marginBottom: '16px' }}>Go deeper</h2>
-        <p
+      {/* CTA: narrow container */}
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 24px' }}>
+        <div
           style={{
-            ...prose,
-            maxWidth: '650px',
-            margin: '0 auto 24px',
+            textAlign: 'center',
+            padding: '40px 24px 24px',
+            borderTop: '1px solid var(--border-color)',
           }}
         >
-          This demo has rate limits and runs simple queries. Set up locally for
-          unlimited access, more data sources, and complex multi-step analysis.
-        </p>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
-          <a
-            href="https://github.com/npstorey/civic-ai-tools"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="nyc-button nyc-button-primary"
+          <h2 style={{ marginBottom: '12px', fontSize: '24px', fontWeight: 500 }}>Go deeper</h2>
+          <p
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              textDecoration: 'none',
+              fontSize: '15px',
+              lineHeight: '170%',
+              color: 'var(--text-secondary)',
+              maxWidth: '650px',
+              margin: '0 auto 20px',
             }}
           >
-            <svg style={{ width: '20px', height: '20px' }} fill="currentColor" viewBox="0 0 24 24">
-              <path
-                fillRule="evenodd"
-                d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Get Started
-          </a>
-          <Link
-            href="/learn#try-it"
-            className="nyc-button nyc-button-secondary"
-            style={{ textDecoration: 'none' }}
-          >
-            Learn how it works
-          </Link>
+            This demo has rate limits and runs simple queries. Set up locally for
+            unlimited access, more data sources, and complex multi-step analysis.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <a
+              href="https://github.com/npstorey/civic-ai-tools"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="nyc-button nyc-button-primary"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                textDecoration: 'none',
+                fontSize: '14px',
+                padding: '10px 24px',
+              }}
+            >
+              <svg style={{ width: '16px', height: '16px' }} fill="currentColor" viewBox="0 0 24 24">
+                <path
+                  fillRule="evenodd"
+                  d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              Get Started
+            </a>
+            <Link
+              href="/learn#try-it"
+              className="nyc-button nyc-button-secondary"
+              style={{ textDecoration: 'none', fontSize: '14px', padding: '10px 24px' }}
+            >
+              Learn how it works
+            </Link>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -514,7 +514,7 @@ footer a:visited {
 /* Query form controls row - responsive layout */
 .form-controls-row {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
   align-items: end;
 }
@@ -523,9 +523,5 @@ footer a:visited {
   .form-controls-row {
     grid-template-columns: 1fr;
     gap: 12px;
-  }
-
-  .form-controls-row .nyc-button {
-    width: 100%;
   }
 }

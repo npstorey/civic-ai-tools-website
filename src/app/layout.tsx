@@ -67,9 +67,9 @@ export default function RootLayout({
       )}
       <body className={`${spaceGrotesk.variable} ${notoSans.variable}`}>
         <Providers>
-          <div className="min-h-screen flex flex-col">
+          <div className="flex flex-col">
             <Header />
-            <main className="flex-1">{children}</main>
+            <main>{children}</main>
             <footer className="border-t py-8 text-center" style={{ borderColor: 'var(--border-color)' }}>
               <div style={{ maxWidth: '600px', margin: '0 auto' }}>
                 <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0 }}>
