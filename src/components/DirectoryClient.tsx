@@ -12,7 +12,7 @@ import {
   GOVERNMENT_LEVEL_LABELS,
   DATA_PLATFORM_LABELS,
 } from '@/lib/mcp/directory-data';
-import { sectionSpacing, prose } from '@/styles/page-styles';
+import { prose } from '@/styles/page-styles';
 
 const SUGGEST_SERVER_URL =
   'https://github.com/npstorey/civic-ai-tools/issues/new?template=suggest-server.yml&labels=directory-submission';
@@ -183,7 +183,7 @@ function FilterDropdown({
 
 // --- Component ---
 
-export default function DirectoryClient({ servers }: { servers: McpServerEntry[] }) {
+export default function DirectoryClient({ servers, portalCounts }: { servers: McpServerEntry[]; portalCounts?: { socrata: number; ckan: number; total: number } }) {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -322,28 +322,55 @@ export default function DirectoryClient({ servers }: { servers: McpServerEntry[]
   const hasFilters = query || domainFilter || levelFilter || transportFilter || platformFilter || officialOnly;
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '48px 24px' }}>
-      {/* Header */}
-      <section style={sectionSpacing}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <h1 style={{ marginBottom: '12px' }}>MCP Server Directory</h1>
-            <p style={{ ...prose, marginBottom: '0' }}>
-              {servers.length} MCP servers for civic and public data &mdash; open data portals, census,
-              legislation, health, geospatial, and more.
-            </p>
-          </div>
-          <a
-            href={SUGGEST_SERVER_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="nyc-button nyc-button-secondary"
-            style={{ fontSize: '14px', padding: '8px 16px', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}
+    <div>
+      {/* Banner */}
+      {portalCounts && (
+        <div style={{
+          backgroundColor: 'var(--card-background)',
+          padding: '12px 16px',
+          borderRadius: '4px',
+          fontSize: '14px',
+          color: 'var(--text-secondary)',
+          marginBottom: '20px',
+          lineHeight: '1.5',
+        }}>
+          These MCP servers connect AI to data from{' '}
+          {portalCounts.socrata.toLocaleString()} Socrata portals and{' '}
+          {portalCounts.ckan.toLocaleString()} CKAN portals worldwide.{' '}
+          <button
+            onClick={() => router.replace('/directory?tab=portals', { scroll: false })}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--nyc-blue)',
+              fontWeight: 500,
+              fontSize: '14px',
+              cursor: 'pointer',
+              padding: 0,
+              fontFamily: 'inherit',
+            }}
           >
-            Suggest a Server
-          </a>
+            Browse Data Portals &rarr;
+          </button>
         </div>
-      </section>
+      )}
+
+      {/* Subtitle + CTA */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '24px' }}>
+        <p style={{ ...prose, margin: 0 }}>
+          {servers.length} MCP servers for civic and public data &mdash; open data portals, census,
+          legislation, health, geospatial, and more.
+        </p>
+        <a
+          href={SUGGEST_SERVER_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="nyc-button nyc-button-secondary"
+          style={{ fontSize: '14px', padding: '8px 16px', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}
+        >
+          Suggest a Server
+        </a>
+      </div>
 
       {/* Filters */}
       <div style={{ marginBottom: '32px' }}>

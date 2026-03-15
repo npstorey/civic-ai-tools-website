@@ -1,18 +1,28 @@
 import { Suspense } from 'react';
 import { getDirectoryData } from '@/lib/mcp/directory-data';
-import DirectoryClient from '@/components/DirectoryClient';
+import { getPortalData, getPortalCounts } from '@/lib/mcp/portal-data';
+import DirectoryWrapper from '@/components/DirectoryWrapper';
 
 export const metadata = {
-  title: 'MCP Server Directory - Civic AI Tools',
+  title: 'Directory - Civic AI Tools',
   description:
-    'Browse 65+ MCP servers for civic and public data — open data portals, census, legislation, health, geospatial, and more. Filter by domain, government level, and transport.',
+    'Browse 65+ MCP servers for civic data and 2,000+ open data portals across Socrata and CKAN platforms.',
 };
 
 export default async function DirectoryPage() {
-  const servers = await getDirectoryData();
+  const [servers, portals, portalCounts] = await Promise.all([
+    getDirectoryData(),
+    getPortalData(),
+    getPortalCounts(),
+  ]);
+
   return (
     <Suspense>
-      <DirectoryClient servers={servers} />
+      <DirectoryWrapper
+        servers={servers}
+        portals={portals}
+        portalCounts={portalCounts}
+      />
     </Suspense>
   );
 }

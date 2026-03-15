@@ -205,7 +205,7 @@ async function getSocrataCount(rawDomain) {
 
   // Fallback: query the portal directly (catches portals not indexed centrally)
   const portalData = await fetchJson(
-    `https://${rawDomain}/api/catalog/v1?limit=0&only=datasets`,
+    `https://${rawDomain}/api/catalog/v1?domains=${encodeURIComponent(rawDomain)}&limit=0&only=datasets`,
     10000,
   );
   const portalCount = portalData?.resultSetSize ?? 0;

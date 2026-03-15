@@ -11,7 +11,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://aces.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -41,7 +41,7 @@
     "owner_name": "USDA",
     "owner_type": "Central government",
     "api_endpoint": "https://agtransport.usda.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -56,7 +56,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://albany.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -71,7 +71,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://albanycountyny.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -86,7 +86,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://albemarlecounty.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -101,7 +101,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://albemarlecountyva-uvaecc.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -116,7 +116,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://alexandercountync.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -131,7 +131,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://alpharetta.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -146,7 +146,7 @@
     "owner_name": "Generalitat de Catalunya",
     "owner_type": "Regional government",
     "api_endpoint": "https://analisi.transparenciacatalunya.cat/api",
-    "dataset_count": 5553,
+    "dataset_count": 1040,
     "status": "active"
   },
   {
@@ -161,7 +161,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://annapolismd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -176,7 +176,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://anokamn.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -191,7 +191,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://applevalley-ca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -206,7 +206,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://ascensionparishla.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -221,7 +221,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://atlanta.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -236,7 +236,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://auburnmaine.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -281,7 +281,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://austintexas-op-beta.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 9,
     "status": "active"
   },
   {
@@ -296,7 +296,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://barnstablecountyma.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -311,7 +311,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://baycountymi.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -326,7 +326,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://bcnv.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -341,7 +341,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://beaufortcountysc.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -356,7 +356,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://beaufortcountyschools.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -371,7 +371,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://bentoncounty.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -386,7 +386,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://bentonvillear.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -401,7 +401,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://berkeleycountywv.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -416,7 +416,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://bernalillocountynm.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -431,7 +431,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://bloomfieldtwp.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -446,7 +446,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://boulderco.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 4,
     "status": "active"
   },
   {
@@ -461,7 +461,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://brec.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -476,7 +476,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://bridgeportct.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 4,
     "status": "active"
   },
   {
@@ -506,7 +506,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://brookhavenga.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -521,7 +521,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://budget-qa-reporting.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -536,7 +536,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://byroncenterpublicschools.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -581,7 +581,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://calhouncountymi.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -596,7 +596,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cambriacounty-pa.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -626,7 +626,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://camdencountyga-sheriff.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -641,7 +641,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://capecoral.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -656,7 +656,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://carsonca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -686,7 +686,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://casagrandeaz.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 3,
     "status": "active"
   },
   {
@@ -731,7 +731,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://centennialco.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -746,7 +746,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cfschools.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -761,7 +761,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://champaignil.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -791,7 +791,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://chicorec.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -836,7 +836,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofabilenetx.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -851,7 +851,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofalbany.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -866,7 +866,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofbranson-edp.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -881,7 +881,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofcamas.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 8,
     "status": "active"
   },
   {
@@ -896,7 +896,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofcharlestonwv.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -926,7 +926,7 @@
     "owner_name": "The City of Chicago",
     "owner_type": "Local government",
     "api_endpoint": "https://cityofchicago-v2.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -941,7 +941,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofcudahy.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -956,7 +956,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofdiboll.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -971,7 +971,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofedmonds-erp.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -986,7 +986,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityoffairbanks.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1001,7 +1001,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityoffairfaxpd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 6,
     "status": "active"
   },
   {
@@ -1016,7 +1016,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofglendoraca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1031,7 +1031,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofindianwells.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1046,7 +1046,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofkingman.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1061,7 +1061,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityoflagunabeach-ca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1076,7 +1076,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityoflancaster.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1091,7 +1091,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityoflaramie.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -1106,7 +1106,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofmelrose.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1121,7 +1121,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofmenifee.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1136,7 +1136,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofmethuenma.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1151,7 +1151,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofmonroeoh.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1166,7 +1166,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofnampa.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 6,
     "status": "active"
   },
   {
@@ -1181,7 +1181,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofoakley.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1196,7 +1196,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityoforange-ca-of.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1211,7 +1211,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofpacifica.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1226,7 +1226,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofpensacolafl.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1241,7 +1241,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofpflugervilletx.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1256,7 +1256,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofrockisland.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -1271,7 +1271,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofsheridanwy.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1286,7 +1286,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityoftracyca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1301,7 +1301,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityoftulare.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -1316,7 +1316,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofwestcovinaca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1331,7 +1331,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofwillmar-edp.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1346,7 +1346,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofwoodland.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1361,7 +1361,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofyorbalinda.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1376,7 +1376,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://citystaug.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1391,7 +1391,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://clatsop.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -1406,7 +1406,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://claycountysheriff-fl.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1421,7 +1421,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://clemsonsc.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1436,7 +1436,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://co-clinton-oh.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1466,7 +1466,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://coconinocountyaz.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1481,7 +1481,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://collin-county-tx-ja.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 3,
     "status": "active"
   },
   {
@@ -1496,7 +1496,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://colonialheightsva-pd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1511,7 +1511,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://coloradospringsco-pd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1541,7 +1541,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://como.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1571,7 +1571,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://conyersga.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -1586,7 +1586,7 @@
     "owner_name": "Cook County Government",
     "owner_type": "Local government",
     "api_endpoint": "https://cookcounty.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 9,
     "status": "active"
   },
   {
@@ -1601,7 +1601,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://coos-county-edp.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1616,7 +1616,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://corsicanatx.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1646,7 +1646,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://corvallisoregon-internal.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1691,7 +1691,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cravencountync.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1721,7 +1721,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cudahyca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1736,7 +1736,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cumberlandcounty.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -1766,7 +1766,7 @@
     "owner_name": "City of Edmonton",
     "owner_type": "Local government",
     "api_endpoint": "https://dashboard.edmonton.ca/api",
-    "dataset_count": 10000,
+    "dataset_count": 9,
     "status": "active"
   },
   {
@@ -1796,7 +1796,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://dashboarddata.caloes.ca.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1856,7 +1856,7 @@
     "owner_name": "AmeriCorps",
     "owner_type": "Central government",
     "api_endpoint": "https://data.americorps.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1886,7 +1886,7 @@
     "owner_name": "City of Austin",
     "owner_type": "Local government",
     "api_endpoint": "https://data.austintexas.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -1976,7 +1976,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://data.buffalony.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -2036,7 +2036,7 @@
     "owner_name": "CDP Worldwide",
     "owner_type": "Civil society",
     "api_endpoint": "https://data.cdp.net/api",
-    "dataset_count": 5553,
+    "dataset_count": 292,
     "status": "active"
   },
   {
@@ -2186,7 +2186,7 @@
     "owner_name": "City of Colorado Springs",
     "owner_type": "Local government",
     "api_endpoint": "https://data.coloradosprings.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 6,
     "status": "active"
   },
   {
@@ -2426,7 +2426,7 @@
     "owner_name": "Franchise Tax Board (FTB)",
     "owner_type": "Central government",
     "api_endpoint": "https://data.ftb.ca.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -2456,7 +2456,7 @@
     "owner_name": "City of Grand Rapids",
     "owner_type": "Local government",
     "api_endpoint": "https://data.grandrapidsmi.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -2501,7 +2501,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://data.illinois.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -2516,7 +2516,7 @@
     "owner_name": "Virginia Department of Rail and Public Transportation",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.internal.drpt.virginia.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -2531,7 +2531,7 @@
     "owner_name": "Sate of Iowa",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.iowa.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -2651,7 +2651,7 @@
     "owner_name": "State of Maryland",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.maryland.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -2966,7 +2966,7 @@
     "owner_name": "Oficina del Contralor Electoral (OCE)",
     "owner_type": "Central government",
     "api_endpoint": "https://data.oce.pr.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 9,
     "status": "active"
   },
   {
@@ -3071,7 +3071,7 @@
     "owner_name": "U.S. Federal Government",
     "owner_type": "Central government",
     "api_endpoint": "https://data.permits.performance.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 4,
     "status": "active"
   },
   {
@@ -3131,7 +3131,7 @@
     "owner_name": "Queen Anne’s County Government Maryland",
     "owner_type": "Local government",
     "api_endpoint": "https://data.qac.org/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3176,7 +3176,7 @@
     "owner_name": "City of Redmond",
     "owner_type": "Local government",
     "api_endpoint": "https://data.redmond.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3221,7 +3221,7 @@
     "owner_name": "County of San Diego",
     "owner_type": "Local government",
     "api_endpoint": "https://data.sandiegocounty.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -3251,7 +3251,7 @@
     "owner_name": "City Of Seattle",
     "owner_type": "Local government",
     "api_endpoint": "https://data.seattle.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3266,7 +3266,7 @@
     "owner_name": "City of San Francisco",
     "owner_type": "Local government",
     "api_endpoint": "https://data.sfgov.org/api",
-    "dataset_count": 10000,
+    "dataset_count": 4,
     "status": "active"
   },
   {
@@ -3326,7 +3326,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://data.stocktonca.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3401,7 +3401,7 @@
     "owner_name": "U.S. Department of Transportation",
     "owner_type": "Central government",
     "api_endpoint": "https://data.transportation.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -3461,7 +3461,7 @@
     "owner_name": "The Department of Veterans Affairs",
     "owner_type": "Central government",
     "api_endpoint": "https://data.va.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3581,7 +3581,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://dataacademy.maryland.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -3761,7 +3761,7 @@
     "owner_name": "Regione Lombaria",
     "owner_type": "Regional government",
     "api_endpoint": "https://dati.lombardia.it/api",
-    "dataset_count": 5553,
+    "dataset_count": 2886,
     "status": "active"
   },
   {
@@ -3791,7 +3791,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://dcsheriff.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -3806,7 +3806,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://dedhamma.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -3821,7 +3821,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://delawarecountyoh-sheriff.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3836,7 +3836,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://desmoinesia-pd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3851,7 +3851,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://dixonca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3866,7 +3866,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://doralfl.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3881,7 +3881,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://dot-edpsandbox.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 4,
     "status": "active"
   },
   {
@@ -3896,7 +3896,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://douglasco.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 4,
     "status": "active"
   },
   {
@@ -3911,7 +3911,7 @@
     "owner_name": "City of Dubuque",
     "owner_type": "Local government",
     "api_endpoint": "https://dubuque.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 3,
     "status": "active"
   },
   {
@@ -3926,7 +3926,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://eaglevalley-ta-edp.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3941,7 +3941,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://edinburgtx-pd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3956,7 +3956,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://edinburgtx.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -4016,7 +4016,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://edwardsvilleil.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4031,7 +4031,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://effinghamil.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4046,7 +4046,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://elkhartcountyin.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -4061,7 +4061,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://emporia-kansas.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4076,7 +4076,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://encinitasca-internal.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4091,7 +4091,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://enforcementmobileanalytics-nvots.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4106,7 +4106,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://enterpriseal.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4121,7 +4121,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://erieco.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -4136,7 +4136,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://farmersbranchtx.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4151,7 +4151,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://farmingtonmo.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4166,7 +4166,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://findlayoh-pd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4196,7 +4196,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://fishersin.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4211,7 +4211,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://flaglercofl.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -4226,7 +4226,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://fontana.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4256,7 +4256,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://fortpiercefl.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4271,7 +4271,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://fourriverssanitationil.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4286,7 +4286,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://franklincountyohio.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4331,7 +4331,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://fwisd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4361,7 +4361,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://gallatincomt.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4376,7 +4376,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://gallatintn.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4391,7 +4391,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://gardencityks.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4406,7 +4406,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://georgetowndividepud.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4421,7 +4421,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://germantownwi.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4451,7 +4451,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://goochlandva.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 8,
     "status": "active"
   },
   {
@@ -4481,7 +4481,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://grandjunctionco.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 7,
     "status": "active"
   },
   {
@@ -4496,7 +4496,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://grantspassor-ps.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4511,7 +4511,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://greenfield-ma.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4526,7 +4526,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://grovecityoh.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4541,7 +4541,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://grovecityohpd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 4,
     "status": "active"
   },
   {
@@ -4556,7 +4556,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://hagerstownmd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4571,7 +4571,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://hallandalebeachfl.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4586,7 +4586,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://haltomcitytx.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4601,7 +4601,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://harrisburgpa.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4631,7 +4631,7 @@
     "owner_name": "U.S. Department of Health",
     "owner_type": "Central government",
     "api_endpoint": "https://healthdata.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4676,7 +4676,7 @@
     "owner_name": "San Bernardino County Department of Public Health",
     "owner_type": "Local government",
     "api_endpoint": "https://healthstat.dph.sbcounty.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4691,7 +4691,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://hemet-ca-ei.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4706,7 +4706,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://hendersoncountync.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4721,7 +4721,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://henrycoga.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 9,
     "status": "active"
   },
   {
@@ -4736,7 +4736,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://hickorync.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -4766,7 +4766,7 @@
     "owner_name": "Hawaii Department of Transportation",
     "owner_type": "Regional government",
     "api_endpoint": "https://hidot-contracts.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -4781,7 +4781,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://highlandsranch.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 4,
     "status": "active"
   },
   {
@@ -4811,7 +4811,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://hopewellva.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4841,7 +4841,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://idaho-state-police.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4901,7 +4901,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://independencemo.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4916,7 +4916,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://indianrivercountyfl.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4931,7 +4931,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://indio.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -4946,7 +4946,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://insights.cincinnati-oh.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 3,
     "status": "active"
   },
   {
@@ -4961,7 +4961,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://integration-kcmo.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 9,
     "status": "active"
   },
   {
@@ -5006,7 +5006,7 @@
     "owner_name": "US Department of Agriculture",
     "owner_type": "Central government",
     "api_endpoint": "https://internal.agtransport.usda.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5066,7 +5066,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://internaldata.maryland.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 4,
     "status": "active"
   },
   {
@@ -5081,7 +5081,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://iop.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -5096,7 +5096,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://ipswich.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5111,7 +5111,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://ivgid.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5126,7 +5126,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://jacksontn.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5156,7 +5156,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://jcps.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5171,7 +5171,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://jefferson-city-pd-mo.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5186,7 +5186,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://jerseyvillagetx.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -5201,7 +5201,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://johnstonia.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -5216,7 +5216,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://kalcounty.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5231,7 +5231,7 @@
     "owner_name": "Socrata",
     "owner_type": "Business",
     "api_endpoint": "https://kc-performance.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 8,
     "status": "active"
   },
   {
@@ -5246,7 +5246,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://kirklandwa-scgc.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -5261,7 +5261,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://kirklandwa.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -5276,7 +5276,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://klamathfallspd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5291,7 +5291,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://lacoso.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 8,
     "status": "active"
   },
   {
@@ -5306,7 +5306,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://lafayettecsdgovla-train.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 3,
     "status": "active"
   },
   {
@@ -5321,7 +5321,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://lafayettecsdgovla.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5336,7 +5336,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://lafourchegov.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5351,7 +5351,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://lafourcheparishsheriff.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5366,7 +5366,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://lakelandfl-pd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5381,7 +5381,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://laramiecounty-sd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5396,7 +5396,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://laramiecounty.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -5411,7 +5411,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://lawrenceks.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5426,7 +5426,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://lawtonok.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5441,7 +5441,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://lemooreca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5456,7 +5456,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://lomalindaca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5471,7 +5471,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://longviewtexas.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5486,7 +5486,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://losgatosca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5516,7 +5516,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://lvmwd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5531,7 +5531,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://lynnfieldma.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5546,7 +5546,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://lynnwoodwa.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5561,7 +5561,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://mahoningcounty.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5576,7 +5576,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://manhattanbeach-ca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5591,7 +5591,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://marysville-oh-of.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5606,7 +5606,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://marysvillewa.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5621,7 +5621,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://mercedca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5636,7 +5636,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://mercedcountyca-sheriff.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5666,7 +5666,7 @@
     "owner_name": "Metropolitan Airports Commission (MAC)",
     "owner_type": "Local government",
     "api_endpoint": "https://metroairports.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 6,
     "status": "active"
   },
   {
@@ -5696,7 +5696,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://miami.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 3,
     "status": "active"
   },
   {
@@ -5726,7 +5726,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://midashboard-staging-sandbox.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5741,7 +5741,7 @@
     "owner_name": "Socrata",
     "owner_type": "Business",
     "api_endpoint": "https://midashboard-staging.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 9,
     "status": "active"
   },
   {
@@ -5756,7 +5756,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://middleborough-ma.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5771,7 +5771,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://midpenopenspace.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5786,7 +5786,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://minotnd-pd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5816,7 +5816,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://mobileal.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5831,7 +5831,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://montebelloca-pd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5846,7 +5846,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://montereyparkca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5861,7 +5861,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://montgomery-al.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5876,7 +5876,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://montrosecounty.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5891,7 +5891,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://mooresvillenc.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5906,7 +5906,7 @@
     "owner_name": "Moreno Valley Data Catalog",
     "owner_type": "Local government",
     "api_endpoint": "https://moreno-valley.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -5921,7 +5921,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://mtdesert.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5936,7 +5936,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://murfreesboro.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5981,7 +5981,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://napervilleil-pd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5996,7 +5996,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://nasa-test-0.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -6011,7 +6011,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://nassaucountycircuitcourt.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6026,7 +6026,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://nesed-reporting-dev.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6041,7 +6041,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://newcastle.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -6056,7 +6056,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://nnps-odp.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -6071,7 +6071,7 @@
     "owner_name": "City of Norfolk, VA",
     "owner_type": "Local government",
     "api_endpoint": "https://norfolk-performance.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -6086,7 +6086,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://northbayvillagefl.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6101,7 +6101,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://northmariana-guam.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6116,7 +6116,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://northmiamibeach-fl.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6131,7 +6131,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://northmiamifl.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6161,7 +6161,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://nyc-scgc.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 7,
     "status": "active"
   },
   {
@@ -6176,7 +6176,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://ofallonmo.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6191,7 +6191,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://ogdencity.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6206,7 +6206,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://ogunquit.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6221,7 +6221,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://olmsteadcountymn.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -6236,7 +6236,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://ometro.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6251,7 +6251,7 @@
     "owner_name": "Government of Ontario",
     "owner_type": "Regional government",
     "api_endpoint": "https://ontario.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 9,
     "status": "active"
   },
   {
@@ -6266,7 +6266,7 @@
     "owner_name": "Metropolitan Transportation Commission",
     "owner_type": "Regional government",
     "api_endpoint": "https://open-data-demo.mtc.ca.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6296,7 +6296,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://opendata-augusta.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -6311,7 +6311,7 @@
     "owner_name": "Camden city",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.camden.gov.uk/api",
-    "dataset_count": 5553,
+    "dataset_count": 113,
     "status": "active"
   },
   {
@@ -6326,7 +6326,7 @@
     "owner_name": "City of Henderson, Nevada",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.cityofhenderson.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6341,7 +6341,7 @@
     "owner_name": "City of Mesquite",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.cityofmesquite.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 4,
     "status": "active"
   },
   {
@@ -6356,7 +6356,7 @@
     "owner_name": "Clermont County Auditor",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.clermontauditor.org/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -6446,7 +6446,7 @@
     "owner_name": "Nassau County",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.nassaucountyny.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6461,7 +6461,7 @@
     "owner_name": "Ramsey County, Minnesota",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.ramseycounty.us/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6476,7 +6476,7 @@
     "owner_name": "Ramsey County, Minnesota",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.ramseycountymn.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6491,7 +6491,7 @@
     "owner_name": "Dienst Wegverkeer (RDW)",
     "owner_type": "Central government",
     "api_endpoint": "https://opendata.rdw.nl/api",
-    "dataset_count": 5553,
+    "dataset_count": 69,
     "status": "active"
   },
   {
@@ -6506,7 +6506,7 @@
     "owner_name": "San Diego Association of Governments",
     "owner_type": "Regional government",
     "api_endpoint": "https://opendata.sandag.org/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6521,7 +6521,7 @@
     "owner_name": "Universal Service Administrative Company",
     "owner_type": "Central government",
     "api_endpoint": "https://opendata.usac.org/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6551,7 +6551,7 @@
     "owner_name": "Nevada Office of Traffic Safety",
     "owner_type": "State government",
     "api_endpoint": "https://opendata.zerofatalitiesnv.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6566,7 +6566,7 @@
     "owner_name": "Nova Scotia Government",
     "owner_type": "Central government",
     "api_endpoint": "https://openinformation.novascotia.ca/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -6581,7 +6581,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://openperformance.edmonton.ca/api",
-    "dataset_count": 10000,
+    "dataset_count": 9,
     "status": "active"
   },
   {
@@ -6596,7 +6596,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://orlandofl.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 9,
     "status": "active"
   },
   {
@@ -6611,7 +6611,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://oroville-ca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6626,7 +6626,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://paducahky-earlyadopter.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -6641,7 +6641,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://paducahky.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6656,7 +6656,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://palmcoastfl.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6671,7 +6671,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://palmettobayfl-erp.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6686,7 +6686,7 @@
     "owner_name": "Town of Parker",
     "owner_type": "Local government",
     "api_endpoint": "https://parkeronline.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -6701,7 +6701,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://parksreporting.parks.ca.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -6716,7 +6716,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://pasorobles-ca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6731,7 +6731,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://pembrokefl.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6746,7 +6746,7 @@
     "owner_name": "Government of Pennsylvania",
     "owner_type": "Regional government",
     "api_endpoint": "https://pennsylvania.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 7,
     "status": "active"
   },
   {
@@ -6761,7 +6761,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://peoriacounty-il.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7001,7 +7001,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://perrycounty.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -7016,7 +7016,7 @@
     "owner_name": "Delaware Department of Natural Resources and Environmental Control (DNREC)",
     "owner_type": "Regional government",
     "api_endpoint": "https://perspectives.dnrec.delaware.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7031,7 +7031,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://pickenscountyga.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7046,7 +7046,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://pinellasparkpd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 8,
     "status": "active"
   },
   {
@@ -7061,7 +7061,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://pittsburg-ca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7076,7 +7076,7 @@
     "owner_name": "Government of Puerto Rico",
     "owner_type": "Regional government",
     "api_endpoint": "https://www.pivcide.pr/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7091,7 +7091,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://platte-county.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7106,7 +7106,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://pleasantonpd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -7121,7 +7121,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://pleasantville-ny.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7136,7 +7136,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://plymouth-ma.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -7181,7 +7181,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://polkcountytaxcollector-fl.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7196,7 +7196,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://portagecounty-oh.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7211,7 +7211,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://portangeleswa.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7241,7 +7241,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://prospertx.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -7271,7 +7271,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://purcellville.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7286,7 +7286,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://radnortownship.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7301,7 +7301,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://ranchocordovaca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 6,
     "status": "active"
   },
   {
@@ -7316,7 +7316,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://readingpa.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -7331,7 +7331,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://redmond-demo.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -7346,7 +7346,7 @@
     "owner_name": "State of Iowa",
     "owner_type": "Regional government",
     "api_endpoint": "https://results.iowa.gov/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7361,7 +7361,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://rosevillepd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 8,
     "status": "active"
   },
   {
@@ -7376,7 +7376,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://rrps.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 4,
     "status": "active"
   },
   {
@@ -7391,7 +7391,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://rutah-water-consevancy.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7406,7 +7406,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://sacramentoareasewerdistrict.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7421,7 +7421,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://sandag.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7436,7 +7436,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://schoharie-county-of.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7451,7 +7451,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://sdc-stories.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 3,
     "status": "active"
   },
   {
@@ -7466,7 +7466,7 @@
     "owner_name": "City of Seattle",
     "owner_type": "Local government",
     "api_endpoint": "https://seattleperformance.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 3,
     "status": "active"
   },
   {
@@ -7511,7 +7511,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://sidneyoh.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7541,7 +7541,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://slo-co.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 6,
     "status": "active"
   },
   {
@@ -7556,7 +7556,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://soquelcreekwdca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -7571,7 +7571,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://southcarolina-departmentofadministration-reporting.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7586,7 +7586,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://southfultonga.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -7601,7 +7601,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://spokanevalleywa.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7661,7 +7661,7 @@
     "owner_name": "Local Government of Socrata",
     "owner_type": "Local government",
     "api_endpoint": "https://stlouiscounty-performance.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 4,
     "status": "active"
   },
   {
@@ -7691,7 +7691,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://sugarlandtx.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7706,7 +7706,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://summitcountyoh.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -7721,7 +7721,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://sussexco.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7736,7 +7736,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://talbotcountymd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7751,7 +7751,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://tetoncountyid.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7781,7 +7781,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://tollesonaz.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7796,7 +7796,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://townofblufftonsc.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7811,7 +7811,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://townofdennis.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7826,7 +7826,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://townofmarblehead-ma-edp.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7841,7 +7841,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://townofmiamilakes.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7856,7 +7856,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://townofswansboro.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7901,7 +7901,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://trca-epl.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -7916,7 +7916,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://tumwater.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7931,7 +7931,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://txcourts-reporting.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -7946,7 +7946,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://txcourts-staging-reporting.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -7961,7 +7961,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://unioncityhi-reporting.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -7976,7 +7976,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://unioncountyoh.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -7991,7 +7991,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://uppermac.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -8021,7 +8021,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://va-cca-uat.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -8036,7 +8036,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://va-cca.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -8051,7 +8051,7 @@
     "owner_name": "Socrata",
     "owner_type": "Business",
     "api_endpoint": "https://vdh-richmondcity.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -8066,7 +8066,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://vusd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -8081,7 +8081,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://wacotexas.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 3,
     "status": "active"
   },
   {
@@ -8096,7 +8096,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://washoe.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 3,
     "status": "active"
   },
   {
@@ -8111,7 +8111,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://waterloo-ia.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -8126,7 +8126,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://wccusd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -8141,7 +8141,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://weho.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -8156,7 +8156,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://wenatchee-wa.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -8171,7 +8171,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://weslacotx.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -8186,7 +8186,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://westgoshenpa.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -8201,7 +8201,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://westlinnoregon.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -8216,7 +8216,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://westpalmbeach.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -8231,7 +8231,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://wicomicocountymd.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -8246,7 +8246,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://williamsoncountyschools.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -8261,7 +8261,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://woburnma.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -8276,7 +8276,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://woodburycountyia.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -8291,7 +8291,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://wsac.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 4,
     "status": "active"
   },
   {
@@ -8306,7 +8306,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://wyomingpels-dev-reporting.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -8321,7 +8321,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://wyomingpels-reporting.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -8336,7 +8336,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://wyomingpels-uat-reporting.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -8351,7 +8351,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://yorkcountyva.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -8366,7 +8366,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://youth-development-index-cs.demo.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -8381,7 +8381,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://yumaaz.data.socrata.com/api",
-    "dataset_count": 10000,
+    "dataset_count": 9,
     "status": "active"
   }
 ]
