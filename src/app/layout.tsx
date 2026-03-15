@@ -83,11 +83,10 @@ export default function RootLayout({
                   <Link href="/about">About</Link>
                   {' \u00b7 '}
                   <a href="https://github.com/npstorey/civic-ai-tools/issues/new?template=suggest-server.yml&labels=directory-submission" target="_blank" rel="noopener noreferrer">Suggest a Server</a>
-                  {' \u00b7 '}
-                  By <a href="https://nathanstorey.com" target="_blank" rel="noopener noreferrer">Nathan Storey</a>
                 </p>
                 <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '8px 0 0 0', opacity: 0.8 }}>
-                  Personal project. Not affiliated with any employer.
+                  By <a href="https://nathanstorey.com" target="_blank" rel="noopener noreferrer">Nathan Storey</a>
+                  {' \u00b7 '}Personal project{' \u00b7 '}Not affiliated with any employer.
                 </p>
               </div>
             </footer>
