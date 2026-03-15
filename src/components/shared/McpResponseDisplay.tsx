@@ -598,10 +598,16 @@ export default function McpResponseDisplay({
               <button
                 onClick={async () => {
                   const parts: string[] = [];
-                  // Header: query and portal
+                  // Header: query and portal(s)
                   if (queryText) parts.push(`**Query:** ${queryText}`);
-                  const portal = toolsCalled.find(t => t.args.portal)?.args.portal as string | undefined;
-                  if (portal) parts.push(`**Portal:** ${getPortalCity(portal)}`);
+                  const copyPortals = [...new Set(
+                    toolsCalled.map(t => t.args.portal as string).filter(Boolean)
+                  )];
+                  if (copyPortals.length === 1) {
+                    parts.push(`**Portal:** ${getPortalCity(copyPortals[0])}`);
+                  } else if (copyPortals.length > 1) {
+                    parts.push(`**Portals:** ${copyPortals.map(p => getPortalCity(p)).join(', ')}`);
+                  }
                   // Context: narrative and stats
                   if (toolsCalled.length > 0) {
                     const narrative = buildNarrativeSummary(toolsCalled);

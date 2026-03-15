@@ -608,15 +608,21 @@ export function buildNarrativeSummary(
 ): string {
   if (toolsCalled.length === 0) return '';
 
-  // Identify portal and datasets
-  const firstPortal = toolsCalled.find(t => t.args.portal)?.args.portal as string | undefined;
-  const cityName = getPortalCity(firstPortal);
+  // Collect unique portals
+  const portalSet = new Set<string>();
+  for (const tool of toolsCalled) {
+    const p = tool.args.portal as string | undefined;
+    if (p) portalSet.add(p);
+  }
+  const portals = [...portalSet];
+  const isMultiPortal = portals.length > 1;
 
-  const datasets = new Map<string, string>();
+  const datasets = new Map<string, { name: string; portal: string }>();
   for (const tool of toolsCalled) {
     const id = tool.args.dataset_id as string | undefined;
+    const p = tool.args.portal as string | undefined;
     if (id && !datasets.has(id)) {
-      datasets.set(id, getDatasetName(id));
+      datasets.set(id, { name: getDatasetName(id), portal: p || portals[0] || '' });
     }
   }
 
@@ -641,17 +647,28 @@ export function buildNarrativeSummary(
   // Build prefix with dataset context (includes markdown links when portal is known)
   let prefix = '';
   if (datasets.size === 1) {
-    const [id, name] = [...datasets.entries()][0];
-    const url = datasetUrl(firstPortal, id);
+    const [id, { name, portal }] = [...datasets.entries()][0];
+    const cityName = getPortalCity(portal);
+    const url = datasetUrl(portal, id);
     const datasetRef = url ? `[${name} (${id})](${url})` : `${name} (${id})`;
     prefix = `Using ${cityName}'s ${datasetRef}, the AI `;
   } else if (datasets.size > 1) {
     const entries = [...datasets.entries()];
-    const linkedNames = entries.map(([id, name]) => {
-      const url = datasetUrl(firstPortal, id);
-      return url ? `[${name} (${id})](${url})` : `${name} (${id})`;
-    });
-    prefix = `Using ${linkedNames.length} ${cityName} datasets (${linkedNames.join(', ')}), the AI `;
+    if (isMultiPortal) {
+      const linkedNames = entries.map(([id, { name, portal }]) => {
+        const cityName = getPortalCity(portal);
+        const url = datasetUrl(portal, id);
+        return url ? `${cityName}'s [${name} (${id})](${url})` : `${cityName}'s ${name} (${id})`;
+      });
+      prefix = `Using ${linkedNames.join(' and ')}, the AI `;
+    } else {
+      const cityName = getPortalCity(portals[0]);
+      const linkedNames = entries.map(([id, { name, portal }]) => {
+        const url = datasetUrl(portal, id);
+        return url ? `[${name} (${id})](${url})` : `${name} (${id})`;
+      });
+      prefix = `Using ${linkedNames.length} ${cityName} datasets (${linkedNames.join(', ')}), the AI `;
+    }
   } else {
     prefix = 'The AI ';
   }
@@ -708,16 +725,27 @@ export function buildProvenanceLine(
 
   const parts: string[] = [];
 
-  const firstPortal = tools.find(t => t.args.portal)?.args.portal as string | undefined;
-  if (firstPortal) {
-    const city = getPortalCity(firstPortal);
-    parts.push(`${city} Open Data`);
+  // Collect unique portals from all tool calls
+  const portalSet = new Set<string>();
+  for (const tool of tools) {
+    const p = tool.args.portal as string | undefined;
+    if (p) portalSet.add(p);
+  }
+  const portals = [...portalSet];
+
+  if (portals.length === 1) {
+    parts.push(`${getPortalCity(portals[0])} Open Data`);
+  } else if (portals.length > 1) {
+    const cities = portals.map(p => getPortalCity(p)).filter(c => c !== 'open data');
+    if (cities.length > 0) {
+      parts.push(`${cities.join(' + ')} Open Data`);
+    }
   }
 
   const seen = new Set<string>();
   for (const tool of queryTools) {
     const did = tool.args.dataset_id as string | undefined;
-    const portal = (tool.args.portal as string | undefined) || firstPortal;
+    const portal = (tool.args.portal as string | undefined) || portals[0];
     if (did && !seen.has(did)) {
       seen.add(did);
       const name = getDatasetName(did);
