@@ -21,12 +21,12 @@ export default function LearnPage() {
 
         <p style={{ fontSize: '20px', lineHeight: '150%', color: 'var(--text-secondary)', marginBottom: '16px' }}>
           This demo runs the same question through the same AI model twice &mdash; once
-          with only its training knowledge, once with live access to government
-          databases through a protocol called MCP (Model Context Protocol).
+          with only its training knowledge, once with live access to open data
+          portals through a protocol called MCP (Model Context Protocol).
         </p>
         <p style={prose}>
           The side-by-side comparison reveals something important: for factual
-          questions about civic data, an AI without access to current databases
+          questions about civic data, an AI without access to current open data portals
           will hedge, generalize, and sometimes fabricate specifics. The same AI
           with structured data access can cite real numbers from real datasets.
         </p>
@@ -147,9 +147,10 @@ export default function LearnPage() {
             MCP (Model Context Protocol)
           </a>{' '}
           is an open standard that gives AI models structured access to external tools and data
-          sources. Unlike web search, which retrieves articles <em>about</em> data, MCP lets the AI
-          query databases directly &mdash; running the same kind of structured queries a data analyst
-          would write.
+          sources. In a similar way that web search tools connect AI to live website data, MCP
+          connects AI models to live government data portals. But unlike web search, which
+          retrieves articles <em>about</em> data, MCP lets the AI query databases
+          directly &mdash; running the same kind of structured queries a data analyst would write.
         </p>
         <p style={prose}>
           When you ask a question in the demo, the AI searches a catalog of civic datasets, examines
@@ -340,7 +341,7 @@ export default function LearnPage() {
 
         <p style={prose}>
           Several additional factors affect the quality of AI responses beyond data access.
-          These matter most if you&apos;re thinking about building your own tools.
+          These factors affect every query, whether you&apos;re exploring data on this site or building your own tools.
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -365,6 +366,7 @@ export default function LearnPage() {
               <li><strong>Cost</strong> &mdash; Premium models cost more per query</li>
               <li><strong>Reasoning ability</strong> &mdash; Complex queries need capable models</li>
               <li><strong>Tool calling</strong> &mdash; Not all models reliably use external tools</li>
+              <li><strong>Ethical considerations</strong> &mdash; AI model providers have different approaches to data privacy, environmental impact, and labor practices. Consider these factors alongside performance when choosing a model.</li>
             </ul>
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '12px', fontStyle: 'italic' }}>
               This demo lets you compare different models on the same query.
@@ -414,7 +416,7 @@ export default function LearnPage() {
               LLMs have a finite context window. System prompts, conversation history, tool results,
               and the response itself all compete for that space. This demo uses a fresh context for
               each query, maximizing room for reasoning. In longer sessions (Claude Code, Cursor),
-              older context is automatically summarized to free space &mdash; which is why the same
+              older context is automatically summarized to free space &mdash; which is one reason why the same
               query can produce different results in different environments.
             </p>
           </div>

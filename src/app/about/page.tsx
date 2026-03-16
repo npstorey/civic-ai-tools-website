@@ -60,44 +60,33 @@ export default function AboutPage() {
             Technologies&apos; Socrata platform (formerly Socrata, now Tyler Data &amp; Insights).
             This is the server powering the demo on this website.
             Install via <code style={{ fontSize: '14px' }}>npx socrata-mcp-server</code> or clone
-            the repo. A live directory of all Socrata-hosted domains is available via the{' '}
-              <a
-                href="https://dev.socrata.com/docs/endpoints.html"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Socrata Discovery API
-              </a>
-              . For a broader directory of open data portals across all platforms, see{' '}
-              <a
-                href="https://dataportals.org"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                dataportals.org
-              </a>.
+            the repo.{' '}
+            <Link href="/directory">Browse the directory</Link> to see the MCP servers and
+            2,000+ open data portals they connect to.
           </li>
           <li>
             <strong>Curated MCP server directory</strong> &mdash; a{' '}
-            <a
-              href="https://github.com/npstorey/civic-ai-tools/blob/main/docs/mcp-servers.md"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              growing directory
-            </a>{' '}
-            of MCP servers for civic and government data, including official servers from the US
-            Census Bureau, the Government Publishing Office, and France&apos;s data.gouv.fr. The
-            starter repo pre-configures the best ones for immediate use. Know of a civic data MCP
-            server that should be in the directory?{' '}
+            <Link href="/directory">growing directory</Link> of MCP servers for civic and
+            government data, including official servers from the US Census Bureau, the Government
+            Publishing Office, and France&apos;s data.gouv.fr. The starter repo pre-configures the
+            best ones for immediate use. Know of a civic data MCP server that should be in the
+            directory?{' '}
             <a href="https://nathanstorey.com/contact/" target="_blank" rel="noopener noreferrer">
               Get in touch
             </a>.
           </li>
           <li>
             <strong>Skill guidance</strong> &mdash; structured instructions that teach AI models how
-            to query civic data accurately: SoQL patterns, date handling, case-insensitive matching,
-            zero-result verification, and dataset-specific knowledge. Coming soon: crowdsourced
+            to query civic data accurately:{' '}
+            <a
+              href="https://github.com/npstorey/civic-ai-tools/blob/main/docs/skills/base.md"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              SoQL patterns, date handling, case-insensitive matching, zero-result verification, and
+              dataset-specific knowledge
+            </a>
+            . Coming soon: crowdsourced
             guidance variants for specific sectors (public safety, housing, transportation, health)
             and a governance framework for evaluating how guidance affects result quality.
           </li>
