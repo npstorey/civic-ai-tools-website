@@ -54,7 +54,7 @@ export default function Home() {
       <div style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 24px 0' }}>
         {/* Hero Section */}
         <div style={{ textAlign: 'center', marginBottom: '24px', paddingTop: '40px' }}>
-          <h1 style={{ marginBottom: '8px', fontSize: '36px', fontWeight: 500 }}>
+          <h1 style={{ marginBottom: '8px' }}>
             Explore Open Data with AI
           </h1>
           <p

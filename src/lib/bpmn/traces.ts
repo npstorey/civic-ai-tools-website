@@ -288,7 +288,7 @@ const multiStepRestaurant: PreRecordedTrace = {
 const filteredNoise: PreRecordedTrace = {
   id: 'filtered-noise',
   title: 'Noise complaints in Brooklyn in 2024',
-  chipLabel: 'Noise in Brooklyn, 2024',
+  chipLabel: 'Noise complaints, 2024',
   query: 'Noise complaints in Brooklyn in 2024',
   model: 'anthropic/claude-sonnet-4',
   portal: 'data.cityofnewyork.us',

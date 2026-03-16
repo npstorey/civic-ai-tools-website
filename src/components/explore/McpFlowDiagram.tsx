@@ -396,6 +396,7 @@ export default function McpFlowDiagram() {
                 progressGroups={liveTrace.progressGroups}
                 toolsCalled={liveTrace.toolsCalled}
                 queryText={liveQueryText}
+                onAbort={handleLiveCancel}
               />
             )}
           </div>

@@ -312,6 +312,37 @@ const provenanceComponents = {
   ),
 };
 
+// Detect if the AI's response appears incomplete or budget-exhausted
+function detectIncompleteResponse(content: string): boolean {
+  if (!content || content.length < 50) return false;
+
+  // Check for phrases indicating the AI couldn't finish
+  const incompletePatterns = [
+    /i couldn'?t complete/i,
+    /ran out of/i,
+    /if you'?d like me to continue/i,
+    /let me know how you would like to proceed/i,
+    /would you like me to\b/i,
+    /i was(n'?t| not) able to finish/i,
+    /due to (?:token |tool[ -]?call )?limits?/i,
+    /budget (?:was )?(?:exceeded|exhausted|reached)/i,
+  ];
+
+  for (const pattern of incompletePatterns) {
+    if (pattern.test(content)) return true;
+  }
+
+  // Check if response ends mid-sentence (last paragraph doesn't end with terminal punctuation)
+  const trimmed = content.trimEnd();
+  const paragraphs = trimmed.split(/\n\n+/);
+  const lastParagraph = paragraphs[paragraphs.length - 1].trim();
+  if (lastParagraph.length > 20 && !/[.!?:)\]"'`*]$/.test(lastParagraph)) {
+    return true;
+  }
+
+  return false;
+}
+
 export default function McpResponseDisplay({
   content,
   queryText,
@@ -337,6 +368,9 @@ export default function McpResponseDisplay({
   const hasProgressLog = progressLog.length > 0;
   const showActiveProgress = (hasProgressLog || hasGroups) && !content;
   const showContent = !!content;
+
+  // Detect heuristic incompleteness (only when explicit token_limit_exceeded banner won't show)
+  const showIncompleteBanner = isComplete && !!content && !token_limit_exceeded && detectIncompleteResponse(content);
 
   // Auto-scroll when enabled
   useEffect(() => {
@@ -474,6 +508,33 @@ export default function McpResponseDisplay({
                 <ReactMarkdown components={provenanceComponents}>
                   {provenance}
                 </ReactMarkdown>
+              </div>
+            )}
+
+            {/* Heuristic incomplete-response banner */}
+            {showIncompleteBanner && (
+              <div
+                style={{
+                  marginTop: '16px',
+                  padding: '10px 14px',
+                  backgroundColor: 'rgba(230, 168, 23, 0.08)',
+                  borderLeft: '3px solid #e6a817',
+                  borderRadius: '0 4px 4px 0',
+                  fontSize: '14px',
+                  color: '#6b5900',
+                  lineHeight: '1.5',
+                }}
+              >
+                Analysis may be incomplete. This demo has token and tool-call limits that can cut short complex queries. For the full analysis with no limits,{' '}
+                <a
+                  href="https://github.com/npstorey/civic-ai-tools"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: '#6b5900', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+                >
+                  run locally
+                </a>{' '}
+                with Claude Code or Cursor.
               </div>
             )}
           </div>

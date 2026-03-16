@@ -29,6 +29,7 @@ interface LiveResponsePanelProps {
   queryText?: string;
   exampleStatus?: ExampleStatus;
   completionCta?: React.ReactNode;
+  onAbort?: () => void;
 }
 
 export default function LiveResponsePanel({
@@ -43,6 +44,7 @@ export default function LiveResponsePanel({
   queryText,
   exampleStatus,
   completionCta,
+  onAbort,
 }: LiveResponsePanelProps) {
   const [timeoutMessage, setTimeoutMessage] = useState<string | null>(null);
   const [isProminent, setIsProminent] = useState(false);
@@ -174,12 +176,40 @@ export default function LiveResponsePanel({
         }}>
           {timeoutMessage === '__too_complex__' ? (
             <>
-              This query may be too complex for the live demo. You can{' '}
-              <a href="/" style={{ color: 'var(--nyc-blue)' }}>try a simpler question</a>, or{' '}
-              <a href="https://github.com/npstorey/civic-ai-tools" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--nyc-blue)' }}>
-                run locally
-              </a>{' '}
-              for more powerful analysis with no limits.
+              <div>
+                This query is taking longer than usual. Complex queries on this demo are subject to token and tool-call limits &mdash; the analysis may be cut short. Don&apos;t close this tab &mdash; results will appear when complete.
+              </div>
+              <div style={{ marginTop: '6px', fontSize: '13px', color: 'var(--text-muted)', fontWeight: 400 }}>
+                {onAbort && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={onAbort}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        fontSize: '13px',
+                        color: 'var(--text-muted)',
+                        textDecoration: 'underline',
+                        textUnderlineOffset: '2px',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      Cancel query
+                    </button>
+                    <span style={{ margin: '0 6px' }}>&middot;</span>
+                  </>
+                )}
+                <a href="/" style={{ color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+                  Try a simpler question
+                </a>
+                <span style={{ margin: '0 6px' }}>&middot;</span>
+                <a href="https://github.com/npstorey/civic-ai-tools" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+                  Run locally (no limits)
+                </a>
+              </div>
             </>
           ) : (
             timeoutMessage
