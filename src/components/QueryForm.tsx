@@ -21,7 +21,7 @@ interface QueryFormProps {
 const EXAMPLE_QUERIES = [
   { text: 'Noise trends in NYC', portal: 'data.cityofnewyork.us' },
   { text: 'Top restaurant violations in SF', portal: 'data.sfgov.org' },
-  { text: 'NYC vs Chicago 311 response times', portal: '' },
+  { text: 'Top 311 complaints: NYC vs SF', portal: '' },
 ];
 
 const PORTALS = [
@@ -116,7 +116,7 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
               }
             }
           }}
-          placeholder="What are the most common 311 complaints in NYC?"
+          placeholder="What data is available about child care in NYC?"
           rows={1}
           disabled={isLoading}
           aria-label="Ask a question about open data"

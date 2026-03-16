@@ -39,8 +39,8 @@ export interface CompletionResult {
 }
 
 // Token safety limits (configurable via env vars)
-const MAX_TOKENS_PER_REQUEST = Number(process.env.TOKEN_LIMIT_PER_REQUEST) || 100_000;
-const MAX_TOOL_RESULT_CHARS = Number(process.env.MAX_TOOL_RESULT_CHARS) || 25_000;
+const MAX_TOKENS_PER_REQUEST = Number(process.env.TOKEN_LIMIT_PER_REQUEST) || 200_000;
+const MAX_TOOL_RESULT_CHARS = Number(process.env.MAX_TOOL_RESULT_CHARS) || 50_000;
 
 // Truncate large tool results to limit input token growth
 function truncateToolResult(result: string): string {
@@ -86,7 +86,7 @@ export async function queryWithoutMcpStreaming(
     const stream = await openrouter.chat.completions.create({
       model,
       messages,
-      max_tokens: 2000,
+      max_tokens: 4000,
       stream: true,
     });
 
@@ -144,11 +144,11 @@ export async function queryWithMcpStreaming(
       messages,
       tools,
       tool_choice: 'auto',
-      max_tokens: 2000,
+      max_tokens: 4000,
     });
 
     let iterations = 0;
-    const maxIterations = 10;
+    const maxIterations = 20;
     let cumulativeTokens = response.usage?.total_tokens || 0;
     let cumulativePromptTokens = response.usage?.prompt_tokens || 0;
     let cumulativeCompletionTokens = response.usage?.completion_tokens || 0;
@@ -238,7 +238,7 @@ export async function queryWithMcpStreaming(
         messages,
         tools,
         tool_choice: 'auto',
-        max_tokens: 2000,
+        max_tokens: 4000,
       });
 
       // Track cumulative tokens
@@ -280,7 +280,7 @@ export async function queryWithMcpStreaming(
             content: 'Based on all the data you have collected from the tool calls above, please provide a comprehensive answer to my original question. Summarize the key findings.',
           },
         ],
-        max_tokens: 2000,
+        max_tokens: 4000,
         stream: true,
       });
 
@@ -350,7 +350,7 @@ export async function queryWithMcpStreaming(
       const finalStream = await openrouter.chat.completions.create({
         model,
         messages,
-        max_tokens: 2000,
+        max_tokens: 4000,
         stream: true,
       });
 
