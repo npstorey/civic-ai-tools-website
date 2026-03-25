@@ -192,11 +192,88 @@ function detectAggregationType(select: string): string | null {
   return null;
 }
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const SHORT_MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+function extractDateDescription(where: string): string | null {
+  // Single-day: column = 'YYYY-MM-DD'
+  const singleDayMatch = where.match(/\w+\s*=\s*'(\d{4})-(\d{2})-(\d{2})'/);
+  if (singleDayMatch) {
+    const [, y, m, d] = singleDayMatch;
+    return `on ${MONTH_NAMES[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, ${y}`;
+  }
+
+  // Range: >= 'YYYY-MM-DD' AND column < 'YYYY-MM-DD'
+  const rangeMatch = where.match(
+    />=?\s*'(\d{4})-(\d{2})-(\d{2})'\s+AND\s+\w+\s*<\s*'(\d{4})-(\d{2})-(\d{2})'/i,
+  );
+  if (rangeMatch) {
+    const [, sy, sm, sd, ey, em, ed] = rangeMatch;
+    const startDay = parseInt(sd, 10);
+    const endDay = parseInt(ed, 10);
+    const startMonth = parseInt(sm, 10);
+    const endMonth = parseInt(em, 10);
+    const startYear = parseInt(sy, 10);
+    const endYear = parseInt(ey, 10);
+
+    // Exact calendar month: 1st of month to 1st of next month
+    const isOneMonth =
+      startDay === 1 &&
+      endDay === 1 &&
+      (endYear - startYear) * 12 + (endMonth - startMonth) === 1;
+    if (isOneMonth) {
+      return `for ${MONTH_NAMES[startMonth - 1]} ${sy}`;
+    }
+
+    // Sub-month or arbitrary range — show end as exclusive (day before)
+    const endDate = new Date(Date.UTC(endYear, endMonth - 1, endDay));
+    endDate.setUTCDate(endDate.getUTCDate() - 1);
+    const adjEndMonth = endDate.getUTCMonth(); // 0-indexed
+    const adjEndDay = endDate.getUTCDate();
+    const adjEndYear = endDate.getUTCFullYear();
+
+    if (startYear === adjEndYear) {
+      if (startMonth - 1 === adjEndMonth) {
+        // Same month: "from Mar 1–7, 2026"
+        return `from ${SHORT_MONTHS[startMonth - 1]} ${startDay}–${adjEndDay}, ${sy}`;
+      }
+      // Different months, same year: "from Feb 15 – Mar 7, 2026"
+      return `from ${SHORT_MONTHS[startMonth - 1]} ${startDay} – ${SHORT_MONTHS[adjEndMonth]} ${adjEndDay}, ${sy}`;
+    }
+    // Different years: "from Dec 15, 2025 – Jan 7, 2026"
+    return `from ${SHORT_MONTHS[startMonth - 1]} ${startDay}, ${sy} – ${SHORT_MONTHS[adjEndMonth]} ${adjEndDay}, ${adjEndYear}`;
+  }
+
+  // Open-ended start: >= 'YYYY-MM-DD' with no upper bound
+  const openStartMatch = where.match(/>=?\s*'(\d{4})-(\d{2})-(\d{2})'/);
+  if (openStartMatch) {
+    const [, y, m, d] = openStartMatch;
+    const day = parseInt(d, 10);
+    const month = parseInt(m, 10);
+    if (day === 1) {
+      return `since ${MONTH_NAMES[month - 1]} ${y}`;
+    }
+    return `since ${SHORT_MONTHS[month - 1]} ${day}, ${y}`;
+  }
+
+  // Bare year fallback: extract_y(...) = 2026 or just a year in quotes
+  const yearMatch = where.match(/(?:'|)(20\d{2})(?:'|)/);
+  if (yearMatch) return `for ${yearMatch[1]}`;
+
+  return null;
+}
+
 function extractFilterDescription(where: string): string | null {
   const parts: string[] = [];
 
-  const yearMatch = where.match(/(?:'|)(20\d{2})(?:'|)/);
-  if (yearMatch) parts.push(`for ${yearMatch[1]}`);
+  const datePart = extractDateDescription(where);
+  if (datePart) parts.push(datePart);
 
   const boroMatch = where.match(/(?:borough|boro|neighborhood)\s*(?:=|ILIKE)\s*'([^']+)'/i);
   if (boroMatch) parts.push(`in ${boroMatch[1].replace(/%/g, '')}`);
