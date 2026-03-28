@@ -85,6 +85,8 @@ Be honest if you don't have access to current or real-time data.`;
     // Run queries (both in parallel, or MCP-only when mcpOnly flag is set)
     const runQueries = async () => {
       try {
+        const MCP_TOOL_TIMEOUT_MS = 45_000; // 45s timeout per individual tool call
+
         const mcpQuery = queryWithMcpStreaming(
           query,
           model,
@@ -93,7 +95,18 @@ Be honest if you don't have access to current or real-time data.`;
             if (!args.portal) {
               args.portal = portal;
             }
-            return callMcpTool(name, args);
+            // Race the MCP call against a timeout so one slow tool call
+            // cannot hang the entire SSE stream indefinitely.
+            const result = await Promise.race([
+              callMcpTool(name, args),
+              new Promise<never>((_, reject) =>
+                setTimeout(
+                  () => reject(new Error(`MCP tool "${name}" timed out after ${MCP_TOOL_TIMEOUT_MS / 1000}s`)),
+                  MCP_TOOL_TIMEOUT_MS,
+                )
+              ),
+            ]);
+            return result;
           },
           systemPromptWithMcp,
           callbacks

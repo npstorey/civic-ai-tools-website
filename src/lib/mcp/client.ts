@@ -1,4 +1,5 @@
 const MCP_URL = process.env.SOCRATA_MCP_URL || 'https://socrata-mcp.civicaitools.org';
+const MCP_TIMEOUT_MS = 45_000; // 45-second timeout for MCP server requests
 
 interface McpToolResult {
   content?: Array<{
@@ -8,30 +9,49 @@ interface McpToolResult {
   error?: string;
 }
 
+function createTimeoutSignal(ms: number): { signal: AbortSignal; clear: () => void } {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return { signal: controller.signal, clear: () => clearTimeout(timer) };
+}
+
 // Session management
 let sessionId: string | null = null;
 
 async function initializeSession(): Promise<string> {
-  const response = await fetch(`${MCP_URL}/mcp`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json, text/event-stream',
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: Date.now(),
-      method: 'initialize',
-      params: {
-        protocolVersion: '2024-11-05',
-        capabilities: {},
-        clientInfo: {
-          name: 'civic-ai-tools-website',
-          version: '1.0.0',
-        },
+  const { signal, clear } = createTimeoutSignal(MCP_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(`${MCP_URL}/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream',
       },
-    }),
-  });
+      signal,
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method: 'initialize',
+        params: {
+          protocolVersion: '2024-11-05',
+          capabilities: {},
+          clientInfo: {
+            name: 'civic-ai-tools-website',
+            version: '1.0.0',
+          },
+        },
+      }),
+    });
+  } catch (error) {
+    clear();
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error(`MCP server did not respond within ${MCP_TIMEOUT_MS / 1000}s — the upstream server may be starting up or unresponsive. Please try again.`);
+    }
+    throw error;
+  } finally {
+    clear();
+  }
 
   if (!response.ok) {
     throw new Error(`MCP initialization failed: ${response.status}`);
@@ -67,20 +87,33 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
 async function makeToolCall(name: string, args: Record<string, unknown>): Promise<string> {
   console.log('[MCP] Calling tool:', name, 'with args:', JSON.stringify(args));
 
-  const response = await fetch(`${MCP_URL}/mcp`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json, text/event-stream',
-      'mcp-session-id': sessionId!,
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: Date.now(),
-      method: 'tools/call',
-      params: { name, arguments: args },
-    }),
-  });
+  const { signal, clear } = createTimeoutSignal(MCP_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(`${MCP_URL}/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream',
+        'mcp-session-id': sessionId!,
+      },
+      signal,
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method: 'tools/call',
+        params: { name, arguments: args },
+      }),
+    });
+  } catch (error) {
+    clear();
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error(`MCP tool call "${name}" timed out after ${MCP_TIMEOUT_MS / 1000}s — the data source may be slow or unresponsive. Try a simpler query.`);
+    }
+    throw error;
+  } finally {
+    clear();
+  }
 
   if (!response.ok) {
     console.error('[MCP] Server error:', response.status, response.statusText);
