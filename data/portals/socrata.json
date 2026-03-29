@@ -161,7 +161,7 @@
     "owner_name": "Generalitat de Catalunya",
     "owner_type": "Regional government",
     "api_endpoint": "https://analisi.transparenciacatalunya.cat/api",
-    "dataset_count": 1051,
+    "dataset_count": 1055,
     "status": "active"
   },
   {
@@ -911,7 +911,7 @@
     "owner_name": "Centers for Disease Control and Prevention",
     "owner_type": "Central government",
     "api_endpoint": "https://chronicdata.cdc.gov/api",
-    "dataset_count": 1105,
+    "dataset_count": 1106,
     "status": "active"
   },
   {
@@ -1541,7 +1541,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://clatsop.data.socrata.com/api",
-    "dataset_count": 5,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -2066,7 +2066,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://data.bayareametro.gov/api",
-    "dataset_count": 2136,
+    "dataset_count": 2140,
     "status": "active"
   },
   {
@@ -2186,7 +2186,7 @@
     "owner_name": "Centers for Disease Control and Prevention",
     "owner_type": "Central government",
     "api_endpoint": "https://data.cdc.gov/api",
-    "dataset_count": 1105,
+    "dataset_count": 1106,
     "status": "active"
   },
   {
@@ -2306,7 +2306,7 @@
     "owner_name": "City of New York",
     "owner_type": "Local government",
     "api_endpoint": "https://data.cityofnewyork.us/api",
-    "dataset_count": 2386,
+    "dataset_count": 2391,
     "status": "active"
   },
   {
@@ -2336,7 +2336,7 @@
     "owner_name": "State of Colorado",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.colorado.gov/api",
-    "dataset_count": 632,
+    "dataset_count": 633,
     "status": "active"
   },
   {
@@ -2381,7 +2381,7 @@
     "owner_name": "City of College Station",
     "owner_type": "Local government",
     "api_endpoint": "https://data.cstx.gov/api",
-    "dataset_count": 15,
+    "dataset_count": 16,
     "status": "active"
   },
   {
@@ -2561,7 +2561,7 @@
     "owner_name": "City of Fort Worth",
     "owner_type": "Local government",
     "api_endpoint": "https://data.fortworthtexas.gov/api",
-    "dataset_count": 0,
+    "dataset_count": 10,
     "status": "active"
   },
   {
@@ -2711,7 +2711,7 @@
     "owner_name": "City of Kansas, MO",
     "owner_type": "Local government",
     "api_endpoint": "https://data.kcmo.org/api",
-    "dataset_count": 200,
+    "dataset_count": 201,
     "status": "active"
   },
   {
@@ -2726,7 +2726,7 @@
     "owner_name": "King County, WA",
     "owner_type": "Local government",
     "api_endpoint": "https://data.kingcounty.gov/api",
-    "dataset_count": 0,
+    "dataset_count": 265,
     "status": "active"
   },
   {
@@ -2936,7 +2936,7 @@
     "owner_name": "Montgomery County",
     "owner_type": "Local government",
     "api_endpoint": "https://data.montgomerycountymd.gov/api",
-    "dataset_count": 455,
+    "dataset_count": 457,
     "status": "active"
   },
   {
@@ -3101,7 +3101,7 @@
     "owner_name": "State of New York",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.ny.gov/api",
-    "dataset_count": 1005,
+    "dataset_count": 993,
     "status": "active"
   },
   {
@@ -3191,7 +3191,7 @@
     "owner_name": "State of Oregon",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.oregon.gov/api",
-    "dataset_count": 488,
+    "dataset_count": 494,
     "status": "active"
   },
   {
@@ -3266,7 +3266,7 @@
     "owner_name": "Prince George County",
     "owner_type": "Local government",
     "api_endpoint": "https://data.princegeorgescountymd.gov/api",
-    "dataset_count": 63,
+    "dataset_count": 58,
     "status": "active"
   },
   {
@@ -3401,7 +3401,7 @@
     "owner_name": "County of Santa Clara",
     "owner_type": "Local government",
     "api_endpoint": "https://data.sccgov.org/api",
-    "dataset_count": 140,
+    "dataset_count": 136,
     "status": "active"
   },
   {
@@ -3536,7 +3536,7 @@
     "owner_name": "State of Texas",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.texas.gov/api",
-    "dataset_count": 765,
+    "dataset_count": 795,
     "status": "active"
   },
   {
@@ -3641,7 +3641,7 @@
     "owner_name": "State of Vermont",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.vermont.gov/api",
-    "dataset_count": 168,
+    "dataset_count": 170,
     "status": "active"
   },
   {
@@ -3671,7 +3671,7 @@
     "owner_name": "State of Washington",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.wa.gov/api",
-    "dataset_count": 1069,
+    "dataset_count": 1066,
     "status": "active"
   },
   {
@@ -3731,7 +3731,7 @@
     "owner_name": "City of Winnipeg",
     "owner_type": "Local government",
     "api_endpoint": "https://data.winnipeg.ca/api",
-    "dataset_count": 217,
+    "dataset_count": 218,
     "status": "active"
   },
   {
@@ -3791,7 +3791,7 @@
     "owner_name": "City of Austin",
     "owner_type": "Local government",
     "api_endpoint": "https://datahub.austintexas.gov/api",
-    "dataset_count": 709,
+    "dataset_count": 708,
     "status": "active"
   },
   {
@@ -3836,7 +3836,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://datahub.transportation.gov/api",
-    "dataset_count": 436,
+    "dataset_count": 395,
     "status": "active"
   },
   {
@@ -3926,7 +3926,7 @@
     "owner_name": "Regione Lombaria",
     "owner_type": "Regional government",
     "api_endpoint": "https://dati.lombardia.it/api",
-    "dataset_count": 2887,
+    "dataset_count": 2897,
     "status": "active"
   },
   {
@@ -3941,7 +3941,7 @@
     "owner_name": "Ministerio de Tecnologías de la Información y las Comunicaciones",
     "owner_type": "Central government",
     "api_endpoint": "https://www.datos.gov.co/api",
-    "dataset_count": 8388,
+    "dataset_count": 8395,
     "status": "active"
   },
   {
@@ -4181,7 +4181,7 @@
     "owner_name": "Commonwealth of Massachusetts",
     "owner_type": "Regional government",
     "api_endpoint": "https://educationtocareer.data.mass.gov/api",
-    "dataset_count": 86,
+    "dataset_count": 88,
     "status": "active"
   },
   {
@@ -6281,7 +6281,7 @@
     "owner_name": "State of Iowa",
     "owner_type": "Regional government",
     "api_endpoint": "https://mydata.iowa.gov/api",
-    "dataset_count": 416,
+    "dataset_count": 432,
     "status": "active"
   },
   {
@@ -6716,7 +6716,7 @@
     "owner_name": "City of Fort Collins",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.fcgov.com/api",
-    "dataset_count": 79,
+    "dataset_count": 80,
     "status": "active"
   },
   {
@@ -7901,7 +7901,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://siouxfalls.data.socrata.com/api",
-    "dataset_count": 14,
+    "dataset_count": 15,
     "status": "active"
   },
   {
