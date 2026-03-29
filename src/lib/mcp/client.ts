@@ -75,8 +75,10 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
   try {
     return await makeToolCall(name, args);
   } catch (error) {
-    // If session expired, try reinitializing
-    if (error instanceof Error && error.message.includes('session')) {
+    // If session expired or rejected (400 = invalid session on server restart), reinitialize
+    if (error instanceof Error && (error.message.includes('session') || error.message.includes('400'))) {
+      console.log('[MCP] Session rejected, reinitializing...');
+      sessionId = null;
       sessionId = await initializeSession();
       return await makeToolCall(name, args);
     }
@@ -186,8 +188,10 @@ export async function callMcpPrompt(name: string, args: Record<string, string>):
   try {
     return await makePromptCall(name, args);
   } catch (error) {
-    // If session expired, try reinitializing
-    if (error instanceof Error && error.message.includes('session')) {
+    // If session expired or rejected (400 = invalid session on server restart), reinitialize
+    if (error instanceof Error && (error.message.includes('session') || error.message.includes('400'))) {
+      console.log('[MCP] Session rejected, reinitializing...');
+      sessionId = null;
       sessionId = await initializeSession();
       return await makePromptCall(name, args);
     }
