@@ -29,6 +29,9 @@ interface McpResponseDisplayProps {
   portal?: string;
   model?: string;
   evidenceTrace?: EvidenceTrace | null;
+  publishDialogOpen?: boolean;
+  onPublishDialogChange?: (open: boolean) => void;
+  onSaveForSignIn?: () => void;
   onContinue?: (continuationPrompt: string) => void;
 }
 
@@ -365,12 +368,22 @@ export default function McpResponseDisplay({
   portal,
   model,
   evidenceTrace,
+  publishDialogOpen: publishDialogOpenProp,
+  onPublishDialogChange,
+  onSaveForSignIn,
   onContinue,
 }: McpResponseDisplayProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
-  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [publishDialogOpenLocal, setPublishDialogOpenLocal] = useState(false);
   const { data: session } = useSession();
+
+  // Use parent-controlled state if provided, otherwise local
+  const publishDialogOpen = publishDialogOpenProp ?? publishDialogOpenLocal;
+  const setPublishDialogOpen = (open: boolean) => {
+    if (onPublishDialogChange) onPublishDialogChange(open);
+    else setPublishDialogOpenLocal(open);
+  };
 
   const canPublish = isComplete && !!content && !!evidenceTrace && toolsCalled.length > 0;
 
@@ -763,6 +776,7 @@ export default function McpResponseDisplay({
               <button
                 onClick={() => {
                   if (!session?.user) {
+                    onSaveForSignIn?.();
                     signIn('github');
                   } else {
                     setPublishDialogOpen(true);
