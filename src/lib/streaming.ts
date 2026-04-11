@@ -1,5 +1,5 @@
 // Types for streaming events
-export type StreamEventType = 'progress' | 'token' | 'complete' | 'error';
+export type StreamEventType = 'progress' | 'token' | 'complete' | 'error' | 'trace';
 export type PanelType = 'withMcp' | 'withoutMcp';
 
 export interface StreamEvent {

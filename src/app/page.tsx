@@ -6,12 +6,12 @@ import QueryForm from '@/components/QueryForm';
 import ComparisonDisplay from '@/components/ComparisonDisplay';
 import { useStreamingComparison } from '@/hooks/useStreamingComparison';
 
-
 export default function Home() {
   const [queryCount, setQueryCount] = useState(0);
   const [usedModel, setUsedModel] = useState<string>('');
   const [lastQuery, setLastQuery] = useState<string>('');
   const [lastPortal, setLastPortal] = useState<string>('');
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const streaming = useStreamingComparison();
@@ -108,6 +108,10 @@ export default function Home() {
             streamingWithMcp={streaming.withMcp}
             queryText={lastQuery}
             portal={lastPortal}
+            model={usedModel}
+            evidenceTrace={streaming.evidenceTrace}
+            publishDialogOpen={publishDialogOpen}
+            onPublishDialogChange={setPublishDialogOpen}
             onContinue={handleContinue}
           />
           {(streaming.withoutMcp.isComplete && streaming.withMcp.isComplete) && (

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import ResponsePanel from './ResponsePanel';
 
-import type { ProgressLogEntry, ProgressGroup } from '@/hooks/useStreamingComparison';
+import type { ProgressLogEntry, ProgressGroup, EvidenceTrace } from '@/hooks/useStreamingComparison';
 
 interface ToolCall {
   name: string;
@@ -42,6 +42,10 @@ interface ComparisonDisplayProps {
   streamingWithMcp?: StreamingPanelState;
   queryText?: string;
   portal?: string;
+  model?: string;
+  evidenceTrace?: EvidenceTrace | null;
+  publishDialogOpen?: boolean;
+  onPublishDialogChange?: (open: boolean) => void;
   onContinue?: (continuationPrompt: string) => void;
 }
 
@@ -67,6 +71,10 @@ export default function ComparisonDisplay({
   streamingWithMcp,
   queryText,
   portal,
+  model,
+  evidenceTrace,
+  publishDialogOpen,
+  onPublishDialogChange,
   onContinue,
 }: ComparisonDisplayProps) {
   const isMobile = useMediaQuery('(max-width: 640px)');
@@ -109,6 +117,10 @@ export default function ComparisonDisplay({
       progressGroups={streamingWithMcp?.progressGroups}
       queryText={queryText}
       portal={portal}
+      model={model}
+      evidenceTrace={evidenceTrace}
+      publishDialogOpen={publishDialogOpen}
+      onPublishDialogChange={onPublishDialogChange}
       onContinue={onContinue}
     />
   );

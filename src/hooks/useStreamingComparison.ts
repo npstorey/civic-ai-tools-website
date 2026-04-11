@@ -52,11 +52,15 @@ interface PanelState {
   error?: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type EvidenceTrace = Record<string, any>;
+
 interface StreamingState {
   withoutMcp: PanelState;
   withMcp: PanelState;
   isLoading: boolean;
   error: string | null;
+  evidenceTrace: EvidenceTrace | null;
 }
 
 const initialPanelState: PanelState = {
@@ -72,6 +76,7 @@ const initialState: StreamingState = {
   withMcp: { ...initialPanelState },
   isLoading: false,
   error: null,
+  evidenceTrace: null,
 };
 
 export function useStreamingComparison() {
@@ -94,6 +99,7 @@ export function useStreamingComparison() {
       withMcp: { ...initialPanelState },
       isLoading: true,
       error: null,
+      evidenceTrace: null,
     });
 
     // Initialize trace capture if enabled
@@ -472,6 +478,13 @@ function handleEvent(
           isLoading: !bothComplete,
         };
       });
+      break;
+
+    case 'trace':
+      setState(prev => ({
+        ...prev,
+        evidenceTrace: event.data as EvidenceTrace,
+      }));
       break;
 
     case 'error':

@@ -1,6 +1,14 @@
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 import { formatToolProgress, formatToolResult, generateToolReason, type PanelType, type ProgressPhase } from './streaming';
+import type { TraceBuilder } from './evidence/trace';
+import { hash as traceHash } from './evidence/trace';
+
+export interface TraceContext {
+  builder: TraceBuilder;
+  parentSpanId: string;
+  systemPromptHash?: string;
+}
 
 const openrouter = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
@@ -123,7 +131,8 @@ export async function queryWithMcpStreaming(
   tools: ChatCompletionTool[],
   executeToolCall: (name: string, args: Record<string, unknown>) => Promise<string>,
   systemPrompt: string | undefined,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
+  trace?: TraceContext,
 ): Promise<void> {
   const startTime = Date.now();
   const panel: PanelType = 'withMcp';
@@ -139,6 +148,12 @@ export async function queryWithMcpStreaming(
     messages.push({ role: 'user', content: query });
 
     // First call - check if tools needed (non-streaming to check for tool_calls)
+    let llmSpanId = trace?.builder.startSpan('llm_inference', trace.parentSpanId, {
+      'gen_ai.system': 'openrouter',
+      'gen_ai.request.model': model,
+      ...(trace.systemPromptHash ? { 'gen_ai.system_prompt_hash': trace.systemPromptHash } : {}),
+      'gen_ai.inference_index': 0,
+    });
     let response = await openrouter.chat.completions.create({
       model,
       messages,
@@ -146,6 +161,12 @@ export async function queryWithMcpStreaming(
       tool_choice: 'auto',
       max_tokens: 4000,
     });
+    if (llmSpanId) {
+      trace!.builder.endSpan(llmSpanId, {
+        'gen_ai.response.prompt_tokens': response.usage?.prompt_tokens || 0,
+        'gen_ai.response.completion_tokens': response.usage?.completion_tokens || 0,
+      });
+    }
 
     let iterations = 0;
     const maxIterations = 20;
@@ -176,6 +197,15 @@ export async function queryWithMcpStreaming(
           toolsCalled.push(toolEntry);
           callbacks.onProgress(panel, progressMessage, { phase: 'tool_start', iteration: currentIteration, args });
 
+          // Trace: start MCP tool call span
+          const toolTraceSpanId = trace?.builder.startSpan('mcp_tool_call', trace.parentSpanId, {
+            'tool.name': toolCall.function.name,
+            'tool.operation_type': operationType || 'unknown',
+            'tool.arguments': JSON.stringify(args),
+            ...(args.dataset_id ? { 'tool.dataset_id': String(args.dataset_id) } : {}),
+            ...(args.portal ? { 'tool.portal_domain': String(args.portal) } : {}),
+          });
+
           try {
             const toolStartTime = Date.now();
             const result = await executeToolCall(toolCall.function.name, args);
@@ -193,6 +223,16 @@ export async function queryWithMcpStreaming(
               }
             } catch {
               // Not JSON or not an array - skip
+            }
+
+            // Trace: end tool call span with response metadata
+            if (toolTraceSpanId) {
+              trace!.builder.endSpan(toolTraceSpanId, {
+                'tool.response_hash': traceHash(result),
+                'tool.response_size_bytes': result.length,
+                'tool.duration_ms': toolDuration,
+                ...(toolEntry.resultSummary ? { 'tool.response_rows': toolEntry.resultSummary.rows } : {}),
+              });
             }
 
             // Send a completion progress event with timing
@@ -213,6 +253,12 @@ export async function queryWithMcpStreaming(
               content: truncatedResult,
             });
           } catch (error) {
+            if (toolTraceSpanId) {
+              trace!.builder.endSpan(toolTraceSpanId, {
+                'error': true,
+                'error.message': error instanceof Error ? error.message : 'Unknown error',
+              });
+            }
             messages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
@@ -233,6 +279,11 @@ export async function queryWithMcpStreaming(
       callbacks.onProgress(panel, 'Analyzing results and deciding next step...', { phase: 'thinking', iteration: currentIteration });
 
       // Get next response
+      llmSpanId = trace?.builder.startSpan('llm_inference', trace.parentSpanId, {
+        'gen_ai.system': 'openrouter',
+        'gen_ai.request.model': model,
+        'gen_ai.inference_index': currentIteration,
+      });
       response = await openrouter.chat.completions.create({
         model,
         messages,
@@ -240,6 +291,12 @@ export async function queryWithMcpStreaming(
         tool_choice: 'auto',
         max_tokens: 4000,
       });
+      if (llmSpanId) {
+        trace!.builder.endSpan(llmSpanId, {
+          'gen_ai.response.prompt_tokens': response.usage?.prompt_tokens || 0,
+          'gen_ai.response.completion_tokens': response.usage?.completion_tokens || 0,
+        });
+      }
 
       // Track cumulative tokens
       cumulativeTokens += response.usage?.total_tokens || 0;
@@ -248,6 +305,9 @@ export async function queryWithMcpStreaming(
 
       iterations++;
     }
+
+    // Trace: start synthesis span (covers final output generation)
+    const synthesisSpanId = trace?.builder.startSpan('synthesis', trace.parentSpanId);
 
     // Handle max iterations, token limit, or pending tool calls
     const lastMessage = response.choices[0]?.message;
@@ -306,6 +366,16 @@ export async function queryWithMcpStreaming(
       cumulativePromptTokens += finalPromptTokens;
       cumulativeCompletionTokens += finalCompletionTokens;
       const duration_ms = Date.now() - startTime;
+
+      if (synthesisSpanId) {
+        trace!.builder.endSpan(synthesisSpanId, {
+          'output.hash': traceHash(content),
+          'output.length': content.length,
+          'gen_ai.response.prompt_tokens': finalPromptTokens,
+          'gen_ai.response.completion_tokens': finalCompletionTokens,
+        });
+      }
+
       callbacks.onComplete(panel, {
         content,
         duration_ms,
@@ -334,6 +404,14 @@ export async function queryWithMcpStreaming(
       }
 
       const duration_ms = Date.now() - startTime;
+
+      if (synthesisSpanId) {
+        trace!.builder.endSpan(synthesisSpanId, {
+          'output.hash': traceHash(content),
+          'output.length': content.length,
+        });
+      }
+
       // cumulativeTokens already includes this response's tokens from the loop
       callbacks.onComplete(panel, {
         content,
@@ -376,6 +454,16 @@ export async function queryWithMcpStreaming(
       cumulativePromptTokens += finalPromptTokens;
       cumulativeCompletionTokens += finalCompletionTokens;
       const duration_ms = Date.now() - startTime;
+
+      if (synthesisSpanId) {
+        trace!.builder.endSpan(synthesisSpanId, {
+          'output.hash': traceHash(content),
+          'output.length': content.length,
+          'gen_ai.response.prompt_tokens': finalPromptTokens,
+          'gen_ai.response.completion_tokens': finalCompletionTokens,
+        });
+      }
+
       callbacks.onComplete(panel, {
         content,
         duration_ms,

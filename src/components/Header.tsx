@@ -142,6 +142,13 @@ export default function Header() {
               )}
             </div>
             <Link
+              href="/evidence"
+              className="no-link-style"
+              style={NAV_LINK_STYLE}
+            >
+              Evidence
+            </Link>
+            <Link
               href="/learn"
               className="no-link-style"
               style={NAV_LINK_STYLE}
@@ -273,6 +280,18 @@ export default function Header() {
           </Link>
           {/* Divider */}
           <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
+          <Link
+            href="/evidence"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              color: 'var(--text-secondary)',
+              fontWeight: 500,
+              fontSize: '16px',
+              textDecoration: 'none',
+            }}
+          >
+            Evidence
+          </Link>
           <Link
             href="/learn"
             onClick={() => setMobileMenuOpen(false)}

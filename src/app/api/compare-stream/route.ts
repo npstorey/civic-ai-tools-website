@@ -8,6 +8,7 @@ import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import { encodeSSE, type PanelType, type StreamEvent } from '@/lib/streaming';
+import { TraceBuilder, hash } from '@/lib/evidence/trace';
 
 interface CompareRequest {
   query: string;
@@ -49,8 +50,23 @@ export async function POST(request: NextRequest) {
     // Increment rate limit
     await incrementRateLimit(identifier, isAuthenticated);
 
-    // System prompts
+    // --- Evidence trace: initialize ---
+    const trace = new TraceBuilder();
+    trace.startRoot('analysis', {
+      'analysis.prompt_hash': hash(query),
+      'analysis.model': model,
+      'analysis.portal': portal,
+    });
+
+    // Fetch skill guidance (with trace span)
+    const skillFetchSpanId = trace.startSpan('skill_fetch');
     const systemPromptWithMcp = await buildSystemPrompt(portal);
+    const systemPromptHash = hash(systemPromptWithMcp);
+    trace.endSpan(skillFetchSpanId, {
+      'skill.text_hash': systemPromptHash,
+      'skill.mcp_server_url': process.env.SOCRATA_MCP_URL || 'https://socrata-mcp.civicaitools.org',
+    });
+
     const systemPromptWithoutMcp = `You are a helpful assistant.
 When answering questions about civic data, government statistics, or local information,
 do your best to provide helpful information based on your training data.
@@ -109,7 +125,8 @@ Be honest if you don't have access to current or real-time data.`;
             return result;
           },
           systemPromptWithMcp,
-          callbacks
+          callbacks,
+          { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash },
         );
 
         if (mcpOnly) {
@@ -123,6 +140,10 @@ Be honest if you don't have access to current or real-time data.`;
       } catch (error) {
         console.error('Stream error:', error);
       } finally {
+        // Finalize trace and send as final SSE event
+        trace.endRoot();
+        const traceJson = trace.finalize();
+        await writeEvent({ type: 'trace' as StreamEvent['type'], panel: 'withMcp', data: traceJson });
         await writer.close();
       }
     };
