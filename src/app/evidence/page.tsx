@@ -4,6 +4,8 @@ import { evidenceRecords, users } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import type { Metadata } from 'next';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'Evidence - Civic AI Tools',
   description: 'Published evidence packages from AI-assisted civic data analyses.',
