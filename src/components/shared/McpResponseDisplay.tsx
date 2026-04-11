@@ -7,7 +7,9 @@ import ProgressLog from '@/components/ProgressLog';
 import SkillPromptDisclosure from '@/components/SkillPromptDisclosure';
 import { buildProvenanceLine, buildNarrativeSummary, buildStatsSummary, getPortalCity } from '@/lib/streaming';
 import { generateNotebook, downloadNotebook } from '@/lib/notebook';
-import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
+import type { ProgressLogEntry, ProgressGroup, ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
+import { useSession, signIn } from 'next-auth/react';
+import PublishEvidenceDialog from '@/components/PublishEvidenceDialog';
 
 interface McpResponseDisplayProps {
   content: string;
@@ -25,6 +27,8 @@ interface McpResponseDisplayProps {
   showFooter?: boolean;
   autoScroll?: boolean;
   portal?: string;
+  model?: string;
+  evidenceTrace?: EvidenceTrace | null;
   onContinue?: (continuationPrompt: string) => void;
 }
 
@@ -359,10 +363,16 @@ export default function McpResponseDisplay({
   showFooter,
   autoScroll,
   portal,
+  model,
+  evidenceTrace,
   onContinue,
 }: McpResponseDisplayProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const { data: session } = useSession();
+
+  const canPublish = isComplete && !!content && !!evidenceTrace && toolsCalled.length > 0;
 
   const hasGroups = progressGroups.length > 0;
   const hasProgressLog = progressLog.length > 0;
@@ -747,6 +757,40 @@ export default function McpResponseDisplay({
                 Notebook
               </button>
             )}
+
+            {/* Publish as Evidence button */}
+            {canPublish && (
+              <button
+                onClick={() => {
+                  if (!session?.user) {
+                    signIn('github');
+                  } else {
+                    setPublishDialogOpen(true);
+                  }
+                }}
+                style={{
+                  background: 'none',
+                  border: '1px solid var(--nyc-blue)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  color: 'var(--nyc-blue)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontWeight: 500,
+                  transition: 'background-color 0.15s',
+                }}
+                onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(16, 63, 239, 0.06)'; }}
+                onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z" />
+                </svg>
+                {session?.user ? 'Publish as Evidence' : 'Sign in to publish'}
+              </button>
+            )}
           </div>
 
           {toolsCalled.length > 0 && (
@@ -776,6 +820,23 @@ export default function McpResponseDisplay({
             Learn more &rarr;
           </a>
         </div>
+      )}
+
+      {/* Publish Evidence Dialog */}
+      {publishDialogOpen && canPublish && queryText && (
+        <PublishEvidenceDialog
+          isOpen={publishDialogOpen}
+          onClose={() => setPublishDialogOpen(false)}
+          queryText={queryText}
+          output={content}
+          toolCalls={toolsCalled}
+          evidenceTrace={evidenceTrace!}
+          model={model || ''}
+          portal={portal || ''}
+          promptTokens={prompt_tokens}
+          completionTokens={completion_tokens}
+          duration_ms={duration_ms}
+        />
       )}
 
       <style jsx>{`

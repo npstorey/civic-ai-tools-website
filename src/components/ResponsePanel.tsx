@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ProgressLog from './ProgressLog';
 import McpResponseDisplay from './shared/McpResponseDisplay';
-import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
+import type { ProgressLogEntry, ProgressGroup, ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
 
 interface ResponsePanelProps {
   title: string;
@@ -24,6 +24,8 @@ interface ResponsePanelProps {
   isStreaming?: boolean;
   queryText?: string;
   portal?: string;
+  model?: string;
+  evidenceTrace?: EvidenceTrace | null;
   onContinue?: (continuationPrompt: string) => void;
 }
 
@@ -44,6 +46,8 @@ export default function ResponsePanel({
   isStreaming,
   queryText,
   portal,
+  model,
+  evidenceTrace,
   onContinue,
 }: ResponsePanelProps) {
   const isMcp = variant === 'with-mcp';
@@ -131,6 +135,8 @@ export default function ResponsePanel({
           isActive={!!isStreaming && !duration_ms}
           showFooter={!isLoading && !!(duration_ms || tokens_used)}
           portal={portal}
+          model={model}
+          evidenceTrace={evidenceTrace}
           onContinue={onContinue}
         />
       )}

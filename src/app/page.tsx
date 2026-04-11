@@ -108,6 +108,8 @@ export default function Home() {
             streamingWithMcp={streaming.withMcp}
             queryText={lastQuery}
             portal={lastPortal}
+            model={usedModel}
+            evidenceTrace={streaming.evidenceTrace}
             onContinue={handleContinue}
           />
           {(streaming.withoutMcp.isComplete && streaming.withMcp.isComplete) && (

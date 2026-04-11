@@ -3,11 +3,12 @@ import { db } from '@/lib/db';
 import { users, evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { putPackage, getPackage } from '@/lib/storage';
+import { buildEvidencePackage } from '@/lib/evidence/packager';
 import crypto from 'crypto';
 
 /**
- * Temporary validation route for Milestone 0.
- * Creates a test user, evidence record, and blob — then retrieves both.
+ * Temporary validation route for M0+M3.
+ * Tests database, storage, and the evidence packager.
  * Remove this route before merging to main.
  */
 export async function GET() {
@@ -34,6 +35,29 @@ export async function GET() {
         .returning({ id: users.id });
       userId = inserted[0].id;
     }
+
+    // 1b. Test the evidence packager
+    const { pkg, hash: pkgHash } = buildEvidencePackage({
+      trace: { resourceSpans: [] },
+      prompt: 'How many 311 complaints in NYC?',
+      output: 'Based on the data, there were 2,500 complaints.',
+      toolCalls: [
+        {
+          name: 'get_data',
+          args: { type: 'query', portal: 'data.cityofnewyork.us', dataset_id: 'erm2-nwe9', select: 'count(*)' },
+          resultSummary: { rows: 1, columns: 1 },
+          duration_ms: 450,
+          operationType: 'query',
+        },
+      ],
+      model: 'openai/gpt-4o-mini',
+      portal: 'data.cityofnewyork.us',
+      tokenUsage: { promptTokens: 1000, completionTokens: 200 },
+      duration_ms: 3200,
+      promptVisibility: 'full_text',
+      title: 'NYC 311 Complaint Count',
+      summary: 'A count of 311 complaints filed in NYC.',
+    });
 
     // 2. Create a test evidence record
     const slug = `test-${Date.now()}`;
@@ -98,6 +122,16 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
+      packager: {
+        packageHashLength: pkgHash.length,
+        hasMetadata: !!pkg.metadata.packageId,
+        hasPromptHash: !!pkg.prompt.hash,
+        promptTextIncluded: !!pkg.prompt.text,
+        queriesCount: pkg.queries.length,
+        dataSourcesCount: pkg.dataSources.length,
+        costModel: pkg.cost.model,
+        schemaVersion: pkg.metadata.schemaVersion,
+      },
       database: {
         recordCreated: record.length === 1,
         recordRetrieved: fetchedRecord.length === 1,
