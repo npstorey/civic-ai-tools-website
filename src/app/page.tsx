@@ -1,13 +1,10 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import Link from 'next/link';
-import { useSession } from 'next-auth/react';
 import QueryForm from '@/components/QueryForm';
 import ComparisonDisplay from '@/components/ComparisonDisplay';
 import { useStreamingComparison } from '@/hooks/useStreamingComparison';
-
-const SESSION_STORAGE_KEY = 'civic-ai-tools-publish-state';
 
 export default function Home() {
   const [queryCount, setQueryCount] = useState(0);
@@ -16,81 +13,8 @@ export default function Home() {
   const [lastPortal, setLastPortal] = useState<string>('');
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
-  const { data: session } = useSession();
 
   const streaming = useStreamingComparison();
-
-  // Restore analysis state after OAuth redirect
-  useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem(SESSION_STORAGE_KEY);
-      if (!saved) return;
-
-      const parsed = JSON.parse(saved);
-      sessionStorage.removeItem(SESSION_STORAGE_KEY);
-
-      // Restore streaming state
-      streaming.restoreState({
-        withMcp: {
-          content: parsed.mcpResponse || '',
-          progress: null,
-          progressLog: [],
-          progressGroups: [],
-          isComplete: true,
-          duration_ms: parsed.duration_ms,
-          tokens_used: parsed.tokens_used,
-          prompt_tokens: parsed.prompt_tokens,
-          completion_tokens: parsed.completion_tokens,
-          tools_called: parsed.toolCalls,
-        },
-        withoutMcp: {
-          content: '',
-          progress: null,
-          progressLog: [],
-          progressGroups: [],
-          isComplete: true,
-        },
-        isLoading: false,
-        error: null,
-        evidenceTrace: parsed.evidenceTrace,
-      });
-
-      // Restore local state
-      setUsedModel(parsed.model || '');
-      setLastQuery(parsed.query || '');
-      setLastPortal(parsed.portal || '');
-      setQueryCount(1);
-
-      // Auto-open publish dialog if now authenticated
-      if (session?.user) {
-        setTimeout(() => setPublishDialogOpen(true), 300);
-      }
-    } catch {
-      // Ignore parse errors — stale or corrupt data
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
-
-  // Save analysis state to sessionStorage before OAuth redirect
-  const handleSaveForSignIn = () => {
-    try {
-      const state = {
-        mcpResponse: streaming.withMcp.content,
-        toolCalls: streaming.withMcp.tools_called,
-        evidenceTrace: streaming.evidenceTrace,
-        model: usedModel,
-        portal: lastPortal,
-        query: lastQuery,
-        duration_ms: streaming.withMcp.duration_ms,
-        tokens_used: streaming.withMcp.tokens_used,
-        prompt_tokens: streaming.withMcp.prompt_tokens,
-        completion_tokens: streaming.withMcp.completion_tokens,
-      };
-      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // sessionStorage may be unavailable — proceed with sign-in anyway
-    }
-  };
 
   // Extract display name from model ID (e.g., "anthropic/claude-sonnet-4" -> "Claude Sonnet 4")
   const getModelDisplayName = (modelId: string) => {
@@ -188,7 +112,6 @@ export default function Home() {
             evidenceTrace={streaming.evidenceTrace}
             publishDialogOpen={publishDialogOpen}
             onPublishDialogChange={setPublishDialogOpen}
-            onSaveForSignIn={handleSaveForSignIn}
             onContinue={handleContinue}
           />
           {(streaming.withoutMcp.isComplete && streaming.withMcp.isComplete) && (

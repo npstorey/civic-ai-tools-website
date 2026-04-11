@@ -8,7 +8,7 @@ import SkillPromptDisclosure from '@/components/SkillPromptDisclosure';
 import { buildProvenanceLine, buildNarrativeSummary, buildStatsSummary, getPortalCity } from '@/lib/streaming';
 import { generateNotebook, downloadNotebook } from '@/lib/notebook';
 import type { ProgressLogEntry, ProgressGroup, ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
-import { useSession, signIn } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import PublishEvidenceDialog from '@/components/PublishEvidenceDialog';
 
 interface McpResponseDisplayProps {
@@ -31,7 +31,6 @@ interface McpResponseDisplayProps {
   evidenceTrace?: EvidenceTrace | null;
   publishDialogOpen?: boolean;
   onPublishDialogChange?: (open: boolean) => void;
-  onSaveForSignIn?: () => void;
   onContinue?: (continuationPrompt: string) => void;
 }
 
@@ -370,13 +369,12 @@ export default function McpResponseDisplay({
   evidenceTrace,
   publishDialogOpen: publishDialogOpenProp,
   onPublishDialogChange,
-  onSaveForSignIn,
   onContinue,
 }: McpResponseDisplayProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [publishDialogOpenLocal, setPublishDialogOpenLocal] = useState(false);
-  const { data: session } = useSession();
+  const { data: session, update: updateSession } = useSession();
 
   // Use parent-controlled state if provided, otherwise local
   const publishDialogOpen = publishDialogOpenProp ?? publishDialogOpenLocal;
@@ -776,8 +774,28 @@ export default function McpResponseDisplay({
               <button
                 onClick={() => {
                   if (!session?.user) {
-                    onSaveForSignIn?.();
-                    signIn('github');
+                    // Open OAuth in popup so analysis state is preserved
+                    const w = 500, h = 700;
+                    const left = Math.round(window.screenX + (window.outerWidth - w) / 2);
+                    const top = Math.round(window.screenY + (window.outerHeight - h) / 2);
+                    const popup = window.open(
+                      '/api/auth/signin/github?callbackUrl=/auth/popup-close',
+                      'github-auth',
+                      `width=${w},height=${h},left=${left},top=${top}`,
+                    );
+                    // Poll for popup close, then refresh session
+                    const poll = setInterval(async () => {
+                      if (!popup || popup.closed) {
+                        clearInterval(poll);
+                        await updateSession();
+                        // Re-check after session refresh — if now authenticated, open dialog
+                        const res = await fetch('/api/auth/session');
+                        const sess = await res.json();
+                        if (sess?.user) {
+                          setPublishDialogOpen(true);
+                        }
+                      }
+                    }, 500);
                   } else {
                     setPublishDialogOpen(true);
                   }

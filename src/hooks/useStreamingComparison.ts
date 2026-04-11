@@ -178,15 +178,10 @@ export function useStreamingComparison() {
     setState(prev => ({ ...prev, isLoading: false }));
   }, []);
 
-  const restoreState = useCallback((saved: StreamingState) => {
-    setState(saved);
-  }, []);
-
   return {
     ...state,
     startComparison,
     abort,
-    restoreState,
   };
 }
 

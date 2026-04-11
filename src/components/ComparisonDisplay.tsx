@@ -46,7 +46,6 @@ interface ComparisonDisplayProps {
   evidenceTrace?: EvidenceTrace | null;
   publishDialogOpen?: boolean;
   onPublishDialogChange?: (open: boolean) => void;
-  onSaveForSignIn?: () => void;
   onContinue?: (continuationPrompt: string) => void;
 }
 
@@ -76,7 +75,6 @@ export default function ComparisonDisplay({
   evidenceTrace,
   publishDialogOpen,
   onPublishDialogChange,
-  onSaveForSignIn,
   onContinue,
 }: ComparisonDisplayProps) {
   const isMobile = useMediaQuery('(max-width: 640px)');
@@ -123,7 +121,6 @@ export default function ComparisonDisplay({
       evidenceTrace={evidenceTrace}
       publishDialogOpen={publishDialogOpen}
       onPublishDialogChange={onPublishDialogChange}
-      onSaveForSignIn={onSaveForSignIn}
       onContinue={onContinue}
     />
   );

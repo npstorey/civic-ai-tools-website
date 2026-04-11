@@ -28,7 +28,6 @@ interface ResponsePanelProps {
   evidenceTrace?: EvidenceTrace | null;
   publishDialogOpen?: boolean;
   onPublishDialogChange?: (open: boolean) => void;
-  onSaveForSignIn?: () => void;
   onContinue?: (continuationPrompt: string) => void;
 }
 
@@ -53,7 +52,6 @@ export default function ResponsePanel({
   evidenceTrace,
   publishDialogOpen,
   onPublishDialogChange,
-  onSaveForSignIn,
   onContinue,
 }: ResponsePanelProps) {
   const isMcp = variant === 'with-mcp';
@@ -145,7 +143,6 @@ export default function ResponsePanel({
           evidenceTrace={evidenceTrace}
           publishDialogOpen={publishDialogOpen}
           onPublishDialogChange={onPublishDialogChange}
-          onSaveForSignIn={onSaveForSignIn}
           onContinue={onContinue}
         />
       )}
