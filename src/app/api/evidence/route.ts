@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import { putPackage } from '@/lib/storage';
 import { buildEvidencePackage, type PackageInput } from '@/lib/evidence/packager';
 import { hash } from '@/lib/evidence/trace';
+import { signPackage, getRfc3161Timestamp, publishToRekor } from '@/lib/evidence/signing';
 
 function slugify(text: string): string {
   return text
@@ -94,6 +95,17 @@ export async function POST(request: NextRequest) {
     // Store package in Vercel Blob
     const blobUrl = await putPackage(packageHash, pkg as unknown as Record<string, unknown>);
 
+    // Sign the package hash (non-blocking — failures don't prevent publishing)
+    const signResult = signPackage(packageHash);
+
+    // RFC 3161 timestamp and Rekor transparency log (run in parallel, non-blocking)
+    const [rfc3161Token, rekorResult] = await Promise.all([
+      getRfc3161Timestamp(packageHash).catch(() => null),
+      signResult
+        ? publishToRekor(packageHash, signResult.signature, signResult.publicKey).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+
     // Generate unique slug
     const slug = await uniqueSlug(slugify(body.title));
 
@@ -115,6 +127,12 @@ export async function POST(request: NextRequest) {
       mcpServer,
       basePackageHash: packageHash,
       basePackageStorageKey: blobUrl,
+      basePackageSignature: signResult
+        ? JSON.stringify({ signature: signResult.signature, publicKey: signResult.publicKey, algorithm: signResult.algorithm })
+        : null,
+      basePackageRfc3161Timestamp: rfc3161Token,
+      basePackageRekorEntryId: rekorResult?.entryId || null,
+      basePackageRekorInclusionProof: rekorResult?.inclusionProof || null,
     });
 
     return NextResponse.json({

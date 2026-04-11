@@ -80,11 +80,38 @@ function CitePopover({ title, creatorName, createdAt, slug, onClose }: {
   );
 }
 
+interface VerifyResult {
+  hashMatch: boolean;
+  signatureValid: boolean | null;
+  rekorVerified: boolean | null;
+  hasTimestamp: boolean;
+  details: {
+    hasSigning: boolean;
+    hasRekor: boolean;
+    rekor?: { logIndex?: number; logEntryUrl?: string } | null;
+  };
+}
+
+function VerifyCheck({ label, status, detail }: { label: string; status: boolean | null; detail?: string }) {
+  const icon = status === true ? '\u2705' : status === false ? '\u274C' : '\u2796';
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px', marginBottom: '6px' }}>
+      <span>{icon}</span>
+      <div>
+        <span style={{ color: 'var(--text-primary)' }}>{label}</span>
+        {detail && <span style={{ color: 'var(--text-muted)', marginLeft: '6px' }}>{detail}</span>}
+      </div>
+    </div>
+  );
+}
+
 export default function EvidenceActions({
   slug, title, creatorName, createdAt, packageUrl, verificationStatus,
 }: EvidenceActionsProps) {
   const [linkCopied, setLinkCopied] = useState(false);
   const [showCite, setShowCite] = useState(false);
+  const [verifyState, setVerifyState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
 
   const handleCopyLink = async () => {
     const url = `${window.location.origin}/evidence/${slug}`;
@@ -98,6 +125,19 @@ export default function EvidenceActions({
     a.href = packageUrl;
     a.download = `evidence-${slug}.json`;
     a.click();
+  };
+
+  const handleVerify = async () => {
+    setVerifyState('loading');
+    try {
+      const res = await fetch(`/api/evidence/${slug}/verify`);
+      if (!res.ok) throw new Error(`${res.status}`);
+      const data = await res.json();
+      setVerifyResult(data);
+      setVerifyState('done');
+    } catch {
+      setVerifyState('error');
+    }
   };
 
   const btnStyle: React.CSSProperties = {
@@ -124,6 +164,13 @@ export default function EvidenceActions({
           </svg>
           Download Package
         </button>
+        <button
+          onClick={handleVerify}
+          disabled={verifyState === 'loading'}
+          style={{ ...btnStyle, color: verifyState === 'loading' ? 'var(--text-muted)' : btnStyle.color }}
+        >
+          {verifyState === 'loading' ? 'Verifying...' : 'Verify Integrity'}
+        </button>
         <button onClick={handleCopyLink} style={{ ...btnStyle, color: linkCopied ? 'var(--nyc-success)' : btnStyle.color }}>
           {linkCopied ? 'Copied' : 'Copy Link'}
         </button>
@@ -131,6 +178,71 @@ export default function EvidenceActions({
           Cite
         </button>
       </div>
+
+      {/* Verification results */}
+      {verifyState === 'done' && verifyResult && (
+        <div style={{
+          marginTop: '12px', padding: '14px 16px',
+          border: '1px solid var(--border-color)', borderRadius: '6px',
+          backgroundColor: 'white',
+        }}>
+          <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>Verification Results</div>
+          <VerifyCheck
+            label="Package integrity"
+            status={verifyResult.hashMatch}
+            detail={verifyResult.hashMatch ? 'Hash matches stored package' : 'Hash mismatch — package may have been altered'}
+          />
+          <VerifyCheck
+            label="Cryptographic signature"
+            status={verifyResult.signatureValid}
+            detail={
+              verifyResult.signatureValid === null
+                ? 'Not signed'
+                : verifyResult.signatureValid
+                  ? 'Valid Ed25519 signature'
+                  : 'Invalid signature'
+            }
+          />
+          <VerifyCheck
+            label="RFC 3161 timestamp"
+            status={verifyResult.hasTimestamp ? true : null}
+            detail={verifyResult.hasTimestamp ? 'Timestamp token present' : 'No timestamp'}
+          />
+          <VerifyCheck
+            label="Transparency log (Rekor)"
+            status={verifyResult.rekorVerified}
+            detail={
+              verifyResult.rekorVerified === null
+                ? 'Not published to Rekor'
+                : verifyResult.rekorVerified
+                  ? 'Entry verified on Sigstore Rekor'
+                  : 'Rekor verification failed'
+            }
+          />
+          {verifyResult.details.rekor?.logEntryUrl && (
+            <div style={{ marginTop: '6px', fontSize: '12px' }}>
+              <a
+                href={verifyResult.details.rekor.logEntryUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: 'var(--nyc-blue)', textDecoration: 'underline' }}
+              >
+                View Rekor log entry (index {verifyResult.details.rekor.logIndex})
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+      {verifyState === 'error' && (
+        <div style={{
+          marginTop: '12px', padding: '10px 14px', fontSize: '13px',
+          color: 'var(--nyc-error)', backgroundColor: 'rgba(236, 19, 30, 0.06)',
+          borderRadius: '4px',
+        }}>
+          Verification request failed. Try again.
+        </div>
+      )}
+
       {showCite && (
         <CitePopover
           title={title}

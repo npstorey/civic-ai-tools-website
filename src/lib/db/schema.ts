@@ -66,6 +66,10 @@ export const evidenceRecords = pgTable('evidence_records', {
   civicContext: text('civic_context'),
   basePackageHash: text('base_package_hash'),
   basePackageStorageKey: text('base_package_storage_key'),
+  basePackageSignature: text('base_package_signature'),
+  basePackageRfc3161Timestamp: text('base_package_rfc3161_timestamp'),
+  basePackageRekorEntryId: text('base_package_rekor_entry_id'),
+  basePackageRekorInclusionProof: text('base_package_rekor_inclusion_proof'),
   verificationStatus: verificationStatusEnum('verification_status')
     .notNull()
     .default('unverified'),
