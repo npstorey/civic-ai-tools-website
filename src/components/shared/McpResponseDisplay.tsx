@@ -374,7 +374,7 @@ export default function McpResponseDisplay({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [publishDialogOpenLocal, setPublishDialogOpenLocal] = useState(false);
-  const { data: session, update: updateSession } = useSession();
+  const { data: session } = useSession();
 
   // Use parent-controlled state if provided, otherwise local
   const publishDialogOpen = publishDialogOpenProp ?? publishDialogOpenLocal;
@@ -772,39 +772,11 @@ export default function McpResponseDisplay({
             {/* Publish as Evidence button */}
             {canPublish && (
               <button
-                onClick={async () => {
+                onClick={() => {
                   if (!session?.user) {
-                    // Open popup immediately (must be synchronous from click to avoid browser blocking)
-                    const w = 500, h = 700;
-                    const left = Math.round(window.screenX + (window.outerWidth - w) / 2);
-                    const top = Math.round(window.screenY + (window.outerHeight - h) / 2);
-                    const popup = window.open(
-                      'about:blank',
-                      'github-auth',
-                      `width=${w},height=${h},left=${left},top=${top}`,
-                    );
-                    // Get the proper OAuth URL via NextAuth (handles CSRF)
-                    const res = await signIn('github', {
-                      redirect: false,
-                      callbackUrl: '/auth/popup-close',
-                    });
-                    if (res?.url && popup) {
-                      // Navigate the already-open popup to the OAuth URL
-                      popup.location.href = res.url;
-                    }
-                      // Poll for popup close, then refresh session
-                      const poll = setInterval(async () => {
-                        if (!popup || popup.closed) {
-                          clearInterval(poll);
-                          await updateSession();
-                          const sessRes = await fetch('/api/auth/session');
-                          const sess = await sessRes.json();
-                          if (sess?.user) {
-                            setPublishDialogOpen(true);
-                          }
-                        }
-                      }, 500);
-                    }
+                    // NextAuth v4 doesn't support redirect:false for OAuth providers,
+                    // so we do a normal redirect. User signs in, then re-runs their query.
+                    signIn('github');
                   } else {
                     setPublishDialogOpen(true);
                   }
