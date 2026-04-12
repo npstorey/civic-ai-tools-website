@@ -5,7 +5,13 @@ import { authOptions } from '@/lib/auth';
 
 const SUMMARY_MODEL = 'google/gemini-2.0-flash-001';
 
-const SYSTEM_PROMPT = `You are summarizing an AI-assisted civic data analysis for a non-technical reader (journalist, community board member, city staff). Write one paragraph covering: what question was asked, what the data showed, what data sources were used, and any limitations. Max 3 sentences. No technical jargon.`;
+const SYSTEM_PROMPT = `You are writing a one-paragraph summary of an AI-assisted civic data analysis for a non-technical reader (journalist, community board member, city staff).
+
+VOICE: Neutral, third-person. Do NOT use first-person (we, our, us, I). Do NOT use second-person (you, your). Start with "This analysis..." or a subject-first construction ("NYC 311 data shows...").
+
+CONTENT: Cover what question was examined, what the data showed, what sources were used, and any limitations. Max 3 sentences. No technical jargon (avoid: SoQL, API, tool calls, LLM, etc.).
+
+TONE: Factual and descriptive, like a dataset abstract or report description. Not promotional. Not narrative.`;
 
 interface ToolCallSummary {
   name: string;

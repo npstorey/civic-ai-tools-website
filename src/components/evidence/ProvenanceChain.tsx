@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { EvidencePackage } from '@/lib/evidence/packager';
+import { formatModelName } from '@/lib/models';
 
 interface ProvenanceChainProps {
   pkg: EvidencePackage;
@@ -112,13 +113,15 @@ export default function ProvenanceChain({ pkg }: ProvenanceChainProps) {
 
       {/* Model + Skill */}
       <StepContainer>
-        <StepLabel label="Model" detail={pkg.cost.model} />
+        <StepLabel label="Model" detail={formatModelName(pkg.cost.model)} />
         {pkg.skillMetadata.systemPromptHash && (
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Skill guidance: <span style={{ fontFamily: 'monospace' }}>{pkg.skillMetadata.systemPromptHash.slice(0, 16)}...</span>
-            {pkg.skillMetadata.mcpServerUrl && (
-              <span> via {pkg.skillMetadata.mcpServerUrl.replace(/^https?:\/\//, '')}</span>
-            )}
+          <div style={{ marginTop: '4px' }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+              Socrata MCP Skill Guidance
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace', marginTop: '2px' }}>
+              {pkg.skillMetadata.systemPromptHash.slice(0, 12)}
+            </div>
           </div>
         )}
       </StepContainer>
