@@ -8,6 +8,7 @@ import type { EvidencePackage } from '@/lib/evidence/packager';
 import ProvenanceChain from '@/components/evidence/ProvenanceChain';
 import EvidenceActions from '@/components/evidence/EvidenceActions';
 import AttestationSection from '@/components/evidence/AttestationSection';
+import DashboardLink from '@/components/evidence/DashboardLink';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -143,6 +144,11 @@ export default async function EvidencePage({ params }: PageProps) {
           <span>{'\u00b7'}</span>
           <span>{dateStr}</span>
         </div>
+        {creator?.githubId && (
+          <div style={{ marginBottom: '4px' }}>
+            <DashboardLink creatorGithubId={creator.githubId} />
+          </div>
+        )}
         {(record.jurisdiction || record.civicContext) && (
           <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
             {record.jurisdiction && <span>{record.jurisdiction}</span>}

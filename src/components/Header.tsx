@@ -148,6 +148,15 @@ export default function Header() {
             >
               Evidence
             </Link>
+            {session && (
+              <Link
+                href="/dashboard"
+                className="no-link-style"
+                style={NAV_LINK_STYLE}
+              >
+                Dashboard
+              </Link>
+            )}
             <Link
               href="/learn"
               className="no-link-style"
@@ -292,6 +301,20 @@ export default function Header() {
           >
             Evidence
           </Link>
+          {session && (
+            <Link
+              href="/dashboard"
+              onClick={() => setMobileMenuOpen(false)}
+              style={{
+                color: 'var(--text-secondary)',
+                fontWeight: 500,
+                fontSize: '16px',
+                textDecoration: 'none',
+              }}
+            >
+              Dashboard
+            </Link>
+          )}
           <Link
             href="/learn"
             onClick={() => setMobileMenuOpen(false)}
