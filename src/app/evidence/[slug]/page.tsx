@@ -10,6 +10,7 @@ import EvidenceActions from '@/components/evidence/EvidenceActions';
 import AttestationSection from '@/components/evidence/AttestationSection';
 import DashboardLink from '@/components/evidence/DashboardLink';
 import ProvenanceGraphSection from '@/components/evidence/ProvenanceGraphSection';
+import { formatModelName, estimateCostUsd } from '@/lib/models';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -235,31 +236,54 @@ export default async function EvidencePage({ params }: PageProps) {
         {/* Resources */}
         {pkg && (
           <Section title="Resources Used">
-            <div style={{
-              display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-              gap: '12px',
-            }}>
-              {[
-                { label: 'Model', value: pkg.cost.model },
+            {(() => {
+              const cost = estimateCostUsd(
+                pkg.cost.model,
+                pkg.cost.promptTokens || 0,
+                pkg.cost.completionTokens || 0,
+              );
+              const skillHash = pkg.skillMetadata.systemPromptHash;
+              const items: Array<{ label: string; value: React.ReactNode; mono?: boolean }> = [
+                { label: 'Model', value: formatModelName(pkg.cost.model) },
+                { label: 'Skill', value: 'Socrata MCP Skill Guidance' },
+                ...(skillHash ? [{
+                  label: 'Skill hash',
+                  value: skillHash.slice(0, 12),
+                  mono: true,
+                }] : []),
                 { label: 'Prompt tokens', value: pkg.cost.promptTokens?.toLocaleString() || '—' },
                 { label: 'Completion tokens', value: pkg.cost.completionTokens?.toLocaleString() || '—' },
                 { label: 'Total tokens', value: pkg.cost.totalTokens?.toLocaleString() || '—' },
+                { label: 'Estimated cost', value: cost !== null ? `~$${cost.toFixed(cost < 0.01 ? 4 : 2)}` : '—' },
                 { label: 'Duration', value: pkg.cost.durationMs ? `${(pkg.cost.durationMs / 1000).toFixed(1)}s` : '—' },
                 { label: 'Tool calls', value: String(pkg.queries.length) },
-              ].map((item) => (
-                <div key={item.label} style={{
-                  padding: '10px 14px', border: '1px solid var(--border-color)',
-                  borderRadius: '4px',
+              ];
+              return (
+                <div style={{
+                  display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                  gap: '12px',
                 }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '2px' }}>
-                    {item.label}
-                  </div>
-                  <div style={{ fontSize: '14px', color: 'var(--text-primary)', fontWeight: 500 }}>
-                    {item.value}
-                  </div>
+                  {items.map((item) => (
+                    <div key={item.label} style={{
+                      padding: '10px 14px', border: '1px solid var(--border-color)',
+                      borderRadius: '4px',
+                    }}>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '2px' }}>
+                        {item.label}
+                      </div>
+                      <div style={{
+                        fontSize: item.mono ? '12px' : '14px',
+                        color: item.mono ? 'var(--text-muted)' : 'var(--text-primary)',
+                        fontWeight: 500,
+                        fontFamily: item.mono ? 'monospace' : 'inherit',
+                      }}>
+                        {item.value}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              );
+            })()}
           </Section>
         )}
 

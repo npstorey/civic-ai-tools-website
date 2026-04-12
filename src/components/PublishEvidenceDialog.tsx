@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
 
 interface PublishEvidenceDialogProps {
@@ -44,11 +44,48 @@ export default function PublishEvidenceDialog({
 
   const [title, setTitle] = useState(defaultTitle);
   const [summary, setSummary] = useState(firstParagraph);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [userEditedSummary, setUserEditedSummary] = useState(false);
   const [promptVisibility, setPromptVisibility] = useState<'full_text' | 'hash_only'>('full_text');
   const [dialogState, setDialogState] = useState<DialogState>('form');
   const [resultUrl, setResultUrl] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [urlCopied, setUrlCopied] = useState(false);
+
+  // Track whether we've already kicked off summary generation for this session
+  const summaryRequested = useRef(false);
+
+  // Auto-generate summary when dialog opens — only once per open
+  useEffect(() => {
+    if (!isOpen || summaryRequested.current || userEditedSummary) return;
+    summaryRequested.current = true;
+    setSummaryLoading(true);
+
+    fetch('/api/evidence/generate-summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: queryText,
+        output,
+        toolCalls: toolCalls.map(tc => ({ name: tc.name, args: tc.args })),
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`${res.status}`);
+        const data = await res.json();
+        // Only replace if the user hasn't started typing
+        if (data.summary && !userEditedSummary) {
+          setSummary(data.summary);
+        }
+      })
+      .catch(() => {
+        // Silently fall back to the default firstParagraph summary
+      })
+      .finally(() => {
+        setSummaryLoading(false);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -173,13 +210,30 @@ export default function PublishEvidenceDialog({
               </div>
 
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-secondary)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-secondary)' }}>
                   Summary
+                  {summaryLoading && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '4px',
+                      fontSize: '11px', fontWeight: 400, color: 'var(--text-muted)',
+                    }}>
+                      <span style={{
+                        width: '10px', height: '10px',
+                        border: '1.5px solid var(--border-color)',
+                        borderTopColor: 'var(--nyc-blue)',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite',
+                      }} />
+                      Generating...
+                    </span>
+                  )}
                 </label>
                 <textarea
                   value={summary}
-                  onChange={(e) => setSummary(e.target.value)}
+                  onChange={(e) => { setSummary(e.target.value); setUserEditedSummary(true); }}
                   rows={4}
+                  disabled={summaryLoading && !userEditedSummary}
+                  placeholder={summaryLoading ? 'Generating summary...' : ''}
                   style={{
                     width: '100%',
                     padding: '8px 12px',
@@ -189,10 +243,11 @@ export default function PublishEvidenceDialog({
                     fontFamily: 'inherit',
                     resize: 'vertical',
                     boxSizing: 'border-box',
+                    opacity: summaryLoading && !userEditedSummary ? 0.6 : 1,
                   }}
                 />
                 <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-                  A 2-4 sentence description for non-technical readers.
+                  A 2-4 sentence description for non-technical readers. Auto-generated on open — edit as needed.
                 </p>
               </div>
 

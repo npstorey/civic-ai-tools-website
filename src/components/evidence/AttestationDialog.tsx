@@ -121,7 +121,7 @@ const EVALUATOR_MODELS = [
   { id: 'openai/gpt-5.4', name: 'GPT-5.4' },
   { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash' },
   { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4' },
-  { id: 'anthropic/claude-haiku-4', name: 'Claude Haiku 4' },
+  { id: 'anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5' },
 ];
 
 // --- Component ---

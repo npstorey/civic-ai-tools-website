@@ -17,19 +17,32 @@ function slugify(text: string): string {
     .slice(0, 80);
 }
 
-async function uniqueSlug(base: string): Promise<string> {
-  let slug = base;
-  let attempt = 0;
-  while (true) {
+/**
+ * Build a content-addressable slug: {title-slug}-{shortHash}
+ * Uses the first 6 hex chars of the package SHA-256 hash for a compact
+ * integrity signal. ~16.7M values per title make collisions negligible.
+ */
+function buildSlug(title: string, packageHash: string, chars: number = 6): string {
+  return `${slugify(title)}-${packageHash.slice(0, chars)}`;
+}
+
+/**
+ * Resolve a slug that doesn't collide with an existing record.
+ * Starts with a 6-char hash suffix; falls back to 8 chars (and then 16)
+ * on the extraordinarily unlikely chance of a collision for the same title.
+ */
+async function resolveSlug(title: string, packageHash: string): Promise<string> {
+  for (const chars of [6, 8, 16]) {
+    const slug = buildSlug(title, packageHash, chars);
     const existing = await db
       .select({ id: evidenceRecords.id })
       .from(evidenceRecords)
       .where(eq(evidenceRecords.slug, slug))
       .limit(1);
     if (existing.length === 0) return slug;
-    attempt++;
-    slug = `${base}-${attempt}`;
   }
+  // Fall through: use full hash (true collision would be cryptographically unbroken)
+  return buildSlug(title, packageHash, 64);
 }
 
 interface PublishRequest {
@@ -106,8 +119,8 @@ export async function POST(request: NextRequest) {
         : Promise.resolve(null),
     ]);
 
-    // Generate unique slug
-    const slug = await uniqueSlug(slugify(body.title));
+    // Generate content-addressable slug: {title-slug}-{shortHash}
+    const slug = await resolveSlug(body.title, packageHash);
 
     // Create evidence record in database
     const promptHash = hash(body.prompt);
