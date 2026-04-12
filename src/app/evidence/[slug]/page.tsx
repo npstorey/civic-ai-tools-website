@@ -9,6 +9,7 @@ import ProvenanceChain from '@/components/evidence/ProvenanceChain';
 import EvidenceActions from '@/components/evidence/EvidenceActions';
 import AttestationSection from '@/components/evidence/AttestationSection';
 import DashboardLink from '@/components/evidence/DashboardLink';
+import ProvenanceGraphSection from '@/components/evidence/ProvenanceGraphSection';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -212,6 +213,13 @@ export default async function EvidencePage({ params }: PageProps) {
             }}>
               <ProvenanceChain pkg={pkg} />
             </div>
+          </Section>
+        )}
+
+        {/* Provenance Graph (W3C PROV-O) */}
+        {pkg?.provenance && (
+          <Section title="Provenance Graph">
+            <ProvenanceGraphSection provenance={pkg.provenance} slug={slug} />
           </Section>
         )}
 

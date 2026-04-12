@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { buildProvenanceGraph, type ProvGraph } from './provenance';
 
 const PACKAGE_SCHEMA_VERSION = '0.1.0';
 
@@ -65,6 +66,7 @@ export interface EvidencePackage {
   };
   output: string;
   trace: Record<string, unknown>;
+  provenance?: ProvGraph;
 }
 
 function sha256(content: string): string {
@@ -132,6 +134,16 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
   const totalTokens = (input.tokenUsage.promptTokens || 0) + (input.tokenUsage.completionTokens || 0);
   const skillMeta = extractSkillMetadata(input.trace);
 
+  // Build PROV-O provenance graph from the OTel trace
+  const provenance = buildProvenanceGraph(input.trace, {
+    packageId,
+    promptHash,
+    promptText: input.promptVisibility === 'full_text' ? input.prompt : undefined,
+    outputText: input.output,
+    model: input.model,
+    portal: input.portal,
+  });
+
   const pkg: EvidencePackage = {
     metadata: {
       schemaVersion: PACKAGE_SCHEMA_VERSION,
@@ -155,9 +167,10 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
     skillMetadata: skillMeta,
     output: input.output,
     trace: input.trace,
+    provenance,
   };
 
-  // Compute package hash from canonical JSON
+  // Compute package hash from canonical JSON (includes provenance)
   const canonical = JSON.stringify(pkg);
   const hash = sha256(canonical);
 
