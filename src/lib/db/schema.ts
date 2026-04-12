@@ -75,6 +75,10 @@ export const evidenceRecords = pgTable('evidence_records', {
     .default('unverified'),
   consistencyClassification: consistencyClassificationEnum('consistency_classification'),
   isPublic: boolean('is_public').notNull().default(true),
+  withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
+  withdrawnReason: text('withdrawn_reason'),
+  withdrawalSignature: text('withdrawal_signature'),
+  withdrawalTimestamp: text('withdrawal_timestamp'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),

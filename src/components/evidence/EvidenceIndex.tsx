@@ -10,6 +10,7 @@ interface EvidenceRecord {
   summary: string;
   model: string;
   verificationStatus: string;
+  withdrawnAt: string | null;
   createdAt: string;
   creatorName: string;
 }
@@ -48,6 +49,7 @@ function StatusBadge({ status }: { status: string }) {
     consistency_tested: { bg: 'rgba(16, 63, 239, 0.1)', text: 'var(--nyc-blue)' },
     evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--nyc-success)' },
     fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--nyc-success)' },
+    withdrawn: { bg: 'rgba(236, 19, 30, 0.08)', text: 'var(--nyc-error)' },
   };
   const c = colors[status] || colors.unverified;
   return (
@@ -75,6 +77,7 @@ export default function EvidenceIndex() {
   const [status, setStatus] = useState('');
   const [range, setRange] = useState('all');
   const [sort, setSort] = useState('newest');
+  const [includeWithdrawn, setIncludeWithdrawn] = useState(false);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<ListResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,7 +92,7 @@ export default function EvidenceIndex() {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedQuery, status, range, sort]);
+  }, [debouncedQuery, status, range, sort, includeWithdrawn]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -98,6 +101,7 @@ export default function EvidenceIndex() {
     if (status) params.set('status', status);
     if (range !== 'all') params.set('range', range);
     if (sort !== 'newest') params.set('sort', sort);
+    if (includeWithdrawn) params.set('withdrawn', 'include');
     if (page > 1) params.set('page', String(page));
 
     try {
@@ -110,7 +114,7 @@ export default function EvidenceIndex() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedQuery, status, range, sort, page]);
+  }, [debouncedQuery, status, range, sort, includeWithdrawn, page]);
 
   useEffect(() => {
     fetchData();
@@ -141,9 +145,20 @@ export default function EvidenceIndex() {
           <select value={sort} onChange={(e) => setSort(e.target.value)} style={selectStyle}>
             {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          {(query || status || range !== 'all' || sort !== 'newest') && (
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: '4px',
+            fontSize: '13px', color: 'var(--text-muted)', cursor: 'pointer',
+          }}>
+            <input
+              type="checkbox"
+              checked={includeWithdrawn}
+              onChange={(e) => setIncludeWithdrawn(e.target.checked)}
+            />
+            Include withdrawn
+          </label>
+          {(query || status || range !== 'all' || sort !== 'newest' || includeWithdrawn) && (
             <button
-              onClick={() => { setQuery(''); setStatus(''); setRange('all'); setSort('newest'); }}
+              onClick={() => { setQuery(''); setStatus(''); setRange('all'); setSort('newest'); setIncludeWithdrawn(false); }}
               style={{
                 ...selectStyle, cursor: 'pointer', border: 'none',
                 color: 'var(--nyc-blue)', backgroundColor: 'transparent', padding: '6px 4px',
@@ -188,6 +203,7 @@ export default function EvidenceIndex() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {data.records.map((r) => {
               const dateStr = new Date(r.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+              const isWithdrawn = !!r.withdrawnAt;
               return (
                 <Link
                   key={r.id}
@@ -197,6 +213,7 @@ export default function EvidenceIndex() {
                     border: '1px solid var(--border-color)', borderRadius: '6px',
                     textDecoration: 'none', color: 'inherit',
                     transition: 'border-color 0.15s, box-shadow 0.15s',
+                    opacity: isWithdrawn ? 0.6 : 1,
                   }}
                   onMouseOver={(e) => {
                     e.currentTarget.style.borderColor = 'var(--nyc-blue)';
@@ -208,10 +225,16 @@ export default function EvidenceIndex() {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '6px' }}>
-                    <h2 style={{ fontSize: '16px', fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>
+                    <h2 style={{
+                      fontSize: '16px', fontWeight: 600, margin: 0, color: 'var(--text-primary)',
+                      textDecoration: isWithdrawn ? 'line-through' : 'none',
+                    }}>
                       {r.title}
                     </h2>
-                    <StatusBadge status={r.verificationStatus} />
+                    {isWithdrawn
+                      ? <StatusBadge status="withdrawn" />
+                      : <StatusBadge status={r.verificationStatus} />
+                    }
                   </div>
                   <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: 1.5 }}>
                     {r.summary}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { evidenceRecords, attestationPackages, users } from '@/lib/db/schema';
-import { eq, desc, asc, ilike, or, and, gte, sql } from 'drizzle-orm';
+import { eq, desc, asc, ilike, or, and, gte, isNull, sql } from 'drizzle-orm';
 
 const PAGE_SIZE = 20;
 
@@ -15,6 +15,7 @@ const PAGE_SIZE = 20;
  *   range   - date range: 7d, 30d, 90d, all
  *   sort    - newest (default), attested, alpha
  *   page    - 1-based page number
+ *   withdrawn - "include" to include withdrawn records (excluded by default)
  */
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
@@ -22,10 +23,16 @@ export async function GET(request: NextRequest) {
   const status = params.get('status') || '';
   const range = params.get('range') || 'all';
   const sort = params.get('sort') || 'newest';
+  const includeWithdrawn = params.get('withdrawn') === 'include';
   const page = Math.max(1, parseInt(params.get('page') || '1', 10));
 
   // Build WHERE conditions
   const conditions = [eq(evidenceRecords.isPublic, true)];
+
+  // Exclude withdrawn by default
+  if (!includeWithdrawn) {
+    conditions.push(isNull(evidenceRecords.withdrawnAt));
+  }
 
   if (q) {
     conditions.push(
@@ -80,6 +87,7 @@ export async function GET(request: NextRequest) {
       summary: evidenceRecords.summary,
       model: evidenceRecords.model,
       verificationStatus: evidenceRecords.verificationStatus,
+      withdrawnAt: evidenceRecords.withdrawnAt,
       createdAt: evidenceRecords.createdAt,
       creatorId: evidenceRecords.creatorId,
     })
@@ -122,6 +130,7 @@ export async function GET(request: NextRequest) {
     summary: r.summary.slice(0, 200) + (r.summary.length > 200 ? '...' : ''),
     model: r.model,
     verificationStatus: r.verificationStatus,
+    withdrawnAt: r.withdrawnAt?.toISOString() || null,
     createdAt: r.createdAt.toISOString(),
     creatorName: creatorMap.get(r.creatorId)?.displayName || 'Unknown',
     attestationCount: attestationCountMap.get(r.id) || 0,

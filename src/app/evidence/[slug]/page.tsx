@@ -126,6 +126,29 @@ export default async function EvidencePage({ params }: PageProps) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 24px 64px' }}>
+        {/* Withdrawal banner */}
+        {record.withdrawnAt && (
+          <div style={{
+            padding: '16px 20px', marginBottom: '24px',
+            backgroundColor: 'rgba(236, 19, 30, 0.06)',
+            border: '1px solid rgba(236, 19, 30, 0.2)',
+            borderRadius: '6px',
+          }}>
+            <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--nyc-error)', marginBottom: '6px' }}>
+              This evidence was withdrawn by the author on{' '}
+              {record.withdrawnAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            </div>
+            {record.withdrawnReason && (
+              <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                <strong>Reason:</strong> {record.withdrawnReason}
+              </div>
+            )}
+            <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+              The original content and cryptographic proofs are preserved below for transparency.
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <h1 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '8px', lineHeight: 1.3 }}>
           {record.title}

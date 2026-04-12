@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, type CSSProperties } from 'react';
+import { useState, useCallback, type CSSProperties } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 // --- Types ---
 
@@ -13,6 +14,7 @@ interface EvidenceRow {
   model: string;
   verificationStatus: string;
   consistencyClassification: string | null;
+  withdrawnAt: string | null;
   createdAt: string;
   attestationCount: number;
 }
@@ -63,6 +65,7 @@ function StatusBadge({ status }: { status: string }) {
     consistency_tested: { bg: 'rgba(16, 63, 239, 0.1)', text: 'var(--nyc-blue)' },
     evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--nyc-success)' },
     fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--nyc-success)' },
+    withdrawn: { bg: 'rgba(236, 19, 30, 0.08)', text: 'var(--nyc-error)' },
   };
   const c = colors[status] || colors.unverified;
   return (
@@ -140,6 +143,36 @@ export default function DashboardTabs({ myEvidence, myEvaluations, activity }: D
 // --- Tab panels ---
 
 function MyEvidenceTab({ rows }: { rows: EvidenceRow[] }) {
+  const router = useRouter();
+  const [withdrawTarget, setWithdrawTarget] = useState<EvidenceRow | null>(null);
+  const [withdrawReason, setWithdrawReason] = useState('');
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawError, setWithdrawError] = useState('');
+
+  const handleWithdraw = useCallback(async () => {
+    if (!withdrawTarget || !withdrawReason.trim()) return;
+    setWithdrawing(true);
+    setWithdrawError('');
+    try {
+      const res = await fetch(`/api/evidence/${withdrawTarget.slug}/withdraw`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: withdrawReason.trim() }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Withdrawal failed' }));
+        throw new Error(err.error || 'Withdrawal failed');
+      }
+      setWithdrawTarget(null);
+      setWithdrawReason('');
+      router.refresh();
+    } catch (err) {
+      setWithdrawError(err instanceof Error ? err.message : 'Withdrawal failed');
+    } finally {
+      setWithdrawing(false);
+    }
+  }, [withdrawTarget, withdrawReason, router]);
+
   if (rows.length === 0) {
     return (
       <EmptyState
@@ -150,46 +183,147 @@ function MyEvidenceTab({ rows }: { rows: EvidenceRow[] }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {rows.map((r) => (
-        <Link
-          key={r.id}
-          href={`/evidence/${r.slug}`}
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {rows.map((r) => {
+          const isWithdrawn = !!r.withdrawnAt;
+          return (
+            <div
+              key={r.id}
+              style={{
+                padding: '14px 18px',
+                border: '1px solid var(--border-color)', borderRadius: '6px',
+                opacity: isWithdrawn ? 0.65 : 1,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', marginBottom: '6px' }}>
+                <Link
+                  href={`/evidence/${r.slug}`}
+                  style={{
+                    fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)',
+                    textDecoration: isWithdrawn ? 'line-through' : 'none',
+                  }}
+                >
+                  {r.title}
+                </Link>
+                <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center' }}>
+                  {isWithdrawn
+                    ? <StatusBadge status="withdrawn" />
+                    : <StatusBadge status={r.verificationStatus} />
+                  }
+                </div>
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <span>{formatDate(r.createdAt)}</span>
+                <span>{'\u00b7'}</span>
+                <span>{r.model}</span>
+                <span>{'\u00b7'}</span>
+                <span>{r.attestationCount} attestation{r.attestationCount !== 1 ? 's' : ''}</span>
+                {r.consistencyClassification && !isWithdrawn && (
+                  <>
+                    <span>{'\u00b7'}</span>
+                    <span style={{ textTransform: 'capitalize' }}>
+                      {r.consistencyClassification.replace(/_/g, ' ')}
+                    </span>
+                  </>
+                )}
+                {isWithdrawn ? (
+                  <>
+                    <span>{'\u00b7'}</span>
+                    <span style={{ color: 'var(--nyc-error)' }}>Withdrawn {formatDate(r.withdrawnAt!)}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>{'\u00b7'}</span>
+                    <button
+                      onClick={() => { setWithdrawTarget(r); setWithdrawReason(''); setWithdrawError(''); }}
+                      style={{
+                        background: 'none', border: 'none', padding: 0,
+                        fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      Withdraw
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Withdrawal confirmation dialog */}
+      {withdrawTarget && (
+        <div
           style={{
-            display: 'block', padding: '14px 18px',
-            border: '1px solid var(--border-color)', borderRadius: '6px',
-            textDecoration: 'none', color: 'inherit',
-            transition: 'border-color 0.15s',
+            position: 'fixed', inset: 0, zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
           }}
-          onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--nyc-blue)'; }}
-          onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--border-color)'; }}
+          onClick={(e) => { if (e.target === e.currentTarget && !withdrawing) { setWithdrawTarget(null); } }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', marginBottom: '6px' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>
-              {r.title}
-            </h3>
-            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-              <StatusBadge status={r.verificationStatus} />
+          <div style={{
+            backgroundColor: 'white', borderRadius: '8px', width: '100%', maxWidth: '480px',
+            margin: '16px', padding: '24px',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Withdraw Evidence</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
+              Withdrawing evidence is a public, permanent action. The record and its cryptographic
+              proofs remain accessible, but the evidence will be flagged as withdrawn.
+            </p>
+            <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', color: 'var(--text-primary)' }}>
+              &ldquo;{withdrawTarget.title}&rdquo;
+            </div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', marginTop: '12px', color: 'var(--text-primary)' }}>
+              Reason for withdrawal *
+            </label>
+            <textarea
+              value={withdrawReason}
+              onChange={(e) => setWithdrawReason(e.target.value)}
+              placeholder="e.g., Data source was updated, methodology was flawed, superseded by newer analysis..."
+              rows={3}
+              style={{
+                width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)',
+                borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
+                resize: 'vertical', fontFamily: 'inherit',
+              }}
+            />
+            {withdrawError && (
+              <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--nyc-error)' }}>
+                {withdrawError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <button
+                onClick={() => setWithdrawTarget(null)}
+                disabled={withdrawing}
+                style={{
+                  padding: '8px 16px', border: '1px solid var(--border-color)', borderRadius: '4px',
+                  fontSize: '13px', cursor: 'pointer', backgroundColor: 'white',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleWithdraw}
+                disabled={!withdrawReason.trim() || withdrawing}
+                style={{
+                  padding: '8px 16px', border: 'none', borderRadius: '4px',
+                  fontSize: '13px', fontWeight: 600, cursor: !withdrawReason.trim() || withdrawing ? 'not-allowed' : 'pointer',
+                  backgroundColor: 'var(--nyc-error)', color: 'white',
+                  opacity: !withdrawReason.trim() || withdrawing ? 0.6 : 1,
+                }}
+              >
+                {withdrawing ? 'Withdrawing...' : 'Withdraw'}
+              </button>
             </div>
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span>{formatDate(r.createdAt)}</span>
-            <span>{'\u00b7'}</span>
-            <span>{r.model}</span>
-            <span>{'\u00b7'}</span>
-            <span>{r.attestationCount} attestation{r.attestationCount !== 1 ? 's' : ''}</span>
-            {r.consistencyClassification && (
-              <>
-                <span>{'\u00b7'}</span>
-                <span style={{ textTransform: 'capitalize' }}>
-                  {r.consistencyClassification.replace(/_/g, ' ')}
-                </span>
-              </>
-            )}
-          </div>
-        </Link>
-      ))}
-    </div>
+        </div>
+      )}
+    </>
   );
 }
 

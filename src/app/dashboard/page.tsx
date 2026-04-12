@@ -44,6 +44,7 @@ export default async function DashboardPage() {
       model: evidenceRecords.model,
       verificationStatus: evidenceRecords.verificationStatus,
       consistencyClassification: evidenceRecords.consistencyClassification,
+      withdrawnAt: evidenceRecords.withdrawnAt,
       createdAt: evidenceRecords.createdAt,
     })
     .from(evidenceRecords)
@@ -72,6 +73,7 @@ export default async function DashboardPage() {
   const myEvidenceData = myEvidence.map(e => ({
     ...e,
     createdAt: e.createdAt.toISOString(),
+    withdrawnAt: e.withdrawnAt?.toISOString() || null,
     attestationCount: countMap.get(e.id) || 0,
   }));
 
