@@ -7,6 +7,7 @@ import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 import ProvenanceChain from '@/components/evidence/ProvenanceChain';
 import EvidenceActions from '@/components/evidence/EvidenceActions';
+import AttestationSection from '@/components/evidence/AttestationSection';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -187,27 +188,11 @@ export default async function EvidencePage({ params }: PageProps) {
 
         {/* Attestations */}
         <Section title="Attestations">
-          <div style={{
-            padding: '16px 20px', border: '1px solid var(--border-color)',
-            borderRadius: '6px', color: 'var(--text-muted)', fontSize: '14px',
-          }}>
-            <p style={{ margin: '0 0 8px' }}>No attestations yet.</p>
-            <p style={{ margin: '0 0 12px', fontSize: '13px' }}>
-              Attestations are independent evaluations — consistency tests, adversarial reviews,
-              or corrections — that anyone can attach to this evidence record.
-            </p>
-            <button
-              disabled
-              title="Coming soon"
-              style={{
-                padding: '6px 14px', border: '1px solid var(--border-color)',
-                borderRadius: '4px', fontSize: '13px', color: 'var(--text-muted)',
-                backgroundColor: '#f5f5f5', cursor: 'not-allowed', opacity: 0.6,
-              }}
-            >
-              + Add evaluation
-            </button>
-          </div>
+          <AttestationSection
+            slug={slug}
+            analysisModel={record.model}
+            promptVisibility={record.promptVisibility}
+          />
         </Section>
 
         {/* Resources */}
