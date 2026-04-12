@@ -188,14 +188,14 @@ export function buildProvenanceGraph(
 
     // SoQL query entity
     const queryUrn = urn(packageId, 'query', queryHash);
-    graph.push({
+    const queryNode: ProvNode = {
       '@id': queryUrn,
       '@type': 'prov:Entity',
       'civic:contentHash': `sha256:${queryHash}`,
       'civic:toolName': toolName,
       'civic:operationType': opType,
       'dcterms:description': `MCP tool arguments (${opType})`,
-    });
+    };
 
     // Find the most recent inference span before this tool call to link as generator
     const toolStart = Number(span.startTimeUnixNano);
@@ -204,12 +204,10 @@ export function buildProvenanceGraph(
       .sort((a, b) => Number(b.endTimeUnixNano || '0') - Number(a.endTimeUnixNano || '0'))[0];
 
     if (precedingInference) {
-      graph.push({
-        '@id': queryUrn,
-        '@type': 'prov:Entity',
-        'prov:wasGeneratedBy': { '@id': urn(packageId, 'inference', precedingInference.spanId) },
-      });
+      queryNode['prov:wasGeneratedBy'] = { '@id': urn(packageId, 'inference', precedingInference.spanId) };
     }
+
+    graph.push(queryNode);
 
     // Data response entity
     if (responseHash) {
