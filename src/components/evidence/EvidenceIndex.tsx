@@ -11,6 +11,7 @@ interface EvidenceRecord {
   model: string;
   verificationStatus: string;
   withdrawnAt: string | null;
+  reinstatedAt: string | null;
   createdAt: string;
   creatorName: string;
 }
@@ -203,7 +204,8 @@ export default function EvidenceIndex() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {data.records.map((r) => {
               const dateStr = new Date(r.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-              const isWithdrawn = !!r.withdrawnAt;
+              // Only currently-withdrawn (withdrawn but not reinstated) gets the muted treatment.
+              const isWithdrawn = !!r.withdrawnAt && !r.reinstatedAt;
               return (
                 <Link
                   key={r.id}

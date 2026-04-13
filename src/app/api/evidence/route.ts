@@ -63,6 +63,7 @@ interface PublishRequest {
   promptVisibility: 'full_text' | 'hash_only';
   title: string;
   summary: string;
+  extensions?: Record<string, unknown>;
 }
 
 export async function POST(request: NextRequest) {
@@ -101,6 +102,7 @@ export async function POST(request: NextRequest) {
       promptVisibility: body.promptVisibility,
       title: body.title,
       summary: body.summary,
+      extensions: body.extensions,
     };
 
     const { pkg, hash: packageHash } = buildEvidencePackage(packageInput);

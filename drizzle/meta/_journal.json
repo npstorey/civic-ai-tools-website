@@ -29,6 +29,13 @@
       "when": 1775999020618,
       "tag": "0003_productive_goblin_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776047158427,
+      "tag": "0004_real_kree",
+      "breakpoints": true
     }
   ]
 }

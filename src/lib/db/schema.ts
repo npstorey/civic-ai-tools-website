@@ -79,6 +79,10 @@ export const evidenceRecords = pgTable('evidence_records', {
   withdrawnReason: text('withdrawn_reason'),
   withdrawalSignature: text('withdrawal_signature'),
   withdrawalTimestamp: text('withdrawal_timestamp'),
+  reinstatedAt: timestamp('reinstated_at', { withTimezone: true }),
+  reinstatedReason: text('reinstated_reason'),
+  reinstatementSignature: text('reinstatement_signature'),
+  reinstatementTimestamp: text('reinstatement_timestamp'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),

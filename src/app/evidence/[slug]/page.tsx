@@ -10,7 +10,10 @@ import EvidenceActions from '@/components/evidence/EvidenceActions';
 import AttestationSection from '@/components/evidence/AttestationSection';
 import DashboardLink from '@/components/evidence/DashboardLink';
 import ProvenanceGraphSection from '@/components/evidence/ProvenanceGraphSection';
+import NotebookSection from '@/components/evidence/NotebookSection';
 import { formatModelName, estimateCostUsd } from '@/lib/models';
+
+const NOTEBOOK_EXTENSION_KEY = 'org.civicaitools.notebook';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -128,8 +131,8 @@ export default async function EvidencePage({ params }: PageProps) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 24px 64px' }}>
-        {/* Withdrawal banner */}
-        {record.withdrawnAt && (
+        {/* Withdrawal banner — only shown when currently withdrawn (not reinstated) */}
+        {record.withdrawnAt && !record.reinstatedAt && (
           <div style={{
             padding: '16px 20px', marginBottom: '24px',
             backgroundColor: 'rgba(236, 19, 30, 0.06)',
@@ -205,6 +208,41 @@ export default async function EvidencePage({ params }: PageProps) {
           </div>
         </Section>
 
+        {/* Status History — shown when the record has a withdrawal/reinstatement cycle */}
+        {record.withdrawnAt && (
+          <Section title="Status History">
+            <div style={{
+              padding: '16px 20px', border: '1px solid var(--border-color)',
+              borderRadius: '6px', backgroundColor: 'white',
+              fontSize: '13px', lineHeight: 1.7, color: 'var(--text-secondary)',
+            }}>
+              <div>
+                <strong style={{ color: 'var(--text-primary)' }}>Published</strong>
+                {' on '}
+                {record.createdAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+              </div>
+              <div>
+                <strong style={{ color: 'var(--text-primary)' }}>Withdrawn</strong>
+                {' on '}
+                {record.withdrawnAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                {record.withdrawnReason && (
+                  <span> — <em>{record.withdrawnReason}</em></span>
+                )}
+              </div>
+              {record.reinstatedAt && (
+                <div>
+                  <strong style={{ color: 'var(--text-primary)' }}>Reinstated</strong>
+                  {' on '}
+                  {record.reinstatedAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  {record.reinstatedReason && (
+                    <span> — <em>{record.reinstatedReason}</em></span>
+                  )}
+                </div>
+              )}
+            </div>
+          </Section>
+        )}
+
         {/* Provenance Chain */}
         {pkg && (
           <Section title="Provenance Chain">
@@ -223,6 +261,39 @@ export default async function EvidencePage({ params }: PageProps) {
             <ProvenanceGraphSection provenance={pkg.provenance} slug={slug} />
           </Section>
         )}
+
+        {/* Jupyter Notebook extension */}
+        {pkg?.extensions?.[NOTEBOOK_EXTENSION_KEY] !== undefined && (
+          <Section title="Jupyter Notebook">
+            <NotebookSection notebook={pkg.extensions[NOTEBOOK_EXTENSION_KEY]} slug={slug} />
+          </Section>
+        )}
+
+        {/* Unknown extensions — graceful fallback for other adopters' artifacts */}
+        {(() => {
+          if (!pkg?.extensions) return null;
+          const unknown = Object.keys(pkg.extensions).filter(k => k !== NOTEBOOK_EXTENSION_KEY);
+          if (unknown.length === 0) return null;
+          return (
+            <Section title="Additional Artifacts">
+              <div style={{
+                padding: '12px 16px', border: '1px solid var(--border-color)',
+                borderRadius: '6px', backgroundColor: 'white',
+                fontSize: '13px', color: 'var(--text-secondary)',
+              }}>
+                <p style={{ margin: '0 0 6px' }}>
+                  This evidence package contains artifacts from other extensions:
+                </p>
+                <ul style={{ margin: 0, paddingLeft: '20px', fontFamily: 'monospace', fontSize: '12px' }}>
+                  {unknown.map(k => <li key={k}>{k}</li>)}
+                </ul>
+                <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  Download the full package to inspect them.
+                </p>
+              </div>
+            </Section>
+          );
+        })()}
 
         {/* Attestations */}
         <Section title="Attestations">

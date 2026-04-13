@@ -23,6 +23,12 @@ export interface PackageInput {
   promptVisibility: 'full_text' | 'hash_only';
   title: string;
   summary: string;
+  /**
+   * Optional implementation-specific artifacts.
+   * Keys MUST follow reverse-DNS conventions (e.g., "org.civicaitools.notebook")
+   * to prevent collisions across adopters of the evidence package spec.
+   */
+  extensions?: Record<string, unknown>;
 }
 
 export interface EvidencePackage {
@@ -67,6 +73,13 @@ export interface EvidencePackage {
   output: string;
   trace: Record<string, unknown>;
   provenance?: ProvGraph;
+  /**
+   * Optional implementation-specific artifacts, keyed by reverse-DNS identifier
+   * (e.g., "org.civicaitools.notebook"). Core consumers of the evidence package
+   * spec MUST NOT require any particular extension. Extensions are included in
+   * the canonical JSON and therefore covered by the package hash.
+   */
+  extensions?: Record<string, unknown>;
 }
 
 function sha256(content: string): string {
@@ -168,9 +181,12 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
     output: input.output,
     trace: input.trace,
     provenance,
+    ...(input.extensions && Object.keys(input.extensions).length > 0
+      ? { extensions: input.extensions }
+      : {}),
   };
 
-  // Compute package hash from canonical JSON (includes provenance)
+  // Compute package hash from canonical JSON (covers provenance + extensions)
   const canonical = JSON.stringify(pkg);
   const hash = sha256(canonical);
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { evidenceRecords, attestationPackages, users } from '@/lib/db/schema';
-import { eq, desc, asc, ilike, or, and, gte, isNull, sql } from 'drizzle-orm';
+import { eq, desc, asc, ilike, or, and, gte, isNull, isNotNull, sql } from 'drizzle-orm';
 
 const PAGE_SIZE = 20;
 
@@ -29,9 +29,15 @@ export async function GET(request: NextRequest) {
   // Build WHERE conditions
   const conditions = [eq(evidenceRecords.isPublic, true)];
 
-  // Exclude withdrawn by default
+  // Exclude currently-withdrawn records by default.
+  // Reinstated records (withdrawn then reinstated) remain visible.
   if (!includeWithdrawn) {
-    conditions.push(isNull(evidenceRecords.withdrawnAt));
+    conditions.push(
+      or(
+        isNull(evidenceRecords.withdrawnAt),
+        isNotNull(evidenceRecords.reinstatedAt),
+      )!,
+    );
   }
 
   if (q) {
@@ -88,6 +94,7 @@ export async function GET(request: NextRequest) {
       model: evidenceRecords.model,
       verificationStatus: evidenceRecords.verificationStatus,
       withdrawnAt: evidenceRecords.withdrawnAt,
+      reinstatedAt: evidenceRecords.reinstatedAt,
       createdAt: evidenceRecords.createdAt,
       creatorId: evidenceRecords.creatorId,
     })
@@ -131,6 +138,7 @@ export async function GET(request: NextRequest) {
     model: r.model,
     verificationStatus: r.verificationStatus,
     withdrawnAt: r.withdrawnAt?.toISOString() || null,
+    reinstatedAt: r.reinstatedAt?.toISOString() || null,
     createdAt: r.createdAt.toISOString(),
     creatorName: creatorMap.get(r.creatorId)?.displayName || 'Unknown',
     attestationCount: attestationCountMap.get(r.id) || 0,

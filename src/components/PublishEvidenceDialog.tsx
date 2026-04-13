@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
+import { generateNotebook } from '@/lib/notebook';
 
 interface PublishEvidenceDialogProps {
   isOpen: boolean;
@@ -92,6 +93,10 @@ export default function PublishEvidenceDialog({
   const handlePublish = async () => {
     setDialogState('publishing');
     try {
+      // Generate Jupyter notebook from the same data used for the "Download Notebook"
+      // button, and include it as the first evidence package extension.
+      const notebook = generateNotebook(queryText, portal, toolCalls, output);
+
       const response = await fetch('/api/evidence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -107,6 +112,9 @@ export default function PublishEvidenceDialog({
           promptVisibility,
           title,
           summary,
+          extensions: {
+            'org.civicaitools.notebook': notebook,
+          },
         }),
       });
 

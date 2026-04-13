@@ -15,6 +15,7 @@ interface EvidenceRow {
   verificationStatus: string;
   consistencyClassification: string | null;
   withdrawnAt: string | null;
+  reinstatedAt: string | null;
   createdAt: string;
   attestationCount: number;
 }
@@ -149,6 +150,11 @@ function MyEvidenceTab({ rows }: { rows: EvidenceRow[] }) {
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState('');
 
+  const [reinstateTarget, setReinstateTarget] = useState<EvidenceRow | null>(null);
+  const [reinstateReason, setReinstateReason] = useState('');
+  const [reinstating, setReinstating] = useState(false);
+  const [reinstateError, setReinstateError] = useState('');
+
   const handleWithdraw = useCallback(async () => {
     if (!withdrawTarget || !withdrawReason.trim()) return;
     setWithdrawing(true);
@@ -173,6 +179,30 @@ function MyEvidenceTab({ rows }: { rows: EvidenceRow[] }) {
     }
   }, [withdrawTarget, withdrawReason, router]);
 
+  const handleReinstate = useCallback(async () => {
+    if (!reinstateTarget || !reinstateReason.trim()) return;
+    setReinstating(true);
+    setReinstateError('');
+    try {
+      const res = await fetch(`/api/evidence/${reinstateTarget.slug}/reinstate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reinstateReason.trim() }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Reinstatement failed' }));
+        throw new Error(err.error || 'Reinstatement failed');
+      }
+      setReinstateTarget(null);
+      setReinstateReason('');
+      router.refresh();
+    } catch (err) {
+      setReinstateError(err instanceof Error ? err.message : 'Reinstatement failed');
+    } finally {
+      setReinstating(false);
+    }
+  }, [reinstateTarget, reinstateReason, router]);
+
   if (rows.length === 0) {
     return (
       <EmptyState
@@ -186,14 +216,15 @@ function MyEvidenceTab({ rows }: { rows: EvidenceRow[] }) {
     <>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {rows.map((r) => {
-          const isWithdrawn = !!r.withdrawnAt;
+          const isCurrentlyWithdrawn = !!r.withdrawnAt && !r.reinstatedAt;
+          const isReinstated = !!r.withdrawnAt && !!r.reinstatedAt;
           return (
             <div
               key={r.id}
               style={{
                 padding: '14px 18px',
                 border: '1px solid var(--border-color)', borderRadius: '6px',
-                opacity: isWithdrawn ? 0.65 : 1,
+                opacity: isCurrentlyWithdrawn ? 0.65 : 1,
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', marginBottom: '6px' }}>
@@ -201,13 +232,13 @@ function MyEvidenceTab({ rows }: { rows: EvidenceRow[] }) {
                   href={`/evidence/${r.slug}`}
                   style={{
                     fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)',
-                    textDecoration: isWithdrawn ? 'line-through' : 'none',
+                    textDecoration: isCurrentlyWithdrawn ? 'line-through' : 'none',
                   }}
                 >
                   {r.title}
                 </Link>
                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center' }}>
-                  {isWithdrawn
+                  {isCurrentlyWithdrawn
                     ? <StatusBadge status="withdrawn" />
                     : <StatusBadge status={r.verificationStatus} />
                   }
@@ -219,7 +250,7 @@ function MyEvidenceTab({ rows }: { rows: EvidenceRow[] }) {
                 <span>{r.model}</span>
                 <span>{'\u00b7'}</span>
                 <span>{r.attestationCount} attestation{r.attestationCount !== 1 ? 's' : ''}</span>
-                {r.consistencyClassification && !isWithdrawn && (
+                {r.consistencyClassification && !isCurrentlyWithdrawn && (
                   <>
                     <span>{'\u00b7'}</span>
                     <span style={{ textTransform: 'capitalize' }}>
@@ -227,12 +258,30 @@ function MyEvidenceTab({ rows }: { rows: EvidenceRow[] }) {
                     </span>
                   </>
                 )}
-                {isWithdrawn ? (
+                {isCurrentlyWithdrawn && (
                   <>
                     <span>{'\u00b7'}</span>
                     <span style={{ color: 'var(--nyc-error)' }}>Withdrawn {formatDate(r.withdrawnAt!)}</span>
+                    <span>{'\u00b7'}</span>
+                    <button
+                      onClick={() => { setReinstateTarget(r); setReinstateReason(''); setReinstateError(''); }}
+                      style={{
+                        background: 'none', border: 'none', padding: 0,
+                        fontSize: '12px', color: 'var(--nyc-blue)', cursor: 'pointer',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      Reinstate
+                    </button>
                   </>
-                ) : (
+                )}
+                {isReinstated && (
+                  <>
+                    <span>{'\u00b7'}</span>
+                    <span style={{ color: 'var(--nyc-success)' }}>Reinstated {formatDate(r.reinstatedAt!)}</span>
+                  </>
+                )}
+                {!isCurrentlyWithdrawn && !isReinstated && (
                   <>
                     <span>{'\u00b7'}</span>
                     <button
@@ -318,6 +367,79 @@ function MyEvidenceTab({ rows }: { rows: EvidenceRow[] }) {
                 }}
               >
                 {withdrawing ? 'Withdrawing...' : 'Withdraw'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reinstatement confirmation dialog */}
+      {reinstateTarget && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget && !reinstating) { setReinstateTarget(null); } }}
+        >
+          <div style={{
+            backgroundColor: 'white', borderRadius: '8px', width: '100%', maxWidth: '480px',
+            margin: '16px', padding: '24px',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Reinstate Evidence</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
+              Reinstating will make this evidence visible again in the public index. The prior
+              withdrawal record is preserved — both the withdrawal and reinstatement will appear
+              in the status history for transparency.
+            </p>
+            <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', color: 'var(--text-primary)' }}>
+              &ldquo;{reinstateTarget.title}&rdquo;
+            </div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', marginTop: '12px', color: 'var(--text-primary)' }}>
+              Reason for reinstatement *
+            </label>
+            <textarea
+              value={reinstateReason}
+              onChange={(e) => setReinstateReason(e.target.value)}
+              placeholder="e.g., Original concern resolved, data was re-verified, withdrawal was premature..."
+              rows={3}
+              style={{
+                width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)',
+                borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
+                resize: 'vertical', fontFamily: 'inherit',
+              }}
+            />
+            {reinstateError && (
+              <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--nyc-error)' }}>
+                {reinstateError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <button
+                onClick={() => setReinstateTarget(null)}
+                disabled={reinstating}
+                style={{
+                  padding: '8px 16px', border: '1px solid var(--border-color)', borderRadius: '4px',
+                  fontSize: '13px', cursor: 'pointer', backgroundColor: 'white',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReinstate}
+                disabled={!reinstateReason.trim() || reinstating}
+                style={{
+                  padding: '8px 16px', border: 'none', borderRadius: '4px',
+                  fontSize: '13px', fontWeight: 600,
+                  cursor: !reinstateReason.trim() || reinstating ? 'not-allowed' : 'pointer',
+                  backgroundColor: 'var(--nyc-success)', color: 'white',
+                  opacity: !reinstateReason.trim() || reinstating ? 0.6 : 1,
+                }}
+              >
+                {reinstating ? 'Reinstating...' : 'Reinstate'}
               </button>
             </div>
           </div>

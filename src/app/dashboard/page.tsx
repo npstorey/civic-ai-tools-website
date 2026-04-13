@@ -45,6 +45,7 @@ export default async function DashboardPage() {
       verificationStatus: evidenceRecords.verificationStatus,
       consistencyClassification: evidenceRecords.consistencyClassification,
       withdrawnAt: evidenceRecords.withdrawnAt,
+      reinstatedAt: evidenceRecords.reinstatedAt,
       createdAt: evidenceRecords.createdAt,
     })
     .from(evidenceRecords)
@@ -74,6 +75,7 @@ export default async function DashboardPage() {
     ...e,
     createdAt: e.createdAt.toISOString(),
     withdrawnAt: e.withdrawnAt?.toISOString() || null,
+    reinstatedAt: e.reinstatedAt?.toISOString() || null,
     attestationCount: countMap.get(e.id) || 0,
   }));
 
