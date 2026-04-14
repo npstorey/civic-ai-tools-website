@@ -183,11 +183,15 @@ Required in `.env.local`:
 ```
 OPENROUTER_API_KEY=sk-or-...
 SOCRATA_MCP_URL=https://socrata-mcp-server.onrender.com
+DATA_COMMONS_MCP_URL=https://api.datacommons.org/mcp
+DATA_COMMONS_API_KEY=                # From https://apikeys.datacommons.org (free)
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
 NEXTAUTH_SECRET=        # openssl rand -base64 32
 NEXTAUTH_URL=http://localhost:3000  # or production URL
 ```
+
+The `DATA_COMMONS_MCP_URL` / `DATA_COMMONS_API_KEY` pair powers the second MCP data source (Google Data Commons; US demographic + federal statistical data via a hosted HTTPS endpoint that Google launched 2026-02-09). The hosted endpoint is mandatory-auth via an `X-API-Key` header — anonymous access is not permitted, so `DATA_COMMONS_API_KEY` must be set or Data Commons tool calls will fail.
 
 Optional (production only):
 ```
