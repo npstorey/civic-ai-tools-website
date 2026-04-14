@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { queryWithoutMcp, queryWithMcp } from '@/lib/openrouter';
-import { socrataMcpTools } from '@/lib/mcp/tools';
+import { mcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
@@ -65,10 +65,10 @@ Be honest if you don't have access to current or real-time data.`;
       queryWithMcp(
         query,
         model,
-        socrataMcpTools,
+        mcpTools,
         async (name, args) => {
-          // Inject default portal if not specified
-          if (!args.portal) {
+          // Socrata tools expect a portal; Data Commons tools don't — only inject the default for Socrata's `get_data`.
+          if (name === 'get_data' && !args.portal) {
             args.portal = portal;
           }
           return callMcpTool(name, args);

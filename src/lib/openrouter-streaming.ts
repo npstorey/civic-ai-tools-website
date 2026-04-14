@@ -8,6 +8,12 @@ export interface TraceContext {
   builder: TraceBuilder;
   parentSpanId: string;
   systemPromptHash?: string;
+  /**
+   * Optional hook that maps a tool name to its MCP source id (e.g. "socrata",
+   * "data-commons"). When provided, the source is recorded on each
+   * `mcp_tool_call` span so the PROV-O builder can distinguish servers.
+   */
+  resolveToolSource?: (toolName: string) => string | undefined;
 }
 
 const openrouter = new OpenAI({
@@ -197,11 +203,16 @@ export async function queryWithMcpStreaming(
           toolsCalled.push(toolEntry);
           callbacks.onProgress(panel, progressMessage, { phase: 'tool_start', iteration: currentIteration, args });
 
-          // Trace: start MCP tool call span
+          // Trace: start MCP tool call span.
+          // `mcp.source` distinguishes which MCP server handled the call so the
+          // PROV-O builder can emit a distinct prov:Agent per source (see
+          // provenance.ts). Unknown tools fall back to "unknown".
+          const toolSource = trace?.resolveToolSource?.(toolCall.function.name) ?? 'unknown';
           const toolTraceSpanId = trace?.builder.startSpan('mcp_tool_call', trace.parentSpanId, {
             'tool.name': toolCall.function.name,
             'tool.operation_type': operationType || 'unknown',
             'tool.arguments': JSON.stringify(args),
+            'mcp.source': toolSource,
             ...(args.dataset_id ? { 'tool.dataset_id': String(args.dataset_id) } : {}),
             ...(args.portal ? { 'tool.portal_domain': String(args.portal) } : {}),
           });

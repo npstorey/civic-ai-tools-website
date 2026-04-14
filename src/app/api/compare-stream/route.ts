@@ -2,8 +2,8 @@ import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks, type ProgressOpts } from '@/lib/openrouter-streaming';
-import { socrataMcpTools } from '@/lib/mcp/tools';
-import { callMcpTool } from '@/lib/mcp/client';
+import { mcpTools } from '@/lib/mcp/tools';
+import { callMcpTool, routeTool } from '@/lib/mcp/client';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
@@ -107,9 +107,10 @@ Be honest if you don't have access to current or real-time data.`;
         const mcpQuery = queryWithMcpStreaming(
           query,
           model,
-          socrataMcpTools,
+          mcpTools,
           async (name, args) => {
-            if (!args.portal) {
+            // Socrata tools expect a portal; Data Commons tools don't.
+            if (name === 'get_data' && !args.portal) {
               args.portal = portal;
             }
             // Race the MCP call against a timeout so one slow tool call
@@ -127,7 +128,7 @@ Be honest if you don't have access to current or real-time data.`;
           },
           systemPromptWithMcp,
           callbacks,
-          { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash },
+          { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: (name) => routeTool(name).sourceId },
         );
 
         if (mcpOnly) {

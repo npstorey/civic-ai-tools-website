@@ -7,7 +7,7 @@ import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
-import { socrataMcpTools } from '@/lib/mcp/tools';
+import { mcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import type { EvidencePackage } from '@/lib/evidence/packager';
@@ -115,7 +115,7 @@ export async function POST(
     let response = await openrouter.chat.completions.create({
       model,
       messages,
-      tools: socrataMcpTools,
+      tools: mcpTools,
       tool_choice: 'auto',
       max_tokens: 4000,
     });
@@ -135,7 +135,8 @@ export async function POST(
         if (toolCall.type !== 'function') continue;
 
         const args = JSON.parse(toolCall.function.arguments);
-        if (!args.portal) args.portal = portal;
+        // Socrata's get_data expects a portal; Data Commons tools don't — only inject for Socrata.
+        if (toolCall.function.name === 'get_data' && !args.portal) args.portal = portal;
         toolsCalled.push({ name: toolCall.function.name, args });
 
         try {
@@ -168,7 +169,7 @@ export async function POST(
       response = await openrouter.chat.completions.create({
         model,
         messages,
-        tools: socrataMcpTools,
+        tools: mcpTools,
         tool_choice: 'auto',
         max_tokens: 4000,
       });
