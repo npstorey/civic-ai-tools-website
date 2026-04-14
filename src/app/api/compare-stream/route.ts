@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
     const systemPromptHash = hash(systemPromptWithMcp);
     trace.endSpan(skillFetchSpanId, {
       'skill.text_hash': systemPromptHash,
+      'skill.text': systemPromptWithMcp,
       'skill.mcp_server_url': process.env.SOCRATA_MCP_URL || 'https://socrata-mcp.civicaitools.org',
     });
 

@@ -69,6 +69,7 @@ export interface EvidencePackage {
   skillMetadata: {
     systemPromptHash?: string;
     mcpServerUrl?: string;
+    skillText?: string;
   };
   output: string;
   trace: Record<string, unknown>;
@@ -86,7 +87,7 @@ function sha256(content: string): string {
   return crypto.createHash('sha256').update(content).digest('hex');
 }
 
-function extractSkillMetadata(trace: Record<string, unknown>): { systemPromptHash?: string; mcpServerUrl?: string } {
+function extractSkillMetadata(trace: Record<string, unknown>): { systemPromptHash?: string; mcpServerUrl?: string; skillText?: string } {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const spans = (trace as any)?.resourceSpans?.[0]?.scopeSpans?.[0]?.spans;
@@ -100,6 +101,7 @@ function extractSkillMetadata(trace: Record<string, unknown>): { systemPromptHas
     return {
       systemPromptHash: attrs['skill.text_hash'] || undefined,
       mcpServerUrl: attrs['skill.mcp_server_url'] || undefined,
+      skillText: attrs['skill.text'] || undefined,
     };
   } catch {
     return {};

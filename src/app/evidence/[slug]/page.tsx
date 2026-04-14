@@ -11,6 +11,7 @@ import AttestationSection from '@/components/evidence/AttestationSection';
 import DashboardLink from '@/components/evidence/DashboardLink';
 import ProvenanceGraphSection from '@/components/evidence/ProvenanceGraphSection';
 import NotebookSection from '@/components/evidence/NotebookSection';
+import SkillSection from '@/components/evidence/SkillSection';
 import { formatModelName, estimateCostUsd } from '@/lib/models';
 
 const NOTEBOOK_EXTENSION_KEY = 'org.civicaitools.notebook';
@@ -259,6 +260,16 @@ export default async function EvidencePage({ params }: PageProps) {
         {pkg?.provenance && (
           <Section title="Provenance Graph">
             <ProvenanceGraphSection provenance={pkg.provenance} slug={slug} />
+          </Section>
+        )}
+
+        {/* Skill guidance (system prompt sent to the model) */}
+        {pkg?.skillMetadata?.skillText && (
+          <Section title="Skill Guidance">
+            <SkillSection
+              skillText={pkg.skillMetadata.skillText}
+              skillHash={pkg.skillMetadata.systemPromptHash}
+            />
           </Section>
         )}
 
