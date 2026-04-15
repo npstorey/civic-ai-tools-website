@@ -4,23 +4,32 @@ import {
   resolveServerForTool,
   type McpRegistry,
   type McpServerConfig,
-} from './registry';
+} from './registry.ts';
 
 const MCP_TIMEOUT_MS = 45_000; // 45-second timeout for MCP server requests
 
 // M9.1: multi-MCP routing.
 //
-// The website now talks to more than one MCP server (Socrata + Google Data
-// Commons). Each server maintains its own `mcp-session-id` independently, so
-// session state is tracked per source rather than in a single module-level
-// variable. Tool calls route to the correct server based on tool name via the
-// registry in `./registry.ts`.
+// The website talks to more than one MCP server (Socrata + Google Data
+// Commons). Tool calls route to the correct server based on tool name via
+// the registry in `./registry.ts`.
 //
-// Why: the research phase (M9.0) confirmed Data Commons ships a hosted HTTPS
-// MCP endpoint that is drop-in compatible with our existing HTTP/SSE client
-// pattern — so the per-server routing layer is the entire architectural
-// change needed. The skill-guidance prompt fetch still lives on the Socrata
-// server and continues to route through the `socrata` source explicitly.
+// Session handling is intentionally flexible because the two servers use
+// different dialects of the MCP spec. The spec says the `mcp-session-id`
+// header is OPTIONAL: servers MAY issue one on `initialize`, and clients
+// MUST echo it back on subsequent requests only when it exists.
+//
+// - Socrata is stateful: `initialize` returns `mcp-session-id`, every
+//   `tools/call` must carry it back, and a server restart invalidates the
+//   session (which we detect and re-initialize on).
+// - Data Commons' hosted HTTPS endpoint at api.datacommons.org/mcp is
+//   stateless: `initialize` succeeds with no session header, and tool calls
+//   carry only Content-Type + Accept + the `X-API-Key` registry header.
+//
+// Each server's state therefore tracks both whether we've initialized and
+// whether that initialization produced a session id. Tool-call header
+// construction is factored into `buildMcpRequestHeaders` so it can be unit
+// tested against a stateless server config without network I/O.
 
 const registry: McpRegistry = buildMcpRegistry(readMcpEnvFromProcess());
 
@@ -32,34 +41,67 @@ interface McpToolResult {
   error?: string;
 }
 
+interface ServerState {
+  initialized: boolean;
+  /** Session id issued by the server on `initialize`, or null if stateless. */
+  sessionId: string | null;
+}
+
+const serverState: Record<string, ServerState> = {};
+
+function getServerState(server: McpServerConfig): ServerState {
+  let state = serverState[server.sourceId];
+  if (!state) {
+    state = { initialized: false, sessionId: null };
+    serverState[server.sourceId] = state;
+  }
+  return state;
+}
+
+function resetServerState(server: McpServerConfig): void {
+  serverState[server.sourceId] = { initialized: false, sessionId: null };
+}
+
 function createTimeoutSignal(ms: number): { signal: AbortSignal; clear: () => void } {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
   return { signal: controller.signal, clear: () => clearTimeout(timer) };
 }
 
-// Per-server session state. Keyed by the server's sourceId.
-const sessionIds: Record<string, string | null> = {};
-
-function getSession(server: McpServerConfig): string | null {
-  return sessionIds[server.sourceId] ?? null;
+/**
+ * Build the merged header set for any request to an MCP server. Combines the
+ * standard JSON/SSE headers, any registry-supplied per-server headers (e.g.
+ * Data Commons' `X-API-Key`), and a conditional `mcp-session-id` when a
+ * session id is present. Exported for unit tests — no network I/O.
+ */
+export function buildMcpRequestHeaders(
+  server: McpServerConfig,
+  sessionId: string | null,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json, text/event-stream',
+    ...(server.headers || {}),
+  };
+  if (sessionId) {
+    headers['mcp-session-id'] = sessionId;
+  }
+  return headers;
 }
 
-function setSession(server: McpServerConfig, id: string | null): void {
-  sessionIds[server.sourceId] = id;
-}
-
-async function initializeSession(server: McpServerConfig): Promise<string> {
+/**
+ * POST `initialize` to a server and return whatever session id the server
+ * issued — or `null` if the server is stateless and issued none. Either
+ * outcome is a successful initialization; the caller flips
+ * `state.initialized = true` on return.
+ */
+async function initializeSession(server: McpServerConfig): Promise<string | null> {
   const { signal, clear } = createTimeoutSignal(MCP_TIMEOUT_MS);
   let response: Response;
   try {
     response = await fetch(server.endpointUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json, text/event-stream',
-        ...(server.headers || {}),
-      },
+      headers: buildMcpRequestHeaders(server, null),
       signal,
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -89,21 +131,23 @@ async function initializeSession(server: McpServerConfig): Promise<string> {
     throw new Error(`MCP initialization failed for "${server.sourceId}": ${response.status}`);
   }
 
-  const newSessionId = response.headers.get('mcp-session-id');
-  if (!newSessionId) {
-    throw new Error(`No session ID returned from MCP server "${server.sourceId}"`);
-  }
-
-  return newSessionId;
+  // Session id header is optional per the MCP spec — stateless servers omit it.
+  return response.headers.get('mcp-session-id');
 }
 
-async function ensureSession(server: McpServerConfig): Promise<string> {
-  let id = getSession(server);
-  if (!id) {
-    id = await initializeSession(server);
-    setSession(server, id);
+/**
+ * Ensure a server has been initialized. Returns the session id issued during
+ * initialization, which may be `null` for stateless servers. Only triggers a
+ * real `initialize` call the first time (or after `resetServerState` on a
+ * session-expired retry).
+ */
+async function ensureInitialized(server: McpServerConfig): Promise<string | null> {
+  const state = getServerState(server);
+  if (!state.initialized) {
+    state.sessionId = await initializeSession(server);
+    state.initialized = true;
   }
-  return id;
+  return state.sessionId;
 }
 
 /**
@@ -120,16 +164,19 @@ export function routeTool(toolName: string): McpServerConfig {
 
 export async function callMcpTool(name: string, args: Record<string, unknown>): Promise<string> {
   const server = routeTool(name);
-  await ensureSession(server);
+  await ensureInitialized(server);
 
   try {
     return await makeToolCall(server, name, args);
   } catch (error) {
-    // Session expired / server restart: clear and retry once.
+    // For stateful servers (Socrata), a restart or session timeout can make a
+    // previously-valid session id stop working. Clear state and retry once.
+    // Stateless servers (Data Commons) never hit this branch — their session
+    // id is always null, and no server-side state means no invalidation.
     if (error instanceof Error && (error.message.includes('session') || error.message.includes('400'))) {
       console.log(`[MCP:${server.sourceId}] Session rejected, reinitializing...`);
-      setSession(server, null);
-      await ensureSession(server);
+      resetServerState(server);
+      await ensureInitialized(server);
       return await makeToolCall(server, name, args);
     }
     throw error;
@@ -143,22 +190,15 @@ async function makeToolCall(
 ): Promise<string> {
   console.log(`[MCP:${server.sourceId}] Calling tool:`, name, 'with args:', JSON.stringify(args));
 
-  const sessionId = getSession(server);
-  if (!sessionId) {
-    throw new Error(`MCP session missing for server "${server.sourceId}"`);
-  }
+  const state = getServerState(server);
+  const headers = buildMcpRequestHeaders(server, state.sessionId);
 
   const { signal, clear } = createTimeoutSignal(MCP_TIMEOUT_MS);
   let response: Response;
   try {
     response = await fetch(server.endpointUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json, text/event-stream',
-        'mcp-session-id': sessionId,
-        ...(server.headers || {}),
-      },
+      headers,
       signal,
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -249,15 +289,15 @@ export async function callMcpPrompt(name: string, args: Record<string, string>):
   if (!server) {
     throw new Error('Socrata MCP server is not configured; cannot fetch prompt');
   }
-  await ensureSession(server);
+  await ensureInitialized(server);
 
   try {
     return await makePromptCall(server, name, args);
   } catch (error) {
     if (error instanceof Error && (error.message.includes('session') || error.message.includes('400'))) {
       console.log(`[MCP:${server.sourceId}] Session rejected, reinitializing...`);
-      setSession(server, null);
-      await ensureSession(server);
+      resetServerState(server);
+      await ensureInitialized(server);
       return await makePromptCall(server, name, args);
     }
     throw error;
@@ -271,19 +311,12 @@ async function makePromptCall(
 ): Promise<string> {
   console.log(`[MCP:${server.sourceId}] Getting prompt:`, name, 'with args:', JSON.stringify(args));
 
-  const sessionId = getSession(server);
-  if (!sessionId) {
-    throw new Error(`MCP session missing for server "${server.sourceId}"`);
-  }
+  const state = getServerState(server);
+  const headers = buildMcpRequestHeaders(server, state.sessionId);
 
   const response = await fetch(server.endpointUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json, text/event-stream',
-      'mcp-session-id': sessionId,
-      ...(server.headers || {}),
-    },
+    headers,
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: Date.now(),

@@ -14,6 +14,7 @@ import {
   resolveServerForTool,
   readMcpEnvFromProcess,
 } from './registry.ts';
+import { buildMcpRequestHeaders } from './client.ts';
 
 const TEST_ENV = {
   socrataUrl: 'https://socrata-mcp.example.org',
@@ -94,6 +95,32 @@ test('readMcpEnvFromProcess falls back to defaults when env vars are unset', () 
     if (originalDc !== undefined) process.env.DATA_COMMONS_MCP_URL = originalDc;
     if (originalKey !== undefined) process.env.DATA_COMMONS_API_KEY = originalKey;
   }
+});
+
+test('Stateless server: request headers omit mcp-session-id, keep X-API-Key', () => {
+  // The Data Commons hosted endpoint is stateless and returns no
+  // mcp-session-id on initialize. Tool calls against such a server must
+  // still carry the registry-supplied headers (X-API-Key) but NOT an
+  // mcp-session-id header — which would otherwise be 'null' or 'undefined'
+  // coerced to a string.
+  const registry = buildMcpRegistry(TEST_ENV);
+  const dataCommons = registry.servers['data-commons'];
+  const headers = buildMcpRequestHeaders(dataCommons, null);
+  assert.equal(headers['Content-Type'], 'application/json');
+  assert.equal(headers['Accept'], 'application/json, text/event-stream');
+  assert.equal(headers['X-API-Key'], 'test-key-abc');
+  assert.ok(!('mcp-session-id' in headers), 'stateless server must not emit mcp-session-id header');
+
+  // Contrast: a stateful Socrata server with an issued session id should
+  // include the header.
+  const socrata = registry.servers.socrata;
+  const statefulHeaders = buildMcpRequestHeaders(socrata, 'session-xyz');
+  assert.equal(statefulHeaders['mcp-session-id'], 'session-xyz');
+
+  // Socrata before initialize completes (sessionId still null) — should also
+  // omit the header. Covers the `initialize` request itself.
+  const preInitHeaders = buildMcpRequestHeaders(socrata, null);
+  assert.ok(!('mcp-session-id' in preInitHeaders));
 });
 
 test('Every tool appears in exactly one server (no accidental overlap)', () => {
