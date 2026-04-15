@@ -58,7 +58,8 @@ export async function POST(request: NextRequest) {
       'analysis.portal': portal,
     });
 
-    // Fetch skill guidance (with trace span)
+    // Fetch skill guidance (with trace span). The composed prompt now spans
+    // both MCP sources (Socrata + Data Commons), so record both server URLs.
     const skillFetchSpanId = trace.startSpan('skill_fetch');
     const systemPromptWithMcp = await buildSystemPrompt(portal);
     const systemPromptHash = hash(systemPromptWithMcp);
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
       'skill.text_hash': systemPromptHash,
       'skill.text': systemPromptWithMcp,
       'skill.mcp_server_url': process.env.SOCRATA_MCP_URL || 'https://socrata-mcp.civicaitools.org',
+      'skill.data_commons_url': process.env.DATA_COMMONS_MCP_URL || 'https://api.datacommons.org/mcp',
     });
 
     const systemPromptWithoutMcp = `You are a helpful assistant.

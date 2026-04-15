@@ -1,7 +1,23 @@
-// Socrata MCP Skill - Domain knowledge for querying Socrata open data portals
-// Fetched from MCP server's prompt endpoint at runtime, with hardcoded fallback.
+// Multi-source MCP skill composition for the civic-ai-tools website.
+//
+// Despite the filename (historical — Socrata was the only source pre-M9.1),
+// `buildSystemPrompt` now composes the full multi-source system prompt:
+//
+//   1. Cross-source preamble  — "you have access to two data sources..."
+//   2. Socrata skill          — fetched from the Socrata MCP server's
+//                                prompts/get endpoint with a hardcoded
+//                                fallback; portal-specific guidance appended
+//   3. Data Commons server instructions — captured from the Data Commons
+//                                initialize response's `result.instructions`
+//                                field (MCP spec). Omitted when absent.
+//   4. Data Commons augmentation — DATA_COMMONS_SKILL from
+//                                ./data-commons-skill.ts (M9.2 skill doc).
+//
+// The order matters for LLM attention: cross-source decision logic lands
+// first so the model reads it before diving into source-specific details.
 
-import { callMcpPrompt } from './client';
+import { callMcpPrompt, getServerInstructions } from './client.ts';
+import { DATA_COMMONS_SKILL } from './data-commons-skill.ts';
 
 // Fallback constant used when the MCP server is unreachable.
 // NOTE: This may be stale — it was last synced at PR #19 and may be missing
@@ -418,23 +434,153 @@ async function fetchSkillGuidance(): Promise<string> {
   }
 }
 
+/**
+ * Identifier for an MCP data source. Mirrors the keys in `./registry.ts` so a
+ * source's skill text is keyed the same way as its tool routing. Adding a
+ * third source means widening this union and adding one entry to
+ * `SKILL_REGISTRY` below — no changes to `composeSkillPrompt` itself.
+ */
+export type SourceId = 'socrata' | 'data-commons';
+
+/**
+ * Inputs handed to every `SkillEntry.fetchText` call. Sources are free to
+ * ignore fields that don't apply to them (e.g. Data Commons ignores `portal`).
+ */
+export interface SkillContext {
+  /** Default Socrata portal, used by the Socrata entry to append portal-specific guidance. */
+  portal?: string;
+  /** Today's date as YYYY-MM-DD; used in the intro block. */
+  today: string;
+  /** Cross-source preamble inserted between the intro and the per-source blocks. Optional. */
+  preamble?: string;
+}
+
+/**
+ * One source's contribution to the composed system prompt. `fetchText` may do
+ * async I/O (MCP prompt fetch, `initialize`-time instructions). It must catch
+ * its own errors and return an empty string to opt out gracefully — the
+ * composer treats empty strings as "skip this source".
+ */
+export interface SkillEntry {
+  sourceId: SourceId;
+  fetchText(ctx: SkillContext): Promise<string>;
+}
+
+/**
+ * Map from `SourceId` to the entry that produces its skill text. `Partial`
+ * because tests inject smaller registries containing only the entries under
+ * test, and because the composer's "unknown sourceId" branch must be reachable
+ * from a real call site, not just from a hand-rolled stub.
+ */
+export type SkillRegistry = Partial<Record<SourceId, SkillEntry>>;
+
+const CROSS_SOURCE_PREAMBLE = `You have access to TWO MCP data sources through the tools below.
+
+1. **Socrata open data portals** — city operational data such as 311 requests, building permits, inspections, crime, housing violations, payroll, and licenses. Tools: get_data, search, fetch.
+2. **Google Data Commons** — authoritative federal and international statistical data from the U.S. Census Bureau (ACS, Decennial), BLS, CDC, Department of Education, EPA, and other official agencies. Tools: search_indicators, get_observations.
+
+When a question is about demographics, poverty, income, education, health, labor, or environment for a defined geography, prefer Data Commons. When a question is about city operations or anything that changes daily, prefer Socrata. When a question needs both — equity analyses that join city operations against demographic context — plan a multi-step analysis and attribute each figure to its source. See the Cross-source decision logic section in the Data Commons guidance below for the join pattern.`;
+
+const INTRO_TEMPLATE = (today: string) =>
+  `You are a helpful assistant with access to civic and statistical data via MCP tools.
+
+Today's date is ${today}. Always use this as the current date for interpreting relative time expressions like "last year" or "past two months."`;
+
+const OUTRO =
+  'When you get results, summarize clearly and cite the dataset ID (for Socrata) or the variable DCID + source dataset (for Data Commons).';
+
+/**
+ * Default registry. One entry per source the website talks to. Each entry's
+ * `fetchText` returns the source's pre-composed block of skill text, ready to
+ * be joined into the final prompt by `composeSkillPrompt`. The blocks are
+ * deliberately self-contained so the composer doesn't need source-specific
+ * branches.
+ */
+const SKILL_REGISTRY: SkillRegistry = {
+  socrata: {
+    sourceId: 'socrata',
+    async fetchText(ctx) {
+      const guidance = await fetchSkillGuidance();
+      const portalSection = ctx.portal
+        ? `\n\n## PORTAL-SPECIFIC GUIDANCE\nDefault portal: ${ctx.portal}\n${getSkillForPortal(ctx.portal)}`
+        : '';
+      return `# Socrata skill guidance\n\n${guidance}${portalSection}`;
+    },
+  },
+  'data-commons': {
+    sourceId: 'data-commons',
+    async fetchText() {
+      const instructions = await getServerInstructions('data-commons');
+      const instructionsBlock = instructions
+        ? `# Data Commons server instructions (from initialize response)\n\n${instructions}`
+        : '# Data Commons server instructions\n\n(The Data Commons MCP server did not advertise per-server instructions on initialize — composing with the embedded Data Commons skill only.)';
+      return `${instructionsBlock}\n\n---\n\n${DATA_COMMONS_SKILL}`;
+    },
+  },
+};
+
+/**
+ * Compose a multi-source LLM system prompt by joining an intro block, an
+ * optional cross-source preamble, one block per active source, and an outro.
+ * Pure aside from the I/O each registry entry chooses to do — the composer
+ * itself has no `process.env` reads, no global mutable state, and no
+ * source-specific branches.
+ *
+ * The default registry argument is the module-level `SKILL_REGISTRY`. Tests
+ * inject custom registries to exercise composition logic without mocking
+ * module imports; production callers leave the registry off.
+ *
+ * Sources that throw, return an empty string, or are missing from the
+ * registry are skipped silently with a warning logged. Composition always
+ * succeeds; an empty `activeSources` produces intro + preamble + outro.
+ */
+export async function composeSkillPrompt(
+  activeSources: SourceId[],
+  context: SkillContext,
+  registry: SkillRegistry = SKILL_REGISTRY,
+): Promise<string> {
+  const intro = INTRO_TEMPLATE(context.today);
+  const introBlock = context.preamble ? `${intro}\n\n${context.preamble}` : intro;
+
+  const sourceTexts = await Promise.all(
+    activeSources.map(async (sourceId) => {
+      const entry = registry[sourceId];
+      if (!entry) {
+        console.warn(`[composeSkillPrompt] Unknown sourceId "${sourceId}" — skipping`);
+        return '';
+      }
+      try {
+        return await entry.fetchText(context);
+      } catch (error) {
+        console.warn(
+          `[composeSkillPrompt] Failed to fetch text for "${sourceId}":`,
+          error instanceof Error ? error.message : error,
+        );
+        return '';
+      }
+    }),
+  );
+
+  const parts: string[] = [introBlock];
+  for (const text of sourceTexts) {
+    if (text && text.trim().length > 0) {
+      parts.push(text);
+    }
+  }
+  parts.push(OUTRO);
+
+  return parts.join('\n\n---\n\n');
+}
+
+/**
+ * Thin wrapper kept for backward compatibility with the existing route
+ * handlers. Delegates to `composeSkillPrompt` with the default active source
+ * list (`['socrata', 'data-commons']`) and the cross-source preamble.
+ */
 export const buildSystemPrompt = async (portal: string): Promise<string> => {
-  const [skillGuidance, portalGuidance] = await Promise.all([
-    fetchSkillGuidance(),
-    Promise.resolve(getSkillForPortal(portal)),
-  ]);
-
-  const today = new Date().toISOString().split('T')[0];
-
-  return `You are a helpful assistant with access to Socrata open data portals via the get_data tool.
-
-Today's date is ${today}. Always use this as the current date for interpreting relative time expressions like "last year" or "past two months."
-
-${skillGuidance}
-
-## PORTAL-SPECIFIC GUIDANCE
-Default portal: ${portal}
-${portalGuidance}
-
-When you get results, summarize clearly and cite the dataset ID used.`;
+  return composeSkillPrompt(['socrata', 'data-commons'], {
+    portal,
+    today: new Date().toISOString().split('T')[0],
+    preamble: CROSS_SOURCE_PREAMBLE,
+  });
 };

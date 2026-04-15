@@ -45,6 +45,14 @@ interface ServerState {
   initialized: boolean;
   /** Session id issued by the server on `initialize`, or null if stateless. */
   sessionId: string | null;
+  /**
+   * Per-server `instructions` text captured from the `initialize` response's
+   * `result.instructions` field (MCP spec, optional). Data Commons' hosted
+   * endpoint returns a "Research Assistant" primer here that seeds the LLM
+   * system prompt; Socrata returns nothing useful. Null until initialized or
+   * when the server does not advertise any instructions.
+   */
+  instructions: string | null;
 }
 
 const serverState: Record<string, ServerState> = {};
@@ -52,14 +60,14 @@ const serverState: Record<string, ServerState> = {};
 function getServerState(server: McpServerConfig): ServerState {
   let state = serverState[server.sourceId];
   if (!state) {
-    state = { initialized: false, sessionId: null };
+    state = { initialized: false, sessionId: null, instructions: null };
     serverState[server.sourceId] = state;
   }
   return state;
 }
 
 function resetServerState(server: McpServerConfig): void {
-  serverState[server.sourceId] = { initialized: false, sessionId: null };
+  serverState[server.sourceId] = { initialized: false, sessionId: null, instructions: null };
 }
 
 function createTimeoutSignal(ms: number): { signal: AbortSignal; clear: () => void } {
@@ -89,13 +97,37 @@ export function buildMcpRequestHeaders(
   return headers;
 }
 
+interface InitializeResult {
+  sessionId: string | null;
+  instructions: string | null;
+}
+
 /**
- * POST `initialize` to a server and return whatever session id the server
- * issued — or `null` if the server is stateless and issued none. Either
- * outcome is a successful initialization; the caller flips
- * `state.initialized = true` on return.
+ * Extract the first JSON payload from an MCP response body. MCP servers may
+ * return either SSE-wrapped format ("event: message\ndata: {...}\n\n") or
+ * raw JSON. Returns null when no payload is recognizable.
  */
-async function initializeSession(server: McpServerConfig): Promise<string | null> {
+function extractMcpJsonPayload(text: string): string | null {
+  const lines = text.split('\n');
+  for (const line of lines) {
+    if (line.startsWith('data:')) {
+      return line.slice(5).trim();
+    }
+  }
+  const trimmed = text.trim();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return trimmed;
+  }
+  return null;
+}
+
+/**
+ * POST `initialize` to a server and return both the session id it issued
+ * (may be null for stateless servers) and any `result.instructions` text the
+ * server advertised (MCP spec, optional). Either outcome is a successful
+ * initialization; the caller flips `state.initialized = true` on return.
+ */
+async function initializeSession(server: McpServerConfig): Promise<InitializeResult> {
   const { signal, clear } = createTimeoutSignal(MCP_TIMEOUT_MS);
   let response: Response;
   try {
@@ -132,22 +164,73 @@ async function initializeSession(server: McpServerConfig): Promise<string | null
   }
 
   // Session id header is optional per the MCP spec — stateless servers omit it.
-  return response.headers.get('mcp-session-id');
+  const sessionId = response.headers.get('mcp-session-id');
+
+  // Parse the body for a `result.instructions` field. MCP servers that ship
+  // a pre-canned LLM primer advertise it here; others omit it. Parse failures
+  // are tolerated silently — initialization itself is still successful.
+  let instructions: string | null = null;
+  try {
+    const text = await response.text();
+    const jsonData = extractMcpJsonPayload(text);
+    if (jsonData) {
+      const parsed = JSON.parse(jsonData);
+      const rawInstructions = parsed?.result?.instructions;
+      if (typeof rawInstructions === 'string' && rawInstructions.length > 0) {
+        instructions = rawInstructions;
+        console.log(
+          `[MCP:${server.sourceId}] Captured server instructions (${rawInstructions.length} chars) from initialize response`,
+        );
+      }
+    }
+  } catch (error) {
+    console.warn(
+      `[MCP:${server.sourceId}] Could not parse initialize response body for instructions:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+
+  return { sessionId, instructions };
 }
 
 /**
  * Ensure a server has been initialized. Returns the session id issued during
  * initialization, which may be `null` for stateless servers. Only triggers a
  * real `initialize` call the first time (or after `resetServerState` on a
- * session-expired retry).
+ * session-expired retry). Also caches any `instructions` text the server
+ * advertised so the skill-composition layer can read it without a second call.
  */
 async function ensureInitialized(server: McpServerConfig): Promise<string | null> {
   const state = getServerState(server);
   if (!state.initialized) {
-    state.sessionId = await initializeSession(server);
+    const { sessionId, instructions } = await initializeSession(server);
+    state.sessionId = sessionId;
+    state.instructions = instructions;
     state.initialized = true;
   }
   return state.sessionId;
+}
+
+/**
+ * Fetch the per-server `instructions` text captured during initialize, if
+ * the server advertised any. Initializes the server lazily if it hasn't been
+ * touched yet. Returns null when the server did not advertise instructions
+ * or initialization failed — callers should treat an empty result as a
+ * soft failure and compose the skill prompt without the server's text.
+ */
+export async function getServerInstructions(sourceId: string): Promise<string | null> {
+  const server = registry.servers[sourceId];
+  if (!server) return null;
+  try {
+    await ensureInitialized(server);
+  } catch (error) {
+    console.warn(
+      `[MCP:${sourceId}] Could not initialize for instructions fetch:`,
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
+  return getServerState(server).instructions;
 }
 
 /**
