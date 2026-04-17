@@ -135,6 +135,23 @@ export async function getRfc3161Timestamp(packageHash: string): Promise<string |
 }
 
 /**
+ * Derive the hex value that Rekor stores in `spec.data.hash.value` for
+ * a given package. Rekor's hashedrekord Ed25519ph verifier treats this
+ * value as the SHA-512 prehash of the signed message, so we mirror that
+ * here: SHA-512 over the UTF-8 bytes of the hex package hash.
+ *
+ * Exported so `verifyRekorEntry` in `verify.ts` can recompute the same
+ * expected value when cross-checking a Rekor entry — the raw SHA-256
+ * `packageHash` does NOT match what Rekor stores.
+ */
+export function rekorHashForPackage(packageHash: string): string {
+  return crypto
+    .createHash('sha512')
+    .update(Buffer.from(packageHash, 'utf-8'))
+    .digest('hex');
+}
+
+/**
  * Re-encode a base64 SPKI-DER public key as a base64-wrapped PEM block.
  * Rekor's `x509.NewPublicKey` requires PEM — raw base64 DER is rejected
  * with "invalid public key: failure decoding PEM".
@@ -171,8 +188,7 @@ export async function publishToRekor(
   publicKeyDerB64: string,
 ): Promise<RekorResult | null> {
   try {
-    const messageBytes = Buffer.from(packageHash, 'utf-8');
-    const sha512HashHex = crypto.createHash('sha512').update(messageBytes).digest('hex');
+    const sha512HashHex = rekorHashForPackage(packageHash);
     const pubKeyPemB64 = derPublicKeyToPemBase64(publicKeyDerB64);
 
     const body = {

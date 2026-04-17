@@ -8,6 +8,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   verifyKeyTrust,
+  loadTrustRegistry,
+  clearTrustRegistryCache,
   type TrustRegistry,
 } from './verify.ts';
 
@@ -217,6 +219,34 @@ test('Rotation scenario: old key deprecated + new key active, both resolve corre
   const forged = verifyKeyTrust(PUB, NEW_KID, undefined, registry);
   assert.equal(forged.status, 'unknown_key');
   assert.equal(forged.verified, false);
+});
+
+// --- loadTrustRegistry: filesystem read path (Bug 1 fix) ---
+//
+// Vercel preview deployments put an HTML auth wall in front of
+// `/.well-known/*` URLs, so the loader must read the registry from disk
+// instead of fetching HTTP. These tests exercise that path against the
+// real file checked into `public/.well-known/evidence-public-keys.json`.
+
+test('loadTrustRegistry reads the checked-in registry from disk', async () => {
+  clearTrustRegistryCache();
+  // Point the HTTP URL at a guaranteed-invalid host; the loader should
+  // still succeed because the filesystem path is tried first.
+  const registry = await loadTrustRegistry('http://127.0.0.1:1/invalid');
+  assert.ok(registry, 'loadTrustRegistry returned undefined even though the on-disk registry exists');
+  assert.ok(registry!.keys.length > 0);
+  const activeKey = registry!.keys.find((k) => k.status === 'active');
+  assert.ok(activeKey, 'registry should have at least one active key');
+  assert.ok(activeKey!.kid.startsWith('platform:'));
+  assert.ok(activeKey!.publicKey && !activeKey!.publicKey.includes('REPLACE_WITH'));
+});
+
+test('loadTrustRegistry caches the disk read across calls', async () => {
+  clearTrustRegistryCache();
+  const a = await loadTrustRegistry('http://127.0.0.1:1/invalid');
+  const b = await loadTrustRegistry('http://127.0.0.1:1/invalid');
+  // Same reference → served from cache, not re-read.
+  assert.strictEqual(a, b);
 });
 
 test('Compromise scenario: revoked key + replacement active key', () => {

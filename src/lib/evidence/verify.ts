@@ -1,5 +1,17 @@
 import crypto from 'crypto';
+import { promises as fs } from 'fs';
+import path from 'path';
 import { ed25519ph } from '@noble/curves/ed25519.js';
+import { rekorHashForPackage } from './signing.ts';
+
+// Build-time import of the checked-in trust registry. This is the most
+// reliable source on Vercel: a filesystem read relies on `process.cwd()`
+// resolving to a directory that actually contains the bundled `public/`
+// folder, and an HTTP fetch back to our own origin is blocked by
+// preview-deployment auth walls. The static import has Next.js bundle
+// the JSON into the function's module graph at build time so
+// `loadTrustRegistry` can return a result synchronously.
+import embeddedTrustRegistry from '../../../public/.well-known/evidence-public-keys.json' with { type: 'json' };
 
 /**
  * Extract the raw 32-byte Ed25519 public key from a base64 SPKI DER
@@ -49,11 +61,18 @@ export interface RekorVerifyResult {
 }
 
 /**
- * Verify a Rekor transparency log entry matches the expected hash.
+ * Verify that a Rekor transparency log entry is consistent with a
+ * published package.
+ *
+ * The `packageHash` argument is the SHA-256 hash our system stores as
+ * `basePackageHash`. Rekor's entry does NOT store that value directly —
+ * it stores the SHA-512 prehash of the signed message
+ * (see `rekorHashForPackage` in signing.ts), because the submission uses
+ * Ed25519ph. We derive the expected Rekor hash here and compare.
  */
 export async function verifyRekorEntry(
   entryId: string,
-  expectedHash: string,
+  packageHash: string,
 ): Promise<RekorVerifyResult> {
   try {
     const response = await fetch(
@@ -69,12 +88,14 @@ export async function verifyRekorEntry(
     const entry = result[entryId] || Object.values(result)[0];
     if (!entry) return { verified: false };
 
-    // Decode the body to check the hash
+    // Decode the body and cross-check both hash algorithm and value.
     const body = JSON.parse(
       Buffer.from(entry.body, 'base64').toString('utf-8'),
     );
-    const recordedHash = body?.spec?.data?.hash?.value;
-    const verified = recordedHash === expectedHash;
+    const recordedHash: string | undefined = body?.spec?.data?.hash?.value;
+    const recordedAlgo: string | undefined = body?.spec?.data?.hash?.algorithm;
+    const expectedHash = rekorHashForPackage(packageHash);
+    const verified = recordedAlgo === 'sha512' && recordedHash === expectedHash;
 
     return {
       verified,
@@ -251,6 +272,9 @@ export function getTrustRegistryUrl(): string {
   return `${site.replace(/\/$/, '')}/.well-known/evidence-public-keys.json`;
 }
 
+/** Filesystem location of the registry within the Next.js build output. */
+const REGISTRY_PUBLIC_PATH = path.join('public', '.well-known', 'evidence-public-keys.json');
+
 export async function loadTrustRegistry(
   url: string = getTrustRegistryUrl(),
 ): Promise<TrustRegistry | undefined> {
@@ -258,14 +282,51 @@ export async function loadTrustRegistry(
   if (cached && cached.expiresAt > Date.now()) {
     return cached.registry;
   }
-  const fetched = await fetchTrustRegistry(url);
-  registryCache.set(url, { registry: fetched, expiresAt: Date.now() + REGISTRY_TTL_MS });
-  return fetched;
+  // Resolution order:
+  //   1. Build-time bundled JSON (always present in the deploy artifact)
+  //   2. On-disk read (dev server, tests running from project root)
+  //   3. HTTP fetch (external verifiers / cross-origin)
+  // The HTTP path exists for external adopters; our own verify route
+  // should never need it because the bundled import is authoritative.
+  const resolved =
+    validateRegistry(embeddedTrustRegistry as unknown) ??
+    (await readTrustRegistryFromDisk()) ??
+    (await fetchTrustRegistry(url));
+  registryCache.set(url, { registry: resolved, expiresAt: Date.now() + REGISTRY_TTL_MS });
+  return resolved;
+}
+
+function validateRegistry(data: unknown): TrustRegistry | undefined {
+  if (
+    typeof data === 'object' &&
+    data !== null &&
+    Array.isArray((data as { keys?: unknown[] }).keys) &&
+    (data as { keys: TrustRegistryKey[] }).keys.every((k) => typeof k?.kid === 'string' && typeof k?.publicKey === 'string')
+  ) {
+    return data as TrustRegistry;
+  }
+  return undefined;
 }
 
 /** For tests / rotation drills: drop the in-memory cache. */
 export function clearTrustRegistryCache(): void {
   registryCache.clear();
+}
+
+async function readTrustRegistryFromDisk(): Promise<TrustRegistry | undefined> {
+  try {
+    const localPath = path.join(process.cwd(), REGISTRY_PUBLIC_PATH);
+    const json = await fs.readFile(localPath, 'utf-8');
+    return validateRegistry(JSON.parse(json));
+  } catch (err) {
+    // Not all runtimes have the file at the expected path (e.g. unit
+    // tests run from a different cwd). Silently fall through so callers
+    // can still try the HTTP URL.
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.warn('[verify] Failed to read trust registry from disk:', err instanceof Error ? err.message : err);
+    }
+    return undefined;
+  }
 }
 
 async function fetchTrustRegistry(url: string): Promise<TrustRegistry | undefined> {
@@ -275,12 +336,14 @@ async function fetchTrustRegistry(url: string): Promise<TrustRegistry | undefine
       console.warn(`[verify] Trust registry fetch returned ${res.status}`);
       return undefined;
     }
-    const data = await res.json();
-    if (!data || !Array.isArray(data.keys)) {
-      console.warn('[verify] Trust registry has invalid shape');
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('json')) {
+      // Vercel preview protection returns an HTML auth wall with 200 OK.
+      // Refuse to treat that as the registry.
+      console.warn(`[verify] Trust registry fetch returned unexpected content-type "${ct}"`);
       return undefined;
     }
-    return data as TrustRegistry;
+    return validateRegistry(await res.json());
   } catch (err) {
     console.warn('[verify] Trust registry fetch failed:', err instanceof Error ? err.message : err);
     return undefined;

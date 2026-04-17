@@ -11,7 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { signPackage, getActiveKeyId } from './signing.ts';
+import { signPackage, getActiveKeyId, rekorHashForPackage } from './signing.ts';
 import { verifySignature } from './verify.ts';
 
 function generateTestKeyEnv(): { privB64: string; pubB64: string } {
@@ -103,6 +103,23 @@ test('getActiveKeyId returns EVIDENCE_KEY_ID when set, default otherwise', () =>
     if (orig === undefined) delete process.env.EVIDENCE_KEY_ID;
     else process.env.EVIDENCE_KEY_ID = orig;
   }
+});
+
+test('rekorHashForPackage: SHA-512 of UTF-8 of hex package hash', () => {
+  // The value Rekor stores in spec.data.hash.value for a signed package
+  // is SHA-512 over the UTF-8 bytes of the hex SHA-256 hash — matching
+  // what signPackage signs via Ed25519ph's internal prehash. This
+  // invariant is what verifyRekorEntry compares against; any drift between
+  // sign-time and verify-time derivation silently breaks Rekor
+  // verification in the UI.
+  const packageHash = 'acdb56712cc0e735589e39d485dcd2c3d34a611b6752ab2f8b703e13008a3004';
+  const expected = crypto
+    .createHash('sha512')
+    .update(Buffer.from(packageHash, 'utf-8'))
+    .digest('hex');
+  assert.equal(rekorHashForPackage(packageHash), expected);
+  // SHA-512 hex is always 128 characters
+  assert.equal(rekorHashForPackage(packageHash).length, 128);
 });
 
 test('Cross-check: signature verifies as Ed25519ph (prehashed with SHA-512)', async () => {
