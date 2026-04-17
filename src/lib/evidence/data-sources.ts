@@ -33,6 +33,45 @@ export interface DataSourceEntry {
   accessTimestamp: string;
 }
 
+/** Human-friendly display label for a `sourceId`. Unknown ids fall back to a
+ *  capitalised form of the raw id so new sources render sensibly before the
+ *  map is updated. */
+const SOURCE_DISPLAY_NAMES: Record<string, string> = {
+  socrata: 'Socrata',
+  'data-commons': 'Data Commons',
+};
+
+export function displayNameForSource(sourceId: string | undefined | null): string {
+  // Pre-M9.3 evidence packages have no `sourceId` field on dataSources entries
+  // (dataSources was Socrata-only before the multi-source refactor), so coerce
+  // missing ids to `socrata` rather than throwing on an empty string.
+  const id = sourceId || 'socrata';
+  return (
+    SOURCE_DISPLAY_NAMES[id]
+    ?? id
+      .split('-')
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ')
+  );
+}
+
+/** Format a `dataSources` array as a compact, de-duplicated summary string
+ *  suitable for the evidence detail page "Data sources" field. Returns `null`
+ *  when the array is empty or missing, letting callers render a fallback. */
+export function formatDataSourcesSummary(entries: DataSourceEntry[] | undefined): string | null {
+  if (!entries || entries.length === 0) return null;
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const entry of entries) {
+    const name = displayNameForSource(entry.sourceId);
+    if (seen.has(name)) continue;
+    seen.add(name);
+    ordered.push(name);
+  }
+  return ordered.join(' \u00b7 ');
+}
+
 interface TraceSpan {
   name: string;
   attributes?: Array<{ key: string; value?: { stringValue?: string; intValue?: string; boolValue?: boolean } }>;

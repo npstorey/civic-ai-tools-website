@@ -13,6 +13,7 @@ import ProvenanceGraphSection from '@/components/evidence/ProvenanceGraphSection
 import NotebookSection from '@/components/evidence/NotebookSection';
 import SkillSection from '@/components/evidence/SkillSection';
 import { formatModelName, estimateCostUsd } from '@/lib/models';
+import { formatDataSourcesSummary } from '@/lib/evidence/data-sources';
 
 const NOTEBOOK_EXTENSION_KEY = 'org.civicaitools.notebook';
 
@@ -325,9 +326,10 @@ export default async function EvidencePage({ params }: PageProps) {
                 pkg.cost.completionTokens || 0,
               );
               const skillHash = pkg.skillMetadata.systemPromptHash;
+              const dataSourcesSummary = formatDataSourcesSummary(pkg.dataSources);
               const items: Array<{ label: string; value: React.ReactNode; mono?: boolean }> = [
                 { label: 'Model', value: formatModelName(pkg.cost.model) },
-                { label: 'Skill', value: 'Socrata MCP Skill Guidance' },
+                { label: 'Data sources', value: dataSourcesSummary ?? '—' },
                 ...(skillHash ? [{
                   label: 'Skill hash',
                   value: skillHash.slice(0, 12),

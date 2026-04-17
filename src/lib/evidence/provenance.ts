@@ -1,5 +1,5 @@
-import { hash } from './trace';
-import type { OTelTrace, Span, OTelAttribute } from './trace';
+import { hash } from './trace.ts';
+import type { OTelTrace, Span, OTelAttribute } from './trace.ts';
 
 /**
  * W3C PROV-O JSON-LD graph built from an OTel trace.
@@ -81,9 +81,10 @@ export function buildProvenanceGraph(
   }
   graph.push(promptEntity);
 
-  // Skill guidance (from skill_fetch span). The skill MCP server URL points at
-  // the prompt source (Socrata today). Multi-source analyses still fetch a
-  // single skill; per-source tool agents are emitted from the tool spans below.
+  // Skill guidance (from skill_fetch span). Since M9.2 the skill is a
+  // composition of per-source guidance (Socrata + Data Commons), so the
+  // description is source-neutral. Per-source tool agents are emitted from
+  // the tool spans below based on which sources were actually invoked.
   const skillSpan = spans.find(s => s.name === 'skill_fetch');
   const skillHash = skillSpan ? getAttr(skillSpan.attributes, 'skill.text_hash') : undefined;
   const skillServerUrl = skillSpan ? getAttr(skillSpan.attributes, 'skill.mcp_server_url') : undefined;
@@ -93,7 +94,7 @@ export function buildProvenanceGraph(
       '@id': urn(packageId, 'skill', skillHash),
       '@type': ['prov:Entity', 'prov:Plan'],
       'civic:contentHash': `sha256:${skillHash}`,
-      'dcterms:description': 'Socrata MCP skill guidance (system prompt)',
+      'dcterms:description': 'Composed MCP skill guidance (system prompt)',
     });
   }
 
@@ -140,10 +141,6 @@ export function buildProvenanceGraph(
     const source = getAttr(span.attributes, 'mcp.source') || 'socrata';
     sourcesInTrace.add(source);
   }
-  // Always emit the Socrata agent when a skill was fetched (the skill prompt
-  // itself currently comes from the Socrata MCP, so the agent needs to exist
-  // whether or not a tool call hit it in this specific analysis).
-  if (skillHash) sourcesInTrace.add('socrata');
 
   for (const sourceId of sourcesInTrace) {
     const meta = sourceAgentMap[sourceId] ?? {

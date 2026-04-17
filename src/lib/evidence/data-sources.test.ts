@@ -13,6 +13,9 @@ import assert from 'node:assert/strict';
 import {
   buildDataSources,
   resolveToolSource,
+  displayNameForSource,
+  formatDataSourcesSummary,
+  type DataSourceEntry,
   type ToolCallSummary,
 } from './data-sources.ts';
 
@@ -204,4 +207,86 @@ test('Trace span mcp.source wins over tool-name mapping when they disagree', () 
 test('Unknown tool with no trace span defaults to socrata (pre-M9.1 backward compat)', () => {
   const tc: ToolCallSummary = { name: 'mystery_tool', args: {} };
   assert.equal(resolveToolSource(tc, undefined), 'socrata');
+});
+
+// --- Display helpers for the evidence detail page UI ---
+
+test('displayNameForSource maps known source ids to friendly names', () => {
+  assert.equal(displayNameForSource('socrata'), 'Socrata');
+  assert.equal(displayNameForSource('data-commons'), 'Data Commons');
+});
+
+test('displayNameForSource capitalises unknown ids so new sources render sensibly', () => {
+  assert.equal(displayNameForSource('boston-core'), 'Boston Core');
+  assert.equal(displayNameForSource('eurostat'), 'Eurostat');
+});
+
+test('displayNameForSource coerces missing sourceId to Socrata (pre-M9.3 packages)', () => {
+  // Evidence packages published before the multi-source dataSources refactor
+  // have no `sourceId` field. Treat them as Socrata since that was the only
+  // possible source at the time.
+  assert.equal(displayNameForSource(undefined), 'Socrata');
+  assert.equal(displayNameForSource(null), 'Socrata');
+  assert.equal(displayNameForSource(''), 'Socrata');
+});
+
+test('formatDataSourcesSummary returns null for missing or empty arrays', () => {
+  assert.equal(formatDataSourcesSummary(undefined), null);
+  assert.equal(formatDataSourcesSummary([]), null);
+});
+
+test('formatDataSourcesSummary renders single-source DC package without Socrata leakage', () => {
+  const entries: DataSourceEntry[] = [
+    {
+      sourceId: 'data-commons',
+      catalogType: 'data-commons',
+      portalUrl: 'https://api.datacommons.org/mcp',
+      accessTimestamp: NOW,
+    },
+  ];
+  assert.equal(formatDataSourcesSummary(entries), 'Data Commons');
+});
+
+test('formatDataSourcesSummary dedupes multiple Socrata dataset entries into one name', () => {
+  const entries: DataSourceEntry[] = [
+    {
+      sourceId: 'socrata',
+      catalogType: 'socrata',
+      portalUrl: 'https://data.cityofnewyork.us',
+      datasetId: 'erm2-nwe9',
+      datasetUrl: 'https://data.cityofnewyork.us/d/erm2-nwe9',
+      accessTimestamp: NOW,
+    },
+    {
+      sourceId: 'socrata',
+      catalogType: 'socrata',
+      portalUrl: 'https://data.cityofnewyork.us',
+      datasetId: '43nn-pn8j',
+      datasetUrl: 'https://data.cityofnewyork.us/d/43nn-pn8j',
+      accessTimestamp: NOW,
+    },
+  ];
+  assert.equal(formatDataSourcesSummary(entries), 'Socrata');
+});
+
+test('formatDataSourcesSummary joins multi-source entries with a middle-dot separator', () => {
+  const entries: DataSourceEntry[] = [
+    {
+      sourceId: 'socrata',
+      catalogType: 'socrata',
+      portalUrl: 'https://data.cityofnewyork.us',
+      datasetId: 'erm2-nwe9',
+      datasetUrl: 'https://data.cityofnewyork.us/d/erm2-nwe9',
+      accessTimestamp: NOW,
+    },
+    {
+      sourceId: 'data-commons',
+      catalogType: 'data-commons',
+      portalUrl: 'https://api.datacommons.org/mcp',
+      accessTimestamp: NOW,
+    },
+  ];
+  // Uses \u00b7 (middle dot) — matches the separator convention elsewhere in
+  // the UI (ProvenanceChain step details).
+  assert.equal(formatDataSourcesSummary(entries), 'Socrata \u00b7 Data Commons');
 });

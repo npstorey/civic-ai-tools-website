@@ -117,7 +117,7 @@ export default function ProvenanceChain({ pkg }: ProvenanceChainProps) {
         {pkg.skillMetadata.systemPromptHash && (
           <div style={{ marginTop: '4px' }}>
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              Socrata MCP Skill Guidance
+              Skill guidance
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace', marginTop: '2px' }}>
               {pkg.skillMetadata.systemPromptHash.slice(0, 12)}
