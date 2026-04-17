@@ -58,6 +58,10 @@ KV_REST_API_TOKEN=
 - Anonymous users: 5 requests/day
 - Signed-in users (GitHub): 25 requests/day
 
+## API documentation
+
+- [`POST /api/evidence`](docs/api/evidence-publish.md) — publish an evidence package (request/response schema, auth pattern, worked curl example for external clients)
+
 ## Contributing
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
