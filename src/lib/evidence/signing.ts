@@ -1,6 +1,15 @@
 import crypto from 'crypto';
+import { ed25519ph } from '@noble/curves/ed25519.js';
 
-const ALGORITHM = 'Ed25519';
+// Signature algorithm identifier stored alongside each signature and
+// embedded in the evidence package metadata. Rekor's hashedrekord
+// verifier (sigstore/rekor@v1.x, 2024+) requires Ed25519ph (pre-hashed
+// Ed25519 with SHA-512) for bare Ed25519 public keys rather than pure
+// Ed25519 — see https://github.com/sigstore/rekor/pull/1945. Node's
+// crypto.sign doesn't expose Ed25519ph, so we use @noble/curves for the
+// sign/verify path. The key material on disk is unchanged: same Ed25519
+// keypair, just a different signing algorithm.
+const ALGORITHM = 'Ed25519ph';
 
 // Default key identifier used when `EVIDENCE_KEY_ID` is not set. The
 // `platform:` prefix leaves room for per-user scopes in the future
@@ -33,8 +42,47 @@ interface RekorResult {
 }
 
 /**
- * Sign a package hash with the platform Ed25519 key.
- * Returns null if EVIDENCE_SIGNING_KEY is not configured.
+ * Extract the 32-byte raw Ed25519 private key seed from a PKCS8 DER key.
+ * Noble's Ed25519ph API takes raw seed bytes; Node's crypto produces
+ * PKCS8 DER. We go through JWK because that's the supported
+ * interchange format exposed by Node's KeyObject.
+ */
+function extractRawPrivateKey(privKeyB64Der: string): Uint8Array {
+  const privateKey = crypto.createPrivateKey({
+    key: Buffer.from(privKeyB64Der, 'base64'),
+    format: 'der',
+    type: 'pkcs8',
+  });
+  const jwk = privateKey.export({ format: 'jwk' });
+  if (!jwk.d) throw new Error('Ed25519 private key JWK missing "d"');
+  return Uint8Array.from(Buffer.from(jwk.d, 'base64url'));
+}
+
+/**
+ * Derive the SPKI DER public key from a PKCS8 DER private key. Retained as
+ * `publicKey` in SignResult (base64 DER) so on-disk and in-registry
+ * encodings are stable across the Ed25519 / Ed25519ph switch; Rekor
+ * submission re-encodes to PEM where required.
+ */
+function derivePublicKeyDer(privKeyB64Der: string): string {
+  const privateKey = crypto.createPrivateKey({
+    key: Buffer.from(privKeyB64Der, 'base64'),
+    format: 'der',
+    type: 'pkcs8',
+  });
+  const pubKeyDer = crypto.createPublicKey(privateKey).export({ format: 'der', type: 'spki' });
+  return pubKeyDer.toString('base64');
+}
+
+/**
+ * Sign a package hash with the platform Ed25519 key using Ed25519ph
+ * (SHA-512 pre-hash). Returns null if EVIDENCE_SIGNING_KEY is not
+ * configured.
+ *
+ * The signed message is the UTF-8 bytes of the package hex hash — same
+ * convention used on the verify side. Ed25519ph prehashes this internally
+ * with SHA-512 to produce the 64-byte digest that the signature commits
+ * to, which is also what Rekor stores as `spec.data.hash`.
  */
 export function signPackage(packageHash: string): SignResult | null {
   const privKeyB64 = process.env.EVIDENCE_SIGNING_KEY;
@@ -43,21 +91,14 @@ export function signPackage(packageHash: string): SignResult | null {
     return null;
   }
 
-  const privateKey = crypto.createPrivateKey({
-    key: Buffer.from(privKeyB64, 'base64'),
-    format: 'der',
-    type: 'pkcs8',
-  });
-
-  const signature = crypto.sign(null, Buffer.from(packageHash, 'utf-8'), privateKey);
-
-  // Derive public key from private key
-  const publicKey = crypto.createPublicKey(privateKey);
-  const pubKeyDer = publicKey.export({ format: 'der', type: 'spki' });
+  const privBytes = extractRawPrivateKey(privKeyB64);
+  const message = Buffer.from(packageHash, 'utf-8');
+  const signature = ed25519ph.sign(message, privBytes);
+  const pubKeyDerB64 = derivePublicKeyDer(privKeyB64);
 
   return {
-    signature: signature.toString('base64'),
-    publicKey: pubKeyDer.toString('base64'),
+    signature: Buffer.from(signature).toString('base64'),
+    publicKey: pubKeyDerB64,
     algorithm: ALGORITHM,
     kid: getActiveKeyId(),
   };
@@ -94,26 +135,56 @@ export async function getRfc3161Timestamp(packageHash: string): Promise<string |
 }
 
 /**
+ * Re-encode a base64 SPKI-DER public key as a base64-wrapped PEM block.
+ * Rekor's `x509.NewPublicKey` requires PEM — raw base64 DER is rejected
+ * with "invalid public key: failure decoding PEM".
+ */
+function derPublicKeyToPemBase64(pubKeyDerB64: string): string {
+  // PEM is the DER bytes in base64, line-wrapped to 64 chars, between
+  // BEGIN/END banners. Rekor accepts either the raw PEM or a base64 of
+  // the PEM; we use the latter because every other `content` field in
+  // the submission body is base64-encoded.
+  const pemBody = pubKeyDerB64.match(/.{1,64}/g)?.join('\n') ?? pubKeyDerB64;
+  const pem = `-----BEGIN PUBLIC KEY-----\n${pemBody}\n-----END PUBLIC KEY-----\n`;
+  return Buffer.from(pem).toString('base64');
+}
+
+/**
  * Publish package hash + signature to Sigstore Rekor transparency log.
  * Returns entry metadata, or null on failure.
+ *
+ * Rekor's hashedrekord v0.0.1 verifier applies Ed25519ph for bare
+ * Ed25519 keys, which means:
+ *   - `data.hash.algorithm` must be `sha512`
+ *   - `data.hash.value` must be hex(SHA-512(signed message))
+ *   - `signature.content` must be an Ed25519ph signature over the same
+ *     signed message (see `signPackage` above)
+ *   - `publicKey.content` must be base64(PEM-wrapped SPKI DER)
+ *
+ * The signed message in our system is the UTF-8 hex representation of
+ * the SHA-256 package hash, preserved here so the Rekor-stored digest
+ * can be independently reproduced from `basePackageHash`.
  */
 export async function publishToRekor(
   packageHash: string,
   signature: string,
-  publicKey: string,
+  publicKeyDerB64: string,
 ): Promise<RekorResult | null> {
   try {
-    // Rekor hashedrekord v0.0.1 format
+    const messageBytes = Buffer.from(packageHash, 'utf-8');
+    const sha512HashHex = crypto.createHash('sha512').update(messageBytes).digest('hex');
+    const pubKeyPemB64 = derPublicKeyToPemBase64(publicKeyDerB64);
+
     const body = {
       apiVersion: '0.0.1',
       kind: 'hashedrekord',
       spec: {
         data: {
-          hash: { algorithm: 'sha256', value: packageHash },
+          hash: { algorithm: 'sha512', value: sha512HashHex },
         },
         signature: {
           content: signature,
-          publicKey: { content: Buffer.from(publicKey, 'base64').toString('base64') },
+          publicKey: { content: pubKeyPemB64 },
         },
       },
     };

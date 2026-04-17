@@ -143,7 +143,12 @@ export async function POST(request: NextRequest) {
       basePackageHash: packageHash,
       basePackageStorageKey: blobUrl,
       basePackageSignature: signResult
-        ? JSON.stringify({ signature: signResult.signature, publicKey: signResult.publicKey, algorithm: signResult.algorithm })
+        ? JSON.stringify({
+            signature: signResult.signature,
+            publicKey: signResult.publicKey,
+            algorithm: signResult.algorithm,
+            kid: signResult.kid,
+          })
         : null,
       basePackageRfc3161Timestamp: rfc3161Token,
       basePackageRekorEntryId: rekorResult?.entryId || null,

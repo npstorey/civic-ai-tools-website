@@ -1,7 +1,29 @@
 import crypto from 'crypto';
+import { ed25519ph } from '@noble/curves/ed25519.js';
 
 /**
- * Verify an Ed25519 signature against a package hash.
+ * Extract the raw 32-byte Ed25519 public key from a base64 SPKI DER
+ * encoding via Node's JWK export. Noble's `ed25519ph.verify` wants raw
+ * key bytes; Node's crypto surfaces them through JWK.
+ */
+function extractRawPublicKey(publicKeyB64Der: string): Uint8Array {
+  const publicKey = crypto.createPublicKey({
+    key: Buffer.from(publicKeyB64Der, 'base64'),
+    format: 'der',
+    type: 'spki',
+  });
+  const jwk = publicKey.export({ format: 'jwk' });
+  if (!jwk.x) throw new Error('Ed25519 public key JWK missing "x"');
+  return Uint8Array.from(Buffer.from(jwk.x, 'base64url'));
+}
+
+/**
+ * Verify an Ed25519ph signature against the package hash.
+ *
+ * The signed message is the UTF-8 bytes of the package hex hash — the
+ * same convention used by `signPackage` in `signing.ts`. Ed25519ph
+ * prehashes the message with SHA-512 before the Ed25519 verify, which
+ * matches the format Rekor uses to validate the same signature.
  */
 export function verifySignature(
   packageHash: string,
@@ -9,17 +31,10 @@ export function verifySignature(
   publicKeyB64: string,
 ): boolean {
   try {
-    const publicKey = crypto.createPublicKey({
-      key: Buffer.from(publicKeyB64, 'base64'),
-      format: 'der',
-      type: 'spki',
-    });
-    return crypto.verify(
-      null,
-      Buffer.from(packageHash, 'utf-8'),
-      publicKey,
-      Buffer.from(signatureB64, 'base64'),
-    );
+    const pubBytes = extractRawPublicKey(publicKeyB64);
+    const sigBytes = Uint8Array.from(Buffer.from(signatureB64, 'base64'));
+    const messageBytes = Uint8Array.from(Buffer.from(packageHash, 'utf-8'));
+    return ed25519ph.verify(sigBytes, messageBytes, pubBytes);
   } catch (err) {
     console.error('[verify] Signature verification error:', err);
     return false;
