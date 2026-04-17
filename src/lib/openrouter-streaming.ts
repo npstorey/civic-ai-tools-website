@@ -3,6 +3,7 @@ import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/reso
 import { formatToolProgress, formatToolResult, generateToolReason, type PanelType, type ProgressPhase } from './streaming';
 import type { TraceBuilder } from './evidence/trace';
 import { hash as traceHash } from './evidence/trace';
+import { deriveOperationType } from './mcp/operation-types';
 
 export interface TraceContext {
   builder: TraceBuilder;
@@ -194,7 +195,7 @@ export async function queryWithMcpStreaming(
       for (const toolCall of toolCalls) {
         if (toolCall.type === 'function') {
           const args = JSON.parse(toolCall.function.arguments);
-          const operationType = (args.type as string) || undefined;
+          const operationType = deriveOperationType(toolCall.function.name, args);
           const reason = generateToolReason(args);
           const toolEntry: typeof toolsCalled[number] = { name: toolCall.function.name, args, operationType, reason };
 

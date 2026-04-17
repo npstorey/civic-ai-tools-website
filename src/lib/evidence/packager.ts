@@ -1,5 +1,7 @@
 import crypto from 'crypto';
 import { buildProvenanceGraph, type ProvGraph } from './provenance';
+import { buildDataSources, type DataSourceEntry } from './data-sources';
+import { deriveOperationType } from '../mcp/operation-types';
 
 const PACKAGE_SCHEMA_VERSION = '0.1.0';
 
@@ -52,13 +54,7 @@ export interface EvidencePackage {
     resultRows?: number;
     resultColumns?: number;
   }>;
-  dataSources: Array<{
-    catalogType: string;
-    portalUrl: string;
-    datasetId: string;
-    datasetUrl: string;
-    accessTimestamp: string;
-  }>;
+  dataSources: DataSourceEntry[];
   cost: {
     promptTokens?: number;
     completionTokens?: number;
@@ -120,7 +116,7 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
   // Extract queries (only tool calls with operation type)
   const queries = input.toolCalls.map(tc => ({
     tool: tc.name,
-    operationType: tc.operationType || (tc.args.type as string) || 'unknown',
+    operationType: tc.operationType || deriveOperationType(tc.name, tc.args) || 'unknown',
     arguments: tc.args,
     datasetId: (tc.args.dataset_id as string) || undefined,
     portal: (tc.args.portal as string) || undefined,
@@ -129,22 +125,7 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
     resultColumns: tc.resultSummary?.columns,
   }));
 
-  // Extract unique data sources from tool calls
-  const sourceMap = new Map<string, { portalUrl: string; datasetId: string }>();
-  for (const tc of input.toolCalls) {
-    const datasetId = tc.args.dataset_id as string | undefined;
-    const portal = (tc.args.portal as string) || input.portal;
-    if (datasetId && !sourceMap.has(datasetId)) {
-      sourceMap.set(datasetId, { portalUrl: `https://${portal}`, datasetId });
-    }
-  }
-  const dataSources = Array.from(sourceMap.values()).map(s => ({
-    catalogType: 'socrata',
-    portalUrl: s.portalUrl,
-    datasetId: s.datasetId,
-    datasetUrl: `${s.portalUrl}/d/${s.datasetId}`,
-    accessTimestamp: now,
-  }));
+  const dataSources = buildDataSources(input.toolCalls, input.trace, input.portal, now);
 
   const totalTokens = (input.tokenUsage.promptTokens || 0) + (input.tokenUsage.completionTokens || 0);
   const skillMeta = extractSkillMetadata(input.trace);
