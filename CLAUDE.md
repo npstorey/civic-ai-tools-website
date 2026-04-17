@@ -14,6 +14,12 @@ This repo is public. Strategic and relationship context — specific external st
 
 When contributing code, docs, commit messages, issue bodies, PR descriptions, or starter prompts for implementation chats that will commit to this repo, use neutral phrasing: "an external stakeholder," "an upcoming demo," "a follow-up meeting" — not specific names. If a task prompt you received includes strategic context, scrub it before producing any content destined for this repo.
 
+## Secret hygiene
+
+Never `cat`, `head`, `tail`, or otherwise dump the full contents of `.env*` files, `auth.json` files, `credentials*` files, `*.pem`, `*.key`, or any file under `~/.ssh`, `~/.aws`, or `~/Library/Application Support/*/auth.json`. If you need a single env var value, `grep '^VAR_NAME=' .env.local` for just that variable name (not the value). For CLI session tokens, prefer running the CLI command directly over reading its session file. If you think you need to dump a secrets file, stop and ask first.
+
+This repo's `.env.local` contains critical infrastructure secrets including the Ed25519 evidence signing key (`EVIDENCE_SIGNING_KEY`) that anchors the cryptographic evidence chain. Secrets live in 1Password — `.env.local` files contain only `op://` references, not real values. Never generate, display, or handle signing keys or other sensitive values from within a Claude Code session; use a separate terminal.
+
 ## Commands
 
 ```bash

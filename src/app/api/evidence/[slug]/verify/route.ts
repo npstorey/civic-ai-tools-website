@@ -85,18 +85,9 @@ export async function GET(
   // real packages, so a missing kid is an unsigned / pre-registry package
   // and we surface `registry_unavailable` to make that explicit.
   let keyTrust: KeyTrustResult | null = null;
-  let registryPublicKeyForKid: string | undefined;
   if (sigPublicKey && sigKid) {
     const registry = await loadTrustRegistry();
     keyTrust = verifyKeyTrust(sigPublicKey, sigKid, rekorIntegratedTime, registry);
-    // Diagnostic: when the registry has an entry with the same kid but a
-    // different public key, surface that key so a mismatch (usually a
-    // rotation-sync bug between EVIDENCE_SIGNING_KEY and the registry
-    // file) can be diagnosed from the verify response.
-    if (registry) {
-      const entry = registry.keys.find((k) => k.kid === sigKid);
-      registryPublicKeyForKid = entry?.publicKey;
-    }
   }
 
   return NextResponse.json({
@@ -112,10 +103,6 @@ export async function GET(
       hasRekor: !!record.basePackageRekorEntryId,
       rekor: rekorDetails,
       kid: sigKid,
-      // Diagnostic: both publicKeys (base64 SPKI DER) for easy diff when
-      // `keyTrust.status === 'unknown_key'`. Public keys are non-sensitive.
-      signaturePublicKey: sigPublicKey,
-      registryPublicKey: registryPublicKeyForKid,
     },
   });
 }
