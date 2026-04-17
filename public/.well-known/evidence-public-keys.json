@@ -8,7 +8,7 @@
   "keys": [
     {
       "kid": "platform:evidence-2026-04",
-      "publicKey": "REPLACE_WITH_EVIDENCE_PUBLIC_KEY_VALUE",
+      "publicKey": "MCowBQYDK2VwAyEA4wfeXXP8Li+GwQ4umOw/KG2St8mRTjIA3im/GAhmgMo=",
       "status": "active",
       "activatedAt": "2026-04-15T00:00:00.000Z",
       "deprecatedAt": null,
