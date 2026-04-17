@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { buildProvenanceGraph, type ProvGraph } from './provenance';
 import { buildDataSources, type DataSourceEntry } from './data-sources';
+import { getActiveKeyId } from './signing';
 import { deriveOperationType } from '../mcp/operation-types';
 
 const PACKAGE_SCHEMA_VERSION = '0.1.0';
@@ -38,6 +39,11 @@ export interface EvidencePackage {
     schemaVersion: string;
     packageId: string;
     createdAt: string;
+    /** Key identifier that signed this package. Captured in the canonical
+     *  hash so a kid swap produces a different hash (defense against
+     *  post-hoc trust-registry relabeling). Verifiers cross-check this
+     *  against the `kid` embedded in the signature blob. */
+    signingKeyId: string;
   };
   prompt: {
     hash: string;
@@ -145,6 +151,7 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       schemaVersion: PACKAGE_SCHEMA_VERSION,
       packageId,
       createdAt: now,
+      signingKeyId: getActiveKeyId(),
     },
     prompt: {
       hash: promptHash,

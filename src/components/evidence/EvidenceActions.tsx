@@ -80,16 +80,51 @@ function CitePopover({ title, creatorName, createdAt, slug, onClose }: {
   );
 }
 
+type KeyTrustStatus =
+  | 'active'
+  | 'deprecated_valid'
+  | 'deprecated_invalid'
+  | 'revoked'
+  | 'unknown_key'
+  | 'registry_unavailable';
+
+interface KeyTrust {
+  status: KeyTrustStatus;
+  verified: boolean;
+  kid: string;
+  deprecatedAt?: string | null;
+  revokedAt?: string | null;
+}
+
 interface VerifyResult {
   hashMatch: boolean;
   signatureValid: boolean | null;
   rekorVerified: boolean | null;
   hasTimestamp: boolean;
+  keyTrust: KeyTrust | null;
   details: {
     hasSigning: boolean;
     hasRekor: boolean;
     rekor?: { logIndex?: number; logEntryUrl?: string } | null;
+    kid?: string;
   };
+}
+
+function keyTrustCopy(keyTrust: KeyTrust): string {
+  switch (keyTrust.status) {
+    case 'active':
+      return `Signed with active key (${keyTrust.kid})`;
+    case 'deprecated_valid':
+      return `Signed with deprecated key before rotation (${keyTrust.kid})`;
+    case 'deprecated_invalid':
+      return `Key deprecated before this signature — do not trust (${keyTrust.kid})`;
+    case 'revoked':
+      return `Key revoked — do not trust (${keyTrust.kid})`;
+    case 'unknown_key':
+      return `Key not in platform trust registry (${keyTrust.kid})`;
+    case 'registry_unavailable':
+      return 'Trust registry unavailable — could not verify key';
+  }
 }
 
 function VerifyCheck({ label, status, detail }: { label: string; status: boolean | null; detail?: string }) {
@@ -201,6 +236,19 @@ export default function EvidenceActions({
                 : verifyResult.signatureValid
                   ? 'Valid Ed25519 signature'
                   : 'Invalid signature'
+            }
+          />
+          <VerifyCheck
+            label="Key trust"
+            status={
+              verifyResult.keyTrust === null
+                ? null
+                : verifyResult.keyTrust.verified
+            }
+            detail={
+              verifyResult.keyTrust === null
+                ? 'No signing key recorded'
+                : keyTrustCopy(verifyResult.keyTrust)
             }
           />
           <VerifyCheck

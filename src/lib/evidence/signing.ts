@@ -2,10 +2,28 @@ import crypto from 'crypto';
 
 const ALGORITHM = 'Ed25519';
 
-interface SignResult {
+// Default key identifier used when `EVIDENCE_KEY_ID` is not set. The
+// `platform:` prefix leaves room for per-user scopes in the future
+// (e.g. `user:<uuid>:<key-name>`) without a trust-registry schema migration —
+// see Phase 5 of the security hardening plan.
+const DEFAULT_KEY_ID = 'platform:evidence-2026-04';
+
+export interface SignResult {
   signature: string;   // base64
   publicKey: string;   // base64 (DER-encoded public key)
   algorithm: string;
+  /** Stable key identifier — matches an entry in the trust registry at
+   *  `/.well-known/evidence-public-keys.json`. */
+  kid: string;
+}
+
+/**
+ * Read the active key identifier. Returns `EVIDENCE_KEY_ID` when set, and
+ * falls back to the default platform kid otherwise. The kid is not secret —
+ * it's the registry lookup handle for the matching public key.
+ */
+export function getActiveKeyId(): string {
+  return process.env.EVIDENCE_KEY_ID || DEFAULT_KEY_ID;
 }
 
 interface RekorResult {
@@ -41,6 +59,7 @@ export function signPackage(packageHash: string): SignResult | null {
     signature: signature.toString('base64'),
     publicKey: pubKeyDer.toString('base64'),
     algorithm: ALGORITHM,
+    kid: getActiveKeyId(),
   };
 }
 

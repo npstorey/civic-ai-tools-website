@@ -3,7 +3,14 @@ import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
-import { verifySignature, verifyRekorEntry, recomputePackageHash } from '@/lib/evidence/verify';
+import {
+  verifySignature,
+  verifyRekorEntry,
+  recomputePackageHash,
+  verifyKeyTrust,
+  loadTrustRegistry,
+  type KeyTrustResult,
+} from '@/lib/evidence/verify';
 
 export async function GET(
   _request: NextRequest,
@@ -36,9 +43,13 @@ export async function GET(
 
   // Step 2: Verify signature
   let signatureValid: boolean | null = null;
+  let sigPublicKey: string | undefined;
+  let sigKid: string | undefined;
   if (record.basePackageSignature && record.basePackageHash) {
     try {
       const sigData = JSON.parse(record.basePackageSignature);
+      sigPublicKey = sigData.publicKey;
+      sigKid = sigData.kid;
       signatureValid = verifySignature(
         record.basePackageHash,
         sigData.signature,
@@ -49,15 +60,17 @@ export async function GET(
     }
   }
 
-  // Step 3: Verify Rekor entry
+  // Step 3: Verify Rekor entry (also gives us integratedTime for key-trust)
   let rekorVerified: boolean | null = null;
   let rekorDetails: { logIndex?: number; logEntryUrl?: string } | null = null;
+  let rekorIntegratedTime: number | undefined;
   if (record.basePackageRekorEntryId && record.basePackageHash) {
     const rekorResult = await verifyRekorEntry(
       record.basePackageRekorEntryId,
       record.basePackageHash,
     );
     rekorVerified = rekorResult.verified;
+    rekorIntegratedTime = rekorResult.integratedTime;
     if (rekorResult.logIndex !== undefined) {
       rekorDetails = {
         logIndex: rekorResult.logIndex,
@@ -66,17 +79,30 @@ export async function GET(
     }
   }
 
+  // Step 4: Verify key trust against the platform trust registry.
+  // Packages signed before #66 shipped won't have a `kid` stored alongside
+  // the signature. The P5 plan resets evidence state before publishing any
+  // real packages, so a missing kid is an unsigned / pre-registry package
+  // and we surface `registry_unavailable` to make that explicit.
+  let keyTrust: KeyTrustResult | null = null;
+  if (sigPublicKey && sigKid) {
+    const registry = await loadTrustRegistry();
+    keyTrust = verifyKeyTrust(sigPublicKey, sigKid, rekorIntegratedTime, registry);
+  }
+
   return NextResponse.json({
     hashMatch,
     signatureValid,
     rekorVerified,
     hasTimestamp: !!record.basePackageRfc3161Timestamp,
+    keyTrust,
     details: {
       storedHash: record.basePackageHash,
       recomputedHash,
       hasSigning: !!record.basePackageSignature,
       hasRekor: !!record.basePackageRekorEntryId,
       rekor: rekorDetails,
+      kid: sigKid,
     },
   });
 }
