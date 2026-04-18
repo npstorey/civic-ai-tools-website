@@ -8,6 +8,7 @@ import { putPackage } from '@/lib/storage';
 import { buildEvidencePackage, type PackageInput } from '@/lib/evidence/packager';
 import { hash } from '@/lib/evidence/trace';
 import { signPackage, getRfc3161Timestamp, publishToRekor } from '@/lib/evidence/signing';
+import { type BlobRef } from '@/lib/evidence/blob-ref';
 
 function slugify(text: string): string {
   return text
@@ -46,9 +47,12 @@ async function resolveSlug(title: string, packageHash: string): Promise<string> 
 }
 
 interface PublishRequest {
-  trace: Record<string, unknown>;
+  /** OTel trace OR a BlobRef. See `docs/api/evidence-publish.md` for the
+   *  blob-reference contract. */
+  trace: Record<string, unknown> | BlobRef;
   prompt: string;
-  output: string;
+  /** Assistant output text OR a BlobRef to the same. */
+  output: string | BlobRef;
   toolCalls: Array<{
     name: string;
     args: Record<string, unknown>;
@@ -63,6 +67,13 @@ interface PublishRequest {
   promptVisibility: 'full_text' | 'hash_only';
   title: string;
   summary: string;
+  /** Optional override for the skill metadata that would otherwise be
+   *  extracted from the trace. Required when `trace` is a BlobRef. */
+  skillMetadataOverride?: {
+    systemPromptHash?: string;
+    mcpServerUrl?: string;
+    skillText?: string | BlobRef;
+  };
   extensions?: Record<string, unknown>;
 }
 
@@ -102,6 +113,7 @@ export async function POST(request: NextRequest) {
       promptVisibility: body.promptVisibility,
       title: body.title,
       summary: body.summary,
+      skillMetadataOverride: body.skillMetadataOverride,
       extensions: body.extensions,
     };
 

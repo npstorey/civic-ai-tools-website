@@ -10,7 +10,9 @@ import {
   verifyKeyTrust,
   loadTrustRegistry,
   legacyEmbeddedKeyTrust,
+  verifyPackageBlobRefs,
   type KeyTrustResult,
+  type BlobRefVerification,
 } from '@/lib/evidence/verify';
 
 export async function GET(
@@ -34,10 +36,11 @@ export async function GET(
   // Step 1: Recompute package hash from stored package
   let hashMatch = false;
   let recomputedHash: string | null = null;
+  let pkgJson: Record<string, unknown> | null = null;
   if (record.basePackageStorageKey) {
-    const pkg = await getPackage(record.basePackageStorageKey);
-    if (pkg) {
-      recomputedHash = recomputePackageHash(pkg);
+    pkgJson = await getPackage(record.basePackageStorageKey);
+    if (pkgJson) {
+      recomputedHash = recomputePackageHash(pkgJson);
       hashMatch = recomputedHash === record.basePackageHash;
     }
   }
@@ -80,6 +83,21 @@ export async function GET(
     }
   }
 
+  // Step 3b: Verify any blob references embedded in the package. `blobRefs`
+  // is always an array — empty for pre-Phase-B.6 packages that store all
+  // fields inline, populated with per-reference verdicts when the publisher
+  // pushed content out of band via the upload-token flow. `blobRefsVerified`
+  // summarises the array (true/false/null-for-no-refs) so clients that
+  // don't care about per-ref granularity can branch on one boolean.
+  let blobRefs: BlobRefVerification[] = [];
+  let blobRefsVerified: boolean | null = null;
+  if (pkgJson) {
+    blobRefs = await verifyPackageBlobRefs(pkgJson);
+    if (blobRefs.length > 0) {
+      blobRefsVerified = blobRefs.every((r) => r.ok);
+    }
+  }
+
   // Step 4: Verify key trust against the platform trust registry.
   // Three paths:
   //   - Signature with a kid → registry lookup via `verifyKeyTrust`.
@@ -102,6 +120,8 @@ export async function GET(
     rekorVerified,
     hasTimestamp: !!record.basePackageRfc3161Timestamp,
     keyTrust,
+    blobRefsVerified,
+    blobRefs,
     details: {
       storedHash: record.basePackageHash,
       recomputedHash,

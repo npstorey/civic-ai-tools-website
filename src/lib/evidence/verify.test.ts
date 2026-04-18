@@ -6,13 +6,16 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'crypto';
 import {
   verifyKeyTrust,
   loadTrustRegistry,
   clearTrustRegistryCache,
   legacyEmbeddedKeyTrust,
+  verifyPackageBlobRefs,
   type TrustRegistry,
 } from './verify.ts';
+import type { BlobRef } from './blob-ref.ts';
 
 const KID = 'platform:evidence-2026-04';
 const NEW_KID = 'platform:evidence-2027-04';
@@ -297,4 +300,139 @@ test('Compromise scenario: revoked key + replacement active key', () => {
   const clean = verifyKeyTrust(NEW_PUB, NEW_KID, undefined, registry);
   assert.equal(clean.status, 'active');
   assert.equal(clean.verified, true);
+});
+
+// --- verifyPackageBlobRefs (Phase B.6 / website#75) ---
+//
+// The content-integrity check that follows blob references embedded in the
+// package JSON and confirms the bytes hash back to the advertised ref.
+
+function sha256Hex(content: string): string {
+  return crypto.createHash('sha256').update(content).digest('hex');
+}
+
+function makeBlobRef(content: string, url = 'https://example/test'): BlobRef {
+  return {
+    ref: `blob:sha256:${sha256Hex(content)}`,
+    url,
+    contentType: 'text/plain',
+    size: content.length,
+  };
+}
+
+function withStubbedFetch<T>(
+  stub: (url: string) => Promise<Response>,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = ((input: RequestInfo | URL) =>
+    stub(typeof input === 'string' ? input : input.toString())) as typeof fetch;
+  return fn().finally(() => {
+    globalThis.fetch = originalFetch;
+  });
+}
+
+test('verifyPackageBlobRefs: package with no refs → empty result', async () => {
+  const pkg = {
+    output: 'inline string',
+    trace: { resourceSpans: [] },
+    skillMetadata: { skillText: 'inline skill' },
+  };
+  const refs = await verifyPackageBlobRefs(pkg);
+  assert.deepEqual(refs, []);
+});
+
+test('verifyPackageBlobRefs: output as BlobRef → single verified result', async () => {
+  const content = 'synthesised output';
+  const ref = makeBlobRef(content);
+  const pkg = { output: ref };
+
+  await withStubbedFetch(
+    async () => new Response(content, { status: 200 }),
+    async () => {
+      const refs = await verifyPackageBlobRefs(pkg);
+      assert.equal(refs.length, 1);
+      assert.equal(refs[0].field, 'output');
+      assert.equal(refs[0].ok, true);
+      assert.equal(refs[0].ref, ref.ref);
+    },
+  );
+});
+
+test('verifyPackageBlobRefs: trace + skillText refs both verified', async () => {
+  const traceBytes = '{"resourceSpans":[]}';
+  const skillBytes = '# skill text\n';
+  const traceRef = makeBlobRef(traceBytes, 'https://example/trace');
+  const skillRef = makeBlobRef(skillBytes, 'https://example/skill');
+
+  const pkg = {
+    output: 'inline',
+    trace: traceRef,
+    skillMetadata: { skillText: skillRef },
+  };
+
+  await withStubbedFetch(
+    async (url) => {
+      if (url.includes('/trace')) return new Response(traceBytes, { status: 200 });
+      if (url.includes('/skill')) return new Response(skillBytes, { status: 200 });
+      return new Response('', { status: 404 });
+    },
+    async () => {
+      const refs = await verifyPackageBlobRefs(pkg);
+      assert.equal(refs.length, 2);
+      const traceResult = refs.find((r) => r.field === 'trace');
+      const skillResult = refs.find((r) => r.field === 'skillMetadata.skillText');
+      assert.ok(traceResult);
+      assert.ok(skillResult);
+      assert.equal(traceResult!.ok, true);
+      assert.equal(skillResult!.ok, true);
+    },
+  );
+});
+
+test('verifyPackageBlobRefs: tampered content → hash_mismatch reported', async () => {
+  const ref = makeBlobRef('original');
+  const pkg = { output: ref };
+
+  await withStubbedFetch(
+    // Server returns different bytes than the ref commits to
+    async () => new Response('tampered', { status: 200 }),
+    async () => {
+      const refs = await verifyPackageBlobRefs(pkg);
+      assert.equal(refs.length, 1);
+      assert.equal(refs[0].ok, false);
+      // "tampered" has 8 bytes, ref.size commits to 8 ("original" is 8).
+      // So size check passes; hash mismatch is the failure mode.
+      assert.equal(refs[0].reason, 'hash_mismatch');
+    },
+  );
+});
+
+test('verifyPackageBlobRefs: missing blob → fetch_failed reported', async () => {
+  const ref = makeBlobRef('anything');
+  const pkg = { output: ref };
+
+  await withStubbedFetch(
+    async () => new Response('', { status: 404 }),
+    async () => {
+      const refs = await verifyPackageBlobRefs(pkg);
+      assert.equal(refs.length, 1);
+      assert.equal(refs[0].ok, false);
+      assert.equal(refs[0].reason, 'fetch_failed');
+    },
+  );
+});
+
+test('verifyPackageBlobRefs: ignores non-BlobRef objects in the field paths', async () => {
+  // `output` is a string (not a BlobRef), `trace` is a normal object, and
+  // `skillMetadata.skillText` is a string. None should be picked up as a
+  // reference, so no fetch should be attempted (the test would fail with a
+  // real network error if it were).
+  const pkg = {
+    output: 'hello',
+    trace: { resourceSpans: [] },
+    skillMetadata: { skillText: 'plain text' },
+  };
+  const refs = await verifyPackageBlobRefs(pkg);
+  assert.deepEqual(refs, []);
 });

@@ -160,14 +160,21 @@ export default function ProvenanceChain({ pkg }: ProvenanceChainProps) {
         );
       })}
 
-      {/* Output */}
+      {/* Output — the detail page resolves BlobRef outputs to strings
+         before passing the package in, so this is always a string in
+         practice. The narrow below keeps the component resilient to a
+         future change in the render pipeline. */}
       <StepContainer isLast>
-        <ExpandableStep
-          label="Output"
-          detail={`${pkg.output.length.toLocaleString()} characters`}
-        >
-          {pkg.output.slice(0, 2000)}{pkg.output.length > 2000 ? '\n\n[truncated]' : ''}
-        </ExpandableStep>
+        {typeof pkg.output === 'string' ? (
+          <ExpandableStep
+            label="Output"
+            detail={`${pkg.output.length.toLocaleString()} characters`}
+          >
+            {pkg.output.slice(0, 2000)}{pkg.output.length > 2000 ? '\n\n[truncated]' : ''}
+          </ExpandableStep>
+        ) : (
+          <StepLabel label="Output" detail="stored as blob — see detail page" />
+        )}
       </StepContainer>
     </div>
   );
