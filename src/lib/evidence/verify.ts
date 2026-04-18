@@ -147,16 +147,32 @@ export type KeyTrustStatus =
   | 'deprecated_invalid'    // deprecated key, but package was signed after deprecation
   | 'revoked'               // revoked key — package is never trusted
   | 'unknown_key'           // (kid, publicKey) pair not found in registry
-  | 'registry_unavailable'; // registry could not be loaded
+  | 'registry_unavailable'  // registry could not be loaded
+  | 'legacy_embedded';      // signature predates the trust registry (no kid stored)
 
 export interface KeyTrustResult {
   status: KeyTrustStatus;
-  /** `true` iff the status is `active` or `deprecated_valid`. */
+  /** `true` iff the status is `active` or `deprecated_valid`. Legacy-embedded
+   *  signatures are intentionally surfaced as `verified: false` because the
+   *  trust registry cannot vouch for them — the UI renders them as neutral
+   *  rather than failed. */
   verified: boolean;
-  kid: string;
+  /** The registry `kid` when available. Omitted for `legacy_embedded` /
+   *  pre-registry packages because the signature has no kid to report. */
+  kid?: string;
   activatedAt?: string;
   deprecatedAt?: string | null;
   revokedAt?: string | null;
+}
+
+/**
+ * Build a `KeyTrustResult` for a package whose signature predates the trust
+ * registry — i.e. has a valid public key but no `kid`. We accept that the
+ * embedded key verified the signature mathematically while making clear in
+ * the UI that no registry check was performed.
+ */
+export function legacyEmbeddedKeyTrust(): KeyTrustResult {
+  return { status: 'legacy_embedded', verified: false };
 }
 
 /**

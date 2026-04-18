@@ -9,6 +9,7 @@ import {
   recomputePackageHash,
   verifyKeyTrust,
   loadTrustRegistry,
+  legacyEmbeddedKeyTrust,
   type KeyTrustResult,
 } from '@/lib/evidence/verify';
 
@@ -80,14 +81,19 @@ export async function GET(
   }
 
   // Step 4: Verify key trust against the platform trust registry.
-  // Packages signed before #66 shipped won't have a `kid` stored alongside
-  // the signature. The P5 plan resets evidence state before publishing any
-  // real packages, so a missing kid is an unsigned / pre-registry package
-  // and we surface `registry_unavailable` to make that explicit.
+  // Three paths:
+  //   - Signature with a kid → registry lookup via `verifyKeyTrust`.
+  //   - Signature without a kid (pre-#66 package) → `legacy_embedded`: the
+  //     embedded public key verified the signature mathematically, but the
+  //     registry cannot vouch for it. The UI renders this as neutral rather
+  //     than failed so older packages aren't visually penalized.
+  //   - No signature at all → keep `keyTrust: null`.
   let keyTrust: KeyTrustResult | null = null;
   if (sigPublicKey && sigKid) {
     const registry = await loadTrustRegistry();
     keyTrust = verifyKeyTrust(sigPublicKey, sigKid, rekorIntegratedTime, registry);
+  } else if (sigPublicKey) {
+    keyTrust = legacyEmbeddedKeyTrust();
   }
 
   return NextResponse.json({

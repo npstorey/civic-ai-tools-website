@@ -115,6 +115,54 @@ The Vercel Blob URL is not returned directly — fetch `/api/evidence/<slug>` to
 
 ---
 
+## Signing and trust registry
+
+Every published package is signed with an Ed25519ph key held by the civicaitools.org platform. Verifiers cross-check both the signature math and a trust-registry lookup.
+
+### Package fields that reflect signing
+
+- `metadata.signingKeyId` — stable key identifier (e.g. `platform:evidence-2026-04`). Captured inside the canonical JSON and therefore part of the package hash. A `kid` swap produces a different hash, which prevents post-hoc trust-registry relabeling from silently changing which key a package appears to be signed by.
+- The signature blob stored on the database row (`basePackageSignature`) carries matching `signature`, `publicKey`, `algorithm`, and `kid` fields. Verify responses expose the `kid` at `details.kid` so clients can cross-check against the registry without re-reading the package.
+
+### Trust registry endpoint
+
+The platform publishes the set of authorised signing keys at:
+
+```
+GET https://civicaitools.org/.well-known/evidence-public-keys.json
+```
+
+Each entry carries a `kid`, the base64 DER public key, and lifecycle metadata (`status` ∈ `active | deprecated | revoked`, `activatedAt`, `deprecatedAt`, `revokedAt`). Verifiers match on the `(kid, publicKey)` pair and apply the status semantics documented inline at the top of the JSON file. The rotation runbook lives at [`docs/key-rotation.md`](../key-rotation.md).
+
+### Verify response and `keyTrust`
+
+`GET /api/evidence/<slug>/verify` returns a `keyTrust` object describing the registry verdict:
+
+| Status                 | Meaning                                                                                         |
+|------------------------|-------------------------------------------------------------------------------------------------|
+| `active`               | Kid matches an active registry entry — trusted.                                                 |
+| `deprecated_valid`     | Kid matches a deprecated entry, but the package was integrated into Rekor before deprecation.   |
+| `deprecated_invalid`   | Kid matches a deprecated entry and was integrated after deprecation, or has no Rekor timestamp. |
+| `revoked`              | Kid matches a revoked entry — never trusted, regardless of integration time.                    |
+| `unknown_key`          | `(kid, publicKey)` pair not present in the registry.                                            |
+| `registry_unavailable` | Registry could not be loaded (network / build / cache miss).                                    |
+| `legacy_embedded`      | Signature predates the trust registry (no `kid` stored). The embedded public key still verifies mathematically but the registry cannot vouch for it. Rendered as a neutral badge rather than a failure. |
+
+External clients that want to verify packages offline should fetch both the package JSON and `/.well-known/evidence-public-keys.json`, recompute the SHA-256 hash, verify the Ed25519ph signature against the embedded public key, then look the `(kid, publicKey)` pair up in the registry and apply the same status semantics.
+
+### Signing-side env vars
+
+Callers publishing through `POST /api/evidence` do not set these themselves — the platform server supplies them. They are listed here so developers running a private fork or the dev server know what drives the signing path:
+
+| Env var                        | Purpose                                                                 |
+|--------------------------------|-------------------------------------------------------------------------|
+| `EVIDENCE_SIGNING_KEY`         | Base64 DER PKCS8 Ed25519 private key. Sensitive.                        |
+| `EVIDENCE_KEY_ID`              | Stable kid string (e.g. `platform:evidence-2026-04`). Non-sensitive.    |
+| `EVIDENCE_PUBLIC_KEY`          | Public half of the signing key. Used only for registry updates.         |
+| `EVIDENCE_TRUST_REGISTRY_URL`  | Optional override for the default `${NEXTAUTH_URL}/.well-known/...` URL. Useful for previews. |
+
+---
+
 ## Error responses
 
 | Status | Body                                                              | Cause                                                                                           |
@@ -267,4 +315,5 @@ These are implementation details that may surprise an external client. None of t
 
 ## Change log
 
+- **2026-04-18** — Added the [Signing and trust registry](#signing-and-trust-registry) section. Documents the `metadata.signingKeyId` field now included in the canonical package hash, the `/.well-known/evidence-public-keys.json` registry endpoint, the `keyTrust` verdicts returned by `GET /api/evidence/<slug>/verify` (including the new `legacy_embedded` state for pre-registry packages), and the signing-side env vars (`EVIDENCE_SIGNING_KEY`, `EVIDENCE_KEY_ID`, `EVIDENCE_PUBLIC_KEY`, `EVIDENCE_TRUST_REGISTRY_URL`). Backwards-compatible at the publish path — clients do not need any changes.
 - **2026-04-17** — Initial documentation published. Tracks the endpoint as of commit [`a8cdc8c`](https://github.com/npstorey/civic-ai-tools-website/commit/a8cdc8c) (M9.3 ship, v0.7.0).

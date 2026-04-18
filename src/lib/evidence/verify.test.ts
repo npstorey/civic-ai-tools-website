@@ -10,6 +10,7 @@ import {
   verifyKeyTrust,
   loadTrustRegistry,
   clearTrustRegistryCache,
+  legacyEmbeddedKeyTrust,
   type TrustRegistry,
 } from './verify.ts';
 
@@ -247,6 +248,22 @@ test('loadTrustRegistry caches the disk read across calls', async () => {
   const b = await loadTrustRegistry('http://127.0.0.1:1/invalid');
   // Same reference → served from cache, not re-read.
   assert.strictEqual(a, b);
+});
+
+// --- Legacy embedded keys (pre-#66 packages) ---
+//
+// Packages signed before the trust registry shipped don't carry a `kid`
+// alongside the signature. The signature itself still verifies
+// mathematically against the embedded public key, so we surface a distinct
+// `legacy_embedded` status rather than treating these as unsigned or
+// registry-failed. The UI renders it as neutral (➖) so existing artifacts
+// aren't visually penalised.
+
+test('legacyEmbeddedKeyTrust: pre-registry signatures get a neutral verdict', () => {
+  const result = legacyEmbeddedKeyTrust();
+  assert.equal(result.status, 'legacy_embedded');
+  assert.equal(result.verified, false);
+  assert.equal(result.kid, undefined);
 });
 
 test('Compromise scenario: revoked key + replacement active key', () => {
