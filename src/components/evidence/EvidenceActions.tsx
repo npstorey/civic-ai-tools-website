@@ -86,12 +86,15 @@ type KeyTrustStatus =
   | 'deprecated_invalid'
   | 'revoked'
   | 'unknown_key'
-  | 'registry_unavailable';
+  | 'registry_unavailable'
+  | 'legacy_embedded';
 
 interface KeyTrust {
   status: KeyTrustStatus;
   verified: boolean;
-  kid: string;
+  /** Optional because `legacy_embedded` signatures predate the trust
+   *  registry and therefore have no kid. */
+  kid?: string;
   deprecatedAt?: string | null;
   revokedAt?: string | null;
 }
@@ -124,7 +127,21 @@ function keyTrustCopy(keyTrust: KeyTrust): string {
       return `Key not in platform trust registry (${keyTrust.kid})`;
     case 'registry_unavailable':
       return 'Trust registry unavailable — could not verify key';
+    case 'legacy_embedded':
+      return 'Signed with legacy embedded key (pre-trust-registry package)';
   }
+}
+
+/**
+ * Map a key-trust result onto the icon state used by `VerifyCheck`:
+ *   - `true`  → ✅ green (registry-validated)
+ *   - `false` → ❌ red (registry says untrusted)
+ *   - `null`  → ➖ neutral (no signing key, or pre-registry legacy package)
+ */
+function keyTrustIconStatus(keyTrust: KeyTrust | null): boolean | null {
+  if (keyTrust === null) return null;
+  if (keyTrust.status === 'legacy_embedded') return null;
+  return keyTrust.verified;
 }
 
 function VerifyCheck({ label, status, detail }: { label: string; status: boolean | null; detail?: string }) {
@@ -240,11 +257,7 @@ export default function EvidenceActions({
           />
           <VerifyCheck
             label="Key trust"
-            status={
-              verifyResult.keyTrust === null
-                ? null
-                : verifyResult.keyTrust.verified
-            }
+            status={keyTrustIconStatus(verifyResult.keyTrust)}
             detail={
               verifyResult.keyTrust === null
                 ? 'No signing key recorded'
