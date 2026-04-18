@@ -3,6 +3,12 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { ed25519ph } from '@noble/curves/ed25519.js';
 import { rekorHashForPackage } from './signing.ts';
+import {
+  isBlobRef,
+  verifyBlobRef,
+  type BlobRef,
+  type BlobRefVerifyReason,
+} from './blob-ref.ts';
 
 // Build-time import of the checked-in trust registry. This is the most
 // reliable source on Vercel: a filesystem read relies on `process.cwd()`
@@ -115,6 +121,78 @@ export async function verifyRekorEntry(
 export function recomputePackageHash(pkg: Record<string, unknown>): string {
   const canonical = JSON.stringify(pkg);
   return crypto.createHash('sha256').update(canonical).digest('hex');
+}
+
+// --- Blob references (Phase B.6) ---
+//
+// Evidence packages can store large fields as content-addressable blobs
+// rather than inlining the content. Verification downloads each blob and
+// confirms the bytes hash to the advertised ref.
+
+/** Field paths that the core verifier scans for BlobRef objects. */
+const BLOB_REF_FIELDS = [
+  'output',
+  'trace',
+  'skillMetadata.skillText',
+] as const;
+
+export type BlobRefField = (typeof BLOB_REF_FIELDS)[number];
+
+export interface BlobRefVerification {
+  field: BlobRefField;
+  ref: string;
+  url: string;
+  size: number;
+  contentType: string;
+  ok: boolean;
+  reason?: BlobRefVerifyReason;
+}
+
+function pickBlobRef(pkg: Record<string, unknown>, path: BlobRefField): BlobRef | null {
+  const segments = path.split('.');
+  let current: unknown = pkg;
+  for (const segment of segments) {
+    if (current == null || typeof current !== 'object') return null;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return isBlobRef(current) ? current : null;
+}
+
+/**
+ * Walk the package JSON for BlobRef fields, fetch each referenced blob,
+ * and confirm the bytes hash to the advertised ref. Returns per-field
+ * verification results. Used by the slug verify endpoint to surface
+ * content-integrity per reference alongside the package-level signature
+ * and Rekor checks.
+ *
+ * Runs fetches in parallel with a per-blob 15 s timeout. Failures are
+ * reported in the result rather than thrown — one bad reference doesn't
+ * fail the whole verify call.
+ */
+export async function verifyPackageBlobRefs(
+  pkg: Record<string, unknown>,
+): Promise<BlobRefVerification[]> {
+  const refs = BLOB_REF_FIELDS
+    .map((field) => {
+      const ref = pickBlobRef(pkg, field);
+      return ref ? { field, ref } : null;
+    })
+    .filter((x): x is { field: BlobRefField; ref: BlobRef } => x !== null);
+
+  return Promise.all(
+    refs.map(async ({ field, ref }) => {
+      const result = await verifyBlobRef(ref);
+      return {
+        field,
+        ref: ref.ref,
+        url: ref.url,
+        size: ref.size,
+        contentType: ref.contentType,
+        ok: result.ok,
+        reason: result.reason,
+      };
+    }),
+  );
 }
 
 // --- Trust registry ---

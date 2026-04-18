@@ -1,8 +1,9 @@
 import crypto from 'crypto';
-import { buildProvenanceGraph, type ProvGraph } from './provenance';
-import { buildDataSources, type DataSourceEntry } from './data-sources';
-import { getActiveKeyId } from './signing';
-import { deriveOperationType } from '../mcp/operation-types';
+import { buildProvenanceGraph, type ProvGraph } from './provenance.ts';
+import { buildDataSources, type DataSourceEntry } from './data-sources.ts';
+import { getActiveKeyId } from './signing.ts';
+import { isBlobRef, parseBlobRef, type BlobRef } from './blob-ref.ts';
+import { deriveOperationType } from '../mcp/operation-types.ts';
 
 const PACKAGE_SCHEMA_VERSION = '0.1.0';
 
@@ -15,9 +16,17 @@ export interface ToolCallInput {
 }
 
 export interface PackageInput {
-  trace: Record<string, unknown>;
+  /** OTel trace object OR a BlobRef pointing at the same content stored
+   *  out of band. When a BlobRef is supplied, the packager cannot walk
+   *  trace spans to auto-extract skill metadata or build a rich PROV-O
+   *  graph; publishers shipping trace-as-BlobRef should also provide
+   *  `skillMetadataOverride` so those fields aren't blanked. */
+  trace: Record<string, unknown> | BlobRef;
   prompt: string;
-  output: string;
+  /** Assistant output text OR a BlobRef pointing at it. The detail-page
+   *  renderer resolves BlobRef outputs server-side; verify follows the
+   *  reference and confirms the hash matches. */
+  output: string | BlobRef;
   toolCalls: ToolCallInput[];
   model: string;
   portal: string;
@@ -26,6 +35,18 @@ export interface PackageInput {
   promptVisibility: 'full_text' | 'hash_only';
   title: string;
   summary: string;
+  /**
+   * Override the skill metadata that the packager would otherwise extract
+   * from the trace. Required when `trace` is a BlobRef (the packager can't
+   * inspect trace spans in that case). Also accepts a BlobRef for
+   * `skillText` so publishers can dedupe very large composed skills
+   * across packages.
+   */
+  skillMetadataOverride?: {
+    systemPromptHash?: string;
+    mcpServerUrl?: string;
+    skillText?: string | BlobRef;
+  };
   /**
    * Optional implementation-specific artifacts.
    * Keys MUST follow reverse-DNS conventions (e.g., "org.civicaitools.notebook")
@@ -71,10 +92,15 @@ export interface EvidencePackage {
   skillMetadata: {
     systemPromptHash?: string;
     mcpServerUrl?: string;
-    skillText?: string;
+    /** Inline skill text, or a BlobRef for very large composed skills.
+     *  The detail page fetches the blob lazily when the section expands. */
+    skillText?: string | BlobRef;
   };
-  output: string;
-  trace: Record<string, unknown>;
+  /** Assistant output. Inline text on historic packages; a BlobRef on
+   *  packages that uploaded large outputs via the upload-token flow. */
+  output: string | BlobRef;
+  /** OTel trace, either inline or referenced by hash. */
+  trace: Record<string, unknown> | BlobRef;
   provenance?: ProvGraph;
   /**
    * Optional implementation-specific artifacts, keyed by reverse-DNS identifier
@@ -113,6 +139,12 @@ function extractSkillMetadata(trace: Record<string, unknown>): { systemPromptHas
 /**
  * Build a structured evidence package from analysis data.
  * Returns the package object and its SHA-256 hash.
+ *
+ * BlobRef fields (`trace`, `output`, `skillMetadataOverride.skillText`) are
+ * passed through unchanged. The packager does not download them, so the
+ * resulting package commits to the reference object while leaving the
+ * content in Vercel Blob. Detail-page rendering and verification each
+ * follow the reference when they need the bytes.
  */
 export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackage; hash: string } {
   const now = new Date().toISOString();
@@ -131,17 +163,39 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
     resultColumns: tc.resultSummary?.columns,
   }));
 
-  const dataSources = buildDataSources(input.toolCalls, input.trace, input.portal, now);
+  // Helpers: when trace is a BlobRef the packager can't inspect spans for
+  // data-source detection, skill extraction, or PROV-O graph construction.
+  // Fall back to an empty trace so downstream builders degrade gracefully.
+  const traceIsBlob = isBlobRef(input.trace);
+  const traceForInspection: Record<string, unknown> = traceIsBlob
+    ? { resourceSpans: [] }
+    : (input.trace as Record<string, unknown>);
+
+  const dataSources = buildDataSources(input.toolCalls, traceForInspection, input.portal, now);
 
   const totalTokens = (input.tokenUsage.promptTokens || 0) + (input.tokenUsage.completionTokens || 0);
-  const skillMeta = extractSkillMetadata(input.trace);
 
-  // Build PROV-O provenance graph from the OTel trace
-  const provenance = buildProvenanceGraph(input.trace, {
+  // Skill metadata: prefer the explicit override when provided (required if
+  // trace is a BlobRef; optional otherwise), otherwise extract from spans.
+  const skillMeta = input.skillMetadataOverride
+    ? {
+        systemPromptHash: input.skillMetadataOverride.systemPromptHash,
+        mcpServerUrl: input.skillMetadataOverride.mcpServerUrl,
+        skillText: input.skillMetadataOverride.skillText,
+      }
+    : extractSkillMetadata(traceForInspection);
+
+  // PROV-O provenance graph. When output is a BlobRef we pass the ref hash
+  // through `outputHash` rather than rehashing a string — the ref IS the
+  // content hash by construction, so this preserves the identity chain
+  // between the evidence record and the referenced blob.
+  const outputIsBlob = isBlobRef(input.output);
+  const provenance = buildProvenanceGraph(traceForInspection, {
     packageId,
     promptHash,
     promptText: input.promptVisibility === 'full_text' ? input.prompt : undefined,
-    outputText: input.output,
+    outputText: outputIsBlob ? undefined : (input.output as string),
+    outputHash: outputIsBlob ? parseBlobRef((input.output as BlobRef).ref).hash : undefined,
     model: input.model,
     portal: input.portal,
   });

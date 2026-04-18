@@ -60,20 +60,21 @@ The endpoint does not currently accept a personal access token, bearer token, or
 
 ### Request body schema
 
-| Field              | Type     | Required | Description                                                                                                                                             |
-|--------------------|----------|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `trace`            | object   | yes      | OpenTelemetry-compatible trace. Minimal acceptable value is `{ "resourceSpans": [] }`. A trace with `mcp_tool_call` spans carrying `mcp.source` attributes enables per-source provenance; an empty trace falls back to the static tool-name → source map. |
-| `prompt`           | string   | yes      | The user's original query text.                                                                                                                         |
-| `output`           | string   | yes      | The assistant's final response text (markdown is accepted and preserved).                                                                               |
-| `toolCalls`        | array    | yes      | Array of tool calls made during the analysis. May be empty. See [`toolCalls[]`](#toolcalls-entries) below.                                              |
-| `model`            | string   | yes      | The model identifier used for the analysis (e.g., `"openai/gpt-4o"`, `"anthropic/claude-opus-4-7"`).                                                    |
-| `portal`           | string   | yes      | Socrata portal domain (e.g., `"data.cityofnewyork.us"`). Used as the fallback portal for Socrata `dataSources[]` entries when a tool call omits `args.portal`. For non-Socrata analyses (e.g., Data Commons-only), any descriptive placeholder is accepted. |
-| `tokenUsage`       | object   | yes      | `{ promptTokens?: number, completionTokens?: number }`. Both inner fields are optional.                                                                 |
-| `promptVisibility` | string   | yes      | `"full_text"` to include the prompt text in the package and database record, or `"hash_only"` to include only the SHA-256 hash.                         |
-| `title`            | string   | yes      | Display title for the evidence record. Used to derive the URL slug.                                                                                     |
-| `summary`          | string   | yes      | A 2–4 sentence description for non-technical readers.                                                                                                   |
-| `duration_ms`      | number   | no       | End-to-end analysis duration in milliseconds.                                                                                                           |
-| `extensions`       | object   | no       | Implementation-specific artifacts keyed by reverse-DNS identifiers (e.g., `"org.civicaitools.notebook"`). Extensions are included in the canonical JSON and therefore covered by the package hash. |
+| Field                   | Type               | Required | Description                                                                                                                                             |
+|-------------------------|--------------------|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `trace`                 | object \| BlobRef  | yes      | OpenTelemetry-compatible trace, OR a [blob reference](#blob-references-phase-b6) pointing at the same content stored out of band. Minimal acceptable inline value is `{ "resourceSpans": [] }`. A trace with `mcp_tool_call` spans carrying `mcp.source` attributes enables per-source provenance; an empty trace falls back to the static tool-name → source map. |
+| `prompt`                | string             | yes      | The user's original query text.                                                                                                                         |
+| `output`                | string \| BlobRef  | yes      | The assistant's final response text (markdown is accepted and preserved), OR a [blob reference](#blob-references-phase-b6).                             |
+| `toolCalls`             | array              | yes      | Array of tool calls made during the analysis. May be empty. See [`toolCalls[]`](#toolcalls-entries) below.                                              |
+| `model`                 | string             | yes      | The model identifier used for the analysis (e.g., `"openai/gpt-4o"`, `"anthropic/claude-opus-4-7"`).                                                    |
+| `portal`                | string             | yes      | Socrata portal domain (e.g., `"data.cityofnewyork.us"`). Used as the fallback portal for Socrata `dataSources[]` entries when a tool call omits `args.portal`. For non-Socrata analyses (e.g., Data Commons-only), any descriptive placeholder is accepted. |
+| `tokenUsage`            | object             | yes      | `{ promptTokens?: number, completionTokens?: number }`. Both inner fields are optional.                                                                 |
+| `promptVisibility`      | string             | yes      | `"full_text"` to include the prompt text in the package and database record, or `"hash_only"` to include only the SHA-256 hash.                         |
+| `title`                 | string             | yes      | Display title for the evidence record. Used to derive the URL slug.                                                                                     |
+| `summary`               | string             | yes      | A 2–4 sentence description for non-technical readers.                                                                                                   |
+| `duration_ms`           | number             | no       | End-to-end analysis duration in milliseconds.                                                                                                           |
+| `skillMetadataOverride` | object             | no       | Override for the skill metadata normally extracted from the trace. Required when `trace` is a BlobRef. See [Blob references](#blob-references-phase-b6). |
+| `extensions`            | object             | no       | Implementation-specific artifacts keyed by reverse-DNS identifiers (e.g., `"org.civicaitools.notebook"`). Extensions are included in the canonical JSON and therefore covered by the package hash. |
 
 #### `toolCalls[]` entries
 
@@ -112,6 +113,127 @@ The endpoint does not currently accept a personal access token, bearer token, or
 | `packageHash` | string | SHA-256 hash of the canonical package JSON (64 hex chars).                                                                 |
 
 The Vercel Blob URL is not returned directly — fetch `/api/evidence/<slug>` to read back the database row, and the blob URL is also available via the detail page's rendered HTML. The blob itself is public and content-addressable at `https://<vercel-blob-host>/evidence-packages/<packageHash>.json`.
+
+---
+
+## Blob references (Phase B.6)
+
+Large package fields — full output text, OTel traces for long sessions, composed skill guidance, eventually multi-turn transcripts and visual artifacts — can be uploaded separately to Vercel Blob and referenced from the package JSON rather than inlined. This side-steps the Next.js App Router ~4 MB body cap on `POST /api/evidence` and makes each piece of content independently verifiable.
+
+Existing inline-content packages remain valid — the schema accepts either shape per field, and pre-Phase-B.6 records continue verifying unchanged.
+
+### Reference format
+
+A BlobRef is a JSON object with four fields:
+
+```json
+{
+  "ref": "blob:sha256:<64 hex chars>",
+  "url": "https://<store>.public.blob.vercel-storage.com/evidence-refs/<hash>.<ext>",
+  "contentType": "text/markdown",
+  "size": 4194304
+}
+```
+
+| Field         | Description                                                                                                   |
+|---------------|---------------------------------------------------------------------------------------------------------------|
+| `ref`         | Content-addressable reference — literal `blob:sha256:` prefix followed by the 64-char lowercase hex SHA-256 of the content bytes. |
+| `url`         | Public Vercel Blob URL. The verifier fetches this URL over HTTPS without authentication.                      |
+| `contentType` | Media type of the referenced blob. Informational for renderers; not enforced at verify time.                  |
+| `size`        | Byte length of the referenced blob. The verifier compares against the fetched content and flags `size_mismatch` on a divergence. |
+
+Fields that currently accept a BlobRef: `output`, `trace`, and `skillMetadataOverride.skillText`. The stored package JSON mirrors these in `pkg.output`, `pkg.trace`, and `pkg.skillMetadata.skillText`.
+
+### Upload flow (presigned client upload)
+
+To avoid the body cap, content is uploaded directly from the client to Vercel Blob via a presigned token minted by the platform:
+
+1. Compute the SHA-256 of the content bytes and construct the target pathname `evidence-refs/<hash>[.ext]`.
+2. Call `upload(pathname, content, { access: 'public', handleUploadUrl: '/api/blob/upload-token', ... })` from `@vercel/blob/client`. The library posts to `/api/blob/upload-token` to obtain a presigned token, then PUTs the content directly to Vercel Blob.
+3. Construct a BlobRef from the returned `url` plus the hash, content type, and byte size.
+4. Reference the BlobRef in the `POST /api/evidence` request body on the matching field.
+
+`POST /api/blob/upload-token` uses the same authentication as `/api/evidence` (NextAuth session cookie + matching `users` row). The minted token only permits uploads whose pathname matches `^evidence-refs/[0-9a-f]{64}(?:\.[a-z0-9]+)?$` and is capped at 100 MB per blob.
+
+Orphan blobs — uploaded but never referenced by any published package — are swept daily by a cron job (`/api/cron/blob-gc`) after a 24-hour grace window.
+
+### Verification semantics
+
+`GET /api/evidence/<slug>/verify` returns two new fields alongside the existing signature and trust-registry verdicts:
+
+| Field              | Description                                                                                               |
+|--------------------|-----------------------------------------------------------------------------------------------------------|
+| `blobRefsVerified` | `true` iff every BlobRef verified, `false` if any did not, `null` if the package contains no references.  |
+| `blobRefs`         | Array of per-reference results. Each entry: `{ field, ref, url, size, contentType, ok, reason? }`. `reason` is one of `invalid_ref`, `fetch_failed`, `size_mismatch`, `hash_mismatch` when `ok` is `false`. |
+
+External verifiers replicate this check by walking the package JSON for BlobRef objects, fetching each, recomputing SHA-256 over the bytes, and confirming the hash matches the `ref` and the byte length matches `size`. The `src/lib/evidence/blob-ref.ts` helper module exposes `isBlobRef(value)`, `parseBlobRef(ref)`, and `verifyBlobRef(ref)` for this purpose.
+
+### Worked example — publishing with a BlobRef output
+
+```ts
+import { upload } from '@vercel/blob/client';
+import crypto from 'crypto';
+
+// 1. Precompute the content hash and upload the blob.
+const output = '# Long synthesised analysis...\n\n## Section 1\n...'; // imagine 8 MB
+const hash = crypto.createHash('sha256').update(output).digest('hex');
+const pathname = `evidence-refs/${hash}.md`;
+
+const blob = await upload(pathname, output, {
+  access: 'public',
+  contentType: 'text/markdown',
+  handleUploadUrl: 'https://civicaitools.org/api/blob/upload-token',
+  clientPayload: null,
+  // The client upload helper posts to /api/blob/upload-token with the
+  // browser's session cookie attached, which authenticates the request.
+});
+
+const outputRef = {
+  ref: `blob:sha256:${hash}`,
+  url: blob.url,
+  contentType: 'text/markdown',
+  size: new TextEncoder().encode(output).byteLength,
+};
+
+// 2. Publish the package, passing the BlobRef in place of inline content.
+await fetch('https://civicaitools.org/api/evidence', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Cookie: `__Secure-next-auth.session-token=${process.env.CIVIC_EVIDENCE_SESSION_COOKIE}`,
+  },
+  body: JSON.stringify({
+    trace: { resourceSpans: [] },
+    prompt,
+    output: outputRef,            // ← BlobRef instead of inline string
+    toolCalls,
+    model,
+    portal: 'data.cityofnewyork.us',
+    tokenUsage,
+    duration_ms,
+    promptVisibility: 'full_text',
+    title,
+    summary,
+  }),
+});
+```
+
+The published package's `output` field is now a BlobRef object rather than inline text; the detail page fetches the content server-side on page load, and the verify endpoint follows the reference and confirms the bytes hash to the ref.
+
+### When `trace` is a BlobRef
+
+When `trace` is a BlobRef the packager cannot walk the spans to auto-extract skill metadata or build a rich PROV-O graph — it falls back to an empty `resourceSpans`. Publishers that ship `trace` as a BlobRef should also supply `skillMetadataOverride` so `skillMetadata.{systemPromptHash,mcpServerUrl,skillText}` aren't blanked:
+
+```json
+{
+  "trace": { "ref": "blob:sha256:...", "url": "...", "contentType": "application/json", "size": 18800000 },
+  "skillMetadataOverride": {
+    "systemPromptHash": "e751da4a…",
+    "mcpServerUrl": "https://socrata-mcp.civicaitools.org",
+    "skillText": { "ref": "blob:sha256:…", "url": "…", "contentType": "text/markdown", "size": 25044 }
+  }
+}
+```
 
 ---
 
@@ -315,5 +437,6 @@ These are implementation details that may surprise an external client. None of t
 
 ## Change log
 
+- **2026-04-18** — Added the [Blob references (Phase B.6)](#blob-references-phase-b6) section. The `output`, `trace`, and `skillMetadataOverride.skillText` request fields now accept either inline content or a BlobRef `{ ref, url, contentType, size }` object; the verify endpoint returns per-reference `blobRefs[]` entries alongside the existing verdicts. A new `POST /api/blob/upload-token` endpoint mints presigned tokens for direct client uploads to `evidence-refs/<sha256>[.ext]`, gated by the same NextAuth session as `/api/evidence`. Orphan blobs are swept by a daily cron (`/api/cron/blob-gc`). Backwards-compatible — existing inline-content packages remain valid and the verify response adds fields rather than renaming any.
 - **2026-04-18** — Added the [Signing and trust registry](#signing-and-trust-registry) section. Documents the `metadata.signingKeyId` field now included in the canonical package hash, the `/.well-known/evidence-public-keys.json` registry endpoint, the `keyTrust` verdicts returned by `GET /api/evidence/<slug>/verify` (including the new `legacy_embedded` state for pre-registry packages), and the signing-side env vars (`EVIDENCE_SIGNING_KEY`, `EVIDENCE_KEY_ID`, `EVIDENCE_PUBLIC_KEY`, `EVIDENCE_TRUST_REGISTRY_URL`). Backwards-compatible at the publish path — clients do not need any changes.
 - **2026-04-17** — Initial documentation published. Tracks the endpoint as of commit [`a8cdc8c`](https://github.com/npstorey/civic-ai-tools-website/commit/a8cdc8c) (M9.3 ship, v0.7.0).

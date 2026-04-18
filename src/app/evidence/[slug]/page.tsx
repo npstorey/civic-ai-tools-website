@@ -14,11 +14,63 @@ import NotebookSection from '@/components/evidence/NotebookSection';
 import SkillSection from '@/components/evidence/SkillSection';
 import { formatModelName, estimateCostUsd } from '@/lib/models';
 import { formatDataSourcesSummary } from '@/lib/evidence/data-sources';
+import { isBlobRef, fetchBlobRefText, type BlobRef } from '@/lib/evidence/blob-ref';
 
 const NOTEBOOK_EXTENSION_KEY = 'org.civicaitools.notebook';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+}
+
+/** Server-side resolution for blob-referenced fields in an evidence package.
+ *  `output` is eagerly fetched so the ProvenanceChain can continue to
+ *  treat it as a string. `skillMetadata.skillText` is handed through as a
+ *  reference when it's a BlobRef — the skill section expands on click and
+ *  fetches lazily, so there's no point paying the latency up front. */
+interface ResolvedPackageData {
+  pkg: EvidencePackage;
+  outputIsBlob: boolean;
+  outputBlobRef: BlobRef | null;
+  skillTextIsBlob: boolean;
+  skillTextBlobRef: BlobRef | null;
+}
+
+async function resolvePackageForRender(pkg: EvidencePackage): Promise<ResolvedPackageData> {
+  const outputIsBlob = isBlobRef(pkg.output);
+  const outputBlobRef = outputIsBlob ? (pkg.output as BlobRef) : null;
+  let resolvedOutput: string;
+  if (outputIsBlob) {
+    resolvedOutput =
+      (await fetchBlobRefText(pkg.output as BlobRef)) ??
+      '[Output blob could not be fetched; see the Package hash below to audit.]';
+  } else {
+    resolvedOutput = pkg.output as string;
+  }
+
+  const skillText = pkg.skillMetadata?.skillText;
+  const skillTextIsBlob = skillText !== undefined && isBlobRef(skillText);
+  const skillTextBlobRef = skillTextIsBlob ? (skillText as BlobRef) : null;
+
+  // Shallow-clone the package with the resolved output so child components
+  // can keep treating `pkg.output` as a plain string.
+  const resolved: EvidencePackage = {
+    ...pkg,
+    output: resolvedOutput,
+    skillMetadata: {
+      ...pkg.skillMetadata,
+      // When skillText is a BlobRef, keep the reference so the SkillSection
+      // can surface it rather than rendering `[object Object]`. The section
+      // fetches bytes on demand.
+      skillText: skillTextIsBlob ? undefined : (skillText as string | undefined),
+    },
+  };
+  return {
+    pkg: resolved,
+    outputIsBlob,
+    outputBlobRef,
+    skillTextIsBlob,
+    skillTextBlobRef,
+  };
 }
 
 async function getEvidenceData(slug: string) {
@@ -37,11 +89,15 @@ async function getEvidenceData(slug: string) {
     .limit(1);
 
   let pkg: EvidencePackage | null = null;
+  let resolution: ResolvedPackageData | null = null;
   if (record.basePackageStorageKey) {
     pkg = (await getPackage(record.basePackageStorageKey)) as EvidencePackage | null;
+    if (pkg) {
+      resolution = await resolvePackageForRender(pkg);
+    }
   }
 
-  return { record, creator: creator[0] || null, pkg };
+  return { record, creator: creator[0] || null, pkg, resolution };
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -112,7 +168,13 @@ export default async function EvidencePage({ params }: PageProps) {
   const data = await getEvidenceData(slug);
   if (!data) notFound();
 
-  const { record, creator, pkg } = data;
+  const { record, creator, pkg, resolution } = data;
+  // Use the resolved package everywhere we render package content — it has
+  // BlobRef outputs eagerly pulled into strings so child components can stay
+  // ignorant of the reference layer. When the package isn't a BlobRef user
+  // (the vast majority of historical records), `resolution.pkg === pkg`
+  // modulo the shallow clone.
+  const renderPkg = resolution?.pkg ?? pkg;
   const dateStr = record.createdAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   // Schema.org JSON-LD
@@ -246,45 +308,56 @@ export default async function EvidencePage({ params }: PageProps) {
         )}
 
         {/* Provenance Chain */}
-        {pkg && (
+        {renderPkg && (
           <Section title="Provenance Chain">
             <div style={{
               padding: '16px 20px', border: '1px solid var(--border-color)',
               borderRadius: '6px', backgroundColor: 'white',
             }}>
-              <ProvenanceChain pkg={pkg} />
+              <ProvenanceChain pkg={renderPkg} />
+              {resolution?.outputIsBlob && (
+                <div style={{
+                  marginTop: '10px', fontSize: '11px', color: 'var(--text-muted)',
+                  fontFamily: 'monospace',
+                }}>
+                  Output stored as blob (verified) · {resolution.outputBlobRef?.size.toLocaleString()} bytes
+                </div>
+              )}
             </div>
           </Section>
         )}
 
         {/* Provenance Graph (W3C PROV-O) */}
-        {pkg?.provenance && (
+        {renderPkg?.provenance && (
           <Section title="Provenance Graph">
-            <ProvenanceGraphSection provenance={pkg.provenance} slug={slug} />
+            <ProvenanceGraphSection provenance={renderPkg.provenance} slug={slug} />
           </Section>
         )}
 
         {/* Skill guidance (system prompt sent to the model) */}
-        {pkg?.skillMetadata?.skillText && (
+        {(renderPkg?.skillMetadata?.skillText || resolution?.skillTextIsBlob) && (
           <Section title="Skill Guidance">
             <SkillSection
-              skillText={pkg.skillMetadata.skillText}
-              skillHash={pkg.skillMetadata.systemPromptHash}
+              skillText={typeof renderPkg?.skillMetadata?.skillText === 'string'
+                ? renderPkg.skillMetadata.skillText
+                : undefined}
+              skillTextRef={resolution?.skillTextBlobRef ?? undefined}
+              skillHash={renderPkg?.skillMetadata?.systemPromptHash}
             />
           </Section>
         )}
 
         {/* Jupyter Notebook extension */}
-        {pkg?.extensions?.[NOTEBOOK_EXTENSION_KEY] !== undefined && (
+        {renderPkg?.extensions?.[NOTEBOOK_EXTENSION_KEY] !== undefined && (
           <Section title="Jupyter Notebook">
-            <NotebookSection notebook={pkg.extensions[NOTEBOOK_EXTENSION_KEY]} slug={slug} />
+            <NotebookSection notebook={renderPkg.extensions[NOTEBOOK_EXTENSION_KEY]} slug={slug} />
           </Section>
         )}
 
         {/* Unknown extensions — graceful fallback for other adopters' artifacts */}
         {(() => {
-          if (!pkg?.extensions) return null;
-          const unknown = Object.keys(pkg.extensions).filter(k => k !== NOTEBOOK_EXTENSION_KEY);
+          if (!renderPkg?.extensions) return null;
+          const unknown = Object.keys(renderPkg.extensions).filter(k => k !== NOTEBOOK_EXTENSION_KEY);
           if (unknown.length === 0) return null;
           return (
             <Section title="Additional Artifacts">
@@ -317,30 +390,37 @@ export default async function EvidencePage({ params }: PageProps) {
         </Section>
 
         {/* Resources */}
-        {pkg && (
+        {renderPkg && (
           <Section title="Resources Used">
             {(() => {
               const cost = estimateCostUsd(
-                pkg.cost.model,
-                pkg.cost.promptTokens || 0,
-                pkg.cost.completionTokens || 0,
+                renderPkg.cost.model,
+                renderPkg.cost.promptTokens || 0,
+                renderPkg.cost.completionTokens || 0,
               );
-              const skillHash = pkg.skillMetadata.systemPromptHash;
-              const dataSourcesSummary = formatDataSourcesSummary(pkg.dataSources);
+              const skillHash = renderPkg.skillMetadata.systemPromptHash;
+              const dataSourcesSummary = formatDataSourcesSummary(renderPkg.dataSources);
+              const blobFields: string[] = [];
+              if (resolution?.outputIsBlob) blobFields.push('output');
+              if (resolution?.skillTextIsBlob) blobFields.push('skill text');
               const items: Array<{ label: string; value: React.ReactNode; mono?: boolean }> = [
-                { label: 'Model', value: formatModelName(pkg.cost.model) },
+                { label: 'Model', value: formatModelName(renderPkg.cost.model) },
                 { label: 'Data sources', value: dataSourcesSummary ?? '—' },
                 ...(skillHash ? [{
                   label: 'Skill hash',
                   value: skillHash.slice(0, 12),
                   mono: true,
                 }] : []),
-                { label: 'Prompt tokens', value: pkg.cost.promptTokens?.toLocaleString() || '—' },
-                { label: 'Completion tokens', value: pkg.cost.completionTokens?.toLocaleString() || '—' },
-                { label: 'Total tokens', value: pkg.cost.totalTokens?.toLocaleString() || '—' },
+                { label: 'Prompt tokens', value: renderPkg.cost.promptTokens?.toLocaleString() || '—' },
+                { label: 'Completion tokens', value: renderPkg.cost.completionTokens?.toLocaleString() || '—' },
+                { label: 'Total tokens', value: renderPkg.cost.totalTokens?.toLocaleString() || '—' },
                 { label: 'Estimated cost', value: cost !== null ? `~$${cost.toFixed(cost < 0.01 ? 4 : 2)}` : '—' },
-                { label: 'Duration', value: pkg.cost.durationMs ? `${(pkg.cost.durationMs / 1000).toFixed(1)}s` : '—' },
-                { label: 'Tool calls', value: String(pkg.queries.length) },
+                { label: 'Duration', value: renderPkg.cost.durationMs ? `${(renderPkg.cost.durationMs / 1000).toFixed(1)}s` : '—' },
+                { label: 'Tool calls', value: String(renderPkg.queries.length) },
+                ...(blobFields.length > 0 ? [{
+                  label: 'Blob-stored fields',
+                  value: blobFields.join(', '),
+                }] : []),
               ];
               return (
                 <div style={{

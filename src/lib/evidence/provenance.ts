@@ -24,7 +24,13 @@ interface ProvenanceInput {
   packageId: string;
   promptHash: string;
   promptText?: string;
-  outputText: string;
+  /** Inline output text. Used to derive the output hash unless
+   *  `outputHash` is supplied explicitly. */
+  outputText?: string;
+  /** Pre-computed SHA-256 hex of the output. Supplied when the output is
+   *  stored as a BlobRef and inline text isn't available; the ref hash
+   *  itself is exactly this value by construction. */
+  outputHash?: string;
   model: string;
   portal: string;
 }
@@ -63,7 +69,7 @@ export function buildProvenanceGraph(
   const otel = trace as unknown as OTelTrace;
   const spans = otel?.resourceSpans?.[0]?.scopeSpans?.[0]?.spans || [];
   const { packageId, promptHash, promptText, outputText, model, portal } = input;
-  const outputHash = hash(outputText);
+  const outputHash = input.outputHash ?? hash(outputText ?? '');
 
   const graph: ProvNode[] = [];
 
