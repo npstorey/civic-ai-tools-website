@@ -101,7 +101,7 @@
     "owner_name": "Open Cities Labs",
     "owner_type": "Community",
     "api_endpoint": "https://ckan.africadatahub.org/api/3",
-    "dataset_count": 218,
+    "dataset_count": 219,
     "status": "active"
   },
   {
@@ -116,7 +116,7 @@
     "owner_name": "Code for Africa",
     "owner_type": "Civil society",
     "api_endpoint": "https://open.africa/api/3",
-    "dataset_count": 6969,
+    "dataset_count": 6970,
     "status": "active"
   },
   {
@@ -131,7 +131,7 @@
     "owner_name": "Africa Open Data",
     "owner_type": "Civil society",
     "api_endpoint": "https://africaopendata.org/api/3",
-    "dataset_count": 6969,
+    "dataset_count": 6970,
     "status": "active"
   },
   {
@@ -281,7 +281,7 @@
     "owner_name": "Akita prefecture",
     "owner_type": "Regional government",
     "api_endpoint": "https://ckan.pref.akita.lg.jp/api/3",
-    "dataset_count": 261,
+    "dataset_count": 262,
     "status": "active"
   },
   {
@@ -296,7 +296,7 @@
     "owner_name": "State of Alagoas",
     "owner_type": "Regional government",
     "api_endpoint": "https://dados.al.gov.br/catalogo/api/3",
-    "dataset_count": 365,
+    "dataset_count": 366,
     "status": "active"
   },
   {
@@ -656,7 +656,7 @@
     "owner_name": "Asmenet",
     "owner_type": "Business",
     "api_endpoint": "https://opendata.asmenet.it/api/3",
-    "dataset_count": 7,
+    "dataset_count": 8,
     "status": "active"
   },
   {
@@ -836,7 +836,7 @@
     "owner_name": "Verkkopalvelun kehittämisestä vastaa",
     "owner_type": "Central government",
     "api_endpoint": "https://avoindata.fi/data/api/3",
-    "dataset_count": 0,
+    "dataset_count": 2508,
     "status": "active"
   },
   {
@@ -881,7 +881,7 @@
     "owner_name": "Ayuntamiento de Arganda del Rey",
     "owner_type": "Local government",
     "api_endpoint": "https://datosabiertos.ayto-arganda.es/api/3",
-    "dataset_count": 1050,
+    "dataset_count": 1052,
     "status": "active"
   },
   {
@@ -896,7 +896,7 @@
     "owner_name": "Ayuntamiento de Encinas Reales",
     "owner_type": "Local government",
     "api_endpoint": "https://encinasreales-opendata.e-admin.es/api/3",
-    "dataset_count": 36,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -926,7 +926,7 @@
     "owner_name": "Ayuntamiento de Montoro",
     "owner_type": "Local government",
     "api_endpoint": "https://montoro-opendata.e-admin.es/api/3",
-    "dataset_count": 32,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -941,7 +941,7 @@
     "owner_name": "Ayuntamiento de Rivas Vaciamadrid",
     "owner_type": "Local government",
     "api_endpoint": "https://datosabiertos.rivasciudad.es/api/3",
-    "dataset_count": 7,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -986,7 +986,7 @@
     "owner_name": "EUDAT CDI",
     "owner_type": "Central government",
     "api_endpoint": "https://b2find.eudat.eu/api/3",
-    "dataset_count": 1460468,
+    "dataset_count": 1459238,
     "status": "active"
   },
   {
@@ -1076,7 +1076,7 @@
     "owner_name": "Bangkok Government",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.bangkok.go.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 1413,
     "status": "active"
   },
   {
@@ -1331,7 +1331,7 @@
     "owner_name": "Big Data Institute (Public Organization), Thailand",
     "owner_type": "Central government",
     "api_endpoint": "https://datacatalog.bde.go.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 51,
     "status": "active"
   },
   {
@@ -1376,7 +1376,7 @@
     "owner_name": "Local Government of Blitarkab",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.blitarkab.go.id/api/3",
-    "dataset_count": 1682,
+    "dataset_count": 1681,
     "status": "active"
   },
   {
@@ -1406,7 +1406,7 @@
     "owner_name": "Big Data & Open Data Initiative Kyushu",
     "owner_type": "Business",
     "api_endpoint": "https://data.bodik.jp/api/3",
-    "dataset_count": 17400,
+    "dataset_count": 17408,
     "status": "active"
   },
   {
@@ -1481,7 +1481,7 @@
     "owner_name": "City of Buenos Aires",
     "owner_type": "Local government",
     "api_endpoint": "https://data.buenosaires.gob.ar/api/3",
-    "dataset_count": 448,
+    "dataset_count": 451,
     "status": "active"
   },
   {
@@ -1586,7 +1586,7 @@
     "owner_name": "California Natural Resources Agency",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.cnra.ca.gov/api/3",
-    "dataset_count": 21038,
+    "dataset_count": 21045,
     "status": "active"
   },
   {
@@ -1601,7 +1601,7 @@
     "owner_name": "State of California",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.ca.gov/api/3",
-    "dataset_count": 4404,
+    "dataset_count": 4412,
     "status": "active"
   },
   {
@@ -1631,7 +1631,7 @@
     "owner_name": "Câmara Municipal de Lisboa",
     "owner_type": "Regional government",
     "api_endpoint": "https://dados.cm-lisboa.pt/api/3",
-    "dataset_count": 401,
+    "dataset_count": 402,
     "status": "active"
   },
   {
@@ -1691,7 +1691,7 @@
     "owner_name": "University of Manitoba, Centre for Earth Observation Science",
     "owner_type": "Academy",
     "api_endpoint": "https://canwin-datahub.ad.umanitoba.ca/data/api/3",
-    "dataset_count": 47742,
+    "dataset_count": 47786,
     "status": "active"
   },
   {
@@ -1871,7 +1871,7 @@
     "owner_name": "Santander",
     "owner_type": "Local government",
     "api_endpoint": "http://apicatalogo.santander.es/api/3",
-    "dataset_count": 0,
+    "dataset_count": 61,
     "status": "active"
   },
   {
@@ -1916,7 +1916,7 @@
     "owner_name": "República Oriental del Uruguay",
     "owner_type": "Central government",
     "api_endpoint": "https://catalogodatos.gub.uy/api/3",
-    "dataset_count": 0,
+    "dataset_count": 2673,
     "status": "active"
   },
   {
@@ -2126,7 +2126,7 @@
     "owner_name": "Tata Institute of Social Sciences",
     "owner_type": "Academy",
     "api_endpoint": "https://archive-cete.tiss.edu/api/3",
-    "dataset_count": 0,
+    "dataset_count": 150,
     "status": "active"
   },
   {
@@ -2141,7 +2141,7 @@
     "owner_name": "Champaign County Regional Planning Commission.",
     "owner_type": "Local government",
     "api_endpoint": "https://data.ccrpc.org/api/3",
-    "dataset_count": 0,
+    "dataset_count": 348,
     "status": "active"
   },
   {
@@ -2216,7 +2216,7 @@
     "owner_name": "Central Institute of Forensic Science, Thailand",
     "owner_type": "Central government",
     "api_endpoint": "https://opendata.cifs.go.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 91,
     "status": "active"
   },
   {
@@ -2231,7 +2231,7 @@
     "owner_name": "Consórcio de Informática na Gestão Pública Municipal - CIGA",
     "owner_type": "Local government",
     "api_endpoint": "https://dados.ciga.sc.gov.br/api/3",
-    "dataset_count": 564,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -2261,7 +2261,7 @@
     "owner_name": "CIOOS Atlantic",
     "owner_type": "Academy",
     "api_endpoint": "https://catalogue.dev.cioosatlantic.ca/api/3",
-    "dataset_count": 246,
+    "dataset_count": 247,
     "status": "active"
   },
   {
@@ -2321,7 +2321,7 @@
     "owner_name": "City of Birmingham",
     "owner_type": "Local government",
     "api_endpoint": "http://data.birminghamal.gov/api/3",
-    "dataset_count": 0,
+    "dataset_count": 116,
     "status": "active"
   },
   {
@@ -2441,7 +2441,7 @@
     "owner_name": "City of San Antonio",
     "owner_type": "Local government",
     "api_endpoint": "http://data.sanantonio.gov/api/3",
-    "dataset_count": 0,
+    "dataset_count": 162,
     "status": "active"
   },
   {
@@ -2801,7 +2801,7 @@
     "owner_name": "CLARIAH",
     "owner_type": "Academy",
     "api_endpoint": "https://mediasuitedata.clariah.nl/api/3",
-    "dataset_count": 0,
+    "dataset_count": 94,
     "status": "active"
   },
   {
@@ -2921,7 +2921,7 @@
     "owner_name": "Columbia Basin Water Hub",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.cbwaterhub.ca/api/3",
-    "dataset_count": 448,
+    "dataset_count": 449,
     "status": "active"
   },
   {
@@ -2966,7 +2966,7 @@
     "owner_name": "Comune di Ferrara",
     "owner_type": "Local government",
     "api_endpoint": "https://dati.comune.fe.it/api/3",
-    "dataset_count": 265,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -2996,7 +2996,7 @@
     "owner_name": "Comune di Rimini",
     "owner_type": "Local government",
     "api_endpoint": "https://dati.comune.rimini.it/api/3",
-    "dataset_count": 72,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3041,7 +3041,7 @@
     "owner_name": "Concejo Municipal de Rosario",
     "owner_type": "Local government",
     "api_endpoint": "http://datos.concejorosario.gov.ar/api/3",
-    "dataset_count": 340,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3071,7 +3071,7 @@
     "owner_name": "Secretaría Ejecutiva de la Coordinadora Nacional para la Reducción de Desastres (SE-CONRED)",
     "owner_type": "Central government",
     "api_endpoint": "http://datos.conred.gob.gt/api/3",
-    "dataset_count": 9,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3086,7 +3086,7 @@
     "owner_name": "Inform CT, Inc. dba CTData Collaborative",
     "owner_type": "Civil society",
     "api_endpoint": "http://data.ctdata.org/api/3",
-    "dataset_count": 226,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3116,7 +3116,7 @@
     "owner_name": "CONSIP (Italy)",
     "owner_type": "Central government",
     "api_endpoint": "https://dati.consip.it/api/3",
-    "dataset_count": 17,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3131,7 +3131,7 @@
     "owner_name": "Consorci Administració Oberta de Catalunya",
     "owner_type": "Regional government",
     "api_endpoint": "http://dadesobertes.seu-e.cat/api/3",
-    "dataset_count": 893,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3281,7 +3281,7 @@
     "owner_name": "Customs Department (Thailand)",
     "owner_type": "Central government",
     "api_endpoint": "https://catalog.customs.go.th/api/3",
-    "dataset_count": 22,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3401,7 +3401,7 @@
     "owner_name": "Universidade Federal do Amazonas (UFAM)",
     "owner_type": "Academy",
     "api_endpoint": "https://dadosabertos.ufam.edu.br/api/3",
-    "dataset_count": 0,
+    "dataset_count": 82,
     "status": "active"
   },
   {
@@ -3491,7 +3491,7 @@
     "owner_name": "IFC",
     "owner_type": "Academy",
     "api_endpoint": "https://dadosabertos.ifc.edu.br/api/3",
-    "dataset_count": 51,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3731,7 +3731,7 @@
     "owner_name": "Governo do Estado de Goias",
     "owner_type": "Regional government",
     "api_endpoint": "https://dadosabertos.go.gov.br/api/3",
-    "dataset_count": 440,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3821,7 +3821,7 @@
     "owner_name": "Governo do Estado de São Paulo",
     "owner_type": "Regional government",
     "api_endpoint": "https://dadosabertos.sp.gov.br/api/3",
-    "dataset_count": 399,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3851,7 +3851,7 @@
     "owner_name": "Universidade Federal de Ciências da Saúde de Porto Alegre (UFCSPA)",
     "owner_type": "Academy",
     "api_endpoint": "https://dados.ufcspa.edu.br/api/3",
-    "dataset_count": 33,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3881,7 +3881,7 @@
     "owner_name": "Universidade Federal da Grande Dourados (UFGD)",
     "owner_type": "Academy",
     "api_endpoint": "https://dadosabertos.ufgd.edu.br/api/3",
-    "dataset_count": 34,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3956,7 +3956,7 @@
     "owner_name": "Universidade Federal de São Paulo (Unifesp)",
     "owner_type": "Academy",
     "api_endpoint": "https://dadosabertos.unifesp.br/api/3",
-    "dataset_count": 44,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4016,7 +4016,7 @@
     "owner_name": "Universidade Federal Fluminense (UFF)",
     "owner_type": "Academy",
     "api_endpoint": "https://dados.uff.br/api/3",
-    "dataset_count": 23,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4031,7 +4031,7 @@
     "owner_name": "Universidade Federal de Sergipe (UFS)",
     "owner_type": "Academy",
     "api_endpoint": "https://dados.ufs.br/api/3",
-    "dataset_count": 30,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4046,7 +4046,7 @@
     "owner_name": "Dairy Farming Promotion Organization Of Thailand (DPO)",
     "owner_type": "Central government",
     "api_endpoint": "https://opendata.dpo.go.th/api/3",
-    "dataset_count": 1,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4061,7 +4061,7 @@
     "owner_name": "CNR - Area Territoriale di Ricerca del CNR di Bologna (Biblioteca Dario Nobili)",
     "owner_type": "Academy",
     "api_endpoint": "https://dalia-bo.cnr.it/api/3",
-    "dataset_count": 235,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4076,7 +4076,7 @@
     "owner_name": "The Danish Agency for Digitalisation",
     "owner_type": "Academy",
     "api_endpoint": "https://sprogteknologi.dk/api/3",
-    "dataset_count": 214,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4091,7 +4091,7 @@
     "owner_name": "University of Bucharest",
     "owner_type": "Academy",
     "api_endpoint": "https://data.danubius-ri.eu/api/3",
-    "dataset_count": 189,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4106,7 +4106,7 @@
     "owner_name": "University of Bucharest",
     "owner_type": "Academy",
     "api_endpoint": "https://ckan.teorie.ro/api/3",
-    "dataset_count": 5,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4151,7 +4151,7 @@
     "owner_name": "University Corporation for Atmospheric Research (UCAR) / NSF National Center for Atmospheric Research (NCAR)",
     "owner_type": "Academy",
     "api_endpoint": "https://data.ucar.edu/api/3",
-    "dataset_count": 23213,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4166,7 +4166,7 @@
     "owner_name": "Institute for the Promotion of Teaching Science and Technology (Thailand)",
     "owner_type": "Central government",
     "api_endpoint": "https://opendata.ipst.ac.th/api/3",
-    "dataset_count": 21,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4196,7 +4196,7 @@
     "owner_name": "Pemerintah Kabupaten Belitung Timur",
     "owner_type": "Local government",
     "api_endpoint": "https://data.beltim.go.id/api/3",
-    "dataset_count": 760,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4241,7 +4241,7 @@
     "owner_name": "Cabildo de El Hierro",
     "owner_type": "Local government",
     "api_endpoint": "https://datosabiertos.elhierro.es/api/3",
-    "dataset_count": 4,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4286,7 +4286,7 @@
     "owner_name": "Fiscal Policy Office (Thailand)",
     "owner_type": "Central government",
     "api_endpoint": "https://catalog.fpo.go.th/api/3",
-    "dataset_count": 7,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4316,7 +4316,7 @@
     "owner_name": "Pemerintah Kabupaten Sumbawa Barat",
     "owner_type": "Local government",
     "api_endpoint": "https://data.sumbawabaratkab.go.id/api/3",
-    "dataset_count": 627,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4346,7 +4346,7 @@
     "owner_name": "Pemerintah Kabupaten Kendal",
     "owner_type": "Local government",
     "api_endpoint": "https://data.kendalkab.go.id/api/3",
-    "dataset_count": 1321,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4406,7 +4406,7 @@
     "owner_name": "Data",
     "owner_type": "Central government",
     "api_endpoint": "https://data.gov.mk/api/3",
-    "dataset_count": 757,
+    "dataset_count": 769,
     "status": "active"
   },
   {
@@ -4466,7 +4466,7 @@
     "owner_name": "Royal Belgian Institute for Space Aeronomy (BIRA-IASB)",
     "owner_type": "Academy",
     "api_endpoint": "https://data.aeronomie.be/api/3",
-    "dataset_count": 159,
+    "dataset_count": 160,
     "status": "active"
   },
   {
@@ -4481,7 +4481,7 @@
     "owner_name": "City of Sapporo",
     "owner_type": "Local government",
     "api_endpoint": "https://ckan.pf-sapporo.jp/api/3",
-    "dataset_count": 258,
+    "dataset_count": 259,
     "status": "active"
   },
   {
@@ -4496,7 +4496,7 @@
     "owner_name": "Ponorogo Regency Government",
     "owner_type": "Local government",
     "api_endpoint": "https://statistik.ponorogo.go.id/api/3",
-    "dataset_count": 3291,
+    "dataset_count": 3293,
     "status": "active"
   },
   {
@@ -4541,7 +4541,7 @@
     "owner_name": "Government of Western Australia",
     "owner_type": "Regional government",
     "api_endpoint": "https://catalogue.data.wa.gov.au/api/3",
-    "dataset_count": 2905,
+    "dataset_count": 2906,
     "status": "active"
   },
   {
@@ -4586,7 +4586,7 @@
     "owner_name": "State of New South Wales",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.nsw.gov.au/data/api/3",
-    "dataset_count": 16856,
+    "dataset_count": 16853,
     "status": "active"
   },
   {
@@ -4661,7 +4661,7 @@
     "owner_name": "Data4Citizen",
     "owner_type": "Civil society",
     "api_endpoint": "https://data.data4citizen.jp/api/3",
-    "dataset_count": 399,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4766,7 +4766,7 @@
     "owner_name": "DataMX",
     "owner_type": "Community",
     "api_endpoint": "https://datamx.io/api/3",
-    "dataset_count": 9757,
+    "dataset_count": 9761,
     "status": "active"
   },
   {
@@ -4841,7 +4841,7 @@
     "owner_name": "Open City (Oorvani Foundation)",
     "owner_type": "Civil society",
     "api_endpoint": "https://data.opencity.in/api/3",
-    "dataset_count": 1004,
+    "dataset_count": 1007,
     "status": "active"
   },
   {
@@ -5126,7 +5126,7 @@
     "owner_name": "Autoridad Portuaria de Santa Cruz de Tenerife",
     "owner_type": "Regional government",
     "api_endpoint": "https://ckan.puertosdetenerife.org/api/3",
-    "dataset_count": 0,
+    "dataset_count": 69,
     "status": "active"
   },
   {
@@ -5141,7 +5141,7 @@
     "owner_name": "Ayntamiento Málaga",
     "owner_type": "Local government",
     "api_endpoint": "http://datosabiertos.malaga.eu/api/3",
-    "dataset_count": 1313,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5171,7 +5171,7 @@
     "owner_name": "City of Bogota",
     "owner_type": "Regional government",
     "api_endpoint": "https://datosabiertos.bogota.gov.co/api/3",
-    "dataset_count": 2171,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5471,7 +5471,7 @@
     "owner_name": "Ministerio del Interior",
     "owner_type": "Central government",
     "api_endpoint": "https://datos.mininterior.gob.ar/api/3",
-    "dataset_count": 0,
+    "dataset_count": 14,
     "status": "active"
   },
   {
@@ -5636,7 +5636,7 @@
     "owner_name": "Datos abiertos Montilla",
     "owner_type": "Local government",
     "api_endpoint": "https://montilla-opendata.e-admin.es/api/3",
-    "dataset_count": 39,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5681,7 +5681,7 @@
     "owner_name": "OLACEFS",
     "owner_type": "International",
     "api_endpoint": "https://datos.olacefs.com/api/3",
-    "dataset_count": 0,
+    "dataset_count": 13,
     "status": "active"
   },
   {
@@ -5891,7 +5891,7 @@
     "owner_name": "Corte Suprema de Justicia de la Nación",
     "owner_type": "Central government",
     "api_endpoint": "https://datos.csjn.gov.ar/api/3",
-    "dataset_count": 294,
+    "dataset_count": 295,
     "status": "active"
   },
   {
@@ -6071,7 +6071,7 @@
     "owner_name": "HIV, AIDS & Viral Hepititis Ministry of Health, Malawi",
     "owner_type": "Central government",
     "api_endpoint": "https://dms.hiv.health.gov.mw/api/3",
-    "dataset_count": 194,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6281,7 +6281,7 @@
     "owner_name": "Department of Social Development and Welfare, Thailand",
     "owner_type": "Central government",
     "api_endpoint": "https://data.dss.go.th/api/3",
-    "dataset_count": 17,
+    "dataset_count": 19,
     "status": "active"
   },
   {
@@ -6311,7 +6311,7 @@
     "owner_name": "depositar.io",
     "owner_type": "Academy",
     "api_endpoint": "https://data.depositar.io/api/3",
-    "dataset_count": 3413,
+    "dataset_count": 3423,
     "status": "active"
   },
   {
@@ -6371,7 +6371,7 @@
     "owner_name": "DetroitData",
     "owner_type": "Civil society",
     "api_endpoint": "https://detroitdata.org/api/3",
-    "dataset_count": 1596,
+    "dataset_count": 1598,
     "status": "active"
   },
   {
@@ -6416,7 +6416,7 @@
     "owner_name": "Dharmasraya Regency Government",
     "owner_type": "Local government",
     "api_endpoint": "https://satudata.dharmasrayakab.go.id/api/3",
-    "dataset_count": 0,
+    "dataset_count": 399,
     "status": "active"
   },
   {
@@ -6596,7 +6596,7 @@
     "owner_name": "Department of Local Administration (DLA), Thailand",
     "owner_type": "Central government",
     "api_endpoint": "https://opendata.dla.go.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 29,
     "status": "active"
   },
   {
@@ -6611,7 +6611,7 @@
     "owner_name": "Departement of Mentral health (Thailand)",
     "owner_type": "Central government",
     "api_endpoint": "https://catalog.dmh.go.th/api/3",
-    "dataset_count": 291,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6656,7 +6656,7 @@
     "owner_name": "Ville de Montréal",
     "owner_type": "Local government",
     "api_endpoint": "https://donnees.ville.montreal.qc.ca/api/3",
-    "dataset_count": 0,
+    "dataset_count": 400,
     "status": "active"
   },
   {
@@ -6671,7 +6671,7 @@
     "owner_name": "Government of Quebec",
     "owner_type": "Regional government",
     "api_endpoint": "https://donneesquebec.ca/api/3",
-    "dataset_count": 1593,
+    "dataset_count": 1597,
     "status": "active"
   },
   {
@@ -6716,7 +6716,7 @@
     "owner_name": "Smart Dublin",
     "owner_type": "Local government",
     "api_endpoint": "https://data.smartdublin.ie/api/3",
-    "dataset_count": 913,
+    "dataset_count": 917,
     "status": "active"
   },
   {
@@ -6851,7 +6851,7 @@
     "owner_name": "Ekiti",
     "owner_type": "Regional government",
     "api_endpoint": "http://sbsopendata.ekitistate.gov.ng/api/3",
-    "dataset_count": 0,
+    "dataset_count": 37,
     "status": "active"
   },
   {
@@ -6881,7 +6881,7 @@
     "owner_name": "Ministerio del Medio Ambiente",
     "owner_type": "Central government",
     "api_endpoint": "https://datosretc.mma.gob.cl/api/3",
-    "dataset_count": 0,
+    "dataset_count": 17,
     "status": "active"
   },
   {
@@ -6926,7 +6926,7 @@
     "owner_name": "Electronic Transactions Development Agency (ETDA), Thailand",
     "owner_type": "Central government",
     "api_endpoint": "https://opendata.etda.or.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 62,
     "status": "active"
   },
   {
@@ -7031,7 +7031,7 @@
     "owner_name": "Government of Espírito Santo",
     "owner_type": "Regional government",
     "api_endpoint": "https://dados.es.gov.br/api/3",
-    "dataset_count": 0,
+    "dataset_count": 428,
     "status": "active"
   },
   {
@@ -7151,7 +7151,7 @@
     "owner_name": "Government of Italy",
     "owner_type": "Central government",
     "api_endpoint": "http://ckan.acs.beniculturali.it/api/3",
-    "dataset_count": 0,
+    "dataset_count": 56,
     "status": "active"
   },
   {
@@ -7181,7 +7181,7 @@
     "owner_name": "City South Tyrol",
     "owner_type": "Local government",
     "api_endpoint": "http://daten.buergernetz.bz.it/api/3",
-    "dataset_count": 0,
+    "dataset_count": 953,
     "status": "active"
   },
   {
@@ -7241,7 +7241,7 @@
     "owner_name": "Food and Agriculture Organization of the United Nations",
     "owner_type": "International",
     "api_endpoint": "https://data.apps.fao.org/catalog/api/3",
-    "dataset_count": 0,
+    "dataset_count": 11698,
     "status": "active"
   },
   {
@@ -7286,7 +7286,7 @@
     "owner_name": "Federal Aviation Administration",
     "owner_type": "Central government",
     "api_endpoint": "https://catalog.data.faa.gov/api/3",
-    "dataset_count": 0,
+    "dataset_count": 6,
     "status": "active"
   },
   {
@@ -7301,7 +7301,7 @@
     "owner_name": "Digilab",
     "owner_type": "Central government",
     "api_endpoint": "https://fds-ckan.apps.digilab.network/api/3",
-    "dataset_count": 0,
+    "dataset_count": 8,
     "status": "active"
   },
   {
@@ -7316,7 +7316,7 @@
     "owner_name": "FID move (Fachinformationsdienst Mobilitäts- und Verkehrsforschung)",
     "owner_type": "Academy",
     "api_endpoint": "https://data.fid-move.de/api/3",
-    "dataset_count": 0,
+    "dataset_count": 25,
     "status": "active"
   },
   {
@@ -7406,7 +7406,7 @@
     "owner_name": "Fortaleza",
     "owner_type": "Local government",
     "api_endpoint": "https://dados.fortaleza.ce.gov.br/api/3",
-    "dataset_count": 0,
+    "dataset_count": 634,
     "status": "active"
   },
   {
@@ -7436,7 +7436,7 @@
     "owner_name": "Fukuyama City",
     "owner_type": "Local government",
     "api_endpoint": "https://data.win-h.jp/api/3",
-    "dataset_count": 0,
+    "dataset_count": 38,
     "status": "active"
   },
   {
@@ -7451,7 +7451,7 @@
     "owner_name": "Fukuyama City",
     "owner_type": "Local government",
     "api_endpoint": "https://data.city.fukuyama.hiroshima.jp/api/3",
-    "dataset_count": 0,
+    "dataset_count": 56,
     "status": "active"
   },
   {
@@ -7466,7 +7466,7 @@
     "owner_name": "Reykjavíkurborg",
     "owner_type": "Local government",
     "api_endpoint": "https://gagnagatt.reykjavik.is/api/3",
-    "dataset_count": 0,
+    "dataset_count": 593,
     "status": "active"
   },
   {
@@ -7481,7 +7481,7 @@
     "owner_name": "Gayo Lues Regency Government",
     "owner_type": "Local government",
     "api_endpoint": "https://data.gayolueskab.go.id/api/3",
-    "dataset_count": 0,
+    "dataset_count": 229,
     "status": "active"
   },
   {
@@ -7526,7 +7526,7 @@
     "owner_name": "Gender Data Lab",
     "owner_type": "Civil society",
     "api_endpoint": "https://data.genderdatalab.org/api/3",
-    "dataset_count": 0,
+    "dataset_count": 12,
     "status": "active"
   },
   {
@@ -7586,7 +7586,7 @@
     "owner_name": "Geocatalogus.nl",
     "owner_type": "Business",
     "api_endpoint": "https://geocatalogus.nl/api/3",
-    "dataset_count": 0,
+    "dataset_count": 16,
     "status": "active"
   },
   {
@@ -7601,7 +7601,7 @@
     "owner_name": "Geodan",
     "owner_type": "Business",
     "api_endpoint": "https://data.beta.geodan.nl/api/3",
-    "dataset_count": 0,
+    "dataset_count": 146,
     "status": "active"
   },
   {
@@ -7661,7 +7661,7 @@
     "owner_name": "Technische Universität Dresden (TUD)",
     "owner_type": "Academy",
     "api_endpoint": "https://geokur-dmp.geo.tu-dresden.de/api/3",
-    "dataset_count": 0,
+    "dataset_count": 63,
     "status": "active"
   },
   {
@@ -7676,7 +7676,7 @@
     "owner_name": "GeoMaster",
     "owner_type": "Other",
     "api_endpoint": "https://ckan.geomaster.pt/api/3",
-    "dataset_count": 0,
+    "dataset_count": 10,
     "status": "active"
   },
   {
@@ -7706,7 +7706,7 @@
     "owner_name": "Stony Brook University",
     "owner_type": "Academy",
     "api_endpoint": "https://data.gss.stonybrook.edu/api/3",
-    "dataset_count": 0,
+    "dataset_count": 61,
     "status": "active"
   },
   {
@@ -7721,7 +7721,7 @@
     "owner_name": "GeoSphere Austria",
     "owner_type": "Academy",
     "api_endpoint": "https://data.hub.geosphere.at/api/3",
-    "dataset_count": 0,
+    "dataset_count": 96,
     "status": "active"
   },
   {
@@ -7796,7 +7796,7 @@
     "owner_name": "Gifu prefecture",
     "owner_type": "Regional government",
     "api_endpoint": "https://gifu-opendata.pref.gifu.lg.jp/api/3",
-    "dataset_count": 0,
+    "dataset_count": 1878,
     "status": "active"
   },
   {
@@ -7841,7 +7841,7 @@
     "owner_name": "Girl Education Finance Tracker",
     "owner_type": "Civil society",
     "api_endpoint": "https://data.girleducation.in/api/3",
-    "dataset_count": 0,
+    "dataset_count": 277,
     "status": "active"
   },
   {
@@ -7856,7 +7856,7 @@
     "owner_name": "Ajuntament de Girona",
     "owner_type": "Local government",
     "api_endpoint": "https://www.girona.cat/opendata/api/3",
-    "dataset_count": 0,
+    "dataset_count": 53,
     "status": "active"
   },
   {
@@ -7916,7 +7916,7 @@
     "owner_name": "The Government of the Northwest Territories",
     "owner_type": "Regional government",
     "api_endpoint": "https://opendata.gov.nt.ca/api/3",
-    "dataset_count": 0,
+    "dataset_count": 341,
     "status": "active"
   },
   {
@@ -7946,7 +7946,7 @@
     "owner_name": "Górnośląsko-Zagłębiowska Metropolia",
     "owner_type": "Local government",
     "api_endpoint": "https://otwartedane.metropoliagzm.pl/api/3",
-    "dataset_count": 0,
+    "dataset_count": 1117,
     "status": "active"
   },
   {
@@ -7976,7 +7976,7 @@
     "owner_name": "National Electronics and Computer Technology Center",
     "owner_type": "Central government",
     "api_endpoint": "https://govtech.in.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 378,
     "status": "active"
   },
   {
@@ -8006,7 +8006,7 @@
     "owner_name": "Government Data Catalog (GD Catalog), Thailand",
     "owner_type": "Central government",
     "api_endpoint": "https://demo.gdcatalog.go.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 62,
     "status": "active"
   },
   {
@@ -8021,7 +8021,7 @@
     "owner_name": "Government of Alberta",
     "owner_type": "Regional government",
     "api_endpoint": "https://open.alberta.ca/api/3",
-    "dataset_count": 0,
+    "dataset_count": 33272,
     "status": "active"
   },
   {
@@ -8126,7 +8126,7 @@
     "owner_name": "Government of Unknown",
     "owner_type": "Central government",
     "api_endpoint": "https://beta.ckan.org/api/3",
-    "dataset_count": 0,
+    "dataset_count": 3,
     "status": "active"
   },
   {
@@ -8141,7 +8141,7 @@
     "owner_name": "Government of Unknown",
     "owner_type": "Central government",
     "api_endpoint": "https://ckan.iotlab.com/api/3",
-    "dataset_count": 0,
+    "dataset_count": 162,
     "status": "active"
   },
   {
@@ -8306,7 +8306,7 @@
     "owner_name": "H-Mat",
     "owner_type": "Academy",
     "api_endpoint": "https://data.h-mat.org/api/3",
-    "dataset_count": 0,
+    "dataset_count": 31,
     "status": "active"
   },
   {
@@ -8321,7 +8321,7 @@
     "owner_name": "Hakai Institute",
     "owner_type": "Academy",
     "api_endpoint": "https://catalogue.hakai.org/api/3",
-    "dataset_count": 0,
+    "dataset_count": 259,
     "status": "active"
   },
   {
@@ -8381,7 +8381,7 @@
     "owner_name": "Sate of Hawaii",
     "owner_type": "Regional government",
     "api_endpoint": "https://opendata.hawaii.gov/api/3",
-    "dataset_count": 0,
+    "dataset_count": 975,
     "status": "active"
   },
   {
@@ -8396,7 +8396,7 @@
     "owner_name": "Health Data Netherlands",
     "owner_type": "Other",
     "api_endpoint": "https://ckan-acc.healthdata.nl/api/3",
-    "dataset_count": 0,
+    "dataset_count": 574,
     "status": "active"
   },
   {
@@ -8411,7 +8411,7 @@
     "owner_name": "Technische Universität München (TUM), Lehrstuhl für Geoinformatik",
     "owner_type": "Academy",
     "api_endpoint": "https://agrihub.gis.lrg.tum.de/api/3",
-    "dataset_count": 0,
+    "dataset_count": 351,
     "status": "active"
   },
   {
@@ -8441,7 +8441,7 @@
     "owner_name": "Helsinki Region",
     "owner_type": "Local government",
     "api_endpoint": "https://hri.fi/data/api/3",
-    "dataset_count": 0,
+    "dataset_count": 549,
     "status": "active"
   },
   {
@@ -8456,7 +8456,7 @@
     "owner_name": "Municipality of Heraklion",
     "owner_type": "Local government",
     "api_endpoint": "https://smartcity.heraklion.gr/opendata/api/3",
-    "dataset_count": 0,
+    "dataset_count": 61,
     "status": "active"
   },
   {
@@ -8486,7 +8486,7 @@
     "owner_name": "HiDALGO2",
     "owner_type": "Academy",
     "api_endpoint": "https://ckan.hidalgo2.eu/api/3",
-    "dataset_count": 0,
+    "dataset_count": 26,
     "status": "active"
   },
   {
@@ -8516,7 +8516,7 @@
     "owner_name": "Himachal Pradesh data catalog",
     "owner_type": "Local government",
     "api_endpoint": "https://ckan.himdataportal.com/api/3",
-    "dataset_count": 0,
+    "dataset_count": 102,
     "status": "active"
   },
   {
@@ -8576,7 +8576,7 @@
     "owner_name": "Office of the Government Chief Information Officer, Hong Kong",
     "owner_type": "Central government",
     "api_endpoint": "https://data.gov.hk/en-data/api/3",
-    "dataset_count": 0,
+    "dataset_count": 470,
     "status": "active"
   },
   {
@@ -8591,7 +8591,7 @@
     "owner_name": "Civil Society - Annual Report",
     "owner_type": "Civil society",
     "api_endpoint": "https://data.hkppdb.org/api/3",
-    "dataset_count": 0,
+    "dataset_count": 1202,
     "status": "active"
   },
   {
@@ -8651,7 +8651,7 @@
     "owner_name": "Health Systems Research Institute (HSRI), Thailand",
     "owner_type": "Central government",
     "api_endpoint": "https://opendata.hsri.or.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 32,
     "status": "active"
   },
   {
@@ -8741,7 +8741,7 @@
     "owner_name": "Development Initiatives Ltd.",
     "owner_type": "International",
     "api_endpoint": "https://iatiregistry.org/api/3",
-    "dataset_count": 13515,
+    "dataset_count": 13524,
     "status": "active"
   },
   {
@@ -8771,7 +8771,7 @@
     "owner_name": "Istanbul Metropolitan Municipality",
     "owner_type": "Local government",
     "api_endpoint": "https://data.ibb.gov.tr/api/3",
-    "dataset_count": 535,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -8861,7 +8861,7 @@
     "owner_name": "Institute of Geography",
     "owner_type": "Academy",
     "api_endpoint": "http://portal.igg.ac.mn/api/3",
-    "dataset_count": 0,
+    "dataset_count": 1043,
     "status": "active"
   },
   {
@@ -8951,7 +8951,7 @@
     "owner_name": "India Data Portal (administered by Government)",
     "owner_type": "Central government",
     "api_endpoint": "https://ckan.indiadataportal.com/api/3",
-    "dataset_count": 0,
+    "dataset_count": 94,
     "status": "active"
   },
   {
@@ -9041,7 +9041,7 @@
     "owner_name": "INESC TEC",
     "owner_type": "Academy",
     "api_endpoint": "https://rdm.inesctec.pt/api/3",
-    "dataset_count": 0,
+    "dataset_count": 165,
     "status": "active"
   },
   {
@@ -9056,7 +9056,7 @@
     "owner_name": "Secretaria de Estado de Educacao do Distrito Federal (SEEDF)",
     "owner_type": "Regional government",
     "api_endpoint": "https://inforepositorio.se.df.gov.br/api/3",
-    "dataset_count": 0,
+    "dataset_count": 27,
     "status": "active"
   },
   {
@@ -9071,7 +9071,7 @@
     "owner_name": "Department of Mulberry Silk  (Thailand)",
     "owner_type": "Central government",
     "api_endpoint": "https://catalog.qsds.go.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 206,
     "status": "active"
   },
   {
@@ -9146,7 +9146,7 @@
     "owner_name": "PROGEP (Stormwater Management and Climate Change Adaptation Project)",
     "owner_type": "International",
     "api_endpoint": "https://inondations-dakar.org/api/3",
-    "dataset_count": 0,
+    "dataset_count": 115,
     "status": "active"
   },
   {
@@ -9236,7 +9236,7 @@
     "owner_name": "Internationa year of Salmon",
     "owner_type": "Academy",
     "api_endpoint": "https://data.npafc.org/api/3",
-    "dataset_count": 0,
+    "dataset_count": 86,
     "status": "active"
   },
   {
@@ -9281,7 +9281,7 @@
     "owner_name": "Incheon National University",
     "owner_type": "Academy",
     "api_endpoint": "https://bridge.inu.ac.kr/api/3",
-    "dataset_count": 0,
+    "dataset_count": 9,
     "status": "active"
   },
   {
@@ -9341,7 +9341,7 @@
     "owner_name": "Government of Ireland",
     "owner_type": "Central government",
     "api_endpoint": "https://data.gov.ie/api/3",
-    "dataset_count": 21902,
+    "dataset_count": 21954,
     "status": "active"
   },
   {
@@ -9416,7 +9416,7 @@
     "owner_name": "Japan Digital Agency",
     "owner_type": "Central government",
     "api_endpoint": "https://data.e-gov.go.jp/data/api/3",
-    "dataset_count": 18782,
+    "dataset_count": 18784,
     "status": "active"
   },
   {
@@ -9431,7 +9431,7 @@
     "owner_name": "General Incorporated Association Social Infrastructure Information Promotion Council",
     "owner_type": "Business",
     "api_endpoint": "https://www.geospatial.jp/ckan/api/3",
-    "dataset_count": 15357,
+    "dataset_count": 17365,
     "status": "active"
   },
   {
@@ -9446,7 +9446,7 @@
     "owner_name": "Pemerintah Provinsi Jawa Tengah",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.jatengprov.go.id/api/3",
-    "dataset_count": 207731,
+    "dataset_count": 207935,
     "status": "active"
   },
   {
@@ -9521,7 +9521,7 @@
     "owner_name": "Kadikoy municipality",
     "owner_type": "Local government",
     "api_endpoint": "https://acikveri.kadikoy.bel.tr/api/3",
-    "dataset_count": 158,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -9581,7 +9581,7 @@
     "owner_name": "City of Kalamazoo",
     "owner_type": "Local government",
     "api_endpoint": "http://data.kalamazoocity.org/api/3",
-    "dataset_count": 0,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -9596,7 +9596,7 @@
     "owner_name": "Kanagawa Prefectural Government",
     "owner_type": "Regional government",
     "api_endpoint": "https://catalog.opendata.pref.kanagawa.jp/api/3",
-    "dataset_count": 793,
+    "dataset_count": 792,
     "status": "active"
   },
   {
@@ -9611,7 +9611,7 @@
     "owner_name": "Kanazawa City",
     "owner_type": "Local government",
     "api_endpoint": "https://catalog-data.city.kanazawa.ishikawa.jp/api/3",
-    "dataset_count": 317,
+    "dataset_count": 319,
     "status": "active"
   },
   {
@@ -9821,7 +9821,7 @@
     "owner_name": "The Royal Netherlands Meteorological Institute (KNMI)",
     "owner_type": "Central government",
     "api_endpoint": "https://dataplatform.knmi.nl/api/3",
-    "dataset_count": 0,
+    "dataset_count": 438,
     "status": "active"
   },
   {
@@ -9851,7 +9851,7 @@
     "owner_name": "City of Kobe",
     "owner_type": "Local government",
     "api_endpoint": "https://catalog.city.kobe.lg.jp/api/3",
-    "dataset_count": 140,
+    "dataset_count": 133,
     "status": "active"
   },
   {
@@ -10016,7 +10016,7 @@
     "owner_name": "Landesregierung Nordrhein-Westfalen",
     "owner_type": "Regional government",
     "api_endpoint": "https://open.nrw/api/3",
-    "dataset_count": 10717,
+    "dataset_count": 11249,
     "status": "active"
   },
   {
@@ -10031,7 +10031,7 @@
     "owner_name": "Ministry of Environmental Protection and Regional Development of Latvia",
     "owner_type": "Central government",
     "api_endpoint": "https://data.gov.lv/api/3",
-    "dataset_count": 1469,
+    "dataset_count": 1470,
     "status": "active"
   },
   {
@@ -10046,7 +10046,7 @@
     "owner_name": "Low Carbon Contracts Company",
     "owner_type": "Central government",
     "api_endpoint": "https://www.lowcarboncontracts.uk/data-portal/api/3",
-    "dataset_count": 0,
+    "dataset_count": 37,
     "status": "active"
   },
   {
@@ -10061,7 +10061,7 @@
     "owner_name": "Legal Execution Department (LED), Thailand",
     "owner_type": "Central government",
     "api_endpoint": "https://opendata.led.go.th/api/3",
-    "dataset_count": 40,
+    "dataset_count": 41,
     "status": "active"
   },
   {
@@ -10091,7 +10091,7 @@
     "owner_name": "University of Hannover",
     "owner_type": "Academy",
     "api_endpoint": "https://data.uni-hannover.de/api/3",
-    "dataset_count": 440,
+    "dataset_count": 439,
     "status": "active"
   },
   {
@@ -10166,7 +10166,7 @@
     "owner_name": "Local Government of Agglo Larochelle",
     "owner_type": "Local government",
     "api_endpoint": "https://d4c.agglo-larochelle.fr/api/3",
-    "dataset_count": 290,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -10361,7 +10361,7 @@
     "owner_name": "Landcare Research",
     "owner_type": "Academy",
     "api_endpoint": "https://datastore.landcareresearch.co.nz/api/3",
-    "dataset_count": 550,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -10691,7 +10691,7 @@
     "owner_name": "Ministry of Higher Education, Science, Research and Innovation, Thailand",
     "owner_type": "Central government",
     "api_endpoint": "https://data.mhesi.go.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 43,
     "status": "active"
   },
   {
@@ -10751,7 +10751,7 @@
     "owner_name": "State of Minnesota",
     "owner_type": "Regional government",
     "api_endpoint": "https://gisdata.mn.gov/api/3",
-    "dataset_count": 0,
+    "dataset_count": 1058,
     "status": "active"
   },
   {
@@ -11126,7 +11126,7 @@
     "owner_name": "National history museum",
     "owner_type": "Academy",
     "api_endpoint": "https://data.nhm.ac.uk/api/3",
-    "dataset_count": 290,
+    "dataset_count": 291,
     "status": "active"
   },
   {
@@ -11246,7 +11246,7 @@
     "owner_name": "NBC&MSO",
     "owner_type": "Central government",
     "api_endpoint": "https://data.nbco.gov.ie/api/3",
-    "dataset_count": 0,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -11366,7 +11366,7 @@
     "owner_name": "U.S. Department of Energy",
     "owner_type": "Central government",
     "api_endpoint": "https://edx.netl.doe.gov/api/3",
-    "dataset_count": 0,
+    "dataset_count": 17984,
     "status": "active"
   },
   {
@@ -11471,7 +11471,7 @@
     "owner_name": "NHS Business Services Authority’s (NHSBSA)",
     "owner_type": "Central government",
     "api_endpoint": "https://opendata.nhsbsa.net/api/3",
-    "dataset_count": 2016,
+    "dataset_count": 2031,
     "status": "active"
   },
   {
@@ -11771,7 +11771,7 @@
     "owner_name": "Government of Northern Ireland",
     "owner_type": "Regional government",
     "api_endpoint": "https://admin.opendatani.gov.uk/api/3",
-    "dataset_count": 1050,
+    "dataset_count": 1055,
     "status": "active"
   },
   {
@@ -11786,7 +11786,7 @@
     "owner_name": "Northern Territory Government of Australia ",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.nt.gov.au/api/3",
-    "dataset_count": 1067,
+    "dataset_count": 1068,
     "status": "active"
   },
   {
@@ -11876,7 +11876,7 @@
     "owner_name": "NSW State Emergency Service and NSW Department of Climate Change, Energy, the Environment and Water",
     "owner_type": "Regional government",
     "api_endpoint": "https://flooddata.ses.nsw.gov.au/api/3",
-    "dataset_count": 4302,
+    "dataset_count": 4296,
     "status": "active"
   },
   {
@@ -11951,7 +11951,7 @@
     "owner_name": "Octopus",
     "owner_type": "Civil society",
     "api_endpoint": "https://odata.org.il/api/3",
-    "dataset_count": 8272,
+    "dataset_count": 8310,
     "status": "active"
   },
   {
@@ -11981,7 +11981,7 @@
     "owner_name": "Oficina de Estudios y Politicas Agrarias (ODEPA)",
     "owner_type": "Central government",
     "api_endpoint": "https://datos.odepa.gob.cl/api/3",
-    "dataset_count": 6,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -11996,7 +11996,7 @@
     "owner_name": "Ministrsvo za Javno Upravo",
     "owner_type": "Central government",
     "api_endpoint": "https://podatki.gov.si/api/3",
-    "dataset_count": 8797,
+    "dataset_count": 8798,
     "status": "active"
   },
   {
@@ -12356,7 +12356,7 @@
     "owner_name": "Government of Ontario",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.ontario.ca/api/3",
-    "dataset_count": 2946,
+    "dataset_count": 2947,
     "status": "active"
   },
   {
@@ -12386,7 +12386,7 @@
     "owner_name": "Ministry of Cultural Affairs Tunis",
     "owner_type": "Central government",
     "api_endpoint": "http://www.openculture.gov.tn/api/3",
-    "dataset_count": 328,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -12476,7 +12476,7 @@
     "owner_name": "Gobierno de Aragon",
     "owner_type": "Regional government",
     "api_endpoint": "https://opendata.aragon.es/api/3",
-    "dataset_count": 2418,
+    "dataset_count": 2420,
     "status": "active"
   },
   {
@@ -12581,7 +12581,7 @@
     "owner_name": "Comune di Reggio Emilia",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.comune.re.it/api/3",
-    "dataset_count": 245,
+    "dataset_count": 248,
     "status": "active"
   },
   {
@@ -12596,7 +12596,7 @@
     "owner_name": "Nemea Cloud / GeoSolutions",
     "owner_type": "Other",
     "api_endpoint": "https://opendata.comuni.nemea.cloud/api/3",
-    "dataset_count": 31,
+    "dataset_count": 32,
     "status": "active"
   },
   {
@@ -12641,7 +12641,7 @@
     "owner_name": "Open Data del Gobierno de Canarias",
     "owner_type": "Regional government",
     "api_endpoint": "https://datos.canarias.es/catalogos/general/api/3",
-    "dataset_count": 22335,
+    "dataset_count": 22340,
     "status": "active"
   },
   {
@@ -12686,7 +12686,7 @@
     "owner_name": "Open Data EMT",
     "owner_type": "Local government",
     "api_endpoint": "https://datos.emtmadrid.es/api/3",
-    "dataset_count": 0,
+    "dataset_count": 20,
     "status": "active"
   },
   {
@@ -12731,7 +12731,7 @@
     "owner_name": "Operandum project",
     "owner_type": "Academy",
     "api_endpoint": "https://data-catalogue.operandum-project.eu/api/3",
-    "dataset_count": 0,
+    "dataset_count": 2339,
     "status": "active"
   },
   {
@@ -12776,7 +12776,7 @@
     "owner_name": "Pemerintah Kabupaten Grobogan (Grobogan Regency Government)",
     "owner_type": "Local government",
     "api_endpoint": "https://data.grobogan.go.id/api/3",
-    "dataset_count": 0,
+    "dataset_count": 810,
     "status": "active"
   },
   {
@@ -12896,7 +12896,7 @@
     "owner_name": "Pemerintah Kabupaten Barito Timur",
     "owner_type": "Local government",
     "api_endpoint": "https://data.baritotimurkab.go.id/api/3",
-    "dataset_count": 8,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -12941,7 +12941,7 @@
     "owner_name": "Demak Regency",
     "owner_type": "Local government",
     "api_endpoint": "https://data.demakkab.go.id/api/3",
-    "dataset_count": 0,
+    "dataset_count": 27156,
     "status": "active"
   },
   {
@@ -13016,7 +13016,7 @@
     "owner_name": "Pemerintah Aceh (Diskominfosa Aceh)",
     "owner_type": "Regional government",
     "api_endpoint": "https://datalatih.siat.web.id/api/3",
-    "dataset_count": 0,
+    "dataset_count": 194,
     "status": "active"
   },
   {
@@ -13136,7 +13136,7 @@
     "owner_name": "Universidade Federal de Sergipe (UFS)",
     "owner_type": "Academy",
     "api_endpoint": "https://petic.dcomp.ufs.br/api/3",
-    "dataset_count": 0,
+    "dataset_count": 90,
     "status": "active"
   },
   {
@@ -13196,7 +13196,7 @@
     "owner_name": "Centro Federal de Educação Tecnológica Celso Suckow da Fonseca (CEFET/RJ)",
     "owner_type": "Academy",
     "api_endpoint": "https://dados.cefet-rj.br/api/3",
-    "dataset_count": 0,
+    "dataset_count": 28,
     "status": "active"
   },
   {
@@ -13316,7 +13316,7 @@
     "owner_name": "Federal University of Ceará",
     "owner_type": "Academy",
     "api_endpoint": "https://dados.ufc.br/api/3",
-    "dataset_count": 121,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -13511,7 +13511,7 @@
     "owner_name": "Regione Umbria",
     "owner_type": "Regional government",
     "api_endpoint": "http://dati.regione.umbria.it/api/3",
-    "dataset_count": 457,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -13631,7 +13631,7 @@
     "owner_name": "Universidade Federal de Minas Gerais",
     "owner_type": "Academy",
     "api_endpoint": "https://dados.ufmg.br/api/3",
-    "dataset_count": 23,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -13646,7 +13646,7 @@
     "owner_name": "Universidade Federal de Pernambuco (UFPE)",
     "owner_type": "Academy",
     "api_endpoint": "https://dados.ufpe.br/api/3",
-    "dataset_count": 17,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -13706,7 +13706,7 @@
     "owner_name": "Office of the National Economic and Social Development Council, NESDB (Thailand)",
     "owner_type": "Central government",
     "api_endpoint": "https://opendata.nesdc.go.th/api/3",
-    "dataset_count": 1668,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -13766,7 +13766,7 @@
     "owner_name": "Projektbüro Digitale Metropole Ruhr",
     "owner_type": "Regional government",
     "api_endpoint": "https://opendata.ruhr/api/3",
-    "dataset_count": 2953,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -13826,7 +13826,7 @@
     "owner_name": "Stavanger Municipality",
     "owner_type": "Regional government",
     "api_endpoint": "https://opencom.no/api/3",
-    "dataset_count": 359,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -13916,7 +13916,7 @@
     "owner_name": "Stadt Arnsberg",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.arnsberg.de/api/3",
-    "dataset_count": 40,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -13931,7 +13931,7 @@
     "owner_name": "Stadt Olpe",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.olpe.de/api/3",
-    "dataset_count": 22,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -13946,7 +13946,7 @@
     "owner_name": "Thanh Hoa province",
     "owner_type": "Regional government",
     "api_endpoint": "https://opendata.thanhhoa.gov.vn/api/3",
-    "dataset_count": 87,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -13961,7 +13961,7 @@
     "owner_name": "Provincia di Padova",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.provincia.padova.it/api/3",
-    "dataset_count": 10,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -14081,7 +14081,7 @@
     "owner_name": "Sidoarjo Regency Government",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.sidoarjokab.go.id/api/3",
-    "dataset_count": 0,
+    "dataset_count": 6639,
     "status": "active"
   },
   {
@@ -14171,7 +14171,7 @@
     "owner_name": "Universitat Politècnica de València",
     "owner_type": "Academy",
     "api_endpoint": "https://upvtransparente.upv.es/api/3",
-    "dataset_count": 98,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -14186,7 +14186,7 @@
     "owner_name": "The Dutch government",
     "owner_type": "Central government",
     "api_endpoint": "https://data.overheid.nl/data/api/3",
-    "dataset_count": 20491,
+    "dataset_count": 20468,
     "status": "active"
   },
   {
@@ -14276,7 +14276,7 @@
     "owner_name": "Government of Canada",
     "owner_type": "Central government",
     "api_endpoint": "https://open.canada.ca/data/api/3",
-    "dataset_count": 46954,
+    "dataset_count": 46996,
     "status": "active"
   },
   {
@@ -14396,7 +14396,7 @@
     "owner_name": "Open State Foundation",
     "owner_type": "Civil society",
     "api_endpoint": "https://data.openstate.eu/api/3",
-    "dataset_count": 90,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -14441,7 +14441,7 @@
     "owner_name": "Schleswig-Holstein",
     "owner_type": "Regional government",
     "api_endpoint": "https://opendata.schleswig-holstein.de/api/3",
-    "dataset_count": 32065,
+    "dataset_count": 32199,
     "status": "active"
   },
   {
@@ -14456,7 +14456,7 @@
     "owner_name": "Landesregierung Nordrhein-Westfalen",
     "owner_type": "Regional government",
     "api_endpoint": "https://ckan-open-nrw.nrw.de/api/3",
-    "dataset_count": 10717,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -14471,7 +14471,7 @@
     "owner_name": "Regione Toscana",
     "owner_type": "Regional government",
     "api_endpoint": "https://dati.toscana.it/api/3",
-    "dataset_count": 12316,
+    "dataset_count": 12329,
     "status": "active"
   },
   {
@@ -14516,7 +14516,7 @@
     "owner_name": "Comune di Genova",
     "owner_type": "Local government",
     "api_endpoint": "https://dati.comune.genova.it/api/3",
-    "dataset_count": 0,
+    "dataset_count": 162,
     "status": "active"
   },
   {
@@ -14651,7 +14651,7 @@
     "owner_name": "City of Kaiserslautern",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.kaiserslautern.de/api/3",
-    "dataset_count": 40,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -14681,7 +14681,7 @@
     "owner_name": "Comune di Rimini",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.comune.rimini.it/api/3",
-    "dataset_count": 72,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -14711,7 +14711,7 @@
     "owner_name": "University of Bari Aldo Moro",
     "owner_type": "Academy",
     "api_endpoint": "https://opendata.uniba.it/api/3",
-    "dataset_count": 105,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -14726,7 +14726,7 @@
     "owner_name": "Universita degli Studi dell'Aquila",
     "owner_type": "Academy",
     "api_endpoint": "https://opendata.univaq.it/api/3",
-    "dataset_count": 16,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -14876,7 +14876,7 @@
     "owner_name": "Council of Ministers of Bosnia and Herzegovina.",
     "owner_type": "Central government",
     "api_endpoint": "http://app.podaci.gov.ba/api/3",
-    "dataset_count": 15,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -14921,7 +14921,7 @@
     "owner_name": "Gdynia City Hall",
     "owner_type": "Local government",
     "api_endpoint": "https://otwartedane.gdynia.pl/api/3",
-    "dataset_count": 0,
+    "dataset_count": 270,
     "status": "active"
   },
   {
@@ -14936,7 +14936,7 @@
     "owner_name": "Urząd Miasta Kołobrzeg",
     "owner_type": "Local government",
     "api_endpoint": "http://opendata.gis.kolobrzeg.pl/api/3",
-    "dataset_count": 0,
+    "dataset_count": 71,
     "status": "active"
   },
   {
@@ -14951,7 +14951,7 @@
     "owner_name": "Lublin City Hall",
     "owner_type": "Local government",
     "api_endpoint": "https://otwartedane.lublin.eu/api/3",
-    "dataset_count": 0,
+    "dataset_count": 201,
     "status": "active"
   },
   {
@@ -14966,7 +14966,7 @@
     "owner_name": "Outdooractive",
     "owner_type": "Business",
     "api_endpoint": "https://www.opentourism.net/api/3",
-    "dataset_count": 0,
+    "dataset_count": 12,
     "status": "active"
   },
   {
@@ -15041,7 +15041,7 @@
     "owner_name": "Padang City Government (Pemko Padang)",
     "owner_type": "Local government",
     "api_endpoint": "https://satudata.padang.go.id/api/3",
-    "dataset_count": 0,
+    "dataset_count": 485,
     "status": "active"
   },
   {
@@ -15071,7 +15071,7 @@
     "owner_name": "Pandeglang Regency Government",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.pandeglangkab.go.id/api/3",
-    "dataset_count": 0,
+    "dataset_count": 1583,
     "status": "active"
   },
   {
@@ -15086,7 +15086,7 @@
     "owner_name": "Max Planck Computing and Data Facility",
     "owner_type": "Academy",
     "api_endpoint": "https://pandoradata.earth/api/3",
-    "dataset_count": 0,
+    "dataset_count": 85,
     "status": "active"
   },
   {
@@ -15101,7 +15101,7 @@
     "owner_name": "Parlamento de Canarias",
     "owner_type": "Regional government",
     "api_endpoint": "https://datos.parcan.es/api/3",
-    "dataset_count": 0,
+    "dataset_count": 4346,
     "status": "active"
   },
   {
@@ -15251,7 +15251,7 @@
     "owner_name": "Pemerintah Kabupaten Kampar",
     "owner_type": "Local government",
     "api_endpoint": "https://data.kamparkab.go.id/api/3",
-    "dataset_count": 0,
+    "dataset_count": 218,
     "status": "active"
   },
   {
@@ -15311,7 +15311,7 @@
     "owner_name": "Penghu County Government",
     "owner_type": "Regional government",
     "api_endpoint": "https://opendata.penghu.gov.tw/api/3",
-    "dataset_count": 0,
+    "dataset_count": 518,
     "status": "active"
   },
   {
@@ -15341,7 +15341,7 @@
     "owner_name": "Pesisir Selatan Regency Government",
     "owner_type": "Local government",
     "api_endpoint": "https://data.pesisirselatankab.go.id/api/3",
-    "dataset_count": 0,
+    "dataset_count": 35,
     "status": "active"
   },
   {
@@ -15371,7 +15371,7 @@
     "owner_name": "Phetchaburi Provincial Administration",
     "owner_type": "Local government",
     "api_endpoint": "https://phetchaburi.gdcatalog.go.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 309,
     "status": "active"
   },
   {
@@ -15506,7 +15506,7 @@
     "owner_name": "PONDERFUL Project",
     "owner_type": "Academy",
     "api_endpoint": "https://dataportal.ponderful.eu/api/3",
-    "dataset_count": 0,
+    "dataset_count": 700,
     "status": "active"
   },
   {
@@ -15536,7 +15536,7 @@
     "owner_name": "UK Data Service",
     "owner_type": "Academy",
     "api_endpoint": "https://statistics.ukdataservice.ac.uk/api/3",
-    "dataset_count": 0,
+    "dataset_count": 906,
     "status": "active"
   },
   {
@@ -15626,7 +15626,7 @@
     "owner_name": "Portal  de Datos Abiertos Diputación de Badajoz",
     "owner_type": "Local government",
     "api_endpoint": "https://datosabiertos.dip-badajoz.es/api/3",
-    "dataset_count": 0,
+    "dataset_count": 107,
     "status": "active"
   },
   {
@@ -15641,7 +15641,7 @@
     "owner_name": "Dinas Komunikasi dan Informatika Kabupaten Belitung",
     "owner_type": "Local government",
     "api_endpoint": "https://data.belitung.go.id/api/3",
-    "dataset_count": 0,
+    "dataset_count": 961,
     "status": "active"
   },
   {
@@ -15806,7 +15806,7 @@
     "owner_name": "Government hospital in Tulungagung Regency, Indonesia",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.rsud.tulungagung.go.id/api/3",
-    "dataset_count": 0,
+    "dataset_count": 153,
     "status": "active"
   },
   {
@@ -15896,7 +15896,7 @@
     "owner_name": "Ajuntament de Mollet del Vallès",
     "owner_type": "Local government",
     "api_endpoint": "https://dadesobertes.molletvalles.cat/api/3",
-    "dataset_count": 0,
+    "dataset_count": 10,
     "status": "active"
   },
   {
@@ -16661,7 +16661,7 @@
     "owner_name": "Junta de Andalucia",
     "owner_type": "Regional government",
     "api_endpoint": "https://www.juntadeandalucia.es/datosabiertos/portal/api/3",
-    "dataset_count": 0,
+    "dataset_count": 828,
     "status": "active"
   },
   {
@@ -16706,7 +16706,7 @@
     "owner_name": "Ayuntamiento de Alcalá de Henares",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.ayto-alcaladehenares.es/api/3",
-    "dataset_count": 0,
+    "dataset_count": 44,
     "status": "active"
   },
   {
@@ -16721,7 +16721,7 @@
     "owner_name": "Ayuntamiento de Chiclana de la Frontera",
     "owner_type": "Local government",
     "api_endpoint": "https://datosabiertos-chiclana.ogovsystem.com/api/3",
-    "dataset_count": 0,
+    "dataset_count": 30,
     "status": "active"
   },
   {
@@ -17246,7 +17246,7 @@
     "owner_name": "Port de Barcelona",
     "owner_type": "Central government",
     "api_endpoint": "https://opendata.portdebarcelona.cat/api/3",
-    "dataset_count": 78,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -17396,7 +17396,7 @@
     "owner_name": "Dinas Komunikasi dan Informatika Provinsi Kalimantan Timur",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.kaltimprov.go.id/api/3",
-    "dataset_count": 11744,
+    "dataset_count": 11803,
     "status": "active"
   },
   {
@@ -17426,7 +17426,7 @@
     "owner_name": "Dinas Komunikasi dan Informatika Provinsi Sulawesi Tengah",
     "owner_type": "Regional government",
     "api_endpoint": "https://ckan.diskominfo.sultengprov.go.id/api/3",
-    "dataset_count": 444,
+    "dataset_count": 464,
     "status": "active"
   },
   {
@@ -17471,7 +17471,7 @@
     "owner_name": "GAL Terra dei Messapi",
     "owner_type": "Other",
     "api_endpoint": "https://opendatacomunideimessapi.it/api/3",
-    "dataset_count": 22,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -17546,7 +17546,7 @@
     "owner_name": "Civis Analytics",
     "owner_type": "Business",
     "api_endpoint": "https://data.civis.bz.it/api/3",
-    "dataset_count": 952,
+    "dataset_count": 953,
     "status": "active"
   },
   {
@@ -17561,7 +17561,7 @@
     "owner_name": "Guvernul Republicii Moldova",
     "owner_type": "Central government",
     "api_endpoint": "https://dataset.gov.md/api/3",
-    "dataset_count": 1275,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -17591,7 +17591,7 @@
     "owner_name": "Universidade Federal de Sergipe (UFS)",
     "owner_type": "Academy",
     "api_endpoint": "https://processosorganizacionais.ufs.br/api/3",
-    "dataset_count": 529,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -17621,7 +17621,7 @@
     "owner_name": "Proyecto Enlaza de la provincia de Córdoba",
     "owner_type": "Local government",
     "api_endpoint": "https://eprinsa-opendata.e-admin.es/api/3",
-    "dataset_count": 2172,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -17726,7 +17726,7 @@
     "owner_name": "Kabupaten Purbalingga",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.purbalinggakab.go.id/api/3",
-    "dataset_count": 8316,
+    "dataset_count": 8338,
     "status": "active"
   },
   {
@@ -17816,7 +17816,7 @@
     "owner_name": "Queensland University of Technology",
     "owner_type": "Academy",
     "api_endpoint": "https://data.researchdatafinder.qut.edu.au/api/3",
-    "dataset_count": 313,
+    "dataset_count": 312,
     "status": "active"
   },
   {
@@ -17846,7 +17846,7 @@
     "owner_name": "Masaryk University (RECETOX)",
     "owner_type": "Academy",
     "api_endpoint": "https://ckan.recetox.cz/api/3",
-    "dataset_count": 0,
+    "dataset_count": 6,
     "status": "active"
   },
   {
@@ -17906,7 +17906,7 @@
     "owner_name": "Región de Murcia",
     "owner_type": "Regional government",
     "api_endpoint": "https://datosabiertos.regiondemurcia.es/api/3",
-    "dataset_count": 979,
+    "dataset_count": 978,
     "status": "active"
   },
   {
@@ -17966,7 +17966,7 @@
     "owner_name": "Regione Emilia-Romagna",
     "owner_type": "Regional government",
     "api_endpoint": "https://dati.emilia-romagna.it/api/3",
-    "dataset_count": 2842,
+    "dataset_count": 2845,
     "status": "active"
   },
   {
@@ -18026,7 +18026,7 @@
     "owner_name": "Sarawak State",
     "owner_type": "Regional government",
     "api_endpoint": "https://catalog.sarawak.gov.my/api/3",
-    "dataset_count": 201,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -18086,7 +18086,7 @@
     "owner_name": "Secretaria de Estado do Planejamento - SEPLAN",
     "owner_type": "Regional government",
     "api_endpoint": "https://ppn.sc.gov.br/api/3",
-    "dataset_count": 1088,
+    "dataset_count": 1094,
     "status": "active"
   },
   {
@@ -18161,7 +18161,7 @@
     "owner_name": "Roiet",
     "owner_type": "Local government",
     "api_endpoint": "https://roiet.gdcatalog.go.th/api/3",
-    "dataset_count": 472,
+    "dataset_count": 496,
     "status": "active"
   },
   {
@@ -18176,7 +18176,7 @@
     "owner_name": "Comune di Roma",
     "owner_type": "Local government",
     "api_endpoint": "https://dati.comune.roma.it/catalog/api/3",
-    "dataset_count": 365,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -18416,7 +18416,7 @@
     "owner_name": "Dewan Perwakilan Daerah Republik Indonesia (DPD RI)",
     "owner_type": "Central government",
     "api_endpoint": "https://satudata.dpd.go.id/api/3",
-    "dataset_count": 27,
+    "dataset_count": 28,
     "status": "active"
   },
   {
@@ -18446,7 +18446,7 @@
     "owner_name": "Pemerintah Kabupaten Kaur",
     "owner_type": "Local government",
     "api_endpoint": "https://datasets.kaurkab.go.id/api/3",
-    "dataset_count": 143,
+    "dataset_count": 146,
     "status": "active"
   },
   {
@@ -18476,7 +18476,7 @@
     "owner_name": "Diskominfo Kabupaten Langkat",
     "owner_type": "Local government",
     "api_endpoint": "https://satudata.langkatkab.go.id/api/3",
-    "dataset_count": 205,
+    "dataset_count": 204,
     "status": "active"
   },
   {
@@ -18806,7 +18806,7 @@
     "owner_name": "Probolinggo Regency Government",
     "owner_type": "Local government",
     "api_endpoint": "https://satudata.probolinggokab.go.id/api/3",
-    "dataset_count": 731,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -19196,7 +19196,7 @@
     "owner_name": "Skeena Knowledge Trust",
     "owner_type": "Civil society",
     "api_endpoint": "https://data.skeenasalmon.info/api/3",
-    "dataset_count": 0,
+    "dataset_count": 1419,
     "status": "active"
   },
   {
@@ -19241,7 +19241,7 @@
     "owner_name": "Instituto Federal de Minas Gerais",
     "owner_type": "Academy",
     "api_endpoint": "https://dadosabertos.ifmg.edu.br/api/3",
-    "dataset_count": 0,
+    "dataset_count": 22,
     "status": "active"
   },
   {
@@ -19271,7 +19271,7 @@
     "owner_name": "Government of South Australia",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.sa.gov.au/data/api/3",
-    "dataset_count": 0,
+    "dataset_count": 1918,
     "status": "active"
   },
   {
@@ -19286,7 +19286,7 @@
     "owner_name": "The Improvement Service (IS)",
     "owner_type": "Civil society",
     "api_endpoint": "https://data.spatialhub.scot/api/3",
-    "dataset_count": 0,
+    "dataset_count": 474,
     "status": "active"
   },
   {
@@ -19346,7 +19346,7 @@
     "owner_name": "Stadt Jena",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.jena.de/api/3",
-    "dataset_count": 0,
+    "dataset_count": 70,
     "status": "active"
   },
   {
@@ -19361,7 +19361,7 @@
     "owner_name": "Stadt Zurich",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.stadt-zuerich.ch/api/3",
-    "dataset_count": 0,
+    "dataset_count": 921,
     "status": "active"
   },
   {
@@ -19376,7 +19376,7 @@
     "owner_name": "Tegel Projekt GmbH",
     "owner_type": "Business",
     "api_endpoint": "https://ckan.staging.futr-hub.de/api/3",
-    "dataset_count": 0,
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -19391,7 +19391,7 @@
     "owner_name": "The Norwegian Public Roads Administration",
     "owner_type": "Central government",
     "api_endpoint": "https://dataut.vegvesen.no/api/3",
-    "dataset_count": 0,
+    "dataset_count": 81,
     "status": "active"
   },
   {
@@ -19436,7 +19436,7 @@
     "owner_name": "City of Sugar Land",
     "owner_type": "Local government",
     "api_endpoint": "https://data.sugarlandtx.gov/api/3",
-    "dataset_count": 134,
+    "dataset_count": 135,
     "status": "active"
   },
   {
@@ -19451,7 +19451,7 @@
     "owner_name": "Danube Data",
     "owner_type": "Academy",
     "api_endpoint": "https://danube-data.eu/api/3",
-    "dataset_count": 0,
+    "dataset_count": 6,
     "status": "active"
   },
   {
@@ -19541,7 +19541,7 @@
     "owner_name": "Finland’s environmental administration",
     "owner_type": "Central government",
     "api_endpoint": "https://ckan.ymparisto.fi/api/3",
-    "dataset_count": 0,
+    "dataset_count": 637,
     "status": "active"
   },
   {
@@ -19631,7 +19631,7 @@
     "owner_name": "Tampere University",
     "owner_type": "Academy",
     "api_endpoint": "https://ckan.energydata.rd.tuni.fi/api/3",
-    "dataset_count": 0,
+    "dataset_count": 32,
     "status": "active"
   },
   {
@@ -19646,7 +19646,7 @@
     "owner_name": "Tampere",
     "owner_type": "Local government",
     "api_endpoint": "https://data.tampere.fi/data/api/3",
-    "dataset_count": 0,
+    "dataset_count": 100,
     "status": "active"
   },
   {
@@ -19691,7 +19691,7 @@
     "owner_name": "Tribunal de Contas do Estado de Goias (TCE-GO)",
     "owner_type": "Regional government",
     "api_endpoint": "https://dadosabertos.tce.go.gov.br/api/3",
-    "dataset_count": 0,
+    "dataset_count": 63,
     "status": "active"
   },
   {
@@ -19721,7 +19721,7 @@
     "owner_name": "Universidad de Alicante",
     "owner_type": "Academy",
     "api_endpoint": "https://tdata.dlsi.ua.es/api/3",
-    "dataset_count": 0,
+    "dataset_count": 1021,
     "status": "active"
   },
   {
@@ -19796,7 +19796,7 @@
     "owner_name": "Thai Health Promotion Foundation",
     "owner_type": "Civil society",
     "api_endpoint": "https://data.thaihealth.or.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 72,
     "status": "active"
   },
   {
@@ -19826,7 +19826,7 @@
     "owner_name": "Ministry of Energy (Thailand)",
     "owner_type": "Central government",
     "api_endpoint": "https://gdcatalog.energy.go.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 216,
     "status": "active"
   },
   {
@@ -19961,7 +19961,7 @@
     "owner_name": "Edinburgh Parallel Computing Centre (EPCC)",
     "owner_type": "Academy",
     "api_endpoint": "https://catalogue.eidf.ac.uk/api/3",
-    "dataset_count": 12,
+    "dataset_count": 13,
     "status": "active"
   },
   {
@@ -19976,7 +19976,7 @@
     "owner_name": "The Global Water Pathogens Project (GWPP)",
     "owner_type": "Academy",
     "api_endpoint": "https://data.waterpathogens.org/api/3",
-    "dataset_count": 47,
+    "dataset_count": 48,
     "status": "active"
   },
   {
@@ -20021,7 +20021,7 @@
     "owner_name": "GSA Technology Transformation Services",
     "owner_type": "Central government",
     "api_endpoint": "https://catalog.data.gov/api/3",
-    "dataset_count": 402388,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -20126,7 +20126,7 @@
     "owner_name": "Porto City Council",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.porto.digital/api/3",
-    "dataset_count": 110,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -20246,7 +20246,7 @@
     "owner_name": "Tokyo Metropolitan Government",
     "owner_type": "Regional government",
     "api_endpoint": "https://catalog.data.metro.tokyo.lg.jp/api/3",
-    "dataset_count": 10074,
+    "dataset_count": 10075,
     "status": "active"
   },
   {
@@ -20276,7 +20276,7 @@
     "owner_name": "Tokyo Metropolitan Government",
     "owner_type": "Regional government",
     "api_endpoint": "https://catalog.data.metro.tokyo.lg.jp/api/3",
-    "dataset_count": 10074,
+    "dataset_count": 10075,
     "status": "active"
   },
   {
@@ -20306,7 +20306,7 @@
     "owner_name": "Toronto and Region Conservation Authority (TRCA)",
     "owner_type": "Local government",
     "api_endpoint": "https://data.trca.ca/api/3",
-    "dataset_count": 16,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -20321,7 +20321,7 @@
     "owner_name": "Tourism Authority of Thailand (TAT)",
     "owner_type": "Central government",
     "api_endpoint": "http://opendata.tgo.or.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 15,
     "status": "active"
   },
   {
@@ -20381,7 +20381,7 @@
     "owner_name": "Stadt Karlsruhe",
     "owner_type": "Local government",
     "api_endpoint": "https://transparenz.karlsruhe.de/api/3",
-    "dataset_count": 148,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -20396,7 +20396,7 @@
     "owner_name": "Hamburgischen Transparenzgesetz (HmbTG)",
     "owner_type": "Local government",
     "api_endpoint": "https://suche.transparenz.hamburg.de/api/3",
-    "dataset_count": 235465,
+    "dataset_count": 235592,
     "status": "active"
   },
   {
@@ -20471,7 +20471,7 @@
     "owner_name": "TUMI (Transformative Urban Mobility Initiative)",
     "owner_type": "International",
     "api_endpoint": "https://hub.tumidata.org/api/3",
-    "dataset_count": 1020,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -20951,7 +20951,7 @@
     "owner_name": "Upplands Väsby kommun",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.upplandsvasby.se/api/3",
-    "dataset_count": 7,
+    "dataset_count": 8,
     "status": "active"
   },
   {
@@ -21056,7 +21056,7 @@
     "owner_name": "Valencia City Council",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.vlci.valencia.es/api/3",
-    "dataset_count": 294,
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -21086,7 +21086,7 @@
     "owner_name": "State of Victoria",
     "owner_type": "Regional government",
     "api_endpoint": "https://discover.data.vic.gov.au/api/3",
-    "dataset_count": 5465,
+    "dataset_count": 5579,
     "status": "active"
   },
   {
@@ -21146,7 +21146,7 @@
     "owner_name": "City of Monreal",
     "owner_type": "Local government",
     "api_endpoint": "https://donnees.montreal.ca/api/3",
-    "dataset_count": 398,
+    "dataset_count": 400,
     "status": "active"
   },
   {
@@ -21206,7 +21206,7 @@
     "owner_name": "VNPT Information Technology company",
     "owner_type": "Business",
     "api_endpoint": "https://opendata.vnptit.vn/api/3",
-    "dataset_count": 0,
+    "dataset_count": 18,
     "status": "active"
   },
   {
@@ -21296,7 +21296,7 @@
     "owner_name": "San Diego Supercomputer Center",
     "owner_type": "Academy",
     "api_endpoint": "https://wifire-data.sdsc.edu/api/3",
-    "dataset_count": 0,
+    "dataset_count": 3707,
     "status": "active"
   },
   {
@@ -21311,7 +21311,7 @@
     "owner_name": "City of Winchester",
     "owner_type": "Local government",
     "api_endpoint": "https://opendata.winchesterva.gov/api/3",
-    "dataset_count": 0,
+    "dataset_count": 725,
     "status": "active"
   },
   {
@@ -21326,7 +21326,7 @@
     "owner_name": "Winnipeg Metropolitan Region",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.winnipegmetroregion.ca/api/3",
-    "dataset_count": 0,
+    "dataset_count": 33,
     "status": "active"
   },
   {
@@ -21446,7 +21446,7 @@
     "owner_name": "Yokohama City",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.city.yokohama.lg.jp/api/3",
-    "dataset_count": 0,
+    "dataset_count": 656,
     "status": "active"
   },
   {
@@ -21461,7 +21461,7 @@
     "owner_name": "City of York (UK)",
     "owner_type": "Local government",
     "api_endpoint": "https://data.yorkopendata.org/api/3",
-    "dataset_count": 0,
+    "dataset_count": 1358,
     "status": "active"
   },
   {
@@ -21491,7 +21491,7 @@
     "owner_name": "Region of Western Macedonia",
     "owner_type": "Regional government",
     "api_endpoint": "https://geodm.gr/api/3",
-    "dataset_count": 0,
+    "dataset_count": 694,
     "status": "active"
   },
   {
@@ -21551,7 +21551,7 @@
     "owner_name": "Sofia City Municipality",
     "owner_type": "Local government",
     "api_endpoint": "https://urbandata.sofia.bg/api/3",
-    "dataset_count": 0,
+    "dataset_count": 310,
     "status": "active"
   },
   {
@@ -21581,7 +21581,7 @@
     "owner_name": "National University of Mongolia (NUM)",
     "owner_type": "Academy",
     "api_endpoint": "https://data.num.edu.mn/api/3",
-    "dataset_count": 0,
+    "dataset_count": 31,
     "status": "active"
   },
   {
@@ -21611,7 +21611,7 @@
     "owner_name": "Government of Ukraine",
     "owner_type": "Central government",
     "api_endpoint": "https://data.gov.ua/api/3",
-    "dataset_count": 0,
+    "dataset_count": 39989,
     "status": "active"
   },
   {
@@ -21806,7 +21806,7 @@
     "owner_name": "IEP",
     "owner_type": "Academy",
     "api_endpoint": "https://repository.nsedc.ru/api/3",
-    "dataset_count": 52336,
+    "dataset_count": 53185,
     "status": "active"
   },
   {
@@ -21851,7 +21851,7 @@
     "owner_name": "Department of Mineral Fuels, Thailand",
     "owner_type": "Central government",
     "api_endpoint": "https://catalog.dmf.go.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 29,
     "status": "active"
   },
   {
@@ -21881,7 +21881,7 @@
     "owner_name": "Office of the Permanent Secretary, Ministry of Education",
     "owner_type": "Central government",
     "api_endpoint": "https://catalog.moe.go.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 94,
     "status": "active"
   },
   {
@@ -21911,7 +21911,7 @@
     "owner_name": "State Enterprise Policy Office",
     "owner_type": "Central government",
     "api_endpoint": "https://catalog.sepo.go.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 13,
     "status": "active"
   },
   {
@@ -21926,7 +21926,7 @@
     "owner_name": "Office of the Royal Development Projects Board (ORDPB), Thailand",
     "owner_type": "Central government",
     "api_endpoint": "https://catalog.rdpb.go.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 5,
     "status": "active"
   },
   {
@@ -21941,7 +21941,7 @@
     "owner_name": "Office of the Permanent Secretary, Ministry of Finance, Thailand",
     "owner_type": "Central government",
     "api_endpoint": "https://catalog.mof.go.th/api/3",
-    "dataset_count": 0,
+    "dataset_count": 46,
     "status": "active"
   },
   {

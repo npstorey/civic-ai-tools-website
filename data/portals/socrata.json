@@ -161,7 +161,7 @@
     "owner_name": "Generalitat de Catalunya",
     "owner_type": "Regional government",
     "api_endpoint": "https://analisi.transparenciacatalunya.cat/api",
-    "dataset_count": 1058,
+    "dataset_count": 1060,
     "status": "active"
   },
   {
@@ -701,7 +701,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://camden.demo.socrata.com/api",
-    "dataset_count": 0,
+    "dataset_count": 11,
     "status": "active"
   },
   {
@@ -926,7 +926,7 @@
     "owner_name": "Centers for Disease Control and Prevention",
     "owner_type": "Central government",
     "api_endpoint": "https://chronicdata.cdc.gov/api",
-    "dataset_count": 1100,
+    "dataset_count": 1102,
     "status": "active"
   },
   {
@@ -1886,7 +1886,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cthru.data.socrata.com/api",
-    "dataset_count": 16,
+    "dataset_count": 17,
     "status": "active"
   },
   {
@@ -2081,7 +2081,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://data.bayareametro.gov/api",
-    "dataset_count": 2140,
+    "dataset_count": 1977,
     "status": "active"
   },
   {
@@ -2201,7 +2201,7 @@
     "owner_name": "Centers for Disease Control and Prevention",
     "owner_type": "Central government",
     "api_endpoint": "https://data.cdc.gov/api",
-    "dataset_count": 1100,
+    "dataset_count": 1102,
     "status": "active"
   },
   {
@@ -2411,7 +2411,7 @@
     "owner_name": "State of Connecticut",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.ct.gov/api",
-    "dataset_count": 591,
+    "dataset_count": 593,
     "status": "active"
   },
   {
@@ -2531,7 +2531,7 @@
     "owner_name": "City Of Edmonton",
     "owner_type": "Local government",
     "api_endpoint": "https://data.edmonton.ca/api",
-    "dataset_count": 1370,
+    "dataset_count": 1369,
     "status": "active"
   },
   {
@@ -2546,7 +2546,7 @@
     "owner_name": "EPA (U.S. Environmental Protection Agency)",
     "owner_type": "Central government",
     "api_endpoint": "https://data.energystar.gov/api",
-    "dataset_count": 52,
+    "dataset_count": 53,
     "status": "active"
   },
   {
@@ -2891,7 +2891,7 @@
     "owner_name": "State Of Michigan",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.michigan.gov/api",
-    "dataset_count": 261,
+    "dataset_count": 257,
     "status": "active"
   },
   {
@@ -2921,7 +2921,7 @@
     "owner_name": "State Of Missouri",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.mo.gov/api",
-    "dataset_count": 247,
+    "dataset_count": 248,
     "status": "active"
   },
   {
@@ -2951,7 +2951,7 @@
     "owner_name": "Montgomery County",
     "owner_type": "Local government",
     "api_endpoint": "https://data.montgomerycountymd.gov/api",
-    "dataset_count": 457,
+    "dataset_count": 458,
     "status": "active"
   },
   {
@@ -3116,7 +3116,7 @@
     "owner_name": "State of New York",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.ny.gov/api",
-    "dataset_count": 996,
+    "dataset_count": 1000,
     "status": "active"
   },
   {
@@ -3206,7 +3206,7 @@
     "owner_name": "State of Oregon",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.oregon.gov/api",
-    "dataset_count": 494,
+    "dataset_count": 497,
     "status": "active"
   },
   {
@@ -3461,7 +3461,7 @@
     "owner_name": "San Mateo County",
     "owner_type": "Local government",
     "api_endpoint": "https://data.smcgov.org/api",
-    "dataset_count": 44,
+    "dataset_count": 45,
     "status": "active"
   },
   {
@@ -3656,7 +3656,7 @@
     "owner_name": "State of Vermont",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.vermont.gov/api",
-    "dataset_count": 169,
+    "dataset_count": 170,
     "status": "active"
   },
   {
@@ -3806,7 +3806,7 @@
     "owner_name": "City of Austin",
     "owner_type": "Local government",
     "api_endpoint": "https://datahub.austintexas.gov/api",
-    "dataset_count": 702,
+    "dataset_count": 705,
     "status": "active"
   },
   {
@@ -3941,7 +3941,7 @@
     "owner_name": "Regione Lombaria",
     "owner_type": "Regional government",
     "api_endpoint": "https://dati.lombardia.it/api",
-    "dataset_count": 2895,
+    "dataset_count": 2898,
     "status": "active"
   },
   {
@@ -3956,7 +3956,7 @@
     "owner_name": "Ministerio de Tecnologías de la Información y las Comunicaciones",
     "owner_type": "Central government",
     "api_endpoint": "https://www.datos.gov.co/api",
-    "dataset_count": 8413,
+    "dataset_count": 8422,
     "status": "active"
   },
   {
@@ -4181,7 +4181,7 @@
     "owner_name": "City of Edmonton",
     "owner_type": "Local government",
     "api_endpoint": "https://edmonton.socrata.com/api",
-    "dataset_count": 1370,
+    "dataset_count": 1369,
     "status": "active"
   },
   {
@@ -4196,7 +4196,7 @@
     "owner_name": "Commonwealth of Massachusetts",
     "owner_type": "Regional government",
     "api_endpoint": "https://educationtocareer.data.mass.gov/api",
-    "dataset_count": 89,
+    "dataset_count": 90,
     "status": "active"
   },
   {
@@ -4511,7 +4511,7 @@
     "owner_name": "State of Michigan",
     "owner_type": "Regional government",
     "api_endpoint": "https://future.michigan.gov/api",
-    "dataset_count": 261,
+    "dataset_count": 257,
     "status": "active"
   },
   {
@@ -4646,7 +4646,7 @@
     "owner_name": "Government of New Brunswick",
     "owner_type": "Regional government",
     "api_endpoint": "https://gnb.socrata.com/api",
-    "dataset_count": 314,
+    "dataset_count": 297,
     "status": "active"
   },
   {
@@ -6296,7 +6296,7 @@
     "owner_name": "State of Iowa",
     "owner_type": "Regional government",
     "api_endpoint": "https://mydata.iowa.gov/api",
-    "dataset_count": 446,
+    "dataset_count": 477,
     "status": "active"
   },
   {
@@ -7931,7 +7931,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://siouxfalls.data.socrata.com/api",
-    "dataset_count": 15,
+    "dataset_count": 17,
     "status": "active"
   },
   {
