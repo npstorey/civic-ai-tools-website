@@ -27,11 +27,19 @@ export const consistencyClassificationEnum = pgEnum('consistency_classification'
   'inconsistent',
 ]);
 
+// `expert_attestation` is a free-text, signed review attached by a
+// human domain expert (issue #53). The term "attestation" carries formal
+// AICPA Statements-on-Standards meaning in accounting / audit contexts;
+// this implementation is not bound by those standards — it's a signed
+// claim that something is true, in the broader tech sense (cryptographic
+// attestation, hardware attestation). Future financial-auditor
+// integrations may need to revisit this distinction.
 export const attestationTypeEnum = pgEnum('attestation_type', [
   'consistency',
   'evaluation',
   're_evaluation',
   'correction',
+  'expert_attestation',
 ]);
 
 // --- Tables ---
