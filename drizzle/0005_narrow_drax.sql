@@ -1,0 +1,1 @@
+ALTER TYPE "public"."attestation_type" ADD VALUE 'expert_attestation';

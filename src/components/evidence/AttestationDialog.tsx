@@ -4,6 +4,12 @@ import { useState, useCallback } from 'react';
 
 // --- Types ---
 
+const EXPERT_RATINGS = ['endorse', 'concerns', 'dispute', 'neutral'] as const;
+type ExpertRating = (typeof EXPERT_RATINGS)[number];
+
+const EXPERT_BODY_MAX_CHARS = 10_000;
+const EXPERT_EXPERTISE_MAX_CHARS = 300;
+
 interface RubricCriterion {
   score: number;
   comment: string;
@@ -133,7 +139,7 @@ export default function AttestationDialog({
   onAttestationCreated,
 }: AttestationDialogProps) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<'consistency' | 'evaluation'>('evaluation');
+  const [tab, setTab] = useState<'consistency' | 'evaluation' | 'expert'>('evaluation');
   const [apiKey, setApiKey] = useState('');
 
   // Consistency test state
@@ -149,11 +155,18 @@ export default function AttestationDialog({
   const [evalResult, setEvalResult] = useState<EvaluationResult | null>(null);
   const [evalError, setEvalError] = useState('');
 
+  // Expert attestation state (free-text, human-submitted — no API key needed)
+  const [expertBody, setExpertBody] = useState('');
+  const [expertExpertise, setExpertExpertise] = useState('');
+  const [expertRating, setExpertRating] = useState<ExpertRating | ''>('');
+  const [expertError, setExpertError] = useState('');
+
   // Submit state
   const [submitting, setSubmitting] = useState(false);
 
   const canReplay = promptVisibility === 'full_text';
   const filteredModels = EVALUATOR_MODELS.filter(m => m.id !== analysisModel);
+  const requiresApiKey = tab === 'consistency' || tab === 'evaluation';
 
   const handleClose = () => {
     if (consistencyStatus === 'running' || evalStatus === 'running' || submitting) return;
@@ -257,6 +270,38 @@ export default function AttestationDialog({
             assessment: evalResult.assessment,
           },
         };
+      } else if (tab === 'expert') {
+        const trimmedBody = expertBody.trim();
+        const trimmedExpertise = expertExpertise.trim();
+        if (!trimmedBody) {
+          setExpertError('Review body is required.');
+          return;
+        }
+        if (trimmedBody.length > EXPERT_BODY_MAX_CHARS) {
+          setExpertError(`Review body exceeds ${EXPERT_BODY_MAX_CHARS} characters.`);
+          return;
+        }
+        if (!trimmedExpertise) {
+          setExpertError('Expertise / affiliation is required.');
+          return;
+        }
+        if (trimmedExpertise.length > EXPERT_EXPERTISE_MAX_CHARS) {
+          setExpertError(`Expertise exceeds ${EXPERT_EXPERTISE_MAX_CHARS} characters.`);
+          return;
+        }
+        if (!expertRating) {
+          setExpertError('Select a rating.');
+          return;
+        }
+        setExpertError('');
+        attestationData = {
+          type: 'expert_attestation',
+          data: {
+            body: trimmedBody,
+            expertise: trimmedExpertise,
+            rating: expertRating,
+          },
+        };
       } else {
         return;
       }
@@ -275,11 +320,15 @@ export default function AttestationDialog({
       setOpen(false);
       onAttestationCreated();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to save attestation');
+      if (tab === 'expert') {
+        setExpertError(err instanceof Error ? err.message : 'Failed to save attestation');
+      } else {
+        alert(err instanceof Error ? err.message : 'Failed to save attestation');
+      }
     } finally {
       setSubmitting(false);
     }
-  }, [tab, consistencyMetrics, completedRuns, evalResult, slug, analysisModel, onAttestationCreated]);
+  }, [tab, consistencyMetrics, completedRuns, evalResult, expertBody, expertExpertise, expertRating, slug, analysisModel, onAttestationCreated]);
 
   // --- Render ---
 
@@ -298,7 +347,7 @@ export default function AttestationDialog({
           fontWeight: 500,
         }}
       >
-        + Add evaluation
+        + Add attestation
       </button>
     );
   }
@@ -323,31 +372,34 @@ export default function AttestationDialog({
           <button onClick={handleClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-muted)' }}>&times;</button>
         </div>
 
-        {/* API Key notice */}
-        <div style={{
-          padding: '10px 14px', backgroundColor: 'rgba(16, 63, 239, 0.04)',
-          borderRadius: '4px', fontSize: '12px', color: 'var(--text-secondary)',
-          marginBottom: '16px', lineHeight: 1.5,
-        }}>
-          Your API key is used for this request only and is never stored. It is sent to our server to make LLM calls on your behalf, then discarded.
-        </div>
+        {/* API Key notice + input — only machine attestations need an LLM call */}
+        {requiresApiKey && (
+          <>
+            <div style={{
+              padding: '10px 14px', backgroundColor: 'rgba(16, 63, 239, 0.04)',
+              borderRadius: '4px', fontSize: '12px', color: 'var(--text-secondary)',
+              marginBottom: '16px', lineHeight: 1.5,
+            }}>
+              Your API key is used for this request only and is never stored. It is sent to our server to make LLM calls on your behalf, then discarded.
+            </div>
 
-        {/* API Key input */}
-        <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }}>
-            OpenRouter API Key
-          </label>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="sk-or-..."
-            style={{
-              width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)',
-              borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
-            }}
-          />
-        </div>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }}>
+                OpenRouter API Key
+              </label>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="sk-or-..."
+                style={{
+                  width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)',
+                  borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+          </>
+        )}
 
         {/* Tab selector */}
         <div style={{ display: 'flex', gap: '0', marginBottom: '20px', borderBottom: '1px solid var(--border-color)' }}>
@@ -356,6 +408,9 @@ export default function AttestationDialog({
           </TabButton>
           <TabButton active={tab === 'consistency'} onClick={() => setTab('consistency')} disabled={!canReplay}>
             Consistency Test
+          </TabButton>
+          <TabButton active={tab === 'expert'} onClick={() => setTab('expert')}>
+            Expert Attestation
           </TabButton>
         </div>
 
@@ -394,6 +449,20 @@ export default function AttestationDialog({
               Consistency testing requires full prompt text. This evidence was published with hash-only visibility.
             </div>
           )
+        )}
+
+        {tab === 'expert' && (
+          <ExpertTab
+            body={expertBody}
+            setBody={setExpertBody}
+            expertise={expertExpertise}
+            setExpertise={setExpertExpertise}
+            rating={expertRating}
+            setRating={setExpertRating}
+            error={expertError}
+            onSubmit={submitAttestation}
+            submitting={submitting}
+          />
         )}
       </div>
     </div>
@@ -635,6 +704,166 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
           </button>
         </div>
       )}
+    </>
+  );
+}
+
+const EXPERT_RATING_OPTIONS: { value: ExpertRating; label: string; hint: string; bg: string; color: string }[] = [
+  {
+    value: 'endorse',
+    label: 'Endorse',
+    hint: 'The analysis is sound given the available data.',
+    bg: 'rgba(0, 183, 3, 0.08)',
+    color: 'var(--nyc-success)',
+  },
+  {
+    value: 'concerns',
+    label: 'Concerns',
+    hint: 'Partially supported — see notes for caveats or missing context.',
+    bg: 'rgba(255, 183, 0, 0.10)',
+    color: '#a07000',
+  },
+  {
+    value: 'dispute',
+    label: 'Dispute',
+    hint: 'The conclusion is not supported by the data or method.',
+    bg: 'rgba(236, 19, 30, 0.08)',
+    color: 'var(--nyc-error)',
+  },
+  {
+    value: 'neutral',
+    label: 'Neutral',
+    hint: 'Observation or methodology note without endorsement or dispute.',
+    bg: 'rgba(0, 0, 0, 0.05)',
+    color: 'var(--text-secondary)',
+  },
+];
+
+function ExpertTab({
+  body, setBody, expertise, setExpertise, rating, setRating, error, onSubmit, submitting,
+}: {
+  body: string;
+  setBody: (v: string) => void;
+  expertise: string;
+  setExpertise: (v: string) => void;
+  rating: ExpertRating | '';
+  setRating: (r: ExpertRating) => void;
+  error: string;
+  onSubmit: () => void;
+  submitting: boolean;
+}) {
+  const bodyCharCount = body.length;
+  const expertiseCharCount = expertise.length;
+  const canSubmit = body.trim().length > 0 && expertise.trim().length > 0 && !!rating && !submitting;
+  return (
+    <>
+      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
+        A signed, timestamped review from a domain expert. Your GitHub identity, self-described expertise,
+        and the review text are all published publicly and attached to this evidence record.
+      </p>
+
+      {/* Body */}
+      <div style={{ marginBottom: '16px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }}>
+          Review
+        </label>
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Your assessment, context, or correction. Markdown supported."
+          rows={8}
+          style={{
+            width: '100%', padding: '10px 12px', border: '1px solid var(--border-color)',
+            borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
+            fontFamily: 'inherit', lineHeight: 1.5, resize: 'vertical',
+          }}
+        />
+        <div style={{
+          fontSize: '11px', color: bodyCharCount > EXPERT_BODY_MAX_CHARS ? 'var(--nyc-error)' : 'var(--text-muted)',
+          textAlign: 'right', marginTop: '2px',
+        }}>
+          {bodyCharCount.toLocaleString()} / {EXPERT_BODY_MAX_CHARS.toLocaleString()}
+        </div>
+      </div>
+
+      {/* Expertise */}
+      <div style={{ marginBottom: '16px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }}>
+          Your expertise or affiliation
+        </label>
+        <input
+          type="text"
+          value={expertise}
+          onChange={(e) => setExpertise(e.target.value)}
+          placeholder="e.g., Demographer, NYU Furman Center"
+          maxLength={EXPERT_EXPERTISE_MAX_CHARS + 50}
+          style={{
+            width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)',
+            borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
+          }}
+        />
+        <div style={{
+          fontSize: '11px', color: expertiseCharCount > EXPERT_EXPERTISE_MAX_CHARS ? 'var(--nyc-error)' : 'var(--text-muted)',
+          textAlign: 'right', marginTop: '2px',
+        }}>
+          {expertiseCharCount} / {EXPERT_EXPERTISE_MAX_CHARS}
+        </div>
+      </div>
+
+      {/* Rating */}
+      <div style={{ marginBottom: '16px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-primary)' }}>
+          Rating
+        </label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          {EXPERT_RATING_OPTIONS.map((opt) => {
+            const selected = rating === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setRating(opt.value)}
+                style={{
+                  textAlign: 'left',
+                  padding: '10px 12px',
+                  border: `1.5px solid ${selected ? opt.color : 'var(--border-color)'}`,
+                  borderRadius: '4px',
+                  backgroundColor: selected ? opt.bg : 'white',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                }}
+              >
+                <div style={{ fontWeight: 600, color: opt.color, marginBottom: '2px' }}>
+                  {opt.label}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                  {opt.hint}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {error && (
+        <div style={{ marginBottom: '12px', padding: '10px', fontSize: '13px', color: 'var(--nyc-error)', backgroundColor: 'rgba(236, 19, 30, 0.06)', borderRadius: '4px' }}>
+          {error}
+        </div>
+      )}
+
+      <button
+        onClick={onSubmit}
+        disabled={!canSubmit}
+        style={{
+          padding: '8px 20px', border: 'none', borderRadius: '4px',
+          fontSize: '13px', fontWeight: 600, cursor: canSubmit ? 'pointer' : 'not-allowed',
+          backgroundColor: canSubmit ? 'var(--nyc-success)' : '#e0e0e0',
+          color: canSubmit ? 'white' : 'var(--text-muted)',
+          opacity: submitting ? 0.7 : 1,
+        }}
+      >
+        {submitting ? 'Signing and publishing...' : 'Publish attestation'}
+      </button>
     </>
   );
 }

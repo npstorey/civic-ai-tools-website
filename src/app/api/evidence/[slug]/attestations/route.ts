@@ -7,10 +7,17 @@ import { evidenceRecords, attestationPackages, users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { putPackage } from '@/lib/storage';
 import { signPackage, getRfc3161Timestamp } from '@/lib/evidence/signing';
+import {
+  buildExpertAttestationPayload,
+  validateExpertAttestation,
+} from '@/lib/evidence/expert-attestation';
 
 function sha256(content: string): string {
   return crypto.createHash('sha256').update(content).digest('hex');
 }
+
+type AttestationType = 'consistency' | 'evaluation' | 'expert_attestation';
+const ACCEPTED_TYPES: AttestationType[] = ['consistency', 'evaluation', 'expert_attestation'];
 
 /**
  * GET /api/evidence/[slug]/attestations
@@ -53,11 +60,19 @@ export async function GET(
 /**
  * POST /api/evidence/[slug]/attestations
  *
- * Stores a new attestation package (consistency test or evaluation).
- * Signs, timestamps, stores in Vercel Blob, creates DB record,
- * and updates the evidence record's verification status.
+ * Stores a new attestation package. Supports three types:
+ *   - `consistency`  — N-run replay metrics (machine-generated)
+ *   - `evaluation`   — adversarial LLM rubric (machine-generated)
+ *   - `expert_attestation` — signed free-text review by a human reviewer
  *
- * Body: { type: 'consistency' | 'evaluation', data: {...} }
+ * Signs the package hash with the platform key, requests an RFC 3161
+ * timestamp, stores the package body in Vercel Blob, inserts the DB row,
+ * and (for machine types only) advances the parent record's verification
+ * status. `expert_attestation` is a separate dimension of review and does
+ * not advance `verification_status` in v1; issue #67 will revisit when
+ * multi-signer and identity tiers land.
+ *
+ * Body: { type: <AttestationType>, data: <type-specific payload> }
  */
 export async function POST(
   request: NextRequest,
@@ -73,14 +88,18 @@ export async function POST(
   // Look up DB user
   const githubId = session.user.id;
   const dbUser = await db
-    .select({ id: users.id })
+    .select({
+      id: users.id,
+      displayName: users.displayName,
+      githubProfileUrl: users.githubProfileUrl,
+    })
     .from(users)
     .where(eq(users.githubId, githubId))
     .limit(1);
   if (dbUser.length === 0) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
-  const userId = dbUser[0].id;
+  const user = dbUser[0];
 
   // Look up evidence record
   const records = await db
@@ -94,23 +113,48 @@ export async function POST(
   const record = records[0];
 
   const body = await request.json();
-  const { type, data } = body;
+  const { type, data } = body as { type?: string; data?: unknown };
 
-  if (!type || !['consistency', 'evaluation'].includes(type)) {
+  if (!type || !ACCEPTED_TYPES.includes(type as AttestationType)) {
     return NextResponse.json({ error: 'Invalid attestation type' }, { status: 400 });
   }
-  if (!data || typeof data !== 'object') {
-    return NextResponse.json({ error: 'Attestation data required' }, { status: 400 });
-  }
+  const attestationType = type as AttestationType;
 
-  // Build attestation package
-  const attestationPkg = {
-    schemaVersion: '0.1.0',
-    type,
-    evidenceBaseHash: record.basePackageHash,
-    createdAt: new Date().toISOString(),
-    ...data,
-  };
+  // Type-specific validation + payload build
+  const createdAt = new Date().toISOString();
+  let attestationPkg: Record<string, unknown>;
+  let typeSpecific: Record<string, unknown>;
+
+  if (attestationType === 'expert_attestation') {
+    const v = validateExpertAttestation(data);
+    if (!v.ok) {
+      return NextResponse.json({ error: v.error }, { status: 400 });
+    }
+    attestationPkg = buildExpertAttestationPayload(
+      v.value,
+      {
+        dbUserId: user.id,
+        githubId,
+        displayName: user.displayName,
+        githubProfileUrl: user.githubProfileUrl,
+      },
+      record.basePackageHash,
+      createdAt,
+    );
+    typeSpecific = {};
+  } else {
+    if (!data || typeof data !== 'object') {
+      return NextResponse.json({ error: 'Attestation data required' }, { status: 400 });
+    }
+    typeSpecific = data as Record<string, unknown>;
+    attestationPkg = {
+      schemaVersion: '0.1.0',
+      type: attestationType,
+      evidenceBaseHash: record.basePackageHash,
+      createdAt,
+      ...typeSpecific,
+    };
+  }
 
   // Hash and store
   const canonical = JSON.stringify(attestationPkg);
@@ -130,38 +174,54 @@ export async function POST(
   // Create DB record
   await db.insert(attestationPackages).values({
     evidenceRecordId: record.id,
-    type: type as 'consistency' | 'evaluation',
-    creatorId: userId,
+    type: attestationType,
+    creatorId: user.id,
     packageHash,
     storageKey: blobUrl,
     referencesBaseHash: record.basePackageHash || '',
   });
 
-  // Update evidence record verification status
-  const newStatus = determineVerificationStatus(
-    record.verificationStatus,
-    type as 'consistency' | 'evaluation',
-  );
+  // Update evidence record verification status — only machine attestations
+  // (`consistency`, `evaluation`) feed into the existing state machine.
+  // Expert attestations are a separate dimension of review and leave the
+  // status unchanged; issue #67 (multi-signer) / #69 (identity tiers) will
+  // revisit whether human reviews should contribute to a verification
+  // verdict, and if so, how they should be weighted.
+  if (attestationType === 'consistency' || attestationType === 'evaluation') {
+    const newStatus = determineVerificationStatus(
+      record.verificationStatus,
+      attestationType,
+    );
 
-  const updateFields: Record<string, unknown> = {
-    verificationStatus: newStatus,
-    updatedAt: new Date(),
-  };
+    const updateFields: Record<string, unknown> = {
+      verificationStatus: newStatus,
+      updatedAt: new Date(),
+    };
 
-  // For consistency tests, also set the classification
-  if (type === 'consistency' && data.metrics?.consistencyClassification) {
-    updateFields.consistencyClassification = data.metrics.consistencyClassification;
+    // For consistency tests, also set the classification
+    if (attestationType === 'consistency') {
+      const metricsData = typeSpecific.metrics as { consistencyClassification?: string } | undefined;
+      if (metricsData?.consistencyClassification) {
+        updateFields.consistencyClassification = metricsData.consistencyClassification;
+      }
+    }
+
+    await db
+      .update(evidenceRecords)
+      .set(updateFields)
+      .where(eq(evidenceRecords.id, record.id));
+
+    return NextResponse.json({
+      id: packageHash,
+      storageKey: blobUrl,
+      verificationStatus: newStatus,
+    });
   }
-
-  await db
-    .update(evidenceRecords)
-    .set(updateFields)
-    .where(eq(evidenceRecords.id, record.id));
 
   return NextResponse.json({
     id: packageHash,
     storageKey: blobUrl,
-    verificationStatus: newStatus,
+    verificationStatus: record.verificationStatus,
   });
 }
 
