@@ -93,11 +93,7 @@ export default function ComparisonDisplay({
       title="With Data Tools"
       subtitle={
         <>
-          {modelName} + live{' '}
-          <span data-tooltip="Open data platform used by 300+ government agencies" style={{ cursor: 'help', position: 'relative', borderBottom: '1px dotted var(--text-muted)' }}>
-            Socrata
-          </span>{' '}
-          data via{' '}
+          {modelName} + live civic data via{' '}
           <span data-tooltip="Model Context Protocol — a standard for connecting AI to external tools" style={{ cursor: 'help', position: 'relative', borderBottom: '1px dotted var(--text-muted)' }}>
             MCP
           </span>

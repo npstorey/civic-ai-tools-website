@@ -20,7 +20,7 @@ interface QueryFormProps {
 
 const EXAMPLE_QUERIES = [
   { text: 'Noise trends in NYC', portal: 'data.cityofnewyork.us' },
-  { text: 'Restaurant violations: SF vs NYC', portal: '' },
+  { text: 'Top 311 complaints: NYC vs SF', portal: '' },
   { text: 'Median household income: NYC vs SF', portal: '' },
 ];
 
