@@ -3,8 +3,8 @@ import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { evidenceRecords, attestationPackages, users } from '@/lib/db/schema';
-import { eq, desc, and, ne, sql } from 'drizzle-orm';
+import { apiTokens, evidenceRecords, attestationPackages, users } from '@/lib/db/schema';
+import { eq, desc, and, ne, isNull, sql } from 'drizzle-orm';
 import DashboardTabs from '@/components/dashboard/DashboardTabs';
 
 export const dynamic = 'force-dynamic';
@@ -126,6 +126,28 @@ export default async function DashboardPage() {
     createdAt: a.createdAt.toISOString(),
   }));
 
+  // --- Tab 4: Tokens (device-flow-minted bearer tokens) ---
+  const tokens = await db
+    .select({
+      id: apiTokens.id,
+      name: apiTokens.name,
+      tokenPrefix: apiTokens.tokenPrefix,
+      scope: apiTokens.scope,
+      createdAt: apiTokens.createdAt,
+      expiresAt: apiTokens.expiresAt,
+      lastUsedAt: apiTokens.lastUsedAt,
+    })
+    .from(apiTokens)
+    .where(and(eq(apiTokens.userId, userId), isNull(apiTokens.revokedAt)))
+    .orderBy(desc(apiTokens.createdAt));
+
+  const tokenData = tokens.map(t => ({
+    ...t,
+    createdAt: t.createdAt.toISOString(),
+    expiresAt: t.expiresAt.toISOString(),
+    lastUsedAt: t.lastUsedAt?.toISOString() || null,
+  }));
+
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 24px 64px' }}>
       <h1 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '4px' }}>Dashboard</h1>
@@ -137,6 +159,7 @@ export default async function DashboardPage() {
         myEvidence={myEvidenceData}
         myEvaluations={myEvaluationsData}
         activity={activityData}
+        tokens={tokenData}
       />
     </div>
   );

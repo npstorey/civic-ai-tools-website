@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { users, evidenceRecords } from '@/lib/db/schema';
+import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { putPackage } from '@/lib/storage';
 import { buildEvidencePackage, type PackageInput } from '@/lib/evidence/packager';
 import { hash } from '@/lib/evidence/trace';
 import { signPackage, getRfc3161Timestamp, publishToRekor } from '@/lib/evidence/signing';
 import { type BlobRef } from '@/lib/evidence/blob-ref';
+import { resolveRequestUser, hasScope } from '@/lib/api-auth';
 
 function slugify(text: string): string {
   return text
@@ -79,24 +78,17 @@ interface PublishRequest {
 
 export async function POST(request: NextRequest) {
   try {
-    // Require authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const auth = await resolveRequestUser(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-
-    // Look up internal DB user ID
-    const githubId = session.user.id;
-    const dbUser = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.githubId, githubId))
-      .limit(1);
-
-    if (dbUser.length === 0) {
-      return NextResponse.json({ error: 'User not found in database' }, { status: 404 });
+    if (!hasScope(auth, 'evidence:publish')) {
+      return NextResponse.json(
+        { error: 'Token missing required scope: evidence:publish' },
+        { status: 403 },
+      );
     }
-    const userId = dbUser[0].id;
+    const userId = auth.userId;
 
     const body: PublishRequest = await request.json();
 
@@ -167,11 +159,20 @@ export async function POST(request: NextRequest) {
       basePackageRekorInclusionProof: rekorResult?.inclusionProof || null,
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       slug,
       url: `/evidence/${slug}`,
       packageHash,
     });
+    if (auth.method === 'cookie') {
+      // Nudge toward programmatic device-flow tokens for non-browser
+      // clients. See docs/api/evidence-publish.md#authentication.
+      response.headers.set('X-Auth-Deprecated', 'cookie');
+      console.log('[api/evidence] cookie-auth publish (deprecated path)', {
+        userId,
+      });
+    }
+    return response;
   } catch (error) {
     console.error('Evidence publish error:', error);
     return NextResponse.json(

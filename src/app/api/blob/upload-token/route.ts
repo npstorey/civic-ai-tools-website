@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
-import { authOptions } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { users } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { resolveRequestUser, hasScope } from '@/lib/api-auth';
 
 /**
  * Presigned client-upload endpoint for evidence blob references
@@ -53,20 +49,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       onBeforeGenerateToken: async (pathname) => {
         // Authentication: same pattern as /api/evidence. Reject anonymous
         // uploads before minting the presigned token — otherwise the
-        // evidence blob store is open to the world.
-        const session = await getServerSession(authOptions);
-        if (!session?.user?.id) {
+        // evidence blob store is open to the world. Accepts either a
+        // bearer token (preferred, device-flow minted, website#73) or a
+        // NextAuth session cookie.
+        const auth = await resolveRequestUser(request);
+        if (!auth) {
           throw new Error('Authentication required');
         }
-
-        const githubId = session.user.id;
-        const dbUser = await db
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.githubId, githubId))
-          .limit(1);
-        if (dbUser.length === 0) {
-          throw new Error('User not found in database');
+        if (!hasScope(auth, 'evidence:publish')) {
+          throw new Error('Token missing required scope: evidence:publish');
         }
 
         // Pathname validation: lock uploads to `evidence-refs/<sha256>[.ext]`.
@@ -91,7 +82,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           // exists" errors when a user republishes similar content.
           allowOverwrite: true,
           tokenPayload: JSON.stringify({
-            userId: dbUser[0].id,
+            userId: auth.userId,
             pathname,
           }),
         };
