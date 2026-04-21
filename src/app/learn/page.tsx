@@ -34,6 +34,12 @@ export default function LearnPage() {
           This page explains how that works &mdash; and why it matters for anyone who
           cares about trustworthy civic information.
         </p>
+        <p style={prose}>
+          Responses can be published as <Link href="/evidence">signed evidence packages</Link> &mdash;
+          cryptographically signed, timestamped, and independently verifiable records of the question,
+          tool calls, data sources, and model output. Browse the{' '}
+          <Link href="/evidence">evidence index</Link> to see published analyses.
+        </p>
       </section>
 
       {/* ============================================================
@@ -155,12 +161,17 @@ export default function LearnPage() {
         <p style={prose}>
           When you ask a question in the demo, the AI searches a catalog of civic datasets, examines
           their structure, then constructs targeted queries &mdash; all through a series of tool calls
-          that flow between the AI, the MCP server, and the underlying Socrata data portals. The demo
-          connects to the{' '}
+          that flow between the AI, the MCP server, and the underlying data portals. The demo
+          connects to two MCP servers: the{' '}
           <a href="https://github.com/npstorey/socrata-mcp-server" target="_blank" rel="noopener noreferrer">
             Socrata MCP server
           </a>
-          , which provides access to open data portals for New York, Chicago, and San Francisco.
+          {' '}for open data portals in New York, Chicago, and San Francisco, and Google&apos;s{' '}
+          <a href="https://api.datacommons.org/mcp" target="_blank" rel="noopener noreferrer">
+            Data Commons MCP server
+          </a>
+          {' '}for US Census / ACS demographic and economic statistics. Tool calls are routed by name,
+          so a single response can combine city service data with federal statistical data.
         </p>
 
         <Link
@@ -587,6 +598,10 @@ export default function LearnPage() {
             {
               query: 'How do housing violations in Brooklyn compare to Manhattan?',
               capability: 'Cross-category comparison',
+            },
+            {
+              query: 'Median household income: NYC vs SF',
+              capability: 'Data Commons: Census / ACS statistics',
             },
           ].map((item, idx) => (
             <Link

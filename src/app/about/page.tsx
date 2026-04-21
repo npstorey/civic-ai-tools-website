@@ -20,8 +20,9 @@ export default function AboutPage() {
             Model Context Protocol (MCP)
           </a>{' '}
           to give AI models structured access to real datasets from cities like New York, Chicago,
-          San Francisco, Seattle, and Los Angeles &mdash; so you can ask plain-language questions and
-          get answers grounded in actual public data, not training data.
+          San Francisco, Seattle, and Los Angeles, plus US Census / ACS demographic and economic data
+          via Google Data Commons &mdash; so you can ask plain-language questions and get answers
+          grounded in actual public data, not training data.
         </p>
       </section>
 
@@ -29,8 +30,9 @@ export default function AboutPage() {
       <section id="whats-in-the-project" style={{ ...sectionSpacing, scrollMarginTop: '80px' }}>
         <h2 style={sectionHeading}>What&apos;s in the project</h2>
         <p style={prose}>
-          The demo on this website uses a single MCP server &mdash; our Socrata connector &mdash; but
-          the civic data MCP ecosystem is much larger and growing fast.
+          The demo on this website uses two MCP servers &mdash; our Socrata connector for city open
+          data portals and Google&apos;s Data Commons for US Census / ACS statistics &mdash; and the
+          broader civic data MCP ecosystem is much larger and growing fast.
           The{' '}
           <a href="https://github.com/npstorey/civic-ai-tools" target="_blank" rel="noopener noreferrer">
             civic-ai-tools starter project
