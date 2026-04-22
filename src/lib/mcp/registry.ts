@@ -27,10 +27,19 @@ export interface McpRegistryEnv {
   socrataUrl: string;
   dataCommonsUrl: string;
   dataCommonsApiKey?: string;
+  bostonOpencontextUrl: string;
 }
 
 const SOCRATA_TOOLS = ['get_data', 'search', 'fetch'];
 const DATA_COMMONS_TOOLS = ['search_indicators', 'get_observations'];
+const BOSTON_OPENCONTEXT_TOOLS = [
+  'ckan__search_datasets',
+  'ckan__get_dataset',
+  'ckan__query_data',
+  'ckan__get_schema',
+  'ckan__execute_sql',
+  'ckan__aggregate_data',
+];
 
 /**
  * Normalize a base URL to a POST-able MCP endpoint. The Socrata env var is
@@ -63,6 +72,12 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
       headers: env.dataCommonsApiKey ? { 'X-API-Key': env.dataCommonsApiKey } : undefined,
       tools: DATA_COMMONS_TOOLS,
     },
+    'boston-opencontext': {
+      sourceId: 'boston-opencontext',
+      label: 'Boston OpenContext MCP Server',
+      endpointUrl: normalizeMcpEndpoint(env.bostonOpencontextUrl),
+      tools: BOSTON_OPENCONTEXT_TOOLS,
+    },
   };
 
   const toolIndex: Record<string, string> = {};
@@ -91,5 +106,7 @@ export function readMcpEnvFromProcess(): McpRegistryEnv {
     socrataUrl: process.env.SOCRATA_MCP_URL || 'https://socrata-mcp.civicaitools.org',
     dataCommonsUrl: process.env.DATA_COMMONS_MCP_URL || 'https://api.datacommons.org/mcp',
     dataCommonsApiKey: process.env.DATA_COMMONS_API_KEY || undefined,
+    bostonOpencontextUrl:
+      process.env.BOSTON_OPENCONTEXT_MCP_URL || 'https://data-mcp.boston.gov/mcp',
   };
 }

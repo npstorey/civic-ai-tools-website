@@ -195,10 +195,194 @@ Examples:
   },
 ];
 
+// --- Boston OpenContext MCP (CKAN-native, data.boston.gov) ---
+// Six-tool surface routed to the production OpenContext endpoint at
+// https://data-mcp.boston.gov/mcp. OpenContext is the City of Boston's
+// open-source MCP framework fronting the CKAN DataStore; full CKAN vs Socrata
+// workflow and Boston-specific geography guidance lives in the skill prompt
+// (see `./boston-skill.ts`). Tool names preserve the `ckan__` prefix used by
+// the upstream server so the registry-layer tool-name → source routing works
+// without a rename layer.
+const bostonOpencontextMcpTools: ChatCompletionTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'ckan__search_datasets',
+      description: `Natural-language dataset discovery against Boston's CKAN portal (data.boston.gov). Returns candidate datasets with their CKAN UUID resource ids, titles, and descriptions.
+
+Use this first when the user asks about Boston civic data and you don't already know the resource UUID. Pair with ckan__get_dataset to inspect a specific candidate or ckan__get_schema to fetch field names for querying.
+
+Examples:
+- { "query": "311 pothole requests", "limit": 5 }
+- { "query": "building permits" }`,
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Free-text search query (e.g., "311 pothole requests", "building permits", "assessing values")',
+          },
+          limit: {
+            type: 'integer',
+            description: 'Maximum number of results (default: 20)',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ckan__get_dataset',
+      description: `Fetch detailed metadata for a specific Boston dataset — title, publisher, update cadence, description, and the list of CKAN resources attached to it. Use after ckan__search_datasets when you need to pick the right resource within a dataset that bundles several.
+
+Example:
+- { "dataset_id": "311-service-requests" }
+- { "dataset_id": "8048697b-ad64-4bfc-b090-ee00169f2323" }`,
+      parameters: {
+        type: 'object',
+        properties: {
+          dataset_id: {
+            type: 'string',
+            description: 'CKAN dataset ID or slug (UUID or human-readable name)',
+          },
+        },
+        required: ['dataset_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ckan__get_schema',
+      description: `Fetch the field names and types for a specific Boston CKAN resource. Always run this before querying an unfamiliar resource — Boston follows CKAN field-naming conventions that differ from Socrata portals (NYC, Chicago, etc.), and guessing a field name can silently return zero rows.
+
+Example:
+- { "resource_id": "8048697b-ad64-4bfc-b090-ee00169f2323" }`,
+      parameters: {
+        type: 'object',
+        properties: {
+          resource_id: {
+            type: 'string',
+            description: 'CKAN resource UUID (e.g., "8048697b-ad64-4bfc-b090-ee00169f2323")',
+          },
+        },
+        required: ['resource_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ckan__query_data',
+      description: `Simple equality-filter query against a Boston CKAN resource. Supports exact-match filtering on one or more fields. For GROUP BY / aggregation, use ckan__aggregate_data. For complex SQL (CTEs, window functions, JOINs), use ckan__execute_sql.
+
+Example:
+- { "resource_id": "8048697b-ad64-4bfc-b090-ee00169f2323", "filters": { "neighborhood": "Dorchester" }, "limit": 100 }`,
+      parameters: {
+        type: 'object',
+        properties: {
+          resource_id: {
+            type: 'string',
+            description: 'CKAN resource UUID to query',
+          },
+          filters: {
+            type: 'object',
+            description: 'Optional exact-match filters as field: value pairs (e.g., { "neighborhood": "Dorchester" })',
+          },
+          limit: {
+            type: 'integer',
+            description: 'Maximum number of records (default: 100)',
+          },
+        },
+        required: ['resource_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ckan__aggregate_data',
+      description: `Structured GROUP BY + aggregation against a Boston CKAN resource. The server compiles a safe SQL query from a JSON spec — prefer this over ckan__execute_sql whenever the question is countable / summable / averageable. Supports count(*), sum(), avg(), min(), max(), stddev().
+
+Run ckan__get_schema first to confirm field names.
+
+Examples:
+- Count 311 requests by neighborhood:
+  { "resource_id": "8048697b-ad64-4bfc-b090-ee00169f2323", "group_by": ["neighborhood"], "metrics": { "count": "count(*)" }, "order_by": "count DESC", "limit": 25 }
+- Requests matching a specific case type grouped by year:
+  { "resource_id": "...", "group_by": ["year"], "metrics": { "total": "count(*)" }, "filters": { "case_title": "Request for Pothole Repair" } }`,
+      parameters: {
+        type: 'object',
+        properties: {
+          resource_id: {
+            type: 'string',
+            description: 'CKAN resource UUID',
+          },
+          group_by: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Fields to group by',
+          },
+          metrics: {
+            type: 'object',
+            description: 'Aggregation metrics as alias: expression pairs (e.g., { "count": "count(*)", "avg_val": "avg(amount)" })',
+          },
+          filters: {
+            type: 'object',
+            description: 'Optional exact-match filters before aggregation',
+          },
+          having: {
+            type: 'object',
+            description: 'Optional post-aggregation filters',
+          },
+          order_by: {
+            type: 'string',
+            description: 'Optional ORDER BY clause (e.g., "count DESC")',
+          },
+          limit: {
+            type: 'integer',
+            description: 'Maximum number of groups to return (default: 100)',
+          },
+        },
+        required: ['resource_id', 'metrics'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ckan__execute_sql',
+      description: `Execute a raw PostgreSQL SELECT against a Boston CKAN resource. For complex queries only — prefer ckan__query_data or ckan__aggregate_data first.
+
+CRITICAL:
+- Only SELECT is allowed. INSERT / UPDATE / DELETE / DDL are rejected server-side.
+- Resource UUIDs MUST be double-quoted in the FROM clause: FROM "8048697b-ad64-4bfc-b090-ee00169f2323"
+
+Supports CTEs (WITH ...), window functions (RANK() OVER (...)), percentile aggregates (PERCENTILE_CONT), and JOINs across resources.
+
+Example:
+- { "sql": "SELECT neighborhood, count(*) AS requests FROM \\"8048697b-ad64-4bfc-b090-ee00169f2323\\" WHERE open_dt >= '2024-01-01' GROUP BY neighborhood ORDER BY requests DESC LIMIT 10" }`,
+      parameters: {
+        type: 'object',
+        properties: {
+          sql: {
+            type: 'string',
+            description: 'PostgreSQL SELECT statement. Resource UUIDs must be double-quoted in FROM.',
+          },
+        },
+        required: ['sql'],
+      },
+    },
+  },
+];
+
 /** Unified tool schema exposed to OpenRouter. The client in ./client.ts routes each call to the correct MCP server by tool name. */
 export const mcpTools: ChatCompletionTool[] = [
   ...socrataMcpTools,
   ...dataCommonsMcpTools,
+  ...bostonOpencontextMcpTools,
 ];
 
 // Model definitions for the model selector

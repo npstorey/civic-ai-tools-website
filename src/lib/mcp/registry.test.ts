@@ -20,6 +20,7 @@ const TEST_ENV = {
   socrataUrl: 'https://socrata-mcp.example.org',
   dataCommonsUrl: 'https://api.datacommons.org/mcp',
   dataCommonsApiKey: 'test-key-abc',
+  bostonOpencontextUrl: 'https://data-mcp.boston.example.org/mcp',
 };
 
 test('Socrata tool names route to the Socrata endpoint', () => {
@@ -44,6 +45,25 @@ test('Data Commons tool names route to the Data Commons endpoint with X-API-Key'
   }
 });
 
+test('Boston OpenContext tool names route to the OpenContext endpoint with no auth header', () => {
+  const registry = buildMcpRegistry(TEST_ENV);
+  const expected = [
+    'ckan__search_datasets',
+    'ckan__get_dataset',
+    'ckan__query_data',
+    'ckan__get_schema',
+    'ckan__execute_sql',
+    'ckan__aggregate_data',
+  ];
+  for (const toolName of expected) {
+    const server = resolveServerForTool(registry, toolName);
+    assert.ok(server, `expected server for tool "${toolName}"`);
+    assert.equal(server!.sourceId, 'boston-opencontext');
+    assert.equal(server!.endpointUrl, 'https://data-mcp.boston.example.org/mcp');
+    assert.equal(server!.headers, undefined, 'OpenContext is unauthenticated; no auth headers expected');
+  }
+});
+
 test('Unknown tool names do not resolve to any server', () => {
   const registry = buildMcpRegistry(TEST_ENV);
   assert.equal(resolveServerForTool(registry, 'get_observation_typo'), undefined);
@@ -51,28 +71,33 @@ test('Unknown tool names do not resolve to any server', () => {
   assert.equal(resolveServerForTool(registry, ''), undefined);
 });
 
-test('Bare Socrata URL gets /mcp appended; Data Commons URL is not double-appended', () => {
+test('Bare Socrata URL gets /mcp appended; DC + OpenContext URLs are not double-appended', () => {
   const registry = buildMcpRegistry({
     socrataUrl: 'https://socrata-mcp.example.org',
     dataCommonsUrl: 'https://api.datacommons.org/mcp',
+    bostonOpencontextUrl: 'https://data-mcp.boston.example.org/mcp',
   });
   assert.equal(registry.servers.socrata.endpointUrl, 'https://socrata-mcp.example.org/mcp');
   assert.equal(registry.servers['data-commons'].endpointUrl, 'https://api.datacommons.org/mcp');
+  assert.equal(registry.servers['boston-opencontext'].endpointUrl, 'https://data-mcp.boston.example.org/mcp');
 });
 
-test('Trailing slash on either env var is normalized', () => {
+test('Trailing slash on any env var is normalized', () => {
   const registry = buildMcpRegistry({
     socrataUrl: 'https://socrata-mcp.example.org/',
     dataCommonsUrl: 'https://api.datacommons.org/mcp/',
+    bostonOpencontextUrl: 'https://data-mcp.boston.example.org/mcp/',
   });
   assert.equal(registry.servers.socrata.endpointUrl, 'https://socrata-mcp.example.org/mcp');
   assert.equal(registry.servers['data-commons'].endpointUrl, 'https://api.datacommons.org/mcp');
+  assert.equal(registry.servers['boston-opencontext'].endpointUrl, 'https://data-mcp.boston.example.org/mcp');
 });
 
 test('Missing Data Commons API key omits the auth header entirely', () => {
   const registry = buildMcpRegistry({
     socrataUrl: 'https://socrata-mcp.example.org',
     dataCommonsUrl: 'https://api.datacommons.org/mcp',
+    bostonOpencontextUrl: 'https://data-mcp.boston.example.org/mcp',
     // no dataCommonsApiKey
   });
   assert.equal(registry.servers['data-commons'].headers, undefined);
@@ -82,18 +107,22 @@ test('readMcpEnvFromProcess falls back to defaults when env vars are unset', () 
   const originalSocrata = process.env.SOCRATA_MCP_URL;
   const originalDc = process.env.DATA_COMMONS_MCP_URL;
   const originalKey = process.env.DATA_COMMONS_API_KEY;
+  const originalBoston = process.env.BOSTON_OPENCONTEXT_MCP_URL;
   delete process.env.SOCRATA_MCP_URL;
   delete process.env.DATA_COMMONS_MCP_URL;
   delete process.env.DATA_COMMONS_API_KEY;
+  delete process.env.BOSTON_OPENCONTEXT_MCP_URL;
   try {
     const env = readMcpEnvFromProcess();
     assert.equal(env.socrataUrl, 'https://socrata-mcp.civicaitools.org');
     assert.equal(env.dataCommonsUrl, 'https://api.datacommons.org/mcp');
     assert.equal(env.dataCommonsApiKey, undefined);
+    assert.equal(env.bostonOpencontextUrl, 'https://data-mcp.boston.gov/mcp');
   } finally {
     if (originalSocrata !== undefined) process.env.SOCRATA_MCP_URL = originalSocrata;
     if (originalDc !== undefined) process.env.DATA_COMMONS_MCP_URL = originalDc;
     if (originalKey !== undefined) process.env.DATA_COMMONS_API_KEY = originalKey;
+    if (originalBoston !== undefined) process.env.BOSTON_OPENCONTEXT_MCP_URL = originalBoston;
   }
 });
 
@@ -135,5 +164,6 @@ test('Every tool appears in exactly one server (no accidental overlap)', () => {
       allTools.set(tool, sourceId);
     }
   }
-  assert.equal(allTools.size, 5, 'registry should host exactly 5 tools in M9.1');
+  // 3 Socrata + 2 Data Commons + 6 Boston OpenContext = 11
+  assert.equal(allTools.size, 11, 'registry should host exactly 11 tools across three sources');
 });

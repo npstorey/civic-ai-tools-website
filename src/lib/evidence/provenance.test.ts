@@ -99,6 +99,36 @@ test('Multi-source analysis emits both MCP agents', () => {
   assert.ok(agents.includes('urn:civic-evidence:mcp-server:data-commons'));
 });
 
+test('Boston OpenContext only analysis emits only the boston-opencontext MCP agent with correct title', () => {
+  const trace = traceOf([skillSpan('skill-hash'), toolSpan('boston-opencontext', 'ckan__search_datasets', 'span-1')]);
+  const graph = buildProvenanceGraph(trace, BASE_INPUT);
+  const agents = mcpAgents(graph['@graph']);
+  assert.deepEqual(agents, ['urn:civic-evidence:mcp-server:boston-opencontext']);
+
+  const bostonAgentNode = graph['@graph'].find(
+    (n) => n['@id'] === 'urn:civic-evidence:mcp-server:boston-opencontext',
+  );
+  assert.ok(bostonAgentNode, 'expected Boston OpenContext agent node in graph');
+  assert.equal(bostonAgentNode!['dcterms:title'], 'Boston OpenContext MCP Server');
+  assert.equal(bostonAgentNode!['civic:serverUrl'], 'https://data-mcp.boston.gov/mcp');
+  assert.equal(bostonAgentNode!['civic:sourceId'], 'boston-opencontext');
+});
+
+test('Three-source analysis emits all three MCP agents, no stray sources', () => {
+  const trace = traceOf([
+    skillSpan('skill-hash'),
+    toolSpan('socrata', 'get_data', 'span-1'),
+    toolSpan('data-commons', 'get_observations', 'span-2'),
+    toolSpan('boston-opencontext', 'ckan__aggregate_data', 'span-3'),
+  ]);
+  const graph = buildProvenanceGraph(trace, BASE_INPUT);
+  const agents = mcpAgents(graph['@graph']);
+  assert.equal(agents.length, 3);
+  assert.ok(agents.includes('urn:civic-evidence:mcp-server:socrata'));
+  assert.ok(agents.includes('urn:civic-evidence:mcp-server:data-commons'));
+  assert.ok(agents.includes('urn:civic-evidence:mcp-server:boston-opencontext'));
+});
+
 test('Skill fetched but no tool calls emits no MCP agent', () => {
   // Regression: pre-M9.3 behaviour always added a socrata agent here even
   // though nothing was ever queried. New rule: no tool calls → no MCP agent.

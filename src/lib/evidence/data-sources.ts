@@ -8,10 +8,12 @@
 
 import { sourceIdForToolName } from '../mcp/operation-types.ts';
 
-// Endpoint URL used to tag Data Commons data-source entries. Kept as a
-// module-scoped constant (not read from process.env) so the function stays
-// pure. Overriding the hosted endpoint via env is out of scope for M9.3.
+// Endpoint URLs used to tag data-source entries for sources whose query
+// surface isn't dataset-keyed. Kept as module-scoped constants (not read from
+// process.env) so the function stays pure. Overriding the hosted endpoints
+// via env is out of scope.
 const DATA_COMMONS_ENDPOINT = 'https://api.datacommons.org/mcp';
+const BOSTON_OPENCONTEXT_PORTAL = 'https://data.boston.gov';
 
 export interface ToolCallSummary {
   name: string;
@@ -39,6 +41,7 @@ export interface DataSourceEntry {
 const SOURCE_DISPLAY_NAMES: Record<string, string> = {
   socrata: 'Socrata',
   'data-commons': 'Data Commons',
+  'boston-opencontext': 'Boston OpenContext',
 };
 
 export function displayNameForSource(sourceId: string | undefined | null): string {
@@ -118,8 +121,11 @@ export function resolveToolSource(
  *
  * Socrata contributes one entry per unique `dataset_id` observed across tool
  * calls. Data Commons contributes a single aggregate entry when any DC tool
- * call was made (its knowledge graph isn't dataset-keyed). Each entry is
- * tagged with `sourceId` so downstream consumers can distinguish provenance.
+ * call was made (its knowledge graph isn't dataset-keyed). Boston OpenContext
+ * contributes a single aggregate entry tagged with the data.boston.gov portal
+ * — per-dataset CKAN resource UUIDs are surfaced via the PROV-O graph's tool
+ * call activities rather than rolled up here. Each entry is tagged with
+ * `sourceId` so downstream consumers can distinguish provenance.
  */
 export function buildDataSources(
   toolCalls: ToolCallSummary[],
@@ -130,6 +136,7 @@ export function buildDataSources(
   const toolSpans = getToolSpans(trace);
   const socrataByDataset = new Map<string, { portalUrl: string; datasetId: string }>();
   let dataCommonsAccessed = false;
+  let bostonOpencontextAccessed = false;
 
   for (let i = 0; i < toolCalls.length; i++) {
     const tc = toolCalls[i];
@@ -142,6 +149,8 @@ export function buildDataSources(
       }
     } else if (source === 'data-commons') {
       dataCommonsAccessed = true;
+    } else if (source === 'boston-opencontext') {
+      bostonOpencontextAccessed = true;
     }
   }
 
@@ -161,6 +170,14 @@ export function buildDataSources(
       sourceId: 'data-commons',
       catalogType: 'data-commons',
       portalUrl: DATA_COMMONS_ENDPOINT,
+      accessTimestamp: now,
+    });
+  }
+  if (bostonOpencontextAccessed) {
+    entries.push({
+      sourceId: 'boston-opencontext',
+      catalogType: 'ckan',
+      portalUrl: BOSTON_OPENCONTEXT_PORTAL,
       accessTimestamp: now,
     });
   }

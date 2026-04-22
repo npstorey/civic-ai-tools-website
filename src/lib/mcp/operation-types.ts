@@ -10,6 +10,12 @@
 const TOOL_OPERATION_TYPES: Record<string, string> = {
   search_indicators: 'search',
   get_observations: 'query',
+  ckan__search_datasets: 'search',
+  ckan__get_dataset: 'metadata',
+  ckan__get_schema: 'metadata',
+  ckan__query_data: 'query',
+  ckan__execute_sql: 'query',
+  ckan__aggregate_data: 'query',
 };
 
 const SOURCE_BY_TOOL_NAME: Record<string, string> = {
@@ -18,6 +24,12 @@ const SOURCE_BY_TOOL_NAME: Record<string, string> = {
   fetch: 'socrata',
   search_indicators: 'data-commons',
   get_observations: 'data-commons',
+  ckan__search_datasets: 'boston-opencontext',
+  ckan__get_dataset: 'boston-opencontext',
+  ckan__query_data: 'boston-opencontext',
+  ckan__get_schema: 'boston-opencontext',
+  ckan__execute_sql: 'boston-opencontext',
+  ckan__aggregate_data: 'boston-opencontext',
 };
 
 /**

@@ -1,7 +1,8 @@
 // Multi-source MCP skill composition for the civic-ai-tools website.
 //
 // Despite the filename (historical — Socrata was the only source pre-M9.1),
-// `buildSystemPrompt` now composes the full multi-source system prompt:
+// `buildSystemPrompt` now composes the full multi-source system prompt
+// spanning Socrata, Google Data Commons, and Boston OpenContext:
 //
 //   1. Cross-source preamble  — "you have access to two data sources..."
 //   2. Socrata skill          — fetched from the Socrata MCP server's
@@ -18,6 +19,7 @@
 
 import { callMcpPrompt, getServerInstructions } from './client.ts';
 import { DATA_COMMONS_SKILL } from './data-commons-skill.ts';
+import { BOSTON_OPENCONTEXT_SKILL } from './boston-skill.ts';
 
 // Fallback constant used when the MCP server is unreachable.
 // NOTE: This may be stale — it was last synced at PR #19 and may be missing
@@ -436,11 +438,11 @@ async function fetchSkillGuidance(): Promise<string> {
 
 /**
  * Identifier for an MCP data source. Mirrors the keys in `./registry.ts` so a
- * source's skill text is keyed the same way as its tool routing. Adding a
- * third source means widening this union and adding one entry to
+ * source's skill text is keyed the same way as its tool routing. Adding
+ * another source means widening this union and adding one entry to
  * `SKILL_REGISTRY` below — no changes to `composeSkillPrompt` itself.
  */
-export type SourceId = 'socrata' | 'data-commons';
+export type SourceId = 'socrata' | 'data-commons' | 'boston-opencontext';
 
 /**
  * Inputs handed to every `SkillEntry.fetchText` call. Sources are free to
@@ -474,12 +476,19 @@ export interface SkillEntry {
  */
 export type SkillRegistry = Partial<Record<SourceId, SkillEntry>>;
 
-const CROSS_SOURCE_PREAMBLE = `You have access to TWO MCP data sources through the tools below.
+const CROSS_SOURCE_PREAMBLE = `You have access to THREE MCP data sources through the tools below.
 
-1. **Socrata open data portals** — city operational data such as 311 requests, building permits, inspections, crime, housing violations, payroll, and licenses. Tools: get_data, search, fetch.
+1. **Socrata open data portals** — city operational data such as 311 requests, building permits, inspections, crime, housing violations, payroll, and licenses. Covers NYC, Chicago, SF, Seattle, LA, and hundreds of other portals — but not Boston. Tools: get_data, search, fetch.
 2. **Google Data Commons** — authoritative federal and international statistical data from the U.S. Census Bureau (ACS, Decennial), BLS, CDC, Department of Education, EPA, and other official agencies. Tools: search_indicators, get_observations.
+3. **Boston OpenContext** — the City of Boston's CKAN-native open-data MCP, fronting data.boston.gov. 311, permits, crime, inspections, property, elections, schools, parcels, and neighborhoods for Boston specifically. Tools: ckan__search_datasets, ckan__get_dataset, ckan__query_data, ckan__get_schema, ckan__execute_sql, ckan__aggregate_data.
 
-When a question is about demographics, poverty, income, education, health, labor, or environment for a defined geography, prefer Data Commons. When a question is about city operations or anything that changes daily, prefer Socrata. When a question needs both — equity analyses that join city operations against demographic context — plan a multi-step analysis and attribute each figure to its source. See the Cross-source decision logic section in the Data Commons guidance below for the join pattern.`;
+Source selection rules:
+- **Boston civic questions** → Boston OpenContext. Boston is not on Socrata.
+- **Other-city civic questions** (NYC, Chicago, SF, Seattle, LA, ...) → Socrata.
+- **Demographics, poverty, income, education, health, labor, environment** for any geography → Data Commons.
+- **Multi-source equity questions** that join operational data against demographic context → plan a multi-step analysis, attribute each figure to its source, and mind geography alignment (Boston neighborhoods and city council districts are not standard census geographies — state the mismatch rather than silently imputing).
+
+See the Cross-source decision logic section in the Data Commons guidance below for the join pattern.`;
 
 const INTRO_TEMPLATE = (today: string) =>
   `You are a helpful assistant with access to civic and statistical data via MCP tools.
@@ -487,7 +496,7 @@ const INTRO_TEMPLATE = (today: string) =>
 Today's date is ${today}. Always use this as the current date for interpreting relative time expressions like "last year" or "past two months."`;
 
 const OUTRO =
-  'When you get results, summarize clearly and cite the dataset ID (for Socrata) or the variable DCID + source dataset (for Data Commons).';
+  'When you get results, summarize clearly and cite the dataset ID (for Socrata), the variable DCID + source dataset (for Data Commons), or the resource UUID + dataset title (for Boston OpenContext).';
 
 /**
  * Default registry. One entry per source the website talks to. Each entry's
@@ -515,6 +524,16 @@ const SKILL_REGISTRY: SkillRegistry = {
         ? `# Data Commons server instructions (from initialize response)\n\n${instructions}`
         : '# Data Commons server instructions\n\n(The Data Commons MCP server did not advertise per-server instructions on initialize — composing with the embedded Data Commons skill only.)';
       return `${instructionsBlock}\n\n---\n\n${DATA_COMMONS_SKILL}`;
+    },
+  },
+  'boston-opencontext': {
+    sourceId: 'boston-opencontext',
+    async fetchText() {
+      const instructions = await getServerInstructions('boston-opencontext');
+      const instructionsBlock = instructions
+        ? `# Boston OpenContext server instructions (from initialize response)\n\n${instructions}`
+        : '# Boston OpenContext server instructions\n\n(The OpenContext MCP server did not advertise per-server instructions on initialize — composing with the embedded Boston skill only; per-tool guidance is carried inline on each ckan__* tool description.)';
+      return `${instructionsBlock}\n\n---\n\n${BOSTON_OPENCONTEXT_SKILL}`;
     },
   },
 };
@@ -575,10 +594,11 @@ export async function composeSkillPrompt(
 /**
  * Thin wrapper kept for backward compatibility with the existing route
  * handlers. Delegates to `composeSkillPrompt` with the default active source
- * list (`['socrata', 'data-commons']`) and the cross-source preamble.
+ * list (`['socrata', 'data-commons', 'boston-opencontext']`) and the
+ * cross-source preamble.
  */
 export const buildSystemPrompt = async (portal: string): Promise<string> => {
-  return composeSkillPrompt(['socrata', 'data-commons'], {
+  return composeSkillPrompt(['socrata', 'data-commons', 'boston-opencontext'], {
     portal,
     today: new Date().toISOString().split('T')[0],
     preamble: CROSS_SOURCE_PREAMBLE,
