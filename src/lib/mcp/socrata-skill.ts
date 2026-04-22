@@ -1,7 +1,8 @@
 // Multi-source MCP skill composition for the civic-ai-tools website.
 //
 // Despite the filename (historical — Socrata was the only source pre-M9.1),
-// `buildSystemPrompt` now composes the full multi-source system prompt:
+// `buildSystemPrompt` now composes the full multi-source system prompt
+// spanning Socrata, Google Data Commons, and Boston OpenContext:
 //
 //   1. Cross-source preamble  — "you have access to two data sources..."
 //   2. Socrata skill          — fetched from the Socrata MCP server's
