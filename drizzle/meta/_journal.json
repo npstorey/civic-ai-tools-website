@@ -43,6 +43,13 @@
       "when": 1776535815723,
       "tag": "0005_add_expert_attestation_enum",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1776731843403,
+      "tag": "0006_mixed_sabra",
+      "breakpoints": true
     }
   ]
 }

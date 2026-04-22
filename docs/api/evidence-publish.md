@@ -24,39 +24,55 @@ The same endpoint is used whether the caller is the website chat UI, a script, o
 
 ## Authentication
 
-### Pattern
+The endpoint accepts two auth methods. **Bearer tokens are preferred for programmatic clients**; the session cookie path remains working indefinitely for browser flows and one-off curls.
 
-Authentication is handled by [NextAuth](https://next-auth.js.org/) with GitHub as the OAuth provider. The endpoint reads the session via `getServerSession(authOptions)` and requires both:
+### Bearer tokens (preferred, OAuth 2.0 device flow)
 
-- A signed-in session (`session.user.id` must be populated from the GitHub user ID stored in the JWT), and
-- A matching row in the `users` table (populated on first sign-in by the NextAuth `signIn` callback).
+External clients — Claude Code publish skills, CI jobs, local CLIs, anything not running in a signed-in browser — should authenticate with a bearer token obtained through the [device authorization grant (RFC 8628)](https://datatracker.ietf.org/doc/html/rfc8628):
 
-Callers authenticate by presenting the NextAuth session cookie:
+1. **Client starts the flow.** POST `/api/auth/device/code` with a JSON body `{ "name": "my client", "scope": "evidence:publish" }`. The response includes a `device_code` (opaque, client-held), a short `user_code` for the human to type, a `verification_uri`, a `verification_uri_complete` (prefilled with the user code), an `expires_in` (seconds until the codes expire — currently 900 = 15 min), and a polling `interval` (seconds between polls — currently 5).
+2. **User approves in a browser.** The client displays the `user_code` and directs the user to `verification_uri_complete`. The user signs in at civicaitools.org with GitHub if not already signed in, reviews the client name and scope, and clicks **Approve** (or **Deny**).
+3. **Client polls for the token.** POST `/api/auth/device/token` with `{ "device_code": "..." }` at the returned interval. Responses:
+    - `200 OK` with `{ access_token, token_type: "Bearer", expires_at, expires_in, scope }` — approved; save the token.
+    - `400 { "error": "authorization_pending" }` — keep polling.
+    - `400 { "error": "slow_down" }` — client is polling too fast; add 5 seconds to the interval.
+    - `400 { "error": "expired_token" }` — the device code aged out; start over.
+    - `400 { "error": "invalid_grant" }` — unknown or already-exchanged code.
+4. **Use the token.** Send `Authorization: Bearer <access_token>` on subsequent writes to `/api/evidence` and `/api/blob/upload-token`. Tokens are valid for 90 days; re-run the flow when the token expires or is revoked.
 
-- **Development:** `next-auth.session-token`
-- **Production:** `__Secure-next-auth.session-token`
+Tokens are stored server-side as SHA-256 hashes — a database compromise leaks hashes, not usable tokens. Each token carries a scope (currently only `evidence:publish`); future capabilities will introduce new scope names rather than widening the existing one. Tokens can be revoked anytime from the [dashboard Tokens tab](https://www.civicaitools.org/dashboard); a revoked token starts returning `401` on the next request.
 
-### Obtaining a session cookie
+### Session cookie (legacy, browser-friendly)
 
-Sign in at `https://civicaitools.org` with GitHub in a regular browser session, then copy the value of the production cookie (`__Secure-next-auth.session-token`) from browser devtools. Store it in a secret manager (1Password, macOS keychain, `.env.local`) and pass it to the client as a `Cookie` header.
+The endpoint still accepts a NextAuth session cookie — `__Secure-next-auth.session-token` in production, `next-auth.session-token` in development — for browser flows and one-off scripts. Sign in at `https://civicaitools.org` with GitHub, then send the cookie as a `Cookie` header. Cookie-authed writes receive an `X-Auth-Deprecated: cookie` response header and a server-side log line nudging toward bearer tokens; no removal date is set.
 
-Session tokens expire; when a request starts returning `401`, sign in again and replace the stored cookie.
+### Server-side validation
 
-### Programmatic authentication
+Both paths resolve to the same DB user ID used for authorship and dashboard filters. The endpoint requires:
 
-The endpoint does not currently accept a personal access token, bearer token, or OAuth device-flow credential. Any external client must present a valid NextAuth session cookie. See [known chat-flow assumptions](#known-chat-flow-assumptions) and the follow-up issue link at the bottom of this document for the longer-term path.
+- A valid bearer token with scope `evidence:publish` and non-null `expires_at > now`, OR
+- A signed-in NextAuth session whose GitHub ID matches a row in the `users` table (populated on first sign-in by the NextAuth `signIn` callback).
+
+When both are presented, the bearer token takes precedence (an invalid bearer does **not** fall through to cookie auth — the request returns `401`).
+
+### Claude Code publish skill
+
+The bundled Claude Code skill at `civic-ai-tools/.claude/skills/publish-evidence/` ships a `publish.py` wrapper that implements all of the above. Run `publish.py --login` to execute the device flow and save a token to `~/.config/civic-ai-tools/credentials.json` (mode 0600); subsequent `publish.py --payload ...` calls pick it up automatically. See `civic-ai-tools/docs/publish-evidence.md` for the user walkthrough.
 
 ---
 
 ## Request
 
-| Property       | Value                                                                 |
-|----------------|-----------------------------------------------------------------------|
-| Method         | `POST`                                                                |
-| Path           | `/api/evidence`                                                       |
-| `Content-Type` | `application/json`                                                    |
-| `Cookie`       | `__Secure-next-auth.session-token=<token>` (production)               |
-| Body           | JSON object matching the [request body schema](#request-body-schema)  |
+| Property        | Value                                                                         |
+|-----------------|-------------------------------------------------------------------------------|
+| Method          | `POST`                                                                        |
+| Path            | `/api/evidence`                                                               |
+| `Content-Type`  | `application/json`                                                            |
+| `Authorization` | `Bearer <access_token>` (preferred) — obtained via the [device flow](#bearer-tokens-preferred-oauth-20-device-flow). |
+| `Cookie`        | `__Secure-next-auth.session-token=<token>` (legacy, production cookie name)   |
+| Body            | JSON object matching the [request body schema](#request-body-schema)          |
+
+Send exactly one auth header — when both are present, the `Authorization` header wins.
 
 ### Request body schema
 
@@ -289,7 +305,8 @@ Callers publishing through `POST /api/evidence` do not set these themselves — 
 
 | Status | Body                                                              | Cause                                                                                           |
 |--------|-------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
-| `401`  | `{ "error": "Authentication required" }`                          | Missing or invalid NextAuth session cookie.                                                     |
+| `401`  | `{ "error": "Authentication required" }`                          | Missing, invalid, expired, or revoked bearer token; or missing/invalid NextAuth session cookie. |
+| `403`  | `{ "error": "Token missing required scope: evidence:publish" }`   | Bearer token is valid but does not hold the `evidence:publish` scope.                           |
 | `404`  | `{ "error": "User not found in database" }`                       | Session is valid but the user record has not been provisioned (can occur if `DATABASE_URL` was unset when the user first signed in — a re-sign-in fixes it). |
 | `500`  | `{ "error": "<message>" }` with `<message>` from the thrown error | Database, blob storage, or evidence-package-building failure.                                    |
 
@@ -310,12 +327,16 @@ Signing, RFC 3161 timestamp, and Rekor submission are non-blocking. Failures for
 ### 1. Publish an analysis with `curl`
 
 ```bash
-# Assumes $SESSION_COOKIE holds the value of __Secure-next-auth.session-token
-# from a signed-in civicaitools.org browser session.
+# Preferred: $CIVIC_EVIDENCE_TOKEN holds a bearer token obtained via
+# `publish.py --login` or a direct device-flow exchange against
+# /api/auth/device/{code,token}.
+#
+# Legacy alternative: replace `-H "Authorization: Bearer ..."` with
+# `-H "Cookie: __Secure-next-auth.session-token=${SESSION_COOKIE}"`.
 
 curl -sS -X POST https://civicaitools.org/api/evidence \
   -H "Content-Type: application/json" \
-  -H "Cookie: __Secure-next-auth.session-token=${SESSION_COOKIE}" \
+  -H "Authorization: Bearer ${CIVIC_EVIDENCE_TOKEN}" \
   -d '{
     "trace": { "resourceSpans": [] },
     "prompt": "How many 311 noise complaints did Manhattan receive last year?",
@@ -396,7 +417,10 @@ const res = await fetch('https://civicaitools.org/api/evidence', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'Cookie': `__Secure-next-auth.session-token=${process.env.CIVIC_EVIDENCE_SESSION_COOKIE}`,
+    // Preferred bearer path:
+    'Authorization': `Bearer ${process.env.CIVIC_EVIDENCE_TOKEN}`,
+    // Legacy alternative (cookie):
+    // 'Cookie': `__Secure-next-auth.session-token=${process.env.CIVIC_EVIDENCE_SESSION_COOKIE}`,
   },
   body: JSON.stringify({
     trace: { resourceSpans: [] },
@@ -427,7 +451,7 @@ const { slug, url, packageHash } = await res.json();
 
 These are implementation details that may surprise an external client. None of them currently block external publishing; each is called out so a client author can make an informed choice.
 
-1. **Session-cookie-only authentication.** The endpoint has no bearer-token, API-key, or device-flow path. A client must reuse a cookie minted through GitHub OAuth in a browser. This is fine for single-developer use but awkward for automation. Tracked for follow-up work in [civic-ai-tools-website#73](https://github.com/npstorey/civic-ai-tools-website/issues/73) — programmatic authentication for external evidence publishers.
+1. ~~Session-cookie-only authentication.~~ **Resolved.** The endpoint now accepts OAuth 2.0 device-flow bearer tokens — see [Authentication](#authentication). Session cookies remain supported for backwards compatibility and one-off curls but carry an `X-Auth-Deprecated: cookie` response header. Issue [civic-ai-tools-website#73](https://github.com/npstorey/civic-ai-tools-website/issues/73) is closed.
 2. **`portal` is required but only meaningful for Socrata.** For Data Commons-only or other non-Socrata analyses, the field still has to be set; `"n/a"` or another placeholder is accepted. Relaxing this requires a schema change and is not in scope for the publish-schema documentation work.
 3. **`trace` format is OpenTelemetry JSON.** External clients that do not run OpenTelemetry internally can send `{ "resourceSpans": [] }`; per-source provenance will fall back to the static tool-name → source map (`get_data`/`search`/`fetch` → Socrata, `search_indicators`/`get_observations` → Data Commons). New tools added to the registry will need either the static map updated or a real trace.
 4. **Slug derivation is content-addressable, not user-provided.** The endpoint derives the URL slug from the title and the package hash. Clients cannot request a specific slug. A title change produces a different package hash only if the title is stored inside the package JSON — which it is not today (title and summary live on the database row, not in the canonical JSON), so re-publishing with a different title creates a different `evidence_records` row but an identical blob.
@@ -437,6 +461,7 @@ These are implementation details that may surprise an external client. None of t
 
 ## Change log
 
+- **2026-04-21** — Added OAuth 2.0 device-flow bearer-token authentication (closes [#73](https://github.com/npstorey/civic-ai-tools-website/issues/73)). New endpoints: `POST /api/auth/device/code` (start), `POST /api/auth/device/token` (poll), `POST /api/auth/device/approve` (user-facing), `GET /api/auth/device/lookup` (user-facing prefill), `GET /api/auth/tokens` (list), `DELETE /api/auth/tokens/:id` (revoke). Clients send `Authorization: Bearer <token>` on `POST /api/evidence` and `POST /api/blob/upload-token`; scope `evidence:publish` is required. Tokens live 90 days by default, are stored server-side as SHA-256 hashes, and can be revoked from the Dashboard **Tokens** tab. Session-cookie auth remains working indefinitely but now emits `X-Auth-Deprecated: cookie` on each cookie-authed response. Backwards-compatible — existing cookie-based clients continue working without changes.
 - **2026-04-18** — Added the [Blob references (Phase B.6)](#blob-references-phase-b6) section. The `output`, `trace`, and `skillMetadataOverride.skillText` request fields now accept either inline content or a BlobRef `{ ref, url, contentType, size }` object; the verify endpoint returns per-reference `blobRefs[]` entries alongside the existing verdicts. A new `POST /api/blob/upload-token` endpoint mints presigned tokens for direct client uploads to `evidence-refs/<sha256>[.ext]`, gated by the same NextAuth session as `/api/evidence`. Orphan blobs are swept by a daily cron (`/api/cron/blob-gc`). Backwards-compatible — existing inline-content packages remain valid and the verify response adds fields rather than renaming any.
 - **2026-04-18** — Added the [Signing and trust registry](#signing-and-trust-registry) section. Documents the `metadata.signingKeyId` field now included in the canonical package hash, the `/.well-known/evidence-public-keys.json` registry endpoint, the `keyTrust` verdicts returned by `GET /api/evidence/<slug>/verify` (including the new `legacy_embedded` state for pre-registry packages), and the signing-side env vars (`EVIDENCE_SIGNING_KEY`, `EVIDENCE_KEY_ID`, `EVIDENCE_PUBLIC_KEY`, `EVIDENCE_TRUST_REGISTRY_URL`). Backwards-compatible at the publish path — clients do not need any changes.
 - **2026-04-17** — Initial documentation published. Tracks the endpoint as of commit [`a8cdc8c`](https://github.com/npstorey/civic-ai-tools-website/commit/a8cdc8c) (M9.3 ship, v0.7.0).

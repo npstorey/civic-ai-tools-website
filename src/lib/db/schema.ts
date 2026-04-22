@@ -115,3 +115,46 @@ export const attestationPackages = pgTable('attestation_packages', {
     .defaultNow()
     .notNull(),
 });
+
+// OAuth 2.0 device authorization grant (RFC 8628). A client (Claude Code
+// publish skill, CI job, etc.) creates a row with an opaque `device_code`
+// and a short human-readable `user_code`. The human visits /auth/device
+// while signed in, finds the row by `user_code`, and approves it; the
+// client polls `/api/auth/device/token` with the `device_code` to mint a
+// bearer token. Rows are single-use (`consumed_at`) and expire in ~15min.
+export const deviceCodes = pgTable('device_codes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  deviceCode: text('device_code').notNull().unique(),
+  userCode: text('user_code').notNull().unique(),
+  clientName: text('client_name').notNull(),
+  scope: text('scope').notNull(),
+  approvedUserId: uuid('approved_user_id').references(() => users.id),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  lastPolledAt: timestamp('last_polled_at', { withTimezone: true }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+// Bearer tokens minted via the device flow. Stored as SHA-256 of the raw
+// token so a DB compromise doesn't leak tokens. `token_prefix` is the
+// first ~12 chars of the raw token (e.g. "evpub_XXXXXX") kept for UI
+// identification — it's not secret on its own and can't be used to auth.
+export const apiTokens = pgTable('api_tokens', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id),
+  tokenHash: text('token_hash').notNull().unique(),
+  tokenPrefix: text('token_prefix').notNull(),
+  name: text('name').notNull(),
+  scope: text('scope').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});

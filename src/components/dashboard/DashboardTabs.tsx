@@ -39,10 +39,21 @@ interface ActivityRow {
   creatorGithubUrl: string;
 }
 
+interface TokenRow {
+  id: string;
+  name: string;
+  tokenPrefix: string;
+  scope: string;
+  createdAt: string;
+  expiresAt: string;
+  lastUsedAt: string | null;
+}
+
 interface DashboardTabsProps {
   myEvidence: EvidenceRow[];
   myEvaluations: EvaluationRow[];
   activity: ActivityRow[];
+  tokens: TokenRow[];
 }
 
 // --- Shared styles ---
@@ -117,8 +128,8 @@ function EmptyState({ message, cta }: { message: string; cta?: { text: string; h
 
 // --- Main component ---
 
-export default function DashboardTabs({ myEvidence, myEvaluations, activity }: DashboardTabsProps) {
-  const [activeTab, setActiveTab] = useState<'evidence' | 'evaluations' | 'activity'>('evidence');
+export default function DashboardTabs({ myEvidence, myEvaluations, activity, tokens }: DashboardTabsProps) {
+  const [activeTab, setActiveTab] = useState<'evidence' | 'evaluations' | 'activity' | 'tokens'>('evidence');
 
   return (
     <>
@@ -132,11 +143,15 @@ export default function DashboardTabs({ myEvidence, myEvaluations, activity }: D
         <button onClick={() => setActiveTab('activity')} style={tabStyle(activeTab === 'activity')}>
           Activity ({activity.length})
         </button>
+        <button onClick={() => setActiveTab('tokens')} style={tabStyle(activeTab === 'tokens')}>
+          Tokens ({tokens.length})
+        </button>
       </div>
 
       {activeTab === 'evidence' && <MyEvidenceTab rows={myEvidence} />}
       {activeTab === 'evaluations' && <MyEvaluationsTab rows={myEvaluations} />}
       {activeTab === 'activity' && <ActivityTab rows={activity} />}
+      {activeTab === 'tokens' && <TokensTab rows={tokens} />}
     </>
   );
 }
@@ -487,6 +502,160 @@ function MyEvaluationsTab({ rows }: { rows: EvaluationRow[] }) {
         </Link>
       ))}
     </div>
+  );
+}
+
+function TokensTab({ rows }: { rows: TokenRow[] }) {
+  const router = useRouter();
+  const [revokeTarget, setRevokeTarget] = useState<TokenRow | null>(null);
+  const [revoking, setRevoking] = useState(false);
+  const [revokeError, setRevokeError] = useState('');
+
+  const handleRevoke = useCallback(async () => {
+    if (!revokeTarget) return;
+    setRevoking(true);
+    setRevokeError('');
+    try {
+      const res = await fetch(`/api/auth/tokens/${revokeTarget.id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Revocation failed' }));
+        throw new Error(err.error || 'Revocation failed');
+      }
+      setRevokeTarget(null);
+      router.refresh();
+    } catch (err) {
+      setRevokeError(err instanceof Error ? err.message : 'Revocation failed');
+    } finally {
+      setRevoking(false);
+    }
+  }, [revokeTarget, router]);
+
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        message="No API tokens. External clients (like the Claude Code publish skill) can request a token by running `publish.py --login`, which starts a device authorization flow."
+      />
+    );
+  }
+
+  return (
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {rows.map((t) => {
+          const expired = new Date(t.expiresAt).getTime() <= Date.now();
+          return (
+            <div
+              key={t.id}
+              style={{
+                padding: '14px 18px',
+                border: '1px solid var(--border-color)', borderRadius: '6px',
+                opacity: expired ? 0.6 : 1,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', marginBottom: '6px' }}>
+                <div style={{ fontSize: '15px', fontWeight: 600 }}>
+                  {t.name}
+                </div>
+                <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center' }}>
+                  <span style={{
+                    display: 'inline-block', padding: '2px 8px', borderRadius: '10px',
+                    fontSize: '11px', fontWeight: 600,
+                    backgroundColor: 'rgba(16, 63, 239, 0.1)', color: 'var(--nyc-blue)',
+                  }}>
+                    {t.scope}
+                  </span>
+                </div>
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <code style={{ fontFamily: 'monospace' }}>{t.tokenPrefix}...</code>
+                <span>{'\u00b7'}</span>
+                <span>Created {formatDate(t.createdAt)}</span>
+                <span>{'\u00b7'}</span>
+                {expired ? (
+                  <span style={{ color: 'var(--nyc-error)' }}>Expired {formatDate(t.expiresAt)}</span>
+                ) : (
+                  <span>Expires {formatDate(t.expiresAt)}</span>
+                )}
+                <span>{'\u00b7'}</span>
+                <span>
+                  {t.lastUsedAt ? `Last used ${formatDate(t.lastUsedAt)}` : 'Never used'}
+                </span>
+                <span>{'\u00b7'}</span>
+                <button
+                  onClick={() => { setRevokeTarget(t); setRevokeError(''); }}
+                  style={{
+                    background: 'none', border: 'none', padding: 0,
+                    fontSize: '12px', color: 'var(--nyc-error)', cursor: 'pointer',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  Revoke
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {revokeTarget && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget && !revoking) { setRevokeTarget(null); } }}
+        >
+          <div style={{
+            backgroundColor: 'white', borderRadius: '8px', width: '100%', maxWidth: '440px',
+            margin: '16px', padding: '24px',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Revoke token</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
+              Revoking is immediate and permanent. Any client still using this
+              token will start seeing 401 Unauthorized responses. The client
+              will need to run a fresh login to get a new token.
+            </p>
+            <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', color: 'var(--text-primary)' }}>
+              &ldquo;{revokeTarget.name}&rdquo; <code style={{ fontSize: '12px', color: 'var(--text-muted)' }}>({revokeTarget.tokenPrefix}...)</code>
+            </div>
+            {revokeError && (
+              <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--nyc-error)' }}>
+                {revokeError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <button
+                onClick={() => setRevokeTarget(null)}
+                disabled={revoking}
+                style={{
+                  padding: '8px 16px', border: '1px solid var(--border-color)', borderRadius: '4px',
+                  fontSize: '13px', cursor: 'pointer', backgroundColor: 'white',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRevoke}
+                disabled={revoking}
+                style={{
+                  padding: '8px 16px', border: 'none', borderRadius: '4px',
+                  fontSize: '13px', fontWeight: 600, cursor: revoking ? 'not-allowed' : 'pointer',
+                  backgroundColor: 'var(--nyc-error)', color: 'white',
+                  opacity: revoking ? 0.6 : 1,
+                }}
+              >
+                {revoking ? 'Revoking...' : 'Revoke'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
