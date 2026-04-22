@@ -4,6 +4,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { apiTokens, users } from '@/lib/db/schema';
+import { isSameOrigin } from '@/lib/api-auth';
 
 /**
  * DELETE /api/auth/tokens/:id — revoke a token the caller owns.
@@ -12,22 +13,11 @@ import { apiTokens, users } from '@/lib/db/schema';
  * caller can't revoke another user's token.
  */
 
-function sameOrigin(request: NextRequest): boolean {
-  const origin = request.headers.get('origin');
-  if (!origin) return false;
-  const expected = process.env.NEXTAUTH_URL;
-  if (!expected) {
-    const host = request.headers.get('host');
-    return !!host && origin.endsWith(host);
-  }
-  return origin === expected.replace(/\/+$/, '');
-}
-
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!sameOrigin(request)) {
+  if (!isSameOrigin(request)) {
     return NextResponse.json({ error: 'Forbidden (cross-origin)' }, { status: 403 });
   }
 

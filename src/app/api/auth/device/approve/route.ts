@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { deviceCodes, users } from '@/lib/db/schema';
 import { normalizeUserCode } from '@/lib/device-flow';
+import { isSameOrigin } from '@/lib/api-auth';
 
 /**
  * User-facing approval endpoint. Called from /auth/device when the
@@ -21,20 +22,8 @@ interface ApproveRequest {
   decision?: 'approve' | 'deny';
 }
 
-function sameOrigin(request: NextRequest): boolean {
-  const origin = request.headers.get('origin');
-  if (!origin) return false;
-  const expected = process.env.NEXTAUTH_URL;
-  if (!expected) {
-    // Dev fallback: allow the request's own host.
-    const host = request.headers.get('host');
-    return !!host && origin.endsWith(host);
-  }
-  return origin === expected.replace(/\/+$/, '');
-}
-
 export async function POST(request: NextRequest) {
-  if (!sameOrigin(request)) {
+  if (!isSameOrigin(request)) {
     return NextResponse.json({ error: 'Forbidden (cross-origin)' }, { status: 403 });
   }
 

@@ -69,6 +69,55 @@ export function hasScope(auth: AuthResult, required: string): boolean {
   return auth.scopes.includes('*') || auth.scopes.includes(required);
 }
 
+/**
+ * Strip protocol noise + leading `www.` from an origin or absolute URL so
+ * apex and www forms of the same domain compare equal. Callers control
+ * what counts as "same logical origin" for their app; this helper just
+ * normalizes the host component.
+ */
+function normalizeOrigin(input: string): string | null {
+  try {
+    const url = new URL(input);
+    const host = url.host.replace(/^www\./, '');
+    return `${url.protocol}//${host}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Same-origin check for state-changing user actions (device approve,
+ * token revoke). Accepts both apex and www variants as equivalent — the
+ * production civicaitools.org deployment 307-redirects apex → www for
+ * GET, so browsers land on www even when `NEXTAUTH_URL` is apex. Without
+ * this normalization the Origin header (`https://www.civicaitools.org`)
+ * would never match NEXTAUTH_URL (`https://civicaitools.org`) and all
+ * legitimate approvals would 403.
+ *
+ * Returns false for cross-origin POSTs and for requests with no Origin
+ * header (e.g. plain curl without `-H Origin`) — callers who want to
+ * support those paths should use bearer tokens, which skip this check.
+ */
+export function isSameOrigin(request: NextRequest): boolean {
+  const origin = request.headers.get('origin');
+  if (!origin) return false;
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (!normalizedOrigin) return false;
+
+  const expected = process.env.NEXTAUTH_URL;
+  if (expected) {
+    const normalizedExpected = normalizeOrigin(expected);
+    return normalizedExpected !== null && normalizedOrigin === normalizedExpected;
+  }
+
+  // Dev fallback: no NEXTAUTH_URL set. Accept the request's own host
+  // (stripped of `www.`) as the trusted origin.
+  const host = request.headers.get('host');
+  if (!host) return false;
+  const normalizedHost = host.replace(/^www\./, '');
+  return normalizedOrigin.endsWith(normalizedHost);
+}
+
 async function resolveBearer(raw: string): Promise<AuthResult | null> {
   if (!raw.startsWith(TOKEN_PREFIX)) return null;
   const hash = sha256Hex(raw);
