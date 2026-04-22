@@ -58,6 +58,28 @@ test('sourceIdForToolName: Data Commons tools', () => {
   assert.equal(sourceIdForToolName('get_observations'), 'data-commons');
 });
 
+test('sourceIdForToolName: Boston OpenContext tools', () => {
+  for (const toolName of [
+    'ckan__search_datasets',
+    'ckan__get_dataset',
+    'ckan__query_data',
+    'ckan__get_schema',
+    'ckan__execute_sql',
+    'ckan__aggregate_data',
+  ]) {
+    assert.equal(sourceIdForToolName(toolName), 'boston-opencontext', `expected "${toolName}" to route to boston-opencontext`);
+  }
+});
+
+test('Boston OpenContext: operation types map per tool', () => {
+  assert.equal(deriveOperationType('ckan__search_datasets', { query: '311' }), 'search');
+  assert.equal(deriveOperationType('ckan__get_dataset', { dataset_id: 'x' }), 'metadata');
+  assert.equal(deriveOperationType('ckan__get_schema', { resource_id: 'x' }), 'metadata');
+  assert.equal(deriveOperationType('ckan__query_data', { resource_id: 'x' }), 'query');
+  assert.equal(deriveOperationType('ckan__execute_sql', { sql: 'SELECT 1' }), 'query');
+  assert.equal(deriveOperationType('ckan__aggregate_data', { resource_id: 'x', metrics: {} }), 'query');
+});
+
 test('sourceIdForToolName: unknown tool returns undefined', () => {
   assert.equal(sourceIdForToolName('mystery_tool'), undefined);
   assert.equal(sourceIdForToolName(''), undefined);

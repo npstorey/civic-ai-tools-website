@@ -19,7 +19,7 @@ const TODAY = '2026-04-15';
 const PREAMBLE = 'PREAMBLE_BODY';
 const INTRO_LINE = 'You are a helpful assistant with access to civic and statistical data via MCP tools.';
 const TODAY_LINE = `Today's date is ${TODAY}. Always use this as the current date for interpreting relative time expressions like "last year" or "past two months."`;
-const OUTRO = 'When you get results, summarize clearly and cite the dataset ID (for Socrata) or the variable DCID + source dataset (for Data Commons).';
+const OUTRO = 'When you get results, summarize clearly and cite the dataset ID (for Socrata), the variable DCID + source dataset (for Data Commons), or the resource UUID + dataset title (for Boston OpenContext).';
 
 function makeStubEntry(sourceId: SourceId, text: string): SkillEntry {
   return {
@@ -51,6 +51,12 @@ function makeFailingEntry(sourceId: SourceId, message: string): SkillEntry {
 const TWO_SOURCE_REGISTRY: SkillRegistry = {
   socrata: makeStubEntry('socrata', 'SOCRATA_BLOCK'),
   'data-commons': makeStubEntry('data-commons', 'DATA_COMMONS_BLOCK'),
+};
+
+const THREE_SOURCE_REGISTRY: SkillRegistry = {
+  socrata: makeStubEntry('socrata', 'SOCRATA_BLOCK'),
+  'data-commons': makeStubEntry('data-commons', 'DATA_COMMONS_BLOCK'),
+  'boston-opencontext': makeStubEntry('boston-opencontext', 'BOSTON_BLOCK'),
 };
 
 test('Both sources, typical context: intro+preamble, both source blocks in order, outro — joined by \\n\\n---\\n\\n', async () => {
@@ -251,6 +257,88 @@ test('SkillContext is threaded through to fetchText (portal + today visible)', a
 
   assert.ok(result.includes('SOCRATA_(portal=data.cityofchicago.org, today=2026-04-15)'));
   assert.ok(result.includes('DC_(portal=data.cityofchicago.org, today=2026-04-15)'));
+});
+
+test('All three sources: socrata + data-commons + boston-opencontext render in active order with ---  separators', async () => {
+  const result = await composeSkillPrompt(
+    ['socrata', 'data-commons', 'boston-opencontext'],
+    { today: TODAY, preamble: PREAMBLE, portal: 'data.cityofnewyork.us' },
+    THREE_SOURCE_REGISTRY,
+  );
+
+  const expected = [
+    `${INTRO_LINE}\n\n${TODAY_LINE}\n\n${PREAMBLE}`,
+    'SOCRATA_BLOCK',
+    'DATA_COMMONS_BLOCK',
+    'BOSTON_BLOCK',
+    OUTRO,
+  ].join('\n\n---\n\n');
+
+  assert.equal(result, expected);
+});
+
+test('Boston-only: no Socrata or Data Commons blocks in output', async () => {
+  const result = await composeSkillPrompt(
+    ['boston-opencontext'],
+    { today: TODAY, preamble: PREAMBLE },
+    THREE_SOURCE_REGISTRY,
+  );
+
+  assert.ok(result.includes('BOSTON_BLOCK'), 'Boston block should be present');
+  assert.ok(!result.includes('SOCRATA_BLOCK'), 'Socrata block should be absent');
+  assert.ok(!result.includes('DATA_COMMONS_BLOCK'), 'Data Commons block should be absent');
+});
+
+test('Three-source activeSources order is preserved regardless of registry insertion order', async () => {
+  const reorderedRegistry: SkillRegistry = {
+    'boston-opencontext': makeStubEntry('boston-opencontext', 'BOSTON_BLOCK'),
+    socrata: makeStubEntry('socrata', 'SOCRATA_BLOCK'),
+    'data-commons': makeStubEntry('data-commons', 'DATA_COMMONS_BLOCK'),
+  };
+
+  const result = await composeSkillPrompt(
+    ['boston-opencontext', 'data-commons', 'socrata'],
+    { today: TODAY, preamble: PREAMBLE },
+    reorderedRegistry,
+  );
+
+  const bostonIndex = result.indexOf('BOSTON_BLOCK');
+  const dcIndex = result.indexOf('DATA_COMMONS_BLOCK');
+  const socrataIndex = result.indexOf('SOCRATA_BLOCK');
+  assert.ok(bostonIndex >= 0 && dcIndex >= 0 && socrataIndex >= 0, 'all three source blocks should appear');
+  assert.ok(bostonIndex < dcIndex, 'boston should render before data-commons when listed first');
+  assert.ok(dcIndex < socrataIndex, 'data-commons should render before socrata when listed second');
+});
+
+test('Three-source composition survives one failing source: boston throws, socrata + data-commons still render', async () => {
+  const warnings: string[] = [];
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args.map(String).join(' '));
+  };
+
+  try {
+    const registry: SkillRegistry = {
+      socrata: makeStubEntry('socrata', 'SOCRATA_BLOCK'),
+      'data-commons': makeStubEntry('data-commons', 'DATA_COMMONS_BLOCK'),
+      'boston-opencontext': makeFailingEntry('boston-opencontext', 'simulated boston outage'),
+    };
+    const result = await composeSkillPrompt(
+      ['socrata', 'data-commons', 'boston-opencontext'],
+      { today: TODAY, preamble: PREAMBLE },
+      registry,
+    );
+
+    assert.ok(result.includes('SOCRATA_BLOCK'), 'surviving Socrata source renders');
+    assert.ok(result.includes('DATA_COMMONS_BLOCK'), 'surviving Data Commons source renders');
+    assert.ok(!result.includes('BOSTON_BLOCK'), 'failed Boston source is omitted');
+    assert.ok(
+      warnings.some((w) => w.includes('boston-opencontext') && w.includes('simulated boston outage')),
+      'a warning was logged about the failed Boston source',
+    );
+  } finally {
+    console.warn = originalWarn;
+  }
 });
 
 test('No-preamble + empty sources: intro joins directly to outro by separator (preamble omitted, no double separator)', async () => {

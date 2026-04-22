@@ -140,6 +140,11 @@ export function buildProvenanceGraph(
       title: 'Google Data Commons MCP Server',
       serverUrl: 'https://api.datacommons.org/mcp',
     },
+    'boston-opencontext': {
+      urn: `urn:civic-evidence:mcp-server:boston-opencontext`,
+      title: 'Boston OpenContext MCP Server',
+      serverUrl: 'https://data-mcp.boston.gov/mcp',
+    },
   };
 
   const sourcesInTrace = new Set<string>();
@@ -261,7 +266,8 @@ export function buildProvenanceGraph(
       dataResponseUrns.push(dataUrn);
 
       // Description varies by source — Socrata has a portal domain, Data
-      // Commons calls run against a knowledge graph keyed by DCIDs.
+      // Commons calls run against a knowledge graph keyed by DCIDs, and
+      // Boston OpenContext calls hit the CKAN DataStore at data.boston.gov.
       const description = toolSource === 'socrata'
         ? `Data response from ${portalDomain}`
         : `Data response from ${sourceAgentMap[toolSource]?.title || toolSource}`;

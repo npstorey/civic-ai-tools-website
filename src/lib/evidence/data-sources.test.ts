@@ -168,6 +168,87 @@ test('Empty trace falls back to tool-name mapping (Data Commons)', () => {
   assert.equal(entries[0].sourceId, 'data-commons');
 });
 
+test('Boston OpenContext only: emits a single aggregate entry tagged sourceId=boston-opencontext with catalogType=ckan', () => {
+  const toolCalls: ToolCallSummary[] = [
+    { name: 'ckan__search_datasets', args: { query: '311 pothole requests' } },
+    {
+      name: 'ckan__aggregate_data',
+      args: {
+        resource_id: '8048697b-ad64-4bfc-b090-ee00169f2323',
+        group_by: ['neighborhood'],
+        metrics: { count: 'count(*)' },
+      },
+    },
+  ];
+  const trace = traceWithToolSpans([
+    toolSpan('boston-opencontext'),
+    toolSpan('boston-opencontext'),
+  ]);
+
+  const entries = buildDataSources(toolCalls, trace, 'data.cityofnewyork.us', NOW);
+
+  assert.equal(entries.length, 1);
+  const entry = entries[0];
+  assert.equal(entry.sourceId, 'boston-opencontext');
+  assert.equal(entry.catalogType, 'ckan');
+  assert.equal(entry.portalUrl, 'https://data.boston.gov');
+  // Boston rolls up per-source (not per-resource) — resource UUIDs live on the
+  // PROV-O graph's tool call activities, not in dataSources.
+  assert.equal(entry.datasetId, undefined);
+  assert.equal(entry.datasetUrl, undefined);
+  assert.equal(entry.accessTimestamp, NOW);
+});
+
+test('Three-source: Socrata + Data Commons + Boston OpenContext produce three distinct entries', () => {
+  const toolCalls: ToolCallSummary[] = [
+    { name: 'search_indicators', args: { query: 'population' } },
+    {
+      name: 'get_observations',
+      args: { variable_dcid: 'Count_Person', place_dcid: 'geoId/25025' },
+    },
+    {
+      name: 'get_data',
+      args: { type: 'query', portal: 'data.cityofnewyork.us', dataset_id: 'erm2-nwe9' },
+    },
+    {
+      name: 'ckan__aggregate_data',
+      args: { resource_id: 'boston-311-uuid', group_by: ['neighborhood'], metrics: { count: 'count(*)' } },
+    },
+  ];
+  const trace = traceWithToolSpans([
+    toolSpan('data-commons'),
+    toolSpan('data-commons'),
+    toolSpan('socrata', { 'tool.dataset_id': 'erm2-nwe9', 'tool.portal_domain': 'data.cityofnewyork.us' }),
+    toolSpan('boston-opencontext'),
+  ]);
+
+  const entries = buildDataSources(toolCalls, trace, 'data.cityofnewyork.us', NOW);
+
+  assert.equal(entries.length, 3);
+  const socrata = entries.find((s) => s.sourceId === 'socrata');
+  const dc = entries.find((s) => s.sourceId === 'data-commons');
+  const boston = entries.find((s) => s.sourceId === 'boston-opencontext');
+  assert.ok(socrata, 'missing socrata dataSource entry');
+  assert.ok(dc, 'missing data-commons dataSource entry');
+  assert.ok(boston, 'missing boston-opencontext dataSource entry');
+  assert.equal(socrata!.datasetId, 'erm2-nwe9');
+  assert.equal(dc!.portalUrl, 'https://api.datacommons.org/mcp');
+  assert.equal(boston!.catalogType, 'ckan');
+  assert.equal(boston!.portalUrl, 'https://data.boston.gov');
+});
+
+test('Empty trace falls back to tool-name mapping (Boston OpenContext)', () => {
+  const toolCalls: ToolCallSummary[] = [
+    { name: 'ckan__search_datasets', args: { query: 'permits' } },
+  ];
+  const trace = { resourceSpans: [] };
+
+  const entries = buildDataSources(toolCalls, trace, 'data.cityofnewyork.us', NOW);
+
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].sourceId, 'boston-opencontext');
+});
+
 test('Regression: Socrata-only entry shape is backward-compatible (new sourceId is additive)', () => {
   // The shape must contain every field the pre-M9.3 code produced, plus the
   // new additive `sourceId`. Downstream consumers that ignore unknown fields
@@ -214,6 +295,7 @@ test('Unknown tool with no trace span defaults to socrata (pre-M9.1 backward com
 test('displayNameForSource maps known source ids to friendly names', () => {
   assert.equal(displayNameForSource('socrata'), 'Socrata');
   assert.equal(displayNameForSource('data-commons'), 'Data Commons');
+  assert.equal(displayNameForSource('boston-opencontext'), 'Boston OpenContext');
 });
 
 test('displayNameForSource capitalises unknown ids so new sources render sensibly', () => {
@@ -267,6 +349,53 @@ test('formatDataSourcesSummary dedupes multiple Socrata dataset entries into one
     },
   ];
   assert.equal(formatDataSourcesSummary(entries), 'Socrata');
+});
+
+test('formatDataSourcesSummary renders a three-source analysis in active-source order', () => {
+  const entries: DataSourceEntry[] = [
+    {
+      sourceId: 'socrata',
+      catalogType: 'socrata',
+      portalUrl: 'https://data.cityofnewyork.us',
+      datasetId: 'erm2-nwe9',
+      datasetUrl: 'https://data.cityofnewyork.us/d/erm2-nwe9',
+      accessTimestamp: NOW,
+    },
+    {
+      sourceId: 'data-commons',
+      catalogType: 'data-commons',
+      portalUrl: 'https://api.datacommons.org/mcp',
+      accessTimestamp: NOW,
+    },
+    {
+      sourceId: 'boston-opencontext',
+      catalogType: 'ckan',
+      portalUrl: 'https://data.boston.gov',
+      accessTimestamp: NOW,
+    },
+  ];
+  const result = formatDataSourcesSummary(entries);
+  assert.ok(result !== null && result.includes('Socrata'));
+  assert.ok(result !== null && result.includes('Data Commons'));
+  assert.ok(result !== null && result.includes('Boston OpenContext'));
+  assert.ok(
+    result !== null &&
+      result.indexOf('Socrata') < result.indexOf('Data Commons') &&
+      result.indexOf('Data Commons') < result.indexOf('Boston OpenContext'),
+    'three-source summary should render in active-source order',
+  );
+});
+
+test('formatDataSourcesSummary renders a Boston-only package without Socrata leakage', () => {
+  const entries: DataSourceEntry[] = [
+    {
+      sourceId: 'boston-opencontext',
+      catalogType: 'ckan',
+      portalUrl: 'https://data.boston.gov',
+      accessTimestamp: NOW,
+    },
+  ];
+  assert.equal(formatDataSourcesSummary(entries), 'Boston OpenContext');
 });
 
 test('formatDataSourcesSummary joins multi-source entries with a middle-dot separator', () => {
