@@ -42,6 +42,10 @@ Three pages, each with a distinct purpose. Use this framing to decide where new 
 
 The BPMN visualization lives on `/explore`. The About page is purely educational prose with a CTA linking to `/explore`.
 
+## Design principles
+
+UX and data-model principles for AI-output and provenance surfaces are documented at [`docs/design-principles.md`](docs/design-principles.md). Read before making changes to the evidence detail page, chat output rendering, provenance graph, or any other AI-output / attestation surface. The five-word summary: **disclosure not validation, hierarchy not equality, narrative not metadata, axes not chips, user language not implementation language.**
+
 ## Architecture
 
 ```
