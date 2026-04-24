@@ -113,7 +113,7 @@ Five highest-leverage changes.
 
 1. **Section heading "Provenance Chain" → "Analysis steps"** (or "How this was made"). "Provenance" is Latinate and operational-jargon-y; the content is a step-by-step narrative of what the AI did. "Analysis steps" reads as user language and matches the homepage's "Show all steps" toggle.
 2. **"Skill guidance" → "AI instructions"** across section heading, step label, and Resources grid. The current term is internal vocabulary whose meaning isn't obvious; P9 calls this out by name. "AI instructions" or "System prompt" both work; prefer the former for reader-accessibility.
-3. **"Provenance Graph (W3C PROV-O)" heading → remove.** Fold into Provenance Chain as a secondary tab (§6). Keep "PROV-O" as the label on the download button only (technical affordance, correct audience).
+3. **The folded graph tab should be labeled "Graph."** Keep "PROV-O" only on the download button, where the technical audience is the intended reader. The structural fold itself (§6) belongs to PR 4; this label change belongs to PR 5, so the two stay independently shippable.
 4. **StatusBadge `unverified` → "No attestations yet".** "Unverified" reads as a failure ("we tried and failed") — flagged directly in P9. "No attestations yet" is honest and reads as a process state.
 5. **Resources grid "Tool calls" → "Data requests"** (or "Source queries"). "Tool calls" is implementation-speak. For the target audience, "data requests" is what actually happened.
 
@@ -131,8 +131,8 @@ Five follow-up PRs/issues. Dependencies noted.
 
 **Deferred out of this memo.** Narrative-at-package-time (generating per-step narration strings at publish time and persisting them in `queries[]` to satisfy Principle 5 server-side-narrative). Worth its own design note once PRs 2–3 are in. Also deferred: mobile UX pass, attestation card re-layout for the multi-type future.
 
-**Open questions for planning-chat review.**
+**Resolved decisions (from planning-chat review).**
 
-1. Is storing a pre-computed `narration?: string` on each `queries[]` entry acceptable as a package-schema evolution (back-compat: old packages render without it, new packages render with it)? If yes, Principle 5's server-side-narrative prescription is achievable without migrating historical data.
-2. Ship PR 1 immediately as its own issue, or bundle it into PR 2 so the inconsistency and the redesign land in one commit? The memo assumes separately; planning chat may prefer atomic.
-3. For the "Provenance Chain" → "Analysis steps" rename, is there a downstream consumer (external citations, search-engine indexing, the `citation_title` metadata) that treats the heading as stable text? If yes, the rename needs a redirect or alias plan. If not, it's a pure display change.
+1. **`narration?: string` on `queries[]` is acceptable** as a package-schema evolution. Generate server-side at publish time in `buildEvidencePackage()`. Templates must be deterministic per-tool-per-source functions — never LLM-generated, which would be Principle 3 false precision via stochastic means. Unknown tools get a generic honest fallback. Old packages render without the field via client-side fallback. Schema evolution documented in `docs/api/evidence-publish.md` change-log when it lands. Scoped as a follow-up design note, not a PR 2 blocker.
+2. **PR 1 ships separately** from PR 2. The bridge fix is a regression fix for a live Principle 8 violation on every CKAN and Data Commons package published since M9.2; it should land within the day rather than wait for the PR 2 redesign cycle.
+3. **No alias/redirect needed for the "Provenance Chain" → "Analysis steps" rename.** Before PR 5 lands, spend ~5 minutes greping the repo for the literal string "Provenance Chain" and update any README screenshots or external doc references found.
