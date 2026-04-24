@@ -73,8 +73,8 @@ export default function AudienceRoutingStrip() {
           marginBottom: '20px',
         }}
       >
-        This roadmap serves six audiences. Start with the adjunct that fits &mdash; the full
-        roadmap follows below.
+        For deeper, audience-specific detail on what this roadmap means for your role, see the
+        adjunct doc linked in each card.
       </p>
 
       <div

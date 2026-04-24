@@ -30,13 +30,13 @@ export default async function RoadmapPage() {
         .
       </p>
 
-      <AudienceRoutingStrip />
-
       {result.ok && result.markdown ? (
         <RoadmapBody markdown={result.markdown} />
       ) : (
         <RoadmapStub />
       )}
+
+      <AudienceRoutingStrip />
     </div>
   );
 }
