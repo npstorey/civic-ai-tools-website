@@ -25,8 +25,10 @@ export default function Header() {
   const headerRef = useRef<HTMLElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [exploreOpen, setExploreOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const exploreRef = useRef<HTMLDivElement>(null);
+  const aboutRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Publish header height as a CSS variable so other components can offset below it
@@ -45,10 +47,13 @@ export default function Header() {
 
   // Close dropdowns on outside click
   useEffect(() => {
-    if (!exploreOpen && !userMenuOpen) return;
+    if (!exploreOpen && !aboutOpen && !userMenuOpen) return;
     const handleClick = (e: MouseEvent) => {
       if (exploreOpen && exploreRef.current && !exploreRef.current.contains(e.target as Node)) {
         setExploreOpen(false);
+      }
+      if (aboutOpen && aboutRef.current && !aboutRef.current.contains(e.target as Node)) {
+        setAboutOpen(false);
       }
       if (userMenuOpen && userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setUserMenuOpen(false);
@@ -56,7 +61,7 @@ export default function Header() {
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, [exploreOpen, userMenuOpen]);
+  }, [exploreOpen, aboutOpen, userMenuOpen]);
 
   return (
     <header
@@ -157,13 +162,62 @@ export default function Header() {
             >
               Learn
             </Link>
-            <Link
-              href="/about"
-              className="no-link-style"
-              style={NAV_LINK_STYLE}
-            >
-              About
-            </Link>
+            {/* About dropdown */}
+            <div ref={aboutRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setAboutOpen(!aboutOpen)}
+                className="no-link-style"
+                style={{
+                  ...NAV_LINK_STYLE,
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontFamily: 'inherit',
+                }}
+              >
+                About
+                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>&#9662;</span>
+              </button>
+              {aboutOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 8px)',
+                    left: 0,
+                    minWidth: '160px',
+                    backgroundColor: 'var(--nyc-white)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '4px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    zIndex: 10,
+                    padding: '4px 0',
+                  }}
+                >
+                  <Link
+                    href="/about"
+                    onClick={() => setAboutOpen(false)}
+                    style={DROPDOWN_ITEM_STYLE}
+                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    About
+                  </Link>
+                  <Link
+                    href="/roadmap"
+                    onClick={() => setAboutOpen(false)}
+                    style={DROPDOWN_ITEM_STYLE}
+                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    Roadmap
+                  </Link>
+                </div>
+              )}
+            </div>
           </nav>
         </div>
 
@@ -357,6 +411,20 @@ export default function Header() {
           >
             Learn
           </Link>
+          {/* Divider */}
+          <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
+          {/* About section */}
+          <span
+            style={{
+              color: 'var(--text-muted)',
+              fontWeight: 600,
+              fontSize: '13px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            About
+          </span>
           <Link
             href="/about"
             onClick={() => setMobileMenuOpen(false)}
@@ -365,9 +433,23 @@ export default function Header() {
               fontWeight: 500,
               fontSize: '16px',
               textDecoration: 'none',
+              paddingLeft: '12px',
             }}
           >
             About
+          </Link>
+          <Link
+            href="/roadmap"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              color: 'var(--text-secondary)',
+              fontWeight: 500,
+              fontSize: '16px',
+              textDecoration: 'none',
+              paddingLeft: '12px',
+            }}
+          >
+            Roadmap
           </Link>
           {/* Account section (logged in only) */}
           {session && (

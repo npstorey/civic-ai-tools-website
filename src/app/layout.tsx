@@ -82,6 +82,8 @@ export default function RootLayout({
                   {' \u00b7 '}
                   <Link href="/about">About</Link>
                   {' \u00b7 '}
+                  <Link href="/roadmap">Roadmap</Link>
+                  {' \u00b7 '}
                   <a href="https://github.com/npstorey/civic-ai-tools/issues/new?template=suggest-server.yml&labels=directory-submission" target="_blank" rel="noopener noreferrer">Suggest a Server</a>
                 </p>
                 <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '8px 0 0 0', opacity: 0.8 }}>
