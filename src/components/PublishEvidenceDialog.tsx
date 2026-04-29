@@ -112,6 +112,8 @@ export default function PublishEvidenceDialog({
           promptVisibility,
           title,
           summary,
+          // ADR-0003: chat flow captures bytes streaming to the browser.
+          captureMethod: 'chat-flow-stream',
           extensions: {
             'org.civicaitools.notebook': notebook,
           },

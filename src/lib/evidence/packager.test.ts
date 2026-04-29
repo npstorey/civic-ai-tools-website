@@ -146,3 +146,60 @@ test('buildEvidencePackage: empty-string output is hashed, not undefined-skipped
     `sha256:${sha256Hex('')}`,
   );
 });
+
+// --- ADR-0003: captureMethod is part of the canonical hash ---
+//
+// The label is what differentiates structurally distinct publish paths
+// (chat-flow streaming vs. Claude Code JSONL readback). For the label to
+// be tamper-evident, two packages identical except for `captureMethod`
+// MUST produce different package hashes — otherwise the field could be
+// flipped in storage without invalidating the signature.
+//
+// `packageId` and `metadata.createdAt` are random/time-dependent, so we
+// strip them before re-hashing for a deterministic comparison.
+
+function normalizedHash(pkg: ReturnType<typeof buildEvidencePackage>['pkg']): string {
+  // Clone the metadata without the non-deterministic fields, leaving the
+  // rest of the package shape (and ordering) intact.
+  const stripped = {
+    ...pkg,
+    metadata: {
+      schemaVersion: pkg.metadata.schemaVersion,
+      signingKeyId: pkg.metadata.signingKeyId,
+      ...(pkg.metadata.captureMethod ? { captureMethod: pkg.metadata.captureMethod } : {}),
+    },
+  };
+  return sha256Hex(JSON.stringify(stripped));
+}
+
+test('buildEvidencePackage: captureMethod is covered by the package hash (ADR-0003)', () => {
+  const a = buildEvidencePackage(baseInput({ captureMethod: 'chat-flow-stream' }));
+  const b = buildEvidencePackage(baseInput({ captureMethod: 'claude-code-jsonl-readback' }));
+  assert.notEqual(
+    normalizedHash(a.pkg),
+    normalizedHash(b.pkg),
+    'two packages identical except for captureMethod must hash differently',
+  );
+});
+
+test('buildEvidencePackage: omitting captureMethod produces canonical JSON without the metadata key', () => {
+  // Backwards compat: callers that don't supply captureMethod (legacy
+  // tests, internal call sites that pre-date the route enforcement) get
+  // a metadata block with no captureMethod key — so legacy verify, which
+  // recomputes the package hash from stored canonical JSON, continues to
+  // produce identical hashes.
+  const { pkg } = buildEvidencePackage(baseInput());
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(pkg.metadata, 'captureMethod'),
+    false,
+  );
+  // And the corresponding JSON.stringify output has no captureMethod key.
+  assert.equal(JSON.stringify(pkg.metadata).includes('captureMethod'), false);
+});
+
+test('buildEvidencePackage: with captureMethod, metadata.captureMethod matches input', () => {
+  const { pkg } = buildEvidencePackage(
+    baseInput({ captureMethod: 'claude-code-jsonl-readback' }),
+  );
+  assert.equal(pkg.metadata.captureMethod, 'claude-code-jsonl-readback');
+});

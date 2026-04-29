@@ -42,6 +42,20 @@ export const attestationTypeEnum = pgEnum('attestation_type', [
   'expert_attestation',
 ]);
 
+// captureMethod labels how the package contents were captured (ADR-0003).
+// `chat-flow-stream` — server captured bytes streaming to the browser.
+// `claude-code-jsonl-readback` — Claude Code skill read each turn from
+// the session JSONL, filtering to text-typed content blocks.
+// `claude-code-self-report` — legacy: the publishing model paraphrased
+// from in-context memory. Deprecated 2026-04-28; retained so pre-ADR
+// records can be labeled with their actual capture method rather than
+// silently re-described.
+export const captureMethodEnum = pgEnum('capture_method', [
+  'chat-flow-stream',
+  'claude-code-jsonl-readback',
+  'claude-code-self-report',
+]);
+
 // --- Tables ---
 
 export const users = pgTable('users', {
@@ -78,6 +92,7 @@ export const evidenceRecords = pgTable('evidence_records', {
   basePackageRfc3161Timestamp: text('base_package_rfc3161_timestamp'),
   basePackageRekorEntryId: text('base_package_rekor_entry_id'),
   basePackageRekorInclusionProof: text('base_package_rekor_inclusion_proof'),
+  captureMethod: captureMethodEnum('capture_method'),
   verificationStatus: verificationStatusEnum('verification_status')
     .notNull()
     .default('unverified'),

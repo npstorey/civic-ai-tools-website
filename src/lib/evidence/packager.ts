@@ -7,6 +7,24 @@ import { deriveOperationType } from '../mcp/operation-types.ts';
 
 const PACKAGE_SCHEMA_VERSION = '0.1.0';
 
+/**
+ * Capture method for the package contents (ADR-0003).
+ *
+ * - `chat-flow-stream` — website server captured bytes as the model
+ *   streamed to the browser. Verbatim by construction at the wire layer.
+ * - `claude-code-jsonl-readback` — Claude Code publish skill read each
+ *   turn's `content` and per-invocation `usage` directly from the session
+ *   JSONL, filtering to `text`-typed content blocks. Verbatim by
+ *   construction at the JSONL layer.
+ * - `claude-code-self-report` — legacy: the publishing model paraphrased
+ *   from in-context memory. Deprecated 2026-04-28; retained so packages
+ *   predating that date can be labeled with their actual capture method.
+ */
+export type CaptureMethod =
+  | 'chat-flow-stream'
+  | 'claude-code-jsonl-readback'
+  | 'claude-code-self-report';
+
 export interface ToolCallInput {
   name: string;
   args: Record<string, unknown>;
@@ -35,6 +53,14 @@ export interface PackageInput {
   promptVisibility: 'full_text' | 'hash_only';
   title: string;
   summary: string;
+  /**
+   * Capture method label per ADR-0003. Optional at the packager layer so
+   * existing tests and any internal call sites that don't supply it still
+   * produce canonical JSON identical to pre-ADR shape. Required at the
+   * route layer (`POST /api/evidence` rejects requests that omit it) so
+   * every published package has an explicit, signed label.
+   */
+  captureMethod?: CaptureMethod;
   /**
    * Override the skill metadata that the packager would otherwise extract
    * from the trace. Required when `trace` is a BlobRef (the packager can't
@@ -65,6 +91,12 @@ export interface EvidencePackage {
      *  post-hoc trust-registry relabeling). Verifiers cross-check this
      *  against the `kid` embedded in the signature blob. */
     signingKeyId: string;
+    /** Capture-method label (ADR-0003). Present on packages built after
+     *  the ADR's enforcement landed; absent on legacy packages, which the
+     *  detail page surfaces as "Unknown (pre-ADR-0003)". When set, the
+     *  field is part of canonical JSON and therefore covered by the
+     *  package hash and signature. */
+    captureMethod?: CaptureMethod;
   };
   prompt: {
     hash: string;
@@ -206,6 +238,11 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       packageId,
       createdAt: now,
       signingKeyId: getActiveKeyId(),
+      // Conditional spread so legacy/test inputs without captureMethod
+      // produce canonical JSON identical to pre-ADR-0003 shape (and
+      // therefore identical hashes). The route layer enforces presence
+      // for production publishes.
+      ...(input.captureMethod ? { captureMethod: input.captureMethod } : {}),
     },
     prompt: {
       hash: promptHash,

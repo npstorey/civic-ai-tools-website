@@ -50,6 +50,13 @@
       "when": 1776731843403,
       "tag": "0006_mixed_sabra",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1777479752642,
+      "tag": "0007_capture_method",
+      "breakpoints": true
     }
   ]
 }

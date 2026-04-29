@@ -163,6 +163,22 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+// Human-readable label for the ADR-0003 captureMethod field. Pre-ADR
+// records (column null) render as "Unknown (pre-ADR-0003)" rather than
+// inferring a method from indirect signals — see ADR-0003 §1 amendment.
+function captureMethodLabel(method: string | null | undefined): string {
+  switch (method) {
+    case 'chat-flow-stream':
+      return 'Chat flow (verbatim stream)';
+    case 'claude-code-jsonl-readback':
+      return 'Claude Code (verbatim JSONL)';
+    case 'claude-code-self-report':
+      return 'Claude Code (self-report, deprecated)';
+    default:
+      return 'Unknown (pre-ADR-0003)';
+  }
+}
+
 export default async function EvidencePage({ params }: PageProps) {
   const { slug } = await params;
   const data = await getEvidenceData(slug);
@@ -269,6 +285,9 @@ export default async function EvidencePage({ params }: PageProps) {
                 Consistency: {record.consistencyClassification.replace(/_/g, ' ')}
               </span>
             )}
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+              Captured via: {captureMethodLabel(record.captureMethod)}
+            </span>
           </div>
         </Section>
 
