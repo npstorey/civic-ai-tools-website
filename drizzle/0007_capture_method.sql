@@ -1,0 +1,2 @@
+CREATE TYPE "public"."capture_method" AS ENUM('chat-flow-stream', 'claude-code-jsonl-readback', 'claude-code-self-report');--> statement-breakpoint
+ALTER TABLE "evidence_records" ADD COLUMN "capture_method" "capture_method";

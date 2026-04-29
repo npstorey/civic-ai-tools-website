@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { putPackage } from '@/lib/storage';
-import { buildEvidencePackage, type PackageInput } from '@/lib/evidence/packager';
+import { buildEvidencePackage, type PackageInput, type CaptureMethod } from '@/lib/evidence/packager';
 import { hash } from '@/lib/evidence/trace';
 import { signPackage, getRfc3161Timestamp, publishToRekor } from '@/lib/evidence/signing';
 import { type BlobRef } from '@/lib/evidence/blob-ref';
@@ -45,6 +45,12 @@ async function resolveSlug(title: string, packageHash: string): Promise<string> 
   return buildSlug(title, packageHash, 64);
 }
 
+const VALID_CAPTURE_METHODS: readonly CaptureMethod[] = [
+  'chat-flow-stream',
+  'claude-code-jsonl-readback',
+  'claude-code-self-report',
+] as const;
+
 interface PublishRequest {
   /** OTel trace OR a BlobRef. See `docs/api/evidence-publish.md` for the
    *  blob-reference contract. */
@@ -66,6 +72,9 @@ interface PublishRequest {
   promptVisibility: 'full_text' | 'hash_only';
   title: string;
   summary: string;
+  /** Capture-method label per ADR-0003. Required for all publishes; the
+   *  route rejects requests that omit or misvalue this field. */
+  captureMethod: CaptureMethod;
   /** Optional override for the skill metadata that would otherwise be
    *  extracted from the trace. Required when `trace` is a BlobRef. */
   skillMetadataOverride?: {
@@ -92,6 +101,18 @@ export async function POST(request: NextRequest) {
 
     const body: PublishRequest = await request.json();
 
+    // Validate captureMethod (ADR-0003). Required for all publishes;
+    // resolve once here, never re-derive downstream.
+    if (!body.captureMethod || !VALID_CAPTURE_METHODS.includes(body.captureMethod)) {
+      return NextResponse.json(
+        {
+          error:
+            'captureMethod is required and must be one of: chat-flow-stream, claude-code-jsonl-readback, claude-code-self-report',
+        },
+        { status: 400 },
+      );
+    }
+
     // Build evidence package
     const packageInput: PackageInput = {
       trace: body.trace,
@@ -105,6 +126,7 @@ export async function POST(request: NextRequest) {
       promptVisibility: body.promptVisibility,
       title: body.title,
       summary: body.summary,
+      captureMethod: body.captureMethod,
       skillMetadataOverride: body.skillMetadataOverride,
       extensions: body.extensions,
     };
@@ -157,6 +179,7 @@ export async function POST(request: NextRequest) {
       basePackageRfc3161Timestamp: rfc3161Token,
       basePackageRekorEntryId: rekorResult?.entryId || null,
       basePackageRekorInclusionProof: rekorResult?.inclusionProof || null,
+      captureMethod: body.captureMethod,
     });
 
     const response = NextResponse.json({

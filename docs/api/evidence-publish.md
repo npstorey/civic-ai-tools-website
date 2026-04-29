@@ -88,6 +88,7 @@ Send exactly one auth header — when both are present, the `Authorization` head
 | `promptVisibility`      | string             | yes      | `"full_text"` to include the prompt text in the package and database record, or `"hash_only"` to include only the SHA-256 hash.                         |
 | `title`                 | string             | yes      | Display title for the evidence record. Used to derive the URL slug.                                                                                     |
 | `summary`               | string             | yes      | A 2–4 sentence description for non-technical readers.                                                                                                   |
+| `captureMethod`         | string             | yes      | Capture-method label per [ADR-0003](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0003-evidence-capture-method.md). One of `"chat-flow-stream"`, `"claude-code-jsonl-readback"`, `"claude-code-self-report"`. Included in the signed envelope and persisted to the database. Missing or invalid values return `400`. |
 | `duration_ms`           | number             | no       | End-to-end analysis duration in milliseconds.                                                                                                           |
 | `skillMetadataOverride` | object             | no       | Override for the skill metadata normally extracted from the trace. Required when `trace` is a BlobRef. See [Blob references](#blob-references-phase-b6). |
 | `extensions`            | object             | no       | Implementation-specific artifacts keyed by reverse-DNS identifiers (e.g., `"org.civicaitools.notebook"`). Extensions are included in the canonical JSON and therefore covered by the package hash. |
@@ -107,6 +108,7 @@ Send exactly one auth header — when both are present, the `Authorization` head
 - **`trace`** — The trace is embedded verbatim in the package and used to extract PROV-O provenance at publish time. External clients that don't run OpenTelemetry internally can ship an empty trace (`{ "resourceSpans": [] }`); per-tool provenance will use the static tool-name → source map. Including a trace with `mcp_tool_call` spans and `mcp.source` attributes produces richer attribution.
 - **`portal`** — Primarily meaningful for Socrata analyses. For Data Commons-only or mixed analyses, this field is still required by the current schema but a placeholder such as `"n/a"` works without breaking provenance. See [known chat-flow assumptions](#known-chat-flow-assumptions).
 - **`extensions`** — The `"org.civicaitools.notebook"` extension (a Jupyter-style cell list) is emitted by the website's chat flow as a content-format marker, not a publish-surface marker. External clients are not required to include any extensions.
+- **`captureMethod`** — Required since 2026-04-29. Three vocabulary values per ADR-0003: `chat-flow-stream` (website server captured bytes streaming to the browser; verbatim by construction at the wire layer), `claude-code-jsonl-readback` (Claude Code skill read each turn from the session JSONL, filtering to text-typed content blocks; verbatim by construction at the JSONL layer), `claude-code-self-report` (legacy: the publishing model paraphrased from in-context memory; deprecated 2026-04-28, retained so pre-ADR records can be labeled with their actual capture method rather than silently re-described). The label is included in `metadata.captureMethod` of the canonical package JSON, so it is covered by the package hash and the platform Ed25519ph signature — the capture method itself is tamper-evident. Pre-ADR packages without the field render as "Unknown (pre-ADR-0003)" on the detail page.
 
 ---
 
@@ -230,6 +232,7 @@ await fetch('https://civicaitools.org/api/evidence', {
     promptVisibility: 'full_text',
     title,
     summary,
+    captureMethod: 'claude-code-jsonl-readback',
   }),
 });
 ```
@@ -362,7 +365,8 @@ curl -sS -X POST https://civicaitools.org/api/evidence \
     "duration_ms": 4200,
     "promptVisibility": "full_text",
     "title": "Manhattan 311 noise complaints, 2025",
-    "summary": "A count of 311 noise complaints filed in Manhattan during 2025 against the NYC Open Data 311 Service Requests dataset."
+    "summary": "A count of 311 noise complaints filed in Manhattan during 2025 against the NYC Open Data 311 Service Requests dataset.",
+    "captureMethod": "claude-code-jsonl-readback"
   }'
 ```
 
@@ -392,6 +396,7 @@ Returns the database row (truncated here for readability):
   "model": "openai/gpt-4o",
   "promptHash": "1f2e3d4c...",
   "promptVisibility": "full_text",
+  "captureMethod": "claude-code-jsonl-readback",
   "verificationStatus": "unverified",
   "consistencyClassification": null,
   "jurisdiction": null,
@@ -434,6 +439,7 @@ const res = await fetch('https://civicaitools.org/api/evidence', {
     promptVisibility: 'full_text',
     title,
     summary,
+    captureMethod: 'claude-code-jsonl-readback',
   }),
 });
 
@@ -461,6 +467,7 @@ These are implementation details that may surprise an external client. None of t
 
 ## Change log
 
+- **2026-04-29** — Added required `captureMethod` field on `POST /api/evidence` per [ADR-0003](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0003-evidence-capture-method.md). Values: `chat-flow-stream` | `claude-code-jsonl-readback` | `claude-code-self-report`. The field is part of `metadata.captureMethod` in the canonical package JSON (covered by the package hash and platform signature) and is persisted to the new `evidence_records.capture_method` column. Requests that omit or misvalue the field return `400`. The detail page surfaces a "Captured via:" label next to the verification status; pre-ADR records render as "Unknown (pre-ADR-0003)". Backwards-compatible at the verify path — legacy packages without the field continue to recompute their hash and verify identically.
 - **2026-04-21** — Added OAuth 2.0 device-flow bearer-token authentication (closes [#73](https://github.com/npstorey/civic-ai-tools-website/issues/73)). New endpoints: `POST /api/auth/device/code` (start), `POST /api/auth/device/token` (poll), `POST /api/auth/device/approve` (user-facing), `GET /api/auth/device/lookup` (user-facing prefill), `GET /api/auth/tokens` (list), `DELETE /api/auth/tokens/:id` (revoke). Clients send `Authorization: Bearer <token>` on `POST /api/evidence` and `POST /api/blob/upload-token`; scope `evidence:publish` is required. Tokens live 90 days by default, are stored server-side as SHA-256 hashes, and can be revoked from the Dashboard **Tokens** tab. Session-cookie auth remains working indefinitely but now emits `X-Auth-Deprecated: cookie` on each cookie-authed response. Backwards-compatible — existing cookie-based clients continue working without changes.
 - **2026-04-18** — Added the [Blob references (Phase B.6)](#blob-references-phase-b6) section. The `output`, `trace`, and `skillMetadataOverride.skillText` request fields now accept either inline content or a BlobRef `{ ref, url, contentType, size }` object; the verify endpoint returns per-reference `blobRefs[]` entries alongside the existing verdicts. A new `POST /api/blob/upload-token` endpoint mints presigned tokens for direct client uploads to `evidence-refs/<sha256>[.ext]`, gated by the same NextAuth session as `/api/evidence`. Orphan blobs are swept by a daily cron (`/api/cron/blob-gc`). Backwards-compatible — existing inline-content packages remain valid and the verify response adds fields rather than renaming any.
 - **2026-04-18** — Added the [Signing and trust registry](#signing-and-trust-registry) section. Documents the `metadata.signingKeyId` field now included in the canonical package hash, the `/.well-known/evidence-public-keys.json` registry endpoint, the `keyTrust` verdicts returned by `GET /api/evidence/<slug>/verify` (including the new `legacy_embedded` state for pre-registry packages), and the signing-side env vars (`EVIDENCE_SIGNING_KEY`, `EVIDENCE_KEY_ID`, `EVIDENCE_PUBLIC_KEY`, `EVIDENCE_TRUST_REGISTRY_URL`). Backwards-compatible at the publish path — clients do not need any changes.
