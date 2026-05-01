@@ -56,7 +56,7 @@ A design document plus reference implementation, in three deliverables:
 - Changing the **inbound** use of Croissant (data-sources.json characterization). That's already partially built, governed by the M2 PROV-O work, and unaffected by this issue.
 - Building a custom indexer or search surface on civicaitools.org. The whole point of this work is to use existing crawler infrastructure rather than build new infrastructure.
 - Migrating to a multi-file package format. That depends on `civic-ai-tools/docs/architecture/end-state-vision.md` §Open questions item #1 — package format and is a separate decision.
-- Schema.org `Claim` / `ClaimReview` integration. That intersects with the typed-claims layer (CACO) and is governed by `civic-ai-tools/docs/architecture/claims-ontology-draft-spec.md` §9 Open Question 5; it does not belong in this issue.
+- Schema.org `Claim` / `ClaimReview` integration. That intersects with the typed-claims layer (the Civic Claim Vocabulary) and is governed by `civic-ai-tools/docs/architecture/civic-claim-vocabulary-draft-spec.md` §9 Open Question 5; it does not belong in this issue.
 
 ## Acceptance criteria
 
