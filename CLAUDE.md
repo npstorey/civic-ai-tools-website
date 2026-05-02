@@ -46,6 +46,10 @@ The BPMN visualization lives on `/explore`. The About page is purely educational
 
 UX and data-model principles for AI-output and provenance surfaces are documented at [`docs/design-principles.md`](docs/design-principles.md). Read before making changes to the evidence detail page, chat output rendering, provenance graph, or any other AI-output / attestation surface. The five-word summary: **disclosure not validation, hierarchy not equality, narrative not metadata, axes not chips, user language not implementation language.**
 
+## Architecture documentation
+
+Canonical architecture documents and spec drafts live in the hub repo at [`civic-ai-tools/docs/architecture/`](https://github.com/npstorey/civic-ai-tools/tree/main/docs/architecture). Read before making changes that touch the evidence-package shape, signing/verification, captureMethod, withdrawal lifecycle, typed-claims layer, or any other surface where the spec is authoritative. The Open Evidence Standard and Civic Claim Vocabulary drafts are both internal working drafts (pre-v0.1, not for external review); sections subject to open questions are marked inline with `⚠ Subject to Open Question #N` callouts. The canonical home for unresolved architectural decisions is [`open-questions.md`](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-questions.md) — spec sections cite by Q-number. When this codebase diverges from the spec drafts, the codebase wins and the spec gets updated to match.
+
 ## Architecture
 
 ```
