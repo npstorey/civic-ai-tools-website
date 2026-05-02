@@ -20,7 +20,7 @@ Without this scaffolding, the first time a real package needs a typed domain cla
 
 ## Proposed approach
 
-A short design document at `civic-ai-tools/docs/architecture/civic-claim-vocabulary-extensions-portfolio.md` covering four sections:
+A short design document at `civic-ai-tools/docs/architecture/civic-claim-vocab-extensions.md` covering four sections:
 
 1. **Promotion criteria.** What a candidate must satisfy to move from "candidate" to "designed":
    - A real evidence package needs it (Xanadu test).
@@ -51,7 +51,7 @@ The design document is the deliverable. Implementation of any specific extension
 ## Scope
 
 **In:**
-- Design document at `civic-ai-tools/docs/architecture/civic-claim-vocabulary-extensions-portfolio.md`.
+- Design document at `civic-ai-tools/docs/architecture/civic-claim-vocab-extensions.md`.
 - Promotion criteria + ranked candidate list with rationale.
 - Recommended approach for the ISO 37120 portfolio as cross-cutting controlled vocabulary.
 - Governance model (proposal, review, versioning, retirement, registry).
@@ -66,7 +66,7 @@ The design document is the deliverable. Implementation of any specific extension
 
 ## Acceptance criteria
 
-- Design document committed at `civic-ai-tools/docs/architecture/civic-claim-vocabulary-extensions-portfolio.md`.
+- Design document committed at `civic-ai-tools/docs/architecture/civic-claim-vocab-extensions.md`.
 - Promotion criteria are concrete and falsifiable (a candidate either meets them or does not).
 - Ranked list includes at minimum the candidates above with rationale, and explicitly names which would be the first one promoted to "designed" status when conditions are met.
 - ISO 37120 portfolio approach is documented including the public-naming-vs-paywalled-text distinction.
