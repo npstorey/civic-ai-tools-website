@@ -1,5 +1,20 @@
 [
   {
+    "id": "aces.data.socrata.com",
+    "name": "",
+    "url": "https://aces.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://aces.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "administraciodigital.gencat.cat",
     "name": "Portal Datos Abiertos - Generalitat de Catalunya",
     "url": "https://administraciodigital.gencat.cat",
@@ -60,6 +75,36 @@
     "status": "active"
   },
   {
+    "id": "albemarlecounty.data.socrata.com",
+    "name": "",
+    "url": "https://albemarlecounty.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://albemarlecounty.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "albemarlecountyva-uvaecc.data.socrata.com",
+    "name": "",
+    "url": "https://albemarlecountyva-uvaecc.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://albemarlecountyva-uvaecc.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "alexandercountync.data.socrata.com",
     "name": "",
     "url": "https://alexandercountync.data.socrata.com",
@@ -101,7 +146,37 @@
     "owner_name": "Generalitat de Catalunya",
     "owner_type": "Regional government",
     "api_endpoint": "https://analisi.transparenciacatalunya.cat/api",
-    "dataset_count": 1061,
+    "dataset_count": 1063,
+    "status": "active"
+  },
+  {
+    "id": "annapolismd.data.socrata.com",
+    "name": "",
+    "url": "https://annapolismd.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://annapolismd.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "anokamn.data.socrata.com",
+    "name": "",
+    "url": "https://anokamn.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://anokamn.data.socrata.com/api",
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -120,6 +195,21 @@
     "status": "active"
   },
   {
+    "id": "ascensionparishla.data.socrata.com",
+    "name": "",
+    "url": "https://ascensionparishla.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://ascensionparishla.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "atlanta.data.socrata.com",
     "name": "",
     "url": "https://atlanta.data.socrata.com",
@@ -132,6 +222,21 @@
     "owner_type": "",
     "api_endpoint": "https://atlanta.data.socrata.com/api",
     "dataset_count": 5,
+    "status": "active"
+  },
+  {
+    "id": "auburnmaine.data.socrata.com",
+    "name": "",
+    "url": "https://auburnmaine.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://auburnmaine.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -180,6 +285,21 @@
     "status": "active"
   },
   {
+    "id": "barnstablecountyma.data.socrata.com",
+    "name": "",
+    "url": "https://barnstablecountyma.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://barnstablecountyma.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "bastropcountytx-erppro.data.socrata.com",
     "name": "",
     "url": "https://bastropcountytx-erppro.data.socrata.com",
@@ -221,6 +341,111 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://bcnv.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "beaufortcountysc.data.socrata.com",
+    "name": "",
+    "url": "https://beaufortcountysc.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://beaufortcountysc.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "beaufortcountyschools.data.socrata.com",
+    "name": "",
+    "url": "https://beaufortcountyschools.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://beaufortcountyschools.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "bentoncounty.data.socrata.com",
+    "name": "",
+    "url": "https://bentoncounty.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://bentoncounty.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "bentonvillear.data.socrata.com",
+    "name": "",
+    "url": "https://bentonvillear.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://bentonvillear.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "berkeleycountywv.data.socrata.com",
+    "name": "",
+    "url": "https://berkeleycountywv.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://berkeleycountywv.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "bernalillocountynm.data.socrata.com",
+    "name": "",
+    "url": "https://bernalillocountynm.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://bernalillocountynm.data.socrata.com/api",
+    "dataset_count": 1,
+    "status": "active"
+  },
+  {
+    "id": "bloomfieldtwp.data.socrata.com",
+    "name": "",
+    "url": "https://bloomfieldtwp.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://bloomfieldtwp.data.socrata.com/api",
     "dataset_count": 0,
     "status": "active"
   },
@@ -285,6 +510,21 @@
     "status": "active"
   },
   {
+    "id": "brookhavenga.data.socrata.com",
+    "name": "",
+    "url": "https://brookhavenga.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://brookhavenga.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "budget-qa-reporting.data.socrata.com",
     "name": "",
     "url": "https://budget-qa-reporting.data.socrata.com",
@@ -297,6 +537,21 @@
     "owner_type": "",
     "api_endpoint": "https://budget-qa-reporting.data.socrata.com/api",
     "dataset_count": 2,
+    "status": "active"
+  },
+  {
+    "id": "byroncenterpublicschools.data.socrata.com",
+    "name": "",
+    "url": "https://byroncenterpublicschools.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://byroncenterpublicschools.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -327,6 +582,66 @@
     "owner_type": "",
     "api_endpoint": "https://ca-sco.demo.socrata.com/api",
     "dataset_count": 16,
+    "status": "active"
+  },
+  {
+    "id": "calhouncountymi.data.socrata.com",
+    "name": "",
+    "url": "https://calhouncountymi.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://calhouncountymi.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "cambriacounty-pa.data.socrata.com",
+    "name": "",
+    "url": "https://cambriacounty-pa.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cambriacounty-pa.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "camden.demo.socrata.com",
+    "name": "",
+    "url": "https://camden.demo.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://camden.demo.socrata.com/api",
+    "dataset_count": 11,
+    "status": "active"
+  },
+  {
+    "id": "camdencountyga-sheriff.data.socrata.com",
+    "name": "",
+    "url": "https://camdencountyga-sheriff.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://camdencountyga-sheriff.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -375,6 +690,21 @@
     "status": "active"
   },
   {
+    "id": "casagrandeaz.data.socrata.com",
+    "name": "",
+    "url": "https://casagrandeaz.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://casagrandeaz.data.socrata.com/api",
+    "dataset_count": 3,
+    "status": "active"
+  },
+  {
     "id": "catalegdades.caib.cat",
     "name": "Catàleg Dades Obertes Illes Balears",
     "url": "https://catalegdades.caib.cat",
@@ -416,6 +746,21 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://centennialco.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "cfschools.data.socrata.com",
+    "name": "",
+    "url": "https://cfschools.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cfschools.data.socrata.com/api",
     "dataset_count": 0,
     "status": "active"
   },
@@ -476,7 +821,7 @@
     "owner_name": "Centers for Disease Control and Prevention",
     "owner_type": "Central government",
     "api_endpoint": "https://chronicdata.cdc.gov/api",
-    "dataset_count": 1105,
+    "dataset_count": 1106,
     "status": "active"
   },
   {
@@ -510,6 +855,36 @@
     "status": "active"
   },
   {
+    "id": "cityofalbany.data.socrata.com",
+    "name": "",
+    "url": "https://cityofalbany.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityofalbany.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "cityofbranson-edp.data.socrata.com",
+    "name": "",
+    "url": "https://cityofbranson-edp.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityofbranson-edp.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "cityofcamas.demo.socrata.com",
     "name": "",
     "url": "https://cityofcamas.demo.socrata.com",
@@ -522,6 +897,21 @@
     "owner_type": "",
     "api_endpoint": "https://cityofcamas.demo.socrata.com/api",
     "dataset_count": 8,
+    "status": "active"
+  },
+  {
+    "id": "cityofcharlestonwv.data.socrata.com",
+    "name": "",
+    "url": "https://cityofcharlestonwv.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityofcharlestonwv.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -600,6 +990,66 @@
     "status": "active"
   },
   {
+    "id": "cityoffairbanks.data.socrata.com",
+    "name": "",
+    "url": "https://cityoffairbanks.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityoffairbanks.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "cityoffairfaxpd.data.socrata.com",
+    "name": "",
+    "url": "https://cityoffairfaxpd.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityoffairfaxpd.data.socrata.com/api",
+    "dataset_count": 6,
+    "status": "active"
+  },
+  {
+    "id": "cityofglendoraca.data.socrata.com",
+    "name": "",
+    "url": "https://cityofglendoraca.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityofglendoraca.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "cityofhelenamt.data.socrata.com",
+    "name": "",
+    "url": "https://cityofhelenamt.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityofhelenamt.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "cityofindianwells.data.socrata.com",
     "name": "",
     "url": "https://cityofindianwells.data.socrata.com",
@@ -626,6 +1076,21 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofkingman.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "cityoflagunabeach-ca.data.socrata.com",
+    "name": "",
+    "url": "https://cityoflagunabeach-ca.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityoflagunabeach-ca.data.socrata.com/api",
     "dataset_count": 0,
     "status": "active"
   },
@@ -735,6 +1200,36 @@
     "status": "active"
   },
   {
+    "id": "cityofoakley.data.socrata.com",
+    "name": "",
+    "url": "https://cityofoakley.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityofoakley.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "cityoforange-ca-of.data.socrata.com",
+    "name": "",
+    "url": "https://cityoforange-ca-of.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityoforange-ca-of.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "cityofpacifica.data.socrata.com",
     "name": "",
     "url": "https://cityofpacifica.data.socrata.com",
@@ -746,6 +1241,36 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofpacifica.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "cityofpensacolafl.data.socrata.com",
+    "name": "",
+    "url": "https://cityofpensacolafl.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityofpensacolafl.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "cityofpflugervilletx.data.socrata.com",
+    "name": "",
+    "url": "https://cityofpflugervilletx.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityofpflugervilletx.data.socrata.com/api",
     "dataset_count": 0,
     "status": "active"
   },
@@ -765,6 +1290,36 @@
     "status": "active"
   },
   {
+    "id": "cityofsheridanwy.data.socrata.com",
+    "name": "",
+    "url": "https://cityofsheridanwy.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityofsheridanwy.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "cityoftracyca.data.socrata.com",
+    "name": "",
+    "url": "https://cityoftracyca.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityoftracyca.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "cityoftulare.data.socrata.com",
     "name": "",
     "url": "https://cityoftulare.data.socrata.com",
@@ -777,6 +1332,66 @@
     "owner_type": "",
     "api_endpoint": "https://cityoftulare.data.socrata.com/api",
     "dataset_count": 2,
+    "status": "active"
+  },
+  {
+    "id": "cityofwestcovinaca.data.socrata.com",
+    "name": "",
+    "url": "https://cityofwestcovinaca.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityofwestcovinaca.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "cityofwillmar-edp.data.socrata.com",
+    "name": "",
+    "url": "https://cityofwillmar-edp.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityofwillmar-edp.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "cityofwoodland.data.socrata.com",
+    "name": "",
+    "url": "https://cityofwoodland.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityofwoodland.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "cityofyorbalinda.data.socrata.com",
+    "name": "",
+    "url": "https://cityofyorbalinda.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityofyorbalinda.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -807,6 +1422,21 @@
     "owner_type": "",
     "api_endpoint": "https://clatsop.data.socrata.com/api",
     "dataset_count": 5,
+    "status": "active"
+  },
+  {
+    "id": "claycountysheriff-fl.data.socrata.com",
+    "name": "",
+    "url": "https://claycountysheriff-fl.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://claycountysheriff-fl.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -882,6 +1512,21 @@
     "owner_type": "",
     "api_endpoint": "https://coconinocountyaz.data.socrata.com/api",
     "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "collin-county-tx-ja.data.socrata.com",
+    "name": "",
+    "url": "https://collin-county-tx-ja.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://collin-county-tx-ja.data.socrata.com/api",
+    "dataset_count": 3,
     "status": "active"
   },
   {
@@ -990,6 +1635,21 @@
     "status": "active"
   },
   {
+    "id": "coos-county-edp.data.socrata.com",
+    "name": "",
+    "url": "https://coos-county-edp.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://coos-county-edp.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "corsicanatx.data.socrata.com",
     "name": "",
     "url": "https://corsicanatx.data.socrata.com",
@@ -1046,7 +1706,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cos-data.seattle.gov/api",
-    "dataset_count": 142,
+    "dataset_count": 143,
     "status": "active"
   },
   {
@@ -1107,6 +1767,21 @@
     "owner_type": "",
     "api_endpoint": "https://cudahyca.data.socrata.com/api",
     "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "cumberlandcounty.data.socrata.com",
+    "name": "",
+    "url": "https://cumberlandcounty.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cumberlandcounty.data.socrata.com/api",
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -1361,7 +2036,7 @@
     "owner_name": "City of Calgary",
     "owner_type": "Local government",
     "api_endpoint": "https://data.calgary.ca/api",
-    "dataset_count": 423,
+    "dataset_count": 422,
     "status": "active"
   },
   {
@@ -1391,7 +2066,7 @@
     "owner_name": "Centers for Disease Control and Prevention",
     "owner_type": "Central government",
     "api_endpoint": "https://data.cdc.gov/api",
-    "dataset_count": 1105,
+    "dataset_count": 1106,
     "status": "active"
   },
   {
@@ -1541,7 +2216,7 @@
     "owner_name": "State of Colorado",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.colorado.gov/api",
-    "dataset_count": 641,
+    "dataset_count": 642,
     "status": "active"
   },
   {
@@ -1586,7 +2261,7 @@
     "owner_name": "City of College Station",
     "owner_type": "Local government",
     "api_endpoint": "https://data.cstx.gov/api",
-    "dataset_count": 17,
+    "dataset_count": 18,
     "status": "active"
   },
   {
@@ -2066,7 +2741,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://data.miamigov.com/api",
-    "dataset_count": 0,
+    "dataset_count": 12,
     "status": "active"
   },
   {
@@ -2111,7 +2786,7 @@
     "owner_name": "State Of Missouri",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.mo.gov/api",
-    "dataset_count": 249,
+    "dataset_count": 254,
     "status": "active"
   },
   {
@@ -2141,7 +2816,7 @@
     "owner_name": "Montgomery County",
     "owner_type": "Local government",
     "api_endpoint": "https://data.montgomerycountymd.gov/api",
-    "dataset_count": 462,
+    "dataset_count": 463,
     "status": "active"
   },
   {
@@ -2186,7 +2861,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://data.napacounty.gov/api",
-    "dataset_count": 78,
+    "dataset_count": 80,
     "status": "active"
   },
   {
@@ -2217,6 +2892,21 @@
     "owner_type": "Local government",
     "api_endpoint": "https://data.nashville.gov/api",
     "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "data.nhitc.org",
+    "name": "",
+    "url": "https://data.nhitc.org",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://data.nhitc.org/api",
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -2411,7 +3101,7 @@
     "owner_name": "State of Pennsylvania",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.pa.gov/api",
-    "dataset_count": 369,
+    "dataset_count": 368,
     "status": "active"
   },
   {
@@ -2670,6 +3360,21 @@
     "status": "active"
   },
   {
+    "id": "data.stocktonca.gov",
+    "name": "",
+    "url": "https://data.stocktonca.gov",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://data.stocktonca.gov/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "data.strathcona.ca",
     "name": "Strathcona County Open Data",
     "url": "https://data.strathcona.ca",
@@ -2711,7 +3416,7 @@
     "owner_name": "State of Texas",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.texas.gov/api",
-    "dataset_count": 796,
+    "dataset_count": 797,
     "status": "active"
   },
   {
@@ -2846,7 +3551,7 @@
     "owner_name": "State of Washington",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.wa.gov/api",
-    "dataset_count": 1061,
+    "dataset_count": 1062,
     "status": "active"
   },
   {
@@ -2966,7 +3671,7 @@
     "owner_name": "City of Austin",
     "owner_type": "Local government",
     "api_endpoint": "https://datahub.austintexas.gov/api",
-    "dataset_count": 706,
+    "dataset_count": 709,
     "status": "active"
   },
   {
@@ -3011,7 +3716,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://datahub.transportation.gov/api",
-    "dataset_count": 360,
+    "dataset_count": 398,
     "status": "active"
   },
   {
@@ -3041,7 +3746,7 @@
     "owner_name": "U.S. Department of Veterans Affairs",
     "owner_type": "Central government",
     "api_endpoint": "https://www.datahub.va.gov/api",
-    "dataset_count": 487,
+    "dataset_count": 489,
     "status": "active"
   },
   {
@@ -3116,7 +3821,7 @@
     "owner_name": "Ministerio de Tecnologías de la Información y las Comunicaciones",
     "owner_type": "Central government",
     "api_endpoint": "https://www.datos.gov.co/api",
-    "dataset_count": 8406,
+    "dataset_count": 8400,
     "status": "active"
   },
   {
@@ -3147,6 +3852,36 @@
     "owner_type": "",
     "api_endpoint": "https://dedhamma.data.socrata.com/api",
     "dataset_count": 2,
+    "status": "active"
+  },
+  {
+    "id": "delawarecountyoh-sheriff.data.socrata.com",
+    "name": "",
+    "url": "https://delawarecountyoh-sheriff.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://delawarecountyoh-sheriff.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "desmoinesia-pd.data.socrata.com",
+    "name": "",
+    "url": "https://desmoinesia-pd.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://desmoinesia-pd.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3240,6 +3975,36 @@
     "status": "active"
   },
   {
+    "id": "edinburgtx-pd.data.socrata.com",
+    "name": "",
+    "url": "https://edinburgtx-pd.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://edinburgtx-pd.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "edinburgtx.data.socrata.com",
+    "name": "",
+    "url": "https://edinburgtx.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://edinburgtx.data.socrata.com/api",
+    "dataset_count": 1,
+    "status": "active"
+  },
+  {
     "id": "edmondok.data.socrata.com",
     "name": "",
     "url": "https://edmondok.data.socrata.com",
@@ -3300,6 +4065,21 @@
     "status": "active"
   },
   {
+    "id": "effinghamil.data.socrata.com",
+    "name": "",
+    "url": "https://effinghamil.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://effinghamil.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "elkhartcountyin.data.socrata.com",
     "name": "",
     "url": "https://elkhartcountyin.data.socrata.com",
@@ -3312,6 +4092,21 @@
     "owner_type": "",
     "api_endpoint": "https://elkhartcountyin.data.socrata.com/api",
     "dataset_count": 1,
+    "status": "active"
+  },
+  {
+    "id": "emporia-kansas.data.socrata.com",
+    "name": "",
+    "url": "https://emporia-kansas.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://emporia-kansas.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3345,6 +4140,21 @@
     "status": "active"
   },
   {
+    "id": "enterpriseal.data.socrata.com",
+    "name": "",
+    "url": "https://enterpriseal.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://enterpriseal.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "erieco.data.socrata.com",
     "name": "",
     "url": "https://erieco.data.socrata.com",
@@ -3357,6 +4167,21 @@
     "owner_type": "",
     "api_endpoint": "https://erieco.data.socrata.com/api",
     "dataset_count": 5,
+    "status": "active"
+  },
+  {
+    "id": "farmersbranchtx.data.socrata.com",
+    "name": "",
+    "url": "https://farmersbranchtx.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://farmersbranchtx.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3405,6 +4230,21 @@
     "status": "active"
   },
   {
+    "id": "fishersin.data.socrata.com",
+    "name": "",
+    "url": "https://fishersin.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://fishersin.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "flaglercofl.data.socrata.com",
     "name": "",
     "url": "https://flaglercofl.data.socrata.com",
@@ -3447,6 +4287,21 @@
     "owner_type": "Local government",
     "api_endpoint": "https://fortlauderdale.data.socrata.com/api",
     "dataset_count": 25,
+    "status": "active"
+  },
+  {
+    "id": "fortpiercefl.data.socrata.com",
+    "name": "",
+    "url": "https://fortpiercefl.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://fortpiercefl.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3507,6 +4362,21 @@
     "owner_type": "Regional government",
     "api_endpoint": "https://future.michigan.gov/api",
     "dataset_count": 259,
+    "status": "active"
+  },
+  {
+    "id": "fwisd.data.socrata.com",
+    "name": "",
+    "url": "https://fwisd.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://fwisd.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3585,6 +4455,21 @@
     "status": "active"
   },
   {
+    "id": "germantownwi.data.socrata.com",
+    "name": "",
+    "url": "https://germantownwi.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://germantownwi.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "gnb.socrata.com",
     "name": "Open Data New Brunswick",
     "url": "https://gnb.socrata.com",
@@ -3596,7 +4481,7 @@
     "owner_name": "Government of New Brunswick",
     "owner_type": "Regional government",
     "api_endpoint": "https://gnb.socrata.com/api",
-    "dataset_count": 299,
+    "dataset_count": 303,
     "status": "active"
   },
   {
@@ -3645,6 +4530,51 @@
     "status": "active"
   },
   {
+    "id": "grantspassor-ps.data.socrata.com",
+    "name": "",
+    "url": "https://grantspassor-ps.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://grantspassor-ps.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "greenfield-ma.data.socrata.com",
+    "name": "",
+    "url": "https://greenfield-ma.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://greenfield-ma.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "grovecityoh.data.socrata.com",
+    "name": "",
+    "url": "https://grovecityoh.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://grovecityoh.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "grovecityohpd.data.socrata.com",
     "name": "",
     "url": "https://grovecityohpd.data.socrata.com",
@@ -3660,6 +4590,81 @@
     "status": "active"
   },
   {
+    "id": "hagerstownmd.data.socrata.com",
+    "name": "",
+    "url": "https://hagerstownmd.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://hagerstownmd.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "hallandalebeachfl.data.socrata.com",
+    "name": "",
+    "url": "https://hallandalebeachfl.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://hallandalebeachfl.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "haltomcitytx.data.socrata.com",
+    "name": "",
+    "url": "https://haltomcitytx.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://haltomcitytx.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "harrisburgpa.data.socrata.com",
+    "name": "",
+    "url": "https://harrisburgpa.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://harrisburgpa.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "haywardarearpd-erp.data.socrata.com",
+    "name": "",
+    "url": "https://haywardarearpd-erp.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://haywardarearpd-erp.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "health.data.ny.gov",
     "name": "Health Data NY",
     "url": "https://health.data.ny.gov",
@@ -3671,7 +4676,7 @@
     "owner_name": "New York Department of Health",
     "owner_type": "Regional government",
     "api_endpoint": "https://health.data.ny.gov/api",
-    "dataset_count": 308,
+    "dataset_count": 310,
     "status": "active"
   },
   {
@@ -3716,7 +4721,7 @@
     "owner_name": "Tennessee Department of Health",
     "owner_type": "Regional government",
     "api_endpoint": "https://healthdata.tn.gov/api",
-    "dataset_count": 261,
+    "dataset_count": 262,
     "status": "active"
   },
   {
@@ -3735,6 +4740,36 @@
     "status": "active"
   },
   {
+    "id": "hemet-ca-ei.data.socrata.com",
+    "name": "",
+    "url": "https://hemet-ca-ei.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://hemet-ca-ei.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "hendersoncountync.data.socrata.com",
+    "name": "",
+    "url": "https://hendersoncountync.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://hendersoncountync.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "henrycoga.data.socrata.com",
     "name": "",
     "url": "https://henrycoga.data.socrata.com",
@@ -3747,6 +4782,21 @@
     "owner_type": "",
     "api_endpoint": "https://henrycoga.data.socrata.com/api",
     "dataset_count": 9,
+    "status": "active"
+  },
+  {
+    "id": "hickorync.data.socrata.com",
+    "name": "",
+    "url": "https://hickorync.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://hickorync.data.socrata.com/api",
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -3810,6 +4860,21 @@
     "status": "active"
   },
   {
+    "id": "hopewellva.data.socrata.com",
+    "name": "",
+    "url": "https://hopewellva.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://hopewellva.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "humboldtgov.data.socrata.com",
     "name": "",
     "url": "https://humboldtgov.data.socrata.com",
@@ -3822,6 +4887,21 @@
     "owner_type": "",
     "api_endpoint": "https://humboldtgov.data.socrata.com/api",
     "dataset_count": 16,
+    "status": "active"
+  },
+  {
+    "id": "idaho-state-police.data.socrata.com",
+    "name": "",
+    "url": "https://idaho-state-police.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://idaho-state-police.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3867,6 +4947,36 @@
     "owner_type": "Local government",
     "api_endpoint": "https://impact.stlouisco.com/api",
     "dataset_count": 77,
+    "status": "active"
+  },
+  {
+    "id": "independencemo.data.socrata.com",
+    "name": "",
+    "url": "https://independencemo.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://independencemo.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "indianrivercountyfl.data.socrata.com",
+    "name": "",
+    "url": "https://indianrivercountyfl.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://indianrivercountyfl.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -3926,7 +5036,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://internal-data.ct.gov/api",
-    "dataset_count": 46,
+    "dataset_count": 47,
     "status": "active"
   },
   {
@@ -3941,7 +5051,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://internal-sandiegocounty.data.socrata.com/api",
-    "dataset_count": 316,
+    "dataset_count": 318,
     "status": "active"
   },
   {
@@ -3986,7 +5096,7 @@
     "owner_name": "Pierce County",
     "owner_type": "Local government",
     "api_endpoint": "https://internal.open.piercecountywa.gov/api",
-    "dataset_count": 902,
+    "dataset_count": 903,
     "status": "active"
   },
   {
@@ -4002,6 +5112,21 @@
     "owner_type": "",
     "api_endpoint": "https://internal.opendata.clermontauditor.org/api",
     "dataset_count": 36,
+    "status": "active"
+  },
+  {
+    "id": "internaldata.maryland.gov",
+    "name": "",
+    "url": "https://internaldata.maryland.gov",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://internaldata.maryland.gov/api",
+    "dataset_count": 6,
     "status": "active"
   },
   {
@@ -4091,6 +5216,21 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://jcps.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "jefferson-city-pd-mo.data.socrata.com",
+    "name": "",
+    "url": "https://jefferson-city-pd-mo.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://jefferson-city-pd-mo.data.socrata.com/api",
     "dataset_count": 0,
     "status": "active"
   },
@@ -4185,6 +5325,21 @@
     "status": "active"
   },
   {
+    "id": "klamathfallspd.data.socrata.com",
+    "name": "",
+    "url": "https://klamathfallspd.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://klamathfallspd.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "lacoso.data.socrata.com",
     "name": "",
     "url": "https://lacoso.data.socrata.com",
@@ -4245,6 +5400,66 @@
     "status": "active"
   },
   {
+    "id": "lafourcheparishsheriff.data.socrata.com",
+    "name": "",
+    "url": "https://lafourcheparishsheriff.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://lafourcheparishsheriff.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "lakelandfl-pd.data.socrata.com",
+    "name": "",
+    "url": "https://lakelandfl-pd.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://lakelandfl-pd.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "laramiecounty-sd.data.socrata.com",
+    "name": "",
+    "url": "https://laramiecounty-sd.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://laramiecounty-sd.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "laramiecounty.data.socrata.com",
+    "name": "",
+    "url": "https://laramiecounty.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://laramiecounty.data.socrata.com/api",
+    "dataset_count": 5,
+    "status": "active"
+  },
+  {
     "id": "lawrenceks.data.socrata.com",
     "name": "",
     "url": "https://lawrenceks.data.socrata.com",
@@ -4260,6 +5475,51 @@
     "status": "active"
   },
   {
+    "id": "lawtonok.data.socrata.com",
+    "name": "",
+    "url": "https://lawtonok.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://lawtonok.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "lemooreca.data.socrata.com",
+    "name": "",
+    "url": "https://lemooreca.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://lemooreca.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "lomalindaca.data.socrata.com",
+    "name": "",
+    "url": "https://lomalindaca.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://lomalindaca.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "longviewtexas.data.socrata.com",
     "name": "",
     "url": "https://longviewtexas.data.socrata.com",
@@ -4271,6 +5531,21 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://longviewtexas.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "losgatosca.data.socrata.com",
+    "name": "",
+    "url": "https://losgatosca.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://losgatosca.data.socrata.com/api",
     "dataset_count": 0,
     "status": "active"
   },
@@ -4316,6 +5591,21 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://lynnfieldma.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "lynnwoodwa.data.socrata.com",
+    "name": "",
+    "url": "https://lynnwoodwa.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://lynnwoodwa.data.socrata.com/api",
     "dataset_count": 0,
     "status": "active"
   },
@@ -4376,6 +5666,36 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://marysvillewa.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "mercedca.data.socrata.com",
+    "name": "",
+    "url": "https://mercedca.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://mercedca.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "mercedcountyca-sheriff.data.socrata.com",
+    "name": "",
+    "url": "https://mercedcountyca-sheriff.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://mercedcountyca-sheriff.data.socrata.com/api",
     "dataset_count": 0,
     "status": "active"
   },
@@ -4500,6 +5820,21 @@
     "status": "active"
   },
   {
+    "id": "midpenopenspace.data.socrata.com",
+    "name": "",
+    "url": "https://midpenopenspace.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://midpenopenspace.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "minotnd-pd.data.socrata.com",
     "name": "",
     "url": "https://minotnd-pd.data.socrata.com",
@@ -4527,6 +5862,81 @@
     "owner_type": "Civil society",
     "api_endpoint": "https://mischooldata.data.socrata.com/api",
     "dataset_count": 29,
+    "status": "active"
+  },
+  {
+    "id": "mobileal.data.socrata.com",
+    "name": "",
+    "url": "https://mobileal.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://mobileal.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "montebelloca-pd.data.socrata.com",
+    "name": "",
+    "url": "https://montebelloca-pd.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://montebelloca-pd.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "montereyparkca.data.socrata.com",
+    "name": "",
+    "url": "https://montereyparkca.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://montereyparkca.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "montgomery-al.data.socrata.com",
+    "name": "",
+    "url": "https://montgomery-al.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://montgomery-al.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "montrosecounty.data.socrata.com",
+    "name": "",
+    "url": "https://montrosecounty.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://montrosecounty.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -4815,6 +6225,21 @@
     "status": "active"
   },
   {
+    "id": "ofallonmo.data.socrata.com",
+    "name": "",
+    "url": "https://ofallonmo.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://ofallonmo.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "ogdencity.data.socrata.com",
     "name": "",
     "url": "https://ogdencity.data.socrata.com",
@@ -4857,6 +6282,21 @@
     "owner_type": "",
     "api_endpoint": "https://olmsteadcountymn.data.socrata.com/api",
     "dataset_count": 2,
+    "status": "active"
+  },
+  {
+    "id": "ometro.data.socrata.com",
+    "name": "",
+    "url": "https://ometro.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://ometro.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -5220,6 +6660,51 @@
     "status": "active"
   },
   {
+    "id": "oroville-ca.data.socrata.com",
+    "name": "",
+    "url": "https://oroville-ca.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://oroville-ca.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "paducahky-earlyadopter.data.socrata.com",
+    "name": "",
+    "url": "https://paducahky-earlyadopter.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://paducahky-earlyadopter.data.socrata.com/api",
+    "dataset_count": 1,
+    "status": "active"
+  },
+  {
+    "id": "paducahky.data.socrata.com",
+    "name": "",
+    "url": "https://paducahky.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://paducahky.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "palmcoastfl.data.socrata.com",
     "name": "",
     "url": "https://palmcoastfl.data.socrata.com",
@@ -5291,6 +6776,21 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://pasorobles-ca.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "pembrokefl.data.socrata.com",
+    "name": "",
+    "url": "https://pembrokefl.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://pembrokefl.data.socrata.com/api",
     "dataset_count": 0,
     "status": "active"
   },
@@ -5595,6 +7095,21 @@
     "status": "active"
   },
   {
+    "id": "pittsburg-ca.data.socrata.com",
+    "name": "",
+    "url": "https://pittsburg-ca.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://pittsburg-ca.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "pivcide.pr",
     "name": "PIVCIDE-PR (Ley 187-2015)",
     "url": "https://www.pivcide.pr",
@@ -5621,6 +7136,36 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://platte-county.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "pleasantonpd.data.socrata.com",
+    "name": "",
+    "url": "https://pleasantonpd.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://pleasantonpd.data.socrata.com/api",
+    "dataset_count": 5,
+    "status": "active"
+  },
+  {
+    "id": "pleasantville-ny.data.socrata.com",
+    "name": "",
+    "url": "https://pleasantville-ny.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://pleasantville-ny.data.socrata.com/api",
     "dataset_count": 0,
     "status": "active"
   },
@@ -5696,6 +7241,21 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://portagecounty-oh.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "portangeleswa.data.socrata.com",
+    "name": "",
+    "url": "https://portangeleswa.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://portangeleswa.data.socrata.com/api",
     "dataset_count": 0,
     "status": "active"
   },
@@ -5835,6 +7395,21 @@
     "status": "active"
   },
   {
+    "id": "rosevillepd.data.socrata.com",
+    "name": "",
+    "url": "https://rosevillepd.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://rosevillepd.data.socrata.com/api",
+    "dataset_count": 8,
+    "status": "active"
+  },
+  {
     "id": "rrps.data.socrata.com",
     "name": "",
     "url": "https://rrps.data.socrata.com",
@@ -5861,6 +7436,21 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://rutah-water-consevancy.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "sacramentoareasewerdistrict.data.socrata.com",
+    "name": "",
+    "url": "https://sacramentoareasewerdistrict.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://sacramentoareasewerdistrict.data.socrata.com/api",
     "dataset_count": 0,
     "status": "active"
   },
@@ -5955,6 +7545,21 @@
     "status": "active"
   },
   {
+    "id": "sidneyoh.data.socrata.com",
+    "name": "",
+    "url": "https://sidneyoh.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://sidneyoh.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "siouxfalls.data.socrata.com",
     "name": "",
     "url": "https://siouxfalls.data.socrata.com",
@@ -6030,6 +7635,21 @@
     "status": "active"
   },
   {
+    "id": "spaldingcounty-erp.data.socrata.com",
+    "name": "",
+    "url": "https://spaldingcounty-erp.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://spaldingcounty-erp.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "spokanevalleywa.data.socrata.com",
     "name": "",
     "url": "https://spokanevalleywa.data.socrata.com",
@@ -6056,7 +7676,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://stat.montgomerycountymd.gov/api",
-    "dataset_count": 0,
+    "dataset_count": 434,
     "status": "active"
   },
   {
@@ -6087,6 +7707,21 @@
     "owner_type": "",
     "api_endpoint": "https://stateofalaska.data.socrata.com/api",
     "dataset_count": 31,
+    "status": "active"
+  },
+  {
+    "id": "stcharlescitymo.data.socrata.com",
+    "name": "",
+    "url": "https://stcharlescitymo.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://stcharlescitymo.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6150,6 +7785,51 @@
     "status": "active"
   },
   {
+    "id": "sussexco.data.socrata.com",
+    "name": "",
+    "url": "https://sussexco.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://sussexco.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "talbotcountymd.data.socrata.com",
+    "name": "",
+    "url": "https://talbotcountymd.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://talbotcountymd.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "tetoncountyid.data.socrata.com",
+    "name": "",
+    "url": "https://tetoncountyid.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://tetoncountyid.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "thedatazone.ca",
     "name": "datazONE",
     "url": "https://www.thedatazone.ca",
@@ -6165,6 +7845,66 @@
     "status": "active"
   },
   {
+    "id": "tollesonaz.data.socrata.com",
+    "name": "",
+    "url": "https://tollesonaz.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://tollesonaz.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "townofblufftonsc.data.socrata.com",
+    "name": "",
+    "url": "https://townofblufftonsc.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://townofblufftonsc.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "townofdennis.data.socrata.com",
+    "name": "",
+    "url": "https://townofdennis.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://townofdennis.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "townofmarblehead-ma-edp.data.socrata.com",
+    "name": "",
+    "url": "https://townofmarblehead-ma-edp.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://townofmarblehead-ma-edp.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "townofmiamilakes.data.socrata.com",
     "name": "",
     "url": "https://townofmiamilakes.data.socrata.com",
@@ -6176,6 +7916,21 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://townofmiamilakes.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "townofswansboro.data.socrata.com",
+    "name": "",
+    "url": "https://townofswansboro.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://townofswansboro.data.socrata.com/api",
     "dataset_count": 0,
     "status": "active"
   },
@@ -6225,6 +7980,21 @@
     "status": "active"
   },
   {
+    "id": "tumwater.data.socrata.com",
+    "name": "",
+    "url": "https://tumwater.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://tumwater.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "txcourts-reporting.data.socrata.com",
     "name": "",
     "url": "https://txcourts-reporting.data.socrata.com",
@@ -6237,6 +8007,36 @@
     "owner_type": "",
     "api_endpoint": "https://txcourts-reporting.data.socrata.com/api",
     "dataset_count": 1,
+    "status": "active"
+  },
+  {
+    "id": "txcourts-staging-reporting.data.socrata.com",
+    "name": "",
+    "url": "https://txcourts-staging-reporting.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://txcourts-staging-reporting.data.socrata.com/api",
+    "dataset_count": 1,
+    "status": "active"
+  },
+  {
+    "id": "unioncity-ca-ei.data.socrata.com",
+    "name": "",
+    "url": "https://unioncity-ca-ei.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://unioncity-ca-ei.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
@@ -6255,6 +8055,36 @@
     "status": "active"
   },
   {
+    "id": "unioncountyoh.data.socrata.com",
+    "name": "",
+    "url": "https://unioncountyoh.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://unioncountyoh.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "uppermac.data.socrata.com",
+    "name": "",
+    "url": "https://uppermac.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://uppermac.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "usc.data.socrata.com",
     "name": "",
     "url": "https://usc.data.socrata.com",
@@ -6267,6 +8097,21 @@
     "owner_type": "",
     "api_endpoint": "https://usc.data.socrata.com/api",
     "dataset_count": 160,
+    "status": "active"
+  },
+  {
+    "id": "va-cca-uat.data.socrata.com",
+    "name": "",
+    "url": "https://va-cca-uat.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://va-cca-uat.data.socrata.com/api",
+    "dataset_count": 2,
     "status": "active"
   },
   {
@@ -6330,6 +8175,21 @@
     "status": "active"
   },
   {
+    "id": "waterloo-ia.data.socrata.com",
+    "name": "",
+    "url": "https://waterloo-ia.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://waterloo-ia.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
     "id": "wccusd.data.socrata.com",
     "name": "",
     "url": "https://wccusd.data.socrata.com",
@@ -6375,6 +8235,21 @@
     "status": "active"
   },
   {
+    "id": "weslacotx.data.socrata.com",
+    "name": "",
+    "url": "https://weslacotx.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://weslacotx.data.socrata.com/api",
+    "dataset_count": 1,
+    "status": "active"
+  },
+  {
     "id": "westgoshenpa.data.socrata.com",
     "name": "",
     "url": "https://westgoshenpa.data.socrata.com",
@@ -6402,6 +8277,36 @@
     "owner_type": "",
     "api_endpoint": "https://westlinnoregon.data.socrata.com/api",
     "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "westpalmbeach.data.socrata.com",
+    "name": "",
+    "url": "https://westpalmbeach.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://westpalmbeach.data.socrata.com/api",
+    "dataset_count": 5,
+    "status": "active"
+  },
+  {
+    "id": "wicomicocountymd.data.socrata.com",
+    "name": "",
+    "url": "https://wicomicocountymd.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://wicomicocountymd.data.socrata.com/api",
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -6462,6 +8367,21 @@
     "owner_type": "",
     "api_endpoint": "https://wsac.demo.socrata.com/api",
     "dataset_count": 4,
+    "status": "active"
+  },
+  {
+    "id": "wyomingpels-dev-reporting.data.socrata.com",
+    "name": "",
+    "url": "https://wyomingpels-dev-reporting.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://wyomingpels-dev-reporting.data.socrata.com/api",
+    "dataset_count": 0,
     "status": "active"
   },
   {
