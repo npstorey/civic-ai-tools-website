@@ -8,7 +8,11 @@ import { deriveOperationType } from '../mcp/operation-types.ts';
 const PACKAGE_SCHEMA_VERSION = '0.1.0';
 
 /**
- * Capture method for the package contents (ADR-0003, ADR-0004).
+ * Capture method for the package contents (ADR-0003).
+ *
+ * Describes *how* the content was captured — the integrity-of-pipeline
+ * property. Orthogonal to `ContentProfile` (ADR-0004), which describes
+ * *what shape* the content is in.
  *
  * - `chat-flow-stream` — website server captured bytes as the model
  *   streamed to the browser. Verbatim by construction at the wire layer.
@@ -19,17 +23,33 @@ const PACKAGE_SCHEMA_VERSION = '0.1.0';
  * - `claude-code-self-report` — legacy: the publishing model paraphrased
  *   from in-context memory. Deprecated 2026-04-28; retained so packages
  *   predating that date can be labeled with their actual capture method.
- * - `datHere` — Civic AI Tools answer pipeline captured the analysis as
- *   the A-G envelope content profile (OES §9.1), with a deterministic
- *   Jupyter notebook in section E that reproduces the rendered answer
- *   in section F against the documented runtime + stable upstream data.
- *   Reproducible-by-construction against a documented runtime. ADR-0004.
  */
 export type CaptureMethod =
   | 'chat-flow-stream'
   | 'claude-code-jsonl-readback'
-  | 'claude-code-self-report'
-  | 'datHere';
+  | 'claude-code-self-report';
+
+/**
+ * Content profile for the package contents (ADR-0004).
+ *
+ * Describes *what shape* the content is in — orthogonal to `CaptureMethod`.
+ *
+ * - `default` — legacy content shape. Pre-ADR-0004 packages omit the
+ *   `contentProfile` field entirely; verifiers treat absence as `default`.
+ *   No additional normative requirements beyond §4 of the standard.
+ * - `datHere` — A-G envelope content profile (OES §9.1) with a
+ *   deterministic Jupyter notebook in section E reproducing the rendered
+ *   answer (F) against the documented runtime + stable upstream data.
+ *   Packages with this profile MUST satisfy §9.1.1 requirements
+ *   (full-text prompt, system prompt present, environment metadata
+ *   present, notebook present, rendered answer present, summary present).
+ *
+ * `contentProfile` and `captureMethod` are independent. A chat-flow-stream
+ * capture can have either content profile; the same is true for any other
+ * captureMethod value. Future content profiles add ADRs and extend this
+ * union.
+ */
+export type ContentProfile = 'default' | 'datHere';
 
 export interface ToolCallInput {
   name: string;
@@ -68,6 +88,17 @@ export interface PackageInput {
    */
   captureMethod?: CaptureMethod;
   /**
+   * Content profile label per ADR-0004. Optional; absence is treated as
+   * `default`. Set to `'datHere'` to produce an A-G envelope package
+   * (OES §9.1), which triggers two additional packager behaviors:
+   * `summary` is emitted into canonical JSON (covered by the package
+   * hash) and `extensions["org.civicaitools.environment"]` is auto-
+   * emitted. Both behaviors are no-ops when contentProfile is `default`
+   * or absent, preserving byte-identical pre-ADR-0004 canonical JSON
+   * for legacy packages.
+   */
+  contentProfile?: ContentProfile;
+  /**
    * Override the skill metadata that the packager would otherwise extract
    * from the trace. Required when `trace` is a BlobRef (the packager can't
    * inspect trace spans in that case). Also accepts a BlobRef for
@@ -103,6 +134,12 @@ export interface EvidencePackage {
      *  field is part of canonical JSON and therefore covered by the
      *  package hash and signature. */
     captureMethod?: CaptureMethod;
+    /** Content-profile label (ADR-0004). Present on packages built after
+     *  ADR-0004's enforcement landed *and* whose publisher selected a
+     *  non-default profile. Absence is treated as `default`. When set,
+     *  the field is part of canonical JSON and therefore covered by the
+     *  package hash and signature. */
+    contentProfile?: ContentProfile;
   };
   prompt: {
     hash: string;
@@ -161,9 +198,9 @@ function sha256(content: string): string {
 
 /**
  * Build the `org.civicaitools.environment` extension content for a
- * `datHere`-captured package. Per OES §9.1.1 requirement 3 the extension
- * MUST carry `modelVersion`, `temperature`, `mcpServers`, `toolDefinitions`,
- * `host`.
+ * package with `contentProfile === 'datHere'`. Per OES §9.1.1 requirement
+ * 3 the extension MUST carry `modelVersion`, `temperature`, `mcpServers`,
+ * `toolDefinitions`, `host`.
  *
  * Prototype limitations (tracked as known gaps; tightened in follow-up work):
  * - `temperature` is not yet captured by the chat flow. Placeholder `0`.
@@ -289,6 +326,11 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       // therefore identical hashes). The route layer enforces presence
       // for production publishes.
       ...(input.captureMethod ? { captureMethod: input.captureMethod } : {}),
+      // ADR-0004 §7: contentProfile is optional; absence means `default`.
+      // Only emit into canonical JSON when explicitly set so pre-ADR-0004
+      // packages (which never supply this field) produce byte-identical
+      // canonical JSON to before.
+      ...(input.contentProfile ? { contentProfile: input.contentProfile } : {}),
     },
     prompt: {
       hash: promptHash,
@@ -308,23 +350,24 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
     output: input.output,
     trace: input.trace,
     // ADR-0004 §7 backwards-compat: emit `summary` into canonical JSON only
-    // when captureMethod === 'datHere' (where the spec requires it). Other
-    // capture methods keep `summary` on the DB row only, so their canonical
-    // JSON — and therefore their package hash — remains byte-identical to
-    // pre-ADR-0004 behavior.
-    ...(input.captureMethod === 'datHere' && input.summary
+    // when contentProfile === 'datHere' (where the spec requires it).
+    // Other content profiles keep `summary` on the DB row only, so their
+    // canonical JSON — and therefore their package hash — remains
+    // byte-identical to pre-ADR-0004 behavior.
+    ...(input.contentProfile === 'datHere' && input.summary
       ? { summary: input.summary }
       : {}),
     provenance,
-    // ADR-0004 §2 + OES §9.1.1 requirement 3: datHere-captured packages
-    // auto-receive an `org.civicaitools.environment` extension carrying
-    // section-C metadata, layered on top of any caller-supplied
+    // ADR-0004 §2 + OES §9.1.1 requirement 3: datHere-content-profile
+    // packages auto-receive an `org.civicaitools.environment` extension
+    // carrying section-C metadata, layered on top of any caller-supplied
     // extensions (e.g. the existing `org.civicaitools.notebook` written
-    // by the chat-flow publish dialog). Non-datHere captures emit only
-    // the caller-supplied extensions, preserving their canonical JSON.
+    // by the chat-flow publish dialog). Non-datHere content profiles
+    // emit only the caller-supplied extensions, preserving their
+    // canonical JSON.
     ...(() => {
       const extensions: Record<string, unknown> = { ...(input.extensions ?? {}) };
-      if (input.captureMethod === 'datHere') {
+      if (input.contentProfile === 'datHere') {
         extensions['org.civicaitools.environment'] = buildDatHereEnvironment(
           input,
           skillMeta.mcpServerUrl,

@@ -204,17 +204,18 @@ test('buildEvidencePackage: with captureMethod, metadata.captureMethod matches i
   assert.equal(pkg.metadata.captureMethod, 'claude-code-jsonl-readback');
 });
 
-// --- ADR-0004: datHere captureMethod variant ---
+// --- ADR-0004: datHere content profile ---
 //
-// The datHere captureMethod (OES §9.1, ADR-0004) promotes `summary` to
+// The datHere content profile (OES §9.1, ADR-0004) promotes `summary` to
 // canonical-JSON and auto-emits the `org.civicaitools.environment`
 // extension. Both are required for datHere conformance per §9.1.1. For
-// non-datHere captures the canonical JSON shape stays byte-identical to
-// pre-ADR-0004 — neither field appears, so pre-ADR packages hash the same.
+// non-datHere content profiles the canonical JSON shape stays byte-
+// identical to pre-ADR-0004 — neither field appears, so pre-ADR packages
+// hash the same. contentProfile is orthogonal to captureMethod (ADR-0003).
 
-test('buildEvidencePackage: datHere captureMethod produces canonical JSON with summary', () => {
+test('buildEvidencePackage: datHere content profile produces canonical JSON with summary', () => {
   const { pkg } = buildEvidencePackage(
-    baseInput({ captureMethod: 'datHere' }),
+    baseInput({ contentProfile: 'datHere' }),
   );
   assert.equal(pkg.summary, 'Test summary.');
   assert.equal(
@@ -223,9 +224,9 @@ test('buildEvidencePackage: datHere captureMethod produces canonical JSON with s
   );
 });
 
-test('buildEvidencePackage: datHere captureMethod auto-emits org.civicaitools.environment extension', () => {
+test('buildEvidencePackage: datHere content profile auto-emits org.civicaitools.environment extension', () => {
   const { pkg } = buildEvidencePackage(
-    baseInput({ captureMethod: 'datHere' }),
+    baseInput({ contentProfile: 'datHere' }),
   );
   const env = pkg.extensions?.['org.civicaitools.environment'];
   assert.ok(env, 'environment extension should be present');
@@ -237,74 +238,110 @@ test('buildEvidencePackage: datHere captureMethod auto-emits org.civicaitools.en
   assert.equal(typeof envObj.temperature, 'number');
 });
 
-test('buildEvidencePackage: non-datHere captureMethod does NOT emit summary in canonical JSON (backwards-compat)', () => {
-  // Same input as datHere test above, but with chat-flow-stream. The
-  // PackageInput.summary IS provided (route always sends it), but the
-  // packager must NOT write it into canonical JSON for non-datHere
-  // captures or pre-ADR-0004 package hashes would change.
+test('buildEvidencePackage: chat-flow-stream WITHOUT contentProfile does NOT emit summary in canonical JSON (backwards-compat)', () => {
+  // Chat-flow-stream capture with no contentProfile (legacy / default).
+  // The PackageInput.summary IS provided (the route always sends it),
+  // but the packager must NOT write it into canonical JSON unless
+  // contentProfile === 'datHere'. Otherwise pre-ADR-0004 package hashes
+  // would change.
   const { pkg } = buildEvidencePackage(
     baseInput({ captureMethod: 'chat-flow-stream' }),
   );
   assert.equal(
     Object.prototype.hasOwnProperty.call(pkg, 'summary'),
     false,
-    'summary must not appear in canonical JSON for chat-flow-stream captures',
+    'summary must not appear in canonical JSON when contentProfile is unset',
   );
   assert.equal(JSON.stringify(pkg).includes('"summary"'), false);
 });
 
-test('buildEvidencePackage: non-datHere captureMethod does NOT emit org.civicaitools.environment extension (backwards-compat)', () => {
+test('buildEvidencePackage: chat-flow-stream WITHOUT contentProfile does NOT emit org.civicaitools.environment extension (backwards-compat)', () => {
   const { pkg } = buildEvidencePackage(
     baseInput({ captureMethod: 'chat-flow-stream' }),
   );
   const env = pkg.extensions?.['org.civicaitools.environment'];
-  assert.equal(env, undefined, 'environment extension must not be auto-emitted for chat-flow-stream');
+  assert.equal(env, undefined, 'environment extension must not be auto-emitted when contentProfile is unset');
 });
 
-test('buildEvidencePackage: summary value is part of the package hash for datHere captures', () => {
-  // Two datHere packages identical except for `summary` MUST hash
-  // differently — otherwise the summary could be flipped in storage
-  // without invalidating the signature. Same load-bearing tamper-evidence
-  // property the captureMethod test asserts.
+test('buildEvidencePackage: summary value is part of the package hash for datHere content profile', () => {
+  // Two datHere-content-profile packages identical except for `summary`
+  // MUST hash differently — otherwise the summary could be flipped in
+  // storage without invalidating the signature. Same load-bearing
+  // tamper-evidence property the captureMethod test asserts.
   const a = buildEvidencePackage(
-    baseInput({ captureMethod: 'datHere', summary: 'Summary A' }),
+    baseInput({ contentProfile: 'datHere', summary: 'Summary A' }),
   );
   const b = buildEvidencePackage(
-    baseInput({ captureMethod: 'datHere', summary: 'Summary B' }),
+    baseInput({ contentProfile: 'datHere', summary: 'Summary B' }),
   );
   assert.notEqual(
     normalizedHash(a.pkg),
     normalizedHash(b.pkg),
-    'two datHere packages identical except for summary must hash differently',
+    'two datHere-content-profile packages identical except for summary must hash differently',
   );
 });
 
-test('buildEvidencePackage: environment extension is part of the package hash for datHere captures', () => {
-  // Two datHere packages with different models produce different
-  // environment.modelVersion values, which are inside the extension,
-  // which is inside canonical JSON, which is inside the hash. Tamper-
-  // evidence for the section-C environment metadata.
+test('buildEvidencePackage: environment extension is part of the package hash for datHere content profile', () => {
+  // Two datHere-content-profile packages with different models produce
+  // different environment.modelVersion values, which are inside the
+  // extension, which is inside canonical JSON, which is inside the
+  // hash. Tamper-evidence for the section-C environment metadata.
   const a = buildEvidencePackage(
-    baseInput({ captureMethod: 'datHere', model: 'openai/gpt-4o' }),
+    baseInput({ contentProfile: 'datHere', model: 'openai/gpt-4o' }),
   );
   const b = buildEvidencePackage(
-    baseInput({ captureMethod: 'datHere', model: 'anthropic/claude-3-5-sonnet' }),
+    baseInput({ contentProfile: 'datHere', model: 'anthropic/claude-3-5-sonnet' }),
   );
   assert.notEqual(
     normalizedHash(a.pkg),
     normalizedHash(b.pkg),
-    'two datHere packages with different environment.modelVersion must hash differently',
+    'two datHere-content-profile packages with different environment.modelVersion must hash differently',
   );
 });
 
-test('buildEvidencePackage: datHere preserves caller-supplied extensions alongside auto-emitted environment', () => {
+test('buildEvidencePackage: datHere content profile is part of the package hash (ADR-0004 tamper-evidence)', () => {
+  // contentProfile flips the canonical JSON shape (adds summary + the
+  // environment extension). Two packages identical except for
+  // contentProfile MUST hash differently so contentProfile can't be
+  // flipped in storage without invalidating the signature. This is the
+  // analog of the ADR-0003 captureMethod tamper-evidence assertion.
+  const a = buildEvidencePackage(baseInput({ captureMethod: 'chat-flow-stream' }));
+  const b = buildEvidencePackage(baseInput({ captureMethod: 'chat-flow-stream', contentProfile: 'datHere' }));
+  assert.notEqual(
+    normalizedHash(a.pkg),
+    normalizedHash(b.pkg),
+    'a contentProfile=datHere package must hash differently from one with contentProfile unset',
+  );
+});
+
+test('buildEvidencePackage: contentProfile is orthogonal to captureMethod', () => {
+  // ADR-0004 architectural property: contentProfile and captureMethod
+  // are orthogonal. A claude-code-jsonl-readback capture with
+  // contentProfile=datHere should produce the same hash-relevant shape
+  // (summary + environment extension) as a chat-flow-stream capture
+  // with contentProfile=datHere.
+  const a = buildEvidencePackage(
+    baseInput({ captureMethod: 'chat-flow-stream', contentProfile: 'datHere' }),
+  );
+  const b = buildEvidencePackage(
+    baseInput({ captureMethod: 'claude-code-jsonl-readback', contentProfile: 'datHere' }),
+  );
+  // Both should have summary + environment extension (the contentProfile-
+  // gated behaviors).
+  assert.equal(a.pkg.summary, 'Test summary.');
+  assert.equal(b.pkg.summary, 'Test summary.');
+  assert.ok(a.pkg.extensions?.['org.civicaitools.environment']);
+  assert.ok(b.pkg.extensions?.['org.civicaitools.environment']);
+});
+
+test('buildEvidencePackage: datHere content profile preserves caller-supplied extensions alongside auto-emitted environment', () => {
   // The chat-flow publish dialog supplies extensions['org.civicaitools.notebook'].
   // datHere auto-emits extensions['org.civicaitools.environment']. Both must
   // survive — the packager merges rather than overwrites.
   const notebookFixture = { nbformat: 4, nbformat_minor: 5, cells: [], metadata: {} };
   const { pkg } = buildEvidencePackage(
     baseInput({
-      captureMethod: 'datHere',
+      contentProfile: 'datHere',
       extensions: { 'org.civicaitools.notebook': notebookFixture },
     }),
   );

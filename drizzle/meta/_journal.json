@@ -64,6 +64,13 @@
       "when": 1779159068114,
       "tag": "0008_add_dathere_capture_method",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1779214284516,
+      "tag": "0009_add_content_profile",
+      "breakpoints": true
     }
   ]
 }

@@ -42,8 +42,10 @@ export const attestationTypeEnum = pgEnum('attestation_type', [
   'expert_attestation',
 ]);
 
-// captureMethod labels how the package contents were captured (ADR-0003,
-// ADR-0004).
+// captureMethod labels how the package contents were captured (ADR-0003).
+// Describes *how* the content was captured — the integrity-of-pipeline
+// property. Orthogonal to contentProfile (ADR-0004).
+//
 // `chat-flow-stream` — server captured bytes streaming to the browser.
 // `claude-code-jsonl-readback` — Claude Code skill read each turn from
 // the session JSONL, filtering to text-typed content blocks.
@@ -51,14 +53,32 @@ export const attestationTypeEnum = pgEnum('attestation_type', [
 // from in-context memory. Deprecated 2026-04-28; retained so pre-ADR
 // records can be labeled with their actual capture method rather than
 // silently re-described.
-// `datHere` — Civic AI Tools answer pipeline captured the analysis as the
-// A-G envelope content profile (OES §9.1) with a deterministic Jupyter
-// notebook in section E reproducing the rendered answer (F) against the
-// documented runtime + stable upstream data. ADR-0004.
+// `datHere` — UNUSED. Added by migration 0008 when datHere was framed
+// as a captureMethod variant; the 2026-05-19 reframe (ADR-0004 status
+// note) moved datHere to a separate `content_profile` column. The enum
+// value remains in the Postgres type because `ALTER TYPE DROP VALUE` is
+// non-trivial and the value carries no production data. Route validation
+// rejects this value at the API layer; new publishes never reach the DB
+// with captureMethod='datHere'.
 export const captureMethodEnum = pgEnum('capture_method', [
   'chat-flow-stream',
   'claude-code-jsonl-readback',
   'claude-code-self-report',
+  'datHere',
+]);
+
+// contentProfile labels the content shape of the package (ADR-0004).
+// Describes *what shape* the content is in — orthogonal to captureMethod.
+//
+// `default` — legacy / default content shape. Equivalent to the column
+// being NULL on legacy rows (the route layer never writes 'default'
+// explicitly; absence is treated as default by surfaces).
+// `datHere` — A-G envelope content profile per OES §9.1, with a
+// deterministic Jupyter notebook in section E reproducing the rendered
+// answer (F). When set, the packager promotes `summary` into canonical
+// JSON and auto-emits the `org.civicaitools.environment` extension.
+export const contentProfileEnum = pgEnum('content_profile', [
+  'default',
   'datHere',
 ]);
 
@@ -99,6 +119,7 @@ export const evidenceRecords = pgTable('evidence_records', {
   basePackageRekorEntryId: text('base_package_rekor_entry_id'),
   basePackageRekorInclusionProof: text('base_package_rekor_inclusion_proof'),
   captureMethod: captureMethodEnum('capture_method'),
+  contentProfile: contentProfileEnum('content_profile'),
   verificationStatus: verificationStatusEnum('verification_status')
     .notNull()
     .default('unverified'),
