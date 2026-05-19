@@ -163,9 +163,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-// Human-readable label for the ADR-0003 captureMethod field. Pre-ADR
-// records (column null) render as "Unknown (pre-ADR-0003)" rather than
-// inferring a method from indirect signals — see ADR-0003 §1 amendment.
+// Human-readable label for the ADR-0003/ADR-0004 captureMethod field.
+// Pre-ADR records (column null) render as "Unknown (pre-ADR-0003)" rather
+// than inferring a method from indirect signals — see ADR-0003 §1 amendment.
 function captureMethodLabel(method: string | null | undefined): string {
   switch (method) {
     case 'chat-flow-stream':
@@ -174,9 +174,25 @@ function captureMethodLabel(method: string | null | undefined): string {
       return 'Claude Code (verbatim JSONL)';
     case 'claude-code-self-report':
       return 'Claude Code (self-report, deprecated)';
+    case 'datHere':
+      return 'datHere (A-G envelope, reproducible notebook)';
     default:
       return 'Unknown (pre-ADR-0003)';
   }
+}
+
+// Type-narrowing accessor for the org.civicaitools.environment extension
+// (OES §9.1.1 requirement 3). Returns null when absent or malformed so
+// callers can default-fallback for non-datHere packages.
+function getEnvironmentExtension(pkg: EvidencePackage | null | undefined): {
+  modelVersion?: string;
+  temperature?: number;
+  mcpServers?: Array<{ url: string; name?: string }>;
+  host?: string;
+} | null {
+  const ext = pkg?.extensions?.['org.civicaitools.environment'];
+  if (!ext || typeof ext !== 'object') return null;
+  return ext as ReturnType<typeof getEnvironmentExtension> & object;
 }
 
 export default async function EvidencePage({ params }: PageProps) {
@@ -265,7 +281,7 @@ export default async function EvidencePage({ params }: PageProps) {
           </div>
         )}
 
-        {/* Summary */}
+        {/* Summary (section G when captureMethod === datHere) */}
         <Section title="Summary">
           <div style={{
             padding: '16px 20px', backgroundColor: 'rgba(16, 63, 239, 0.04)',
@@ -275,6 +291,52 @@ export default async function EvidencePage({ params }: PageProps) {
             {record.summary}
           </div>
         </Section>
+
+        {/* A-G Envelope structure — datHere captureMethod only.
+            ADR-0004 + OES §9.1 content profile. Light prototype display:
+            section labels with pointers to the content's existing location
+            on the page. Verification-grade A-G rendering arrives later
+            with the ProvenanceChain redesign (website#88-#92). */}
+        {record.captureMethod === 'datHere' && (
+          <Section title="A-G Envelope">
+            <div style={{
+              padding: '14px 18px', border: '1px solid var(--border-color)',
+              borderRadius: '6px', backgroundColor: 'white',
+              fontSize: '13px', lineHeight: 1.7, color: 'var(--text-secondary)',
+            }}>
+              <p style={{ margin: '0 0 10px', color: 'var(--text-primary)' }}>
+                This evidence package is organized as the <strong>A-G envelope</strong>{' '}
+                content profile — a Civic-AI-Tools-captured analysis whose deterministic
+                Jupyter notebook (section E) reproduces the rendered answer (section F){' '}
+                against the documented runtime + stable upstream data.{' '}
+                <a
+                  href="https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-evidence-standard.md#91-dathere-capturemethod-content-profile"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: 'var(--nyc-blue)' }}
+                >
+                  OES §9.1
+                </a>
+                {' · '}
+                <a
+                  href={`/api/evidence/${slug}/bundle`}
+                  style={{ color: 'var(--nyc-blue)' }}
+                >
+                  Download notebook (.ipynb)
+                </a>
+              </p>
+              <ul style={{ margin: '0', paddingLeft: '22px' }}>
+                <li><strong>A. Initial prompt</strong> — see Provenance Chain below</li>
+                <li><strong>B. System prompts</strong> — see Skill Guidance below</li>
+                <li><strong>C. Model + environment</strong> — see Resources Used below</li>
+                <li><strong>D. Deliberative trace</strong> — see Provenance Chain below</li>
+                <li><strong>E. Answer notebook</strong> — see Jupyter Notebook below</li>
+                <li><strong>F. Rendered answer</strong> — see Provenance Chain below</li>
+                <li><strong>G. Summary</strong> — above</li>
+              </ul>
+            </div>
+          </Section>
+        )}
 
         {/* Verification Status */}
         <Section title="Verification Status">
@@ -422,8 +484,28 @@ export default async function EvidencePage({ params }: PageProps) {
               const blobFields: string[] = [];
               if (resolution?.outputIsBlob) blobFields.push('output');
               if (resolution?.skillTextIsBlob) blobFields.push('skill text');
+              // Section-C environment metadata (datHere captureMethod only;
+              // org.civicaitools.environment extension per OES §9.1.1).
+              const env = getEnvironmentExtension(renderPkg);
+              const envMcpHosts = env?.mcpServers
+                ?.map((s) => {
+                  try { return new URL(s.url).host; } catch { return s.url; }
+                })
+                .join(', ');
               const items: Array<{ label: string; value: React.ReactNode; mono?: boolean }> = [
                 { label: 'Model', value: formatModelName(renderPkg.cost.model) },
+                ...(env?.modelVersion && env.modelVersion !== renderPkg.cost.model ? [{
+                  label: 'Model version',
+                  value: env.modelVersion,
+                }] : []),
+                ...(env?.host ? [{
+                  label: 'Publishing host',
+                  value: env.host,
+                }] : []),
+                ...(envMcpHosts ? [{
+                  label: 'MCP servers',
+                  value: envMcpHosts,
+                }] : []),
                 { label: 'Data sources', value: dataSourcesSummary ?? '—' },
                 ...(skillHash ? [{
                   label: 'Skill hash',
