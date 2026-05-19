@@ -8,7 +8,7 @@ import { deriveOperationType } from '../mcp/operation-types.ts';
 const PACKAGE_SCHEMA_VERSION = '0.1.0';
 
 /**
- * Capture method for the package contents (ADR-0003).
+ * Capture method for the package contents (ADR-0003, ADR-0004).
  *
  * - `chat-flow-stream` — website server captured bytes as the model
  *   streamed to the browser. Verbatim by construction at the wire layer.
@@ -19,11 +19,17 @@ const PACKAGE_SCHEMA_VERSION = '0.1.0';
  * - `claude-code-self-report` — legacy: the publishing model paraphrased
  *   from in-context memory. Deprecated 2026-04-28; retained so packages
  *   predating that date can be labeled with their actual capture method.
+ * - `datHere` — Civic AI Tools answer pipeline captured the analysis as
+ *   the A-G envelope content profile (OES §9.1), with a deterministic
+ *   Jupyter notebook in section E that reproduces the rendered answer
+ *   in section F against the documented runtime + stable upstream data.
+ *   Reproducible-by-construction against a documented runtime. ADR-0004.
  */
 export type CaptureMethod =
   | 'chat-flow-stream'
   | 'claude-code-jsonl-readback'
-  | 'claude-code-self-report';
+  | 'claude-code-self-report'
+  | 'datHere';
 
 export interface ToolCallInput {
   name: string;
