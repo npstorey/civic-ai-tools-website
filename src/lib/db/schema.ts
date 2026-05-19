@@ -42,7 +42,8 @@ export const attestationTypeEnum = pgEnum('attestation_type', [
   'expert_attestation',
 ]);
 
-// captureMethod labels how the package contents were captured (ADR-0003).
+// captureMethod labels how the package contents were captured (ADR-0003,
+// ADR-0004).
 // `chat-flow-stream` — server captured bytes streaming to the browser.
 // `claude-code-jsonl-readback` — Claude Code skill read each turn from
 // the session JSONL, filtering to text-typed content blocks.
@@ -50,10 +51,15 @@ export const attestationTypeEnum = pgEnum('attestation_type', [
 // from in-context memory. Deprecated 2026-04-28; retained so pre-ADR
 // records can be labeled with their actual capture method rather than
 // silently re-described.
+// `datHere` — Civic AI Tools answer pipeline captured the analysis as the
+// A-G envelope content profile (OES §9.1) with a deterministic Jupyter
+// notebook in section E reproducing the rendered answer (F) against the
+// documented runtime + stable upstream data. ADR-0004.
 export const captureMethodEnum = pgEnum('capture_method', [
   'chat-flow-stream',
   'claude-code-jsonl-readback',
   'claude-code-self-report',
+  'datHere',
 ]);
 
 // --- Tables ---
