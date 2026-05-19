@@ -8,7 +8,7 @@ import type { EvidencePackage } from '@/lib/evidence/packager';
 /**
  * GET /api/evidence/[slug]/bundle
  *
- * Returns the datHere-captured package as a notebook-embedded
+ * Returns a datHere-content-profile package as a notebook-embedded
  * serialization per OES §9.2.2 — a single .ipynb file whose root
  * metadata carries the commitment view under the `org.civicaitools.evidence`
  * namespace, with a cell-0 metadata table prepended per the §9.2.4
@@ -21,9 +21,12 @@ import type { EvidencePackage } from '@/lib/evidence/packager';
  * Limitations (prototype):
  * - Returns only the notebook-embedded serialization. Sibling-YAML
  *   serialization (OES §9.2.3) for non-notebook outputs is future work.
- * - Bundle endpoint refuses non-datHere captureMethods with 400. The
- *   spec does not require bundle export for other captureMethods, and
- *   the existing canonical package URL remains available for them.
+ * - Bundle endpoint refuses non-datHere content profiles with 400. The
+ *   spec does not require bundle export for other content profiles, and
+ *   the existing canonical package URL remains available for them. The
+ *   gate is `contentProfile`, not `captureMethod` (post-2026-05-19
+ *   reframe in ADR-0004); a chat-flow-stream capture with the datHere
+ *   content profile is fully supported.
  */
 
 const NOTEBOOK_EXTENSION_KEY = 'org.civicaitools.notebook';
@@ -65,7 +68,8 @@ function buildCommitmentView(
     evidenceProtocolVersion: '0.1.0',
     packageHash: record.basePackageHash,
     packageUrl: record.basePackageStorageKey,
-    captureMethod: 'datHere',
+    captureMethod: record.captureMethod ?? null,
+    contentProfile: 'datHere',
     ...(signature ? { signature } : {}),
     ...(signerIdentity ? { signerIdentity } : {}),
     ...(record.basePackageRfc3161Timestamp
@@ -105,6 +109,15 @@ function buildCellZero(
   const detailUrl = `https://civicaitools.org/evidence/${record.slug}`;
   const trustHost = TRUST_REGISTRY_URL.replace('https://', '');
 
+  const captureMethodFriendly =
+    record.captureMethod === 'chat-flow-stream'
+      ? 'Web chat (wire-layer verbatim)'
+      : record.captureMethod === 'claude-code-jsonl-readback'
+        ? 'Claude Code (JSONL verbatim)'
+        : record.captureMethod === 'claude-code-self-report'
+          ? 'Claude Code (self-report, deprecated)'
+          : 'Unknown';
+
   const lines: string[] = [
     '## Evidence package',
     '',
@@ -112,7 +125,8 @@ function buildCellZero(
     '| --- | --- |',
     `| **Signer** | ${signerLink} |`,
     `| **Package hash** | ${hashPrefix} |`,
-    '| **Capture method** | datHere (A-G envelope) |',
+    `| **Captured via** | ${captureMethodFriendly} |`,
+    '| **Content profile** | datHere (A-G envelope, reproducible notebook) |',
     `| **Published** | ${publishedDate} via [civicaitools.org](${detailUrl}) |`,
     `| **Trust registry** | [${trustHost}](${TRUST_REGISTRY_URL}) |`,
     '',
@@ -145,13 +159,16 @@ export async function GET(
   }
   const record = records[0];
 
-  // Bundle export is datHere-specific. Other capture methods don't produce
-  // the A-G envelope content the bundle serializes; their canonical package
-  // URL remains the authoritative artifact.
-  if (record.captureMethod !== 'datHere') {
+  // Bundle export is datHere-content-profile specific. Other content
+  // profiles don't produce the A-G envelope content the bundle
+  // serializes; their canonical package URL remains the authoritative
+  // artifact. The gate is `contentProfile` (ADR-0004), not
+  // `captureMethod` — a chat-flow-stream capture with the datHere
+  // content profile is fully supported.
+  if (record.contentProfile !== 'datHere') {
     return NextResponse.json(
       {
-        error: `Bundle export is only available for datHere-captured packages; this package was captured via "${record.captureMethod ?? 'unknown'}".`,
+        error: `Bundle export is only available for packages with contentProfile === "datHere"; this package's contentProfile is "${record.contentProfile ?? 'default'}".`,
       },
       { status: 400 },
     );

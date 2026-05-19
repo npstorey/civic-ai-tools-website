@@ -97,17 +97,20 @@ export default function PublishEvidenceDialog({
       // button, and include it as the first evidence package extension.
       const notebook = generateNotebook(queryText, portal, toolCalls, output);
 
-      // Capture-method selection (ADR-0003 + ADR-0004):
-      // - `datHere` when the user opted into full-text prompt visibility:
-      //   the chat-flow capture has all the inputs the A-G envelope requires
-      //   (full prompt text, system prompt, output, trace, notebook, summary)
-      //   so the package is published as a datHere-flavored envelope. The
-      //   packager auto-adds the `org.civicaitools.environment` extension and
-      //   promotes `summary` into canonical JSON.
-      // - `chat-flow-stream` when the user selected hash_only: datHere requires
-      //   full_text per OES §9.1.1, so we fall back to the wire-layer-verbatim
-      //   label. Package retains its existing shape (summary stays DB-only).
-      const captureMethod = promptVisibility === 'full_text' ? 'datHere' : 'chat-flow-stream';
+      // captureMethod (ADR-0003) is always `chat-flow-stream` for chat-flow
+      // publishes — bytes captured at the wire layer as the model streamed
+      // to the browser, regardless of which content shape gets published.
+      //
+      // contentProfile (ADR-0004) is `datHere` when the user opted into
+      // full-text prompt visibility: the chat-flow capture has all the
+      // inputs the A-G envelope requires (full prompt text, system prompt,
+      // output, trace, notebook, summary), so the package is published as
+      // a datHere-content-profile envelope. The packager auto-adds the
+      // `org.civicaitools.environment` extension and promotes `summary`
+      // into canonical JSON. For `hash_only` prompts the contentProfile
+      // falls back to default (OES §9.1.1 requires full_text); the package
+      // retains its existing shape (summary stays DB-only).
+      const contentProfile = promptVisibility === 'full_text' ? 'datHere' : 'default';
 
       const response = await fetch('/api/evidence', {
         method: 'POST',
@@ -124,7 +127,8 @@ export default function PublishEvidenceDialog({
           promptVisibility,
           title,
           summary,
-          captureMethod,
+          captureMethod: 'chat-flow-stream',
+          contentProfile,
           extensions: {
             'org.civicaitools.notebook': notebook,
           },

@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { putPackage } from '@/lib/storage';
-import { buildEvidencePackage, type PackageInput, type CaptureMethod } from '@/lib/evidence/packager';
+import { buildEvidencePackage, type PackageInput, type CaptureMethod, type ContentProfile } from '@/lib/evidence/packager';
 import { hash } from '@/lib/evidence/trace';
 import { signPackage, getRfc3161Timestamp, publishToRekor } from '@/lib/evidence/signing';
 import { type BlobRef } from '@/lib/evidence/blob-ref';
@@ -49,6 +49,12 @@ const VALID_CAPTURE_METHODS: readonly CaptureMethod[] = [
   'chat-flow-stream',
   'claude-code-jsonl-readback',
   'claude-code-self-report',
+] as const;
+
+// ADR-0004: contentProfile values. Orthogonal to captureMethod. Optional
+// at the route layer; absence is equivalent to `'default'`.
+const VALID_CONTENT_PROFILES: readonly ContentProfile[] = [
+  'default',
   'datHere',
 ] as const;
 
@@ -76,6 +82,12 @@ interface PublishRequest {
   /** Capture-method label per ADR-0003. Required for all publishes; the
    *  route rejects requests that omit or misvalue this field. */
   captureMethod: CaptureMethod;
+  /** Content-profile label per ADR-0004. Optional; absence is equivalent
+   *  to `'default'`. When set to `'datHere'`, the route enforces additional
+   *  constraints (full_text prompt visibility, non-empty summary) and the
+   *  packager promotes `summary` into canonical JSON + auto-emits the
+   *  `org.civicaitools.environment` extension. */
+  contentProfile?: ContentProfile;
   /** Optional override for the skill metadata that would otherwise be
    *  extracted from the trace. Required when `trace` is a BlobRef. */
   skillMetadataOverride?: {
@@ -108,21 +120,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            'captureMethod is required and must be one of: chat-flow-stream, claude-code-jsonl-readback, claude-code-self-report, datHere',
+            'captureMethod is required and must be one of: chat-flow-stream, claude-code-jsonl-readback, claude-code-self-report',
         },
         { status: 400 },
       );
     }
 
-    // ADR-0004 §9.1.1: datHere requires full_text prompt visibility (the
-    // A-G envelope needs section A readable) and a non-empty summary
-    // (section G). Other capture methods don't require either.
-    if (body.captureMethod === 'datHere') {
+    // Validate contentProfile (ADR-0004). Optional; absence is equivalent
+    // to `'default'`. When set, must be a recognized value.
+    if (body.contentProfile && !VALID_CONTENT_PROFILES.includes(body.contentProfile)) {
+      return NextResponse.json(
+        {
+          error:
+            'contentProfile, when provided, must be one of: default, datHere',
+        },
+        { status: 400 },
+      );
+    }
+
+    // ADR-0004 §9.1.1: contentProfile=datHere requires full_text prompt
+    // visibility (the A-G envelope needs section A readable) and a
+    // non-empty summary (section G). Other content profiles don't require
+    // either. captureMethod is orthogonal — chat-flow-stream, claude-code-
+    // jsonl-readback, and claude-code-self-report can each have either
+    // content profile.
+    if (body.contentProfile === 'datHere') {
       if (body.promptVisibility !== 'full_text') {
         return NextResponse.json(
           {
             error:
-              'captureMethod "datHere" requires promptVisibility "full_text" (OES §9.1.1 requirement 1).',
+              'contentProfile "datHere" requires promptVisibility "full_text" (OES §9.1.1 requirement 1).',
           },
           { status: 400 },
         );
@@ -131,7 +158,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error:
-              'captureMethod "datHere" requires a non-empty summary (OES §9.1.1 requirement 6).',
+              'contentProfile "datHere" requires a non-empty summary (OES §9.1.1 requirement 6).',
           },
           { status: 400 },
         );
@@ -152,6 +179,7 @@ export async function POST(request: NextRequest) {
       title: body.title,
       summary: body.summary,
       captureMethod: body.captureMethod,
+      contentProfile: body.contentProfile,
       skillMetadataOverride: body.skillMetadataOverride,
       extensions: body.extensions,
     };
@@ -205,6 +233,7 @@ export async function POST(request: NextRequest) {
       basePackageRekorEntryId: rekorResult?.entryId || null,
       basePackageRekorInclusionProof: rekorResult?.inclusionProof || null,
       captureMethod: body.captureMethod,
+      contentProfile: body.contentProfile ?? null,
     });
 
     const response = NextResponse.json({

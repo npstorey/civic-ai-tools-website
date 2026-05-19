@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { db } from '@/lib/db';
 import { evidenceRecords, users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -163,19 +165,26 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-// Human-readable label for the ADR-0003/ADR-0004 captureMethod field.
-// Pre-ADR records (column null) render as "Unknown (pre-ADR-0003)" rather
-// than inferring a method from indirect signals — see ADR-0003 §1 amendment.
+// Human-readable label for the ADR-0003 captureMethod field. Pre-ADR
+// records (column null) render as "Unknown (pre-ADR-0003)" rather than
+// inferring a method from indirect signals — see ADR-0003 §1 amendment.
+// Friendly labels per the 2026-05-19 reframe: chat-flow-stream surfaces
+// as "Web chat" — short, non-technical, matches the user-facing pipeline.
 function captureMethodLabel(method: string | null | undefined): string {
   switch (method) {
     case 'chat-flow-stream':
-      return 'Chat flow (verbatim stream)';
+      return 'Web chat';
     case 'claude-code-jsonl-readback':
       return 'Claude Code (verbatim JSONL)';
     case 'claude-code-self-report':
       return 'Claude Code (self-report, deprecated)';
     case 'datHere':
-      return 'datHere (A-G envelope, reproducible notebook)';
+      // Legacy: pre-reframe records may carry this value. The 2026-05-19
+      // reframe (ADR-0004) moved datHere from captureMethod to a separate
+      // contentProfile field. No new publishes write this value to
+      // captureMethod; if a record still has it, surface as "Unknown"
+      // with a brief annotation so readers know the cause.
+      return 'Unknown (pre-reframe datHere captureMethod, ADR-0004)';
     default:
       return 'Unknown (pre-ADR-0003)';
   }
@@ -208,6 +217,13 @@ export default async function EvidencePage({ params }: PageProps) {
   // modulo the shallow clone.
   const renderPkg = resolution?.pkg ?? pkg;
   const dateStr = record.createdAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  // ADR-0004: detail-page layout branches on contentProfile. When the value
+  // is 'datHere', the page renders the A-G envelope as its primary structure
+  // (sections A through G replace ProvenanceChain, Skill Guidance, Jupyter
+  // Notebook, and Resources Used). For default / absent contentProfile, the
+  // existing legacy layout renders unchanged.
+  const isDatHere = record.contentProfile === 'datHere';
 
   // Schema.org JSON-LD
   const jsonLd = {
@@ -281,77 +297,243 @@ export default async function EvidencePage({ params }: PageProps) {
           </div>
         )}
 
-        {/* Summary (section G when captureMethod === datHere) */}
-        <Section title="Summary">
-          <div style={{
-            padding: '16px 20px', backgroundColor: 'rgba(16, 63, 239, 0.04)',
-            borderLeft: '3px solid var(--nyc-blue)', borderRadius: '0 4px 4px 0',
-            fontSize: '15px', lineHeight: 1.6, color: 'var(--text-secondary)',
-          }}>
-            {record.summary}
-          </div>
-        </Section>
-
-        {/* A-G Envelope structure — datHere captureMethod only.
-            ADR-0004 + OES §9.1 content profile. Light prototype display:
-            section labels with pointers to the content's existing location
-            on the page. Verification-grade A-G rendering arrives later
-            with the ProvenanceChain redesign (website#88-#92). */}
-        {record.captureMethod === 'datHere' && (
-          <Section title="A-G Envelope">
+        {/* Summary — legacy layout only (datHere shows summary as section G) */}
+        {!isDatHere && (
+          <Section title="Summary">
             <div style={{
-              padding: '14px 18px', border: '1px solid var(--border-color)',
-              borderRadius: '6px', backgroundColor: 'white',
-              fontSize: '13px', lineHeight: 1.7, color: 'var(--text-secondary)',
+              padding: '16px 20px', backgroundColor: 'rgba(16, 63, 239, 0.04)',
+              borderLeft: '3px solid var(--nyc-blue)', borderRadius: '0 4px 4px 0',
+              fontSize: '15px', lineHeight: 1.6, color: 'var(--text-secondary)',
             }}>
-              <p style={{ margin: '0 0 10px', color: 'var(--text-primary)' }}>
-                This evidence package is organized as the <strong>A-G envelope</strong>{' '}
-                content profile — a Civic-AI-Tools-captured analysis whose deterministic
-                Jupyter notebook (section E) reproduces the rendered answer (section F){' '}
-                against the documented runtime + stable upstream data.{' '}
-                <a
-                  href="https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-evidence-standard.md#91-dathere-capturemethod-content-profile"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: 'var(--nyc-blue)' }}
-                >
-                  OES §9.1
-                </a>
-                {' · '}
-                <a
-                  href={`/api/evidence/${slug}/bundle`}
-                  style={{ color: 'var(--nyc-blue)' }}
-                >
-                  Download notebook (.ipynb)
-                </a>
-              </p>
-              <ul style={{ margin: '0', paddingLeft: '22px' }}>
-                <li><strong>A. Initial prompt</strong> — see Provenance Chain below</li>
-                <li><strong>B. System prompts</strong> — see Skill Guidance below</li>
-                <li><strong>C. Model + environment</strong> — see Resources Used below</li>
-                <li><strong>D. Deliberative trace</strong> — see Provenance Chain below</li>
-                <li><strong>E. Answer notebook</strong> — see Jupyter Notebook below</li>
-                <li><strong>F. Rendered answer</strong> — see Provenance Chain below</li>
-                <li><strong>G. Summary</strong> — above</li>
-              </ul>
+              {record.summary}
             </div>
           </Section>
         )}
 
-        {/* Verification Status */}
-        <Section title="Verification Status">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
-            <StatusBadge status={record.verificationStatus} />
-            {record.consistencyClassification && (
-              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                Consistency: {record.consistencyClassification.replace(/_/g, ' ')}
-              </span>
-            )}
-            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-              Captured via: {captureMethodLabel(record.captureMethod)}
-            </span>
+        {/* DatHere small label row — appears between header and content.
+            Per ADR-0004 + the 2026-05-19 reframe: captureMethod and
+            contentProfile are orthogonal axes; surface both inline near
+            the top, then render A-G as the page structure below. */}
+        {isDatHere && (
+          <div style={{
+            fontSize: '13px', color: 'var(--text-secondary)',
+            marginBottom: '24px', marginTop: '12px',
+            display: 'flex', flexWrap: 'wrap', gap: '0 8px', alignItems: 'center',
+          }}>
+            <span>Captured via <strong>{captureMethodLabel(record.captureMethod)}</strong></span>
+            <span>{'·'}</span>
+            <span>datHere content profile</span>
+            <span>{'·'}</span>
+            <a
+              href="https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-evidence-standard.md#91-dathere-content-profile"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--nyc-blue)' }}
+            >
+              OES §9.1
+            </a>
+            <span>{'·'}</span>
+            <a
+              href={`/api/evidence/${slug}/bundle`}
+              style={{ color: 'var(--nyc-blue)' }}
+            >
+              Download notebook (.ipynb)
+            </a>
           </div>
-        </Section>
+        )}
+
+        {/* A-G sections AS the page structure for datHere-content-profile
+            packages. ADR-0004 + OES §9.1. The legacy ProvenanceChain /
+            Skill Guidance / Jupyter Notebook / Resources Used sections
+            below are suppressed for datHere; their content is subsumed
+            here as sections A, B, E, and C respectively. */}
+        {isDatHere && renderPkg && (
+          <>
+            {/* A · Initial prompt */}
+            <Section title="A · Initial prompt">
+              {renderPkg.prompt.text ? (
+                <div style={{
+                  padding: '16px 20px', backgroundColor: 'rgba(16, 63, 239, 0.04)',
+                  borderLeft: '3px solid var(--nyc-blue)', borderRadius: '0 4px 4px 0',
+                  fontSize: '15px', lineHeight: 1.6, color: 'var(--text-primary)',
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {renderPkg.prompt.text}
+                </div>
+              ) : (
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                  Prompt visibility was hash-only; verbatim text not captured.
+                </div>
+              )}
+            </Section>
+
+            {/* B · System prompts */}
+            {(renderPkg.skillMetadata?.skillText || resolution?.skillTextIsBlob) ? (
+              <Section title="B · System prompts">
+                <SkillSection
+                  skillText={typeof renderPkg.skillMetadata?.skillText === 'string'
+                    ? renderPkg.skillMetadata.skillText
+                    : undefined}
+                  skillTextRef={resolution?.skillTextBlobRef ?? undefined}
+                  skillHash={renderPkg.skillMetadata?.systemPromptHash}
+                />
+              </Section>
+            ) : null}
+
+            {/* C · Model + environment */}
+            <Section title="C · Model + environment">
+              {(() => {
+                const env = getEnvironmentExtension(renderPkg);
+                const envMcpHosts = env?.mcpServers
+                  ?.map((s) => {
+                    try { return new URL(s.url).host; } catch { return s.url; }
+                  })
+                  .join(', ');
+                const cost = estimateCostUsd(
+                  renderPkg.cost.model,
+                  renderPkg.cost.promptTokens || 0,
+                  renderPkg.cost.completionTokens || 0,
+                );
+                const items: Array<{ label: string; value: React.ReactNode; mono?: boolean }> = [
+                  { label: 'Model', value: formatModelName(renderPkg.cost.model) },
+                  ...(env?.modelVersion && env.modelVersion !== renderPkg.cost.model ? [{
+                    label: 'Model version', value: env.modelVersion,
+                  }] : []),
+                  ...(env?.temperature !== undefined ? [{
+                    label: 'Temperature', value: String(env.temperature),
+                  }] : []),
+                  ...(env?.host ? [{
+                    label: 'Publishing host', value: env.host,
+                  }] : []),
+                  ...(envMcpHosts ? [{
+                    label: 'MCP servers', value: envMcpHosts,
+                  }] : []),
+                  { label: 'Prompt tokens', value: renderPkg.cost.promptTokens?.toLocaleString() || '—' },
+                  { label: 'Completion tokens', value: renderPkg.cost.completionTokens?.toLocaleString() || '—' },
+                  { label: 'Estimated cost', value: cost !== null ? `~$${cost.toFixed(cost < 0.01 ? 4 : 2)}` : '—' },
+                  { label: 'Duration', value: renderPkg.cost.durationMs ? `${(renderPkg.cost.durationMs / 1000).toFixed(1)}s` : '—' },
+                ];
+                return (
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                    gap: '12px',
+                  }}>
+                    {items.map((item) => (
+                      <div key={item.label} style={{
+                        padding: '10px 14px', border: '1px solid var(--border-color)',
+                        borderRadius: '4px',
+                      }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '2px' }}>
+                          {item.label}
+                        </div>
+                        <div style={{ fontSize: '14px', color: 'var(--text-primary)', fontWeight: 500 }}>
+                          {item.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </Section>
+
+            {/* D · Deliberative trace — collapsed by default */}
+            <Section title="D · Deliberative trace">
+              <details>
+                <summary style={{
+                  cursor: 'pointer', fontSize: '13px',
+                  color: 'var(--text-secondary)', padding: '8px 0',
+                }}>
+                  Show {renderPkg.queries.length} tool {renderPkg.queries.length === 1 ? 'call' : 'calls'}
+                </summary>
+                <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {renderPkg.queries.map((q, i) => (
+                    <div key={i} style={{
+                      padding: '10px 14px', border: '1px solid var(--border-color)',
+                      borderRadius: '4px', fontSize: '13px',
+                    }}>
+                      <div style={{ fontFamily: 'monospace', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                        {q.tool}{q.operationType ? ` (${q.operationType})` : ''}
+                      </div>
+                      <pre style={{
+                        fontSize: '11px', color: 'var(--text-secondary)', margin: 0,
+                        overflow: 'auto', whiteSpace: 'pre-wrap',
+                      }}>
+                        {JSON.stringify(q.arguments, null, 2)}
+                      </pre>
+                      {q.resultRows !== undefined && (
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                          Result: {q.resultRows} rows × {q.resultColumns ?? '—'} cols
+                          {q.duration_ms !== undefined && ` · ${q.duration_ms}ms`}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </Section>
+
+            {/* E · Answer notebook */}
+            {renderPkg.extensions?.[NOTEBOOK_EXTENSION_KEY] !== undefined ? (
+              <Section title="E · Answer notebook">
+                <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  Re-executing this notebook against the documented runtime + stable upstream data reproduces section F (OES §9.1.3).{' '}
+                  <a href={`/api/evidence/${slug}/bundle`} style={{ color: 'var(--nyc-blue)' }}>
+                    Download notebook (.ipynb)
+                  </a>
+                </div>
+                <NotebookSection notebook={renderPkg.extensions[NOTEBOOK_EXTENSION_KEY]} slug={slug} />
+              </Section>
+            ) : null}
+
+            {/* F · Rendered answer */}
+            <Section title="F · Rendered answer">
+              <div style={{
+                padding: '16px 20px', border: '1px solid var(--border-color)',
+                borderRadius: '6px', backgroundColor: 'white',
+                fontSize: '15px', lineHeight: 1.6, color: 'var(--text-primary)',
+              }}>
+                {typeof renderPkg.output === 'string' ? (
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{renderPkg.output}</ReactMarkdown>
+                ) : (
+                  <em style={{ color: 'var(--text-muted)' }}>
+                    Output stored as blob ({resolution?.outputBlobRef?.size.toLocaleString()} bytes);
+                    fetch the canonical package URL to retrieve.
+                  </em>
+                )}
+              </div>
+            </Section>
+
+            {/* G · Summary */}
+            <Section title="G · Summary">
+              <div style={{
+                padding: '12px 16px', backgroundColor: 'rgba(16, 63, 239, 0.04)',
+                borderLeft: '3px solid var(--nyc-blue)', borderRadius: '0 4px 4px 0',
+                fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)',
+              }}>
+                {renderPkg.summary ?? record.summary}
+              </div>
+            </Section>
+          </>
+        )}
+
+        {/* Verification Status — legacy layout shows near top; datHere
+            renders this section near the bottom (after Attestations) per
+            ADR-0004 detail-page restructure. */}
+        {!isDatHere && (
+          <Section title="Verification Status">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+              <StatusBadge status={record.verificationStatus} />
+              {record.consistencyClassification && (
+                <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                  Consistency: {record.consistencyClassification.replace(/_/g, ' ')}
+                </span>
+              )}
+              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                Captured via: {captureMethodLabel(record.captureMethod)}
+              </span>
+            </div>
+          </Section>
+        )}
 
         {/* Status History — shown when the record has a withdrawal/reinstatement cycle */}
         {record.withdrawnAt && (
@@ -388,8 +570,9 @@ export default async function EvidencePage({ params }: PageProps) {
           </Section>
         )}
 
-        {/* Provenance Chain */}
-        {renderPkg && (
+        {/* Provenance Chain — legacy layout only (datHere subsumes this
+            into sections A/B/C/D/F per the A-G content profile). */}
+        {!isDatHere && renderPkg && (
           <Section title="Provenance Chain">
             <div style={{
               padding: '16px 20px', border: '1px solid var(--border-color)',
@@ -415,8 +598,8 @@ export default async function EvidencePage({ params }: PageProps) {
           </Section>
         )}
 
-        {/* Skill guidance (system prompt sent to the model) */}
-        {(renderPkg?.skillMetadata?.skillText || resolution?.skillTextIsBlob) && (
+        {/* Skill guidance — legacy layout only (datHere subsumes into B). */}
+        {!isDatHere && (renderPkg?.skillMetadata?.skillText || resolution?.skillTextIsBlob) && (
           <Section title="Skill Guidance">
             <SkillSection
               skillText={typeof renderPkg?.skillMetadata?.skillText === 'string'
@@ -428,8 +611,8 @@ export default async function EvidencePage({ params }: PageProps) {
           </Section>
         )}
 
-        {/* Jupyter Notebook extension */}
-        {renderPkg?.extensions?.[NOTEBOOK_EXTENSION_KEY] !== undefined && (
+        {/* Jupyter Notebook — legacy layout only (datHere subsumes into E). */}
+        {!isDatHere && renderPkg?.extensions?.[NOTEBOOK_EXTENSION_KEY] !== undefined && (
           <Section title="Jupyter Notebook">
             <NotebookSection notebook={renderPkg.extensions[NOTEBOOK_EXTENSION_KEY]} slug={slug} />
           </Section>
@@ -470,8 +653,8 @@ export default async function EvidencePage({ params }: PageProps) {
           />
         </Section>
 
-        {/* Resources */}
-        {renderPkg && (
+        {/* Resources Used — legacy layout only (datHere subsumes into C). */}
+        {!isDatHere && renderPkg && (
           <Section title="Resources Used">
             {(() => {
               const cost = estimateCostUsd(
@@ -549,6 +732,25 @@ export default async function EvidencePage({ params }: PageProps) {
                 </div>
               );
             })()}
+          </Section>
+        )}
+
+        {/* Verification Status — datHere layout shows this near the bottom
+            (after Attestations and Resources). Legacy layout has it near
+            the top after Summary. */}
+        {isDatHere && (
+          <Section title="Verification Status">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+              <StatusBadge status={record.verificationStatus} />
+              {record.consistencyClassification && (
+                <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                  Consistency: {record.consistencyClassification.replace(/_/g, ' ')}
+                </span>
+              )}
+              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                Captured via: {captureMethodLabel(record.captureMethod)}
+              </span>
+            </div>
           </Section>
         )}
 
