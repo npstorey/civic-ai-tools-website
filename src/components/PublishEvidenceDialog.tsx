@@ -97,6 +97,18 @@ export default function PublishEvidenceDialog({
       // button, and include it as the first evidence package extension.
       const notebook = generateNotebook(queryText, portal, toolCalls, output);
 
+      // Capture-method selection (ADR-0003 + ADR-0004):
+      // - `datHere` when the user opted into full-text prompt visibility:
+      //   the chat-flow capture has all the inputs the A-G envelope requires
+      //   (full prompt text, system prompt, output, trace, notebook, summary)
+      //   so the package is published as a datHere-flavored envelope. The
+      //   packager auto-adds the `org.civicaitools.environment` extension and
+      //   promotes `summary` into canonical JSON.
+      // - `chat-flow-stream` when the user selected hash_only: datHere requires
+      //   full_text per OES §9.1.1, so we fall back to the wire-layer-verbatim
+      //   label. Package retains its existing shape (summary stays DB-only).
+      const captureMethod = promptVisibility === 'full_text' ? 'datHere' : 'chat-flow-stream';
+
       const response = await fetch('/api/evidence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -112,8 +124,7 @@ export default function PublishEvidenceDialog({
           promptVisibility,
           title,
           summary,
-          // ADR-0003: chat flow captures bytes streaming to the browser.
-          captureMethod: 'chat-flow-stream',
+          captureMethod,
           extensions: {
             'org.civicaitools.notebook': notebook,
           },

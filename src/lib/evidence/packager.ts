@@ -139,6 +139,12 @@ export interface EvidencePackage {
   output: string | BlobRef;
   /** OTel trace, either inline or referenced by hash. */
   trace: Record<string, unknown> | BlobRef;
+  /** Short, indexable, citation-ready summary (OES §4.1, ADR-0004).
+   *  Required when `metadata.captureMethod === 'datHere'`; optional and
+   *  typically absent for other capture methods (where summary lives on
+   *  the DB row only). When present in the canonical JSON, it is covered
+   *  by the package hash and the platform signature. */
+  summary?: string;
   provenance?: ProvGraph;
   /**
    * Optional implementation-specific artifacts, keyed by reverse-DNS identifier
@@ -151,6 +157,40 @@ export interface EvidencePackage {
 
 function sha256(content: string): string {
   return crypto.createHash('sha256').update(content).digest('hex');
+}
+
+/**
+ * Build the `org.civicaitools.environment` extension content for a
+ * `datHere`-captured package. Per OES §9.1.1 requirement 3 the extension
+ * MUST carry `modelVersion`, `temperature`, `mcpServers`, `toolDefinitions`,
+ * `host`.
+ *
+ * Prototype limitations (tracked as known gaps; tightened in follow-up work):
+ * - `temperature` is not yet captured by the chat flow. Placeholder `0`.
+ * - `toolDefinitions` is not yet captured. Placeholder `[]`.
+ * - `mcpServers` is derived from the trace's skill-fetch span URL (the
+ *   primary MCP server for the analysis). A richer derivation that walks
+ *   per-query portals can land later without breaking the field shape.
+ *
+ * Fields the prototype DOES capture honestly: `modelVersion` (from the
+ * model identifier surfaced through the chat flow) and `host` (the
+ * publishing host of civicaitools.org's reference implementation).
+ */
+function buildDatHereEnvironment(
+  input: PackageInput,
+  skillMcpServerUrl: string | undefined,
+): Record<string, unknown> {
+  const mcpServers: Array<{ url: string; name?: string }> = [];
+  if (skillMcpServerUrl) {
+    mcpServers.push({ url: skillMcpServerUrl });
+  }
+  return {
+    modelVersion: input.model,
+    temperature: 0,
+    mcpServers,
+    toolDefinitions: [],
+    host: 'civicaitools.org',
+  };
 }
 
 function extractSkillMetadata(trace: Record<string, unknown>): { systemPromptHash?: string; mcpServerUrl?: string; skillText?: string } {
@@ -267,10 +307,31 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
     skillMetadata: skillMeta,
     output: input.output,
     trace: input.trace,
-    provenance,
-    ...(input.extensions && Object.keys(input.extensions).length > 0
-      ? { extensions: input.extensions }
+    // ADR-0004 §7 backwards-compat: emit `summary` into canonical JSON only
+    // when captureMethod === 'datHere' (where the spec requires it). Other
+    // capture methods keep `summary` on the DB row only, so their canonical
+    // JSON — and therefore their package hash — remains byte-identical to
+    // pre-ADR-0004 behavior.
+    ...(input.captureMethod === 'datHere' && input.summary
+      ? { summary: input.summary }
       : {}),
+    provenance,
+    // ADR-0004 §2 + OES §9.1.1 requirement 3: datHere-captured packages
+    // auto-receive an `org.civicaitools.environment` extension carrying
+    // section-C metadata, layered on top of any caller-supplied
+    // extensions (e.g. the existing `org.civicaitools.notebook` written
+    // by the chat-flow publish dialog). Non-datHere captures emit only
+    // the caller-supplied extensions, preserving their canonical JSON.
+    ...(() => {
+      const extensions: Record<string, unknown> = { ...(input.extensions ?? {}) };
+      if (input.captureMethod === 'datHere') {
+        extensions['org.civicaitools.environment'] = buildDatHereEnvironment(
+          input,
+          skillMeta.mcpServerUrl,
+        );
+      }
+      return Object.keys(extensions).length > 0 ? { extensions } : {};
+    })(),
   };
 
   // Compute package hash from canonical JSON (covers provenance + extensions)

@@ -114,6 +114,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ADR-0004 §9.1.1: datHere requires full_text prompt visibility (the
+    // A-G envelope needs section A readable) and a non-empty summary
+    // (section G). Other capture methods don't require either.
+    if (body.captureMethod === 'datHere') {
+      if (body.promptVisibility !== 'full_text') {
+        return NextResponse.json(
+          {
+            error:
+              'captureMethod "datHere" requires promptVisibility "full_text" (OES §9.1.1 requirement 1).',
+          },
+          { status: 400 },
+        );
+      }
+      if (!body.summary || body.summary.trim().length === 0) {
+        return NextResponse.json(
+          {
+            error:
+              'captureMethod "datHere" requires a non-empty summary (OES §9.1.1 requirement 6).',
+          },
+          { status: 400 },
+        );
+      }
+    }
+
     // Build evidence package
     const packageInput: PackageInput = {
       trace: body.trace,
