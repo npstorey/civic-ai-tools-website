@@ -4,7 +4,7 @@ The evidence publish endpoint is the single write path for the civicaitools.org 
 
 This document describes the request and response contract so external clients can publish without reverse-engineering the implementation in `src/app/api/evidence/route.ts`.
 
-**Status:** Schema version `0.1.0`. Fields may be added in a backwards-compatible way; breaking changes will bump the `schemaVersion` inside the package and be noted in the change log at the bottom of this document.
+**Status:** Schema version `0.1.0`. Fields may be added in a backwards-compatible way; breaking changes will bump the `schemaVersion` inside the package and be noted in the change log at the bottom of this document. The 2026-05-18 amendment for the `datHere` captureMethod variant (ADR-0004) is additive — pre-ADR-0004 packages hash byte-identical with the new code.
 
 ---
 
@@ -88,7 +88,7 @@ Send exactly one auth header — when both are present, the `Authorization` head
 | `promptVisibility`      | string             | yes      | `"full_text"` to include the prompt text in the package and database record, or `"hash_only"` to include only the SHA-256 hash.                         |
 | `title`                 | string             | yes      | Display title for the evidence record. Used to derive the URL slug.                                                                                     |
 | `summary`               | string             | yes      | A 2–4 sentence description for non-technical readers.                                                                                                   |
-| `captureMethod`         | string             | yes      | Capture-method label per [ADR-0003](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0003-evidence-capture-method.md). One of `"chat-flow-stream"`, `"claude-code-jsonl-readback"`, `"claude-code-self-report"`. Included in the signed envelope and persisted to the database. Missing or invalid values return `400`. |
+| `captureMethod`         | string             | yes      | Capture-method label per [ADR-0003](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0003-evidence-capture-method.md) and [ADR-0004](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0004-dathere-captureMethod-variant.md). One of `"chat-flow-stream"`, `"claude-code-jsonl-readback"`, `"claude-code-self-report"`, `"datHere"`. Included in the signed envelope and persisted to the database. Missing or invalid values return `400`. `datHere` imposes additional requirements (see notes below). |
 | `duration_ms`           | number             | no       | End-to-end analysis duration in milliseconds.                                                                                                           |
 | `skillMetadataOverride` | object             | no       | Override for the skill metadata normally extracted from the trace. Required when `trace` is a BlobRef. See [Blob references](#blob-references-phase-b6). |
 | `extensions`            | object             | no       | Implementation-specific artifacts keyed by reverse-DNS identifiers (e.g., `"org.civicaitools.notebook"`). Extensions are included in the canonical JSON and therefore covered by the package hash. |
@@ -107,8 +107,54 @@ Send exactly one auth header — when both are present, the `Authorization` head
 
 - **`trace`** — The trace is embedded verbatim in the package and used to extract PROV-O provenance at publish time. External clients that don't run OpenTelemetry internally can ship an empty trace (`{ "resourceSpans": [] }`); per-tool provenance will use the static tool-name → source map. Including a trace with `mcp_tool_call` spans and `mcp.source` attributes produces richer attribution.
 - **`portal`** — Primarily meaningful for Socrata analyses. For Data Commons-only or mixed analyses, this field is still required by the current schema but a placeholder such as `"n/a"` works without breaking provenance. See [known chat-flow assumptions](#known-chat-flow-assumptions).
-- **`extensions`** — The `"org.civicaitools.notebook"` extension (a Jupyter-style cell list) is emitted by the website's chat flow as a content-format marker, not a publish-surface marker. External clients are not required to include any extensions.
-- **`captureMethod`** — Required since 2026-04-29. Three vocabulary values per ADR-0003: `chat-flow-stream` (website server captured bytes streaming to the browser; verbatim by construction at the wire layer), `claude-code-jsonl-readback` (Claude Code skill read each turn from the session JSONL, filtering to text-typed content blocks; verbatim by construction at the JSONL layer), `claude-code-self-report` (legacy: the publishing model paraphrased from in-context memory; deprecated 2026-04-28, retained so pre-ADR records can be labeled with their actual capture method rather than silently re-described). The label is included in `metadata.captureMethod` of the canonical package JSON, so it is covered by the package hash and the platform Ed25519ph signature — the capture method itself is tamper-evident. Pre-ADR packages without the field render as "Unknown (pre-ADR-0003)" on the detail page.
+- **`extensions`** — The `"org.civicaitools.notebook"` extension (a Jupyter-style cell list) is emitted by the website's chat flow as a content-format marker. Under `captureMethod: "datHere"` the notebook extension is normatively required (OES §9.1.1 requirement 4); for other capture methods it stays informative. Clients may pass other reverse-DNS-keyed extensions for their own artifacts.
+- **`captureMethod`** — Required since 2026-04-29. Four vocabulary values:
+    - `chat-flow-stream` (ADR-0003) — website server captured bytes streaming to the browser; verbatim by construction at the wire layer.
+    - `claude-code-jsonl-readback` (ADR-0003) — Claude Code skill read each turn from the session JSONL, filtering to text-typed content blocks; verbatim by construction at the JSONL layer.
+    - `claude-code-self-report` (ADR-0003) — legacy: the publishing model paraphrased from in-context memory; deprecated 2026-04-28, retained so pre-ADR records can be labeled with their actual capture method rather than silently re-described.
+    - `datHere` (ADR-0004) — Civic AI Tools answer pipeline captured the analysis as the A-G envelope content profile (OES §9.1) with a deterministic Jupyter notebook in section E reproducing the rendered answer (F) against the documented runtime + stable upstream data. Reproducible-by-construction against a documented runtime.
+
+  The label is included in `metadata.captureMethod` of the canonical package JSON, so it is covered by the package hash and the platform Ed25519ph signature — the capture method itself is tamper-evident. Pre-ADR packages without the field render as "Unknown (pre-ADR-0003)" on the detail page.
+- **`datHere` requirements (OES §9.1.1)** — When `captureMethod === "datHere"`, the route additionally enforces:
+    1. `promptVisibility` MUST be `"full_text"` (the A-G envelope needs section A readable). 400 with explicit error on `"hash_only"`.
+    2. `summary` MUST be non-empty (section G). 400 on missing or blank.
+    3. The packager auto-emits `extensions["org.civicaitools.environment"]` with section-C metadata: `modelVersion` (from `model`), `temperature` (prototype placeholder `0` pending capture work), `mcpServers` (derived from `skillMetadata.mcpServerUrl`), `toolDefinitions` (prototype placeholder `[]`), `host` (`"civicaitools.org"`).
+    4. `summary` is also promoted to a top-level field in canonical JSON (so it is covered by the package hash); for non-datHere captures, `summary` continues to live on the database row only and the package JSON shape stays byte-identical to pre-ADR-0004.
+  Callers supplying their own `extensions["org.civicaitools.notebook"]` (e.g., the chat-flow publish dialog) see it preserved alongside the auto-emitted environment extension.
+
+---
+
+## Bundle export — `GET /api/evidence/:slug/bundle`
+
+A `datHere`-captured package can be exported in the notebook-embedded
+serialization (OES §9.2.2) via `GET /api/evidence/:slug/bundle`. The
+endpoint returns the package's stored notebook with two enrichments
+applied:
+
+1. **Commitment view embedded** at the notebook's root `metadata` object
+   under the reverse-DNS namespace `org.civicaitools.evidence` (OES §9.2.1
+   field set: `evidenceProtocolVersion`, `packageHash`, `packageUrl`,
+   `captureMethod`, `signature`, `signerIdentity`, optional RFC 3161 token
+   + Rekor entry + inclusion proof, `trustRegistryUrl`, `subjectTitle`,
+   `subjectSummary`).
+2. **Cell-0 metadata table** prepended (OES §9.2.4 SHOULD-level reader
+   affordance) — a markdown cell showing signer, package hash (truncated),
+   capture method, publication date, trust registry. Verification does
+   NOT depend on this rendering; the authoritative metadata is the
+   namespace.
+
+Response:
+
+- **Content-Type:** `application/x-ipynb+json; charset=utf-8`
+- **Content-Disposition:** `attachment; filename="<slug>.ipynb"`
+- **Body:** the enriched notebook serialized as pretty-printed JSON.
+
+Non-`datHere` capture methods return `400` with an error message. The
+canonical package URL (Vercel Blob, content-addressable) remains
+authoritative for verification regardless of bundle availability.
+
+Sibling-YAML serialization (OES §9.2.3) for non-notebook outputs is not
+yet implemented.
 
 ---
 
@@ -467,6 +513,7 @@ These are implementation details that may surprise an external client. None of t
 
 ## Change log
 
+- **2026-05-18** — Added `datHere` value to the `captureMethod` vocabulary per [ADR-0004](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0004-dathere-captureMethod-variant.md) — the Civic AI Tools answer pipeline's A-G envelope content profile. Three additive changes to the publish path: (a) `summary` is promoted from a DB-only field to an optional canonical-JSON field, required when `captureMethod === "datHere"` and emitted only for that captureMethod (pre-ADR-0004 packages hash byte-identical); (b) the packager auto-emits `extensions["org.civicaitools.environment"]` for datHere captures with model/MCP/host metadata; (c) the route enforces `promptVisibility === "full_text"` and non-empty `summary` for datHere requests (400 on either violation). New endpoint `GET /api/evidence/:slug/bundle` returns the package's notebook with the OES §9.2.2 commitment view embedded at the notebook's root metadata under `org.civicaitools.evidence` plus a cell-0 reader-affordance metadata table; non-datHere captures return `400` on the bundle endpoint. DB migration `drizzle/0008_add_dathere_capture_method.sql` adds `datHere` to the `capture_method` enum. Schema version unchanged (`0.1.0`) — enum extension is a vocabulary change and the new fields are backwards-compatible.
 - **2026-04-29** — Added required `captureMethod` field on `POST /api/evidence` per [ADR-0003](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0003-evidence-capture-method.md). Values: `chat-flow-stream` | `claude-code-jsonl-readback` | `claude-code-self-report`. The field is part of `metadata.captureMethod` in the canonical package JSON (covered by the package hash and platform signature) and is persisted to the new `evidence_records.capture_method` column. Requests that omit or misvalue the field return `400`. The detail page surfaces a "Captured via:" label next to the verification status; pre-ADR records render as "Unknown (pre-ADR-0003)". Backwards-compatible at the verify path — legacy packages without the field continue to recompute their hash and verify identically.
 - **2026-04-21** — Added OAuth 2.0 device-flow bearer-token authentication (closes [#73](https://github.com/npstorey/civic-ai-tools-website/issues/73)). New endpoints: `POST /api/auth/device/code` (start), `POST /api/auth/device/token` (poll), `POST /api/auth/device/approve` (user-facing), `GET /api/auth/device/lookup` (user-facing prefill), `GET /api/auth/tokens` (list), `DELETE /api/auth/tokens/:id` (revoke). Clients send `Authorization: Bearer <token>` on `POST /api/evidence` and `POST /api/blob/upload-token`; scope `evidence:publish` is required. Tokens live 90 days by default, are stored server-side as SHA-256 hashes, and can be revoked from the Dashboard **Tokens** tab. Session-cookie auth remains working indefinitely but now emits `X-Auth-Deprecated: cookie` on each cookie-authed response. Backwards-compatible — existing cookie-based clients continue working without changes.
 - **2026-04-18** — Added the [Blob references (Phase B.6)](#blob-references-phase-b6) section. The `output`, `trace`, and `skillMetadataOverride.skillText` request fields now accept either inline content or a BlobRef `{ ref, url, contentType, size }` object; the verify endpoint returns per-reference `blobRefs[]` entries alongside the existing verdicts. A new `POST /api/blob/upload-token` endpoint mints presigned tokens for direct client uploads to `evidence-refs/<sha256>[.ext]`, gated by the same NextAuth session as `/api/evidence`. Orphan blobs are swept by a daily cron (`/api/cron/blob-gc`). Backwards-compatible — existing inline-content packages remain valid and the verify response adds fields rather than renaming any.
