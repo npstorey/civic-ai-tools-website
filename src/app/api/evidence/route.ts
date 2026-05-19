@@ -49,6 +49,7 @@ const VALID_CAPTURE_METHODS: readonly CaptureMethod[] = [
   'chat-flow-stream',
   'claude-code-jsonl-readback',
   'claude-code-self-report',
+  'datHere',
 ] as const;
 
 interface PublishRequest {
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            'captureMethod is required and must be one of: chat-flow-stream, claude-code-jsonl-readback, claude-code-self-report',
+            'captureMethod is required and must be one of: chat-flow-stream, claude-code-jsonl-readback, claude-code-self-report, datHere',
         },
         { status: 400 },
       );
