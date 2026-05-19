@@ -203,3 +203,119 @@ test('buildEvidencePackage: with captureMethod, metadata.captureMethod matches i
   );
   assert.equal(pkg.metadata.captureMethod, 'claude-code-jsonl-readback');
 });
+
+// --- ADR-0004: datHere captureMethod variant ---
+//
+// The datHere captureMethod (OES §9.1, ADR-0004) promotes `summary` to
+// canonical-JSON and auto-emits the `org.civicaitools.environment`
+// extension. Both are required for datHere conformance per §9.1.1. For
+// non-datHere captures the canonical JSON shape stays byte-identical to
+// pre-ADR-0004 — neither field appears, so pre-ADR packages hash the same.
+
+test('buildEvidencePackage: datHere captureMethod produces canonical JSON with summary', () => {
+  const { pkg } = buildEvidencePackage(
+    baseInput({ captureMethod: 'datHere' }),
+  );
+  assert.equal(pkg.summary, 'Test summary.');
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(pkg, 'summary'),
+    true,
+  );
+});
+
+test('buildEvidencePackage: datHere captureMethod auto-emits org.civicaitools.environment extension', () => {
+  const { pkg } = buildEvidencePackage(
+    baseInput({ captureMethod: 'datHere' }),
+  );
+  const env = pkg.extensions?.['org.civicaitools.environment'];
+  assert.ok(env, 'environment extension should be present');
+  const envObj = env as Record<string, unknown>;
+  assert.equal(envObj.modelVersion, 'openai/gpt-4o');
+  assert.equal(envObj.host, 'civicaitools.org');
+  assert.ok(Array.isArray(envObj.mcpServers));
+  assert.ok(Array.isArray(envObj.toolDefinitions));
+  assert.equal(typeof envObj.temperature, 'number');
+});
+
+test('buildEvidencePackage: non-datHere captureMethod does NOT emit summary in canonical JSON (backwards-compat)', () => {
+  // Same input as datHere test above, but with chat-flow-stream. The
+  // PackageInput.summary IS provided (route always sends it), but the
+  // packager must NOT write it into canonical JSON for non-datHere
+  // captures or pre-ADR-0004 package hashes would change.
+  const { pkg } = buildEvidencePackage(
+    baseInput({ captureMethod: 'chat-flow-stream' }),
+  );
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(pkg, 'summary'),
+    false,
+    'summary must not appear in canonical JSON for chat-flow-stream captures',
+  );
+  assert.equal(JSON.stringify(pkg).includes('"summary"'), false);
+});
+
+test('buildEvidencePackage: non-datHere captureMethod does NOT emit org.civicaitools.environment extension (backwards-compat)', () => {
+  const { pkg } = buildEvidencePackage(
+    baseInput({ captureMethod: 'chat-flow-stream' }),
+  );
+  const env = pkg.extensions?.['org.civicaitools.environment'];
+  assert.equal(env, undefined, 'environment extension must not be auto-emitted for chat-flow-stream');
+});
+
+test('buildEvidencePackage: summary value is part of the package hash for datHere captures', () => {
+  // Two datHere packages identical except for `summary` MUST hash
+  // differently — otherwise the summary could be flipped in storage
+  // without invalidating the signature. Same load-bearing tamper-evidence
+  // property the captureMethod test asserts.
+  const a = buildEvidencePackage(
+    baseInput({ captureMethod: 'datHere', summary: 'Summary A' }),
+  );
+  const b = buildEvidencePackage(
+    baseInput({ captureMethod: 'datHere', summary: 'Summary B' }),
+  );
+  assert.notEqual(
+    normalizedHash(a.pkg),
+    normalizedHash(b.pkg),
+    'two datHere packages identical except for summary must hash differently',
+  );
+});
+
+test('buildEvidencePackage: environment extension is part of the package hash for datHere captures', () => {
+  // Two datHere packages with different models produce different
+  // environment.modelVersion values, which are inside the extension,
+  // which is inside canonical JSON, which is inside the hash. Tamper-
+  // evidence for the section-C environment metadata.
+  const a = buildEvidencePackage(
+    baseInput({ captureMethod: 'datHere', model: 'openai/gpt-4o' }),
+  );
+  const b = buildEvidencePackage(
+    baseInput({ captureMethod: 'datHere', model: 'anthropic/claude-3-5-sonnet' }),
+  );
+  assert.notEqual(
+    normalizedHash(a.pkg),
+    normalizedHash(b.pkg),
+    'two datHere packages with different environment.modelVersion must hash differently',
+  );
+});
+
+test('buildEvidencePackage: datHere preserves caller-supplied extensions alongside auto-emitted environment', () => {
+  // The chat-flow publish dialog supplies extensions['org.civicaitools.notebook'].
+  // datHere auto-emits extensions['org.civicaitools.environment']. Both must
+  // survive — the packager merges rather than overwrites.
+  const notebookFixture = { nbformat: 4, nbformat_minor: 5, cells: [], metadata: {} };
+  const { pkg } = buildEvidencePackage(
+    baseInput({
+      captureMethod: 'datHere',
+      extensions: { 'org.civicaitools.notebook': notebookFixture },
+    }),
+  );
+  assert.ok(pkg.extensions, 'extensions object should be present');
+  assert.deepEqual(
+    pkg.extensions?.['org.civicaitools.notebook'],
+    notebookFixture,
+    'caller-supplied notebook extension must be preserved verbatim',
+  );
+  assert.ok(
+    pkg.extensions?.['org.civicaitools.environment'],
+    'environment extension must be auto-emitted alongside the caller-supplied notebook extension',
+  );
+});
