@@ -36,6 +36,20 @@ const ENV_SNAPSHOT_ID = 'SANDBOX_SNAPSHOT_ID';
 const ENV_SOCRATA_TOKEN = 'SOCRATA_APP_TOKEN';
 const ENV_DC_API_KEY = 'DC_API_KEY';
 
+/**
+ * The python3.13 sandbox image (Amazon Linux 2023 base) expects its CA
+ * bundle at `/etc/ssl/certs/ca-certificates.crt` but ships it only at
+ * `/etc/pki/tls/certs/ca-bundle.crt`. Setting the standard openssl-family
+ * env vars so pip + `requests` inside the executed notebook resolve PyPI
+ * and HTTPS civic-data endpoints. Mirrors scripts/build-sandbox-snapshot.ts.
+ */
+const AL2023_CA_BUNDLE = '/etc/pki/tls/certs/ca-bundle.crt';
+const TLS_ENV: Record<string, string> = {
+  SSL_CERT_FILE: AL2023_CA_BUNDLE,
+  REQUESTS_CA_BUNDLE: AL2023_CA_BUNDLE,
+  PIP_CERT: AL2023_CA_BUNDLE,
+};
+
 export interface ExecuteNotebookOptions {
   /** Snapshot to boot from. Defaults to env `SANDBOX_SNAPSHOT_ID`. */
   snapshotId?: string;
@@ -75,7 +89,7 @@ export class NotebookExecutionError extends Error {
 }
 
 function buildSandboxEnv(extra?: Record<string, string>): Record<string, string> {
-  const env: Record<string, string> = {};
+  const env: Record<string, string> = { ...TLS_ENV };
   const socrataToken = process.env[ENV_SOCRATA_TOKEN];
   if (socrataToken) env[ENV_SOCRATA_TOKEN] = socrataToken;
   const dcKey = process.env[ENV_DC_API_KEY];
@@ -121,7 +135,7 @@ async function ensureScientificStack(sandbox: Sandbox): Promise<void> {
     `matplotlib==${PINNED_LIBRARIES.matplotlib}`,
     'jupyter', 'ipykernel', 'nbformat', 'nbconvert',
   ];
-  const result = await sandbox.runCommand('pip', pipArgs);
+  const result = await sandbox.runCommand({ cmd: 'pip', args: pipArgs, env: TLS_ENV });
   if (result.exitCode !== 0) {
     const stderr = await result.stderr();
     throw new NotebookExecutionError(
