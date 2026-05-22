@@ -13,12 +13,15 @@
  * source-of-truth).
  */
 
-/** Pinned scientific-stack versions; MUST match `scripts/build-sandbox-snapshot.ts`. */
+/** Pinned scientific-stack versions; MUST match `scripts/build-sandbox-snapshot.ts`.
+ *  All four pins target releases with prebuilt CPython 3.13 wheels so pip
+ *  install on the Vercel Sandbox python3.13 runtime never needs a C
+ *  compiler (which the runtime image does not ship). */
 export const PINNED_LIBRARIES = {
-  pandas: '2.2.0',
-  requests: '2.31.0',
-  numpy: '1.26.4',
-  matplotlib: '3.8.4',
+  pandas: '2.2.3',
+  requests: '2.32.3',
+  numpy: '2.1.3',
+  matplotlib: '3.9.2',
 } as const;
 
 /** Default Python runtime version baked into the Vercel Sandbox snapshot. */

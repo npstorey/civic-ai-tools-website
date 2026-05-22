@@ -27,11 +27,13 @@
 import { Sandbox } from '@vercel/sandbox';
 
 // Keep this list mirrored with src/lib/notebook-author/prompt.ts:PINNED_LIBRARIES.
+// Versions chosen so every pin has a prebuilt CPython 3.13 wheel — no
+// compiler needed in the python3.13 sandbox image.
 const PINNED_LIBRARIES: Record<string, string> = {
-  pandas: '2.2.0',
-  requests: '2.31.0',
-  numpy: '1.26.4',
-  matplotlib: '3.8.4',
+  pandas: '2.2.3',
+  requests: '2.32.3',
+  numpy: '2.1.3',
+  matplotlib: '3.9.2',
 };
 
 const SNAPSHOT_BUILD_TIMEOUT_MS = 600_000; // 10 minutes — pip install + freeze
@@ -51,9 +53,23 @@ async function main(): Promise<void> {
       ...Object.entries(PINNED_LIBRARIES).map(([n, v]) => `${n}==${v}`),
       'jupyter', 'ipykernel', 'nbformat', 'nbconvert',
     ];
+    // The python3.13 sandbox image expects the CA bundle at the Debian
+    // path `/etc/ssl/certs/ca-certificates.crt`, but Amazon Linux 2023
+    // ships it at `/etc/pki/tls/certs/ca-bundle.crt`. Point pip's TLS
+    // stack at the correct path so the install can reach PyPI.
+    const AL2023_CA_BUNDLE = '/etc/pki/tls/certs/ca-bundle.crt';
+    const tlsEnv: Record<string, string> = {
+      SSL_CERT_FILE: AL2023_CA_BUNDLE,
+      REQUESTS_CA_BUNDLE: AL2023_CA_BUNDLE,
+      PIP_CERT: AL2023_CA_BUNDLE,
+    };
     console.log('[sandbox-snapshot] installing pinned scientific stack + jupyter…');
     console.log('               pip ' + pipArgs.join(' '));
-    const installResult = await sandbox.runCommand('pip', pipArgs);
+    const installResult = await sandbox.runCommand({
+      cmd: 'pip',
+      args: pipArgs,
+      env: tlsEnv,
+    });
     if (installResult.exitCode !== 0) {
       const stderr = await installResult.stderr();
       throw new Error(`pip install failed (exit ${installResult.exitCode}):\n${stderr}`);

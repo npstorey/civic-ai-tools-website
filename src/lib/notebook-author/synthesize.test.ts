@@ -62,7 +62,7 @@ test('synthesizeNotebook: produces an executed-flavor notebook with the expected
   assert.equal(cells[1].cell_type, 'code');
   const cell1Source = cells[1].source.join('');
   assert.match(cell1Source, /pip install/);
-  assert.match(cell1Source, /pandas==2\.2\.0/);
+  assert.match(cell1Source, /pandas==2\.2\.3/);
 
   // Cell 2: imports
   assert.equal(cells[2].cell_type, 'code');
