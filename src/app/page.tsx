@@ -2,19 +2,23 @@
 
 import { useState, useRef } from 'react';
 import Link from 'next/link';
-import QueryForm from '@/components/QueryForm';
+import QueryForm, { type QueryMode } from '@/components/QueryForm';
 import ComparisonDisplay from '@/components/ComparisonDisplay';
+import NotebookOutput from '@/components/notebook/NotebookOutput';
 import { useStreamingComparison } from '@/hooks/useStreamingComparison';
+import { useNotebookStream } from '@/hooks/useNotebookStream';
 
 export default function Home() {
   const [queryCount, setQueryCount] = useState(0);
   const [usedModel, setUsedModel] = useState<string>('');
   const [lastQuery, setLastQuery] = useState<string>('');
   const [lastPortal, setLastPortal] = useState<string>('');
+  const [lastMode, setLastMode] = useState<QueryMode>('standard');
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const streaming = useStreamingComparison();
+  const notebook = useNotebookStream();
 
   // Extract display name from model ID (e.g., "anthropic/claude-sonnet-4" -> "Claude Sonnet 4")
   const getModelDisplayName = (modelId: string) => {
@@ -25,18 +29,25 @@ export default function Home() {
       .join(' ');
   };
 
-  const handleSubmit = async (query: string, model: string, portal: string) => {
+  const handleSubmit = async (query: string, model: string, portal: string, mode: QueryMode) => {
     const effectivePortal = portal || 'data.cityofnewyork.us';
     setUsedModel(model);
     setLastQuery(query);
     setLastPortal(effectivePortal);
+    setLastMode(mode);
 
     // Scroll to results after a brief delay to let the loading state render
     setTimeout(() => {
       resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
 
-    streaming.startComparison(query, model, effectivePortal);
+    if (mode === 'notebook') {
+      streaming.abort();
+      notebook.start(query, model, effectivePortal);
+    } else {
+      notebook.reset();
+      streaming.startComparison(query, model, effectivePortal);
+    }
     setQueryCount((c) => c + 1);
   };
 
@@ -46,6 +57,10 @@ export default function Home() {
     }, 100);
     streaming.startComparison(continuationPrompt, usedModel, lastPortal);
     setQueryCount((c) => c + 1);
+  };
+
+  const handleNotebookRetry = () => {
+    if (lastQuery) notebook.start(lastQuery, usedModel, lastPortal);
   };
 
   return (
@@ -77,7 +92,7 @@ export default function Home() {
       </div>
 
       {/* Results: wide container matching header max-w-6xl */}
-      {streaming.error && (
+      {lastMode === 'standard' && streaming.error && (
         <div className="max-w-6xl mx-auto px-6">
           <div
             style={{
@@ -94,7 +109,7 @@ export default function Home() {
         </div>
       )}
 
-      {(streaming.isLoading || streaming.withoutMcp.content || streaming.withMcp.content ||
+      {lastMode === 'standard' && (streaming.isLoading || streaming.withoutMcp.content || streaming.withMcp.content ||
         streaming.withoutMcp.isComplete || streaming.withMcp.isComplete || streaming.error) && (
         <div ref={resultsRef} className="max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
           <h2 style={{ marginBottom: '16px' }}>Results</h2>
@@ -134,6 +149,13 @@ export default function Home() {
               locally with Claude Code or Cursor.
             </p>
           )}
+        </div>
+      )}
+
+      {lastMode === 'notebook' && (notebook.state.isLoading || notebook.state.notebook || notebook.state.error) && (
+        <div ref={resultsRef} className="max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
+          <h2 style={{ marginBottom: '16px' }}>Reproducible notebook</h2>
+          <NotebookOutput state={notebook.state} onRetry={handleNotebookRetry} />
         </div>
       )}
 
