@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import RateLimitBanner from './RateLimitBanner';
 
@@ -12,8 +12,48 @@ interface Model {
   description?: string;
 }
 
+export type QueryMode = 'standard' | 'notebook';
+
+const MODE_STORAGE_KEY = 'civicaitools.notebookMode';
+
+/**
+ * Sticky-per-session mode persistence. Subscribes to the `storage` event so
+ * multiple tabs reflecting each other in the same session stay in sync, and
+ * survives Strict Mode double-invocation. SSR returns 'standard'.
+ */
+function subscribeToStorage(notify: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener('storage', notify);
+  return () => window.removeEventListener('storage', notify);
+}
+
+function readStoredMode(): QueryMode {
+  if (typeof window === 'undefined') return 'standard';
+  const raw = window.sessionStorage.getItem(MODE_STORAGE_KEY);
+  return raw === 'notebook' || raw === 'standard' ? raw : 'standard';
+}
+
+function useStoredMode(): [QueryMode, (next: QueryMode) => void] {
+  const stored = useSyncExternalStore(
+    subscribeToStorage,
+    readStoredMode,
+    () => 'standard' as QueryMode,
+  );
+  // Local override lets the component update synchronously on click without
+  // round-tripping through a `storage` event (which never fires in the same
+  // tab).
+  const [override, setOverride] = useState<QueryMode | null>(null);
+  const set = useCallback((next: QueryMode) => {
+    setOverride(next);
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(MODE_STORAGE_KEY, next);
+    }
+  }, []);
+  return [override ?? stored, set];
+}
+
 interface QueryFormProps {
-  onSubmit: (query: string, model: string, portal: string) => void;
+  onSubmit: (query: string, model: string, portal: string, mode: QueryMode) => void;
   isLoading: boolean;
   queryCount?: number;
 }
@@ -37,6 +77,10 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
   const [query, setQuery] = useState('');
   const [model, setModel] = useState('openai/gpt-4o');
   const [portal, setPortal] = useState('');
+  // Sticky-per-session toggle persistence per Q7 (executed-notebook plan §10).
+  // Defaults to Standard on new visits; sessionStorage rather than localStorage
+  // so the choice doesn't survive a fresh browser session.
+  const [mode, updateMode] = useStoredMode();
   const [models, setModels] = useState<Model[]>([]);
   const [modelOpen, setModelOpen] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
@@ -87,7 +131,7 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim() && !isLoading) {
-      onSubmit(query.trim(), model, portal);
+      onSubmit(query.trim(), model, portal, mode);
     }
   };
 
@@ -98,8 +142,80 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
 
   const selectedModel = models.find((m) => m.id === model);
 
+  const segmentStyle = (active: boolean): React.CSSProperties => ({
+    flex: 1,
+    padding: '8px 14px',
+    border: 'none',
+    background: active ? 'var(--nyc-white, #fff)' : 'transparent',
+    color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+    fontSize: '13px',
+    fontWeight: active ? 600 : 500,
+    cursor: isLoading ? 'not-allowed' : 'pointer',
+    borderRadius: '999px',
+    boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+    transition: 'background-color 0.15s ease, color 0.15s ease',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+  });
+
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {/* Mode toggle (Standard / Reproducible notebook) — sticky-per-session;
+          see executed-notebook plan §4.1 + §10 Q7 for the persistence model. */}
+      <div
+        role="radiogroup"
+        aria-label="Response mode"
+        style={{
+          display: 'flex',
+          padding: '3px',
+          gap: '4px',
+          background: 'var(--card-background, #f3f3f3)',
+          borderRadius: '999px',
+          border: '1px solid var(--border-color, #e5e5e5)',
+          maxWidth: '420px',
+          margin: '0 auto',
+          width: '100%',
+        }}
+      >
+        <button
+          type="button"
+          role="radio"
+          aria-checked={mode === 'standard'}
+          disabled={isLoading}
+          onClick={() => updateMode('standard')}
+          style={segmentStyle(mode === 'standard')}
+        >
+          Standard
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={mode === 'notebook'}
+          disabled={isLoading}
+          onClick={() => updateMode('notebook')}
+          style={segmentStyle(mode === 'notebook')}
+          title="Generate and execute a Jupyter notebook against live data (~1-2 min)."
+        >
+          Reproducible notebook
+        </button>
+      </div>
+      {mode === 'notebook' && (
+        <p
+          style={{
+            margin: '-4px auto 0',
+            fontSize: '12px',
+            color: 'var(--text-muted)',
+            textAlign: 'center',
+            maxWidth: '520px',
+          }}
+        >
+          Generates and executes a Jupyter notebook against live data.
+          Typically 30 to 90 seconds.
+        </p>
+      )}
+
       {/* Chat-style textarea with inline send button */}
       <div className="nyc-field" style={{ position: 'relative' }}>
         <textarea
@@ -112,7 +228,7 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               if (query.trim() && !isLoading) {
-                onSubmit(query.trim(), model, portal);
+                onSubmit(query.trim(), model, portal, mode);
               }
             }
           }}
