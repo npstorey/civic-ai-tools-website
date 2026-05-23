@@ -19,6 +19,11 @@
 import { buildSampleExecutedNotebook } from '@/components/notebook/__dev__/sampleExecutedNotebook';
 import NotebookPreviewClient from './NotebookPreviewClient';
 
+// Opt out of static prerendering — the client component reads `?state=` via
+// `useSearchParams`, which requires a dynamic page or a Suspense boundary.
+// Dev-only route, so the perf hit of dynamic rendering is irrelevant.
+export const dynamic = 'force-dynamic';
+
 export default function NotebookPreviewPage() {
   const { notebook, validation } = buildSampleExecutedNotebook();
   return <NotebookPreviewClient notebook={notebook} validation={validation} />;
