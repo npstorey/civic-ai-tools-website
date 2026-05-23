@@ -1,27 +1,34 @@
 'use client';
 
 /**
- * Phase 2a wrapper — picks the right surface based on stream state:
+ * Phase 2a1 wrapper — picks the right surface based on stream state:
  *   - error (shown alongside any partial state),
  *   - in-progress → multi-stage NotebookProgress,
- *   - completed → NotebookRenderer with the executed notebook.
+ *   - completed → ChatNotebookOutput (A-G section layout matching the
+ *     evidence detail page for datHere-profile packages).
  *
- * Consumers pass the state object from `useNotebookStream`. The reason this
- * wrapper exists (vs. inlining the branching on the home page) is to keep
- * the dev preview route a simple consumer too — it stubs the hook output
- * with a fixture and reuses the same picker.
+ * Consumers pass the state object from `useNotebookStream` plus the prompt /
+ * model / portal context the renderer needs for sections A and C. The page
+ * threads these from the QueryForm submit handler; the dev preview page
+ * threads fixtures.
  */
-import type { NotebookStreamState } from '@/hooks/useNotebookStream';
+import ChatNotebookOutput from './ChatNotebookOutput';
 import NotebookProgress from './NotebookProgress';
-import NotebookRenderer from './NotebookRenderer';
+import type { NotebookStreamState } from '@/hooks/useNotebookStream';
 
 interface NotebookOutputProps {
   state: NotebookStreamState;
+  /** The prompt that was submitted; surfaced in section A. */
+  prompt: string;
+  /** Model ID; surfaced in section C. */
+  model: string;
+  /** Portal (e.g., `data.cityofnewyork.us`); surfaced in section C. */
+  portal: string;
   /** Optional refresh — if the request errored, the page can offer a retry. */
   onRetry?: () => void;
 }
 
-export default function NotebookOutput({ state, onRetry }: NotebookOutputProps) {
+export default function NotebookOutput({ state, prompt, model, portal, onRetry }: NotebookOutputProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {state.error && (
@@ -70,7 +77,13 @@ export default function NotebookOutput({ state, onRetry }: NotebookOutputProps) 
       )}
 
       {state.notebook && (
-        <NotebookRenderer notebook={state.notebook} validation={state.validation ?? undefined} />
+        <ChatNotebookOutput
+          notebook={state.notebook}
+          prompt={prompt}
+          model={model}
+          portal={portal}
+          toolCalls={state.toolCalls}
+        />
       )}
     </div>
   );

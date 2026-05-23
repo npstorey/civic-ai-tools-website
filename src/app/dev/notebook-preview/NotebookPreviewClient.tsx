@@ -23,6 +23,27 @@ const PHASE_DETAILS: Record<string, string | null> = {
   D: 'Stamping execution metadata + appending comparison cell…',
 };
 
+const FIXTURE_TOOL_CALLS = [
+  {
+    name: 'get_data',
+    operationType: 'catalog',
+    reason: 'search for "311 Brooklyn complaints"',
+    resultSummary: { rows: 12, columns: 5 },
+  },
+  {
+    name: 'get_data',
+    operationType: 'metadata',
+    reason: 'inspect erm2-nwe9 schema',
+    resultSummary: { rows: 41, columns: 3 },
+  },
+  {
+    name: 'get_data',
+    operationType: 'query',
+    reason: 'aggregate by complaint_type for the past 30 days',
+    resultSummary: { rows: 5, columns: 2 },
+  },
+];
+
 function buildState(
   stateParam: string | null,
   notebook: Notebook,
@@ -38,6 +59,7 @@ function buildState(
       return {
         phase: stateParam,
         detail: PHASE_DETAILS[stateParam] ?? null,
+        toolCalls: FIXTURE_TOOL_CALLS.slice(0, stateParam === 'A' ? 2 : 3),
         phaseStartedAt: Date.now() - 18_000,
         startedAt: baseStarted,
         completedAt: null,
@@ -52,6 +74,7 @@ function buildState(
       return {
         phase: 'C',
         detail: null,
+        toolCalls: FIXTURE_TOOL_CALLS,
         phaseStartedAt: Date.now() - 32_000,
         startedAt: baseStarted,
         completedAt: Date.now(),
@@ -66,6 +89,7 @@ function buildState(
       return {
         phase: 'complete',
         detail: null,
+        toolCalls: FIXTURE_TOOL_CALLS,
         phaseStartedAt: null,
         startedAt: baseStarted,
         completedAt: Date.now(),
@@ -104,7 +128,12 @@ export default function NotebookPreviewClient({ notebook, validation }: Notebook
         Add <code>?state=A|B|C|D|error</code> to preview other states. No
         live <code>/api/query-notebook</code> traffic; fixture only.
       </div>
-      <NotebookOutput state={state} />
+      <NotebookOutput
+        state={state}
+        prompt="Show me top 5 311 complaint types in Brooklyn over the past 30 days"
+        model="anthropic/claude-sonnet-4-6"
+        portal="data.cityofnewyork.us"
+      />
     </div>
   );
 }

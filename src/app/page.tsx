@@ -154,8 +154,14 @@ export default function Home() {
 
       {lastMode === 'notebook' && (notebook.state.isLoading || notebook.state.notebook || notebook.state.error) && (
         <div ref={resultsRef} className="max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
-          <h2 style={{ marginBottom: '16px' }}>Reproducible notebook</h2>
-          <NotebookOutput state={notebook.state} onRetry={handleNotebookRetry} />
+          <h2 style={{ marginBottom: '16px' }}>Executed-sandbox response</h2>
+          <NotebookOutput
+            state={notebook.state}
+            prompt={lastQuery}
+            model={usedModel}
+            portal={lastPortal}
+            onRetry={handleNotebookRetry}
+          />
         </div>
       )}
 

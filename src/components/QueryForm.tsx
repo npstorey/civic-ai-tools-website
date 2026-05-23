@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
 import Link from 'next/link';
+import { signIn, useSession } from 'next-auth/react';
 import RateLimitBanner from './RateLimitBanner';
 
 interface Model {
@@ -33,7 +34,7 @@ function readStoredMode(): QueryMode {
   return raw === 'notebook' || raw === 'standard' ? raw : 'standard';
 }
 
-function useStoredMode(): [QueryMode, (next: QueryMode) => void] {
+function useStoredMode(enabled: boolean): [QueryMode, (next: QueryMode) => void] {
   const stored = useSyncExternalStore(
     subscribeToStorage,
     readStoredMode,
@@ -49,7 +50,11 @@ function useStoredMode(): [QueryMode, (next: QueryMode) => void] {
       window.sessionStorage.setItem(MODE_STORAGE_KEY, next);
     }
   }, []);
-  return [override ?? stored, set];
+  // When the toggle is disabled (anonymous user, loading auth state, etc.)
+  // force-return 'standard'. Stored preference is preserved so signing back
+  // in restores the previous choice.
+  const effective = enabled ? (override ?? stored) : 'standard';
+  return [effective, set];
 }
 
 interface QueryFormProps {
@@ -77,10 +82,13 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
   const [query, setQuery] = useState('');
   const [model, setModel] = useState('openai/gpt-4o');
   const [portal, setPortal] = useState('');
-  // Sticky-per-session toggle persistence per Q7 (executed-notebook plan §10).
-  // Defaults to Standard on new visits; sessionStorage rather than localStorage
-  // so the choice doesn't survive a fresh browser session.
-  const [mode, updateMode] = useStoredMode();
+  // Phase 2a1 gate: executed-sandbox mode is signed-in-only. Anonymous users
+  // cannot invoke /api/query-notebook through the UI. `useStoredMode` keeps
+  // the sticky-per-session persistence from §10 Q7 but force-returns
+  // 'standard' when the user is not authenticated.
+  const { status: authStatus } = useSession();
+  const isAuthenticated = authStatus === 'authenticated';
+  const [mode, updateMode] = useStoredMode(isAuthenticated);
   const [models, setModels] = useState<Model[]>([]);
   const [modelOpen, setModelOpen] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
@@ -162,60 +170,6 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {/* Mode toggle (Standard / Reproducible notebook) — sticky-per-session;
-          see executed-notebook plan §4.1 + §10 Q7 for the persistence model. */}
-      <div
-        role="radiogroup"
-        aria-label="Response mode"
-        style={{
-          display: 'flex',
-          padding: '3px',
-          gap: '4px',
-          background: 'var(--card-background, #f3f3f3)',
-          borderRadius: '999px',
-          border: '1px solid var(--border-color, #e5e5e5)',
-          maxWidth: '420px',
-          margin: '0 auto',
-          width: '100%',
-        }}
-      >
-        <button
-          type="button"
-          role="radio"
-          aria-checked={mode === 'standard'}
-          disabled={isLoading}
-          onClick={() => updateMode('standard')}
-          style={segmentStyle(mode === 'standard')}
-        >
-          Standard
-        </button>
-        <button
-          type="button"
-          role="radio"
-          aria-checked={mode === 'notebook'}
-          disabled={isLoading}
-          onClick={() => updateMode('notebook')}
-          style={segmentStyle(mode === 'notebook')}
-          title="Generate and execute a Jupyter notebook against live data (~1-2 min)."
-        >
-          Reproducible notebook
-        </button>
-      </div>
-      {mode === 'notebook' && (
-        <p
-          style={{
-            margin: '-4px auto 0',
-            fontSize: '12px',
-            color: 'var(--text-muted)',
-            textAlign: 'center',
-            maxWidth: '520px',
-          }}
-        >
-          Generates and executes a Jupyter notebook against live data.
-          Typically 30 to 90 seconds.
-        </p>
-      )}
-
       {/* Chat-style textarea with inline send button */}
       <div className="nyc-field" style={{ position: 'relative' }}>
         <textarea
@@ -339,6 +293,102 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
       {/* Advanced options expanded section */}
       {advancedOpen && (
         <div>
+          {/* Response mode — signed-in-only per Phase 2a1. Anonymous users
+              see a sign-in prompt instead of the toggle; the executed-sandbox
+              path requires authentication to invoke /api/query-notebook. */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 400, display: 'block', marginBottom: '6px' }}>
+              Response mode
+            </label>
+            {isAuthenticated ? (
+              <>
+                <div
+                  role="radiogroup"
+                  aria-label="Response mode"
+                  style={{
+                    display: 'flex',
+                    padding: '3px',
+                    gap: '4px',
+                    background: 'var(--card-background, #f3f3f3)',
+                    borderRadius: '999px',
+                    border: '1px solid var(--border-color, #e5e5e5)',
+                    width: '100%',
+                  }}
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={mode === 'standard'}
+                    disabled={isLoading}
+                    onClick={() => updateMode('standard')}
+                    style={segmentStyle(mode === 'standard')}
+                  >
+                    Standard
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={mode === 'notebook'}
+                    disabled={isLoading}
+                    onClick={() => updateMode('notebook')}
+                    style={segmentStyle(mode === 'notebook')}
+                    title="Generate and execute a Jupyter notebook against live data (~30-90s)."
+                  >
+                    Execute in a signed sandbox
+                  </button>
+                </div>
+                {mode === 'notebook' && (
+                  <p
+                    style={{
+                      margin: '6px 0 0',
+                      fontSize: '12px',
+                      color: 'var(--text-muted)',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Generates and executes a Jupyter notebook against live
+                    data. Typically 30 to 90 seconds. The notebook and a
+                    cryptographic execution record are signed by the platform.
+                  </p>
+                )}
+              </>
+            ) : (
+              <div
+                style={{
+                  padding: '12px 14px',
+                  border: '1px dashed var(--border-color, #e5e5e5)',
+                  borderRadius: '6px',
+                  background: 'var(--card-background, #f8f8f8)',
+                  fontSize: '13px',
+                  color: 'var(--text-secondary)',
+                  lineHeight: 1.5,
+                }}
+              >
+                <div style={{ marginBottom: '6px', fontWeight: 500, color: 'var(--text-primary)' }}>
+                  Sign in to execute in a signed sandbox
+                </div>
+                <p style={{ margin: '0 0 10px' }}>
+                  Executed-sandbox mode generates and runs a Jupyter notebook
+                  against live data, then signs the execution record. Sign in
+                  with GitHub to enable.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => signIn('github')}
+                  disabled={authStatus === 'loading'}
+                  className="nyc-button nyc-button-primary"
+                  style={{
+                    fontSize: '13px',
+                    padding: '6px 14px',
+                    cursor: authStatus === 'loading' ? 'wait' : 'pointer',
+                  }}
+                >
+                  {authStatus === 'loading' ? 'Loading…' : 'Sign in with GitHub'}
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="form-controls-row">
               {/* Model dropdown */}
               <div className="nyc-field" ref={modelDropdownRef} style={{ position: 'relative' }}>

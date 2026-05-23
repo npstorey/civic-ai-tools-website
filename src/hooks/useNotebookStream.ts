@@ -18,10 +18,22 @@ import { connectSSE, SSEError } from '@/lib/sse-client';
 import type { Notebook } from '@/lib/notebook-author';
 import type { NotebookPhase } from '@/components/notebook/NotebookProgress';
 
+/** A single tool call captured during Phase A — used to populate the
+ *  deliberative-trace section of the chat-output A-G renderer. Shape mirrors
+ *  the Phase 1 route's `phase_a_tool_call` event. */
+export interface CapturedToolCall {
+  name: string;
+  operationType?: string;
+  reason?: string;
+  resultSummary?: { rows: number; columns: number };
+}
+
 export interface NotebookStreamState {
   phase: NotebookPhase | null;
   /** Detail line shown beneath the active row (Phase A tool call / progress). */
   detail: string | null;
+  /** Accumulated tool calls captured during Phase A. Drives section D. */
+  toolCalls: CapturedToolCall[];
   phaseStartedAt: number | null;
   startedAt: number | null;
   completedAt: number | null;
@@ -36,6 +48,7 @@ export interface NotebookStreamState {
 const INITIAL_STATE: NotebookStreamState = {
   phase: null,
   detail: null,
+  toolCalls: [],
   phaseStartedAt: null,
   startedAt: null,
   completedAt: null,
@@ -102,8 +115,22 @@ export function useNotebookStream() {
           const name = raw.name as string | undefined;
           const op = raw.operationType as string | undefined;
           const reason = raw.reason as string | undefined;
+          const resultSummary = raw.resultSummary as CapturedToolCall['resultSummary'] | undefined;
+          if (!name) break;
           const label = [op || name, reason ? `(${reason})` : null].filter(Boolean).join(' ');
-          if (label) setState((prev) => ({ ...prev, detail: label }));
+          setState((prev) => ({
+            ...prev,
+            detail: label || prev.detail,
+            toolCalls: [
+              ...prev.toolCalls,
+              {
+                name,
+                operationType: op,
+                reason,
+                resultSummary,
+              },
+            ],
+          }));
           break;
         }
         case 'phase_a_answer': {
