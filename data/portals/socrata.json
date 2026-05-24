@@ -221,7 +221,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://atlanta.data.socrata.com/api",
-    "dataset_count": 5,
+    "dataset_count": 7,
     "status": "active"
   },
   {
@@ -521,6 +521,21 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://brookhavenga.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "buckscountywsa-erp.data.socrata.com",
+    "name": "",
+    "url": "https://buckscountywsa-erp.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://buckscountywsa-erp.data.socrata.com/api",
     "dataset_count": 0,
     "status": "active"
   },
@@ -836,7 +851,7 @@
     "owner_name": "City of Mesa",
     "owner_type": "Local government",
     "api_endpoint": "https://citydata.mesaaz.gov/api",
-    "dataset_count": 297,
+    "dataset_count": 302,
     "status": "active"
   },
   {
@@ -971,6 +986,21 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://cityofdiboll.data.socrata.com/api",
+    "dataset_count": 0,
+    "status": "active"
+  },
+  {
+    "id": "cityofdodgecityks-ei.data.socrata.com",
+    "name": "",
+    "url": "https://cityofdodgecityks-ei.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://cityofdodgecityks-ei.data.socrata.com/api",
     "dataset_count": 0,
     "status": "active"
   },
@@ -1946,7 +1976,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://data.bayareametro.gov/api",
-    "dataset_count": 1969,
+    "dataset_count": 1978,
     "status": "active"
   },
   {
@@ -2051,7 +2081,7 @@
     "owner_name": "City of Cambridge, Ma",
     "owner_type": "Local government",
     "api_endpoint": "https://data.cambridgema.gov/api",
-    "dataset_count": 286,
+    "dataset_count": 279,
     "status": "active"
   },
   {
@@ -2216,7 +2246,7 @@
     "owner_name": "State of Colorado",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.colorado.gov/api",
-    "dataset_count": 642,
+    "dataset_count": 650,
     "status": "active"
   },
   {
@@ -2336,7 +2366,7 @@
     "owner_name": "State of Delaware",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.delaware.gov/api",
-    "dataset_count": 172,
+    "dataset_count": 171,
     "status": "active"
   },
   {
@@ -2591,7 +2621,7 @@
     "owner_name": "City of Kansas, MO",
     "owner_type": "Local government",
     "api_endpoint": "https://data.kcmo.org/api",
-    "dataset_count": 203,
+    "dataset_count": 202,
     "status": "active"
   },
   {
@@ -2756,7 +2786,7 @@
     "owner_name": "State Of Michigan",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.michigan.gov/api",
-    "dataset_count": 259,
+    "dataset_count": 255,
     "status": "active"
   },
   {
@@ -2786,7 +2816,7 @@
     "owner_name": "State Of Missouri",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.mo.gov/api",
-    "dataset_count": 254,
+    "dataset_count": 255,
     "status": "active"
   },
   {
@@ -2981,7 +3011,7 @@
     "owner_name": "State of New York",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.ny.gov/api",
-    "dataset_count": 1000,
+    "dataset_count": 1010,
     "status": "active"
   },
   {
@@ -3071,7 +3101,7 @@
     "owner_name": "State of Oregon",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.oregon.gov/api",
-    "dataset_count": 500,
+    "dataset_count": 501,
     "status": "active"
   },
   {
@@ -3146,7 +3176,7 @@
     "owner_name": "Prince George County",
     "owner_type": "Local government",
     "api_endpoint": "https://data.princegeorgescountymd.gov/api",
-    "dataset_count": 61,
+    "dataset_count": 65,
     "status": "active"
   },
   {
@@ -3416,7 +3446,7 @@
     "owner_name": "State of Texas",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.texas.gov/api",
-    "dataset_count": 797,
+    "dataset_count": 799,
     "status": "active"
   },
   {
@@ -3521,7 +3551,7 @@
     "owner_name": "State of Vermont",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.vermont.gov/api",
-    "dataset_count": 170,
+    "dataset_count": 171,
     "status": "active"
   },
   {
@@ -3671,7 +3701,7 @@
     "owner_name": "City of Austin",
     "owner_type": "Local government",
     "api_endpoint": "https://datahub.austintexas.gov/api",
-    "dataset_count": 709,
+    "dataset_count": 713,
     "status": "active"
   },
   {
@@ -3746,7 +3776,7 @@
     "owner_name": "U.S. Department of Veterans Affairs",
     "owner_type": "Central government",
     "api_endpoint": "https://www.datahub.va.gov/api",
-    "dataset_count": 489,
+    "dataset_count": 495,
     "status": "active"
   },
   {
@@ -3806,7 +3836,7 @@
     "owner_name": "Regione Lombaria",
     "owner_type": "Regional government",
     "api_endpoint": "https://dati.lombardia.it/api",
-    "dataset_count": 2897,
+    "dataset_count": 2900,
     "status": "active"
   },
   {
@@ -3821,7 +3851,7 @@
     "owner_name": "Ministerio de Tecnologías de la Información y las Comunicaciones",
     "owner_type": "Central government",
     "api_endpoint": "https://www.datos.gov.co/api",
-    "dataset_count": 8400,
+    "dataset_count": 8403,
     "status": "active"
   },
   {
@@ -4361,7 +4391,7 @@
     "owner_name": "State of Michigan",
     "owner_type": "Regional government",
     "api_endpoint": "https://future.michigan.gov/api",
-    "dataset_count": 259,
+    "dataset_count": 255,
     "status": "active"
   },
   {
@@ -4931,7 +4961,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://illinois-edp.data.socrata.com/api",
-    "dataset_count": 294,
+    "dataset_count": 295,
     "status": "active"
   },
   {
@@ -5051,7 +5081,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://internal-sandiegocounty.data.socrata.com/api",
-    "dataset_count": 318,
+    "dataset_count": 316,
     "status": "active"
   },
   {
@@ -7721,7 +7751,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://stcharlescitymo.data.socrata.com/api",
-    "dataset_count": 0,
+    "dataset_count": 1,
     "status": "active"
   },
   {
@@ -8127,6 +8157,21 @@
     "owner_type": "Business",
     "api_endpoint": "https://vdh-richmondcity.demo.socrata.com/api",
     "dataset_count": 5,
+    "status": "active"
+  },
+  {
+    "id": "vtmbl-reporting-uat.data.socrata.com",
+    "name": "",
+    "url": "https://vtmbl-reporting-uat.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://vtmbl-reporting-uat.data.socrata.com/api",
+    "dataset_count": 1,
     "status": "active"
   },
   {
