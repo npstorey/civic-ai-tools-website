@@ -30,6 +30,7 @@ import {
   type StreamCallbacks,
 } from '@/lib/openrouter-streaming';
 import { TraceBuilder, hash as traceHash } from '@/lib/evidence/trace';
+import { getActiveKeyId } from '@/lib/evidence/signing';
 import {
   type PhaseAToolCall,
   stampExecutedNotebook,
@@ -52,6 +53,7 @@ type NotebookEvent =
   | { type: 'phase_a_progress'; message: string; phase?: string; iteration?: number }
   | { type: 'phase_a_tool_call'; name: string; operationType?: string; reason?: string; resultSummary?: { rows: number; columns: number } }
   | { type: 'phase_a_answer'; content: string }
+  | { type: 'metadata'; composedSystemPrompt: string; composedSystemPromptHash: string; signingKeyId: string }
   | { type: 'notebook'; notebook: unknown; sandboxId: string; executionDuration_ms: number; validation: { ok: boolean; issues: { path: string; message: string }[] } }
   | { type: 'error'; message: string };
 
@@ -115,6 +117,18 @@ export async function POST(request: NextRequest) {
 
   const runPipeline = async () => {
     try {
+      // Phase 2a2 (item 1 + 4): emit the composed system prompt + active
+      // signing key id up front so the chat output's Section B can render
+      // the system prompt inline behind a disclosure and the Signers
+      // section can show the platform key id honestly. Both fields are
+      // server-derived and not secret (the key id is published in the
+      // trust registry at /.well-known/evidence-public-keys.json).
+      await emit({
+        type: 'metadata',
+        composedSystemPrompt: systemPrompt,
+        composedSystemPromptHash: systemPromptHash,
+        signingKeyId: getActiveKeyId(),
+      });
       await emit({ type: 'phase', name: 'A', message: 'Discovering datasets…' });
       const phaseAResult = await runPhaseA({
         query: body.query,

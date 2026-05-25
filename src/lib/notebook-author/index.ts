@@ -32,6 +32,11 @@ export {
 export {
   NOTEBOOK_EXTENSION_KEY,
   EXECUTION_EXTENSION_KEY,
+  SUMMARY_EXTENSION_KEY,
+  SYNTHESIS_CELL_ROLE,
   PINNED_LIBRARIES,
   PYTHON_RUNTIME_VERSION,
+  buildSynthesisCellSource,
+  parseSynthesisOutput,
 } from './prompt.ts';
+export type { StructuredSummary, ParsedSynthesisOutput } from './prompt.ts';

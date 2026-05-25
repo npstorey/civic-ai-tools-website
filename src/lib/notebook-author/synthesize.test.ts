@@ -7,7 +7,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { synthesizeNotebook } from './synthesize.ts';
-import { NOTEBOOK_EXTENSION_KEY, PYTHON_RUNTIME_VERSION } from './prompt.ts';
+import {
+  NOTEBOOK_EXTENSION_KEY,
+  PYTHON_RUNTIME_VERSION,
+  SUMMARY_EXTENSION_KEY,
+  SYNTHESIS_CELL_ROLE,
+} from './prompt.ts';
 
 const BROOKLYN_311_FIXTURE = {
   query: 'Show me top 5 311 complaint types in Brooklyn over the past 30 days',
@@ -88,8 +93,8 @@ test('synthesizeNotebook: each fetching call yields a (markdown explainer + code
   const out = synthesizeNotebook({ ...BROOKLYN_311_FIXTURE });
   // There is one query tool call; expect exactly one df-producing code cell.
   const codeCells = out.notebook.cells.filter(c => c.cell_type === 'code');
-  // env setup + imports + helpers + (fetching cell) + metric-capture
-  assert.equal(codeCells.length, 5);
+  // env setup + imports + helpers + (fetching cell) + metric-capture + synthesis (Phase 2a2)
+  assert.equal(codeCells.length, 6);
   const fetchCell = codeCells[3].source.join('');
   assert.match(fetchCell, /df1 = fetch_socrata\(/);
   assert.match(fetchCell, /portal="data\.cityofnewyork\.us"/);
@@ -99,13 +104,20 @@ test('synthesizeNotebook: each fetching call yields a (markdown explainer + code
   assert.deepEqual(out.dataFrameVariables, ['df1']);
 });
 
-test('synthesizeNotebook: metric-capture cell precedes the synthesis cell', () => {
+test('synthesizeNotebook: metric-capture cell precedes the synthesis code cell (role marker)', () => {
   const out = synthesizeNotebook({ ...BROOKLYN_311_FIXTURE });
   const cellTexts = out.notebook.cells.map(c => c.source.join(''));
   const captureIdx = cellTexts.findIndex(t => t.includes('_civic_capture'));
-  const synthIdx = cellTexts.findIndex(t => t.startsWith('## Synthesis'));
+  const synthIdx = out.notebook.cells.findIndex(
+    c => c.cell_type === 'code' && (c.metadata as Record<string, unknown>)?.role === SYNTHESIS_CELL_ROLE,
+  );
   assert.ok(captureIdx > 0, 'metric-capture cell missing');
-  assert.ok(synthIdx > captureIdx, 'synthesis cell must follow metric-capture');
+  assert.ok(synthIdx > captureIdx, 'synthesis code cell must follow metric-capture');
+  // Phase 2a2: synthesis cell is a code cell that produces rendered outputs,
+  // not a markdown cell with a `## Synthesis` heading.
+  assert.equal(out.notebook.cells[synthIdx].cell_type, 'code');
+  const synthSource = out.notebook.cells[synthIdx].source.join('');
+  assert.match(synthSource, /from IPython\.display import display, Markdown/);
 });
 
 test('synthesizeNotebook: footer carries the dataset citation', () => {
@@ -128,4 +140,58 @@ test('synthesizeNotebook: metadata.extensions stamps notebookProvenance = "execu
 test('synthesizeNotebook: notebook kernelspec is python3.13', () => {
   const out = synthesizeNotebook({ ...BROOKLYN_311_FIXTURE });
   assert.equal(out.notebook.metadata.language_info.version, PYTHON_RUNTIME_VERSION);
+});
+
+test('synthesizeNotebook: parses LLM ```json``` summary block + ```python``` synthesis block', () => {
+  const llmAnswer = [
+    '```json',
+    '{',
+    '  "analysisDescription": "Top 311 complaints in Brooklyn over the past 30 days.",',
+    '  "headlineFinding": "Illegal Parking led with 51,438 instances (23%)."',
+    '}',
+    '```',
+    '',
+    'And the synthesis cell body:',
+    '',
+    '```python',
+    'print(f"Illegal Parking led with {df1.iloc[0][\'count\']:,} instances.")',
+    'display(Markdown("- See `df1` above for the full distribution."))',
+    '```',
+  ].join('\n');
+  const out = synthesizeNotebook({
+    ...BROOKLYN_311_FIXTURE,
+    finalAnswer: llmAnswer,
+  });
+
+  assert.ok(out.summary, 'parsed summary should be present');
+  assert.equal(out.summary?.analysisDescription, 'Top 311 complaints in Brooklyn over the past 30 days.');
+  assert.match(out.summary?.headlineFinding ?? '', /Illegal Parking led with 51,438 instances/);
+
+  const summaryExt = (out.notebook.metadata.extensions as Record<string, unknown>)[SUMMARY_EXTENSION_KEY];
+  assert.ok(summaryExt, 'org.civicaitools.summary should be stamped on metadata');
+  assert.equal((summaryExt as Record<string, unknown>).headlineFinding, out.summary?.headlineFinding);
+
+  const synthCell = out.notebook.cells.find(
+    c => c.cell_type === 'code' && (c.metadata as Record<string, unknown>)?.role === SYNTHESIS_CELL_ROLE,
+  );
+  const synthSource = synthCell?.source.join('') ?? '';
+  assert.match(synthSource, /print\(f"Illegal Parking led with \{df1\.iloc\[0\]\['count'\]:,\} instances\."\)/);
+  assert.match(synthSource, /display\(Markdown\("- See `df1` above for the full distribution\."\)\)/);
+});
+
+test('synthesizeNotebook: synthesis cell falls back to display(Markdown(...)) wrapping raw answer when LLM omits ```python``` block', () => {
+  const out = synthesizeNotebook({
+    ...BROOKLYN_311_FIXTURE,
+    finalAnswer: 'Noise was the top complaint at 1,234 cases.',
+  });
+  const synthCell = out.notebook.cells.find(
+    c => c.cell_type === 'code' && (c.metadata as Record<string, unknown>)?.role === SYNTHESIS_CELL_ROLE,
+  );
+  assert.ok(synthCell, 'synthesis cell must be emitted even in fallback mode');
+  const synthSource = synthCell!.source.join('');
+  assert.match(synthSource, /display\(Markdown\("Noise was the top complaint at 1,234 cases\.".*\)\)/);
+  // No structured summary should be stamped when the LLM didn't emit one.
+  assert.equal(out.summary, null);
+  const exts = out.notebook.metadata.extensions as Record<string, unknown>;
+  assert.equal(exts[SUMMARY_EXTENSION_KEY], undefined);
 });

@@ -2,18 +2,23 @@
 
 /**
  * Phase 2a1 — Signers + attestations placeholder beneath the A-G output.
+ * Phase 2a2 item 4 (Option A): the platform signer row is reframed to be
+ * honest about pre-publish state. The signature does not yet exist; it is
+ * created at publish time by /api/evidence after the user signs in and
+ * triggers publish. The chat-time output carries execution metadata
+ * (`executedAt`, environment, sandboxId) but those are captured, not
+ * signed. Option B (formalizing execution-time signing as a real signature
+ * event) is deferred to a separate ADR + IMPL phase post-G3 — the
+ * location-as-attestation work is the architectural prerequisite.
  *
  * Two sections rendered:
- *   - Signers — lists the cryptographic signers attached to this output. For
- *     executed-notebook responses, only the platform signer (civicaitools.org)
- *     applies at chat time; publisher / host endorsement signers (per the
- *     typed-standards-proposal §2 capture-method discipline) are scaffolded
- *     but empty until those signing tiers exist.
- *   - Production method — the captureMethod-discipline labeling applied to
- *     user-facing language: "Executed in signed sandbox" matches the toggle
- *     label's past-tense form, signaling what actually happened.
+ *   - Signed by — pre-publish: dashed border + italic copy + key id
+ *     "will sign at publish time." Post-publish (detail page), the
+ *     equivalent renders a solid-border "signed Ed25519ph at <date>" row.
+ *   - Production method — captureMethod-discipline labeling ("Executed in
+ *     signed sandbox"; per ADR-0004 § captureMethod label).
  *   - Attestations — placeholder framing ("none yet"); attestations attach
- *     after publish, so chat-time output never carries them.
+ *     after publish.
  *
  * Honest framing: this section describes process (disclosure), not truth
  * (validation). See `docs/design-principles.md` Principle 1.
@@ -22,6 +27,10 @@
 interface ChatSignersSectionProps {
   /** Stamped at Phase D from the sandbox; informational, not a trust claim. */
   executedAt: string | null;
+  /** Phase 2a2 item 4: active platform key id from the SSE metadata event.
+   *  Surfaced in the pre-publish signer copy so the reader knows which key
+   *  the eventual signature will be anchored under. */
+  signingKeyId?: string | null;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -35,37 +44,73 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function SignerRow({
-  label,
-  detail,
-  tier,
+/** Phase 2a2 item 4: pre-publish signer row. Visually distinct from the
+ *  post-publish equivalent (dashed border, dimmed dot, italic copy) so the
+ *  reader can tell at a glance that the signature is pending, not real. */
+function PlatformPendingSignerRow({
+  signingKeyId,
+  executedAt,
 }: {
-  label: string;
-  detail: string;
-  tier: 'platform' | 'publisher' | 'host';
+  signingKeyId: string | null;
+  executedAt: string | null;
 }) {
-  const tierLabels: Record<string, string> = {
-    platform: 'platform signer',
-    publisher: 'publisher signer',
-    host: 'host endorsement',
-  };
+  const keyIdLabel = signingKeyId ?? 'platform key (will resolve at publish)';
+  const executedAtLabel = executedAt
+    ? `Execution captured ${new Date(executedAt).toLocaleString()}`
+    : null;
   return (
-    <div style={{
-      padding: '10px 14px', border: '1px solid var(--border-color)',
-      borderRadius: '4px', display: 'flex', alignItems: 'flex-start', gap: '12px',
-    }}>
+    <div
+      style={{
+        padding: '10px 14px',
+        border: '1px dashed var(--border-color)',
+        borderRadius: '4px',
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '12px',
+        background: 'rgba(16, 63, 239, 0.02)',
+      }}
+    >
       <span aria-hidden style={{
         marginTop: '3px', flexShrink: 0,
         width: '8px', height: '8px', borderRadius: '50%',
-        background: 'var(--nyc-success, #00b703)',
+        background: 'var(--border-color)',
       }} />
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>
-          {label}
+        <div style={{
+          fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)',
+          display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap',
+        }}>
+          <span>civicaitools.org</span>
+          <span
+            style={{
+              fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              padding: '1px 6px', borderRadius: '999px',
+              background: 'rgba(16, 63, 239, 0.1)', color: 'var(--nyc-blue, #0039a6)',
+            }}
+          >
+            Pre-publish preview
+          </span>
         </div>
-        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-          {tierLabels[tier]} · {detail}
+        <div style={{
+          fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px',
+          fontStyle: 'italic', lineHeight: 1.5,
+        }}>
+          Platform signature will be created at publish time
+          (Ed25519ph; key id <code style={{
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
+            background: 'transparent', padding: '0 2px',
+          }}>{keyIdLabel}</code>). The notebook execution
+          metadata (executedAt, environment, sandboxId) is captured now but
+          is not yet cryptographically signed.
         </div>
+        {executedAtLabel && (
+          <div style={{
+            fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px',
+          }}>
+            {executedAtLabel} (informational).
+          </div>
+        )}
       </div>
     </div>
   );
@@ -103,26 +148,20 @@ function EmptyTierRow({ tier }: { tier: 'publisher' | 'host' }) {
   );
 }
 
-export default function ChatSignersSection({ executedAt }: ChatSignersSectionProps) {
+export default function ChatSignersSection({ executedAt, signingKeyId }: ChatSignersSectionProps) {
   return (
     <>
       <Section title="Signed by">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <SignerRow
-            label="civicaitools.org"
-            detail={executedAt
-              ? `signed Ed25519 at ${new Date(executedAt).toLocaleString()}`
-              : 'signs Ed25519 at publish time'}
-            tier="platform"
-          />
+          <PlatformPendingSignerRow signingKeyId={signingKeyId ?? null} executedAt={executedAt} />
           <EmptyTierRow tier="publisher" />
           <EmptyTierRow tier="host" />
         </div>
         <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '10px', lineHeight: 1.5 }}>
           Signatures describe <em>who attached their key</em>, not whether the
-          analysis is correct. The platform signer attaches at execution
-          time; other signers attach if the publisher or an upstream host
-          chooses to co-sign.
+          analysis is correct. The platform signer attaches at publish time;
+          other signers attach if the publisher or an upstream host chooses
+          to co-sign.
         </p>
       </Section>
 
@@ -143,7 +182,7 @@ export default function ChatSignersSection({ executedAt }: ChatSignersSectionPro
             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
               Notebook authored, executed, and stamped by the publisher
               pipeline; outputs derive from real cell execution against live
-              upstream data.
+              upstream data. The signed envelope is created at publish time.
             </div>
           </div>
         </div>

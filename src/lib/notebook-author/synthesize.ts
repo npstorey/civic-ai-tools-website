@@ -26,10 +26,15 @@ import {
   CELL_4_HEADER,
   NOTEBOOK_EXTENSION_KEY,
   PYTHON_RUNTIME_VERSION,
+  SUMMARY_EXTENSION_KEY,
+  SYNTHESIS_CELL_ROLE,
+  type StructuredSummary,
   buildCell0Source,
   buildCell1Source,
   buildCell2Source,
   buildFooterCellSource,
+  buildSynthesisCellSource,
+  parseSynthesisOutput,
 } from './prompt.ts';
 import {
   type PhaseAToolCall,
@@ -55,6 +60,8 @@ export interface SynthesisOutputs {
   dataFrameVariables: string[];
   /** Helpers actually embedded inline (see ADR-0005 §3). */
   embeddedHelpers: HelperId[];
+  /** Structured summary parsed from the LLM's reproducible-mode output, if any. */
+  summary: StructuredSummary | null;
 }
 
 function buildHelperCellSource(helperIds: readonly HelperId[]): string {
@@ -129,13 +136,17 @@ export function synthesizeNotebook(inputs: PhaseAOutputs): SynthesisOutputs {
   // original-value literals.
   notebook.cells.push(buildMetricCaptureCell(dataFrameVariables));
 
-  // Synthesis cell — chat-flow's final answer
-  const synthesisBody = inputs.finalAnswer?.trim() || '_No synthesis was produced for this analysis._';
-  notebook.cells.push(markdownCell([
-    '## Synthesis',
-    '',
-    synthesisBody,
-  ].join('\n')));
+  // Phase 2a2 (item 2 + 3): parse the LLM's reproducible-mode answer for
+  // the synthesis code block and the structured summary. The LLM emits both
+  // per the C5 skill-guidance update; either may be absent on imperfect
+  // output, in which case `buildSynthesisCellSource` falls back to wrapping
+  // the raw answer in display(Markdown(...)).
+  const parsed = parseSynthesisOutput(inputs.finalAnswer ?? '');
+  const synthesisCellSource = buildSynthesisCellSource({
+    synthesisCode: parsed.synthesisCode,
+    rawAnswer: inputs.finalAnswer ?? '',
+  });
+  notebook.cells.push(codeCell(synthesisCellSource, { role: SYNTHESIS_CELL_ROLE }));
 
   // Footer cell — citations + reproducibility + generation metadata
   notebook.cells.push(markdownCell(buildFooterCellSource({
@@ -154,5 +165,20 @@ export function synthesizeNotebook(inputs: PhaseAOutputs): SynthesisOutputs {
     },
   };
 
-  return { notebook, dataFrameVariables, embeddedHelpers: helperIds };
+  // Phase 2a2 (item 3): stamp the structured summary in notebook root
+  // metadata when the LLM provided one. Section G + the citation block
+  // read from this field; legacy clients ignore it.
+  if (parsed.summary) {
+    notebook.metadata.extensions = {
+      ...notebook.metadata.extensions,
+      [SUMMARY_EXTENSION_KEY]: parsed.summary,
+    };
+  }
+
+  return {
+    notebook,
+    dataFrameVariables,
+    embeddedHelpers: helperIds,
+    summary: parsed.summary,
+  };
 }
