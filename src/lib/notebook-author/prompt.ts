@@ -193,26 +193,57 @@ export function parseSynthesisOutput(rawAnswer: string): ParsedSynthesisOutput {
   return { summary, synthesisCode };
 }
 
+/** Indent every line of `body` by `prefix` for embedding into Python control
+ *  flow (try/except, def, etc.). Preserves blank lines as blank-prefix lines
+ *  per PEP 8. */
+function indentPython(body: string, prefix: string): string {
+  const lines = body.split('\n');
+  return lines.map((line) => (line.length === 0 ? '' : prefix + line)).join('\n');
+}
+
 /**
  * Phase 2a2 (item 2): the rendering code cell body. When the LLM provides
  * a synthesis code block via the skill-guidance convention, that block is
- * used verbatim. Otherwise we wrap the raw chat-flow answer in a
- * `display(Markdown(...))` call so the cell still produces a rendered
- * answer output — backward-compatible with LLMs that haven't been updated
- * to the new convention.
+ * wrapped in a try/except so an LLM-authoring mistake (NameError on a
+ * wrong DataFrame name, KeyError on an unexpected column, SyntaxError-free
+ * but runtime-raising expression) does NOT take down the whole notebook
+ * execution. On exception, the cell prints a short diagnostic and falls
+ * back to rendering the raw chat-flow answer as markdown so the user still
+ * gets a useful section F. The cell metadata.role === "synthesis" marker
+ * stays attached either way so the chat-output extractor finds it.
+ *
+ * When the LLM omits the ```python``` block entirely, we skip the try/except
+ * and just render the raw chat-flow answer as markdown via display(Markdown).
+ *
+ * ADR-0005 §1 Phase C envisions a retry-once loop with the failure in the
+ * LLM's context; the try/except wrapper here is the lighter-weight defense
+ * appropriate to the synthesis cell specifically (the rest of the notebook
+ * still benefits from the full retry loop once that lands).
  */
 export function buildSynthesisCellSource(args: {
   synthesisCode: string | null;
   rawAnswer: string;
 }): string {
   const fallbackBody = (args.rawAnswer ?? '').trim() || '_No synthesis was produced for this analysis._';
+  const fallbackPyLiteral = JSON.stringify(fallbackBody);
   if (args.synthesisCode && args.synthesisCode.trim().length > 0) {
+    const llmBody = args.synthesisCode.trimEnd();
     return [
       '# Synthesis — rendered answer for the query above. This cell\'s outputs',
       '# become section F of the evidence A-G envelope (OES §9.1.4 / ADR-0005).',
       'from IPython.display import display, Markdown',
       '',
-      args.synthesisCode.trimEnd(),
+      'try:',
+      indentPython(llmBody, '    '),
+      'except Exception as _civic_synth_err:',
+      '    # LLM-emitted synthesis raised — fall back to the raw chat-flow answer',
+      '    # so the synthesis cell still produces a useful section F output.',
+      '    print(',
+      '        f"\\u26A0 Synthesis code raised "',
+      '        f"{type(_civic_synth_err).__name__}: {_civic_synth_err}. "',
+      '        f"Falling back to the chat-flow answer.",',
+      '    )',
+      `    display(Markdown(${fallbackPyLiteral}))`,
     ].join('\n');
   }
   return [
@@ -222,6 +253,6 @@ export function buildSynthesisCellSource(args: {
     '# answer is rendered verbatim as markdown.',
     'from IPython.display import display, Markdown',
     '',
-    `display(Markdown(${JSON.stringify(fallbackBody)}))`,
+    `display(Markdown(${fallbackPyLiteral}))`,
   ].join('\n');
 }

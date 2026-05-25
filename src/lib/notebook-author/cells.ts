@@ -10,10 +10,31 @@ export type CellSource = string | readonly string[];
 
 export interface NotebookCell {
   cell_type: 'code' | 'markdown';
+  /** nbformat v4.5 required cell id. Auto-assigned by the cell builders so
+   *  jupyter nbconvert / nbformat don't emit MissingIDFieldWarning. */
+  id: string;
   metadata: Record<string, unknown>;
   source: string[];
   outputs?: unknown[];
   execution_count?: number | null;
+}
+
+/** Cell-id counter to give every cell a unique id within the notebook.
+ *  nbformat v4.5 requires the id field (1–64 chars, alphanumeric +
+ *  `_-`); nbconvert otherwise emits MissingIDFieldWarning. The counter is
+ *  per-process and per-notebook is acceptable for the v1 cell-id scheme
+ *  because a fresh notebook is built once per pipeline invocation and the
+ *  id only needs to be unique inside that notebook. */
+let _cellIdCounter = 0;
+function nextCellId(): string {
+  _cellIdCounter += 1;
+  return `cell-${_cellIdCounter.toString(36).padStart(4, '0')}`;
+}
+
+/** Test-only: reset the cell-id counter between assertions so the ids in
+ *  a fresh notebook are reproducible (cell-0001, cell-0002, …). */
+export function _resetCellIdCounterForTests(): void {
+  _cellIdCounter = 0;
 }
 
 export interface Notebook {
@@ -40,6 +61,7 @@ export function asSourceLines(source: CellSource): string[] {
 export function markdownCell(source: CellSource, metadata: Record<string, unknown> = {}): NotebookCell {
   return {
     cell_type: 'markdown',
+    id: nextCellId(),
     metadata,
     source: asSourceLines(source),
   };
@@ -48,6 +70,7 @@ export function markdownCell(source: CellSource, metadata: Record<string, unknow
 export function codeCell(source: CellSource, metadata: Record<string, unknown> = {}): NotebookCell {
   return {
     cell_type: 'code',
+    id: nextCellId(),
     metadata,
     source: asSourceLines(source),
     outputs: [],
