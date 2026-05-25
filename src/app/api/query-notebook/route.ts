@@ -177,8 +177,32 @@ export async function POST(request: NextRequest) {
       });
       await emit({ type: 'phase', name: 'complete', message: 'Done.' });
     } catch (err) {
+      // Log full stderr server-side (Vercel function logs) so the actual
+      // preprocess_cell exception is recoverable for debugging — the SSE
+      // payload only carries a tail of the traceback to keep the UI sane.
+      if (err instanceof NotebookExecutionError) {
+        console.error('[query-notebook] NotebookExecutionError', {
+          exitCode: err.exitCode,
+          message: err.message,
+          stderr: err.stderr,
+        });
+      } else if (err instanceof Error) {
+        console.error('[query-notebook] error', { message: err.message, stack: err.stack });
+      } else {
+        console.error('[query-notebook] unknown error', err);
+      }
+
+      // The Python exception nbconvert raises lives at the TAIL of stderr
+      // (the cell traceback + `<exception type>: <message>` is the last
+      // thing printed). Slice the last 8000 chars so the user sees the
+      // smoking gun rather than the warmup boilerplate.
+      const STDERR_TAIL_CHARS = 8000;
+      const stderrTail = (s: string): string => {
+        if (s.length <= STDERR_TAIL_CHARS) return s;
+        return `…(stderr truncated; full output in server logs)…\n${s.slice(-STDERR_TAIL_CHARS)}`;
+      };
       const message = err instanceof NotebookExecutionError
-        ? `Notebook execution failed (exit ${err.exitCode ?? 'n/a'}): ${err.message}${err.stderr ? `\n${err.stderr.slice(0, 4000)}` : ''}`
+        ? `Notebook execution failed (exit ${err.exitCode ?? 'n/a'}): ${err.message}${err.stderr ? `\n${stderrTail(err.stderr)}` : ''}`
         : err instanceof Error ? err.message : 'Unknown error';
       await emit({ type: 'error', message });
     } finally {

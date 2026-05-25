@@ -175,8 +175,22 @@ test('synthesizeNotebook: parses LLM ```json``` summary block + ```python``` syn
     c => c.cell_type === 'code' && (c.metadata as Record<string, unknown>)?.role === SYNTHESIS_CELL_ROLE,
   );
   const synthSource = synthCell?.source.join('') ?? '';
-  assert.match(synthSource, /print\(f"Illegal Parking led with \{df1\.iloc\[0\]\['count'\]:,\} instances\."\)/);
-  assert.match(synthSource, /display\(Markdown\("- See `df1` above for the full distribution\."\)\)/);
+  // Phase 2a2 hotfix: LLM-emitted python is now wrapped in try/except so a
+  // single buggy line in the synthesis cell doesn't blow up the whole
+  // notebook execution (nbconvert runs with --allow_errors=False).
+  assert.match(synthSource, /^try:\s*$/m);
+  assert.match(synthSource, /^\s{4}print\(f"Illegal Parking led with \{df1\.iloc\[0\]\['count'\]:,\} instances\."\)/m);
+  assert.match(synthSource, /^\s{4}display\(Markdown\("- See `df1` above for the full distribution\."\)\)/m);
+  assert.match(synthSource, /except Exception as _civic_synth_err:/);
+  assert.match(synthSource, /Falling back to the chat-flow answer/);
+});
+
+test('synthesizeNotebook: every cell carries an nbformat v4.5 id field', () => {
+  const out = synthesizeNotebook({ ...BROOKLYN_311_FIXTURE });
+  for (const cell of out.notebook.cells) {
+    assert.ok(typeof cell.id === 'string' && cell.id.length > 0, `cell missing id: ${JSON.stringify(cell.metadata)}`);
+    assert.ok(cell.id.length <= 64, `cell id too long: ${cell.id}`);
+  }
 });
 
 test('synthesizeNotebook: synthesis cell falls back to display(Markdown(...)) wrapping raw answer when LLM omits ```python``` block', () => {
