@@ -1,6 +1,6 @@
-// Phase 2a1 — mapper tests. Run with: npm test
+// Phase 2a1 + 2a2 — mapper tests. Run with: npm test
 //
-// Exercise the synthesis-cell extraction + summary derivation against the
+// Exercise the rendering-cell extraction + structured-summary read against the
 // real Phase 1 synthesizer output so any structural drift between the
 // synthesizer and the chat-output mapper is caught at test time.
 
@@ -9,13 +9,27 @@ import assert from 'node:assert/strict';
 import { buildChatEvidenceView } from './buildChatEvidenceView.ts';
 import { stampExecutedNotebook } from '../../lib/notebook-author/phase-d.ts';
 import { synthesizeNotebook } from '../../lib/notebook-author/synthesize.ts';
+import { SYNTHESIS_CELL_ROLE } from '../../lib/notebook-author/prompt.ts';
+
+const LLM_STRUCTURED_ANSWER = [
+  '```json',
+  '{',
+  '  "analysisDescription": "Top 5 complaint types in Brooklyn (last 30 days).",',
+  '  "headlineFinding": "Noise — Residential led with 1,234 cases."',
+  '}',
+  '```',
+  '',
+  '```python',
+  'print(f"Noise — Residential led with {df1.iloc[0][\'count\']:,} cases.")',
+  'display(Markdown("- Illegal Parking and Blocked Driveway followed."))',
+  '```',
+].join('\n');
 
 const SYNTH_INPUTS = {
   query: 'Top 5 complaint types in Brooklyn over the past 30 days',
   defaultPortal: 'data.cityofnewyork.us',
   modelName: 'anthropic/claude-sonnet-4-6',
-  finalAnswer:
-    'Noise — Residential was the top complaint at 1,234 cases over the past 30 days. Illegal Parking and Blocked Driveway followed.',
+  finalAnswer: LLM_STRUCTURED_ANSWER,
   generatedAt: '2026-05-21T14:00:00.000Z',
   toolCalls: [
     {
@@ -36,8 +50,29 @@ const SYNTH_INPUTS = {
   ],
 };
 
-function makeNotebook() {
-  const synth = synthesizeNotebook({ ...SYNTH_INPUTS });
+function makeNotebook(opts: { finalAnswer?: string; withExecutedOutputs?: boolean } = {}) {
+  const synth = synthesizeNotebook({
+    ...SYNTH_INPUTS,
+    finalAnswer: opts.finalAnswer ?? SYNTH_INPUTS.finalAnswer,
+  });
+  if (opts.withExecutedOutputs) {
+    // Simulate the sandbox having executed the synthesis cell — attach a
+    // display_data output with text/markdown so the mapper's
+    // renderingCellOutputs array is non-empty.
+    for (const cell of synth.notebook.cells) {
+      if (cell.cell_type !== 'code') continue;
+      const role = (cell.metadata as Record<string, unknown>)?.role;
+      if (role !== SYNTHESIS_CELL_ROLE) continue;
+      cell.outputs = [
+        { output_type: 'stream', name: 'stdout', text: 'Noise — Residential led with 1,234 cases.\n' },
+        {
+          output_type: 'display_data',
+          data: { 'text/markdown': '- Illegal Parking and Blocked Driveway followed.' },
+        },
+      ];
+      cell.execution_count = 7;
+    }
+  }
   stampExecutedNotebook(
     synth.notebook,
     {
@@ -50,8 +85,8 @@ function makeNotebook() {
   return synth.notebook;
 }
 
-test('buildChatEvidenceView: extracts synthesis markdown and a one-line summary', () => {
-  const notebook = makeNotebook();
+test('buildChatEvidenceView: extracts rendering-cell outputs verbatim when synthesis-role code cell is present', () => {
+  const notebook = makeNotebook({ withExecutedOutputs: true });
   const view = buildChatEvidenceView({
     notebook,
     prompt: SYNTH_INPUTS.query,
@@ -62,20 +97,41 @@ test('buildChatEvidenceView: extracts synthesis markdown and a one-line summary'
     ],
   });
 
-  assert.match(view.synthesisMarkdown, /Noise — Residential was the top complaint/);
-  assert.ok(view.summary.length > 0, 'summary should be non-empty');
-  assert.ok(view.summary.length <= 240, `summary too long: ${view.summary.length}`);
-  assert.match(view.summary, /Noise — Residential/);
+  assert.ok(view.renderingCellOutputs, 'rendering-cell outputs should be present');
+  assert.equal(view.renderingCellOutputs?.length, 2);
+  assert.equal(view.renderingCellOutputs?.[0].output_type, 'stream');
+  assert.equal(view.renderingCellOutputs?.[1].output_type, 'display_data');
+  // synthesisMarkdown is only populated as a legacy fallback; when the
+  // rendering code cell is present, the renderer uses outputs verbatim.
+  assert.equal(view.synthesisMarkdown, '');
 });
 
-test('buildChatEvidenceView: surfaces the execution extension', () => {
-  const notebook = makeNotebook();
+test('buildChatEvidenceView: surfaces the structured summary from notebook root metadata', () => {
+  const notebook = makeNotebook({ withExecutedOutputs: true });
   const view = buildChatEvidenceView({
     notebook,
     prompt: SYNTH_INPUTS.query,
     model: SYNTH_INPUTS.modelName,
     portal: SYNTH_INPUTS.defaultPortal,
     toolCalls: [],
+  });
+
+  assert.ok(view.structuredSummary, 'structured summary should be present');
+  assert.equal(view.structuredSummary?.analysisDescription, 'Top 5 complaint types in Brooklyn (last 30 days).');
+  assert.match(view.structuredSummary?.headlineFinding ?? '', /Noise — Residential led with 1,234 cases\./);
+});
+
+test('buildChatEvidenceView: surfaces the execution extension + streaming-supplied metadata', () => {
+  const notebook = makeNotebook({ withExecutedOutputs: true });
+  const view = buildChatEvidenceView({
+    notebook,
+    prompt: SYNTH_INPUTS.query,
+    model: SYNTH_INPUTS.modelName,
+    portal: SYNTH_INPUTS.defaultPortal,
+    toolCalls: [],
+    composedSystemPrompt: 'Some composed prompt text…',
+    composedSystemPromptHash: 'deadbeef00000000ffffffff00000000aaaaaaaabbbbbbbbccccccccdddddddd',
+    signingKeyId: 'platform:evidence-2026-04',
   });
 
   assert.equal(view.executedAt, '2026-05-21T14:23:45.000Z');
@@ -83,19 +139,16 @@ test('buildChatEvidenceView: surfaces the execution extension', () => {
   assert.equal(view.sandboxId, 'vrcl-sbx-abc');
   assert.equal(view.environment?.python, '3.13');
   assert.ok(view.environment?.libraries?.pandas);
+  assert.equal(view.composedSystemPrompt, 'Some composed prompt text…');
+  assert.equal(view.composedSystemPromptHash, 'deadbeef00000000ffffffff00000000aaaaaaaabbbbbbbbccccccccdddddddd');
+  assert.equal(view.signingKeyId, 'platform:evidence-2026-04');
 });
 
-test('buildChatEvidenceView: empty synthesis yields empty summary', () => {
-  const notebook = makeNotebook();
-  // Wipe the synthesis cell content.
-  for (const cell of notebook.cells) {
-    if (cell.cell_type === 'markdown') {
-      const src = Array.isArray(cell.source) ? cell.source.join('') : (cell.source as string);
-      if (/^##\s+Synthesis\b/m.test(src)) {
-        cell.source = ['## Synthesis\n', '\n'];
-      }
-    }
-  }
+test('buildChatEvidenceView: fallback path — LLM omits structured blocks → renderingCellOutputs is the empty array (cell exists, no outputs)', () => {
+  // Without a ```python``` block, the synthesizer still emits the synthesis
+  // code cell (using the display(Markdown(rawAnswer)) fallback), but the
+  // cell has no outputs because we didn't simulate execution.
+  const notebook = makeNotebook({ finalAnswer: 'Plain LLM prose, no fences here.' });
   const view = buildChatEvidenceView({
     notebook,
     prompt: SYNTH_INPUTS.query,
@@ -103,6 +156,10 @@ test('buildChatEvidenceView: empty synthesis yields empty summary', () => {
     portal: SYNTH_INPUTS.defaultPortal,
     toolCalls: [],
   });
-  assert.equal(view.synthesisMarkdown, '');
-  assert.equal(view.summary, '');
+  // The cell is present; outputs array is empty pre-execution.
+  assert.deepEqual(view.renderingCellOutputs, []);
+  assert.equal(view.structuredSummary, null);
+  // No structured summary present → derivedSummary is empty too (no legacy
+  // markdown cell to derive from now that synthesis is a code cell).
+  assert.equal(view.derivedSummary, '');
 });

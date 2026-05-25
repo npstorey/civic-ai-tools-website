@@ -41,6 +41,11 @@ export interface NotebookStreamState {
   validation: { ok: boolean; issues: { path: string; message: string }[] } | null;
   sandboxId: string | null;
   executionDurationMs: number | null;
+  /** Phase 2a2 item 1: composed system prompt streamed at pipeline start. */
+  composedSystemPrompt: string | null;
+  composedSystemPromptHash: string | null;
+  /** Phase 2a2 item 4: active platform signing key id. */
+  signingKeyId: string | null;
   isLoading: boolean;
   error: string | null;
 }
@@ -56,6 +61,9 @@ const INITIAL_STATE: NotebookStreamState = {
   validation: null,
   sandboxId: null,
   executionDurationMs: null,
+  composedSystemPrompt: null,
+  composedSystemPromptHash: null,
+  signingKeyId: null,
   isLoading: false,
   error: null,
 };
@@ -136,6 +144,22 @@ export function useNotebookStream() {
         case 'phase_a_answer': {
           // Synthesis text is already embedded in the notebook by Phase B; no
           // chat-side rendering needed yet. Future work may stream it here.
+          break;
+        }
+        case 'metadata': {
+          // Phase 2a2 item 1 + 4: route emits the composed system prompt
+          // and active signing key id at pipeline start. Both feed the
+          // chat-output A-G renderer (Section B inline disclosure;
+          // Signers section honest pre-publish UX).
+          const composedSystemPrompt = raw.composedSystemPrompt as string | undefined;
+          const composedSystemPromptHash = raw.composedSystemPromptHash as string | undefined;
+          const signingKeyId = raw.signingKeyId as string | undefined;
+          setState((prev) => ({
+            ...prev,
+            composedSystemPrompt: composedSystemPrompt ?? prev.composedSystemPrompt,
+            composedSystemPromptHash: composedSystemPromptHash ?? prev.composedSystemPromptHash,
+            signingKeyId: signingKeyId ?? prev.signingKeyId,
+          }));
           break;
         }
         case 'notebook': {

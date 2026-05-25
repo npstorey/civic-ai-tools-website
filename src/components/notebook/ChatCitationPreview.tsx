@@ -24,6 +24,13 @@ interface ChatCitationPreviewProps {
   prompt: string;
   /** Stamped at Phase D; used as the citation date. */
   executedAt: string | null;
+  /** Phase 2a2 item 3: structured summary from notebook root metadata.
+   *  When present, the "Deliberative process reference" citation includes
+   *  the headline finding for context. */
+  structuredSummary?: {
+    analysisDescription: string;
+    headlineFinding: string;
+  } | null;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -46,7 +53,7 @@ function deriveTitle(prompt: string): string {
   return firstChunk.slice(0, 97).trim() + '…';
 }
 
-export default function ChatCitationPreview({ prompt, executedAt }: ChatCitationPreviewProps) {
+export default function ChatCitationPreview({ prompt, executedAt, structuredSummary }: ChatCitationPreviewProps) {
   const { data: session } = useSession();
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
@@ -54,17 +61,26 @@ export default function ChatCitationPreview({ prompt, executedAt }: ChatCitation
   const date = executedAt ? new Date(executedAt) : new Date();
   const year = date.getFullYear();
   const dateStr = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const title = deriveTitle(prompt);
+  // Phase 2a2 item 3: prefer the analysis description from the structured
+  // summary when present (it's an LLM-authored one-clause; cleaner than the
+  // prompt's first sentence). Otherwise fall back to the prompt-derived
+  // title heuristic.
+  const title = structuredSummary?.analysisDescription
+    ? structuredSummary.analysisDescription.replace(/[.!?]+$/, '')
+    : deriveTitle(prompt);
   const placeholderUrl = 'https://civicaitools.org/evidence/(URL assigned at publish)';
 
+  const headlineSuffix = structuredSummary?.headlineFinding
+    ? ` Headline finding: ${structuredSummary.headlineFinding}`
+    : '';
   const citations = [
     {
       label: 'Plain text',
-      text: `${creatorName} (${year}). "${title}." Civic AI Tools Evidence Package. ${placeholderUrl}. Published: (date assigned at publish).`,
+      text: `${creatorName} (${year}). "${title}." Civic AI Tools Evidence Package. ${placeholderUrl}. Published: (date assigned at publish).${headlineSuffix}`,
     },
     {
       label: 'For deliberative process reference',
-      text: `Evidence: ${title} [Executed: ${dateStr}] ${placeholderUrl}`,
+      text: `Evidence: ${title} [Executed: ${dateStr}] ${placeholderUrl}${headlineSuffix}`,
     },
   ];
 

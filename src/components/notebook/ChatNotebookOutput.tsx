@@ -2,32 +2,44 @@
 
 /**
  * Phase 2a1 — chat-output renderer for executed-notebook responses.
+ * Phase 2a2 refinements layered in:
+ *   - Item 1: Section B now surfaces the composed system prompt inline
+ *             behind a disclosure; SHA-256 hash (truncated) is visible.
+ *   - Item 2: Section F renders the rendering code cell's outputs verbatim
+ *             (markdown via display_data, tables via DataFrame outputs,
+ *             plain text via stream). Legacy notebooks (no synthesis-role
+ *             code cell) fall back to ReactMarkdown over the legacy
+ *             `## Synthesis` markdown body.
+ *   - Item 3: Section G renders the structured two-clause summary from
+ *             notebook root metadata; falls back to a one-line derived
+ *             summary when the structured field is absent.
+ *   - Item 4: Signers/citation handed the active platform key id so the
+ *             pre-publish framing is honest (handled in the sibling
+ *             ChatSignersSection component).
  *
- * Renders sections A through G matching the evidence detail page layout for
- * datHere-content-profile packages (src/app/evidence/[slug]/page.tsx §A-G).
  * Each section is honest about pre-publish state: no slug yet, no
- * `EvidencePackage` row in the DB, no Rekor entry. Sections that would
- * normally pull from the package read from the in-flight notebook + the
- * useNotebookStream state instead.
+ * `EvidencePackage` row in the DB, no Rekor entry.
  *
  * Sections:
  *   A · Initial prompt    — verbatim user input
- *   B · System prompts    — pre-publish stub describing the composed overlay
+ *   B · System prompts    — inline composed prompt behind disclosure
  *   C · Model + environment — model name, runtime, MCP servers
  *   D · Deliberative trace — Phase A tool calls (collapsed)
  *   E · Answer notebook   — NotebookSection (.ipynb download + cell preview)
- *   F · Rendered answer   — synthesis cell rendered as markdown (hero)
- *   G · Summary           — one-line blurb derived from synthesis
+ *   F · Rendered answer   — outputs of the rendering code cell (hero)
+ *   G · Summary           — structured two-clause blurb
  *
  * Signers, attestations placeholder, and citation block are rendered by
  * sibling components composed at the bottom of this output.
  */
+import { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { formatModelName } from '@/lib/models';
 import NotebookSection from '@/components/evidence/NotebookSection';
 import ChatSignersSection from './ChatSignersSection';
 import ChatCitationPreview from './ChatCitationPreview';
+import RenderingCellOutputs from './RenderingCellOutputs';
 import { buildChatEvidenceView } from './buildChatEvidenceView';
 import type { Notebook } from '@/lib/notebook-author';
 import type { CapturedToolCall } from '@/hooks/useNotebookStream';
@@ -38,6 +50,11 @@ interface ChatNotebookOutputProps {
   model: string;
   portal: string;
   toolCalls: CapturedToolCall[];
+  /** Phase 2a2 item 1: composed system prompt text streamed via SSE. */
+  composedSystemPrompt?: string | null;
+  composedSystemPromptHash?: string | null;
+  /** Phase 2a2 item 4: active platform signing key id streamed via SSE. */
+  signingKeyId?: string | null;
   /** Optional title — defaults to the prompt's first sentence/clause. */
   title?: string;
 }
@@ -79,11 +96,29 @@ export default function ChatNotebookOutput({
   model,
   portal,
   toolCalls,
+  composedSystemPrompt,
+  composedSystemPromptHash,
+  signingKeyId,
   title,
 }: ChatNotebookOutputProps) {
-  const view = buildChatEvidenceView({ notebook, prompt, model, portal, toolCalls });
+  const view = buildChatEvidenceView({
+    notebook,
+    prompt,
+    model,
+    portal,
+    toolCalls,
+    composedSystemPrompt,
+    composedSystemPromptHash,
+    signingKeyId,
+  });
   const mcpServers = approximateMcpServers(portal);
   const portalLabel = portal && portal !== '__all__' ? portal : 'all portals';
+
+  // Phase 2a2 item 1: compute line count once for the disclosure label.
+  const composedPromptLineCount = useMemo(() => {
+    if (!view.composedSystemPrompt) return 0;
+    return view.composedSystemPrompt.split(/\r?\n/).length;
+  }, [view.composedSystemPrompt]);
 
   // Slug is "(unpublished)" since the chat output is pre-publish. The
   // NotebookSection download filename uses this; we pick a slug-shaped
@@ -125,17 +160,64 @@ export default function ChatNotebookOutput({
         </div>
       </Section>
 
-      {/* B · System prompts (pre-publish stub) */}
+      {/* B · System prompts (Phase 2a2 item 1: inline composed prompt + truncated hash) */}
       <Section title="B · System prompts">
         <div style={{
           padding: '12px 16px', border: '1px solid var(--border-color)', borderRadius: '6px',
           fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6,
         }}>
-          The system prompt is composed from the base civic-data skill
-          guidance plus the web overlay (and any portal-specific overlays).
-          Its content hash is captured at execution time and embedded in the
-          evidence package when this analysis is published. Full text is
-          available on the detail page once published.
+          <p style={{ margin: '0 0 10px' }}>
+            The system prompt is composed from the base civic-data skill
+            guidance plus the web overlay (and any portal-specific overlays).
+            The content hash below is captured at execution time and embedded
+            in the evidence package when this analysis is published.
+          </p>
+          {view.composedSystemPromptHash && (
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: '6px 12px',
+              alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)',
+              marginBottom: '8px',
+            }}>
+              <span>SHA-256:</span>
+              <code
+                title={view.composedSystemPromptHash}
+                style={{
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
+                  background: '#f5f5f5', padding: '1px 6px', borderRadius: '3px',
+                }}
+              >
+                {view.composedSystemPromptHash.slice(0, 16)}…
+              </code>
+              <span style={{ fontStyle: 'italic' }}>
+                (truncated; full hash is what the evidence package will sign)
+              </span>
+            </div>
+          )}
+          {view.composedSystemPrompt ? (
+            <details>
+              <summary style={{ cursor: 'pointer', color: 'var(--nyc-blue)', fontSize: '13px', padding: '4px 0' }}>
+                Show full system prompt ({composedPromptLineCount.toLocaleString()} lines)
+              </summary>
+              <pre style={{
+                marginTop: '8px', padding: '12px 14px', background: '#f9f9f9',
+                border: '1px solid var(--border-color)', borderRadius: '4px',
+                fontSize: '12px', lineHeight: 1.5, whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word', maxHeight: '420px', overflow: 'auto',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
+                color: 'var(--text-primary)',
+              }}>
+                {view.composedSystemPrompt}
+              </pre>
+            </details>
+          ) : (
+            <p style={{
+              margin: 0, fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic',
+            }}>
+              Full text was not captured in this stream. (The route emits it as
+              the first SSE event; if you opened this preview from a fixture
+              or a cached page, the inline disclosure is unavailable.)
+            </p>
+          )}
         </div>
       </Section>
 
@@ -247,14 +329,16 @@ export default function ChatNotebookOutput({
         <NotebookSection notebook={view.notebook} slug={placeholderSlug} />
       </Section>
 
-      {/* F · Rendered answer — hero */}
+      {/* F · Rendered answer — hero (Phase 2a2 item 2: rendering code cell outputs) */}
       <Section title="F · Rendered answer">
         <div style={{
           padding: '16px 20px', border: '1px solid var(--border-color)',
           borderRadius: '6px', backgroundColor: 'white',
           fontSize: '15px', lineHeight: 1.6, color: 'var(--text-primary)',
         }}>
-          {view.synthesisMarkdown ? (
+          {view.renderingCellOutputs !== null ? (
+            <RenderingCellOutputs outputs={view.renderingCellOutputs} />
+          ) : view.synthesisMarkdown ? (
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{view.synthesisMarkdown}</ReactMarkdown>
           ) : (
             <em style={{ color: 'var(--text-muted)' }}>
@@ -264,14 +348,31 @@ export default function ChatNotebookOutput({
         </div>
       </Section>
 
-      {/* G · Summary */}
+      {/* G · Summary (Phase 2a2 item 3: structured two-clause blurb) */}
       <Section title="G · Summary">
         <div style={{
           padding: '12px 16px', backgroundColor: 'rgba(16, 63, 239, 0.04)',
           borderLeft: '3px solid var(--nyc-blue)', borderRadius: '0 4px 4px 0',
           fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)',
         }}>
-          {view.summary || (
+          {view.structuredSummary ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Analysis:
+                </span>{' '}
+                {view.structuredSummary.analysisDescription}
+              </div>
+              <div>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Headline finding:
+                </span>{' '}
+                {view.structuredSummary.headlineFinding}
+              </div>
+            </div>
+          ) : view.derivedSummary ? (
+            view.derivedSummary
+          ) : (
             <em style={{ color: 'var(--text-muted)' }}>
               Summary will be generated at publish time.
             </em>
@@ -280,8 +381,12 @@ export default function ChatNotebookOutput({
       </Section>
 
       {/* Signers + attestations + citation — sibling sections beneath G */}
-      <ChatSignersSection executedAt={view.executedAt} />
-      <ChatCitationPreview prompt={view.prompt} executedAt={view.executedAt} />
+      <ChatSignersSection executedAt={view.executedAt} signingKeyId={view.signingKeyId} />
+      <ChatCitationPreview
+        prompt={view.prompt}
+        executedAt={view.executedAt}
+        structuredSummary={view.structuredSummary}
+      />
     </div>
   );
 }
