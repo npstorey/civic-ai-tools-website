@@ -1,11 +1,23 @@
 import crypto from 'crypto';
 import { buildProvenanceGraph, type ProvGraph } from './provenance.ts';
 import { buildDataSources, type DataSourceEntry } from './data-sources.ts';
-import { getActiveKeyId } from './signing.ts';
+import { getActiveKeyId, type SignerIdentity } from './signing.ts';
 import { isBlobRef, parseBlobRef, type BlobRef } from './blob-ref.ts';
 import { deriveOperationType } from '../mcp/operation-types.ts';
 
 const PACKAGE_SCHEMA_VERSION = '0.1.0';
+
+// Two-family node type taxonomy (spec §8.1.1, §8.12, ADR-0009): every node
+// carries `type` of the form `content/<noun>/v<N>` or `attestation/<verb>/v<N>`.
+// AI-Assisted Analysis output defaults to `content/analysis/v1`; pre-v0.1
+// packages omit the field and are interpreted as this value.
+export const DEFAULT_CONTENT_TYPE = 'content/analysis/v1';
+
+// Producer Profile (spec §8.1.1, §8.6, ADR-0006): compound
+// `<profile-type>/<profile-subtype>`. The v0.1 value auto-derived for the
+// datHere content profile — the legacy `contentProfile` field is retained as
+// a backwards-compatible alias, and the two MUST stay consistent.
+const DATHERE_PRODUCER_PROFILE = 'ai-assisted-analysis/datHere';
 
 /**
  * Capture method for the package contents (ADR-0003).
@@ -99,6 +111,29 @@ export interface PackageInput {
    */
   contentProfile?: ContentProfile;
   /**
+   * Producer Profile label per ADR-0006 (spec §8.1.1, §8.6). Compound
+   * `<profile-type>/<profile-subtype>` string. Optional at the packager
+   * layer (conditional-spread keeps existing-shape inputs byte-identical);
+   * when omitted but `contentProfile === 'datHere'`, the packager
+   * auto-derives `'ai-assisted-analysis/datHere'`. The route default-fills
+   * and validates the consistency invariant.
+   */
+  producerProfile?: string;
+  /**
+   * Node type per the two-family taxonomy (ADR-0009, spec §8.1.1, §8.12).
+   * Optional at the packager layer so existing-shape inputs stay
+   * byte-identical; the route default-fills `'content/analysis/v1'` for the
+   * standard publish path. Absence is interpreted as `content/analysis/v1`.
+   */
+  type?: string;
+  /**
+   * Envelope-side identity claim per ADR-0009 (spec §8.1.1, §8.5).
+   * "Recommended": the route default-fills it from the active signing key.
+   * Optional at the packager layer (conditional-spread); pre-v0.1 packages
+   * have no signer and verifiers derive it from the trust registry instead.
+   */
+  signer?: SignerIdentity;
+  /**
    * Override the skill metadata that the packager would otherwise extract
    * from the trace. Required when `trace` is a BlobRef (the packager can't
    * inspect trace spans in that case). Also accepts a BlobRef for
@@ -141,6 +176,21 @@ export interface EvidencePackage {
      *  package hash and signature. */
     contentProfile?: ContentProfile;
   };
+  /** Producer Profile label (ADR-0006, spec §8.1.1). Top-level envelope
+   *  field (parallel axis to `metadata.contentProfile`, which stays nested
+   *  as the grandfathered legacy alias). Present when supplied or
+   *  auto-derived for the datHere content profile; covered by the package
+   *  hash and signature when present. */
+  producerProfile?: string;
+  /** Node type per the two-family taxonomy (ADR-0009, spec §8.1.1, §8.12).
+   *  Top-level. Present on packages built via the publish route (default
+   *  `content/analysis/v1`); absence is interpreted as `content/analysis/v1`. */
+  type?: string;
+  /** Envelope-side identity claim (ADR-0009, spec §8.1.1, §8.5). Top-level.
+   *  Distinct from the signature envelope (`kid`/publicKey); verifiers
+   *  cross-check the two via the trust registry (check #14). Absent on
+   *  pre-v0.1 packages. */
+  signer?: SignerIdentity;
   prompt: {
     hash: string;
     visibility: 'full_text' | 'hash_only';
@@ -315,6 +365,15 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
     portal: input.portal,
   });
 
+  // Producer Profile (ADR-0006): emit when explicitly supplied, else
+  // auto-derive from the datHere content profile. Left undefined (and thus
+  // unspread below) for default/legacy inputs so their canonical JSON — and
+  // package hash — stays byte-identical to pre-ADR-0006 shape. The route
+  // enforces the contentProfile↔producerProfile consistency invariant.
+  const producerProfile =
+    input.producerProfile ??
+    (input.contentProfile === 'datHere' ? DATHERE_PRODUCER_PROFILE : undefined);
+
   const pkg: EvidencePackage = {
     metadata: {
       schemaVersion: PACKAGE_SCHEMA_VERSION,
@@ -332,6 +391,13 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       // canonical JSON to before.
       ...(input.contentProfile ? { contentProfile: input.contentProfile } : {}),
     },
+    // Top-level envelope fields (ADR-0006/0009, spec §8.1.1). Conditional
+    // spread so existing-shape inputs (no producerProfile/type/signer) emit
+    // byte-identical canonical JSON to before; the route default-fills `type`
+    // and `signer` for the production publish path.
+    ...(producerProfile ? { producerProfile } : {}),
+    ...(input.type ? { type: input.type } : {}),
+    ...(input.signer ? { signer: input.signer } : {}),
     prompt: {
       hash: promptHash,
       visibility: input.promptVisibility,

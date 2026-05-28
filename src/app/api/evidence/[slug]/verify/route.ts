@@ -11,8 +11,14 @@ import {
   loadTrustRegistry,
   legacyEmbeddedKeyTrust,
   verifyPackageBlobRefs,
+  resolvePackageType,
+  checkSignerIdentity,
+  checkCaptureMethodVocab,
   type KeyTrustResult,
   type BlobRefVerification,
+  type TypeResolution,
+  type SignerIdentityCheck,
+  type CaptureMethodVocabCheck,
 } from '@/lib/evidence/verify';
 
 export async function GET(
@@ -106,12 +112,35 @@ export async function GET(
   //     registry cannot vouch for it. The UI renders this as neutral rather
   //     than failed so older packages aren't visually penalized.
   //   - No signature at all → keep `keyTrust: null`.
+  // Load the trust registry once — used by both key-trust (step 4) and the
+  // signer-identity cross-check (#14 below). Cached; falls back to the
+  // build-time embedded copy.
+  const registry = await loadTrustRegistry();
+
   let keyTrust: KeyTrustResult | null = null;
   if (sigPublicKey && sigKid) {
-    const registry = await loadTrustRegistry();
     keyTrust = verifyKeyTrust(sigPublicKey, sigKid, rekorIntegratedTime, registry);
   } else if (sigPublicKey) {
     keyTrust = legacyEmbeddedKeyTrust();
+  }
+
+  // Step 5: Typed-standards envelope checks (spec §9.2). These run against
+  // the canonical package JSON when available; each degrades gracefully for
+  // pre-v0.1 packages that omit the corresponding field.
+  //   #12 type resolution      — non-fatal (unknown_type renders, doesn't fail)
+  //   #13 nodeId               — the recomputed envelope hash (current
+  //                              JSON.stringify canonicalization; PR2 switches
+  //                              this to JCS alongside the hash change)
+  //   #14 signer ↔ registry    — fatal on mismatch; skipped when no signer
+  //   #15 captureMethod vocab  — captureMethod_unknown rejects; bundle-
+  //                              unresolved degrades gracefully
+  let typeResolution: TypeResolution | null = null;
+  let signerIdentity: SignerIdentityCheck | null = null;
+  let captureMethodVocab: CaptureMethodVocabCheck | null = null;
+  if (pkgJson) {
+    typeResolution = resolvePackageType(pkgJson);
+    signerIdentity = checkSignerIdentity(pkgJson, sigKid, registry);
+    captureMethodVocab = checkCaptureMethodVocab(pkgJson);
   }
 
   return NextResponse.json({
@@ -122,6 +151,11 @@ export async function GET(
     keyTrust,
     blobRefsVerified,
     blobRefs,
+    // Typed-standards envelope checks (spec §9.2 checks #12-#15).
+    nodeId: recomputedHash,
+    typeResolution,
+    signerIdentity,
+    captureMethodVocab,
     details: {
       storedHash: record.basePackageHash,
       recomputedHash,

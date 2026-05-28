@@ -9,6 +9,11 @@
     {
       "kid": "platform:evidence-2026-04",
       "publicKey": "MCowBQYDK2VwAyEAqd/MVdHJFPLi8nxxwmqWsDdgz8yssU76unJMHW3xaAE=",
+      "signerIdentity": {
+        "bindingTier": "platform",
+        "identifier": "platform:civic-ai-tools",
+        "displayName": "Civic AI Tools Platform"
+      },
       "status": "active",
       "activatedAt": "2026-04-15T00:00:00.000Z",
       "deprecatedAt": null,

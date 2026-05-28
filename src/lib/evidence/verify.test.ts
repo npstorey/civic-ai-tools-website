@@ -13,6 +13,9 @@ import {
   clearTrustRegistryCache,
   legacyEmbeddedKeyTrust,
   verifyPackageBlobRefs,
+  resolvePackageType,
+  checkSignerIdentity,
+  checkCaptureMethodVocab,
   type TrustRegistry,
 } from './verify.ts';
 import type { BlobRef } from './blob-ref.ts';
@@ -435,4 +438,124 @@ test('verifyPackageBlobRefs: ignores non-BlobRef objects in the field paths', as
   };
   const refs = await verifyPackageBlobRefs(pkg);
   assert.deepEqual(refs, []);
+});
+
+// --- PR1: check #12 — type resolution ---
+
+test('resolvePackageType: known content type → ok', () => {
+  assert.deepEqual(resolvePackageType({ type: 'content/analysis/v1' }), {
+    status: 'ok',
+    type: 'content/analysis/v1',
+  });
+});
+
+test('resolvePackageType: known attestation sub-type → ok', () => {
+  assert.deepEqual(resolvePackageType({ type: 'attestation/withdraws/v1' }), {
+    status: 'ok',
+    type: 'attestation/withdraws/v1',
+  });
+});
+
+test('resolvePackageType: absent → implicit content/analysis/v1 (pre-v0.1)', () => {
+  assert.deepEqual(resolvePackageType({}), {
+    status: 'implicit',
+    type: 'content/analysis/v1',
+  });
+});
+
+test('resolvePackageType: unrecognized URI → unknown_type (non-fatal)', () => {
+  assert.deepEqual(resolvePackageType({ type: 'content/madeup/v9' }), {
+    status: 'unknown_type',
+    type: 'content/madeup/v9',
+  });
+});
+
+// --- PR1: check #14 — signer.identifier ↔ registry signerIdentity ---
+
+const SIGNER_REGISTRY: TrustRegistry = registryWith([
+  {
+    kid: KID,
+    publicKey: PUB,
+    status: 'active',
+    activatedAt: '2026-04-15T00:00:00.000Z',
+    deprecatedAt: null,
+    revokedAt: null,
+    signerIdentity: {
+      bindingTier: 'platform',
+      identifier: 'platform:civic-ai-tools',
+      displayName: 'Civic AI Tools Platform',
+    },
+  },
+]);
+
+test('checkSignerIdentity: matching identifier → ok', () => {
+  const pkg = { signer: { bindingTier: 'platform', identifier: 'platform:civic-ai-tools', displayName: 'Civic AI Tools Platform' } };
+  assert.deepEqual(checkSignerIdentity(pkg, KID, SIGNER_REGISTRY), {
+    status: 'ok',
+    claimed: 'platform:civic-ai-tools',
+    registered: 'platform:civic-ai-tools',
+  });
+});
+
+test('checkSignerIdentity: mismatched identifier → signer_identity_mismatch (fatal)', () => {
+  const pkg = { signer: { bindingTier: 'platform', identifier: 'platform:impostor', displayName: 'x' } };
+  const result = checkSignerIdentity(pkg, KID, SIGNER_REGISTRY);
+  assert.equal(result.status, 'signer_identity_mismatch');
+  assert.equal(result.claimed, 'platform:impostor');
+  assert.equal(result.registered, 'platform:civic-ai-tools');
+});
+
+test('checkSignerIdentity: no envelope signer (pre-v0.1) → no_signer, skip', () => {
+  assert.deepEqual(checkSignerIdentity({}, KID, SIGNER_REGISTRY), { status: 'no_signer' });
+});
+
+test('checkSignerIdentity: registry entry without signerIdentity → no_registry_identity', () => {
+  const legacyRegistry = registryWith([
+    { kid: KID, publicKey: PUB, status: 'active', activatedAt: '2026-04-15T00:00:00.000Z', deprecatedAt: null, revokedAt: null },
+  ]);
+  const pkg = { signer: { bindingTier: 'platform', identifier: 'platform:civic-ai-tools', displayName: 'x' } };
+  assert.deepEqual(checkSignerIdentity(pkg, KID, legacyRegistry), {
+    status: 'no_registry_identity',
+    claimed: 'platform:civic-ai-tools',
+  });
+});
+
+// --- PR1: check #15 — captureMethod per-profile vocabulary ---
+
+test('checkCaptureMethodVocab: value in vocab → ok', () => {
+  const pkg = {
+    metadata: { captureMethod: 'chat-flow-stream' },
+    producerProfile: 'ai-assisted-analysis/datHere',
+  };
+  const r = checkCaptureMethodVocab(pkg);
+  assert.equal(r.status, 'ok');
+  assert.equal(r.profileType, 'ai-assisted-analysis');
+});
+
+test('checkCaptureMethodVocab: value not in vocab → captureMethod_unknown (rejects)', () => {
+  const pkg = { metadata: { captureMethod: 'totally-bogus' }, producerProfile: 'ai-assisted-analysis/datHere' };
+  assert.equal(checkCaptureMethodVocab(pkg).status, 'captureMethod_unknown');
+});
+
+test('checkCaptureMethodVocab: null captureMethod (pre-v0.1) → no_capture_method (neutral)', () => {
+  assert.equal(checkCaptureMethodVocab({ metadata: {} }).status, 'no_capture_method');
+});
+
+test('checkCaptureMethodVocab: unresolvable profile bundle → producerProfile_bundle_unresolved (degrade)', () => {
+  const pkg = { metadata: { captureMethod: 'chat-flow-stream' }, producerProfile: 'human/expert-review' };
+  const r = checkCaptureMethodVocab(pkg);
+  assert.equal(r.status, 'producerProfile_bundle_unresolved');
+  assert.equal(r.profileType, 'human');
+});
+
+test('checkCaptureMethodVocab: resolves via contentProfile legacy alias when producerProfile absent', () => {
+  const pkg = { metadata: { captureMethod: 'claude-code-jsonl-readback', contentProfile: 'datHere' } };
+  assert.equal(checkCaptureMethodVocab(pkg).status, 'ok');
+});
+
+test('checkCaptureMethodVocab: pre-v0.1 (no producerProfile/contentProfile) resolves to ai-assisted-analysis', () => {
+  const pkg = { metadata: { captureMethod: 'chat-flow-stream' } };
+  const r = checkCaptureMethodVocab(pkg);
+  assert.equal(r.status, 'ok');
+  assert.equal(r.profileType, 'ai-assisted-analysis');
 });
