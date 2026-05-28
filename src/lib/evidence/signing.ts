@@ -17,6 +17,33 @@ const ALGORITHM = 'Ed25519ph';
 // see Phase 5 of the security hardening plan.
 const DEFAULT_KEY_ID = 'platform:evidence-2026-04';
 
+/**
+ * Envelope-side identity claim for the party that signed a node (spec
+ * §8.1.1 `signer`, §8.5). Distinct from the `sig` envelope (publicKey +
+ * algorithm + kid): `sig` answers *what was signed and by what key*;
+ * `signer` answers *who claims to have signed it*. A verifier cross-checks
+ * the two via the trust registry's `signerIdentity` (verify check #14).
+ */
+export interface SignerIdentity {
+  bindingTier: string;
+  identifier: string;
+  displayName: string;
+  verifiedAt?: string;
+}
+
+// Identity bound to the active platform signing key. The platform holds the
+// key and signs on behalf of authors (spec §8.5 — users do not yet sign
+// their own packages), so the envelope `signer` reflects the platform. These
+// values MUST match the `signerIdentity` recorded for the active `kid` in the
+// trust registry (`public/.well-known/evidence-public-keys.json`) so verify
+// check #14 resolves — the kid and its identity are kept together here the
+// same way `DEFAULT_KEY_ID` mirrors the registry's `kid`.
+const PLATFORM_SIGNER_IDENTITY: SignerIdentity = {
+  bindingTier: 'platform',
+  identifier: 'platform:civic-ai-tools',
+  displayName: 'Civic AI Tools Platform',
+};
+
 export interface SignResult {
   signature: string;   // base64
   publicKey: string;   // base64 (DER-encoded public key)
@@ -33,6 +60,17 @@ export interface SignResult {
  */
 export function getActiveKeyId(): string {
   return process.env.EVIDENCE_KEY_ID || DEFAULT_KEY_ID;
+}
+
+/**
+ * Identity bound to the active signing key, for emission as the envelope-side
+ * `signer` claim (spec §8.1.1). Returns the platform identity since the
+ * platform key signs all packages today; mirrors the active key's
+ * `signerIdentity` in the trust registry so verify check #14 cross-checks
+ * cleanly.
+ */
+export function getActiveSigner(): SignerIdentity {
+  return { ...PLATFORM_SIGNER_IDENTITY };
 }
 
 interface RekorResult {

@@ -3,9 +3,10 @@ import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { putPackage } from '@/lib/storage';
-import { buildEvidencePackage, type PackageInput, type CaptureMethod, type ContentProfile } from '@/lib/evidence/packager';
+import { buildEvidencePackage, type PackageInput, type CaptureMethod, type ContentProfile, DEFAULT_CONTENT_TYPE } from '@/lib/evidence/packager';
 import { hash } from '@/lib/evidence/trace';
-import { signPackage, getRfc3161Timestamp, publishToRekor } from '@/lib/evidence/signing';
+import { signPackage, getRfc3161Timestamp, publishToRekor, getActiveSigner, type SignerIdentity } from '@/lib/evidence/signing';
+import { captureVocabForProfile } from '@/lib/evidence/profiles';
 import { type BlobRef } from '@/lib/evidence/blob-ref';
 import { resolveRequestUser, hasScope } from '@/lib/api-auth';
 
@@ -45,12 +46,6 @@ async function resolveSlug(title: string, packageHash: string): Promise<string> 
   return buildSlug(title, packageHash, 64);
 }
 
-const VALID_CAPTURE_METHODS: readonly CaptureMethod[] = [
-  'chat-flow-stream',
-  'claude-code-jsonl-readback',
-  'claude-code-self-report',
-] as const;
-
 // ADR-0004: contentProfile values. Orthogonal to captureMethod. Optional
 // at the route layer; absence is equivalent to `'default'`.
 const VALID_CONTENT_PROFILES: readonly ContentProfile[] = [
@@ -88,6 +83,17 @@ interface PublishRequest {
    *  packager promotes `summary` into canonical JSON + auto-emits the
    *  `org.civicaitools.environment` extension. */
   contentProfile?: ContentProfile;
+  /** Producer Profile label per ADR-0006 (spec §8.1.1). Optional; when
+   *  omitted the packager auto-derives it for the datHere content profile.
+   *  Must stay consistent with contentProfile (validated below). */
+  producerProfile?: string;
+  /** Node type per ADR-0009 (spec §8.1.1, §8.12). Optional; defaults to
+   *  `content/analysis/v1`. This endpoint accepts only that value — other
+   *  sub-types are emitted by their own routes / reserved. */
+  type?: string;
+  /** Envelope-side identity claim per ADR-0009 (spec §8.1.1, §8.5).
+   *  Optional; the route default-fills it from the active signing key. */
+  signer?: SignerIdentity;
   /** Optional override for the skill metadata that would otherwise be
    *  extracted from the trace. Required when `trace` is a BlobRef. */
   skillMetadataOverride?: {
@@ -114,18 +120,6 @@ export async function POST(request: NextRequest) {
 
     const body: PublishRequest = await request.json();
 
-    // Validate captureMethod (ADR-0003). Required for all publishes;
-    // resolve once here, never re-derive downstream.
-    if (!body.captureMethod || !VALID_CAPTURE_METHODS.includes(body.captureMethod)) {
-      return NextResponse.json(
-        {
-          error:
-            'captureMethod is required and must be one of: chat-flow-stream, claude-code-jsonl-readback, claude-code-self-report',
-        },
-        { status: 400 },
-      );
-    }
-
     // Validate contentProfile (ADR-0004). Optional; absence is equivalent
     // to `'default'`. When set, must be a recognized value.
     if (body.contentProfile && !VALID_CONTENT_PROFILES.includes(body.contentProfile)) {
@@ -133,6 +127,51 @@ export async function POST(request: NextRequest) {
         {
           error:
             'contentProfile, when provided, must be one of: default, datHere',
+        },
+        { status: 400 },
+      );
+    }
+
+    // Validate producerProfile consistency (ADR-0006, spec §8.1.1). When a
+    // producerProfile is supplied it MUST agree with contentProfile:
+    // contentProfile === 'datHere' iff producerProfile begins with
+    // 'ai-assisted-analysis/datHere'. When omitted, the packager
+    // auto-derives a consistent value for the datHere profile.
+    if (body.producerProfile) {
+      const ppIsDatHere = body.producerProfile.startsWith('ai-assisted-analysis/datHere');
+      const cpIsDatHere = body.contentProfile === 'datHere';
+      if (ppIsDatHere !== cpIsDatHere) {
+        return NextResponse.json(
+          {
+            error:
+              'producerProfile and contentProfile are inconsistent: contentProfile "datHere" iff producerProfile begins with "ai-assisted-analysis/datHere".',
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Validate type (ADR-0009). The standard publish path produces
+    // content/analysis/v1; attestation/* sub-types are emitted by their own
+    // routes and typed-content sub-types are reserved (out of scope here).
+    if (body.type && body.type !== DEFAULT_CONTENT_TYPE) {
+      return NextResponse.json(
+        { error: `type, when provided to this endpoint, must be "${DEFAULT_CONTENT_TYPE}".` },
+        { status: 400 },
+      );
+    }
+
+    // Validate captureMethod (ADR-0003/0011). Required for all publishes;
+    // must be in the captureMethod vocabulary declared by the package's
+    // Producer Profile (spec §8.6), resolved via the shared hardcoded
+    // PROFILE_CAPTURE_VOCAB table. Resolve once here, never re-derive
+    // downstream.
+    const captureVocab = captureVocabForProfile(body.producerProfile, body.contentProfile);
+    if (!body.captureMethod || !captureVocab || !captureVocab.includes(body.captureMethod)) {
+      return NextResponse.json(
+        {
+          error:
+            'captureMethod is required and must be one of the values declared by the producerProfile vocabulary (ai-assisted-analysis: chat-flow-stream, claude-code-jsonl-readback, claude-code-self-report).',
         },
         { status: 400 },
       );
@@ -180,6 +219,12 @@ export async function POST(request: NextRequest) {
       summary: body.summary,
       captureMethod: body.captureMethod,
       contentProfile: body.contentProfile,
+      // ADR-0006: pass through; the packager auto-derives for datHere when omitted.
+      producerProfile: body.producerProfile,
+      // ADR-0009: default-fill the standard content type + the envelope-side
+      // signer identity (the active platform signing key) for every publish.
+      type: body.type ?? DEFAULT_CONTENT_TYPE,
+      signer: body.signer ?? getActiveSigner(),
       skillMetadataOverride: body.skillMetadataOverride,
       extensions: body.extensions,
     };

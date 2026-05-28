@@ -2,7 +2,9 @@ import crypto from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { ed25519ph } from '@noble/curves/ed25519.js';
-import { rekorHashForPackage } from './signing.ts';
+import { rekorHashForPackage, type SignerIdentity } from './signing.ts';
+import { captureVocabForProfile, resolveProfileType } from './profiles.ts';
+import type { CaptureMethod } from './packager.ts';
 import {
   isBlobRef,
   verifyBlobRef,
@@ -213,6 +215,11 @@ export interface TrustRegistryKey {
   activatedAt: string;
   deprecatedAt: string | null;
   revokedAt: string | null;
+  /** Identity the `kid` is bound to (spec §8.3.3). Verify check #14
+   *  cross-checks a package's envelope-side `signer.identifier` against this.
+   *  Optional: legacy registries omit it, and verifiers then skip the
+   *  cross-check (treating the binding as `legacy_embedded`). */
+  signerIdentity?: SignerIdentity;
 }
 
 export interface TrustRegistry {
@@ -338,6 +345,156 @@ export function verifyKeyTrust(
     verified: true,
     kid,
     activatedAt: match.activatedAt,
+  };
+}
+
+// --- Typed-standards envelope checks (spec §9.2 checks #12, #14, #15) ---
+//
+// These read the consolidated-spec envelope fields (`type`, `signer`,
+// `producerProfile`) added by the publish path. They run alongside the
+// existing hash/signature/Rekor/key-trust checks. Each degrades gracefully
+// for pre-v0.1 packages that omit the field, per the per-field
+// backwards-compatibility rules.
+
+// v0.1 ratified node type URIs (spec §8.12.1). Recognized so check #12
+// resolves them; only `content/analysis/v1` (+ the withdraws/reinstates
+// lifecycle sub-types in PR3) are operationalized today, but the full
+// ratified set is registered so conformant packages don't render as
+// `unknown_type`.
+const KNOWN_TYPE_URIS: readonly string[] = [
+  'content/analysis/v1',
+  'attestation/withdraws/v1',
+  'attestation/reinstates/v1',
+  'attestation/supersedes/v1',
+  'attestation/publishes/v1',
+  'attestation/locatedAt/v1',
+  'attestation/corroborates/v1',
+  'attestation/contradicts/v1',
+  'attestation/endorses/v1',
+  'attestation/wasDerivedFrom/v1',
+  'attestation/answersQuestion/v1',
+  'attestation/supportedBy/v1',
+  'attestation/opposedBy/v1',
+  'attestation/certifies/v1',
+  'attestation/evaluates/v1',
+  'attestation/conforms/v1',
+];
+
+export type TypeResolutionStatus = 'ok' | 'implicit' | 'unknown_type';
+
+export interface TypeResolution {
+  status: TypeResolutionStatus;
+  /** The resolved type URI (the implicit `content/analysis/v1` when omitted). */
+  type: string;
+}
+
+/**
+ * Check #12 — `type` resolution. Reads the node's family + sub-type so
+ * per-sub-type rules can apply. An absent field resolves to the implicit
+ * `content/analysis/v1` (pre-v0.1). An unrecognized URI reports
+ * `unknown_type` and renders as such — it does NOT fail verification.
+ */
+export function resolvePackageType(pkg: Record<string, unknown>): TypeResolution {
+  const raw = pkg['type'];
+  if (typeof raw !== 'string' || raw.length === 0) {
+    return { status: 'implicit', type: 'content/analysis/v1' };
+  }
+  if (KNOWN_TYPE_URIS.includes(raw)) {
+    return { status: 'ok', type: raw };
+  }
+  return { status: 'unknown_type', type: raw };
+}
+
+export type SignerIdentityCheckStatus =
+  | 'ok'
+  | 'signer_identity_mismatch'
+  | 'no_signer'
+  | 'no_registry_identity';
+
+export interface SignerIdentityCheck {
+  status: SignerIdentityCheckStatus;
+  /** The `signer.identifier` claimed in the envelope, when present. */
+  claimed?: string;
+  /** The identifier the registry records for the signing `kid`, when present. */
+  registered?: string;
+}
+
+/**
+ * Check #14 — `signer.identifier` ↔ trust-registry `signerIdentity`
+ * cross-check (rules out a kid-swap-with-mismatched-identity attack).
+ * `signer_identity_mismatch` is fatal. Pre-v0.1 packages carry no
+ * envelope-side `signer` (`no_signer`) — the verifier derives the signer
+ * from the registry and skips the cross-check. A registry entry without a
+ * `signerIdentity` (legacy registry) yields `no_registry_identity`.
+ */
+export function checkSignerIdentity(
+  pkg: Record<string, unknown>,
+  kid: string | undefined,
+  registry: TrustRegistry | undefined,
+): SignerIdentityCheck {
+  const signer = pkg['signer'] as SignerIdentity | undefined;
+  if (!signer || typeof signer !== 'object' || typeof signer.identifier !== 'string') {
+    return { status: 'no_signer' };
+  }
+  const entry = kid && registry ? registry.keys.find((k) => k.kid === kid) : undefined;
+  const registered = entry?.signerIdentity?.identifier;
+  if (!registered) {
+    return { status: 'no_registry_identity', claimed: signer.identifier };
+  }
+  if (registered !== signer.identifier) {
+    return { status: 'signer_identity_mismatch', claimed: signer.identifier, registered };
+  }
+  return { status: 'ok', claimed: signer.identifier, registered };
+}
+
+export type CaptureMethodVocabStatus =
+  | 'ok'
+  | 'captureMethod_unknown'
+  | 'producerProfile_bundle_unresolved'
+  | 'no_capture_method';
+
+export interface CaptureMethodVocabCheck {
+  status: CaptureMethodVocabStatus;
+  captureMethod?: string;
+  /** The resolved Producer Profile type whose vocabulary was consulted. */
+  profileType: string;
+}
+
+/**
+ * Check #15 — `captureMethod` per-profile vocabulary conformance. Resolves
+ * the package's Producer Profile (or its legacy-alias / pre-v0.1 fallback)
+ * and confirms `metadata.captureMethod` is in the declared vocabulary.
+ * A value not in the vocabulary reports `captureMethod_unknown` (rejects).
+ * An unresolvable profile bundle reports `producerProfile_bundle_unresolved`
+ * and degrades gracefully — the value is preserved, structural checks still
+ * pass, only the vocabulary-conformance assertion is unverified. A null
+ * captureMethod (pre-v0.1) is neutral (`no_capture_method`).
+ */
+export function checkCaptureMethodVocab(pkg: Record<string, unknown>): CaptureMethodVocabCheck {
+  const metadata = pkg['metadata'] as Record<string, unknown> | undefined;
+  const captureMethod =
+    typeof metadata?.['captureMethod'] === 'string'
+      ? (metadata['captureMethod'] as string)
+      : undefined;
+  const producerProfile =
+    typeof pkg['producerProfile'] === 'string' ? (pkg['producerProfile'] as string) : undefined;
+  const contentProfile =
+    typeof metadata?.['contentProfile'] === 'string'
+      ? (metadata['contentProfile'] as string)
+      : undefined;
+  const profileType = resolveProfileType(producerProfile, contentProfile);
+
+  if (!captureMethod) {
+    return { status: 'no_capture_method', profileType };
+  }
+  const vocab = captureVocabForProfile(producerProfile, contentProfile);
+  if (!vocab) {
+    return { status: 'producerProfile_bundle_unresolved', captureMethod, profileType };
+  }
+  return {
+    status: vocab.includes(captureMethod as CaptureMethod) ? 'ok' : 'captureMethod_unknown',
+    captureMethod,
+    profileType,
   };
 }
 

@@ -356,3 +356,64 @@ test('buildEvidencePackage: datHere content profile preserves caller-supplied ex
     'environment extension must be auto-emitted alongside the caller-supplied notebook extension',
   );
 });
+
+// --- PR1: producerProfile / type / signer top-level envelope fields ---
+//
+// ADR-0006/0009 (spec §8.1.1). The load-bearing property is that
+// existing-shape inputs (none of the three fields) produce byte-identical
+// canonical JSON to before — so legacy verify, which recomputes the hash
+// from stored canonical JSON, still matches. The fields are top-level
+// (parallel to metadata.contentProfile, which stays nested).
+
+test('buildEvidencePackage: existing-shape input emits NO producerProfile/type/signer (byte-identical)', () => {
+  const { pkg } = buildEvidencePackage(baseInput());
+  // Top-level keys must be absent so legacy verify (which recomputes the hash
+  // from stored canonical JSON) still matches. (A substring scan of the JSON
+  // would false-positive on nested keys like a tool call's `args.type`, so
+  // assert on the top-level object's own properties.)
+  assert.equal(Object.prototype.hasOwnProperty.call(pkg, 'producerProfile'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(pkg, 'type'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(pkg, 'signer'), false);
+});
+
+test('buildEvidencePackage: datHere auto-derives producerProfile = ai-assisted-analysis/datHere', () => {
+  const { pkg } = buildEvidencePackage(baseInput({ contentProfile: 'datHere' }));
+  assert.equal(pkg.producerProfile, 'ai-assisted-analysis/datHere');
+});
+
+test('buildEvidencePackage: explicit producerProfile is preserved (not overridden by auto-derive)', () => {
+  const { pkg } = buildEvidencePackage(
+    baseInput({ contentProfile: 'datHere', producerProfile: 'ai-assisted-analysis/datHere' }),
+  );
+  assert.equal(pkg.producerProfile, 'ai-assisted-analysis/datHere');
+  // And a non-datHere input with an explicit producerProfile keeps it.
+  const { pkg: pkg2 } = buildEvidencePackage(
+    baseInput({ producerProfile: 'ai-assisted-analysis/civicaitools-default' }),
+  );
+  assert.equal(pkg2.producerProfile, 'ai-assisted-analysis/civicaitools-default');
+});
+
+test('buildEvidencePackage: type is emitted at top level when supplied', () => {
+  const { pkg } = buildEvidencePackage(baseInput({ type: 'content/analysis/v1' }));
+  assert.equal(pkg.type, 'content/analysis/v1');
+});
+
+test('buildEvidencePackage: signer is emitted at top level when supplied', () => {
+  const signer = {
+    bindingTier: 'platform',
+    identifier: 'platform:civic-ai-tools',
+    displayName: 'Civic AI Tools Platform',
+  };
+  const { pkg } = buildEvidencePackage(baseInput({ signer }));
+  assert.deepEqual(pkg.signer, signer);
+});
+
+test('buildEvidencePackage: type is covered by the package hash (tamper-evidence)', () => {
+  const a = buildEvidencePackage(baseInput({ type: 'content/analysis/v1' }));
+  const b = buildEvidencePackage(baseInput({ type: 'content/other/v1' }));
+  assert.notEqual(
+    normalizedHash(a.pkg),
+    normalizedHash(b.pkg),
+    'two packages identical except for type must hash differently',
+  );
+});

@@ -531,6 +531,19 @@ export default async function EvidencePage({ params }: PageProps) {
               <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
                 Captured via: {captureMethodLabel(record.captureMethod)}
               </span>
+              {/* Typed-standards envelope labels (ADR-0006/0009). Read from
+                  the canonical package object — not a DB column. Absent on
+                  pre-v0.1 packages, which simply omit these. */}
+              {renderPkg?.producerProfile && (
+                <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                  Producer profile: {renderPkg.producerProfile}
+                </span>
+              )}
+              {renderPkg?.type && (
+                <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                  {renderPkg.type}
+                </span>
+              )}
             </div>
           </Section>
         )}
@@ -750,6 +763,19 @@ export default async function EvidencePage({ params }: PageProps) {
               <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
                 Captured via: {captureMethodLabel(record.captureMethod)}
               </span>
+              {/* Typed-standards envelope labels (ADR-0006/0009). Read from
+                  the canonical package object — not a DB column. Absent on
+                  pre-v0.1 packages, which simply omit these. */}
+              {renderPkg?.producerProfile && (
+                <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                  Producer profile: {renderPkg.producerProfile}
+                </span>
+              )}
+              {renderPkg?.type && (
+                <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                  {renderPkg.type}
+                </span>
+              )}
             </div>
           </Section>
         )}
