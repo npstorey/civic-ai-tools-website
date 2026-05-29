@@ -8,7 +8,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
+import canonicalize from 'canonicalize';
 import { buildEvidencePackage, type PackageInput } from './packager.ts';
+import { recomputePackageHash } from './verify.ts';
+import {
+  LEGACY_JSON_CANONICALIZATION,
+  DATHERE_AG_JUPYTER_CANONICALIZATION,
+} from './canonicalization.ts';
 import type { BlobRef } from './blob-ref.ts';
 
 function sha256Hex(content: string): string {
@@ -416,4 +422,135 @@ test('buildEvidencePackage: type is covered by the package hash (tamper-evidence
     normalizedHash(b.pkg),
     'two packages identical except for type must hash differently',
   );
+});
+
+// --- PR2: contentCanonicalization + contentHash + JCS envelope hash ---
+//
+// The v0.1 envelope is gated on `type` presence (the spec's required v0.1
+// discriminator, which the route always default-fills). Legacy / internal
+// callers that don't supply `type` keep the pre-PR2 shape — no contentHash,
+// JSON.stringify hashing — so their canonical JSON stays byte-identical and
+// re-verifies on the legacy detection chain.
+
+/** Simulate the production storage round-trip: putPackage stores
+ *  JSON.stringify(pkg); getPackage returns response.json() (a parsed object). */
+function storageRoundTrip(pkg: unknown): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(pkg)) as Record<string, unknown>;
+}
+
+test('buildEvidencePackage: legacy input (no type) emits NO contentHash/contentCanonicalization and hashes via JSON.stringify (byte-identical)', () => {
+  const { pkg, hash } = buildEvidencePackage(baseInput());
+  assert.equal(Object.prototype.hasOwnProperty.call(pkg, 'contentHash'), false);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(pkg, 'contentCanonicalization'),
+    false,
+  );
+  // Byte-identical legacy chain: the envelope hash is SHA-256(JSON.stringify).
+  assert.equal(
+    hash,
+    crypto.createHash('sha256').update(JSON.stringify(pkg)).digest('hex'),
+  );
+});
+
+test('buildEvidencePackage: v0.1 input (type present) emits legacy-json/v1 rule + multihash contentHash, hashes via JCS', () => {
+  const { pkg, hash } = buildEvidencePackage(
+    baseInput({ type: 'content/analysis/v1' }),
+  );
+  assert.equal(pkg.contentCanonicalization, LEGACY_JSON_CANONICALIZATION);
+  assert.ok(pkg.contentHash, 'contentHash should be present on a v0.1 package');
+  assert.equal(typeof pkg.contentHash!.sha256, 'string');
+  assert.equal(pkg.contentHash!.sha256.length, 64);
+  // JCS chain: the envelope hash is SHA-256(JCS(pkg)).
+  assert.equal(
+    hash,
+    crypto.createHash('sha256').update(canonicalize(pkg) as string).digest('hex'),
+  );
+});
+
+test('buildEvidencePackage: v0.1 default contentHash fingerprints the package minus contentHash (legacy-json/v1)', () => {
+  const { pkg } = buildEvidencePackage(baseInput({ type: 'content/analysis/v1' }));
+  const rest: Record<string, unknown> = { ...pkg };
+  delete rest.contentHash;
+  const expected = crypto
+    .createHash('sha256')
+    .update(canonicalize(rest) as string)
+    .digest('hex');
+  assert.equal(pkg.contentHash!.sha256, expected);
+});
+
+test('buildEvidencePackage: v0.1 datHere emits dathere-ag-jupyter/v1 rule + fingerprints the executed notebook', () => {
+  const notebook = { nbformat: 4, nbformat_minor: 5, cells: [], metadata: {} };
+  const { pkg } = buildEvidencePackage(
+    baseInput({
+      type: 'content/analysis/v1',
+      contentProfile: 'datHere',
+      extensions: { 'org.civicaitools.notebook': notebook },
+    }),
+  );
+  assert.equal(pkg.contentCanonicalization, DATHERE_AG_JUPYTER_CANONICALIZATION);
+  // datHere off-log content is the notebook, NOT the whole package; the
+  // auto-emitted environment extension is a sibling and is excluded.
+  const expected = crypto
+    .createHash('sha256')
+    .update(canonicalize(notebook) as string)
+    .digest('hex');
+  assert.equal(pkg.contentHash!.sha256, expected);
+});
+
+test('buildEvidencePackage: v0.1 contentHash changes when off-log content changes (tamper-evidence)', () => {
+  const a = buildEvidencePackage(
+    baseInput({ type: 'content/analysis/v1', output: 'AAAA' }),
+  );
+  const b = buildEvidencePackage(
+    baseInput({ type: 'content/analysis/v1', output: 'BBBB' }),
+  );
+  assert.notEqual(a.pkg.contentHash!.sha256, b.pkg.contentHash!.sha256);
+});
+
+// --- PR2: build → store → verify round-trip (the regression-guard property) ---
+//
+// A freshly-built package must recompute to the exact hash it was published
+// under after the production storage round-trip (JSON.stringify → JSON.parse).
+// This is the unit-level analog of the production regression guard.
+
+test('round-trip: legacy package re-verifies byte-identical (legacy detection chain)', () => {
+  const { pkg, hash } = buildEvidencePackage(baseInput());
+  assert.equal(recomputePackageHash(storageRoundTrip(pkg)), hash);
+});
+
+test('round-trip: v0.1 default package re-verifies (JCS detection chain)', () => {
+  const { pkg, hash } = buildEvidencePackage(
+    baseInput({ type: 'content/analysis/v1' }),
+  );
+  assert.equal(recomputePackageHash(storageRoundTrip(pkg)), hash);
+});
+
+test('round-trip: v0.1 datHere package re-verifies (JCS detection chain)', () => {
+  const notebook = {
+    nbformat: 4,
+    nbformat_minor: 5,
+    cells: [
+      { cell_type: 'code', source: ['print(1)'], outputs: [], metadata: {} },
+    ],
+    metadata: {},
+  };
+  const { pkg, hash } = buildEvidencePackage(
+    baseInput({
+      type: 'content/analysis/v1',
+      contentProfile: 'datHere',
+      extensions: { 'org.civicaitools.notebook': notebook },
+    }),
+  );
+  assert.equal(recomputePackageHash(storageRoundTrip(pkg)), hash);
+});
+
+test('round-trip: v0.1 package re-verifies even if storage reorders top-level keys (JCS order-independence)', () => {
+  const { pkg, hash } = buildEvidencePackage(
+    baseInput({ type: 'content/analysis/v1' }),
+  );
+  const reordered: Record<string, unknown> = {};
+  for (const k of Object.keys(pkg).reverse()) {
+    reordered[k] = (pkg as unknown as Record<string, unknown>)[k];
+  }
+  assert.equal(recomputePackageHash(reordered), hash);
 });

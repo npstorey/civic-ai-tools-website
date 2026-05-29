@@ -7,6 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
+import canonicalize from 'canonicalize';
 import {
   verifyKeyTrust,
   loadTrustRegistry,
@@ -16,8 +17,15 @@ import {
   resolvePackageType,
   checkSignerIdentity,
   checkCaptureMethodVocab,
+  recomputePackageHash,
+  resolveContentCanonicalization,
+  verifyContentHash,
   type TrustRegistry,
 } from './verify.ts';
+import {
+  LEGACY_JSON_CANONICALIZATION,
+  DATHERE_AG_JUPYTER_CANONICALIZATION,
+} from './canonicalization.ts';
 import type { BlobRef } from './blob-ref.ts';
 
 const KID = 'platform:evidence-2026-04';
@@ -558,4 +566,146 @@ test('checkCaptureMethodVocab: pre-v0.1 (no producerProfile/contentProfile) reso
   const r = checkCaptureMethodVocab(pkg);
   assert.equal(r.status, 'ok');
   assert.equal(r.profileType, 'ai-assisted-analysis');
+});
+
+// --- PR2: recomputePackageHash dual-chain (checks #1 + #13) ---
+
+test('recomputePackageHash: multihash contentHash present → JCS chain', () => {
+  const pkg = { b: 1, a: 2, contentHash: { sha256: 'x' } };
+  assert.equal(
+    recomputePackageHash(pkg),
+    sha256Hex(canonicalize(pkg) as string),
+  );
+});
+
+test('recomputePackageHash: no contentHash (pre-v0.1) → legacy JSON.stringify chain', () => {
+  const pkg = { b: 1, a: 2 };
+  assert.equal(recomputePackageHash(pkg), sha256Hex(JSON.stringify(pkg)));
+});
+
+// --- PR2: check #3 — contentCanonicalization rule resolution ---
+
+test('resolveContentCanonicalization: known legacy-json/v1 URI → ok', () => {
+  assert.deepEqual(
+    resolveContentCanonicalization({
+      contentCanonicalization: LEGACY_JSON_CANONICALIZATION,
+    }),
+    { status: 'ok', rule: LEGACY_JSON_CANONICALIZATION },
+  );
+});
+
+test('resolveContentCanonicalization: known dathere-ag-jupyter/v1 URI → ok', () => {
+  assert.deepEqual(
+    resolveContentCanonicalization({
+      contentCanonicalization: DATHERE_AG_JUPYTER_CANONICALIZATION,
+    }),
+    { status: 'ok', rule: DATHERE_AG_JUPYTER_CANONICALIZATION },
+  );
+});
+
+test('resolveContentCanonicalization: unrecognized URI → unknown_canonicalization_rule', () => {
+  const r = resolveContentCanonicalization({
+    contentCanonicalization: 'https://example.org/canon/madeup/v9',
+  });
+  assert.equal(r.status, 'unknown_canonicalization_rule');
+  assert.equal(r.rule, 'https://example.org/canon/madeup/v9');
+});
+
+test('resolveContentCanonicalization: absent + contentProfile datHere → implicit dathere rule (pre-v0.1)', () => {
+  assert.deepEqual(
+    resolveContentCanonicalization({ metadata: { contentProfile: 'datHere' } }),
+    { status: 'implicit', rule: DATHERE_AG_JUPYTER_CANONICALIZATION },
+  );
+});
+
+test('resolveContentCanonicalization: absent + default/legacy → implicit legacy rule (pre-v0.1)', () => {
+  assert.deepEqual(resolveContentCanonicalization({ metadata: {} }), {
+    status: 'implicit',
+    rule: LEGACY_JSON_CANONICALIZATION,
+  });
+});
+
+test('resolveContentCanonicalization: absent + producerProfile datHere alias → implicit dathere rule', () => {
+  assert.deepEqual(
+    resolveContentCanonicalization({
+      producerProfile: 'ai-assisted-analysis/datHere',
+    }),
+    { status: 'implicit', rule: DATHERE_AG_JUPYTER_CANONICALIZATION },
+  );
+});
+
+// --- PR2: check #4 — content-hash verification ---
+
+/** Build a v0.1 legacy-json/v1 package with a correct contentHash. */
+function v01LegacyPkg(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    type: 'content/analysis/v1',
+    contentCanonicalization: LEGACY_JSON_CANONICALIZATION,
+    output: 'hello',
+    ...overrides,
+  };
+  const sha256 = sha256Hex(canonicalize(base) as string);
+  return { ...base, contentHash: { sha256 } };
+}
+
+const OK_RULE = { status: 'ok' as const, rule: LEGACY_JSON_CANONICALIZATION };
+const OK_DATHERE_RULE = {
+  status: 'ok' as const,
+  rule: DATHERE_AG_JUPYTER_CANONICALIZATION,
+};
+
+test('verifyContentHash: v0.1 legacy-json/v1 with a correct hash → ok (sha256 matched)', () => {
+  const pkg = v01LegacyPkg();
+  const r = verifyContentHash(pkg, OK_RULE);
+  assert.equal(r.status, 'ok');
+  assert.equal(r.matched, 'sha256');
+  assert.deepEqual(r.algorithms, ['sha256']);
+});
+
+test('verifyContentHash: v0.1 tampered off-log content → content_hash_mismatch', () => {
+  // Keep the stored (now-stale) contentHash but mutate covered content.
+  const pkg = { ...v01LegacyPkg(), output: 'tampered after signing' };
+  assert.equal(verifyContentHash(pkg, OK_RULE).status, 'content_hash_mismatch');
+});
+
+test('verifyContentHash: v0.1 dathere-ag-jupyter/v1 over the notebook → ok', () => {
+  const notebook = { nbformat: 4, nbformat_minor: 5, cells: [], metadata: {} };
+  const sha256 = sha256Hex(canonicalize(notebook) as string);
+  const pkg = {
+    type: 'content/analysis/v1',
+    contentCanonicalization: DATHERE_AG_JUPYTER_CANONICALIZATION,
+    extensions: { 'org.civicaitools.notebook': notebook },
+    contentHash: { sha256 },
+  };
+  assert.equal(verifyContentHash(pkg, OK_DATHERE_RULE).status, 'ok');
+});
+
+test('verifyContentHash: only an unsupported algorithm listed → contentHash_no_supported_algorithm', () => {
+  const pkg = {
+    contentCanonicalization: LEGACY_JSON_CANONICALIZATION,
+    contentHash: { 'sha3-256': 'deadbeef' },
+  };
+  assert.equal(
+    verifyContentHash(pkg, OK_RULE).status,
+    'contentHash_no_supported_algorithm',
+  );
+});
+
+test('verifyContentHash: unknown canonicalization rule → unresolved_rule', () => {
+  const pkg = {
+    contentCanonicalization: 'https://example.org/canon/madeup/v9',
+    contentHash: { sha256: 'x' },
+  };
+  const resolution = resolveContentCanonicalization(pkg);
+  assert.equal(verifyContentHash(pkg, resolution).status, 'unresolved_rule');
+});
+
+test('verifyContentHash: pre-v0.1 (no multihash contentHash) → legacy_relabeled with the slug hash', () => {
+  const pkg = { output: 'hi' };
+  const resolution = resolveContentCanonicalization(pkg);
+  const r = verifyContentHash(pkg, resolution, 'abc123def456');
+  assert.equal(r.status, 'legacy_relabeled');
+  assert.deepEqual(r.contentHash, { sha256: 'abc123def456' });
 });
