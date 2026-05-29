@@ -24,6 +24,7 @@ import {
   type ContentCanonicalizationResolution,
   type ContentHashCheck,
 } from '@/lib/evidence/verify';
+import { resolveLifecycle } from '@/lib/evidence/lifecycle';
 
 export async function GET(
   _request: NextRequest,
@@ -164,6 +165,16 @@ export async function GET(
     captureMethodVocab = checkCaptureMethodVocab(pkgJson);
   }
 
+  // Step 6: Lifecycle (check #10, spec §8.10). Dual-read — derive status from
+  // the signer-matched, independently-verified chain of `attestation/*` nodes
+  // when present, else fall back to the legacy withdrawnAt/reinstatedAt columns
+  // (§8.10.4). The target signer is the content node's signer.identifier (the
+  // publisher-only signer-match), defaulting to the platform signer.
+  const lifecycle = await resolveLifecycle(
+    record,
+    (pkgJson?.['signer'] as { identifier?: string } | undefined)?.identifier,
+  );
+
   return NextResponse.json({
     hashMatch,
     signatureValid,
@@ -180,6 +191,9 @@ export async function GET(
     typeResolution,
     signerIdentity,
     captureMethodVocab,
+    // Lifecycle check (spec §9.2 check #10, §8.10) — attestation chain or
+    // legacy-column fallback.
+    lifecycle,
     details: {
       storedHash: record.basePackageHash,
       recomputedHash,
