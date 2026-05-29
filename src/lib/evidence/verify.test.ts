@@ -20,12 +20,21 @@ import {
   recomputePackageHash,
   resolveContentCanonicalization,
   verifyContentHash,
+  verifyAttestationNode,
+  resolveLifecycleFromChain,
+  resolveLifecycleFromLegacyColumns,
   type TrustRegistry,
+  type LifecycleAttestationView,
 } from './verify.ts';
 import {
   LEGACY_JSON_CANONICALIZATION,
   DATHERE_AG_JUPYTER_CANONICALIZATION,
 } from './canonicalization.ts';
+import {
+  buildAttestationNode,
+  ATTESTATION_WITHDRAWS,
+  ATTESTATION_REINSTATES,
+} from './attestation.ts';
 import type { BlobRef } from './blob-ref.ts';
 
 const KID = 'platform:evidence-2026-04';
@@ -708,4 +717,165 @@ test('verifyContentHash: pre-v0.1 (no multihash contentHash) → legacy_relabele
   const r = verifyContentHash(pkg, resolution, 'abc123def456');
   assert.equal(r.status, 'legacy_relabeled');
   assert.deepEqual(r.contentHash, { sha256: 'abc123def456' });
+});
+
+// --- PR3: check #10 — lifecycle attestation chain (spec §8.10) ---
+
+const PLATFORM = 'platform:civic-ai-tools';
+const OTHER = 'platform:someone-else';
+
+function view(overrides: Partial<LifecycleAttestationView> = {}): LifecycleAttestationView {
+  return {
+    nodeId: 'n1',
+    type: ATTESTATION_WITHDRAWS,
+    signer: { bindingTier: 'platform', identifier: PLATFORM, displayName: 'P' },
+    createdAt: '2026-01-01T00:00:00.000Z',
+    signatureValid: true,
+    nodeIdMatches: true,
+    hasTimestamp: true,
+    hasRekor: true,
+    signerMatchesTarget: true,
+    ...overrides,
+  };
+}
+
+test('resolveLifecycleFromChain: empty chain → active', () => {
+  const r = resolveLifecycleFromChain([]);
+  assert.equal(r.status, 'active');
+  assert.equal(r.source, 'attestation-chain');
+  assert.deepEqual(r.chain, []);
+});
+
+test('resolveLifecycleFromChain: single signer-matched withdraws → withdrawn', () => {
+  const r = resolveLifecycleFromChain([
+    view({ type: ATTESTATION_WITHDRAWS, reason: 'bad data', createdAt: '2026-02-01T00:00:00.000Z', effectiveAt: '2026-02-01T00:00:00.000Z' }),
+  ]);
+  assert.equal(r.status, 'withdrawn');
+  assert.equal(r.withdrawnReason, 'bad data');
+  assert.equal(r.withdrawnAt, '2026-02-01T00:00:00.000Z');
+});
+
+test('resolveLifecycleFromChain: withdraws then reinstates → active, both convenience fields', () => {
+  const w = view({ nodeId: 'w', type: ATTESTATION_WITHDRAWS, reason: 'oops', createdAt: '2026-02-01T00:00:00.000Z', effectiveAt: '2026-02-01T00:00:00.000Z' });
+  const re = view({ nodeId: 'r', type: ATTESTATION_REINSTATES, reason: 'fixed', createdAt: '2026-03-01T00:00:00.000Z' });
+  const r = resolveLifecycleFromChain([w, re]);
+  assert.equal(r.status, 'active');
+  assert.equal(r.withdrawnAt, '2026-02-01T00:00:00.000Z');
+  assert.equal(r.reinstatedAt, '2026-03-01T00:00:00.000Z');
+  assert.equal(r.reinstatedReason, 'fixed');
+});
+
+test('resolveLifecycleFromChain: orders by envelope timestamp regardless of input order', () => {
+  const w = view({ nodeId: 'w', type: ATTESTATION_WITHDRAWS, createdAt: '2026-02-01T00:00:00.000Z' });
+  const re = view({ nodeId: 'r', type: ATTESTATION_REINSTATES, createdAt: '2026-03-01T00:00:00.000Z' });
+  const r = resolveLifecycleFromChain([re, w]); // reinstates passed first
+  assert.equal(r.status, 'active');             // but withdraws is earlier → latest is reinstates
+  assert.equal(r.chain[0].nodeId, 'w');         // sorted ascending
+  assert.equal(r.chain[1].nodeId, 'r');
+});
+
+test('resolveLifecycleFromChain: ties broken by nodeId lexicographic', () => {
+  const a = view({ nodeId: 'aaa', type: ATTESTATION_REINSTATES, createdAt: '2026-02-01T00:00:00.000Z' });
+  const b = view({ nodeId: 'bbb', type: ATTESTATION_WITHDRAWS, createdAt: '2026-02-01T00:00:00.000Z' });
+  const r = resolveLifecycleFromChain([b, a]); // same timestamp; 'aaa' < 'bbb'
+  assert.equal(r.chain[0].nodeId, 'aaa');
+  assert.equal(r.chain[1].nodeId, 'bbb');
+  assert.equal(r.status, 'withdrawn');          // latest (bbb) is withdraws
+});
+
+test('resolveLifecycleFromChain: non-signer-matched withdraws does NOT move status (retention asymmetry §8.10.3)', () => {
+  const foreign = view({
+    nodeId: 'f', type: ATTESTATION_WITHDRAWS, createdAt: '2026-02-01T00:00:00.000Z',
+    signer: { bindingTier: 'platform', identifier: OTHER, displayName: 'X' },
+    signerMatchesTarget: false,
+  });
+  const r = resolveLifecycleFromChain([foreign]);
+  assert.equal(r.status, 'active');  // foreign withdrawal ignored for status
+  assert.equal(r.chain.length, 1);   // but still surfaced in the chain
+});
+
+test('resolveLifecycleFromChain: re-withdrawn (multi-cycle) → withdrawn (latest wins)', () => {
+  const w1 = view({ nodeId: 'w1', type: ATTESTATION_WITHDRAWS, createdAt: '2026-01-01T00:00:00.000Z' });
+  const r1 = view({ nodeId: 'r1', type: ATTESTATION_REINSTATES, createdAt: '2026-02-01T00:00:00.000Z' });
+  const w2 = view({ nodeId: 'w2', type: ATTESTATION_WITHDRAWS, createdAt: '2026-03-01T00:00:00.000Z', reason: 'again' });
+  const r = resolveLifecycleFromChain([w1, r1, w2]);
+  assert.equal(r.status, 'withdrawn');
+  assert.equal(r.withdrawnReason, 'again');
+});
+
+// --- PR3: check #10 — legacy column fallback (spec §8.10.4) ---
+
+test('resolveLifecycleFromLegacyColumns: no withdrawnAt → active, source none', () => {
+  const r = resolveLifecycleFromLegacyColumns({});
+  assert.equal(r.status, 'active');
+  assert.equal(r.source, 'none');
+});
+
+test('resolveLifecycleFromLegacyColumns: withdrawnAt set → withdrawn (pre-PR3 fallback)', () => {
+  const r = resolveLifecycleFromLegacyColumns({ withdrawnAt: '2026-02-01T00:00:00.000Z', withdrawnReason: 'legacy' });
+  assert.equal(r.status, 'withdrawn');
+  assert.equal(r.source, 'legacy-columns');
+  assert.equal(r.withdrawnReason, 'legacy');
+});
+
+test('resolveLifecycleFromLegacyColumns: withdrawn + reinstated → active', () => {
+  const r = resolveLifecycleFromLegacyColumns({ withdrawnAt: '2026-02-01T00:00:00.000Z', reinstatedAt: '2026-03-01T00:00:00.000Z' });
+  assert.equal(r.status, 'active');
+  assert.equal(r.source, 'legacy-columns');
+});
+
+// --- PR3: verifyAttestationNode ---
+
+const ATT_SIGNER = { bindingTier: 'platform', identifier: PLATFORM, displayName: 'P' };
+
+test('verifyAttestationNode: built node recomputes its nodeId (integrity)', () => {
+  const { node, nodeId } = buildAttestationNode({ type: ATTESTATION_WITHDRAWS, targetNodeId: 'a'.repeat(64), signer: ATT_SIGNER, reason: 'x' });
+  const r = verifyAttestationNode(node as unknown as Record<string, unknown>, nodeId, null);
+  assert.equal(r.nodeIdMatches, true);
+  assert.equal(r.signatureValid, null); // no signature envelope supplied
+});
+
+test('verifyAttestationNode: wrong stored nodeId → nodeIdMatches false', () => {
+  const { node } = buildAttestationNode({ type: ATTESTATION_WITHDRAWS, targetNodeId: 'a'.repeat(64), signer: ATT_SIGNER, reason: 'x' });
+  const r = verifyAttestationNode(node as unknown as Record<string, unknown>, 'f'.repeat(64), null);
+  assert.equal(r.nodeIdMatches, false);
+});
+
+test('verifyAttestationNode: tampered node → nodeIdMatches false', () => {
+  const { node, nodeId } = buildAttestationNode({ type: ATTESTATION_WITHDRAWS, targetNodeId: 'a'.repeat(64), signer: ATT_SIGNER, reason: 'x' });
+  const tampered = { ...node, reason: 'tampered after signing' } as unknown as Record<string, unknown>;
+  assert.equal(verifyAttestationNode(tampered, nodeId, null).nodeIdMatches, false);
+});
+
+// --- PR3 regression guard: both lifecycle paths resolve correctly ---
+
+test('lifecycle regression: NEW withdrawal (built node → view → chain) resolves withdrawn', () => {
+  // The post-PR3 path end-to-end minus the DB: build a withdraws node, project
+  // it into a view as lifecycle.ts would, resolve the chain.
+  const { node, nodeId } = buildAttestationNode({ type: ATTESTATION_WITHDRAWS, targetNodeId: 'a'.repeat(64), signer: ATT_SIGNER, reason: 'data error' });
+  const v: LifecycleAttestationView = {
+    nodeId,
+    type: node.type,
+    signer: node.signer,
+    createdAt: node.metadata.createdAt,
+    reason: node.reason,
+    effectiveAt: node.effectiveAt,
+    signatureValid: null,
+    nodeIdMatches: verifyAttestationNode(node as unknown as Record<string, unknown>, nodeId, null).nodeIdMatches,
+    hasTimestamp: false,
+    hasRekor: false,
+    signerMatchesTarget: true,
+  };
+  assert.equal(v.nodeIdMatches, true);
+  const r = resolveLifecycleFromChain([v]);
+  assert.equal(r.status, 'withdrawn');
+  assert.equal(r.source, 'attestation-chain');
+  assert.equal(r.withdrawnReason, 'data error');
+});
+
+test('lifecycle regression: PRE-PR3 legacy withdrawnAt (no chain) resolves withdrawn via fallback', () => {
+  const r = resolveLifecycleFromLegacyColumns({ withdrawnAt: '2025-12-01T00:00:00.000Z', withdrawnReason: 'pre-PR3 withdrawal' });
+  assert.equal(r.status, 'withdrawn');
+  assert.equal(r.source, 'legacy-columns');
+  assert.equal(r.withdrawnReason, 'pre-PR3 withdrawal');
 });

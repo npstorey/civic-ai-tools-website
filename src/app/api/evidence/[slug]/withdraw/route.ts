@@ -1,18 +1,36 @@
-import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { evidenceRecords, users } from '@/lib/db/schema';
+import { evidenceRecords, attestationNodes, users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import { signPackage, getRfc3161Timestamp } from '@/lib/evidence/signing';
+import { putPackage } from '@/lib/storage';
+import {
+  signPackage,
+  getRfc3161Timestamp,
+  publishToRekor,
+  getActiveSigner,
+} from '@/lib/evidence/signing';
+import { buildAttestationNode, ATTESTATION_WITHDRAWS } from '@/lib/evidence/attestation';
 
 /**
  * POST /api/evidence/[slug]/withdraw
  *
- * Withdraws an evidence record. Only the creator can withdraw their own evidence.
- * The withdrawal is a signed, timestamped action — the record and its cryptographic
- * proofs remain accessible but are flagged as withdrawn.
+ * Withdraws an evidence record (spec §8.10, ADR-0010; PR3). The withdrawal is a
+ * separately-signed `attestation/withdraws/v1` node — its own nodeId (envelope
+ * hash), signature, RFC 3161 timestamp, and Rekor inclusion — referencing the
+ * content node by `targetNodeId`. The content node's own signature is untouched.
+ *
+ * The legacy `withdrawn_at` / `withdrawn_reason` columns are ALSO written as a
+ * denormalized status mirror so the simple list / dashboard / index consumers
+ * (which filter + render on those columns) keep working unchanged. The signed
+ * attestation node is the canonical, conformant representation; verify check #10
+ * and the detail page read the chain first and fall back to the columns only for
+ * pre-PR3 records (§8.10.4 dual-read).
+ *
+ * Authorization is publisher-only: only the content node's creator may withdraw
+ * it (parity with the pre-PR3 behavior). The platform key signs the attestation
+ * on the author's behalf (§8.5), so its `signer` matches the content node's.
  *
  * Body: { reason: string }
  */
@@ -50,14 +68,26 @@ export async function POST(
   }
   const record = records[0];
 
-  // Only the creator can withdraw
+  // Publisher-only: only the creator can withdraw (§8.12.3 authorization rule).
   if (record.creatorId !== userId) {
     return NextResponse.json({ error: 'Only the creator can withdraw evidence' }, { status: 403 });
   }
 
-  // Already withdrawn
+  // Single-cycle parity: reject if already withdrawn. The current status is read
+  // from the legacy column mirror, which the dual-write keeps in sync with the
+  // attestation chain.
   if (record.withdrawnAt) {
     return NextResponse.json({ error: 'Evidence is already withdrawn' }, { status: 400 });
+  }
+
+  // An attestation MUST reference a content node by nodeId (§8.12.3). Published
+  // records always carry one; refuse otherwise rather than emit a non-conformant
+  // node.
+  if (!record.basePackageHash) {
+    return NextResponse.json(
+      { error: 'Cannot withdraw: record has no content node hash to reference' },
+      { status: 400 },
+    );
   }
 
   const body = await request.json();
@@ -66,30 +96,59 @@ export async function POST(
     return NextResponse.json({ error: 'Withdrawal reason is required' }, { status: 400 });
   }
 
-  const now = new Date();
-
-  // Sign the withdrawal action: hash of slug + reason + timestamp
-  const withdrawalContent = JSON.stringify({
-    action: 'withdraw',
-    slug,
+  // Build the signed attestation/withdraws/v1 node. nodeId = envelope hash via
+  // the shared PR2 canonicalization (RFC 8785 JCS).
+  const { node, nodeId } = buildAttestationNode({
+    type: ATTESTATION_WITHDRAWS,
+    targetNodeId: record.basePackageHash,
+    signer: getActiveSigner(),
     reason: reason.trim(),
-    timestamp: now.toISOString(),
-    evidencePackageHash: record.basePackageHash,
   });
-  const withdrawalHash = crypto.createHash('sha256').update(withdrawalContent).digest('hex');
 
-  const signResult = signPackage(withdrawalHash);
-  const rfc3161Token = await getRfc3161Timestamp(withdrawalHash).catch(() => null);
+  // Sign + timestamp + Rekor over the nodeId, exactly like a content package.
+  const signResult = signPackage(nodeId);
+  const [rfc3161Token, rekorResult] = await Promise.all([
+    getRfc3161Timestamp(nodeId).catch(() => null),
+    signResult
+      ? publishToRekor(nodeId, signResult.signature, signResult.publicKey).catch(() => null)
+      : Promise.resolve(null),
+  ]);
 
-  // Update the record
+  // Persist the canonical attestation node FIRST (blob + DB row), so a later
+  // column-mirror failure can't lose the signed artifact.
+  const blobUrl = await putPackage(nodeId, node as unknown as Record<string, unknown>);
+  const signatureJson = signResult
+    ? JSON.stringify({
+        nodeId,
+        signature: signResult.signature,
+        publicKey: signResult.publicKey,
+        algorithm: signResult.algorithm,
+        kid: signResult.kid,
+      })
+    : null;
+
+  await db.insert(attestationNodes).values({
+    nodeId,
+    targetNodeId: record.basePackageHash,
+    type: ATTESTATION_WITHDRAWS,
+    storageKey: blobUrl,
+    signature: signatureJson,
+    rfc3161Timestamp: rfc3161Token,
+    rekorEntryId: rekorResult?.entryId || null,
+    rekorInclusionProof: rekorResult?.inclusionProof || null,
+    signer: node.signer,
+    payload: { reason: reason.trim(), effectiveAt: node.effectiveAt },
+    creatorId: userId,
+  });
+
+  // Dual-write the legacy column mirror (keeps list/dashboard/index working).
+  const now = new Date();
   await db
     .update(evidenceRecords)
     .set({
       withdrawnAt: now,
       withdrawnReason: reason.trim(),
-      withdrawalSignature: signResult
-        ? JSON.stringify({ hash: withdrawalHash, signature: signResult.signature, publicKey: signResult.publicKey, algorithm: signResult.algorithm })
-        : null,
+      withdrawalSignature: signatureJson,
       withdrawalTimestamp: rfc3161Token,
       updatedAt: now,
     })
@@ -98,5 +157,6 @@ export async function POST(
   return NextResponse.json({
     withdrawn: true,
     withdrawnAt: now.toISOString(),
+    attestationNodeId: nodeId,
   });
 }

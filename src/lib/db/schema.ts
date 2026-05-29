@@ -5,6 +5,7 @@ import {
   timestamp,
   boolean,
   pgEnum,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 
 // --- Enums ---
@@ -153,6 +154,46 @@ export const attestationPackages = pgTable('attestation_packages', {
   packageHash: text('package_hash').notNull(),
   storageKey: text('storage_key').notNull(),
   referencesBaseHash: text('references_base_hash').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+// Signed `attestation/*` nodes (spec §8.10, §8.12; ADR-0010). Each row is a
+// full signed envelope — its own nodeId (envelope hash), signature, timestamp,
+// and Rekor proof — referencing a content node by `target_node_id`. PR3
+// operationalizes the lifecycle sub-types (`attestation/withdraws/v1`,
+// `attestation/reinstates/v1`); the `type` column + `payload` jsonb keep the
+// table GENERAL so future sub-types (supersedes / publishes / locatedAt /
+// corroborates / endorses / evaluates / certifies …) land here with no further
+// migration (planning Q6). Distinct from `attestation_packages`, the pre-v0.1
+// "comment on a package" feature that has no signature/type-URI/targetNodeId
+// columns (see PR3 summary for the fold-in recommendation).
+export const attestationNodes = pgTable('attestation_nodes', {
+  // The attestation's own envelope hash (spec §8.2/§8.3.1) — its nodeId.
+  nodeId: text('node_id').primaryKey(),
+  // The content node this attestation references by nodeId (spec §8.12.1).
+  targetNodeId: text('target_node_id').notNull(),
+  // The attestation sub-type URI, e.g. `attestation/withdraws/v1`.
+  type: text('type').notNull(),
+  // Vercel Blob URL of the canonical attestation package JSON.
+  storageKey: text('storage_key').notNull(),
+  // Signature envelope JSON ({signature, publicKey, algorithm, kid}); null when
+  // signing was unavailable at emit time (best-effort, like content packages).
+  signature: text('signature'),
+  rfc3161Timestamp: text('rfc3161_timestamp'),
+  rekorEntryId: text('rekor_entry_id'),
+  rekorInclusionProof: text('rekor_inclusion_proof'),
+  // Envelope-side signer identity claim (spec §8.1.1 `signer`).
+  signer: jsonb('signer'),
+  // Sub-type-specific payload (lifecycle: reason / effectiveAt /
+  // priorWithdrawalNodeId; future sub-types: their own fields). jsonb keeps
+  // the table general across all attestation/* sub-types.
+  payload: jsonb('payload'),
+  // The human author who requested the attestation (route-level authz/audit).
+  creatorId: uuid('creator_id')
+    .notNull()
+    .references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),

@@ -7,6 +7,7 @@ import { evidenceRecords, users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
+import { resolveLifecycle } from '@/lib/evidence/lifecycle';
 import ProvenanceChain from '@/components/evidence/ProvenanceChain';
 import EvidenceActions from '@/components/evidence/EvidenceActions';
 import AttestationSection from '@/components/evidence/AttestationSection';
@@ -225,6 +226,15 @@ export default async function EvidencePage({ params }: PageProps) {
   // existing legacy layout renders unchanged.
   const isDatHere = record.contentProfile === 'datHere';
 
+  // Lifecycle (spec §8.10) — dual-read the signed attestation chain when
+  // present, else the legacy withdrawn/reinstated columns (§8.10.4). The banner
+  // and Status History below render from the resolved status + history rather
+  // than the raw columns, so post-PR3 records surface their signed chain while
+  // pre-PR3 records keep rendering from their columns.
+  const lifecycle = await resolveLifecycle(record, renderPkg?.signer?.identifier);
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
   // Schema.org JSON-LD
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -243,8 +253,10 @@ export default async function EvidencePage({ params }: PageProps) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 24px 64px' }}>
-        {/* Withdrawal banner — only shown when currently withdrawn (not reinstated) */}
-        {record.withdrawnAt && !record.reinstatedAt && (
+        {/* Withdrawal banner — shown when the resolved lifecycle status is
+            withdrawn (from the signed attestation chain, or the legacy columns
+            for pre-PR3 records). */}
+        {lifecycle.status === 'withdrawn' && lifecycle.withdrawnAt && (
           <div style={{
             padding: '16px 20px', marginBottom: '24px',
             backgroundColor: 'rgba(236, 19, 30, 0.06)',
@@ -253,15 +265,16 @@ export default async function EvidencePage({ params }: PageProps) {
           }}>
             <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--nyc-error)', marginBottom: '6px' }}>
               This evidence was withdrawn by the author on{' '}
-              {record.withdrawnAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+              {fmtDate(lifecycle.withdrawnAt)}
             </div>
-            {record.withdrawnReason && (
+            {lifecycle.withdrawnReason && (
               <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                <strong>Reason:</strong> {record.withdrawnReason}
+                <strong>Reason:</strong> {lifecycle.withdrawnReason}
               </div>
             )}
             <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
               The original content and cryptographic proofs are preserved below for transparency.
+              {lifecycle.source === 'attestation-chain' && ' This withdrawal is a separately-signed attestation node.'}
             </div>
           </div>
         )}
@@ -548,8 +561,10 @@ export default async function EvidencePage({ params }: PageProps) {
           </Section>
         )}
 
-        {/* Status History — shown when the record has a withdrawal/reinstatement cycle */}
-        {record.withdrawnAt && (
+        {/* Status History — shown when the record has a withdrawal/reinstatement
+            cycle. Sourced from the resolved lifecycle (signed attestation chain
+            when present, legacy columns otherwise). */}
+        {lifecycle.withdrawnAt && (
           <Section title="Status History">
             <div style={{
               padding: '16px 20px', border: '1px solid var(--border-color)',
@@ -564,19 +579,25 @@ export default async function EvidencePage({ params }: PageProps) {
               <div>
                 <strong style={{ color: 'var(--text-primary)' }}>Withdrawn</strong>
                 {' on '}
-                {record.withdrawnAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-                {record.withdrawnReason && (
-                  <span> — <em>{record.withdrawnReason}</em></span>
+                {fmtDate(lifecycle.withdrawnAt)}
+                {lifecycle.withdrawnReason && (
+                  <span> — <em>{lifecycle.withdrawnReason}</em></span>
                 )}
               </div>
-              {record.reinstatedAt && (
+              {lifecycle.reinstatedAt && (
                 <div>
                   <strong style={{ color: 'var(--text-primary)' }}>Reinstated</strong>
                   {' on '}
-                  {record.reinstatedAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-                  {record.reinstatedReason && (
-                    <span> — <em>{record.reinstatedReason}</em></span>
+                  {fmtDate(lifecycle.reinstatedAt)}
+                  {lifecycle.reinstatedReason && (
+                    <span> — <em>{lifecycle.reinstatedReason}</em></span>
                   )}
+                </div>
+              )}
+              {lifecycle.source === 'attestation-chain' && (
+                <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  Lifecycle events above are separately-signed attestation nodes
+                  ({lifecycle.chain.length} in the chain).
                 </div>
               )}
             </div>
