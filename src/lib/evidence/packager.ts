@@ -4,6 +4,12 @@ import { buildDataSources, type DataSourceEntry } from './data-sources.ts';
 import { getActiveKeyId, type SignerIdentity } from './signing.ts';
 import { isBlobRef, parseBlobRef, type BlobRef } from './blob-ref.ts';
 import { deriveOperationType } from '../mcp/operation-types.ts';
+import {
+  LEGACY_JSON_CANONICALIZATION,
+  DATHERE_AG_JUPYTER_CANONICALIZATION,
+  computeEnvelopeHash,
+  computeContentHashSha256,
+} from './canonicalization.ts';
 
 const PACKAGE_SCHEMA_VERSION = '0.1.0';
 
@@ -191,6 +197,20 @@ export interface EvidencePackage {
    *  cross-check the two via the trust registry (check #14). Absent on
    *  pre-v0.1 packages. */
   signer?: SignerIdentity;
+  /** Content-canonicalization rule URI (spec §8.1.1, §8.2). Names how the
+   *  off-log content reduces to the bytes `contentHash` fingerprints. Emitted
+   *  on v0.1 packages: `…/legacy-json/v1` by default, `…/dathere-ag-jupyter/v1`
+   *  for the datHere content profile. Absent on pre-v0.1 packages (verifiers
+   *  infer the rule from contentProfile). Covered by the envelope hash. */
+  contentCanonicalization?: string;
+  /** Multihash content-hash digest set (spec §8.1.1, §8.2). Object keyed by
+   *  lowercase algorithm name (`sha256` required default) with hex digest
+   *  values, fingerprinting the off-log content canonicalized per
+   *  `contentCanonicalization`. Its presence as a multihash object is the
+   *  §8.2 detection signal routing a package to the JCS chain; pre-v0.1
+   *  packages omit it and stay on the legacy `JSON.stringify` chain. Covered
+   *  by the envelope hash. */
+  contentHash?: Record<string, string>;
   prompt: {
     hash: string;
     visibility: 'full_text' | 'hash_only';
@@ -374,7 +394,22 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
     input.producerProfile ??
     (input.contentProfile === 'datHere' ? DATHERE_PRODUCER_PROFILE : undefined);
 
-  const pkg: EvidencePackage = {
+  // v0.1 canonicalization & hashing (PR2, spec §8.2). `type` is the spec's
+  // required v0.1 discriminator ("pre-v0.1 packages omit the field") and the
+  // route default-fills it for every publish, so its presence is the signal
+  // to emit `contentCanonicalization` + `contentHash` and hash via RFC 8785
+  // JCS. Legacy/internal callers that don't supply `type` keep the pre-PR2
+  // shape — no contentHash, JSON.stringify hashing — so their canonical JSON
+  // (and hash) stays byte-identical. The off-log content's canonicalization
+  // rule follows the content profile: datHere fingerprints its executed
+  // notebook, everything else uses the legacy-json/v1 whole-package rule.
+  const isV01Envelope = input.type !== undefined;
+  const contentCanonicalization =
+    input.contentProfile === 'datHere'
+      ? DATHERE_AG_JUPYTER_CANONICALIZATION
+      : LEGACY_JSON_CANONICALIZATION;
+
+  const pkgBase: EvidencePackage = {
     metadata: {
       schemaVersion: PACKAGE_SCHEMA_VERSION,
       packageId,
@@ -398,6 +433,12 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
     ...(producerProfile ? { producerProfile } : {}),
     ...(input.type ? { type: input.type } : {}),
     ...(input.signer ? { signer: input.signer } : {}),
+    // v0.1 content-canonicalization rule URI (spec §8.2). Conditional spread
+    // gated on the v0.1 discriminator so pre-PR2 callers stay byte-identical.
+    // `contentHash` is computed from this base object below and spread on
+    // last — it cannot be in this literal because legacy-json/v1 fingerprints
+    // the package minus contentHash (a hash cannot include itself).
+    ...(isV01Envelope ? { contentCanonicalization } : {}),
     prompt: {
       hash: promptHash,
       visibility: input.promptVisibility,
@@ -443,9 +484,27 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
     })(),
   };
 
-  // Compute package hash from canonical JSON (covers provenance + extensions)
-  const canonical = JSON.stringify(pkg);
-  const hash = sha256(canonical);
+  // v0.1 packages embed the multihash `contentHash` fingerprinting the
+  // off-log content (spec §8.2). It is computed from `pkgBase` (which already
+  // carries `contentCanonicalization` but not yet `contentHash`) and spread
+  // on last; legacy callers leave `pkgBase` untouched so their canonical JSON
+  // is byte-identical to the pre-PR2 shape.
+  const pkg: EvidencePackage = isV01Envelope
+    ? {
+        ...pkgBase,
+        contentHash: {
+          sha256: computeContentHashSha256(
+            pkgBase as unknown as Record<string, unknown>,
+            contentCanonicalization,
+          ),
+        },
+      }
+    : pkgBase;
+
+  // Envelope hash routes by the §8.2 detection rule: SHA-256(JCS) for v0.1
+  // packages (multihash contentHash present), legacy SHA-256(JSON.stringify)
+  // for pre-v0.1. Shared with verify.ts so producer and verifier agree.
+  const hash = computeEnvelopeHash(pkg as unknown as Record<string, unknown>);
 
   return { pkg, hash };
 }

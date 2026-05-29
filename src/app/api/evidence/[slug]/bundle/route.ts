@@ -45,6 +45,7 @@ type UserRecord = typeof users.$inferSelect;
 function buildCommitmentView(
   record: EvidenceRecord,
   creator: UserRecord | null,
+  pkg: EvidencePackage,
 ): Record<string, unknown> {
   let signature: Record<string, unknown> | null = null;
   if (record.basePackageSignature) {
@@ -70,6 +71,20 @@ function buildCommitmentView(
     packageUrl: record.basePackageStorageKey,
     captureMethod: record.captureMethod ?? null,
     contentProfile: 'datHere',
+    // Envelope fields sourced from the signed package JSON (spec §8.1.1).
+    // Conditionally spread so packages predating these fields omit them
+    // rather than emitting nulls. `producerProfile` / `type` / `signer` are
+    // the PR1 taxonomy fields; `contentHash` / `contentCanonicalization` are
+    // the PR2 §8.2 canonicalization fields. All are covered by the package
+    // signature, so surfacing them in the commitment view lets a cross-host
+    // reader resolve the same envelope the signature commits to.
+    ...(pkg.producerProfile ? { producerProfile: pkg.producerProfile } : {}),
+    ...(pkg.type ? { type: pkg.type } : {}),
+    ...(pkg.signer ? { signer: pkg.signer } : {}),
+    ...(pkg.contentHash ? { contentHash: pkg.contentHash } : {}),
+    ...(pkg.contentCanonicalization
+      ? { contentCanonicalization: pkg.contentCanonicalization }
+      : {}),
     ...(signature ? { signature } : {}),
     ...(signerIdentity ? { signerIdentity } : {}),
     ...(record.basePackageRfc3161Timestamp
@@ -212,7 +227,7 @@ export async function GET(
 
   // Inject commitment view at notebook root metadata (OES §9.2.2)
   const metadata = (notebook.metadata as Record<string, unknown>) ?? {};
-  metadata[EVIDENCE_NAMESPACE_KEY] = buildCommitmentView(record, creator);
+  metadata[EVIDENCE_NAMESPACE_KEY] = buildCommitmentView(record, creator, pkg);
   notebook.metadata = metadata;
 
   // Prepend cell-0 reader-affordance table (OES §9.2.4)

@@ -14,11 +14,15 @@ import {
   resolvePackageType,
   checkSignerIdentity,
   checkCaptureMethodVocab,
+  resolveContentCanonicalization,
+  verifyContentHash,
   type KeyTrustResult,
   type BlobRefVerification,
   type TypeResolution,
   type SignerIdentityCheck,
   type CaptureMethodVocabCheck,
+  type ContentCanonicalizationResolution,
+  type ContentHashCheck,
 } from '@/lib/evidence/verify';
 
 export async function GET(
@@ -124,20 +128,37 @@ export async function GET(
     keyTrust = legacyEmbeddedKeyTrust();
   }
 
-  // Step 5: Typed-standards envelope checks (spec §9.2). These run against
-  // the canonical package JSON when available; each degrades gracefully for
-  // pre-v0.1 packages that omit the corresponding field.
+  // Step 5: Canonicalization, content-hash, and typed-standards envelope
+  // checks (spec §9.2). These run against the canonical package JSON when
+  // available; each degrades gracefully for pre-v0.1 packages that omit the
+  // corresponding field.
+  //   #3  contentCanonicalization — known URI resolves; unknown renders as
+  //                              unknown_canonicalization_rule; absent infers
+  //                              the rule from the content profile
+  //   #4  contentHash          — recompute off-log digest under the resolved
+  //                              rule and confirm at least one algorithm
+  //                              matches; pre-v0.1 relabels the slug hash
   //   #12 type resolution      — non-fatal (unknown_type renders, doesn't fail)
-  //   #13 nodeId               — the recomputed envelope hash (current
-  //                              JSON.stringify canonicalization; PR2 switches
-  //                              this to JCS alongside the hash change)
+  //   #13 nodeId               — the recomputed envelope hash; dual-chain via
+  //                              recomputePackageHash (JCS for v0.1 packages,
+  //                              legacy JSON.stringify for pre-v0.1)
   //   #14 signer ↔ registry    — fatal on mismatch; skipped when no signer
   //   #15 captureMethod vocab  — captureMethod_unknown rejects; bundle-
   //                              unresolved degrades gracefully
+  let contentCanonicalization: ContentCanonicalizationResolution | null = null;
+  let contentHashCheck: ContentHashCheck | null = null;
   let typeResolution: TypeResolution | null = null;
   let signerIdentity: SignerIdentityCheck | null = null;
   let captureMethodVocab: CaptureMethodVocabCheck | null = null;
   if (pkgJson) {
+    contentCanonicalization = resolveContentCanonicalization(pkgJson);
+    // The legacy external single-SHA-256 (relabeled for pre-v0.1 packages) is
+    // the package's stored slug hash — pass it so check #4 can surface it.
+    contentHashCheck = verifyContentHash(
+      pkgJson,
+      contentCanonicalization,
+      record.basePackageHash ?? undefined,
+    );
     typeResolution = resolvePackageType(pkgJson);
     signerIdentity = checkSignerIdentity(pkgJson, sigKid, registry);
     captureMethodVocab = checkCaptureMethodVocab(pkgJson);
@@ -151,6 +172,9 @@ export async function GET(
     keyTrust,
     blobRefsVerified,
     blobRefs,
+    // Canonicalization & content-hash checks (spec §9.2 checks #3-#4).
+    contentCanonicalization,
+    contentHash: contentHashCheck,
     // Typed-standards envelope checks (spec §9.2 checks #12-#15).
     nodeId: recomputedHash,
     typeResolution,

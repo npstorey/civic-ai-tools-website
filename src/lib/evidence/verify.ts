@@ -6,6 +6,14 @@ import { rekorHashForPackage, type SignerIdentity } from './signing.ts';
 import { captureVocabForProfile, resolveProfileType } from './profiles.ts';
 import type { CaptureMethod } from './packager.ts';
 import {
+  computeEnvelopeHash,
+  computeContentHashSha256,
+  isMultihashContentHash,
+  KNOWN_CANONICALIZATION_RULES,
+  LEGACY_JSON_CANONICALIZATION,
+  DATHERE_AG_JUPYTER_CANONICALIZATION,
+} from './canonicalization.ts';
+import {
   isBlobRef,
   verifyBlobRef,
   type BlobRef,
@@ -118,11 +126,171 @@ export async function verifyRekorEntry(
 }
 
 /**
- * Recompute the SHA-256 hash of a package object.
+ * Recompute a package's envelope hash, routed by the §8.2 detection rule:
+ * v0.1 packages (multihash `contentHash` present) hash via RFC 8785 JCS;
+ * pre-v0.1 packages hash via the legacy insertion-order `JSON.stringify`.
+ * Drives both check #1 (envelope integrity / `hashMatch`) and check #13
+ * (`nodeId`). Delegates to the shared `computeEnvelopeHash` so the recomputed
+ * value is guaranteed to match what the packager produced.
  */
 export function recomputePackageHash(pkg: Record<string, unknown>): string {
-  const canonical = JSON.stringify(pkg);
-  return crypto.createHash('sha256').update(canonical).digest('hex');
+  return computeEnvelopeHash(pkg);
+}
+
+// --- Content canonicalization & hashing checks (spec §9.2 checks #3, #4) ---
+//
+// These read the §8.2 `contentCanonicalization` + `contentHash` fields. Like
+// the envelope checks below, each degrades gracefully for pre-v0.1 packages
+// that omit the fields: check #3 infers the rule from the content profile,
+// and check #4 relabels the package's historical external single-SHA-256
+// rather than recomputing it under a v0.1 rule.
+
+export type ContentCanonicalizationStatus =
+  | 'ok'
+  | 'implicit'
+  | 'unknown_canonicalization_rule';
+
+export interface ContentCanonicalizationResolution {
+  status: ContentCanonicalizationStatus;
+  /** The resolved canonicalization-rule URI — the explicit field value, or
+   *  the rule inferred from the content profile for pre-v0.1 packages. */
+  rule: string;
+}
+
+/**
+ * Check #3 — content-canonicalization rule resolution (spec §9.2). Reads the
+ * package's `contentCanonicalization` URI and resolves it against the local
+ * rule registry. A known URI → `ok`. An unrecognized URI →
+ * `unknown_canonicalization_rule` (renders; check #4 then cannot recompute).
+ * An absent field on a pre-v0.1 package → `implicit`, inferring the rule from
+ * contentProfile / producerProfile (datHere → dathere-ag-jupyter/v1;
+ * otherwise legacy-json/v1).
+ */
+export function resolveContentCanonicalization(
+  pkg: Record<string, unknown>,
+): ContentCanonicalizationResolution {
+  const raw = pkg['contentCanonicalization'];
+  if (typeof raw === 'string' && raw.length > 0) {
+    if (KNOWN_CANONICALIZATION_RULES.includes(raw)) {
+      return { status: 'ok', rule: raw };
+    }
+    return { status: 'unknown_canonicalization_rule', rule: raw };
+  }
+  // Pre-v0.1: infer the rule from the content profile (the same datHere
+  // legacy-alias logic the captureMethod resolver uses).
+  const metadata = pkg['metadata'] as Record<string, unknown> | undefined;
+  const contentProfile =
+    typeof metadata?.['contentProfile'] === 'string'
+      ? (metadata['contentProfile'] as string)
+      : undefined;
+  const producerProfile =
+    typeof pkg['producerProfile'] === 'string'
+      ? (pkg['producerProfile'] as string)
+      : undefined;
+  const isDatHere =
+    contentProfile === 'datHere' ||
+    (producerProfile?.startsWith('ai-assisted-analysis/datHere') ?? false);
+  return {
+    status: 'implicit',
+    rule: isDatHere
+      ? DATHERE_AG_JUPYTER_CANONICALIZATION
+      : LEGACY_JSON_CANONICALIZATION,
+  };
+}
+
+export type ContentHashStatus =
+  | 'ok'
+  | 'content_hash_mismatch'
+  | 'contentHash_no_supported_algorithm'
+  | 'unresolved_rule'
+  | 'legacy_relabeled';
+
+export interface ContentHashCheck {
+  status: ContentHashStatus;
+  /** Algorithm names listed in the package's multihash `contentHash`. */
+  algorithms?: string[];
+  /** The algorithm whose recomputed digest matched (status === 'ok'). */
+  matched?: string;
+  /** The multihash digest set the verifier reports for the package. For
+   *  pre-v0.1 packages this is the legacy external single-SHA-256 relabeled
+   *  as `{ sha256: <hex> }` per §8.2. */
+  contentHash?: Record<string, string>;
+}
+
+/** Multihash algorithms this verifier can recompute today (spec §8.2 lists
+ *  sha256 required + sha3-256 / blake3 as registered alternates). */
+const SUPPORTED_CONTENT_HASH_ALGORITHMS: readonly string[] = ['sha256'];
+
+/**
+ * Check #4 — content-hash verification (spec §9.2, §8.2).
+ *
+ * v0.1 packages (multihash `contentHash` present): recompute the off-log
+ * content's digest under the resolved canonicalization rule for every listed
+ * algorithm this verifier supports, and confirm at least one matches.
+ *   - at least one supported algorithm matches → `ok`.
+ *   - a supported algorithm is present but none match → `content_hash_mismatch`
+ *     (the off-log content was altered).
+ *   - none of the listed algorithms are ones this verifier can compute →
+ *     `contentHash_no_supported_algorithm` (degrades; the value is preserved).
+ *   - the canonicalization rule could not be resolved (check #3 unknown) →
+ *     `unresolved_rule` (cannot recompute).
+ *
+ * pre-v0.1 packages (no multihash `contentHash`): the historical external
+ * single-SHA-256 (the package's slug / `basePackageHash`) is RELABELED as
+ * `{ sha256: <hex> }` per §8.2 rather than recomputed under legacy-json/v1.
+ * Its integrity is established by check #1 (the legacy envelope hash matches
+ * the slug), so check #4 reports `legacy_relabeled` rather than re-deriving it.
+ */
+export function verifyContentHash(
+  pkg: Record<string, unknown>,
+  resolution: ContentCanonicalizationResolution,
+  legacyExternalHash?: string,
+): ContentHashCheck {
+  const contentHash = pkg['contentHash'];
+  if (!isMultihashContentHash(contentHash)) {
+    return {
+      status: 'legacy_relabeled',
+      ...(legacyExternalHash ? { contentHash: { sha256: legacyExternalHash } } : {}),
+    };
+  }
+
+  const algorithms = Object.keys(contentHash);
+  if (resolution.status === 'unknown_canonicalization_rule') {
+    return { status: 'unresolved_rule', algorithms, contentHash };
+  }
+
+  const checkable = algorithms.filter((a) =>
+    SUPPORTED_CONTENT_HASH_ALGORITHMS.includes(a),
+  );
+  if (checkable.length === 0) {
+    return {
+      status: 'contentHash_no_supported_algorithm',
+      algorithms,
+      contentHash,
+    };
+  }
+
+  for (const algo of checkable) {
+    let recomputed: string | undefined;
+    try {
+      // sha256 is the only supported algorithm today; the off-log content is
+      // recomputed under the resolved rule (legacy-json/v1 → package minus
+      // contentHash; dathere-ag-jupyter/v1 → the executed notebook).
+      recomputed =
+        algo === 'sha256'
+          ? computeContentHashSha256(pkg, resolution.rule)
+          : undefined;
+    } catch {
+      // A structurally malformed package (e.g. a datHere package missing its
+      // notebook extension) can't be recomputed — treat as non-matching
+      // rather than throwing out of the whole verify pass.
+      recomputed = undefined;
+    }
+    if (recomputed !== undefined && recomputed === contentHash[algo]) {
+      return { status: 'ok', algorithms, matched: algo, contentHash };
+    }
+  }
+  return { status: 'content_hash_mismatch', algorithms, contentHash };
 }
 
 // --- Blob references (Phase B.6) ---
