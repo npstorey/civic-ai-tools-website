@@ -25,6 +25,10 @@
   --nyc-success: #008A02;
   --nyc-caution: #FFB320;
   --nyc-error: #EC131E;
+  /* Trust-signal "Attention" tier (civic-ai-tools-website#110). Aliased to the
+     existing NYC caution amber rather than introducing a second amber token, so
+     the verify panel's amber stays in lockstep with the design-system palette. */
+  --nyc-warning: var(--nyc-caution);
 
   /* Spacing Scale */
   --space-xs: 8px;
