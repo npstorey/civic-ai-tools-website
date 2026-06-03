@@ -59,11 +59,18 @@ export function parseBlobRef(ref: string): ParsedBlobRef {
   return { algo: 'sha256', hash: match[1] };
 }
 
-export type BlobRefVerifyReason =
-  | 'invalid_ref'
-  | 'fetch_failed'
-  | 'size_mismatch'
-  | 'hash_mismatch';
+// Source-of-truth array (not just a type) so the trust-signal vocabulary
+// (civic-ai-tools-website#110) can enumerate every BlobRef failure reason at
+// runtime. Each reason is a sub-explanation of a failed (Alarm-tier) BlobRef
+// integrity check (#9). Behavior-preserving: the derived type is identical to
+// the prior hand-written union.
+export const BLOB_REF_VERIFY_REASONS = [
+  'invalid_ref',
+  'fetch_failed',
+  'size_mismatch',
+  'hash_mismatch',
+] as const;
+export type BlobRefVerifyReason = (typeof BLOB_REF_VERIFY_REASONS)[number];
 
 export interface BlobRefVerifyResult {
   ok: boolean;

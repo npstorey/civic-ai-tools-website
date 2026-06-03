@@ -150,10 +150,17 @@ export function recomputePackageHash(pkg: Record<string, unknown>): string {
 // and check #4 relabels the package's historical external single-SHA-256
 // rather than recomputing it under a v0.1 rule.
 
+// Source-of-truth array (not just a type) so consumers — the trust-signal
+// vocabulary (civic-ai-tools-website#110) and its coverage test — can enumerate
+// every status at runtime. Behavior-preserving: the derived type is identical
+// to the prior hand-written union.
+export const CONTENT_CANONICALIZATION_STATUSES = [
+  'ok',
+  'implicit',
+  'unknown_canonicalization_rule',
+] as const;
 export type ContentCanonicalizationStatus =
-  | 'ok'
-  | 'implicit'
-  | 'unknown_canonicalization_rule';
+  (typeof CONTENT_CANONICALIZATION_STATUSES)[number];
 
 export interface ContentCanonicalizationResolution {
   status: ContentCanonicalizationStatus;
@@ -203,12 +210,14 @@ export function resolveContentCanonicalization(
   };
 }
 
-export type ContentHashStatus =
-  | 'ok'
-  | 'content_hash_mismatch'
-  | 'contentHash_no_supported_algorithm'
-  | 'unresolved_rule'
-  | 'legacy_relabeled';
+export const CONTENT_HASH_STATUSES = [
+  'ok',
+  'content_hash_mismatch',
+  'contentHash_no_supported_algorithm',
+  'unresolved_rule',
+  'legacy_relabeled',
+] as const;
+export type ContentHashStatus = (typeof CONTENT_HASH_STATUSES)[number];
 
 export interface ContentHashCheck {
   status: ContentHashStatus;
@@ -309,7 +318,17 @@ export function verifyContentHash(
 // `lifecycle.ts`; the pure ordering / status-derivation logic lives here so it
 // is unit-testable.
 
-export type LifecycleStatus = 'active' | 'withdrawn';
+export const LIFECYCLE_STATUSES = ['active', 'withdrawn'] as const;
+export type LifecycleStatus = (typeof LIFECYCLE_STATUSES)[number];
+
+/** Which representation determined the lifecycle status. `none` = never
+ *  withdrawn, no attestations and no legacy columns. */
+export const LIFECYCLE_SOURCES = [
+  'attestation-chain',
+  'legacy-columns',
+  'none',
+] as const;
+export type LifecycleSource = (typeof LIFECYCLE_SOURCES)[number];
 
 /** A single verified lifecycle attestation, as surfaced in the chain. */
 export interface LifecycleAttestationView {
@@ -338,9 +357,8 @@ export interface LifecycleAttestationView {
 
 export interface LifecycleResolution {
   status: LifecycleStatus;
-  /** Which representation determined the status. `none` = never withdrawn,
-   *  no attestations and no legacy columns. */
-  source: 'attestation-chain' | 'legacy-columns' | 'none';
+  /** Which representation determined the status (see `LIFECYCLE_SOURCES`). */
+  source: LifecycleSource;
   /** The ordered lifecycle attestation chain (envelope-timestamp asc, ties by
    *  nodeId lexicographic). Empty for the legacy-columns / none sources. */
   chain: LifecycleAttestationView[];
@@ -573,14 +591,16 @@ export interface TrustRegistry {
   keys: TrustRegistryKey[];
 }
 
-export type KeyTrustStatus =
-  | 'active'                // active key — package is trusted
-  | 'deprecated_valid'      // deprecated key, but package was signed before deprecation
-  | 'deprecated_invalid'    // deprecated key, but package was signed after deprecation
-  | 'revoked'               // revoked key — package is never trusted
-  | 'unknown_key'           // (kid, publicKey) pair not found in registry
-  | 'registry_unavailable'  // registry could not be loaded
-  | 'legacy_embedded';      // signature predates the trust registry (no kid stored)
+export const KEY_TRUST_STATUSES = [
+  'active',                // active key — package is trusted
+  'deprecated_valid',      // deprecated key, but package was signed before deprecation
+  'deprecated_invalid',    // deprecated key, but package was signed after deprecation
+  'revoked',               // revoked key — package is never trusted
+  'unknown_key',           // (kid, publicKey) pair not found in registry
+  'registry_unavailable',  // registry could not be loaded
+  'legacy_embedded',       // signature predates the trust registry (no kid stored)
+] as const;
+export type KeyTrustStatus = (typeof KEY_TRUST_STATUSES)[number];
 
 export interface KeyTrustResult {
   status: KeyTrustStatus;
@@ -727,7 +747,8 @@ const KNOWN_TYPE_URIS: readonly string[] = [
   'attestation/conforms/v1',
 ];
 
-export type TypeResolutionStatus = 'ok' | 'implicit' | 'unknown_type';
+export const TYPE_RESOLUTION_STATUSES = ['ok', 'implicit', 'unknown_type'] as const;
+export type TypeResolutionStatus = (typeof TYPE_RESOLUTION_STATUSES)[number];
 
 export interface TypeResolution {
   status: TypeResolutionStatus;
@@ -752,11 +773,14 @@ export function resolvePackageType(pkg: Record<string, unknown>): TypeResolution
   return { status: 'unknown_type', type: raw };
 }
 
+export const SIGNER_IDENTITY_CHECK_STATUSES = [
+  'ok',
+  'signer_identity_mismatch',
+  'no_signer',
+  'no_registry_identity',
+] as const;
 export type SignerIdentityCheckStatus =
-  | 'ok'
-  | 'signer_identity_mismatch'
-  | 'no_signer'
-  | 'no_registry_identity';
+  (typeof SIGNER_IDENTITY_CHECK_STATUSES)[number];
 
 export interface SignerIdentityCheck {
   status: SignerIdentityCheckStatus;
@@ -794,11 +818,14 @@ export function checkSignerIdentity(
   return { status: 'ok', claimed: signer.identifier, registered };
 }
 
+export const CAPTURE_METHOD_VOCAB_STATUSES = [
+  'ok',
+  'captureMethod_unknown',
+  'producerProfile_bundle_unresolved',
+  'no_capture_method',
+] as const;
 export type CaptureMethodVocabStatus =
-  | 'ok'
-  | 'captureMethod_unknown'
-  | 'producerProfile_bundle_unresolved'
-  | 'no_capture_method';
+  (typeof CAPTURE_METHOD_VOCAB_STATUSES)[number];
 
 export interface CaptureMethodVocabCheck {
   status: CaptureMethodVocabStatus;
