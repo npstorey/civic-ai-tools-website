@@ -166,31 +166,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-// Human-readable label for the ADR-0003 captureMethod field. Pre-ADR
-// records (column null) render as "Unknown (pre-ADR-0003)" rather than
-// inferring a method from indirect signals — see ADR-0003 §1 amendment.
-// Friendly labels per the 2026-05-19 reframe: chat-flow-stream surfaces
-// as "Web chat" — short, non-technical, matches the user-facing pipeline.
-function captureMethodLabel(method: string | null | undefined): string {
-  switch (method) {
-    case 'chat-flow-stream':
-      return 'Web chat';
-    case 'claude-code-jsonl-readback':
-      return 'Claude Code (verbatim JSONL)';
-    case 'claude-code-self-report':
-      return 'Claude Code (self-report, deprecated)';
-    case 'datHere':
-      // Legacy: pre-reframe records may carry this value. The 2026-05-19
-      // reframe (ADR-0004) moved datHere from captureMethod to a separate
-      // contentProfile field. No new publishes write this value to
-      // captureMethod; if a record still has it, surface as "Unknown"
-      // with a brief annotation so readers know the cause.
-      return 'Unknown (pre-reframe datHere captureMethod, ADR-0004)';
-    default:
-      return 'Unknown (pre-ADR-0003)';
-  }
-}
-
 // Type-narrowing accessor for the org.civicaitools.environment extension
 // (OES §9.1.1 requirement 3). Returns null when absent or malformed so
 // callers can default-fallback for non-datHere packages.
@@ -323,18 +298,17 @@ export default async function EvidencePage({ params }: PageProps) {
           </Section>
         )}
 
-        {/* DatHere small label row — appears between header and content.
-            Per ADR-0004 + the 2026-05-19 reframe: captureMethod and
-            contentProfile are orthogonal axes; surface both inline near
-            the top, then render A-G as the page structure below. */}
+        {/* DatHere small label row — appears between header and content. Per
+            ADR-0004 + the 2026-05-19 reframe, captureMethod and contentProfile
+            are orthogonal axes; this row carries the contentProfile label (the
+            captureMethod label now sits beside the signature verdict in the
+            verify panel, #111), then renders A-G as the page structure below. */}
         {isDatHere && (
           <div style={{
             fontSize: '13px', color: 'var(--text-secondary)',
             marginBottom: '24px', marginTop: '12px',
             display: 'flex', flexWrap: 'wrap', gap: '0 8px', alignItems: 'center',
           }}>
-            <span>Captured via <strong>{captureMethodLabel(record.captureMethod)}</strong></span>
-            <span>{'·'}</span>
             <span>datHere content profile</span>
             <span>{'·'}</span>
             <a
@@ -541,9 +515,6 @@ export default async function EvidencePage({ params }: PageProps) {
                   Consistency: {record.consistencyClassification.replace(/_/g, ' ')}
                 </span>
               )}
-              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                Captured via: {captureMethodLabel(record.captureMethod)}
-              </span>
               {/* Typed-standards envelope labels (ADR-0006/0009). Read from
                   the canonical package object — not a DB column. Absent on
                   pre-v0.1 packages, which simply omit these. */}
@@ -781,9 +752,6 @@ export default async function EvidencePage({ params }: PageProps) {
                   Consistency: {record.consistencyClassification.replace(/_/g, ' ')}
                 </span>
               )}
-              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                Captured via: {captureMethodLabel(record.captureMethod)}
-              </span>
               {/* Typed-standards envelope labels (ADR-0006/0009). Read from
                   the canonical package object — not a DB column. Absent on
                   pre-v0.1 packages, which simply omit these. */}
@@ -809,7 +777,7 @@ export default async function EvidencePage({ params }: PageProps) {
             creatorName={creator?.displayName || 'Unknown'}
             createdAt={record.createdAt.toISOString()}
             packageUrl={record.basePackageStorageKey || ''}
-            verificationStatus={record.verificationStatus}
+            captureMethod={record.captureMethod}
           />
         </Section>
 

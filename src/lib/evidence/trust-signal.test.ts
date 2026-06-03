@@ -53,6 +53,9 @@ import {
   CAPTURE_METHOD_LABELS,
   NOTEBOOK_PROVENANCE_VALUES,
   NOTEBOOK_PROVENANCE_SIGNALS,
+  NO_SIGNING_KEY_SIGNAL,
+  resolveKeyTrust,
+  resolveCaptureMethodLabel,
   type TrustSignalDescriptor,
 } from './trust-signal.ts';
 
@@ -233,4 +236,38 @@ test('captureMethod labels are informational (no tier) and cover the known metho
   for (const method of ['chat-flow-stream', 'claude-code-jsonl-readback', 'claude-code-self-report'] as const) {
     assert.ok(CAPTURE_METHOD_LABELS[method].length > 0, `captureMethod label "${method}"`);
   }
+});
+
+// --- #111 consumer resolvers (verify-panel re-skin) ----------------------
+
+test('resolveKeyTrust: unsigned (null/undefined) reads calm Normal; statuses pass through', () => {
+  // keyTrust:null is the unsigned package — expected, never a failure (the #111
+  // calm baseline). It must resolve to the calm NO_SIGNING_KEY_SIGNAL, not a
+  // hand-rolled tier in the component.
+  assert.equal(resolveKeyTrust(null), NO_SIGNING_KEY_SIGNAL);
+  assert.equal(resolveKeyTrust(undefined), NO_SIGNING_KEY_SIGNAL);
+  assert.equal(NO_SIGNING_KEY_SIGNAL.tier, 'normal');
+  // A real status passes straight through to its KEY_TRUST_SIGNALS descriptor.
+  assert.equal(resolveKeyTrust({ status: 'legacy_embedded' }), KEY_TRUST_SIGNALS.legacy_embedded);
+  assert.equal(resolveKeyTrust({ status: 'active' }), KEY_TRUST_SIGNALS.active);
+  assert.equal(resolveKeyTrust({ status: 'revoked' }).tier, 'alarm');
+});
+
+test('resolveCaptureMethodLabel: known methods, datHere ADR-0004 special case, omit-on-absent', () => {
+  // Known methods resolve to the canonical CAPTURE_METHOD_LABELS reading.
+  assert.equal(resolveCaptureMethodLabel('chat-flow-stream'), CAPTURE_METHOD_LABELS['chat-flow-stream']);
+  assert.equal(
+    resolveCaptureMethodLabel('claude-code-jsonl-readback'),
+    CAPTURE_METHOD_LABELS['claude-code-jsonl-readback'],
+  );
+  // Absent / pre-ADR-0003 → null so the consumer omits the line (calm legacy view).
+  assert.equal(resolveCaptureMethodLabel(null), null);
+  assert.equal(resolveCaptureMethodLabel(undefined), null);
+  assert.equal(resolveCaptureMethodLabel(''), null);
+  // datHere special case (ADR-0004) preserved: a non-null legacy annotation,
+  // distinct from a real capture method (must NOT regress to a plain reading).
+  const datHere = resolveCaptureMethodLabel('datHere');
+  assert.ok(datHere && /ADR-0004/.test(datHere), 'datHere preserves the ADR-0004 annotation');
+  // An unrecognized value omits rather than echoing a raw code.
+  assert.equal(resolveCaptureMethodLabel('something-else'), null);
 });
