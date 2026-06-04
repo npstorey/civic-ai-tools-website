@@ -610,7 +610,7 @@ export const KEY_TRUST_STATUSES = [
   'revoked',               // revoked key — package is never trusted
   'unknown_key',           // (kid, publicKey) pair not found in registry
   'registry_unavailable',  // registry could not be loaded
-  'legacy_embedded',       // signature predates the trust registry (no kid stored)
+  'legacy_embedded',       // signed with an embedded key, no registry kid stored
 ] as const;
 export type KeyTrustStatus = (typeof KEY_TRUST_STATUSES)[number];
 

@@ -251,12 +251,17 @@ export const KEY_TRUST_SIGNALS: Record<KeyTrustStatus, TrustSignalDescriptor> = 
     label: 'Trust registry could not be reached',
     detail: 'The trust registry could not be loaded, so the key status was not checked.',
   },
-  // Load-bearing: every pre-trust-registry package. Must read calm.
+  // Load-bearing: any package signed with an embedded key that carries no
+  // registry kid — genuinely-old packages AND recent ones signed before kid
+  // storage. Must read calm. Speaks ONLY to key trust (P7): the signature
+  // itself is check #2 and is never asserted here (older copy claimed "its
+  // signature verified against its embedded key", which contradicted a #2
+  // failure on any no-kid package whose signature did not verify).
   legacy_embedded: {
     tier: 'normal',
-    label: 'Signed before the trust registry existed',
+    label: 'Signed with an embedded key (not in the trust registry)',
     detail:
-      'This package predates the trust registry; its signature verified against its embedded key, but the registry cannot vouch for it.',
+      'The signature uses an embedded public key that is not listed in our published trust registry, so the registry cannot vouch for it.',
   },
 };
 
