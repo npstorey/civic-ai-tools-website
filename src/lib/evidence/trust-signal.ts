@@ -251,14 +251,41 @@ export const KEY_TRUST_SIGNALS: Record<KeyTrustStatus, TrustSignalDescriptor> = 
     label: 'Trust registry could not be reached',
     detail: 'The trust registry could not be loaded, so the key status was not checked.',
   },
-  // Load-bearing: every pre-trust-registry package. Must read calm.
+  // Load-bearing: any package signed with an embedded key that carries no
+  // registry kid — genuinely-old packages AND recent ones signed before kid
+  // storage. Must read calm. Speaks ONLY to key trust (P7): the signature
+  // itself is check #2 and is never asserted here (older copy claimed "its
+  // signature verified against its embedded key", which contradicted a #2
+  // failure on any no-kid package whose signature did not verify).
   legacy_embedded: {
     tier: 'normal',
-    label: 'Signed before the trust registry existed',
+    label: 'Signed with an embedded key (not in the trust registry)',
     detail:
-      'This package predates the trust registry; its signature verified against its embedded key, but the registry cannot vouch for it.',
+      'The signature uses an embedded public key that is not listed in our published trust registry, so the registry cannot vouch for it.',
   },
 };
+
+/**
+ * Calm reading for a package with NO signing key at all. The verify route emits
+ * `keyTrust: null` only for an unsigned package (it co-occurs with
+ * `signatureValid: null`), so "no key to check" is an expected, Normal state —
+ * never a failure. Defined here, not hand-rolled in the component, so the tier
+ * decision keeps a single source of truth.
+ */
+export const NO_SIGNING_KEY_SIGNAL: TrustSignalDescriptor = {
+  tier: 'normal',
+  label: 'No signing key',
+  detail:
+    'This package carries no signing key, so there is nothing to check against the trust registry.',
+};
+
+/** Resolve the trust-registry verdict, folding the unsigned (`null`) case into
+ *  the calm `NO_SIGNING_KEY_SIGNAL` so consumers never branch on a missing key. */
+export function resolveKeyTrust(
+  keyTrust: { status: KeyTrustStatus } | null | undefined,
+): TrustSignalDescriptor {
+  return keyTrust ? KEY_TRUST_SIGNALS[keyTrust.status] : NO_SIGNING_KEY_SIGNAL;
+}
 
 // --- #7 Timestamp validity (hasTimestamp: boolean) -----------------------
 
@@ -466,6 +493,27 @@ export const CAPTURE_METHOD_LABELS: Record<CaptureMethod, string> = {
   'claude-code-self-report':
     'Summarized by the AI from its own session memory (deprecated capture method).',
 };
+
+/**
+ * Resolve the plain-language capture-method reading rendered as a neutral label
+ * beside the signature verdict (#111). Returns `null` when there is nothing to
+ * show — a pre-ADR-0003 package with no captureMethod, or an unrecognized value
+ * — so the consumer simply omits the line (no noise on legacy packages).
+ *
+ * `datHere` is a preserved special case (ADR-0004): the 2026-05-19 reframe moved
+ * datHere out of captureMethod into a separate contentProfile column, but legacy
+ * pre-reframe records may still carry it here. It is surfaced as a legacy value
+ * with an ADR-0004 annotation, never treated as a real capture method.
+ */
+export function resolveCaptureMethodLabel(method: string | null | undefined): string | null {
+  if (!method) return null;
+  const known = (CAPTURE_METHOD_LABELS as Record<string, string | undefined>)[method];
+  if (known) return known;
+  if (method === 'datHere') {
+    return 'Recorded with a legacy datHere capture method (pre-ADR-0004 reframe); the content profile now carries this distinction.';
+  }
+  return null;
+}
 
 // --- #12 type resolution -------------------------------------------------
 

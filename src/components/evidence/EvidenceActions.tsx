@@ -1,6 +1,25 @@
 'use client';
 
 import { useState } from 'react';
+import TrustSignal from './TrustSignal';
+import {
+  resolveEnvelopeIntegrity,
+  resolveSignature,
+  resolveTimestamp,
+  resolveRekor,
+  resolveKeyTrust,
+  resolveCaptureMethodLabel,
+} from '@/lib/evidence/trust-signal';
+import type {
+  KeyTrustResult,
+  BlobRefVerification,
+  TypeResolution,
+  SignerIdentityCheck,
+  CaptureMethodVocabCheck,
+  ContentCanonicalizationResolution,
+  ContentHashCheck,
+  LifecycleResolution,
+} from '@/lib/evidence/verify';
 
 interface EvidenceActionsProps {
   slug: string;
@@ -8,7 +27,10 @@ interface EvidenceActionsProps {
   creatorName: string;
   createdAt: string;
   packageUrl: string;
-  verificationStatus: string;
+  /** ADR-0003 captureMethod DB column (enum string | null). Rendered as a
+   *  neutral informational label beside the signature verdict (#11,
+   *  "signed ≠ verbatim"). */
+  captureMethod: string | null;
 }
 
 function CitePopover({ title, creatorName, createdAt, slug, onClose }: {
@@ -80,32 +102,32 @@ function CitePopover({ title, creatorName, createdAt, slug, onClose }: {
   );
 }
 
-type KeyTrustStatus =
-  | 'active'
-  | 'deprecated_valid'
-  | 'deprecated_invalid'
-  | 'revoked'
-  | 'unknown_key'
-  | 'registry_unavailable'
-  | 'legacy_embedded';
-
-interface KeyTrust {
-  status: KeyTrustStatus;
-  verified: boolean;
-  /** Optional because `legacy_embedded` signatures predate the trust
-   *  registry and therefore have no kid. */
-  kid?: string;
-  deprecatedAt?: string | null;
-  revokedAt?: string | null;
-}
-
+/**
+ * The verify-route response shape. #111 renders only the five legacy checks
+ * (hashMatch, signatureValid, keyTrust, hasTimestamp, rekorVerified), but the
+ * type is aligned to the route's full emitted shape (spec §9.2 checks #3-#15 +
+ * lifecycle) as a clean base for the #113/#114 panel waves — those fields are
+ * typed here but intentionally NOT surfaced yet. The upstream interfaces are
+ * type-only imports, so this client component pulls in no node:crypto runtime.
+ */
 interface VerifyResult {
   hashMatch: boolean;
   signatureValid: boolean | null;
   rekorVerified: boolean | null;
   hasTimestamp: boolean;
-  keyTrust: KeyTrust | null;
+  keyTrust: KeyTrustResult | null;
+  blobRefsVerified: boolean | null;
+  blobRefs: BlobRefVerification[];
+  contentCanonicalization: ContentCanonicalizationResolution | null;
+  contentHash: ContentHashCheck | null;
+  nodeId: string | null;
+  typeResolution: TypeResolution | null;
+  signerIdentity: SignerIdentityCheck | null;
+  captureMethodVocab: CaptureMethodVocabCheck | null;
+  lifecycle: LifecycleResolution;
   details: {
+    storedHash?: string | null;
+    recomputedHash?: string | null;
     hasSigning: boolean;
     hasRekor: boolean;
     rekor?: { logIndex?: number; logEntryUrl?: string } | null;
@@ -113,57 +135,18 @@ interface VerifyResult {
   };
 }
 
-function keyTrustCopy(keyTrust: KeyTrust): string {
-  switch (keyTrust.status) {
-    case 'active':
-      return `Signed with active key (${keyTrust.kid})`;
-    case 'deprecated_valid':
-      return `Signed with deprecated key before rotation (${keyTrust.kid})`;
-    case 'deprecated_invalid':
-      return `Key deprecated before this signature — do not trust (${keyTrust.kid})`;
-    case 'revoked':
-      return `Key revoked — do not trust (${keyTrust.kid})`;
-    case 'unknown_key':
-      return `Key not in platform trust registry (${keyTrust.kid})`;
-    case 'registry_unavailable':
-      return 'Trust registry unavailable — could not verify key';
-    case 'legacy_embedded':
-      return 'Signed with legacy embedded key (pre-trust-registry package)';
-  }
-}
-
-/**
- * Map a key-trust result onto the icon state used by `VerifyCheck`:
- *   - `true`  → ✅ green (registry-validated)
- *   - `false` → ❌ red (registry says untrusted)
- *   - `null`  → ➖ neutral (no signing key, or pre-registry legacy package)
- */
-function keyTrustIconStatus(keyTrust: KeyTrust | null): boolean | null {
-  if (keyTrust === null) return null;
-  if (keyTrust.status === 'legacy_embedded') return null;
-  return keyTrust.verified;
-}
-
-function VerifyCheck({ label, status, detail }: { label: string; status: boolean | null; detail?: string }) {
-  const icon = status === true ? '\u2705' : status === false ? '\u274C' : '\u2796';
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px', marginBottom: '6px' }}>
-      <span>{icon}</span>
-      <div>
-        <span style={{ color: 'var(--text-primary)' }}>{label}</span>
-        {detail && <span style={{ color: 'var(--text-muted)', marginLeft: '6px' }}>{detail}</span>}
-      </div>
-    </div>
-  );
-}
-
 export default function EvidenceActions({
-  slug, title, creatorName, createdAt, packageUrl, verificationStatus,
+  slug, title, creatorName, createdAt, packageUrl, captureMethod,
 }: EvidenceActionsProps) {
   const [linkCopied, setLinkCopied] = useState(false);
   const [showCite, setShowCite] = useState(false);
   const [verifyState, setVerifyState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
+
+  // captureMethod LABEL (#11, "signed != verbatim"): a neutral, signature-covered
+  // reading of HOW the bytes were captured, shown beside the signature verdict.
+  // Pre-ADR-0003 packages have no captureMethod (null), so the line is omitted.
+  const captureMethodCaption = resolveCaptureMethodLabel(captureMethod);
 
   const handleCopyLink = async () => {
     const url = `${window.location.origin}/evidence/${slug}`;
@@ -239,47 +222,42 @@ export default function EvidenceActions({
           backgroundColor: 'white',
         }}>
           <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>Verification Results</div>
-          <VerifyCheck
-            label="Package integrity"
-            status={verifyResult.hashMatch}
-            detail={verifyResult.hashMatch ? 'Hash matches stored package' : 'Hash mismatch — package may have been altered'}
-          />
-          <VerifyCheck
-            label="Cryptographic signature"
-            status={verifyResult.signatureValid}
-            detail={
-              verifyResult.signatureValid === null
-                ? 'Not signed'
-                : verifyResult.signatureValid
-                  ? 'Valid Ed25519 signature'
-                  : 'Invalid signature'
-            }
-          />
-          <VerifyCheck
-            label="Key trust"
-            status={keyTrustIconStatus(verifyResult.keyTrust)}
-            detail={
-              verifyResult.keyTrust === null
-                ? 'No signing key recorded'
-                : keyTrustCopy(verifyResult.keyTrust)
-            }
-          />
-          <VerifyCheck
-            label="RFC 3161 timestamp"
-            status={verifyResult.hasTimestamp ? true : null}
-            detail={verifyResult.hasTimestamp ? 'Timestamp token present' : 'No timestamp'}
-          />
-          <VerifyCheck
-            label="Transparency log (Rekor)"
-            status={verifyResult.rekorVerified}
-            detail={
-              verifyResult.rekorVerified === null
-                ? 'Not published to Rekor'
-                : verifyResult.rekorVerified
-                  ? 'Entry verified on Sigstore Rekor'
-                  : 'Rekor verification failed'
-            }
-          />
+          {/* The five integrity checks, re-skinned onto <TrustSignal> and driven
+              entirely by the trust-signal vocabulary (#110). Legacy / back-compat
+              statuses resolve to Verified or Normal — never amber or red — so a
+              pre-v0.1 package reads calm (the #111 calm baseline). The label is
+              the verdict one-liner; the muted detail expands it (P5). */}
+
+          {/* #1 Envelope integrity */}
+          <TrustSignal {...resolveEnvelopeIntegrity(verifyResult.hashMatch)} />
+
+          {/* #2 Cryptographic signature, with the captureMethod label directly
+              beneath it — "signed ≠ verbatim" (spec §9.2 #11). A valid signature
+              proves the bytes are unchanged since signing, not that they are a
+              verbatim capture; the caption says how the signed bytes were obtained. */}
+          <TrustSignal {...resolveSignature(verifyResult.signatureValid)} />
+          {captureMethodCaption && (
+            <div
+              style={{
+                marginLeft: '24px',
+                marginBottom: '8px',
+                fontSize: '12px',
+                lineHeight: 1.45,
+                color: 'var(--text-muted)',
+              }}
+            >
+              {captureMethodCaption}
+            </div>
+          )}
+
+          {/* #5 Key trust (keyTrust:null = unsigned → calm Normal) */}
+          <TrustSignal {...resolveKeyTrust(verifyResult.keyTrust)} />
+
+          {/* #7 RFC 3161 timestamp */}
+          <TrustSignal {...resolveTimestamp(verifyResult.hasTimestamp)} />
+
+          {/* #8 Transparency log (Rekor) */}
+          <TrustSignal {...resolveRekor(verifyResult.rekorVerified)} />
           {verifyResult.details.rekor?.logEntryUrl && (
             <div style={{ marginTop: '6px', fontSize: '12px' }}>
               <a

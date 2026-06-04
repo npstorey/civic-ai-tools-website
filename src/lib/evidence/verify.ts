@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { ed25519ph } from '@noble/curves/ed25519.js';
+import { ed25519, ed25519ph } from '@noble/curves/ed25519.js';
 import { rekorHashForPackage, type SignerIdentity } from './signing.ts';
 import { captureVocabForProfile, resolveProfileType } from './profiles.ts';
 import type { CaptureMethod } from './packager.ts';
@@ -51,23 +51,35 @@ function extractRawPublicKey(publicKeyB64Der: string): Uint8Array {
 }
 
 /**
- * Verify an Ed25519ph signature against the package hash.
+ * Verify an evidence signature against the package hash.
  *
- * The signed message is the UTF-8 bytes of the package hex hash — the
- * same convention used by `signPackage` in `signing.ts`. Ed25519ph
- * prehashes the message with SHA-512 before the Ed25519 verify, which
- * matches the format Rekor uses to validate the same signature.
+ * The signed message is the UTF-8 bytes of the package hex hash — the same
+ * convention used by `signPackage` in `signing.ts`. The signature is verified
+ * under the algorithm it was actually created with (`algorithm`):
+ *   - `Ed25519ph` — the current scheme (SHA-512 prehash, matching what Rekor
+ *     validates). Used for every modern package; the default when no label is
+ *     given.
+ *   - `Ed25519`  — plain Ed25519, used by pre-switch legacy packages whose
+ *     stored signature is labeled `'Ed25519'` (these carry no kid and predate
+ *     the Ed25519→Ed25519ph migration).
+ *
+ * Dispatching on the stored label fixes a false negative where a valid
+ * plain-Ed25519 signature was checked with Ed25519ph and read as invalid. It
+ * does not weaken verification: the label only selects the verifier, the
+ * signature math must still hold, so a forgery fails under both.
  */
 export function verifySignature(
   packageHash: string,
   signatureB64: string,
   publicKeyB64: string,
+  algorithm?: string,
 ): boolean {
   try {
     const pubBytes = extractRawPublicKey(publicKeyB64);
     const sigBytes = Uint8Array.from(Buffer.from(signatureB64, 'base64'));
     const messageBytes = Uint8Array.from(Buffer.from(packageHash, 'utf-8'));
-    return ed25519ph.verify(sigBytes, messageBytes, pubBytes);
+    const verifier = algorithm === 'Ed25519' ? ed25519 : ed25519ph;
+    return verifier.verify(sigBytes, messageBytes, pubBytes);
   } catch (err) {
     console.error('[verify] Signature verification error:', err);
     return false;
@@ -598,7 +610,7 @@ export const KEY_TRUST_STATUSES = [
   'revoked',               // revoked key — package is never trusted
   'unknown_key',           // (kid, publicKey) pair not found in registry
   'registry_unavailable',  // registry could not be loaded
-  'legacy_embedded',       // signature predates the trust registry (no kid stored)
+  'legacy_embedded',       // signed with an embedded key, no registry kid stored
 ] as const;
 export type KeyTrustStatus = (typeof KEY_TRUST_STATUSES)[number];
 
