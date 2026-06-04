@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import crypto from 'crypto';
 import canonicalize from 'canonicalize';
 import {
+  verifySignature,
   verifyKeyTrust,
   loadTrustRegistry,
   clearTrustRegistryCache,
@@ -36,6 +37,7 @@ import {
   ATTESTATION_REINSTATES,
 } from './attestation.ts';
 import type { BlobRef } from './blob-ref.ts';
+import { ed25519, ed25519ph } from '@noble/curves/ed25519.js';
 
 const KID = 'platform:evidence-2026-04';
 const NEW_KID = 'platform:evidence-2027-04';
@@ -287,6 +289,41 @@ test('legacyEmbeddedKeyTrust: pre-registry signatures get a neutral verdict', ()
   assert.equal(result.status, 'legacy_embedded');
   assert.equal(result.verified, false);
   assert.equal(result.kid, undefined);
+});
+
+// --- Signature algorithm dispatch (the Ed25519 -> Ed25519ph migration fix) ---
+//
+// Pre-switch legacy packages (e.g. the withdrawn da9246 package surfaced in the
+// #111 calm-baseline review) carry PLAIN Ed25519 signatures labeled
+// `algorithm: 'Ed25519'`. verifySignature must verify each signature under the
+// scheme it was actually created with: checking a valid plain-Ed25519 signature
+// with Ed25519ph is the false negative that made a genuinely-valid legacy
+// package show a red "signature does not verify". Dispatching on the stored
+// label fixes it without weakening anything — a forgery still fails under both.
+test('verifySignature: dispatches on the algorithm label (Ed25519 vs Ed25519ph)', () => {
+  const hash = 'da9246cd974b0fafb1d16190e80903727133d67127febab8c16ec28a67fcaf7f';
+  const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+  const pubB64 = publicKey.export({ format: 'der', type: 'spki' }).toString('base64');
+  const jwk = privateKey.export({ format: 'jwk' });
+  const rawPriv = Uint8Array.from(Buffer.from(jwk.d as string, 'base64url'));
+  const msg = Buffer.from(hash, 'utf-8');
+
+  // Plain Ed25519 (the legacy scheme): verifies ONLY when labeled 'Ed25519'.
+  const plainSig = Buffer.from(ed25519.sign(msg, rawPriv)).toString('base64');
+  assert.equal(verifySignature(hash, plainSig, pubB64, 'Ed25519'), true);
+  // The bug being fixed: the same valid signature, checked with the ph default.
+  assert.equal(verifySignature(hash, plainSig, pubB64), false);
+
+  // Ed25519ph (the modern scheme): verifies under the explicit label AND the
+  // no-label default (Ed25519ph), so modern packages are unaffected.
+  const phSig = Buffer.from(ed25519ph.sign(msg, rawPriv)).toString('base64');
+  assert.equal(verifySignature(hash, phSig, pubB64, 'Ed25519ph'), true);
+  assert.equal(verifySignature(hash, phSig, pubB64), true);
+
+  // Cross-scheme never passes regardless of label — the label only selects the
+  // verifier; the signature math must still hold.
+  assert.equal(verifySignature(hash, phSig, pubB64, 'Ed25519'), false);
+  assert.equal(verifySignature(hash, plainSig, pubB64, 'Ed25519ph'), false);
 });
 
 test('Compromise scenario: revoked key + replacement active key', () => {

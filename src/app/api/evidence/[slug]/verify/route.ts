@@ -69,6 +69,7 @@ export async function GET(
         record.basePackageHash,
         sigData.signature,
         sigData.publicKey,
+        sigData.algorithm,
       );
     } catch {
       signatureValid = false;
