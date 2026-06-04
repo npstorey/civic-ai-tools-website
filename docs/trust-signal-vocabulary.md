@@ -1,4 +1,6 @@
 <!-- v1 — 2026-06-02 — Trust-signal vocabulary + calm-status taxonomy (Evidence trust UX #110, Wave 0). Defines the four severity tiers and assigns one to EVERY verify-library status value plus notebookProvenance, resolves every judgment call, and records three deliberate deviations from the issue brief. Source of truth for src/lib/evidence/trust-signal.ts and src/components/evidence/TrustSignal.tsx. No verification-behavior change; not wired into any live panel (that is #111). -->
+<!-- v2 — 2026-06-04 — legacy_embedded copy P7-decoupled to match code (PR #118, commit e032a01, pending merge): label → "Signed with an embedded key (not in the trust registry)"; the detail no longer asserts the signature verified (that is check #2's axis — the registry line speaks only to key trust). Motivated by a live contradiction on the withdrawn da9246 package, whose plain-Ed25519 signature hit a since-fixed Ed25519/Ed25519ph false negative in verify.ts (same PR). Docs-only sync; no tier or verification-behavior change. See §5 #10. -->
+
 
 # Trust-signal vocabulary + calm-status taxonomy
 
@@ -101,7 +103,7 @@ Ordered by spec §9.2 check number. "Copy" is the glanceable one-liner; the libr
 | `revoked` | **Alarm** | Signed with a revoked key |
 | `unknown_key` | Attention | Signing key not in the trust registry |
 | `registry_unavailable` | Attention | Trust registry could not be reached |
-| `legacy_embedded` | Normal | Signed before the trust registry existed |
+| `legacy_embedded` | Normal | Signed with an embedded key (not in the trust registry) |
 
 ### #7 Timestamp — `hasTimestamp: boolean`
 | Status | Tier | Copy |
@@ -203,6 +205,8 @@ Each `⚖` from the issue brief, resolved with rationale. The guiding distinctio
 8. **Lifecycle per-attestation falses — split, not uniform.** `signatureValid: false` and `nodeIdMatches: false` are integrity of the *event itself* → a forged or altered transition → **Alarm**. But `signerMatchesTarget: false` is **Normal** — see deviation (b) below.
 
 9. **Lifecycle surfaced in the verify panel?** Open for #111 (see §4 #10). Tiered here for completeness.
+
+10. **`keyTrust.legacy_embedded` is key-trust-only (P7) — it must not assert signature validity.** This line speaks solely to the registry dimension: an embedded signing key that is not listed in the trust registry, so the registry cannot vouch for it. It must **not** claim the signature verified — that is check #2's axis. `legacyEmbeddedKeyTrust()` returns its verdict *without re-verifying*, so the earlier copy ("its signature verified against its embedded key") created a live contradiction on a real package: the withdrawn `da9246`, whose plain-Ed25519 signature read as a #2 failure — a since-fixed Ed25519/Ed25519ph false negative in `verifySignature` (PR #118) — while #5 calmly asserted the signature had verified. Decoupling the copy keeps the two axes orthogonal and prevents the contradiction recurring on any future no-kid package whose signature genuinely fails. Shipped strings (`trust-signal.ts`, e032a01): label *"Signed with an embedded key (not in the trust registry)"*; detail *"The signature uses an embedded public key that is not listed in our published trust registry, so the registry cannot vouch for it."* (The label also drops "Signed before the trust registry existed", which misread as a temporal claim — `legacy_embedded` means "embedded key, no registry kid", which includes recent packages signed before kid storage, not only genuinely-old ones.)
 
 ### Deviations from the issue brief (flagged)
 
