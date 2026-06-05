@@ -1,27 +1,15 @@
-// @typedstandards/verify-core (in-repo) — the portable, browser-safe evidence
-// verification core (civic-ai-tools-website#116 WS2).
+// @typedstandards/verify-core consumer shim (civic-ai-tools-website#116 WS3).
 //
-// Pure functions over provided data: no `node:crypto` / `fs` / `path` / `process`
-// (an ESLint `no-restricted-imports` rule scoped to this directory enforces it),
-// no app imports. Hashing is `@noble/hashes`, signatures are `@noble/curves`, JCS
-// is `canonicalize`, and all network I/O is injected (`FetchLike`). The same code
-// runs in the civicaitools.org server route and the typedstandards.org browser
-// client (WS3); structured for trivial extraction to a standalone npm package
-// when that second consumer lands.
+// The browser-safe §9.2 verification core was extracted to the published
+// @typedstandards/verify-core npm package in Phase A (its source previously lived
+// in this directory, WS2). This directory is now a thin re-export layer: every
+// existing importer (the verify route, the server re-export modules, the
+// trust-signal vocabulary, tests) keeps importing from `@/lib/evidence/verify-core`
+// and `./verify-core/*` unchanged, while the single source of truth is the
+// versioned package — which therefore CANNOT drift from the typedstandards.org
+// browser verifier that consumes the exact same package.
 //
-// The server modules (`verify.ts`, `canonicalization.ts`, `profiles.ts`,
-// `blob-ref.ts`, `signing.ts`, `attestation.ts`) re-export FROM here — never the
-// reverse — so there is one implementation of every check and it cannot drift.
-
-export * from './types.ts';
-export * from './primitives.ts';
-export * from './canonicalization.ts';
-export * from './profiles.ts';
-export * from './attestation.ts';
-export * from './blob-ref.ts';
-export * from './signature.ts';
-export * from './trust-registry.ts';
-export * from './checks.ts';
-export * from './lifecycle.ts';
-export * from './rekor.ts';
-export * from './verify.ts';
+// Server-only concerns (the trust-registry loader using fs/path/process) stay in
+// `../verify.ts`, outside this browser-safe boundary; they import the package's
+// `verifyKeyTrust`/`validateRegistry` as data-driven functions.
+export * from '@typedstandards/verify-core';

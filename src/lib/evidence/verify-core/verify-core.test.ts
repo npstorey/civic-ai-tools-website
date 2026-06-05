@@ -1,4 +1,12 @@
-// Tests for the browser-safe verify-core (civic-ai-tools-website#116 WS2):
+// Consumer parity + version-pin guard for @typedstandards/verify-core (WS3).
+//
+// The §9.2 verification core now lives in the published @typedstandards/verify-core
+// package (WS2 extracted it; WS3 published it). This directory is a thin re-export
+// shim, so these tests run against the CONSUMED package via `./index.ts` — proving
+// civicaitools.org's verify path stays byte-identical to the one source that
+// typedstandards.org's browser verifier consumes. They cover:
+//   0. Version pin — the installed package is the expected scope + major, so a
+//      breaking major bump can't reach this app silently.
 //   1. SPKI-extraction fixture — the DER-slice key extraction returns the exact
 //      bytes the old `node:crypto` JWK path produced.
 //   2. Algorithm dispatch (#111) — plain Ed25519 vs Ed25519ph verify under their
@@ -13,6 +21,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
 import { ed25519, ed25519ph } from '@noble/curves/ed25519.js';
+import verifyCorePkg from '@typedstandards/verify-core/package.json' with { type: 'json' };
 import {
   extractRawPublicKey,
   verifySignature,
@@ -32,6 +41,24 @@ import {
   type VerifySignatureEnvelope,
   type FetchLike,
 } from './index.ts';
+
+// --- 0. Version pin -------------------------------------------------------
+//
+// This app depends on `^0.1.0` (see package.json). Pin the MAJOR here so a future
+// breaking release (1.x) cannot be picked up without a deliberate update to this
+// constant and a re-review of the parity tests below. Bump on an intentional major.
+const EXPECTED_MAJOR = 0;
+
+test('version pin: the installed @typedstandards/verify-core is the expected scope + major', () => {
+  assert.equal(verifyCorePkg.name, '@typedstandards/verify-core');
+  const major = Number(String(verifyCorePkg.version).split('.')[0]);
+  assert.equal(
+    major,
+    EXPECTED_MAJOR,
+    `@typedstandards/verify-core is ${verifyCorePkg.version}; expected major ${EXPECTED_MAJOR}. ` +
+      `A major bump may change verification behavior — re-review the parity tests, then update EXPECTED_MAJOR.`,
+  );
+});
 
 // A 12-byte Ed25519 SPKI prefix (SEQUENCE → AlgorithmIdentifier{OID 1.3.101.112}
 // → BIT STRING). Used to assemble SPKI DER from a raw noble public key.
