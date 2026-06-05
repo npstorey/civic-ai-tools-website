@@ -4,6 +4,10 @@ import { evidenceRecords, users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
+import {
+  buildCommitmentView,
+  CANONICAL_TRUST_REGISTRY_URL,
+} from '@/lib/evidence/commitment';
 
 /**
  * GET /api/evidence/[slug]/bundle
@@ -31,76 +35,14 @@ import type { EvidencePackage } from '@/lib/evidence/packager';
 
 const NOTEBOOK_EXTENSION_KEY = 'org.civicaitools.notebook';
 const EVIDENCE_NAMESPACE_KEY = 'org.civicaitools.evidence';
-const TRUST_REGISTRY_URL =
-  'https://civicaitools.org/.well-known/evidence-public-keys.json';
 
 type EvidenceRecord = typeof evidenceRecords.$inferSelect;
 type UserRecord = typeof users.$inferSelect;
 
-/**
- * Build the OES §9.2.1 commitment view from the evidence record + creator.
- * Optional fields (RFC 3161 timestamp, Rekor entry/proof) are conditionally
- * spread so absent values don't appear as `null` in the serialized output.
- */
-function buildCommitmentView(
-  record: EvidenceRecord,
-  creator: UserRecord | null,
-  pkg: EvidencePackage,
-): Record<string, unknown> {
-  let signature: Record<string, unknown> | null = null;
-  if (record.basePackageSignature) {
-    try {
-      signature = JSON.parse(record.basePackageSignature);
-    } catch {
-      signature = null;
-    }
-  }
-
-  const signerIdentity = creator
-    ? {
-        provider: 'github',
-        providerId: creator.githubId,
-        displayName: creator.displayName,
-        profileUrl: creator.githubProfileUrl,
-      }
-    : null;
-
-  return {
-    evidenceProtocolVersion: '0.1.0',
-    packageHash: record.basePackageHash,
-    packageUrl: record.basePackageStorageKey,
-    captureMethod: record.captureMethod ?? null,
-    contentProfile: 'datHere',
-    // Envelope fields sourced from the signed package JSON (spec §8.1.1).
-    // Conditionally spread so packages predating these fields omit them
-    // rather than emitting nulls. `producerProfile` / `type` / `signer` are
-    // the PR1 taxonomy fields; `contentHash` / `contentCanonicalization` are
-    // the PR2 §8.2 canonicalization fields. All are covered by the package
-    // signature, so surfacing them in the commitment view lets a cross-host
-    // reader resolve the same envelope the signature commits to.
-    ...(pkg.producerProfile ? { producerProfile: pkg.producerProfile } : {}),
-    ...(pkg.type ? { type: pkg.type } : {}),
-    ...(pkg.signer ? { signer: pkg.signer } : {}),
-    ...(pkg.contentHash ? { contentHash: pkg.contentHash } : {}),
-    ...(pkg.contentCanonicalization
-      ? { contentCanonicalization: pkg.contentCanonicalization }
-      : {}),
-    ...(signature ? { signature } : {}),
-    ...(signerIdentity ? { signerIdentity } : {}),
-    ...(record.basePackageRfc3161Timestamp
-      ? { rfc3161Timestamp: record.basePackageRfc3161Timestamp }
-      : {}),
-    ...(record.basePackageRekorEntryId
-      ? { rekorEntryId: record.basePackageRekorEntryId }
-      : {}),
-    ...(record.basePackageRekorInclusionProof
-      ? { rekorInclusionProof: record.basePackageRekorInclusionProof }
-      : {}),
-    trustRegistryUrl: TRUST_REGISTRY_URL,
-    subjectTitle: record.title,
-    subjectSummary: record.summary,
-  };
-}
+// `buildCommitmentView` (the §9.2.1 proof sidecar) now lives in
+// `@/lib/evidence/commitment` so the public commitment endpoint and this
+// notebook-embedded bundle emit the same self-describing proof object
+// (civic-ai-tools-website#116 WS1).
 
 /**
  * Build a cell-0 markdown metadata table per OES §9.2.4 (SHOULD-level
@@ -122,7 +64,7 @@ function buildCellZero(
     : creator?.displayName ?? 'Unknown';
   const publishedDate = record.createdAt.toISOString().split('T')[0];
   const detailUrl = `https://civicaitools.org/evidence/${record.slug}`;
-  const trustHost = TRUST_REGISTRY_URL.replace('https://', '');
+  const trustHost = CANONICAL_TRUST_REGISTRY_URL.replace('https://', '');
 
   const captureMethodFriendly =
     record.captureMethod === 'chat-flow-stream'
@@ -143,7 +85,7 @@ function buildCellZero(
     `| **Captured via** | ${captureMethodFriendly} |`,
     '| **Content profile** | datHere (A-G envelope, reproducible notebook) |',
     `| **Published** | ${publishedDate} via [civicaitools.org](${detailUrl}) |`,
-    `| **Trust registry** | [${trustHost}](${TRUST_REGISTRY_URL}) |`,
+    `| **Trust registry** | [${trustHost}](${CANONICAL_TRUST_REGISTRY_URL}) |`,
     '',
     "*Re-execute the cells below to reproduce the analysis. The cryptographic envelope is in this notebook's root `metadata.org.civicaitools.evidence` namespace — that's what binds the signature to this content. This cell is a reader affordance only.*",
   ];

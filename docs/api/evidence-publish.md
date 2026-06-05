@@ -163,6 +163,11 @@ authoritative for verification regardless of bundle availability.
 Sibling-YAML serialization (OES §9.2.3) for non-notebook outputs is not
 yet implemented.
 
+The same §9.2.1 commitment view (the enrichment #1 embedded above) is also
+served standalone, for **all** content profiles, as a public proof sidecar at
+`GET /api/evidence/<hash|slug>/commitment` — the entry point for independent,
+client-side verification. See [`evidence-commitment.md`](./evidence-commitment.md).
+
 ---
 
 ## Success response
