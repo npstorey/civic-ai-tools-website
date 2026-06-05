@@ -1,5 +1,12 @@
 import crypto from 'crypto';
 import { ed25519ph } from '@noble/curves/ed25519.js';
+// The Rekor prehash is defined once in the browser-safe verify-core (WS2) so the
+// producer (here) and the verifier compute one value; re-exported for the
+// existing `./signing.ts` importers (e.g. signing.test.ts) and bound locally for
+// `publishToRekor` below.
+import { rekorHashForPackage } from './verify-core/signature.ts';
+
+export { rekorHashForPackage };
 
 // Signature algorithm identifier stored alongside each signature and
 // embedded in the evidence package metadata. Rekor's hashedrekord
@@ -170,23 +177,6 @@ export async function getRfc3161Timestamp(packageHash: string): Promise<string |
     console.warn('[signing] RFC 3161 timestamp failed:', err instanceof Error ? err.message : err);
     return null;
   }
-}
-
-/**
- * Derive the hex value that Rekor stores in `spec.data.hash.value` for
- * a given package. Rekor's hashedrekord Ed25519ph verifier treats this
- * value as the SHA-512 prehash of the signed message, so we mirror that
- * here: SHA-512 over the UTF-8 bytes of the hex package hash.
- *
- * Exported so `verifyRekorEntry` in `verify.ts` can recompute the same
- * expected value when cross-checking a Rekor entry — the raw SHA-256
- * `packageHash` does NOT match what Rekor stores.
- */
-export function rekorHashForPackage(packageHash: string): string {
-  return crypto
-    .createHash('sha512')
-    .update(Buffer.from(packageHash, 'utf-8'))
-    .digest('hex');
 }
 
 /**

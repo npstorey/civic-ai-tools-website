@@ -18,25 +18,27 @@ import {
   computeEnvelopeHash,
   computeContentHashSha256,
 } from './canonicalization.ts';
-
-const PACKAGE_SCHEMA_VERSION = '0.1.0';
-
-// Lifecycle attestation sub-type URIs operationalized in PR3 (spec §8.12.1).
-// `supersedes` / `publishes` / `locatedAt` and the claim-to-claim sub-types are
-// reserved name-only per the Xanadu doctrine — the attestation_nodes table
-// holds them, but no route emits them until an adopter needs them.
-export const ATTESTATION_WITHDRAWS = 'attestation/withdraws/v1';
-export const ATTESTATION_REINSTATES = 'attestation/reinstates/v1';
-
-export type LifecycleAttestationType =
-  | typeof ATTESTATION_WITHDRAWS
-  | typeof ATTESTATION_REINSTATES;
-
-/** The lifecycle sub-type URIs PR3 resolves on the verify side. */
-export const LIFECYCLE_ATTESTATION_TYPES: readonly string[] = [
+// Lifecycle sub-type URIs are defined once in verify-core (the verify side
+// dispatches on them); imported here for the builder body and re-exported so
+// existing importers (`./attestation.ts`) are unaffected. `supersedes` /
+// `publishes` / `locatedAt` and the claim-to-claim sub-types remain reserved
+// name-only per the Xanadu doctrine — the attestation_nodes table holds them,
+// but no route emits them until an adopter needs them.
+import {
   ATTESTATION_WITHDRAWS,
   ATTESTATION_REINSTATES,
-];
+  LIFECYCLE_ATTESTATION_TYPES,
+  type LifecycleAttestationType,
+} from './verify-core/attestation.ts';
+
+export {
+  ATTESTATION_WITHDRAWS,
+  ATTESTATION_REINSTATES,
+  LIFECYCLE_ATTESTATION_TYPES,
+  type LifecycleAttestationType,
+};
+
+const PACKAGE_SCHEMA_VERSION = '0.1.0';
 
 /**
  * A conformant `attestation/*` envelope (spec §8.12.3). Structurally a

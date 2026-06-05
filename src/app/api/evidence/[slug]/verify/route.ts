@@ -3,27 +3,19 @@ import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
+// The §9.2 check suite runs through verify-core's `verifyEvidence` orchestrator —
+// the SAME implementation the typedstandards.org browser verifier (WS3) will run,
+// so a tampered package fails identically in both (parity test in
+// verify-core/verify-core.test.ts). The server supplies what only it can: its
+// loaded trust registry, its `fetch`, and — to keep this route's output
+// byte-identical — its server-deeper lifecycle resolution from the signed
+// attestation chain (check #10 at chain depth; verify-core's portable default is
+// state depth).
 import {
-  verifySignature,
-  verifyRekorEntry,
-  recomputePackageHash,
-  verifyKeyTrust,
-  loadTrustRegistry,
-  legacyEmbeddedKeyTrust,
-  verifyPackageBlobRefs,
-  resolvePackageType,
-  checkSignerIdentity,
-  checkCaptureMethodVocab,
-  resolveContentCanonicalization,
-  verifyContentHash,
-  type KeyTrustResult,
-  type BlobRefVerification,
-  type TypeResolution,
-  type SignerIdentityCheck,
-  type CaptureMethodVocabCheck,
-  type ContentCanonicalizationResolution,
-  type ContentHashCheck,
-} from '@/lib/evidence/verify';
+  verifyEvidence,
+  type VerifySignatureEnvelope,
+} from '@/lib/evidence/verify-core';
+import { loadTrustRegistry } from '@/lib/evidence/verify';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
 
 export async function GET(
@@ -44,164 +36,75 @@ export async function GET(
 
   const record = records[0];
 
-  // Step 1: Recompute package hash from stored package
-  let hashMatch = false;
-  let recomputedHash: string | null = null;
-  let pkgJson: Record<string, unknown> | null = null;
-  if (record.basePackageStorageKey) {
-    pkgJson = await getPackage(record.basePackageStorageKey);
-    if (pkgJson) {
-      recomputedHash = recomputePackageHash(pkgJson);
-      hashMatch = recomputedHash === record.basePackageHash;
-    }
-  }
+  // Resolve the canonical package JSON from the blob (null mirrors the prior
+  // "blob unavailable" path — integrity fails, package-derived checks report
+  // null).
+  const pkgJson = record.basePackageStorageKey
+    ? await getPackage(record.basePackageStorageKey)
+    : null;
 
-  // Step 2: Verify signature
-  let signatureValid: boolean | null = null;
-  let sigPublicKey: string | undefined;
-  let sigKid: string | undefined;
-  if (record.basePackageSignature && record.basePackageHash) {
+  // Parse the persisted signature envelope. A present-but-corrupt column is
+  // surfaced as a present, invalid signature (the route's long-standing
+  // try/catch semantics), conveyed to verify-core via `signatureMalformed`.
+  let signature: VerifySignatureEnvelope | null = null;
+  let signatureMalformed = false;
+  if (record.basePackageSignature) {
     try {
-      const sigData = JSON.parse(record.basePackageSignature);
-      sigPublicKey = sigData.publicKey;
-      sigKid = sigData.kid;
-      signatureValid = verifySignature(
-        record.basePackageHash,
-        sigData.signature,
-        sigData.publicKey,
-        sigData.algorithm,
-      );
+      signature = JSON.parse(record.basePackageSignature) as VerifySignatureEnvelope;
     } catch {
-      signatureValid = false;
+      signatureMalformed = true;
     }
   }
 
-  // Step 3: Verify Rekor entry (also gives us integratedTime for key-trust)
-  let rekorVerified: boolean | null = null;
-  let rekorDetails: { logIndex?: number; logEntryUrl?: string } | null = null;
-  let rekorIntegratedTime: number | undefined;
-  if (record.basePackageRekorEntryId && record.basePackageHash) {
-    const rekorResult = await verifyRekorEntry(
-      record.basePackageRekorEntryId,
-      record.basePackageHash,
-    );
-    rekorVerified = rekorResult.verified;
-    rekorIntegratedTime = rekorResult.integratedTime;
-    if (rekorResult.logIndex !== undefined) {
-      rekorDetails = {
-        logIndex: rekorResult.logIndex,
-        logEntryUrl: rekorResult.logEntryUrl,
-      };
-    }
-  }
+  // Load the trust registry once (cached; falls back to the build-time embedded
+  // copy) and resolve lifecycle at the server's chain depth.
+  const [registry, lifecycleResolution] = await Promise.all([
+    loadTrustRegistry(),
+    resolveLifecycle(
+      record,
+      (pkgJson?.['signer'] as { identifier?: string } | undefined)?.identifier,
+    ),
+  ]);
 
-  // Step 3b: Verify any blob references embedded in the package. `blobRefs`
-  // is always an array — empty for pre-Phase-B.6 packages that store all
-  // fields inline, populated with per-reference verdicts when the publisher
-  // pushed content out of band via the upload-token flow. `blobRefsVerified`
-  // summarises the array (true/false/null-for-no-refs) so clients that
-  // don't care about per-ref granularity can branch on one boolean.
-  let blobRefs: BlobRefVerification[] = [];
-  let blobRefsVerified: boolean | null = null;
-  if (pkgJson) {
-    blobRefs = await verifyPackageBlobRefs(pkgJson);
-    if (blobRefs.length > 0) {
-      blobRefsVerified = blobRefs.every((r) => r.ok);
-    }
-  }
-
-  // Step 4: Verify key trust against the platform trust registry.
-  // Three paths:
-  //   - Signature with a kid → registry lookup via `verifyKeyTrust`.
-  //   - Signature without a kid (pre-#66 package) → `legacy_embedded`: the
-  //     embedded public key verified the signature mathematically, but the
-  //     registry cannot vouch for it. The UI renders this as neutral rather
-  //     than failed so older packages aren't visually penalized.
-  //   - No signature at all → keep `keyTrust: null`.
-  // Load the trust registry once — used by both key-trust (step 4) and the
-  // signer-identity cross-check (#14 below). Cached; falls back to the
-  // build-time embedded copy.
-  const registry = await loadTrustRegistry();
-
-  let keyTrust: KeyTrustResult | null = null;
-  if (sigPublicKey && sigKid) {
-    keyTrust = verifyKeyTrust(sigPublicKey, sigKid, rekorIntegratedTime, registry);
-  } else if (sigPublicKey) {
-    keyTrust = legacyEmbeddedKeyTrust();
-  }
-
-  // Step 5: Canonicalization, content-hash, and typed-standards envelope
-  // checks (spec §9.2). These run against the canonical package JSON when
-  // available; each degrades gracefully for pre-v0.1 packages that omit the
-  // corresponding field.
-  //   #3  contentCanonicalization — known URI resolves; unknown renders as
-  //                              unknown_canonicalization_rule; absent infers
-  //                              the rule from the content profile
-  //   #4  contentHash          — recompute off-log digest under the resolved
-  //                              rule and confirm at least one algorithm
-  //                              matches; pre-v0.1 relabels the slug hash
-  //   #12 type resolution      — non-fatal (unknown_type renders, doesn't fail)
-  //   #13 nodeId               — the recomputed envelope hash; dual-chain via
-  //                              recomputePackageHash (JCS for v0.1 packages,
-  //                              legacy JSON.stringify for pre-v0.1)
-  //   #14 signer ↔ registry    — fatal on mismatch; skipped when no signer
-  //   #15 captureMethod vocab  — captureMethod_unknown rejects; bundle-
-  //                              unresolved degrades gracefully
-  let contentCanonicalization: ContentCanonicalizationResolution | null = null;
-  let contentHashCheck: ContentHashCheck | null = null;
-  let typeResolution: TypeResolution | null = null;
-  let signerIdentity: SignerIdentityCheck | null = null;
-  let captureMethodVocab: CaptureMethodVocabCheck | null = null;
-  if (pkgJson) {
-    contentCanonicalization = resolveContentCanonicalization(pkgJson);
-    // The legacy external single-SHA-256 (relabeled for pre-v0.1 packages) is
-    // the package's stored slug hash — pass it so check #4 can surface it.
-    contentHashCheck = verifyContentHash(
-      pkgJson,
-      contentCanonicalization,
-      record.basePackageHash ?? undefined,
-    );
-    typeResolution = resolvePackageType(pkgJson);
-    signerIdentity = checkSignerIdentity(pkgJson, sigKid, registry);
-    captureMethodVocab = checkCaptureMethodVocab(pkgJson);
-  }
-
-  // Step 6: Lifecycle (check #10, spec §8.10). Dual-read — derive status from
-  // the signer-matched, independently-verified chain of `attestation/*` nodes
-  // when present, else fall back to the legacy withdrawnAt/reinstatedAt columns
-  // (§8.10.4). The target signer is the content node's signer.identifier (the
-  // publisher-only signer-match), defaulting to the platform signer.
-  const lifecycle = await resolveLifecycle(
-    record,
-    (pkgJson?.['signer'] as { identifier?: string } | undefined)?.identifier,
+  const result = await verifyEvidence(
+    {
+      package: pkgJson,
+      packageHash: record.basePackageHash ?? '',
+      signature,
+      signatureMalformed,
+      rfc3161Timestamp: record.basePackageRfc3161Timestamp,
+      rekorEntryId: record.basePackageRekorEntryId,
+      legacyExternalHash: record.basePackageHash ?? undefined,
+    },
+    { registry, fetch: globalThis.fetch, lifecycleResolution },
   );
 
   return NextResponse.json({
-    hashMatch,
-    signatureValid,
-    rekorVerified,
-    hasTimestamp: !!record.basePackageRfc3161Timestamp,
-    keyTrust,
-    blobRefsVerified,
-    blobRefs,
+    hashMatch: result.hashMatch,
+    signatureValid: result.signatureValid,
+    rekorVerified: result.rekorVerified,
+    hasTimestamp: result.hasTimestamp,
+    keyTrust: result.keyTrust,
+    blobRefsVerified: result.blobRefsVerified,
+    blobRefs: result.blobRefs,
     // Canonicalization & content-hash checks (spec §9.2 checks #3-#4).
-    contentCanonicalization,
-    contentHash: contentHashCheck,
+    contentCanonicalization: result.contentCanonicalization,
+    contentHash: result.contentHash,
     // Typed-standards envelope checks (spec §9.2 checks #12-#15).
-    nodeId: recomputedHash,
-    typeResolution,
-    signerIdentity,
-    captureMethodVocab,
+    nodeId: result.nodeId,
+    typeResolution: result.typeResolution,
+    signerIdentity: result.signerIdentity,
+    captureMethodVocab: result.captureMethodVocab,
     // Lifecycle check (spec §9.2 check #10, §8.10) — attestation chain or
     // legacy-column fallback.
-    lifecycle,
+    lifecycle: result.lifecycle,
     details: {
       storedHash: record.basePackageHash,
-      recomputedHash,
-      hasSigning: !!record.basePackageSignature,
-      hasRekor: !!record.basePackageRekorEntryId,
-      rekor: rekorDetails,
-      kid: sigKid,
+      recomputedHash: result.recomputedHash,
+      hasSigning: result.hasSigning,
+      hasRekor: result.hasRekor,
+      rekor: result.rekorDetails,
+      kid: result.kid,
     },
   });
 }
