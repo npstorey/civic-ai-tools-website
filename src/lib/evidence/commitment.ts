@@ -25,7 +25,8 @@ import type { EvidencePackage } from './packager.ts';
  * `docs/api/evidence-commitment.md`): package hash, blob URL, the signature
  * envelope (signature/publicKey/algorithm/kid — all public; no private key
  * material), the public-log proofs (RFC 3161 token, Rekor entry + inclusion
- * proof), the signed envelope claims (signer/type/producerProfile/contentHash),
+ * proof + the entry's public canonical body), the signed envelope claims
+ * (signer/type/producerProfile/contentHash),
  * the creator's PUBLIC GitHub identity, and the public title/summary. It emits
  * NO email, NO internal DB UUIDs, and NO private columns (prompt text, etc.).
  */
@@ -184,6 +185,12 @@ export function buildCommitmentView(
       : {}),
     ...(record.basePackageRekorInclusionProof
       ? { rekorInclusionProof: record.basePackageRekorInclusionProof }
+      : {}),
+    // The Rekor entry's canonical leaf bytes (base64), carried so a verifier can
+    // recompute the RFC 6962 leaf and verify Merkle inclusion OFFLINE against the
+    // carried proof + checkpoint — no re-fetch (#119 P1 / D2). Public log data.
+    ...(record.basePackageRekorEntryBody
+      ? { rekorEntryBody: record.basePackageRekorEntryBody }
       : {}),
     ...(lifecycle ? { lifecycle } : {}),
     // Canonical path (ADR-0012); new clients SHOULD use this. `…Legacy` is the

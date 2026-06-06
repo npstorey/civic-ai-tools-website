@@ -1,0 +1,1 @@
+ALTER TABLE "evidence_records" ADD COLUMN "base_package_rekor_entry_body" text;

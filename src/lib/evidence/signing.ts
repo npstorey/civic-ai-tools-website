@@ -84,6 +84,9 @@ interface RekorResult {
   entryId: string;
   logIndex: number;
   inclusionProof: string; // JSON stringified
+  /** The entry's canonical leaf bytes (base64 `body`) — captured so a verifier can
+   *  recompute the RFC 6962 leaf and verify Merkle inclusion OFFLINE (#119 / D2). */
+  entryBody: string | null;
 }
 
 /**
@@ -247,7 +250,7 @@ export async function publishToRekor(
     }
 
     const result = await response.json();
-    // Response is { [entryId]: { logIndex, ... } }
+    // Response is { [entryId]: { body, logIndex, verification: { inclusionProof }, ... } }
     const entryId = Object.keys(result)[0];
     const entry = result[entryId];
 
@@ -255,6 +258,8 @@ export async function publishToRekor(
       entryId,
       logIndex: entry.logIndex,
       inclusionProof: JSON.stringify(entry.verification?.inclusionProof || {}),
+      // The base64 `body` Rekor canonicalized and logged — the RFC 6962 leaf input.
+      entryBody: typeof entry.body === 'string' ? entry.body : null,
     };
   } catch (err) {
     console.warn('[signing] Rekor publish failed:', err instanceof Error ? err.message : err);

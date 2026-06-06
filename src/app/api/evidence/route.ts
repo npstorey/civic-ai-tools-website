@@ -277,6 +277,7 @@ export async function POST(request: NextRequest) {
       basePackageRfc3161Timestamp: rfc3161Token,
       basePackageRekorEntryId: rekorResult?.entryId || null,
       basePackageRekorInclusionProof: rekorResult?.inclusionProof || null,
+      basePackageRekorEntryBody: rekorResult?.entryBody || null,
       captureMethod: body.captureMethod,
       contentProfile: body.contentProfile ?? null,
     });
