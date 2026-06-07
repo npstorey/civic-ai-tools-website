@@ -13,8 +13,8 @@ import { getPackage } from '@/lib/storage';
 // state depth).
 import {
   verifyEvidence,
+  parseInclusionProof,
   type VerifySignatureEnvelope,
-  type RekorInclusionProof,
 } from '@/lib/evidence/verify-core';
 import { loadTrustRegistry } from '@/lib/evidence/verify';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
@@ -57,22 +57,14 @@ export async function GET(
     }
   }
 
-  // Parse the persisted Rekor inclusion proof. Only a REAL proof (carrying the
-  // audit path + signed checkpoint) is usable for cryptographic Merkle inclusion
-  // (#119 P1); the empty `{}` placeholder some early rows stored is treated as
-  // absent (those rows are healed by the backfill). With the carried entry body
-  // (#119 P1/D2), inclusion verifies OFFLINE — no re-fetch from Rekor.
-  let rekorInclusionProof: RekorInclusionProof | null = null;
-  if (record.basePackageRekorInclusionProof) {
-    try {
-      const parsed = JSON.parse(record.basePackageRekorInclusionProof);
-      if (parsed && Array.isArray(parsed.hashes) && typeof parsed.checkpoint === 'string') {
-        rekorInclusionProof = parsed as RekorInclusionProof;
-      }
-    } catch {
-      // malformed proof column ⇒ leave null (inclusion simply not verified here)
-    }
-  }
+  // Parse the persisted Rekor inclusion proof with verify-core's shared
+  // `parseInclusionProof` (#119 P4) — the one guard this route, the browser
+  // verify-flow, and the backfill share. Only a REAL proof (audit path + signed
+  // checkpoint) is usable for cryptographic Merkle inclusion (#119 P1); the empty
+  // `{}` placeholder some early rows stored is treated as absent (those rows are
+  // healed by the backfill). With the carried entry body (#119 P1/D2), inclusion
+  // verifies OFFLINE — no re-fetch from Rekor.
+  const rekorInclusionProof = parseInclusionProof(record.basePackageRekorInclusionProof);
 
   // Load the trust registry once (cached; falls back to the build-time embedded
   // copy) and resolve lifecycle at the server's chain depth.

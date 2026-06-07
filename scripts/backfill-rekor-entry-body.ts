@@ -27,6 +27,7 @@ import { db } from '../src/lib/db';
 import { evidenceRecords } from '../src/lib/db/schema';
 import {
   verifyRekorInclusion,
+  parseInclusionProof,
   type RekorInclusionProof,
   type RekorInclusionResult,
 } from '@typedstandards/verify-core';
@@ -38,7 +39,11 @@ interface RekorEntry {
   verification?: { inclusionProof?: RekorInclusionProof };
 }
 
-/** A proof is usable only if it carries an audit path + a signed checkpoint. */
+// A proof is usable only if it carries an audit path + a signed checkpoint. The
+// STORED column (a JSON string) is parsed with verify-core's shared
+// `parseInclusionProof` (#119 P4) — the same guard the verify route and browser
+// verify-flow use. `isRealProof` is its object-level twin, for validating the FRESH
+// proof object pulled from a re-fetched Rekor entry (already parsed, not a string).
 function isRealProof(proof: unknown): proof is RekorInclusionProof {
   return (
     !!proof &&
@@ -46,16 +51,6 @@ function isRealProof(proof: unknown): proof is RekorInclusionProof {
     Array.isArray((proof as RekorInclusionProof).hashes) &&
     typeof (proof as RekorInclusionProof).checkpoint === 'string'
   );
-}
-
-function parseStoredProof(raw: string | null): RekorInclusionProof | null {
-  if (!raw) return null;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return isRealProof(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
 }
 
 async function fetchRekorEntry(entryId: string): Promise<RekorEntry | null> {
@@ -90,7 +85,7 @@ async function planRow(row: {
   if (!entry) return { outcome: { kind: 'skip-no-entry' } };
   if (typeof entry.body !== 'string') return { outcome: { kind: 'skip-no-body' } };
 
-  const storedProof = parseStoredProof(row.basePackageRekorInclusionProof);
+  const storedProof = parseInclusionProof(row.basePackageRekorInclusionProof);
   const freshProof = isRealProof(entry.verification?.inclusionProof)
     ? entry.verification!.inclusionProof!
     : null;
