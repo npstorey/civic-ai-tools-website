@@ -108,6 +108,11 @@ export async function GET(
     // Rekor). Data only — the #8 UI/depth-label rendering is unchanged (that is P4).
     rekorInclusion: result.rekorInclusion,
     hasTimestamp: result.hasTimestamp,
+    // Cryptographic RFC 3161 TSA verdict (#119 P2a), additive to the presence-only
+    // `hasTimestamp`. verifyEvidence runs it from the already-passed token (offline,
+    // ECDSA-P384 vs the pinned FreeTSA anchor). Data only — the #7 UI/depth labels
+    // are unchanged (surfacing is P4).
+    rfc3161: result.rfc3161,
     keyTrust: result.keyTrust,
     blobRefsVerified: result.blobRefsVerified,
     blobRefs: result.blobRefs,
