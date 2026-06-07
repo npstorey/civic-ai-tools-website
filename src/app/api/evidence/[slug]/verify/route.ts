@@ -14,6 +14,7 @@ import { getPackage } from '@/lib/storage';
 import {
   verifyEvidence,
   type VerifySignatureEnvelope,
+  type RekorInclusionProof,
 } from '@/lib/evidence/verify-core';
 import { loadTrustRegistry } from '@/lib/evidence/verify';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
@@ -56,6 +57,23 @@ export async function GET(
     }
   }
 
+  // Parse the persisted Rekor inclusion proof. Only a REAL proof (carrying the
+  // audit path + signed checkpoint) is usable for cryptographic Merkle inclusion
+  // (#119 P1); the empty `{}` placeholder some early rows stored is treated as
+  // absent (those rows are healed by the backfill). With the carried entry body
+  // (#119 P1/D2), inclusion verifies OFFLINE — no re-fetch from Rekor.
+  let rekorInclusionProof: RekorInclusionProof | null = null;
+  if (record.basePackageRekorInclusionProof) {
+    try {
+      const parsed = JSON.parse(record.basePackageRekorInclusionProof);
+      if (parsed && Array.isArray(parsed.hashes) && typeof parsed.checkpoint === 'string') {
+        rekorInclusionProof = parsed as RekorInclusionProof;
+      }
+    } catch {
+      // malformed proof column ⇒ leave null (inclusion simply not verified here)
+    }
+  }
+
   // Load the trust registry once (cached; falls back to the build-time embedded
   // copy) and resolve lifecycle at the server's chain depth.
   const [registry, lifecycleResolution] = await Promise.all([
@@ -74,6 +92,8 @@ export async function GET(
       signatureMalformed,
       rfc3161Timestamp: record.basePackageRfc3161Timestamp,
       rekorEntryId: record.basePackageRekorEntryId,
+      rekorInclusionProof,
+      rekorEntryBody: record.basePackageRekorEntryBody,
       legacyExternalHash: record.basePackageHash ?? undefined,
     },
     { registry, fetch: globalThis.fetch, lifecycleResolution },
@@ -83,6 +103,10 @@ export async function GET(
     hashMatch: result.hashMatch,
     signatureValid: result.signatureValid,
     rekorVerified: result.rekorVerified,
+    // Cryptographic Merkle-inclusion verdict (#119 P1), additive to the hash-parity
+    // `rekorVerified`. Null when no usable proof was carried (e.g. da9246 has no
+    // Rekor). Data only — the #8 UI/depth-label rendering is unchanged (that is P4).
+    rekorInclusion: result.rekorInclusion,
     hasTimestamp: result.hasTimestamp,
     keyTrust: result.keyTrust,
     blobRefsVerified: result.blobRefsVerified,
