@@ -156,3 +156,63 @@ async function buildAttestationView(
 function pickString(v: unknown): string | undefined {
   return typeof v === 'string' ? v : undefined;
 }
+
+/** A signed lifecycle attestation carried in the commitment/bundle so an independent
+ *  verifier resolves #10 OFFLINE — verify-core's `verifyLifecycleChain` shape
+ *  (civic-ai-tools-website#119 P3). All public: the signed node envelope + its public
+ *  signature (no private key, no internal DB ids). */
+export interface CarriedLifecycleAttestation {
+  node: Record<string, unknown>;
+  nodeId: string;
+  signature: { signature?: string; publicKey?: string; algorithm?: string } | null;
+  hasTimestamp: boolean;
+  hasRekor: boolean;
+}
+
+/**
+ * Load the signed lifecycle attestation envelopes targeting a content node, for
+ * CARRYING (not resolving) in the commitment/bundle. Each is the signed node JSON
+ * (from blob) + its stored nodeId + signature, so an offline verifier can recompute
+ * the envelope hash, check the signature, and resolve the chain itself — no
+ * reference-implementation dependency. A node whose blob can't be fetched is skipped
+ * (it can't be carried as a self-contained envelope). Returns [] on any query error
+ * (same degrade-not-down posture as `resolveLifecycle`).
+ */
+export async function loadCarriedLifecycleAttestations(
+  targetNodeId: string,
+): Promise<CarriedLifecycleAttestation[]> {
+  let rows: AttestationRow[] = [];
+  try {
+    rows = await db
+      .select()
+      .from(attestationNodes)
+      .where(eq(attestationNodes.targetNodeId, targetNodeId));
+  } catch {
+    return [];
+  }
+
+  const carried: CarriedLifecycleAttestation[] = [];
+  for (const row of rows) {
+    const node = (await getPackage(row.storageKey).catch(() => null)) as Record<
+      string,
+      unknown
+    > | null;
+    if (!node) continue;
+    let signature: CarriedLifecycleAttestation['signature'] = null;
+    if (row.signature) {
+      try {
+        signature = JSON.parse(row.signature);
+      } catch {
+        signature = null;
+      }
+    }
+    carried.push({
+      node,
+      nodeId: row.nodeId,
+      signature,
+      hasTimestamp: !!row.rfc3161Timestamp,
+      hasRekor: !!row.rekorEntryId,
+    });
+  }
+  return carried;
+}

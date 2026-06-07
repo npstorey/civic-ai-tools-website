@@ -4,6 +4,7 @@ import { evidenceRecords, users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
+import { loadCarriedLifecycleAttestations } from '@/lib/evidence/lifecycle';
 import {
   buildCommitmentView,
   CANONICAL_TRUST_REGISTRY_URL,
@@ -167,9 +168,13 @@ export async function GET(
   // Deep-clone so we don't mutate the cached package
   const notebook = JSON.parse(JSON.stringify(notebookRaw)) as Record<string, unknown>;
 
-  // Inject commitment view at notebook root metadata (OES §9.2.2)
+  // Inject commitment view at notebook root metadata (OES §9.2.2), carrying the
+  // signed lifecycle attestation chain (#119 P3) for offline #10 resolution.
+  const lifecycleAttestations = record.basePackageHash
+    ? await loadCarriedLifecycleAttestations(record.basePackageHash)
+    : [];
   const metadata = (notebook.metadata as Record<string, unknown>) ?? {};
-  metadata[EVIDENCE_NAMESPACE_KEY] = buildCommitmentView(record, creator, pkg);
+  metadata[EVIDENCE_NAMESPACE_KEY] = buildCommitmentView(record, creator, pkg, lifecycleAttestations);
   notebook.metadata = metadata;
 
   // Prepend cell-0 reader-affordance table (OES §9.2.4)

@@ -42,6 +42,7 @@ const ALLOWED_KEYS = new Set([
   'rekorInclusionProof',
   'rekorEntryBody',
   'lifecycle',
+  'lifecycleAttestations',
   'trustRegistryUrl',
   'trustRegistryUrlLegacy',
   'subjectTitle',
@@ -156,6 +157,23 @@ test('rekorEntryBody is omitted (not null) when the column is empty', () => {
     makePkg(),
   );
   assert.equal('rekorEntryBody' in view, false);
+});
+
+test('carries lifecycleAttestations when present, omits when empty (#119 P3)', () => {
+  const att = [
+    {
+      node: { type: 'attestation/withdraws/v1', targetNodeId: 'abc' },
+      nodeId: 'deadbeef',
+      signature: { signature: 'SIG', publicKey: 'PUB', algorithm: 'Ed25519ph' },
+      hasTimestamp: false,
+      hasRekor: false,
+    },
+  ];
+  const withChain = buildCommitmentView(makeRecord(), makeCreator(), makePkg(), att);
+  assert.deepEqual(withChain.lifecycleAttestations, att);
+  // No signed chain ⇒ the key is omitted (verifier falls back to STATE).
+  const noChain = buildCommitmentView(makeRecord(), makeCreator(), makePkg(), []);
+  assert.equal('lifecycleAttestations' in noChain, false);
 });
 
 test('datHere package surfaces contentProfile datHere', () => {
