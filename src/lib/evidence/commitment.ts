@@ -1,5 +1,6 @@
 import { evidenceRecords, users } from '../db/schema.ts';
 import type { EvidencePackage } from './packager.ts';
+import type { CarriedLifecycleAttestation } from './lifecycle.ts';
 
 /**
  * Proof sidecar ("commitment view") builder — spec §9.2.1.
@@ -25,7 +26,8 @@ import type { EvidencePackage } from './packager.ts';
  * `docs/api/evidence-commitment.md`): package hash, blob URL, the signature
  * envelope (signature/publicKey/algorithm/kid — all public; no private key
  * material), the public-log proofs (RFC 3161 token, Rekor entry + inclusion
- * proof + the entry's public canonical body), the signed envelope claims
+ * proof + the entry's public canonical body), the signed lifecycle attestation
+ * chain (public signed envelopes + signatures), the signed envelope claims
  * (signer/type/producerProfile/contentHash),
  * the creator's PUBLIC GitHub identity, and the public title/summary. It emits
  * NO email, NO internal DB UUIDs, and NO private columns (prompt text, etc.).
@@ -122,6 +124,11 @@ export function buildCommitmentView(
   record: EvidenceRecord,
   creator: UserRecord | null,
   pkg: EvidencePackage | null,
+  /** Signed lifecycle attestation envelopes (from `loadCarriedLifecycleAttestations`),
+   *  carried so an independent verifier resolves #10 OFFLINE via verify-core's
+   *  `verifyLifecycleChain` — no reference-impl dependency (#119 P3). Omitted when the
+   *  package has no signed lifecycle chain (it then stays at STATE / legacy columns). */
+  lifecycleAttestations?: CarriedLifecycleAttestation[],
 ): Record<string, unknown> {
   let signature: Record<string, unknown> | null = null;
   if (record.basePackageSignature) {
@@ -193,6 +200,10 @@ export function buildCommitmentView(
       ? { rekorEntryBody: record.basePackageRekorEntryBody }
       : {}),
     ...(lifecycle ? { lifecycle } : {}),
+    // The signed lifecycle attestation chain (#119 P3), carried so an independent
+    // verifier resolves #10 offline. Omitted when there is no signed chain — the
+    // verifier then resolves lifecycle at STATE depth from `lifecycle` above.
+    ...(lifecycleAttestations?.length ? { lifecycleAttestations } : {}),
     // Canonical path (ADR-0012); new clients SHOULD use this. `…Legacy` is the
     // byte-identical pre-ADR-0012 path, emitted alongside for older clients.
     trustRegistryUrl: CANONICAL_TRUST_REGISTRY_URL,

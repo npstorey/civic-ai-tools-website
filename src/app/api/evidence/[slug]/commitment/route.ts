@@ -5,6 +5,7 @@ import { eq, asc } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 import { buildCommitmentView } from '@/lib/evidence/commitment';
+import { loadCarriedLifecycleAttestations } from '@/lib/evidence/lifecycle';
 
 /**
  * GET /api/evidence/[hash|slug]/commitment
@@ -131,7 +132,13 @@ export async function GET(
     }
   }
 
-  const commitment = buildCommitmentView(record, creator, pkg);
+  // Carry the signed lifecycle attestation chain (#119 P3) so an independent
+  // verifier resolves #10 offline. Empty for packages with no signed chain.
+  const lifecycleAttestations = record.basePackageHash
+    ? await loadCarriedLifecycleAttestations(record.basePackageHash)
+    : [];
+
+  const commitment = buildCommitmentView(record, creator, pkg, lifecycleAttestations);
 
   // Short cache: the proofs are immutable for a given hash, but lifecycle state
   // (withdrawal/reinstatement) can change after publish, so keep it brief.
