@@ -119,6 +119,11 @@ export const evidenceRecords = pgTable('evidence_records', {
   basePackageRfc3161Timestamp: text('base_package_rfc3161_timestamp'),
   basePackageRekorEntryId: text('base_package_rekor_entry_id'),
   basePackageRekorInclusionProof: text('base_package_rekor_inclusion_proof'),
+  // The Rekor entry's canonical leaf bytes (its base64 `body`), captured at publish
+  // so an independent verifier can recompute the RFC 6962 leaf and verify Merkle
+  // inclusion OFFLINE — no re-fetch from Rekor, no civicaitools.org dependency
+  // (civic-ai-tools-website#119 P1 / D2). Carried in the commitment as `rekorEntryBody`.
+  basePackageRekorEntryBody: text('base_package_rekor_entry_body'),
   captureMethod: captureMethodEnum('capture_method'),
   contentProfile: contentProfileEnum('content_profile'),
   verificationStatus: verificationStatusEnum('verification_status')

@@ -40,6 +40,7 @@ const ALLOWED_KEYS = new Set([
   'rfc3161Timestamp',
   'rekorEntryId',
   'rekorInclusionProof',
+  'rekorEntryBody',
   'lifecycle',
   'trustRegistryUrl',
   'trustRegistryUrlLegacy',
@@ -75,6 +76,7 @@ function makeRecord(overrides: Partial<EvidenceRecord> = {}): EvidenceRecord {
     basePackageRfc3161Timestamp: 'BASE64TSTOKEN',
     basePackageRekorEntryId: 'rekor-entry-123',
     basePackageRekorInclusionProof: JSON.stringify({ logIndex: 42 }),
+    basePackageRekorEntryBody: 'eyJhcGlWZXJzaW9uIjoiMC4wLjEifQ==',
     captureMethod: 'chat-flow-stream',
     contentProfile: null,
     verificationStatus: 'unverified',
@@ -142,7 +144,18 @@ test('non-datHere package (contentProfile null) yields a coherent default sideca
   );
   assert.equal(view.rfc3161Timestamp, 'BASE64TSTOKEN');
   assert.equal(view.rekorEntryId, 'rekor-entry-123');
+  // The Rekor entry body is carried so inclusion can be verified offline (#119 P1).
+  assert.equal(view.rekorEntryBody, 'eyJhcGlWZXJzaW9uIjoiMC4wLjEifQ==');
   assert.equal(view.evidenceProtocolVersion, '0.1.0');
+});
+
+test('rekorEntryBody is omitted (not null) when the column is empty', () => {
+  const view = buildCommitmentView(
+    makeRecord({ basePackageRekorEntryBody: null }),
+    makeCreator(),
+    makePkg(),
+  );
+  assert.equal('rekorEntryBody' in view, false);
 });
 
 test('datHere package surfaces contentProfile datHere', () => {
