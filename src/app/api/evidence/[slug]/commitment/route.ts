@@ -5,6 +5,7 @@ import { eq, asc } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 import { buildCommitmentView } from '@/lib/evidence/commitment';
+import { loadTrustRegistry } from '@/lib/evidence/verify';
 import { loadCarriedLifecycleAttestations } from '@/lib/evidence/lifecycle';
 
 /**
@@ -43,6 +44,15 @@ import { loadCarriedLifecycleAttestations } from '@/lib/evidence/lifecycle';
  * package blob is additionally fetched best-effort to surface the signed envelope
  * fields (`signer`, `type`, `producerProfile`, `contentHash`,
  * `contentCanonicalization`). No live Rekor / TSA call.
+ *
+ * Self-contained bundle (`?inline=1`): opt-in, the response additionally INLINES the
+ * full package JSON (`package`) and the stamped trust registry (`trustRegistry`) so
+ * the commitment verifies with ZERO network — the client-side verifier reaches
+ * `fullyOffline` (package inline + registry inline; the RFC 3161 token, Rekor entry
+ * body + inclusion proof, and lifecycle chain are already inline). The DEFAULT (no
+ * flag) is unchanged — the lightweight URL sidecar — so the online verify path is not
+ * bloated. Pass `?inline` / `?inline=1` / `?inline=true`; `?inline=0` / `=false` are
+ * off. (#119 Q15a)
  */
 
 // A base-package hash is the hex SHA-256 of the canonical envelope: 64 hex chars.
@@ -70,7 +80,7 @@ export async function OPTIONS() {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug: identifier } = await params;
@@ -140,9 +150,28 @@ export async function GET(
 
   const commitment = buildCommitmentView(record, creator, pkg, lifecycleAttestations);
 
+  // `?inline=1` → self-contained bundle (#119 Q15a): inline the package + the stamped
+  // trust registry so the commitment needs zero network to verify. The package is the
+  // one `buildCommitmentView` already received; the registry is exactly what the verify
+  // route trusts (the build-time-bundled, generatedAt-stamped `/.well-known` file). When
+  // the blob couldn't be fetched (`pkg === null`), `package` is simply omitted — the
+  // bundle then falls back to `packageUrl` rather than serving a hollow inline field.
+  const inlineParam = request.nextUrl.searchParams.get('inline');
+  const inline = inlineParam !== null && inlineParam !== '0' && inlineParam !== 'false';
+  let body: Record<string, unknown> = commitment;
+  if (inline) {
+    const registry = await loadTrustRegistry();
+    body = {
+      ...commitment,
+      ...(pkg ? { package: pkg } : {}),
+      ...(registry ? { trustRegistry: registry } : {}),
+    };
+  }
+
   // Short cache: the proofs are immutable for a given hash, but lifecycle state
-  // (withdrawal/reinstatement) can change after publish, so keep it brief.
-  return jsonResponse(commitment, 200, {
+  // (withdrawal/reinstatement) can change after publish, so keep it brief. The inline
+  // and default forms cache separately (the cache key includes the query string).
+  return jsonResponse(body, 200, {
     'Cache-Control': 'public, max-age=60, s-maxage=60',
   });
 }

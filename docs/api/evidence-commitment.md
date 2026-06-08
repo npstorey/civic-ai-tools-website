@@ -33,6 +33,21 @@ The endpoint is **CORS-open** (`Access-Control-Allow-Origin: *`, `Access-Control
 
 The two other resources a cross-origin verifier must fetch are already CORS-open (verified 2026-06-04): the **Vercel Blob** package object (`access-control-allow-origin: *`) and the **trust registry** at both `/.well-known/typed-publisher.json` (canonical) and `/.well-known/evidence-public-keys.json` (legacy).
 
+### Self-contained bundle (`?inline=1`)
+
+By default the commitment is a lightweight **pointer**: it carries `packageUrl` and `trustRegistryUrl`, and a verifier fetches those two resources to complete verification.
+
+Pass **`?inline=1`** (also `?inline` / `?inline=true`; `?inline=0` / `?inline=false` are off) to get a **self-contained bundle** — the same commitment view, plus:
+
+| Field | Inlined value |
+|-------|---------------|
+| `package` | the full canonical package JSON (otherwise fetched from `packageUrl`) |
+| `trustRegistry` | the publisher's trust registry document, with its `generatedAt` as-of date (otherwise fetched from `trustRegistryUrl`) |
+
+The RFC 3161 timestamp, the Rekor entry body + inclusion proof, and the signed lifecycle attestation chain are **already inline** in the default view, so an `?inline=1` response needs **zero network** to verify: the client-side verifier recomputes the hash, signature, content fingerprint, key trust (against the inlined registry — surfaced with the snapshot's as-of date and an online-recheck affordance), the RFC 3161 chain, the Rekor Merkle inclusion, and the lifecycle chain, all offline (`#119` Q15). Save the response to a file and verify it anywhere, later, with no connectivity.
+
+Trade-off: the inline form is larger (it embeds the whole package), so the default stays the lightweight pointer. Both forms cache separately (the cache key includes the query string).
+
 ---
 
 ## Response (`200`)
@@ -134,3 +149,4 @@ curl https://civicaitools.org/api/evidence/noise-trends-in-nyc-last-tuesday-ef1a
 ## Change log
 
 - **2026-06-04** — Initial endpoint. Extracted and generalized `buildCommitmentView` from the notebook bundle route into `src/lib/evidence/commitment.ts`; added the public, CORS-open `GET /api/evidence/<hash|slug>/commitment`. WS1 of #116.
+- **2026-06-08** — Added the opt-in `?inline=1` self-contained bundle (inlines `package` + the stamped `trustRegistry`) so the commitment verifies with zero network — the verifier reaches `fullyOffline`. Default form unchanged. #119 Q15a.
