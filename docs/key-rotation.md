@@ -79,6 +79,12 @@ verifiable after the rotation.
      timestamp.
    - Flip the previous key's `status` to `deprecated`, set `deprecatedAt`
      to the same ISO timestamp, and leave `revokedAt` as `null`.
+   - **Bump the document-level `generatedAt`** to the current ISO timestamp.
+     This is the registry's "thisUpdate" (CRL precedent): it declares when
+     this version of the list was issued, so offline verifiers can state the
+     as-of date of the snapshot they checked against (#119 P4). Bump it on
+     **every** registry edit, not only rotations — a verifier that only has a
+     stale snapshot cannot see a revocation made after this date.
 
 4. **Merge and deploy the registry** before rotating env vars. Verifiers
    must be able to see the new key before they see any package signed by

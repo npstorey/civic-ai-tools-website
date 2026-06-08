@@ -1,5 +1,6 @@
 {
   "$comment": "Platform trust registry for civicaitools.org evidence packages. Verifiers fetch this file, match the (kid, publicKey) pair embedded in a package's signature, and apply the status semantics below. See docs/key-rotation.md for the rotation runbook.",
+  "generatedAt": "2026-06-07T00:00:00.000Z",
   "statusSemantics": {
     "active": "Valid for signing new packages and for verification.",
     "deprecated": "Cannot sign new packages. Signatures are valid for verification only when the package's Rekor integratedTime precedes deprecatedAt.",
