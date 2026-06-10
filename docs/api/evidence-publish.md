@@ -377,7 +377,7 @@ Signing, RFC 3161 timestamp, and Rekor submission are non-blocking. Failures for
 
 ## Rate limits and size constraints
 
-- **No application-level rate limit on `POST /api/evidence`.** The `/api/compare` endpoints are rate-limited (5 requests/day anonymous, 25/day signed-in), but the evidence publish endpoint is not. External clients should self-throttle.
+- **No application-level rate limit on `POST /api/evidence`.** The `/api/compare` endpoints are rate-limited (10 requests/day anonymous, 25/day signed-in), but the evidence publish endpoint is not. External clients should self-throttle.
 - **Request body size:** The Next.js App Router default cap of ~4 MB applies. Large OpenTelemetry traces or very long outputs can push close to this limit.
 - **Request timeout:** Vercel Pro sets a 300-second function timeout (see workspace `CLAUDE.md`). Publishing normally completes in under 10 seconds; the bulk of the latency comes from the external RFC 3161 and Rekor calls, both guarded with internal timeouts (10s and 15s respectively).
 

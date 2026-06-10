@@ -55,7 +55,7 @@ KV_REST_API_TOKEN=
 
 ## Rate Limits
 
-- Anonymous users: 5 requests/day
+- Anonymous users: 10 requests/day
 - Signed-in users (GitHub): 25 requests/day
 
 ## API documentation

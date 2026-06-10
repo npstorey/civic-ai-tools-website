@@ -32,13 +32,21 @@ npm run lint         # Run ESLint
 
 ## Information Architecture
 
-Three pages, each with a distinct purpose. Use this framing to decide where new features belong:
+Each page has a distinct purpose. Use this framing to decide where new features belong:
 
 | Page | Route | Star of the page | User goal |
 |------|-------|-------------------|-----------|
 | **Home** | `/` | The result content | "Show me why MCP matters" |
 | **Explore** | `/explore` | The process | "Show me how this works" |
 | **About** | `/about` | The prose | "Explain this to me" |
+| **Learn** | `/learn` | Educational content | "Teach me the concepts" |
+| **Evidence index** | `/evidence` | The published registry | "Show me what's been published" |
+| **Evidence detail** | `/evidence/[slug]` | One signed analysis | "Let me scrutinize this analysis" |
+| **Directory** | `/directory` | MCP-server inventory | "What sources can I connect to?" |
+| **Roadmap** | `/roadmap` | Plans + commitments | "Where is this project going?" |
+| **Dashboard** | `/dashboard` | The user's own publishes | "Manage my evidence" |
+
+(`/auth/device` is the device-flow pairing screen; `/dev/notebook-preview` is a dev-only preview harness, not user-facing.)
 
 The BPMN visualization lives on `/explore`. The About page is purely educational prose with a CTA linking to `/explore`.
 
