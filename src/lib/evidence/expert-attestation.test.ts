@@ -27,7 +27,7 @@ const SAMPLE_ATTESTER = {
   githubProfileUrl: 'https://github.com/ava-attester',
 };
 
-const MIN_VALID_INPUT = { body: 'Solid analysis.', expertise: 'Demographer', rating: 'endorse' };
+const MIN_VALID_INPUT = { body: 'Solid analysis.', expertise: 'Demographer', rating: 'endorse' as const };
 
 // ---- validateExpertAttestation ----
 

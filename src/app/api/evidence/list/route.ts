@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
     attestationCountMap = new Map(counts.map(c => [c.evidenceRecordId, c.count]));
   }
 
-  let results = records.map(r => ({
+  const results = records.map(r => ({
     id: r.id,
     slug: r.slug,
     title: r.title,

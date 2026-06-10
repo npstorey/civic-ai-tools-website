@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useCallback, useSyncExternalStore } from 'react';
 import ResponsePanel from './ResponsePanel';
 
 import type { ProgressLogEntry, ProgressGroup, EvidenceTrace } from '@/hooks/useStreamingComparison';
@@ -50,15 +50,19 @@ interface ComparisonDisplayProps {
 }
 
 function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(false);
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    setMatches(mql.matches);
-    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  }, [query]);
-  return matches;
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      const mql = window.matchMedia(query);
+      mql.addEventListener('change', onStoreChange);
+      return () => mql.removeEventListener('change', onStoreChange);
+    },
+    [query],
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia(query).matches,
+    () => false,
+  );
 }
 
 export default function ComparisonDisplay({

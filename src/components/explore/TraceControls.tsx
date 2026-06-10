@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { PreRecordedTrace } from '@/lib/bpmn/traces';
 import type { PlaybackSpeed, ReplayState } from '@/lib/bpmn/animation';
 import type { LiveTraceStatus, SlowQueryMessage } from '@/hooks/useLiveTrace';
@@ -95,10 +95,14 @@ export default function TraceControls({
 }: TraceControlsProps) {
   const [liveQuery, setLiveQuery] = useState('');
 
-  // Update query input when a suggestion comes in
-  useEffect(() => {
+  // Update query input when a suggestion comes in — the "adjust state when
+  // props change" render-time pattern, replacing a setState-in-effect that
+  // the react-hooks rules flag for cascading renders.
+  const [prevSuggested, setPrevSuggested] = useState<string | undefined>(undefined);
+  if (suggestedQuery !== prevSuggested) {
+    setPrevSuggested(suggestedQuery);
     if (suggestedQuery) setLiveQuery(suggestedQuery);
-  }, [suggestedQuery]);
+  }
   const selectedTrace = traces.find(t => t.id === selectedTraceId);
 
   // Complexity indicator: count tool_start events and format duration
