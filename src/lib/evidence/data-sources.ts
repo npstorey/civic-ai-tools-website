@@ -101,7 +101,7 @@ function spanAttr(span: TraceSpan | undefined, key: string): string | undefined 
  * Resolve the MCP source for a tool call. Prefers the `mcp.source` attribute
  * recorded on the matching `mcp_tool_call` span (the M9.1 source of truth);
  * falls back to the static tool-name mapping for packages written before
- * M9.1 or callers that ship an empty trace (e.g. `/api/evidence/test`).
+ * M9.1 or callers that ship an empty trace.
  *
  * Tool calls are paired to spans by index — `openrouter-streaming.ts` emits
  * one span per call in order, so positional matching is exact in the normal

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import McpResponseDisplay from '@/components/shared/McpResponseDisplay';
 import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
 
@@ -48,10 +49,16 @@ export default function LiveResponsePanel({
 }: LiveResponsePanelProps) {
   const [timeoutMessage, setTimeoutMessage] = useState<string | null>(null);
   const [isProminent, setIsProminent] = useState(false);
-  const lastEventTimeRef = useRef<number>(Date.now());
+  // Stamped by the isRunning effect before the interval ever reads it;
+  // initializing to 0 keeps Date.now() out of render (react-hooks/purity).
+  const lastEventTimeRef = useRef<number>(0);
   const prevProgressLenRef = useRef<number>(progressLog.length);
 
-  // Reset timer when new progress events arrive
+  // Reset timer when new progress events arrive.
+  // The synchronous setState here is intentional: the stall banner must clear
+  // in the same pass that evidence of progress arrives, and the guard ensures
+  // it only fires when the log actually grew (no cascading-render loop).
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional immediate banner clear; see #132 */
   useEffect(() => {
     if (progressLog.length !== prevProgressLenRef.current) {
       prevProgressLenRef.current = progressLog.length;
@@ -70,6 +77,7 @@ export default function LiveResponsePanel({
       lastEventTimeRef.current = Date.now();
     }
   }, [isRunning]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Tick every second while running to check for timeout messages
   useEffect(() => {
@@ -202,9 +210,9 @@ export default function LiveResponsePanel({
                     <span style={{ margin: '0 6px' }}>&middot;</span>
                   </>
                 )}
-                <a href="/" style={{ color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+                <Link href="/" style={{ color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
                   Try a simpler question
-                </a>
+                </Link>
                 <span style={{ margin: '0 6px' }}>&middot;</span>
                 <a href="https://github.com/npstorey/civic-ai-tools" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
                   Run locally (no limits)

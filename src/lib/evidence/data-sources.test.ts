@@ -135,9 +135,9 @@ test('Multi-source: Socrata + Data Commons in one analysis produce distinct entr
 });
 
 test('Empty trace falls back to tool-name source mapping (Socrata)', () => {
-  // `/api/evidence/test/route.ts` ships an empty trace. The static tool-name
-  // map should still identify `get_data` as Socrata so the existing test
-  // scaffolding keeps producing a valid dataSources entry.
+  // Some callers ship an empty trace (pre-M9.1 packages, external clients).
+  // The static tool-name map should still identify `get_data` as Socrata so
+  // empty-trace packages keep producing a valid dataSources entry.
   const toolCalls: ToolCallSummary[] = [
     {
       name: 'get_data',
