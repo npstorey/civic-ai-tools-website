@@ -148,7 +148,14 @@ export async function GET(
     ? await loadCarriedLifecycleAttestations(record.basePackageHash)
     : [];
 
-  const commitment = buildCommitmentView(record, creator, pkg, lifecycleAttestations);
+  // Committed records (civic-ai-tools#71, ADR-0010 §5): the commitment IS
+  // public — the hash is already on the transparency log — but the content
+  // surface is not. Serve the view redacted of the capability URL, title, and
+  // summary; never inline the package.
+  const isCommitted = record.visibility === 'committed';
+  const commitment = buildCommitmentView(record, creator, pkg, lifecycleAttestations, {
+    redactContentSurface: isCommitted,
+  });
 
   // `?inline=1` → self-contained bundle (#119 Q15a): inline the package + the stamped
   // trust registry so the commitment needs zero network to verify. The package is the
@@ -156,6 +163,7 @@ export async function GET(
   // route trusts (the build-time-bundled, generatedAt-stamped `/.well-known` file). When
   // the blob couldn't be fetched (`pkg === null`), `package` is simply omitted — the
   // bundle then falls back to `packageUrl` rather than serving a hollow inline field.
+  // Committed records never inline the package (content is creator-distributed only).
   const inlineParam = request.nextUrl.searchParams.get('inline');
   const inline = inlineParam !== null && inlineParam !== '0' && inlineParam !== 'false';
   let body: Record<string, unknown> = commitment;
@@ -163,7 +171,7 @@ export async function GET(
     const registry = await loadTrustRegistry();
     body = {
       ...commitment,
-      ...(pkg ? { package: pkg } : {}),
+      ...(pkg && !isCommitted ? { package: pkg } : {}),
       ...(registry ? { trustRegistry: registry } : {}),
     };
   }

@@ -18,9 +18,10 @@ import {
 } from '@/lib/evidence/verify-core';
 import { loadTrustRegistry } from '@/lib/evidence/verify';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
+import { canReadRecord } from '@/lib/evidence/committed-access';
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
@@ -36,6 +37,13 @@ export async function GET(
   }
 
   const record = records[0];
+
+  // Committed records are creator-only on this surface (civic-ai-tools#71);
+  // public verification of a committed claim goes through the redacted
+  // commitment sidecar instead.
+  if (!(await canReadRecord(request, record))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
 
   // Resolve the canonical package JSON from the blob (null mirrors the prior
   // "blob unavailable" path — integrity fails, package-derived checks report

@@ -3,9 +3,10 @@ import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
+import { canReadRecord } from '@/lib/evidence/committed-access';
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
@@ -13,12 +14,19 @@ export async function GET(
   const records = await db
     .select({
       basePackageStorageKey: evidenceRecords.basePackageStorageKey,
+      visibility: evidenceRecords.visibility,
+      creatorId: evidenceRecords.creatorId,
     })
     .from(evidenceRecords)
     .where(eq(evidenceRecords.slug, slug))
     .limit(1);
 
   if (records.length === 0) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  // Committed records' content is creator-only (civic-ai-tools#71).
+  if (!(await canReadRecord(request, records[0]))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 

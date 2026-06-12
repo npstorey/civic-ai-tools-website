@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
+import { canReadRecord } from '@/lib/evidence/committed-access';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 
 const EVALUATION_RUBRIC = `You are an independent evaluator assessing an AI-generated civic data analysis.
@@ -110,6 +111,12 @@ export async function POST(
     return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });
   }
   const record = records[0];
+
+  // Committed records are creator-only on this content-bearing surface
+  // (civic-ai-tools#71).
+  if (!(await canReadRecord(request, record))) {
+    return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });
+  }
 
   if (!record.basePackageStorageKey) {
     return NextResponse.json({ error: 'No evidence package available' }, { status: 400 });

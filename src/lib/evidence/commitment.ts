@@ -129,7 +129,17 @@ export function buildCommitmentView(
    *  `verifyLifecycleChain` — no reference-impl dependency (#119 P3). Omitted when the
    *  package has no signed lifecycle chain (it then stays at STATE / legacy columns). */
   lifecycleAttestations?: CarriedLifecycleAttestation[],
+  /** COMMITTED-record redaction (civic-ai-tools#71, ADR-0010 §5): the commitment
+   *  is public by design (the hash is already on the transparency log), but the
+   *  content's location and content-derived strings are not. When set, the view
+   *  omits `packageUrl` (the non-derivable capability URL must not be disclosed),
+   *  `subjectTitle`, and `subjectSummary`, and carries `visibility: "committed"`
+   *  so verifiers can render the zero-location state honestly. Proof-side fields
+   *  (hash, signature, signer, envelope taxonomy, timestamps, Rekor, lifecycle)
+   *  are served unredacted — they ARE the commitment. */
+  opts?: { redactContentSurface?: boolean },
 ): Record<string, unknown> {
+  const redact = opts?.redactContentSurface === true;
   let signature: Record<string, unknown> | null = null;
   if (record.basePackageSignature) {
     try {
@@ -163,7 +173,12 @@ export function buildCommitmentView(
   return {
     evidenceProtocolVersion: '0.1.0',
     packageHash: record.basePackageHash,
-    packageUrl: record.basePackageStorageKey,
+    // The committed-mode storage key is a non-derivable capability URL; it is
+    // never emitted on a redacted view (Phase 2 hard requirement).
+    ...(redact ? {} : { packageUrl: record.basePackageStorageKey }),
+    // Visibility state (ADR-0010): lets a verifier render "committed — content
+    // not publicly located" instead of treating a missing packageUrl as an error.
+    visibility: record.visibility ?? 'published',
     captureMethod: record.captureMethod ?? null,
     // Generalized for all packages (WS1): sourced from the row, not hardcoded
     // 'datHere'. Absent column ⇒ 'default' (legacy / default content shape).
@@ -208,7 +223,8 @@ export function buildCommitmentView(
     // byte-identical pre-ADR-0012 path, emitted alongside for older clients.
     trustRegistryUrl: CANONICAL_TRUST_REGISTRY_URL,
     trustRegistryUrlLegacy: LEGACY_TRUST_REGISTRY_URL,
-    subjectTitle: record.title,
-    subjectSummary: record.summary,
+    // Title and summary are content-derived (titles are typically the user's
+    // question verbatim) — redacted for committed records.
+    ...(redact ? {} : { subjectTitle: record.title, subjectSummary: record.summary }),
   };
 }

@@ -47,6 +47,7 @@ const ALLOWED_KEYS = new Set([
   'trustRegistryUrlLegacy',
   'subjectTitle',
   'subjectSummary',
+  'visibility',
 ]);
 
 function makeRecord(overrides: Partial<EvidenceRecord> = {}): EvidenceRecord {
@@ -83,6 +84,7 @@ function makeRecord(overrides: Partial<EvidenceRecord> = {}): EvidenceRecord {
     verificationStatus: 'unverified',
     consistencyClassification: null,
     isPublic: true,
+    visibility: 'published',
     withdrawnAt: null,
     withdrawnReason: null,
     withdrawalSignature: 'SECRET withdrawal signature',
@@ -354,4 +356,46 @@ test('SECURITY: only intended-public keys are emitted (no PII / internal IDs / p
     false,
     'creator UUID leaked',
   );
+});
+
+// --- Committed-record redaction (civic-ai-tools#71 Phase 2, ADR-0010 §5) ---
+
+test('committed redaction: capability URL, title, and summary never leave the server', () => {
+  const record = makeRecord({
+    visibility: 'committed',
+    basePackageStorageKey:
+      'https://store.public.blob.vercel-storage.com/evidence-packages/committed/0123456789abcdef0123456789abcdef.json',
+    title: 'SECRET internal question title',
+    summary: 'SECRET internal summary',
+  });
+  const view = buildCommitmentView(record, makeCreator(), makePkg(), undefined, {
+    redactContentSurface: true,
+  });
+
+  const serialized = JSON.stringify(view);
+  assert.equal(serialized.includes('committed/0123456789abcdef'), false, 'capability URL leaked');
+  assert.equal(serialized.includes('SECRET internal question title'), false, 'title leaked');
+  assert.equal(serialized.includes('SECRET internal summary'), false, 'summary leaked');
+  assert.ok(!('packageUrl' in view));
+  assert.ok(!('subjectTitle' in view));
+  assert.ok(!('subjectSummary' in view));
+
+  // The commitment itself — the proofs — is served unredacted.
+  assert.equal(view.visibility, 'committed');
+  assert.equal(view.packageHash, record.basePackageHash);
+  assert.ok(view.signature, 'signature envelope should be served');
+  assert.equal(view.rfc3161Timestamp, 'BASE64TSTOKEN');
+  assert.equal(view.rekorEntryId, 'rekor-entry-123');
+
+  // Allowed-keys audit holds for the redacted form too.
+  for (const key of Object.keys(view)) {
+    assert.ok(ALLOWED_KEYS.has(key), `unexpected key in redacted sidecar: ${key}`);
+  }
+});
+
+test('published records carry visibility "published" and stay unredacted', () => {
+  const view = buildCommitmentView(makeRecord(), makeCreator(), makePkg());
+  assert.equal(view.visibility, 'published');
+  assert.ok(view.packageUrl);
+  assert.equal(view.subjectTitle, 'Sample analysis');
 });

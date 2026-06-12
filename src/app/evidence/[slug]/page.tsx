@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
+import { sessionUserIsCreator } from '@/lib/evidence/committed-access';
 import ProvenanceChain from '@/components/evidence/ProvenanceChain';
 import EvidenceActions from '@/components/evidence/EvidenceActions';
 import AttestationSection from '@/components/evidence/AttestationSection';
@@ -108,6 +109,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const data = await getEvidenceData(slug);
   if (!data) return { title: 'Evidence Not Found' };
 
+  // Committed records (civic-ai-tools#71): title/summary are content-derived
+  // and creator-only — emit generic metadata regardless of viewer so nothing
+  // content-bearing lands in OG tags, caches, or link previews.
+  if (data.record.visibility === 'committed') {
+    return { title: 'Committed evidence record', robots: { index: false } };
+  }
+
   const { record, creator } = data;
   const url = `https://civicaitools.org/evidence/${slug}`;
   const description = record.summary.slice(0, 200);
@@ -185,6 +193,15 @@ export default async function EvidencePage({ params }: PageProps) {
   const data = await getEvidenceData(slug);
   if (!data) notFound();
 
+  // Committed records are creator-only (civic-ai-tools#71): the page (content,
+  // title, summary, notebook) does not exist for anyone else — 404, not 403,
+  // so probing can't confirm the record. The public surface for a committed
+  // claim is the redacted commitment sidecar.
+  const isCommitted = data.record.visibility === 'committed';
+  if (isCommitted && !(await sessionUserIsCreator(data.record))) {
+    notFound();
+  }
+
   const { record, creator, pkg, resolution } = data;
   // Use the resolved package everywhere we render package content — it has
   // BlobRef outputs eagerly pulled into strings so child components can stay
@@ -228,6 +245,29 @@ export default async function EvidencePage({ params }: PageProps) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 24px 64px' }}>
+        {/* Committed banner (civic-ai-tools#71) — creator-only view of a
+            committed-not-published record. The commitment (hash + signature +
+            timestamp + Rekor) is publicly registered; the content is not. */}
+        {isCommitted && (
+          <div style={{
+            padding: '16px 20px', marginBottom: '24px',
+            backgroundColor: 'rgba(16, 63, 239, 0.05)',
+            border: '1px solid rgba(16, 63, 239, 0.25)',
+            borderRadius: '6px',
+          }}>
+            <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--nyc-blue)', marginBottom: '6px' }}>
+              Committed — not published
+            </div>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+              This record is signed, timestamped, and registered on the public
+              transparency log, but its content is not publicly accessible and
+              it does not appear in the public registry. Only you can see this
+              page. Publishing is a separate, irreversible step that makes the
+              content public and emits signed publication attestations.
+            </div>
+          </div>
+        )}
+
         {/* Withdrawal banner — shown when the resolved lifecycle status is
             withdrawn (from the signed attestation chain, or the legacy columns
             for pre-PR3 records). */}

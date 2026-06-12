@@ -20,10 +20,10 @@ import {
 } from './canonicalization.ts';
 // Lifecycle sub-type URIs are defined once in verify-core (the verify side
 // dispatches on them); imported here for the builder body and re-exported so
-// existing importers (`./attestation.ts`) are unaffected. `supersedes` /
-// `publishes` / `locatedAt` and the claim-to-claim sub-types remain reserved
-// name-only per the Xanadu doctrine — the attestation_nodes table holds them,
-// but no route emits them until an adopter needs them.
+// existing importers (`./attestation.ts`) are unaffected. `supersedes` and the
+// claim-to-claim sub-types remain reserved name-only per the Xanadu doctrine —
+// the attestation_nodes table holds them, but no route emits them until an
+// adopter needs them.
 import {
   ATTESTATION_WITHDRAWS,
   ATTESTATION_REINSTATES,
@@ -37,6 +37,22 @@ export {
   LIFECYCLE_ATTESTATION_TYPES,
   type LifecycleAttestationType,
 };
+
+// Publication-pair sub-types (spec §8.10, §8.12.1; ADR-0010 §6), operationalized
+// by the Phase 2 integration-arc work (civic-ai-tools#71). Defined here (not in
+// verify-core) because lifecycle STATUS resolution intentionally ignores them —
+// verify-core's `resolveLifecycleFromChain` filters to withdraws/reinstates;
+// publishes/locatedAt express the visibility dimension, which surfaces read
+// directly from the chain (or the DB visibility mirror).
+export const ATTESTATION_PUBLISHES = 'attestation/publishes/v1';
+export const ATTESTATION_LOCATED_AT = 'attestation/locatedAt/v1';
+
+/** The sub-types this builder can emit: the verify-core lifecycle pair plus the
+ *  publication pair. */
+export type EmittableAttestationType =
+  | LifecycleAttestationType
+  | typeof ATTESTATION_PUBLISHES
+  | typeof ATTESTATION_LOCATED_AT;
 
 const PACKAGE_SCHEMA_VERSION = '0.1.0';
 
@@ -74,15 +90,34 @@ export interface AttestationNode {
   effectiveAt?: string;
   /** `reinstates`: the prior withdrawal this reinstatement reverses. */
   priorWithdrawalNodeId?: string;
+  /** `publishes`: the host the publication transitions visibility on. */
+  publicationHost?: string;
+  /** `publishes`: when the publication takes effect (defaults to envelope ts). */
+  releasedAt?: string;
+  /** `locatedAt`: the URI where the target's content is available. */
+  uri?: string;
+  /** `locatedAt`: multihash fingerprint of the TARGET's content (SHOULD match
+   *  the target node's own `contentHash`). Named `targetContentHash` rather
+   *  than the §8.12.1 table's `contentHash` because that key is already taken
+   *  by this envelope's own structural-primitive fingerprint — registered as
+   *  open-questions Q48 pending table reconciliation. */
+  targetContentHash?: Record<string, string>;
+  /** `locatedAt`: byte length of the content at `uri` (optional). */
+  contentLength?: number;
 }
 
 export interface AttestationInput {
-  type: LifecycleAttestationType;
+  type: EmittableAttestationType;
   targetNodeId: string;
   signer: SignerIdentity;
   reason?: string;
   effectiveAt?: string;
   priorWithdrawalNodeId?: string;
+  publicationHost?: string;
+  releasedAt?: string;
+  uri?: string;
+  targetContentHash?: Record<string, string>;
+  contentLength?: number;
 }
 
 /**
@@ -119,6 +154,23 @@ export function buildAttestationNode(
       : {}),
     ...(input.priorWithdrawalNodeId !== undefined
       ? { priorWithdrawalNodeId: input.priorWithdrawalNodeId }
+      : {}),
+    // `publishes` payload (§8.12.1): publicationHost + releasedAt (defaults to
+    // the envelope timestamp, mirroring effectiveAt's rule).
+    ...(input.type === ATTESTATION_PUBLISHES
+      ? {
+          publicationHost: input.publicationHost,
+          releasedAt: input.releasedAt ?? now,
+        }
+      : {}),
+    // `locatedAt` payload (§8.12.1): uri + target fingerprint (+ optional
+    // length). See the Q48 note on `targetContentHash` above.
+    ...(input.uri !== undefined ? { uri: input.uri } : {}),
+    ...(input.targetContentHash !== undefined
+      ? { targetContentHash: input.targetContentHash }
+      : {}),
+    ...(input.contentLength !== undefined
+      ? { contentLength: input.contentLength }
       : {}),
   };
 

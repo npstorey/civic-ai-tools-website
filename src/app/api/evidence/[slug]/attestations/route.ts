@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { canReadRecord } from '@/lib/evidence/committed-access';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { evidenceRecords, attestationPackages, users } from '@/lib/db/schema';
@@ -25,18 +26,27 @@ const ACCEPTED_TYPES: AttestationType[] = ['consistency', 'evaluation', 'expert_
  * Lists all attestation packages for an evidence record.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
 
   // Look up evidence record by slug
   const records = await db
-    .select({ id: evidenceRecords.id })
+    .select({
+      id: evidenceRecords.id,
+      visibility: evidenceRecords.visibility,
+      creatorId: evidenceRecords.creatorId,
+    })
     .from(evidenceRecords)
     .where(eq(evidenceRecords.slug, slug))
     .limit(1);
   if (records.length === 0) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  // Committed records are creator-only (civic-ai-tools#71).
+  if (!(await canReadRecord(request, records[0]))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
@@ -111,6 +121,11 @@ export async function POST(
     return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });
   }
   const record = records[0];
+
+  // Committed records are creator-only (civic-ai-tools#71).
+  if (!(await canReadRecord(request, record))) {
+    return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });
+  }
 
   const body = await request.json();
   const { type, data } = body as { type?: string; data?: unknown };

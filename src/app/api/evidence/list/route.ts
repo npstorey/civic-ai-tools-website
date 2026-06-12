@@ -26,8 +26,13 @@ export async function GET(request: NextRequest) {
   const includeWithdrawn = params.get('withdrawn') === 'include';
   const page = Math.max(1, parseInt(params.get('page') || '1', 10));
 
-  // Build WHERE conditions
-  const conditions = [eq(evidenceRecords.isPublic, true)];
+  // Build WHERE conditions. Committed records (civic-ai-tools#71) are never
+  // listed — their commitment is public via the commitment endpoint, but the
+  // record itself is creator-only until published.
+  const conditions = [
+    eq(evidenceRecords.isPublic, true),
+    eq(evidenceRecords.visibility, 'published' as const),
+  ];
 
   // Exclude currently-withdrawn records by default.
   // Reinstated records (withdrawn then reinstated) remain visible.

@@ -85,6 +85,13 @@
       "when": 1780779327133,
       "tag": "0011_aberrant_squadron_sinister",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1781231818401,
+      "tag": "0012_add_visibility",
+      "breakpoints": true
     }
   ]
 }
