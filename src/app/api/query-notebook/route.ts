@@ -51,10 +51,22 @@ interface QueryNotebookRequest {
 type NotebookEvent =
   | { type: 'phase'; name: 'A' | 'B' | 'C' | 'D' | 'complete'; message: string }
   | { type: 'phase_a_progress'; message: string; phase?: string; iteration?: number }
-  | { type: 'phase_a_tool_call'; name: string; operationType?: string; reason?: string; resultSummary?: { rows: number; columns: number } }
+  | { type: 'phase_a_tool_call'; name: string; operationType?: string; reason?: string; resultSummary?: { rows: number; columns: number }; args?: Record<string, unknown>; duration_ms?: number }
   | { type: 'phase_a_answer'; content: string }
   | { type: 'metadata'; composedSystemPrompt: string; composedSystemPromptHash: string; signingKeyId: string }
   | { type: 'notebook'; notebook: unknown; sandboxId: string; executionDuration_ms: number; validation: { ok: boolean; issues: { path: string; message: string }[] } }
+  // Publish-path inputs (civic-ai-tools-website#112): everything the client
+  // needs to publish the executed session through POST /api/evidence without
+  // regenerating a skeleton — the finalized OTel trace, token usage, and the
+  // Phase A answer text (the package `output`). Emitted once, on success,
+  // after the `complete` phase event.
+  | {
+      type: 'publish_inputs';
+      trace: Record<string, unknown>;
+      tokenUsage: { promptTokens?: number; completionTokens?: number };
+      answer: string;
+      duration_ms: number;
+    }
   | { type: 'error'; message: string };
 
 function encodeNotebookEvent(event: NotebookEvent): string {
@@ -116,6 +128,7 @@ export async function POST(request: NextRequest) {
   });
 
   const runPipeline = async () => {
+    const pipelineStart = Date.now();
     try {
       // Phase 2a2 (item 1 + 4): emit the composed system prompt + active
       // signing key id up front so the chat output's Section B can render
@@ -176,6 +189,23 @@ export async function POST(request: NextRequest) {
         validation,
       });
       await emit({ type: 'phase', name: 'complete', message: 'Done.' });
+
+      // #112 publish-path parity: end the root span and ship the finalized
+      // trace + usage + answer so the publish dialog can build a package from
+      // the EXECUTED session (same pattern as /api/compare-stream's final
+      // `trace` event). Emitted only on success — a failed pipeline has
+      // nothing publishable.
+      trace.endRoot();
+      await emit({
+        type: 'publish_inputs',
+        trace: trace.finalize() as unknown as Record<string, unknown>,
+        tokenUsage: {
+          promptTokens: phaseAResult.prompt_tokens,
+          completionTokens: phaseAResult.completion_tokens,
+        },
+        answer: phaseAResult.content,
+        duration_ms: Date.now() - pipelineStart,
+      });
     } catch (err) {
       // Log full stderr server-side (Vercel function logs) so the actual
       // preprocess_cell exception is recoverable for debugging — the SSE
@@ -269,6 +299,11 @@ async function runPhaseA(args: {
             operationType: call.operationType,
             reason: call.reason,
             resultSummary: call.resultSummary,
+            // #112: carry the verbatim arguments + timing so a publish from
+            // this session can populate `toolCalls[].args` (the package's
+            // `queries[].arguments`) instead of an empty skeleton.
+            args: call.args,
+            duration_ms: call.duration_ms,
           });
         }
         void emit({ type: 'phase_a_answer', content: result.content });

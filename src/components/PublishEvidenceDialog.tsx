@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
 import { generateNotebook } from '@/lib/notebook';
+import type { Notebook } from '@/lib/notebook-author/cells';
 
 interface PublishEvidenceDialogProps {
   isOpen: boolean;
@@ -16,6 +17,15 @@ interface PublishEvidenceDialogProps {
   promptTokens?: number;
   completionTokens?: number;
   duration_ms?: number;
+  /** #112: the EXECUTED notebook from a signed-sandbox session. When present,
+   *  it is carried into the package verbatim — its metadata already holds the
+   *  `org.civicaitools.execution` extension and the
+   *  `notebookProvenance: "executed"` discriminator (Q31) — instead of
+   *  regenerating a skeleton via generateNotebook. */
+  executedNotebook?: Notebook | null;
+  /** #112: pre-fill for the summary field (e.g. the notebook's structured
+   *  two-clause summary). When provided, the LLM auto-generation is skipped. */
+  initialSummary?: string;
 }
 
 type DialogState = 'form' | 'publishing' | 'success' | 'error';
@@ -32,6 +42,8 @@ export default function PublishEvidenceDialog({
   promptTokens,
   completionTokens,
   duration_ms,
+  executedNotebook,
+  initialSummary,
 }: PublishEvidenceDialogProps) {
   const defaultTitle = queryText.length > 80
     ? queryText.slice(0, 77) + '...'
@@ -44,7 +56,7 @@ export default function PublishEvidenceDialog({
     ?.slice(0, 300) || '';
 
   const [title, setTitle] = useState(defaultTitle);
-  const [summary, setSummary] = useState(firstParagraph);
+  const [summary, setSummary] = useState(initialSummary || firstParagraph);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [userEditedSummary, setUserEditedSummary] = useState(false);
   const [promptVisibility, setPromptVisibility] = useState<'full_text' | 'hash_only'>('full_text');
@@ -56,9 +68,12 @@ export default function PublishEvidenceDialog({
   // Track whether we've already kicked off summary generation for this session
   const summaryRequested = useRef(false);
 
-  // Auto-generate summary when dialog opens — only once per open
+  // Auto-generate summary when dialog opens — only once per open. Skipped
+  // when a structured summary was provided (#112: the executed notebook's
+  // two-clause summary is the better default — it was produced alongside the
+  // analysis, not paraphrased after the fact).
   useEffect(() => {
-    if (!isOpen || summaryRequested.current || userEditedSummary) return;
+    if (!isOpen || summaryRequested.current || userEditedSummary || initialSummary) return;
     summaryRequested.current = true;
     setSummaryLoading(true);
 
@@ -93,13 +108,21 @@ export default function PublishEvidenceDialog({
   const handlePublish = async () => {
     setDialogState('publishing');
     try {
-      // Generate Jupyter notebook from the same data used for the "Download Notebook"
-      // button, and include it as the first evidence package extension.
-      const notebook = generateNotebook(queryText, portal, toolCalls, output);
+      // #112 — no skeleton downgrade: when the session executed in the signed
+      // sandbox, carry the EXECUTED notebook verbatim (it embeds the
+      // `org.civicaitools.execution` extension and the Q31
+      // `notebookProvenance: "executed"` discriminator in its own metadata).
+      // Only chat-flow sessions, which never had an executed artifact,
+      // generate the skeleton notebook (`notebookProvenance: "skeleton"`
+      // semantics per Q31).
+      const notebook = executedNotebook ?? generateNotebook(queryText, portal, toolCalls, output);
 
-      // captureMethod (ADR-0003) is always `chat-flow-stream` for chat-flow
-      // publishes — bytes captured at the wire layer as the model streamed
-      // to the browser, regardless of which content shape gets published.
+      // captureMethod (ADR-0003/0011) is `chat-flow-stream` for BOTH paths
+      // through this dialog: the platform captured the model's bytes at the
+      // wire layer — streamed to the browser (chat flow) or to the server
+      // (notebook mode's Phase A). The vocabulary is fixed per ADR-0011;
+      // executed-vs-skeleton is the ORTHOGONAL notebookProvenance axis (Q31),
+      // carried inside the notebook extension, not a captureMethod value.
       //
       // contentProfile (ADR-0004) is `datHere` when the user opted into
       // full-text prompt visibility: the chat-flow capture has all the
@@ -141,7 +164,9 @@ export default function PublishEvidenceDialog({
       }
 
       const data = await response.json();
-      setResultUrl(data.url);
+      // `url` is absent for committed-visibility responses (the dialog only
+      // sends published mode today; defensive for the Phase 5 toggle).
+      setResultUrl(data.url ?? `/evidence/${data.slug}`);
       setDialogState('success');
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Publishing failed');

@@ -26,6 +26,10 @@ export interface CapturedToolCall {
   operationType?: string;
   reason?: string;
   resultSummary?: { rows: number; columns: number };
+  /** #112: verbatim tool arguments, carried so a publish from this session
+   *  populates the package's `queries[].arguments`. */
+  args?: Record<string, unknown>;
+  duration_ms?: number;
 }
 
 export interface NotebookStreamState {
@@ -46,6 +50,15 @@ export interface NotebookStreamState {
   composedSystemPromptHash: string | null;
   /** Phase 2a2 item 4: active platform signing key id. */
   signingKeyId: string | null;
+  // --- #112 publish-path inputs (from the `publish_inputs` SSE event) ---
+  /** Phase A answer text — the package `output` at publish time. */
+  answerContent: string | null;
+  /** Finalized OTel trace for the pipeline run. */
+  evidenceTrace: Record<string, unknown> | null;
+  /** Phase A token usage. */
+  tokenUsage: { promptTokens?: number; completionTokens?: number } | null;
+  /** End-to-end pipeline duration reported by the route. */
+  pipelineDurationMs: number | null;
   isLoading: boolean;
   error: string | null;
 }
@@ -64,6 +77,10 @@ const INITIAL_STATE: NotebookStreamState = {
   composedSystemPrompt: null,
   composedSystemPromptHash: null,
   signingKeyId: null,
+  answerContent: null,
+  evidenceTrace: null,
+  tokenUsage: null,
+  pipelineDurationMs: null,
   isLoading: false,
   error: null,
 };
@@ -124,6 +141,8 @@ export function useNotebookStream() {
           const op = raw.operationType as string | undefined;
           const reason = raw.reason as string | undefined;
           const resultSummary = raw.resultSummary as CapturedToolCall['resultSummary'] | undefined;
+          const args = raw.args as Record<string, unknown> | undefined;
+          const duration_ms = raw.duration_ms as number | undefined;
           if (!name) break;
           const label = [op || name, reason ? `(${reason})` : null].filter(Boolean).join(' ');
           setState((prev) => ({
@@ -136,14 +155,35 @@ export function useNotebookStream() {
                 operationType: op,
                 reason,
                 resultSummary,
+                args,
+                duration_ms,
               },
             ],
           }));
           break;
         }
         case 'phase_a_answer': {
-          // Synthesis text is already embedded in the notebook by Phase B; no
-          // chat-side rendering needed yet. Future work may stream it here.
+          // The synthesis text is embedded in the notebook by Phase B; capture
+          // it here as the package `output` for the publish path (#112).
+          const content = raw.content as string | undefined;
+          if (typeof content === 'string') {
+            setState((prev) => ({ ...prev, answerContent: content }));
+          }
+          break;
+        }
+        case 'publish_inputs': {
+          // #112: trace + usage + answer for publishing the executed session.
+          const trace = raw.trace as Record<string, unknown> | undefined;
+          const tokenUsage = raw.tokenUsage as NotebookStreamState['tokenUsage'] | undefined;
+          const answer = raw.answer as string | undefined;
+          const duration_ms = raw.duration_ms as number | undefined;
+          setState((prev) => ({
+            ...prev,
+            evidenceTrace: trace ?? prev.evidenceTrace,
+            tokenUsage: tokenUsage ?? prev.tokenUsage,
+            answerContent: answer ?? prev.answerContent,
+            pipelineDurationMs: duration_ms ?? prev.pipelineDurationMs,
+          }));
           break;
         }
         case 'metadata': {
