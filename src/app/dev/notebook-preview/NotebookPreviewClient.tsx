@@ -70,6 +70,10 @@ function buildState(
         composedSystemPrompt: null,
         composedSystemPromptHash: null,
         signingKeyId: null,
+        answerContent: null,
+        evidenceTrace: null,
+        tokenUsage: null,
+        pipelineDurationMs: null,
         isLoading: true,
         error: null,
       };
@@ -88,6 +92,10 @@ function buildState(
         composedSystemPrompt: null,
         composedSystemPromptHash: null,
         signingKeyId: null,
+        answerContent: null,
+        evidenceTrace: null,
+        tokenUsage: null,
+        pipelineDurationMs: null,
         isLoading: false,
         error: 'Notebook execution failed (exit 1): NameError on cell 5 — df1 referenced before assignment',
       };
@@ -106,6 +114,10 @@ function buildState(
         composedSystemPrompt: 'You are a helpful assistant…\n\n(Fixture-only composed prompt for the dev preview surface; the live route emits the real composed system prompt over SSE.)',
         composedSystemPromptHash: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678901234567890abcdef012345',
         signingKeyId: 'platform:evidence-2026-04',
+        answerContent: null,
+        evidenceTrace: null,
+        tokenUsage: null,
+        pipelineDurationMs: null,
         isLoading: false,
         error: null,
       };
