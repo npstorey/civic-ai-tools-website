@@ -83,6 +83,19 @@ export const contentProfileEnum = pgEnum('content_profile', [
   'datHere',
 ]);
 
+// visibility mirrors the package's lifecycle visibility for query convenience
+// (list filtering, dashboard labels). The CANONICAL representation is the
+// attestation chain (spec §8.10, ADR-0010): a node is published iff an
+// `attestation/publishes/v1` (+ ≥1 `attestation/locatedAt/v1`) references it;
+// committed = zero-location base case. This column is a denormalized status
+// mirror in the same pattern as the withdrawn/reinstated columns — the publish
+// flow dual-writes it alongside emitting the signed attestation pair. Legacy
+// rows backfill to 'published' (every pre-Phase-2 publish was public).
+export const visibilityEnum = pgEnum('visibility', [
+  'published',
+  'committed',
+]);
+
 // --- Tables ---
 
 export const users = pgTable('users', {
@@ -131,6 +144,11 @@ export const evidenceRecords = pgTable('evidence_records', {
     .default('unverified'),
   consistencyClassification: consistencyClassificationEnum('consistency_classification'),
   isPublic: boolean('is_public').notNull().default(true),
+  // Visibility mirror (see visibilityEnum above). 'committed' records are
+  // creator-only on every content-bearing surface; their commitment (hash,
+  // signature, timestamp, Rekor proof) stays publicly served, redacted of
+  // content and location, via the commitment endpoint.
+  visibility: visibilityEnum('visibility').notNull().default('published'),
   withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
   withdrawnReason: text('withdrawn_reason'),
   withdrawalSignature: text('withdrawal_signature'),

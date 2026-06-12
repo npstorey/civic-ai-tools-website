@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import { putPackage } from '@/lib/storage';
+import { putPackage, putCommittedPackage } from '@/lib/storage';
 import { buildEvidencePackage, type PackageInput, type CaptureMethod, type ContentProfile, DEFAULT_CONTENT_TYPE } from '@/lib/evidence/packager';
 import { hash } from '@/lib/evidence/trace';
 import { signPackage, getRfc3161Timestamp, publishToRekor, getActiveSigner, type SignerIdentity } from '@/lib/evidence/signing';
 import { captureVocabForProfile } from '@/lib/evidence/profiles';
 import { type BlobRef } from '@/lib/evidence/blob-ref';
 import { resolveRequestUser, hasScope } from '@/lib/api-auth';
+import { emitPublicationPair } from '@/lib/evidence/publication';
 
 function slugify(text: string): string {
   return text
@@ -102,6 +103,16 @@ interface PublishRequest {
     skillText?: string | BlobRef;
   };
   extensions?: Record<string, unknown>;
+  /** REQUEST-LEVEL visibility instruction (civic-ai-tools#71; spec §8.10,
+   *  ADR-0010 §5/§6) — an instruction to the registry, NOT an envelope field
+   *  (the package JSON is byte-identical either way; visibility is the
+   *  structural consequence of which attestations reference the node).
+   *  `"published"` (default, back-compat): store content-addressably, list
+   *  publicly, emit the publication pair. `"committed"`: register the
+   *  commitment (sign + timestamp + Rekor) but emit no publishes/locatedAt
+   *  attestations, keep the record unlisted, and store the content under a
+   *  random non-hash-derivable key. */
+  visibility?: 'published' | 'committed';
 }
 
 export async function POST(request: NextRequest) {
@@ -160,6 +171,17 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+
+    // Validate visibility (civic-ai-tools#71). Request-level instruction;
+    // absence is equivalent to "published" (backwards compatibility — every
+    // pre-Phase-2 publish was public).
+    if (body.visibility && body.visibility !== 'published' && body.visibility !== 'committed') {
+      return NextResponse.json(
+        { error: 'visibility, when provided, must be "published" or "committed".' },
+        { status: 400 },
+      );
+    }
+    const visibility: 'published' | 'committed' = body.visibility ?? 'published';
 
     // Validate captureMethod (ADR-0003/0011). Required for all publishes;
     // must be in the captureMethod vocabulary declared by the package's
@@ -231,8 +253,13 @@ export async function POST(request: NextRequest) {
 
     const { pkg, hash: packageHash } = buildEvidencePackage(packageInput);
 
-    // Store package in Vercel Blob
-    const blobUrl = await putPackage(packageHash, pkg as unknown as Record<string, unknown>);
+    // Store package in Vercel Blob. Committed packages use a random,
+    // non-hash-derivable key (Phase 2 hard requirement: the hash is public in
+    // Rekor, so a hash-derived pathname would leak committed content); the
+    // canonical hash-addressed key is claimed at publication time.
+    const blobUrl = visibility === 'committed'
+      ? await putCommittedPackage(pkg as unknown as Record<string, unknown>)
+      : await putPackage(packageHash, pkg as unknown as Record<string, unknown>);
 
     // Sign the package hash (non-blocking — failures don't prevent publishing)
     const signResult = signPackage(packageHash);
@@ -280,13 +307,44 @@ export async function POST(request: NextRequest) {
       basePackageRekorEntryBody: rekorResult?.entryBody || null,
       captureMethod: body.captureMethod,
       contentProfile: body.contentProfile ?? null,
+      visibility,
     });
 
-    const response = NextResponse.json({
-      slug,
-      url: `/evidence/${slug}`,
-      packageHash,
-    });
+    // Published-mode packages get the publication pair at publish time
+    // (spec §8.10, ADR-0010 §6): attestation/publishes/v1 + the platform's own
+    // attestation/locatedAt/v1, each independently signed + timestamped +
+    // Rekor-included. Best-effort, matching the signing posture above — a pair
+    // failure doesn't fail the publish (the content is public and listed; the
+    // pair can be re-emitted by a future repair pass).
+    let publicationPair: { publishesNodeId: string; locatedAtNodeId: string } | null = null;
+    if (visibility === 'published') {
+      try {
+        publicationPair = await emitPublicationPair({
+          targetNodeId: packageHash,
+          uri: blobUrl,
+          targetContentHash: pkg.contentHash,
+          contentLength: Buffer.byteLength(JSON.stringify(pkg)),
+          creatorId: userId,
+        });
+      } catch (err) {
+        console.warn('[api/evidence] publication-pair emission failed (non-fatal):', err instanceof Error ? err.message : err);
+      }
+    }
+
+    // Committed records return NO public url (the record is unlisted and the
+    // content URL is undisclosed); the slug + packageHash are the creator's
+    // handles for the later publish step.
+    const response = NextResponse.json(
+      visibility === 'committed'
+        ? { slug, packageHash, visibility }
+        : {
+            slug,
+            url: `/evidence/${slug}`,
+            packageHash,
+            visibility,
+            ...(publicationPair ?? {}),
+          },
+    );
     if (auth.method === 'cookie') {
       // Nudge toward programmatic device-flow tokens for non-browser
       // clients. See docs/api/evidence-publish.md#authentication.

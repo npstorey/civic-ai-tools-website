@@ -13,6 +13,8 @@ import {
   buildAttestationNode,
   ATTESTATION_WITHDRAWS,
   ATTESTATION_REINSTATES,
+  ATTESTATION_PUBLISHES,
+  ATTESTATION_LOCATED_AT,
 } from './attestation.ts';
 import {
   computeEnvelopeHash,
@@ -96,5 +98,65 @@ test('buildAttestationNode: different reason → different nodeId (tamper-eviden
 test('buildAttestationNode: different targetNodeId → different nodeId', () => {
   const a = buildAttestationNode({ type: ATTESTATION_WITHDRAWS, targetNodeId: 'a'.repeat(64), signer: SIGNER, reason: 'x' });
   const b = buildAttestationNode({ type: ATTESTATION_WITHDRAWS, targetNodeId: 'c'.repeat(64), signer: SIGNER, reason: 'x' });
+  assert.notEqual(a.nodeId, b.nodeId);
+});
+
+// --- Publication pair sub-types (spec §8.10/§8.12.1, ADR-0010 §6; Phase 2) ---
+
+test('buildAttestationNode: publishes node carries publicationHost + releasedAt (defaults to envelope ts)', () => {
+  const { node, nodeId } = buildAttestationNode({
+    type: ATTESTATION_PUBLISHES,
+    targetNodeId: TARGET,
+    signer: SIGNER,
+    publicationHost: 'civicaitools.org',
+  });
+  assert.equal(node.type, ATTESTATION_PUBLISHES);
+  assert.equal(node.targetNodeId, TARGET);
+  assert.equal(node.publicationHost, 'civicaitools.org');
+  // releasedAt defaults to the envelope timestamp, mirroring effectiveAt's rule.
+  assert.equal(node.releasedAt, node.metadata.createdAt);
+  // publishes carries no withdraws-only fields.
+  assert.equal(node.effectiveAt, undefined);
+  assert.equal(nodeId.length, 64);
+  // Round-trip re-verification (same dual-chain hash as content packages).
+  assert.equal(computeEnvelopeHash(JSON.parse(JSON.stringify(node))), nodeId);
+});
+
+test('buildAttestationNode: locatedAt node carries uri + targetContentHash distinct from its own contentHash (Q48)', () => {
+  const targetFingerprint = { sha256: 'd'.repeat(64) };
+  const { node, nodeId } = buildAttestationNode({
+    type: ATTESTATION_LOCATED_AT,
+    targetNodeId: TARGET,
+    signer: SIGNER,
+    uri: 'https://blob.example/evidence-packages/aaaa.json',
+    targetContentHash: targetFingerprint,
+    contentLength: 1234,
+  });
+  assert.equal(node.type, ATTESTATION_LOCATED_AT);
+  assert.equal(node.uri, 'https://blob.example/evidence-packages/aaaa.json');
+  assert.equal(node.contentLength, 1234);
+  // Q48: the TARGET's fingerprint lives at targetContentHash; the envelope's
+  // own structural-primitive contentHash is computed by the builder and MUST
+  // be a different value (it fingerprints this attestation, not the target).
+  assert.deepEqual(node.targetContentHash, targetFingerprint);
+  assert.ok(node.contentHash, 'envelope contentHash should still be present');
+  assert.notEqual(node.contentHash!.sha256, targetFingerprint.sha256);
+  assert.equal(computeEnvelopeHash(JSON.parse(JSON.stringify(node))), nodeId);
+});
+
+test('buildAttestationNode: locatedAt omits optional fields when not supplied', () => {
+  const { node } = buildAttestationNode({
+    type: ATTESTATION_LOCATED_AT,
+    targetNodeId: TARGET,
+    signer: SIGNER,
+    uri: 'https://blob.example/x.json',
+  });
+  assert.ok(!('targetContentHash' in node));
+  assert.ok(!('contentLength' in node));
+});
+
+test('buildAttestationNode: different uri → different locatedAt nodeId (tamper-evidence)', () => {
+  const a = buildAttestationNode({ type: ATTESTATION_LOCATED_AT, targetNodeId: TARGET, signer: SIGNER, uri: 'https://host-a.example/x.json' });
+  const b = buildAttestationNode({ type: ATTESTATION_LOCATED_AT, targetNodeId: TARGET, signer: SIGNER, uri: 'https://host-b.example/x.json' });
   assert.notEqual(a.nodeId, b.nodeId);
 });

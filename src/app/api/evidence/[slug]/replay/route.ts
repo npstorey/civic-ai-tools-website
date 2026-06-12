@@ -7,6 +7,7 @@ import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
+import { canReadRecord } from '@/lib/evidence/committed-access';
 import { mcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
@@ -69,6 +70,12 @@ export async function POST(
     return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });
   }
   const record = records[0];
+
+  // Committed records are creator-only on this content-bearing surface
+  // (civic-ai-tools#71).
+  if (!(await canReadRecord(request, record))) {
+    return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });
+  }
 
   // Fetch evidence package
   if (!record.basePackageStorageKey) {

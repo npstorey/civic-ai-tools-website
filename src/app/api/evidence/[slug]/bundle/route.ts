@@ -9,6 +9,7 @@ import {
   buildCommitmentView,
   CANONICAL_TRUST_REGISTRY_URL,
 } from '@/lib/evidence/commitment';
+import { canReadRecord } from '@/lib/evidence/committed-access';
 
 /**
  * GET /api/evidence/[slug]/bundle
@@ -99,7 +100,7 @@ function buildCellZero(
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
@@ -116,6 +117,13 @@ export async function GET(
     );
   }
   const record = records[0];
+
+  // Committed records' bundle (the full content, packaged for sharing) is
+  // creator-only (civic-ai-tools#71) — the creator exports it to distribute
+  // to chosen recipients; it is not a public surface until publication.
+  if (!(await canReadRecord(request, record))) {
+    return NextResponse.json({ error: 'Evidence not found' }, { status: 404 });
+  }
 
   // Bundle export is datHere-content-profile specific. Other content
   // profiles don't produce the A-G envelope content the bundle
