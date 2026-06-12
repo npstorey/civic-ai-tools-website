@@ -18,6 +18,9 @@ interface EvidenceRow {
   reinstatedAt: string | null;
   createdAt: string;
   attestationCount: number;
+  /** Visibility mirror (civic-ai-tools#71): committed records are unlisted +
+   *  creator-only until promoted via the publish flow. */
+  visibility: string;
 }
 
 interface EvaluationRow {
@@ -78,6 +81,7 @@ function StatusBadge({ status }: { status: string }) {
     evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--nyc-success)' },
     fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--nyc-success)' },
     withdrawn: { bg: 'rgba(236, 19, 30, 0.08)', text: 'var(--nyc-error)' },
+    committed: { bg: 'rgba(16, 63, 239, 0.08)', text: 'var(--nyc-blue)' },
   };
   const c = colors[status] || colors.unverified;
   return (
@@ -218,6 +222,36 @@ function MyEvidenceTab({ rows }: { rows: EvidenceRow[] }) {
     }
   }, [reinstateTarget, reinstateReason, router]);
 
+  // Committed → published promotion (civic-ai-tools#71/#72 Phase 5). Runs the
+  // default-on adversarial eval unless the user unchecks it; irreversible.
+  const [publishTarget, setPublishTarget] = useState<EvidenceRow | null>(null);
+  const [publishRunEval, setPublishRunEval] = useState(true);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState('');
+
+  const handlePublish = useCallback(async () => {
+    if (!publishTarget) return;
+    setPublishing(true);
+    setPublishError('');
+    try {
+      const res = await fetch(`/api/evidence/${publishTarget.slug}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runEvaluation: publishRunEval }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Publication failed' }));
+        throw new Error(err.error || 'Publication failed');
+      }
+      setPublishTarget(null);
+      router.refresh();
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : 'Publication failed');
+    } finally {
+      setPublishing(false);
+    }
+  }, [publishTarget, publishRunEval, router]);
+
   if (rows.length === 0) {
     return (
       <EmptyState
@@ -253,6 +287,7 @@ function MyEvidenceTab({ rows }: { rows: EvidenceRow[] }) {
                   {r.title}
                 </Link>
                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center' }}>
+                  {r.visibility === 'committed' && <StatusBadge status="committed" />}
                   {isCurrentlyWithdrawn
                     ? <StatusBadge status="withdrawn" />
                     : <StatusBadge status={r.verificationStatus} />
@@ -296,6 +331,21 @@ function MyEvidenceTab({ rows }: { rows: EvidenceRow[] }) {
                     <span style={{ color: 'var(--nyc-success)' }}>Reinstated {formatDate(r.reinstatedAt!)}</span>
                   </>
                 )}
+                {r.visibility === 'committed' && !isCurrentlyWithdrawn && (
+                  <>
+                    <span>{'\u00b7'}</span>
+                    <button
+                      onClick={() => { setPublishTarget(r); setPublishRunEval(true); setPublishError(''); }}
+                      style={{
+                        background: 'none', border: 'none', padding: 0,
+                        fontSize: '12px', color: 'var(--nyc-blue)', cursor: 'pointer',
+                        textDecoration: 'underline', fontWeight: 600,
+                      }}
+                    >
+                      Publish
+                    </button>
+                  </>
+                )}
                 {!isCurrentlyWithdrawn && !isReinstated && (
                   <>
                     <span>{'\u00b7'}</span>
@@ -316,6 +366,81 @@ function MyEvidenceTab({ rows }: { rows: EvidenceRow[] }) {
           );
         })}
       </div>
+
+      {/* Publish (committed → published) confirmation dialog */}
+      {publishTarget && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget && !publishing) { setPublishTarget(null); } }}
+        >
+          <div style={{
+            backgroundColor: 'white', borderRadius: '8px', width: '100%', maxWidth: '480px',
+            margin: '16px', padding: '24px',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Publish Evidence</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 12px' }}>
+              Publishing makes the content of <strong>{publishTarget.title}</strong> publicly
+              accessible, lists it in the registry, and emits signed publication
+              attestations. Publication is <strong>not reversible</strong> — a later
+              withdrawal flags the record but does not erase it.
+            </p>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px', cursor: 'pointer', marginBottom: '12px' }}>
+              <input
+                type="checkbox"
+                checked={publishRunEval}
+                onChange={(e) => setPublishRunEval(e.target.checked)}
+                disabled={publishing}
+                style={{ marginTop: '2px' }}
+              />
+              <span>
+                Run an adversarial evaluation before publishing
+                <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  An independent model critiques the analysis against a declared
+                  rubric; the signed result is attached to the record (adds ~30s).
+                </span>
+              </span>
+            </label>
+            {publishError && (
+              <div style={{
+                padding: '8px 12px', marginBottom: '12px', borderRadius: '4px',
+                backgroundColor: 'rgba(236, 19, 30, 0.08)', color: 'var(--nyc-error)', fontSize: '13px',
+              }}>
+                {publishError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setPublishTarget(null)}
+                disabled={publishing}
+                style={{
+                  padding: '8px 16px', border: '1px solid var(--border-color)', borderRadius: '4px',
+                  fontSize: '13px', cursor: publishing ? 'not-allowed' : 'pointer', backgroundColor: 'white',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePublish}
+                disabled={publishing}
+                style={{
+                  padding: '8px 16px', border: 'none', borderRadius: '4px',
+                  fontSize: '13px', fontWeight: 600,
+                  cursor: publishing ? 'wait' : 'pointer',
+                  backgroundColor: 'var(--nyc-blue)', color: 'white',
+                  opacity: publishing ? 0.7 : 1,
+                }}
+              >
+                {publishing ? (publishRunEval ? 'Evaluating & publishing…' : 'Publishing…') : 'Publish'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Withdrawal confirmation dialog */}
       {withdrawTarget && (
