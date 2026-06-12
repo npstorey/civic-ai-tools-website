@@ -9,6 +9,8 @@ import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
 import { sessionUserIsCreator } from '@/lib/evidence/committed-access';
+import { loadEvaluationViews } from '@/lib/evidence/adversarial-eval';
+import EvaluationAttestationsSection from '@/components/evidence/EvaluationAttestationsSection';
 import ProvenanceChain from '@/components/evidence/ProvenanceChain';
 import EvidenceActions from '@/components/evidence/EvidenceActions';
 import AttestationSection from '@/components/evidence/AttestationSection';
@@ -224,6 +226,10 @@ export default async function EvidencePage({ params }: PageProps) {
   // than the raw columns, so post-PR3 records surface their signed chain while
   // pre-PR3 records keep rendering from their columns.
   const lifecycle = await resolveLifecycle(record, renderPkg?.signer?.identifier);
+  // Adversarial evaluations targeting this content node (civic-ai-tools#72).
+  const evaluationViews = record.basePackageHash
+    ? await loadEvaluationViews(record.basePackageHash)
+    : [];
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -688,6 +694,16 @@ export default async function EvidencePage({ params }: PageProps) {
             </Section>
           );
         })()}
+
+        {/* Adversarial evaluations (civic-ai-tools#72) — signed
+            attestation/evaluates/v1 nodes targeting this content node,
+            emitted by the publication gate (or future third-party
+            evaluators). Renders nothing when no evaluations exist. */}
+        {evaluationViews.length > 0 && (
+          <Section title="Adversarial evaluations">
+            <EvaluationAttestationsSection views={evaluationViews} />
+          </Section>
+        )}
 
         {/* Attestations */}
         <Section title="Attestations">

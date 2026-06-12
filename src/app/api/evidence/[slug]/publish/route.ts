@@ -1,39 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { getPackage, putPackage, deletePackageBlob } from '@/lib/storage';
 import { emitPublicationPair } from '@/lib/evidence/publication';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 import { resolveRequestUser, hasScope } from '@/lib/api-auth';
+import {
+  runAdversarialEval,
+  emitEvaluationAttestation,
+} from '@/lib/evidence/adversarial-eval';
 
 /**
  * POST /api/evidence/[slug]/publish
  *
  * Promotes a COMMITTED record to PUBLISHED (civic-ai-tools#71; spec §8.10,
- * ADR-0010 §6). Publication is two coupled signed nodes, each independently
- * timestamped and Rekor-included:
+ * ADR-0010 §6), gated by a default-on adversarial evaluation
+ * (civic-ai-tools#72; Q25 option (b)+(c): host-policy + default-on at the
+ * publisher tool — NOT protocol-mandatory).
  *
- *   1. attestation/publishes/v1  (publisher-only; platform signs on the
- *      author's behalf per §8.5, exactly like withdraw/reinstate)
- *   2. attestation/locatedAt/v1  (the platform's first-asserter pointer to the
- *      now-public content URL)
+ * Body: { runEvaluation?: boolean, evaluatorModel?: string }
  *
- * Flow: re-home the content from its random committed key to the canonical
- * hash-addressed key → emit the pair → flip the DB visibility mirror → delete
- * the old capability-URL blob (best-effort). If pair emission fails, the
- * canonical blob is removed again and the record stays committed — the publish
- * is retryable, never half-listed.
+ * Flow:
+ *   1. Default-on adversarial eval (skippable via runEvaluation:false): the
+ *      platform runs the six-criterion rubric with its own OpenRouter key and
+ *      emits a signed `attestation/evaluates/v1` node targeting the content
+ *      node. The gate is PRESENCE-based — the eval and the publication record
+ *      relate via the shared targetNodeId; `publishes/v1` stays at its
+ *      ratified payload (the explicit-reference question is registered under
+ *      Q25). Any score publishes in v1; score thresholds are a host-policy
+ *      axis. An eval FAILURE (evaluator unreachable / invalid response) aborts
+ *      the publish with an explicit 502 — never a silent skip; the caller can
+ *      retry or pass runEvaluation:false to publish without an eval.
+ *   2. Compare-and-set visibility committed→published (the concurrency guard:
+ *      two racing publishes can both pass the pre-check, but only one wins the
+ *      conditional UPDATE; the loser gets 409 and emits nothing).
+ *   3. Re-home the content from its random committed key to the canonical
+ *      hash-addressed key; emit the publication pair (attestation/publishes/v1
+ *      + attestation/locatedAt/v1, one atomic insert); point the record at the
+ *      canonical blob; retire the old capability URL.
+ *      On failure: visibility reverts to committed and the canonical blob is
+ *      deleted — a failed publish is retryable, never half-published. (A
+ *      surviving evaluation node from step 1 is harmless: evals target the
+ *      content node and remain valid for the retry.)
  *
  * Publication is not reversible (spec §8.10.3 retention asymmetry): a later
  * withdrawal is a new attestation in the chain, not an unpublish.
- *
- * Body: { runEvaluation?: boolean } — accepted per the integration contract;
- * the adversarial-eval gate wires in Phase 3 (civic-ai-tools#72). Until then
- * no evaluation runs regardless of the flag, and the response carries no
- * evaluationNodeId. Documented in docs/api/evidence-publish.md.
  */
+
+// Default evaluator for the publication gate. Must differ from the analysis
+// model (evaluator independence); when they collide, the fallback is used.
+const DEFAULT_EVALUATOR_MODEL = 'anthropic/claude-sonnet-4-6';
+const FALLBACK_EVALUATOR_MODEL = 'openai/gpt-4o';
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
@@ -92,12 +112,19 @@ export async function POST(
     );
   }
 
-  // Body is optional; `runEvaluation` is parsed for forward-compat with the
-  // Phase 3 eval gate but intentionally unused here (see route docblock).
+  // Body: { runEvaluation?: boolean, evaluatorModel?: string }. Empty body ok.
+  let runEvaluation = true;
+  let evaluatorModelOverride: string | undefined;
   try {
-    await request.json();
+    const body = await request.json();
+    if (body && typeof body === 'object') {
+      if (body.runEvaluation === false) runEvaluation = false;
+      if (typeof body.evaluatorModel === 'string' && body.evaluatorModel.trim()) {
+        evaluatorModelOverride = body.evaluatorModel.trim();
+      }
+    }
   } catch {
-    // Empty body is fine.
+    // Empty / non-JSON body is fine; defaults apply.
   }
 
   // Fetch the committed package from its random-key blob.
@@ -109,17 +136,102 @@ export async function POST(
     );
   }
 
-  // 1. Re-home the content at the canonical, content-addressable key. The
-  //    content is now technically fetchable by hash — the pair + DB flip
-  //    follow immediately, and on pair failure the blob is deleted again.
-  const publicUrl = await putPackage(
-    record.basePackageHash,
-    pkg as unknown as Record<string, unknown>,
-  );
+  // 1. Default-on adversarial evaluation (civic-ai-tools#72; Q25 (b)+(c)).
+  let evaluationNodeId: string | undefined;
+  if (runEvaluation) {
+    const platformKey = process.env.OPENROUTER_API_KEY;
+    if (!platformKey) {
+      return NextResponse.json(
+        {
+          error:
+            'Evaluation unavailable (no platform evaluator credentials); retry with {"runEvaluation": false} to publish without an evaluation.',
+        },
+        { status: 502 },
+      );
+    }
+    // Evaluator independence: the evaluator model must differ from the model
+    // that produced the analysis (same invariant as the interactive route).
+    // An explicit override that collides is the caller's error (400); the
+    // DEFAULT colliding silently falls back instead.
+    let evaluatorModel = evaluatorModelOverride ?? DEFAULT_EVALUATOR_MODEL;
+    if (evaluatorModelOverride && evaluatorModelOverride === pkg.cost.model) {
+      return NextResponse.json(
+        { error: 'Evaluator model must differ from the analysis model' },
+        { status: 400 },
+      );
+    }
+    if (evaluatorModel === pkg.cost.model) {
+      evaluatorModel = FALLBACK_EVALUATOR_MODEL;
+    }
 
-  // 2. Emit the publication pair (both signed nodes + one atomic DB insert).
+    try {
+      const parsed = await runAdversarialEval(pkg, {
+        apiKey: platformKey,
+        evaluatorModel,
+      });
+      if (!parsed.ok) {
+        return NextResponse.json(
+          {
+            error: `Adversarial evaluation failed (${parsed.error}); retry, or pass {"runEvaluation": false} to publish without an evaluation.`,
+          },
+          { status: 502 },
+        );
+      }
+      const emitted = await emitEvaluationAttestation({
+        targetNodeId: record.basePackageHash,
+        evaluatorModel,
+        results: parsed.results,
+        creatorId: record.creatorId,
+      });
+      evaluationNodeId = emitted.evaluationNodeId;
+    } catch (err) {
+      console.error('[api/evidence/publish] evaluation failed:', err);
+      return NextResponse.json(
+        {
+          error:
+            'Adversarial evaluation failed (evaluator unreachable); retry, or pass {"runEvaluation": false} to publish without an evaluation.',
+        },
+        { status: 502 },
+      );
+    }
+  }
+
+  // 2. Compare-and-set the visibility mirror committed→published. This is the
+  //    concurrency guard: of two racing publishes, exactly one UPDATE matches
+  //    the WHERE clause. The loser emits nothing and reports the conflict.
+  const won = await db
+    .update(evidenceRecords)
+    .set({ visibility: 'published', updatedAt: new Date() })
+    .where(
+      and(
+        eq(evidenceRecords.id, record.id),
+        eq(evidenceRecords.visibility, 'committed' as const),
+      ),
+    )
+    .returning({ id: evidenceRecords.id });
+  if (won.length === 0) {
+    return NextResponse.json(
+      { error: 'Evidence was published concurrently by another request' },
+      { status: 409 },
+    );
+  }
+
+  const revertToCommitted = async () => {
+    await db
+      .update(evidenceRecords)
+      .set({ visibility: 'committed', updatedAt: new Date() })
+      .where(eq(evidenceRecords.id, record.id));
+  };
+
+  // 3. Re-home the content at the canonical, content-addressable key, emit the
+  //    publication pair, and point the record at the canonical blob.
+  let publicUrl: string | null = null;
   let pair;
   try {
+    publicUrl = await putPackage(
+      record.basePackageHash,
+      pkg as unknown as Record<string, unknown>,
+    );
     pair = await emitPublicationPair({
       targetNodeId: record.basePackageHash,
       uri: publicUrl,
@@ -128,9 +240,12 @@ export async function POST(
       creatorId: record.creatorId,
     });
   } catch (err) {
-    // Roll the content back out of public reach; the record stays committed
-    // and the publish is retryable.
-    await deletePackageBlob(publicUrl);
+    // Roll back: content out of public reach, visibility back to committed.
+    // The publish is retryable; a step-1 evaluation node survives harmlessly.
+    if (publicUrl) await deletePackageBlob(publicUrl);
+    await revertToCommitted().catch((revertErr) =>
+      console.error('[api/evidence/publish] visibility revert failed:', revertErr),
+    );
     console.error('[api/evidence/publish] pair emission failed:', err);
     return NextResponse.json(
       { error: 'Publication failed; the record remains committed' },
@@ -138,15 +253,10 @@ export async function POST(
     );
   }
 
-  // 3. Flip the visibility mirror + point the record at the canonical blob.
   const oldStorageKey = record.basePackageStorageKey;
   await db
     .update(evidenceRecords)
-    .set({
-      visibility: 'published',
-      basePackageStorageKey: publicUrl,
-      updatedAt: new Date(),
-    })
+    .set({ basePackageStorageKey: publicUrl, updatedAt: new Date() })
     .where(eq(evidenceRecords.id, record.id));
 
   // 4. Retire the old capability URL (best-effort).
@@ -156,6 +266,7 @@ export async function POST(
 
   return NextResponse.json({
     published: true,
+    ...(evaluationNodeId ? { evaluationNodeId } : {}),
     publishesNodeId: pair.publishesNodeId,
     locatedAtNodeId: pair.locatedAtNodeId,
     url: `/evidence/${slug}`,

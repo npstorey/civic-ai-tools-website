@@ -15,6 +15,7 @@ import {
   ATTESTATION_REINSTATES,
   ATTESTATION_PUBLISHES,
   ATTESTATION_LOCATED_AT,
+  ATTESTATION_EVALUATES,
 } from './attestation.ts';
 import {
   computeEnvelopeHash,
@@ -159,4 +160,48 @@ test('buildAttestationNode: different uri → different locatedAt nodeId (tamper
   const a = buildAttestationNode({ type: ATTESTATION_LOCATED_AT, targetNodeId: TARGET, signer: SIGNER, uri: 'https://host-a.example/x.json' });
   const b = buildAttestationNode({ type: ATTESTATION_LOCATED_AT, targetNodeId: TARGET, signer: SIGNER, uri: 'https://host-b.example/x.json' });
   assert.notEqual(a.nodeId, b.nodeId);
+});
+
+// --- Adversarial evaluation sub-type (spec §8.12.1; civic-ai-tools#72) ---
+
+test('buildAttestationNode: evaluates node carries methodology + scoringRubric + results', () => {
+  const methodology = {
+    testSet: 'civicaitools-adversarial-rubric/six-criterion-v1',
+    promptSetVersion: 'e'.repeat(64),
+    evaluatorModel: 'anthropic/claude-sonnet-4-6',
+  };
+  const results = {
+    perCriterion: { dataSourceIdentification: { score: 8, comment: 'solid' } },
+    overallScore: 8,
+    assessment: 'Good.',
+  };
+  const { node, nodeId } = buildAttestationNode({
+    type: ATTESTATION_EVALUATES,
+    targetNodeId: TARGET,
+    signer: SIGNER,
+    methodology,
+    scoringRubric: methodology.testSet,
+    results,
+  });
+  assert.equal(node.type, ATTESTATION_EVALUATES);
+  assert.deepEqual(node.methodology, methodology);
+  assert.equal(node.scoringRubric, methodology.testSet);
+  assert.deepEqual(node.results, results);
+  // Q26: evaluator binding rides the envelope signer, not a payload field.
+  assert.deepEqual(node.signer, SIGNER);
+  assert.ok(!('evaluatorBindingTier' in node));
+  assert.equal(computeEnvelopeHash(JSON.parse(JSON.stringify(node))), nodeId);
+});
+
+test('buildAttestationNode: different results → different evaluates nodeId (tamper-evidence)', () => {
+  const mk = (score: number) =>
+    buildAttestationNode({
+      type: ATTESTATION_EVALUATES,
+      targetNodeId: TARGET,
+      signer: SIGNER,
+      methodology: { testSet: 't', promptSetVersion: 'v', evaluatorModel: 'm' },
+      scoringRubric: 't',
+      results: { perCriterion: {}, overallScore: score, assessment: '' },
+    });
+  assert.notEqual(mk(3).nodeId, mk(9).nodeId);
 });
