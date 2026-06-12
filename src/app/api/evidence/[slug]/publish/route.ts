@@ -4,6 +4,7 @@ import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPackage, putPackage, deletePackageBlob } from '@/lib/storage';
 import { emitPublicationPair } from '@/lib/evidence/publication';
+import { resolveLifecycle } from '@/lib/evidence/lifecycle';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 import { resolveRequestUser, hasScope } from '@/lib/api-auth';
 
@@ -72,8 +73,12 @@ export async function POST(
 
   // A withdrawn committed claim must be reinstated before it can publish —
   // publishing content whose own author has withdrawn it would assert a
-  // visibility the lifecycle chain contradicts.
-  if (record.withdrawnAt && !record.reinstatedAt) {
+  // visibility the lifecycle chain contradicts. Resolved from the signed
+  // attestation chain first (§8.10.4 dual-read) rather than the legacy column
+  // mirror, so this gate stays correct when multi-cycle lifecycle support
+  // (free in the chain by construction) reaches the withdraw/reinstate routes.
+  const lifecycle = await resolveLifecycle(record);
+  if (lifecycle.status === 'withdrawn') {
     return NextResponse.json(
       { error: 'Evidence is withdrawn; reinstate it before publishing' },
       { status: 400 },
