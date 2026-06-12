@@ -362,6 +362,141 @@ Callers publishing through `POST /api/evidence` do not set these themselves — 
 
 ---
 
+## Visibility lifecycle, publication records, and the adversarial-eval gate (integration contract)
+
+This section is the integration contract for the attest-by-default / publish-by-choice lifecycle ([civic-ai-tools#71](https://github.com/npstorey/civic-ai-tools/issues/71)) and the adversarial-evaluation publication gate ([civic-ai-tools#72](https://github.com/npstorey/civic-ai-tools/issues/72)). It documents the wire shapes an integrating client produces and consumes. The normative definitions live in the Typed Standards Specification — §8.10 (lifecycle and location attestations) and §8.12 (the `attestation/*` namespace) — as operationalized by [ADR-0009](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0009-unified-typed-attestation-primitive.md) and [ADR-0010](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0010-visibility-lifecycle-location-attestations.md). Open design questions are tracked in the registry as [Q20](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-questions.md#q20--visibility-lifecycle-and-attestpublish-semantics) (visibility lifecycle), [Q25](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-questions.md#q25--adversarial-evaluation-requirement-strength-on-publication-records) (eval requirement strength), and [Q26](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-questions.md#q26--valid-evaluator-definition-identity-binding--methodology-declaration) (valid evaluator definition). This contract cites those shapes; it does not extend them.
+
+**Implementation status at a glance.** Each subsection carries a status label so integrating engineers can tell contract-now from contract-next:
+
+| Capability | Status |
+|---|---|
+| Withdrawal / reinstatement as signed `attestation/*` nodes | **Live** (`POST /api/evidence/:slug/withdraw`, `/reinstate`) |
+| Visibility expressed as attestation presence (spec semantics) | **Ratified** (spec §8.10, ADR-0010) — this is the normative model now |
+| Committed-mode publishing (`visibility: "committed"` request flag) | **Contract preview** — lands in the Phase 2 implementation |
+| Publication-record creation (`POST /api/evidence/:slug/publish`) | **Contract preview** — lands in Phase 2 |
+| Adversarial-eval attestation as a signed `attestation/evaluates/v1` node | **Contract preview** — the eval runner exists (`POST /api/evidence/:slug/evaluate`) but does not yet emit signed attestation nodes; gate wiring lands in Phase 3 |
+| Host self-attestation (`requiresAdversarialEvalOnPublication`) | **Specified shape, reserved sub-type** — `content/host/v1` is reserved per ADR-0009 §7; the field shape below is the agreed v1 contract (Q22 / proposed-issue 008) |
+
+### Vocabulary mapping — issue framing → ratified shapes
+
+The integration-arc issues were written before the unified-primitive consolidation, in a vocabulary (`visibility` as an envelope field; `publication-record` as a `claimType`) that ADR-0010 explicitly superseded. If you are integrating from the text of civic-ai-tools#71/#72, read this mapping first:
+
+| Issue-#71/#72 term | Ratified shape (spec §8.10 / §8.12, ADR-0010) |
+|---|---|
+| `visibility: "committed"` envelope field | **Not a field.** A content node that is signed and transparency-logged but has **no `attestation/publishes/v1` and no public `attestation/locatedAt/v1`** referencing it. This is the zero-location base case (ADR-0010 §5, spec §8.10.2). |
+| `visibility: "published"` envelope field | **Not a field.** A content node referenced by an `attestation/publishes/v1` **and** at least one `attestation/locatedAt/v1` — publication is two coupled, independently Rekor-included signed nodes (ADR-0010 §6). |
+| `publication-record` claim type | **Is** the `attestation/publishes/v1` node (payload: `targetNodeId`, `publicationHost`, `releasedAt`), typically paired with the publisher's own `attestation/locatedAt/v1` (payload: `targetNodeId`, `uri`, `contentHash`, optional `contentLength`/`availability`). Multiple parties publishing the same committed claim each emit their own pair. |
+| `visibility: "group"` (reserved) | Still reserved. No sub-type is minted; group-corroboration patterns are future work under Q20. |
+| Publication is irreversible; withdrawal is a meta-attestation | Preserved by construction: `attestation/withdraws/v1` is a separately-signed `publisher-only` node that reverses the publisher's *own* visibility commitment without erasing anything — retention asymmetry is normative (spec §8.10.3). |
+| `hostPointers` can be empty (point-to-point distribution) | Zero `attestation/locatedAt/v1` nodes — the recipient-distributed case under the zero-location base case. |
+
+Why the envelope must not carry a visibility field: visibility changes over a node's life, and the envelope is content-addressed — a field flip would re-hash and re-sign the node, breaking the "publication adds attestations to the chain" property. ADR-0010's considered-and-rejected list records this decision; clients MUST NOT add a `visibility` key to package extensions to simulate it.
+
+### Lifecycle endpoints (live today)
+
+Withdrawal and reinstatement are shipped and emit conformant `attestation/*` nodes (spec §8.10.1). Both are publisher-only (the record's creator), session-cookie authenticated today:
+
+- **`POST /api/evidence/:slug/withdraw`** — body `{ "reason": string }` (required, non-empty). Emits a signed `attestation/withdraws/v1` referencing the package's envelope hash by `targetNodeId`, with its own RFC 3161 timestamp and Rekor inclusion, persisted alongside a legacy-column mirror for list/dashboard consumers. Returns `{ withdrawn: true, withdrawnAt, attestationNodeId }`.
+- **`POST /api/evidence/:slug/reinstate`** — body `{ "reason": string }` (required, non-empty). Emits `attestation/reinstates/v1` carrying `priorWithdrawalNodeId`. Same persistence pattern.
+
+Verifiers resolve lifecycle from the attestation chain first and fall back to the legacy columns only for pre-chain records (spec §8.10.4 dual-read). The bundle and commitment endpoints carry the signed lifecycle envelopes so third-party verifiers resolve the chain offline.
+
+### Committed-mode publishing (contract preview — Phase 2)
+
+`POST /api/evidence` gains an optional **request-level** `visibility` field — an instruction to the registry, not an envelope field (the package JSON is unchanged either way):
+
+| Value | Behavior |
+|---|---|
+| `"published"` (default) | Current behavior, made explicit: the platform stores the package, signs it, timestamps it, Rekor-includes it, lists it in the public registry, and (Phase 2) emits the publication pair — `attestation/publishes/v1` + the platform's own `attestation/locatedAt/v1` — at publish time. |
+| `"committed"` | The platform builds, signs, timestamps, and Rekor-includes the content node — the **commitment is publicly registered** — but emits **no** `attestation/publishes/v1` and **no** `attestation/locatedAt/v1`, does not list the record in the public registry index, and does not disclose a content URL. The publisher holds (or separately distributes) the bytes. |
+
+The default is `"published"` for backwards compatibility — existing clients see no behavior change. The website publish dialog will default its *UI choice* to committed per civic-ai-tools#71 scope item 7; it sends the flag explicitly.
+
+Response additions for committed mode: `{ slug, packageHash, visibility: "committed" }` — no public `url` is returned. The detail page for a committed record renders a commitment-only view (hash, signature, timestamps, Rekor proof; no content) to its creator, and is not listed publicly.
+
+Two honesty notes integrating clients should know:
+
+1. **A public Rekor inclusion is itself a disclosure** — the envelope hash, timestamp, and signer identity become public records even for committed claims (spec §11.1; ADR-0010 §4). Truly-no-public-footprint flows require a private transparency-log substrate, which is design-permitted but not built (Xanadu-gated).
+2. **Content-URL non-derivability.** Today's storage scheme keys blobs by package hash (`evidence-packages/<hash>.json`), and the hash is public in the Rekor log — so committed-mode content storage must use a non-derivable key or access control. This is a Phase 2 implementation requirement, called out here so partner clients don't assume hash-derivable URLs for committed packages.
+
+### Publication-record creation (contract preview — Phase 2)
+
+A committed claim is promoted to published by creating the publication pair:
+
+- **`POST /api/evidence/:slug/publish`** — authorization: publisher-only (the record's creator; delegated-publisher is a future ADR per Q20). Body: `{ "runEvaluation"?: boolean }` (see the gate below; defaults to `true`). Emits, as two independently signed + timestamped + Rekor-included nodes:
+  1. `attestation/publishes/v1` — payload `targetNodeId` (the package's envelope hash), `publicationHost` (`"civicaitools.org"`), `releasedAt`.
+  2. `attestation/locatedAt/v1` — payload `targetNodeId`, `uri` (the now-public content URL), `contentHash` (multihash; matches the target's), optional `contentLength`.
+
+  Returns `{ published: true, publishesNodeId, locatedAtNodeId, evaluationNodeId? }`.
+
+Publication is logically complete when both nodes are inclusion-proven (ADR-0010 §6); each is independently verifiable. Re-publishing an already-published record returns `400`. Publication is not reversible — a subsequent withdrawal is a new `attestation/withdraws/v1` in the chain, surfaced alongside any surviving third-party `locatedAt` copies per the retention-asymmetry rule.
+
+Third parties (mirrors, archives, downstream hosts — including integration partners) MAY emit their own `attestation/locatedAt/v1` against the same `targetNodeId` under the `any-with-binding` rule (spec §8.12.1); multiple `(signer.identifier, uri-authority)` pairs are the durable-copy signal. Partner pipelines that re-host published packages should emit their own `locatedAt` rather than asking the platform to record their URL.
+
+### Adversarial-evaluation attestation (contract preview — Phase 3)
+
+The evaluation is a signed **`attestation/evaluates/v1`** node (spec §8.12.1; authorization `specific-role-required` — an evaluator with declared methodology and identity binding per Q26). Payload contract:
+
+```jsonc
+{
+  "type": "attestation/evaluates/v1",
+  "targetNodeId": "<envelope hash of the evaluated content node>",
+  "methodology": {
+    "testSet": "<rubric / prompt-set identifier>",
+    "promptSetVersion": "<version of the rubric text, e.g. its SHA-256>",
+    "evaluatorModel": "<model identifier, e.g. anthropic/claude-sonnet-4-6>"
+  },
+  "scoringRubric": "<rubric identifier or inline criteria list>",
+  "results": {
+    "perCriterion": { "<criterion>": { "score": 0, "comment": "…" } },
+    "overallScore": 0.0,
+    "assessment": "<2-4 sentence overall assessment>"
+  },
+  "signer": { "bindingTier": "…", "identifier": "…", "displayName": "…" }
+}
+```
+
+Notes on the shape:
+
+- **Evaluator binding lives on the envelope `signer`, not in the payload.** Issue #72 names an `evaluatorBindingTier` content field; under the ADR-0009 §4 split the evaluator's identity binding is the envelope's `signer.bindingTier` / `signer.identifier` (cross-checked against the trust registry like any signer). Duplicating it in the payload would create a consistency hazard, so this contract carries it once, on the envelope. Consumers filter on `signer.bindingTier` per Q26 — there is no central registry of approved evaluators.
+- **Methodology declaration is required content** (Q26): test set, evaluator model, scoring rubric, prompt-set version. The v1 rubric is the existing six-criterion adversarial rubric implemented by `POST /api/evidence/:slug/evaluate` (data-source identification, quantitative-claim support, confounders/bias, geographic scope, limitations noted, contradictory conclusion — each 1–10 with comments, plus `overallScore` and `assessment`). The methodology declaration supports any test set; nothing in the contract privileges this rubric.
+- **Today's eval runner does not yet emit signed nodes.** `POST /api/evidence/:slug/evaluate` (live) runs the rubric with a caller-supplied OpenRouter key and returns the scores transiently. Phase 3 wires the same runner to emit the signed `attestation/evaluates/v1` node above.
+
+### The publication gate (contract preview — Phase 3)
+
+Requirement strength follows the Q25 recommendation — **host policy + default-on at the publisher tool**, not protocol-mandatory (avoids ossifying one methodology at the protocol layer):
+
+- **Default-on.** `POST /api/evidence/:slug/publish` runs an adversarial evaluation by default before creating the publication pair, emitting the signed `attestation/evaluates/v1` first and returning its `evaluationNodeId` alongside the publication node ids.
+- **Configurable off.** `{ "runEvaluation": false }` skips the eval. The publication pair is still created; the record simply carries no evaluation reference. Hosts that require evals (below) may refuse to *serve* such publication records — that is host policy, not protocol failure.
+- **The gate check is presence-based.** A conforming evaluation is an `attestation/evaluates/v1` node targeting the **same content node** (`targetNodeId` equal to the publication record's `targetNodeId`), with a valid signature, a methodology declaration, and a signer meeting the host's declared binding-tier floor. The publication record does not carry an explicit pointer to the evaluation node — the relationship is via the shared target, which keeps the `publishes/v1` payload exactly at its ratified shape (`targetNodeId`, `publicationHost`, `releasedAt`). Whether `publishes/v1` should gain an explicit evaluation-reference field is a registry question, not something this contract invents.
+- **Presence vs. minimum score.** v1 gates on presence + conforming methodology + binding tier. Score thresholds are a host-policy axis (expressible in the host self-attestation, below), not a platform constant.
+
+A consuming partner verifying a received publication record therefore checks: (1) the `publishes/v1` + `locatedAt/v1` pair verifies per §8.12.3; (2) the serving host's self-attestation, if it declares `requiresAdversarialEvalOnPublication`, is satisfied by ≥1 conforming `attestation/evaluates/v1` targeting the same content node; (3) the evaluation node itself verifies (signature, methodology present, signer binding tier).
+
+### Host self-attestation field (specified shape — Q22 / proposed-issue 008)
+
+Hosts express the eval requirement in their self-attestation — a `content/host/v1` node (reserved sub-type per ADR-0009 §7; the host asserts about itself, so it is `content/*`, not `attestation/*`). The agreed v1 field contract:
+
+```jsonc
+{
+  "type": "content/host/v1",
+  "hostIdentifier": "https://civicaitools.org",
+  "claimTypesServed": ["content/analysis/v1"],
+  "filterPolicy": "<URL>",
+  "governance": "<URL>",
+  "retention": "indefinite",
+  "requiresAdversarialEvalOnPublication": {
+    "required": true,
+    "minOverallScore": null,
+    "minEvaluatorBindingTier": "oauth"
+  }
+}
+```
+
+`requiresAdversarialEvalOnPublication` accepts `false`, `true` (presence-only), or the structured form above (score floor and/or evaluator binding-tier floor — `null` means no floor on that axis). Hosts that declare a requirement refuse to serve publication records lacking a conforming evaluation; hosts that don't declare it serve either. The full host self-attestation (well-known location, transparency-log registration, third-party host evaluations) is the proposed-issue 008 deliverable and lands when that work is promoted; this contract fixes only the field shape so partner pipelines can implement the consumer-side check now.
+
+---
+
 ## Error responses
 
 | Status | Body                                                              | Cause                                                                                           |
@@ -525,6 +660,7 @@ These are implementation details that may surprise an external client. None of t
 
 ## Change log
 
+- **2026-06-11** — Added the [Visibility lifecycle, publication records, and the adversarial-eval gate (integration contract)](#visibility-lifecycle-publication-records-and-the-adversarial-eval-gate-integration-contract) section — Phase 1 of the collaborator integration arc ([civic-ai-tools#71](https://github.com/npstorey/civic-ai-tools/issues/71), [civic-ai-tools#72](https://github.com/npstorey/civic-ai-tools/issues/72)). Documents: the vocabulary mapping from the issues' original `visibility`-field / `publication-record`-claimType framing to the ratified attestation-presence shapes (spec §8.10/§8.12, ADR-0009/ADR-0010); the live withdraw/reinstate lifecycle endpoints; the committed-mode request flag and publication-record creation endpoint as **contract previews** for Phase 2; the `attestation/evaluates/v1` payload contract and presence-based publication gate (Q25 host-policy + default-on; Q26 evaluator binding on the envelope `signer`) as **contract previews** for Phase 3; and the `requiresAdversarialEvalOnPublication` host self-attestation field shape (Q22 / proposed-issue 008). Documentation-only — no endpoint behavior changes in this revision; each preview lands with its implementing phase and will be re-stamped in this change log.
 - **2026-05-19** — Reframe per [ADR-0004 status note](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0004-dathere-captureMethod-variant.md): `datHere` is a `contentProfile` value, not a `captureMethod` variant. `captureMethod` (ADR-0003) and `contentProfile` (ADR-0004) are orthogonal — `captureMethod` describes how content was captured, `contentProfile` describes what shape it's in. Changes to the publish path from the brief 2026-05-18 captureMethod-variant state: (a) `VALID_CAPTURE_METHODS` reverts to three values; (b) new optional `contentProfile` field on the request, values `"default"` | `"datHere"`; (c) the additional route validation (full_text + non-empty summary) gates on `contentProfile === "datHere"` rather than `captureMethod === "datHere"`; (d) the packager emits `summary` to canonical JSON + auto-emits `extensions["org.civicaitools.environment"]` when `contentProfile === "datHere"`; (e) the bundle endpoint gates on `contentProfile === "datHere"`. DB migration `drizzle/0009_add_content_profile.sql` adds a `content_profile` enum column on `evidence_records`. The earlier `drizzle/0008_add_dathere_capture_method.sql` migration is retained in history; the `datHere` value on the `capture_method` enum is now unused (Postgres ALTER TYPE DROP VALUE is non-trivial, and route validation rejects it). Schema version unchanged (`0.1.0`) — additive changes only; pre-ADR-0004 packages hash byte-identical.
 - **2026-05-18** — *(Superseded by the 2026-05-19 reframe above. Retained for historical record.)* Added `datHere` value to the `captureMethod` vocabulary per [ADR-0004](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0004-dathere-captureMethod-variant.md) — the Civic AI Tools answer pipeline's A-G envelope content profile. Three additive changes to the publish path: (a) `summary` is promoted from a DB-only field to an optional canonical-JSON field, required when `captureMethod === "datHere"` and emitted only for that captureMethod (pre-ADR-0004 packages hash byte-identical); (b) the packager auto-emits `extensions["org.civicaitools.environment"]` for datHere captures with model/MCP/host metadata; (c) the route enforces `promptVisibility === "full_text"` and non-empty `summary` for datHere requests (400 on either violation). New endpoint `GET /api/evidence/:slug/bundle` returns the package's notebook with the OES §9.2.2 commitment view embedded at the notebook's root metadata under `org.civicaitools.evidence` plus a cell-0 reader-affordance metadata table; non-datHere captures return `400` on the bundle endpoint. DB migration `drizzle/0008_add_dathere_capture_method.sql` adds `datHere` to the `capture_method` enum. Schema version unchanged (`0.1.0`) — enum extension is a vocabulary change and the new fields are backwards-compatible.
 - **2026-04-29** — Added required `captureMethod` field on `POST /api/evidence` per [ADR-0003](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0003-evidence-capture-method.md). Values: `chat-flow-stream` | `claude-code-jsonl-readback` | `claude-code-self-report`. The field is part of `metadata.captureMethod` in the canonical package JSON (covered by the package hash and platform signature) and is persisted to the new `evidence_records.capture_method` column. Requests that omit or misvalue the field return `400`. The detail page surfaces a "Captured via:" label next to the verification status; pre-ADR records render as "Unknown (pre-ADR-0003)". Backwards-compatible at the verify path — legacy packages without the field continue to recompute their hash and verify identically.
