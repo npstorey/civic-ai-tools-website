@@ -60,6 +60,12 @@ export default function PublishEvidenceDialog({
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [userEditedSummary, setUserEditedSummary] = useState(false);
   const [promptVisibility, setPromptVisibility] = useState<'full_text' | 'hash_only'>('full_text');
+  // Visibility choice (civic-ai-tools#71 scope item 7): COMMITTED is the
+  // default — attest by default, publish by choice. The request-level flag is
+  // sent explicitly either way (the API's own default stays "published" for
+  // client back-compat; the UI default is the product decision).
+  const [visibility, setVisibility] = useState<'committed' | 'published'>('committed');
+  const [resultVisibility, setResultVisibility] = useState<'committed' | 'published'>('published');
   const [dialogState, setDialogState] = useState<DialogState>('form');
   const [resultUrl, setResultUrl] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -152,6 +158,7 @@ export default function PublishEvidenceDialog({
           summary,
           captureMethod: 'chat-flow-stream',
           contentProfile,
+          visibility,
           extensions: {
             'org.civicaitools.notebook': notebook,
           },
@@ -164,9 +171,10 @@ export default function PublishEvidenceDialog({
       }
 
       const data = await response.json();
-      // `url` is absent for committed-visibility responses (the dialog only
-      // sends published mode today; defensive for the Phase 5 toggle).
+      // `url` is absent for committed-visibility responses; the slug-derived
+      // page is creator-only until the record is published.
       setResultUrl(data.url ?? `/evidence/${data.slug}`);
+      setResultVisibility(data.visibility === 'committed' ? 'committed' : 'published');
       setDialogState('success');
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Publishing failed');
@@ -339,6 +347,47 @@ export default function PublishEvidenceDialog({
                 </div>
               </div>
 
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
+                  Visibility
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
+                    <input
+                      type="radio"
+                      name="visibility"
+                      checked={visibility === 'committed'}
+                      onChange={() => setVisibility('committed')}
+                      style={{ marginTop: '3px' }}
+                    />
+                    <span>
+                      Commit (default)
+                      <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)' }}>
+                        Signed, timestamped, and registered on the public transparency
+                        log — but the content stays private to you. Publish later from
+                        your dashboard.
+                      </span>
+                    </span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
+                    <input
+                      type="radio"
+                      name="visibility"
+                      checked={visibility === 'published'}
+                      onChange={() => setVisibility('published')}
+                      style={{ marginTop: '3px' }}
+                    />
+                    <span>
+                      Publish now
+                      <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)' }}>
+                        Content becomes public and listed in the registry immediately.
+                        Publication is not reversible.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+
               <button
                 onClick={handlePublish}
                 disabled={!title.trim() || !summary.trim()}
@@ -355,7 +404,7 @@ export default function PublishEvidenceDialog({
                   opacity: title.trim() && summary.trim() ? 1 : 0.5,
                 }}
               >
-                Publish
+                {visibility === 'committed' ? 'Commit' : 'Publish'}
               </button>
             </>
           )}
@@ -394,11 +443,15 @@ export default function PublishEvidenceDialog({
                 <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
                 </svg>
-                <span style={{ fontSize: '16px', fontWeight: 600 }}>Published</span>
+                <span style={{ fontSize: '16px', fontWeight: 600 }}>
+                  {resultVisibility === 'committed' ? 'Committed' : 'Published'}
+                </span>
               </div>
 
               <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>
-                Your evidence record is live at:
+                {resultVisibility === 'committed'
+                  ? 'Your evidence is committed — signed and registered, content private to you. Only you can open this page; publish it anytime from your dashboard:'
+                  : 'Your evidence record is live at:'}
               </p>
 
               <div style={{
@@ -441,7 +494,9 @@ export default function PublishEvidenceDialog({
               </div>
 
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 16px' }}>
-                The evidence page will be available once the viewing interface is built. The data is already stored and accessible via the API.
+                {resultVisibility === 'committed'
+                  ? 'The cryptographic commitment (hash, signature, timestamp, transparency-log proof) is publicly verifiable; the content and this page are not.'
+                  : 'The record is signed, timestamped, and registered on the public transparency log.'}
               </p>
 
               <button

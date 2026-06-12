@@ -47,6 +47,7 @@ export default async function DashboardPage() {
       withdrawnAt: evidenceRecords.withdrawnAt,
       reinstatedAt: evidenceRecords.reinstatedAt,
       createdAt: evidenceRecords.createdAt,
+      visibility: evidenceRecords.visibility,
     })
     .from(evidenceRecords)
     .where(eq(evidenceRecords.creatorId, userId))
