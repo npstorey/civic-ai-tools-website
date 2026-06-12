@@ -47,12 +47,36 @@ export {
 export const ATTESTATION_PUBLISHES = 'attestation/publishes/v1';
 export const ATTESTATION_LOCATED_AT = 'attestation/locatedAt/v1';
 
-/** The sub-types this builder can emit: the verify-core lifecycle pair plus the
- *  publication pair. */
+// Adversarial-evaluation sub-type (spec §8.12.1; civic-ai-tools#72 Phase 3).
+// Authorization rule: specific-role-required — an evaluator with a declared
+// methodology and identity binding per Q26. The evaluator's binding lives on
+// the envelope `signer` (ADR-0009 §4), NOT duplicated in the payload.
+export const ATTESTATION_EVALUATES = 'attestation/evaluates/v1';
+
+/** The sub-types this builder can emit: the verify-core lifecycle pair, the
+ *  publication pair, and the adversarial evaluation. */
 export type EmittableAttestationType =
   | LifecycleAttestationType
   | typeof ATTESTATION_PUBLISHES
-  | typeof ATTESTATION_LOCATED_AT;
+  | typeof ATTESTATION_LOCATED_AT
+  | typeof ATTESTATION_EVALUATES;
+
+/** `evaluates` payload: methodology declaration (Q26 required content). */
+export interface EvaluationMethodology {
+  /** Test-set / rubric identifier (e.g. `civicaitools-adversarial-rubric`). */
+  testSet: string;
+  /** Version of the rubric text — its SHA-256, so the exact prompt set is pinned. */
+  promptSetVersion: string;
+  /** Model identifier that performed the evaluation. */
+  evaluatorModel: string;
+}
+
+/** `evaluates` payload: structured results. */
+export interface EvaluationResults {
+  perCriterion: Record<string, { score: number; comment: string }>;
+  overallScore: number;
+  assessment: string;
+}
 
 const PACKAGE_SCHEMA_VERSION = '0.1.0';
 
@@ -104,6 +128,12 @@ export interface AttestationNode {
   targetContentHash?: Record<string, string>;
   /** `locatedAt`: byte length of the content at `uri` (optional). */
   contentLength?: number;
+  /** `evaluates`: methodology declaration (Q26 required content). */
+  methodology?: EvaluationMethodology;
+  /** `evaluates`: rubric identifier (per the §8.12.1 payload row). */
+  scoringRubric?: string;
+  /** `evaluates`: structured results. */
+  results?: EvaluationResults;
 }
 
 export interface AttestationInput {
@@ -118,6 +148,9 @@ export interface AttestationInput {
   uri?: string;
   targetContentHash?: Record<string, string>;
   contentLength?: number;
+  methodology?: EvaluationMethodology;
+  scoringRubric?: string;
+  results?: EvaluationResults;
 }
 
 /**
@@ -172,6 +205,10 @@ export function buildAttestationNode(
     ...(input.contentLength !== undefined
       ? { contentLength: input.contentLength }
       : {}),
+    // `evaluates` payload (§8.12.1): methodology + scoringRubric + results.
+    ...(input.methodology !== undefined ? { methodology: input.methodology } : {}),
+    ...(input.scoringRubric !== undefined ? { scoringRubric: input.scoringRubric } : {}),
+    ...(input.results !== undefined ? { results: input.results } : {}),
   };
 
   const contentHash = {
