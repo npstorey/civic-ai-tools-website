@@ -2,6 +2,8 @@
 
 A demo website showcasing the value of [Model Context Protocol (MCP)](https://modelcontextprotocol.io) by displaying side-by-side LLM responses with and without MCP integration for civic data queries.
 
+> **Integrating?** Start at [`docs/api/evidence-publish.md`](docs/api/evidence-publish.md) — the evidence-publish contract, including the "Repositories & layers" orientation and the integration-contract section.
+
 **Live demo:** [civic-ai-tools-website.vercel.app](https://civic-ai-tools-website.vercel.app/)
 
 ## What it does
