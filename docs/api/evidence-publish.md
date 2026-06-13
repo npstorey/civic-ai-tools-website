@@ -4,6 +4,20 @@ The evidence publish endpoint is the single write path for the civicaitools.org 
 
 This document describes the request and response contract so external clients can publish without reverse-engineering the implementation in `src/app/api/evidence/route.ts`.
 
+## Repositories & layers
+
+This contract spans three repositories. If you're integrating, here's how they relate:
+
+| Repo | Layer | What lives here |
+|---|---|---|
+| [`civic-ai-tools-website`](https://github.com/npstorey/civic-ai-tools-website) | Reference implementation | The civicaitools.org endpoints you call, this contract (`docs/api/evidence-publish.md`), and implementation issues (e.g. [#112](https://github.com/npstorey/civic-ai-tools-website/issues/112)). |
+| [`civic-ai-tools`](https://github.com/npstorey/civic-ai-tools) | Protocol decisions + spec source | The ADRs, the open-questions registry (Q-numbers), the integration-arc issues [#71](https://github.com/npstorey/civic-ai-tools/issues/71) / [#72](https://github.com/npstorey/civic-ai-tools/issues/72), and the [Typed Standards Specification](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/typed-standards-specification.md) itself — the source of the `§8.x` section numbers. |
+| [`typedstandards`](https://github.com/npstorey/typedstandards) | The standard's public home | `@typedstandards/verify-core` and the standalone verifier; the specification's public home from the July RFC. (The repo is private pre-launch; until publication the spec source is the `civic-ai-tools` link above.) |
+
+Every ADR, `§`-reference, issue, and Q-number below is hyperlinked to its source — follow the link rather than guessing which repo it's in.
+
+_Last updated: 2026-06-13 — see the [change log](#change-log) for dated changes._
+
 **Status:** Schema version `0.1.0`. Fields may be added in a backwards-compatible way; breaking changes will bump the `schemaVersion` inside the package and be noted in the change log at the bottom of this document. The 2026-05-19 amendment introduces the `contentProfile` field per [ADR-0004](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0004-dathere-captureMethod-variant.md) and reverts the brief 2026-05-18 `datHere` captureMethod variant; both changes are additive — pre-ADR-0004 packages hash byte-identical with the new code.
 
 ---
@@ -365,7 +379,7 @@ Callers publishing through `POST /api/evidence` do not set these themselves — 
 
 ## Visibility lifecycle, publication records, and the adversarial-eval gate (integration contract)
 
-This section is the integration contract for the attest-by-default / publish-by-choice lifecycle ([civic-ai-tools#71](https://github.com/npstorey/civic-ai-tools/issues/71)) and the adversarial-evaluation publication gate ([civic-ai-tools#72](https://github.com/npstorey/civic-ai-tools/issues/72)). It documents the wire shapes an integrating client produces and consumes. The normative definitions live in the Typed Standards Specification — §8.10 (lifecycle and location attestations) and §8.12 (the `attestation/*` namespace) — as operationalized by [ADR-0009](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0009-unified-typed-attestation-primitive.md) and [ADR-0010](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0010-visibility-lifecycle-location-attestations.md). Open design questions are tracked in the registry as [Q20](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-questions.md#q20--visibility-lifecycle-and-attestpublish-semantics) (visibility lifecycle), [Q25](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-questions.md#q25--adversarial-evaluation-requirement-strength-on-publication-records) (eval requirement strength), and [Q26](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-questions.md#q26--valid-evaluator-definition-identity-binding--methodology-declaration) (valid evaluator definition). This contract cites those shapes; it does not extend them.
+This section is the integration contract for the attest-by-default / publish-by-choice lifecycle ([civic-ai-tools#71](https://github.com/npstorey/civic-ai-tools/issues/71)) and the adversarial-evaluation publication gate ([civic-ai-tools#72](https://github.com/npstorey/civic-ai-tools/issues/72)). It documents the wire shapes an integrating client produces and consumes. The normative definitions live in the Typed Standards Specification — [§8.10](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/typed-standards-specification.md#810-lifecycle-and-location-attestations) (lifecycle and location attestations) and [§8.12](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/typed-standards-specification.md#812-the-attestation-namespace) (the `attestation/*` namespace) — as operationalized by [ADR-0009](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0009-unified-typed-attestation-primitive.md) and [ADR-0010](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0010-visibility-lifecycle-location-attestations.md). Open design questions are tracked in the registry as [Q20](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-questions.md#q20--visibility-lifecycle-and-attestpublish-semantics) (visibility lifecycle), [Q25](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-questions.md#q25--adversarial-evaluation-requirement-strength-on-publication-records) (eval requirement strength), and [Q26](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-questions.md#q26--valid-evaluator-definition-identity-binding--methodology-declaration) (valid evaluator definition). This contract cites those shapes; it does not extend them.
 
 **Implementation status at a glance.** Each subsection carries a status label so integrating engineers can tell contract-now from contract-next:
 
@@ -666,6 +680,8 @@ These are implementation details that may surprise an external client. None of t
 ---
 
 ## Change log
+
+- **2026-06-13** — Added a "Repositories & layers" orientation section at the top of the doc plus a last-updated stamp, and hyperlinked the previously-bare `§8.10` / `§8.12` spec references in the integration-contract section to the specification source in `civic-ai-tools`. Docs-only; no API or schema change.
 
 - **2026-06-12 (d)** — **Visibility UI + dashboard promotion flow** (arc Phase 5): the website publish dialog surfaces the visibility choice with **committed as the default** (civic-ai-tools#71 scope item 7) and branches its success state honestly (committed records show the commitment-is-public / content-is-private framing); the dashboard labels committed records and provides the committed→published promotion with the adversarial-eval toggle (default on) wired to `POST /api/evidence/:slug/publish`. Documentation truth-pass: removed the pre-detail-page "viewing interface" copy; documented the deliberate eval-gate asymmetry between dashboard promotion (always gated) and direct published-mode publishes (ungated, per Q25). No API changes.
 
