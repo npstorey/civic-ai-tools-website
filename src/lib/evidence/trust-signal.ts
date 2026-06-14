@@ -589,6 +589,114 @@ export const CAPTURE_METHOD_VOCAB_SIGNALS: Record<
   },
 };
 
+// --- Overall integrity glance (worst-tier-wins) — #113 -------------------
+//
+// ADR-0013 / Q46 splits verification rendering by disclosure depth: the
+// publishing host renders only a calm GLANCE (this summary); the full §9.2
+// per-check "show the math" is delegated to the neutral verifier at
+// typedstandards.org/verify. This rolls the per-check tiers into ONE of the
+// three summary states the issue names — Verified / Attention / Alarm — by
+// worst-tier-wins, with Normal collapsing into the calm Verified summary.
+//
+// Why Normal → Verified (not its own glance state): a pre-v0.1 legacy package
+// produces only Verified + Normal checks (legacy_relabeled, legacy_embedded,
+// no timestamp, …). The load-bearing calm requirement (§3 of the design note)
+// is that such a package reads calm and affirmative, never amber/red — so with
+// no Attention and no Alarm present, the glance is "Integrity verified". The
+// Normal-tier back-compat nuance lives in the delegated per-check verifier, not
+// in the one-line in-page glance (P5: glance here, detail there).
+
+const TIER_RANK: Record<TrustTier, number> = {
+  verified: 0,
+  normal: 1,
+  attention: 2,
+  alarm: 3,
+};
+
+/** The three overall-integrity summary states (#113). Disclosure, never
+ *  validation (P1): "Integrity verified" speaks to the cryptographic/structural
+ *  checks, never to whether the analysis is correct. */
+export const OVERALL_INTEGRITY_SIGNALS: Record<
+  'verified' | 'attention' | 'alarm',
+  TrustSignalDescriptor
+> = {
+  verified: {
+    tier: 'verified',
+    label: 'Integrity verified',
+    detail: 'The integrity checks ran cleanly. You can re-run them yourself in the independent verifier.',
+  },
+  attention: {
+    tier: 'attention',
+    label: 'Some checks need a closer look',
+    detail: 'One or more checks could not be confirmed. See the full breakdown in the independent verifier.',
+  },
+  alarm: {
+    tier: 'alarm',
+    label: 'Integrity problem detected',
+    detail: 'One or more checks did not pass. See the full breakdown in the independent verifier.',
+  },
+};
+
+/** The verify-result fields the integrity glance rolls up. Structurally a
+ *  subset of the verify route's response (and the component's `VerifyResult`),
+ *  so the resolved object passes straight in. Status-bearing checks are
+ *  optional (absent → skipped) to stay tolerant of partial / legacy results. */
+export interface IntegrityGlanceInput {
+  hashMatch: boolean;
+  signatureValid: boolean | null;
+  keyTrust: { status: KeyTrustStatus } | null;
+  hasTimestamp: boolean;
+  rekorVerified: boolean | null;
+  blobRefsVerified: boolean | null;
+  contentCanonicalization: { status: ContentCanonicalizationStatus } | null;
+  contentHash: { status: ContentHashStatus } | null;
+  typeResolution: { status: TypeResolutionStatus } | null;
+  signerIdentity: { status: SignerIdentityCheckStatus } | null;
+  captureMethodVocab: { status: CaptureMethodVocabStatus } | null;
+}
+
+/**
+ * Collect the per-check descriptors the integrity glance rolls up. Each is
+ * resolved through the SAME source-of-truth maps the (delegated) per-check
+ * verifier uses, so the in-page glance and the full breakdown can never assign a
+ * status a different tier. Lifecycle (#10) is deliberately excluded — it is a
+ * separate axis from cryptographic integrity (P7) and has its own page surface
+ * (the withdrawal banner + Status History).
+ */
+export function collectIntegrityDescriptors(r: IntegrityGlanceInput): TrustSignalDescriptor[] {
+  const d: TrustSignalDescriptor[] = [
+    resolveEnvelopeIntegrity(r.hashMatch),
+    resolveSignature(r.signatureValid),
+    resolveKeyTrust(r.keyTrust),
+    resolveTimestamp(r.hasTimestamp),
+    resolveRekor(r.rekorVerified),
+    resolveBlobRefs(r.blobRefsVerified),
+  ];
+  if (r.contentCanonicalization)
+    d.push(CONTENT_CANONICALIZATION_SIGNALS[r.contentCanonicalization.status]);
+  if (r.contentHash) d.push(CONTENT_HASH_SIGNALS[r.contentHash.status]);
+  if (r.typeResolution) d.push(TYPE_RESOLUTION_SIGNALS[r.typeResolution.status]);
+  if (r.signerIdentity) d.push(SIGNER_IDENTITY_SIGNALS[r.signerIdentity.status]);
+  if (r.captureMethodVocab) d.push(CAPTURE_METHOD_VOCAB_SIGNALS[r.captureMethodVocab.status]);
+  return d;
+}
+
+/**
+ * Roll the integrity checks into ONE calm overall glance (#113), worst-tier-wins.
+ * Alarm if any check alarms; else Attention if any needs a closer look; else the
+ * calm "Integrity verified" (Verified + Normal back-compat checks both land
+ * here, so legacy packages read calm — never amber/red).
+ */
+export function summarizeIntegrity(r: IntegrityGlanceInput): TrustSignalDescriptor {
+  let worst = 0;
+  for (const d of collectIntegrityDescriptors(r)) {
+    worst = Math.max(worst, TIER_RANK[d.tier]);
+  }
+  if (worst >= TIER_RANK.alarm) return OVERALL_INTEGRITY_SIGNALS.alarm;
+  if (worst >= TIER_RANK.attention) return OVERALL_INTEGRITY_SIGNALS.attention;
+  return OVERALL_INTEGRITY_SIGNALS.verified;
+}
+
 // --- notebookProvenance (honest execution label) -------------------------
 //
 // Not a verify-library status: `metadata.extensions["org.civicaitools.notebook"]

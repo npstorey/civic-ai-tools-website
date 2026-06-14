@@ -54,9 +54,13 @@ import {
   NOTEBOOK_PROVENANCE_VALUES,
   NOTEBOOK_PROVENANCE_SIGNALS,
   NO_SIGNING_KEY_SIGNAL,
+  OVERALL_INTEGRITY_SIGNALS,
+  collectIntegrityDescriptors,
+  summarizeIntegrity,
   resolveKeyTrust,
   resolveCaptureMethodLabel,
   type TrustSignalDescriptor,
+  type IntegrityGlanceInput,
 } from './trust-signal.ts';
 
 // The valid tiers, derived from the source so the test cannot drift from it.
@@ -270,4 +274,84 @@ test('resolveCaptureMethodLabel: known methods, datHere ADR-0004 special case, o
   assert.ok(datHere && /ADR-0004/.test(datHere), 'datHere preserves the ADR-0004 annotation');
   // An unrecognized value omits rather than echoing a raw code.
   assert.equal(resolveCaptureMethodLabel('something-else'), null);
+});
+
+// --- #113 overall-integrity glance (worst-tier-wins summary) -------------
+
+// A fully-affirmative current-format result: every emitted check is Verified.
+const CLEAN_RESULT: IntegrityGlanceInput = {
+  hashMatch: true,
+  signatureValid: true,
+  keyTrust: { status: 'active' },
+  hasTimestamp: true,
+  rekorVerified: true,
+  blobRefsVerified: null,
+  contentCanonicalization: { status: 'ok' },
+  contentHash: { status: 'ok' },
+  typeResolution: { status: 'ok' },
+  signerIdentity: { status: 'ok' },
+  captureMethodVocab: { status: 'ok' },
+};
+
+// A synthetic pre-v0.1 legacy result: a fistful of "not ok but expected"
+// statuses, all Verified or Normal — the load-bearing calm case.
+const LEGACY_RESULT: IntegrityGlanceInput = {
+  hashMatch: true,
+  signatureValid: true,
+  keyTrust: { status: 'legacy_embedded' },
+  hasTimestamp: false,
+  rekorVerified: null,
+  blobRefsVerified: null,
+  contentCanonicalization: { status: 'implicit' },
+  contentHash: { status: 'legacy_relabeled' },
+  typeResolution: { status: 'implicit' },
+  signerIdentity: { status: 'no_signer' },
+  captureMethodVocab: { status: 'no_capture_method' },
+};
+
+test('summarizeIntegrity: a clean current-format package reads Verified', () => {
+  assert.equal(summarizeIntegrity(CLEAN_RESULT), OVERALL_INTEGRITY_SIGNALS.verified);
+});
+
+test('summarizeIntegrity: a legacy package reads calm Verified (the load-bearing case)', () => {
+  // The whole point of #113's roll-up: Normal-tier back-compat checks collapse
+  // into the calm "Integrity verified" — zero amber/red on a legacy package.
+  const summary = summarizeIntegrity(LEGACY_RESULT);
+  assert.equal(summary, OVERALL_INTEGRITY_SIGNALS.verified);
+  assert.notEqual(summary.tier, 'attention');
+  assert.notEqual(summary.tier, 'alarm');
+  // And every per-check descriptor that fed it is itself calm (verified/normal).
+  for (const d of collectIntegrityDescriptors(LEGACY_RESULT)) {
+    assert.ok(d.tier === 'verified' || d.tier === 'normal', `legacy check tier ${d.tier}`);
+  }
+});
+
+test('summarizeIntegrity: a content-hash mismatch escalates to Alarm', () => {
+  // Same check as legacy_relabeled, opposite tier — off-log content altered.
+  const summary = summarizeIntegrity({ ...LEGACY_RESULT, contentHash: { status: 'content_hash_mismatch' } });
+  assert.equal(summary, OVERALL_INTEGRITY_SIGNALS.alarm);
+});
+
+test('summarizeIntegrity: an invalid signature escalates to Alarm', () => {
+  assert.equal(
+    summarizeIntegrity({ ...CLEAN_RESULT, signatureValid: false }).tier,
+    'alarm',
+  );
+});
+
+test('summarizeIntegrity: an unconfirmed check (no alarm) reads Attention', () => {
+  // unknown_key is absence-of-trust (Attention), not positive distrust (Alarm).
+  assert.equal(
+    summarizeIntegrity({ ...CLEAN_RESULT, keyTrust: { status: 'unknown_key' } }),
+    OVERALL_INTEGRITY_SIGNALS.attention,
+  );
+  // Alarm out-ranks Attention when both are present (worst-tier-wins).
+  assert.equal(
+    summarizeIntegrity({
+      ...CLEAN_RESULT,
+      keyTrust: { status: 'unknown_key' },
+      hashMatch: false,
+    }).tier,
+    'alarm',
+  );
 });
