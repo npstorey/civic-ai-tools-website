@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import TrustSignal from './TrustSignal';
+import VerifyBadge from './VerifyBadge';
 import {
   summarizeIntegrity,
   resolveCaptureMethodLabel,
@@ -27,6 +28,15 @@ interface EvidenceActionsProps {
    *  neutral informational label beside the signature verdict (#11,
    *  "signed ≠ verbatim"). */
   captureMethod: string | null;
+  /** Record visibility (`published` | `committed`). Gates the verify badge
+   *  (#114): the delegated verifier resolves a package via its commitment
+   *  sidecar, which is redacted for committed records, so the badge is
+   *  published-only. */
+  visibility: string;
+  /** Absolute, publicly-fetchable commitment endpoint for this package
+   *  (resolved server-side from the request host). The verify badge (#114)
+   *  deep-links the neutral verifier to it. */
+  commitmentUrl: string;
 }
 
 function CitePopover({ title, creatorName, createdAt, slug, onClose }: {
@@ -133,7 +143,7 @@ interface VerifyResult {
 }
 
 export default function EvidenceActions({
-  slug, title, creatorName, createdAt, packageUrl, captureMethod,
+  slug, title, creatorName, createdAt, packageUrl, captureMethod, visibility, commitmentUrl,
 }: EvidenceActionsProps) {
   const [linkCopied, setLinkCopied] = useState(false);
   const [showCite, setShowCite] = useState(false);
@@ -260,6 +270,15 @@ export default function EvidenceActions({
             </button>
           </div>
         )}
+
+        {/* Verify-independently badge (#114) — the host-side entry point to the
+            neutral verifier (ADR-0013 / Q46). Published-only: the verifier
+            resolves a package through its commitment sidecar, which is redacted
+            for committed records (content private), so /verify would show a
+            missing-content alarm. Rendered independent of the glance's load
+            state — when our own check can't load, "verify it yourself" matters
+            most. */}
+        {visibility === 'published' && <VerifyBadge commitmentUrl={commitmentUrl} />}
       </div>
 
       {/* Actions */}
