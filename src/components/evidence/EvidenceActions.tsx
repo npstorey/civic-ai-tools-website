@@ -1,13 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import TrustSignal from './TrustSignal';
 import {
-  resolveEnvelopeIntegrity,
-  resolveSignature,
-  resolveTimestamp,
-  resolveRekor,
-  resolveKeyTrust,
+  summarizeIntegrity,
   resolveCaptureMethodLabel,
 } from '@/lib/evidence/trust-signal';
 import type {
@@ -103,12 +99,13 @@ function CitePopover({ title, creatorName, createdAt, slug, onClose }: {
 }
 
 /**
- * The verify-route response shape. #111 renders only the five legacy checks
- * (hashMatch, signatureValid, keyTrust, hasTimestamp, rekorVerified), but the
- * type is aligned to the route's full emitted shape (spec §9.2 checks #3-#15 +
- * lifecycle) as a clean base for the #113/#114 panel waves — those fields are
- * typed here but intentionally NOT surfaced yet. The upstream interfaces are
- * type-only imports, so this client component pulls in no node:crypto runtime.
+ * The verify-route response shape. The #113 in-page glance rolls these checks
+ * into ONE worst-tier-wins summary (`summarizeIntegrity`); the full per-check
+ * "show the math" is delegated to the neutral verifier at typedstandards.org
+ * /verify (ADR-0013 / Q46), reached via the verify badge (#114). The structural
+ * superset of `IntegrityGlanceInput`, so the fetched result passes straight in.
+ * The upstream interfaces are type-only imports, so this client component pulls
+ * in no node:crypto runtime.
  */
 interface VerifyResult {
   hashMatch: boolean;
@@ -140,7 +137,7 @@ export default function EvidenceActions({
 }: EvidenceActionsProps) {
   const [linkCopied, setLinkCopied] = useState(false);
   const [showCite, setShowCite] = useState(false);
-  const [verifyState, setVerifyState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [verifyState, setVerifyState] = useState<'loading' | 'done' | 'error'>('loading');
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
 
   // captureMethod LABEL (#11, "signed != verbatim"): a neutral, signature-covered
@@ -162,7 +159,12 @@ export default function EvidenceActions({
     a.click();
   };
 
-  const handleVerify = async () => {
+  // The integrity glance auto-loads so it is a true glance (always present,
+  // P5's glance layer), not gated behind a click. A failure to LOAD the check
+  // is rendered calm (a muted "couldn't load" + Retry), never as an integrity
+  // failure — our endpoint being unreachable says nothing about the package
+  // (P1 disclosure ≠ validation, P3 no false precision).
+  const runVerify = async () => {
     setVerifyState('loading');
     try {
       const res = await fetch(`/api/evidence/${slug}/verify`);
@@ -174,6 +176,11 @@ export default function EvidenceActions({
       setVerifyState('error');
     }
   };
+
+  useEffect(() => {
+    runVerify();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
 
   const btnStyle: React.CSSProperties = {
     background: 'none',
@@ -191,6 +198,71 @@ export default function EvidenceActions({
 
   return (
     <>
+      {/* Integrity glance (#113) — a single calm, worst-tier-wins overall
+          verdict, auto-loaded so it is always present (P5's glance layer), not
+          gated behind a click. The full per-check "show the math" is delegated
+          to the neutral verifier at typedstandards.org/verify (ADR-0013 / Q46),
+          reached via the verify badge (#114), and is not rendered here. */}
+      <div style={{ marginBottom: '16px' }}>
+        {verifyState === 'loading' && (
+          <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+            Checking integrity…
+          </div>
+        )}
+
+        {verifyState === 'done' && verifyResult && (
+          <>
+            {/* Worst-tier-wins summary. Legacy / back-compat checks
+                (legacy_relabeled, legacy_embedded, no timestamp, …) roll up into
+                the calm "Integrity verified" — never amber/red (the load-bearing
+                calm requirement). Amber/red appear only on a genuine
+                unconfirmed/failed check. */}
+            <TrustSignal {...summarizeIntegrity(verifyResult)} />
+
+            {/* captureMethod label adjacent to the glance — "signed ≠ verbatim"
+                (spec §9.2 #11): the summary's signature check proves the bytes
+                are unchanged since signing, not that they are a verbatim
+                capture; this caption says how the signed bytes were obtained.
+                Omitted for pre-ADR-0003 packages (null), keeping legacy calm. */}
+            {captureMethodCaption && (
+              <div
+                style={{
+                  marginLeft: '24px',
+                  fontSize: '12px',
+                  lineHeight: 1.45,
+                  color: 'var(--text-muted)',
+                }}
+              >
+                {captureMethodCaption}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* A failure to LOAD the check is calm, not an alarm — our endpoint
+            being unreachable says nothing about the package (P1 / P3). */}
+        {verifyState === 'error' && (
+          <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+            Integrity check couldn’t be loaded.{' '}
+            <button
+              onClick={runVerify}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                fontSize: '13px',
+                color: 'var(--nyc-blue)',
+                textDecoration: 'underline',
+                cursor: 'pointer',
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Actions */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
         <button onClick={handleDownload} style={btnStyle}>
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -199,13 +271,6 @@ export default function EvidenceActions({
           </svg>
           Download Package
         </button>
-        <button
-          onClick={handleVerify}
-          disabled={verifyState === 'loading'}
-          style={{ ...btnStyle, color: verifyState === 'loading' ? 'var(--text-muted)' : btnStyle.color }}
-        >
-          {verifyState === 'loading' ? 'Verifying...' : 'Verify Integrity'}
-        </button>
         <button onClick={handleCopyLink} style={{ ...btnStyle, color: linkCopied ? 'var(--nyc-success)' : btnStyle.color }}>
           {linkCopied ? 'Copied' : 'Copy Link'}
         </button>
@@ -213,74 +278,6 @@ export default function EvidenceActions({
           Cite
         </button>
       </div>
-
-      {/* Verification results */}
-      {verifyState === 'done' && verifyResult && (
-        <div style={{
-          marginTop: '12px', padding: '14px 16px',
-          border: '1px solid var(--border-color)', borderRadius: '6px',
-          backgroundColor: 'white',
-        }}>
-          <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>Verification Results</div>
-          {/* The five integrity checks, re-skinned onto <TrustSignal> and driven
-              entirely by the trust-signal vocabulary (#110). Legacy / back-compat
-              statuses resolve to Verified or Normal — never amber or red — so a
-              pre-v0.1 package reads calm (the #111 calm baseline). The label is
-              the verdict one-liner; the muted detail expands it (P5). */}
-
-          {/* #1 Envelope integrity */}
-          <TrustSignal {...resolveEnvelopeIntegrity(verifyResult.hashMatch)} />
-
-          {/* #2 Cryptographic signature, with the captureMethod label directly
-              beneath it — "signed ≠ verbatim" (spec §9.2 #11). A valid signature
-              proves the bytes are unchanged since signing, not that they are a
-              verbatim capture; the caption says how the signed bytes were obtained. */}
-          <TrustSignal {...resolveSignature(verifyResult.signatureValid)} />
-          {captureMethodCaption && (
-            <div
-              style={{
-                marginLeft: '24px',
-                marginBottom: '8px',
-                fontSize: '12px',
-                lineHeight: 1.45,
-                color: 'var(--text-muted)',
-              }}
-            >
-              {captureMethodCaption}
-            </div>
-          )}
-
-          {/* #5 Key trust (keyTrust:null = unsigned → calm Normal) */}
-          <TrustSignal {...resolveKeyTrust(verifyResult.keyTrust)} />
-
-          {/* #7 RFC 3161 timestamp */}
-          <TrustSignal {...resolveTimestamp(verifyResult.hasTimestamp)} />
-
-          {/* #8 Transparency log (Rekor) */}
-          <TrustSignal {...resolveRekor(verifyResult.rekorVerified)} />
-          {verifyResult.details.rekor?.logEntryUrl && (
-            <div style={{ marginTop: '6px', fontSize: '12px' }}>
-              <a
-                href={verifyResult.details.rekor.logEntryUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: 'var(--nyc-blue)', textDecoration: 'underline' }}
-              >
-                View Rekor log entry (index {verifyResult.details.rekor.logIndex})
-              </a>
-            </div>
-          )}
-        </div>
-      )}
-      {verifyState === 'error' && (
-        <div style={{
-          marginTop: '12px', padding: '10px 14px', fontSize: '13px',
-          color: 'var(--nyc-error)', backgroundColor: 'rgba(236, 19, 30, 0.06)',
-          borderRadius: '4px',
-        }}>
-          Verification request failed. Try again.
-        </div>
-      )}
 
       {showCite && (
         <CitePopover
