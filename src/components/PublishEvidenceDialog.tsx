@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import type { ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
 import { generateNotebook } from '@/lib/notebook';
 import type { Notebook } from '@/lib/notebook-author/cells';
@@ -70,6 +71,8 @@ export default function PublishEvidenceDialog({
   const [resultUrl, setResultUrl] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [urlCopied, setUrlCopied] = useState(false);
+
+  const router = useRouter();
 
   // Track whether we've already kicked off summary generation for this session
   const summaryRequested = useRef(false);
@@ -188,6 +191,32 @@ export default function PublishEvidenceDialog({
     setErrorMessage('');
     setUrlCopied(false);
     onClose();
+  };
+
+  // #86 (published path) — the highest-frequency post-publish intent is "let me
+  // see what I just published", so it is the primary affordance: client-side
+  // navigation to the evidence page (not an auto-redirect — the user chooses).
+  const handleView = () => {
+    router.push(resultUrl);
+  };
+
+  // #86 (published path) — "let me share this" without leaving: native share
+  // sheet where available (mobile), clipboard + toast otherwise (desktop). A
+  // dismissed share sheet is a no-op (no surprise copy). Only ever wired for a
+  // PUBLISHED result — a committed record is private, so Share is meaningless.
+  const handleShare = async () => {
+    const fullUrl = `${window.location.origin}${resultUrl}`;
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title, url: fullUrl });
+      } catch {
+        // User dismissed the share sheet (or it failed) — do nothing.
+      }
+      return;
+    }
+    await navigator.clipboard.writeText(fullUrl);
+    setUrlCopied(true);
+    setTimeout(() => setUrlCopied(false), 2000);
   };
 
   return (
@@ -448,73 +477,146 @@ export default function PublishEvidenceDialog({
                 </span>
               </div>
 
-              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>
-                {resultVisibility === 'committed'
-                  ? 'Your evidence is committed — signed and registered, content private to you. Only you can open this page; publish it anytime from your dashboard:'
-                  : 'Your evidence record is live at:'}
-              </p>
+              {resultVisibility === 'committed' ? (
+                /* COMMITTED — a private record. Preserve the creator-only copy +
+                   the URL box (the creator's own handle to open / re-open it);
+                   no public "Share" affordance, because the content is private
+                   and a shared link is meaningless to anyone else (#86). */
+                <>
+                  <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>
+                    Your evidence is committed — signed and registered, content private to you.
+                    Only you can open this page; publish it anytime from your dashboard:
+                  </p>
 
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 12px',
-                backgroundColor: 'var(--nyc-gray-50, #f5f5f5)',
-                borderRadius: '4px',
-                marginBottom: '16px',
-              }}>
-                <code style={{
-                  flex: 1,
-                  fontSize: '13px',
-                  wordBreak: 'break-all',
-                  color: 'var(--nyc-blue)',
-                }}>
-                  {typeof window !== 'undefined' ? window.location.origin : ''}{resultUrl}
-                </code>
-                <button
-                  onClick={async () => {
-                    const fullUrl = `${window.location.origin}${resultUrl}`;
-                    await navigator.clipboard.writeText(fullUrl);
-                    setUrlCopied(true);
-                    setTimeout(() => setUrlCopied(false), 2000);
-                  }}
-                  style={{
-                    background: 'none',
-                    border: '1px solid var(--border-color)',
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 12px',
+                    backgroundColor: 'var(--nyc-gray-50, #f5f5f5)',
                     borderRadius: '4px',
-                    padding: '4px 10px',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    color: urlCopied ? 'var(--nyc-success)' : 'var(--text-muted)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {urlCopied ? 'Copied' : 'Copy'}
-                </button>
-              </div>
+                    marginBottom: '16px',
+                  }}>
+                    <code style={{
+                      flex: 1,
+                      fontSize: '13px',
+                      wordBreak: 'break-all',
+                      color: 'var(--nyc-blue)',
+                    }}>
+                      {typeof window !== 'undefined' ? window.location.origin : ''}{resultUrl}
+                    </code>
+                    <button
+                      onClick={async () => {
+                        const fullUrl = `${window.location.origin}${resultUrl}`;
+                        await navigator.clipboard.writeText(fullUrl);
+                        setUrlCopied(true);
+                        setTimeout(() => setUrlCopied(false), 2000);
+                      }}
+                      style={{
+                        background: 'none',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '4px',
+                        padding: '4px 10px',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        color: urlCopied ? 'var(--nyc-success)' : 'var(--text-muted)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {urlCopied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
 
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 16px' }}>
-                {resultVisibility === 'committed'
-                  ? 'The cryptographic commitment (hash, signature, timestamp, transparency-log proof) is publicly verifiable; the content and this page are not.'
-                  : 'The record is signed, timestamped, and registered on the public transparency log.'}
-              </p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 16px' }}>
+                    The cryptographic commitment (hash, signature, timestamp, transparency-log
+                    proof) is publicly verifiable; the content and this page are not.
+                  </p>
 
-              <button
-                onClick={handleClose}
-                style={{
-                  width: '100%',
-                  padding: '10px 20px',
-                  backgroundColor: 'var(--nyc-blue)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Done
-              </button>
+                  <button
+                    onClick={handleClose}
+                    style={{
+                      width: '100%',
+                      padding: '10px 20px',
+                      backgroundColor: 'var(--nyc-blue)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Done
+                  </button>
+                </>
+              ) : (
+                /* PUBLISHED — a public record. Two distinct affordances instead
+                   of a raw URL to parse (#86): primary "View" (navigates) +
+                   secondary "Share" (copy / native share). The raw URL stays
+                   reachable via Share and the destination URL bar; closing the
+                   dialog (header ×, backdrop, or "Keep chatting") returns to the
+                   chat to continue. */
+                <>
+                  <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 16px' }}>
+                    Your evidence page is live.
+                  </p>
+
+                  <button
+                    onClick={handleView}
+                    style={{
+                      width: '100%',
+                      padding: '10px 20px',
+                      backgroundColor: 'var(--nyc-blue)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    View your evidence page →
+                  </button>
+
+                  <button
+                    onClick={handleShare}
+                    style={{
+                      width: '100%',
+                      padding: '10px 20px',
+                      backgroundColor: 'white',
+                      color: urlCopied ? 'var(--nyc-success)' : 'var(--text-secondary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {urlCopied ? 'Link copied' : 'Share'}
+                  </button>
+
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '16px 0 0' }}>
+                    The record is signed, timestamped, and registered on the public transparency log.
+                  </p>
+
+                  <button
+                    onClick={handleClose}
+                    style={{
+                      width: '100%',
+                      marginTop: '12px',
+                      padding: '6px',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Keep chatting
+                  </button>
+                </>
+              )}
             </div>
           )}
 
