@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { headers } from 'next/headers';
 import type { Metadata } from 'next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -212,6 +213,14 @@ export default async function EvidencePage({ params }: PageProps) {
   // modulo the shallow clone.
   const renderPkg = resolution?.pkg ?? pkg;
   const dateStr = record.createdAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  // Absolute, publicly-fetchable commitment endpoint for the verify badge
+  // (#114), resolved from the request host so the deep-link is correct on
+  // production AND preview deploys (the verifier fetches it cross-origin).
+  const hdrs = await headers();
+  const host = hdrs.get('x-forwarded-host') ?? hdrs.get('host') ?? 'civicaitools.org';
+  const proto = hdrs.get('x-forwarded-proto') ?? 'https';
+  const commitmentUrl = `${proto}://${host}/api/evidence/${slug}/commitment`;
 
   // ADR-0004: detail-page layout branches on contentProfile. When the value
   // is 'datHere', the page renders the A-G envelope as its primary structure
@@ -834,6 +843,8 @@ export default async function EvidencePage({ params }: PageProps) {
             createdAt={record.createdAt.toISOString()}
             packageUrl={record.basePackageStorageKey || ''}
             captureMethod={record.captureMethod}
+            visibility={record.visibility}
+            commitmentUrl={commitmentUrl}
           />
         </Section>
 
