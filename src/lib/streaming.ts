@@ -42,6 +42,113 @@ export interface ErrorEvent extends StreamEvent {
   message: string;
 }
 
+// --- Friendly error copy -----------------------------------------------------
+//
+// Streaming failures (an unavailable or slow MCP data source, a dropped
+// connection, a rate-limit response) must never surface raw error strings,
+// status codes, or server names to the reader. These helpers classify any
+// error shape into a small set of kinds and map each kind to calm, plain
+// user-language copy (design-principles.md P9: "data source", "AI"; no
+// implementation jargon; no new trust/status vocabulary). They are the single
+// place error-to-copy mapping lives, consumed by every SSE-consuming hook.
+
+export type StreamErrorKind = 'rate_limit' | 'mcp_timeout' | 'mcp_unavailable' | 'connection' | 'generic';
+
+/** Pull a lowercased message string out of any error-ish input. */
+function errorMessageOf(input: unknown): string {
+  if (input instanceof Error) return input.message;
+  if (typeof input === 'string') return input;
+  if (input !== null && typeof input === 'object' && 'message' in input) {
+    const m = (input as { message?: unknown }).message;
+    if (typeof m === 'string') return m;
+  }
+  return '';
+}
+
+/**
+ * Classify an error (an `Error`, an SSEError-like object with `status`, a raw
+ * message string, or an SSE `error`-event message) into a `StreamErrorKind`.
+ * Order matters: rate-limit first (status or text), then the more specific MCP
+ * timeout before the broader MCP-unavailable, then generic connection.
+ */
+export function classifyStreamError(input: unknown): StreamErrorKind {
+  const status =
+    input !== null && typeof input === 'object' && 'status' in input
+      ? (input as { status?: unknown }).status
+      : undefined;
+  if (status === 429) return 'rate_limit';
+
+  const m = errorMessageOf(input).toLowerCase();
+  if (!m) return 'generic';
+
+  if (m.includes('rate limit') || m.includes('429')) return 'rate_limit';
+  if (m.includes('timed out') || m.includes('timeout') || m.includes('did not respond within')) return 'mcp_timeout';
+  if (
+    m.includes('unavailable') ||
+    m.includes('initialization failed') ||
+    m.includes('mcp server') ||
+    m.includes('mcp tool') ||
+    m.includes('econnrefused') ||
+    m.includes('enotfound') ||
+    m.includes('fetch failed') ||
+    m.includes('502') ||
+    m.includes('503') ||
+    m.includes('504')
+  ) {
+    return 'mcp_unavailable';
+  }
+  if (
+    m.includes('failed to connect') ||
+    m.includes('no response body') ||
+    m.includes('network') ||
+    m.includes('connection')
+  ) {
+    return 'connection';
+  }
+  return 'generic';
+}
+
+const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
+  rate_limit: 'You’ve reached today’s request limit. Sign in for more requests, or try again tomorrow.',
+  mcp_timeout:
+    'The live data source took too long to respond, so this query couldn’t finish. Try again in a moment, or narrow the question (for example, add a date range).',
+  mcp_unavailable:
+    'The live data source is temporarily unavailable, so this query couldn’t be completed. Please try again shortly.',
+  connection: 'The connection was interrupted before the response finished. Please try again.',
+  generic: 'Something went wrong while running this query. Please try again in a moment.',
+};
+
+/** Map any streaming error into calm, reader-facing copy. Never leaks raw text. */
+export function friendlyStreamError(input: unknown): string {
+  return FRIENDLY_STREAM_COPY[classifyStreamError(input)];
+}
+
+/**
+ * Server-side: the neutral text fed back to the model when an MCP tool call
+ * fails, in place of the raw `Error executing tool: <message>` string. It (1)
+ * preserves the anti-hallucination guard (the model must not invent values to
+ * fill the gap), and (2) instructs the model to tell the user plainly that the
+ * live data couldn't be retrieved, without echoing raw error text, status
+ * codes, or server names into the answer.
+ */
+export function describeToolFailureForLlm(_toolName: string, input: unknown): string {
+  const preamble =
+    'This data request returned no data. Do not estimate, guess, or fabricate any values to fill the gap.';
+  const tellUser = (detail: string) =>
+    `${preamble} ${detail} In your answer, briefly tell the user in plain language that the live data could not be retrieved, and do not include any raw error text, status codes, server names, or system details.`;
+
+  switch (classifyStreamError(input)) {
+    case 'mcp_timeout':
+      return tellUser(
+        'The live data source did not respond in time and the request timed out. Suggest trying again or narrowing the query (for example, adding a date range).',
+      );
+    case 'mcp_unavailable':
+      return tellUser('The live data source is temporarily unavailable. Suggest trying again shortly.');
+    default:
+      return tellUser('The request could not be completed. Suggest trying again.');
+  }
+}
+
 // Format tool call arguments into human-readable progress messages
 export function formatToolProgress(
   name: string,

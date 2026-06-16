@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { connectSSE, SSEError } from '@/lib/sse-client';
+import { connectSSE } from '@/lib/sse-client';
 import { createTraceCapture } from '@/lib/bpmn/capture-trace';
 import { mapEventToNodes } from '@/lib/bpmn/node-mapping';
 import type { TraceEvent, PreRecordedTrace } from '@/lib/bpmn/traces';
-import type { ProgressPhase } from '@/lib/streaming';
+import { friendlyStreamError, type ProgressPhase } from '@/lib/streaming';
 import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
 import { generateGroupLabel } from '@/hooks/useStreamingComparison';
 import {
@@ -402,7 +402,7 @@ export function useLiveTrace(): UseLiveTraceReturn {
         }
 
         if (type === 'error') {
-          setError(eventData.message as string);
+          setError(friendlyStreamError(eventData.message));
           setStatus('error');
           clearTimers();
         }
@@ -440,11 +440,9 @@ export function useLiveTrace(): UseLiveTraceReturn {
     }).catch((err) => {
       if (err instanceof Error && err.name === 'AbortError') return;
       clearTimers();
-      if (err instanceof SSEError && err.status === 429) {
-        setError('Rate limit exceeded. Please try again tomorrow or sign in for more requests.');
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to connect to the server. Please try again.');
-      }
+      // friendlyStreamError covers SSEError 429, MCP timeout/down, and connection
+      // drops with calm copy — never the raw error message.
+      setError(friendlyStreamError(err));
       setStatus('error');
     });
   }, [clearTimers, handleProgressEvent, finalizeProgress]);

@@ -14,7 +14,8 @@
  * arrives, so the rest of the UI does not re-render every second.
  */
 import { useCallback, useRef, useState } from 'react';
-import { connectSSE, SSEError } from '@/lib/sse-client';
+import { connectSSE } from '@/lib/sse-client';
+import { friendlyStreamError } from '@/lib/streaming';
 import type { Notebook } from '@/lib/notebook-author';
 import type { NotebookPhase } from '@/components/notebook/NotebookProgress';
 
@@ -217,7 +218,7 @@ export function useNotebookStream() {
           break;
         }
         case 'error': {
-          const message = (raw.message as string | undefined) || 'Notebook generation failed';
+          const message = friendlyStreamError((raw.message as string | undefined) || 'Notebook generation failed');
           setState((prev) => ({
             ...prev,
             error: message,
@@ -247,13 +248,9 @@ export function useNotebookStream() {
       });
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
-      const message =
-        err instanceof SSEError && err.status === 429
-          ? 'Rate limit exceeded. Try again tomorrow or sign in for more requests.'
-          : err instanceof Error
-            ? err.message
-            : 'Failed to connect to /api/query-notebook';
-      setState((prev) => ({ ...prev, error: message, isLoading: false, completedAt: Date.now() }));
+      // friendlyStreamError maps SSEError 429, MCP timeout/down, and connection
+      // drops to calm copy — the raw error/server text never reaches the UI.
+      setState((prev) => ({ ...prev, error: friendlyStreamError(err), isLoading: false, completedAt: Date.now() }));
     }
   }, []);
 

@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
-import { formatToolProgress, formatToolResult, generateToolReason, type PanelType, type ProgressPhase } from './streaming';
+import { formatToolProgress, formatToolResult, generateToolReason, describeToolFailureForLlm, type PanelType, type ProgressPhase } from './streaming';
 import type { TraceBuilder } from './evidence/trace';
 import { hash as traceHash } from './evidence/trace';
 import { deriveOperationType } from './mcp/operation-types';
@@ -271,10 +271,13 @@ export async function queryWithMcpStreaming(
                 'error.message': error instanceof Error ? error.message : 'Unknown error',
               });
             }
+            // Feed the model neutral guidance instead of the raw error string:
+            // keep it honest (no invented data) without letting raw infra text
+            // (timeouts, status codes, server names) reach the final answer.
             messages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
-              content: `Error executing tool: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              content: describeToolFailureForLlm(toolCall.function.name, error),
             });
           }
         }
