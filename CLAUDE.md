@@ -383,7 +383,7 @@ CSS keyframes (`blink`, `spin`, `pulse`) and component-specific styles use style
 3. **`useLiveTrace` responsibility accumulation** — Manages SSE connection, diagram animation, progress logs, tool tracking, trace capture, slow timers, elapsed time, and abort control. Works but is a code smell.
 4. **bpmn-js type gaps** — 4 `@typescript-eslint/no-explicit-any` suppressions for untyped bpmn-js APIs.
 5. **BPMN XML hand-authored** — Should be round-tripped through bpmn.io visual modeler for maintainability.
-6. **Pre-existing lint warnings** — TraceControls setState-in-effect, unused `mapEventToNodes` in animation.ts, unused `onError` in sse-client.ts.
+6. **Pre-existing lint warnings** — TraceControls setState-in-effect, unused `mapEventToNodes` in animation.ts. (The unused `onError` in sse-client.ts was removed — see its error-contract JSDoc; errors flow through promise rejection only.)
 
 ## Retrospectives
 

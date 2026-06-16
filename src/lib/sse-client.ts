@@ -19,17 +19,35 @@ export interface SSEClientOptions {
   url: string;
   body: Record<string, unknown>;
   onEvent: (event: Record<string, unknown>) => void;
-  onError?: (error: Error) => void;
   onComplete?: () => void;
   signal?: AbortSignal;
 }
 
 /**
  * Opens an SSE connection via POST, parses events, and dispatches them.
- * Resolves when the stream ends; rejects on HTTP error or network failure.
+ *
+ * Error contract: this function communicates ALL fatal failures by REJECTING
+ * the returned promise — an `SSEError` (carrying the HTTP status) on a non-ok
+ * response, or the underlying error on a missing body / mid-stream network
+ * drop. Promise rejection is the single error channel; every caller handles it
+ * with try/catch or `.catch()` and maps it to user copy via
+ * `friendlyStreamError` (see lib/streaming.ts). There is deliberately no
+ * `onError` callback — see the removal rationale below.
+ *
+ * Per-event JSON parse errors are intentionally swallowed (logged, not thrown):
+ * one malformed event must not tear down an otherwise-healthy stream.
+ *
+ * `onComplete` runs in a `finally` when the read loop exits, on both the
+ * success path and a mid-stream drop (in the latter case the promise also
+ * rejects afterward; callers' rejection handler is authoritative).
+ *
+ * Removed: a previously-declared `onError?` option that was destructured but
+ * never invoked, and which no caller ever passed. It was a dead second error
+ * channel — keeping it invited a future caller to wire it up and silently get
+ * no callbacks. Errors flow through promise rejection only.
  */
 export async function connectSSE(options: SSEClientOptions): Promise<void> {
-  const { url, body, onEvent, onError, onComplete, signal } = options;
+  const { url, body, onEvent, onComplete, signal } = options;
 
   const response = await fetch(url, {
     method: 'POST',
