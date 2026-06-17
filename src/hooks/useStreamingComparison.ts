@@ -2,8 +2,8 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { createTraceCapture } from '@/lib/bpmn/capture-trace';
-import { connectSSE, SSEError } from '@/lib/sse-client';
-import type { ProgressPhase } from '@/lib/streaming';
+import { connectSSE } from '@/lib/sse-client';
+import { friendlyStreamError, type ProgressPhase } from '@/lib/streaming';
 
 export interface ToolCall {
   name: string;
@@ -147,26 +147,12 @@ export function useStreamingComparison() {
       if (error instanceof Error && error.name === 'AbortError') {
         return;
       }
-      if (error instanceof SSEError) {
-        if (error.status === 429) {
-          setState(prev => ({
-            ...prev,
-            isLoading: false,
-            error: 'Rate limit exceeded. Please try again tomorrow or sign in for more requests.',
-          }));
-        } else {
-          setState(prev => ({
-            ...prev,
-            isLoading: false,
-            error: error.message || 'An error occurred',
-          }));
-        }
-        return;
-      }
+      // friendlyStreamError maps every shape (SSEError 429, MCP timeout/down,
+      // connection drop, generic) to calm copy — no raw error text reaches the UI.
       setState(prev => ({
         ...prev,
         isLoading: false,
-        error: 'Failed to connect to the server. Please try again.',
+        error: friendlyStreamError(error),
       }));
     }
   }, []);
@@ -492,7 +478,7 @@ function handleEvent(
         ...prev,
         [panel]: {
           ...prev[panel],
-          error: event.message as string,
+          error: friendlyStreamError(event.message),
           isComplete: true,
           progress: null,
         },
