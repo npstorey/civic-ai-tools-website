@@ -135,7 +135,7 @@ Domain knowledge injected into the LLM system prompt:
 - Portal-specific guidance
 
 ### Rate Limiting (`lib/rate-limit.ts`)
-- Anonymous: 5 requests/day (tracked by IP)
+- Anonymous: 10 requests/day (tracked by IP)
 - Authenticated: 25 requests/day (tracked by GitHub user ID)
 - Key format in Upstash: `rate:{user_id_or_ip}:{YYYY-MM-DD}`
 - Falls back to in-memory store if KV not configured (resets on deploy)
