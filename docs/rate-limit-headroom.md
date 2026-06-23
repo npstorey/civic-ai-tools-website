@@ -1,8 +1,8 @@
-<!-- v1 — 2026-06-16 — Decision memo for the maintainer: rate-limit headroom options for a high-traffic event (e.g. a live demo). Presents options + exact code touch-points; deliberately does NOT change any limit. Produced during demo dry-run hardening (Pass 1). -->
+<!-- v2 — 2026-06-23 — Decision recorded: A+B. Option B mechanism (env-overridable limits) applied in src/lib/rate-limit.ts; NOT activated (no env var set). Status header + Option B + Recommendation updated to match. v1 (2026-06-16): options memo, no code changed. -->
 
 # Rate-limit headroom for a high-traffic event
 
-**Status:** Decision memo — awaiting maintainer choice. No limit has been changed.
+**Status:** Decision recorded — **A + B**. The Option B mechanism (env-overridable limits) is now **applied in code** (`src/lib/rate-limit.ts`) but **not activated**: no override env var is set, so the live limits are still the defaults (10 anonymous / 25 authenticated). Activation is a maintainer step on demo day — set `ANONYMOUS_RATE_LIMIT` (and optionally `AUTHENTICATED_RATE_LIMIT`) in Vercel **production** for the demo window only, then delete it. Option A stands as the primary path (the driver signs in).
 **Why this exists:** An upcoming public demo will put a burst of traffic on `civicaitools.org` from one venue. The current anonymous limit is low and keys on IP, which interacts badly with a shared venue network. This memo lays out the options and the exact code that each one touches, so the choice is yours and reversible.
 
 ---
@@ -46,14 +46,14 @@ A signed-in request is keyed by GitHub user id, not IP, and uses `AUTHENTICATED_
 
 Make `ANONYMOUS_LIMIT` (and optionally `AUTHENTICATED_LIMIT`) read an env override with the current value as the default. Headroom then becomes a **Vercel env change, no code deploy**, and reverting is just removing the env var — no commit to forget on the auto-deploying `main`.
 
-- **Touch-point:** `src/lib/rate-limit.ts:3-4`. Proposed two-line change (ready to apply if you choose it):
+- **Touch-point:** `src/lib/rate-limit.ts`. **Applied** — both limits now resolve through a `resolveLimit(envValue, fallback)` helper that reads the env override with the current value as the default:
 
   ```ts
-  const ANONYMOUS_LIMIT = Number(process.env.ANONYMOUS_RATE_LIMIT) || 10;
-  const AUTHENTICATED_LIMIT = Number(process.env.AUTHENTICATED_RATE_LIMIT) || 25;
+  const ANONYMOUS_LIMIT = resolveLimit(process.env.ANONYMOUS_RATE_LIMIT, 10);
+  const AUTHENTICATED_LIMIT = resolveLimit(process.env.AUTHENTICATED_RATE_LIMIT, 25);
   ```
 
-  Then for the demo window set e.g. `ANONYMOUS_RATE_LIMIT=100` in Vercel (production), and delete it afterward. If you also add `scripts/preflight-env.mjs` entries for the two overrides, the preflight will report whether a lift is currently active.
+  Behavior is identical to the old hardcoded constants when the env vars are unset (a missing, empty, non-numeric, or zero override all resolve to the default — covered by `rate-limit.test.ts`). To lift for the demo window, set e.g. `ANONYMOUS_RATE_LIMIT=100` in Vercel (production) and delete it afterward.
 - **Pros:** raises the shared-IP ceiling for everyone in the room; reversible with no deploy and no leftover elevated constant in code; covers both anonymous attendees and a heavy-rehearsal driver in one mechanism.
 - **Cons:** globally loosens the anonymous limit for the window (low abuse risk — the site is `robots`-blocked and low-traffic, but it is a global change). Even lifted, a busy shared NAT could exhaust a higher bucket.
 - **Alternative (not recommended):** hardcode `ANONYMOUS_LIMIT = 100` directly. Simpler diff, but it must be reverted by a second commit, and a forgotten revert ships an elevated limit to prod via auto-deploy. The env-driven form avoids that trap.
@@ -71,12 +71,12 @@ Exempt a specific identifier (the venue egress IP) or a shared bypass token from
 ## Recommendation
 
 1. **Primary: Option A.** The driver signs in; their live queries use the private 25/day bucket. Zero code, fits the storyboard. (Confirm the four auth env vars via the preflight.)
-2. **Safety net: Option B (env-driven).** Apply the two-line change so headroom is a reversible Vercel env toggle, and set `ANONYMOUS_RATE_LIMIT` for the demo window only if audience members will run anonymous queries from the venue. Removing the env var fully reverts it.
+2. **Safety net: Option B (env-driven) — applied.** The env-override mechanism is now in code; headroom is a reversible Vercel env toggle. Set `ANONYMOUS_RATE_LIMIT` for the demo window only if audience members will run anonymous queries from the venue. Removing the env var fully reverts it.
 3. **Option C only if** a hands-on station has many people running anonymous queries and Options A+B don't cover it — accept the added cleanup.
 
-Optional, independent of the above: bump `AUTHENTICATED_RATE_LIMIT` for the demo day if the driver's same-day rehearsal + live run might exceed 25 (the limit resets at the UTC day boundary).
+Optional, independent of the above: set `AUTHENTICATED_RATE_LIMIT` (now also env-overridable) for the demo day if the driver's same-day rehearsal + live run might exceed 25 (the limit resets at the UTC day boundary).
 
-**This memo changes nothing.** Picking an option (and, for B, the lift value) is your call; the ready-to-apply diff above is provided so the chosen change is a one-step approval.
+**Decision: A + B.** The Option B mechanism is applied but **not activated** — the live limits remain the defaults until an override env var is set in Vercel production on demo day.
 
 ## Demo-day checklist tie-in
 
