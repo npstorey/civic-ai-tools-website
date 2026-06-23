@@ -1,7 +1,19 @@
 import { kv } from '@vercel/kv';
 
-const ANONYMOUS_LIMIT = 10;
-const AUTHENTICATED_LIMIT = 25;
+/**
+ * Resolve a per-request quota from an optional env override, falling back to
+ * the default. The `|| fallback` guard means a missing, empty, non-numeric, or
+ * zero override all resolve to the default — so behavior is identical to the
+ * hardcoded value when the env var is unset. Lets the limits be lifted for a
+ * high-traffic window via a Vercel env var (no code deploy) and reverted by
+ * removing it. See docs/rate-limit-headroom.md (Option B). Exported for tests.
+ */
+export function resolveLimit(envValue: string | undefined, fallback: number): number {
+  return Number(envValue) || fallback;
+}
+
+const ANONYMOUS_LIMIT = resolveLimit(process.env.ANONYMOUS_RATE_LIMIT, 10);
+const AUTHENTICATED_LIMIT = resolveLimit(process.env.AUTHENTICATED_RATE_LIMIT, 25);
 
 // In-memory fallback for local development without Vercel KV
 const memoryStore = new Map<string, number>();
