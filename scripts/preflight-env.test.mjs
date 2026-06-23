@@ -35,12 +35,25 @@ test('ok=false and the missing required var is reported when one is absent', () 
 
 test('empty string and whitespace-only count as absent (not present)', () => {
   const env = envWithAllRequired();
+  // Two required vars with NO coded fallback, so they count as hard misses.
   env.EVIDENCE_SIGNING_KEY = '';
-  env.EVIDENCE_KEY_ID = '   ';
+  env.NEXTAUTH_SECRET = '   ';
   const result = evaluateEnv(env);
   assert.equal(result.ok, false);
   const names = result.missingRequired.map((r) => r.name).sort();
-  assert.deepEqual(names, ['EVIDENCE_KEY_ID', 'EVIDENCE_SIGNING_KEY']);
+  assert.deepEqual(names, ['EVIDENCE_SIGNING_KEY', 'NEXTAUTH_SECRET']);
+});
+
+test('a required var with a coded fallback is soft when absent (fallbk, run still passes)', () => {
+  const env = envWithAllRequired();
+  delete env.EVIDENCE_KEY_ID; // required, but hasFallback (signing.ts → DEFAULT_KEY_ID)
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, true, 'a fallback-backed required var does not fail the run');
+  assert.equal(result.missingRequired.length, 0);
+  assert.deepEqual(result.requiredOnFallback.map((r) => r.name), ['EVIDENCE_KEY_ID']);
+  const report = renderReport(result);
+  assert.match(report, /fallbk/);
+  assert.match(report, /built-in fallback/);
 });
 
 test('missing recommended variables do not fail the run', () => {

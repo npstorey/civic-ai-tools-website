@@ -47,7 +47,7 @@ export const ENV_SPEC = [
   { name: 'DATABASE_URL', tier: 'required', purpose: 'Evidence DB — publish + dashboard + detail page' },
   { name: 'BLOB_READ_WRITE_TOKEN', tier: 'required', purpose: 'Evidence package storage (Vercel Blob)' },
   { name: 'EVIDENCE_SIGNING_KEY', tier: 'required', purpose: 'Ed25519 private key — signs evidence packages' },
-  { name: 'EVIDENCE_KEY_ID', tier: 'required', purpose: 'Active signing key id (kid) — must match the trust registry' },
+  { name: 'EVIDENCE_KEY_ID', tier: 'required', purpose: 'Active signing key id (kid) — must match the trust registry', hasFallback: true }, // signing.ts: `EVIDENCE_KEY_ID || DEFAULT_KEY_ID`; the default mirrors the registry's active kid
 
   // --- Sign-in path (the rate-limit headroom option; OAuth) ---
   { name: 'NEXTAUTH_SECRET', tier: 'required', purpose: 'NextAuth session encryption' },
@@ -93,17 +93,25 @@ export function evaluateEnv(env, spec = ENV_SPEC) {
     };
   });
 
-  const missingRequired = rows.filter((r) => r.tier === 'required' && !r.present);
+  // A required var with a coded fallback (`hasFallback`) is NOT a hard miss when
+  // absent — the app substitutes a built-in default (e.g. signing.ts uses
+  // DEFAULT_KEY_ID for EVIDENCE_KEY_ID). It is surfaced separately so the
+  // default's continued correctness (e.g. the kid still matching the trust
+  // registry across a key rotation) can be confirmed, without failing the run.
+  const missingRequired = rows.filter((r) => r.tier === 'required' && !r.present && !r.hasFallback);
+  const requiredOnFallback = rows.filter((r) => r.tier === 'required' && !r.present && r.hasFallback);
   const missingRecommended = rows.filter((r) => r.tier === 'recommended' && !r.present);
 
-  return { rows, missingRequired, missingRecommended, ok: missingRequired.length === 0 };
+  return { rows, missingRequired, requiredOnFallback, missingRecommended, ok: missingRequired.length === 0 };
 }
 
 /** Status token for a row. Pure; no values involved. */
 function statusToken(row) {
   if (row.present) return 'PASS   ';
-  if (row.tier === 'required') return 'MISSING';
+  // A coded fallback applies whether the var is required or optional: an absent
+  // var with a hardcoded default is running on that default, not missing.
   if (row.hasFallback) return 'fallbk ';
+  if (row.tier === 'required') return 'MISSING';
   return 'absent ';
 }
 
@@ -132,6 +140,10 @@ export function renderReport(result) {
   } else {
     lines.push(`  RESULT: FAIL — ${result.missingRequired.length} required variable(s) missing:`);
     for (const r of result.missingRequired) lines.push(`            - ${r.name}`);
+  }
+  if (result.requiredOnFallback && result.requiredOnFallback.length > 0) {
+    lines.push(`  NOTE: ${result.requiredOnFallback.length} required variable(s) absent but running on a built-in fallback (confirm the default is still correct):`);
+    for (const r of result.requiredOnFallback) lines.push(`            - ${r.name}`);
   }
   if (result.missingRecommended.length > 0) {
     lines.push(`  NOTE: ${result.missingRecommended.length} recommended variable(s) absent (feature(s) will degrade):`);
