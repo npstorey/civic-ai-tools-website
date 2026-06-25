@@ -6,7 +6,7 @@ import RoadmapBody from '@/components/roadmap/RoadmapBody';
 export const metadata: Metadata = {
   title: 'Roadmap - Civic AI Tools',
   description:
-    'The civic-ai-tools public roadmap — vision pillars, trust commitments, near-term plans, and the evidence-system fork. Mirrored from the hub repo.',
+    'The civic-ai-tools public roadmap — vision pillars, trust commitments, near-term plans, and how the evidence-system fork resolved (toward a domain-neutral, spec-first protocol). Mirrored from the hub repo.',
 };
 
 export default async function RoadmapPage() {
