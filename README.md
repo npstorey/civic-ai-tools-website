@@ -64,6 +64,12 @@ KV_REST_API_TOKEN=
 
 - [`POST /api/evidence`](docs/api/evidence-publish.md) — publish an evidence package (request/response schema, auth pattern, worked curl example for external clients)
 
+## Contact / express-interest links
+
+All "get in touch" links on the site (home positioning band, `/about`) read from
+`EXPRESS_INTEREST_URL` in [`src/lib/site-config.ts`](src/lib/site-config.ts).
+Re-pointing them to a different destination is a one-line change to that constant.
+
 ## Contributing
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.

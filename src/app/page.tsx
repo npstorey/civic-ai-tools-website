@@ -5,6 +5,7 @@ import Link from 'next/link';
 import QueryForm, { type QueryMode } from '@/components/QueryForm';
 import ComparisonDisplay from '@/components/ComparisonDisplay';
 import NotebookOutput from '@/components/notebook/NotebookOutput';
+import PositioningBand from '@/components/home/PositioningBand';
 import { useStreamingComparison } from '@/hooks/useStreamingComparison';
 import { useNotebookStream } from '@/hooks/useNotebookStream';
 
@@ -221,6 +222,9 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Positioning band: the demo above is the hero; this zooms out */}
+      <PositioningBand />
     </>
   );
 }
