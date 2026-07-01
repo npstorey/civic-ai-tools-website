@@ -7,6 +7,7 @@ import type { EvidencePackage } from '@/lib/evidence/packager';
 import { buildCommitmentView } from '@/lib/evidence/commitment';
 import { loadTrustRegistry } from '@/lib/evidence/verify';
 import { loadCarriedLifecycleAttestations } from '@/lib/evidence/lifecycle';
+import { classifyIdentifier, commitmentAccessError } from '@/lib/evidence/identifier';
 
 /**
  * GET /api/evidence/[hash|slug]/commitment
@@ -21,6 +22,11 @@ import { loadCarriedLifecycleAttestations } from '@/lib/evidence/lifecycle';
  * The `[slug]` path segment accepts EITHER:
  *   - a 64-hex base-package hash (`/api/evidence/<hash>/commitment`), or
  *   - an evidence slug (`/api/evidence/<slug>/commitment`).
+ * The two forms are interchangeable and resolve to the SAME commitment. Hash
+ * matching is case-INSENSITIVE (an upper- or mixed-case hash pasted by a user,
+ * or embedded in an older link/badge, still resolves). Classification and the
+ * public-visibility gate live in `@/lib/evidence/identifier` so the hash and
+ * slug paths share one authorization surface (civic-ai-tools-website#116).
  *
  * Hash → row ambiguity: re-publishing the same package under a different title
  * creates a second row with the same `basePackageHash` (identical immutable
@@ -55,9 +61,6 @@ import { loadCarriedLifecycleAttestations } from '@/lib/evidence/lifecycle';
  * off. (#119 Q15a)
  */
 
-// A base-package hash is the hex SHA-256 of the canonical envelope: 64 hex chars.
-const HASH_RE = /^[0-9a-f]{64}$/i;
-
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -85,18 +88,23 @@ export async function GET(
 ) {
   const { slug: identifier } = await params;
 
-  // Resolve the row by hash (canonical/first match) or by slug (unambiguous).
-  const records = HASH_RE.test(identifier)
+  // Resolve the row by base-package hash or by slug — the two forms are
+  // interchangeable (see `classifyIdentifier`). Hash matching is
+  // case-insensitive and hits the `base_package_hash` index; a re-published
+  // package can share a hash across rows, so the hash form takes the canonical
+  // (first-created) row. The slug is unique — at most one row.
+  const q = classifyIdentifier(identifier);
+  const records = q.isHash
     ? await db
         .select()
         .from(evidenceRecords)
-        .where(eq(evidenceRecords.basePackageHash, identifier))
+        .where(eq(evidenceRecords.basePackageHash, q.value))
         .orderBy(asc(evidenceRecords.createdAt))
         .limit(1)
     : await db
         .select()
         .from(evidenceRecords)
-        .where(eq(evidenceRecords.slug, identifier))
+        .where(eq(evidenceRecords.slug, q.value))
         .limit(1);
 
   if (records.length === 0) {
@@ -104,19 +112,13 @@ export async function GET(
   }
   const record = records[0];
 
-  // A row with no base-package hash never completed publishing — there are no
-  // proofs to commit to. Treat as not found (nothing to verify).
-  if (!record.basePackageHash) {
-    return jsonResponse(
-      { error: 'No published evidence package for this identifier' },
-      404,
-    );
-  }
-
-  // Non-public records are not exposed (mirrors the existing read-back; the
-  // public flag is independent of withdrawal — withdrawn-but-public is served).
-  if (!record.isPublic) {
-    return jsonResponse({ error: 'Evidence not found' }, 404);
+  // Public-visibility gate — applied to the RESOLVED record, so it is identical
+  // whether the record was addressed by hash or by slug: addressing by hash
+  // grants no more access than addressing by slug (a record with no published
+  // base package, or one that is not public, is unreachable by either form).
+  const accessError = commitmentAccessError(record);
+  if (accessError) {
+    return jsonResponse({ error: accessError }, 404);
   }
 
   const creators = await db
