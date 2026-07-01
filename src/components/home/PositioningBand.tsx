@@ -199,7 +199,8 @@ export default function PositioningBand() {
               </strong>{' '}
               This site is a working prototype <LegendLabel status="built" />
               {' '}&mdash; real data, real signatures, demo-scale limits. A
-              production city deployment is a different bar{' '}
+              production deployment customized to one city&apos;s portals,
+              policies, and scale is the next step{' '}
               <LegendLabel status="upcoming" />.
             </li>
             <li style={bodyText}>
