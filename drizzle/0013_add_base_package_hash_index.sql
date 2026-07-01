@@ -1,0 +1,1 @@
+CREATE INDEX "evidence_records_base_package_hash_idx" ON "evidence_records" USING btree ("base_package_hash");

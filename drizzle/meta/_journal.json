@@ -92,6 +92,13 @@
       "when": 1781231818401,
       "tag": "0012_add_visibility",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1782929788389,
+      "tag": "0013_add_base_package_hash_index",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,7 @@ import {
   boolean,
   pgEnum,
   jsonb,
+  index,
 } from 'drizzle-orm/pg-core';
 
 // --- Enums ---
@@ -163,7 +164,15 @@ export const evidenceRecords = pgTable('evidence_records', {
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .defaultNow()
     .notNull(),
-});
+}, (table) => ({
+  // Hash-addressable commitment lookup (`GET /api/evidence/<hash>/commitment`)
+  // matches on `base_package_hash`; index it so the lookup is not a table scan.
+  // Non-unique on purpose: a re-published package can share a base_package_hash
+  // across rows (identical immutable blob, a separate signing run).
+  basePackageHashIdx: index('evidence_records_base_package_hash_idx').on(
+    table.basePackageHash,
+  ),
+}));
 
 export const attestationPackages = pgTable('attestation_packages', {
   id: uuid('id').defaultRandom().primaryKey(),
