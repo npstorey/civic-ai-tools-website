@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { prose, sectionHeading, sectionSpacing } from '@/styles/page-styles';
+import { EXPRESS_INTEREST_URL } from '@/lib/site-config';
 
 export const metadata = {
   title: 'About - Civic AI Tools',
@@ -73,7 +74,7 @@ export default function AboutPage() {
             Publishing Office, and France&apos;s data.gouv.fr. The starter repo pre-configures the
             best ones for immediate use. Know of a civic data MCP server that should be in the
             directory?{' '}
-            <a href="https://nathanstorey.com/contact/" target="_blank" rel="noopener noreferrer">
+            <a href={EXPRESS_INTEREST_URL} target="_blank" rel="noopener noreferrer">
               Get in touch
             </a>.
           </li>
@@ -99,7 +100,7 @@ export default function AboutPage() {
             &mdash; an entry point for exploring what AI-assisted data analysis looks like, and a
             resource for building open data literacy and AI literacy. If you&apos;re interested in
             using Civic AI Tools in an educational, open data literacy, or AI literacy context,{' '}
-            <a href="https://nathanstorey.com/contact/" target="_blank" rel="noopener noreferrer">
+            <a href={EXPRESS_INTEREST_URL} target="_blank" rel="noopener noreferrer">
               get in touch
             </a>.
           </li>

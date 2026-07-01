@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { signIn, signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { TYPED_STANDARDS_URL } from '@/lib/site-config';
 
 const NAV_LINK_STYLE: React.CSSProperties = {
   color: 'var(--text-secondary)',
@@ -218,6 +219,16 @@ export default function Header() {
                 </div>
               )}
             </div>
+            <a
+              href={TYPED_STANDARDS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="no-link-style"
+              style={NAV_LINK_STYLE}
+            >
+              Typed Standards
+              <span aria-hidden="true" style={{ fontSize: '11px', marginLeft: '4px', color: 'var(--text-muted)' }}>&#8599;</span>
+            </a>
           </nav>
         </div>
 
@@ -451,6 +462,23 @@ export default function Header() {
           >
             Roadmap
           </Link>
+          {/* Divider */}
+          <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
+          <a
+            href={TYPED_STANDARDS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              color: 'var(--text-secondary)',
+              fontWeight: 500,
+              fontSize: '16px',
+              textDecoration: 'none',
+            }}
+          >
+            Typed Standards
+            <span aria-hidden="true" style={{ fontSize: '11px', marginLeft: '4px', color: 'var(--text-muted)' }}>&#8599;</span>
+          </a>
           {/* Account section (logged in only) */}
           {session && (
             <>
