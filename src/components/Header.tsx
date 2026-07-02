@@ -163,6 +163,13 @@ export default function Header() {
             >
               Learn
             </Link>
+            <Link
+              href="/project"
+              className="no-link-style"
+              style={NAV_LINK_STYLE}
+            >
+              Project
+            </Link>
             {/* About dropdown */}
             <div ref={aboutRef} style={{ position: 'relative' }}>
               <button
@@ -421,6 +428,20 @@ export default function Header() {
             }}
           >
             Learn
+          </Link>
+          {/* Divider */}
+          <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
+          <Link
+            href="/project"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              color: 'var(--text-secondary)',
+              fontWeight: 500,
+              fontSize: '16px',
+              textDecoration: 'none',
+            }}
+          >
+            Project
           </Link>
           {/* Divider */}
           <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />

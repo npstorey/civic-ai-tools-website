@@ -5,6 +5,7 @@ import './globals.css';
 import Link from 'next/link';
 import Providers from '@/components/Providers';
 import Header from '@/components/Header';
+import { SPONSOR_LINE } from '@/lib/site-config';
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
@@ -90,6 +91,11 @@ export default function RootLayout({
                   By <a href="https://nathanstorey.com" target="_blank" rel="noopener noreferrer">Nathan Storey</a>
                   {' \u00b7 '}Personal project{' \u00b7 '}Not affiliated with any employer.
                 </p>
+                {SPONSOR_LINE && (
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '8px 0 0 0', opacity: 0.8 }}>
+                    {SPONSOR_LINE}
+                  </p>
+                )}
               </div>
             </footer>
           </div>
