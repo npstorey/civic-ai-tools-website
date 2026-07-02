@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { prose, sectionHeading, sectionSpacing } from '@/styles/page-styles';
-import { EXPRESS_INTEREST_URL, SPONSOR_LINE } from '@/lib/site-config';
+import { EXPRESS_INTEREST_URL } from '@/lib/site-config';
+import SponsorLine from '@/components/SponsorLine';
 
 export const metadata = {
   title: 'About - Civic AI Tools',
@@ -154,7 +155,7 @@ export default function AboutPage() {
           It is an independent, spare-time project motivated by a belief that public data should be
           easier &mdash; and safer &mdash; to access.
         </p>
-        {SPONSOR_LINE && <p style={prose}>{SPONSOR_LINE}</p>}
+        <SponsorLine style={prose} />
         <p style={prose}>Contributions welcome.</p>
       </section>
 
