@@ -23,4 +23,8 @@ export const EXPRESS_INTEREST_URL = 'https://nathanstorey.com/contact/';
  * here. When it lands, it is additive to — never a replacement for — the
  * existing "Personal project · Not affiliated with any employer." line.
  */
-export const SPONSOR: { prefix: string; name: string; url: string } | null = null;
+export const SPONSOR: { prefix: string; name: string; url: string } | null = {
+  prefix: 'Fiscally sponsored by',
+  name: 'Metagov',
+  url: 'https://metagov.org',
+};

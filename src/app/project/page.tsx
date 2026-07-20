@@ -154,8 +154,7 @@ export default function ProjectPage() {
       <section style={sectionSpacing}>
         <h2 style={sectionHeading}>Consortium</h2>
         <p style={prose}>
-          This section will list the organizations participating in the project. The entries
-          below are placeholders.
+          Founding members of the consortium supporting the Typed Standards ecosystem.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {CONSORTIUM_MEMBERS.map((member) => (

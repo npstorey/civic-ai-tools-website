@@ -1,10 +1,9 @@
 // Consortium membership data for the /project page.
 //
-// PLACEHOLDERS ONLY until membership is cleared for publication: real member
-// names, blurbs, and logos must NOT appear anywhere in this repo (code,
-// comments, commits, PR text) before that clearance. When cleared, real
-// members land as a pure data swap in this array — the page renders whatever
-// is here and needs no other changes.
+// Membership is cleared for publication. Members land as a pure data swap in
+// this array — the page renders whatever is here and needs no other changes.
+// A member card renders only with a complete package (blurb + logo + naming
+// approval + link + role); entries with null logoSrc/url degrade gracefully.
 
 export interface ConsortiumMember {
   /** Organization or program name. */
@@ -21,27 +20,27 @@ export interface ConsortiumMember {
 
 export const CONSORTIUM_MEMBERS: ConsortiumMember[] = [
   {
-    name: 'Member One — placeholder',
+    name: 'Metagov',
     blurb:
-      'Placeholder entry. A real member description will replace this text when membership is cleared for publication.',
-    logoSrc: null,
-    url: null,
-    role: 'Placeholder',
+      'Metagov is a laboratory for digital governance, cultivating tools, practices, and communities that enable self-governance in the digital age. Provides fiscal sponsorship for Civic AI Tools and Typed Standards.',
+    logoSrc: '/consortium/metagov-logofull-dark.png',
+    url: 'https://metagov.org',
+    role: 'Fiscal sponsor',
   },
   {
-    name: 'Member Two — placeholder',
+    name: 'Dynamical Systems Group',
     blurb:
-      'Placeholder entry. A real member description will replace this text when membership is cleared for publication.',
-    logoSrc: null,
-    url: null,
-    role: 'Placeholder',
+      'Dynamical Systems Group brings systems-engineering rigor to the standard — ontology assembly, verification and validation, and document-assurance practice. Lead external technical advisor to the Typed Standards protocol.',
+    logoSrc: '/consortium/dynamical-systems-lockup-copper.png',
+    url: 'https://www.dynamicalsystemsgroup.com',
+    role: 'Founding member',
   },
   {
-    name: 'Member Three — placeholder',
+    name: 'datHere',
     blurb:
-      'Placeholder entry. A real member description will replace this text when membership is cleared for publication.',
-    logoSrc: null,
-    url: null,
-    role: 'Placeholder',
+      'datHere builds AI-Ready open source, standards-based Data Infrastructure; its Verikan Data Concierge is the first publisher in the Typed Standards host directory.',
+    logoSrc: '/consortium/logo-datHere-light.png',
+    url: 'https://dathere.com',
+    role: 'Founding member',
   },
 ];
