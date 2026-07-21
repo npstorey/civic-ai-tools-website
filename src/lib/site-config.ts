@@ -11,7 +11,7 @@ export const TYPED_STANDARDS_URL = 'https://typedstandards.org';
  * changing this one line re-points every contact entry on the site
  * (home positioning band + /about + /project). Links out only — no embedded form.
  */
-export const EXPRESS_INTEREST_URL = 'https://nathanstorey.com/contact/';
+export const EXPRESS_INTEREST_URL = 'mailto:civicaitools@metagov.org';
 
 /**
  * Optional sponsor acknowledgment, rendered in the global footer and the
