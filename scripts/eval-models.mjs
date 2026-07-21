@@ -42,16 +42,29 @@ const openrouter = new OpenAI({
 
 // --- Models ---
 
+// All slugs verified live on openrouter.ai/api/v1/models (2026-07-20) and
+// confirmed to advertise tool-calling support. Roster skews to current (2026)
+// releases per the "evaluate up-to-date models" directive; gpt-4o and gpt-5.4
+// are retained only as incumbent baselines so the fresh picks can be measured
+// against what ships today. Corrections vs the prior list:
+//   - `anthropic/claude-haiku-4-5` was a non-existent slug (real: `claude-haiku-4.5`)
+//   - `google/gemini-2.0-flash-001` has been removed from OpenRouter entirely
 const ALL_MODELS = [
-  { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4' },
-  { id: 'openai/gpt-4o', name: 'GPT-4o' },
-  { id: 'anthropic/claude-haiku-4-5', name: 'Claude Haiku 4.5' },
-  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini' },
-  { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash' },
-  // Candidates
-  { id: 'anthropic/claude-sonnet-4.6', name: 'Claude Sonnet 4.6' },
-  { id: 'google/gemini-3-flash-preview', name: 'Gemini 3 Flash' },
-  { id: 'openai/gpt-5.4', name: 'GPT-5.4' },
+  // OpenAI — incumbents (baselines) + newest
+  { id: 'openai/gpt-4o', name: 'GPT-4o' },                      // baseline (incumbent recommended, 2024-05)
+  { id: 'openai/gpt-5.4', name: 'GPT-5.4' },                    // baseline (incumbent premium, 2026-03)
+  { id: 'openai/gpt-5.4-nano', name: 'GPT-5.4 Nano' },          // 2026-03 · $0.20/$1.25 (cheapest current OpenAI)
+  { id: 'openai/gpt-5.6-luna', name: 'GPT-5.6 Luna' },          // 2026-07 · $1/$6
+  { id: 'openai/gpt-5.6-terra', name: 'GPT-5.6 Terra' },        // 2026-07 · $2.50/$15
+  // Google — newest
+  { id: 'google/gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite' }, // 2026-05 · $0.25/$1.50
+  { id: 'google/gemini-3-flash-preview', name: 'Gemini 3 Flash Preview' }, // 2025-12 · $0.50/$3
+  { id: 'google/gemini-3.5-flash', name: 'Gemini 3.5 Flash' },  // 2026-05 · $1.50/$9
+  { id: 'google/gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro' }, // 2026-02 · $2/$12
+  // Anthropic — newest (picker reconsideration per the "Why not Claude?" question)
+  { id: 'anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5' }, // 2025-10 · $1/$5 (cheap Claude tier)
+  { id: 'anthropic/claude-sonnet-5', name: 'Claude Sonnet 5' },  // 2026-06 · $2/$10
+  { id: 'anthropic/claude-opus-4.8', name: 'Claude Opus 4.8' },  // 2026-05 · $5/$25
 ];
 
 // --- Test Queries ---
