@@ -16,7 +16,7 @@ This contract spans three repositories. If you're integrating, here's how they r
 
 Every ADR, `§`-reference, issue, and Q-number below is hyperlinked to its source — follow the link rather than guessing which repo it's in.
 
-_Last updated: 2026-06-13 — see the [change log](#change-log) for dated changes._
+_Last updated: 2026-08-02 — see the [change log](#change-log) for dated changes._
 
 **Status:** Schema version `0.1.0`. Fields may be added in a backwards-compatible way; breaking changes will bump the `schemaVersion` inside the package and be noted in the change log at the bottom of this document. The 2026-05-19 amendment introduces the `contentProfile` field per [ADR-0004](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0004-dathere-captureMethod-variant.md) and reverts the brief 2026-05-18 `datHere` captureMethod variant; both changes are additive — pre-ADR-0004 packages hash byte-identical with the new code.
 
@@ -524,10 +524,12 @@ Hosts express the eval requirement in their self-attestation — a `content/host
 |--------|-------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
 | `401`  | `{ "error": "Authentication required" }`                          | Missing, invalid, expired, or revoked bearer token; or missing/invalid NextAuth session cookie. |
 | `403`  | `{ "error": "Token missing required scope: evidence:publish" }`   | Bearer token is valid but does not hold the `evidence:publish` scope.                           |
+| `403`  | `{ "error": "This instance is running unsigned …", "code": "unsigned_tier" }` | The instance holds no signing key (the ADR-0020 unsigned dev tier). Both request-level visibilities are refused: an unsigned package can reach neither the sealed nor the public state (Decision C), so nothing is persisted. Also returned by `POST /api/evidence/:slug/publish` on an unsigned instance. Configure signing per [docs/instance-setup.md](../instance-setup.md). |
 | `404`  | `{ "error": "User not found in database" }`                       | Session is valid but the user record has not been provisioned (can occur if `DATABASE_URL` was unset when the user first signed in — a re-sign-in fixes it). |
+| `409`  | `{ "error": "This record was persisted without a signature …", "code": "unsigned_package" }` | `POST /api/evidence/:slug/publish` only: the committed record predates the unsigned-tier gate and has no base-package signature — it cannot be promoted to `published` even on a signed instance (ADR-0020 Decision C is a property of the package). |
 | `500`  | `{ "error": "<message>" }` with `<message>` from the thrown error | Database, blob storage, or evidence-package-building failure.                                    |
 
-Signing, RFC 3161 timestamp, and Rekor submission are non-blocking. Failures for any of these are logged server-side but still return `200` — the resulting record will simply have `null` values for the corresponding database columns.
+RFC 3161 timestamp and Rekor submission are non-blocking. Failures for either are logged server-side but still return `200` — the resulting record will simply have `null` values for the corresponding database columns. Signing itself is **not** optional as of S3a P3: a missing key is refused up front with the `unsigned_tier` `403` above (previously the record persisted with a `null` signature), while a signing *failure* with a configured key still surfaces as `500`.
 
 ---
 
@@ -680,6 +682,8 @@ These are implementation details that may surprise an external client. None of t
 ---
 
 ## Change log
+
+- **2026-08-02** — **Unsigned-tier gate-off** (S3a P3, [#166](https://github.com/npstorey/civic-ai-tools-website/issues/166); [ADR-0020](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0020-instance-key-custody.md) Decisions B/C, G0-3): on an instance with no `EVIDENCE_SIGNING_KEY`, `POST /api/evidence` (both request-level visibilities) and `POST /api/evidence/:slug/publish` are refused with `403 { code: "unsigned_tier" }` — an unsigned package can reach neither the sealed nor the public state, so nothing is persisted (previously the record persisted with a `null` signature and a `committed`/`published` visibility). The publish route additionally refuses a historical committed record that carries no base-package signature with `409 { code: "unsigned_package" }` (existing rows are not migrated or relabeled). New presence-only endpoint `GET /api/evidence/signing-status` returns `{ "signingConfigured": boolean }` for client affordances. Unsigned packages now render prominently (Attention-tier "Unsigned package — no cryptographic commitment" glance + detail-page banner), and a running-unsigned site banner shows outside dev environments.
 
 - **2026-06-13** — Added a "Repositories & layers" orientation section at the top of the doc plus a last-updated stamp, and hyperlinked the previously-bare `§8.10` / `§8.12` spec references in the integration-contract section to the specification source in `civic-ai-tools`. Docs-only; no API or schema change.
 

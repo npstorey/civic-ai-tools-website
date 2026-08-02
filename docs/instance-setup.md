@@ -6,12 +6,16 @@ unsigned dev tier). Follow it once at go-to-production time; afterwards, key
 changes follow the rotation runbook in
 [`docs/key-rotation.md`](key-rotation.md).
 
-An instance works unsigned out of the box — packages are produced and can be
-inspected, and verification calmly reports that no signing key is configured.
-Signing is the **go-to-production** step: keygen → registry → environment.
-Nothing unsigned can reach the `sealed` or `public` states, so an instance
-that skips this guide has opted out of the evidence layer, never silently
-mislabeled its output.
+An instance works unsigned out of the box — analyses run and packages can be
+produced and inspected. Signing is the **go-to-production** step: keygen →
+registry → environment. Nothing unsigned can reach the `sealed` or `public`
+states, and the application enforces this (ADR-0020 Decisions B/C): with no
+signing key configured, the evidence **commit and publish actions are gated
+off** server-side and in the UI, verification labels unsigned output
+prominently ("Unsigned package — no cryptographic commitment"), and a
+**running-unsigned banner** shows site-wide outside a dev environment
+(`next dev` stays calm). An instance that skips this guide has opted out of
+the evidence layer — a legitimate choice, never a silent one.
 
 ## 1. Generate a keypair
 

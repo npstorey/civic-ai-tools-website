@@ -210,6 +210,9 @@ export default async function EvidencePage({ params }: PageProps) {
   }
 
   const { record, creator, pkg, resolution } = data;
+  // Unsigned-package discriminator (ADR-0020 guard 2): a record persisted
+  // with no signature envelope. Drives the prominent unsigned banner below.
+  const isUnsignedRecord = !record.basePackageSignature;
   // Use the resolved package everywhere we render package content — it has
   // BlobRef outputs eagerly pulled into strings so child components can stay
   // ignorant of the reference layer. When the package isn't a BlobRef user
@@ -264,9 +267,39 @@ export default async function EvidencePage({ params }: PageProps) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 24px 64px' }}>
+        {/* Unsigned-package banner (S3a P3, #166; ADR-0020 §Consequences
+            guard 2 — mandatory labeling wherever an unsigned package appears).
+            A record persisted without a signature carries no cryptographic
+            commitment: no signature, no registered key, and — Rekor logging
+            being signature-gated — no transparency-log entry. Going forward
+            the seal/commit gate prevents such rows from being created; a
+            historical row is not migrated or relabeled, it renders with this
+            prominent label (and cannot be published — the per-record gate). */}
+        {isUnsignedRecord && (
+          <div style={{
+            padding: '16px 20px', marginBottom: '24px',
+            backgroundColor: 'rgba(255, 179, 32, 0.12)',
+            border: '1px solid var(--nyc-caution, #FFB320)',
+            borderRadius: '6px',
+          }}>
+            <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+              Unsigned package — no cryptographic commitment
+            </div>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+              This record was produced without a signing key (the unsigned dev
+              tier). It carries no signature, no registered key, and no
+              transparency-log entry, so its origin cannot be cryptographically
+              confirmed. An unsigned package can reach neither the sealed nor
+              the public state.
+            </div>
+          </div>
+        )}
+
         {/* Committed banner (civic-ai-tools#71) — creator-only view of a
             committed-not-published record. The commitment (hash + signature +
-            timestamp + Rekor) is publicly registered; the content is not. */}
+            timestamp + Rekor) is publicly registered; the content is not.
+            The proof sentence is signature-conditional: a historical unsigned
+            row registered no commitment, and the banner must not claim one. */}
         {isCommitted && (
           <div style={{
             padding: '16px 20px', marginBottom: '24px',
@@ -278,11 +311,23 @@ export default async function EvidencePage({ params }: PageProps) {
               Committed — not published
             </div>
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              This record is signed, timestamped, and registered on the public
-              transparency log, but its content is not publicly accessible and
-              it does not appear in the public registry. Only you can see this
-              page. Publishing is a separate, irreversible step that makes the
-              content public and emits signed publication attestations.
+              {isUnsignedRecord ? (
+                <>
+                  This record is unlisted: its content is not publicly
+                  accessible and it does not appear in the public registry.
+                  Only you can see this page. It was persisted without a
+                  signature, so no public commitment backs it and it cannot be
+                  published.
+                </>
+              ) : (
+                <>
+                  This record is signed, timestamped, and registered on the public
+                  transparency log, but its content is not publicly accessible and
+                  it does not appear in the public registry. Only you can see this
+                  page. Publishing is a separate, irreversible step that makes the
+                  content public and emits signed publication attestations.
+                </>
+              )}
             </div>
           </div>
         )}

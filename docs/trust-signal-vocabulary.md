@@ -44,10 +44,10 @@ A pre-v0.1 (legacy) package must show **zero red and zero amber** on the default
 | Check | Legacy status | Tier |
 |---|---|---|
 | #1 envelope integrity | `hashMatch: true` | Verified |
-| #2 signature | `signatureValid: true` (embedded key) or `null` (unsigned) | Verified / Normal |
+| #2 signature | `signatureValid: true` (embedded key) | Verified |
 | #3 canonicalization | `implicit` | Normal |
 | #4 content hash | `legacy_relabeled` | **Normal** |
-| #5 key trust | `legacy_embedded` (or `null`) | **Normal** |
+| #5 key trust | `legacy_embedded` | **Normal** |
 | #7 timestamp | `hasTimestamp: false` | Normal |
 | #8 Rekor | `rekorVerified: null` | Normal |
 | #9 BlobRefs | `blobRefsVerified: null` | Normal |
@@ -58,6 +58,8 @@ A pre-v0.1 (legacy) package must show **zero red and zero amber** on the default
 | notebookProvenance | `skeleton` | Normal |
 
 The hardest split is **content-hash (#4)**: `legacy_relabeled` (every pre-v0.1 package) is **Normal**, while `content_hash_mismatch` (off-log content altered after signing) is **Alarm** — the same check, opposite tiers. The coverage test (`trust-signal.test.ts`) asserts both this split and that the full synthetic-legacy status set above tiers all-calm.
+
+**The calm requirement applies to SIGNED legacy packages only.** A fully **unsigned** package (no signature envelope at all — `signatureValid: null` co-occurring with `keyTrust: null`) is a different case, deliberately elevated in S3a P3 per ADR-0020 §Consequences guard 2 ("mandatory labeling"): `NO_SIGNING_KEY_SIGNAL` is tiered **Attention**, and the #113 overall glance renders a dedicated `UNSIGNED_PACKAGE_SIGNAL` ("Unsigned package — no cryptographic commitment", Attention) instead of the calm all-clear. Attention, never Alarm — the unsigned dev tier is a legitimate producer state (ADR-0020 §B), but it must be surfaced prominently wherever the package appears, never silently.
 
 ---
 
@@ -104,6 +106,7 @@ Ordered by spec §9.2 check number. "Copy" is the glanceable one-liner; the libr
 | `unknown_key` | Attention | Signing key not in the trust registry |
 | `registry_unavailable` | Attention | Trust registry could not be reached |
 | `legacy_embedded` | Normal | Signed with an embedded key (not in the trust registry) |
+| `null` (unsigned package) | **Attention** | No signing key *(`NO_SIGNING_KEY_SIGNAL`; elevated from Normal in S3a P3 per ADR-0020 guard 2 — see the note in §3)* |
 
 ### #7 Timestamp — `hasTimestamp: boolean`
 | Status | Tier | Copy |

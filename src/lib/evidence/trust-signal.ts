@@ -266,17 +266,22 @@ export const KEY_TRUST_SIGNALS: Record<KeyTrustStatus, TrustSignalDescriptor> = 
 };
 
 /**
- * Calm reading for a package with NO signing key at all. The verify route emits
- * `keyTrust: null` only for an unsigned package (it co-occurs with
- * `signatureValid: null`), so "no key to check" is an expected, Normal state —
- * never a failure. Defined here, not hand-rolled in the component, so the tier
- * decision keeps a single source of truth.
+ * Prominent reading for a package with NO signing key at all. The verify route
+ * emits `keyTrust: null` only for an unsigned package (it co-occurs with
+ * `signatureValid: null`). Deliberately elevated from calm Normal to Attention
+ * in S3a P3 (ADR-0020 §Consequences guard 2, "mandatory labeling"): an
+ * unsigned package is the intentional dev tier — legitimate, not proven-bad —
+ * but its rendering must be surfaced prominently wherever the package
+ * appears, never fold into a calm all-clear. Attention is the honest tier:
+ * "unconfirmed, look closer", not Alarm's "provably wrong". Defined here, not
+ * hand-rolled in the component, so the tier decision keeps a single source of
+ * truth.
  */
 export const NO_SIGNING_KEY_SIGNAL: TrustSignalDescriptor = {
-  tier: 'normal',
+  tier: 'attention',
   label: 'No signing key',
   detail:
-    'This package carries no signing key, so there is nothing to check against the trust registry.',
+    'This package carries no signing key — it was produced by an instance running in the unsigned dev tier, so its origin is not cryptographically attributable and there is nothing to check against the trust registry.',
 };
 
 /** Resolve the trust-registry verdict, folding the unsigned (`null`) case into
@@ -613,6 +618,36 @@ const TIER_RANK: Record<TrustTier, number> = {
   alarm: 3,
 };
 
+/**
+ * Dedicated overall glance for an UNSIGNED package (S3a P3; ADR-0020 guard 2
+ * "mandatory labeling"). An unsigned package has no signature, no registered
+ * key, and — because Rekor logging is signature-gated — no transparency-log
+ * entry: there is no cryptographic commitment for the glance to speak to, so
+ * the generic "some checks need a closer look" would under-describe the
+ * condition. Attention tier (unconfirmed, not proven-bad — the unsigned dev
+ * tier is a legitimate producer state per ADR-0020 §B); named explicitly so
+ * the label travels with every surface that renders the glance.
+ */
+export const UNSIGNED_PACKAGE_SIGNAL: TrustSignalDescriptor = {
+  tier: 'attention',
+  label: 'Unsigned package — no cryptographic commitment',
+  detail:
+    'This package was produced without a signing key (the unsigned dev tier). It carries no signature, no registered key, and no transparency-log entry, so its origin cannot be cryptographically confirmed.',
+};
+
+/**
+ * The unsigned-package discriminator: the verify path emits `signatureValid:
+ * null` AND `keyTrust: null` together only when the package carries no
+ * signature envelope at all. Every signed package — including legacy
+ * embedded-key packages — has a non-null keyTrust, so the legacy calm
+ * requirement is untouched by this branch.
+ */
+export function isUnsignedGlance(
+  r: Pick<IntegrityGlanceInput, 'signatureValid' | 'keyTrust'>,
+): boolean {
+  return r.signatureValid === null && r.keyTrust === null;
+}
+
 /** The three overall-integrity summary states (#113). Disclosure, never
  *  validation (P1): "Integrity verified" speaks to the cryptographic/structural
  *  checks, never to whether the analysis is correct. */
@@ -683,9 +718,12 @@ export function collectIntegrityDescriptors(r: IntegrityGlanceInput): TrustSigna
 
 /**
  * Roll the integrity checks into ONE calm overall glance (#113), worst-tier-wins.
- * Alarm if any check alarms; else Attention if any needs a closer look; else the
- * calm "Integrity verified" (Verified + Normal back-compat checks both land
- * here, so legacy packages read calm — never amber/red).
+ * Alarm if any check alarms; else — for an unsigned package — the dedicated
+ * prominent unsigned label (S3a P3, ADR-0020 guard 2: mandatory labeling
+ * wherever an unsigned package appears; Attention tier, so it outranks
+ * nothing genuinely broken); else Attention if any check needs a closer look;
+ * else the calm "Integrity verified" (Verified + Normal back-compat checks
+ * both land here, so SIGNED legacy packages read calm — never amber/red).
  */
 export function summarizeIntegrity(r: IntegrityGlanceInput): TrustSignalDescriptor {
   let worst = 0;
@@ -693,6 +731,7 @@ export function summarizeIntegrity(r: IntegrityGlanceInput): TrustSignalDescript
     worst = Math.max(worst, TIER_RANK[d.tier]);
   }
   if (worst >= TIER_RANK.alarm) return OVERALL_INTEGRITY_SIGNALS.alarm;
+  if (isUnsignedGlance(r)) return UNSIGNED_PACKAGE_SIGNAL;
   if (worst >= TIER_RANK.attention) return OVERALL_INTEGRITY_SIGNALS.attention;
   return OVERALL_INTEGRITY_SIGNALS.verified;
 }

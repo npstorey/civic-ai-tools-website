@@ -5,6 +5,7 @@ import './globals.css';
 import Link from 'next/link';
 import Providers from '@/components/Providers';
 import Header from '@/components/Header';
+import RunningUnsignedBanner from '@/components/RunningUnsignedBanner';
 import SponsorLine from '@/components/SponsorLine';
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
@@ -70,6 +71,9 @@ export default function RootLayout({
         <Providers>
           <div className="flex flex-col">
             <Header />
+            {/* ADR-0020: running-unsigned indicator — renders only when this
+                instance has no signing key AND is outside a dev environment. */}
+            <RunningUnsignedBanner />
             <main>{children}</main>
             <footer className="border-t py-8 text-center" style={{ borderColor: 'var(--border-color)' }}>
               <div style={{ maxWidth: '600px', margin: '0 auto' }}>
