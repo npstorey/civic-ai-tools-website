@@ -161,6 +161,14 @@ test('derivation: EVIDENCE_SITE_ORIGIN alone re-points host, registry URLs, and 
       'https://evidence.example.org/.well-known/evidence-public-keys.json',
     );
     assert.equal(getPlatformAgentOverrides().url, 'https://evidence.example.org');
+    // The `/evidence/<slug>` detail-URL composition used by the evidence
+    // detail page (canonical/OG/JSON-LD) and the bundle route — those are
+    // Next server modules that can't load under node --test, so the wiring
+    // is proven at the getter level (the pages compose exactly this).
+    assert.equal(
+      `${getEvidenceSiteOrigin()}/evidence/some-slug`,
+      'https://evidence.example.org/evidence/some-slug',
+    );
   });
 });
 

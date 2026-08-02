@@ -5,6 +5,10 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { db } from '@/lib/db';
 import { evidenceRecords, users } from '@/lib/db/schema';
+// Instance-identity config (ADR-0020): canonical/OG/JSON-LD URLs and the
+// request-host fallback resolve per-instance (server component — env is
+// available at request time; demo defaults when unset).
+import { getEvidenceSiteOrigin, getPublicationHost } from '@/lib/site-config';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
@@ -120,7 +124,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const { record, creator } = data;
-  const url = `https://civicaitools.org/evidence/${slug}`;
+  const url = `${getEvidenceSiteOrigin()}/evidence/${slug}`;
   const description = record.summary.slice(0, 200);
 
   return {
@@ -218,7 +222,7 @@ export default async function EvidencePage({ params }: PageProps) {
   // (#114), resolved from the request host so the deep-link is correct on
   // production AND preview deploys (the verifier fetches it cross-origin).
   const hdrs = await headers();
-  const host = hdrs.get('x-forwarded-host') ?? hdrs.get('host') ?? 'civicaitools.org';
+  const host = hdrs.get('x-forwarded-host') ?? hdrs.get('host') ?? getPublicationHost();
   const proto = hdrs.get('x-forwarded-proto') ?? 'https';
   const commitmentUrl = `${proto}://${host}/api/evidence/${slug}/commitment`;
 
@@ -250,7 +254,7 @@ export default async function EvidencePage({ params }: PageProps) {
     description: record.summary,
     creator: { '@type': 'Person', name: creator?.displayName || 'Unknown' },
     datePublished: record.createdAt.toISOString().split('T')[0],
-    url: `https://civicaitools.org/evidence/${slug}`,
+    url: `${getEvidenceSiteOrigin()}/evidence/${slug}`,
   };
 
   return (
