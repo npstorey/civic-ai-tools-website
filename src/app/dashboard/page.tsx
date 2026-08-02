@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { apiTokens, evidenceRecords, attestationPackages, users } from '@/lib/db/schema';
 import { eq, desc, and, ne, isNull, sql } from 'drizzle-orm';
 import DashboardTabs from '@/components/dashboard/DashboardTabs';
+import { isSigningConfigured } from '@/lib/evidence/unsigned-tier';
 
 export const dynamic = 'force-dynamic';
 
@@ -161,6 +162,7 @@ export default async function DashboardPage() {
         myEvaluations={myEvaluationsData}
         activity={activityData}
         tokens={tokenData}
+        signingConfigured={isSigningConfigured()}
       />
     </div>
   );

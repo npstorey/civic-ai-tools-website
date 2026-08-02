@@ -57,6 +57,11 @@ interface DashboardTabsProps {
   myEvaluations: EvaluationRow[];
   activity: ActivityRow[];
   tokens: TokenRow[];
+  /** Whether this instance holds a signing key (ADR-0020, S3a P3): with no
+   *  key the committed→published promotion is gated off server-side, so the
+   *  Publish affordance renders disabled-with-explanation instead of a dead
+   *  button that errors. */
+  signingConfigured?: boolean;
 }
 
 // --- Shared styles ---
@@ -132,7 +137,7 @@ function EmptyState({ message, cta }: { message: string; cta?: { text: string; h
 
 // --- Main component ---
 
-export default function DashboardTabs({ myEvidence, myEvaluations, activity, tokens }: DashboardTabsProps) {
+export default function DashboardTabs({ myEvidence, myEvaluations, activity, tokens, signingConfigured = true }: DashboardTabsProps) {
   const [activeTab, setActiveTab] = useState<'evidence' | 'evaluations' | 'activity' | 'tokens'>('evidence');
 
   return (
@@ -152,7 +157,7 @@ export default function DashboardTabs({ myEvidence, myEvaluations, activity, tok
         </button>
       </div>
 
-      {activeTab === 'evidence' && <MyEvidenceTab rows={myEvidence} />}
+      {activeTab === 'evidence' && <MyEvidenceTab rows={myEvidence} signingConfigured={signingConfigured} />}
       {activeTab === 'evaluations' && <MyEvaluationsTab rows={myEvaluations} />}
       {activeTab === 'activity' && <ActivityTab rows={activity} />}
       {activeTab === 'tokens' && <TokensTab rows={tokens} />}
@@ -162,7 +167,7 @@ export default function DashboardTabs({ myEvidence, myEvaluations, activity, tok
 
 // --- Tab panels ---
 
-function MyEvidenceTab({ rows }: { rows: EvidenceRow[] }) {
+function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signingConfigured: boolean }) {
   const router = useRouter();
   const [withdrawTarget, setWithdrawTarget] = useState<EvidenceRow | null>(null);
   const [withdrawReason, setWithdrawReason] = useState('');
@@ -334,16 +339,34 @@ function MyEvidenceTab({ rows }: { rows: EvidenceRow[] }) {
                 {r.visibility === 'committed' && !isCurrentlyWithdrawn && (
                   <>
                     <span>{'\u00b7'}</span>
-                    <button
-                      onClick={() => { setPublishTarget(r); setPublishRunEval(true); setPublishError(''); }}
-                      style={{
-                        background: 'none', border: 'none', padding: 0,
-                        fontSize: '12px', color: 'var(--nyc-blue)', cursor: 'pointer',
-                        textDecoration: 'underline', fontWeight: 600,
-                      }}
-                    >
-                      Publish
-                    </button>
+                    {signingConfigured ? (
+                      <button
+                        onClick={() => { setPublishTarget(r); setPublishRunEval(true); setPublishError(''); }}
+                        style={{
+                          background: 'none', border: 'none', padding: 0,
+                          fontSize: '12px', color: 'var(--nyc-blue)', cursor: 'pointer',
+                          textDecoration: 'underline', fontWeight: 600,
+                        }}
+                      >
+                        Publish
+                      </button>
+                    ) : (
+                      /* Unsigned-tier gate-off (ADR-0020, S3a P3): publishing
+                         emits signed attestations this instance cannot back,
+                         so the action is disabled with an explanation rather
+                         than left as a dead button that errors. */
+                      <button
+                        disabled
+                        title="Publishing is unavailable \u2014 this instance is running unsigned (no signing key is configured). Signing is the go-to-production step; see docs/instance-setup.md."
+                        style={{
+                          background: 'none', border: 'none', padding: 0,
+                          fontSize: '12px', color: 'var(--text-muted)',
+                          cursor: 'not-allowed', fontWeight: 600,
+                        }}
+                      >
+                        Publish unavailable (unsigned)
+                      </button>
+                    )}
                   </>
                 )}
                 {!isCurrentlyWithdrawn && !isReinstated && (

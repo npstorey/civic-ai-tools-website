@@ -10,6 +10,7 @@ import { captureVocabForProfile } from '@/lib/evidence/profiles';
 import { type BlobRef } from '@/lib/evidence/blob-ref';
 import { resolveRequestUser, hasScope } from '@/lib/api-auth';
 import { emitPublicationPair } from '@/lib/evidence/publication';
+import { evaluateSealCommitGate } from '@/lib/evidence/unsigned-tier';
 
 function slugify(text: string): string {
   return text
@@ -128,6 +129,17 @@ export async function POST(request: NextRequest) {
       );
     }
     const userId = auth.userId;
+
+    // Unsigned-tier gate-off (S3a P3, #166; ADR-0020 Decisions B/C, G0-3).
+    // Both request-level visibilities are persist actions this route signs:
+    // "committed" registers a commitment (sealed-family) and "published" is
+    // the public state — an unsigned package may reach NEITHER, so with no
+    // signing key configured the whole persist path is refused up front
+    // rather than storing a record with a null signature.
+    const gate = evaluateSealCommitGate();
+    if (gate) {
+      return NextResponse.json(gate.body, { status: gate.status });
+    }
 
     const body: PublishRequest = await request.json();
 

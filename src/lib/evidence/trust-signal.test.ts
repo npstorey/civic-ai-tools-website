@@ -54,6 +54,8 @@ import {
   NOTEBOOK_PROVENANCE_VALUES,
   NOTEBOOK_PROVENANCE_SIGNALS,
   NO_SIGNING_KEY_SIGNAL,
+  UNSIGNED_PACKAGE_SIGNAL,
+  isUnsignedGlance,
   OVERALL_INTEGRITY_SIGNALS,
   collectIntegrityDescriptors,
   summarizeIntegrity,
@@ -244,13 +246,17 @@ test('captureMethod labels are informational (no tier) and cover the known metho
 
 // --- #111 consumer resolvers (verify-panel re-skin) ----------------------
 
-test('resolveKeyTrust: unsigned (null/undefined) reads calm Normal; statuses pass through', () => {
-  // keyTrust:null is the unsigned package — expected, never a failure (the #111
-  // calm baseline). It must resolve to the calm NO_SIGNING_KEY_SIGNAL, not a
-  // hand-rolled tier in the component.
+test('resolveKeyTrust: unsigned (null/undefined) is prominently labeled; statuses pass through', () => {
+  // DELIBERATE UPDATE (S3a P3, #166 — ADR-0020 §Consequences guard 2): this
+  // test previously pinned NO_SIGNING_KEY_SIGNAL at calm Normal. G0-3 chose
+  // gate-off for the unsigned tier, and ADR-0020 requires the unsigned
+  // rendering to be surfaced PROMINENTLY wherever an unsigned package
+  // appears — so the signal is elevated to Attention (unconfirmed, not
+  // proven-bad; never Alarm). It still resolves through the single
+  // NO_SIGNING_KEY_SIGNAL source of truth, not a hand-rolled component tier.
   assert.equal(resolveKeyTrust(null), NO_SIGNING_KEY_SIGNAL);
   assert.equal(resolveKeyTrust(undefined), NO_SIGNING_KEY_SIGNAL);
-  assert.equal(NO_SIGNING_KEY_SIGNAL.tier, 'normal');
+  assert.equal(NO_SIGNING_KEY_SIGNAL.tier, 'attention');
   // A real status passes straight through to its KEY_TRUST_SIGNALS descriptor.
   assert.equal(resolveKeyTrust({ status: 'legacy_embedded' }), KEY_TRUST_SIGNALS.legacy_embedded);
   assert.equal(resolveKeyTrust({ status: 'active' }), KEY_TRUST_SIGNALS.active);
@@ -354,4 +360,70 @@ test('summarizeIntegrity: an unconfirmed check (no alarm) reads Attention', () =
     }).tier,
     'alarm',
   );
+});
+
+// --- S3a P3 (#166): unsigned-package prominence (ADR-0020 guard 2) --------
+//
+// NEW behavior: an unsigned package (no signature envelope at all — the
+// verify path emits signatureValid:null AND keyTrust:null together) must be
+// labeled prominently wherever it appears, never fold into the calm
+// "Integrity verified" glance. Signed packages — including legacy
+// embedded-key ones — are untouched (the LEGACY_RESULT test above still pins
+// the calm requirement, unmodified).
+
+// The verify-result shape an unsigned package produces (mirrors the verify
+// route: no signature → #2 null, #5 null, no timestamp, no Rekor).
+const UNSIGNED_RESULT: IntegrityGlanceInput = {
+  hashMatch: true,
+  signatureValid: null,
+  keyTrust: null,
+  hasTimestamp: false,
+  rekorVerified: null,
+  blobRefsVerified: null,
+  contentCanonicalization: { status: 'ok' },
+  contentHash: { status: 'ok' },
+  typeResolution: { status: 'ok' },
+  signerIdentity: { status: 'no_signer' },
+  captureMethodVocab: { status: 'ok' },
+};
+
+test('isUnsignedGlance: discriminates the no-signature co-occurrence only', () => {
+  assert.equal(isUnsignedGlance(UNSIGNED_RESULT), true);
+  // A signed package (even one whose key trust is merely legacy) is NOT unsigned.
+  assert.equal(isUnsignedGlance(LEGACY_RESULT), false);
+  assert.equal(isUnsignedGlance(CLEAN_RESULT), false);
+  // signatureValid:null with a NON-null keyTrust is not the unsigned shape.
+  assert.equal(
+    isUnsignedGlance({ signatureValid: null, keyTrust: { status: 'legacy_embedded' } }),
+    false,
+  );
+});
+
+test('summarizeIntegrity: an unsigned package reads the dedicated prominent unsigned glance', () => {
+  const summary = summarizeIntegrity(UNSIGNED_RESULT);
+  assert.equal(summary, UNSIGNED_PACKAGE_SIGNAL);
+  assert.equal(summary.tier, 'attention');
+  // The label names the condition — not the generic "closer look" copy.
+  assert.match(summary.label, /Unsigned/);
+});
+
+test('summarizeIntegrity: Alarm still out-ranks the unsigned glance (worst-tier-wins)', () => {
+  // Unsigned AND altered content → the genuine integrity failure wins.
+  assert.equal(
+    summarizeIntegrity({ ...UNSIGNED_RESULT, hashMatch: false }),
+    OVERALL_INTEGRITY_SIGNALS.alarm,
+  );
+  assert.equal(
+    summarizeIntegrity({ ...UNSIGNED_RESULT, contentHash: { status: 'content_hash_mismatch' } }),
+    OVERALL_INTEGRITY_SIGNALS.alarm,
+  );
+});
+
+test('unsigned prominence never regresses to Alarm, and signed packages never see it', () => {
+  // The unsigned dev tier is legitimate (ADR-0020 §B): prominent, not "broken".
+  assert.equal(UNSIGNED_PACKAGE_SIGNAL.tier, 'attention');
+  assert.equal(NO_SIGNING_KEY_SIGNAL.tier, 'attention');
+  // A signed legacy package still rolls up calm — the load-bearing requirement
+  // (also pinned, unmodified, by the LEGACY_RESULT test above).
+  assert.equal(summarizeIntegrity(LEGACY_RESULT), OVERALL_INTEGRITY_SIGNALS.verified);
 });

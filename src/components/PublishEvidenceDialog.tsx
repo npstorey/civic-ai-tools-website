@@ -71,11 +71,37 @@ export default function PublishEvidenceDialog({
   const [resultUrl, setResultUrl] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [urlCopied, setUrlCopied] = useState(false);
+  // Unsigned-tier gate-off (ADR-0020, S3a P3): whether this instance holds a
+  // signing key, fetched presence-only from /api/evidence/signing-status.
+  // null = not yet known (treated as available; the SERVER gate is the
+  // enforcement — this state only drives the explanatory affordance).
+  const [signingConfigured, setSigningConfigured] = useState<boolean | null>(null);
 
   const router = useRouter();
 
   // Track whether we've already kicked off summary generation for this session
   const summaryRequested = useRef(false);
+  // Track whether we've asked for the signing tier for this open.
+  const signingStatusRequested = useRef(false);
+
+  // Ask the producer tier once per dialog session. When the instance runs
+  // unsigned, the seal/commit server gate refuses every persist — render a
+  // disabled action with an explanation instead of a dead button that errors.
+  useEffect(() => {
+    if (!isOpen || signingStatusRequested.current) return;
+    signingStatusRequested.current = true;
+    fetch('/api/evidence/signing-status')
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`${res.status}`);
+        const data = await res.json();
+        setSigningConfigured(data.signingConfigured !== false);
+      })
+      .catch(() => {
+        // Unknown tier → leave the action enabled; the server gate still
+        // enforces and its refusal message renders in the error state.
+        setSigningConfigured(null);
+      });
+  }, [isOpen]);
 
   // Auto-generate summary when dialog opens — only once per open. Skipped
   // when a structured summary was provided (#112: the executed notebook's
@@ -417,9 +443,34 @@ export default function PublishEvidenceDialog({
                 </div>
               </div>
 
+              {/* Unsigned-tier gate-off (ADR-0020, S3a P3): with no signing
+                  key, neither Commit (sealed) nor Publish (public) is
+                  reachable — the action renders disabled with an explanation,
+                  mirroring the server-side gate. */}
+              {signingConfigured === false && (
+                <div style={{
+                  padding: '12px',
+                  marginBottom: '12px',
+                  borderRadius: '4px',
+                  backgroundColor: 'rgba(255, 179, 32, 0.12)',
+                  border: '1px solid var(--nyc-caution, #FFB320)',
+                  fontSize: '13px',
+                  lineHeight: 1.5,
+                  color: 'var(--text-secondary)',
+                }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>
+                    This instance is running unsigned.
+                  </strong>{' '}
+                  No signing key is configured, so evidence cannot be committed
+                  or published — an unsigned package can reach neither the
+                  sealed nor the public state. The analysis itself still works;
+                  an operator enables signing via the instance setup guide.
+                </div>
+              )}
+
               <button
                 onClick={handlePublish}
-                disabled={!title.trim() || !summary.trim()}
+                disabled={!title.trim() || !summary.trim() || signingConfigured === false}
                 style={{
                   width: '100%',
                   padding: '10px 20px',
@@ -429,11 +480,13 @@ export default function PublishEvidenceDialog({
                   borderRadius: '4px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  cursor: title.trim() && summary.trim() ? 'pointer' : 'not-allowed',
-                  opacity: title.trim() && summary.trim() ? 1 : 0.5,
+                  cursor: title.trim() && summary.trim() && signingConfigured !== false ? 'pointer' : 'not-allowed',
+                  opacity: title.trim() && summary.trim() && signingConfigured !== false ? 1 : 0.5,
                 }}
               >
-                {visibility === 'committed' ? 'Commit' : 'Publish'}
+                {signingConfigured === false
+                  ? 'Unavailable (running unsigned)'
+                  : visibility === 'committed' ? 'Commit' : 'Publish'}
               </button>
             </>
           )}

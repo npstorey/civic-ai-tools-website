@@ -11,6 +11,10 @@ import {
   runAdversarialEval,
   emitEvaluationAttestation,
 } from '@/lib/evidence/adversarial-eval';
+import {
+  evaluateSealCommitGate,
+  evaluateUnsignedRecordPublishGate,
+} from '@/lib/evidence/unsigned-tier';
 
 /**
  * POST /api/evidence/[slug]/publish
@@ -71,6 +75,15 @@ export async function POST(
     );
   }
 
+  // Unsigned-tier gate-off (S3a P3, #166; ADR-0020 Decisions B/C, G0-3): the
+  // committed→published promotion emits SIGNED publication attestations — an
+  // instance with no signing key cannot back them, and an unsigned package
+  // may reach neither sealed nor public. Refused before any lookup.
+  const gate = evaluateSealCommitGate();
+  if (gate) {
+    return NextResponse.json(gate.body, { status: gate.status });
+  }
+
   const records = await db
     .select()
     .from(evidenceRecords)
@@ -89,6 +102,17 @@ export async function POST(
 
   if (record.visibility !== 'committed') {
     return NextResponse.json({ error: 'Evidence is already published' }, { status: 400 });
+  }
+
+  // Per-record form of the same gate: a historical row persisted WITHOUT a
+  // signature (pre-gate unsigned-committed) cannot be promoted to public even
+  // on a signed instance — the base package has no signature to back a public
+  // state (ADR-0020 Decision C is a property of the package). The row itself
+  // is not migrated or relabeled; it stays committed and renders with the
+  // prominent unsigned labeling.
+  const recordGate = evaluateUnsignedRecordPublishGate(record.basePackageSignature);
+  if (recordGate) {
+    return NextResponse.json(recordGate.body, { status: recordGate.status });
   }
 
   // A withdrawn committed claim must be reinstated before it can publish —
