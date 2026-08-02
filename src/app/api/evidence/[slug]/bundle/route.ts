@@ -5,11 +5,17 @@ import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 import { loadCarriedLifecycleAttestations } from '@/lib/evidence/lifecycle';
-import {
-  buildCommitmentView,
-  CANONICAL_TRUST_REGISTRY_URL,
-} from '@/lib/evidence/commitment';
+import { buildCommitmentView } from '@/lib/evidence/commitment';
 import { canReadRecord } from '@/lib/evidence/committed-access';
+// Instance-identity config (ADR-0020): the cell-0 reader affordance carries
+// this instance's detail URL, host label, and trust-registry pointer — the
+// same values the embedded commitment view resolves; demo defaults when no
+// config is set.
+import {
+  getEvidenceSiteOrigin,
+  getPublicationHost,
+  getSidecarTrustRegistryUrls,
+} from '@/lib/site-config';
 
 /**
  * GET /api/evidence/[slug]/bundle
@@ -65,8 +71,9 @@ function buildCellZero(
     ? `[${creator.displayName}](${creator.githubProfileUrl})`
     : creator?.displayName ?? 'Unknown';
   const publishedDate = record.createdAt.toISOString().split('T')[0];
-  const detailUrl = `https://civicaitools.org/evidence/${record.slug}`;
-  const trustHost = CANONICAL_TRUST_REGISTRY_URL.replace('https://', '');
+  const detailUrl = `${getEvidenceSiteOrigin()}/evidence/${record.slug}`;
+  const trustRegistryUrl = getSidecarTrustRegistryUrls().canonical;
+  const trustHost = trustRegistryUrl.replace('https://', '');
 
   const captureMethodFriendly =
     record.captureMethod === 'chat-flow-stream'
@@ -86,8 +93,8 @@ function buildCellZero(
     `| **Package hash** | ${hashPrefix} |`,
     `| **Captured via** | ${captureMethodFriendly} |`,
     '| **Content profile** | datHere (A-G envelope, reproducible notebook) |',
-    `| **Published** | ${publishedDate} via [civicaitools.org](${detailUrl}) |`,
-    `| **Trust registry** | [${trustHost}](${CANONICAL_TRUST_REGISTRY_URL}) |`,
+    `| **Published** | ${publishedDate} via [${getPublicationHost()}](${detailUrl}) |`,
+    `| **Trust registry** | [${trustHost}](${trustRegistryUrl}) |`,
     '',
     "*Re-execute the cells below to reproduce the analysis. The cryptographic envelope is in this notebook's root `metadata.org.civicaitools.evidence` namespace — that's what binds the signature to this content. This cell is a reader affordance only.*",
   ];

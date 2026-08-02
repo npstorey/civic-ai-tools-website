@@ -20,6 +20,7 @@
  */
 import type { Notebook } from './cells.ts';
 import { codeCell, emptyNotebook, markdownCell } from './cells.ts';
+import { getPublicationHost } from '../site-config.ts';
 import { getHelperSource, helpersForToolNames, type HelperId } from './helpers/index.ts';
 import { buildMetricCaptureCell } from './phase-d.ts';
 import {
@@ -68,7 +69,7 @@ function buildHelperCellSource(helperIds: readonly HelperId[]): string {
   const blocks = helperIds.map(id => getHelperSource(id).trimEnd());
   return [
     '# Helper functions (embedded inline per ADR-0005 §3).',
-    '# Source of truth: src/lib/notebook-author/helpers/*.py on civicaitools.org.',
+    `# Source of truth: src/lib/notebook-author/helpers/*.py on ${getPublicationHost()}.`,
     '',
     ...blocks,
   ].join('\n\n');

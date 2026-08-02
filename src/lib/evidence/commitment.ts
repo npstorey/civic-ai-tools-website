@@ -1,13 +1,32 @@
 import { evidenceRecords, users } from '../db/schema.ts';
 import type { EvidencePackage } from './packager.ts';
 import type { CarriedLifecycleAttestation } from './lifecycle.ts';
+import {
+  buildCommitmentView as buildCommitmentViewCore,
+  type CommitmentLifecycle,
+} from '@typedstandards/produce-core';
+import {
+  getSidecarTrustRegistryUrls,
+  DEMO_TRUST_REGISTRY_CANONICAL_URL,
+  DEMO_TRUST_REGISTRY_LEGACY_URL,
+} from '../site-config.ts';
 
 /**
  * Proof sidecar ("commitment view") builder — spec §9.2.1.
  *
- * Extracted from `src/app/api/evidence/[slug]/bundle/route.ts` (WS1 of
- * civic-ai-tools-website#116) so the same self-describing proof object is
- * produced by two surfaces:
+ * As of S3a P2 (#166) the neutral §8.8.1 sidecar ASSEMBLY lives in
+ * @typedstandards/produce-core (`buildCommitmentView` there takes every proof
+ * field as caller-supplied data, with `trustRegistryUrl` as REQUIRED
+ * per-publisher configuration — never a core constant). What stays HERE is
+ * the implementation-side adapter (ADR-0021 §B): mapping the evidence DB row
+ * + creator row onto the neutral input, parsing the stored signature JSON,
+ * deriving the lifecycle summary from the row's columns, the COMMITTED-record
+ * redaction decision, and resolving THIS instance's trust-registry URLs from
+ * config (ADR-0020 — see `src/lib/site-config.ts`).
+ *
+ * Originally extracted from `src/app/api/evidence/[slug]/bundle/route.ts`
+ * (WS1 of civic-ai-tools-website#116) so the same self-describing proof
+ * object is produced by two surfaces:
  *
  *   1. the notebook-embedded bundle (`/api/evidence/[slug]/bundle`), where it
  *      lives under the notebook root's `org.civicaitools.evidence` namespace;
@@ -37,27 +56,33 @@ type EvidenceRecord = typeof evidenceRecords.$inferSelect;
 type UserRecord = typeof users.$inferSelect;
 
 /**
- * Canonical trust-registry path (spec §8.3.3, ADR-0012 §3). New external
- * clients SHOULD resolve the publisher's keys from this path. Served
- * byte-identical to the legacy path below (parallel-serve).
+ * Canonical trust-registry path (spec §8.3.3, ADR-0012 §3) — the DEMO
+ * deployment's value, kept as the exported default. New external clients
+ * SHOULD resolve the publisher's keys from this path. Served byte-identical
+ * to the legacy path below (parallel-serve).
+ *
+ * The EMITTED value now resolves per-instance via
+ * `getSidecarTrustRegistryUrls()` (ADR-0020: an instance shipping the demo
+ * URLs unchanged would emit proofs pointing at a registry that lacks its
+ * key); with no config set it equals this constant, byte-for-byte.
  */
-export const CANONICAL_TRUST_REGISTRY_URL =
-  'https://civicaitools.org/.well-known/typed-publisher.json';
+export const CANONICAL_TRUST_REGISTRY_URL = DEMO_TRUST_REGISTRY_CANONICAL_URL;
 
 /**
- * Legacy trust-registry path (pre-ADR-0012). Served indefinitely, byte-identical
- * to the canonical path; emitted alongside the canonical URL so existing clients
- * that only know the legacy path keep resolving.
+ * Legacy trust-registry path (pre-ADR-0012) — the DEMO deployment's value.
+ * Served indefinitely, byte-identical to the canonical path; emitted
+ * alongside the canonical URL so existing clients that only know the legacy
+ * path keep resolving. Instances derive their own (or omit it) via config.
  */
-export const LEGACY_TRUST_REGISTRY_URL =
-  'https://civicaitools.org/.well-known/evidence-public-keys.json';
+export const LEGACY_TRUST_REGISTRY_URL = DEMO_TRUST_REGISTRY_LEGACY_URL;
 
 /**
  * Current lifecycle state of the content node, surfaced alongside the proofs so
  * an independent verifier can render "this package was withdrawn" without a
  * separate lookup. A withdrawn package's base signature still verifies
  * (withdrawal is a separate, separately-signed action) — the proofs are served
- * regardless; this is informational state.
+ * regardless; this is informational state. Type re-exported from produce-core
+ * (structurally identical to the historical local interface).
  *
  * Derived directly from the evidence row's legacy lifecycle columns, which the
  * withdraw / reinstate routes dual-write alongside the signed `attestation/*`
@@ -66,13 +91,7 @@ export const LEGACY_TRUST_REGISTRY_URL =
  * reinstatedAt) and the detail page (+ reasons). Independent verification of the
  * signed lifecycle attestation chain itself is WS2 / civic-ai-tools-website#119.
  */
-export interface CommitmentLifecycle {
-  status: 'active' | 'withdrawn';
-  withdrawnAt?: string;
-  withdrawnReason?: string;
-  reinstatedAt?: string;
-  reinstatedReason?: string;
-}
+export type { CommitmentLifecycle };
 
 /**
  * Build the §9.2.1 lifecycle summary from a record's legacy columns, or null
@@ -110,7 +129,9 @@ export function buildCommitmentLifecycle(
  * Build the spec §9.2.1 commitment view from the evidence record + creator + the
  * signed package JSON. Optional fields (envelope taxonomy, canonicalization,
  * RFC 3161 timestamp, Rekor entry/proof, lifecycle) are conditionally spread so
- * absent values don't appear as `null` in the serialized output.
+ * absent values don't appear as `null` in the serialized output — the
+ * conditional-emission rules live in produce-core's neutral builder; this
+ * adapter supplies the row-derived values.
  *
  * `pkg` is the canonical package JSON fetched from the blob. It carries the
  * signed envelope fields (`producerProfile`, `type`, `signer`, `contentHash`,
@@ -139,7 +160,6 @@ export function buildCommitmentView(
    *  are served unredacted — they ARE the commitment. */
   opts?: { redactContentSurface?: boolean },
 ): Record<string, unknown> {
-  const redact = opts?.redactContentSurface === true;
   let signature: Record<string, unknown> | null = null;
   if (record.basePackageSignature) {
     try {
@@ -170,61 +190,61 @@ export function buildCommitmentView(
 
   const lifecycle = buildCommitmentLifecycle(record);
 
-  return {
-    evidenceProtocolVersion: '0.1.0',
-    packageHash: record.basePackageHash,
-    // The committed-mode storage key is a non-derivable capability URL; it is
-    // never emitted on a redacted view (Phase 2 hard requirement).
-    ...(redact ? {} : { packageUrl: record.basePackageStorageKey }),
+  // Per-instance trust-registry URLs (ADR-0020). With no config set these are
+  // the demo constants above — byte-identical emission.
+  const registry = getSidecarTrustRegistryUrls();
+
+  return buildCommitmentViewCore({
+    // Cast: the column is nullable in the schema; the historical view emitted
+    // the raw column value verbatim (`"packageHash": null` on a hashless
+    // row), and the pass-through preserves that.
+    packageHash: record.basePackageHash as unknown as string,
+    // The committed-mode storage key is a non-derivable capability URL; the
+    // core never emits it on a redacted view (Phase 2 hard requirement). The
+    // cast preserves the historical pass-through of a null column.
+    packageUrl: record.basePackageStorageKey as unknown as string | undefined,
     // Visibility state (ADR-0010): lets a verifier render "committed — content
-    // not publicly located" instead of treating a missing packageUrl as an error.
-    visibility: record.visibility ?? 'published',
-    captureMethod: record.captureMethod ?? null,
+    // not publicly located" instead of treating a missing packageUrl as an
+    // error. The core defaults absent → 'published'.
+    visibility: record.visibility ?? undefined,
+    captureMethod: record.captureMethod,
     // Generalized for all packages (WS1): sourced from the row, not hardcoded
-    // 'datHere'. Absent column ⇒ 'default' (legacy / default content shape).
-    contentProfile: record.contentProfile ?? 'default',
-    // Envelope fields sourced from the signed package JSON (spec §8.1.1).
-    // Conditionally spread so packages predating these fields (or a missing
-    // blob) omit them rather than emitting nulls. `producerProfile` / `type` /
-    // `signer` are the PR1 taxonomy fields; `contentHash` /
-    // `contentCanonicalization` are the PR2 §8.2 canonicalization fields. All
-    // are covered by the package signature, so surfacing them lets a cross-host
-    // reader resolve the same envelope the signature commits to.
-    ...(pkg?.producerProfile ? { producerProfile: pkg.producerProfile } : {}),
-    ...(pkg?.type ? { type: pkg.type } : {}),
-    ...(pkg?.signer ? { signer: pkg.signer } : {}),
-    ...(pkg?.contentHash ? { contentHash: pkg.contentHash } : {}),
-    ...(pkg?.contentCanonicalization
-      ? { contentCanonicalization: pkg.contentCanonicalization }
-      : {}),
-    ...(signature ? { signature } : {}),
-    ...(signerIdentity ? { signerIdentity } : {}),
-    ...(record.basePackageRfc3161Timestamp
-      ? { rfc3161Timestamp: record.basePackageRfc3161Timestamp }
-      : {}),
-    ...(record.basePackageRekorEntryId
-      ? { rekorEntryId: record.basePackageRekorEntryId }
-      : {}),
-    ...(record.basePackageRekorInclusionProof
-      ? { rekorInclusionProof: record.basePackageRekorInclusionProof }
-      : {}),
-    // The Rekor entry's canonical leaf bytes (base64), carried so a verifier can
-    // recompute the RFC 6962 leaf and verify Merkle inclusion OFFLINE against the
-    // carried proof + checkpoint — no re-fetch (#119 P1 / D2). Public log data.
-    ...(record.basePackageRekorEntryBody
-      ? { rekorEntryBody: record.basePackageRekorEntryBody }
-      : {}),
-    ...(lifecycle ? { lifecycle } : {}),
-    // The signed lifecycle attestation chain (#119 P3), carried so an independent
-    // verifier resolves #10 offline. Omitted when there is no signed chain — the
-    // verifier then resolves lifecycle at STATE depth from `lifecycle` above.
-    ...(lifecycleAttestations?.length ? { lifecycleAttestations } : {}),
+    // 'datHere'. The core defaults an absent column to 'default' (legacy /
+    // default content shape).
+    contentProfile: record.contentProfile,
+    // Envelope fields sourced from the signed package JSON (spec §8.1.1),
+    // conditionally spread by the core so packages predating these fields (or
+    // a missing blob) omit them rather than emitting nulls. All are covered by
+    // the package signature, so surfacing them lets a cross-host reader
+    // resolve the same envelope the signature commits to.
+    producerProfile: pkg?.producerProfile,
+    type: pkg?.type,
+    signer: pkg?.signer,
+    contentHash: pkg?.contentHash,
+    contentCanonicalization: pkg?.contentCanonicalization,
+    signature,
+    signerIdentity,
+    rfc3161Timestamp: record.basePackageRfc3161Timestamp ?? undefined,
+    rekorEntryId: record.basePackageRekorEntryId ?? undefined,
+    rekorInclusionProof: record.basePackageRekorInclusionProof ?? undefined,
+    // The Rekor entry's canonical leaf bytes (base64), carried so a verifier
+    // can recompute the RFC 6962 leaf and verify Merkle inclusion OFFLINE
+    // against the carried proof + checkpoint — no re-fetch (#119 P1 / D2).
+    rekorEntryBody: record.basePackageRekorEntryBody ?? undefined,
+    lifecycle,
+    // The signed lifecycle attestation chain (#119 P3), carried so an
+    // independent verifier resolves #10 offline. Omitted when there is no
+    // signed chain — the verifier then resolves lifecycle at STATE depth.
+    lifecycleAttestations,
     // Canonical path (ADR-0012); new clients SHOULD use this. `…Legacy` is the
-    // byte-identical pre-ADR-0012 path, emitted alongside for older clients.
-    trustRegistryUrl: CANONICAL_TRUST_REGISTRY_URL,
-    trustRegistryUrlLegacy: LEGACY_TRUST_REGISTRY_URL,
+    // byte-identical parallel-served path, emitted alongside for older clients
+    // (omittable per-instance via config).
+    trustRegistryUrl: registry.canonical,
+    trustRegistryUrlLegacy: registry.legacy,
     // Title and summary are content-derived (titles are typically the user's
     // question verbatim) — redacted for committed records.
-    ...(redact ? {} : { subjectTitle: record.title, subjectSummary: record.summary }),
-  };
+    subjectTitle: record.title,
+    subjectSummary: record.summary,
+    redactContentSurface: opts?.redactContentSurface,
+  });
 }

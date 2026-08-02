@@ -10,6 +10,13 @@
 // first (source of truth), then re-sync this constant by hand. A sync script
 // is planned as post-M9 cleanup.
 
+// Instance-identity config (ADR-0020): skill text lands inside signed
+// packages, so the demo-host mention below resolves through config —
+// evaluated at MODULE LOAD, demo default when unset. The hand-synced source
+// of truth (civic-ai-tools/docs/skills/data-commons.md) still carries the
+// literal; keep the interpolation when re-syncing.
+import { getPublicationHost } from '../site-config.ts';
+
 export const DATA_COMMONS_SKILL = `
 # Data Commons Companion Skill — Base Guidance
 
@@ -109,7 +116,7 @@ If a question is genuinely ambiguous — "how many New Yorkers earn under $50k?"
 
 Attribute every Data Commons observation with the **source dataset** (e.g., "ACS 5-Year Estimates, 2020-2024"), the **statistical agency** (e.g., "U.S. Census Bureau"), and the **place DCID** and **variable DCID** used, so the answer is reproducible.
 
-When a Data Commons call is part of an analysis published as an evidence package on civicaitools.org, the evidence chain captures the DCIDs, variable, vintage, and place type automatically. The provenance graph emits Data Commons as a distinct prov:Agent alongside Socrata agents so a reader verifying the package can tell exactly which numbers came from which source.
+When a Data Commons call is part of an analysis published as an evidence package on ${getPublicationHost()}, the evidence chain captures the DCIDs, variable, vintage, and place type automatically. The provenance graph emits Data Commons as a distinct prov:Agent alongside Socrata agents so a reader verifying the package can tell exactly which numbers came from which source.
 
 ## Empty or unrelated results
 
