@@ -1,131 +1,67 @@
-// Multi-source extraction used by the evidence packager (M9.3).
+// Multi-source `dataSources` extraction — app-side shim over
+// @typedstandards/civic-typed-harness (S3a P1, #166; the verify-core shim
+// pattern of #116-WS3 applied to the capture layer).
 //
-// Walks the trace's `mcp_tool_call` spans plus the caller-supplied tool-call
-// summary to produce one `dataSources` entry per (source, datasetId) tuple.
-// Pure module — no `process.env`, no `crypto`, no upstream dependencies other
-// than the static tool-name→source map — so it can be unit-tested in
-// isolation via the node test runner.
+// The span-walk / population logic lives in the harness's capture group
+// (ADR-0022 §C); `DataSourceEntry` is produce-core's envelope input shape,
+// re-exported through the harness. The tool-name → source-id fallback map is
+// APP-SIDE knowledge (the MCP registry lives in `../mcp/`), so this shim
+// passes `sourceIdForToolName` into the harness's injectable resolver rather
+// than relying on the harness's exported civic default — the app's own map
+// stays authoritative, per the S3a contract. The display helpers re-export
+// the harness's civic-registry-backed versions (same names, same output,
+// including the socrata coercion for pre-M9.3 packages and the middle-dot
+// separator).
 
 import { sourceIdForToolName } from '../mcp/operation-types.ts';
+import {
+  buildDataSources as harnessBuildDataSources,
+  resolveToolSource as harnessResolveToolSource,
+  displayNameForSource,
+  formatDataSourcesSummary,
+  type DataSourceEntry,
+  type ToolCallSummary,
+  type ToolSourceResolver,
+} from '@typedstandards/civic-typed-harness';
 
-// Endpoint URLs used to tag data-source entries for sources whose query
-// surface isn't dataset-keyed. Kept as module-scoped constants (not read from
-// process.env) so the function stays pure. Overriding the hosted endpoints
-// via env is out of scope.
-const DATA_COMMONS_ENDPOINT = 'https://api.datacommons.org/mcp';
-const BOSTON_OPENCONTEXT_PORTAL = 'https://data.boston.gov';
-
-export interface ToolCallSummary {
-  name: string;
-  args: Record<string, unknown>;
-}
-
-export interface DataSourceEntry {
-  /** Stable source identifier — matches the registry source ids used in
-   *  the routing layer and the PROV-O `civic:sourceId` attribute.
-   *  `socrata` or `data-commons` today. */
-  sourceId: string;
-  catalogType: string;
-  portalUrl: string;
-  /** Socrata dataset id. Absent for sources that don't expose a per-dataset
-   *  URL (e.g. Data Commons, whose query surface is DCIDs). */
-  datasetId?: string;
-  /** Canonical per-dataset URL. Absent for sources without one. */
-  datasetUrl?: string;
-  accessTimestamp: string;
-}
-
-/** Human-friendly display label for a `sourceId`. Unknown ids fall back to a
- *  capitalised form of the raw id so new sources render sensibly before the
- *  map is updated. */
-const SOURCE_DISPLAY_NAMES: Record<string, string> = {
-  socrata: 'Socrata',
-  'data-commons': 'Data Commons',
-  'boston-opencontext': 'Boston OpenContext',
+export {
+  displayNameForSource,
+  formatDataSourcesSummary,
+  type DataSourceEntry,
+  type ToolCallSummary,
 };
 
-export function displayNameForSource(sourceId: string | undefined | null): string {
-  // Pre-M9.3 evidence packages have no `sourceId` field on dataSources entries
-  // (dataSources was Socrata-only before the multi-source refactor), so coerce
-  // missing ids to `socrata` rather than throwing on an empty string.
-  const id = sourceId || 'socrata';
-  return (
-    SOURCE_DISPLAY_NAMES[id]
-    ?? id
-      .split('-')
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ')
-  );
-}
+/** The app's static tool-name → source-id map (`../mcp/operation-types.ts`)
+ *  as a harness resolver — the fallback when a trace span carries no
+ *  `mcp.source` attribute. */
+const appToolSourceResolver: ToolSourceResolver = (toolName) =>
+  sourceIdForToolName(toolName);
 
-/** Format a `dataSources` array as a compact, de-duplicated summary string
- *  suitable for the evidence detail page "Data sources" field. Returns `null`
- *  when the array is empty or missing, letting callers render a fallback. */
-export function formatDataSourcesSummary(entries: DataSourceEntry[] | undefined): string | null {
-  if (!entries || entries.length === 0) return null;
-  const seen = new Set<string>();
-  const ordered: string[] = [];
-  for (const entry of entries) {
-    const name = displayNameForSource(entry.sourceId);
-    if (seen.has(name)) continue;
-    seen.add(name);
-    ordered.push(name);
-  }
-  return ordered.join(' \u00b7 ');
-}
-
+/** Trace-span shape the resolver inspects. Structural — matches the span
+ *  shape the harness walks (the harness does not export it). */
 interface TraceSpan {
   name: string;
   attributes?: Array<{ key: string; value?: { stringValue?: string; intValue?: string; boolValue?: boolean } }>;
 }
 
-function getToolSpans(trace: Record<string, unknown>): TraceSpan[] {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const spans = (trace as any)?.resourceSpans?.[0]?.scopeSpans?.[0]?.spans;
-    if (!Array.isArray(spans)) return [];
-    return (spans as TraceSpan[]).filter((s) => s.name === 'mcp_tool_call');
-  } catch {
-    return [];
-  }
-}
-
-function spanAttr(span: TraceSpan | undefined, key: string): string | undefined {
-  if (!span) return undefined;
-  const attr = span.attributes?.find((a) => a.key === key);
-  return attr?.value?.stringValue ?? attr?.value?.intValue ?? undefined;
-}
-
 /**
  * Resolve the MCP source for a tool call. Prefers the `mcp.source` attribute
  * recorded on the matching `mcp_tool_call` span (the M9.1 source of truth);
- * falls back to the static tool-name mapping for packages written before
- * M9.1 or callers that ship an empty trace.
- *
- * Tool calls are paired to spans by index — `openrouter-streaming.ts` emits
- * one span per call in order, so positional matching is exact in the normal
- * flow. When the counts diverge, the static map still identifies the source.
+ * falls back to the app's static tool-name mapping for packages written
+ * before M9.1 or callers that ship an empty trace.
  */
 export function resolveToolSource(
   toolCall: ToolCallSummary,
   span: TraceSpan | undefined,
 ): string {
-  return spanAttr(span, 'mcp.source')
-    ?? sourceIdForToolName(toolCall.name)
-    ?? 'socrata';
+  return harnessResolveToolSource(toolCall, span, appToolSourceResolver);
 }
 
 /**
- * Build the per-source evidence-package `dataSources` array.
- *
- * Socrata contributes one entry per unique `dataset_id` observed across tool
- * calls. Data Commons contributes a single aggregate entry when any DC tool
- * call was made (its knowledge graph isn't dataset-keyed). Boston OpenContext
- * contributes a single aggregate entry tagged with the data.boston.gov portal
- * — per-dataset CKAN resource UUIDs are surfaced via the PROV-O graph's tool
- * call activities rather than rolled up here. Each entry is tagged with
- * `sourceId` so downstream consumers can distinguish provenance.
+ * Build the per-source evidence-package `dataSources` array. Same walk and
+ * emission order as before the re-point (dataset-keyed Socrata entries in
+ * first-seen order, then aggregate sources in registry order); the app's
+ * tool-name map is injected as the span-attribute fallback resolver.
  */
 export function buildDataSources(
   toolCalls: ToolCallSummary[],
@@ -133,53 +69,7 @@ export function buildDataSources(
   fallbackPortal: string,
   now: string,
 ): DataSourceEntry[] {
-  const toolSpans = getToolSpans(trace);
-  const socrataByDataset = new Map<string, { portalUrl: string; datasetId: string }>();
-  let dataCommonsAccessed = false;
-  let bostonOpencontextAccessed = false;
-
-  for (let i = 0; i < toolCalls.length; i++) {
-    const tc = toolCalls[i];
-    const source = resolveToolSource(tc, toolSpans[i]);
-    if (source === 'socrata') {
-      const datasetId = tc.args.dataset_id as string | undefined;
-      const portal = (tc.args.portal as string) || fallbackPortal;
-      if (datasetId && !socrataByDataset.has(datasetId)) {
-        socrataByDataset.set(datasetId, { portalUrl: `https://${portal}`, datasetId });
-      }
-    } else if (source === 'data-commons') {
-      dataCommonsAccessed = true;
-    } else if (source === 'boston-opencontext') {
-      bostonOpencontextAccessed = true;
-    }
-  }
-
-  const entries: DataSourceEntry[] = [];
-  for (const { portalUrl, datasetId } of socrataByDataset.values()) {
-    entries.push({
-      sourceId: 'socrata',
-      catalogType: 'socrata',
-      portalUrl,
-      datasetId,
-      datasetUrl: `${portalUrl}/d/${datasetId}`,
-      accessTimestamp: now,
-    });
-  }
-  if (dataCommonsAccessed) {
-    entries.push({
-      sourceId: 'data-commons',
-      catalogType: 'data-commons',
-      portalUrl: DATA_COMMONS_ENDPOINT,
-      accessTimestamp: now,
-    });
-  }
-  if (bostonOpencontextAccessed) {
-    entries.push({
-      sourceId: 'boston-opencontext',
-      catalogType: 'ckan',
-      portalUrl: BOSTON_OPENCONTEXT_PORTAL,
-      accessTimestamp: now,
-    });
-  }
-  return entries;
+  return harnessBuildDataSources(toolCalls, trace, fallbackPortal, now, {
+    resolver: appToolSourceResolver,
+  });
 }
