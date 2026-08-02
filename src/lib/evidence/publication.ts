@@ -20,6 +20,7 @@
 import { db } from '@/lib/db';
 import { attestationNodes } from '@/lib/db/schema';
 import { putPackage } from '@/lib/storage';
+import { getPublicationHost } from '../site-config.ts';
 import {
   signPackage,
   getRfc3161Timestamp,
@@ -33,7 +34,10 @@ import {
   type AttestationNode,
 } from './attestation.ts';
 
-const PUBLICATION_HOST = 'civicaitools.org';
+// Publication host label on `attestation/publishes/v1` nodes — resolved from
+// instance config (ADR-0020; `EVIDENCE_PUBLICATION_HOST` / derived from
+// `EVIDENCE_SITE_ORIGIN`, demo default 'civicaitools.org'). Read at call
+// time via `getPublicationHost()` below.
 
 export interface PublicationPairInput {
   /** The content node's envelope hash (what both attestations target). */
@@ -115,7 +119,7 @@ export async function emitPublicationPair(
     type: ATTESTATION_PUBLISHES,
     targetNodeId: input.targetNodeId,
     signer,
-    publicationHost: PUBLICATION_HOST,
+    publicationHost: getPublicationHost(),
   });
 
   const locatedAt = buildAttestationNode({

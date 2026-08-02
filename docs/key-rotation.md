@@ -1,7 +1,9 @@
 # Evidence signing key rotation
 
 This runbook describes how to rotate the Ed25519 platform signing key that
-anchors the cryptographic evidence chain. Follow it for both preventive
+anchors the cryptographic evidence chain. (First-time key + registry setup
+for a new instance is covered in [`docs/instance-setup.md`](instance-setup.md);
+this runbook picks up once an active key exists.) Follow it for both preventive
 rotations (scheduled) and compromise rotations (incident response). The two
 paths differ only in the final registry status you flip the previous key to
 — `deprecated` for preventive, `revoked` for compromise.

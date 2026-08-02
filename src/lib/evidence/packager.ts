@@ -1,3 +1,26 @@
+// Evidence-package builder — app-side adapter over
+// @typedstandards/civic-typed-harness + @typedstandards/produce-core
+// (S3a P2, #166; the verify-core shim pattern of #116-WS3 applied to the
+// assembly layer).
+//
+// The operating rule (ADR-0021 §B): THE HARNESS DERIVES, THE CORE ASSEMBLES.
+//   - produce-core owns envelope ASSEMBLY (`buildEnvelope`) with the byte-
+//     compat discipline: conditional spreads, the v0.1 `type` discriminator,
+//     contentHash computed from the base object and spread last, the shared
+//     §8.2 envelope-hash detection chain.
+//   - the civic harness owns the DERIVATIONS: the datHere policy
+//     (producerProfile auto-derive, canonicalization-rule selection,
+//     summary-emission gate, the `org.civicaitools.environment` extension),
+//     skill extraction from the trace's `skill_fetch` span, the BlobRef-safe
+//     trace-inspection fallback, and the PROV-O graph build.
+//   - THIS FILE supplies what stays app-side: the determinism inputs
+//     (`randomUUID` / clock / active kid — ADR-0021 §D: the core takes them
+//     as arguments), the `deriveOperationType` fallback (the MCP registry is
+//     app knowledge), the data-source population via the app's resolver
+//     (./data-sources.ts), and the instance-identity config (ADR-0020:
+//     publication host + PROV platform agent from `src/lib/site-config.ts`;
+//     demo defaults = byte-identical emission with no config set).
+
 import crypto from 'crypto';
 import { buildProvenanceGraph, type ProvGraph } from './provenance.ts';
 import { buildDataSources, type DataSourceEntry } from './data-sources.ts';
@@ -5,25 +28,29 @@ import { getActiveKeyId, type SignerIdentity } from './signing.ts';
 import { isBlobRef, parseBlobRef, type BlobRef } from './blob-ref.ts';
 import { deriveOperationType } from '../mcp/operation-types.ts';
 import {
-  LEGACY_JSON_CANONICALIZATION,
-  DATHERE_AG_JUPYTER_CANONICALIZATION,
-  computeEnvelopeHash,
-  computeContentHashSha256,
-} from './canonicalization.ts';
-
-const PACKAGE_SCHEMA_VERSION = '0.1.0';
+  buildEnvelope,
+  sha256Hex,
+  DEFAULT_CONTENT_TYPE,
+} from '@typedstandards/produce-core';
+import {
+  deriveDatHereEnvelopeFields,
+  extractSkillMetadata,
+  traceForInspection,
+  CIVICAITOOLS_PROVENANCE_CONFIG,
+  CIVICAITOOLS_PLATFORM_AGENT,
+  type ProvenanceConfig,
+} from '@typedstandards/civic-typed-harness';
+import {
+  getPublicationHost,
+  getPlatformAgentOverrides,
+} from '../site-config.ts';
 
 // Two-family node type taxonomy (spec §8.1.1, §8.12, ADR-0009): every node
 // carries `type` of the form `content/<noun>/v<N>` or `attestation/<verb>/v<N>`.
 // AI-Assisted Analysis output defaults to `content/analysis/v1`; pre-v0.1
-// packages omit the field and are interpreted as this value.
-export const DEFAULT_CONTENT_TYPE = 'content/analysis/v1';
-
-// Producer Profile (spec §8.1.1, §8.6, ADR-0006): compound
-// `<profile-type>/<profile-subtype>`. The v0.1 value auto-derived for the
-// datHere content profile — the legacy `contentProfile` field is retained as
-// a backwards-compatible alias, and the two MUST stay consistent.
-const DATHERE_PRODUCER_PROFILE = 'ai-assisted-analysis/datHere';
+// packages omit the field and are interpreted as this value. Re-exported from
+// produce-core (same value).
+export { DEFAULT_CONTENT_TYPE };
 
 /**
  * Capture method for the package contents (ADR-0003).
@@ -262,63 +289,26 @@ export interface EvidencePackage {
   extensions?: Record<string, unknown>;
 }
 
-function sha256(content: string): string {
-  return crypto.createHash('sha256').update(content).digest('hex');
-}
-
 /**
- * Build the `org.civicaitools.environment` extension content for a
- * package with `contentProfile === 'datHere'`. Per OES §9.1.1 requirement
- * 3 the extension MUST carry `modelVersion`, `temperature`, `mcpServers`,
- * `toolDefinitions`, `host`.
- *
- * Prototype limitations (tracked as known gaps; tightened in follow-up work):
- * - `temperature` is not yet captured by the chat flow. Placeholder `0`.
- * - `toolDefinitions` is not yet captured. Placeholder `[]`.
- * - `mcpServers` is derived from the trace's skill-fetch span URL (the
- *   primary MCP server for the analysis). A richer derivation that walks
- *   per-query portals can land later without breaking the field shape.
- *
- * Fields the prototype DOES capture honestly: `modelVersion` (from the
- * model identifier surfaced through the chat flow) and `host` (the
- * publishing host of civicaitools.org's reference implementation).
+ * PROV-O graph config for this instance: the harness's demo default with the
+ * platform agent re-pointed at any configured instance identity (ADR-0020 —
+ * the agent names WHO published inside the signed graph). With no overrides
+ * set, the harness's own default config object is passed through untouched,
+ * so the emitted graph is byte-identical by construction.
  */
-function buildDatHereEnvironment(
-  input: PackageInput,
-  skillMcpServerUrl: string | undefined,
-): Record<string, unknown> {
-  const mcpServers: Array<{ url: string; name?: string }> = [];
-  if (skillMcpServerUrl) {
-    mcpServers.push({ url: skillMcpServerUrl });
+function instanceProvenanceConfig(): ProvenanceConfig {
+  const overrides = getPlatformAgentOverrides();
+  if (!overrides.id && !overrides.title && !overrides.url) {
+    return CIVICAITOOLS_PROVENANCE_CONFIG;
   }
   return {
-    modelVersion: input.model,
-    temperature: 0,
-    mcpServers,
-    toolDefinitions: [],
-    host: 'civicaitools.org',
+    ...CIVICAITOOLS_PROVENANCE_CONFIG,
+    platformAgent: {
+      id: overrides.id ?? CIVICAITOOLS_PLATFORM_AGENT.id,
+      title: overrides.title ?? CIVICAITOOLS_PLATFORM_AGENT.title,
+      url: overrides.url ?? CIVICAITOOLS_PLATFORM_AGENT.url,
+    },
   };
-}
-
-function extractSkillMetadata(trace: Record<string, unknown>): { systemPromptHash?: string; mcpServerUrl?: string; skillText?: string } {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const spans = (trace as any)?.resourceSpans?.[0]?.scopeSpans?.[0]?.spans;
-    if (!Array.isArray(spans)) return {};
-    const skillSpan = spans.find((s: { name: string }) => s.name === 'skill_fetch');
-    if (!skillSpan) return {};
-    const attrs: Record<string, string> = {};
-    for (const a of skillSpan.attributes || []) {
-      attrs[a.key] = a.value?.stringValue || '';
-    }
-    return {
-      systemPromptHash: attrs['skill.text_hash'] || undefined,
-      mcpServerUrl: attrs['skill.mcp_server_url'] || undefined,
-      skillText: attrs['skill.text'] || undefined,
-    };
-  } catch {
-    return {};
-  }
 }
 
 /**
@@ -330,13 +320,21 @@ function extractSkillMetadata(trace: Record<string, unknown>): { systemPromptHas
  * resulting package commits to the reference object while leaving the
  * content in Vercel Blob. Detail-page rendering and verification each
  * follow the reference when they need the bytes.
+ *
+ * Known constraint (civic-ai-tools#116 P1 rider): a v0.1 datHere input
+ * without an `org.civicaitools.notebook` extension THROWS —
+ * `computeContentHashSha256` refuses to fingerprint `dathere-ag-jupyter/v1`
+ * content with no notebook. The real publish flow always supplies one; the
+ * adapter keeps the invariant (pinned in packager-instance-config.test.ts).
  */
 export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackage; hash: string } {
   const now = new Date().toISOString();
   const packageId = crypto.randomUUID();
-  const promptHash = sha256(input.prompt);
+  const promptHash = sha256Hex(input.prompt);
 
-  // Extract queries (only tool calls with operation type)
+  // Extract queries (only tool calls with operation type). The
+  // `deriveOperationType` fallback is app-side knowledge — the MCP tool
+  // registry lives in `../mcp/`, and produce-core carries no derivation table.
   const queries = input.toolCalls.map(tc => ({
     tool: tc.name,
     operationType: tc.operationType || deriveOperationType(tc.name, tc.args) || 'unknown',
@@ -348,102 +346,74 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
     resultColumns: tc.resultSummary?.columns,
   }));
 
-  // Helpers: when trace is a BlobRef the packager can't inspect spans for
-  // data-source detection, skill extraction, or PROV-O graph construction.
-  // Fall back to an empty trace so downstream builders degrade gracefully.
-  const traceIsBlob = isBlobRef(input.trace);
-  const traceForInspection: Record<string, unknown> = traceIsBlob
-    ? { resourceSpans: [] }
-    : (input.trace as Record<string, unknown>);
+  // When trace is a BlobRef the packager can't inspect spans for data-source
+  // detection, skill extraction, or PROV-O graph construction; the harness's
+  // `traceForInspection` falls back to an empty trace so downstream builders
+  // degrade gracefully.
+  const inspectableTrace = traceForInspection(input.trace);
 
-  const dataSources = buildDataSources(input.toolCalls, traceForInspection, input.portal, now);
+  const dataSources = buildDataSources(input.toolCalls, inspectableTrace, input.portal, now);
 
   const totalTokens = (input.tokenUsage.promptTokens || 0) + (input.tokenUsage.completionTokens || 0);
 
   // Skill metadata: prefer the explicit override when provided (required if
-  // trace is a BlobRef; optional otherwise), otherwise extract from spans.
+  // trace is a BlobRef; optional otherwise), otherwise extract from spans
+  // via the harness.
   const skillMeta = input.skillMetadataOverride
     ? {
         systemPromptHash: input.skillMetadataOverride.systemPromptHash,
         mcpServerUrl: input.skillMetadataOverride.mcpServerUrl,
         skillText: input.skillMetadataOverride.skillText,
       }
-    : extractSkillMetadata(traceForInspection);
+    : extractSkillMetadata(inspectableTrace);
 
   // PROV-O provenance graph. When output is a BlobRef we pass the ref hash
   // through `outputHash` rather than rehashing a string — the ref IS the
   // content hash by construction, so this preserves the identity chain
   // between the evidence record and the referenced blob.
   const outputIsBlob = isBlobRef(input.output);
-  const provenance = buildProvenanceGraph(traceForInspection, {
-    packageId,
-    promptHash,
-    promptText: input.promptVisibility === 'full_text' ? input.prompt : undefined,
-    outputText: outputIsBlob ? undefined : (input.output as string),
-    outputHash: outputIsBlob ? parseBlobRef((input.output as BlobRef).ref).hash : undefined,
-    model: input.model,
-    portal: input.portal,
-  });
-
-  // Producer Profile (ADR-0006): emit when explicitly supplied, else
-  // auto-derive from the datHere content profile. Left undefined (and thus
-  // unspread below) for default/legacy inputs so their canonical JSON — and
-  // package hash — stays byte-identical to pre-ADR-0006 shape. The route
-  // enforces the contentProfile↔producerProfile consistency invariant.
-  const producerProfile =
-    input.producerProfile ??
-    (input.contentProfile === 'datHere' ? DATHERE_PRODUCER_PROFILE : undefined);
-
-  // v0.1 canonicalization & hashing (PR2, spec §8.2). `type` is the spec's
-  // required v0.1 discriminator ("pre-v0.1 packages omit the field") and the
-  // route default-fills it for every publish, so its presence is the signal
-  // to emit `contentCanonicalization` + `contentHash` and hash via RFC 8785
-  // JCS. Legacy/internal callers that don't supply `type` keep the pre-PR2
-  // shape — no contentHash, JSON.stringify hashing — so their canonical JSON
-  // (and hash) stays byte-identical. The off-log content's canonicalization
-  // rule follows the content profile: datHere fingerprints its executed
-  // notebook, everything else uses the legacy-json/v1 whole-package rule.
-  const isV01Envelope = input.type !== undefined;
-  const contentCanonicalization =
-    input.contentProfile === 'datHere'
-      ? DATHERE_AG_JUPYTER_CANONICALIZATION
-      : LEGACY_JSON_CANONICALIZATION;
-
-  const pkgBase: EvidencePackage = {
-    metadata: {
-      schemaVersion: PACKAGE_SCHEMA_VERSION,
+  const provenance = buildProvenanceGraph(
+    inspectableTrace,
+    {
       packageId,
-      createdAt: now,
-      signingKeyId: getActiveKeyId(),
-      // Conditional spread so legacy/test inputs without captureMethod
-      // produce canonical JSON identical to pre-ADR-0003 shape (and
-      // therefore identical hashes). The route layer enforces presence
-      // for production publishes.
-      ...(input.captureMethod ? { captureMethod: input.captureMethod } : {}),
-      // ADR-0004 §7: contentProfile is optional; absence means `default`.
-      // Only emit into canonical JSON when explicitly set so pre-ADR-0004
-      // packages (which never supply this field) produce byte-identical
-      // canonical JSON to before.
-      ...(input.contentProfile ? { contentProfile: input.contentProfile } : {}),
+      promptHash,
+      promptText: input.promptVisibility === 'full_text' ? input.prompt : undefined,
+      outputText: outputIsBlob ? undefined : (input.output as string),
+      outputHash: outputIsBlob ? parseBlobRef((input.output as BlobRef).ref).hash : undefined,
+      model: input.model,
+      portal: input.portal,
     },
-    // Top-level envelope fields (ADR-0006/0009, spec §8.1.1). Conditional
-    // spread so existing-shape inputs (no producerProfile/type/signer) emit
-    // byte-identical canonical JSON to before; the route default-fills `type`
-    // and `signer` for the production publish path.
-    ...(producerProfile ? { producerProfile } : {}),
-    ...(input.type ? { type: input.type } : {}),
-    ...(input.signer ? { signer: input.signer } : {}),
-    // v0.1 content-canonicalization rule URI (spec §8.2). Conditional spread
-    // gated on the v0.1 discriminator so pre-PR2 callers stay byte-identical.
-    // `contentHash` is computed from this base object below and spread on
-    // last — it cannot be in this literal because legacy-json/v1 fingerprints
-    // the package minus contentHash (a hash cannot include itself).
-    ...(isV01Envelope ? { contentCanonicalization } : {}),
-    prompt: {
-      hash: promptHash,
-      visibility: input.promptVisibility,
-      ...(input.promptVisibility === 'full_text' ? { text: input.prompt } : {}),
+    instanceProvenanceConfig(),
+  );
+
+  // datHere policy (ADR-0004/0006, OES §9.1.1): producerProfile auto-derive,
+  // canonicalization-rule selection, the summary-emission gate, and the
+  // `org.civicaitools.environment` extension layered onto caller-supplied
+  // extensions — all derived by the harness; the environment's `host` is this
+  // instance's publication host (ADR-0020 config; demo default
+  // 'civicaitools.org'). Non-datHere inputs pass through untouched, keeping
+  // their canonical JSON byte-identical.
+  const datHere = deriveDatHereEnvelopeFields(
+    {
+      model: input.model,
+      contentProfile: input.contentProfile,
+      producerProfile: input.producerProfile,
+      summary: input.summary,
+      skillMcpServerUrl: skillMeta.mcpServerUrl,
+      extensions: input.extensions,
     },
+    { host: getPublicationHost() },
+  );
+
+  // Envelope assembly + hashing (spec §8.1.1, §8.2) — produce-core, with the
+  // determinism inputs supplied here (ADR-0021 §D) and every derived value
+  // passed as explicit envelope-field input.
+  const { pkg, envelopeHash } = buildEnvelope({
+    packageId,
+    createdAt: now,
+    signingKeyId: getActiveKeyId(),
+    prompt: input.prompt,
+    promptVisibility: input.promptVisibility,
     queries,
     dataSources,
     cost: {
@@ -456,55 +426,16 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
     skillMetadata: skillMeta,
     output: input.output,
     trace: input.trace,
-    // ADR-0004 §7 backwards-compat: emit `summary` into canonical JSON only
-    // when contentProfile === 'datHere' (where the spec requires it).
-    // Other content profiles keep `summary` on the DB row only, so their
-    // canonical JSON — and therefore their package hash — remains
-    // byte-identical to pre-ADR-0004 behavior.
-    ...(input.contentProfile === 'datHere' && input.summary
-      ? { summary: input.summary }
-      : {}),
+    summary: datHere.summary,
+    captureMethod: input.captureMethod,
+    contentProfile: input.contentProfile,
+    producerProfile: datHere.producerProfile,
+    type: input.type,
+    signer: input.signer,
+    contentCanonicalization: datHere.contentCanonicalization,
     provenance,
-    // ADR-0004 §2 + OES §9.1.1 requirement 3: datHere-content-profile
-    // packages auto-receive an `org.civicaitools.environment` extension
-    // carrying section-C metadata, layered on top of any caller-supplied
-    // extensions (e.g. the existing `org.civicaitools.notebook` written
-    // by the chat-flow publish dialog). Non-datHere content profiles
-    // emit only the caller-supplied extensions, preserving their
-    // canonical JSON.
-    ...(() => {
-      const extensions: Record<string, unknown> = { ...(input.extensions ?? {}) };
-      if (input.contentProfile === 'datHere') {
-        extensions['org.civicaitools.environment'] = buildDatHereEnvironment(
-          input,
-          skillMeta.mcpServerUrl,
-        );
-      }
-      return Object.keys(extensions).length > 0 ? { extensions } : {};
-    })(),
-  };
+    extensions: datHere.extensions,
+  });
 
-  // v0.1 packages embed the multihash `contentHash` fingerprinting the
-  // off-log content (spec §8.2). It is computed from `pkgBase` (which already
-  // carries `contentCanonicalization` but not yet `contentHash`) and spread
-  // on last; legacy callers leave `pkgBase` untouched so their canonical JSON
-  // is byte-identical to the pre-PR2 shape.
-  const pkg: EvidencePackage = isV01Envelope
-    ? {
-        ...pkgBase,
-        contentHash: {
-          sha256: computeContentHashSha256(
-            pkgBase as unknown as Record<string, unknown>,
-            contentCanonicalization,
-          ),
-        },
-      }
-    : pkgBase;
-
-  // Envelope hash routes by the §8.2 detection rule: SHA-256(JCS) for v0.1
-  // packages (multihash contentHash present), legacy SHA-256(JSON.stringify)
-  // for pre-v0.1. Shared with verify.ts so producer and verifier agree.
-  const hash = computeEnvelopeHash(pkg as unknown as Record<string, unknown>);
-
-  return { pkg, hash };
+  return { pkg: pkg as EvidencePackage, hash: envelopeHash };
 }
