@@ -62,6 +62,11 @@ export const DEMO_TRUST_REGISTRY_CANONICAL_URL =
 export const DEMO_TRUST_REGISTRY_LEGACY_URL =
   'https://civicaitools.org/.well-known/evidence-public-keys.json';
 
+/** Demo default platform display name — the attribution name inside authored
+ *  notebooks and the PROV platform-agent title. Anti-drift-pinned against the
+ *  harness's `CIVICAITOOLS_PLATFORM_AGENT.title` in instance-config.test.ts. */
+export const DEMO_PLATFORM_TITLE = 'Civic AI Tools';
+
 /** Demo default envelope-side signer identity (spec §8.5). MUST match the
  *  `signerIdentity` recorded for the active kid in the trust registry so
  *  verify check #14 resolves. */
@@ -143,6 +148,20 @@ export function getEvidenceSignerIdentity(): {
     displayName:
       process.env.EVIDENCE_SIGNER_DISPLAY_NAME || DEMO_SIGNER_IDENTITY.displayName,
   };
+}
+
+/**
+ * Display name of this instance for attribution surfaces — the "Generated
+ * by …" lines in authored/downloaded notebooks. Reuses
+ * `EVIDENCE_PLATFORM_AGENT_TITLE` (one variable names the instance in both
+ * the PROV agent and the human-readable attribution), demo default
+ * 'Civic AI Tools'. NOTE: on client-rendered surfaces (the notebook
+ * download button) non-NEXT_PUBLIC env is not inlined into the browser
+ * bundle, so the demo default renders there regardless of server config —
+ * see the flag in the S3a P2 phase record.
+ */
+export function getPlatformTitle(): string {
+  return process.env.EVIDENCE_PLATFORM_AGENT_TITLE || DEMO_PLATFORM_TITLE;
 }
 
 /**

@@ -69,15 +69,15 @@ export const ENV_SPEC = [
   //     emits the demo deployment's historical values byte-identically. An
   //     instance sets EVIDENCE_SITE_ORIGIN (+ the signer set) and every derived
   //     surface follows; the rest are per-item overrides for split hosts. ---
-  { name: 'EVIDENCE_SITE_ORIGIN', tier: 'optional', purpose: 'Instance origin — registry URLs, verify fallback, platform-agent URL derive from it', hasFallback: true },
-  { name: 'EVIDENCE_PUBLICATION_HOST', tier: 'optional', purpose: 'Host label on publishes-attestations + datHere environment.host', hasFallback: true },
+  { name: 'EVIDENCE_SITE_ORIGIN', tier: 'optional', purpose: 'Instance origin — registry URLs, verify fallback, platform-agent URL, notebook/bundle attribution links derive from it', hasFallback: true },
+  { name: 'EVIDENCE_PUBLICATION_HOST', tier: 'optional', purpose: 'Host label on publishes-attestations, datHere environment.host, notebook/skill-text host mentions', hasFallback: true },
   { name: 'EVIDENCE_TRUST_REGISTRY_CANONICAL_URL', tier: 'optional', purpose: 'Sidecar trustRegistryUrl override (defaults to origin + well-known path)', hasFallback: true },
   { name: 'EVIDENCE_TRUST_REGISTRY_LEGACY_URL', tier: 'optional', purpose: 'Sidecar trustRegistryUrlLegacy override (empty string omits it)', hasFallback: true },
   { name: 'EVIDENCE_SIGNER_BINDING_TIER', tier: 'optional', purpose: 'Envelope signer claim: bindingTier — must match the registry entry (check #14)', hasFallback: true },
   { name: 'EVIDENCE_SIGNER_IDENTIFIER', tier: 'optional', purpose: 'Envelope signer claim: identifier — must match the registry entry (check #14)', hasFallback: true },
   { name: 'EVIDENCE_SIGNER_DISPLAY_NAME', tier: 'optional', purpose: 'Envelope signer claim: displayName — must match the registry entry (check #14)', hasFallback: true },
   { name: 'EVIDENCE_PLATFORM_AGENT_ID', tier: 'optional', purpose: 'PROV platform-agent id inside the signed provenance graph', hasFallback: true },
-  { name: 'EVIDENCE_PLATFORM_AGENT_TITLE', tier: 'optional', purpose: 'PROV platform-agent title inside the signed provenance graph', hasFallback: true },
+  { name: 'EVIDENCE_PLATFORM_AGENT_TITLE', tier: 'optional', purpose: 'PROV platform-agent title + notebook attribution display name', hasFallback: true },
   { name: 'EVIDENCE_PLATFORM_AGENT_URL', tier: 'optional', purpose: 'PROV platform-agent URL (defaults to EVIDENCE_SITE_ORIGIN when set)', hasFallback: true },
 
   // --- Optional / feature / ops ---

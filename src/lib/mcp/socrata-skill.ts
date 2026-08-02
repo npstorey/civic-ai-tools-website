@@ -20,6 +20,15 @@
 import { callMcpPrompt, getServerInstructions } from './client.ts';
 import { DATA_COMMONS_SKILL } from './data-commons-skill.ts';
 import { BOSTON_OPENCONTEXT_SKILL } from './boston-skill.ts';
+// Instance-identity config (ADR-0020): skill text lands inside signed
+// packages (skillMetadata.skillText + skill.text_hash), so the demo-host
+// mention below resolves through config. Evaluated at MODULE LOAD (the
+// constant is a template literal) — boot-time env, demo default when unset.
+// CAVEATS (flagged in the S3a P2 phase record): `npm run sync-fallback`
+// rewrites this constant's entire body from the MCP server and would clobber
+// the interpolation; the primary runtime path also fetches skill text from
+// the MCP server, whose copy of this line is outside this repo.
+import { getPublicationHost } from '../site-config.ts';
 
 // Fallback constant used when the MCP server is unreachable.
 // NOTE: This may be stale — it was last synced at PR #19 and may be missing
@@ -359,7 +368,7 @@ ORDER BY total_requests DESC
 
 # Socrata MCP Skill — Web Overlay
 
-> Applies to: Web demo (civicaitools.org) and other HTTP-connected clients.
+> Applies to: Web demo (${getPublicationHost()}) and other HTTP-connected clients.
 
 ## Date Filter Enforcement
 
