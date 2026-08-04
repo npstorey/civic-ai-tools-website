@@ -69,6 +69,12 @@ const tokenRes = await fetch(`${BASE_URL}/api/blob/upload-token`, {
       callbackUrl: `${BASE_URL}/api/blob/upload-token`,
       clientPayload: null,
       multipart: false,
+      // Driver-seam extension (S3b P3): instances running BLOB_DRIVER=s3
+      // need the exact content type + byte count to mint a presigned PUT
+      // (both get signed into the URL). The default vercel-blob driver
+      // ignores these two fields, so it is always safe to send them.
+      contentType: OUTPUT_CONTENT_TYPE,
+      contentLength: OUTPUT_BYTES.byteLength,
     },
   }),
 });
@@ -78,40 +84,66 @@ if (!tokenRes.ok) {
   process.exit(1);
 }
 const tokenJson = await tokenRes.json();
-const clientToken = tokenJson.clientToken;
-if (!clientToken) {
-  console.error('No clientToken in response:', tokenJson);
-  process.exit(1);
+if (tokenJson.uploadMethod !== 'presigned-put') {
+  if (!tokenJson.clientToken) {
+    console.error('No clientToken in response:', tokenJson);
+    process.exit(1);
+  }
+  console.log('  ✓ token received');
 }
-console.log('  ✓ token received');
 
 // --- 2. Upload the blob directly -----------------------------------------
-// The Vercel Blob API accepts a PUT to https://blob.vercel-storage.com/<pathname>
-// with Authorization: Bearer <clientToken>. This mirrors what @vercel/blob/client
-// does internally; documented at https://vercel.com/docs/vercel-blob/using-blob-sdk.
+// The grant response is driver-shaped:
+//   - vercel-blob (default): `{ clientToken }` — PUT to blob.vercel-storage.com
+//     with Authorization: Bearer <clientToken>, mirroring what
+//     @vercel/blob/client does internally; documented at
+//     https://vercel.com/docs/vercel-blob/using-blob-sdk.
+//   - s3: `{ uploadMethod: 'presigned-put', url, headers, blobUrl }` — a
+//     plain PUT of the bytes to the presigned URL with exactly the granted
+//     headers.
 
 console.log(`[2/4] Uploading ${OUTPUT_BYTES.byteLength} bytes to ${OUTPUT_PATHNAME}…`);
-const uploadRes = await fetch(`https://blob.vercel-storage.com/${OUTPUT_PATHNAME}`, {
-  method: 'PUT',
-  headers: {
-    Authorization: `Bearer ${clientToken}`,
-    'Content-Type': OUTPUT_CONTENT_TYPE,
-    'x-content-type': OUTPUT_CONTENT_TYPE,
-    'x-add-random-suffix': '0',
-    'x-allow-overwrite': '1',
-  },
-  body: OUTPUT_BYTES,
-});
-if (!uploadRes.ok) {
-  const text = await uploadRes.text();
-  console.error(`Blob upload failed (${uploadRes.status}): ${text.slice(0, 500)}`);
-  process.exit(1);
-}
-const uploadJson = await uploadRes.json();
-const BLOB_URL = uploadJson.url;
-if (!BLOB_URL) {
-  console.error('No url in upload response:', uploadJson);
-  process.exit(1);
+let BLOB_URL;
+if (tokenJson.uploadMethod === 'presigned-put') {
+  const uploadRes = await fetch(tokenJson.url, {
+    method: 'PUT',
+    headers: tokenJson.headers,
+    body: OUTPUT_BYTES,
+  });
+  if (!uploadRes.ok) {
+    const text = await uploadRes.text();
+    console.error(`Presigned upload failed (${uploadRes.status}): ${text.slice(0, 500)}`);
+    process.exit(1);
+  }
+  BLOB_URL = tokenJson.blobUrl;
+  if (!BLOB_URL) {
+    console.error('No blobUrl in presigned-put grant:', tokenJson);
+    process.exit(1);
+  }
+} else {
+  const clientToken = tokenJson.clientToken;
+  const uploadRes = await fetch(`https://blob.vercel-storage.com/${OUTPUT_PATHNAME}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${clientToken}`,
+      'Content-Type': OUTPUT_CONTENT_TYPE,
+      'x-content-type': OUTPUT_CONTENT_TYPE,
+      'x-add-random-suffix': '0',
+      'x-allow-overwrite': '1',
+    },
+    body: OUTPUT_BYTES,
+  });
+  if (!uploadRes.ok) {
+    const text = await uploadRes.text();
+    console.error(`Blob upload failed (${uploadRes.status}): ${text.slice(0, 500)}`);
+    process.exit(1);
+  }
+  const uploadJson = await uploadRes.json();
+  BLOB_URL = uploadJson.url;
+  if (!BLOB_URL) {
+    console.error('No url in upload response:', uploadJson);
+    process.exit(1);
+  }
 }
 console.log(`  ✓ stored at ${BLOB_URL}`);
 
