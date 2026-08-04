@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { createModelClient } from '@/lib/model-client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
@@ -65,10 +65,7 @@ Analysis output:
 ${output.slice(0, 4000)}`;
 
   try {
-    const openrouter = new OpenAI({
-      baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: process.env.OPENROUTER_API_KEY,
-    });
+    const openrouter = createModelClient();
 
     const response = await openrouter.chat.completions.create({
       model: SUMMARY_MODEL,

@@ -1,5 +1,5 @@
-import OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
+import { getModelClient } from './model-client';
 import { formatToolProgress, formatToolResult, generateToolReason, describeToolFailureForLlm, type PanelType, type ProgressPhase } from './streaming';
 import type { TraceBuilder } from './evidence/trace';
 import { hash as traceHash } from './evidence/trace';
@@ -16,11 +16,6 @@ export interface TraceContext {
    */
   resolveToolSource?: (toolName: string) => string | undefined;
 }
-
-const openrouter = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
 
 export interface ProgressOpts {
   duration_ms?: number;
@@ -98,7 +93,7 @@ export async function queryWithoutMcpStreaming(
     }
     messages.push({ role: 'user', content: query });
 
-    const stream = await openrouter.chat.completions.create({
+    const stream = await getModelClient().chat.completions.create({
       model,
       messages,
       max_tokens: 4000,
@@ -161,7 +156,7 @@ export async function queryWithMcpStreaming(
       ...(trace.systemPromptHash ? { 'gen_ai.system_prompt_hash': trace.systemPromptHash } : {}),
       'gen_ai.inference_index': 0,
     });
-    let response = await openrouter.chat.completions.create({
+    let response = await getModelClient().chat.completions.create({
       model,
       messages,
       tools,
@@ -299,7 +294,7 @@ export async function queryWithMcpStreaming(
         'gen_ai.request.model': model,
         'gen_ai.inference_index': currentIteration,
       });
-      response = await openrouter.chat.completions.create({
+      response = await getModelClient().chat.completions.create({
         model,
         messages,
         tools,
@@ -346,7 +341,7 @@ export async function queryWithMcpStreaming(
       }
 
       // Make final streaming call without tools
-      const finalStream = await openrouter.chat.completions.create({
+      const finalStream = await getModelClient().chat.completions.create({
         model,
         messages: [
           ...messages,
@@ -440,7 +435,7 @@ export async function queryWithMcpStreaming(
       // No content - make a final streaming call
       callbacks.onProgress(panel, 'Synthesizing findings into response...', { phase: 'synthesize' });
 
-      const finalStream = await openrouter.chat.completions.create({
+      const finalStream = await getModelClient().chat.completions.create({
         model,
         messages,
         max_tokens: 4000,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { createModelClient } from '@/lib/model-client';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -101,11 +101,8 @@ export async function POST(
   // Build system prompt (regenerated fresh — may differ slightly if guidance updated)
   const systemPrompt = await buildSystemPrompt(portal);
 
-  // Create OpenRouter client with user's API key
-  const openrouter = new OpenAI({
-    baseURL: 'https://openrouter.ai/api/v1',
-    apiKey: openRouterApiKey,
-  });
+  // Create a model client with the user's API key
+  const openrouter = createModelClient({ apiKey: openRouterApiKey });
 
   const startTime = Date.now();
   const toolsCalled: { name: string; args: Record<string, unknown> }[] = [];

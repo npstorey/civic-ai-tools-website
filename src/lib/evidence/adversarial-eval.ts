@@ -19,7 +19,7 @@
 // prompt-set version (SHA-256 of the rubric text, pinning the exact prompts),
 // evaluator model, scoring rubric identifier.
 
-import OpenAI from 'openai';
+import { createModelClient } from '@/lib/model-client';
 import { db } from '@/lib/db';
 import { attestationNodes } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
@@ -60,10 +60,7 @@ export async function runAdversarialEval(
   pkg: EvidencePackage,
   opts: { apiKey: string; evaluatorModel: string },
 ): Promise<ParsedEvaluation> {
-  const openrouter = new OpenAI({
-    baseURL: 'https://openrouter.ai/api/v1',
-    apiKey: opts.apiKey,
-  });
+  const openrouter = createModelClient({ apiKey: opts.apiKey });
   const response = await openrouter.chat.completions.create({
     model: opts.evaluatorModel,
     messages: [

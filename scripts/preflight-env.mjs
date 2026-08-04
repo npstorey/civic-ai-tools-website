@@ -41,10 +41,12 @@ import { fileURLToPath } from 'node:url';
 export const ENV_SPEC = [
   // --- Core query path (every demo query depends on these) ---
   { name: 'OPENROUTER_API_KEY', tier: 'required', purpose: 'LLM access — every query (no fallback)' },
+  { name: 'MODEL_API_BASE_URL', tier: 'optional', purpose: 'Chat-completions endpoint override — any OpenAI-compatible endpoint (default: OpenRouter)', hasFallback: true },
   { name: 'SOCRATA_MCP_URL', tier: 'required', purpose: 'Socrata MCP endpoint (the demo data source)', hasFallback: true },
 
   // --- Evidence publish + verify (the demo centerpiece: publish → badge) ---
   { name: 'DATABASE_URL', tier: 'required', purpose: 'Evidence DB — publish + dashboard + detail page' },
+  { name: 'DB_DRIVER', tier: 'optional', purpose: "DB driver — 'neon-http' (default) or 'node-postgres' (any Postgres over TCP)", hasFallback: true },
   { name: 'BLOB_READ_WRITE_TOKEN', tier: 'required', purpose: 'Evidence package storage (Vercel Blob)' },
   { name: 'EVIDENCE_SIGNING_KEY', tier: 'required', purpose: 'Ed25519 private key — signs evidence packages' },
   { name: 'EVIDENCE_KEY_ID', tier: 'required', purpose: 'Active signing key id (kid) — must match the trust registry', hasFallback: true }, // signing.ts: `EVIDENCE_KEY_ID || DEFAULT_KEY_ID`; the default mirrors the registry's active kid
@@ -54,6 +56,12 @@ export const ENV_SPEC = [
   { name: 'NEXTAUTH_URL', tier: 'required', purpose: 'OAuth callback base URL (must match the deploy origin)' },
   { name: 'GITHUB_CLIENT_ID', tier: 'required', purpose: 'GitHub sign-in (raises the per-user rate limit)' },
   { name: 'GITHUB_CLIENT_SECRET', tier: 'required', purpose: 'GitHub sign-in (raises the per-user rate limit)' },
+  // Generic OIDC sign-in (optional — active only when ISSUER + CLIENT_ID +
+  // CLIENT_SECRET are all present; unset, sign-in is GitHub only).
+  { name: 'OIDC_ISSUER', tier: 'optional', purpose: 'Generic OIDC sign-in — issuer URL (discovery-based)' },
+  { name: 'OIDC_CLIENT_ID', tier: 'optional', purpose: 'Generic OIDC sign-in — client id' },
+  { name: 'OIDC_CLIENT_SECRET', tier: 'optional', purpose: 'Generic OIDC sign-in — client secret' },
+  { name: 'OIDC_PROVIDER_NAME', tier: 'optional', purpose: 'OIDC sign-in button label (default "SSO")', hasFallback: true },
 
   // --- Rate limiting (durable counter; without it, falls back to per-instance memory) ---
   { name: 'KV_REST_API_URL', tier: 'required', purpose: 'Durable rate-limit counter (Upstash/Vercel KV)' },

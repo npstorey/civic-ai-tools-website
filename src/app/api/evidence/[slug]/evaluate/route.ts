@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { createModelClient } from '@/lib/model-client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -78,10 +78,7 @@ export async function POST(
     );
   }
 
-  const openrouter = new OpenAI({
-    baseURL: 'https://openrouter.ai/api/v1',
-    apiKey: openRouterApiKey,
-  });
+  const openrouter = createModelClient({ apiKey: openRouterApiKey });
 
   try {
     const evaluationContent = buildEvaluationPrompt(pkg);
