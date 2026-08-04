@@ -57,6 +57,14 @@ export const ENV_SPEC = [
   { name: 'S3_SECRET_ACCESS_KEY', tier: 'optional', purpose: 'S3 secret key (required when BLOB_DRIVER=s3)' },
   { name: 'S3_FORCE_PATH_STYLE', tier: 'optional', purpose: 'Path-style S3 addressing (default: on when S3_ENDPOINT is set — MinIO)', hasFallback: true },
   { name: 'S3_PUBLIC_BASE_URL', tier: 'optional', purpose: 'Public object URL base (default: endpoint/bucket path-style)', hasFallback: true },
+  // --- Notebook executor (S3b P4 driver seam; executed-notebook pipeline) ---
+  { name: 'EXECUTOR_DRIVER', tier: 'optional', purpose: "Notebook executor driver — 'vercel-sandbox' (default) or 'container' (host container runtime)", hasFallback: true },
+  { name: 'EXECUTOR_CONTAINER_IMAGE', tier: 'optional', purpose: 'Executor image tag (EXECUTOR_DRIVER=container only; default civic-notebook-executor:0.1.0)', hasFallback: true },
+  { name: 'SANDBOX_SNAPSHOT_ID', tier: 'recommended', purpose: 'Prebuilt sandbox snapshot — absent, the vercel-sandbox driver falls back to a slow fresh boot + pip install', hasFallback: true },
+  { name: 'VERCEL_TOKEN', tier: 'optional', purpose: 'Vercel Sandbox auth for off-platform runs (on-deploy auth is OIDC-automatic)' },
+  { name: 'VERCEL_TEAM_ID', tier: 'optional', purpose: 'Vercel Sandbox auth for off-platform runs (with VERCEL_TOKEN + VERCEL_PROJECT_ID)' },
+  { name: 'VERCEL_PROJECT_ID', tier: 'optional', purpose: 'Vercel Sandbox auth for off-platform runs (with VERCEL_TOKEN + VERCEL_TEAM_ID)' },
+
   { name: 'EVIDENCE_SIGNING_KEY', tier: 'required', purpose: 'Ed25519 private key — signs evidence packages' },
   { name: 'EVIDENCE_KEY_ID', tier: 'required', purpose: 'Active signing key id (kid) — must match the trust registry', hasFallback: true }, // signing.ts: `EVIDENCE_KEY_ID || DEFAULT_KEY_ID`; the default mirrors the registry's active kid
 
