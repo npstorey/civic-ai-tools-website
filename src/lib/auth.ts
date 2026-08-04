@@ -1,22 +1,56 @@
 import type { NextAuthOptions } from 'next-auth';
-import GithubProvider from 'next-auth/providers/github';
+import { buildProviders, normalizeIssuer, oidcAccountKey, OIDC_PROVIDER_ID } from './auth-providers';
 import { db } from '@/lib/db';
 import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 
+/**
+ * Upsert a user row keyed by its provider-account key (the `githubId`
+ * column: GitHub numeric id for GitHub sign-ins, `oidc:{issuer}:{sub}`
+ * composite for OIDC sign-ins — the prefix cannot collide with numeric ids).
+ */
+async function upsertUser(accountKey: string, displayName: string, profileUrl: string) {
+  const existing = await db
+    .select()
+    .from(users)
+    .where(eq(users.githubId, accountKey))
+    .limit(1);
+
+  if (existing.length === 0) {
+    await db.insert(users).values({
+      githubId: accountKey,
+      displayName,
+      githubProfileUrl: profileUrl,
+    });
+  } else {
+    // Update display name and profile URL in case they changed upstream
+    await db
+      .update(users)
+      .set({ displayName, githubProfileUrl: profileUrl })
+      .where(eq(users.githubId, accountKey));
+  }
+}
+
 export const authOptions: NextAuthOptions = {
-  providers: [
-    GithubProvider({
-      clientId: process.env.GITHUB_CLIENT_ID || '',
-      clientSecret: process.env.GITHUB_CLIENT_SECRET || '',
-    }),
-  ],
+  providers: buildProviders(),
   callbacks: {
-    async signIn({ user, profile }) {
+    async signIn({ user, account, profile }) {
       // Upsert user record in the database on every login.
       // Skip if DATABASE_URL is not configured (preserves existing behavior in dev).
       if (!process.env.DATABASE_URL) return true;
 
+      if (account?.provider === OIDC_PROVIDER_ID) {
+        // Generic OIDC sign-in: key by issuer + subject.
+        const subject = account.providerAccountId || user.id;
+        if (!subject) return true;
+        const displayName = user.name || user.email || 'Unknown';
+        // No provider-agnostic profile page exists; record the issuer origin.
+        const profileUrl = normalizeIssuer(process.env.OIDC_ISSUER || '');
+        await upsertUser(oidcAccountKey(subject), displayName, profileUrl);
+        return true;
+      }
+
+      // GitHub sign-in (the pre-existing path)
       const githubId = user.id;
       if (!githubId) return true;
 
@@ -24,25 +58,7 @@ export const authOptions: NextAuthOptions = {
       const displayName = user.name || ghProfile?.login || 'Unknown';
       const profileUrl = ghProfile?.html_url || `https://github.com/${ghProfile?.login || ''}`;
 
-      const existing = await db
-        .select()
-        .from(users)
-        .where(eq(users.githubId, githubId))
-        .limit(1);
-
-      if (existing.length === 0) {
-        await db.insert(users).values({
-          githubId,
-          displayName,
-          githubProfileUrl: profileUrl,
-        });
-      } else {
-        // Update display name and profile URL in case they changed on GitHub
-        await db
-          .update(users)
-          .set({ displayName, githubProfileUrl: profileUrl })
-          .where(eq(users.githubId, githubId));
-      }
+      await upsertUser(githubId, displayName, profileUrl);
 
       return true;
     },
@@ -63,12 +79,17 @@ export const authOptions: NextAuthOptions = {
         token.accessToken = account.access_token;
       }
 
-      // Look up the internal DB user ID on initial sign-in
+      // Look up the internal DB user ID on initial sign-in, by the same
+      // provider-account key the signIn upsert wrote.
       if (user?.id && process.env.DATABASE_URL) {
+        const accountKey =
+          account?.provider === OIDC_PROVIDER_ID
+            ? oidcAccountKey(account.providerAccountId || user.id)
+            : user.id;
         const dbUser = await db
           .select({ id: users.id })
           .from(users)
-          .where(eq(users.githubId, user.id))
+          .where(eq(users.githubId, accountKey))
           .limit(1);
         if (dbUser.length > 0) {
           token.dbUserId = dbUser[0].id;

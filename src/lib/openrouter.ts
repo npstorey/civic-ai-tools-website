@@ -1,10 +1,5 @@
-import OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
-
-const openrouter = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
+import { getModelClient } from './model-client';
 
 export interface CompletionResult {
   content: string;
@@ -30,7 +25,7 @@ export async function queryWithoutMcp(
   }
   messages.push({ role: 'user', content: query });
 
-  const response = await openrouter.chat.completions.create({
+  const response = await getModelClient().chat.completions.create({
     model,
     messages,
     max_tokens: 2000,
@@ -64,7 +59,7 @@ export async function queryWithMcp(
   }
   messages.push({ role: 'user', content: query });
 
-  let response = await openrouter.chat.completions.create({
+  let response = await getModelClient().chat.completions.create({
     model,
     messages,
     tools,
@@ -107,7 +102,7 @@ export async function queryWithMcp(
     }
 
     // Get next response
-    response = await openrouter.chat.completions.create({
+    response = await getModelClient().chat.completions.create({
       model,
       messages,
       tools,
@@ -136,7 +131,7 @@ export async function queryWithMcp(
     }
 
     // Make final call without tools to force a text response
-    response = await openrouter.chat.completions.create({
+    response = await getModelClient().chat.completions.create({
       model,
       messages: [
         ...messages,
@@ -161,5 +156,3 @@ export async function queryWithMcp(
     tools_called: toolsCalled.length > 0 ? toolsCalled : undefined,
   };
 }
-
-export { openrouter };
