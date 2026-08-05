@@ -40,7 +40,7 @@
  * Usage (vercel-sandbox leg — needs Vercel Sandbox auth; run through the
  * 1Password wrapper so the op:// references resolve; ONE command):
  *
- *   op run --env-file=.env.local -- node --experimental-strip-types \
+ *   op run --env-file=.env.parity.local -- node --experimental-strip-types \
  *     scripts/executor-parity.mjs run --driver vercel-sandbox --out parity-vercel.json
  *
  * Compare (exit 0 = parity, exit 1 = mismatch, differences listed):
@@ -77,7 +77,7 @@ function usage(message) {
       '  executor-parity.mjs compare <a.json> <b.json>',
       '',
       'vercel-sandbox leg (auth via 1Password wrapper), one command:',
-      '  op run --env-file=.env.local -- node --experimental-strip-types \\',
+      '  op run --env-file=.env.parity.local -- node --experimental-strip-types \\',
       '    scripts/executor-parity.mjs run --driver vercel-sandbox --out parity-vercel.json',
     ].join('\n'),
   );
