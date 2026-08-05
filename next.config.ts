@@ -1,6 +1,20 @@
 import type { NextConfig } from "next";
 
+/**
+ * Standalone output is opt-in via `BUILD_STANDALONE=1` (see `npm run
+ * build:standalone`). Unset — every existing build path, including the
+ * hosted one — is byte-for-byte the build this repo has always produced;
+ * set, `next build` additionally emits `.next/standalone/server.js` with a
+ * traced `node_modules`, which is what the container image runs.
+ *
+ * Standalone tracing is also where runtime-read non-JS assets can silently
+ * go missing (see `outputFileTracingIncludes` below), so a standalone build
+ * is only trustworthy together with `npm run check:standalone`.
+ */
+const standalone = process.env.BUILD_STANDALONE === '1';
+
 const nextConfig: NextConfig = {
+  ...(standalone ? { output: 'standalone' as const } : {}),
   images: {
     remotePatterns: [
       {
