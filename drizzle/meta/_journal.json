@@ -99,6 +99,13 @@
       "when": 1782929788389,
       "tag": "0013_add_base_package_hash_index",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1785931200000,
+      "tag": "0014_add_sealed_public_visibility",
+      "breakpoints": true
     }
   ]
 }

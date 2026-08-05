@@ -1,0 +1,27 @@
+-- M1 (EXPAND) of the ADR-0016 §A visibility-label rename: committed -> sealed,
+-- published -> public. This migration ONLY widens the enum. It rewrites no rows
+-- and does not touch the column default — the row flip and the default move are
+-- M2, a separate, separately-gated migration.
+--
+-- OWNER-RUN. Applied by hand via psql against production, ahead of the phase
+-- that starts writing the new labels. A downstream fork will apply this same
+-- file through an ordinary `drizzle-kit migrate`, so both paths must be safe on
+-- a database that may already hold the values: `IF NOT EXISTS` makes the
+-- statements idempotent by construction, and re-running the file is a no-op.
+-- (The earlier hand-authored ADD VALUE migrations here omit `IF NOT EXISTS`;
+-- this one needs it precisely because it has two application paths.)
+--
+-- VERIFY AFTER APPLYING — do not skip, and do not trust a tool's exit status:
+--
+--     \dT+ visibility
+--
+-- must list FOUR labels: published, committed, sealed, public. `drizzle-kit`
+-- can report success without having applied anything, so the catalog is the
+-- only acceptable evidence that this landed.
+--
+-- Note on transactions: `ALTER TYPE ... ADD VALUE` is safe inside a transaction
+-- block on PostgreSQL 12+, but the new label cannot be USED in the same
+-- transaction that adds it. Nothing here uses it, and the code that will is in
+-- a later deploy, so the ordering is fine either way.
+ALTER TYPE "public"."visibility" ADD VALUE IF NOT EXISTS 'sealed';--> statement-breakpoint
+ALTER TYPE "public"."visibility" ADD VALUE IF NOT EXISTS 'public';
