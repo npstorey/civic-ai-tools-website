@@ -25,16 +25,13 @@
  * Run:   npm run sandbox:build-snapshot
  */
 import { Sandbox } from '@vercel/sandbox';
-
-// Keep this list mirrored with src/lib/notebook-author/prompt.ts:PINNED_LIBRARIES.
-// Versions chosen so every pin has a prebuilt CPython 3.13 wheel — no
-// compiler needed in the python3.13 sandbox image.
-const PINNED_LIBRARIES: Record<string, string> = {
-  pandas: '2.2.3',
-  requests: '2.32.3',
-  numpy: '2.1.3',
-  matplotlib: '3.9.2',
-};
+// Pinned versions are single-sourced from the notebook-author table (S3b P4):
+// this script, the sandbox pip fallback, the notebook's own pip-install cell,
+// and the container executor image (docker/executor/Dockerfile, test-enforced)
+// all derive from PINNED_LIBRARIES. Versions are chosen there so every pin
+// has a prebuilt CPython 3.13 wheel — no compiler needed in the sandbox image.
+import { PINNED_LIBRARIES } from '../src/lib/notebook-author/prompt.ts';
+import { EXECUTOR_TOOLING_PACKAGES } from '../src/lib/sandbox/driver.ts';
 
 const SNAPSHOT_BUILD_TIMEOUT_MS = 600_000; // 10 minutes — pip install + freeze
 const SNAPSHOT_EXPIRATION_MS = 0;          // 0 = never expire (operator controls cadence)
@@ -51,7 +48,7 @@ async function main(): Promise<void> {
     const pipArgs = [
       'install', '--no-input',
       ...Object.entries(PINNED_LIBRARIES).map(([n, v]) => `${n}==${v}`),
-      'jupyter', 'ipykernel', 'nbformat', 'nbconvert',
+      ...EXECUTOR_TOOLING_PACKAGES,
     ];
     // The python3.13 sandbox image expects the CA bundle at the Debian
     // path `/etc/ssl/certs/ca-certificates.crt`, but Amazon Linux 2023

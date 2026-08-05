@@ -1,63 +1,89 @@
 /**
- * Vercel Sandbox integration for the executed-notebook pipeline (ADR-0005
- * Phase C, project plan N4).
+ * Notebook execution for the executed-notebook pipeline (ADR-0005 Phase C,
+ * project plan N4) — driver-dispatching since S3b P4.
  *
- * Boots a python3.13 sandbox from a pre-built snapshot (sub-second cold
- * start per ADR-0005 Context), writes the notebook in, runs
- * `jupyter nbconvert --execute` against it, and reads the executed
- * notebook back as JSON. The snapshot embeds the pinned scientific stack
- * (pandas/requests/numpy/matplotlib) AND jupyter so cold start is fast;
- * the build script that produces the snapshot lives at
- * `scripts/build-sandbox-snapshot.ts` (project-plan N5).
+ * The orchestration is runtime-agnostic: boot an executor session, write the
+ * notebook in, run `jupyter nbconvert --execute` against it, and read the
+ * executed notebook back as JSON. Which runtime boots is a driver decision
+ * (`NotebookExecutorDriver` in `./driver.ts`):
  *
- * Auth is OIDC-automatic on Vercel deployments; local dev needs
- * `VERCEL_OIDC_TOKEN` (via `vercel link` + `vercel env pull`) OR the
- * VERCEL_TOKEN+VERCEL_TEAM_ID+VERCEL_PROJECT_ID triple.
+ *   - 'vercel-sandbox' (default): Vercel Sandbox microVM — the demo
+ *     deployment's behavior, unchanged when the var is unset
+ *     (`./vercel-sandbox.ts`).
+ *   - 'container': the host container runtime via the docker CLI, using the
+ *     prebuilt image from `docker/executor/Dockerfile` (`./container.ts`).
+ *
+ * Selection follows the DB_DRIVER / BLOB_DRIVER pattern (`src/lib/db/
+ * index.ts`, `src/lib/storage/index.ts`): EXECUTOR_DRIVER env var, lazy
+ * dynamic import so the non-selected driver's SDK never loads, loud failure
+ * on unknown values.
  */
-import { Sandbox } from '@vercel/sandbox';
 import type { Notebook } from '../notebook-author/cells.ts';
 import { PINNED_LIBRARIES, PYTHON_RUNTIME_VERSION } from '../notebook-author/prompt.ts';
+import { EXECUTOR_TOOLING_PACKAGES, NotebookExecutionError } from './driver.ts';
+import type { ExecutorSession, NotebookExecutorDriver } from './driver.ts';
+
+export { NotebookExecutionError } from './driver.ts';
 
 /**
- * Wall-clock timeout for a single sandbox execution. The notebook itself
- * may run for up to NOTEBOOK_TIMEOUT_S; the sandbox timeout adds headroom
+ * Wall-clock timeout for a single execution session. The notebook itself
+ * may run for up to NOTEBOOK_TIMEOUT_S; the session timeout adds headroom
  * for boot, writeFiles, and readback. Per ADR-0005 Risks: 90-120s timeout.
  */
 const SANDBOX_TIMEOUT_MS = 180_000;
 const NOTEBOOK_TIMEOUT_S = 120;
 
-/** Path inside the sandbox where the unexecuted notebook is written. */
+/** Path inside the session where the unexecuted notebook is written. */
 const NOTEBOOK_IN_PATH = '/tmp/notebook.ipynb';
-/** Path inside the sandbox where jupyter writes the executed notebook. */
+/** Path inside the session where jupyter writes the executed notebook. */
 const NOTEBOOK_OUT_PATH = '/tmp/executed.ipynb';
 
-/** Environment-variable names this module honors at module load time. */
+/** Environment-variable names this module honors. */
+const ENV_EXECUTOR_DRIVER = 'EXECUTOR_DRIVER';
 const ENV_SNAPSHOT_ID = 'SANDBOX_SNAPSHOT_ID';
 const ENV_SOCRATA_TOKEN = 'SOCRATA_APP_TOKEN';
 const ENV_DC_API_KEY = 'DC_API_KEY';
 
+export type ExecutorDriverName = 'vercel-sandbox' | 'container';
+
 /**
- * The python3.13 sandbox image (Amazon Linux 2023 base) expects its CA
- * bundle at `/etc/ssl/certs/ca-certificates.crt` but ships it only at
- * `/etc/pki/tls/certs/ca-bundle.crt`. Setting the standard openssl-family
- * env vars so pip + `requests` inside the executed notebook resolve PyPI
- * and HTTPS civic-data endpoints. Mirrors scripts/build-sandbox-snapshot.ts.
+ * Resolve the configured driver name. Exported for tests; the unknown-value
+ * throw is deliberately loud and lazy (first execution, not import time).
  */
-const AL2023_CA_BUNDLE = '/etc/pki/tls/certs/ca-bundle.crt';
-const TLS_ENV: Record<string, string> = {
-  SSL_CERT_FILE: AL2023_CA_BUNDLE,
-  REQUESTS_CA_BUNDLE: AL2023_CA_BUNDLE,
-  PIP_CERT: AL2023_CA_BUNDLE,
-};
+export function resolveExecutorDriverName(
+  env: Record<string, string | undefined> = process.env,
+): ExecutorDriverName {
+  const driver = env[ENV_EXECUTOR_DRIVER] || 'vercel-sandbox';
+  if (driver === 'vercel-sandbox' || driver === 'container') return driver;
+  throw new Error(
+    `Unsupported EXECUTOR_DRIVER "${driver}" (expected "vercel-sandbox" or "container")`,
+  );
+}
+
+let _driver: NotebookExecutorDriver | null = null;
+
+async function getDriver(): Promise<NotebookExecutorDriver> {
+  if (!_driver) {
+    const name = resolveExecutorDriverName();
+    if (name === 'container') {
+      const { createContainerDriver } = await import('./container.ts');
+      _driver = createContainerDriver();
+    } else {
+      const { createVercelSandboxDriver } = await import('./vercel-sandbox.ts');
+      _driver = createVercelSandboxDriver();
+    }
+  }
+  return _driver;
+}
 
 export interface ExecuteNotebookOptions {
-  /** Snapshot to boot from. Defaults to env `SANDBOX_SNAPSHOT_ID`. */
+  /** Snapshot to boot from (vercel-sandbox driver only). Defaults to env `SANDBOX_SNAPSHOT_ID`. */
   snapshotId?: string;
-  /** Hard timeout for the whole sandbox session (ms). */
+  /** Hard timeout for the whole execution session (ms). */
   timeoutMs?: number;
   /** Timeout passed to `jupyter nbconvert --ExecutePreprocessor.timeout`. */
   notebookTimeoutS?: number;
-  /** Extra env vars passed to the sandbox. */
+  /** Extra env vars passed to the session. */
   extraEnv?: Record<string, string>;
   /** AbortSignal for the caller's wrapping timeout. */
   signal?: AbortSignal;
@@ -66,30 +92,19 @@ export interface ExecuteNotebookOptions {
 export interface ExecutionResult {
   /** Executed notebook (with output cells embedded). */
   notebook: Notebook;
-  /** Sandbox id; carried through into the execution-metadata stamp. */
+  /** Executor instance id (sandbox id or container id); carried through into
+   *  the execution-metadata stamp. */
   sandboxId: string;
-  /** Wall-clock duration from sandbox boot to readback (ms). */
+  /** Wall-clock duration from session boot to readback (ms). */
   executionDuration_ms: number;
-  /** Python version reported by the sandbox runtime. */
+  /** Python version reported by the session runtime. */
   pythonVersion: string;
-  /** Pinned library versions actually present inside the sandbox. */
+  /** Pinned library versions actually present inside the session. */
   libraries: Record<string, string>;
 }
 
-export class NotebookExecutionError extends Error {
-  readonly stderr?: string;
-  readonly exitCode?: number;
-  constructor(message: string, opts: { stderr?: string; exitCode?: number; cause?: unknown } = {}) {
-    super(message);
-    this.name = 'NotebookExecutionError';
-    this.stderr = opts.stderr;
-    this.exitCode = opts.exitCode;
-    if (opts.cause) (this as { cause?: unknown }).cause = opts.cause;
-  }
-}
-
-function buildSandboxEnv(extra?: Record<string, string>): Record<string, string> {
-  const env: Record<string, string> = { ...TLS_ENV };
+function buildNotebookEnv(extra?: Record<string, string>): Record<string, string> {
+  const env: Record<string, string> = {};
   const socrataToken = process.env[ENV_SOCRATA_TOKEN];
   if (socrataToken) env[ENV_SOCRATA_TOKEN] = socrataToken;
   const dcKey = process.env[ENV_DC_API_KEY];
@@ -102,40 +117,13 @@ function buildSandboxEnv(extra?: Record<string, string>): Record<string, string>
   return env;
 }
 
-interface SandboxCreateBase {
-  timeout: number;
-  env: Record<string, string>;
-}
-
-function createSandbox(
-  snapshotId: string | undefined,
-  base: SandboxCreateBase,
-): Promise<Sandbox> {
-  if (snapshotId) {
-    return Sandbox.create({
-      ...base,
-      source: { type: 'snapshot', snapshotId },
-    });
-  }
-  // No snapshot configured — boot a fresh python3.13 sandbox and install
-  // the pinned scientific stack inline. Slower (~10-30s cold start) and
-  // intended only for the snapshot-build script + local-dev smoke tests.
-  return Sandbox.create({
-    ...base,
-    runtime: 'python3.13',
-  });
-}
-
-async function ensureScientificStack(sandbox: Sandbox): Promise<void> {
+async function ensureScientificStack(session: ExecutorSession): Promise<void> {
   const pipArgs = [
     'install', '--quiet', '--no-input',
-    `pandas==${PINNED_LIBRARIES.pandas}`,
-    `requests==${PINNED_LIBRARIES.requests}`,
-    `numpy==${PINNED_LIBRARIES.numpy}`,
-    `matplotlib==${PINNED_LIBRARIES.matplotlib}`,
-    'jupyter', 'ipykernel', 'nbformat', 'nbconvert',
+    ...Object.entries(PINNED_LIBRARIES).map(([name, version]) => `${name}==${version}`),
+    ...EXECUTOR_TOOLING_PACKAGES,
   ];
-  const result = await sandbox.runCommand({ cmd: 'pip', args: pipArgs, env: TLS_ENV });
+  const result = await session.runCommand({ cmd: 'pip', args: pipArgs, env: {} });
   if (result.exitCode !== 0) {
     const stderr = await result.stderr();
     throw new NotebookExecutionError(
@@ -146,15 +134,16 @@ async function ensureScientificStack(sandbox: Sandbox): Promise<void> {
 }
 
 /**
- * Execute a notebook end-to-end in Vercel Sandbox.
+ * Execute a notebook end-to-end via the configured executor driver.
  *
  * The flow:
- *   1. Boot a sandbox (from `SANDBOX_SNAPSHOT_ID` snapshot when set, else a
- *      fresh python3.13 sandbox with inline pip install).
+ *   1. Boot a session (vercel-sandbox: from `SANDBOX_SNAPSHOT_ID` snapshot
+ *      when set, else a fresh python3.13 sandbox with inline pip install;
+ *      container: the prebuilt executor image).
  *   2. Write the notebook JSON to `/tmp/notebook.ipynb`.
  *   3. Run `jupyter nbconvert --to notebook --execute` against it.
  *   4. Read `/tmp/executed.ipynb` back and parse as JSON.
- *   5. Stop the sandbox (best-effort; errors are swallowed).
+ *   5. Stop the session (best-effort; errors are swallowed).
  *
  * Throws `NotebookExecutionError` when nbconvert exits non-zero or readback
  * fails. The caller (Phase D) is responsible for the comparison-cell append
@@ -167,19 +156,20 @@ export async function executeNotebook(
   const snapshotId = opts.snapshotId ?? process.env[ENV_SNAPSHOT_ID];
   const timeoutMs = opts.timeoutMs ?? SANDBOX_TIMEOUT_MS;
   const notebookTimeoutS = opts.notebookTimeoutS ?? NOTEBOOK_TIMEOUT_S;
-  const env = buildSandboxEnv(opts.extraEnv);
+  const env = buildNotebookEnv(opts.extraEnv);
   const startedAt = Date.now();
 
-  const sandbox = await createSandbox(snapshotId, { timeout: timeoutMs, env });
+  const driver = await getDriver();
+  const session = await driver.createSession({ timeoutMs, env, snapshotId });
   try {
-    // Without a snapshot, we still need the pinned scientific stack present.
-    if (!snapshotId) {
-      await ensureScientificStack(sandbox);
+    // Without a preinstalled stack (fresh sandbox), pip-install the pins.
+    if (!session.stackPreinstalled) {
+      await ensureScientificStack(session);
     }
 
-    // Stage the notebook on the sandbox filesystem.
+    // Stage the notebook on the session filesystem.
     const notebookJson = JSON.stringify(notebook);
-    await sandbox.writeFiles(
+    await session.writeFiles(
       [{ path: NOTEBOOK_IN_PATH, content: notebookJson }],
       opts.signal ? { signal: opts.signal } : undefined,
     );
@@ -187,7 +177,7 @@ export async function executeNotebook(
     // Execute the notebook in-place: nbconvert reads NOTEBOOK_IN_PATH, runs
     // every cell, and writes the executed copy to NOTEBOOK_OUT_PATH. Use a
     // generous per-cell timeout via --ExecutePreprocessor.timeout (seconds).
-    const convertResult = await sandbox.runCommand({
+    const convertResult = await session.runCommand({
       cmd: 'jupyter',
       args: [
         'nbconvert',
@@ -210,7 +200,7 @@ export async function executeNotebook(
     }
 
     // Read the executed notebook back as bytes, parse JSON.
-    const buffer = await sandbox.readFileToBuffer({ path: NOTEBOOK_OUT_PATH });
+    const buffer = await session.readFileToBuffer(NOTEBOOK_OUT_PATH);
     if (!buffer) {
       throw new NotebookExecutionError(`executed notebook not found at ${NOTEBOOK_OUT_PATH}`);
     }
@@ -221,18 +211,21 @@ export async function executeNotebook(
       throw new NotebookExecutionError('executed notebook JSON parse error', { cause: parseErr });
     }
 
-    // Capture runtime detail by asking the sandbox what python it has.
-    const versionResult = await sandbox.runCommand('python3', [
-      '-c',
-      'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")',
-    ]);
+    // Capture runtime detail by asking the session what python it has.
+    const versionResult = await session.runCommand({
+      cmd: 'python3',
+      args: [
+        '-c',
+        'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")',
+      ],
+    });
     const pythonVersion = versionResult.exitCode === 0
       ? (await versionResult.stdout()).trim() || PYTHON_RUNTIME_VERSION
       : PYTHON_RUNTIME_VERSION;
 
     return {
       notebook: executed,
-      sandboxId: sandbox.sandboxId,
+      sandboxId: session.id,
       executionDuration_ms: Date.now() - startedAt,
       pythonVersion,
       libraries: { ...PINNED_LIBRARIES },
@@ -241,7 +234,7 @@ export async function executeNotebook(
     // Best-effort cleanup; if the caller's signal aborted, stop() may also
     // throw — we swallow because the user already saw the abort.
     try {
-      await sandbox.stop();
+      await session.stop();
     } catch {
       /* ignore */
     }
