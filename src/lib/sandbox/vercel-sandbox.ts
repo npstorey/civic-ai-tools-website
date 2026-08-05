@@ -13,6 +13,17 @@
  * `VERCEL_OIDC_TOKEN` (via `vercel link` + `vercel env pull`) OR the
  * VERCEL_TOKEN+VERCEL_TEAM_ID+VERCEL_PROJECT_ID triple.
  *
+ * IMPORTANT — how that triple actually reaches the SDK: `@vercel/sandbox`
+ * and `@vercel/oidc` read exactly ONE auth variable from the environment,
+ * `VERCEL_OIDC_TOKEN`. The token/teamId/projectId triple is accepted *only*
+ * as explicit `Sandbox.create({ token, teamId, projectId })` parameters, so
+ * THIS MODULE reads the three variables and passes them through (see
+ * `resolveSandboxAuthParams`). Without that pass-through an off-platform run
+ * with the triple set still fails with `LocalOidcContextError` — and under a
+ * non-TTY wrapper (e.g. `op run`) the SDK's interactive-login fallback is
+ * disabled (`shouldPromptForCredentials()` requires a TTY), so it throws
+ * rather than prompting.
+ *
  * This module is the ONLY runtime importer of `@vercel/sandbox` — the seam
  * (`./execute.ts`) loads it lazily, so the container driver never touches
  * the SDK or its auth requirements.
@@ -48,24 +59,61 @@ interface SandboxCreateBase {
   env: Record<string, string>;
 }
 
+/** Environment-variable names for the off-platform auth triple. */
+const ENV_VERCEL_TOKEN = 'VERCEL_TOKEN';
+const ENV_VERCEL_TEAM_ID = 'VERCEL_TEAM_ID';
+const ENV_VERCEL_PROJECT_ID = 'VERCEL_PROJECT_ID';
+
+/** The SDK's `Credentials` shape — all three fields required, never partial. */
+export interface SandboxAuthParams {
+  token: string;
+  teamId: string;
+  projectId: string;
+}
+
+/**
+ * Resolve the off-platform auth triple from the environment.
+ *
+ * ALL THREE OR NONE, deliberately: the SDK's credential resolver treats a
+ * partial triple as a hard error (it throws "Missing credentials parameters
+ * to access the Vercel API") and falls through to the OIDC path only when
+ * all three are absent. Returning `null` unless the set is complete is what
+ * keeps the on-platform OIDC-automatic path untouched — production sets none
+ * of the three, so this returns null there and no auth keys are passed.
+ *
+ * SECRET HYGIENE: the returned token is passed straight to the SDK and is
+ * never logged, echoed, hashed, or included in an error message — not here
+ * and not in any caller. Pure function; exported for unit tests.
+ */
+export function resolveSandboxAuthParams(
+  env: Record<string, string | undefined> = process.env,
+): SandboxAuthParams | null {
+  const token = env[ENV_VERCEL_TOKEN]?.trim();
+  const teamId = env[ENV_VERCEL_TEAM_ID]?.trim();
+  const projectId = env[ENV_VERCEL_PROJECT_ID]?.trim();
+  if (token && teamId && projectId) return { token, teamId, projectId };
+  return null;
+}
+
 function createSandbox(
   snapshotId: string | undefined,
   base: SandboxCreateBase,
 ): Promise<Sandbox> {
-  if (snapshotId) {
-    return Sandbox.create({
-      ...base,
-      source: { type: 'snapshot', snapshotId },
-    });
-  }
-  // No snapshot configured — boot a fresh python3.13 sandbox; the
-  // orchestrator installs the pinned scientific stack inline. Slower
-  // (~10-30s cold start) and intended only for the snapshot-build script +
-  // local-dev smoke tests.
-  return Sandbox.create({
-    ...base,
-    runtime: 'python3.13',
-  });
+  const params = snapshotId
+    ? { ...base, source: { type: 'snapshot' as const, snapshotId } }
+    // No snapshot configured — boot a fresh python3.13 sandbox; the
+    // orchestrator installs the pinned scientific stack inline. Slower
+    // (~10-30s cold start) and intended only for the snapshot-build script +
+    // local-dev smoke tests.
+    : { ...base, runtime: 'python3.13' as const };
+
+  // Attach the auth triple ONLY when complete. Two distinct call shapes
+  // rather than a spread of possibly-undefined keys: an undefined-valued
+  // `token`/`teamId`/`projectId` would read to the SDK as a partial triple
+  // and throw. With the triple unset (the demo/production case) the call is
+  // byte-for-byte the pre-fix call and OIDC resolution is untouched.
+  const auth = resolveSandboxAuthParams();
+  return auth ? Sandbox.create({ ...params, ...auth }) : Sandbox.create(params);
 }
 
 export function createVercelSandboxDriver(): NotebookExecutorDriver {
