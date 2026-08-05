@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:standalone": "BUILD_STANDALONE=1 next build && npm run check:standalone",
+    "check:standalone": "node scripts/check-standalone-assets.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "node --test --experimental-strip-types 'src/**/*.test.ts'",

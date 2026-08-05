@@ -1,0 +1,26 @@
+# Build-context exclusions for the application image (see Dockerfile).
+#
+# `.env*` is excluded FIRST and without exception: the build context is
+# copied wholesale into the builder stage, and anything copied there is
+# recoverable from the image layers. Configuration reaches a container at
+# RUN time (compose `environment:` / `--env-file`), never at build time.
+.env
+.env.*
+
+# Reinstalled inside the image for the image's own platform.
+node_modules
+
+# Rebuilt inside the image.
+.next
+out
+build
+
+# Not needed to build or run the server.
+.git
+.github
+.vercel
+.claude
+coverage
+*.tsbuildinfo
+npm-debug.log*
+.DS_Store

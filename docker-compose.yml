@@ -1,0 +1,250 @@
+# Self-hosted deployment: application + Postgres + S3-compatible object
+# storage + a scheduler sidecar, wired onto the portability drivers
+# (DB_DRIVER=node-postgres, BLOB_DRIVER=s3, EXECUTOR_DRIVER=container).
+#
+# Bring-up:
+#   docker compose --profile build-only build executor-image   # once
+#   docker compose up --build
+#
+# ─── SECURITY: the app service mounts the host container-runtime socket ────
+# EXECUTOR_DRIVER=container executes notebooks by shelling out to `docker`
+# (src/lib/sandbox/container.ts), so the app container is given
+# /var/run/docker.sock and runs as root to use it. Be clear-eyed about the
+# cost: socket access is equivalent to root on the host. Anything able to
+# talk to that daemon can start a privileged container, bind-mount the host
+# filesystem, and step outside the container boundary — the isolation the
+# executor exists to provide does not extend to the app service itself.
+# Run this configuration only on a host you already trust the application
+# with, and do not expose the app's port to an untrusted network as-is.
+# The avoidance path is executor driver #3 (ADR-0023): an HTTP runner that
+# owns the runtime and exposes only "execute this notebook" over the
+# network, leaving the app with no socket at all. Until that exists, the
+# mount is the mechanism and this notice is the mitigation.
+# ───────────────────────────────────────────────────────────────────────────
+#
+# EXTERNAL BY DESIGN: the model endpoint and the MCP data endpoints are
+# network services, not containers here. Supply them by environment
+# (MODEL_API_BASE_URL / OPENROUTER_API_KEY, SOCRATA_MCP_URL,
+# DATA_COMMONS_MCP_URL / DATA_COMMONS_API_KEY).
+#
+# CONFIGURATION: every value written into this file is a neutral
+# local-development placeholder. Entries listed as a bare NAME are
+# pass-through — set in the container only when the caller's environment has
+# them, absent otherwise — so credentials and instance identity arrive from
+# your own environment file:
+#
+#   docker compose --env-file <your env file> up
+#
+# An instance that publishes signed evidence supplies EVIDENCE_SIGNING_KEY,
+# EVIDENCE_KEY_ID, and its own identity values; with none set the app runs
+# in the unsigned tier by design (ADR-0020) — publish stays gated off and
+# the running-unsigned banner shows. See docs/instance-setup.md.
+
+services:
+  postgres:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    # Placeholder credentials for a loopback-bound development database.
+    # Override all three from your own environment for anything else.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-civic}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localdev}
+      POSTGRES_DB: ${POSTGRES_DB:-civic}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-civic} -d ${POSTGRES_DB:-civic}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # Loopback-bound: the app reaches Postgres over the compose network;
+      # this mapping is for your own psql/inspection only.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+
+  minio:
+    # Pin to a dated release tag for a deployment you intend to keep.
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    # Placeholder credentials, as above — these are also the S3_* credentials
+    # the app authenticates with, so the two stay in step by construction.
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-localminio}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-localminio}
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - miniodata:/data
+    ports:
+      - "127.0.0.1:${S3_PORT:-9000}:9000"
+      - "127.0.0.1:${S3_CONSOLE_PORT:-9001}:9001"
+
+  # One-shot: create the evidence bucket and give it public-read objects.
+  # Public read matches the object-URL semantics the app is written against
+  # (a stored package URL is fetchable); confidentiality of an uncommitted
+  # package rests on its unguessable random key, not on bucket ACLs
+  # (src/lib/storage/index.ts putCommittedPackage).
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_USER" "$$MINIO_PASSWORD"
+        mc mb --ignore-existing "local/$$BUCKET"
+        mc anonymous set download "local/$$BUCKET"
+        echo "[minio-init] bucket $$BUCKET ready"
+    environment:
+      MINIO_USER: ${S3_ACCESS_KEY_ID:-localminio}
+      MINIO_PASSWORD: ${S3_SECRET_ACCESS_KEY:-localminio}
+      BUCKET: ${S3_BUCKET:-evidence}
+    restart: "no"
+
+  # One-shot: apply pending Drizzle migrations, then exit. Built from the
+  # image's `migrate` target (the build stage, which still has drizzle-kit
+  # and the drizzle/ folder).
+  migrate:
+    build:
+      context: .
+      target: migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-civic}:${POSTGRES_PASSWORD:-localdev}@postgres:5432/${POSTGRES_DB:-civic}
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    # Root + socket: see the SECURITY note in this file's header. Both lines
+    # exist for EXECUTOR_DRIVER=container and are removable together on a
+    # deployment that does not execute notebooks.
+    user: "root"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      # Loopback by default, deliberately: the socket mount above makes this
+      # container's reachability a host-security decision. Publish it wider
+      # (APP_BIND=0.0.0.0, or a reverse proxy) only once that is considered.
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"
+    healthcheck:
+      # Dependency-free endpoint (reads env, returns a boolean). Probed with
+      # node because the runtime image ships no HTTP client of its own.
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "fetch('http://127.0.0.1:3000/api/evidence/signing-status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    environment:
+      # --- portability drivers (S3b) ---
+      DB_DRIVER: node-postgres
+      DATABASE_URL: postgres://${POSTGRES_USER:-civic}:${POSTGRES_PASSWORD:-localdev}@postgres:5432/${POSTGRES_DB:-civic}
+      BLOB_DRIVER: s3
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${S3_BUCKET:-evidence}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-localminio}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-localminio}
+      # Object URLs are handed to browsers, so the public base is the address
+      # a browser can reach — not the in-network endpoint above. Keep the
+      # last path segment equal to S3_BUCKET.
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-http://localhost:9000/evidence}
+      EXECUTOR_DRIVER: container
+      EXECUTOR_CONTAINER_IMAGE: ${EXECUTOR_CONTAINER_IMAGE:-civic-notebook-executor:0.1.0}
+      # --- instance identity (ADR-0020; neutral local values) ---
+      EVIDENCE_SITE_ORIGIN: ${EVIDENCE_SITE_ORIGIN:-http://localhost:3000}
+      EVIDENCE_PUBLICATION_HOST: ${EVIDENCE_PUBLICATION_HOST:-localhost:3000}
+      EVIDENCE_SIGNER_BINDING_TIER: ${EVIDENCE_SIGNER_BINDING_TIER:-platform}
+      EVIDENCE_SIGNER_IDENTIFIER: ${EVIDENCE_SIGNER_IDENTIFIER:-platform:local-instance}
+      EVIDENCE_SIGNER_DISPLAY_NAME: ${EVIDENCE_SIGNER_DISPLAY_NAME:-Local Instance}
+      EVIDENCE_PLATFORM_AGENT_ID: ${EVIDENCE_PLATFORM_AGENT_ID:-local-instance}
+      EVIDENCE_PLATFORM_AGENT_TITLE: ${EVIDENCE_PLATFORM_AGENT_TITLE:-Local Instance}
+      # --- auth ---
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      # --- pass-through (key with no value): set in the container only when
+      # present in the caller's environment, absent otherwise ---
+      #   EVIDENCE_SIGNING_KEY / EVIDENCE_KEY_ID  unset ⇒ unsigned tier
+      #   NEXTAUTH_SECRET                         unset ⇒ sign-in unavailable
+      #   CRON_SECRET                             unset ⇒ scheduler rejected (401)
+      # NEXT_PUBLIC_* values are not here: those are inlined into client
+      # bundles at build time, so they belong to the image build, not to run.
+      EVIDENCE_SIGNING_KEY:
+      EVIDENCE_KEY_ID:
+      NEXTAUTH_SECRET:
+      GITHUB_CLIENT_ID:
+      GITHUB_CLIENT_SECRET:
+      OIDC_ISSUER:
+      OIDC_CLIENT_ID:
+      OIDC_CLIENT_SECRET:
+      OIDC_PROVIDER_NAME:
+      OPENROUTER_API_KEY:
+      MODEL_API_BASE_URL:
+      SOCRATA_MCP_URL:
+      SOCRATA_APP_TOKEN:
+      DATA_COMMONS_MCP_URL:
+      DATA_COMMONS_API_KEY:
+      DC_API_KEY:
+      CRON_SECRET:
+      KV_REST_API_URL:
+      KV_REST_API_TOKEN:
+
+  # Periodic caller for the scheduler endpoint. The endpoint is a plain
+  # bearer-authenticated GET (src/app/api/cron/blob-gc/route.ts), so any
+  # scheduler can drive it — this sidecar is the portable one; the hosted
+  # deployment keeps its platform cron (vercel.json) unchanged.
+  gc-cron:
+    image: curlimages/curl:8.11.1
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      GC_ENDPOINT: ${GC_ENDPOINT:-http://app:3000/api/cron/blob-gc}
+      GC_INTERVAL_SECONDS: ${GC_INTERVAL_SECONDS:-86400}
+      # Same pass-through as the app: both sides must hold the same secret.
+      CRON_SECRET:
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "[gc-cron] every $${GC_INTERVAL_SECONDS}s → $${GC_ENDPOINT}"
+        while true; do
+          printf '[gc-cron] %s ' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          curl -sS -w ' (http %{http_code})\n' \
+            -H "Authorization: Bearer $${CRON_SECRET}" \
+            "$${GC_ENDPOINT}" || echo '[gc-cron] request failed'
+          sleep "$${GC_INTERVAL_SECONDS}"
+        done
+
+  # Not started by `up`. Builds the notebook-executor image that the app's
+  # container driver runs on the HOST runtime through the mounted socket:
+  #
+  #   docker compose --profile build-only build executor-image
+  executor-image:
+    profiles: ["build-only"]
+    image: ${EXECUTOR_CONTAINER_IMAGE:-civic-notebook-executor:0.1.0}
+    build:
+      context: docker/executor
+
+volumes:
+  pgdata:
+  miniodata:
