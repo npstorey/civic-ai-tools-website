@@ -15,11 +15,13 @@
  * shown ONLY there. The badge SVG (served by typedstandards.org) enforces this;
  * this component only points at it.
  *
- * CALLER GATE: render this ONLY for `visibility === 'published'` records. The
- * verifier resolves a package through its `/commitment` sidecar, and a committed
+ * CALLER GATE: render this ONLY for records in the PUBLIC visibility state —
+ * test it via `normalizeVisibility` (`@/lib/evidence/visibility`), never against
+ * a raw label, since the column carries either vocabulary (ADR-0016 §A). The
+ * verifier resolves a package through its `/commitment` sidecar, and a sealed
  * record's commitment is redacted of the package location (content is private),
- * so /verify would surface a missing-content alarm. Committed support is tracked
- * separately (arch-gated); until then the badge is published-only.
+ * so /verify would surface a missing-content alarm. Sealed support is tracked
+ * separately (arch-gated); until then the badge is public-state-only.
  *
  * `commitmentUrl` is the absolute, publicly-fetchable commitment endpoint for
  * this package, resolved server-side from the request host so it is correct on

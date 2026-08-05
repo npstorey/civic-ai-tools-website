@@ -8,6 +8,7 @@ import { buildCommitmentView } from '@/lib/evidence/commitment';
 import { loadTrustRegistry } from '@/lib/evidence/verify';
 import { loadCarriedLifecycleAttestations } from '@/lib/evidence/lifecycle';
 import { classifyIdentifier, commitmentAccessError } from '@/lib/evidence/identifier';
+import { fromDbValue } from '@/lib/evidence/visibility';
 
 /**
  * GET /api/evidence/[hash|slug]/commitment
@@ -154,7 +155,11 @@ export async function GET(
   // public — the hash is already on the transparency log — but the content
   // surface is not. Serve the view redacted of the capability URL, title, and
   // summary; never inline the package.
-  const isCommitted = record.visibility === 'committed';
+  // Keyed on the canonical state, so redaction holds for a row under EITHER
+  // label (legacy `committed` or ADR-0016 `sealed`). Note this decides only
+  // WHETHER to redact — the `visibility` value the view SERVES is the raw
+  // column, passed through unchanged by `buildCommitmentView`.
+  const isCommitted = fromDbValue(record.visibility) === 'sealed';
   const commitment = buildCommitmentView(record, creator, pkg, lifecycleAttestations, {
     redactContentSurface: isCommitted,
   });

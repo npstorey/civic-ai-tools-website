@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { evidenceRecords, attestationPackages, users } from '@/lib/db/schema';
 import { eq, desc, asc, ilike, or, and, gte, isNull, isNotNull, sql } from 'drizzle-orm';
+import { visibilityMatches } from '@/lib/evidence/visibility-sql';
 
 const PAGE_SIZE = 20;
 
@@ -26,12 +27,17 @@ export async function GET(request: NextRequest) {
   const includeWithdrawn = params.get('withdrawn') === 'include';
   const page = Math.max(1, parseInt(params.get('page') || '1', 10));
 
-  // Build WHERE conditions. Committed records (civic-ai-tools#71) are never
+  // Build WHERE conditions. Sealed records (civic-ai-tools#71) are never
   // listed — their commitment is public via the commitment endpoint, but the
   // record itself is creator-only until published.
+  //
+  // The visibility filter is a SET-membership test over both public-state
+  // labels rather than equality against one (ADR-0016 §A; see
+  // `@/lib/evidence/visibility`). Equality against a single spelling would
+  // silently empty this listing the moment the row flip renames the rows.
   const conditions = [
     eq(evidenceRecords.isPublic, true),
-    eq(evidenceRecords.visibility, 'published' as const),
+    visibilityMatches(evidenceRecords.visibility, 'public'),
   ];
 
   // Exclude currently-withdrawn records by default.

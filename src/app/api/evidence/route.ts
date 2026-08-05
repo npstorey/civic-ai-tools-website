@@ -11,6 +11,13 @@ import { type BlobRef } from '@/lib/evidence/blob-ref';
 import { resolveRequestUser, hasScope } from '@/lib/api-auth';
 import { emitPublicationPair } from '@/lib/evidence/publication';
 import { evaluateSealCommitGate } from '@/lib/evidence/unsigned-tier';
+import {
+  normalizeVisibility,
+  toDbValue,
+  ACCEPTED_VISIBILITY_INPUTS,
+  type Visibility,
+  type VisibilityDbValue,
+} from '@/lib/evidence/visibility';
 
 function slugify(text: string): string {
   return text
@@ -108,12 +115,17 @@ interface PublishRequest {
    *  ADR-0010 §5/§6) — an instruction to the registry, NOT an envelope field
    *  (the package JSON is byte-identical either way; visibility is the
    *  structural consequence of which attestations reference the node).
-   *  `"published"` (default, back-compat): store content-addressably, list
-   *  publicly, emit the publication pair. `"committed"`: register the
+   *  `"public"` (default, back-compat): store content-addressably, list
+   *  publicly, emit the publication pair. `"sealed"`: register the
    *  commitment (sign + timestamp + Rekor) but emit no publishes/locatedAt
    *  attestations, keep the record unlisted, and store the content under a
-   *  random non-hash-derivable key. */
-  visibility?: 'published' | 'committed';
+   *  random non-hash-derivable key.
+   *
+   *  Both vocabularies are accepted, indefinitely: `"committed"` is an alias of
+   *  `"sealed"` and `"published"` of `"public"` (ADR-0016 §A back-compat
+   *  SHOULD — already-shipped clients and the published skill send the legacy
+   *  pair). See `@/lib/evidence/visibility`. */
+  visibility?: VisibilityDbValue;
 }
 
 export async function POST(request: NextRequest) {
@@ -132,8 +144,8 @@ export async function POST(request: NextRequest) {
 
     // Unsigned-tier gate-off (S3a P3, #166; ADR-0020 Decisions B/C, G0-3).
     // Both request-level visibilities are persist actions this route signs:
-    // "committed" registers a commitment (sealed-family) and "published" is
-    // the public state — an unsigned package may reach NEITHER, so with no
+    // "sealed" registers a commitment and "public" is the disclosed
+    // state — an unsigned package may reach NEITHER, so with no
     // signing key configured the whole persist path is refused up front
     // rather than storing a record with a null signature.
     const gate = evaluateSealCommitGate();
@@ -185,15 +197,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate visibility (civic-ai-tools#71). Request-level instruction;
-    // absence is equivalent to "published" (backwards compatibility — every
-    // pre-Phase-2 publish was public).
-    if (body.visibility && body.visibility !== 'published' && body.visibility !== 'committed') {
+    // absence is equivalent to "public" (backwards compatibility — every
+    // pre-Phase-2 publish was public). Both the ADR-0016 §A vocabulary and the
+    // legacy one are accepted; everything downstream branches on the canonical
+    // value, and the single write goes through `toDbValue`.
+    const requestedVisibility = body.visibility === undefined
+      ? 'public'
+      : normalizeVisibility(body.visibility);
+    if (requestedVisibility === null) {
       return NextResponse.json(
-        { error: 'visibility, when provided, must be "published" or "committed".' },
+        {
+          error: `visibility, when provided, must be one of: ${ACCEPTED_VISIBILITY_INPUTS.map((v) => `"${v}"`).join(', ')}.`,
+        },
         { status: 400 },
       );
     }
-    const visibility: 'published' | 'committed' = body.visibility ?? 'published';
+    const visibility: Visibility = requestedVisibility;
+    // The label actually persisted, and the one echoed back to the caller. Both
+    // stay on the legacy vocabulary until the flip phase — see `toDbValue`.
+    const visibilityDbValue = toDbValue(visibility);
 
     // Validate captureMethod (ADR-0003/0011). Required for all publishes;
     // must be in the captureMethod vocabulary declared by the package's
@@ -269,7 +291,7 @@ export async function POST(request: NextRequest) {
     // non-hash-derivable key (Phase 2 hard requirement: the hash is public in
     // Rekor, so a hash-derived pathname would leak committed content); the
     // canonical hash-addressed key is claimed at publication time.
-    const blobUrl = visibility === 'committed'
+    const blobUrl = visibility === 'sealed'
       ? await putCommittedPackage(pkg as unknown as Record<string, unknown>)
       : await putPackage(packageHash, pkg as unknown as Record<string, unknown>);
 
@@ -319,7 +341,7 @@ export async function POST(request: NextRequest) {
       basePackageRekorEntryBody: rekorResult?.entryBody || null,
       captureMethod: body.captureMethod,
       contentProfile: body.contentProfile ?? null,
-      visibility,
+      visibility: visibilityDbValue,
     });
 
     // Published-mode packages get the publication pair at publish time
@@ -329,7 +351,7 @@ export async function POST(request: NextRequest) {
     // failure doesn't fail the publish (the content is public and listed; the
     // pair can be re-emitted by a future repair pass).
     let publicationPair: { publishesNodeId: string; locatedAtNodeId: string } | null = null;
-    if (visibility === 'published') {
+    if (visibility === 'public') {
       try {
         publicationPair = await emitPublicationPair({
           targetNodeId: packageHash,
@@ -343,17 +365,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Committed records return NO public url (the record is unlisted and the
+    // Sealed records return NO public url (the record is unlisted and the
     // content URL is undisclosed); the slug + packageHash are the creator's
     // handles for the later publish step.
+    //
+    // The echoed `visibility` is the PERSISTED label, not the canonical one:
+    // this response is a served surface, and changing what clients read is the
+    // flip phase's chartered change, not a side effect of accepting aliases.
     const response = NextResponse.json(
-      visibility === 'committed'
-        ? { slug, packageHash, visibility }
+      visibility === 'sealed'
+        ? { slug, packageHash, visibility: visibilityDbValue }
         : {
             slug,
             url: `/evidence/${slug}`,
             packageHash,
-            visibility,
+            visibility: visibilityDbValue,
             ...(publicationPair ?? {}),
           },
     );

@@ -15,6 +15,8 @@ import {
   evaluateSealCommitGate,
   evaluateUnsignedRecordPublishGate,
 } from '@/lib/evidence/unsigned-tier';
+import { fromDbValue, toDbValue } from '@/lib/evidence/visibility';
+import { visibilityMatches } from '@/lib/evidence/visibility-sql';
 
 /**
  * POST /api/evidence/[slug]/publish
@@ -100,7 +102,9 @@ export async function POST(
     return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });
   }
 
-  if (record.visibility !== 'committed') {
+  // Precondition, keyed on the canonical state so a row holding EITHER label
+  // (legacy `committed` or ADR-0016 `sealed`) is still promotable.
+  if (fromDbValue(record.visibility) !== 'sealed') {
     return NextResponse.json({ error: 'Evidence is already published' }, { status: 400 });
   }
 
@@ -220,16 +224,22 @@ export async function POST(
     }
   }
 
-  // 2. Compare-and-set the visibility mirror committed→published. This is the
+  // 2. Compare-and-set the visibility mirror sealed→public. This is the
   //    concurrency guard: of two racing publishes, exactly one UPDATE matches
   //    the WHERE clause. The loser emits nothing and reports the conflict.
+  //
+  //    The compare side matches EITHER sealed-state label, so the guard keeps
+  //    working on rows still holding the legacy value — if it only matched one
+  //    spelling, a row on the other one would fail the CAS with a 409 and be
+  //    permanently unpublishable. The set side writes whatever `toDbValue`
+  //    currently persists, so the pre-check above and this update always agree.
   const won = await db
     .update(evidenceRecords)
-    .set({ visibility: 'published', updatedAt: new Date() })
+    .set({ visibility: toDbValue('public'), updatedAt: new Date() })
     .where(
       and(
         eq(evidenceRecords.id, record.id),
-        eq(evidenceRecords.visibility, 'committed' as const),
+        visibilityMatches(evidenceRecords.visibility, 'sealed'),
       ),
     )
     .returning({ id: evidenceRecords.id });
@@ -243,7 +253,7 @@ export async function POST(
   const revertToCommitted = async () => {
     await db
       .update(evidenceRecords)
-      .set({ visibility: 'committed', updatedAt: new Date() })
+      .set({ visibility: toDbValue('sealed'), updatedAt: new Date() })
       .where(eq(evidenceRecords.id, record.id));
   };
 

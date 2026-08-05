@@ -14,6 +14,7 @@ import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
 import { sessionUserIsCreator } from '@/lib/evidence/committed-access';
+import { fromDbValue } from '@/lib/evidence/visibility';
 import { loadEvaluationViews } from '@/lib/evidence/adversarial-eval';
 import EvaluationAttestationsSection from '@/components/evidence/EvaluationAttestationsSection';
 import ProvenanceChain from '@/components/evidence/ProvenanceChain';
@@ -119,7 +120,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // Committed records (civic-ai-tools#71): title/summary are content-derived
   // and creator-only — emit generic metadata regardless of viewer so nothing
   // content-bearing lands in OG tags, caches, or link previews.
-  if (data.record.visibility === 'committed') {
+  if (fromDbValue(data.record.visibility) === 'sealed') {
     return { title: 'Committed evidence record', robots: { index: false } };
   }
 
@@ -204,7 +205,7 @@ export default async function EvidencePage({ params }: PageProps) {
   // title, summary, notebook) does not exist for anyone else — 404, not 403,
   // so probing can't confirm the record. The public surface for a committed
   // claim is the redacted commitment sidecar.
-  const isCommitted = data.record.visibility === 'committed';
+  const isCommitted = fromDbValue(data.record.visibility) === 'sealed';
   if (isCommitted && !(await sessionUserIsCreator(data.record))) {
     notFound();
   }
