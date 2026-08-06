@@ -14,14 +14,21 @@ import { db } from '@/lib/db';
 import { users, type evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { resolveRequestUser } from '@/lib/api-auth';
+import { isSealedDbValue } from '@/lib/evidence/visibility';
 
 type VisibilityColumns = Pick<
   typeof evidenceRecords.$inferSelect,
   'visibility' | 'creatorId'
 >;
 
+/**
+ * True for the not-yet-disclosed state, under EITHER label — the row may hold
+ * the legacy `committed` or the ADR-0016 §A `sealed` (see
+ * `@/lib/evidence/visibility`). Historical rows keep the legacy label
+ * indefinitely, so this gate must never be keyed on one spelling.
+ */
 export function isCommittedRecord(record: VisibilityColumns): boolean {
-  return record.visibility === 'committed';
+  return isSealedDbValue(record.visibility);
 }
 
 /**

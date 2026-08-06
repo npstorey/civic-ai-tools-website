@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
 import { generateNotebook } from '@/lib/notebook';
 import type { Notebook } from '@/lib/notebook-author/cells';
+import { normalizeVisibility } from '@/lib/evidence/visibility';
 
 interface PublishEvidenceDialogProps {
   isOpen: boolean;
@@ -203,7 +204,12 @@ export default function PublishEvidenceDialog({
       // `url` is absent for committed-visibility responses; the slug-derived
       // page is creator-only until the record is published.
       setResultUrl(data.url ?? `/evidence/${data.slug}`);
-      setResultVisibility(data.visibility === 'committed' ? 'committed' : 'published');
+      // Read-side normalization only (ADR-0016 §A): the response may carry
+      // either vocabulary. The local state union and the request value it sends
+      // stay on the legacy labels in this phase.
+      setResultVisibility(
+        normalizeVisibility(data.visibility) === 'sealed' ? 'committed' : 'published',
+      );
       setDialogState('success');
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Publishing failed');

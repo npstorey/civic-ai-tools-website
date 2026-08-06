@@ -3,6 +3,7 @@
 import { useState, useCallback, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { normalizeVisibility } from '@/lib/evidence/visibility';
 
 // --- Types ---
 
@@ -18,8 +19,10 @@ interface EvidenceRow {
   reinstatedAt: string | null;
   createdAt: string;
   attestationCount: number;
-  /** Visibility mirror (civic-ai-tools#71): committed records are unlisted +
-   *  creator-only until promoted via the publish flow. */
+  /** Visibility mirror (civic-ai-tools#71), as the raw DB label — either
+   *  vocabulary (ADR-0016 §A; normalized through `@/lib/evidence/visibility`).
+   *  Sealed records are unlisted + creator-only until promoted via the publish
+   *  flow. */
   visibility: string;
 }
 
@@ -292,7 +295,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
                   {r.title}
                 </Link>
                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center' }}>
-                  {r.visibility === 'committed' && <StatusBadge status="committed" />}
+                  {normalizeVisibility(r.visibility) === 'sealed' && <StatusBadge status="committed" />}
                   {isCurrentlyWithdrawn
                     ? <StatusBadge status="withdrawn" />
                     : <StatusBadge status={r.verificationStatus} />
@@ -336,7 +339,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
                     <span style={{ color: 'var(--nyc-success)' }}>Reinstated {formatDate(r.reinstatedAt!)}</span>
                   </>
                 )}
-                {r.visibility === 'committed' && !isCurrentlyWithdrawn && (
+                {normalizeVisibility(r.visibility) === 'sealed' && !isCurrentlyWithdrawn && (
                   <>
                     <span>{'\u00b7'}</span>
                     {signingConfigured ? (

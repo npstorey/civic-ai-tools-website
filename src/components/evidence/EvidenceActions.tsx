@@ -7,6 +7,7 @@ import {
   summarizeIntegrity,
   resolveCaptureMethodLabel,
 } from '@/lib/evidence/trust-signal';
+import { normalizeVisibility } from '@/lib/evidence/visibility';
 import type {
   KeyTrustResult,
   BlobRefVerification,
@@ -28,10 +29,11 @@ interface EvidenceActionsProps {
    *  neutral informational label beside the signature verdict (#11,
    *  "signed ≠ verbatim"). */
   captureMethod: string | null;
-  /** Record visibility (`published` | `committed`). Gates the verify badge
+  /** Record visibility, as the raw DB label — either vocabulary (ADR-0016 §A;
+   *  normalized through `@/lib/evidence/visibility`). Gates the verify badge
    *  (#114): the delegated verifier resolves a package via its commitment
-   *  sidecar, which is redacted for committed records, so the badge is
-   *  published-only. */
+   *  sidecar, which is redacted for sealed records, so the badge is
+   *  public-state-only. */
   visibility: string;
   /** Absolute, publicly-fetchable commitment endpoint for this package
    *  (resolved server-side from the request host). The verify badge (#114)
@@ -278,7 +280,7 @@ export default function EvidenceActions({
             missing-content alarm. Rendered independent of the glance's load
             state — when our own check can't load, "verify it yourself" matters
             most. */}
-        {visibility === 'published' && <VerifyBadge commitmentUrl={commitmentUrl} />}
+        {normalizeVisibility(visibility) === 'public' && <VerifyBadge commitmentUrl={commitmentUrl} />}
       </div>
 
       {/* Actions */}

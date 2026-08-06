@@ -92,9 +92,32 @@ export const contentProfileEnum = pgEnum('content_profile', [
 // mirror in the same pattern as the withdrawn/reinstated columns — the publish
 // flow dual-writes it alongside emitting the signed attestation pair. Legacy
 // rows backfill to 'published' (every pre-Phase-2 publish was public).
+//
+// ADR-0016 §A renames the two STATE labels — `committed` -> `sealed`,
+// `published` -> `public` — while the verb "Publish", the cryptographic
+// "commitment" noun, and `attestation/publishes/v1` all stay put. The rename
+// ships as expand -> flip -> keep-the-dead-values, so the enum carries all four
+// labels permanently (Postgres cannot drop an enum value without recreating the
+// type, and keeping the legacy pair makes every step reversible and every
+// historical dump readable).
+//
+// THIS DECLARATION RUNS AHEAD OF THE DATABASE. The `sealed` / `public` labels
+// reach the live enum only when the owner-run M1 expand migration
+// (drizzle/0014_add_sealed_public_visibility.sql) is applied. Declaring them
+// early is inert: a drizzle `pgEnum` is a compile-time type declaration plus a
+// migration-diff input — it emits no runtime validation — and the code in this
+// phase writes ONLY the legacy labels, because
+// `src/lib/evidence/visibility.ts#toDbValue` still maps the canonical values
+// back to `committed` / `published`. Order matches what `ALTER TYPE ... ADD
+// VALUE` produces: the new labels append after the existing two.
+//
+// The column DEFAULT stays `'published'` in this phase; moving it is part of
+// the later flip, alongside the row rewrite.
 export const visibilityEnum = pgEnum('visibility', [
   'published',
   'committed',
+  'sealed',
+  'public',
 ]);
 
 // --- Tables ---
