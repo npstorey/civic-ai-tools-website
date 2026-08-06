@@ -16,7 +16,7 @@ This contract spans three repositories. If you're integrating, here's how they r
 
 Every ADR, `§`-reference, issue, and Q-number below is hyperlinked to its source — follow the link rather than guessing which repo it's in.
 
-_Last updated: 2026-08-02 — see the [change log](#change-log) for dated changes._
+_Last updated: 2026-08-05 — see the [change log](#change-log) for dated changes._
 
 **Status:** Schema version `0.1.0`. Fields may be added in a backwards-compatible way; breaking changes will bump the `schemaVersion` inside the package and be noted in the change log at the bottom of this document. The 2026-05-19 amendment introduces the `contentProfile` field per [ADR-0004](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0004-dathere-captureMethod-variant.md) and reverts the brief 2026-05-18 `datHere` captureMethod variant; both changes are additive — pre-ADR-0004 packages hash byte-identical with the new code.
 
@@ -107,7 +107,7 @@ Send exactly one auth header — when both are present, the `Authorization` head
 | `duration_ms`           | number             | no       | End-to-end analysis duration in milliseconds.                                                                                                           |
 | `skillMetadataOverride` | object             | no       | Override for the skill metadata normally extracted from the trace. Required when `trace` is a BlobRef. See [Blob references](#blob-references-phase-b6). |
 | `extensions`            | object             | no       | Implementation-specific artifacts keyed by reverse-DNS identifiers (e.g., `"org.civicaitools.notebook"`). Extensions are included in the canonical JSON and therefore covered by the package hash. |
-| `visibility`            | string             | no       | Request-level visibility instruction per [civic-ai-tools#71](https://github.com/npstorey/civic-ai-tools/issues/71): `"published"` (default) or `"committed"`. NOT an envelope field — the package JSON is identical either way. See [Committed-mode publishing](#committed-mode-publishing-live-since-2026-06-12). |
+| `visibility`            | string             | no       | Request-level visibility instruction per [civic-ai-tools#71](https://github.com/npstorey/civic-ai-tools/issues/71): `"public"` (default) or `"sealed"`. The legacy spellings `"published"` and `"committed"` are accepted as aliases indefinitely (deprecated, see below). NOT an envelope field — the package JSON is identical either way. See [Sealed-mode publishing](#sealed-mode-publishing-live-since-2026-06-12). |
 
 #### `toolCalls[]` entries
 
@@ -387,7 +387,7 @@ This section is the integration contract for the attest-by-default / publish-by-
 |---|---|
 | Withdrawal / reinstatement as signed `attestation/*` nodes | **Live** (`POST /api/evidence/:slug/withdraw`, `/reinstate`) |
 | Visibility expressed as attestation presence (spec semantics) | **Ratified** (spec §8.10, ADR-0010) — this is the normative model now |
-| Committed-mode publishing (`visibility: "committed"` request flag) | **Live** (Phase 2, 2026-06-12) |
+| Sealed-mode publishing (`visibility: "sealed"` request flag) | **Live** (Phase 2, 2026-06-12; renamed from `"committed"` 2026-08-05 per ADR-0016 §A — the legacy spelling still works) |
 | Publication-record creation (`POST /api/evidence/:slug/publish`) | **Live** (Phase 2, 2026-06-12) |
 | Adversarial-eval attestation as a signed `attestation/evaluates/v1` node + default-on publication gate | **Live** (Phase 3, 2026-06-12) — `runEvaluation` defaults to `true` on the publish route |
 | Host self-attestation (`requiresAdversarialEvalOnPublication`) | **Specified shape, reserved sub-type** — `content/host/v1` is reserved per ADR-0009 §7; the field shape below is the agreed v1 contract (Q22 / proposed-issue 008) |
@@ -400,10 +400,18 @@ The integration-arc issues were written before the unified-primitive consolidati
 |---|---|
 | `visibility: "committed"` envelope field | **Not a field.** A content node that is signed and transparency-logged but has **no `attestation/publishes/v1` and no public `attestation/locatedAt/v1`** referencing it. This is the zero-location base case (ADR-0010 §5, spec §8.10.2). |
 | `visibility: "published"` envelope field | **Not a field.** A content node referenced by an `attestation/publishes/v1` **and** at least one `attestation/locatedAt/v1` — publication is two coupled, independently Rekor-included signed nodes (ADR-0010 §6). |
-| `publication-record` claim type | **Is** the `attestation/publishes/v1` node (payload: `targetNodeId`, `publicationHost`, `releasedAt`), typically paired with the publisher's own `attestation/locatedAt/v1` (payload: `targetNodeId`, `uri`, `contentHash`, optional `contentLength`/`availability`). Multiple parties publishing the same committed claim each emit their own pair. |
+| `publication-record` claim type | **Is** the `attestation/publishes/v1` node (payload: `targetNodeId`, `publicationHost`, `releasedAt`), typically paired with the publisher's own `attestation/locatedAt/v1` (payload: `targetNodeId`, `uri`, `contentHash`, optional `contentLength`/`availability`). Multiple parties publishing the same sealed claim each emit their own pair. |
 | `visibility: "group"` (reserved) | Still reserved. No sub-type is minted; group-corroboration patterns are future work under Q20. |
 | Publication is irreversible; withdrawal is a meta-attestation | Preserved by construction: `attestation/withdraws/v1` is a separately-signed `publisher-only` node that reverses the publisher's *own* visibility commitment without erasing anything — retention asymmetry is normative (spec §8.10.3). |
 | `hostPointers` can be empty (point-to-point distribution) | Zero `attestation/locatedAt/v1` nodes — the recipient-distributed case under the zero-location base case. |
+
+The left column above quotes the **issues' original wording verbatim**, so that
+someone reading civic-ai-tools#71/#72 can find the ratified shape. It is not
+current vocabulary on two counts: those `visibility` values were never envelope
+fields, and the state labels themselves were subsequently renamed
+`committed` → `sealed` and `published` → `public` by
+[ADR-0016 §A](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0016-vcs-native-lifecycle-mapping.md)
+(see [Sealed-mode publishing](#sealed-mode-publishing-live-since-2026-06-12)).
 
 Why the envelope must not carry a visibility field: visibility changes over a node's life, and the envelope is content-addressed — a field flip would re-hash and re-sign the node, breaking the "publication adds attestations to the chain" property. ADR-0010's considered-and-rejected list records this decision; clients MUST NOT add a `visibility` key to package extensions to simulate it.
 
@@ -416,39 +424,78 @@ Withdrawal and reinstatement are shipped and emit conformant `attestation/*` nod
 
 Verifiers resolve lifecycle from the attestation chain first and fall back to the legacy columns only for pre-chain records (spec §8.10.4 dual-read). The bundle and commitment endpoints carry the signed lifecycle envelopes so third-party verifiers resolve the chain offline.
 
-### Committed-mode publishing (live since 2026-06-12)
+<a id="committed-mode-publishing-live-since-2026-06-12"></a>
+
+### Sealed-mode publishing (live since 2026-06-12)
 
 `POST /api/evidence` accepts an optional **request-level** `visibility` field — an instruction to the registry, not an envelope field (the package JSON is unchanged either way):
 
 | Value | Behavior |
 |---|---|
-| `"published"` (default) | Prior behavior, made explicit: the platform stores the package content-addressably, signs it, timestamps it, Rekor-includes it, lists it in the public registry, and emits the publication pair — `attestation/publishes/v1` + the platform's own `attestation/locatedAt/v1` — at publish time. Pair emission is best-effort (matching the signing posture); when it succeeds the response carries `publishesNodeId` + `locatedAtNodeId`. |
-| `"committed"` | The platform builds, signs, timestamps, and Rekor-includes the content node — the **commitment is publicly registered** — but emits **no** `attestation/publishes/v1` and **no** `attestation/locatedAt/v1`, does not list the record in the public registry index, and does not disclose a content URL. The content blob is stored under a **random, non-hash-derivable key** (the package hash is public in Rekor, so a hash-derived pathname would leak committed content). The publisher holds (or separately distributes) the bytes — the creator-only bundle export is the supported distribution artifact. |
+| `"public"` (default) | Prior behavior, made explicit: the platform stores the package content-addressably, signs it, timestamps it, Rekor-includes it, lists it in the public registry, and emits the publication pair — `attestation/publishes/v1` + the platform's own `attestation/locatedAt/v1` — at publish time. Pair emission is best-effort (matching the signing posture); when it succeeds the response carries `publishesNodeId` + `locatedAtNodeId`. |
+| `"sealed"` | The platform builds, signs, timestamps, and Rekor-includes the content node — the **commitment is publicly registered** — but emits **no** `attestation/publishes/v1` and **no** `attestation/locatedAt/v1`, does not list the record in the public registry index, and does not disclose a content URL. The content blob is stored under a **random, non-hash-derivable key** (the package hash is public in Rekor, so a hash-derived pathname would leak sealed content). The publisher holds (or separately distributes) the bytes — the creator-only bundle export is the supported distribution artifact. |
 
-The default is `"published"` for backwards compatibility — existing clients see no behavior change. The website publish dialog defaults its *UI choice* to **committed** per civic-ai-tools#71 scope item 7 (attest by default, publish by choice) and sends the flag explicitly; committed records are then promoted from the dashboard, where the publish step runs the default-on adversarial-eval gate. Note the asymmetry this creates deliberately: the dashboard promotion path always passes through the eval gate, while direct `visibility: "published"` publishes (API clients; the dialog's explicit "Publish now" choice) emit the publication pair without an evaluation — consistent with Q25's host-policy-not-protocol-mandatory posture.
+#### Accepted values and the legacy aliases
 
-Committed-mode response: `{ slug, packageHash, visibility: "committed" }` — no public `url` is returned. Published-mode response (additively extended): `{ slug, url, packageHash, visibility: "published", publishesNodeId?, locatedAtNodeId? }`.
+`visibility` is one of **four accepted input literals**, and will be indefinitely:
 
-What a committed record looks like from the outside:
+| Input literal | Means | Status |
+|---|---|---|
+| `"sealed"` | the not-yet-disclosed state | **Current** (ADR-0016 §A) |
+| `"public"` | the disclosed state | **Current** (ADR-0016 §A) |
+| `"committed"` | alias of `"sealed"` | **Deprecated**, accepted indefinitely |
+| `"published"` | alias of `"public"` | **Deprecated**, accepted indefinitely |
+
+The two vocabularies are indistinguishable once the value is accepted — the same
+record is produced either way, and the same bytes are signed. Anything else is
+rejected with `400`.
+
+There is **no removal date** for the deprecated pair, and none is planned:
+already-shipped clients and the published `publish-evidence` skill send it, and
+[ADR-0016 §A](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0016-vcs-native-lifecycle-mapping.md)
+makes back-compat a SHOULD. "Deprecated" here means only that new clients should
+write `"sealed"` / `"public"`.
+
+**What is SERVED, as of 2026-08-05, is always the current vocabulary.** Every
+response field that carries a visibility state — the `POST /api/evidence` echo,
+`GET /api/evidence/:slug`, and the `/commitment` sidecar — emits `"sealed"` or
+`"public"`, including for records created before the rename. A consumer that
+branches on the served value therefore needs to handle exactly two literals; a
+consumer reading a stored copy of an older response may still see the legacy
+pair and should treat the two vocabularies as synonymous.
+
+**What is renamed and what is not.** ADR-0016 §A moves the *state label* only.
+The verb stays **"Publish"** (and its mirror **"Seal"**), the relationship stays
+`attestation/publishes/v1` + `attestation/locatedAt/v1`, and the cryptographic
+**"commitment"** noun — the `/commitment` endpoint, the commitment view, the
+commitment bundle — is untouched. A sealed node and a public node BOTH carry a
+public transparency-log commitment; `visibility` describes whether the *content*
+is disclosed, never whether the node is on the ledger.
+
+The default is `"public"` for backwards compatibility — existing clients see no behavior change. The website publish dialog defaults its *UI choice* to **Seal** per civic-ai-tools#71 scope item 7 (attest by default, publish by choice) and sends the flag explicitly; sealed records are then promoted from the dashboard, where the publish step runs the default-on adversarial-eval gate. Note the asymmetry this creates deliberately: the dashboard promotion path always passes through the eval gate, while direct `visibility: "public"` publishes (API clients; the dialog's explicit "Publish now" choice) emit the publication pair without an evaluation — consistent with Q25's host-policy-not-protocol-mandatory posture.
+
+Sealed-mode response: `{ slug, packageHash, visibility: "sealed" }` — no public `url` is returned. Public-mode response (additively extended): `{ slug, url, packageHash, visibility: "public", publishesNodeId?, locatedAtNodeId? }`. The echoed `visibility` is the current vocabulary regardless of which spelling the request used.
+
+What a sealed record looks like from the outside:
 
 - **Not listed** in `/api/evidence/list` or the public registry index.
 - **Creator-only** (404 to everyone else, including probes) on every content-bearing surface: the detail page, `GET /api/evidence/:slug`, `/package`, `/bundle`, `/verify`, `/replay`, `/evaluate`, `/attestations`. The creator authenticates by session cookie or bearer token.
-- **Commitment publicly served, redacted**: `GET /api/evidence/:slug/commitment` (and the hash-addressed form) returns the proofs — `packageHash`, signature envelope, signer, envelope taxonomy fields, RFC 3161 token, Rekor entry + inclusion proof, lifecycle chain — plus `visibility: "committed"`, but **omits** `packageUrl`, `subjectTitle`, and `subjectSummary`, and never inlines the package (`?inline=1` inlines only the trust registry). A recipient holding creator-distributed bytes verifies them against this redacted commitment.
+- **Commitment publicly served, redacted**: `GET /api/evidence/:slug/commitment` (and the hash-addressed form) returns the proofs — `packageHash`, signature envelope, signer, envelope taxonomy fields, RFC 3161 token, Rekor entry + inclusion proof, lifecycle chain — plus `visibility: "sealed"`, but **omits** `packageUrl`, `subjectTitle`, and `subjectSummary`, and never inlines the package (`?inline=1` inlines only the trust registry). A recipient holding creator-distributed bytes verifies them against this redacted commitment.
 
 Two honesty notes integrating clients should know:
 
-1. **A public Rekor inclusion is itself a disclosure** — the envelope hash, timestamp, and signer identity become public records even for committed claims (spec §11.1; ADR-0010 §4). Truly-no-public-footprint flows require a private transparency-log substrate, which is design-permitted but not built (Xanadu-gated).
-2. **Content-URL non-derivability is implemented as a random storage key.** Committed blobs live at `evidence-packages/committed/<128-bit-random-hex>.json` — a capability URL the platform never discloses. At publication the content is re-homed to the canonical `evidence-packages/<hash>.json` key and the old capability URL is deleted.
+1. **A public Rekor inclusion is itself a disclosure** — the envelope hash, timestamp, and signer identity become public records even for sealed claims (spec §11.1; ADR-0010 §4). Truly-no-public-footprint flows require a private transparency-log substrate, which is design-permitted but not built (Xanadu-gated).
+2. **Content-URL non-derivability is implemented as a random storage key.** Sealed blobs live at `evidence-packages/committed/<128-bit-random-hex>.json` — a capability URL the platform never discloses. At publication the content is re-homed to the canonical `evidence-packages/<hash>.json` key and the old capability URL is deleted. (That path segment keeps its original spelling deliberately: it is a frozen storage literal, and every already-stored sealed package's capability URL contains it. It is not a state label and clients never see it.)
 
 ### Publication-record creation (live since 2026-06-12)
 
-A committed claim is promoted to published by creating the publication pair:
+A sealed claim is promoted to the public state by creating the publication pair:
 
-- **`POST /api/evidence/:slug/publish`** — authorization: publisher-only (the record's creator, via bearer token with `evidence:publish` scope or session cookie; delegated-publisher is a future ADR per Q20). Body: `{ "runEvaluation"?: boolean, "evaluatorModel"?: string }` — see [the publication gate](#the-publication-gate-live-since-2026-06-12) for the default-on adversarial evaluation that runs first. Flow: the adversarial eval runs and its signed node is emitted; the visibility transition is a compare-and-set (a concurrent second publish loses the race and gets `409`); then the content is re-homed from its random committed key to the canonical hash-addressed key and two independently signed + timestamped + Rekor-included nodes are emitted:
+- **`POST /api/evidence/:slug/publish`** — authorization: publisher-only (the record's creator, via bearer token with `evidence:publish` scope or session cookie; delegated-publisher is a future ADR per Q20). Body: `{ "runEvaluation"?: boolean, "evaluatorModel"?: string }` — see [the publication gate](#the-publication-gate-live-since-2026-06-12) for the default-on adversarial evaluation that runs first. Flow: the adversarial eval runs and its signed node is emitted; the visibility transition is a compare-and-set (a concurrent second publish loses the race and gets `409`); then the content is re-homed from its random sealed-mode capability key to the canonical hash-addressed key and two independently signed + timestamped + Rekor-included nodes are emitted:
   1. `attestation/publishes/v1` — payload `targetNodeId` (the package's envelope hash), `publicationHost` (`"civicaitools.org"`), `releasedAt`.
   2. `attestation/locatedAt/v1` — payload `targetNodeId`, `uri` (the now-public content URL), `targetContentHash` (multihash; matches the target's own `contentHash` — named `targetContentHash` rather than the §8.12.1 table's `contentHash` because that key is the attestation envelope's own fingerprint; registered as open-questions Q48), optional `contentLength`.
 
-  Returns `{ published: true, evaluationNodeId?, publishesNodeId, locatedAtNodeId, url }` (`evaluationNodeId` present unless `runEvaluation: false`). On pair-emission failure the canonical blob is rolled back, the visibility flip is reverted, and the record stays committed (`500`; retryable — never half-published; an already-emitted evaluation node survives harmlessly and counts for the retry).
+  Returns `{ published: true, evaluationNodeId?, publishesNodeId, locatedAtNodeId, url }` (`evaluationNodeId` present unless `runEvaluation: false`). On pair-emission failure the canonical blob is rolled back, the visibility flip is reverted, and the record stays sealed (`500`; retryable — never half-published; an already-emitted evaluation node survives harmlessly and counts for the retry).
 
 Publication is logically complete when both nodes are inclusion-proven (ADR-0010 §6); each is independently verifiable. Re-publishing an already-published record returns `400`, as does publishing a currently-withdrawn record (reinstate first — publishing content its own author has withdrawn would contradict the lifecycle chain). Publication is not reversible — a subsequent withdrawal is a new `attestation/withdraws/v1` in the chain, surfaced alongside any surviving third-party `locatedAt` copies per the retention-asymmetry rule.
 
@@ -526,7 +573,7 @@ Hosts express the eval requirement in their self-attestation — a `content/host
 | `403`  | `{ "error": "Token missing required scope: evidence:publish" }`   | Bearer token is valid but does not hold the `evidence:publish` scope.                           |
 | `403`  | `{ "error": "This instance is running unsigned …", "code": "unsigned_tier" }` | The instance holds no signing key (the ADR-0020 unsigned dev tier). Both request-level visibilities are refused: an unsigned package can reach neither the sealed nor the public state (Decision C), so nothing is persisted. Also returned by `POST /api/evidence/:slug/publish` on an unsigned instance. Configure signing per [docs/instance-setup.md](../instance-setup.md). |
 | `404`  | `{ "error": "User not found in database" }`                       | Session is valid but the user record has not been provisioned (can occur if `DATABASE_URL` was unset when the user first signed in — a re-sign-in fixes it). |
-| `409`  | `{ "error": "This record was persisted without a signature …", "code": "unsigned_package" }` | `POST /api/evidence/:slug/publish` only: the committed record predates the unsigned-tier gate and has no base-package signature — it cannot be promoted to `published` even on a signed instance (ADR-0020 Decision C is a property of the package). |
+| `409`  | `{ "error": "This record was persisted without a signature …", "code": "unsigned_package" }` | `POST /api/evidence/:slug/publish` only: the sealed record predates the unsigned-tier gate and has no base-package signature — it cannot be promoted to `public` even on a signed instance (ADR-0020 Decision C is a property of the package). |
 | `500`  | `{ "error": "<message>" }` with `<message>` from the thrown error | Database, blob storage, or evidence-package-building failure.                                    |
 
 RFC 3161 timestamp and Rekor submission are non-blocking. Failures for either are logged server-side but still return `200` — the resulting record will simply have `null` values for the corresponding database columns. Signing itself is **not** optional as of S3a P3: a missing key is refused up front with the `unsigned_tier` `403` above (previously the record persisted with a `null` signature), while a signing *failure* with a configured key still surfaces as `500`.
@@ -618,12 +665,35 @@ Returns the database row (truncated here for readability):
   "jurisdiction": null,
   "civicContext": null,
   "basePackageHash": "a1b2c3d4e5f6...",
+  "listed": true,
   "isPublic": true,
+  "visibility": "public",
   "createdAt": "2026-04-17T21:04:00.000Z",
   "updatedAt": "2026-04-17T21:04:00.000Z",
   "creator": { "displayName": "...", "githubProfileUrl": "..." }
 }
 ```
+
+Two things about that body are worth reading carefully:
+
+- **`listed` and `isPublic` are the same value.** `listed` is the canonical key;
+  `isPublic` is a read-back alias kept for already-shipped clients. Both are
+  emitted indefinitely. Prefer `listed`.
+- **`listed` and `visibility` are ORTHOGONAL, and may legitimately disagree.**
+  They are different dimensions in
+  [ADR-0016 §A.1](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0016-vcs-native-lifecycle-mapping.md):
+  `visibility` is the *content-disclosure* axis (`"sealed"` | `"public"`), while
+  `listed` is the *host-display* axis — whether **this host** shows the record in
+  its index, which is host policy rather than a property of the node. They are
+  separate columns. `{"visibility": "sealed", "listed": true}` is expressible and
+  is **not** a contradiction; in particular `listed` does **not** mean
+  "visibility == public". This is exactly why the boolean got a second, honest
+  name — read `visibility` when you want the disclosure state.
+
+  (The one place the two are entangled is `GET /api/evidence/list`, which ANDs
+  them: a record appears in that listing only if it is `listed` **and** its
+  visibility is the public state. That is a property of the listing endpoint, not
+  of the fields.)
 
 Open the detail page in a browser to see the rendered evidence, PROV-O graph, and signing metadata:
 
@@ -682,6 +752,8 @@ These are implementation details that may surprise an external client. None of t
 ---
 
 ## Change log
+
+- **2026-08-05** — **`visibility` state labels renamed `committed` → `sealed`, `published` → `public`** ([ADR-0016 §A](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0016-vcs-native-lifecycle-mapping.md)). The `visibility` field's values are now disclosure qualities rather than one quality and one act. **Input:** all four literals are accepted, indefinitely — `"committed"` is an alias of `"sealed"` and `"published"` of `"public"` — so no client has to change; the default is unchanged in meaning (`"public"`, formerly spelled `"published"`). **Output (the breaking-ish part, and the only behavior change):** every response field carrying a visibility state now emits the CURRENT vocabulary, including for records created before the rename — the `POST /api/evidence` echo, `GET /api/evidence/:slug`, and the `/commitment` sidecar. A consumer that string-compares a served `visibility` against `"published"` or `"committed"` must accept `"public"` / `"sealed"` instead; a consumer that treats the two vocabularies as synonymous needs no change. **Not renamed** (deliberately): the verb "Publish", the `attestation/publishes/v1` + `attestation/locatedAt/v1` relationship, and the cryptographic "commitment" noun — the `/commitment` endpoint, the commitment view, and the commitment bundle keep their names, because a node in EITHER visibility state carries a public transparency-log commitment. The `evidence-packages/committed/<random>.json` storage prefix also keeps its spelling: it is a frozen capability-URL literal, never a state label. UI copy follows the field: badges read "Sealed" / "Public" and the publish dialog's non-publishing action reads "Seal". Also on this revision: `GET /api/evidence/:slug` gains **`listed`** as the canonical name for the host-display boolean, with **`isPublic`** retained as an alias on the same value — `listed` and `visibility` are orthogonal dimensions (ADR-0016 §A.1) and may legitimately disagree. Database: the enum retains `published` and `committed` as documented dead values (Postgres cannot drop an enum value without a type rebuild, which was declined), and migration `0015_flip_visibility_to_sealed_public.sql` relabels existing rows and moves the column default.
 
 - **2026-08-02** — **Unsigned-tier gate-off** (S3a P3, [#166](https://github.com/npstorey/civic-ai-tools-website/issues/166); [ADR-0020](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0020-instance-key-custody.md) Decisions B/C, G0-3): on an instance with no `EVIDENCE_SIGNING_KEY`, `POST /api/evidence` (both request-level visibilities) and `POST /api/evidence/:slug/publish` are refused with `403 { code: "unsigned_tier" }` — an unsigned package can reach neither the sealed nor the public state, so nothing is persisted (previously the record persisted with a `null` signature and a `committed`/`published` visibility). The publish route additionally refuses a historical committed record that carries no base-package signature with `409 { code: "unsigned_package" }` (existing rows are not migrated or relabeled). New presence-only endpoint `GET /api/evidence/signing-status` returns `{ "signingConfigured": boolean }` for client affordances. Unsigned packages now render prominently (Attention-tier "Unsigned package — no cryptographic commitment" glance + detail-page banner), and a running-unsigned site banner shows outside dev environments.
 
