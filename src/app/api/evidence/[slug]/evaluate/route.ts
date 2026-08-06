@@ -6,7 +6,7 @@ import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
-import { canReadRecord } from '@/lib/evidence/committed-access';
+import { canReadRecord } from '@/lib/evidence/sealed-access';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 // Rubric, prompt builder, and response parsing are shared with the
 // publication gate (civic-ai-tools#72 Phase 3) via the adversarial-eval lib.
@@ -56,7 +56,7 @@ export async function POST(
   }
   const record = records[0];
 
-  // Committed records are creator-only on this content-bearing surface
+  // Sealed records are creator-only on this content-bearing surface
   // (civic-ai-tools#71).
   if (!(await canReadRecord(request, record))) {
     return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });

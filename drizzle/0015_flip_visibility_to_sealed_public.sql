@@ -1,0 +1,65 @@
+-- M2 (FLIP) of the ADR-0016 §A visibility-label rename: committed -> sealed,
+-- published -> public. M1 (0014_add_sealed_public_visibility.sql) widened the
+-- enum to four labels and touched no rows. THIS migration rewrites the existing
+-- rows onto the new labels and moves the column default. It adds no enum value
+-- and drops none — the legacy pair stays declared forever (sprint decision
+-- G0-3: Postgres has no `ALTER TYPE ... DROP VALUE`, and the type rebuild that
+-- would be required was considered and declined; keeping the dead labels costs
+-- nothing and keeps historical dumps loadable).
+--
+-- ORDERING — this runs AFTER the code that writes the new labels is deployed,
+-- not before. In the window between that deploy and this migration the table
+-- holds BOTH vocabularies at once: historical rows on `committed`/`published`,
+-- new rows on `sealed`/`public`. That is safe by construction because every
+-- read path normalizes through `fromDbValue` and every query predicate is a
+-- `::text`-cast set-membership test over both labels of a state
+-- (`src/lib/evidence/visibility-sql.ts`), never an equality against one
+-- spelling. Running this migration early is also safe — it just has fewer rows
+-- to rewrite.
+--
+-- OWNER-RUN. Applied by hand via psql against production. A downstream fork
+-- applies this same file through an ordinary `drizzle-kit migrate`, so both
+-- paths must be safe on a database that has already been flipped: the `WHERE`
+-- clauses make the UPDATEs idempotent by construction (a second run matches
+-- zero rows) and `SET DEFAULT` is idempotent on its own. Re-running the whole
+-- file is a no-op. Keep it that way — do not add an unconditional UPDATE.
+--
+-- VERIFY BEFORE AND AFTER — do not skip, and do not trust a tool's exit status.
+-- Run this BEFORE applying and keep the output:
+--
+--     SELECT visibility::text AS label, count(*)
+--       FROM evidence_records
+--      GROUP BY 1
+--      ORDER BY 1;
+--
+-- Then apply, then run it again. Expected shape of the change:
+--
+--   * no row remains on `committed` or `published`;
+--   * the `sealed` count afterwards equals (`committed` + `sealed`) before;
+--   * the `public` count afterwards equals (`published` + `public`) before;
+--   * the GRAND TOTAL is unchanged.
+--
+-- A CHANGED TOTAL MEANS SOMETHING REWROTE ROWS IT SHOULD NOT HAVE — stop and
+-- investigate rather than proceeding; these statements only relabel, they
+-- neither insert nor delete. (Counts are deliberately not written into this
+-- file: they are a property of one database at one moment, and a stale literal
+-- in a tracked file is worse than no literal.)
+--
+-- Confirm the default moved with:
+--
+--     \d evidence_records
+--
+-- The `visibility` column must show `default 'public'::visibility`.
+--
+-- WHY THIS IS A SEPARATE FILE FROM 0014, and must stay one. `ALTER TYPE ... ADD
+-- VALUE` is transactional on PostgreSQL 12+, but a label added in a transaction
+-- cannot be USED in that same transaction. The statements below use `sealed`
+-- and `public`, so they must run in a transaction later than the one that added
+-- them. Two migration files = two transactions. Do not merge them.
+--
+-- REVERSIBILITY. The inverse is the same two UPDATEs with the labels swapped
+-- plus `SET DEFAULT 'published'`; it stays available precisely because the
+-- legacy labels were never dropped from the type.
+UPDATE "evidence_records" SET "visibility" = 'sealed' WHERE "visibility" = 'committed';--> statement-breakpoint
+UPDATE "evidence_records" SET "visibility" = 'public' WHERE "visibility" = 'published';--> statement-breakpoint
+ALTER TABLE "evidence_records" ALTER COLUMN "visibility" SET DEFAULT 'public';

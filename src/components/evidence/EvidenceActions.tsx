@@ -274,9 +274,9 @@ export default function EvidenceActions({
         )}
 
         {/* Verify-independently badge (#114) — the host-side entry point to the
-            neutral verifier (ADR-0013 / Q46). Published-only: the verifier
+            neutral verifier (ADR-0013 / Q46). Public-state-only: the verifier
             resolves a package through its commitment sidecar, which is redacted
-            for committed records (content private), so /verify would show a
+            for sealed records (content private), so /verify would show a
             missing-content alarm. Rendered independent of the glance's load
             state — when our own check can't load, "verify it yourself" matters
             most. */}

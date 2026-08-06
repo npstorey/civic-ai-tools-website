@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
-import { canReadRecord } from '@/lib/evidence/committed-access';
+import { canReadRecord } from '@/lib/evidence/sealed-access';
 
 export async function GET(
   request: NextRequest,
@@ -25,7 +25,7 @@ export async function GET(
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  // Committed records' content is creator-only (civic-ai-tools#71).
+  // Sealed records' content is creator-only (civic-ai-tools#71).
   if (!(await canReadRecord(request, records[0]))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }

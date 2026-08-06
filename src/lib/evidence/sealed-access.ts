@@ -1,6 +1,6 @@
-// Creator-only read gate for committed records (civic-ai-tools#71 Phase 2).
+// Creator-only read gate for sealed records (civic-ai-tools#71 Phase 2).
 //
-// A committed record's COMMITMENT (hash, signature, timestamp, Rekor proof) is
+// A sealed record's COMMITMENT (hash, signature, timestamp, Rekor proof) is
 // public by design — it sits on a public transparency log. Its CONTENT, title,
 // summary, and location are not: every content-bearing surface ([slug] read-back,
 // package, bundle, verify, evaluate, replay, attestations, the detail page) is
@@ -27,13 +27,13 @@ type VisibilityColumns = Pick<
  * `@/lib/evidence/visibility`). Historical rows keep the legacy label
  * indefinitely, so this gate must never be keyed on one spelling.
  */
-export function isCommittedRecord(record: VisibilityColumns): boolean {
+export function isSealedRecord(record: VisibilityColumns): boolean {
   return isSealedDbValue(record.visibility);
 }
 
 /**
- * Route-layer gate. Published records are readable by anyone (true without an
- * auth lookup). Committed records require the requester to resolve — via
+ * Route-layer gate. Public records are readable by anyone (true without an
+ * auth lookup). Sealed records require the requester to resolve — via
  * bearer token or session cookie (`resolveRequestUser` handles both) — to the
  * record's creator.
  */
@@ -41,7 +41,7 @@ export async function canReadRecord(
   request: NextRequest,
   record: VisibilityColumns,
 ): Promise<boolean> {
-  if (!isCommittedRecord(record)) return true;
+  if (!isSealedRecord(record)) return true;
   const auth = await resolveRequestUser(request).catch(() => null);
   return !!auth && auth.userId === record.creatorId;
 }

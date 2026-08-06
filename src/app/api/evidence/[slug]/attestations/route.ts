@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { canReadRecord } from '@/lib/evidence/committed-access';
+import { canReadRecord } from '@/lib/evidence/sealed-access';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { evidenceRecords, attestationPackages, users } from '@/lib/db/schema';
@@ -45,7 +45,7 @@ export async function GET(
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  // Committed records are creator-only (civic-ai-tools#71).
+  // Sealed records are creator-only (civic-ai-tools#71).
   if (!(await canReadRecord(request, records[0]))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
@@ -122,7 +122,7 @@ export async function POST(
   }
   const record = records[0];
 
-  // Committed records are creator-only (civic-ai-tools#71).
+  // Sealed records are creator-only (civic-ai-tools#71).
   if (!(await canReadRecord(request, record))) {
     return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });
   }

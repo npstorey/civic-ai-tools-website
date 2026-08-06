@@ -213,8 +213,10 @@ export async function POST(request: NextRequest) {
       );
     }
     const visibility: Visibility = requestedVisibility;
-    // The label actually persisted, and the one echoed back to the caller. Both
-    // stay on the legacy vocabulary until the flip phase — see `toDbValue`.
+    // The label actually persisted. Since the P2 flip `toDbValue` is the
+    // identity, so this equals the canonical value — but the write still goes
+    // through the boundary, because that function is the one place that decides
+    // what lands in the column.
     const visibilityDbValue = toDbValue(visibility);
 
     // Validate captureMethod (ADR-0003/0011). Required for all publishes;
@@ -287,9 +289,9 @@ export async function POST(request: NextRequest) {
 
     const { pkg, hash: packageHash } = buildEvidencePackage(packageInput);
 
-    // Store package in Vercel Blob. Committed packages use a random,
+    // Store package in Vercel Blob. Sealed packages use a random,
     // non-hash-derivable key (Phase 2 hard requirement: the hash is public in
-    // Rekor, so a hash-derived pathname would leak committed content); the
+    // Rekor, so a hash-derived pathname would leak sealed content); the
     // canonical hash-addressed key is claimed at publication time.
     const blobUrl = visibility === 'sealed'
       ? await putCommittedPackage(pkg as unknown as Record<string, unknown>)
@@ -369,17 +371,22 @@ export async function POST(request: NextRequest) {
     // content URL is undisclosed); the slug + packageHash are the creator's
     // handles for the later publish step.
     //
-    // The echoed `visibility` is the PERSISTED label, not the canonical one:
-    // this response is a served surface, and changing what clients read is the
-    // flip phase's chartered change, not a side effect of accepting aliases.
+    // The echoed `visibility` is the CANONICAL value (ADR-0016 §A, P2) — the
+    // same vocabulary every other serving surface emits — not the raw persisted
+    // label. It happens to equal `visibilityDbValue` now that `toDbValue` is
+    // the identity, but it is written as the canonical value on purpose: what a
+    // client reads must not be coupled to what the column happens to store.
+    // A legacy request body (`"committed"` / `"published"`) is still accepted
+    // and still means the same thing; the echo tells the caller the state in
+    // one vocabulary.
     const response = NextResponse.json(
       visibility === 'sealed'
-        ? { slug, packageHash, visibility: visibilityDbValue }
+        ? { slug, packageHash, visibility }
         : {
             slug,
             url: `/evidence/${slug}`,
             packageHash,
-            visibility: visibilityDbValue,
+            visibility,
             ...(publicationPair ?? {}),
           },
     );

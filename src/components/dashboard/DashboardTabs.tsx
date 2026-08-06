@@ -61,7 +61,7 @@ interface DashboardTabsProps {
   activity: ActivityRow[];
   tokens: TokenRow[];
   /** Whether this instance holds a signing key (ADR-0020, S3a P3): with no
-   *  key the committed→published promotion is gated off server-side, so the
+   *  key the sealed→public promotion is gated off server-side, so the
    *  Publish affordance renders disabled-with-explanation instead of a dead
    *  button that errors. */
   signingConfigured?: boolean;
@@ -89,7 +89,7 @@ function StatusBadge({ status }: { status: string }) {
     evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--nyc-success)' },
     fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--nyc-success)' },
     withdrawn: { bg: 'rgba(236, 19, 30, 0.08)', text: 'var(--nyc-error)' },
-    committed: { bg: 'rgba(16, 63, 239, 0.08)', text: 'var(--nyc-blue)' },
+    sealed: { bg: 'rgba(16, 63, 239, 0.08)', text: 'var(--nyc-blue)' },
   };
   const c = colors[status] || colors.unverified;
   return (
@@ -230,7 +230,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
     }
   }, [reinstateTarget, reinstateReason, router]);
 
-  // Committed → published promotion (civic-ai-tools#71/#72 Phase 5). Runs the
+  // Sealed → public promotion (civic-ai-tools#71/#72 Phase 5). Runs the
   // default-on adversarial eval unless the user unchecks it; irreversible.
   const [publishTarget, setPublishTarget] = useState<EvidenceRow | null>(null);
   const [publishRunEval, setPublishRunEval] = useState(true);
@@ -295,7 +295,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
                   {r.title}
                 </Link>
                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center' }}>
-                  {normalizeVisibility(r.visibility) === 'sealed' && <StatusBadge status="committed" />}
+                  {normalizeVisibility(r.visibility) === 'sealed' && <StatusBadge status="sealed" />}
                   {isCurrentlyWithdrawn
                     ? <StatusBadge status="withdrawn" />
                     : <StatusBadge status={r.verificationStatus} />
@@ -393,7 +393,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
         })}
       </div>
 
-      {/* Publish (committed → published) confirmation dialog */}
+      {/* Publish (sealed → public) confirmation dialog */}
       {publishTarget && (
         <div
           style={{

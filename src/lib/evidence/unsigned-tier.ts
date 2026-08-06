@@ -48,8 +48,8 @@ export interface SealCommitGateRefusal {
  * Guard 1 (instance form): the seal/commit action is unreachable in the
  * unsigned tier. Returns `null` when signing is configured (the action may
  * proceed) and a refusal otherwise. Wired server-side into the publish/commit
- * routes so an unsigned run cannot persist a `committed`- or
- * `published`-labeled record — per Decision C an unsigned package may reach
+ * routes so an unsigned run cannot persist a `sealed`- or
+ * `public`-labeled record — per Decision C an unsigned package may reach
  * neither state, so the whole persist action is gated, not just one
  * visibility value.
  */
@@ -62,7 +62,7 @@ export function evaluateSealCommitGate(
     body: {
       error:
         'This instance is running unsigned — no signing key is configured. ' +
-        'Committing or publishing evidence requires a signature: an unsigned ' +
+        'Sealing or publishing evidence requires a signature: an unsigned ' +
         'package can reach neither the sealed nor the public state (ADR-0020). ' +
         'Analyses still run and can be inspected locally; an operator enables ' +
         'signing via docs/instance-setup.md.',
@@ -73,8 +73,8 @@ export function evaluateSealCommitGate(
 
 /**
  * Guard 1 (per-record form): a record persisted WITHOUT a signature (a
- * historical unsigned-committed row, predating this gate) cannot be promoted
- * to `published` — even on an instance that has since configured signing. The
+ * historical unsigned-sealed row, predating this gate) cannot be promoted
+ * to `public` — even on an instance that has since configured signing. The
  * base package has no signature to back a public state; per Decision C it can
  * reach neither `sealed` nor `public`. The row itself is NOT migrated or
  * relabeled — the gate is on the action going forward, and the record keeps

@@ -18,7 +18,7 @@ import {
 } from '@/lib/evidence/verify-core';
 import { loadTrustRegistry } from '@/lib/evidence/verify';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
-import { canReadRecord } from '@/lib/evidence/committed-access';
+import { canReadRecord } from '@/lib/evidence/sealed-access';
 
 export async function GET(
   request: NextRequest,
@@ -38,8 +38,8 @@ export async function GET(
 
   const record = records[0];
 
-  // Committed records are creator-only on this surface (civic-ai-tools#71);
-  // public verification of a committed claim goes through the redacted
+  // Sealed records are creator-only on this surface (civic-ai-tools#71);
+  // public verification of a sealed claim goes through the redacted
   // commitment sidecar instead.
   if (!(await canReadRecord(request, record))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });

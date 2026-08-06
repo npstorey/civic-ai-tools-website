@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
 import { generateNotebook } from '@/lib/notebook';
 import type { Notebook } from '@/lib/notebook-author/cells';
-import { normalizeVisibility } from '@/lib/evidence/visibility';
+import { normalizeVisibility, type Visibility } from '@/lib/evidence/visibility';
 
 interface PublishEvidenceDialogProps {
   isOpen: boolean;
@@ -62,12 +62,17 @@ export default function PublishEvidenceDialog({
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [userEditedSummary, setUserEditedSummary] = useState(false);
   const [promptVisibility, setPromptVisibility] = useState<'full_text' | 'hash_only'>('full_text');
-  // Visibility choice (civic-ai-tools#71 scope item 7): COMMITTED is the
+  // Visibility choice (civic-ai-tools#71 scope item 7): SEALED is the
   // default — attest by default, publish by choice. The request-level flag is
-  // sent explicitly either way (the API's own default stays "published" for
+  // sent explicitly either way (the API's own default is the public state for
   // client back-compat; the UI default is the product decision).
-  const [visibility, setVisibility] = useState<'committed' | 'published'>('committed');
-  const [resultVisibility, setResultVisibility] = useState<'committed' | 'published'>('published');
+  //
+  // Both unions are on the ADR-0016 §A canonical vocabulary. The request value
+  // sent below is one of these literals, and the API accepts it directly (the
+  // legacy pair remains accepted as an alias, indefinitely — this client just
+  // no longer sends it).
+  const [visibility, setVisibility] = useState<Visibility>('sealed');
+  const [resultVisibility, setResultVisibility] = useState<Visibility>('public');
   const [dialogState, setDialogState] = useState<DialogState>('form');
   const [resultUrl, setResultUrl] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -201,15 +206,16 @@ export default function PublishEvidenceDialog({
       }
 
       const data = await response.json();
-      // `url` is absent for committed-visibility responses; the slug-derived
+      // `url` is absent for sealed-visibility responses; the slug-derived
       // page is creator-only until the record is published.
       setResultUrl(data.url ?? `/evidence/${data.slug}`);
-      // Read-side normalization only (ADR-0016 §A): the response may carry
-      // either vocabulary. The local state union and the request value it sends
-      // stay on the legacy labels in this phase.
-      setResultVisibility(
-        normalizeVisibility(data.visibility) === 'sealed' ? 'committed' : 'published',
-      );
+      // Still normalized on read (ADR-0016 §A): this instance's API now echoes
+      // the canonical value, but the dialog must not assume the server it is
+      // talking to has flipped — a fork mid-migration can still answer with a
+      // legacy label. `normalizeVisibility` returns null only for a value that
+      // is neither vocabulary; treat that as the public state, which is the
+      // API's own default when the field is absent.
+      setResultVisibility(normalizeVisibility(data.visibility) ?? 'public');
       setDialogState('success');
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Publishing failed');
@@ -235,7 +241,7 @@ export default function PublishEvidenceDialog({
   // #86 (published path) — "let me share this" without leaving: native share
   // sheet where available (mobile), clipboard + toast otherwise (desktop). A
   // dismissed share sheet is a no-op (no surprise copy). Only ever wired for a
-  // PUBLISHED result — a committed record is private, so Share is meaningless.
+  // PUBLIC result — a sealed record is private, so Share is meaningless.
   const handleShare = async () => {
     const fullUrl = `${window.location.origin}${resultUrl}`;
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
@@ -417,12 +423,12 @@ export default function PublishEvidenceDialog({
                     <input
                       type="radio"
                       name="visibility"
-                      checked={visibility === 'committed'}
-                      onChange={() => setVisibility('committed')}
+                      checked={visibility === 'sealed'}
+                      onChange={() => setVisibility('sealed')}
                       style={{ marginTop: '3px' }}
                     />
                     <span>
-                      Commit (default)
+                      Seal (default)
                       <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)' }}>
                         Signed, timestamped, and registered on the public transparency
                         log — but the content stays private to you. Publish later from
@@ -434,8 +440,8 @@ export default function PublishEvidenceDialog({
                     <input
                       type="radio"
                       name="visibility"
-                      checked={visibility === 'published'}
-                      onChange={() => setVisibility('published')}
+                      checked={visibility === 'public'}
+                      onChange={() => setVisibility('public')}
                       style={{ marginTop: '3px' }}
                     />
                     <span>
@@ -450,7 +456,7 @@ export default function PublishEvidenceDialog({
               </div>
 
               {/* Unsigned-tier gate-off (ADR-0020, S3a P3): with no signing
-                  key, neither Commit (sealed) nor Publish (public) is
+                  key, neither Seal (sealed) nor Publish (public) is
                   reachable — the action renders disabled with an explanation,
                   mirroring the server-side gate. */}
               {signingConfigured === false && (
@@ -467,7 +473,7 @@ export default function PublishEvidenceDialog({
                   <strong style={{ color: 'var(--text-primary)' }}>
                     This instance is running unsigned.
                   </strong>{' '}
-                  No signing key is configured, so evidence cannot be committed
+                  No signing key is configured, so evidence cannot be sealed
                   or published — an unsigned package can reach neither the
                   sealed nor the public state. The analysis itself still works;
                   an operator enables signing via the instance setup guide.
@@ -492,7 +498,7 @@ export default function PublishEvidenceDialog({
               >
                 {signingConfigured === false
                   ? 'Unavailable (running unsigned)'
-                  : visibility === 'committed' ? 'Commit' : 'Publish'}
+                  : visibility === 'sealed' ? 'Seal' : 'Publish'}
               </button>
             </>
           )}
@@ -532,18 +538,18 @@ export default function PublishEvidenceDialog({
                   <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
                 </svg>
                 <span style={{ fontSize: '16px', fontWeight: 600 }}>
-                  {resultVisibility === 'committed' ? 'Committed' : 'Published'}
+                  {resultVisibility === 'sealed' ? 'Sealed' : 'Public'}
                 </span>
               </div>
 
-              {resultVisibility === 'committed' ? (
-                /* COMMITTED — a private record. Preserve the creator-only copy +
+              {resultVisibility === 'sealed' ? (
+                /* SEALED — a private record. Preserve the creator-only copy +
                    the URL box (the creator's own handle to open / re-open it);
                    no public "Share" affordance, because the content is private
                    and a shared link is meaningless to anyone else (#86). */
                 <>
                   <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>
-                    Your evidence is committed — signed and registered, content private to you.
+                    Your evidence is sealed — signed and registered, content private to you.
                     Only you can open this page; publish it anytime from your dashboard:
                   </p>
 
@@ -609,7 +615,7 @@ export default function PublishEvidenceDialog({
                   </button>
                 </>
               ) : (
-                /* PUBLISHED — a public record. Two distinct affordances instead
+                /* PUBLIC — a public record. Two distinct affordances instead
                    of a raw URL to parse (#86): primary "View" (navigates) +
                    secondary "Share" (copy / native share). The raw URL stays
                    reachable via Share and the destination URL bar; closing the

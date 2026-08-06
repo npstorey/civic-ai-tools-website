@@ -13,7 +13,7 @@ import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
-import { sessionUserIsCreator } from '@/lib/evidence/committed-access';
+import { sessionUserIsCreator } from '@/lib/evidence/sealed-access';
 import { fromDbValue } from '@/lib/evidence/visibility';
 import { loadEvaluationViews } from '@/lib/evidence/adversarial-eval';
 import EvaluationAttestationsSection from '@/components/evidence/EvaluationAttestationsSection';
@@ -117,11 +117,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const data = await getEvidenceData(slug);
   if (!data) return { title: 'Evidence Not Found' };
 
-  // Committed records (civic-ai-tools#71): title/summary are content-derived
+  // Sealed records (civic-ai-tools#71): title/summary are content-derived
   // and creator-only — emit generic metadata regardless of viewer so nothing
   // content-bearing lands in OG tags, caches, or link previews.
   if (fromDbValue(data.record.visibility) === 'sealed') {
-    return { title: 'Committed evidence record', robots: { index: false } };
+    return { title: 'Sealed evidence record', robots: { index: false } };
   }
 
   const { record, creator } = data;
@@ -201,12 +201,12 @@ export default async function EvidencePage({ params }: PageProps) {
   const data = await getEvidenceData(slug);
   if (!data) notFound();
 
-  // Committed records are creator-only (civic-ai-tools#71): the page (content,
+  // Sealed records are creator-only (civic-ai-tools#71): the page (content,
   // title, summary, notebook) does not exist for anyone else — 404, not 403,
-  // so probing can't confirm the record. The public surface for a committed
+  // so probing can't confirm the record. The public surface for a sealed
   // claim is the redacted commitment sidecar.
-  const isCommitted = fromDbValue(data.record.visibility) === 'sealed';
-  if (isCommitted && !(await sessionUserIsCreator(data.record))) {
+  const isSealed = fromDbValue(data.record.visibility) === 'sealed';
+  if (isSealed && !(await sessionUserIsCreator(data.record))) {
     notFound();
   }
 
@@ -296,12 +296,12 @@ export default async function EvidencePage({ params }: PageProps) {
           </div>
         )}
 
-        {/* Committed banner (civic-ai-tools#71) — creator-only view of a
-            committed-not-published record. The commitment (hash + signature +
+        {/* Sealed banner (civic-ai-tools#71) — creator-only view of a
+            sealed-not-published record. The commitment (hash + signature +
             timestamp + Rekor) is publicly registered; the content is not.
             The proof sentence is signature-conditional: a historical unsigned
             row registered no commitment, and the banner must not claim one. */}
-        {isCommitted && (
+        {isSealed && (
           <div style={{
             padding: '16px 20px', marginBottom: '24px',
             backgroundColor: 'rgba(16, 63, 239, 0.05)',
@@ -309,7 +309,7 @@ export default async function EvidencePage({ params }: PageProps) {
             borderRadius: '6px',
           }}>
             <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--nyc-blue)', marginBottom: '6px' }}>
-              Committed — not published
+              Sealed — not published
             </div>
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
               {isUnsignedRecord ? (

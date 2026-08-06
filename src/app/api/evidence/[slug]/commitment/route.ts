@@ -151,17 +151,17 @@ export async function GET(
     ? await loadCarriedLifecycleAttestations(record.basePackageHash)
     : [];
 
-  // Committed records (civic-ai-tools#71, ADR-0010 §5): the commitment IS
+  // Sealed records (civic-ai-tools#71, ADR-0010 §5): the commitment IS
   // public — the hash is already on the transparency log — but the content
   // surface is not. Serve the view redacted of the capability URL, title, and
   // summary; never inline the package.
   // Keyed on the canonical state, so redaction holds for a row under EITHER
-  // label (legacy `committed` or ADR-0016 `sealed`). Note this decides only
-  // WHETHER to redact — the `visibility` value the view SERVES is the raw
-  // column, passed through unchanged by `buildCommitmentView`.
-  const isCommitted = fromDbValue(record.visibility) === 'sealed';
+  // label (legacy `committed` or ADR-0016 `sealed`). As of the P2 flip the
+  // `visibility` value the view SERVES is also canonical — `buildCommitmentView`
+  // normalizes the column rather than passing it through.
+  const isSealed = fromDbValue(record.visibility) === 'sealed';
   const commitment = buildCommitmentView(record, creator, pkg, lifecycleAttestations, {
-    redactContentSurface: isCommitted,
+    redactContentSurface: isSealed,
   });
 
   // `?inline=1` → self-contained bundle (#119 Q15a): inline the package + the stamped
@@ -170,7 +170,7 @@ export async function GET(
   // route trusts (the build-time-bundled, generatedAt-stamped `/.well-known` file). When
   // the blob couldn't be fetched (`pkg === null`), `package` is simply omitted — the
   // bundle then falls back to `packageUrl` rather than serving a hollow inline field.
-  // Committed records never inline the package (content is creator-distributed only).
+  // Sealed records never inline the package (content is creator-distributed only).
   const inlineParam = request.nextUrl.searchParams.get('inline');
   const inline = inlineParam !== null && inlineParam !== '0' && inlineParam !== 'false';
   let body: Record<string, unknown> = commitment;
@@ -178,7 +178,7 @@ export async function GET(
     const registry = await loadTrustRegistry();
     body = {
       ...commitment,
-      ...(pkg && !isCommitted ? { package: pkg } : {}),
+      ...(pkg && !isSealed ? { package: pkg } : {}),
       ...(registry ? { trustRegistry: registry } : {}),
     };
   }

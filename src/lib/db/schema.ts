@@ -86,33 +86,44 @@ export const contentProfileEnum = pgEnum('content_profile', [
 
 // visibility mirrors the package's lifecycle visibility for query convenience
 // (list filtering, dashboard labels). The CANONICAL representation is the
-// attestation chain (spec §8.10, ADR-0010): a node is published iff an
+// attestation chain (spec §8.10, ADR-0010): a node is public iff an
 // `attestation/publishes/v1` (+ ≥1 `attestation/locatedAt/v1`) references it;
-// committed = zero-location base case. This column is a denormalized status
+// sealed = zero-location base case. This column is a denormalized status
 // mirror in the same pattern as the withdrawn/reinstated columns — the publish
 // flow dual-writes it alongside emitting the signed attestation pair. Legacy
-// rows backfill to 'published' (every pre-Phase-2 publish was public).
+// rows backfill to the public state (every pre-Phase-2 publish was public).
 //
 // ADR-0016 §A renames the two STATE labels — `committed` -> `sealed`,
 // `published` -> `public` — while the verb "Publish", the cryptographic
 // "commitment" noun, and `attestation/publishes/v1` all stay put. The rename
 // ships as expand -> flip -> keep-the-dead-values, so the enum carries all four
-// labels permanently (Postgres cannot drop an enum value without recreating the
-// type, and keeping the legacy pair makes every step reversible and every
-// historical dump readable).
+// labels permanently.
 //
-// THIS DECLARATION RUNS AHEAD OF THE DATABASE. The `sealed` / `public` labels
-// reach the live enum only when the owner-run M1 expand migration
-// (drizzle/0014_add_sealed_public_visibility.sql) is applied. Declaring them
-// early is inert: a drizzle `pgEnum` is a compile-time type declaration plus a
-// migration-diff input — it emits no runtime validation — and the code in this
-// phase writes ONLY the legacy labels, because
-// `src/lib/evidence/visibility.ts#toDbValue` still maps the canonical values
-// back to `committed` / `published`. Order matches what `ALTER TYPE ... ADD
-// VALUE` produces: the new labels append after the existing two.
+// DEAD VALUES, DELIBERATELY RETAINED (sprint decision G0-3). `published` and
+// `committed` are no longer WRITTEN by any code path — `toDbValue` in
+// `src/lib/evidence/visibility.ts` is the identity, and the 0015 migration
+// rewrites every existing row — but they stay declared here and in the live
+// Postgres type. Dropping an enum value requires recreating the type (Postgres
+// has no `ALTER TYPE ... DROP VALUE`), which means rewriting every dependent
+// column under a lock; that rebuild was considered and DECLINED. Keeping the
+// pair costs nothing and buys three things: every step of the rename stays
+// reversible, every historical dump and restored backup remains loadable, and a
+// downstream fork part-way through the migration keeps working. Reads must
+// therefore treat all four labels as live forever — `fromDbValue` is total over
+// them by design.
 //
-// The column DEFAULT stays `'published'` in this phase; moving it is part of
-// the later flip, alongside the row rewrite.
+// Enum ORDER matches what `ALTER TYPE ... ADD VALUE` produced in migration
+// 0014: the new labels append after the original two. It is the physical sort
+// order of the type, not a statement about which are current.
+//
+// SCHEMA-VS-DATABASE ASYMMETRY ON THE DEFAULT. The declaration below says
+// `'public'` as of this phase, but the DB-side `DEFAULT` moves in migration
+// 0015 (`ALTER COLUMN visibility SET DEFAULT 'public'`), which the owner runs
+// AFTER this code deploys. In the window between the two, the declaration and
+// the live column disagree — harmlessly, because every INSERT this application
+// makes supplies `visibility` explicitly (see `src/app/api/evidence/route.ts`),
+// so the column default is never exercised by the write path. It matters only
+// for hand-written SQL and for `drizzle-kit`'s diff.
 export const visibilityEnum = pgEnum('visibility', [
   'published',
   'committed',
@@ -167,12 +178,16 @@ export const evidenceRecords = pgTable('evidence_records', {
     .notNull()
     .default('unverified'),
   consistencyClassification: consistencyClassificationEnum('consistency_classification'),
+  // Host-display axis (ADR-0016 §A.1) — does this host index the record? A
+  // SEPARATE dimension from `visibility` below, and orthogonal to it: the two
+  // may legitimately disagree. Served as `listed` (canonical key) with
+  // `isPublic` as a back-compat alias on `GET /api/evidence/[slug]`.
   isPublic: boolean('is_public').notNull().default(true),
-  // Visibility mirror (see visibilityEnum above). 'committed' records are
-  // creator-only on every content-bearing surface; their commitment (hash,
-  // signature, timestamp, Rekor proof) stays publicly served, redacted of
-  // content and location, via the commitment endpoint.
-  visibility: visibilityEnum('visibility').notNull().default('published'),
+  // Content-disclosure axis / visibility mirror (see visibilityEnum above).
+  // Sealed records are creator-only on every content-bearing surface; their
+  // commitment (hash, signature, timestamp, Rekor proof) stays publicly served,
+  // redacted of content and location, via the commitment endpoint.
+  visibility: visibilityEnum('visibility').notNull().default('public'),
   withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
   withdrawnReason: text('withdrawn_reason'),
   withdrawalSignature: text('withdrawal_signature'),

@@ -21,7 +21,7 @@ import { visibilityMatches } from '@/lib/evidence/visibility-sql';
 /**
  * POST /api/evidence/[slug]/publish
  *
- * Promotes a COMMITTED record to PUBLISHED (civic-ai-tools#71; spec §8.10,
+ * Promotes a SEALED record to PUBLIC (civic-ai-tools#71; spec §8.10,
  * ADR-0010 §6), gated by a default-on adversarial evaluation
  * (civic-ai-tools#72; Q25 option (b)+(c): host-policy + default-on at the
  * publisher tool — NOT protocol-mandatory).
@@ -39,14 +39,14 @@ import { visibilityMatches } from '@/lib/evidence/visibility-sql';
  *      axis. An eval FAILURE (evaluator unreachable / invalid response) aborts
  *      the publish with an explicit 502 — never a silent skip; the caller can
  *      retry or pass runEvaluation:false to publish without an eval.
- *   2. Compare-and-set visibility committed→published (the concurrency guard:
+ *   2. Compare-and-set visibility sealed→public (the concurrency guard:
  *      two racing publishes can both pass the pre-check, but only one wins the
  *      conditional UPDATE; the loser gets 409 and emits nothing).
- *   3. Re-home the content from its random committed key to the canonical
+ *   3. Re-home the content from its random sealed-mode key to the canonical
  *      hash-addressed key; emit the publication pair (attestation/publishes/v1
  *      + attestation/locatedAt/v1, one atomic insert); point the record at the
  *      canonical blob; retire the old capability URL.
- *      On failure: visibility reverts to committed and the canonical blob is
+ *      On failure: visibility reverts to sealed and the canonical blob is
  *      deleted — a failed publish is retryable, never half-published. (A
  *      surviving evaluation node from step 1 is harmless: evals target the
  *      content node and remain valid for the retry.)
@@ -78,7 +78,7 @@ export async function POST(
   }
 
   // Unsigned-tier gate-off (S3a P3, #166; ADR-0020 Decisions B/C, G0-3): the
-  // committed→published promotion emits SIGNED publication attestations — an
+  // sealed→public promotion emits SIGNED publication attestations — an
   // instance with no signing key cannot back them, and an unsigned package
   // may reach neither sealed nor public. Refused before any lookup.
   const gate = evaluateSealCommitGate();
@@ -97,29 +97,31 @@ export async function POST(
   const record = records[0];
 
   // Publisher-only (§8.12.3): only the creator can publish. 404 (not 403) for
-  // non-creators so a committed record's existence isn't confirmed by probing.
+  // non-creators so a sealed record's existence isn't confirmed by probing.
   if (record.creatorId !== auth.userId) {
     return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });
   }
 
   // Precondition, keyed on the canonical state so a row holding EITHER label
-  // (legacy `committed` or ADR-0016 `sealed`) is still promotable.
+  // (legacy `committed` or ADR-0016 `sealed`) is still promotable. This is the
+  // mixed-state property in its sharpest form: between this deploy and the M2
+  // backfill the table holds both spellings at once.
   if (fromDbValue(record.visibility) !== 'sealed') {
     return NextResponse.json({ error: 'Evidence is already published' }, { status: 400 });
   }
 
   // Per-record form of the same gate: a historical row persisted WITHOUT a
-  // signature (pre-gate unsigned-committed) cannot be promoted to public even
+  // signature (pre-gate unsigned-sealed) cannot be promoted to public even
   // on a signed instance — the base package has no signature to back a public
   // state (ADR-0020 Decision C is a property of the package). The row itself
-  // is not migrated or relabeled; it stays committed and renders with the
+  // is not migrated or relabeled; it stays sealed and renders with the
   // prominent unsigned labeling.
   const recordGate = evaluateUnsignedRecordPublishGate(record.basePackageSignature);
   if (recordGate) {
     return NextResponse.json(recordGate.body, { status: recordGate.status });
   }
 
-  // A withdrawn committed claim must be reinstated before it can publish —
+  // A withdrawn sealed claim must be reinstated before it can publish —
   // publishing content whose own author has withdrawn it would assert a
   // visibility the lifecycle chain contradicts. Resolved from the signed
   // attestation chain first (§8.10.4 dual-read) rather than the legacy column
@@ -155,7 +157,7 @@ export async function POST(
     // Empty / non-JSON body is fine; defaults apply.
   }
 
-  // Fetch the committed package from its random-key blob.
+  // Fetch the sealed package from its random-key blob.
   const pkg = (await getPackage(record.basePackageStorageKey)) as EvidencePackage | null;
   if (!pkg) {
     return NextResponse.json(
@@ -250,7 +252,7 @@ export async function POST(
     );
   }
 
-  const revertToCommitted = async () => {
+  const revertToSealed = async () => {
     await db
       .update(evidenceRecords)
       .set({ visibility: toDbValue('sealed'), updatedAt: new Date() })
@@ -274,15 +276,15 @@ export async function POST(
       creatorId: record.creatorId,
     });
   } catch (err) {
-    // Roll back: content out of public reach, visibility back to committed.
+    // Roll back: content out of public reach, visibility back to sealed.
     // The publish is retryable; a step-1 evaluation node survives harmlessly.
     if (publicUrl) await deletePackageBlob(publicUrl);
-    await revertToCommitted().catch((revertErr) =>
+    await revertToSealed().catch((revertErr) =>
       console.error('[api/evidence/publish] visibility revert failed:', revertErr),
     );
     console.error('[api/evidence/publish] pair emission failed:', err);
     return NextResponse.json(
-      { error: 'Publication failed; the record remains committed' },
+      { error: 'Publication failed; the record remains sealed' },
       { status: 500 },
     );
   }
