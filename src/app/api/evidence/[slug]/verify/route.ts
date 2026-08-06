@@ -18,7 +18,7 @@ import {
 } from '@/lib/evidence/verify-core';
 import { loadTrustRegistry } from '@/lib/evidence/verify';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
-import { canReadRecord } from '@/lib/evidence/committed-access';
+import { canReadRecord } from '@/lib/evidence/sealed-access';
 
 export async function GET(
   request: NextRequest,

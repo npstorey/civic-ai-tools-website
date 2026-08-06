@@ -6,7 +6,7 @@ import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 import { loadCarriedLifecycleAttestations } from '@/lib/evidence/lifecycle';
 import { buildCommitmentView } from '@/lib/evidence/commitment';
-import { canReadRecord } from '@/lib/evidence/committed-access';
+import { canReadRecord } from '@/lib/evidence/sealed-access';
 // Instance-identity config (ADR-0020): the cell-0 reader affordance carries
 // this instance's detail URL, host label, and trust-registry pointer — the
 // same values the embedded commitment view resolves; demo defaults when no

@@ -13,7 +13,7 @@ import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
-import { sessionUserIsCreator } from '@/lib/evidence/committed-access';
+import { sessionUserIsCreator } from '@/lib/evidence/sealed-access';
 import { fromDbValue } from '@/lib/evidence/visibility';
 import { loadEvaluationViews } from '@/lib/evidence/adversarial-eval';
 import EvaluationAttestationsSection from '@/components/evidence/EvaluationAttestationsSection';

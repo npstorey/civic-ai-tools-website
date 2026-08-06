@@ -7,7 +7,7 @@ import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
-import { canReadRecord } from '@/lib/evidence/committed-access';
+import { canReadRecord } from '@/lib/evidence/sealed-access';
 import { mcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';

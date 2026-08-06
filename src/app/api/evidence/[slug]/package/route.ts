@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
-import { canReadRecord } from '@/lib/evidence/committed-access';
+import { canReadRecord } from '@/lib/evidence/sealed-access';
 
 export async function GET(
   request: NextRequest,

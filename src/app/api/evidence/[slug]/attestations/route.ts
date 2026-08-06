@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { canReadRecord } from '@/lib/evidence/committed-access';
+import { canReadRecord } from '@/lib/evidence/sealed-access';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { evidenceRecords, attestationPackages, users } from '@/lib/db/schema';

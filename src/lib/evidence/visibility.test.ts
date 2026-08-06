@@ -177,7 +177,7 @@ test('historical record: a legacy "committed" row still reads as the sealed stat
 });
 
 test('historical record: a legacy "committed" row still fails the public read gate', () => {
-  // `isCommittedRecord` in committed-access.ts is exactly this predicate applied
+  // `isSealedRecord` in sealed-access.ts is exactly this predicate applied
   // to `record.visibility`; when it is true the route requires the requester to
   // resolve to `record.creatorId`. A row on the legacy label must keep hitting
   // that branch — if it stopped, the content surface of every pre-rename sealed

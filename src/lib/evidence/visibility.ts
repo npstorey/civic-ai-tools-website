@@ -111,7 +111,7 @@ export function fromDbValue(value: VisibilityDbValue): Visibility {
 /**
  * Does this DB label denote the sealed (not-yet-disclosed) state, under either
  * vocabulary? This is the exact predicate the creator-only read gate keys on
- * (`isCommittedRecord` in `committed-access.ts`), named here so it is
+ * (`isSealedRecord` in `sealed-access.ts`), named here so it is
  * directly exercisable — that module cannot be loaded by the test runner,
  * which resolves no path aliases.
  */
