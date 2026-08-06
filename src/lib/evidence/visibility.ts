@@ -15,10 +15,25 @@
 //                (drizzle/0014_add_sealed_public_visibility.sql). The enum then
 //                carries all four labels. No row changes; no behavior changes.
 //
-//   M2  FLIP     Rewrite the rows onto the new labels and move the column
-//                default. Only after this does the database hold any
-//                new-vocabulary row. Paired with the code-side flip of
-//                `toDbValue` below.
+//   P2  FLIP     `toDbValue` becomes the identity, so every NEW row lands on
+//                `sealed` / `public`, and the three serving surfaces start
+//                emitting the canonical value. This deploys BEFORE M2.
+//
+//   M2  BACKFILL Rewrite the existing rows onto the new labels and move the
+//                column default (drizzle/0015_flip_visibility_to_sealed_public
+//                .sql). Run by the owner AFTER the P2 deploy.
+//
+//   THE MIXED-STATE WINDOW between P2 and M2 is the load-bearing case: the
+//   table holds BOTH vocabularies simultaneously — historical rows on
+//   `committed` / `published`, rows written since the deploy on `sealed` /
+//   `public`. Every read path normalizes through `fromDbValue`, and every
+//   query predicate is a SET-MEMBERSHIP test over both labels for a state
+//   (`visibility-sql.ts#visibilityMatches`), never an equality against one
+//   spelling. An equality test would empty the public listing and break the
+//   publish compare-and-set the moment this phase deployed. The window is not
+//   the only time this matters: a restored backup or a fork that never runs M2
+//   holds legacy labels forever, so the property is permanent, not
+//   transitional.
 //
 //   ---  KEEP    The legacy labels `committed` / `published` are NEVER dropped.
 //                Postgres cannot remove an enum value without recreating the
@@ -36,9 +51,9 @@
 //   downstream fork part-way through the migration, or a replica that has not
 //   run M2 all serve legacy labels. Reading must never assume the flip ran.
 //
-//   `toDbValue` is the SINGLE place that decides what gets WRITTEN. It is
-//   phase-gated (see its comment) so the flip is a one-line change instead of a
-//   second sweep across every write site.
+//   `toDbValue` is the SINGLE place that decides what gets WRITTEN. Because it
+//   is the only such place, the flip was a one-line change instead of a second
+//   sweep across every write site.
 //
 // Read sites therefore normalize through `fromDbValue` / `normalizeVisibility`
 // and branch on the canonical vocabulary; write sites go through `toDbValue`.
@@ -120,22 +135,24 @@ export function isSealedDbValue(value: VisibilityDbValue): boolean {
 }
 
 /**
- * ============================ THE FLIP POINT ============================
+ * The single place that decides what a write puts in the `visibility` column.
+ * It is the IDENTITY: the canonical vocabulary and the persisted vocabulary are
+ * now the same two labels (`sealed`, `public`), so every new row lands on the
+ * ADR-0016 §A spelling.
  *
- * PHASE P1 (this phase): returns the LEGACY label. The application continues
- * to WRITE exactly what it writes today (`sealed` -> `'committed'`,
- * `public` -> `'published'`), which is what makes P1's merge behaviorally
- * inert — the new labels do not yet exist in the database.
+ * The flip happened in P2, after the owner-run M1 expand migration
+ * (drizzle/0014_add_sealed_public_visibility.sql) put `sealed` and `public` on
+ * the live enum. It was a one-line change precisely because no other module
+ * decides what a write persists.
  *
- * PHASE P2 (after the owner-run M1 expand migration lands): this function
- * becomes the identity — `sealed` -> `'sealed'`, `public` -> `'public'` — and
- * that is the ENTIRE code-side flip. Nothing else has to change, because no
- * other module decides what a write puts in the column.
- *
- * =======================================================================
+ * IT STAYS A FUNCTION, not an inlined cast. Writing is a policy decision — if a
+ * future instance ever has to emit a different label (a downstream fork pinned
+ * to the legacy vocabulary, a rollback window), this is the one line that
+ * changes. `fromDbValue`'s permanent four-label totality is what keeps that
+ * reversible.
  */
 export function toDbValue(value: Visibility): VisibilityDbValue {
-  return value === 'sealed' ? 'committed' : 'published';
+  return value;
 }
 
 /**

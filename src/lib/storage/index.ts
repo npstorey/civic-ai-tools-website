@@ -54,12 +54,20 @@ export async function putPackage(
 }
 
 /**
- * Store a COMMITTED evidence package blob under a random, non-hash-derivable
+ * Store a SEALED evidence package blob under a random, non-hash-derivable
  * key (Phase 2 hard requirement, civic-ai-tools#71): the package hash is
  * public in the Rekor log, so a hash-derived pathname would let anyone with
- * the commitment fetch committed content. 128 bits of randomness make the
+ * the commitment fetch sealed content. 128 bits of randomness make the
  * URL a capability held by the creator (and whoever they hand it to) until
  * publication moves the content to the canonical hash-addressed key.
+ *
+ * DELIBERATELY NOT RENAMED by the ADR-0016 §A sweep: the `committed/` path
+ * segment below is a FROZEN STORAGE LITERAL, not a state label. Every
+ * already-stored sealed package lives at that prefix and its capability URL is
+ * recorded on the row (`base_package_storage_key`); changing the segment would
+ * strand them. The function name tracks the path it writes so the two cannot
+ * drift apart. The state label that used to spell this word now reads `sealed`
+ * everywhere it is a state label — see `src/lib/evidence/visibility.ts`.
  */
 export async function putCommittedPackage(
   data: Record<string, unknown>
@@ -75,7 +83,7 @@ export async function putCommittedPackage(
 
 /**
  * Best-effort delete of a blob by URL. Used when publication re-homes a
- * committed package to its canonical hash-addressed key — the old random-key
+ * sealed package to its canonical hash-addressed key — the old random-key
  * blob is removed so the capability URL stops working. Failures are swallowed
  * (the canonical copy is already live; a stale duplicate is a cleanup concern,
  * not a correctness one).

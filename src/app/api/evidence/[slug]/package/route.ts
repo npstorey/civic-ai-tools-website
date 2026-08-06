@@ -25,7 +25,7 @@ export async function GET(
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  // Committed records' content is creator-only (civic-ai-tools#71).
+  // Sealed records' content is creator-only (civic-ai-tools#71).
   if (!(await canReadRecord(request, records[0]))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }

@@ -38,8 +38,8 @@ export async function GET(
 
   const record = records[0];
 
-  // Committed records are creator-only on this surface (civic-ai-tools#71);
-  // public verification of a committed claim goes through the redacted
+  // Sealed records are creator-only on this surface (civic-ai-tools#71);
+  // public verification of a sealed claim goes through the redacted
   // commitment sidecar instead.
   if (!(await canReadRecord(request, record))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });

@@ -71,7 +71,7 @@ export async function POST(
   }
   const record = records[0];
 
-  // Committed records are creator-only on this content-bearing surface
+  // Sealed records are creator-only on this content-bearing surface
   // (civic-ai-tools#71).
   if (!(await canReadRecord(request, record))) {
     return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });

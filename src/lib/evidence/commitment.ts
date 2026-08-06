@@ -10,6 +10,7 @@ import {
   DEMO_TRUST_REGISTRY_CANONICAL_URL,
   DEMO_TRUST_REGISTRY_LEGACY_URL,
 } from '../site-config.ts';
+import { fromDbValue } from './visibility.ts';
 
 /**
  * Proof sidecar ("commitment view") builder — spec §9.2.1.
@@ -20,7 +21,7 @@ import {
  * per-publisher configuration — never a core constant). What stays HERE is
  * the implementation-side adapter (ADR-0021 §B): mapping the evidence DB row
  * + creator row onto the neutral input, parsing the stored signature JSON,
- * deriving the lifecycle summary from the row's columns, the COMMITTED-record
+ * deriving the lifecycle summary from the row's columns, the SEALED-record
  * redaction decision, and resolving THIS instance's trust-registry URLs from
  * config (ADR-0020 — see `src/lib/site-config.ts`).
  *
@@ -150,11 +151,11 @@ export function buildCommitmentView(
    *  `verifyLifecycleChain` — no reference-impl dependency (#119 P3). Omitted when the
    *  package has no signed lifecycle chain (it then stays at STATE / legacy columns). */
   lifecycleAttestations?: CarriedLifecycleAttestation[],
-  /** COMMITTED-record redaction (civic-ai-tools#71, ADR-0010 §5): the commitment
+  /** SEALED-record redaction (civic-ai-tools#71, ADR-0010 §5): the commitment
    *  is public by design (the hash is already on the transparency log), but the
    *  content's location and content-derived strings are not. When set, the view
    *  omits `packageUrl` (the non-derivable capability URL must not be disclosed),
-   *  `subjectTitle`, and `subjectSummary`, and carries `visibility: "committed"`
+   *  `subjectTitle`, and `subjectSummary`, and carries `visibility: "sealed"`
    *  so verifiers can render the zero-location state honestly. Proof-side fields
    *  (hash, signature, signer, envelope taxonomy, timestamps, Rekor, lifecycle)
    *  are served unredacted — they ARE the commitment. */
@@ -199,14 +200,25 @@ export function buildCommitmentView(
     // the raw column value verbatim (`"packageHash": null` on a hashless
     // row), and the pass-through preserves that.
     packageHash: record.basePackageHash as unknown as string,
-    // The committed-mode storage key is a non-derivable capability URL; the
+    // The sealed-mode storage key is a non-derivable capability URL; the
     // core never emits it on a redacted view (Phase 2 hard requirement). The
     // cast preserves the historical pass-through of a null column.
     packageUrl: record.basePackageStorageKey as unknown as string | undefined,
-    // Visibility state (ADR-0010): lets a verifier render "committed — content
+    // Visibility state (ADR-0010): lets a verifier render "sealed — content
     // not publicly located" instead of treating a missing packageUrl as an
-    // error. The core defaults absent → 'published'.
-    visibility: record.visibility ?? undefined,
+    // error. (The core defaults an ABSENT value to 'published'; the column is
+    // `NOT NULL`, so that branch is unreachable from this adapter — the
+    // fallback exists for callers whose row shape predates the column.)
+    //
+    // SERVED CANONICAL (ADR-0016 §A, P2). The row's raw label is normalized
+    // through the vocabulary boundary before it is emitted, so a historical row
+    // still holding `committed` serves `sealed` and one holding `published`
+    // serves `public`. This is the chartered externally-visible change of the
+    // flip phase: the commitment view is the offline-bundle surface, and a
+    // third-party verifier reading it must see ONE vocabulary regardless of
+    // which spelling the row happens to carry — otherwise the same record read
+    // before and after the M2 backfill would appear to change state.
+    visibility: record.visibility ? fromDbValue(record.visibility) : undefined,
     captureMethod: record.captureMethod,
     // Generalized for all packages (WS1): sourced from the row, not hardcoded
     // 'datHere'. The core defaults an absent column to 'default' (legacy /
@@ -242,7 +254,7 @@ export function buildCommitmentView(
     trustRegistryUrl: registry.canonical,
     trustRegistryUrlLegacy: registry.legacy,
     // Title and summary are content-derived (titles are typically the user's
-    // question verbatim) — redacted for committed records.
+    // question verbatim) — redacted for sealed records.
     subjectTitle: record.title,
     subjectSummary: record.summary,
     redactContentSurface: opts?.redactContentSurface,

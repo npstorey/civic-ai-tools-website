@@ -59,7 +59,7 @@ export function classifyIdentifier(identifier: string): ResolvedIdentifier {
  * This is the load-bearing authorization invariant of the hash-lookup fix:
  * addressing a record by hash grants NO more access than addressing it by slug.
  * A record with no published base package, or one that is not public (private /
- * unlisted), is unreachable by EITHER form. Committed-visibility redaction is
+ * unlisted), is unreachable by EITHER form. Sealed-visibility redaction is
  * handled separately by the route (the commitment is public by design — the hash
  * is already on the transparency log — but content and location are redacted).
  */

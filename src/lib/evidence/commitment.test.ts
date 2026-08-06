@@ -358,9 +358,9 @@ test('SECURITY: only intended-public keys are emitted (no PII / internal IDs / p
   );
 });
 
-// --- Committed-record redaction (civic-ai-tools#71 Phase 2, ADR-0010 §5) ---
+// --- Sealed-record redaction (civic-ai-tools#71 Phase 2, ADR-0010 §5) ---
 
-test('committed redaction: capability URL, title, and summary never leave the server', () => {
+test('sealed redaction: capability URL, title, and summary never leave the server', () => {
   const record = makeRecord({
     visibility: 'committed',
     basePackageStorageKey:
@@ -380,8 +380,10 @@ test('committed redaction: capability URL, title, and summary never leave the se
   assert.ok(!('subjectTitle' in view));
   assert.ok(!('subjectSummary' in view));
 
-  // The commitment itself — the proofs — is served unredacted.
-  assert.equal(view.visibility, 'committed');
+  // The commitment itself — the proofs — is served unredacted. `visibility` is
+  // served CANONICAL as of the ADR-0016 §A P2 flip: this fixture's row still
+  // holds the legacy `committed` label and the view emits `sealed`.
+  assert.equal(view.visibility, 'sealed');
   assert.equal(view.packageHash, record.basePackageHash);
   assert.ok(view.signature, 'signature envelope should be served');
   assert.equal(view.rfc3161Timestamp, 'BASE64TSTOKEN');
@@ -393,9 +395,11 @@ test('committed redaction: capability URL, title, and summary never leave the se
   }
 });
 
-test('published records carry visibility "published" and stay unredacted', () => {
+test('public records carry visibility "public" and stay unredacted', () => {
+  // The base fixture's row holds the legacy `published` label; the view serves
+  // the canonical `public` (ADR-0016 §A, P2).
   const view = buildCommitmentView(makeRecord(), makeCreator(), makePkg());
-  assert.equal(view.visibility, 'published');
+  assert.equal(view.visibility, 'public');
   assert.ok(view.packageUrl);
   assert.equal(view.subjectTitle, 'Sample analysis');
 });

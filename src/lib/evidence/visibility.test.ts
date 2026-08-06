@@ -1,7 +1,16 @@
-// Tests for the ADR-0016 §A visibility vocabulary boundary (visibility.ts) and
-// for the property that makes the rename safe to ship in stages: a row written
-// under the LEGACY vocabulary keeps working, unchanged, at every surface that
-// reads it.
+// Tests for the ADR-0016 §A visibility vocabulary boundary (visibility.ts), the
+// read-back projection (readback.ts), and the property that makes the rename
+// safe to ship in stages: a row written under the LEGACY vocabulary keeps
+// working at every surface that reads it, in the mixed state where the table
+// holds BOTH vocabularies at once.
+//
+// Two things changed at the P2 flip and are asserted as such below:
+//   - writes now emit `sealed` / `public` only (legacy input still ACCEPTED,
+//     it just no longer round-trips to a legacy DB label);
+//   - the serving surfaces emit the CANONICAL value, so a row still holding
+//     `committed` serves `sealed`. That is the deliberate, chartered delta —
+//     the alternative would be an external consumer watching a record appear to
+//     change state when the M2 backfill rewrites its label.
 //
 // Run with: npm test (Node 22+).
 
@@ -20,6 +29,7 @@ import {
   type VisibilityDbValue,
 } from './visibility.ts';
 import { buildCommitmentView } from './commitment.ts';
+import { buildRecordReadback } from './readback.ts';
 import { evidenceRecords, users } from '../db/schema.ts';
 import type { EvidencePackage } from './packager.ts';
 
@@ -148,15 +158,36 @@ test('round trip: legacy input and new input produce an identical DB write', () 
     return toDbValue(canonical as Visibility);
   };
 
+  // Back-compat, permanent (ADR-0016 §A): an already-shipped client sending the
+  // legacy literal and a new client sending the ADR literal are indistinguishable
+  // by the time the value reaches the column.
   assert.equal(write('committed'), write('sealed'));
   assert.equal(write('published'), write('public'));
 
-  // …and in this phase that identical write is the LEGACY label, so the merge
-  // changes nothing about what lands in the column. When the flip phase turns
-  // `toDbValue` into the identity, this pair of assertions is what changes —
-  // and it is the only place in the suite that has to.
-  assert.equal(write('sealed'), 'committed');
-  assert.equal(write('public'), 'published');
+  // …and after the P2 flip that identical write is the NEW label. Legacy input
+  // is still accepted; it just no longer round-trips to a legacy DB value.
+  assert.equal(write('sealed'), 'sealed');
+  assert.equal(write('public'), 'public');
+  assert.equal(write('committed'), 'sealed');
+  assert.equal(write('published'), 'public');
+});
+
+test('writes emit ONLY the ADR-0016 vocabulary — no legacy label can be persisted', () => {
+  // The whole point of routing every write through one function: enumerate its
+  // range and there is nothing else to audit. If a legacy label ever reappears
+  // in the column, it did not come from this application.
+  const emitted = new Set((['sealed', 'public'] as const).map(toDbValue));
+  assert.deepEqual([...emitted].sort(), ['public', 'sealed']);
+
+  // Stated the other way round, so a partial revert fails loudly rather than
+  // half-flipping one state.
+  for (const legacy of ['committed', 'published'] as const) {
+    assert.equal(
+      emitted.has(legacy),
+      false,
+      `toDbValue must never emit the dead label "${legacy}"`,
+    );
+  }
 });
 
 test('toDbValue output is always a value the canonical vocabulary round-trips', () => {
@@ -217,20 +248,89 @@ test('historical record: a legacy "committed" row still produces a servable, red
   assert.equal(view.rfc3161Timestamp, 'BASE64TSTOKEN');
   assert.equal(view.rekorEntryId, 'rekor-entry-legacy');
 
-  // SERVING SURFACE, deliberately unchanged: the commitment view passes the raw
-  // column through. An external verifier that already knows this record reads
-  // byte-identically to before the boundary module existed. Renaming what this
-  // field serves is the flip phase's chartered change, not a side effect here.
-  assert.equal(view.visibility, 'committed');
+  // SERVING SURFACE — the deliberate P2 delta. The commitment view no longer
+  // passes the raw column through: it normalizes, so this legacy `committed`
+  // row now serves `sealed`. That is the chartered externally-visible change of
+  // the flip phase. A verifier reading the offline bundle sees ONE vocabulary
+  // whichever spelling the row carries, so the same record does not appear to
+  // change state when the M2 backfill later rewrites it.
+  assert.equal(view.visibility, 'sealed');
 });
 
-test('serving surface: a public-state row still serves its raw label unchanged', () => {
+test('serving surface: a legacy "published" row serves the canonical "public"', () => {
   const view = buildCommitmentView(
     makeRecord({ visibility: 'published', title: 'Open analysis', summary: 'Open summary' }),
     makeCreator(),
     makePkg(),
   );
-  assert.equal(view.visibility, 'published');
+  assert.equal(view.visibility, 'public');
   assert.equal(view.subjectTitle, 'Open analysis');
   assert.ok(view.packageUrl);
+});
+
+test('serving surface: both spellings of a state serve the SAME value', () => {
+  // The mixed-state property as an equality, not two literals: during the window
+  // between this deploy and the M2 backfill the table holds both vocabularies at
+  // once, and a consumer must not be able to tell which row is which.
+  const seal = (v: VisibilityDbValue) =>
+    buildCommitmentView(makeRecord({ visibility: v }), makeCreator(), makePkg(), undefined, {
+      redactContentSurface: true,
+    }).visibility;
+  assert.equal(seal('committed'), seal('sealed'));
+  assert.equal(seal('committed'), 'sealed');
+
+  const pub = (v: VisibilityDbValue) =>
+    buildCommitmentView(makeRecord({ visibility: v }), makeCreator(), makePkg()).visibility;
+  assert.equal(pub('published'), pub('public'));
+  assert.equal(pub('published'), 'public');
+});
+
+// --- The `[slug]` read-back projection (sprint decision G0-6) ---
+
+test('read-back: visibility is served canonical for a row on either vocabulary', () => {
+  for (const [raw, served] of [
+    ['committed', 'sealed'],
+    ['sealed', 'sealed'],
+    ['published', 'public'],
+    ['public', 'public'],
+  ] as const) {
+    const body = buildRecordReadback(makeRecord({ visibility: raw }), null);
+    assert.equal(body.visibility, served, `${raw} should serve ${served}`);
+  }
+});
+
+test('read-back: `listed` and `isPublic` both serialize, from the same column', () => {
+  for (const flag of [true, false]) {
+    const body = buildRecordReadback(makeRecord({ isPublic: flag }), null);
+    assert.ok('listed' in body, '`listed` (the canonical key) must be present');
+    assert.ok('isPublic' in body, '`isPublic` (the read-back alias) must be present');
+    assert.equal(body.listed, flag);
+    assert.equal(body.isPublic, flag);
+    assert.equal(body.listed, body.isPublic, 'the alias must never drift');
+  }
+});
+
+test('read-back: `listed` and `visibility` are orthogonal — they may disagree', () => {
+  // ADR-0016 §A.1: host display and content disclosure are different dimensions.
+  // `{visibility: "sealed", listed: true}` is expressible and is NOT a
+  // contradiction — which is exactly why the boolean needed its own honest name.
+  const sealedButFlagged = buildRecordReadback(
+    makeRecord({ visibility: 'sealed', isPublic: true }),
+    null,
+  );
+  assert.equal(sealedButFlagged.visibility, 'sealed');
+  assert.equal(sealedButFlagged.listed, true);
+
+  const publicButUnlisted = buildRecordReadback(
+    makeRecord({ visibility: 'public', isPublic: false }),
+    null,
+  );
+  assert.equal(publicButUnlisted.visibility, 'public');
+  assert.equal(publicButUnlisted.listed, false);
+});
+
+test('read-back: the creator projection is null-safe', () => {
+  assert.equal(buildRecordReadback(makeRecord(), null).creator, null);
+  const creator = { displayName: 'Octocat', githubProfileUrl: 'https://github.com/octocat' };
+  assert.deepEqual(buildRecordReadback(makeRecord(), creator).creator, creator);
 });

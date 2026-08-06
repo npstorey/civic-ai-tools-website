@@ -125,7 +125,7 @@ export async function GET(
   }
   const record = records[0];
 
-  // Committed records' bundle (the full content, packaged for sharing) is
+  // Sealed records' bundle (the full content, packaged for sharing) is
   // creator-only (civic-ai-tools#71) — the creator exports it to distribute
   // to chosen recipients; it is not a public surface until publication.
   if (!(await canReadRecord(request, record))) {

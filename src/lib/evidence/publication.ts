@@ -3,8 +3,8 @@
 // A publication is two coupled, independently-verifiable signed nodes, each
 // with its own nodeId, signature, RFC 3161 timestamp, and Rekor inclusion:
 //
-//   1. `attestation/publishes/v1`  — the visibility transition (committed →
-//      published) asserted by the publisher. Authorization: publisher-only;
+//   1. `attestation/publishes/v1`  — the visibility transition (sealed →
+//      public) asserted by the publisher. Authorization: publisher-only;
 //      the platform signs on the author's behalf (§8.5), exactly as the
 //      withdraw/reinstate routes do.
 //   2. `attestation/locatedAt/v1`  — the publisher's own public pointer to the
