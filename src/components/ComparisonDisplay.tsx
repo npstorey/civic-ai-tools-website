@@ -29,6 +29,7 @@ interface StreamingPanelState {
   completion_tokens?: number;
   token_limit_exceeded?: boolean;
   tools_called?: ToolCall[];
+  error?: string;
 }
 
 interface ComparisonDisplayProps {
@@ -112,6 +113,7 @@ export default function ComparisonDisplay({
       tools_called={isStreaming ? streamingWithMcp?.tools_called : withMcp?.tools_called}
       isLoading={isLoading && !isStreaming}
       variant="with-mcp"
+      error={isStreaming ? streamingWithMcp?.error : undefined}
       isStreaming={isStreaming}
       progressLog={streamingWithMcp?.progressLog}
       progressGroups={streamingWithMcp?.progressGroups}
@@ -134,6 +136,7 @@ export default function ComparisonDisplay({
       tokens_used={isStreaming ? streamingWithoutMcp?.tokens_used : withoutMcp?.tokens_used}
       isLoading={isLoading && !isStreaming}
       variant="without-mcp"
+      error={isStreaming ? streamingWithoutMcp?.error : undefined}
       isStreaming={isStreaming}
       progressLog={streamingWithoutMcp?.progressLog}
       progressGroups={streamingWithoutMcp?.progressGroups}

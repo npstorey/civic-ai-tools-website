@@ -1,9 +1,9 @@
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
-import { getModelClient } from './model-client';
-import { formatToolProgress, formatToolResult, generateToolReason, describeToolFailureForLlm, type PanelType, type ProgressPhase } from './streaming';
-import type { TraceBuilder } from './evidence/trace';
-import { hash as traceHash } from './evidence/trace';
-import { deriveOperationType } from './mcp/operation-types';
+import { getModelClient, classifyModelError } from './model-client.ts';
+import { formatToolProgress, formatToolResult, generateToolReason, describeToolFailureForLlm, type PanelType, type ProgressPhase, type ModelErrorCode } from './streaming.ts';
+import type { TraceBuilder } from './evidence/trace.ts';
+import { hash as traceHash } from './evidence/trace.ts';
+import { deriveOperationType } from './mcp/operation-types.ts';
 
 export interface TraceContext {
   builder: TraceBuilder;
@@ -28,7 +28,19 @@ export interface StreamCallbacks {
   onProgress: (panel: PanelType, message: string, opts?: ProgressOpts) => void;
   onToken: (panel: PanelType, content: string) => void;
   onComplete: (panel: PanelType, result: CompletionResult) => void;
-  onError: (panel: PanelType, error: string) => void;
+  /** `code` is set for typed model-credential failures (#178); undefined otherwise. */
+  onError: (panel: PanelType, error: string, code?: ModelErrorCode) => void;
+}
+
+/**
+ * Shared failure tail for both streaming query functions: classify the error,
+ * log it server-side (previously this path was silent — the error only went to
+ * the SSE callback), and forward message + typed code to the caller.
+ */
+function reportStreamFailure(panel: PanelType, error: unknown, callbacks: StreamCallbacks): void {
+  const code = classifyModelError(error) ?? undefined;
+  console.error(`[stream:${panel}] query failed${code ? ` (${code})` : ''}:`, error);
+  callbacks.onError(panel, error instanceof Error ? error.message : 'Unknown error', code);
 }
 
 export interface CompletionResult {
@@ -123,7 +135,7 @@ export async function queryWithoutMcpStreaming(
       tokens_used: tokensUsed,
     });
   } catch (error) {
-    callbacks.onError(panel, error instanceof Error ? error.message : 'Unknown error');
+    reportStreamFailure(panel, error, callbacks);
   }
 }
 
@@ -484,6 +496,6 @@ export async function queryWithMcpStreaming(
       });
     }
   } catch (error) {
-    callbacks.onError(panel, error instanceof Error ? error.message : 'Unknown error');
+    reportStreamFailure(panel, error, callbacks);
   }
 }

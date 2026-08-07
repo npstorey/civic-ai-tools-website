@@ -1,5 +1,5 @@
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
-import { getModelClient } from './model-client';
+import { getModelClient } from './model-client.ts';
 
 export interface CompletionResult {
   content: string;
