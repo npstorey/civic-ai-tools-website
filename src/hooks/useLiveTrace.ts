@@ -63,6 +63,10 @@ export function useLiveTrace(): UseLiveTraceReturn {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cascadeTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const receivedCompleteRef = useRef(false);
+  // Tracks a typed `error` event in a ref (statusRef lags a render behind), so
+  // onComplete's connection-lost fallback can't overwrite the real error when
+  // the stream closes immediately after erroring.
+  const receivedErrorRef = useRef(false);
 
   // Keep statusRef in sync
   useEffect(() => {
@@ -94,6 +98,7 @@ export function useLiveTrace(): UseLiveTraceReturn {
     setToolsCalled([]);
     eventIndexRef.current = 0;
     receivedCompleteRef.current = false;
+    receivedErrorRef.current = false;
     traceCaptureRef.current = null;
   }, [clearTimers]);
 
@@ -261,6 +266,7 @@ export function useLiveTrace(): UseLiveTraceReturn {
     setToolsCalled([]);
     eventIndexRef.current = 0;
     receivedCompleteRef.current = false;
+    receivedErrorRef.current = false;
 
     const abortController = new AbortController();
     abortRef.current = abortController;
@@ -402,7 +408,11 @@ export function useLiveTrace(): UseLiveTraceReturn {
         }
 
         if (type === 'error') {
-          setError(friendlyStreamError(eventData.message));
+          // Pass the whole event: a typed `code` (e.g. model_not_configured)
+          // selects operator-actionable copy; otherwise the message text is
+          // classified as before.
+          receivedErrorRef.current = true;
+          setError(friendlyStreamError(eventData));
           setStatus('error');
           clearTimers();
         }
@@ -422,7 +432,7 @@ export function useLiveTrace(): UseLiveTraceReturn {
 
           if (receivedCompleteRef.current) {
             setStatus('complete');
-          } else {
+          } else if (!receivedErrorRef.current) {
             // Stream ended without a complete event — likely a connection drop
             setError('Connection lost before the query finished. Partial results may be shown.');
             setStatus('error');

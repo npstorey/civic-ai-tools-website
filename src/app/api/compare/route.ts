@@ -6,6 +6,7 @@ import { mcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
+import { getMissingModelCredentialError, classifyModelError } from '@/lib/model-client';
 import { headers } from 'next/headers';
 
 interface CompareRequest {
@@ -24,6 +25,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Query and model are required' },
         { status: 400 }
+      );
+    }
+
+    // Fail fast when the instance has no model credential (#178) — same shared
+    // guard as the streaming route, before rate limiting or any upstream call.
+    const credentialError = getMissingModelCredentialError();
+    if (credentialError) {
+      console.error('[compare]', credentialError.message);
+      return NextResponse.json(
+        { error: credentialError.message, code: credentialError.code },
+        { status: 503 }
       );
     }
 
@@ -83,6 +95,15 @@ Be honest if you don't have access to current or real-time data.`;
     });
   } catch (error) {
     console.error('Compare API error:', error);
+    // Distinguish an upstream auth rejection (configured but refused key)
+    // from other failures so the operator gets a typed, actionable response.
+    const code = classifyModelError(error);
+    if (code) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Model credential error', code },
+        { status: code === 'model_not_configured' ? 503 : 502 }
+      );
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }

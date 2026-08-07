@@ -7,8 +7,15 @@ import { callMcpTool, routeTool } from '@/lib/mcp/client';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
-import { encodeSSE, type PanelType, type StreamEvent } from '@/lib/streaming';
+import { encodeSSE, type ModelErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
+import { getMissingModelCredentialError } from '@/lib/model-client';
 import { TraceBuilder, hash } from '@/lib/evidence/trace';
+
+const SSE_HEADERS = {
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-cache',
+  'Connection': 'keep-alive',
+} as const;
 
 interface CompareRequest {
   query: string;
@@ -28,6 +35,29 @@ export async function POST(request: NextRequest) {
         JSON.stringify({ error: 'Query and model are required' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Fail fast when the instance has no model credential (#178). Checked
+    // before rate limiting (a misconfigured instance must not burn quota) and
+    // before any upstream work (skill fetch, MCP init). Surfaced as typed SSE
+    // error events — the channel the client already renders — plus a server
+    // log line for the operator.
+    const credentialError = getMissingModelCredentialError();
+    if (credentialError) {
+      console.error('[compare-stream]', credentialError.message);
+      const encoder = new TextEncoder();
+      const panels: PanelType[] = mcpOnly ? ['withMcp'] : ['withoutMcp', 'withMcp'];
+      const body = panels
+        .map((panel) =>
+          encodeSSE({
+            type: 'error',
+            panel,
+            message: credentialError.message,
+            code: credentialError.code,
+          } as StreamEvent & { message: string; code: ModelErrorCode })
+        )
+        .join('');
+      return new Response(encoder.encode(body), { headers: SSE_HEADERS });
     }
 
     // Get session and identifier for rate limiting
@@ -96,8 +126,13 @@ Be honest if you don't have access to current or real-time data.`;
       onComplete: (panel: PanelType, result) => {
         writeEvent({ type: 'complete', panel, data: result });
       },
-      onError: (panel: PanelType, message: string) => {
-        writeEvent({ type: 'error', panel, message } as StreamEvent & { message: string });
+      onError: (panel: PanelType, message: string, code?: ModelErrorCode) => {
+        writeEvent({
+          type: 'error',
+          panel,
+          message,
+          ...(code ? { code } : {}),
+        } as StreamEvent & { message: string; code?: ModelErrorCode });
       },
     };
 
@@ -156,13 +191,7 @@ Be honest if you don't have access to current or real-time data.`;
     runQueries();
 
     // Return the readable stream as SSE
-    return new Response(stream.readable, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
+    return new Response(stream.readable, { headers: SSE_HEADERS });
   } catch (error) {
     console.error('Compare stream API error:', error);
     return new Response(

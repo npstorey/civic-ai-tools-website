@@ -18,6 +18,8 @@ interface ResponsePanelProps {
   tools_called?: ToolCall[];
   isLoading?: boolean;
   variant: 'without-mcp' | 'with-mcp';
+  /** Friendly error copy for this panel (already mapped via friendlyStreamError). */
+  error?: string;
   // Streaming props
   progressLog?: ProgressLogEntry[];
   progressGroups?: ProgressGroup[];
@@ -43,6 +45,7 @@ export default function ResponsePanel({
   tools_called,
   isLoading,
   variant,
+  error,
   progressLog,
   progressGroups,
   isStreaming,
@@ -56,12 +59,31 @@ export default function ResponsePanel({
 }: ResponsePanelProps) {
   const isMcp = variant === 'with-mcp';
 
-  // Without-MCP display state
+  // Without-MCP display state. An error suppresses the in-progress affordances
+  // (spinners, "answering from training data" note) so the panel reads as
+  // failed, not still working (#178).
   const hasProgressLog = isStreaming && progressLog && progressLog.length > 0;
   const hasGroups = isStreaming && progressGroups && progressGroups.length > 0;
-  const showProgressLog = !isMcp && (hasProgressLog || hasGroups) && !content;
+  const showProgressLog = !isMcp && (hasProgressLog || hasGroups) && !content && !error;
   const showStreamingContent = !isMcp && isStreaming && !!content;
   const showStaticContent = !isMcp && !isStreaming && !isLoading && !!content;
+
+  const errorBox = error ? (
+    <div
+      role="alert"
+      style={{
+        padding: '12px 16px',
+        backgroundColor: 'rgba(236, 19, 30, 0.1)',
+        color: 'var(--nyc-error)',
+        borderRadius: '4px',
+        border: '1px solid var(--nyc-error)',
+        fontSize: '14px',
+        marginBottom: '16px',
+      }}
+    >
+      {error}
+    </div>
+  ) : null;
 
   const markdownContent = (text: string, showCursor?: boolean) => (
     <div className="response-markdown">
@@ -122,7 +144,10 @@ export default function ResponsePanel({
         </p>
       </div>
 
-      {/* MCP variant: delegate to shared component */}
+      {/* MCP variant: delegate to shared component (error box above it) */}
+      {isMcp && errorBox && (
+        <div style={{ padding: '16px 24px 0' }}>{errorBox}</div>
+      )}
       {isMcp && (
         <McpResponseDisplay
           content={content}
@@ -136,7 +161,7 @@ export default function ResponsePanel({
           completion_tokens={completion_tokens}
           token_limit_exceeded={token_limit_exceeded}
           isComplete={isStreaming ? !!duration_ms : !!content}
-          isActive={!!isStreaming && !duration_ms}
+          isActive={!!isStreaming && !duration_ms && !error}
           showFooter={!isLoading && !!(duration_ms || tokens_used)}
           portal={portal}
           model={model}
@@ -204,6 +229,9 @@ export default function ResponsePanel({
               </div>
             )}
 
+            {/* Typed failure (e.g. no model credential configured) */}
+            {errorBox}
+
             {/* Streaming progress log */}
             {showProgressLog && hasGroups && (
               <ProgressLog
@@ -214,7 +242,7 @@ export default function ResponsePanel({
               />
             )}
             {/* Without-MCP contextual label during streaming */}
-            {isStreaming && !content && (
+            {isStreaming && !content && !error && (
               <div
                 style={{
                   borderLeft: '3px solid var(--nyc-caution)',

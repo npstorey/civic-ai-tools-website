@@ -89,3 +89,47 @@ test('describeToolFailureForLlm distinguishes unavailable from generic', () => {
   assert.match(unavailable, /temporarily unavailable/i);
   assert.match(generic, /could not be completed/i);
 });
+
+// --- Typed model-credential failures (#178) --------------------------------
+//
+// The server stamps `code` on SSE error events for the two credential
+// failures. Classification must honor the code without parsing message text,
+// and the copy must be operator-actionable (it names the env var — these
+// errors only appear on self-hosted instances with a broken configuration).
+
+test('classifyStreamError honors a typed code before any message parsing', () => {
+  assert.equal(
+    classifyStreamError({ code: 'model_not_configured', message: 'whatever' }),
+    'model_not_configured',
+  );
+  assert.equal(
+    classifyStreamError({ code: 'model_auth_rejected', message: 'whatever' }),
+    'model_auth_rejected',
+  );
+  // An unknown code falls through to message classification.
+  assert.equal(classifyStreamError({ code: 'bogus', message: 'rate limit exceeded' }), 'rate_limit');
+});
+
+test('classifyStreamError falls back to message shape for credential failures', () => {
+  // The guard's own message (non-streaming route JSON path).
+  assert.equal(
+    classifyStreamError('No model API key is configured: OPENROUTER_API_KEY is missing or empty in the server environment.'),
+    'model_not_configured',
+  );
+  // The SDK's constructor message (belt and braces).
+  assert.equal(classifyStreamError('Missing credentials. Please pass an `apiKey`.'), 'model_not_configured');
+  // A typical upstream 401 body message.
+  assert.equal(classifyStreamError('401 Invalid API key provided'), 'model_auth_rejected');
+});
+
+test('friendlyStreamError gives distinct, operator-actionable copy for the two credential failures', () => {
+  const notConfigured = friendlyStreamError({ code: 'model_not_configured' });
+  const rejected = friendlyStreamError({ code: 'model_auth_rejected' });
+  assert.notEqual(notConfigured, rejected);
+  // Both name the env var so the operator knows exactly what to fix.
+  assert.match(notConfigured, /OPENROUTER_API_KEY/);
+  assert.match(rejected, /OPENROUTER_API_KEY/);
+  // Distinguishing language: absent vs rejected.
+  assert.match(notConfigured, /no AI model API key configured/i);
+  assert.match(rejected, /rejected/i);
+});

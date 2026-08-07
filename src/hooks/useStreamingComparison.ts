@@ -474,15 +474,31 @@ function handleEvent(
       break;
 
     case 'error':
-      setState(prev => ({
-        ...prev,
-        [panel]: {
-          ...prev[panel],
-          error: friendlyStreamError(event.message),
+      setState(prev => {
+        // Stop the spinners: without this, a panel that errors before any
+        // content arrives keeps its in-flight progress entries animating
+        // forever — the silent-hang symptom of #178.
+        const newLog = prev[panel].progressLog.map(entry => ({ ...entry, isComplete: true }));
+        const newGroups = prev[panel].progressGroups.map(g => ({
+          ...g,
           isComplete: true,
-          progress: null,
-        },
-      }));
+          entries: g.entries.map(e => ({ ...e, isComplete: true })),
+        }));
+        return {
+          ...prev,
+          [panel]: {
+            ...prev[panel],
+            // Pass the whole event: a typed `code` (e.g. model_not_configured)
+            // selects operator-actionable copy; otherwise the message text is
+            // classified as before.
+            error: friendlyStreamError(event),
+            isComplete: true,
+            progress: null,
+            progressLog: newLog,
+            progressGroups: newGroups,
+          },
+        };
+      });
       break;
   }
 }

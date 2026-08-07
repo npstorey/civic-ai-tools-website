@@ -37,9 +37,21 @@ export interface CompleteEvent extends StreamEvent {
   };
 }
 
+/**
+ * Machine-readable code for model-credential failures (issue #178). Set by the
+ * server on `error` events so the client can render distinct,
+ * operator-actionable copy without parsing message strings:
+ * - `model_not_configured` — no credential in the environment; detected before
+ *   any upstream call.
+ * - `model_auth_rejected` — a credential exists but the model endpoint refused
+ *   it (401/403).
+ */
+export type ModelErrorCode = 'model_not_configured' | 'model_auth_rejected';
+
 export interface ErrorEvent extends StreamEvent {
   type: 'error';
   message: string;
+  code?: ModelErrorCode;
 }
 
 // --- Friendly error copy -----------------------------------------------------
@@ -52,7 +64,14 @@ export interface ErrorEvent extends StreamEvent {
 // implementation jargon; no new trust/status vocabulary). They are the single
 // place error-to-copy mapping lives, consumed by every SSE-consuming hook.
 
-export type StreamErrorKind = 'rate_limit' | 'mcp_timeout' | 'mcp_unavailable' | 'connection' | 'generic';
+export type StreamErrorKind =
+  | 'rate_limit'
+  | 'model_not_configured'
+  | 'model_auth_rejected'
+  | 'mcp_timeout'
+  | 'mcp_unavailable'
+  | 'connection'
+  | 'generic';
 
 /** Pull a lowercased message string out of any error-ish input. */
 function errorMessageOf(input: unknown): string {
@@ -67,11 +86,17 @@ function errorMessageOf(input: unknown): string {
 
 /**
  * Classify an error (an `Error`, an SSEError-like object with `status`, a raw
- * message string, or an SSE `error`-event message) into a `StreamErrorKind`.
- * Order matters: rate-limit first (status or text), then the more specific MCP
- * timeout before the broader MCP-unavailable, then generic connection.
+ * message string, or an SSE `error`-event object) into a `StreamErrorKind`.
+ * Order matters: an explicit typed `code` first (server-declared, never
+ * guessed from text), then rate-limit (status or text), then the more specific
+ * MCP timeout before the broader MCP-unavailable, then generic connection.
  */
 export function classifyStreamError(input: unknown): StreamErrorKind {
+  if (input !== null && typeof input === 'object' && 'code' in input) {
+    const code = (input as { code?: unknown }).code;
+    if (code === 'model_not_configured' || code === 'model_auth_rejected') return code;
+  }
+
   const status =
     input !== null && typeof input === 'object' && 'status' in input
       ? (input as { status?: unknown }).status
@@ -82,6 +107,10 @@ export function classifyStreamError(input: unknown): StreamErrorKind {
   if (!m) return 'generic';
 
   if (m.includes('rate limit') || m.includes('429')) return 'rate_limit';
+  // Message-shape fallback for the two credential failures, for paths that
+  // carry only a message (e.g. the non-streaming route's JSON error).
+  if (m.includes('no model api key') || m.includes('missing credentials')) return 'model_not_configured';
+  if (m.includes('invalid api key') || m.includes('incorrect api key')) return 'model_auth_rejected';
   if (m.includes('timed out') || m.includes('timeout') || m.includes('did not respond within')) return 'mcp_timeout';
   if (
     m.includes('unavailable') ||
@@ -110,6 +139,13 @@ export function classifyStreamError(input: unknown): StreamErrorKind {
 
 const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
   rate_limit: 'You’ve reached today’s request limit. Sign in for more requests, or try again tomorrow.',
+  // The two credential kinds are deliberately operator-actionable (they name
+  // the env var): they only appear on self-hosted instances with a broken
+  // configuration, where the reader is the person who can fix it (#178).
+  model_not_configured:
+    'This server has no AI model API key configured, so queries can’t run. If you operate this instance, set OPENROUTER_API_KEY in the server environment and restart.',
+  model_auth_rejected:
+    'The AI model service rejected this server’s API key, so the query couldn’t run. If you operate this instance, check that OPENROUTER_API_KEY is valid for the configured endpoint.',
   mcp_timeout:
     'The live data source took too long to respond, so this query couldn’t finish. Try again in a moment, or narrow the question (for example, add a date range).',
   mcp_unavailable:
