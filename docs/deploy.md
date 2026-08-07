@@ -78,9 +78,12 @@ cd civic-ai-tools-website
 
 # Build the notebook-executor image once (and again after any pinned-
 # version change). The app's container driver runs notebooks in it.
+# A cold build spends several minutes in pip installs with little
+# visible progress — that is normal, not a hang.
 docker compose --profile build-only build executor-image
 
-# Bring the stack up.
+# Bring the stack up. This runs in the foreground; add -d to detach,
+# or keep a second terminal for the verification commands below.
 docker compose up --build
 ```
 
@@ -88,8 +91,11 @@ First bring-up builds the app image (a full Next.js standalone build)
 and pulls the service images; expect several minutes. When it settles:
 `postgres` and `minio` are healthy, `minio-init` and `migrate` have run
 once and exited `0`, `app` reports healthy, and `gc-cron` is looping.
-The app listens on `http://localhost:3000`, **bound to loopback
-deliberately** (see the security note below).
+The app listens on `http://127.0.0.1:3000`, **bound to loopback
+deliberately** (see the security note below). The compose file publishes
+the port on the IPv4 loopback address specifically, so commands in this
+guide use `127.0.0.1` throughout; a browser's `localhost` normally
+reaches it too.
 
 What you will see, and why it is correct:
 
@@ -119,17 +125,16 @@ curl -s http://127.0.0.1:3000/api/evidence/signing-status
 docker compose exec postgres psql -U civic -d civic -c '\dT+ visibility'
 ```
 
+The `psql` commands in this guide use the placeholder `civic` user and
+database; substitute your own values wherever you override
+`POSTGRES_USER` / `POSTGRES_DB`.
+
 ### Supplying your environment
 
 Configuration is run-time only — no environment file enters the image
 build. Entries the compose file lists as a bare `NAME` (no value) are
 pass-through: set in the container only when your environment has them,
-absent otherwise. Put your values in a file of `KEY=value` lines and
-start the stack with it:
-
-```bash
-docker compose --env-file /path/to/your.env up
-```
+absent otherwise. Put your values in a file of `KEY=value` lines.
 
 A minimal first environment file (placeholders — substitute your own,
 and never commit this file):
@@ -148,6 +153,33 @@ NEXTAUTH_SECRET=<generated: openssl rand -base64 32>
 NEXTAUTH_URL=<your public origin, e.g. https://evidence.example.org>
 GITHUB_CLIENT_ID=<your OAuth app>
 GITHUB_CLIENT_SECRET=<your OAuth app>
+```
+
+Anything spelled `${VAR:-default}` in the compose file is overridable
+this way — the service passwords, host ports, bucket name,
+`S3_PUBLIC_BASE_URL`, `APP_BIND`/`APP_PORT`, the executor image tag, the
+identity variables, `NEXTAUTH_URL`, and the GC knobs — in addition to
+the bare-`NAME` pass-throughs. The three driver selectors,
+`S3_ENDPOINT`, and the constructed `DATABASE_URL` are hardcoded wiring:
+changing those means editing the compose file, not the env file.
+
+> **Reset the dev volumes before switching to your own passwords.**
+> Postgres reads `POSTGRES_PASSWORD` only when its data volume is first
+> initialized — and the bare bring-up above already initialized it with
+> the placeholder password. Starting again with a changed password does
+> **not** rotate it; it produces a stack that fails halfway up: the
+> `migrate` service exits 1
+> (`service "migrate" didn't complete successfully: exit 1`), the
+> Postgres log shows
+> `FATAL: password authentication failed for user "civic"`, and the app
+> never starts. Neither error names the cause. At this stage the volumes
+> hold nothing but placeholder-initialized dev data, so the reset is
+> free — and the same applies to any later `POSTGRES_*` change: those
+> values take effect at volume initialization, never on restart.
+
+```bash
+docker compose down -v   # discard the placeholder-initialized volumes
+docker compose --env-file /path/to/your.env up -d
 ```
 
 Many operators keep this file free of literal secrets by storing values
@@ -248,6 +280,27 @@ is no silent hang to diagnose. Recognize them:
   so the query couldn't run. If you operate this instance, check that
   OPENROUTER_API_KEY is valid for the configured endpoint."*
 
+Both are reproducible from the command line against a running stack:
+
+```bash
+curl -s -X POST http://127.0.0.1:3000/api/compare \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"test","model":"openai/gpt-5-mini"}'
+```
+
+With no key configured this returns HTTP 503 carrying the
+`model_not_configured` message above as JSON. With a key the endpoint
+refuses, it returns HTTP 502 and the raw upstream rejection:
+
+```json
+{"error":"401 User not found.","code":"model_auth_rejected"}
+```
+
+— which is also what appears in server logs and API responses. The text
+after the status code is the upstream endpoint's own message and varies
+(a malformed key value, for example, yields
+`401 Missing Authentication header`).
+
 ## Environment reference, tier by tier
 
 The executable authority on the environment is
@@ -256,20 +309,42 @@ the **presence** (never the value) of every variable the app reads,
 resolves the three driver selectors first, and tiers every other
 variable against the resolved profile — so a self-hosted instance is
 neither passed while unrunnable nor nagged about variables its profile
-never reads. Run it from the checkout with your instance environment
-loaded (for example through your secret-manager wrapper):
+never reads. Preflight reads only the shell environment it runs in. **Run off-stack,
+it cannot see what compose wires in** — the three driver selectors,
+`DATABASE_URL`, and the `S3_*` set live inside `docker-compose.yml` — so
+a bare `node scripts/preflight-env.mjs` reports the *default managed
+profile* and fails demanding variables the compose path never uses
+(`BLOB_READ_WRITE_TOKEN` among them). To preflight a compose deployment,
+represent the compose profile explicitly. Presence is all that is
+checked, never values, so fixed stand-ins are fine for the
+compose-wired variables. From the checkout, with your own env-file
+values also in the environment (exported, or through your
+secret-manager wrapper):
 
 ```bash
+DB_DRIVER=node-postgres BLOB_DRIVER=s3 EXECUTOR_DRIVER=container \
+DATABASE_URL=wired-by-compose \
+S3_BUCKET=wired-by-compose \
+S3_ACCESS_KEY_ID=wired-by-compose \
+S3_SECRET_ACCESS_KEY=wired-by-compose \
 node scripts/preflight-env.mjs
 ```
 
-Exit code `0` means every required variable for your profile is present;
-`1` otherwise. With any selector off its default the report opens with a
-profile banner, e.g.
-`PROFILE: db=node-postgres  blob=s3  executor=container`, and drops the
-variables that profile never reads (under the compose profile:
-`BLOB_READ_WRITE_TOKEN`, `SANDBOX_SNAPSHOT_ID`, and the three
-`VERCEL_*` sandbox-auth variables).
+The report then opens with the resolved profile and drops what that
+profile never reads:
+
+```
+  PROFILE: db=node-postgres  blob=s3  executor=container
+  (5 variable(s) not applicable to this profile — omitted)
+```
+
+(the five: `BLOB_READ_WRITE_TOKEN`, `SANDBOX_SNAPSHOT_ID`, and the three
+`VERCEL_*` sandbox-auth variables). Exit code `0` means every required
+variable for the profile is present; `1` otherwise. Run with the
+stand-ins alone, it exits `1` naming exactly the six operator-supplied
+variables — `OPENROUTER_API_KEY`, `EVIDENCE_SIGNING_KEY`,
+`NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `GITHUB_CLIENT_ID`,
+`GITHUB_CLIENT_SECRET`.
 
 **Read preflight's "required" tier honestly.** It is the
 full-production bar, not the boot bar. Nothing on the list prevents the
@@ -370,7 +445,21 @@ the client with redirect URI:
 
 The flow requests `openid profile email` scopes and uses PKCE + state.
 
-Verify by completing a sign-in round-trip in a browser against your
+Before any browser test, check what the instance advertises:
+
+```bash
+curl -s http://127.0.0.1:3000/api/auth/providers
+```
+
+It lists each active provider with the exact `signinUrl` and
+`callbackUrl` the instance built from `NEXTAUTH_URL` — and the OIDC
+provider appears only when all three `OIDC_*` variables are set, so a
+half-configured provider shows up here as simply missing. One caveat to
+internalize: a wrong `NEXTAUTH_URL` produces a perfectly *healthy*
+instance advertising unreachable callback URLs — nothing warns; this
+endpoint is where it becomes visible.
+
+Then verify by completing a sign-in round-trip in a browser against your
 deployed origin — a misconfigured `NEXTAUTH_URL` typically surfaces as a
 callback-URL mismatch error from the provider. Signed-in users are
 recorded in the instance's own database on first sign-in.
@@ -389,7 +478,9 @@ same files:
   skipped.
 
 - **Direct path (fork operators, external databases).** From the
-  checkout, with `DATABASE_URL` pointing at your database:
+  checkout — after a one-time `npm install`, so the repository-pinned
+  `drizzle-kit` is what executes — with `DATABASE_URL` pointing at your
+  database:
 
   ```bash
   npx drizzle-kit migrate
@@ -495,9 +586,10 @@ objects it creates, deletes them all in teardown, never prints a
 credential value, and exits `0` only when all four legs pass (`2` for a
 config problem — it names the variable; `1` for a failed leg).
 
-Run it from the checkout against your real bucket, injecting values via
-your secret manager (shown here with the 1Password wrapper — one
-convention, not a requirement):
+Run it from the checkout (it imports the repository's dependencies —
+run `npm install` once first) against your real bucket, injecting
+values via your secret manager (shown here with the 1Password wrapper —
+one convention, not a requirement):
 
 ```bash
 op run --env-file=<your-env-file> -- node scripts/rehearse-storage-s3.mjs
@@ -509,14 +601,26 @@ Or with the environment already exported, plainly:
 node scripts/rehearse-storage-s3.mjs
 ```
 
-Watch for `shielding 0 pre-existing object(s)` in the GC leg — zero
-confirms an empty, dedicated bucket, so the sweep's delete behavior is
-observed in isolation. The expected end state is
+In the GC leg, a clean run on a dedicated bucket prints
+
+```
+shielding 1 pre-existing object(s) under evidence-refs/ (marked referenced)
+```
+
+— exactly one, twice (once per sweep). The one object is the harness's
+**own** accepted upload from the grant leg, which lands under the GC
+prefix before the sweep leg runs, so the count is never zero on a
+passing run. A larger count means the bucket holds objects the harness
+did not create: every such object is shielded from deletion and the run
+can still pass, but you are no longer observing the sweep on a
+dedicated bucket. The expected end state is
 `RESULT: PASS — 4/4 legs`.
 
 The same harness validates the compose stack's own MinIO (loopback
 endpoint, compose placeholder values), and the file's header comment
-carries a fully disposable MinIO self-verification recipe.
+carries a fully disposable MinIO self-verification recipe. Note the
+recipe binds `127.0.0.1:9000` — the same port the compose stack's MinIO
+publishes — so stop the stack first or change the port.
 
 ## Scheduler and background jobs
 
@@ -729,9 +833,10 @@ Then validate the whole chain before pointing the app at it:
 op run --env-file=<your-env-file> -- node scripts/rehearse-storage-s3.mjs
 ```
 
-`RESULT: PASS — 4/4 legs` (with `shielding 0 pre-existing object(s)` on
-a fresh bucket) means the bucket, policy, account scoping, region, and
-public-URL construction are all correct — hand the same four `S3_*`
+`RESULT: PASS — 4/4 legs` — with the GC leg shielding exactly **one**
+pre-existing object on a fresh bucket, the harness's own grant-leg
+upload — means the bucket, policy, account scoping, region, and
+public-URL construction are all correct. Hand the same four `S3_*`
 values to your deployment and go.
 
 [ADR-0016]: https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0016-vcs-native-lifecycle-mapping.md
