@@ -1,42 +1,96 @@
 #!/usr/bin/env node
 /**
- * Demo-day environment preflight.
+ * Instance environment preflight.
  *
- * Checks the PRESENCE (never the value) of the environment variables the
- * civic-ai-tools-website needs in production, and prints a grouped pass/fail
- * table. Built for the demo dry-run: several of these vars fail silently or
- * with a generic error when absent (DATABASE_URL, BLOB_READ_WRITE_TOKEN,
+ * Checks the PRESENCE (never the value) of the environment variables an
+ * instance of civic-ai-tools-website needs to run, and prints a grouped
+ * pass/fail table. Several of these vars fail silently or with a generic
+ * error when absent (DATABASE_URL, the storage credentials,
  * EVIDENCE_SIGNING_KEY, EVIDENCE_KEY_ID, the MCP endpoints, the model key),
  * so a one-shot "is everything wired?" check removes that failure mode.
  *
- * SECRET HYGIENE (absolute): this script only reads whether
- * `process.env[NAME]` is a non-empty string. It never prints, logs, hashes,
- * stores, or transmits any value — not even its length. The output is a
- * present/absent table keyed by variable NAME only.
+ * INSTANCE-AWARE: an instance is not one fixed deployment shape. The three
+ * driver-selector variables — DB_DRIVER, BLOB_DRIVER, EXECUTOR_DRIVER — pick
+ * which backing service each seam talks to, and which OTHER variables are
+ * load-bearing follows from that choice. This script resolves the selectors
+ * first, then resolves every other variable's tier against them, so a
+ * self-hosted instance is neither passed while unrunnable nor nagged about
+ * variables its profile will never read. See `resolveSpec` below.
+ *
+ * SECRET HYGIENE (absolute): for every variable except the three driver
+ * selectors, this script reads only whether `process.env[NAME]` is a
+ * non-empty string — it never prints, logs, hashes, stores, or transmits any
+ * value, not even its length. The three selectors are the sole exception and
+ * are not secrets: their value space is a closed set of non-secret enum
+ * literals (see DRIVER_SEAMS). Even for those, the raw string is never
+ * echoed: it is matched against the known literals, and the output carries
+ * only a matched literal — an unmatched selector is reported by variable
+ * NAME alone. No unbounded input from the environment reaches the output,
+ * which is what the "never echoed" test in the suite pins down.
  *
  * Run it through 1Password so the op:// references in .env.local resolve into
  * this process's environment:
  *
  *   op run --env-file=.env.local -- node scripts/preflight-env.mjs
  *
- * Exit code is 0 when every REQUIRED variable is present and 1 otherwise, so
+ * Exit code is 0 when every REQUIRED variable (as resolved for the selected
+ * profile) is present and the selectors are all recognized; 1 otherwise, so
  * the script can gate a deploy check or a CI step. Missing RECOMMENDED or
  * OPTIONAL variables are reported but never fail the run.
  *
- * The pure check logic (`evaluateEnv`, `ENV_SPEC`) is exported and covered by
- * scripts/preflight-env.test.mjs (run: `node --test scripts/preflight-env.test.mjs`).
+ * The pure check logic (`evaluateEnv`, `resolveSpec`, `ENV_SPEC`) is exported
+ * and covered by scripts/preflight-env.test.mjs (run:
+ * `node --test scripts/preflight-env.test.mjs`).
  */
 
 import { fileURLToPath } from 'node:url';
 
 /**
+ * The three driver seams. Each maps a selector variable to its closed set of
+ * accepted values and the value the code substitutes when the selector is
+ * unset. The defaults MUST mirror the app: src/lib/db/index.ts,
+ * src/lib/storage/index.ts, src/lib/sandbox/execute.ts each read
+ * `env.X_DRIVER || '<default>'` and throw on anything outside `values`.
+ *
+ * These are the only variables whose VALUE this script reads (see the secret
+ * hygiene note at the top): they are non-secret enum selectors, and only a
+ * matched literal from `values` is ever printed.
+ */
+export const DRIVER_SEAMS = {
+  db: { env: 'DB_DRIVER', default: 'neon-http', values: ['neon-http', 'node-postgres'] },
+  blob: { env: 'BLOB_DRIVER', default: 'vercel-blob', values: ['vercel-blob', 's3'] },
+  executor: { env: 'EXECUTOR_DRIVER', default: 'vercel-sandbox', values: ['vercel-sandbox', 'container'] },
+};
+
+/**
  * The variables the app actually reads (grepped from `process.env.*` across
- * src/, plus the two scripts/-only eval-harness knobs, marked as such). Tiers:
- *   - required:    the demo's load-bearing path fails without it.
+ * src/, plus the two scripts/-only eval-harness knobs, marked as such).
+ *
+ * Tiers are declared for the DEFAULT profile (every selector unset) and then
+ * resolved per instance by `resolveSpec`:
+ *   - required:    the instance's load-bearing path fails without it.
  *   - recommended: a feature degrades or a fallback kicks in; not fatal.
- *   - optional:    nice-to-have / non-demo / analytics / dev-only.
- * `hasFallback: true` means the code substitutes a hardcoded default when the
- * var is absent, so its absence is a soft note rather than a hard miss.
+ *   - optional:    nice-to-have / analytics / dev-only / profile-specific knob.
+ * `hasFallback: true` means the code substitutes a hardcoded default (or a
+ * degraded in-process path) when the var is absent, so its absence is a soft
+ * note rather than a hard miss.
+ *
+ * Two optional fields make a tier conditional on the selected drivers. Both
+ * are keyed by DRIVER_SEAMS seam name:
+ *   - `onlyWhen: { <seam>: '<driver>' }` — NOT APPLICABLE under any other
+ *     driver for that seam. A not-applicable entry is dropped from the report
+ *     entirely rather than reported as absent: an instance must not be nagged
+ *     about a variable its profile will never read.
+ *   - `requiredWhen: { <seam>: '<driver>' }` — tier becomes 'required' under
+ *     that driver; otherwise the declared `tier` stands.
+ *
+ * CONSTRAINT: both fields must leave the default profile untouched. With no
+ * selector set (or every selector set to its default) the resolved spec is
+ * identical to the declared one, so the report is byte-identical to the
+ * pre-driver-awareness output. That is why the S3_* knobs stay listed under
+ * the Vercel Blob profile rather than being suppressed as not-applicable —
+ * the suppression only runs in the direction that the frozen default output
+ * does not cover.
  */
 export const ENV_SPEC = [
   // --- Core query path (every demo query depends on these) ---
@@ -46,24 +100,37 @@ export const ENV_SPEC = [
 
   // --- Evidence publish + verify (the demo centerpiece: publish → badge) ---
   { name: 'DATABASE_URL', tier: 'required', purpose: 'Evidence DB — publish + dashboard + detail page' },
+  // Selector, not a setting: unset declares the managed serverless driver.
+  // DATABASE_URL is load-bearing under BOTH drivers (neon() and pg.Pool both
+  // read it), so the db seam has no tier flips — only the selector itself.
   { name: 'DB_DRIVER', tier: 'optional', purpose: "DB driver — 'neon-http' (default) or 'node-postgres' (any Postgres over TCP)", hasFallback: true },
-  { name: 'BLOB_READ_WRITE_TOKEN', tier: 'required', purpose: 'Evidence package storage (Vercel Blob)' },
+  // Vercel Blob credential: not read at all off that driver (src/lib/storage/index.ts
+  // dynamic-imports only the selected driver), so demanding it under s3 would
+  // fail an instance that is not on Vercel.
+  { name: 'BLOB_READ_WRITE_TOKEN', tier: 'required', purpose: 'Evidence package storage (Vercel Blob)', onlyWhen: { blob: 'vercel-blob' } },
   { name: 'BLOB_DRIVER', tier: 'optional', purpose: "Blob storage driver — 'vercel-blob' (default) or 's3' (any S3-compatible endpoint)", hasFallback: true },
-  // S3-compatible storage (read only when BLOB_DRIVER=s3; see src/lib/storage/s3.ts)
+  // S3-compatible storage (read only when BLOB_DRIVER=s3; see src/lib/storage/s3.ts).
+  // The three credentials below are hard throws in resolveS3ConfigFromEnv
+  // (s3.ts:67-69); the rest resolve to coded defaults.
   { name: 'S3_ENDPOINT', tier: 'optional', purpose: 'S3-compatible endpoint URL (BLOB_DRIVER=s3; omit for AWS S3 proper)', hasFallback: true },
   { name: 'S3_REGION', tier: 'optional', purpose: 'S3 region (BLOB_DRIVER=s3; default us-east-1)', hasFallback: true },
-  { name: 'S3_BUCKET', tier: 'optional', purpose: 'S3 bucket for evidence blobs (required when BLOB_DRIVER=s3)' },
-  { name: 'S3_ACCESS_KEY_ID', tier: 'optional', purpose: 'S3 access key (required when BLOB_DRIVER=s3)' },
-  { name: 'S3_SECRET_ACCESS_KEY', tier: 'optional', purpose: 'S3 secret key (required when BLOB_DRIVER=s3)' },
+  { name: 'S3_BUCKET', tier: 'optional', purpose: 'S3 bucket for evidence blobs (required when BLOB_DRIVER=s3)', requiredWhen: { blob: 's3' } },
+  { name: 'S3_ACCESS_KEY_ID', tier: 'optional', purpose: 'S3 access key (required when BLOB_DRIVER=s3)', requiredWhen: { blob: 's3' } },
+  { name: 'S3_SECRET_ACCESS_KEY', tier: 'optional', purpose: 'S3 secret key (required when BLOB_DRIVER=s3)', requiredWhen: { blob: 's3' } },
   { name: 'S3_FORCE_PATH_STYLE', tier: 'optional', purpose: 'Path-style S3 addressing (default: on when S3_ENDPOINT is set — MinIO)', hasFallback: true },
   { name: 'S3_PUBLIC_BASE_URL', tier: 'optional', purpose: 'Public object URL base (default: endpoint/bucket path-style)', hasFallback: true },
   // --- Notebook executor (S3b P4 driver seam; executed-notebook pipeline) ---
   { name: 'EXECUTOR_DRIVER', tier: 'optional', purpose: "Notebook executor driver — 'vercel-sandbox' (default) or 'container' (host container runtime)", hasFallback: true },
+  // Relevant under the container driver, inert under the sandbox driver, and
+  // fallback-backed under both (container.ts:47 → DEFAULT_CONTAINER_IMAGE), so
+  // it carries no condition: it is never a miss and never a nag either way.
   { name: 'EXECUTOR_CONTAINER_IMAGE', tier: 'optional', purpose: 'Executor image tag (EXECUTOR_DRIVER=container only; default civic-notebook-executor:0.1.0)', hasFallback: true },
-  { name: 'SANDBOX_SNAPSHOT_ID', tier: 'recommended', purpose: 'Prebuilt sandbox snapshot — absent, the vercel-sandbox driver falls back to a slow fresh boot + pip install', hasFallback: true },
-  { name: 'VERCEL_TOKEN', tier: 'optional', purpose: 'Vercel Sandbox auth for off-platform runs (on-deploy auth is OIDC-automatic)' },
-  { name: 'VERCEL_TEAM_ID', tier: 'optional', purpose: 'Vercel Sandbox auth for off-platform runs (with VERCEL_TOKEN + VERCEL_PROJECT_ID)' },
-  { name: 'VERCEL_PROJECT_ID', tier: 'optional', purpose: 'Vercel Sandbox auth for off-platform runs (with VERCEL_TOKEN + VERCEL_TEAM_ID)' },
+  // Sandbox-only: the container driver boots a local image and reads none of
+  // these four (vercel-sandbox.ts:89-96 is behind the driver's dynamic import).
+  { name: 'SANDBOX_SNAPSHOT_ID', tier: 'recommended', purpose: 'Prebuilt sandbox snapshot — absent, the vercel-sandbox driver falls back to a slow fresh boot + pip install', hasFallback: true, onlyWhen: { executor: 'vercel-sandbox' } },
+  { name: 'VERCEL_TOKEN', tier: 'optional', purpose: 'Vercel Sandbox auth for off-platform runs (on-deploy auth is OIDC-automatic)', onlyWhen: { executor: 'vercel-sandbox' } },
+  { name: 'VERCEL_TEAM_ID', tier: 'optional', purpose: 'Vercel Sandbox auth for off-platform runs (with VERCEL_TOKEN + VERCEL_PROJECT_ID)', onlyWhen: { executor: 'vercel-sandbox' } },
+  { name: 'VERCEL_PROJECT_ID', tier: 'optional', purpose: 'Vercel Sandbox auth for off-platform runs (with VERCEL_TOKEN + VERCEL_TEAM_ID)', onlyWhen: { executor: 'vercel-sandbox' } },
 
   { name: 'EVIDENCE_SIGNING_KEY', tier: 'required', purpose: 'Ed25519 private key — signs evidence packages' },
   { name: 'EVIDENCE_KEY_ID', tier: 'required', purpose: 'Active signing key id (kid) — must match the trust registry', hasFallback: true }, // signing.ts: `EVIDENCE_KEY_ID || DEFAULT_KEY_ID`; the default mirrors the registry's active kid
@@ -81,8 +148,12 @@ export const ENV_SPEC = [
   { name: 'OIDC_PROVIDER_NAME', tier: 'optional', purpose: 'OIDC sign-in button label (default "SSO")', hasFallback: true },
 
   // --- Rate limiting (durable counter; without it, falls back to per-instance memory) ---
-  { name: 'KV_REST_API_URL', tier: 'required', purpose: 'Durable rate-limit counter (Upstash/Vercel KV)' },
-  { name: 'KV_REST_API_TOKEN', tier: 'required', purpose: 'Durable rate-limit counter (Upstash/Vercel KV)' },
+  // hasFallback, not a hard miss: rate-limit.ts:53-63 tests both vars and takes
+  // an in-process memory store when either is absent — the instance runs, the
+  // counter just stops being durable across instances and deploys. Absence is a
+  // soft note so a single-node instance with no managed KV can pass preflight.
+  { name: 'KV_REST_API_URL', tier: 'required', purpose: 'Durable rate-limit counter (Upstash/Vercel KV)', hasFallback: true },
+  { name: 'KV_REST_API_TOKEN', tier: 'required', purpose: 'Durable rate-limit counter (Upstash/Vercel KV)', hasFallback: true },
 
   // --- Secondary MCP sources (not on the storyboard-3 critical path) ---
   { name: 'DATA_COMMONS_MCP_URL', tier: 'recommended', purpose: 'Data Commons MCP endpoint', hasFallback: true },
@@ -128,14 +199,80 @@ export const ENV_SPEC = [
 const TIER_ORDER = ['required', 'recommended', 'optional'];
 
 /**
+ * Resolve the instance profile from the driver selectors.
+ *
+ * An absent or empty selector takes the seam's coded default, matching
+ * `env.X_DRIVER || '<default>'` in the app. A value outside the seam's closed
+ * set is what the app throws on at first use, so it is an error here too —
+ * recorded by seam NAME only; the offending value is never echoed.
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {{ drivers: Record<string, string>, errors: string[], isDefault: boolean }}
+ */
+export function resolveDrivers(env) {
+  const drivers = {};
+  const errors = [];
+  for (const [seam, def] of Object.entries(DRIVER_SEAMS)) {
+    const raw = env[def.env];
+    const chosen = typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : def.default;
+    if (def.values.includes(chosen)) {
+      drivers[seam] = chosen;
+    } else {
+      // Unknown selector: fall back to the seam's default for resolution so
+      // the rest of the table still renders, and fail the run below.
+      drivers[seam] = def.default;
+      errors.push(def.env);
+    }
+  }
+  const isDefault = Object.entries(DRIVER_SEAMS).every(([seam, def]) => drivers[seam] === def.default);
+  return { drivers, errors, isDefault };
+}
+
+/** True when every seam named in a condition matches the resolved driver. */
+function conditionMet(condition, drivers) {
+  return Object.entries(condition).every(([seam, driver]) => drivers[seam] === driver);
+}
+
+/**
+ * Resolve the declared spec against an instance profile: drop entries the
+ * profile will never read, and promote entries the profile makes load-bearing.
+ *
+ * With every selector at its default this is the identity transform on
+ * ENV_SPEC (see the CONSTRAINT note on ENV_SPEC), which is what keeps the
+ * default profile's report byte-identical.
+ *
+ * @param {Record<string, string>} drivers
+ * @param {typeof ENV_SPEC} [spec]
+ * @returns {{ applicable: typeof ENV_SPEC, notApplicable: typeof ENV_SPEC }}
+ */
+export function resolveSpec(drivers, spec = ENV_SPEC) {
+  const applicable = [];
+  const notApplicable = [];
+  for (const s of spec) {
+    if (s.onlyWhen && !conditionMet(s.onlyWhen, drivers)) {
+      notApplicable.push(s);
+      continue;
+    }
+    const promoted = s.requiredWhen && conditionMet(s.requiredWhen, drivers);
+    applicable.push(promoted ? { ...s, tier: 'required' } : s);
+  }
+  return { applicable, notApplicable };
+}
+
+/**
  * Pure presence evaluation. Reads only whether each value is a non-empty
- * string; returns no values. `ok` is true iff every required var is present.
+ * string (the driver selectors excepted — see resolveDrivers); returns no
+ * values. `ok` is true iff every required var resolved for this profile is
+ * present and every selector is recognized.
  *
  * @param {Record<string, string | undefined>} env
  * @param {typeof ENV_SPEC} [spec]
  */
 export function evaluateEnv(env, spec = ENV_SPEC) {
-  const rows = spec.map((s) => {
+  const { drivers, errors: driverErrors, isDefault } = resolveDrivers(env);
+  const { applicable, notApplicable } = resolveSpec(drivers, spec);
+
+  const rows = applicable.map((s) => {
     const raw = env[s.name];
     const present = typeof raw === 'string' && raw.trim().length > 0;
     return {
@@ -156,7 +293,18 @@ export function evaluateEnv(env, spec = ENV_SPEC) {
   const requiredOnFallback = rows.filter((r) => r.tier === 'required' && !r.present && r.hasFallback);
   const missingRecommended = rows.filter((r) => r.tier === 'recommended' && !r.present);
 
-  return { rows, missingRequired, requiredOnFallback, missingRecommended, ok: missingRequired.length === 0 };
+  return {
+    rows,
+    missingRequired,
+    requiredOnFallback,
+    missingRecommended,
+    // Profile context. `notApplicable` is deliberately NOT rendered as rows:
+    // an instance must not be told about variables its profile never reads.
+    profile: { drivers, isDefault },
+    notApplicable: notApplicable.map((s) => s.name),
+    driverErrors,
+    ok: missingRequired.length === 0 && driverErrors.length === 0,
+  };
 }
 
 /** Status token for a row. Pure; no values involved. */
@@ -177,6 +325,18 @@ export function renderReport(result) {
   lines.push('  (presence only; no values are read or shown)');
   lines.push('');
 
+  // Profile banner, printed ONLY for a non-default profile so the default
+  // instance's report stays byte-identical. Values shown are matched literals
+  // from DRIVER_SEAMS, never raw environment input.
+  if (result.profile && !result.profile.isDefault) {
+    const pairs = Object.keys(DRIVER_SEAMS).map((seam) => `${seam}=${result.profile.drivers[seam]}`);
+    lines.push(`  PROFILE: ${pairs.join('  ')}`);
+    if (result.notApplicable && result.notApplicable.length > 0) {
+      lines.push(`  (${result.notApplicable.length} variable(s) not applicable to this profile — omitted)`);
+    }
+    lines.push('');
+  }
+
   const nameWidth = Math.max(...result.rows.map((r) => r.name.length));
 
   for (const tier of TIER_ORDER) {
@@ -191,9 +351,20 @@ export function renderReport(result) {
 
   if (result.ok) {
     lines.push('  RESULT: PASS — all required variables present.');
-  } else {
+  } else if (result.missingRequired.length > 0) {
     lines.push(`  RESULT: FAIL — ${result.missingRequired.length} required variable(s) missing:`);
     for (const r of result.missingRequired) lines.push(`            - ${r.name}`);
+  } else {
+    lines.push('  RESULT: FAIL — unrecognized driver selection.');
+  }
+  // Selector set to a value outside its closed set: the app throws on it at
+  // first use, so preflight must not pass. Named, never echoed.
+  if (result.driverErrors && result.driverErrors.length > 0) {
+    lines.push(`  ERROR: ${result.driverErrors.length} driver selector(s) set to an unrecognized value:`);
+    for (const name of result.driverErrors) {
+      const seam = Object.values(DRIVER_SEAMS).find((d) => d.env === name);
+      lines.push(`            - ${name} (expected one of: ${seam.values.join(', ')})`);
+    }
   }
   if (result.requiredOnFallback && result.requiredOnFallback.length > 0) {
     lines.push(`  NOTE: ${result.requiredOnFallback.length} required variable(s) absent but running on a built-in fallback (confirm the default is still correct):`);
