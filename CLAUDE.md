@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A demo website showcasing MCP (Model Context Protocol) value by displaying side-by-side LLM responses with and without MCP integration for civic data queries. Built with Next.js 16+ on Vercel, it connects to OpenRouter for LLM access and socrata-mcp-server for live Socrata civic data.
 
-**Production URL:** https://civic-ai-tools-website.vercel.app/
+**Production URL:** https://civicaitools.org/
 
 ## Strategic context — what not to include in this repo
 
@@ -39,6 +39,7 @@ Each page has a distinct purpose. Use this framing to decide where new features 
 | **Home** | `/` | The result content | "Show me why MCP matters" |
 | **Explore** | `/explore` | The process | "Show me how this works" |
 | **About** | `/about` | The prose | "Explain this to me" |
+| **Project** | `/project` | Mission + proof | "What is this project, and does it work?" |
 | **Learn** | `/learn` | Educational content | "Teach me the concepts" |
 | **Evidence index** | `/evidence` | The published registry | "Show me what's been published" |
 | **Evidence detail** | `/evidence/[slug]` | One signed analysis | "Let me scrutinize this analysis" |
@@ -331,7 +332,6 @@ Active work is organized into lightweight sprints in [`/sprints/`](sprints/).
 |------|---------|
 | [civic-ai-tools](https://github.com/npstorey/civic-ai-tools) | MCP server configs, skill docs, setup scripts |
 | [socrata-mcp-server](https://github.com/npstorey/socrata-mcp-server) | The MCP server itself (Socrata/OpenGov data) |
-| [socrata-mcp-server-vercel-nextjs](https://github.com/npstorey/socrata-mcp-server-vercel-nextjs) | Vercel deployment wrapper for the MCP server |
 
 ## Design Notes
 
