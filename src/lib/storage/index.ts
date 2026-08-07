@@ -62,12 +62,19 @@ export async function putPackage(
  * publication moves the content to the canonical hash-addressed key.
  *
  * DELIBERATELY NOT RENAMED by the ADR-0016 §A sweep: the `committed/` path
- * segment below is a FROZEN STORAGE LITERAL, not a state label. Every
- * already-stored sealed package lives at that prefix and its capability URL is
- * recorded on the row (`base_package_storage_key`); changing the segment would
- * strand them. The function name tracks the path it writes so the two cannot
- * drift apart. The state label that used to spell this word now reads `sealed`
- * everywhere it is a state label — see `src/lib/evidence/visibility.ts`.
+ * segment below is a FROZEN STORAGE LITERAL, not a state label.
+ *
+ * Renaming it would NOT strand existing packages — every consumer reads the
+ * stored key off the row (`base_package_storage_key`) and hands it to
+ * `getPackage()`, and the GC selects stored keys from the database; nothing
+ * reconstructs the path from visibility state. What renaming would actually
+ * produce is a split storage layout for no benefit, plus a hazard for future
+ * code that DOES try to derive the path. The freeze is worth keeping for a
+ * simpler reason: a stored capability URL is a value someone already holds.
+ *
+ * The function name tracks the path it writes so the two cannot drift apart.
+ * The state label that used to spell this word now reads `sealed` everywhere
+ * it is a state label — see `src/lib/evidence/visibility.ts`.
  */
 export async function putCommittedPackage(
   data: Record<string, unknown>
