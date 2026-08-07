@@ -19,7 +19,7 @@ Thank you for your interest in contributing! This is the demo website for the ci
 ## Getting started
 
 1. Fork the repo and clone your fork
-2. Copy `.env.example` to `.env.local` and fill in the required values (see README)
+2. Copy `.env.example` to `.env.local` and fill in the values — `node scripts/preflight-env.mjs` reports what your setup requires, and [`docs/deploy.md`](docs/deploy.md#environment-reference-tier-by-tier)'s "Environment reference, tier by tier" section explains what each variable does
 3. Run `npm install && npm run dev`
 4. Create a branch for your changes
 5. Submit a pull request

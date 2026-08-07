@@ -12,7 +12,7 @@ This contract spans three repositories. If you're integrating, here's how they r
 |---|---|---|
 | [`civic-ai-tools-website`](https://github.com/npstorey/civic-ai-tools-website) | Reference implementation | The civicaitools.org endpoints you call, this contract (`docs/api/evidence-publish.md`), and implementation issues (e.g. [#112](https://github.com/npstorey/civic-ai-tools-website/issues/112)). |
 | [`civic-ai-tools`](https://github.com/npstorey/civic-ai-tools) | Protocol decisions + spec source | The ADRs, the open-questions registry (Q-numbers), the integration-arc issues [#71](https://github.com/npstorey/civic-ai-tools/issues/71) / [#72](https://github.com/npstorey/civic-ai-tools/issues/72), and the [Typed Standards Specification](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/typed-standards-specification.md) itself — the source of the `§8.x` section numbers. |
-| [`typedstandards`](https://github.com/npstorey/typedstandards) | The standard's public home | `@typedstandards/verify-core` and the standalone verifier; the specification's public home from the July RFC. (The repo is private pre-launch; until publication the spec source is the `civic-ai-tools` link above.) |
+| [`typedstandards`](https://github.com/npstorey/typedstandards) | The standard's public home | `@typedstandards/verify-core` and the standalone verifier; the specification's public home from the July RFC. (The repo is public; the spec's live home is [typedstandards.org](https://typedstandards.org).) |
 
 Every ADR, `§`-reference, issue, and Q-number below is hyperlinked to its source — follow the link rather than guessing which repo it's in.
 
@@ -366,7 +366,7 @@ External clients that want to verify packages offline should fetch both the pack
 
 ### Signing-side env vars
 
-Callers publishing through `POST /api/evidence` do not set these themselves — the platform server supplies them. They are listed here so developers running a private fork or the dev server know what drives the signing path:
+Callers publishing through `POST /api/evidence` do not set these themselves — the platform server supplies them. They are listed here so developers running a private instance or the dev server know what drives the signing path:
 
 | Env var                        | Purpose                                                                 |
 |--------------------------------|-------------------------------------------------------------------------|
@@ -479,7 +479,7 @@ Sealed-mode response: `{ slug, packageHash, visibility: "sealed" }` — no publi
 What a sealed record looks like from the outside:
 
 - **Not listed** in `/api/evidence/list` or the public registry index.
-- **Creator-only** (404 to everyone else, including probes) on every content-bearing surface: the detail page, `GET /api/evidence/:slug`, `/package`, `/bundle`, `/verify`, `/replay`, `/evaluate`, `/attestations`. The creator authenticates by session cookie or bearer token.
+- **Creator-only** (404 to everyone else, including probes) on every content-bearing surface: the detail page, `GET /api/evidence/:slug`, `/package`, `/bundle`, `/verify`, `/replay`, `/evaluate`. The creator authenticates by session cookie or bearer token.
 - **Commitment publicly served, redacted**: `GET /api/evidence/:slug/commitment` (and the hash-addressed form) returns the proofs — `packageHash`, signature envelope, signer, envelope taxonomy fields, RFC 3161 token, Rekor entry + inclusion proof, lifecycle chain — plus `visibility: "sealed"`, but **omits** `packageUrl`, `subjectTitle`, and `subjectSummary`, and never inlines the package (`?inline=1` inlines only the trust registry). A recipient holding creator-distributed bytes verifies them against this redacted commitment.
 
 Two honesty notes integrating clients should know:
