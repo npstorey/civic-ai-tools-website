@@ -137,7 +137,7 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the
 ## Disclaimer
 
 This is a personal project and is not affiliated with, endorsed by, or
-representative of any employer or organization.
+representative of any employer.
 
 ## License
 
