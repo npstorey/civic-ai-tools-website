@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { buildProviders } from '@/lib/auth-providers';
+import { toSignInOptions } from '@/lib/auth-provider-options';
 import QuerySurface from '@/components/shared/QuerySurface';
 import AskSignInPanel from './AskSignInPanel';
 
@@ -35,6 +37,20 @@ import AskSignInPanel from './AskSignInPanel';
  * a redirect here would close a loop. This is not the access gate either:
  * the gate is at sign-in (`SIGN_IN_ALLOWLIST`), and an off-list account
  * never gets a session to arrive with.
+ *
+ * THE PROMPT'S BUTTONS ARE DERIVED HERE, ON THE SERVER (P4b). This page
+ * asks `buildProviders()` what the instance actually configured and narrows
+ * the configs — which carry client secrets and callbacks, and can never
+ * cross to the client — to serializable `{id, name}` options. Two reasons
+ * it is a server derivation and not a client fetch of
+ * `/api/auth/providers`: there is no loading flash and no failure path in
+ * which the visitor is left with no way to sign in. And two reasons the
+ * options carry the provider ID at all: `signIn(id)` goes straight to that
+ * provider's authorize flow, where `signIn()` unnamed would land on
+ * `authOptions.pages.signIn` (`/`) and be redirected back here by the proxy
+ * — a silent sign-in loop, which is exactly what Gate C found; and naming
+ * no provider in this file keeps an OIDC-only instance rendering its own
+ * provider's label rather than a hardcoded one (#193).
  */
 
 export const dynamic = 'force-dynamic';
@@ -66,7 +82,7 @@ export default async function AskPage() {
           get an answer built from live public data, and publish it as a
           signed evidence package anyone can verify independently.
         </p>
-        <AskSignInPanel />
+        <AskSignInPanel options={toSignInOptions(buildProviders())} />
       </div>
     );
   }
