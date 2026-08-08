@@ -1,4 +1,5 @@
 import AppChrome from '@/components/AppChrome';
+import { resolvePublicSiteHref } from '@/lib/host-routing';
 
 /**
  * Layout for the `(app)` route group — the gated app surface's shell
@@ -19,6 +20,13 @@ import AppChrome from '@/components/AppChrome';
  * pages, on top of the site header and footer the root layout already
  * provides. `AppChrome` renders nothing at all for a signed-out visitor, so
  * the public evidence pages are untouched.
+ *
+ * The "Public site" exit link is resolved HERE (a server component) from
+ * the host-topology env vars and passed down as a plain prop — AppChrome is
+ * a client component and non-NEXT_PUBLIC env never reaches the browser
+ * bundle. Unset topology resolves to `/`, today's exact link. For routes
+ * prerendered at build time the value freezes at build, the same semantics
+ * an inlined NEXT_PUBLIC var would have.
  */
 export default function AppLayout({
   children,
@@ -27,7 +35,7 @@ export default function AppLayout({
 }>) {
   return (
     <>
-      <AppChrome />
+      <AppChrome publicSiteHref={resolvePublicSiteHref(process.env)} />
       {children}
     </>
   );

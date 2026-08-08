@@ -23,15 +23,17 @@ The guide is ordered the way a first deployment actually proceeds:
    overrides a default.
 5. [Sign-in configuration](#sign-in-configuration) — your own OAuth
    application.
-6. [Database and migrations](#database-and-migrations) — including the
+6. [Host topology](#host-topology-optional) — optional: split the
+   public face from the gated app surface, or run app-only.
+7. [Database and migrations](#database-and-migrations) — including the
    fork/existing-database path.
-7. [Instance identity and signing](#instance-identity-and-signing-go-to-production)
+8. [Instance identity and signing](#instance-identity-and-signing-go-to-production)
    — the go-to-production step (linked, not duplicated).
-8. [Object storage: configuration and rehearsal](#object-storage-configuration-and-rehearsal)
-9. [Scheduler and background jobs](#scheduler-and-background-jobs)
-10. [Managed-platform deployment](#managed-platform-deployment)
-11. [Vocabulary notes for integrators](#vocabulary-notes-for-integrators)
-12. [Appendix A: first-time S3 on a public cloud](#appendix-a-first-time-s3-on-a-public-cloud)
+9. [Object storage: configuration and rehearsal](#object-storage-configuration-and-rehearsal)
+10. [Scheduler and background jobs](#scheduler-and-background-jobs)
+11. [Managed-platform deployment](#managed-platform-deployment)
+12. [Vocabulary notes for integrators](#vocabulary-notes-for-integrators)
+13. [Appendix A: first-time S3 on a public cloud](#appendix-a-first-time-s3-on-a-public-cloud)
 
 ## Before you start
 
@@ -397,6 +399,9 @@ the demo deployment's values are emitted; see
 [`docs/instance-setup.md`](instance-setup.md)), `OIDC_PROVIDER_NAME`
 (button label), `SIGN_IN_ALLOWLIST` (unset or empty = open sign-in,
 exactly the pre-allowlist behavior; see the sign-in section),
+the host-topology set (`APP_HOST`, `MARKETING_HOST`, `APP_ONLY` — with
+none set, every route serves on every host, exactly the single-host
+behavior; see [Host topology](#host-topology-optional)),
 rate-limit and token-budget tuning knobs
 (`ANONYMOUS_RATE_LIMIT`, `AUTHENTICATED_RATE_LIMIT`,
 `APP_TIER_RATE_LIMIT`, `TOKEN_LIMIT_PER_REQUEST`,
@@ -485,6 +490,51 @@ Then verify by completing a sign-in round-trip in a browser against your
 deployed origin — a misconfigured `NEXTAUTH_URL` typically surfaces as a
 callback-URL mismatch error from the provider. Signed-in users are
 recorded in the instance's own database on first sign-in.
+
+## Host topology (optional)
+
+By default an instance is a single host and every route serves on it —
+nothing in this section is required, and with none of the three
+variables set the routing middleware passes every request through
+untouched. Set them to split the public face from the gated app
+surface, or to run an app-only instance with no public face at all.
+The decision logic lives in `src/lib/host-routing.ts` (unit-tested;
+`src/proxy.ts` is a thin adapter over it).
+
+| Variable | Meaning |
+| --- | --- |
+| `APP_HOST` | The host that serves the gated app surface. On it, `/` temporarily redirects to `/evidence` (a later release mounts the signed-in query surface at `/`; the dashboard is not the target because it bounces signed-out visitors back to `/`, which would loop), the marketing pages return 404, and the dashboard, device pairing, and evidence routes all serve. |
+| `MARKETING_HOST` | The host that serves the public face. On it, the marketing pages and the public evidence registry serve exactly as on a single host, and the app-private routes — `/dashboard`, `/auth/device`, `/dev/notebook-preview` — return 404. |
+| `APP_ONLY` | `1` or `true`: an app-only instance. Every request on every host gets the app-surface behavior above; `APP_HOST`/`MARKETING_HOST` are ignored. For operators deploying only the gated surface, with no marketing site. |
+
+Values are host names (`app.example.org`); a full origin
+(`http://localhost:3000`) is also accepted, and matching is
+case-, port-, and `www.`-insensitive. Three properties worth
+internalizing:
+
+- **Roles are claimed, never assumed.** A request on a host matching
+  neither variable — a preview deployment, a health check by IP, an
+  alias you have not named — is served exactly as if no topology were
+  configured. That makes the rollout incremental: set `APP_HOST` first
+  and verify the app host, then set `MARKETING_HOST` to switch on the
+  withholding.
+- **The evidence registry is dual-served on purpose.** `/evidence` and
+  `/evidence/<slug>` are public product surface; published links must
+  keep resolving on the public face, and the app surface serves them
+  too. `/api/*`, `/.well-known/*`, and static assets likewise serve on
+  every host.
+- **Withholding is topology, not security.** The 404s shape which host
+  presents which surface; access control is sign-in
+  (`SIGN_IN_ALLOWLIST`) and the per-route session checks, which apply
+  identically on every host.
+
+Two split-host interactions to plan for: `NEXTAUTH_URL` can point at
+only one host, and sessions are per-host cookies — decide which host
+users sign in on (for a gated app surface, normally the app host) and
+point `NEXTAUTH_URL` and your OAuth callback URLs there. The
+device-pairing URL the API hands to CLI clients already follows
+`APP_HOST` when it is set, since `/auth/device` is withheld on the
+marketing host.
 
 ## Database and migrations
 

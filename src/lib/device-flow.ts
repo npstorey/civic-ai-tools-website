@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { resolveAppOrigin } from './host-routing';
 
 /**
  * Device authorization grant primitives (RFC 8628).
@@ -62,11 +63,17 @@ export function normalizeUserCode(input: string): string {
 }
 
 /**
- * Returns the base URL for this deployment. Prefers `NEXTAUTH_URL` (set
- * per-environment in Vercel); falls back to the request origin when
- * called with one.
+ * Returns the base URL the device-flow verification URIs are built on —
+ * the pairing page `/auth/device` lives under it. Host topology (P3): on a
+ * split-host deployment the pairing page is served on the app host and
+ * WITHHELD on the marketing host, so a configured `APP_HOST` wins over
+ * `NEXTAUTH_URL` (which stays pointed at the OAuth-callback host). With no
+ * topology configured: `NEXTAUTH_URL` (set per-environment in Vercel),
+ * then the request origin when called with one — unchanged.
  */
 export function getBaseUrl(request?: Request): string {
+  const appOrigin = resolveAppOrigin(process.env);
+  if (appOrigin) return appOrigin;
   const fromEnv = process.env.NEXTAUTH_URL;
   if (fromEnv) return fromEnv.replace(/\/+$/, '');
   if (request) {

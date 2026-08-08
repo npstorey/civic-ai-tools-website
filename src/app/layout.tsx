@@ -5,6 +5,7 @@ import './globals.css';
 import Link from 'next/link';
 import Providers from '@/components/Providers';
 import Header from '@/components/Header';
+import { resolveDashboardHref } from '@/lib/host-routing';
 import RunningUnsignedBanner from '@/components/RunningUnsignedBanner';
 import SponsorLine from '@/components/SponsorLine';
 
@@ -70,7 +71,10 @@ export default function RootLayout({
       <body className={`${spaceGrotesk.variable} ${notoSans.variable}`}>
         <Providers>
           <div className="flex flex-col">
-            <Header />
+            {/* Env-driven (P3): on a split-host topology the marketing host
+                withholds /dashboard, so the signed-in menu must carry the
+                app origin. Unset topology resolves to '/dashboard'. */}
+            <Header dashboardHref={resolveDashboardHref(process.env)} />
             {/* ADR-0020: running-unsigned indicator — renders only when this
                 instance has no signing key AND is outside a dev environment. */}
             <RunningUnsignedBanner />

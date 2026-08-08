@@ -380,6 +380,24 @@ test('the sign-in gate and app-tier knobs are optional with coded fallbacks', ()
   assert.ok(!result.missingRecommended.some((r) => r.name === 'APP_TIER_RATE_LIMIT'));
 });
 
+test('the host-topology trio is optional with coded fallbacks (unset = single host, no withholding)', () => {
+  // All three reproduce today's behavior when unset — the middleware passes
+  // every request through — so none may ever fail or nag a run (the P3 seam
+  // convention, same shape as the sign-in gate above).
+  for (const name of ['APP_HOST', 'MARKETING_HOST', 'APP_ONLY']) {
+    const entry = ENV_SPEC.find((s) => s.name === name);
+    assert.ok(entry, `${name} is enumerated`);
+    assert.equal(entry.tier, 'optional', `${name} is optional`);
+    assert.equal(entry.hasFallback, true, `${name} has a coded fallback`);
+  }
+  const result = evaluateEnv(envWithAllRequired()); // all three absent
+  assert.equal(result.ok, true);
+  for (const name of ['APP_HOST', 'MARKETING_HOST', 'APP_ONLY']) {
+    assert.ok(!result.missingRequired.some((r) => r.name === name));
+    assert.ok(!result.missingRecommended.some((r) => r.name === name));
+  }
+});
+
 test('a configured allowlist is never echoed — only the variable name', () => {
   const env = { ...envWithAllRequired(), SIGN_IN_ALLOWLIST: '4242,oidc:https://idp.example.org:SENTINEL' };
   const report = renderReport(evaluateEnv(env));
