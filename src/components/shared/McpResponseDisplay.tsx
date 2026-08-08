@@ -874,12 +874,18 @@ export default function McpResponseDisplay({
         >
           AI-generated analysis may contain errors. Verify findings against the{' '}
           original dataset before citing.{' '}
-          <a
-            href="/learn#ai-limitations"
-            style={{ color: 'var(--text-muted)', textDecoration: 'underline' }}
-          >
-            Learn more &rarr;
-          </a>
+          {/* Same marketing-route treatment as the truncation CTA above, and
+              found beside it: this link renders on EVERY completed result, so
+              on the app host it was the more frequently broken of the two.
+              The sentence stands on its own when the link is omitted. */}
+          {marketingOrigin !== null && (
+            <a
+              href={`${marketingOrigin}/learn#ai-limitations`}
+              style={{ color: 'var(--text-muted)', textDecoration: 'underline' }}
+            >
+              Learn more &rarr;
+            </a>
+          )}
         </div>
       )}
 
