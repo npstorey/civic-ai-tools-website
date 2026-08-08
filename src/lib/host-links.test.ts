@@ -10,6 +10,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_HOST_LINKS, resolveHostLinks } from './host-links.ts';
+import { SIGN_IN_INTENT_PARAM } from './sign-in-intent.ts';
 
 test('unset topology: relative marketing links, sign in place', () => {
   assert.deepEqual(resolveHostLinks({}), { marketingOrigin: '', signInHref: null });
@@ -20,7 +21,7 @@ test('unset topology: relative marketing links, sign in place', () => {
 test('split host: marketing links carry the marketing origin, sign-in goes to the app surface', () => {
   assert.deepEqual(
     resolveHostLinks({ APP_HOST: 'app.example.org', MARKETING_HOST: 'example.org' }),
-    { marketingOrigin: 'https://example.org', signInHref: 'https://app.example.org/ask' },
+    { marketingOrigin: 'https://example.org', signInHref: 'https://app.example.org/ask?signin=1' },
   );
 });
 
@@ -29,12 +30,12 @@ test('app-only: no marketing site to link to, sign-in is a relative path', () =>
   // resolvePublicSiteHref's null for the AppChrome exit link.
   assert.deepEqual(resolveHostLinks({ APP_ONLY: '1' }), {
     marketingOrigin: null,
-    signInHref: '/ask',
+    signInHref: '/ask?signin=1',
   });
   // APP_ONLY wins over host matching, as it does in decideRoute.
   assert.deepEqual(
     resolveHostLinks({ APP_ONLY: 'true', APP_HOST: 'app.example.org', MARKETING_HOST: 'example.org' }),
-    { marketingOrigin: null, signInHref: '/ask' },
+    { marketingOrigin: null, signInHref: '/ask?signin=1' },
   );
 });
 
@@ -43,7 +44,7 @@ test('the two halves are independent — an incremental rollout is coherent at e
   // marketing links stay relative because no marketing origin is named yet.
   assert.deepEqual(resolveHostLinks({ APP_HOST: 'app.example.org' }), {
     marketingOrigin: '',
-    signInHref: 'https://app.example.org/ask',
+    signInHref: 'https://app.example.org/ask?signin=1',
   });
   // Stage 2: MARKETING_HOST only. The mirror image.
   assert.deepEqual(resolveHostLinks({ MARKETING_HOST: 'example.org' }), {
@@ -55,7 +56,7 @@ test('the two halves are independent — an incremental rollout is coherent at e
 test('host values accept a full origin, and a dev instance keeps its scheme and port', () => {
   assert.deepEqual(
     resolveHostLinks({ APP_HOST: 'http://app.localhost:3000/', MARKETING_HOST: 'http://localhost:3000' }),
-    { marketingOrigin: 'http://localhost:3000', signInHref: 'http://app.localhost:3000/ask' },
+    { marketingOrigin: 'http://localhost:3000', signInHref: 'http://app.localhost:3000/ask?signin=1' },
   );
 });
 
@@ -66,6 +67,24 @@ test('empty and whitespace values are unset, not configuration', () => {
   });
   assert.deepEqual(resolveHostLinks({ APP_ONLY: '0' }).marketingOrigin, '');
   assert.deepEqual(resolveHostLinks({ APP_ONLY: 'false' }).signInHref, null);
+});
+
+test('every non-null sign-in href carries the intent parameter, relative one included', () => {
+  // The parameter encodes intent, not topology — an app-only visitor who
+  // clicks "sign in" wants what a split-host visitor who clicks it wants.
+  const configured = [
+    resolveHostLinks({ APP_HOST: 'app.example.org' }).signInHref,
+    resolveHostLinks({ APP_HOST: 'app.example.org', MARKETING_HOST: 'example.org' }).signInHref,
+    resolveHostLinks({ APP_ONLY: '1' }).signInHref,
+  ];
+  for (const href of configured) {
+    assert.ok(href !== null);
+    assert.ok(href.includes(`${SIGN_IN_INTENT_PARAM}=1`), href);
+    assert.ok(href.split('?')[0].endsWith('/ask'), href);
+  }
+  // ...and an unset instance still has no href at all, so no parameter
+  // reaches anything: the affordances stay in-place buttons.
+  assert.equal(resolveHostLinks({}).signInHref, null);
 });
 
 test('concatenation property: an empty prefix yields exactly the relative href', () => {

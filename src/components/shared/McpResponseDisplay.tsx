@@ -399,7 +399,7 @@ export default function McpResponseDisplay({
   const { data: session } = useSession();
   // P4c: null when no host topology is configured — the publish button's
   // signed-out branch then signs in place, exactly as today.
-  const { signInHref } = useHostLinks();
+  const { signInHref, marketingOrigin } = useHostLinks();
 
   // Use parent-controlled state if provided, otherwise local
   const publishDialogOpen = publishDialogOpenProp ?? publishDialogOpenLocal;
@@ -637,17 +637,25 @@ export default function McpResponseDisplay({
                 Continue this analysis
               </button>
             )}
-            <a
-              href="/learn#try-it"
-              style={{
-                fontSize: '12px',
-                color: '#8a6d00',
-                textDecoration: 'underline',
-                textUnderlineOffset: '2px',
-              }}
-            >
-              Try this locally (no limits)
-            </a>
+            {/* Marketing route (P4d): the app host withholds /learn, so the
+                CTA carries the marketing origin when one is configured,
+                stays exactly relative when nothing is, and is omitted on an
+                app-only instance — which has no marketing site, and where
+                a link to /learn could only 404. Same treatment the header
+                and footer marketing links got in P4c. */}
+            {marketingOrigin !== null && (
+              <a
+                href={`${marketingOrigin}/learn#try-it`}
+                style={{
+                  fontSize: '12px',
+                  color: '#8a6d00',
+                  textDecoration: 'underline',
+                  textUnderlineOffset: '2px',
+                }}
+              >
+                Try this locally (no limits)
+              </a>
+            )}
           </div>
         </div>
       )}

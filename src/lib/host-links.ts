@@ -30,14 +30,25 @@ import {
   parseBooleanFlag,
   resolveAppOrigin,
 } from './host-routing.ts';
+import { SIGN_IN_INTENT_PARAM } from './sign-in-intent.ts';
 
 /**
  * Where the app surface takes someone who needs to sign in. `/ask` renders
  * the provider panel (P4b) for a signed-out visitor, and it is the app
  * host's root destination, so this is the one door that works for every
  * instance shape.
+ *
+ * The intent parameter (P4d) says the visitor ARRIVED BY CLICKING "sign in"
+ * rather than by browsing to the page, which lets the panel start the flow
+ * for them when the instance offers exactly one provider. It rides on every
+ * non-null `signInHref`, including the relative app-only one: the parameter
+ * encodes intent, not topology. An app-only visitor who clicks "sign in"
+ * wants precisely what a split-host visitor who clicks "sign in" wants, and
+ * making the two configurations behave differently would be a distinction
+ * with no user-visible justification — plus a second code path to keep true.
  */
 const SIGN_IN_PATH = '/ask';
+const SIGN_IN_HREF = `${SIGN_IN_PATH}?${SIGN_IN_INTENT_PARAM}=1`;
 
 export interface HostLinks {
   /**
@@ -86,7 +97,7 @@ export function resolveHostLinks(
   // An app-only instance is its own app host: sign-in is a relative path on
   // whatever host the request arrived on, and there is no marketing site.
   if (parseBooleanFlag(env.APP_ONLY)) {
-    return { marketingOrigin: null, signInHref: SIGN_IN_PATH };
+    return { marketingOrigin: null, signInHref: SIGN_IN_HREF };
   }
 
   const appOrigin = resolveAppOrigin(env);
@@ -94,6 +105,6 @@ export function resolveHostLinks(
 
   return {
     marketingOrigin: marketingOrigin ?? '',
-    signInHref: appOrigin !== null ? `${appOrigin}${SIGN_IN_PATH}` : null,
+    signInHref: appOrigin !== null ? `${appOrigin}${SIGN_IN_HREF}` : null,
   };
 }

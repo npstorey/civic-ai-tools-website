@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import type { SignInOption } from '@/lib/auth-provider-options';
+import { SIGN_IN_INTENT_PARAM } from '@/lib/sign-in-intent';
 
 /**
  * The signed-out state of `/ask` — a prompt rendered IN PLACE, never a
@@ -34,8 +36,71 @@ import type { SignInOption } from '@/lib/auth-provider-options';
  * ZERO OPTIONS ⇒ NO BUTTON. An instance with no complete provider
  * credentials says so plainly rather than rendering a control that cannot
  * work — the same #193 principle at its limit.
+ *
+ * AUTO-INVOKE ON INTENT (P4d). `autoSignIn` is decided by the server page:
+ * the visitor arrived with `?signin=1` (they clicked "sign in" on another
+ * host) AND this instance offers exactly one provider. Then the second
+ * click is pure friction and this component starts the flow itself.
+ *
+ * ONE SHOT, and both halves of that matter:
+ *   1. The parameter is stripped from the URL with `history.replaceState`
+ *      BEFORE `signIn` is called. If the provider returns an error to
+ *      `/ask`, or the visitor presses Back, the URL no longer says "sign
+ *      in" — so the auto-invoke cannot re-fire and trap them in a loop
+ *      between this page and a failing provider.
+ *   2. A ref guards the effect within a mount. The prop is a server value
+ *      and does not change when the URL is replaced client-side, and React
+ *      runs effects twice in development; without the ref either would fire
+ *      the redirect twice.
+ *
+ * While invoking, the panel renders a plain progress line rather than the
+ * buttons: a control that is about to be navigated away from is a control
+ * someone will click. If `signIn` rejects (network failure — a successful
+ * call navigates away and never resolves here), the buttons come back, so
+ * the interstitial is never a dead end.
  */
-export default function AskSignInPanel({ options }: { options: SignInOption[] }) {
+export default function AskSignInPanel({
+  options,
+  autoSignIn = false,
+}: {
+  options: SignInOption[];
+  autoSignIn?: boolean;
+}) {
+  const [autoSigningIn, setAutoSigningIn] = useState(autoSignIn);
+  const firedRef = useRef(false);
+
+  useEffect(() => {
+    if (!autoSignIn || firedRef.current) return;
+    const option = options[0];
+    if (!option) return;
+    firedRef.current = true;
+
+    // Strip first, invoke second — see ONE SHOT above.
+    const url = new URL(window.location.href);
+    if (url.searchParams.has(SIGN_IN_INTENT_PARAM)) {
+      url.searchParams.delete(SIGN_IN_INTENT_PARAM);
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+
+    signIn(option.id, { callbackUrl: '/ask' }).catch(() => setAutoSigningIn(false));
+  }, [autoSignIn, options]);
+
+  if (autoSigningIn && options.length > 0) {
+    return (
+      <div
+        style={{
+          padding: '20px',
+          border: '1px solid var(--border-color)',
+          borderRadius: '6px',
+        }}
+      >
+        <p style={{ fontSize: '14px', lineHeight: 1.5, margin: 0 }}>
+          Taking you to sign in with {options[0].name}…
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
