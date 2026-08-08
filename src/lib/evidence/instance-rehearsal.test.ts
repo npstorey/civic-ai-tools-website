@@ -28,9 +28,9 @@ test('config rehearsal: alternate identity + local registry, zero code edits (ch
   // Strip every EVIDENCE_* variable from the inherited environment so the
   // rehearsal's config is exactly what the script sets — the run must not
   // borrow identity (or, worse, a key) from the invoking shell.
-  const env: Record<string, string> = {};
-  for (const [name, value] of Object.entries(process.env)) {
-    if (value !== undefined && !name.startsWith('EVIDENCE_')) env[name] = value;
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const name of Object.keys(env)) {
+    if (name.startsWith('EVIDENCE_')) delete env[name];
   }
 
   const result = spawnSync(

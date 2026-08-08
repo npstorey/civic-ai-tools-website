@@ -1,0 +1,93 @@
+name: CI
+
+# Credential-free by construction. This workflow contains zero `secrets.`
+# references and uses only first-party GitHub actions (checkout, setup-node),
+# so a fork PR gets exactly the same run as a branch PR. The build step below
+# is not merely "does it compile" — it is the tested invariant that the app
+# needs no secret at build time. Do not add a `secrets.` reference or an `env:`
+# block of placeholder credentials to make a step pass: that would delete the
+# invariant this workflow exists to protect.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Superseded runs on the same ref are pointless spend — cancel them.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: build / test / lint / typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node version comes from the repo's own constraint: package.json
+      # `engines.node` is ">=22" and .nvmrc pins 22 (Next.js 16 requires >=20.9,
+      # so 22 clears it). Reading .nvmrc keeps CI from drifting away from local
+      # and container builds. No dependency cache is configured on purpose — a
+      # cold `npm ci` every run is the honest measure of the install budget.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      # The manifest declares no install-lifecycle hooks (no prepare /
+      # preinstall / postinstall), so `npm ci` runs no project code. If a hook
+      # is ever added, remember it also fires on Vercel's install step.
+      - name: Install
+        run: npm ci
+
+      # THE KEYLESS BUILD. No env is set here and no secret is available to the
+      # job, so this step fails if anything reintroduces an import-time
+      # credential requirement. The model client is a lazy factory
+      # (src/lib/model-client.ts — `createModelClient()` reads
+      # OPENROUTER_API_KEY at call time, never at module scope) and the DB
+      # access is a lazy proxy, which is what makes a keyless build possible.
+      # A failure here is a regression in that design, not a missing secret.
+      - name: Build (keyless — no secrets available to this job)
+        run: npm run build
+
+      # Covers src/**/*.test.ts and scripts/**/*.test.mjs — including
+      # scripts/preflight-env.test.mjs, which until now gated nothing.
+      - name: Test
+        run: npm test
+
+      - name: Lint
+        run: npm run lint
+
+      # Runs after the build on purpose: tsconfig.json includes
+      # .next/types/**/*.ts, which only exists once `next build` has emitted it.
+      - name: Typecheck
+        run: npm run typecheck
+
+      # ADR-0012 §3 / spec §8.3.3 parallel-serve: /.well-known/typed-publisher.json
+      # (the canonical path) and /.well-known/evidence-public-keys.json (the
+      # legacy path) MUST emit byte-identical content. The canonical path is a
+      # force-static route handler that reads the legacy static file verbatim,
+      # so the guarantee holds by construction — this step proves it against the
+      # bytes the build actually emitted, and fails loudly if the route stops
+      # being prerendered or starts re-serializing the JSON.
+      - name: .well-known byte-identity
+        run: |
+          set -euo pipefail
+          SOURCE="public/.well-known/evidence-public-keys.json"
+          SERVED=".next/server/app/.well-known/typed-publisher.json.body"
+          if [ ! -f "$SOURCE" ]; then
+            echo "::error file=$SOURCE::legacy trust-registry file is missing"
+            exit 1
+          fi
+          if [ ! -f "$SERVED" ]; then
+            echo "::error::$SERVED was not emitted. /.well-known/typed-publisher.json is no longer prerendered as a static body (check \`export const dynamic = 'force-static'\` in src/app/.well-known/typed-publisher.json/route.ts). Byte-identity with the legacy path can no longer be proven at build time."
+            exit 1
+          fi
+          if ! cmp "$SERVED" "$SOURCE"; then
+            echo "::error::/.well-known/typed-publisher.json and /.well-known/evidence-public-keys.json are NOT byte-identical. ADR-0012 §3 requires the two paths emit the same bytes; verifiers that fetch either path must agree. Do not paper over this by regenerating one file."
+            exit 1
+          fi
+          echo "byte-identical (sha256 $(sha256sum "$SOURCE" | cut -d' ' -f1))"
