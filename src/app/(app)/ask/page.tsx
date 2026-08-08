@@ -3,6 +3,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { buildProviders } from '@/lib/auth-providers';
 import { toSignInOptions } from '@/lib/auth-provider-options';
+import {
+  SIGN_IN_INTENT_PARAM,
+  readSignInIntent,
+  shouldAutoSignIn,
+} from '@/lib/sign-in-intent';
 import QuerySurface from '@/components/shared/QuerySurface';
 import AskSignInPanel from './AskSignInPanel';
 
@@ -51,6 +56,16 @@ import AskSignInPanel from './AskSignInPanel';
  * — a silent sign-in loop, which is exactly what Gate C found; and naming
  * no provider in this file keeps an OIDC-only instance rendering its own
  * provider's label rather than a hardcoded one (#193).
+ *
+ * SIGN-IN INTENT IS READ HERE, NOT IN THE CLIENT (P4d). A visitor who
+ * clicked "sign in" on another host arrives with `?signin=1`; when the
+ * instance offers exactly one provider, the panel starts that provider's
+ * flow rather than asking for a second, identical click. The parameter is
+ * read from `searchParams` in this server component and handed down as a
+ * decided boolean — `useSearchParams()` in the panel would need a Suspense
+ * boundary and would put a routing concern inside a presentational
+ * component. The gate itself (`shouldAutoSignIn`) is pure and tested; every
+ * case it refuses falls back to rendering the ordinary panel.
  */
 
 export const dynamic = 'force-dynamic';
@@ -61,10 +76,22 @@ export const metadata: Metadata = {
     'Ask a question about public data and publish the answer as a signed evidence package.',
 };
 
-export default async function AskPage() {
+interface AskPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function AskPage({ searchParams }: AskPageProps) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
+    const options = toSignInOptions(buildProviders());
+    const params = await searchParams;
+    const autoSignIn = shouldAutoSignIn({
+      hasIntent: readSignInIntent(params[SIGN_IN_INTENT_PARAM]),
+      signedOut: true,
+      optionCount: options.length,
+    });
+
     return (
       <div style={{ maxWidth: '520px', margin: '0 auto', padding: '48px 24px 64px' }}>
         <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '8px' }}>
@@ -82,7 +109,7 @@ export default async function AskPage() {
           get an answer built from live public data, and publish it as a
           signed evidence package anyone can verify independently.
         </p>
-        <AskSignInPanel options={toSignInOptions(buildProviders())} />
+        <AskSignInPanel options={options} autoSignIn={autoSignIn} />
       </div>
     );
   }
