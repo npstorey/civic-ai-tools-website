@@ -22,16 +22,32 @@ const DROPDOWN_ITEM_STYLE: React.CSSProperties = {
 };
 
 /**
- * `dashboardHref` is env-driven (app front-door P3): the root layout passes
- * `resolveDashboardHref()` so that on a split-host deployment — where the
- * marketing host withholds `/dashboard` — the signed-in menu points at the
- * app host instead of a 404. Default (and unset topology) is today's
- * relative href, byte-identical.
+ * Every cross-host target this header needs is env-derived and passed in by
+ * the root layout; none of it is computed from the request's host, so the
+ * markup is identical on every host and every render.
+ *
+ * - `dashboardHref` (P3) — the marketing host withholds `/dashboard`, so on a
+ *   split-host deployment the signed-in menu points at the app host.
+ * - `marketingOrigin` (P4c) — prefix for the nav's marketing routes, which
+ *   the APP host withholds. `''` (the default, and unset topology) leaves
+ *   every href exactly the relative one it is today; `null` means an
+ *   app-only instance with no marketing site, and those items are hidden
+ *   rather than pointed at a 404.
+ * - `signInHref` (P4c) — where "sign in" should go. On the marketing host an
+ *   in-place `signIn()` cannot finish: the OAuth state cookie is written for
+ *   the host the click happened on, and the session belongs to the app host,
+ *   so the round-trip dies at the provider's redirect warning. Non-null
+ *   turns the button into a plain link to the app surface's sign-in panel;
+ *   `null` (the default, and unset topology) keeps today's in-place button.
  */
 export default function Header({
   dashboardHref = '/dashboard',
+  marketingOrigin = '',
+  signInHref = null,
 }: {
   dashboardHref?: string;
+  marketingOrigin?: string | null;
+  signInHref?: string | null;
 }) {
   const { data: session, status } = useSession();
   const headerRef = useRef<HTMLElement>(null);
@@ -42,6 +58,12 @@ export default function Header({
   const exploreRef = useRef<HTMLDivElement>(null);
   const aboutRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Marketing-route href, prefixed with the marketing origin when one is
+  // configured. With the default empty prefix this is the identity function
+  // on the path — the byte-identity guarantee, in one expression.
+  const showMarketingNav = marketingOrigin !== null;
+  const mkt = (path: string) => `${marketingOrigin ?? ''}${path}`;
 
   // Publish header height as a CSS variable so other components can offset below it
   useEffect(() => {
@@ -137,8 +159,10 @@ export default function Header({
                     padding: '4px 0',
                   }}
                 >
+                  {showMarketingNav && (
+                    <>
                   <Link
-                    href="/explore"
+                    href={mkt('/explore')}
                     onClick={() => setExploreOpen(false)}
                     style={DROPDOWN_ITEM_STYLE}
                     onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
@@ -147,7 +171,7 @@ export default function Header({
                     Data Flow
                   </Link>
                   <Link
-                    href="/directory"
+                    href={mkt('/directory')}
                     onClick={() => setExploreOpen(false)}
                     style={DROPDOWN_ITEM_STYLE}
                     onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
@@ -155,6 +179,9 @@ export default function Header({
                   >
                     Directory
                   </Link>
+                    </>
+                  )}
+                  {/* Dual-served by design (P3): stays relative on both hosts. */}
                   <Link
                     href="/evidence"
                     onClick={() => setExploreOpen(false)}
@@ -167,15 +194,17 @@ export default function Header({
                 </div>
               )}
             </div>
+            {showMarketingNav && (
+              <>
             <Link
-              href="/learn"
+              href={mkt('/learn')}
               className="no-link-style"
               style={NAV_LINK_STYLE}
             >
               Learn
             </Link>
             <Link
-              href="/project"
+              href={mkt('/project')}
               className="no-link-style"
               style={NAV_LINK_STYLE}
             >
@@ -217,7 +246,7 @@ export default function Header({
                   }}
                 >
                   <Link
-                    href="/about"
+                    href={mkt('/about')}
                     onClick={() => setAboutOpen(false)}
                     style={DROPDOWN_ITEM_STYLE}
                     onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
@@ -226,7 +255,7 @@ export default function Header({
                     About
                   </Link>
                   <Link
-                    href="/roadmap"
+                    href={mkt('/roadmap')}
                     onClick={() => setAboutOpen(false)}
                     style={DROPDOWN_ITEM_STYLE}
                     onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
@@ -237,6 +266,8 @@ export default function Header({
                 </div>
               )}
             </div>
+              </>
+            )}
             <a
               href={TYPED_STANDARDS_URL}
               target="_blank"
@@ -351,6 +382,18 @@ export default function Header({
                 </div>
               )}
             </div>
+          ) : signInHref !== null ? (
+            /* Split topology: sign-in happens on the app surface, so this is
+               a plain link — it works before hydration, and the label drops
+               the provider name because the panel it lands on lists whatever
+               providers the instance actually configured. */
+            <a
+              href={signInHref}
+              className="nyc-button nyc-button-primary"
+              style={{ padding: '8px 16px', fontSize: '14px', textDecoration: 'none' }}
+            >
+              Sign in
+            </a>
           ) : (
             <button
               onClick={() => signIn('github')}
@@ -387,8 +430,10 @@ export default function Header({
           >
             Explore
           </span>
+          {showMarketingNav && (
+            <>
           <Link
-            href="/explore"
+            href={mkt('/explore')}
             onClick={() => setMobileMenuOpen(false)}
             style={{
               color: 'var(--text-secondary)',
@@ -401,7 +446,7 @@ export default function Header({
             Data Flow
           </Link>
           <Link
-            href="/directory"
+            href={mkt('/directory')}
             onClick={() => setMobileMenuOpen(false)}
             style={{
               color: 'var(--text-secondary)',
@@ -413,6 +458,8 @@ export default function Header({
           >
             Directory
           </Link>
+            </>
+          )}
           <Link
             href="/evidence"
             onClick={() => setMobileMenuOpen(false)}
@@ -426,10 +473,12 @@ export default function Header({
           >
             Evidence
           </Link>
+          {showMarketingNav && (
+            <>
           {/* Divider */}
           <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
           <Link
-            href="/learn"
+            href={mkt('/learn')}
             onClick={() => setMobileMenuOpen(false)}
             style={{
               color: 'var(--text-secondary)',
@@ -443,7 +492,7 @@ export default function Header({
           {/* Divider */}
           <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
           <Link
-            href="/project"
+            href={mkt('/project')}
             onClick={() => setMobileMenuOpen(false)}
             style={{
               color: 'var(--text-secondary)',
@@ -469,7 +518,7 @@ export default function Header({
             About
           </span>
           <Link
-            href="/about"
+            href={mkt('/about')}
             onClick={() => setMobileMenuOpen(false)}
             style={{
               color: 'var(--text-secondary)',
@@ -482,7 +531,7 @@ export default function Header({
             About
           </Link>
           <Link
-            href="/roadmap"
+            href={mkt('/roadmap')}
             onClick={() => setMobileMenuOpen(false)}
             style={{
               color: 'var(--text-secondary)',
@@ -494,6 +543,8 @@ export default function Header({
           >
             Roadmap
           </Link>
+            </>
+          )}
           {/* Divider */}
           <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
           <a

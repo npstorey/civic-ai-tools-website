@@ -9,7 +9,29 @@ import { buildProvenanceLine, buildNarrativeSummary, buildStatsSummary, getPorta
 import { generateNotebook, downloadNotebook } from '@/lib/notebook';
 import type { ProgressLogEntry, ProgressGroup, ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
 import { useSession, signIn } from 'next-auth/react';
+import { useHostLinks } from '@/components/HostLinksProvider';
 import PublishEvidenceDialog from '@/components/PublishEvidenceDialog';
+
+/**
+ * Shared by the publish affordance's two shapes — the button that opens the
+ * publish dialog, and (on a split-host topology) the link that sends a
+ * signed-out visitor to the app surface's sign-in panel. Extracted so the
+ * two render identically rather than by copied style objects.
+ */
+const PUBLISH_BUTTON_STYLE: React.CSSProperties = {
+  background: 'none',
+  border: '1px solid var(--nyc-blue)',
+  borderRadius: '4px',
+  padding: '4px 10px',
+  fontSize: '12px',
+  color: 'var(--nyc-blue)',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+  fontWeight: 500,
+  transition: 'background-color 0.15s',
+};
 
 interface McpResponseDisplayProps {
   content: string;
@@ -375,6 +397,9 @@ export default function McpResponseDisplay({
   const [copied, setCopied] = useState(false);
   const [publishDialogOpenLocal, setPublishDialogOpenLocal] = useState(false);
   const { data: session } = useSession();
+  // P4c: null when no host topology is configured — the publish button's
+  // signed-out branch then signs in place, exactly as today.
+  const { signInHref } = useHostLinks();
 
   // Use parent-controlled state if provided, otherwise local
   const publishDialogOpen = publishDialogOpenProp ?? publishDialogOpenLocal;
@@ -772,6 +797,26 @@ export default function McpResponseDisplay({
             {/* Publish as Evidence button */}
             {canPublish && (
               <>
+                {!session?.user && signInHref !== null ? (
+                  /* Split topology (P4c): publishing needs a session, and a
+                     session cannot be started from this host — the OAuth
+                     state cookie would be written here while the session
+                     belongs to the app host. So the signed-out affordance
+                     becomes a link to the app surface's sign-in panel. The
+                     "re-run your query" note below already described this
+                     shape; it is now literally true. */
+                  <a
+                    href={signInHref}
+                    style={{ ...PUBLISH_BUTTON_STYLE, textDecoration: 'none' }}
+                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(16, 63, 239, 0.06)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z" />
+                    </svg>
+                    Sign in to publish
+                  </a>
+                ) : (
                 <button
                   onClick={() => {
                     if (!session?.user) {
@@ -782,20 +827,7 @@ export default function McpResponseDisplay({
                       setPublishDialogOpen(true);
                     }
                   }}
-                  style={{
-                    background: 'none',
-                    border: '1px solid var(--nyc-blue)',
-                    borderRadius: '4px',
-                    padding: '4px 10px',
-                    fontSize: '12px',
-                    color: 'var(--nyc-blue)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    fontWeight: 500,
-                    transition: 'background-color 0.15s',
-                  }}
+                  style={PUBLISH_BUTTON_STYLE}
                   onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(16, 63, 239, 0.06)'; }}
                   onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                 >
@@ -804,6 +836,7 @@ export default function McpResponseDisplay({
                   </svg>
                   {session?.user ? 'Publish as Evidence' : 'Sign in to publish'}
                 </button>
+                )}
                 {!session?.user && (
                   <span style={{ fontSize: '11px', color: '#666' }}>
                     Sign in first, then re-run your query
