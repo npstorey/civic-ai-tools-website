@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A demo website showcasing MCP (Model Context Protocol) value by displaying side-by-side LLM responses with and without MCP integration for civic data queries. Built with Next.js 16+ on Vercel, it connects to OpenRouter for LLM access and socrata-mcp-server for live Socrata civic data.
+The reference implementation of an evidence-publishing platform for AI-assisted analysis of civic open data. Users ask plain-language questions about public data; the app answers them against live sources through MCP (Model Context Protocol) servers, can re-run an analysis as an executed notebook, and packages the result as a **signed evidence package** anyone can verify independently. The side-by-side comparison of a model answering with and without live data access is one of the surfaces the app offers — the thing it publishes is the evidence. Built with Next.js (App Router) in TypeScript, deployed on Vercel for the reference deployment.
 
 **Production URL:** https://civicaitools.org/
 
@@ -76,10 +76,12 @@ API Routes (Serverless)
     └── /api/auth/[...nextauth]  → GitHub OAuth
     │
 External Services
-    ├── OpenRouter (LLM API, OpenAI-compatible)
+    ├── Model endpoint (OpenAI-compatible; OpenRouter by default, swappable via MODEL_API_BASE_URL)
     ├── socrata-mcp-server (Socrata data via HTTP/SSE at /mcp endpoint)
     └── Upstash Redis via @vercel/kv (Rate limiting)
 ```
+
+The diagram shows the comparison path as the reference deployment runs it. The stack is not hardwired to these services: the model endpoint (`src/lib/model-client.ts`), the Postgres database, the blob-storage driver (`src/lib/storage/`), and the notebook-executor driver (`src/lib/sandbox/`) are all configurable seams. [`docs/deploy.md`](docs/deploy.md) is the reference for the driver decisions and what each seam accepts.
 
 ## Key Implementation Details
 
@@ -202,6 +204,8 @@ explore/page.tsx
 
 ## Environment Variables
 
+This is the local-dev set for the reference deployment; the full tier-by-tier environment reference for an instance (drivers, signing, instance identity) is [`docs/deploy.md`](docs/deploy.md).
+
 Required in `.env.local`:
 ```
 OPENROUTER_API_KEY=sk-or-...
@@ -229,71 +233,23 @@ KV_REST_API_TOKEN=
 KV_REST_API_READ_ONLY_TOKEN=
 ```
 
-## Directory Structure
+## Directory Orientation
 
-```
-src/
-├── app/
-│   ├── page.tsx                  # Home page with query form + streaming results
-│   ├── about/page.tsx            # About MCP page (educational prose)
-│   ├── explore/page.tsx          # Explore page (BPMN diagram + trace replay + live queries)
-│   ├── layout.tsx                # Root layout with header/footer
-│   ├── globals.css               # NYC Design System styles (light mode only)
-│   └── api/
-│       ├── compare/route.ts      # Main comparison endpoint (non-streaming)
-│       ├── compare-stream/route.ts # SSE streaming comparison endpoint
-│       ├── models/route.ts       # Available models
-│       ├── rate-limit/route.ts
-│       └── auth/[...nextauth]/route.ts
-├── components/
-│   ├── shared/
-│   │   └── McpResponseDisplay.tsx # Shared MCP response rendering (both pages use this)
-│   ├── explore/
-│   │   ├── McpFlowDiagram.tsx     # BPMN orchestrator (fullscreen, state sync)
-│   │   ├── McpFlowDiagramWrapper.tsx # Client-side dynamic import wrapper
-│   │   ├── BpmnViewer.tsx         # bpmn-js NavigatedViewer wrapper
-│   │   ├── bpmn-diagram.css       # CSS markers, overlays, zoom controls
-│   │   ├── TraceControls.tsx      # Mode toggle, trace pills, playback, live input
-│   │   ├── LiveResponsePanel.tsx  # Response panel (delegates to McpResponseDisplay)
-│   │   └── DiagramAnnotations.tsx # Educational text panel
-│   ├── Header.tsx
-│   ├── QueryForm.tsx              # Query input + model/portal selectors
-│   ├── ComparisonDisplay.tsx      # Side-by-side results wrapper
-│   ├── ResponsePanel.tsx          # Individual result panel (MCP variant → McpResponseDisplay)
-│   ├── ProgressLog.tsx            # Narrative summary + expandable tool call steps
-│   ├── SkillPromptDisclosure.tsx  # Expandable system prompt viewer
-│   ├── NarrationExplainer.tsx     # "What am I looking at?" tooltip
-│   ├── SoqlDisplay.tsx            # SoQL query syntax highlighting
-│   ├── ToolCallCard.tsx           # Individual tool call display
-│   ├── LoadingSpinner.tsx
-│   ├── RateLimitBanner.tsx        # Inline rate limit display
-│   └── Providers.tsx              # NextAuth SessionProvider
-├── hooks/
-│   ├── useStreamingComparison.ts  # SSE streaming for home page (both panels)
-│   ├── useLiveTrace.ts            # SSE + diagram animation for Explore page live queries
-│   └── useTraceReplay.ts          # Replay state machine for pre-recorded traces
-└── lib/
-    ├── openrouter.ts              # LLM API client (non-streaming)
-    ├── openrouter-streaming.ts    # LLM API client (streaming with SSE events)
-    ├── streaming.ts               # Shared: event types, narrative, provenance, dataset URLs
-    ├── notebook.ts                # Jupyter notebook generation (client-side .ipynb)
-    ├── sse-client.ts              # Client-side SSE connection helper
-    ├── rate-limit.ts              # Rate limiting logic
-    ├── auth.ts                    # NextAuth config
-    ├── bpmn/
-    │   ├── traces.ts              # 4 pre-recorded traces with SoQL and timing
-    │   ├── node-mapping.ts        # ProgressPhase → BPMN element IDs
-    │   ├── animation.ts           # ReplayState type, animation utilities
-    │   └── capture-trace.ts       # Dev utility (NEXT_PUBLIC_CAPTURE_TRACES=true)
-    └── mcp/
-        ├── client.ts              # MCP server HTTP client
-        ├── tools.ts               # Tool definitions for OpenRouter
-        └── socrata-skill.ts       # Domain knowledge for Socrata queries
+Deliberately a short orientation, not an exhaustive tree — the tree drifted badly once already. Verify against the filesystem when precision matters.
 
-public/
-└── bpmn/
-    └── mcp-query-flow.bpmn       # BPMN 2.0 XML: 5-lane MCP query flow process
-```
+- `src/app/(marketing)/` — the public pages: home (`page.tsx`), `/explore`, `/directory`, `/learn`, `/project`, `/about`, `/roadmap`
+- `src/app/(app)/` — dashboard, evidence, and auth surfaces: `/dashboard`, `/evidence`, `/auth/device`, plus the dev-only `/dev/notebook-preview`
+- `src/app/api/` — serverless routes: `compare`, `compare-stream`, `models`, `rate-limit`, `query-notebook`, plus the `evidence/*`, `blob/*`, `cron/*`, and `auth/*` route families
+- `src/lib/` — the major areas:
+  - `evidence/` — evidence-system core: packaging, signing, verification, provenance, attestation, lifecycle
+  - `storage/` — blob-storage driver seam (Vercel Blob / S3-compatible)
+  - `sandbox/` — notebook-executor driver seam (container / Vercel Sandbox)
+  - `db/` — Drizzle ORM schema + client (Postgres)
+  - `mcp/` — MCP HTTP client, tool definitions, Socrata skill fallback
+  - auth (files, not a directory): `auth.ts`, `auth-providers.ts`, `api-auth.ts`, `device-flow.ts` — NextAuth config, provider seam, API-token auth, device flow
+- `src/components/` — UI, with `dashboard/`, `evidence/`, `explore/`, `home/`, `notebook/`, `roadmap/`, and `shared/` subtrees alongside top-level components like `Header.tsx`
+
+For depth, read [`docs/deploy.md`](docs/deploy.md) (drivers, environment tiers, self-hosting) and [`docs/api/evidence-publish.md`](docs/api/evidence-publish.md) (the evidence-publish contract, including the repositories-and-layers orientation).
 
 ## Key Datasets
 
@@ -345,7 +301,7 @@ Active work is organized into lightweight sprints in [`/sprints/`](sprints/).
 ### Deep linking
 
 - `/explore?trace={id}` — Auto-loads and replays a specific trace (reserved, not yet wired up)
-- Header nav order: Home | About | Explore | GitHub
+- Header nav (desktop, `src/components/Header.tsx`): Explore ▾ (Data Flow `/explore` · Directory `/directory` · Evidence `/evidence`) | Learn | Project | About ▾ (About `/about` · Roadmap `/roadmap`) | Typed Standards (external link, typedstandards.org). There is no GitHub nav link. Dashboard is not in the nav — it lives in the signed-in user menu; signed-out users see a "Sign in with GitHub" button instead.
 
 ## Patterns & Conventions
 
