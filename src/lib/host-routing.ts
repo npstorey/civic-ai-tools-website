@@ -14,7 +14,7 @@
  * Configuration (all optional; host names are env-driven, never literals):
  *
  * - `APP_HOST` — the host that serves the gated `(app)` surface. On it,
- *   `/` redirects to `/dashboard` (interim — see APP_ROOT_ACTION), the
+ *   `/` redirects to `/evidence` (interim — see APP_ROOT_ACTION), the
  *   marketing routes 404, and the full `(app)` group serves.
  * - `MARKETING_HOST` — the host that serves the marketing face and the
  *   public evidence registry. On it, the app-private routes
