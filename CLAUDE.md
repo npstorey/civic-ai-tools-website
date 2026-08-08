@@ -151,6 +151,7 @@ Domain knowledge injected into the LLM system prompt:
 - Progress phases: `analyze`, `tool_start`, `tool_complete`, `tool_result`, `thinking`, `synthesize`
 - `streaming.ts` is the shared utility hub — exports event types, `buildNarrativeSummary()`, `buildProvenanceLine()`, `datasetUrl()`, `getEducationalAnnotation()`
 - `sse-client.ts` handles client-side SSE connection with reconnect
+- **Streaming errors: never render a raw `err.message`.** Route every reader-facing streaming error through `friendlyStreamError()` and every LLM-facing tool-failure string through `describeToolFailureForLlm()` (both in `streaming.ts`) — they preserve the anti-hallucination guard and keep raw infrastructure detail (status codes, server names, stack text) out of the response.
 - Dataset IDs are auto-linked to Socrata pages: `https://{portal}/d/{datasetId}`
 
 ### Shared MCP Response Display (`components/shared/McpResponseDisplay.tsx`)
