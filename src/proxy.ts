@@ -33,8 +33,9 @@ export function proxy(request: NextRequest) {
       // indistinguishable from a route that does not exist.
       return NextResponse.rewrite(new URL('/404', request.url));
     case 'redirect':
-      // Temporary on purpose (APP_ROOT_ACTION is an interim mount — P4
-      // claims the app root); browsers cache permanent redirects.
+      // Temporary on purpose: where the app root points is a product
+      // decision (APP_ROOT_ACTION), and browsers cache permanent redirects
+      // past the point where changing it would take effect.
       return NextResponse.redirect(new URL(action.destination, request.url), 307);
     default:
       return NextResponse.next();

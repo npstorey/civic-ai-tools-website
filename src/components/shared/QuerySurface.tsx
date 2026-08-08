@@ -25,9 +25,25 @@ import { useNotebookStream } from '@/hooks/useNotebookStream';
 interface QuerySurfaceProps {
   /** Framing content rendered above the form, inside its container. */
   children?: React.ReactNode;
+  /**
+   * Whether to close a completed comparison with the footnote suggesting the
+   * reader run the tools locally for complex multi-step analysis.
+   *
+   * Default `true` — the apex demo's existing behavior, unchanged and
+   * unconfigured (the marketing page passes nothing). The signed-in `(app)`
+   * mount passes `false`: there, the footnote would send a user who just
+   * signed in to the surface built for exactly this work somewhere else to
+   * do it, and the limit it implicitly apologizes for is the app tier, not
+   * the demo's. On the apex the footnote is honest — that surface IS the
+   * rate-limited demo, and pointing past it is the point.
+   */
+  showLocalSetupFootnote?: boolean;
 }
 
-export default function QuerySurface({ children }: QuerySurfaceProps) {
+export default function QuerySurface({
+  children,
+  showLocalSetupFootnote = true,
+}: QuerySurfaceProps) {
   const [queryCount, setQueryCount] = useState(0);
   const [usedModel, setUsedModel] = useState<string>('');
   const [lastQuery, setLastQuery] = useState<string>('');
@@ -132,7 +148,7 @@ export default function QuerySurface({ children }: QuerySurfaceProps) {
             onPublishDialogChange={setPublishDialogOpen}
             onContinue={handleContinue}
           />
-          {(streaming.withoutMcp.isComplete && streaming.withMcp.isComplete) && (
+          {showLocalSetupFootnote && (streaming.withoutMcp.isComplete && streaming.withMcp.isComplete) && (
             <p
               style={{
                 marginTop: '16px',
