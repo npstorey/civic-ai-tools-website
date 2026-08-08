@@ -2,15 +2,21 @@
 // is a pure function of the environment (and unit-testable without NextAuth
 // runtime wiring).
 //
-// Two providers:
-//   - GitHub: always present (the demo deployment's provider, unchanged).
+// Two providers, each gated on its own env set being complete:
+//   - GitHub: present ONLY when GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are
+//     both set. Previously pushed unconditionally with `|| ''` fallbacks,
+//     which rendered a sign-in button that redirected with an empty client id
+//     on an instance that had never configured a GitHub OAuth app — silently
+//     broken rather than absent (#193).
 //   - Generic OIDC: present ONLY when OIDC_ISSUER, OIDC_CLIENT_ID, and
 //     OIDC_CLIENT_SECRET are all set. Any OIDC provider that supports
 //     standard discovery (/.well-known/openid-configuration) works; the
 //     optional OIDC_PROVIDER_NAME sets the sign-in button label.
 //
-// With none of the OIDC vars set, the provider list is exactly the
-// pre-existing GitHub-only list.
+// With the GitHub pair set and none of the OIDC vars set, the provider list is
+// exactly the pre-existing GitHub-only list — the reference deployment's shape,
+// unchanged. `/api/auth/providers` is the runtime answer to "what does this
+// instance actually offer": a half-configured provider is simply absent there.
 
 import GithubProviderImport from 'next-auth/providers/github';
 import type { Provider } from 'next-auth/providers/index';
@@ -61,16 +67,46 @@ export function oidcAccountKey(subject: string, issuer: string = process.env.OID
 }
 
 /**
+ * THE provider-account key derivation — one implementation, three consumers:
+ * the sign-in allowlist gate, the users-table upsert, and the JWT's DB-user
+ * lookup (all in auth.ts). Keeping it here, beside `oidcAccountKey`, is what
+ * stops a parallel derivation from drifting into existence.
+ *
+ * Returns the key stored in the users table's provider-account key column:
+ * the GitHub numeric account id for GitHub sign-ins, the
+ * `oidc:{issuer}:{sub}` composite for OIDC sign-ins. Returns null when no key
+ * can be derived (no subject and no user id) — callers decide what that means
+ * for them.
+ */
+export function providerAccountKey(
+  account: { provider?: string; providerAccountId?: string | null } | null | undefined,
+  user: { id?: string | null } | null | undefined,
+): string | null {
+  if (account?.provider === OIDC_PROVIDER_ID) {
+    const subject = account.providerAccountId || user?.id;
+    return subject ? oidcAccountKey(subject) : null;
+  }
+  return user?.id || null;
+}
+
+/**
  * Build the NextAuth provider list from the environment. Pure: given the same
  * env, returns the same list. Defaults to process.env.
  */
 export function buildProviders(env: AuthProviderEnv | NodeJS.ProcessEnv = process.env): Provider[] {
-  const providers: Provider[] = [
-    GithubProvider({
-      clientId: env.GITHUB_CLIENT_ID || '',
-      clientSecret: env.GITHUB_CLIENT_SECRET || '',
-    }),
-  ];
+  const providers: Provider[] = [];
+
+  // Gated on the full pair, mirroring the OIDC gate below: an incomplete pair
+  // can only produce a broken authorization redirect, so the honest render is
+  // no GitHub button at all (#193).
+  if (env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET) {
+    providers.push(
+      GithubProvider({
+        clientId: env.GITHUB_CLIENT_ID,
+        clientSecret: env.GITHUB_CLIENT_SECRET,
+      }),
+    );
+  }
 
   if (env.OIDC_ISSUER && env.OIDC_CLIENT_ID && env.OIDC_CLIENT_SECRET) {
     const issuer = normalizeIssuer(env.OIDC_ISSUER);

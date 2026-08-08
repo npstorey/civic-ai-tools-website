@@ -395,9 +395,12 @@ doesn't):
 `EVIDENCE_PUBLICATION_HOST`, the registry-URL overrides — with none set,
 the demo deployment's values are emitted; see
 [`docs/instance-setup.md`](instance-setup.md)), `OIDC_PROVIDER_NAME`
-(button label), rate-limit and token-budget tuning knobs
+(button label), `SIGN_IN_ALLOWLIST` (unset or empty = open sign-in,
+exactly the pre-allowlist behavior; see the sign-in section),
+rate-limit and token-budget tuning knobs
 (`ANONYMOUS_RATE_LIMIT`, `AUTHENTICATED_RATE_LIMIT`,
-`TOKEN_LIMIT_PER_REQUEST`, `MAX_TOOL_RESULT_CHARS`),
+`APP_TIER_RATE_LIMIT`, `TOKEN_LIMIT_PER_REQUEST`,
+`MAX_TOOL_RESULT_CHARS`),
 `S3_REGION` / `S3_FORCE_PATH_STYLE` / `S3_PUBLIC_BASE_URL` (coded
 defaults described in the storage section), and analytics
 (`NEXT_PUBLIC_GA_MEASUREMENT_ID`).
@@ -430,7 +433,11 @@ authorization callback URL to:
 <your origin>/api/auth/callback/github
 ```
 
-and supply `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
+and supply `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`. The provider
+appears only when both are set — with either half absent, the GitHub
+button is simply not rendered rather than rendered broken, and preflight
+demotes the pair from required to optional once the OIDC triple below is
+complete (an instance needs *a* working provider, not this one).
 
 **Generic OIDC provider.** Any provider that supports standard OIDC
 discovery (`/.well-known/openid-configuration`) works — an enterprise
@@ -444,6 +451,21 @@ the client with redirect URI:
 ```
 
 The flow requests `openid profile email` scopes and uses PKCE + state.
+
+**Restricting who may sign in (optional allowlist).** By default any
+account the active provider authenticates may sign in. To gate an
+instance, set `SIGN_IN_ALLOWLIST` to the permitted provider-account
+keys — the same strings the users table stores: the GitHub numeric
+account id for GitHub sign-ins, `oidc:{issuer}:{sub}` for OIDC
+sign-ins. Entries are separated by commas and/or whitespace, so a
+multi-line value in a secret manager works as well as a one-line list.
+Unset or empty means open — an instance that has never heard of the
+variable behaves exactly as before the gate existed. A refused account
+gets NextAuth's built-in Access Denied page and leaves no user row
+behind. On a gated instance, signed-in users draw their daily quota
+from `APP_TIER_RATE_LIMIT` instead of `AUTHENTICATED_RATE_LIMIT`; its
+default is the authenticated limit itself, so leaving it unset changes
+nothing.
 
 Before any browser test, check what the instance advertises:
 

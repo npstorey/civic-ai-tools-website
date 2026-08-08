@@ -84,14 +84,36 @@ export const DRIVER_SEAMS = {
  *   - `requiredWhen: { <seam>: '<driver>' }` — tier becomes 'required' under
  *     that driver; otherwise the declared `tier` stands.
  *
- * CONSTRAINT: both fields must leave the default profile untouched. With no
- * selector set (or every selector set to its default) the resolved spec is
- * identical to the declared one, so the report is byte-identical to the
- * pre-driver-awareness output. That is why the S3_* knobs stay listed under
- * the Vercel Blob profile rather than being suppressed as not-applicable —
- * the suppression only runs in the direction that the frozen default output
- * does not cover.
+ * A third conditional field expresses ALTERNATIVES rather than drivers — the
+ * case where two variable sets satisfy the same need and an instance picks
+ * one:
+ *   - `requiredUnlessAllPresent: ['A', 'B', ...]` — the entry's declared
+ *     'required' tier is DEMOTED TO 'optional' when every named variable is
+ *     present. Used for the sign-in providers: an instance needs *a* provider,
+ *     and a complete OIDC triple satisfies that need without GitHub. Demoted
+ *     to 'optional' rather than 'recommended' on purpose — for an OIDC-only
+ *     instance an absent GitHub pair is a deliberate configuration choice, not
+ *     a degraded feature, and 'recommended' would emit a "feature(s) will
+ *     degrade" nag. Same no-nagging principle as `onlyWhen`; the entry stays
+ *     listed so the operator can still see the option exists.
+ *
+ * CONSTRAINT: all three fields must leave the default profile untouched. With
+ * no selector set (or every selector set to its default) and no alternative
+ * set complete, the resolved spec is identical to the declared one, so the
+ * report is byte-identical to the pre-driver-awareness output. That is why the
+ * S3_* knobs stay listed under the Vercel Blob profile rather than being
+ * suppressed as not-applicable — the suppression only runs in the direction
+ * that the frozen default output does not cover. The same holds for the
+ * GitHub pair: the demotion fires only when the OIDC triple is complete, which
+ * the frozen default output does not cover either.
  */
+/**
+ * The generic-OIDC provider set. A complete triple is a full substitute for a
+ * GitHub OAuth app, which is what the GitHub pair's `requiredUnlessAllPresent`
+ * condition below is asserting. Named once so the two sides cannot drift.
+ */
+export const OIDC_PROVIDER_SET = ['OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET'];
+
 export const ENV_SPEC = [
   // --- Core query path (every demo query depends on these) ---
   { name: 'OPENROUTER_API_KEY', tier: 'required', purpose: 'LLM access — every query (no fallback)' },
@@ -138,14 +160,23 @@ export const ENV_SPEC = [
   // --- Sign-in path (the rate-limit headroom option; OAuth) ---
   { name: 'NEXTAUTH_SECRET', tier: 'required', purpose: 'NextAuth session encryption' },
   { name: 'NEXTAUTH_URL', tier: 'required', purpose: 'OAuth callback base URL (must match the deploy origin)' },
-  { name: 'GITHUB_CLIENT_ID', tier: 'required', purpose: 'GitHub sign-in (raises the per-user rate limit)' },
-  { name: 'GITHUB_CLIENT_SECRET', tier: 'required', purpose: 'GitHub sign-in (raises the per-user rate limit)' },
+  // The GitHub pair now GATES its provider (auth-providers.ts): with either
+  // half absent the button is not rendered at all, rather than rendered
+  // broken. That is what makes an honest retier possible — the pair is
+  // required unless the OIDC triple is complete, because an instance needs at
+  // least one working sign-in provider and OIDC is a full substitute.
+  { name: 'GITHUB_CLIENT_ID', tier: 'required', purpose: 'GitHub sign-in — the pair gates the provider (required unless the OIDC triple is complete)', requiredUnlessAllPresent: OIDC_PROVIDER_SET },
+  { name: 'GITHUB_CLIENT_SECRET', tier: 'required', purpose: 'GitHub sign-in — the pair gates the provider (required unless the OIDC triple is complete)', requiredUnlessAllPresent: OIDC_PROVIDER_SET },
   // Generic OIDC sign-in (optional — active only when ISSUER + CLIENT_ID +
   // CLIENT_SECRET are all present; unset, sign-in is GitHub only).
   { name: 'OIDC_ISSUER', tier: 'optional', purpose: 'Generic OIDC sign-in — issuer URL (discovery-based)' },
   { name: 'OIDC_CLIENT_ID', tier: 'optional', purpose: 'Generic OIDC sign-in — client id' },
   { name: 'OIDC_CLIENT_SECRET', tier: 'optional', purpose: 'Generic OIDC sign-in — client secret' },
   { name: 'OIDC_PROVIDER_NAME', tier: 'optional', purpose: 'OIDC sign-in button label (default "SSO")', hasFallback: true },
+  // Sign-in gate (app front door). Unset/empty = open sign-in, i.e. exactly
+  // the behavior before the gate existed — so it is a pure override with a
+  // coded default, never load-bearing for an instance that does not want it.
+  { name: 'SIGN_IN_ALLOWLIST', tier: 'optional', purpose: 'Allowlist of provider-account keys permitted to sign in (unset/empty = open)', hasFallback: true },
 
   // --- Rate limiting (durable counter; without it, falls back to per-instance memory) ---
   // hasFallback, not a hard miss: rate-limit.ts:53-63 tests both vars and takes
@@ -186,6 +217,10 @@ export const ENV_SPEC = [
   //     reads them but runs on built-in defaults when absent) ---
   { name: 'ANONYMOUS_RATE_LIMIT', tier: 'optional', purpose: 'Anonymous per-day query limit (default 10)', hasFallback: true },
   { name: 'AUTHENTICATED_RATE_LIMIT', tier: 'optional', purpose: 'Authenticated per-day query limit (default 25)', hasFallback: true },
+  // Applies only on a gated instance (SIGN_IN_ALLOWLIST populated), and its
+  // coded fallback is the authenticated limit itself — so unset it is not
+  // merely defaulted, it is identical to the authenticated tier.
+  { name: 'APP_TIER_RATE_LIMIT', tier: 'optional', purpose: 'Per-day query limit for signed-in users of a gated instance (default: AUTHENTICATED_RATE_LIMIT)', hasFallback: true },
   { name: 'TOKEN_LIMIT_PER_REQUEST', tier: 'optional', purpose: 'Streaming token budget per request (coded default)', hasFallback: true },
   { name: 'MAX_TOOL_RESULT_CHARS', tier: 'optional', purpose: 'Tool-result truncation budget (coded default)', hasFallback: true },
   { name: 'NEXT_PUBLIC_CAPTURE_TRACES', tier: 'optional', purpose: 'Dev-only BPMN trace capture toggle', hasFallback: true },
@@ -234,18 +269,34 @@ function conditionMet(condition, drivers) {
 }
 
 /**
+ * True when every named variable is present in `env`. Presence only — the
+ * same non-empty-after-trim test `evaluateEnv` uses, and no value is read
+ * beyond that boolean.
+ */
+function allPresent(names, env) {
+  return names.every((name) => {
+    const raw = env[name];
+    return typeof raw === 'string' && raw.trim().length > 0;
+  });
+}
+
+/**
  * Resolve the declared spec against an instance profile: drop entries the
- * profile will never read, and promote entries the profile makes load-bearing.
+ * profile will never read, promote entries the profile makes load-bearing, and
+ * demote entries whose need another present variable set already satisfies.
  *
- * With every selector at its default this is the identity transform on
- * ENV_SPEC (see the CONSTRAINT note on ENV_SPEC), which is what keeps the
- * default profile's report byte-identical.
+ * With every selector at its default and no alternative set complete this is
+ * the identity transform on ENV_SPEC (see the CONSTRAINT note on ENV_SPEC),
+ * which is what keeps the default profile's report byte-identical. `env`
+ * therefore defaults to `{}`: a caller that passes only drivers gets exactly
+ * the driver-aware behavior it got before alternatives existed.
  *
  * @param {Record<string, string>} drivers
  * @param {typeof ENV_SPEC} [spec]
+ * @param {Record<string, string | undefined>} [env]
  * @returns {{ applicable: typeof ENV_SPEC, notApplicable: typeof ENV_SPEC }}
  */
-export function resolveSpec(drivers, spec = ENV_SPEC) {
+export function resolveSpec(drivers, spec = ENV_SPEC, env = {}) {
   const applicable = [];
   const notApplicable = [];
   for (const s of spec) {
@@ -254,7 +305,14 @@ export function resolveSpec(drivers, spec = ENV_SPEC) {
       continue;
     }
     const promoted = s.requiredWhen && conditionMet(s.requiredWhen, drivers);
-    applicable.push(promoted ? { ...s, tier: 'required' } : s);
+    if (promoted) {
+      applicable.push({ ...s, tier: 'required' });
+      continue;
+    }
+    // An alternative set covers this variable's need: demote rather than
+    // suppress, so the option stays visible without being nagged about.
+    const demoted = s.requiredUnlessAllPresent && allPresent(s.requiredUnlessAllPresent, env);
+    applicable.push(demoted ? { ...s, tier: 'optional' } : s);
   }
   return { applicable, notApplicable };
 }
@@ -270,7 +328,7 @@ export function resolveSpec(drivers, spec = ENV_SPEC) {
  */
 export function evaluateEnv(env, spec = ENV_SPEC) {
   const { drivers, errors: driverErrors, isDefault } = resolveDrivers(env);
-  const { applicable, notApplicable } = resolveSpec(drivers, spec);
+  const { applicable, notApplicable } = resolveSpec(drivers, spec, env);
 
   const rows = applicable.map((s) => {
     const raw = env[s.name];
