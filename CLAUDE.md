@@ -46,6 +46,9 @@ Each page has a distinct purpose. Use this framing to decide where new features 
 | **Directory** | `/directory` | MCP-server inventory | "What sources can I connect to?" |
 | **Roadmap** | `/roadmap` | Plans + commitments | "Where is this project going?" |
 | **Dashboard** | `/dashboard` | The user's own publishes | "Manage my evidence" |
+| **Ask** | `/ask` | The query form (signed-in) | "Answer a question against live data and publish it" |
+
+`/ask` is the signed-in query mount (app front-door v0.1.0): the same shared `QuerySurface` as home, in signed-in configuration — app-private in the host topology (`src/lib/host-routing.ts`), so it 404s on the marketing host and is where the app host's `/` redirects.
 
 (`/auth/device` is the device-flow pairing screen; `/dev/notebook-preview` is a dev-only preview harness, not user-facing.)
 
@@ -238,7 +241,7 @@ KV_REST_API_READ_ONLY_TOKEN=
 Deliberately a short orientation, not an exhaustive tree — the tree drifted badly once already. Verify against the filesystem when precision matters.
 
 - `src/app/(marketing)/` — the public pages: home (`page.tsx`), `/explore`, `/directory`, `/learn`, `/project`, `/about`, `/roadmap`
-- `src/app/(app)/` — dashboard, evidence, and auth surfaces: `/dashboard`, `/evidence`, `/auth/device`, plus the dev-only `/dev/notebook-preview`
+- `src/app/(app)/` — dashboard, evidence, auth, and the signed-in query surfaces: `/dashboard`, `/evidence`, `/ask`, `/auth/device`, plus the dev-only `/dev/notebook-preview`
 - `src/app/api/` — serverless routes: `compare`, `compare-stream`, `models`, `rate-limit`, `query-notebook`, plus the `evidence/*`, `blob/*`, `cron/*`, and `auth/*` route families
 - `src/lib/` — the major areas:
   - `evidence/` — evidence-system core: packaging, signing, verification, provenance, attestation, lifecycle
@@ -321,7 +324,8 @@ The `McpResponseDisplay` shared component is the canonical example — both `Res
 
 ### Prop threading for context
 Query text, progress state, and tool call data are threaded from page → wrapper → panel → shared component. Follow the existing prop chains when adding new data:
-- Home: `page.tsx → ComparisonDisplay → ResponsePanel → McpResponseDisplay`
+- Home: `page.tsx → QuerySurface → ComparisonDisplay → ResponsePanel → McpResponseDisplay`
+- Ask: `(app)/ask/page.tsx → QuerySurface → …` (same chain as home from `QuerySurface` down)
 - Explore: `McpFlowDiagram → LiveResponsePanel → McpResponseDisplay`
 
 ### styled-jsx for component-scoped CSS
