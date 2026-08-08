@@ -38,9 +38,19 @@ import { useSession } from 'next-auth/react';
  *
  * NOT A GATE. This component decides what to DISPLAY; it never decides who
  * may READ. The sprint's gate is at sign-in (`SIGN_IN_ALLOWLIST`, checked in
- * `callbacks.signIn`); host separation arrives in P3.
+ * `callbacks.signIn`); host separation lives in `src/middleware.ts` (P3).
+ *
+ * `publicSiteHref` is resolved server-side by the `(app)` layout via
+ * `resolvePublicSiteHref()` (src/lib/host-routing.ts): `/` on a single
+ * host, the marketing origin on a split-host deployment, and null on an
+ * app-only instance — null hides the link entirely, because an app-only
+ * instance HAS no public marketing site to exit to.
  */
-export default function AppChrome() {
+export default function AppChrome({
+  publicSiteHref = '/',
+}: {
+  publicSiteHref?: string | null;
+}) {
   const { data: session, status } = useSession();
   const pathname = usePathname();
 
@@ -86,15 +96,19 @@ export default function AppChrome() {
               Dashboard
             </Link>
           )}
-          {/* The way out. Relative on purpose: on a single host `/` is the
-              public site, and when P3 splits the hosts this one href is the
-              single place that becomes the apex origin. */}
-          <Link href="/" style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
-            Public site
-            <span aria-hidden="true" style={{ marginLeft: '4px', color: 'var(--text-muted)' }}>
-              &#8599;
-            </span>
-          </Link>
+          {/* The way out. Env-driven (P3): relative `/` on a single host,
+              the marketing origin when MARKETING_HOST splits the hosts,
+              absent entirely on an APP_ONLY instance. next/link treats an
+              absolute cross-origin href as a plain anchor navigation, so
+              one element covers both shapes. */}
+          {publicSiteHref !== null && (
+            <Link href={publicSiteHref} style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
+              Public site
+              <span aria-hidden="true" style={{ marginLeft: '4px', color: 'var(--text-muted)' }}>
+                &#8599;
+              </span>
+            </Link>
+          )}
         </span>
       </div>
     </div>

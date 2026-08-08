@@ -21,7 +21,18 @@ const DROPDOWN_ITEM_STYLE: React.CSSProperties = {
   fontWeight: 500,
 };
 
-export default function Header() {
+/**
+ * `dashboardHref` is env-driven (app front-door P3): the root layout passes
+ * `resolveDashboardHref()` so that on a split-host deployment — where the
+ * marketing host withholds `/dashboard` — the signed-in menu points at the
+ * app host instead of a 404. Default (and unset topology) is today's
+ * relative href, byte-identical.
+ */
+export default function Header({
+  dashboardHref = '/dashboard',
+}: {
+  dashboardHref?: string;
+}) {
   const { data: session, status } = useSession();
   const headerRef = useRef<HTMLElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -313,7 +324,7 @@ export default function Header() {
                   }}
                 >
                   <Link
-                    href="/dashboard"
+                    href={dashboardHref}
                     onClick={() => setUserMenuOpen(false)}
                     style={DROPDOWN_ITEM_STYLE}
                     onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
@@ -516,7 +527,7 @@ export default function Header() {
                 Your account
               </span>
               <Link
-                href="/dashboard"
+                href={dashboardHref}
                 onClick={() => setMobileMenuOpen(false)}
                 style={{
                   color: 'var(--text-secondary)',
