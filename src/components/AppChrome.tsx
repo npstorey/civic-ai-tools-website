@@ -38,7 +38,7 @@ import { useSession } from 'next-auth/react';
  *
  * NOT A GATE. This component decides what to DISPLAY; it never decides who
  * may READ. The sprint's gate is at sign-in (`SIGN_IN_ALLOWLIST`, checked in
- * `callbacks.signIn`); host separation lives in `src/middleware.ts` (P3).
+ * `callbacks.signIn`); host separation lives in `src/proxy.ts` (P3).
  *
  * `publicSiteHref` is resolved server-side by the `(app)` layout via
  * `resolvePublicSiteHref()` (src/lib/host-routing.ts): `/` on a single

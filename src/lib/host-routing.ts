@@ -1,7 +1,7 @@
 /**
  * Host-topology routing (app front-door v0.1.0, P3).
  *
- * Pure decision logic for which routes each HOST serves. `src/middleware.ts`
+ * Pure decision logic for which routes each HOST serves. `src/proxy.ts`
  * is a thin adapter over `decideRoute`; everything testable lives here, with
  * no Next.js imports so the module runs under `node --test` and in the edge
  * runtime alike.

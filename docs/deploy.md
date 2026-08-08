@@ -499,7 +499,7 @@ variables set the routing middleware passes every request through
 untouched. Set them to split the public face from the gated app
 surface, or to run an app-only instance with no public face at all.
 The decision logic lives in `src/lib/host-routing.ts` (unit-tested;
-`src/middleware.ts` is a thin adapter over it).
+`src/proxy.ts` is a thin adapter over it).
 
 | Variable | Meaning |
 | --- | --- |
