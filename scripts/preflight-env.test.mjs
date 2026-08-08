@@ -14,6 +14,7 @@ import {
   resolveSpec,
   ENV_SPEC,
   DRIVER_SEAMS,
+  OIDC_PROVIDER_SET,
 } from './preflight-env.mjs';
 
 const REQUIRED = ENV_SPEC.filter((s) => s.tier === 'required').map((s) => s.name);
@@ -261,6 +262,130 @@ test('an unrecognized selector value fails the run and is never echoed', () => {
   const report = renderReport(result);
   assert.ok(!report.includes('SENTINEL'), 'the offending value is never echoed');
   assert.match(report, /BLOB_DRIVER \(expected one of: vercel-blob, s3\)/);
+});
+
+// --- Alternative sets (sign-in providers; #193) -----------------------------
+
+/** The pair that gates the GitHub provider in src/lib/auth-providers.ts. */
+const GITHUB_PAIR = ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET'];
+
+/** Env with a complete generic-OIDC provider triple. */
+function withOidcProvider(env) {
+  const out = { ...env };
+  for (const name of OIDC_PROVIDER_SET) out[name] = 'present';
+  return out;
+}
+
+test('every requiredUnlessAllPresent names variables the spec itself declares', () => {
+  const declared = new Set(ENV_SPEC.map((s) => s.name));
+  for (const s of ENV_SPEC) {
+    if (!s.requiredUnlessAllPresent) continue;
+    assert.ok(Array.isArray(s.requiredUnlessAllPresent), `${s.name}.requiredUnlessAllPresent is a list`);
+    assert.ok(s.requiredUnlessAllPresent.length > 0, `${s.name}.requiredUnlessAllPresent is non-empty`);
+    // Demotion only makes sense from 'required' — anything else is a no-op
+    // that would silently mislead a reader of the spec.
+    assert.equal(s.tier, 'required', `${s.name} declares 'required' so the demotion is meaningful`);
+    for (const name of s.requiredUnlessAllPresent) {
+      assert.ok(declared.has(name), `${s.name} names a declared variable (${name})`);
+    }
+  }
+});
+
+test('the GitHub pair carries the OIDC alternative condition', () => {
+  for (const name of GITHUB_PAIR) {
+    const entry = ENV_SPEC.find((s) => s.name === name);
+    assert.deepEqual(entry.requiredUnlessAllPresent, OIDC_PROVIDER_SET);
+  }
+});
+
+test('REGRESSION: an incomplete OIDC triple leaves the GitHub pair required', () => {
+  // Every strict subset of the triple, plus none of it at all.
+  const partials = [
+    {},
+    { OIDC_ISSUER: 'present' },
+    { OIDC_ISSUER: 'present', OIDC_CLIENT_ID: 'present' },
+    { OIDC_CLIENT_ID: 'present', OIDC_CLIENT_SECRET: 'present' },
+  ];
+  for (const partial of partials) {
+    const env = { ...envWithAllRequired(), ...partial };
+    for (const name of GITHUB_PAIR) delete env[name];
+    const result = evaluateEnv(env);
+    const which = JSON.stringify(Object.keys(partial));
+    for (const name of GITHUB_PAIR) {
+      assert.equal(tierOf(result.rows, name), 'required', `${name} stays required for ${which}`);
+    }
+    assert.equal(result.ok, false, `an instance with no working provider fails for ${which}`);
+    assert.deepEqual(result.missingRequired.map((r) => r.name).sort(), [...GITHUB_PAIR].sort());
+  }
+});
+
+test('a complete OIDC triple demotes the GitHub pair to optional and passes without it', () => {
+  const env = withOidcProvider(envWithAllRequired());
+  for (const name of GITHUB_PAIR) delete env[name];
+
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, true, 'an OIDC-only instance has a working provider and must pass');
+  for (const name of GITHUB_PAIR) {
+    assert.equal(tierOf(result.rows, name), 'optional', `${name} is optional for an OIDC-only instance`);
+  }
+  // Demoted to 'optional', NOT 'recommended': an absent GitHub pair on an
+  // OIDC-only instance is a configuration choice, not a degraded feature, so
+  // it must not appear in the "feature(s) will degrade" note.
+  assert.ok(!result.missingRecommended.some((r) => GITHUB_PAIR.includes(r.name)));
+  const report = renderReport(result);
+  // The degrade note exists (other recommended vars are absent in this env);
+  // what matters is that neither GitHub variable is named inside it.
+  const degradeNote = report.slice(report.indexOf('will degrade'));
+  for (const name of GITHUB_PAIR) {
+    assert.ok(!degradeNote.includes(name), `${name} is not nagged about as a degraded feature`);
+  }
+  // Still listed in the table, so the operator can see GitHub remains
+  // available to add alongside OIDC.
+  assert.match(report, /GITHUB_CLIENT_ID/);
+});
+
+test('the demotion is presence-driven, not order-driven: whitespace-only OIDC vars do not count', () => {
+  const env = { ...envWithAllRequired(), ...withOidcProvider({}) };
+  env.OIDC_CLIENT_SECRET = '   '; // present-but-blank is absent everywhere else too
+  for (const name of GITHUB_PAIR) delete env[name];
+
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, false);
+  for (const name of GITHUB_PAIR) {
+    assert.equal(tierOf(result.rows, name), 'required');
+  }
+});
+
+test('REGRESSION: resolveSpec without an env argument never demotes (identity preserved)', () => {
+  const { drivers } = resolveDrivers({});
+  const { applicable } = resolveSpec(drivers); // no env passed
+  assert.deepEqual(applicable, ENV_SPEC);
+});
+
+// --- The app front door's two new knobs -------------------------------------
+
+test('the sign-in gate and app-tier knobs are optional with coded fallbacks', () => {
+  // Both reproduce today's behavior when unset — SIGN_IN_ALLOWLIST leaves
+  // sign-in open, APP_TIER_RATE_LIMIT falls back to the authenticated limit —
+  // so neither may ever fail or nag a run.
+  for (const name of ['SIGN_IN_ALLOWLIST', 'APP_TIER_RATE_LIMIT']) {
+    const entry = ENV_SPEC.find((s) => s.name === name);
+    assert.ok(entry, `${name} is enumerated`);
+    assert.equal(entry.tier, 'optional', `${name} is optional`);
+    assert.equal(entry.hasFallback, true, `${name} has a coded fallback`);
+  }
+  const result = evaluateEnv(envWithAllRequired()); // both absent
+  assert.equal(result.ok, true);
+  assert.ok(!result.missingRecommended.some((r) => r.name === 'SIGN_IN_ALLOWLIST'));
+  assert.ok(!result.missingRecommended.some((r) => r.name === 'APP_TIER_RATE_LIMIT'));
+});
+
+test('a configured allowlist is never echoed — only the variable name', () => {
+  const env = { ...envWithAllRequired(), SIGN_IN_ALLOWLIST: '4242,oidc:https://idp.example.org:SENTINEL' };
+  const report = renderReport(evaluateEnv(env));
+  assert.ok(!report.includes('SENTINEL'), 'allowlist entries are identities — never printed');
+  assert.ok(!report.includes('4242'));
+  assert.ok(report.includes('SIGN_IN_ALLOWLIST'));
 });
 
 test('the durable rate-limit counter is soft: absent, the run still passes', () => {
