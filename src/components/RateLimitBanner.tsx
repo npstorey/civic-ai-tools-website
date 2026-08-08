@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { signIn, useSession } from 'next-auth/react';
+import { useHostLinks } from '@/components/HostLinksProvider';
 
 interface RateLimitInfo {
   remaining: number;
@@ -16,6 +17,9 @@ interface RateLimitBannerProps {
 
 export default function RateLimitBanner({ refreshTrigger = 0 }: RateLimitBannerProps) {
   const { data: session } = useSession();
+  // P4c: null when no host topology is configured — the button below stays
+  // an in-place sign-in, exactly as today. See src/lib/host-links.ts.
+  const { signInHref } = useHostLinks();
   const [rateLimit, setRateLimit] = useState<RateLimitInfo | null>(null);
 
   useEffect(() => {
@@ -68,6 +72,21 @@ export default function RateLimitBanner({ refreshTrigger = 0 }: RateLimitBannerP
         {!rateLimit.authenticated && !session && (
           <span style={{ marginLeft: '4px' }}>
             ·{' '}
+            {signInHref !== null ? (
+              /* Split topology (P4c): a link to the app surface's sign-in
+                 panel. An in-place OAuth start cannot complete from the
+                 marketing host — the session lives on the app host. */
+              <a
+                href={signInHref}
+                style={{
+                  color: 'var(--nyc-blue-40)',
+                  textDecoration: 'underline',
+                  fontSize: 'inherit',
+                }}
+              >
+                Sign in for a higher daily limit
+              </a>
+            ) : (
             <button
               onClick={() => signIn('github')}
               style={{
@@ -82,6 +101,7 @@ export default function RateLimitBanner({ refreshTrigger = 0 }: RateLimitBannerP
             >
               Sign in for 25/day
             </button>
+            )}
           </span>
         )}
       </span>

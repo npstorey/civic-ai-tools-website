@@ -5,7 +5,9 @@ import './globals.css';
 import Link from 'next/link';
 import Providers from '@/components/Providers';
 import Header from '@/components/Header';
+import { HostLinksProvider } from '@/components/HostLinksProvider';
 import { resolveDashboardHref } from '@/lib/host-routing';
+import { resolveHostLinks } from '@/lib/host-links';
 import RunningUnsignedBanner from '@/components/RunningUnsignedBanner';
 import SponsorLine from '@/components/SponsorLine';
 
@@ -50,6 +52,15 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  /**
+   * Cross-host link targets (P4c), derived once per render from the
+   * environment — never from the request's host, which would force every
+   * static marketing page to render dynamically. Unset topology resolves to
+   * an empty marketing prefix and a null sign-in href: today's exact links
+   * and today's in-place sign-in.
+   */
+  const hostLinks = resolveHostLinks(process.env);
+
   return (
     <html lang="en">
       {GA_MEASUREMENT_ID && (
@@ -70,11 +81,20 @@ export default function RootLayout({
       )}
       <body className={`${spaceGrotesk.variable} ${notoSans.variable}`}>
         <Providers>
+          <HostLinksProvider value={hostLinks}>
           <div className="flex flex-col">
             {/* Env-driven (P3): on a split-host topology the marketing host
                 withholds /dashboard, so the signed-in menu must carry the
-                app origin. Unset topology resolves to '/dashboard'. */}
-            <Header dashboardHref={resolveDashboardHref(process.env)} />
+                app origin. Unset topology resolves to '/dashboard'.
+                `marketingOrigin`/`signInHref` are P4c's equivalents for the
+                nav links and the sign-in button — props here because the
+                layout renders Header directly; the components deeper inside
+                the page read the same values from HostLinksProvider. */}
+            <Header
+              dashboardHref={resolveDashboardHref(process.env)}
+              marketingOrigin={hostLinks.marketingOrigin}
+              signInHref={hostLinks.signInHref}
+            />
             {/* ADR-0020: running-unsigned indicator — renders only when this
                 instance has no signing key AND is outside a dev environment. */}
             <RunningUnsignedBanner />
@@ -86,12 +106,21 @@ export default function RootLayout({
                 </p>
                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '8px 0 0 0' }}>
                   <a href="https://github.com/npstorey/civic-ai-tools" target="_blank" rel="noopener noreferrer">GitHub</a>
-                  {' \u00b7 '}
-                  <Link href="/learn">Learn</Link>
-                  {' \u00b7 '}
-                  <Link href="/about">About</Link>
-                  {' \u00b7 '}
-                  <Link href="/roadmap">Roadmap</Link>
+                  {/* Marketing routes (P4c): prefixed with the marketing
+                      origin on a split host so they resolve from the app
+                      host too, exactly relative when nothing is configured,
+                      and omitted entirely on an app-only instance \u2014 which
+                      has no marketing site for them to point at. */}
+                  {hostLinks.marketingOrigin !== null && (
+                    <>
+                      {' \u00b7 '}
+                      <Link href={`${hostLinks.marketingOrigin}/learn`}>Learn</Link>
+                      {' \u00b7 '}
+                      <Link href={`${hostLinks.marketingOrigin}/about`}>About</Link>
+                      {' \u00b7 '}
+                      <Link href={`${hostLinks.marketingOrigin}/roadmap`}>Roadmap</Link>
+                    </>
+                  )}
                   {' \u00b7 '}
                   <a href="https://github.com/npstorey/civic-ai-tools/issues/new?template=suggest-server.yml&labels=directory-submission" target="_blank" rel="noopener noreferrer">Suggest a Server</a>
                 </p>
@@ -103,6 +132,7 @@ export default function RootLayout({
               </div>
             </footer>
           </div>
+          </HostLinksProvider>
         </Providers>
       </body>
     </html>

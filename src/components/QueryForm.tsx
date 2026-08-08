@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { signIn, useSession } from 'next-auth/react';
+import { useHostLinks } from '@/components/HostLinksProvider';
 import RateLimitBanner from './RateLimitBanner';
 
 interface Model {
@@ -88,6 +89,10 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
   // 'standard' when the user is not authenticated.
   const { status: authStatus } = useSession();
   const isAuthenticated = authStatus === 'authenticated';
+  // Where sign-in should go (P4c). Null on an instance with no host
+  // topology configured — then the affordance below stays in place, exactly
+  // as it is today. See src/lib/host-links.ts.
+  const { signInHref } = useHostLinks();
   const [mode, updateMode] = useStoredMode(isAuthenticated);
   const [models, setModels] = useState<Model[]>([]);
   const [modelOpen, setModelOpen] = useState(false);
@@ -367,11 +372,27 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
                 <div style={{ marginBottom: '6px', fontWeight: 500, color: 'var(--text-primary)' }}>
                   Sign in to execute in a signed sandbox
                 </div>
+                {/* One expression, not a sentence split around a ternary:
+                    two adjacent text children would make React emit comment
+                    separators, and the unset case must stay byte-identical. */}
                 <p style={{ margin: '0 0 10px' }}>
-                  Executed-sandbox mode generates and runs a Jupyter notebook
-                  against live data, then signs the execution record. Sign in
-                  with GitHub to enable.
+                  {signInHref !== null
+                    ? 'Executed-sandbox mode generates and runs a Jupyter notebook against live data, then signs the execution record. Sign in to enable.'
+                    : 'Executed-sandbox mode generates and runs a Jupyter notebook against live data, then signs the execution record. Sign in with GitHub to enable.'}
                 </p>
+                {signInHref !== null ? (
+                  /* Split topology (P4c): sign-in lives on the app surface,
+                     so this is a link rather than an in-place OAuth start —
+                     which could not complete from this host anyway. No
+                     loading state: the destination decides server-side. */
+                  <a
+                    href={signInHref}
+                    className="nyc-button nyc-button-primary"
+                    style={{ fontSize: '13px', padding: '6px 14px', textDecoration: 'none' }}
+                  >
+                    Sign in
+                  </a>
+                ) : (
                 <button
                   type="button"
                   onClick={() => signIn('github')}
@@ -385,6 +406,7 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
                 >
                   {authStatus === 'loading' ? 'Loading…' : 'Sign in with GitHub'}
                 </button>
+                )}
               </div>
             )}
           </div>
