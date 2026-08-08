@@ -14,11 +14,11 @@
  * Configuration (all optional; host names are env-driven, never literals):
  *
  * - `APP_HOST` — the host that serves the gated `(app)` surface. On it,
- *   `/` redirects to `/evidence` (interim — see APP_ROOT_ACTION), the
- *   marketing routes 404, and the full `(app)` group serves.
+ *   `/` redirects to the query surface at `/ask` (see APP_ROOT_ACTION),
+ *   the marketing routes 404, and the full `(app)` group serves.
  * - `MARKETING_HOST` — the host that serves the marketing face and the
  *   public evidence registry. On it, the app-private routes
- *   (`/dashboard`, `/auth/device`, `/dev/notebook-preview`) 404;
+ *   (`/ask`, `/dashboard`, `/auth/device`, `/dev/notebook-preview`) 404;
  *   everything else serves byte-identically to a single-host deployment.
  * - `APP_ONLY` — `1`/`true`: a single-host instance that deploys ONLY the
  *   gated surface (no marketing site). Every request, on every host, gets
@@ -72,22 +72,34 @@ const SERVE: RouteAction = { kind: 'serve' };
 const WITHHOLD: RouteAction = { kind: 'withhold' };
 
 /**
- * What the app host serves at `/`. P4 claims `/` for the signed-in query
- * mount; until then, a temporary redirect into the `(app)` group so the
- * root is never a marketing page on the gated surface. P4's change is this
- * one constant (e.g. swap in a rewrite once an `(app)` route owns the
- * mount). 307, not 308: browsers cache permanent redirects; this is not one.
+ * What the app host serves at `/` — the app surface's front door. P4
+ * claimed the seam P3 left here: the destination is now `/ask`, the
+ * signed-in query mount (`src/app/(app)/ask/page.tsx`), rather than P3's
+ * interim `/evidence`.
  *
- * `/evidence`, NOT `/dashboard`, and the choice is load-bearing: the
- * dashboard bounces signed-out visitors back to `/` (`redirect('/')` in
- * dashboard/page.tsx), so `/` → `/dashboard` would be a redirect LOOP for
- * anyone without a valid session — every anonymous visitor, and every
- * returning visitor after a NEXTAUTH_SECRET rotation. The evidence index
- * never redirects, serves publicly on the app surface by design, and a
- * signed-in visitor gets the AppChrome strip there with Dashboard one
- * click away.
+ * REDIRECT, NOT REWRITE, and the reasoning is recorded because both were
+ * available. A rewrite would make `/` itself BE the query surface, which
+ * reads well in a URL bar; it would also give the same content two
+ * addresses on the same host (`/` and `/ask`), invisibly — nothing in the
+ * response says the proxy substituted a route, so "why does the root
+ * render the query page?" becomes unanswerable without reading this file.
+ * A redirect is one visible hop (`curl -I` shows it), leaves exactly one
+ * canonical URL for the surface, needs no new RouteAction kind, and keeps
+ * the proxy adapter untouched. 307, not 308: browsers cache permanent
+ * redirects; this is not one.
+ *
+ * NO LOOP, and the property is load-bearing rather than incidental. The
+ * destination must be a path this same function SERVES on the app host,
+ * and whose page does not itself redirect a signed-out visitor. `/ask`
+ * satisfies both: it is app-private (served here, withheld on the
+ * marketing host), and it renders a sign-in prompt in place for anonymous
+ * visitors instead of bouncing them. That is why the target is not
+ * `/dashboard` — the dashboard does `redirect('/')` without a session, so
+ * `/` → `/dashboard` → `/` would loop for every anonymous visitor. The
+ * signed-out chain on the app host now terminates in one render:
+ * `/dashboard` → `/` → `/ask` → sign-in prompt (200).
  */
-const APP_ROOT_ACTION: RouteAction = { kind: 'redirect', destination: '/evidence' };
+export const APP_ROOT_ACTION: RouteAction = { kind: 'redirect', destination: '/ask' };
 
 /**
  * Route classes, matched by first path segment(s). Derived from the route
@@ -105,8 +117,16 @@ export const MARKETING_PATHS = [
   '/roadmap',
 ] as const;
 
-/** The `(app)`-private routes the marketing host withholds. */
+/**
+ * The `(app)`-private routes the marketing host withholds.
+ *
+ * `/ask` is the signed-in query mount (P4). It is app-private rather than
+ * dual-served because the apex already has its own query surface at `/` in
+ * anonymous demo configuration — a second, signed-in copy of it on the
+ * public face would be two front doors to the same thing.
+ */
 export const APP_PRIVATE_PATHS = [
+  '/ask',
   '/dashboard',
   '/auth/device',
   '/dev/notebook-preview',

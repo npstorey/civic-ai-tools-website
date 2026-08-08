@@ -503,8 +503,8 @@ The decision logic lives in `src/lib/host-routing.ts` (unit-tested;
 
 | Variable | Meaning |
 | --- | --- |
-| `APP_HOST` | The host that serves the gated app surface. On it, `/` temporarily redirects to `/evidence` (a later release mounts the signed-in query surface at `/`; the dashboard is not the target because it bounces signed-out visitors back to `/`, which would loop), the marketing pages return 404, and the dashboard, device pairing, and evidence routes all serve. |
-| `MARKETING_HOST` | The host that serves the public face. On it, the marketing pages and the public evidence registry serve exactly as on a single host, and the app-private routes — `/dashboard`, `/auth/device`, `/dev/notebook-preview` — return 404. |
+| `APP_HOST` | The host that serves the gated app surface. On it, `/` redirects (307) to `/ask` — the signed-in query surface — the marketing pages return 404, and `/ask`, the dashboard, device pairing, and evidence routes all serve. |
+| `MARKETING_HOST` | The host that serves the public face. On it, the marketing pages and the public evidence registry serve exactly as on a single host, and the app-private routes — `/ask`, `/dashboard`, `/auth/device`, `/dev/notebook-preview` — return 404. |
 | `APP_ONLY` | `1` or `true`: an app-only instance. Every request on every host gets the app-surface behavior above; `APP_HOST`/`MARKETING_HOST` are ignored. For operators deploying only the gated surface, with no marketing site. |
 
 Values are host names (`app.example.org`); a full origin
@@ -526,7 +526,9 @@ internalizing:
 - **Withholding is topology, not security.** The 404s shape which host
   presents which surface; access control is sign-in
   (`SIGN_IN_ALLOWLIST`) and the per-route session checks, which apply
-  identically on every host.
+  identically on every host. `/ask` is the visible case: a signed-out
+  visitor gets a sign-in prompt there rather than a redirect, on any
+  host that serves it.
 
 Two split-host interactions to plan for: `NEXTAUTH_URL` can point at
 only one host, and sessions are per-host cookies — decide which host
