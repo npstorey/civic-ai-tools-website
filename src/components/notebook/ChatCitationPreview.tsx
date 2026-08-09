@@ -19,6 +19,7 @@
  */
 import { useSession } from 'next-auth/react';
 import { useState } from 'react';
+import { useBrandName } from '@/components/BrandProvider';
 
 interface ChatCitationPreviewProps {
   prompt: string;
@@ -44,9 +45,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function deriveTitle(prompt: string): string {
+function deriveTitle(prompt: string, brandName: string): string {
   const trimmed = prompt.trim();
-  if (trimmed.length === 0) return 'Civic AI Tools Evidence Package';
+  if (trimmed.length === 0) return `${brandName} Evidence Package`;
   // Use the first sentence-ish chunk, capped.
   const firstChunk = trimmed.split(/[?.!\n]/)[0]?.trim() || trimmed;
   if (firstChunk.length <= 100) return firstChunk;
@@ -56,6 +57,9 @@ function deriveTitle(prompt: string): string {
 export default function ChatCitationPreview({ prompt, executedAt, structuredSummary }: ChatCitationPreviewProps) {
   const { data: session } = useSession();
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  // Instance display name (#217) via BrandProvider (root layout) — this
+  // component sits deep in a 'use client' tree, so context, not props.
+  const brandName = useBrandName();
 
   const creatorName = session?.user?.name || 'Anonymous';
   const date = executedAt ? new Date(executedAt) : new Date();
@@ -67,7 +71,7 @@ export default function ChatCitationPreview({ prompt, executedAt, structuredSumm
   // title heuristic.
   const title = structuredSummary?.analysisDescription
     ? structuredSummary.analysisDescription.replace(/[.!?]+$/, '')
-    : deriveTitle(prompt);
+    : deriveTitle(prompt, brandName);
   const placeholderUrl = 'https://civicaitools.org/evidence/(URL assigned at publish)';
 
   const headlineSuffix = structuredSummary?.headlineFinding
@@ -76,7 +80,7 @@ export default function ChatCitationPreview({ prompt, executedAt, structuredSumm
   const citations = [
     {
       label: 'Plain text',
-      text: `${creatorName} (${year}). "${title}." Civic AI Tools Evidence Package. ${placeholderUrl}. Published: (date assigned at publish).${headlineSuffix}`,
+      text: `${creatorName} (${year}). "${title}." ${brandName} Evidence Package. ${placeholderUrl}. Published: (date assigned at publish).${headlineSuffix}`,
     },
     {
       label: 'For deliberative process reference',

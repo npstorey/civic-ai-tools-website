@@ -85,11 +85,11 @@ const tabStyle = (isActive: boolean): CSSProperties => ({
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
     unverified: { bg: 'rgba(0,0,0,0.06)', text: 'var(--text-muted)' },
-    consistency_tested: { bg: 'rgba(16, 63, 239, 0.1)', text: 'var(--nyc-blue)' },
+    consistency_tested: { bg: 'rgba(var(--accent-rgb), 0.1)', text: 'var(--nyc-blue)' },
     evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--nyc-success)' },
     fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--nyc-success)' },
     withdrawn: { bg: 'rgba(236, 19, 30, 0.08)', text: 'var(--nyc-error)' },
-    sealed: { bg: 'rgba(16, 63, 239, 0.08)', text: 'var(--nyc-blue)' },
+    sealed: { bg: 'rgba(var(--accent-rgb), 0.08)', text: 'var(--nyc-blue)' },
   };
   const c = colors[status] || colors.unverified;
   return (
@@ -109,7 +109,7 @@ function TypeBadge({ type }: { type: string }) {
     <span style={{
       display: 'inline-block', padding: '2px 8px', borderRadius: '10px',
       fontSize: '11px', fontWeight: 600,
-      backgroundColor: isConsistency ? 'rgba(16, 63, 239, 0.1)' : 'rgba(0, 183, 3, 0.1)',
+      backgroundColor: isConsistency ? 'rgba(var(--accent-rgb), 0.1)' : 'rgba(0, 183, 3, 0.1)',
       color: isConsistency ? 'var(--nyc-blue)' : 'var(--nyc-success)',
       textTransform: 'capitalize',
     }}>
@@ -713,7 +713,7 @@ function TokensTab({ rows }: { rows: TokenRow[] }) {
                   <span style={{
                     display: 'inline-block', padding: '2px 8px', borderRadius: '10px',
                     fontSize: '11px', fontWeight: 600,
-                    backgroundColor: 'rgba(16, 63, 239, 0.1)', color: 'var(--nyc-blue)',
+                    backgroundColor: 'rgba(var(--accent-rgb), 0.1)', color: 'var(--nyc-blue)',
                   }}>
                     {t.scope}
                   </span>

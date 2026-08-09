@@ -51,7 +51,7 @@ function SpeedSelector({ speed, onSetSpeed }: { speed: PlaybackSpeed; onSetSpeed
               ? '1px solid var(--nyc-blue-40)'
               : '1px solid var(--border-color)',
             background: s === speed
-              ? 'rgba(16, 63, 239, 0.1)'
+              ? 'rgba(var(--accent-rgb), 0.1)'
               : 'var(--background)',
             color: s === speed
               ? 'var(--nyc-blue-40)'
@@ -378,8 +378,8 @@ export default function TraceControls({
                     ? {
                         color: 'var(--nyc-blue-40)',
                         padding: '8px 12px',
-                        background: 'rgba(16, 63, 239, 0.06)',
-                        border: '1px solid rgba(16, 63, 239, 0.15)',
+                        background: 'rgba(var(--accent-rgb), 0.06)',
+                        border: '1px solid rgba(var(--accent-rgb), 0.15)',
                         borderRadius: '4px',
                       }
                     : {

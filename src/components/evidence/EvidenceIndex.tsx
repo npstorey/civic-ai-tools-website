@@ -47,7 +47,7 @@ const SORT_OPTIONS = [
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
     unverified: { bg: 'rgba(0,0,0,0.06)', text: 'var(--text-muted)' },
-    consistency_tested: { bg: 'rgba(16, 63, 239, 0.1)', text: 'var(--nyc-blue)' },
+    consistency_tested: { bg: 'rgba(var(--accent-rgb), 0.1)', text: 'var(--nyc-blue)' },
     evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--nyc-success)' },
     fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--nyc-success)' },
     withdrawn: { bg: 'rgba(236, 19, 30, 0.08)', text: 'var(--nyc-error)' },
@@ -219,7 +219,7 @@ export default function EvidenceIndex() {
                   }}
                   onMouseOver={(e) => {
                     e.currentTarget.style.borderColor = 'var(--nyc-blue)';
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 63, 239, 0.1)';
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(var(--accent-rgb), 0.1)';
                   }}
                   onMouseOut={(e) => {
                     e.currentTarget.style.borderColor = 'var(--border-color)';

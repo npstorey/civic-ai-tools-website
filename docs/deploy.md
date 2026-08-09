@@ -396,7 +396,11 @@ doesn't):
 (`EVIDENCE_SITE_ORIGIN`, `EVIDENCE_SIGNER_*`, `EVIDENCE_PLATFORM_AGENT_*`,
 `EVIDENCE_PUBLICATION_HOST`, the registry-URL overrides — with none set,
 the demo deployment's values are emitted; see
-[`docs/instance-setup.md`](instance-setup.md)), `OIDC_PROVIDER_NAME`
+[`docs/instance-setup.md`](instance-setup.md)), the chrome-branding set
+(`SITE_BRAND_NAME`, `SITE_BRAND_ACCENT`, `SITE_BRAND_TAGLINE`,
+`SITE_BRAND_ATTRIBUTION` — with none set, the demo chrome renders
+byte-identically; see [Branding and
+theming](#branding-and-theming-chrome-only) below), `OIDC_PROVIDER_NAME`
 (button label), `SIGN_IN_ALLOWLIST` (unset or empty = open sign-in,
 exactly the pre-allowlist behavior; see the sign-in section),
 the host-topology set (`APP_HOST`, `MARKETING_HOST`, `APP_ONLY` — with
@@ -413,6 +417,36 @@ defaults described in the storage section), and analytics
 One build-time caveat: `NEXT_PUBLIC_*` values are inlined into client
 bundles at build time. They belong to the image build, not to `docker
 compose up` — a pass-through at run time cannot change them.
+
+### Branding and theming (chrome only)
+
+Four variables rebrand the site chrome — and only the chrome. Nothing
+here touches emitted evidence: the values that name your instance
+*inside signed packages* are the `EVIDENCE_*` set
+([`docs/instance-setup.md`](instance-setup.md)), and the two sets are
+read independently so a chrome change can never invalidate a package or
+a registry cross-check. All four resolve in
+[`src/lib/brand-config.ts`](../src/lib/brand-config.ts); with none set,
+the demo chrome renders byte-identically.
+
+| Variable | Meaning | Default |
+| --- | --- | --- |
+| `SITE_BRAND_NAME` | Display name in chrome: the header wordmark, the page `<title>`s, and the "… Evidence Package" citation labels. Prose *about* the reference project (the About/Project pages) is content, not chrome, and does not follow this variable. | `Civic AI Tools` |
+| `SITE_BRAND_ACCENT` | Accent color as `#rgb`/`#rrggbb`. Overrides the accent tokens (`--accent` and companions in `src/app/globals.css`) via one inline style on `<html>`; every accent-colored surface follows, including the aliased NYC-palette names. The darker hover and lighter fill companions are derived from this one value. Invalid values are ignored — the stylesheet default renders. Semantic status colors (success green, caution amber, error red) are governed by `docs/design-principles.md` and are deliberately NOT themable. | the NYC blue `#103FEF` |
+| `SITE_BRAND_TAGLINE` | The footer's first identity line. | the demo tagline |
+| `SITE_BRAND_ATTRIBUTION` | The footer's attribution line, as plain text (replaces the demo deployment's authored line, which carries a hyperlink). The footer's repo links and the sponsor line are not part of this seam. | the demo attribution |
+
+Set these **in the build environment as well as at run time**.
+Statically prerendered pages bake their chrome at `next build` (the
+same server-side seam behavior as the host-topology variables), while
+dynamic pages read the runtime environment — with the variables present
+in both, every page agrees. None of these are `NEXT_PUBLIC_*`, and none
+may become so: client inlining is exactly what would break runtime
+container configuration for the dynamic pages.
+
+The favicon is a file, not a variable: replace
+[`src/app/favicon.ico`](../src/app/favicon.ico) in your checkout (the
+App Router serves it at `/favicon.ico`) and rebuild.
 
 ## Sign-in configuration
 

@@ -202,7 +202,7 @@ function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
   });
 
   const typeBadge = attestation.type === 'consistency'
-    ? { label: 'Consistency Test', bg: 'rgba(16, 63, 239, 0.1)', color: 'var(--nyc-blue)' }
+    ? { label: 'Consistency Test', bg: 'rgba(var(--accent-rgb), 0.1)', color: 'var(--nyc-blue)' }
     : { label: 'Evaluation', bg: 'rgba(0, 183, 3, 0.1)', color: 'var(--nyc-success)' };
 
   return (

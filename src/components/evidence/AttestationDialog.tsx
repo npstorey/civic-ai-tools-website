@@ -376,7 +376,7 @@ export default function AttestationDialog({
         {requiresApiKey && (
           <>
             <div style={{
-              padding: '10px 14px', backgroundColor: 'rgba(16, 63, 239, 0.04)',
+              padding: '10px 14px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
               borderRadius: '4px', fontSize: '12px', color: 'var(--text-secondary)',
               marginBottom: '16px', lineHeight: 1.5,
             }}>

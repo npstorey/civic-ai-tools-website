@@ -449,7 +449,7 @@ export default function McpResponseDisplay({
           <div
             style={{
               borderLeft: '3px solid var(--nyc-blue)',
-              backgroundColor: 'rgba(16, 63, 239, 0.04)',
+              backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
               padding: '8px 12px',
               marginBottom: '16px',
               fontSize: '15px',
@@ -816,7 +816,7 @@ export default function McpResponseDisplay({
                   <a
                     href={signInHref}
                     style={{ ...PUBLISH_BUTTON_STYLE, textDecoration: 'none' }}
-                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(16, 63, 239, 0.06)'; }}
+                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(var(--accent-rgb), 0.06)'; }}
                     onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                   >
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
@@ -836,7 +836,7 @@ export default function McpResponseDisplay({
                     }
                   }}
                   style={PUBLISH_BUTTON_STYLE}
-                  onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(16, 63, 239, 0.06)'; }}
+                  onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(var(--accent-rgb), 0.06)'; }}
                   onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                 >
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">

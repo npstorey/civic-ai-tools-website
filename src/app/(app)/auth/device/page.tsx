@@ -4,11 +4,12 @@ import { authOptions } from '@/lib/auth';
 import { normalizeUserCode } from '@/lib/device-flow';
 import DeviceApprovalPanel from './DeviceApprovalPanel';
 import DeviceSignInPanel from './DeviceSignInPanel';
+import { getBrandName } from '@/lib/brand-config';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Authorize device - Civic AI Tools',
+  title: `Authorize device - ${getBrandName()}`,
   description: 'Authorize a CLI or external client to publish evidence on your behalf.',
 };
 

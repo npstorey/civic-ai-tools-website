@@ -96,7 +96,7 @@ function AudienceCardTile({ card }: { card: AudienceCard }) {
   const linkStyle: React.CSSProperties = {
     fontSize: '14px',
     fontWeight: 500,
-    color: 'var(--nyc-blue, #103FEF)',
+    color: 'var(--nyc-blue)',
     textDecoration: 'none',
   };
   const arrow = ' →';

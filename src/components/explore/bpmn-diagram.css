@@ -24,7 +24,7 @@
 
 /* Active flow */
 .bpmn-active-flow .djs-visual > path {
-  stroke: var(--nyc-blue-40, #103FEF) !important;
+  stroke: var(--nyc-blue-40) !important;
   stroke-width: 3px !important;
   transition: all 0.3s ease;
 }
@@ -98,7 +98,7 @@
 
 .bpmn-overlay .iteration-badge {
   display: inline-block;
-  background: var(--nyc-blue-40, #103FEF);
+  background: var(--nyc-blue-40);
   color: white;
   font-size: 20px;
   font-weight: 700;
@@ -170,8 +170,8 @@
 
 .bpmn-zoom-controls button:hover {
   background: var(--card-background, #eee);
-  border-color: var(--nyc-blue-40, #103FEF);
-  color: var(--nyc-blue-40, #103FEF);
+  border-color: var(--nyc-blue-40);
+  color: var(--nyc-blue-40);
 }
 
 .bpmn-zoom-level {

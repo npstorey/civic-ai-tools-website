@@ -2,15 +2,37 @@
 
 /* NYC Design System Color Palette */
 :root {
+  /* Accent tokens — the operator-facing theming seam (#217).
+     These four are the ONLY color tokens an instance is ever told to change,
+     and they are set through configuration (SITE_BRAND_ACCENT → an inline
+     style on <html> in the root layout), not by editing this file. The
+     values here are the reference deployment's NYC-palette defaults; with no
+     brand configuration the rendered output is byte-identical to before the
+     seam existed.
+     --accent-rgb is --accent's channel triplet. The pair MUST stay in
+     lockstep: rgba(var(--accent-rgb), α) is the sanctioned form for every
+     translucent accent (no hardcoded rgba(16, 63, 239, …) call sites), and
+     the runtime override always writes all four properties from one
+     configured value (src/lib/brand-config.ts derives the companions), so a
+     configured instance cannot drift either. */
+  --accent: #103FEF;
+  --accent-rgb: 16, 63, 239;
+  --accent-hover: #050560;
+  --accent-light: #B5DBFF;
+
   /* Primary Brand Colors */
   --nyc-black: #000000;
   --nyc-white: #FFFFFF;
-  --nyc-blue-40: #103FEF;
-  --nyc-blue: #103FEF;
+  /* Accent-family NYC names — aliased to the neutral tokens above (#217) so
+     every existing --nyc-* reference keeps resolving to the same computed
+     value. New code and operators use the neutral names; the wholesale
+     reference migration is #220's, not this seam's. */
+  --nyc-blue-40: var(--accent);
+  --nyc-blue: var(--accent);
 
   /* Interactive State Colors */
-  --nyc-blue-80: #B5DBFF;
-  --nyc-blue-10: #050560;
+  --nyc-blue-80: var(--accent-light);
+  --nyc-blue-10: var(--accent-hover);
 
   /* Foreground Colors (Text & Elements) */
   --nyc-gray-20: #333333;
@@ -44,9 +66,8 @@
   --text-secondary: var(--nyc-gray-20);
   --text-muted: #757575;
   --border-color: var(--nyc-gray-80);
-  --accent: var(--nyc-blue-40);
-  --accent-hover: var(--nyc-blue-10);
-  --accent-light: var(--nyc-blue-80);
+  /* --accent / --accent-hover / --accent-light are defined at the top of
+     this block (#217) — they are the settable seam now, not applied aliases. */
   --card-background: var(--nyc-gray-90);
   --skeleton-color: var(--nyc-gray-80);
 }
@@ -508,7 +529,7 @@ footer a:visited {
 /* About page query suggestion cards */
 .query-suggestion-card:hover {
   border-color: var(--nyc-blue-40);
-  background-color: rgba(16, 63, 239, 0.03);
+  background-color: rgba(var(--accent-rgb), 0.03);
 }
 
 .query-suggestion-card:visited {
