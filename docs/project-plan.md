@@ -1,5 +1,7 @@
 # civic-ai-tools-website Project Plan
 
+> **Historical — superseded.** This plan dates from the pre-launch phase (last revised 2026-03-08) and is retained for context, not as current direction. Current scope lives in GitHub issues and sprint docs; the current architecture is described in [`../README.md`](../README.md) and [`deploy.md`](deploy.md).
+
 A demo website that showcases the value of MCP (Model Context Protocol) servers for civic data queries by showing side-by-side comparisons of LLM responses with and without MCP.
 
 ---

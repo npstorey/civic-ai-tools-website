@@ -1,5 +1,7 @@
 # Sprint Plan: Community Trace Gallery
 
+> **Status note.** The stated prerequisite (sprint 004, explore-page migration) is complete — see [`completed/sprint-004-explore-page-migration.md`](completed/sprint-004-explore-page-migration.md). This plan is unblocked but unscheduled; treat it as a backlog proposal, not an active sprint.
+
 **Status:** Not started — blocked on sprint 004
 **Prerequisite:** Sprint 004 (explore page migration) must be complete first
 **Estimated effort:** 2–3 days

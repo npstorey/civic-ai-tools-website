@@ -1,5 +1,7 @@
 # Model Audit - OpenRouter Models for Civic AI Tools
 
+> **Historical — audit run 2026-01-15, not repeated.** (The date line below says 2025-01-15; the year is a typo — this repo's first commit is 2026-01-14, and this file entered git on 2026-03-05.) Model availability, pricing, and tool-calling reliability have turned over completely since. Retained for the evaluation criteria, not the verdicts. The live model list is defined in code (`availableModels` in [`../src/lib/mcp/tools.ts`](../src/lib/mcp/tools.ts), served via `/api/models`); the model endpoint and API key are environment-driven (`MODEL_API_BASE_URL`, `OPENROUTER_API_KEY`) — see [`deploy.md`](deploy.md#the-model-seam).
+
 **Date:** 2025-01-15
 **Purpose:** Evaluate available models for the MCP demo, considering cost, performance, and tool calling reliability.
 

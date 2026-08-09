@@ -348,4 +348,4 @@ CSS keyframes (`blink`, `spin`, `pulse`) and component-specific styles use style
 
 ## Retrospectives
 
-Session retrospectives are kept in [`RETROSPECTIVE.md`](RETROSPECTIVE.md) (reverse-chronological). Review before starting work to understand recent decisions and lessons learned.
+Session retrospectives are kept in [`docs/RETROSPECTIVE.md`](docs/RETROSPECTIVE.md) (reverse-chronological). Review before starting work to understand recent decisions and lessons learned.
