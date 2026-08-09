@@ -39,15 +39,20 @@ const DROPDOWN_ITEM_STYLE: React.CSSProperties = {
  *   so the round-trip dies at the provider's redirect warning. Non-null
  *   turns the button into a plain link to the app surface's sign-in panel;
  *   `null` (the default, and unset topology) keeps today's in-place button.
+ * - `brandName` (#217) — the wordmark text, resolved by the layout from
+ *   `SITE_BRAND_NAME` (src/lib/brand-config.ts). The default is the demo
+ *   name, so a mount that omits the prop renders today's chrome.
  */
 export default function Header({
   dashboardHref = '/dashboard',
   marketingOrigin = '',
   signInHref = null,
+  brandName = 'Civic AI Tools',
 }: {
   dashboardHref?: string;
   marketingOrigin?: string | null;
   signInHref?: string | null;
+  brandName?: string;
 }) {
   const { data: session, status } = useSession();
   const headerRef = useRef<HTMLElement>(null);
@@ -121,7 +126,7 @@ export default function Header({
               color: 'var(--text-primary)',
             }}
           >
-            Civic AI Tools
+            {brandName}
           </Link>
           <nav className="hidden sm:flex items-center gap-6">
             {/* Explore dropdown */}

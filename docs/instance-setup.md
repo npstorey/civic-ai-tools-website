@@ -124,6 +124,18 @@ set, the demo deployment's values are emitted):
 Check the wiring with the presence-only preflight (no values are read or
 printed): `node scripts/preflight-env.mjs`.
 
+**Chrome branding is a separate, lighter set.** The table above covers
+everything that names your instance *inside emitted evidence* — values
+that are signed and cross-checked against your registry. What names it
+in the *site chrome* — the header wordmark, page titles, the footer
+identity lines, and the accent color — is presentation, configured by
+the `SITE_BRAND_*` set in
+[deploy.md's Branding and theming section](deploy.md#branding-and-theming-chrome-only).
+Nothing in that set is ever signed or verified. A fully renamed instance
+typically sets both `SITE_BRAND_NAME` (chrome) and
+`EVIDENCE_PLATFORM_AGENT_TITLE` (evidence attribution); the two are read
+independently on purpose, so neither can surprise the other.
+
 ## 5. Smoke test
 
 Publish a fresh package and verify it on your instance's detail page: the

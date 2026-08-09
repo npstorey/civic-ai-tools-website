@@ -39,10 +39,17 @@ interface EvidenceActionsProps {
    *  (resolved server-side from the request host). The verify badge (#114)
    *  deep-links the neutral verifier to it. */
   commitmentUrl: string;
+  /** Instance display name for the citation label (#217), resolved
+   *  server-side by the detail page from `SITE_BRAND_NAME`
+   *  (src/lib/brand-config.ts) — a prop, not context, because the server
+   *  page renders this component directly. Defaults to the demo name. */
+  brandName?: string;
 }
 
-function CitePopover({ title, creatorName, createdAt, slug, onClose }: {
-  title: string; creatorName: string; createdAt: string; slug: string; onClose: () => void;
+/** Exported for render-harness/tests only — the popover mounts on the Cite
+ *  button's click, which a DOM-free server render cannot simulate. */
+export function CitePopover({ title, creatorName, createdAt, slug, brandName, onClose }: {
+  title: string; creatorName: string; createdAt: string; slug: string; brandName: string; onClose: () => void;
 }) {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const date = new Date(createdAt);
@@ -53,7 +60,7 @@ function CitePopover({ title, creatorName, createdAt, slug, onClose }: {
   const citations = [
     {
       label: 'Plain text',
-      text: `${creatorName} (${year}). "${title}." Civic AI Tools Evidence Package. ${url}. Published: ${dateStr}.`,
+      text: `${creatorName} (${year}). "${title}." ${brandName} Evidence Package. ${url}. Published: ${dateStr}.`,
     },
     {
       label: 'For deliberative process reference',
@@ -146,6 +153,7 @@ interface VerifyResult {
 
 export default function EvidenceActions({
   slug, title, creatorName, createdAt, packageUrl, captureMethod, visibility, commitmentUrl,
+  brandName = 'Civic AI Tools',
 }: EvidenceActionsProps) {
   const [linkCopied, setLinkCopied] = useState(false);
   const [showCite, setShowCite] = useState(false);
@@ -306,6 +314,7 @@ export default function EvidenceActions({
           creatorName={creatorName}
           createdAt={createdAt}
           slug={slug}
+          brandName={brandName}
           onClose={() => setShowCite(false)}
         />
       )}

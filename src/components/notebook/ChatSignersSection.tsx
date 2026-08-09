@@ -67,7 +67,7 @@ function PlatformPendingSignerRow({
         display: 'flex',
         alignItems: 'flex-start',
         gap: '12px',
-        background: 'rgba(16, 63, 239, 0.02)',
+        background: 'rgba(var(--accent-rgb), 0.02)',
       }}
     >
       <span aria-hidden style={{
@@ -86,7 +86,7 @@ function PlatformPendingSignerRow({
               fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em',
               textTransform: 'uppercase',
               padding: '1px 6px', borderRadius: '999px',
-              background: 'rgba(16, 63, 239, 0.1)', color: 'var(--nyc-blue, #0039a6)',
+              background: 'rgba(var(--accent-rgb), 0.1)', color: 'var(--nyc-blue)',
             }}
           >
             Pre-publish preview
@@ -174,7 +174,7 @@ export default function ChatSignersSection({ executedAt, signingKeyId }: ChatSig
           <span style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             width: '22px', height: '22px', borderRadius: '50%',
-            background: 'rgba(16, 63, 239, 0.1)', color: 'var(--nyc-blue, #0039a6)',
+            background: 'rgba(var(--accent-rgb), 0.1)', color: 'var(--nyc-blue)',
             fontSize: '11px', fontWeight: 700,
           }}>↻</span>
           <div>

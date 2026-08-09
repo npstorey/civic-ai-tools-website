@@ -10,6 +10,7 @@ import {
 } from '@/lib/sign-in-intent';
 import QuerySurface from '@/components/shared/QuerySurface';
 import AskSignInPanel from './AskSignInPanel';
+import { getBrandName } from '@/lib/brand-config';
 
 /**
  * `/ask` — the query surface in signed-in configuration (app front-door
@@ -71,7 +72,7 @@ import AskSignInPanel from './AskSignInPanel';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Ask - Civic AI Tools',
+  title: `Ask - ${getBrandName()}`,
   description:
     'Ask a question about public data and publish the answer as a signed evidence package.',
 };

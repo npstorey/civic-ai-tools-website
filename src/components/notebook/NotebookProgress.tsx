@@ -75,7 +75,7 @@ function StatusGlyph({ status }: { status: 'pending' | 'active' | 'done' }) {
         aria-hidden
         style={{
           width: '16px', height: '16px', display: 'inline-block',
-          border: '2px solid var(--nyc-blue, #0039a6)',
+          border: '2px solid var(--nyc-blue)',
           borderTopColor: 'transparent', borderRadius: '50%',
           animation: 'spin 1s linear infinite',
         }}

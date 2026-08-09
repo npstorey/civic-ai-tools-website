@@ -9,6 +9,9 @@ import { evidenceRecords, users } from '@/lib/db/schema';
 // request-host fallback resolve per-instance (server component — env is
 // available at request time; demo defaults when unset).
 import { getEvidenceSiteOrigin, getPublicationHost } from '@/lib/site-config';
+// Chrome branding (#217): the citation label's display name — chrome-only,
+// never part of the signed package (that is the EVIDENCE_* set above).
+import { getBrandName } from '@/lib/brand-config';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
@@ -154,7 +157,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
     unverified: { bg: 'rgba(0,0,0,0.06)', text: 'var(--text-muted)' },
-    consistency_tested: { bg: 'rgba(16, 63, 239, 0.1)', text: 'var(--nyc-blue)' },
+    consistency_tested: { bg: 'rgba(var(--accent-rgb), 0.1)', text: 'var(--nyc-blue)' },
     evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--nyc-success)' },
     fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--nyc-success)' },
   };
@@ -304,8 +307,8 @@ export default async function EvidencePage({ params }: PageProps) {
         {isSealed && (
           <div style={{
             padding: '16px 20px', marginBottom: '24px',
-            backgroundColor: 'rgba(16, 63, 239, 0.05)',
-            border: '1px solid rgba(16, 63, 239, 0.25)',
+            backgroundColor: 'rgba(var(--accent-rgb), 0.05)',
+            border: '1px solid rgba(var(--accent-rgb), 0.25)',
             borderRadius: '6px',
           }}>
             <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--nyc-blue)', marginBottom: '6px' }}>
@@ -394,7 +397,7 @@ export default async function EvidencePage({ params }: PageProps) {
         {!isDatHere && (
           <Section title="Summary">
             <div style={{
-              padding: '16px 20px', backgroundColor: 'rgba(16, 63, 239, 0.04)',
+              padding: '16px 20px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
               borderLeft: '3px solid var(--nyc-blue)', borderRadius: '0 4px 4px 0',
               fontSize: '15px', lineHeight: 1.6, color: 'var(--text-secondary)',
             }}>
@@ -445,7 +448,7 @@ export default async function EvidencePage({ params }: PageProps) {
             <Section title="A · Initial prompt">
               {renderPkg.prompt.text ? (
                 <div style={{
-                  padding: '16px 20px', backgroundColor: 'rgba(16, 63, 239, 0.04)',
+                  padding: '16px 20px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
                   borderLeft: '3px solid var(--nyc-blue)', borderRadius: '0 4px 4px 0',
                   fontSize: '15px', lineHeight: 1.6, color: 'var(--text-primary)',
                   whiteSpace: 'pre-wrap',
@@ -598,7 +601,7 @@ export default async function EvidencePage({ params }: PageProps) {
             {/* G · Summary */}
             <Section title="G · Summary">
               <div style={{
-                padding: '12px 16px', backgroundColor: 'rgba(16, 63, 239, 0.04)',
+                padding: '12px 16px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
                 borderLeft: '3px solid var(--nyc-blue)', borderRadius: '0 4px 4px 0',
                 fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)',
               }}>
@@ -895,6 +898,7 @@ export default async function EvidencePage({ params }: PageProps) {
             captureMethod={record.captureMethod}
             visibility={record.visibility}
             commitmentUrl={commitmentUrl}
+            brandName={getBrandName()}
           />
         </Section>
 

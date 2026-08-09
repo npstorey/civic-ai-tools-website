@@ -151,7 +151,7 @@ export default function ChatNotebookOutput({
       {/* A · Initial prompt */}
       <Section title="A · Initial prompt">
         <div style={{
-          padding: '16px 20px', backgroundColor: 'rgba(16, 63, 239, 0.04)',
+          padding: '16px 20px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
           borderLeft: '3px solid var(--nyc-blue)', borderRadius: '0 4px 4px 0',
           fontSize: '15px', lineHeight: 1.6, color: 'var(--text-primary)',
           whiteSpace: 'pre-wrap',
@@ -351,7 +351,7 @@ export default function ChatNotebookOutput({
       {/* G · Summary (Phase 2a2 item 3: structured two-clause blurb) */}
       <Section title="G · Summary">
         <div style={{
-          padding: '12px 16px', backgroundColor: 'rgba(16, 63, 239, 0.04)',
+          padding: '12px 16px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
           borderLeft: '3px solid var(--nyc-blue)', borderRadius: '0 4px 4px 0',
           fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)',
         }}>

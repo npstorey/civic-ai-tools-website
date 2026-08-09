@@ -7,11 +7,12 @@ import { apiTokens, evidenceRecords, attestationPackages, users } from '@/lib/db
 import { eq, desc, and, ne, isNull, sql } from 'drizzle-orm';
 import DashboardTabs from '@/components/dashboard/DashboardTabs';
 import { isSigningConfigured } from '@/lib/evidence/unsigned-tier';
+import { getBrandName } from '@/lib/brand-config';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Dashboard - Civic AI Tools',
+  title: `Dashboard - ${getBrandName()}`,
   description: 'Manage your evidence records and evaluations.',
 };
 

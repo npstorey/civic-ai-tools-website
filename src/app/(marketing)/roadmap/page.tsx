@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import { getRoadmapMarkdown, ROADMAP_GITHUB_URL } from '@/lib/roadmap/data';
 import AudienceRoutingStrip from '@/components/roadmap/AudienceRoutingStrip';
 import RoadmapBody from '@/components/roadmap/RoadmapBody';
+import { getBrandName } from '@/lib/brand-config';
 
 export const metadata: Metadata = {
-  title: 'Roadmap - Civic AI Tools',
+  title: `Roadmap - ${getBrandName()}`,
   description:
     'The civic-ai-tools public roadmap — vision pillars, trust commitments, near-term plans, and how the evidence-system fork resolved (toward a domain-neutral, spec-first protocol). Mirrored from the hub repo.',
 };

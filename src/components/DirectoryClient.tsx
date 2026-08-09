@@ -664,7 +664,7 @@ function ServerCard({ server }: { server: McpServerEntry }) {
         border: `1px solid ${server.included ? 'var(--nyc-blue)' : 'var(--border-color)'}`,
         borderRadius: '4px',
         padding: '20px',
-        backgroundColor: server.included ? 'rgba(16, 63, 239, 0.03)' : 'var(--background)',
+        backgroundColor: server.included ? 'rgba(var(--accent-rgb), 0.03)' : 'var(--background)',
         display: 'flex',
         flexDirection: 'column',
         gap: '10px',
@@ -681,7 +681,7 @@ function ServerCard({ server }: { server: McpServerEntry }) {
           >
             {server.name}
           </a>
-          {server.included && <Badge color="#103FEF" bg="rgba(16, 63, 239, 0.1)">Included</Badge>}
+          {server.included && <Badge color="var(--accent)" bg="rgba(var(--accent-rgb), 0.1)">Included</Badge>}
           {server.verificationStatus === 'official' && (
             <Badge color="var(--nyc-success)" bg="rgba(0, 138, 2, 0.1)">Official</Badge>
           )}
@@ -699,8 +699,8 @@ function ServerCard({ server }: { server: McpServerEntry }) {
         {server.transport.map((t) => (
           <Badge
             key={t}
-            color={t === 'http' ? '#103FEF' : t === 'sse' ? '#B8860B' : 'var(--text-muted)'}
-            bg={t === 'http' ? 'rgba(16, 63, 239, 0.08)' : t === 'sse' ? 'rgba(184, 134, 11, 0.08)' : 'var(--card-background)'}
+            color={t === 'http' ? 'var(--accent)' : t === 'sse' ? '#B8860B' : 'var(--text-muted)'}
+            bg={t === 'http' ? 'rgba(var(--accent-rgb), 0.08)' : t === 'sse' ? 'rgba(184, 134, 11, 0.08)' : 'var(--card-background)'}
           >
             {t}
           </Badge>

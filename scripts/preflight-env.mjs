@@ -216,6 +216,16 @@ export const ENV_SPEC = [
   { name: 'EVIDENCE_PLATFORM_AGENT_TITLE', tier: 'optional', purpose: 'PROV platform-agent title + notebook attribution display name', hasFallback: true },
   { name: 'EVIDENCE_PLATFORM_AGENT_URL', tier: 'optional', purpose: 'PROV platform-agent URL (defaults to EVIDENCE_SITE_ORIGIN when set)', hasFallback: true },
 
+  // --- Instance branding (#217: chrome-only theming seam; src/lib/brand-config.ts).
+  //     All optional with coded defaults: unset, the demo chrome renders
+  //     byte-identically. Chrome only — nothing here is emitted inside signed
+  //     evidence (that is the EVIDENCE_* identity set above), so these can
+  //     never invalidate a package or a registry cross-check. ---
+  { name: 'SITE_BRAND_NAME', tier: 'optional', purpose: 'Instance display name — header wordmark, page titles, citation labels (default "Civic AI Tools")', hasFallback: true },
+  { name: 'SITE_BRAND_ACCENT', tier: 'optional', purpose: 'Accent color (#rgb/#rrggbb) — overrides the accent tokens site-wide; unset or invalid = stylesheet default', hasFallback: true },
+  { name: 'SITE_BRAND_TAGLINE', tier: 'optional', purpose: 'Footer tagline line (default: the demo tagline)', hasFallback: true },
+  { name: 'SITE_BRAND_ATTRIBUTION', tier: 'optional', purpose: 'Footer attribution line, plain text (unset: the demo authored attribution markup)', hasFallback: true },
+
   // --- Optional / feature / ops ---
   { name: 'EVIDENCE_TRUST_REGISTRY_URL', tier: 'optional', purpose: 'External trust-registry override', hasFallback: true },
   { name: 'CIVICAITOOLS_SESSION_TOKEN', tier: 'optional', purpose: 'publish-evidence skill (Claude Code) auth' },
