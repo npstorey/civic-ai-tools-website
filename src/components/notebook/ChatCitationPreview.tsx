@@ -20,6 +20,8 @@
 import { useSession } from 'next-auth/react';
 import { useState } from 'react';
 import { useBrandName } from '@/components/BrandProvider';
+import { useEvidenceSiteOrigin } from '@/components/EvidenceOriginProvider';
+import { buildCitationPlaceholderUrl } from './citation-placeholder';
 
 interface ChatCitationPreviewProps {
   prompt: string;
@@ -60,6 +62,9 @@ export default function ChatCitationPreview({ prompt, executedAt, structuredSumm
   // Instance display name (#217) via BrandProvider (root layout) — this
   // component sits deep in a 'use client' tree, so context, not props.
   const brandName = useBrandName();
+  // Instance evidence origin (#227) via EvidenceOriginProvider, same mount
+  // and same reasoning — evidence identity, so its own seam, not the brand one.
+  const siteOrigin = useEvidenceSiteOrigin();
 
   const creatorName = session?.user?.name || 'Anonymous';
   const date = executedAt ? new Date(executedAt) : new Date();
@@ -72,7 +77,7 @@ export default function ChatCitationPreview({ prompt, executedAt, structuredSumm
   const title = structuredSummary?.analysisDescription
     ? structuredSummary.analysisDescription.replace(/[.!?]+$/, '')
     : deriveTitle(prompt, brandName);
-  const placeholderUrl = 'https://civicaitools.org/evidence/(URL assigned at publish)';
+  const placeholderUrl = buildCitationPlaceholderUrl(siteOrigin);
 
   const headlineSuffix = structuredSummary?.headlineFinding
     ? ` Headline finding: ${structuredSummary.headlineFinding}`
