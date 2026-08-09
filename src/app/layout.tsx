@@ -11,12 +11,14 @@ import { resolveHostLinks } from '@/lib/host-links';
 import RunningUnsignedBanner from '@/components/RunningUnsignedBanner';
 import SponsorLine from '@/components/SponsorLine';
 import { BrandProvider } from '@/components/BrandProvider';
+import { EvidenceOriginProvider } from '@/components/EvidenceOriginProvider';
 import {
   getBrandAccent,
   getBrandAttribution,
   getBrandName,
   getBrandTagline,
 } from '@/lib/brand-config';
+import { getEvidenceSiteOrigin } from '@/lib/site-config';
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
@@ -124,6 +126,10 @@ export default function RootLayout({
               currently the chat citation preview. Same pattern and mount
               point as HostLinksProvider above. */}
           <BrandProvider value={brandName}>
+          {/* Evidence site origin for the same unreachable client surface
+              (#227) — instance identity (EVIDENCE_SITE_ORIGIN), so its own
+              provider rather than a rider on the chrome-brand one. */}
+          <EvidenceOriginProvider value={getEvidenceSiteOrigin()}>
           <div className="flex flex-col">
             {/* Env-driven (P3): on a split-host topology the marketing host
                 withholds /dashboard, so the signed-in menu must carry the
@@ -188,6 +194,7 @@ export default function RootLayout({
               </div>
             </footer>
           </div>
+          </EvidenceOriginProvider>
           </BrandProvider>
           </HostLinksProvider>
         </Providers>
