@@ -9,10 +9,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   evaluateEnv,
+  evaluateGroups,
   renderReport,
   resolveDrivers,
   resolveSpec,
   ENV_SPEC,
+  ENV_GROUPS,
   DRIVER_SEAMS,
   OIDC_PROVIDER_SET,
 } from './preflight-env.mjs';
@@ -417,4 +419,134 @@ test('the durable rate-limit counter is soft: absent, the run still passes', () 
     result.requiredOnFallback.map((r) => r.name).filter((n) => n.startsWith('KV_')),
     ['KV_REST_API_URL', 'KV_REST_API_TOKEN'],
   );
+});
+
+// --- All-or-nothing groups (#195) -------------------------------------------
+
+test('every group member is declared in ENV_SPEC and every group condition names a known seam/driver', () => {
+  const declared = new Set(ENV_SPEC.map((s) => s.name));
+  for (const g of ENV_GROUPS) {
+    assert.ok(typeof g.name === 'string' && g.name.length > 0, 'group has a name');
+    assert.ok(typeof g.feature === 'string' && g.feature.length > 0, `${g.name} names its feature`);
+    assert.ok(Array.isArray(g.members) && g.members.length >= 2, `${g.name} has at least two members`);
+    for (const name of g.members) {
+      assert.ok(declared.has(name), `${g.name} member ${name} is declared in ENV_SPEC`);
+    }
+    if (!g.onlyWhen) continue;
+    for (const [seam, driver] of Object.entries(g.onlyWhen)) {
+      assert.ok(DRIVER_SEAMS[seam], `${g.name}.onlyWhen names a known seam (${seam})`);
+      assert.ok(
+        DRIVER_SEAMS[seam].values.includes(driver),
+        `${g.name}.onlyWhen.${seam} names a known driver (${driver})`,
+      );
+    }
+  }
+});
+
+test('a partially set group warns, naming exactly the missing members, and never fails the run', () => {
+  const env = envWithAllRequired();
+  env.VERCEL_TOKEN = 'present';
+  env.VERCEL_TEAM_ID = 'present'; // VERCEL_PROJECT_ID deliberately absent
+  const result = evaluateEnv(env);
+
+  assert.equal(result.ok, true, 'a partial group warns; it must not fail the run');
+  const partial = result.partialGroups.find((g) => g.name === 'Vercel Sandbox off-platform auth');
+  assert.ok(partial, 'the sandbox trio is reported as partial');
+  assert.equal(partial.total, 3);
+  assert.deepEqual(partial.present.sort(), ['VERCEL_TEAM_ID', 'VERCEL_TOKEN']);
+  assert.deepEqual(partial.missing, ['VERCEL_PROJECT_ID']);
+
+  const report = renderReport(result);
+  assert.match(report, /WARN: 1 all-or-nothing variable group\(s\) partially set/);
+  assert.match(report, /Vercel Sandbox off-platform auth: 2 of 3 present; off until all 3 are set\. Missing: VERCEL_PROJECT_ID/);
+});
+
+test('complete groups and untouched groups do not warn (the default full-required env is warning-free)', () => {
+  // envWithAllRequired sets the GitHub pair and the KV pair completely and
+  // leaves the OIDC triple and the sandbox trio empty — no group is partial.
+  const result = evaluateEnv(envWithAllRequired());
+  assert.deepEqual(result.partialGroups, []);
+  assert.ok(!renderReport(result).includes('WARN'), 'no WARN block when no group is partial');
+});
+
+test('a group is not checked when its profile never reads its members (container executor)', () => {
+  const env = { ...envWithAllRequired(), EXECUTOR_DRIVER: 'container' };
+  env.VERCEL_TOKEN = 'present'; // would be a partial trio under vercel-sandbox
+  const result = evaluateEnv(env);
+  assert.ok(
+    !result.partialGroups.some((g) => g.name === 'Vercel Sandbox off-platform auth'),
+    'the sandbox-auth group is skipped for a container-executor instance',
+  );
+  assert.ok(!renderReport(result).includes('VERCEL_TOKEN'), 'suppressed members stay unmentioned');
+});
+
+test('a partial OIDC triple warns and carries the identity-bearing issuer note', () => {
+  const env = envWithAllRequired();
+  env.OIDC_ISSUER = 'present';
+  env.OIDC_CLIENT_ID = 'present'; // OIDC_CLIENT_SECRET deliberately absent
+  const result = evaluateEnv(env);
+
+  const partial = result.partialGroups.find((g) => g.name === 'Generic OIDC sign-in');
+  assert.ok(partial);
+  assert.deepEqual(partial.missing, ['OIDC_CLIENT_SECRET']);
+
+  const report = renderReport(result);
+  assert.match(report, /Generic OIDC sign-in: 2 of 3 present/);
+  assert.match(report, /not offered on the sign-in screen/);
+  // The rider from #195: the issuer is part of every OIDC user's account key.
+  assert.match(report, /OIDC_ISSUER is identity-bearing/);
+});
+
+test('a half-set GitHub pair on an OIDC-complete instance warns (the genuinely silent case)', () => {
+  // With the OIDC triple complete the pair is demoted to optional, so this
+  // partial configuration passes every tier check — the group warning is the
+  // only surface that catches it.
+  const env = withOidcProvider(envWithAllRequired());
+  delete env.GITHUB_CLIENT_SECRET;
+  const result = evaluateEnv(env);
+
+  assert.equal(result.ok, true);
+  const partial = result.partialGroups.find((g) => g.name === 'GitHub sign-in');
+  assert.ok(partial, 'the half pair is reported even though its tier is optional');
+  assert.deepEqual(partial.missing, ['GITHUB_CLIENT_SECRET']);
+  assert.match(renderReport(result), /GitHub sign-in: 1 of 2 present; off until all 2 are set\. Missing: GITHUB_CLIENT_SECRET/);
+});
+
+test('a partial KV pair warns that durable rate limiting is off, while the run still passes', () => {
+  const env = envWithAllRequired();
+  delete env.KV_REST_API_TOKEN; // URL stays set — silently in-memory at run time
+  const result = evaluateEnv(env);
+
+  assert.equal(result.ok, true);
+  const partial = result.partialGroups.find((g) => g.name === 'Durable rate limiting');
+  assert.ok(partial);
+  assert.deepEqual(partial.missing, ['KV_REST_API_TOKEN']);
+  assert.match(renderReport(result), /falls back to per-process memory/);
+});
+
+test('group detection uses the same presence test as everything else: whitespace-only is absent', () => {
+  const env = envWithAllRequired();
+  env.OIDC_ISSUER = 'present';
+  env.OIDC_CLIENT_ID = '   '; // whitespace-only must count as absent
+  const result = evaluateEnv(env);
+  const partial = result.partialGroups.find((g) => g.name === 'Generic OIDC sign-in');
+  assert.ok(partial);
+  assert.deepEqual(partial.missing.sort(), ['OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET']);
+});
+
+test('group warnings never echo values — only variable names reach the report', () => {
+  const env = envWithAllRequired();
+  env.VERCEL_TOKEN = 'vercel-tok-SENTINEL-DO-NOT-LEAK';
+  const report = renderReport(evaluateEnv(env));
+  assert.ok(!report.includes('SENTINEL'), 'a group member value is never printed');
+  assert.ok(report.includes('VERCEL_TEAM_ID'), 'the missing members are named');
+});
+
+test('evaluateGroups is pure and driver-aware when called directly', () => {
+  const { drivers } = resolveDrivers({ EXECUTOR_DRIVER: 'container' });
+  const partial = evaluateGroups({ VERCEL_TOKEN: 'present' }, drivers);
+  assert.ok(!partial.some((g) => g.name === 'Vercel Sandbox off-platform auth'));
+  const { drivers: defaults } = resolveDrivers({});
+  const partialDefault = evaluateGroups({ VERCEL_TOKEN: 'present' }, defaults);
+  assert.ok(partialDefault.some((g) => g.name === 'Vercel Sandbox off-platform auth'));
 });
