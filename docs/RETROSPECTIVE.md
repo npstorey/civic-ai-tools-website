@@ -1,5 +1,7 @@
 # Retrospectives
 
+> **Dormant log.** Entries stop at 2026-03-05, the Sprint 004 retro (the 2026-03-07 commit only moved this file into `docs/`, without changing content). The practice lapsed rather than moving elsewhere — the one per-sprint retro under [`../sprints/completed/`](../sprints/completed/) predates that last entry. This file is retained as the early-project record.
+
 Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ---

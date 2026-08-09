@@ -3,6 +3,9 @@
 # Rate-limit headroom for a high-traffic event
 
 **Status:** Decision recorded — **A + B**. The Option B mechanism (env-overridable limits) is now **applied in code** (`src/lib/rate-limit.ts`) but **not activated**: no override env var is set, so the live limits are still the defaults (10 anonymous / 25 authenticated). Activation is a maintainer step on demo day — set `ANONYMOUS_RATE_LIMIT` (and optionally `AUTHENTICATED_RATE_LIMIT`) in Vercel **production** for the demo window only, then delete it. Option A stands as the primary path (the driver signs in).
+
+> **Post-event note.** The demo window this memo was written for has passed. The mechanism it describes remains in [`../src/lib/rate-limit.ts`](../src/lib/rate-limit.ts) and remains opt-in — the limits resolve to their defaults (10 anonymous / 25 authenticated) unless the `ANONYMOUS_RATE_LIMIT` / `AUTHENTICATED_RATE_LIMIT` override variables are set (a third override, `APP_TIER_RATE_LIMIT`, has since been added alongside them). The memo stays as the runbook for the next high-traffic event.
+
 **Why this exists:** An upcoming public demo will put a burst of traffic on `civicaitools.org` from one venue. The current anonymous limit is low and keys on IP, which interacts badly with a shared venue network. This memo lays out the options and the exact code that each one touches, so the choice is yours and reversible.
 
 ---
