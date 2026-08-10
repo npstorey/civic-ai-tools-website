@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { createTraceCapture } from '@/lib/bpmn/capture-trace';
 import { connectSSE } from '@/lib/sse-client';
+import { isComparisonRunComplete } from '@/lib/query-presentation';
 import { friendlyStreamError, type ProgressPhase } from '@/lib/streaming';
 
 export interface ToolCall {
@@ -61,6 +62,15 @@ interface StreamingState {
   isLoading: boolean;
   error: string | null;
   evidenceTrace: EvidenceTrace | null;
+  /**
+   * Whether the current run executes only the with-data arm (s6 P2, #229).
+   * Latched per run at start: completion logic must not wait for a
+   * without-data panel that will never stream, and the surface renders the
+   * demoted (answer-first) treatment for exactly the runs that skipped the
+   * comparison. Always false on mounts that never pass the option — the
+   * apex default, unchanged.
+   */
+  mcpOnly: boolean;
 }
 
 const initialPanelState: PanelState = {
@@ -77,6 +87,7 @@ const initialState: StreamingState = {
   isLoading: false,
   error: null,
   evidenceTrace: null,
+  mcpOnly: false,
 };
 
 export function useStreamingComparison() {
@@ -84,7 +95,14 @@ export function useStreamingComparison() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const traceCaptureRef = useRef<ReturnType<typeof createTraceCapture> | null>(null);
 
-  const startComparison = useCallback(async (query: string, model: string, portal: string) => {
+  const startComparison = useCallback(async (
+    query: string,
+    model: string,
+    portal: string,
+    opts?: { mcpOnly?: boolean },
+  ) => {
+    const mcpOnly = opts?.mcpOnly ?? false;
+
     // Abort any existing request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -100,6 +118,7 @@ export function useStreamingComparison() {
       isLoading: true,
       error: null,
       evidenceTrace: null,
+      mcpOnly,
     });
 
     // Initialize trace capture if enabled
@@ -112,7 +131,9 @@ export function useStreamingComparison() {
     try {
       await connectSSE({
         url: '/api/compare-stream',
-        body: { query, model, portal },
+        // The flag is only serialized when set, so a default (two-arm) run's
+        // request body is byte-identical to what the apex has always sent.
+        body: { query, model, portal, ...(mcpOnly ? { mcpOnly: true } : {}) },
         signal: abortControllerRef.current.signal,
         onEvent: (eventData) => {
           // Record MCP-panel events for trace capture
@@ -136,10 +157,16 @@ export function useStreamingComparison() {
           handleEvent(eventData as { type: string; panel: 'withMcp' | 'withoutMcp'; [key: string]: unknown }, setState);
         },
         onComplete: () => {
-          // Check if both panels are complete
+          // Check whether every panel this run actually has is complete —
+          // a demoted (mcpOnly) run must not wait for the without-data
+          // panel, which never streams.
           setState(prev => ({
             ...prev,
-            isLoading: !(prev.withoutMcp.isComplete && prev.withMcp.isComplete),
+            isLoading: !isComparisonRunComplete(
+              prev.mcpOnly,
+              prev.withoutMcp.isComplete,
+              prev.withMcp.isComplete,
+            ),
           }));
         },
       });
@@ -457,11 +484,16 @@ function handleEvent(
             progressGroups: newGroups,
           },
         };
-        // Check if both are complete
-        const bothComplete = newState.withoutMcp.isComplete && newState.withMcp.isComplete;
+        // Check if every panel this run has is complete (one for a demoted
+        // mcpOnly run, both otherwise)
+        const runComplete = isComparisonRunComplete(
+          newState.mcpOnly,
+          newState.withoutMcp.isComplete,
+          newState.withMcp.isComplete,
+        );
         return {
           ...newState,
-          isLoading: !bothComplete,
+          isLoading: !runComplete,
         };
       });
       break;

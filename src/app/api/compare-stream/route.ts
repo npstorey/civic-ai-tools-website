@@ -7,7 +7,7 @@ import { callMcpTool, routeTool } from '@/lib/mcp/client';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
-import { encodeSSE, type ModelErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
+import { encodeSSE, panelsForRun, type ModelErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
 import { getMissingModelCredentialError } from '@/lib/model-client';
 import { TraceBuilder, hash } from '@/lib/evidence/trace';
 
@@ -46,8 +46,7 @@ export async function POST(request: NextRequest) {
     if (credentialError) {
       console.error('[compare-stream]', credentialError.message);
       const encoder = new TextEncoder();
-      const panels: PanelType[] = mcpOnly ? ['withMcp'] : ['withoutMcp', 'withMcp'];
-      const body = panels
+      const body = panelsForRun(mcpOnly)
         .map((panel) =>
           encodeSSE({
             type: 'error',

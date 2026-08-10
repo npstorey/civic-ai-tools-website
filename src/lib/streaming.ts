@@ -990,3 +990,14 @@ export function buildProvenanceLine(
 export function encodeSSE(event: StreamEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
 }
+
+/**
+ * The panels (model arms) a comparison run executes. An `mcpOnly` run is
+ * the with-data arm alone — one model call; the default is both arms.
+ * `/api/compare-stream` uses this both to dispatch work and to address
+ * fail-fast error events, so the two can never disagree about which
+ * panels a run has.
+ */
+export function panelsForRun(mcpOnly: boolean): PanelType[] {
+  return mcpOnly ? ['withMcp'] : ['withoutMcp', 'withMcp'];
+}

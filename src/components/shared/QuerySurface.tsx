@@ -16,11 +16,20 @@
  */
 
 import { useState, useRef } from 'react';
-import QueryForm, { type QueryMode } from '@/components/QueryForm';
+import QueryForm from '@/components/QueryForm';
 import ComparisonDisplay from '@/components/ComparisonDisplay';
 import NotebookOutput from '@/components/notebook/NotebookOutput';
 import { useStreamingComparison } from '@/hooks/useStreamingComparison';
 import { useNotebookStream } from '@/hooks/useNotebookStream';
+import { useSessionChoice } from '@/hooks/useSessionChoice';
+import {
+  COMPARISON_STORAGE_KEY,
+  isComparisonRunComplete,
+  parseStoredComparison,
+  shouldRunMcpOnly,
+  type QueryMode,
+  type QuerySurfacePresentation,
+} from '@/lib/query-presentation';
 
 interface QuerySurfaceProps {
   /** Framing content rendered above the form, inside its container. */
@@ -38,11 +47,34 @@ interface QuerySurfaceProps {
    * rate-limited demo, and pointing past it is the point.
    */
   showLocalSetupFootnote?: boolean;
+  /**
+   * How this mount presents the standard-mode result (s6 P2, #229; Q62 G0).
+   *
+   * Default `'comparison'` — the apex demo's side-by-side, unchanged and
+   * unconfigured (the marketing page passes nothing; the default is applied
+   * here, inside the client component, so nothing about it serializes into
+   * that mount's payload). `/ask` passes `'answer-first'`: the with-data
+   * answer is primary, the comparison is demoted to an expand option, and
+   * demoted runs make one model call instead of two. The visitor can
+   * restore the comparison per session — via the demoted element under the
+   * answer or the Advanced-options toggle — after which both arms run and
+   * render exactly as on the apex.
+   */
+  presentation?: QuerySurfacePresentation;
+  /**
+   * The response mode the form starts in when the visitor has made no
+   * explicit choice. Default `'standard'` — every existing mount's
+   * behavior; `/ask` passes `'notebook'` (Q62 G0). An explicit mode choice
+   * is session-sticky and wins over this default.
+   */
+  defaultMode?: QueryMode;
 }
 
 export default function QuerySurface({
   children,
   showLocalSetupFootnote = true,
+  presentation = 'comparison',
+  defaultMode = 'standard',
 }: QuerySurfaceProps) {
   const [queryCount, setQueryCount] = useState(0);
   const [usedModel, setUsedModel] = useState<string>('');
@@ -54,6 +86,23 @@ export default function QuerySurface({
 
   const streaming = useStreamingComparison();
   const notebook = useNotebookStream();
+
+  // Answer-first configuration (s6 P2, #229). The restore choice is
+  // session-sticky through the same mechanism as the response mode; it only
+  // means anything on an answer-first mount — the apex neither reads it into
+  // behavior (shouldRunMcpOnly is constant-false for 'comparison') nor
+  // renders the toggle that writes it.
+  const answerFirstConfigured = presentation === 'answer-first';
+  const [comparisonChoice, setComparisonChoice] = useSessionChoice(
+    COMPARISON_STORAGE_KEY,
+    parseStoredComparison,
+  );
+  const comparisonRestored = comparisonChoice === 'on';
+  // Presentation follows the run, not the toggle: flipping the toggle
+  // mid-result must not reshape an already-rendered answer (a restored
+  // comparison has nothing to show for a run whose without-data arm never
+  // executed). The next submit picks the toggle up.
+  const answerFirstActive = answerFirstConfigured && streaming.mcpOnly;
 
   // Extract display name from model ID (e.g., "anthropic/claude-sonnet-4" -> "Claude Sonnet 4")
   const getModelDisplayName = (modelId: string) => {
@@ -81,7 +130,9 @@ export default function QuerySurface({
       notebook.start(query, model, effectivePortal);
     } else {
       notebook.reset();
-      streaming.startComparison(query, model, effectivePortal);
+      streaming.startComparison(query, model, effectivePortal, {
+        mcpOnly: shouldRunMcpOnly(presentation, comparisonRestored),
+      });
     }
     setQueryCount((c) => c + 1);
   };
@@ -90,7 +141,23 @@ export default function QuerySurface({
     setTimeout(() => {
       resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
-    streaming.startComparison(continuationPrompt, usedModel, lastPortal);
+    streaming.startComparison(continuationPrompt, usedModel, lastPortal, {
+      mcpOnly: shouldRunMcpOnly(presentation, comparisonRestored),
+    });
+    setQueryCount((c) => c + 1);
+  };
+
+  // Expand option on the demoted comparison (answer-first mounts): restore
+  // the side-by-side presentation for the session and re-run the question
+  // with both arms — the without-data arm was skipped, so there is nothing
+  // to expand without running it.
+  const handleRunComparison = () => {
+    if (!lastQuery) return;
+    setComparisonChoice('on');
+    setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+    streaming.startComparison(lastQuery, usedModel, lastPortal, { mcpOnly: false });
     setQueryCount((c) => c + 1);
   };
 
@@ -106,7 +173,20 @@ export default function QuerySurface({
 
         {/* Query Form */}
         <div style={{ marginBottom: '48px' }}>
-          <QueryForm onSubmit={handleSubmit} isLoading={streaming.isLoading} queryCount={queryCount} />
+          <QueryForm
+            onSubmit={handleSubmit}
+            isLoading={streaming.isLoading}
+            queryCount={queryCount}
+            defaultMode={defaultMode}
+            comparisonControl={
+              answerFirstConfigured
+                ? {
+                    restored: comparisonRestored,
+                    onChange: (restored) => setComparisonChoice(restored ? 'on' : 'off'),
+                  }
+                : undefined
+            }
+          />
         </div>
       </div>
 
@@ -147,8 +227,18 @@ export default function QuerySurface({
             publishDialogOpen={publishDialogOpen}
             onPublishDialogChange={setPublishDialogOpen}
             onContinue={handleContinue}
+            answerFirst={answerFirstActive}
+            onRunComparison={answerFirstConfigured ? handleRunComparison : undefined}
           />
-          {showLocalSetupFootnote && (streaming.withoutMcp.isComplete && streaming.withMcp.isComplete) && (
+          {/* The footnote closes a finished run, however many panes the run
+              had — a demoted (one-pane) run is finished when its only pane
+              is. On the apex (mcpOnly always false) this is exactly the old
+              both-panes condition. */}
+          {showLocalSetupFootnote && isComparisonRunComplete(
+            streaming.mcpOnly,
+            streaming.withoutMcp.isComplete,
+            streaming.withMcp.isComplete,
+          ) && (
             <p
               style={{
                 marginTop: '16px',
