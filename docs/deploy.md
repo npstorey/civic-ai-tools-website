@@ -51,6 +51,18 @@ You need:
 - **Node.js ≥ 22** on the host if you want to run the preflight and
   rehearsal scripts from the checkout (recommended; the containers
   themselves don't need it).
+- **Network egress to `fonts.googleapis.com` from the build
+  environment.** The app loads its two typefaces through
+  `next/font/google`, which fetches them at `next build` time — and
+  since Next.js 16.2.11 an unreachable `fonts.googleapis.com`
+  **hard-fails the build** (16.2.7 and earlier warned and fell back to
+  system fonts). Every path that builds the app is affected: the compose
+  bring-up's image build below, a bare `next build`, and the standalone
+  build. A restricted-egress build environment — common in government
+  and enterprise CI — must allow that host, or the build stops there.
+  This is a build-time requirement only; the running app makes no
+  request to it. Removing the dependency by self-hosting the fonts is
+  tracked in [#225] / [#221].
 
 > **Sign-in prerequisite — read before bring-up.** The notebook/query
 > execution feature (executed-sandbox mode: generate a Jupyter notebook,
@@ -311,7 +323,12 @@ the **presence** (never the value) of every variable the app reads,
 resolves the three driver selectors first, and tiers every other
 variable against the resolved profile — so a self-hosted instance is
 neither passed while unrunnable nor nagged about variables its profile
-never reads. Preflight reads only the shell environment it runs in. **Run off-stack,
+never reads. It also warns when an **all-or-nothing variable group** is
+only partially set — the Vercel Sandbox auth trio, either sign-in
+provider's credential set, the KV pair. The code consumes each of those
+sets only complete, so a partial set is indistinguishable from an empty
+one at run time and the feature silently stays off; the warning names
+the missing members. Preflight reads only the shell environment it runs in. **Run off-stack,
 it cannot see what compose wires in** — the three driver selectors,
 `DATABASE_URL`, and the `S3_*` set live inside `docker-compose.yml` — so
 a bare `node scripts/preflight-env.mjs` reports the *default managed
@@ -490,6 +507,14 @@ the client with redirect URI:
 ```
 
 The flow requests `openid profile email` scopes and uses PKCE + state.
+
+Treat `OIDC_ISSUER` as **identity-bearing, not just configuration**: the
+issuer URL is embedded in every OIDC user's stored account key
+(`oidc:{issuer}:{sub}` — the same string the allowlist matches), so
+changing or unsetting it later silently re-keys every OIDC user into a
+fresh database row on their next sign-in. Existing allowlist entries
+stop matching, and each user's earlier activity stays bound to the old
+row. Pick the issuer value once, before real users sign in.
 
 **Restricting who may sign in (optional allowlist).** By default any
 account the active provider authenticates may sign in. To gate an
@@ -950,3 +975,5 @@ values to your deployment and go.
 [ADR-0016]: https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0016-vcs-native-lifecycle-mapping.md
 [ADR-0020]: https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0020-instance-key-custody.md
 [ADR-0023]: https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0023-notebook-executor-driver.md
+[#221]: https://github.com/npstorey/civic-ai-tools-website/issues/221
+[#225]: https://github.com/npstorey/civic-ai-tools-website/issues/225

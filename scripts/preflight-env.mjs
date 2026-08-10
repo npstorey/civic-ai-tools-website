@@ -38,6 +38,13 @@
  * the script can gate a deploy check or a CI step. Missing RECOMMENDED or
  * OPTIONAL variables are reported but never fail the run.
  *
+ * GROUPS (#195): beyond per-variable tiers, some variable sets are
+ * all-or-nothing in the code — a partial set is indistinguishable from an
+ * empty one at run time, so the feature silently stays off. ENV_GROUPS
+ * declares those sets and a partially set group emits a WARN naming the
+ * missing members. Warn-only, never a failure: each member keeps its own
+ * tier above, and the group check adds the set semantics on top.
+ *
  * The pure check logic (`evaluateEnv`, `resolveSpec`, `ENV_SPEC`) is exported
  * and covered by scripts/preflight-env.test.mjs (run:
  * `node --test scripts/preflight-env.test.mjs`).
@@ -250,6 +257,63 @@ export const ENV_SPEC = [
   { name: 'EVAL_QUERIES', tier: 'optional', purpose: 'Model-eval harness query set (scripts/eval-models.mjs only)', hasFallback: true },
 ];
 
+/**
+ * All-or-nothing variable groups (#195). Each names a set the code consumes
+ * only as a complete set: with any member absent the whole set is ignored —
+ * no error, no log — so a partially set group means the operator configured
+ * something that is silently not in effect, and preflight is the only place
+ * that can be surfaced. Detection is presence-only, same test as everywhere
+ * else; no value is ever read or echoed.
+ *
+ * Fields:
+ *   - members: the variable names (each must also be declared in ENV_SPEC —
+ *     the test suite pins that).
+ *   - feature: what stays off while the group is partial (rendered in the
+ *     warning).
+ *   - onlyWhen: same semantics as the ENV_SPEC field — the group is checked
+ *     only when the resolved drivers match, so a profile that never reads the
+ *     members is never warned about them.
+ *   - note: extra caution rendered under the warning.
+ */
+export const ENV_GROUPS = [
+  {
+    name: 'Vercel Sandbox off-platform auth',
+    members: ['VERCEL_TOKEN', 'VERCEL_TEAM_ID', 'VERCEL_PROJECT_ID'],
+    // resolveSandboxAuthParams (src/lib/sandbox/vercel-sandbox.ts:88-96)
+    // returns null unless all three are present, so a two-of-three set
+    // silently downgrades to no sandbox auth — off-platform, that means
+    // notebook execution cannot start.
+    feature: 'off-platform sandbox auth — notebook execution fails off-deploy',
+    onlyWhen: { executor: 'vercel-sandbox' },
+  },
+  {
+    name: 'Generic OIDC sign-in',
+    members: OIDC_PROVIDER_SET,
+    // src/lib/auth-providers.ts activates the provider only on the full
+    // triple; with any member absent the provider never appears — no error,
+    // no log.
+    feature: 'the OIDC provider is not offered on the sign-in screen',
+    note: 'OIDC_ISSUER is identity-bearing, not just configuration: it is embedded in every OIDC user\'s stored account key, so changing or unsetting it later re-keys those users into fresh accounts.',
+  },
+  {
+    name: 'GitHub sign-in',
+    members: ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET'],
+    // src/lib/auth-providers.ts renders the provider only when both halves
+    // are present. When the OIDC triple is complete the pair is individually
+    // optional (requiredUnlessAllPresent above), so a half-set pair is
+    // otherwise fully silent.
+    feature: 'the GitHub provider is not offered on the sign-in screen',
+  },
+  {
+    name: 'Durable rate limiting',
+    members: ['KV_REST_API_URL', 'KV_REST_API_TOKEN'],
+    // src/lib/rate-limit.ts requires both; with either absent the counter
+    // silently falls back to per-process memory (resets on restart, not
+    // shared across instances).
+    feature: 'the rate-limit counter falls back to per-process memory',
+  },
+];
+
 const TIER_ORDER = ['required', 'recommended', 'optional'];
 
 /**
@@ -288,15 +352,47 @@ function conditionMet(condition, drivers) {
 }
 
 /**
- * True when every named variable is present in `env`. Presence only — the
- * same non-empty-after-trim test `evaluateEnv` uses, and no value is read
- * beyond that boolean.
+ * THE presence test — non-empty after trim. Every check in this script
+ * (tiers, alternatives, groups) uses this one boolean; no value is read
+ * beyond it.
  */
+function isPresent(raw) {
+  return typeof raw === 'string' && raw.trim().length > 0;
+}
+
+/** True when every named variable is present in `env`. Presence only. */
 function allPresent(names, env) {
-  return names.every((name) => {
-    const raw = env[name];
-    return typeof raw === 'string' && raw.trim().length > 0;
-  });
+  return names.every((name) => isPresent(env[name]));
+}
+
+/**
+ * Detect partially set all-or-nothing groups (#195). A group whose
+ * `onlyWhen` condition the resolved drivers do not meet is skipped entirely
+ * (its members are not read by that profile). A group with zero members
+ * present is deliberately not configured; a complete group is in effect;
+ * anything in between is the silent-failure case this check exists for.
+ *
+ * @param {Record<string, string | undefined>} env
+ * @param {Record<string, string>} drivers
+ * @param {typeof ENV_GROUPS} [groups]
+ * @returns {{ name: string, feature: string, note?: string, total: number, present: string[], missing: string[] }[]}
+ */
+export function evaluateGroups(env, drivers, groups = ENV_GROUPS) {
+  const partial = [];
+  for (const g of groups) {
+    if (g.onlyWhen && !conditionMet(g.onlyWhen, drivers)) continue;
+    const present = g.members.filter((name) => isPresent(env[name]));
+    if (present.length === 0 || present.length === g.members.length) continue;
+    partial.push({
+      name: g.name,
+      feature: g.feature,
+      note: g.note,
+      total: g.members.length,
+      present,
+      missing: g.members.filter((name) => !isPresent(env[name])),
+    });
+  }
+  return partial;
 }
 
 /**
@@ -350,8 +446,7 @@ export function evaluateEnv(env, spec = ENV_SPEC) {
   const { applicable, notApplicable } = resolveSpec(drivers, spec, env);
 
   const rows = applicable.map((s) => {
-    const raw = env[s.name];
-    const present = typeof raw === 'string' && raw.trim().length > 0;
+    const present = isPresent(env[s.name]);
     return {
       name: s.name,
       tier: s.tier,
@@ -369,12 +464,17 @@ export function evaluateEnv(env, spec = ENV_SPEC) {
   const missingRequired = rows.filter((r) => r.tier === 'required' && !r.present && !r.hasFallback);
   const requiredOnFallback = rows.filter((r) => r.tier === 'required' && !r.present && r.hasFallback);
   const missingRecommended = rows.filter((r) => r.tier === 'recommended' && !r.present);
+  const partialGroups = evaluateGroups(env, drivers);
 
   return {
     rows,
     missingRequired,
     requiredOnFallback,
     missingRecommended,
+    // All-or-nothing groups only partially set (#195). Warn-only by design:
+    // a partial group never flips `ok` — each member's own tier already
+    // governs pass/fail, and the group adds the set semantics on top.
+    partialGroups,
     // Profile context. `notApplicable` is deliberately NOT rendered as rows:
     // an instance must not be told about variables its profile never reads.
     profile: { drivers, isDefault },
@@ -441,6 +541,18 @@ export function renderReport(result) {
     for (const name of result.driverErrors) {
       const seam = Object.values(DRIVER_SEAMS).find((d) => d.env === name);
       lines.push(`            - ${name} (expected one of: ${seam.values.join(', ')})`);
+    }
+  }
+  // Partially set all-or-nothing groups (#195): louder than a NOTE because
+  // the operator configured something that is silently not in effect, but
+  // never a failure — the members' own tiers govern pass/fail. Only names
+  // are printed, never values.
+  if (result.partialGroups && result.partialGroups.length > 0) {
+    lines.push(`  WARN: ${result.partialGroups.length} all-or-nothing variable group(s) partially set — a partial group leaves its feature silently off:`);
+    for (const g of result.partialGroups) {
+      lines.push(`            - ${g.name}: ${g.present.length} of ${g.total} present; off until all ${g.total} are set. Missing: ${g.missing.join(', ')}`);
+      lines.push(`              (while partial: ${g.feature})`);
+      if (g.note) lines.push(`              Note: ${g.note}`);
     }
   }
   if (result.requiredOnFallback && result.requiredOnFallback.length > 0) {
