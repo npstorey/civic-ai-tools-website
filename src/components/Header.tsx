@@ -10,6 +10,8 @@ import {
   resolveSignInAffordance,
   type SignInOption,
 } from '@/lib/auth-provider-options';
+import { useCrossHostSession } from '@/hooks/useCrossHostSession';
+import type { SessionAffordanceTarget } from '@/lib/allowed-origins';
 
 const NAV_LINK_STYLE: React.CSSProperties = {
   color: 'var(--text-secondary)',
@@ -52,6 +54,11 @@ const DROPDOWN_ITEM_STYLE: React.CSSProperties = {
  *   in-place branch below reads it (the split-host branch links to the `/ask`
  *   panel, which lists the providers itself). The default is today's single
  *   GitHub button.
+ * - `sessionProbe` (#229 P3 / Q64) — the app host's session-status URL and
+ *   the "Open app →" target, derived by the layout from
+ *   `resolveSessionAffordance`. Non-null only on a full split topology;
+ *   `null` (the default, and every other configuration) fires no fetch and
+ *   renders every affordance unchanged.
  */
 export default function Header({
   dashboardHref = '/dashboard',
@@ -59,14 +66,25 @@ export default function Header({
   signInHref = null,
   brandName = 'Civic AI Tools',
   signInOptions = DEFAULT_SIGN_IN_OPTIONS,
+  sessionProbe = null,
 }: {
   dashboardHref?: string;
   marketingOrigin?: string | null;
   signInHref?: string | null;
   brandName?: string;
   signInOptions?: SignInOption[];
+  sessionProbe?: SessionAffordanceTarget | null;
 }) {
   const { data: session, status } = useSession();
+
+  // Cross-host session probe (Q64): only on a split topology
+  // (sessionProbe non-null) and only while this browser has no local
+  // session. `false` — the mount value, and the value after any probe
+  // failure — keeps the sign-in control exactly as it is today.
+  const crossHostSignedIn = useCrossHostSession(
+    sessionProbe?.statusUrl ?? null,
+    !session,
+  );
   const headerRef = useRef<HTMLElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [exploreOpen, setExploreOpen] = useState(false);
@@ -406,6 +424,45 @@ export default function Header({
                 </div>
               )}
             </div>
+          ) : signInHref !== null && sessionProbe !== null ? (
+            /* Full split topology (Q64): the same link as the plain branch
+               below, but session-aware — when the cross-host probe finds a
+               session on the app host, "Sign in" becomes "Open app →"
+               pointing there. CLS-safe by reservation: both labels occupy
+               the same grid cell from first paint, so the control's box is
+               sized to the wider label and cannot shift at swap time; the
+               inactive label is hidden but keeps contributing its width. */
+            <a
+              href={crossHostSignedIn ? sessionProbe.openAppHref : signInHref}
+              className="nyc-button nyc-button-primary"
+              style={{
+                padding: '8px 16px',
+                fontSize: '14px',
+                textDecoration: 'none',
+                display: 'inline-grid',
+              }}
+            >
+              <span
+                aria-hidden={crossHostSignedIn}
+                style={{
+                  gridArea: '1 / 1',
+                  textAlign: 'center',
+                  visibility: crossHostSignedIn ? 'hidden' : 'visible',
+                }}
+              >
+                Sign in
+              </span>
+              <span
+                aria-hidden={!crossHostSignedIn}
+                style={{
+                  gridArea: '1 / 1',
+                  textAlign: 'center',
+                  visibility: crossHostSignedIn ? 'visible' : 'hidden',
+                }}
+              >
+                Open app &rarr;
+              </span>
+            </a>
           ) : signInHref !== null ? (
             /* Split topology: sign-in happens on the app surface, so this is
                a plain link — it works before hydration, and the label drops

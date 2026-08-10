@@ -8,6 +8,7 @@ import Header from '@/components/Header';
 import { HostLinksProvider } from '@/components/HostLinksProvider';
 import { resolveDashboardHref } from '@/lib/host-routing';
 import { resolveHostLinks } from '@/lib/host-links';
+import { resolveSessionAffordance } from '@/lib/allowed-origins';
 import RunningUnsignedBanner from '@/components/RunningUnsignedBanner';
 import SponsorLine from '@/components/SponsorLine';
 import { BrandProvider } from '@/components/BrandProvider';
@@ -72,6 +73,15 @@ export default function RootLayout({
    * and today's in-place sign-in.
    */
   const hostLinks = resolveHostLinks(process.env);
+
+  /**
+   * The header's cross-host session affordance (s6 P3, Q64) — non-null only
+   * on a full split topology (both hosts named, not app-only). Spread
+   * conditionally below, like `accentProps`: an explicit null prop would
+   * serialize into the RSC flight payload, a needless byte delta on every
+   * configuration that has no affordance.
+   */
+  const sessionProbe = resolveSessionAffordance(process.env);
 
   /**
    * Instance branding (#217), resolved server-side like the host links
@@ -162,6 +172,7 @@ export default function RootLayout({
               signInHref={hostLinks.signInHref}
               brandName={brandName}
               signInOptions={signInOptions}
+              {...(sessionProbe !== null ? { sessionProbe } : {})}
             />
             {/* ADR-0020: running-unsigned indicator — renders only when this
                 instance has no signing key AND is outside a dev environment. */}
