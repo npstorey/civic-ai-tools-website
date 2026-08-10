@@ -10,6 +10,8 @@ import { generateNotebook, downloadNotebook } from '@/lib/notebook';
 import type { ProgressLogEntry, ProgressGroup, ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
 import { useSession, signIn } from 'next-auth/react';
 import { useHostLinks } from '@/components/HostLinksProvider';
+import { useSignInOptions } from '@/components/SignInOptionsProvider';
+import { resolveSignInAffordance } from '@/lib/auth-provider-options';
 import PublishEvidenceDialog from '@/components/PublishEvidenceDialog';
 
 /**
@@ -400,6 +402,9 @@ export default function McpResponseDisplay({
   // P4c: null when no host topology is configured — the publish button's
   // signed-out branch then signs in place, exactly as today.
   const { signInHref, marketingOrigin } = useHostLinks();
+  // #229 P1: the publish button's signed-out, in-place branch starts the
+  // provider this instance actually configured — not a hardcoded one (Q63).
+  const signInAffordance = resolveSignInAffordance(useSignInOptions());
 
   // Use parent-controlled state if provided, otherwise local
   const publishDialogOpen = publishDialogOpenProp ?? publishDialogOpenLocal;
@@ -824,13 +829,30 @@ export default function McpResponseDisplay({
                     </svg>
                     Sign in to publish
                   </a>
+                ) : !session?.user && signInAffordance.kind === 'panel' ? (
+                  /* No topology, but more than one provider: a single button
+                     cannot offer a choice, so link to the panel that can. */
+                  <a
+                    href={signInAffordance.href}
+                    style={{ ...PUBLISH_BUTTON_STYLE, textDecoration: 'none' }}
+                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(var(--accent-rgb), 0.06)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z" />
+                    </svg>
+                    Sign in to publish
+                  </a>
+                ) : !session?.user && signInAffordance.kind === 'none' ? (
+                  /* Nothing configured: no way in, so no control (#193). */
+                  null
                 ) : (
                 <button
                   onClick={() => {
-                    if (!session?.user) {
+                    if (!session?.user && signInAffordance.kind === 'provider') {
                       // NextAuth v4 doesn't support redirect:false for OAuth providers,
                       // so we do a normal redirect. User signs in, then re-runs their query.
-                      signIn('github');
+                      signIn(signInAffordance.option.id);
                     } else {
                       setPublishDialogOpen(true);
                     }
@@ -845,7 +867,9 @@ export default function McpResponseDisplay({
                   {session?.user ? 'Publish as Evidence' : 'Sign in to publish'}
                 </button>
                 )}
-                {!session?.user && (
+                {/* Suppressed only when there is no way to sign in at all —
+                    an instruction with no control to follow it is noise. */}
+                {!session?.user && (signInHref !== null || signInAffordance.kind !== 'none') && (
                   <span style={{ fontSize: '11px', color: '#666' }}>
                     Sign in first, then re-run your query
                   </span>

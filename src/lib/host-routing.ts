@@ -293,6 +293,22 @@ export function resolveDashboardHref(env: Record<string, string | undefined>): s
 }
 
 /**
+ * Where an "Ask" affordance should point (#210 — the `AppChrome` strip).
+ *
+ * Exactly `resolveDashboardHref`'s shape, and for exactly its reason: the
+ * strip renders on the DUAL-SERVED `/evidence` pages, which serve on the
+ * marketing host too — where `/ask` is app-private and withheld. A relative
+ * href there is a 404, so a split-host instance must carry the app origin.
+ * Relative everywhere else: unset topology serves `/ask` on whatever host the
+ * request arrived on, and an app-only instance is its own app host.
+ */
+export function resolveAskHref(env: Record<string, string | undefined>): string {
+  if (parseBooleanFlag(env.APP_ONLY)) return '/ask';
+  const appOrigin = resolveAppOrigin(env);
+  return appOrigin !== null ? `${appOrigin}/ask` : '/ask';
+}
+
+/**
  * Where the app surface's "Public site" affordances should point (the
  * `AppChrome` exit link):
  * - app-only instance → null: there IS no public marketing site — hide the

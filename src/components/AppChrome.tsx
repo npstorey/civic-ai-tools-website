@@ -20,8 +20,11 @@ import { useSession } from 'next-auth/react';
  *      avatar menu, because on the app surface "which account is this?" is a
  *      question you must be able to answer at a glance before publishing
  *      anything under it.
- *   2. WHERE IS MY WORK — a direct Dashboard link, current-page aware.
- *   3. HOW DO I GET OUT — an explicit exit to the public site.
+ *   2. WHAT DO I DO HERE — a direct Ask link (#210). Before it, a signed-in
+ *      user who landed on `/dashboard` had no in-app path back to the query
+ *      surface at all; the URL bar was the only way.
+ *   3. WHERE IS MY WORK — a direct Dashboard link, current-page aware.
+ *   4. HOW DO I GET OUT — an explicit exit to the public site.
  *
  * CLIENT COMPONENT ON PURPOSE. It reads the session through `useSession()`
  * (the provider is already mounted in the root layout) rather than
@@ -45,11 +48,21 @@ import { useSession } from 'next-auth/react';
  * host, the marketing origin on a split-host deployment, and null on an
  * app-only instance — null hides the link entirely, because an app-only
  * instance HAS no public marketing site to exit to.
+ *
+ * `askHref` is resolved the same way, by `resolveAskHref()`, and it is NOT a
+ * plain `/ask` for the reason #210 records: this strip also renders on the
+ * dual-served `/evidence` pages, which serve on the MARKETING host, where
+ * `/ask` is app-private and withheld. A relative href would 404 there, so a
+ * split-host instance carries the app origin — the treatment
+ * `resolveDashboardHref` established for the header's Dashboard link.
+ * Defaults to `/ask`: today's relative path, for any mount that omits it.
  */
 export default function AppChrome({
   publicSiteHref = '/',
+  askHref = '/ask',
 }: {
   publicSiteHref?: string | null;
+  askHref?: string;
 }) {
   const { data: session, status } = useSession();
   const pathname = usePathname();
@@ -60,6 +73,7 @@ export default function AppChrome({
 
   const displayName = session.user.name || session.user.email || 'your account';
   const onDashboard = pathname === '/dashboard';
+  const onAsk = pathname === '/ask';
 
   return (
     <div
@@ -87,6 +101,18 @@ export default function AppChrome({
           <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{displayName}</strong>
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {/* The app surface's primary action, first (#210). Same
+              current-page treatment as Dashboard: on `/ask` itself the item
+              states where you are rather than linking to it. */}
+          {onAsk ? (
+            <span aria-current="page" style={{ color: 'var(--text-muted)' }}>
+              Ask
+            </span>
+          ) : (
+            <Link href={askHref} style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
+              Ask
+            </Link>
+          )}
           {onDashboard ? (
             <span aria-current="page" style={{ color: 'var(--text-muted)' }}>
               Dashboard

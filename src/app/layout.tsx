@@ -12,6 +12,9 @@ import RunningUnsignedBanner from '@/components/RunningUnsignedBanner';
 import SponsorLine from '@/components/SponsorLine';
 import { BrandProvider } from '@/components/BrandProvider';
 import { EvidenceOriginProvider } from '@/components/EvidenceOriginProvider';
+import { SignInOptionsProvider } from '@/components/SignInOptionsProvider';
+import { buildProviders } from '@/lib/auth-providers';
+import { toSignInOptions } from '@/lib/auth-provider-options';
 import {
   getBrandAccent,
   getBrandAttribution,
@@ -86,6 +89,16 @@ export default function RootLayout({
   const brandTagline = getBrandTagline();
   const brandAttribution = getBrandAttribution();
   const brandAccent = getBrandAccent();
+
+  /**
+   * The instance's sign-in choices (#229 P1 / Q63), derived here for the same
+   * reason the host links are: `buildProviders()` returns provider configs
+   * carrying client secrets, so the derivation is server-only and only the
+   * narrowed `{id, name}` list crosses to the client. `/ask` has done this
+   * since P4b; this hoists it to the layout so the five affordances outside
+   * `/ask` stop hardcoding one provider.
+   */
+  const signInOptions = toSignInOptions(buildProviders());
   // Conditional SPREAD, not `style={maybeUndefined}`: an explicit
   // `style={undefined}` would still serialize a `"style":"$undefined"` entry
   // into the RSC flight payload, a needless unset-case byte delta. With the
@@ -130,6 +143,11 @@ export default function RootLayout({
               (#227) — instance identity (EVIDENCE_SITE_ORIGIN), so its own
               provider rather than a rider on the chrome-brand one. */}
           <EvidenceOriginProvider value={getEvidenceSiteOrigin()}>
+          {/* Sign-in choices for the affordances inside client trees (#229
+              P1) — QueryForm, RateLimitBanner, McpResponseDisplay and
+              NotebookOutput all render under the apex page, a client
+              component with no server ancestor to thread a prop from. */}
+          <SignInOptionsProvider value={signInOptions}>
           <div className="flex flex-col">
             {/* Env-driven (P3): on a split-host topology the marketing host
                 withholds /dashboard, so the signed-in menu must carry the
@@ -143,6 +161,7 @@ export default function RootLayout({
               marketingOrigin={hostLinks.marketingOrigin}
               signInHref={hostLinks.signInHref}
               brandName={brandName}
+              signInOptions={signInOptions}
             />
             {/* ADR-0020: running-unsigned indicator — renders only when this
                 instance has no signing key AND is outside a dev environment. */}
@@ -194,6 +213,7 @@ export default function RootLayout({
               </div>
             </footer>
           </div>
+          </SignInOptionsProvider>
           </EvidenceOriginProvider>
           </BrandProvider>
           </HostLinksProvider>

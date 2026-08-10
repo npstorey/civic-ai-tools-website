@@ -1,5 +1,5 @@
 import AppChrome from '@/components/AppChrome';
-import { resolvePublicSiteHref } from '@/lib/host-routing';
+import { resolveAskHref, resolvePublicSiteHref } from '@/lib/host-routing';
 
 /**
  * Layout for the `(app)` route group — the gated app surface's shell
@@ -27,6 +27,10 @@ import { resolvePublicSiteHref } from '@/lib/host-routing';
  * bundle. Unset topology resolves to `/`, today's exact link. For routes
  * prerendered at build time the value freezes at build, the same semantics
  * an inlined NEXT_PUBLIC var would have.
+ *
+ * The "Ask" link (#210) is resolved the same way and for the same reason:
+ * this group's `/evidence` pages are dual-served, so the strip can render on
+ * the marketing host, where `/ask` is withheld.
  */
 export default function AppLayout({
   children,
@@ -35,7 +39,10 @@ export default function AppLayout({
 }>) {
   return (
     <>
-      <AppChrome publicSiteHref={resolvePublicSiteHref(process.env)} />
+      <AppChrome
+        publicSiteHref={resolvePublicSiteHref(process.env)}
+        askHref={resolveAskHref(process.env)}
+      />
       {children}
     </>
   );

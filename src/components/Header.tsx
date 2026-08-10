@@ -5,6 +5,11 @@ import { signIn, signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { TYPED_STANDARDS_URL } from '@/lib/site-config';
+import {
+  DEFAULT_SIGN_IN_OPTIONS,
+  resolveSignInAffordance,
+  type SignInOption,
+} from '@/lib/auth-provider-options';
 
 const NAV_LINK_STYLE: React.CSSProperties = {
   color: 'var(--text-secondary)',
@@ -42,17 +47,24 @@ const DROPDOWN_ITEM_STYLE: React.CSSProperties = {
  * - `brandName` (#217) — the wordmark text, resolved by the layout from
  *   `SITE_BRAND_NAME` (src/lib/brand-config.ts). The default is the demo
  *   name, so a mount that omits the prop renders today's chrome.
+ * - `signInOptions` (#229 P1) — the providers this instance actually
+ *   configured, derived by the layout from `buildProviders()`. Only the
+ *   in-place branch below reads it (the split-host branch links to the `/ask`
+ *   panel, which lists the providers itself). The default is today's single
+ *   GitHub button.
  */
 export default function Header({
   dashboardHref = '/dashboard',
   marketingOrigin = '',
   signInHref = null,
   brandName = 'Civic AI Tools',
+  signInOptions = DEFAULT_SIGN_IN_OPTIONS,
 }: {
   dashboardHref?: string;
   marketingOrigin?: string | null;
   signInHref?: string | null;
   brandName?: string;
+  signInOptions?: SignInOption[];
 }) {
   const { data: session, status } = useSession();
   const headerRef = useRef<HTMLElement>(null);
@@ -69,6 +81,13 @@ export default function Header({
   // on the path — the byte-identity guarantee, in one expression.
   const showMarketingNav = marketingOrigin !== null;
   const mkt = (path: string) => `${marketingOrigin ?? ''}${path}`;
+
+  // The in-place sign-in control, for instances with no app host to send
+  // anyone to. One configured provider ⇒ that provider's button (GitHub's, on
+  // the reference deployment — today's exact markup); none ⇒ no button; more
+  // than one ⇒ a link to the panel that can list them. See
+  // resolveSignInAffordance.
+  const signInAffordance = resolveSignInAffordance(signInOptions);
 
   // Publish header height as a CSS variable so other components can offset below it
   useEffect(() => {
@@ -399,15 +418,23 @@ export default function Header({
             >
               Sign in
             </a>
-          ) : (
+          ) : signInAffordance.kind === 'provider' ? (
             <button
-              onClick={() => signIn('github')}
+              onClick={() => signIn(signInAffordance.option.id)}
               className="nyc-button nyc-button-primary"
               style={{ padding: '8px 16px', fontSize: '14px' }}
             >
-              Sign in with GitHub
+              Sign in with {signInAffordance.option.name}
             </button>
-          )}
+          ) : signInAffordance.kind === 'panel' ? (
+            <a
+              href={signInAffordance.href}
+              className="nyc-button nyc-button-primary"
+              style={{ padding: '8px 16px', fontSize: '14px', textDecoration: 'none' }}
+            >
+              Sign in
+            </a>
+          ) : null}
         </div>
       </div>
 

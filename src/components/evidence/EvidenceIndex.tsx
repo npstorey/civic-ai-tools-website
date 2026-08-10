@@ -188,7 +188,14 @@ export default function EvidenceIndex() {
           </p>
           {!debouncedQuery && !status && range === 'all' && (
             <p style={{ fontSize: '14px', margin: 0 }}>
-              Run a query on the <Link href="/" style={{ color: 'var(--nyc-blue)' }}>home page</Link> and
+              {/* Topology-stale copy fixed in #229 P1 — the second instance
+                  of the "home page" noun the dashboard carried. `/evidence`
+                  is DUAL-SERVED, so this line renders on both hosts, and the
+                  href must stay relative: `/` is the query surface on the
+                  marketing host and 307s to `/ask` on the app host, while a
+                  direct `/ask` would 404 on the marketing host. Only the
+                  wording was wrong — the app host has no "home page". */}
+              <Link href="/" style={{ color: 'var(--nyc-blue)' }}>Run a query</Link> and
               click &ldquo;Publish as Evidence&rdquo; to create the first one.
             </p>
           )}

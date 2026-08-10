@@ -262,9 +262,17 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
 
   if (rows.length === 0) {
     return (
+      /* Topology-stale copy fixed in #229 P1. "The home page" is a
+         marketing-surface noun: the dashboard is app-private, so on a
+         split-host instance it renders on the app host, which HAS no home
+         page — `/` there 307s to `/ask`. `/ask` is the signed-in query
+         surface on every topology (it serves everywhere when none is
+         configured), and everyone reading this empty state is signed in by
+         definition, so the relative href is correct on all three shapes with
+         no origin treatment needed. */
       <EmptyState
-        message="You haven't published any evidence yet. Run an analysis on the home page and click 'Publish as Evidence' to get started."
-        cta={{ text: 'Go to home page', href: '/' }}
+        message="You haven't published any evidence yet. Ask a question, then click 'Publish as Evidence' to get started."
+        cta={{ text: 'Ask a question', href: '/ask' }}
       />
     );
   }

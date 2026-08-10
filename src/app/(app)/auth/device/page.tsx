@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { normalizeUserCode } from '@/lib/device-flow';
+import { buildProviders } from '@/lib/auth-providers';
+import { toSignInOptions } from '@/lib/auth-provider-options';
 import DeviceApprovalPanel from './DeviceApprovalPanel';
 import DeviceSignInPanel from './DeviceSignInPanel';
 import { getBrandName } from '@/lib/brand-config';
@@ -47,7 +49,15 @@ export default async function DeviceAuthPage({ searchParams }: PageProps) {
       {session?.user?.id ? (
         <DeviceApprovalPanel initialUserCode={normalized} />
       ) : (
-        <DeviceSignInPanel callbackUrl={callbackUrl} prefilledUserCode={normalized} />
+        /* #211: the panel's buttons are what this instance actually
+           configured, derived here on the server (the configs carry client
+           secrets and cannot cross to the client) — the same derivation
+           `/ask` has used since P4b. */
+        <DeviceSignInPanel
+          callbackUrl={callbackUrl}
+          prefilledUserCode={normalized}
+          options={toSignInOptions(buildProviders())}
+        />
       )}
     </div>
   );
