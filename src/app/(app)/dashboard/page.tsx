@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { apiTokens, evidenceRecords, attestationPackages, users } from '@/lib/db/schema';
 import { eq, desc, and, ne, isNull, sql } from 'drizzle-orm';
+import { findDbUserByAccountKey } from '@/lib/db/creator-evidence';
 import DashboardTabs from '@/components/dashboard/DashboardTabs';
 import { isSigningConfigured } from '@/lib/evidence/unsigned-tier';
 import { getBrandName } from '@/lib/brand-config';
@@ -22,19 +23,15 @@ export default async function DashboardPage() {
     redirect('/');
   }
 
-  // Look up DB user ID from GitHub ID
-  const githubId = session.user.id;
-  const dbUser = await db
-    .select({ id: users.id, displayName: users.displayName })
-    .from(users)
-    .where(eq(users.githubId, githubId))
-    .limit(1);
-
-  if (dbUser.length === 0) {
+  // Account key → internal user row, via the shared by-creator data path
+  // (src/lib/db/creator-evidence.ts — extracted for #239 so the /ask
+  // first-run block keys on the same lookup instead of duplicating it).
+  const dbUser = await findDbUserByAccountKey(session.user.id);
+  if (dbUser === null) {
     redirect('/');
   }
-  const userId = dbUser[0].id;
-  const displayName = dbUser[0].displayName;
+  const userId = dbUser.id;
+  const displayName = dbUser.displayName;
 
   // --- Tab 1: My Evidence ---
   const myEvidence = await db

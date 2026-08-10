@@ -92,3 +92,29 @@ export function resolveSignInAffordance(options: SignInOption[]): SignInAffordan
   if (options.length === 1) return { kind: 'provider', option: options[0] };
   return { kind: 'panel', href: SIGN_IN_PANEL_HREF };
 }
+
+/**
+ * The sign-in WORDING for pure prose — copy with no control attached (#235:
+ * `AttestationSection`'s "Sign in with GitHub to add an attestation.", the
+ * seventh instance of the provider-literal class P1 generalized out of the
+ * six interactive affordances). A sentence cannot start an OAuth flow, so it
+ * carries no affordance — but its wording must still be derived from what
+ * the instance configured rather than hardcoded:
+ *
+ * - one provider  → name it ("Sign in with GitHub") — on the reference
+ *   deployment this is byte-for-byte today's copy;
+ * - more than one → "Sign in" — prose can no more enumerate a choice than a
+ *   one-control affordance can, and the surface the reader will actually
+ *   sign in through lists the real options;
+ * - none          → null: the caller drops the sentence entirely. Prose
+ *   inviting a sign-in that cannot complete is the dead button #193 removed,
+ *   in copy form.
+ *
+ * Returns the verb phrase only; the caller owns the rest of its sentence.
+ */
+export function resolveSignInProse(options: SignInOption[]): string | null {
+  const affordance = resolveSignInAffordance(options);
+  if (affordance.kind === 'none') return null;
+  if (affordance.kind === 'provider') return `Sign in with ${affordance.option.name}`;
+  return 'Sign in';
+}

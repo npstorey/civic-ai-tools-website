@@ -11,6 +11,7 @@ import {
 import QuerySurface from '@/components/shared/QuerySurface';
 import AskSignInPanel from './AskSignInPanel';
 import { getBrandName } from '@/lib/brand-config';
+import { hasPublishedEvidence } from '@/lib/db/creator-evidence';
 
 /**
  * `/ask` — the query surface in signed-in configuration (app front-door
@@ -126,6 +127,25 @@ export default async function AskPage({ searchParams }: AskPageProps) {
     );
   }
 
+  // FIRST-RUN ORIENTATION (#239 — Q63's first-run half, decided at the #229
+  // G0). Keyed on the dashboard's evidence-records-by-creator data path
+  // (src/lib/db/creator-evidence.ts), narrowed to an existence probe: the
+  // block renders until the user's FIRST publish and then never again. The
+  // record itself is the state — no cookie, no dismissal flag, no client
+  // fetch; it is a server derivation like everything else on this page.
+  // Failure closes to today's render: a session missing its account key or a
+  // database error renders the surface exactly as it rendered before this
+  // block existed, because a read-only orientation aid is never worth
+  // failing — or slowing the recovery of — the page over.
+  let showFirstRunOrientation = false;
+  if (session.user.id) {
+    try {
+      showFirstRunOrientation = !(await hasPublishedEvidence(session.user.id));
+    } catch {
+      // Degrade to no block (today's bytes), deliberately silently.
+    }
+  }
+
   return (
     <QuerySurface
       showLocalSetupFootnote={false}
@@ -148,6 +168,31 @@ export default async function AskPage({ searchParams }: AskPageProps) {
           you can publish it as a signed evidence package anyone can verify
           independently.
         </p>
+        {showFirstRunOrientation && (
+          <div
+            style={{
+              marginTop: '16px',
+              padding: '12px 16px',
+              border: '1px solid var(--border-color)',
+              borderRadius: '6px',
+              backgroundColor: 'var(--card-background)',
+              fontSize: '14px',
+              lineHeight: 1.6,
+              color: 'var(--text-secondary)',
+              maxWidth: '650px',
+            }}
+          >
+            <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+              Getting started.
+            </strong>{' '}
+            Ask a question below and the answer is assembled from live public
+            data, with every query it ran shown alongside the result. When an
+            answer is worth keeping, publish it: publishing creates a signed
+            evidence package — a permanent, independently verifiable record of
+            the answer and how it was produced — listed on your dashboard.
+            This note disappears after your first publish.
+          </div>
+        )}
       </div>
     </QuerySurface>
   );
