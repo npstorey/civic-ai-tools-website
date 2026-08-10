@@ -243,7 +243,7 @@ Deliberately a short orientation, not an exhaustive tree — the tree drifted ba
 
 - `src/app/(marketing)/` — the public pages: home (`page.tsx`), `/explore`, `/directory`, `/learn`, `/project`, `/about`, `/roadmap`
 - `src/app/(app)/` — dashboard, evidence, auth, and the signed-in query surfaces: `/dashboard`, `/evidence`, `/ask`, `/auth/device`, plus the dev-only `/dev/notebook-preview`
-- `src/app/api/` — serverless routes: `compare`, `compare-stream`, `models`, `rate-limit`, `query-notebook`, plus the `evidence/*`, `blob/*`, `cron/*`, and `auth/*` route families
+- `src/app/api/` — serverless routes: `compare`, `compare-stream`, `models`, `rate-limit`, `query-notebook`, `session-status` (boolean-only has-a-session probe with marketing-origin CORS), plus the `evidence/*`, `blob/*`, `cron/*`, and `auth/*` route families
 - `src/lib/` — the major areas:
   - `evidence/` — evidence-system core: packaging, signing, verification, provenance, attestation, lifecycle
   - `storage/` — blob-storage driver seam (Vercel Blob / S3-compatible)
