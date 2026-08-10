@@ -38,6 +38,17 @@ import { getBrandName } from '@/lib/brand-config';
  *   - NO MARKETING FRAMING. No positioning band, no "go set it up locally"
  *     call to action, and `showLocalSetupFootnote={false}` suppresses the
  *     one piece of that framing living inside the shared component.
+ *   - ANSWER-FIRST, ONE MODEL CALL (s6 P2, #229; Q62 G0).
+ *     `presentation="answer-first"` makes the with-data answer primary and
+ *     demotes the side-by-side comparison to an expand option; demoted
+ *     standard runs pass `mcpOnly` so only the with-data arm executes. The
+ *     visitor restores the comparison per session — via the demoted element
+ *     or the Advanced-options toggle — and restored runs execute both arms
+ *     exactly as the apex always has.
+ *   - NOTEBOOK BY DEFAULT (same decision set). `defaultMode="notebook"`
+ *     starts the form in executed-sandbox mode; an explicit mode choice is
+ *     session-sticky and wins over the default. The apex default mode is
+ *     untouched.
  *
  * SIGNED OUT RENDERS A PROMPT, NOT A REDIRECT — see AskSignInPanel for why
  * a redirect here would close a loop. This is not the access gate either:
@@ -116,7 +127,11 @@ export default async function AskPage({ searchParams }: AskPageProps) {
   }
 
   return (
-    <QuerySurface showLocalSetupFootnote={false}>
+    <QuerySurface
+      showLocalSetupFootnote={false}
+      presentation="answer-first"
+      defaultMode="notebook"
+    >
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '8px' }}>
           Ask a question
