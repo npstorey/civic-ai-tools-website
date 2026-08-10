@@ -18,6 +18,7 @@ import {
   parseBooleanFlag,
   readHostRoutingConfig,
   resolveAppOrigin,
+  resolveAskHref,
   resolveDashboardHref,
   resolveHostRole,
   resolvePublicSiteHref,
@@ -314,6 +315,18 @@ test('resolveDashboardHref: relative today and on app-only; app origin on a spli
   assert.equal(
     resolveDashboardHref({ APP_HOST: 'http://localhost:3000' }),
     'http://localhost:3000/dashboard',
+  );
+});
+
+test('resolveAskHref: relative today and on app-only; app origin on a split host (#210)', () => {
+  // The dual-served /evidence pages render the AppChrome strip on the
+  // MARKETING host, where /ask is withheld — hence the origin.
+  assert.equal(resolveAskHref({}), '/ask');
+  assert.equal(resolveAskHref({ APP_ONLY: '1', APP_HOST: 'app.example.org' }), '/ask');
+  assert.equal(resolveAskHref({ APP_HOST: 'app.example.org' }), 'https://app.example.org/ask');
+  assert.equal(
+    resolveAskHref({ APP_HOST: 'http://localhost:3000' }),
+    'http://localhost:3000/ask',
   );
 });
 
