@@ -1,5 +1,7 @@
 'use client';
 
+import { toDisplayHost, useEvidenceSiteOrigin } from '@/components/EvidenceOriginProvider';
+
 /**
  * Phase 2a1 — Signers + attestations placeholder beneath the A-G output.
  * Phase 2a2 item 4 (Option A): the platform signer row is reframed to be
@@ -54,6 +56,12 @@ function PlatformPendingSignerRow({
   signingKeyId: string | null;
   executedAt: string | null;
 }) {
+  // Instance identity (#227 class): this row names WHO will sign at publish
+  // time — the platform signer, which is evidence identity (site-config.ts's
+  // EVIDENCE_* family), never chrome, per brand-config.ts's chrome-vs-
+  // evidence line. So it reads EvidenceOriginProvider, not BrandProvider.
+  // Host only, as the row always rendered it.
+  const platformHost = toDisplayHost(useEvidenceSiteOrigin());
   const keyIdLabel = signingKeyId ?? 'platform key (will resolve at publish)';
   const executedAtLabel = executedAt
     ? `Execution captured ${new Date(executedAt).toLocaleString()}`
@@ -80,7 +88,7 @@ function PlatformPendingSignerRow({
           fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)',
           display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap',
         }}>
-          <span>civicaitools.org</span>
+          <span>{platformHost}</span>
           <span
             style={{
               fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em',

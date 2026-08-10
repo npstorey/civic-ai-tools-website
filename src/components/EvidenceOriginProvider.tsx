@@ -42,3 +42,18 @@ export function EvidenceOriginProvider({
 export function useEvidenceSiteOrigin(): string {
   return useContext(EvidenceOriginContext);
 }
+
+/**
+ * The origin's host, for surfaces that render a bare host label
+ * (`https://example.org` → `example.org`) — the client-side counterpart of
+ * `getPublicationHost()`'s derivation in src/lib/site-config.ts. Falls back
+ * to the raw value when the origin is not URL-parseable, so an instance that
+ * set a bare host still renders something honest rather than nothing.
+ */
+export function toDisplayHost(origin: string): string {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return origin;
+  }
+}
