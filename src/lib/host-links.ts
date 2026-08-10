@@ -50,6 +50,16 @@ import { SIGN_IN_INTENT_PARAM } from './sign-in-intent.ts';
 const SIGN_IN_PATH = '/ask';
 const SIGN_IN_HREF = `${SIGN_IN_PATH}?${SIGN_IN_INTENT_PARAM}=1`;
 
+/**
+ * The same door, as a RELATIVE href — for affordances that need the panel
+ * without any cross-host question. `resolveSignInAffordance` uses it for the
+ * multi-provider case of a one-control affordance (see auth-provider-options),
+ * which only arises on the null-topology branch: an instance with no app
+ * origin to prefix, where `/ask` serves on whatever host the request arrived
+ * on. Exported so that case names one constant rather than a second literal.
+ */
+export const SIGN_IN_PANEL_HREF = SIGN_IN_HREF;
+
 export interface HostLinks {
   /**
    * Prefix to put in front of a marketing route's path.

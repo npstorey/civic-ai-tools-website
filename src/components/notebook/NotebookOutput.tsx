@@ -24,6 +24,8 @@ import { useSession, signIn } from 'next-auth/react';
 import ChatNotebookOutput from './ChatNotebookOutput';
 import NotebookProgress from './NotebookProgress';
 import PublishEvidenceDialog from '@/components/PublishEvidenceDialog';
+import { useSignInOptions } from '@/components/SignInOptionsProvider';
+import { resolveSignInAffordance } from '@/lib/auth-provider-options';
 import { SUMMARY_EXTENSION_KEY } from '@/lib/notebook-author/prompt';
 import type { NotebookStreamState } from '@/hooks/useNotebookStream';
 import type { Notebook } from '@/lib/notebook-author/cells';
@@ -54,6 +56,11 @@ function structuredSummaryText(notebook: Notebook): string | undefined {
 
 export default function NotebookOutput({ state, prompt, model, portal, onRetry }: NotebookOutputProps) {
   const { data: session } = useSession();
+  // #229 P1: same treatment as the chat flow's publish button — the
+  // signed-out branch starts whatever provider this instance configured.
+  // (This surface has no split-topology branch of its own; it only renders
+  // under `/ask` and the dev preview, both app-private.)
+  const signInAffordance = resolveSignInAffordance(useSignInOptions());
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
 
   // Publishable iff the pipeline completed AND the publish inputs arrived
@@ -137,13 +144,32 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
                 borderTop: '1px solid var(--border-color)',
               }}
             >
+              {!session?.user && signInAffordance.kind === 'panel' ? (
+                /* More than one provider: defer to the panel that lists them. */
+                <a
+                  href={signInAffordance.href}
+                  style={{
+                    background: 'none',
+                    border: '1px solid var(--nyc-blue)',
+                    borderRadius: '4px',
+                    padding: '6px 14px',
+                    fontSize: '13px',
+                    color: 'var(--nyc-blue)',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                    textDecoration: 'none',
+                  }}
+                >
+                  Sign in to publish
+                </a>
+              ) : !session?.user && signInAffordance.kind === 'none' ? null : (
               <button
                 onClick={() => {
-                  if (!session?.user) {
+                  if (!session?.user && signInAffordance.kind === 'provider') {
                     // NextAuth v4 OAuth providers need a full redirect; the
                     // user signs in, then re-runs the query (same caveat as
                     // the chat flow's publish button).
-                    signIn('github');
+                    signIn(signInAffordance.option.id);
                   } else {
                     setPublishDialogOpen(true);
                   }
@@ -161,11 +187,14 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
               >
                 {session?.user ? 'Publish as Evidence' : 'Sign in to publish'}
               </button>
+              )}
+              {(session?.user || signInAffordance.kind !== 'none') && (
               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                 {session?.user
                   ? 'Publishes the executed notebook and its execution record — not a regenerated skeleton.'
                   : 'Sign in first, then re-run your query.'}
               </span>
+              )}
             </div>
           )}
 

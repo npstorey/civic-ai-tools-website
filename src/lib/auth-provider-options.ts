@@ -19,6 +19,7 @@
 // configured nothing must render no button at all.
 
 import type { Provider } from 'next-auth/providers/index';
+import { SIGN_IN_PANEL_HREF } from './host-links.ts';
 
 /** One sign-in choice: what to label the button, and what to call `signIn` with. */
 export interface SignInOption {
@@ -44,4 +45,50 @@ export function toSignInOptions(providers: Provider[]): SignInOption[] {
       id: provider.id,
       name: typeof provider.name === 'string' && provider.name.length > 0 ? provider.name : provider.id,
     }));
+}
+
+/**
+ * The seam default: the single GitHub button every generalized affordance
+ * rendered before this seam existed.
+ *
+ * It is the same kind of default as `DEFAULT_HOST_LINKS` and `BrandProvider`'s
+ * demo name — what a mount OUTSIDE the provider (a test, a future surface that
+ * forgets to pass the value) falls back to. It is deliberately today's exact
+ * rendering rather than `[]`, so forgetting to wire the seam degrades to the
+ * pre-seam bytes instead of silently deleting every sign-in control. Instances
+ * never see it: the root layout and the device page both pass the derived list.
+ */
+export const DEFAULT_SIGN_IN_OPTIONS: SignInOption[] = [{ id: 'github', name: 'GitHub' }];
+
+/**
+ * What a ONE-CONTROL sign-in affordance should do — the header button, the
+ * rate-limit line, the query form's sandbox-mode prompt, and the two publish
+ * buttons. Each of those has room for exactly one control and (unlike the
+ * `/ask` and `/auth/device` panels) cannot lay out a row of provider buttons
+ * without becoming a different component.
+ *
+ * Three cases, and each is the honest render for its instance shape:
+ *
+ * - `provider` — exactly one configured provider: start its flow in place,
+ *   naming it. On the reference deployment that one provider is GitHub, so
+ *   this is byte-for-byte today's affordance; on an OIDC-only instance it is
+ *   that instance's own provider, which is the #193 principle these five
+ *   surfaces were still missing.
+ * - `none` — nothing configured: render no control at all. A button that
+ *   cannot complete an authorization is the dead button #193 removed.
+ * - `panel` — more than one: a single control cannot express a choice, so
+ *   defer to the surface that can. This mirrors what the topology-configured
+ *   branch of these same affordances already does — it links to the `/ask`
+ *   panel rather than starting a flow — and the panel lists every provider
+ *   the instance actually offers.
+ */
+export type SignInAffordance =
+  | { kind: 'none' }
+  | { kind: 'provider'; option: SignInOption }
+  | { kind: 'panel'; href: string };
+
+export function resolveSignInAffordance(options: SignInOption[]): SignInAffordance {
+  if (options.length === 0) return { kind: 'none' };
+  if (options.length === 1) return { kind: 'provider', option: options[0] };
+  return { kind: 'panel', href: SIGN_IN_PANEL_HREF };
 }

@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from '
 import Link from 'next/link';
 import { signIn, useSession } from 'next-auth/react';
 import { useHostLinks } from '@/components/HostLinksProvider';
+import { useSignInOptions } from '@/components/SignInOptionsProvider';
+import { resolveSignInAffordance } from '@/lib/auth-provider-options';
 import RateLimitBanner from './RateLimitBanner';
 
 interface Model {
@@ -93,6 +95,9 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
   // topology configured — then the affordance below stays in place, exactly
   // as it is today. See src/lib/host-links.ts.
   const { signInHref } = useHostLinks();
+  // #229 P1: which provider the in-place branch below starts, and whether it
+  // can name one at all — derived from the instance's configuration (Q63).
+  const signInAffordance = resolveSignInAffordance(useSignInOptions());
   const [mode, updateMode] = useStoredMode(isAuthenticated);
   const [models, setModels] = useState<Model[]>([]);
   const [modelOpen, setModelOpen] = useState(false);
@@ -374,11 +379,14 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
                 </div>
                 {/* One expression, not a sentence split around a ternary:
                     two adjacent text children would make React emit comment
-                    separators, and the unset case must stay byte-identical. */}
+                    separators, and the unset case must stay byte-identical.
+                    The provider name is interpolated (#229 P1) only where the
+                    in-place branch can name one — every other shape keeps the
+                    provider-neutral sentence P4c already ships. */}
                 <p style={{ margin: '0 0 10px' }}>
-                  {signInHref !== null
-                    ? 'Executed-sandbox mode generates and runs a Jupyter notebook against live data, then signs the execution record. Sign in to enable.'
-                    : 'Executed-sandbox mode generates and runs a Jupyter notebook against live data, then signs the execution record. Sign in with GitHub to enable.'}
+                  {signInHref === null && signInAffordance.kind === 'provider'
+                    ? `Executed-sandbox mode generates and runs a Jupyter notebook against live data, then signs the execution record. Sign in with ${signInAffordance.option.name} to enable.`
+                    : 'Executed-sandbox mode generates and runs a Jupyter notebook against live data, then signs the execution record. Sign in to enable.'}
                 </p>
                 {signInHref !== null ? (
                   /* Split topology (P4c): sign-in lives on the app surface,
@@ -392,10 +400,10 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
                   >
                     Sign in
                   </a>
-                ) : (
+                ) : signInAffordance.kind === 'provider' ? (
                 <button
                   type="button"
-                  onClick={() => signIn('github')}
+                  onClick={() => signIn(signInAffordance.option.id)}
                   disabled={authStatus === 'loading'}
                   className="nyc-button nyc-button-primary"
                   style={{
@@ -404,9 +412,18 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
                     cursor: authStatus === 'loading' ? 'wait' : 'pointer',
                   }}
                 >
-                  {authStatus === 'loading' ? 'Loading…' : 'Sign in with GitHub'}
+                  {authStatus === 'loading' ? 'Loading…' : `Sign in with ${signInAffordance.option.name}`}
                 </button>
-                )}
+                ) : signInAffordance.kind === 'panel' ? (
+                  /* More than one provider: the panel that can list them. */
+                  <a
+                    href={signInAffordance.href}
+                    className="nyc-button nyc-button-primary"
+                    style={{ fontSize: '13px', padding: '6px 14px', textDecoration: 'none' }}
+                  >
+                    Sign in
+                  </a>
+                ) : null}
               </div>
             )}
           </div>

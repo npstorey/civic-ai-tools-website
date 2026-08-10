@@ -8,8 +8,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Provider } from 'next-auth/providers/index';
-import { toSignInOptions } from './auth-provider-options.ts';
+import {
+  DEFAULT_SIGN_IN_OPTIONS,
+  resolveSignInAffordance,
+  toSignInOptions,
+} from './auth-provider-options.ts';
 import { buildProviders } from './auth-providers.ts';
+import { SIGN_IN_PANEL_HREF } from './host-links.ts';
 
 /** A provider config with only the fields this module reads. */
 function fakeProvider(id: string, name: string): Provider {
@@ -90,4 +95,66 @@ test('both configured ⇒ one button each; a half-configured pair contributes no
 
 test('an unconfigured instance ⇒ zero options', () => {
   assert.deepEqual(toSignInOptions(buildProviders({})), []);
+});
+
+// --- One-control affordances (#229 P1 / Q63) -------------------------------
+//
+// The header button, the rate-limit line, the sandbox-mode prompt and the two
+// publish buttons each have room for exactly one control, so they cannot map
+// over the options the way the /ask and /auth/device panels do.
+
+test('resolveSignInAffordance: one provider ⇒ start it in place, named', () => {
+  const affordance = resolveSignInAffordance([{ id: 'oidc', name: 'Acme SSO' }]);
+  assert.deepEqual(affordance, {
+    kind: 'provider',
+    option: { id: 'oidc', name: 'Acme SSO' },
+  });
+});
+
+test('resolveSignInAffordance: nothing configured ⇒ no control at all (#193)', () => {
+  assert.deepEqual(resolveSignInAffordance([]), { kind: 'none' });
+});
+
+test('resolveSignInAffordance: more than one ⇒ defer to the panel that can list them', () => {
+  assert.deepEqual(
+    resolveSignInAffordance([
+      { id: 'github', name: 'GitHub' },
+      { id: 'oidc', name: 'Acme SSO' },
+    ]),
+    { kind: 'panel', href: SIGN_IN_PANEL_HREF },
+  );
+});
+
+test('the seam default is today’s exact affordance: one GitHub button', () => {
+  // The value a mount OUTSIDE SignInOptionsProvider falls back to. It must
+  // reproduce the pre-seam rendering, not an empty list.
+  assert.deepEqual(DEFAULT_SIGN_IN_OPTIONS, [{ id: 'github', name: 'GitHub' }]);
+  assert.deepEqual(resolveSignInAffordance(DEFAULT_SIGN_IN_OPTIONS), {
+    kind: 'provider',
+    option: { id: 'github', name: 'GitHub' },
+  });
+});
+
+test('the reference deployment resolves to exactly the pre-seam button', () => {
+  // GitHub pair configured, nothing else: derivation → affordance → the same
+  // in-place `signIn('github')` button the five surfaces hardcoded before.
+  const affordance = resolveSignInAffordance(
+    toSignInOptions(buildProviders({ GITHUB_CLIENT_ID: 'id', GITHUB_CLIENT_SECRET: 'secret' })),
+  );
+  assert.deepEqual(affordance, { kind: 'provider', option: { id: 'github', name: 'GitHub' } });
+});
+
+test('an OIDC-only instance renders its own provider, never GitHub', () => {
+  const affordance = resolveSignInAffordance(
+    toSignInOptions(
+      buildProviders({
+        OIDC_ISSUER: 'https://sso.example.org',
+        OIDC_CLIENT_ID: 'id',
+        OIDC_CLIENT_SECRET: 'secret',
+        OIDC_PROVIDER_NAME: 'Acme SSO',
+      }),
+    ),
+  );
+  assert.deepEqual(affordance, { kind: 'provider', option: { id: 'oidc', name: 'Acme SSO' } });
+  assert.equal(JSON.stringify(affordance).includes('GitHub'), false);
 });
