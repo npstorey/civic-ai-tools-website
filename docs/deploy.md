@@ -597,6 +597,25 @@ device-pairing URL the API hands to CLI clients already follows
 `APP_HOST` when it is set, since `/auth/device` is withheld on the
 marketing host.
 
+Two split-host behaviors follow automatically from the same variables
+(no additional configuration):
+
+- **Same-origin writes work from both hosts.** Browser POSTs that guard
+  with an Origin check (device approval, token revocation) accept any of
+  the instance's own origins — `NEXTAUTH_URL`, `APP_HOST`,
+  `MARKETING_HOST` — not just `NEXTAUTH_URL`, so approving a device from
+  the app host works even when `NEXTAUTH_URL` names the marketing host.
+  With no topology set the accepted origin is `NEXTAUTH_URL` alone,
+  exactly as before.
+- **The marketing header is session-aware.** `GET /api/session-status`
+  returns `{"signedIn":…}` — a boolean, never user data — and grants
+  CORS to exactly one origin: the configured marketing origin. After
+  hydration the marketing host's header probes it (silently; any
+  failure keeps the signed-out control) and shows "Open app →" instead
+  of "Sign in" for a visitor who already has a session on the app host.
+  With no marketing origin configured the endpoint emits no CORS
+  headers at all and no probe ever fires.
+
 ## Database and migrations
 
 Schema migrations are ordinary [Drizzle](https://orm.drizzle.team)
