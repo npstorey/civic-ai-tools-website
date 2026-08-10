@@ -1,11 +1,18 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { signIn, useSession } from 'next-auth/react';
 import { useHostLinks } from '@/components/HostLinksProvider';
 import { useSignInOptions } from '@/components/SignInOptionsProvider';
 import { resolveSignInAffordance } from '@/lib/auth-provider-options';
+import { useSessionChoice } from '@/hooks/useSessionChoice';
+import {
+  MODE_STORAGE_KEY,
+  parseStoredMode,
+  resolveEffectiveMode,
+  type QueryMode,
+} from '@/lib/query-presentation';
 import RateLimitBanner from './RateLimitBanner';
 
 interface Model {
@@ -16,47 +23,25 @@ interface Model {
   description?: string;
 }
 
-export type QueryMode = 'standard' | 'notebook';
-
-const MODE_STORAGE_KEY = 'civicaitools.notebookMode';
+// Re-exported for existing importers; the type itself lives in
+// src/lib/query-presentation.ts alongside the derivations that use it.
+export type { QueryMode };
 
 /**
- * Sticky-per-session mode persistence. Subscribes to the `storage` event so
- * multiple tabs reflecting each other in the same session stay in sync, and
- * survives Strict Mode double-invocation. SSR returns 'standard'.
+ * Sticky-per-session mode persistence (§10 Q7), on the shared
+ * `useSessionChoice` mechanism. The user's explicit, stored choice wins over
+ * the mount's `defaultMode`; with no choice stored the mount default applies
+ * (s6 P2, #229 — 'standard' everywhere except mounts that say otherwise).
+ * When the toggle is disabled (anonymous user, loading auth state, etc.)
+ * the effective mode is forced to 'standard'; the stored preference is
+ * preserved so signing back in restores the previous choice.
  */
-function subscribeToStorage(notify: () => void): () => void {
-  if (typeof window === 'undefined') return () => {};
-  window.addEventListener('storage', notify);
-  return () => window.removeEventListener('storage', notify);
-}
-
-function readStoredMode(): QueryMode {
-  if (typeof window === 'undefined') return 'standard';
-  const raw = window.sessionStorage.getItem(MODE_STORAGE_KEY);
-  return raw === 'notebook' || raw === 'standard' ? raw : 'standard';
-}
-
-function useStoredMode(enabled: boolean): [QueryMode, (next: QueryMode) => void] {
-  const stored = useSyncExternalStore(
-    subscribeToStorage,
-    readStoredMode,
-    () => 'standard' as QueryMode,
-  );
-  // Local override lets the component update synchronously on click without
-  // round-tripping through a `storage` event (which never fires in the same
-  // tab).
-  const [override, setOverride] = useState<QueryMode | null>(null);
-  const set = useCallback((next: QueryMode) => {
-    setOverride(next);
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.setItem(MODE_STORAGE_KEY, next);
-    }
-  }, []);
-  // When the toggle is disabled (anonymous user, loading auth state, etc.)
-  // force-return 'standard'. Stored preference is preserved so signing back
-  // in restores the previous choice.
-  const effective = enabled ? (override ?? stored) : 'standard';
+function useStoredMode(
+  enabled: boolean,
+  defaultMode: QueryMode,
+): [QueryMode, (next: QueryMode) => void] {
+  const [chosen, set] = useSessionChoice<QueryMode>(MODE_STORAGE_KEY, parseStoredMode);
+  const effective = resolveEffectiveMode({ enabled, chosen, defaultMode });
   return [effective, set];
 }
 
@@ -64,6 +49,22 @@ interface QueryFormProps {
   onSubmit: (query: string, model: string, portal: string, mode: QueryMode) => void;
   isLoading: boolean;
   queryCount?: number;
+  /**
+   * The response mode the form starts in when the visitor has not made an
+   * explicit (session-persisted) choice. Default 'standard' — today's
+   * behavior on every existing mount; `/ask` passes 'notebook' (s6 P2).
+   */
+  defaultMode?: QueryMode;
+  /**
+   * When present, Advanced options renders the side-by-side-comparison
+   * restore toggle bound to this state (s6 P2, #229 — answer-first mounts
+   * only). Absent (the default, and every pre-existing mount), nothing
+   * renders and the form is unchanged.
+   */
+  comparisonControl?: {
+    restored: boolean;
+    onChange: (restored: boolean) => void;
+  };
 }
 
 const EXAMPLE_QUERIES = [
@@ -81,7 +82,13 @@ const PORTALS = [
   { id: 'data.seattle.gov', name: 'Seattle' },
 ];
 
-export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: QueryFormProps) {
+export default function QueryForm({
+  onSubmit,
+  isLoading,
+  queryCount = 0,
+  defaultMode = 'standard',
+  comparisonControl,
+}: QueryFormProps) {
   const [query, setQuery] = useState('');
   const [model, setModel] = useState('openai/gpt-4o');
   const [portal, setPortal] = useState('');
@@ -98,7 +105,7 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
   // #229 P1: which provider the in-place branch below starts, and whether it
   // can name one at all — derived from the instance's configuration (Q63).
   const signInAffordance = resolveSignInAffordance(useSignInOptions());
-  const [mode, updateMode] = useStoredMode(isAuthenticated);
+  const [mode, updateMode] = useStoredMode(isAuthenticated, defaultMode);
   const [models, setModels] = useState<Model[]>([]);
   const [modelOpen, setModelOpen] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
@@ -427,6 +434,49 @@ export default function QueryForm({ onSubmit, isLoading, queryCount = 0 }: Query
               </div>
             )}
           </div>
+
+          {/* Side-by-side comparison restore (s6 P2, #229) — rendered only
+              when the mount runs answer-first and hands down the control.
+              Persisted per-session by the mount, exactly like the response
+              mode above. */}
+          {comparisonControl && (
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 400, display: 'block', marginBottom: '6px' }}>
+                Side-by-side comparison
+              </label>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '8px',
+                  fontSize: '13px',
+                  color: 'var(--text-secondary)',
+                  lineHeight: 1.5,
+                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={comparisonControl.restored}
+                  disabled={isLoading}
+                  onChange={(e) => comparisonControl.onChange(e.target.checked)}
+                  style={{ marginTop: '2px', cursor: 'inherit' }}
+                />
+                <span>Compare with and without data tools</span>
+              </label>
+              <p
+                style={{
+                  margin: '6px 0 0 22px',
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  lineHeight: 1.5,
+                }}
+              >
+                Adds a second answer from training data alone, side by side.
+                Runs one extra model call per question.
+              </p>
+            </div>
+          )}
 
           <div className="form-controls-row">
               {/* Model dropdown */}

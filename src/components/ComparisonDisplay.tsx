@@ -48,6 +48,21 @@ interface ComparisonDisplayProps {
   publishDialogOpen?: boolean;
   onPublishDialogChange?: (open: boolean) => void;
   onContinue?: (continuationPrompt: string) => void;
+  /**
+   * Answer-first presentation (s6 P2, #229): the with-data answer is the
+   * page and the side-by-side comparison is demoted to an expand option —
+   * the same demotion the mobile layout has always applied, promoted to
+   * every width. Set for runs that skipped the without-data arm, so the
+   * demoted element offers to run the comparison rather than previewing a
+   * panel that never streamed. Default false: today's layout, unchanged.
+   */
+  answerFirst?: boolean;
+  /**
+   * Called when the reader expands the demoted comparison. The surface
+   * restores the side-by-side presentation for the session and re-runs the
+   * question with both arms.
+   */
+  onRunComparison?: () => void;
 }
 
 function useMediaQuery(query: string) {
@@ -81,6 +96,8 @@ export default function ComparisonDisplay({
   publishDialogOpen,
   onPublishDialogChange,
   onContinue,
+  answerFirst = false,
+  onRunComparison,
 }: ComparisonDisplayProps) {
   const isMobile = useMediaQuery('(max-width: 640px)');
   const [nonMcpExpanded, setNonMcpExpanded] = useState(false);
@@ -259,6 +276,90 @@ export default function ComparisonDisplay({
       </button>
     </div>
   );
+
+  // Answer-first (s6 P2): the demoted element keeps the page's dominant
+  // split — AI alone vs AI with civic data — discoverable without running
+  // both arms up front. Visually it is the mobile collapsed panel; because
+  // the without-data arm was skipped, activating it runs the comparison
+  // (restoring the side-by-side presentation for the session) instead of
+  // expanding content that does not exist.
+  const runComparisonAffordance = (
+    <button
+      type="button"
+      onClick={onRunComparison}
+      disabled={isLoading || !onRunComparison}
+      style={{
+        display: 'block',
+        width: '100%',
+        textAlign: 'left',
+        border: '2px solid var(--border-color)',
+        borderRadius: '4px',
+        cursor: isLoading || !onRunComparison ? 'not-allowed' : 'pointer',
+        overflow: 'hidden',
+        padding: 0,
+        background: 'none',
+        font: 'inherit',
+      }}
+    >
+      <div
+        style={{
+          padding: '16px 24px',
+          backgroundColor: 'var(--card-background)',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '12px',
+        }}
+      >
+        <span
+          style={{
+            color: 'var(--text-muted)',
+            fontSize: '14px',
+            lineHeight: '24px',
+            flexShrink: 0,
+          }}
+        >
+          &#9654;
+        </span>
+        <div>
+          <h3
+            style={{
+              fontSize: '20px',
+              fontWeight: 600,
+              margin: 0,
+              color: 'var(--text-primary)',
+            }}
+          >
+            Without Data Tools
+          </h3>
+          <p
+            style={{
+              fontSize: '14px',
+              color: 'var(--text-muted)',
+              margin: '4px 0 0 0',
+            }}
+          >
+            Run the side-by-side comparison — ask this question again with and
+            without data tools to see the difference.
+          </p>
+        </div>
+      </div>
+    </button>
+  );
+
+  if (answerFirst) {
+    return (
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr',
+          gap: '24px',
+        }}
+      >
+        {withMcpPanel}
+        {runComparisonAffordance}
+      </div>
+    );
+  }
 
   return (
     <div
