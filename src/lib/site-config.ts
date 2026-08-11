@@ -29,6 +29,70 @@ export const SPONSOR: { prefix: string; name: string; url: string } | null = {
   url: 'https://metagov.org',
 };
 
+// --- Instance content sources (#241) ----------------------------------------
+//
+// Every value that names where THIS deployment's `/directory` and `/roadmap`
+// pages fetch their content from resolves through the getters below. The
+// demo defaults are the civicaitools.org reference deployment's historical
+// hardcoded URLs — the civic-ai-tools hub repo's server directory JSON and
+// ROADMAP.md — so with NO environment set the fetched bytes and rendered
+// links are identical to before (the same byte-parity bar as the Evidence
+// instance identity set below).
+//
+// An instance stood up from the guide with no environment set otherwise
+// silently fetches and serves the *reference project's* directory and
+// roadmap under its own name and brand (#241). Setting these variables
+// points each page at the instance's own content instead; leaving them
+// unset is a deliberate choice too — see the PR for #241 for the tradeoffs
+// of each no-config behavior, which this seam does not decide.
+//
+// Values are read at CALL time (not module load), matching the rest of this
+// file.
+
+/** Demo default directory-JSON source (civic-ai-tools hub repo, raw). */
+export const DEMO_DIRECTORY_DATA_URL =
+  'https://raw.githubusercontent.com/npstorey/civic-ai-tools/main/data/mcp-servers.json';
+
+/** Demo default roadmap markdown source (civic-ai-tools hub repo, raw). */
+export const DEMO_ROADMAP_RAW_URL =
+  'https://raw.githubusercontent.com/npstorey/civic-ai-tools/main/ROADMAP.md';
+
+/** Demo default roadmap "view on GitHub" link (civic-ai-tools hub repo). */
+export const DEMO_ROADMAP_GITHUB_URL =
+  'https://github.com/npstorey/civic-ai-tools/blob/main/ROADMAP.md';
+
+/**
+ * Source URL the `/directory` page fetches its MCP-server list from (JSON,
+ * `McpServerEntry[]`). Env: `DIRECTORY_DATA_URL`. On fetch failure the page
+ * falls back to the checked-in `directory-fallback.json` snapshot regardless
+ * of this value — see `src/lib/mcp/directory-data.ts`.
+ */
+export function getDirectoryDataUrl(): string {
+  return process.env.DIRECTORY_DATA_URL || DEMO_DIRECTORY_DATA_URL;
+}
+
+/**
+ * Source URL the `/roadmap` page fetches its markdown body from. Env:
+ * `ROADMAP_RAW_URL`. On fetch failure the page renders a stub pointing at
+ * `getRoadmapGithubUrl()` — see `src/lib/roadmap/data.ts`.
+ */
+export function getRoadmapRawUrl(): string {
+  return process.env.ROADMAP_RAW_URL || DEMO_ROADMAP_RAW_URL;
+}
+
+/**
+ * Human-facing "view on GitHub" link rendered on `/roadmap` (the "Renders
+ * from …" byline and the fetch-failure stub). Env: `ROADMAP_GITHUB_URL`.
+ * NOTE: the byline's visible label text ("civic-ai-tools/ROADMAP.md") is
+ * still hardcoded copy in `roadmap/page.tsx`, independent of this URL — an
+ * instance that overrides this var gets a correct link with a stale label.
+ * Addressing that is part of the #241 attribution design question, not this
+ * seam.
+ */
+export function getRoadmapGithubUrl(): string {
+  return process.env.ROADMAP_GITHUB_URL || DEMO_ROADMAP_GITHUB_URL;
+}
+
 // --- Evidence instance identity (ADR-0020: config, not code) ----------------
 //
 // Every value that names THIS deployment inside emitted evidence surfaces —

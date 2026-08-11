@@ -1,7 +1,9 @@
 // MCP Server Directory data fetching
 // Fetches from GitHub raw at build time, falls back to checked-in snapshot.
+// Source URL is instance configuration — see src/lib/site-config.ts (#241).
 
 import fallbackData from './directory-fallback.json';
+import { getDirectoryDataUrl } from '@/lib/site-config';
 
 // Types — compatible subset of civic-ai-tools/data/mcp-server-schema.ts
 
@@ -61,12 +63,9 @@ export interface McpServerEntry {
   priority?: PriorityTier;
 }
 
-const GITHUB_RAW_URL =
-  'https://raw.githubusercontent.com/npstorey/civic-ai-tools/main/data/mcp-servers.json';
-
 export async function getDirectoryData(): Promise<McpServerEntry[]> {
   try {
-    const res = await fetch(GITHUB_RAW_URL, {
+    const res = await fetch(getDirectoryDataUrl(), {
       next: { revalidate: 3600 }, // ISR: 1 hour
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

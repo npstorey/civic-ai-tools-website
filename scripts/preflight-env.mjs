@@ -233,6 +233,14 @@ export const ENV_SPEC = [
   { name: 'SITE_BRAND_TAGLINE', tier: 'optional', purpose: 'Footer tagline line (default: the demo tagline)', hasFallback: true },
   { name: 'SITE_BRAND_ATTRIBUTION', tier: 'optional', purpose: 'Footer attribution line, plain text (unset: the demo authored attribution markup)', hasFallback: true },
 
+  // --- Instance content sources (#241: src/lib/site-config.ts). All
+  //     optional: with none set, /directory and /roadmap fetch the
+  //     civic-ai-tools hub repo's content byte-identically to before. An
+  //     instance with content of its own points these at it instead. ---
+  { name: 'DIRECTORY_DATA_URL', tier: 'optional', purpose: '/directory page data source — MCP-server JSON (default: the civic-ai-tools hub repo)', hasFallback: true },
+  { name: 'ROADMAP_RAW_URL', tier: 'optional', purpose: '/roadmap page data source — raw ROADMAP.md (default: the civic-ai-tools hub repo)', hasFallback: true },
+  { name: 'ROADMAP_GITHUB_URL', tier: 'optional', purpose: '/roadmap "view on GitHub" link target (default: the civic-ai-tools hub repo)', hasFallback: true },
+
   // --- Optional / feature / ops ---
   { name: 'EVIDENCE_TRUST_REGISTRY_URL', tier: 'optional', purpose: 'External trust-registry override', hasFallback: true },
   { name: 'CIVICAITOOLS_SESSION_TOKEN', tier: 'optional', purpose: 'publish-evidence skill (Claude Code) auth' },

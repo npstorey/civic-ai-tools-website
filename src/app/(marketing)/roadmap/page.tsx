@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
-import { getRoadmapMarkdown, ROADMAP_GITHUB_URL } from '@/lib/roadmap/data';
+import { getRoadmapMarkdown } from '@/lib/roadmap/data';
 import AudienceRoutingStrip from '@/components/roadmap/AudienceRoutingStrip';
 import RoadmapBody from '@/components/roadmap/RoadmapBody';
 import { getBrandName } from '@/lib/brand-config';
+import { getRoadmapGithubUrl } from '@/lib/site-config';
 
 export const metadata: Metadata = {
   title: `Roadmap - ${getBrandName()}`,
@@ -25,7 +26,7 @@ export default async function RoadmapPage() {
         }}
       >
         Renders from{' '}
-        <a href={ROADMAP_GITHUB_URL} target="_blank" rel="noopener noreferrer">
+        <a href={getRoadmapGithubUrl()} target="_blank" rel="noopener noreferrer">
           civic-ai-tools/ROADMAP.md
         </a>
         .
@@ -60,7 +61,7 @@ function RoadmapStub() {
       </p>
       <p style={{ margin: 0 }}>
         Read the canonical version at{' '}
-        <a href={ROADMAP_GITHUB_URL} target="_blank" rel="noopener noreferrer">
+        <a href={getRoadmapGithubUrl()} target="_blank" rel="noopener noreferrer">
           civic-ai-tools/ROADMAP.md
         </a>
         .
