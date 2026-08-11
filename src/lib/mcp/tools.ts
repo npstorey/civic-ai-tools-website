@@ -414,8 +414,8 @@ export const availableModels: ModelDefinition[] = [
     description: 'Highest quality analysis, newest model',
   },
   {
-    id: 'google/gemini-2.0-flash-001',
-    name: 'Gemini 2.0 Flash',
+    id: 'google/gemini-3.5-flash-lite',
+    name: 'Gemini 3.5 Flash Lite',
     tag: 'fastest',
     provider: 'Google',
     supports_tools: true,
