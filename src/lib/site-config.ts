@@ -1,6 +1,11 @@
 // Site-wide external URLs. Import from here rather than hard-coding hrefs so
 // each destination can be changed in one place.
 
+// Relative, extension-bearing import: this module is in the `node --test`
+// graph (via the evidence modules), which resolves neither the `@/` alias nor
+// extensionless specifiers — the same convention as evidence/verify.ts.
+import { describeContentSource, type ContentProvenance } from './content-source.ts';
+
 /** The Typed Standards protocol site — spec home and neutral verifier. */
 export const TYPED_STANDARDS_URL = 'https://typedstandards.org';
 
@@ -31,66 +36,93 @@ export const SPONSOR: { prefix: string; name: string; url: string } | null = {
 
 // --- Instance content sources (#241) ----------------------------------------
 //
-// Every value that names where THIS deployment's `/directory` and `/roadmap`
-// pages fetch their content from resolves through the getters below. The
-// demo defaults are the civicaitools.org reference deployment's historical
-// hardcoded URLs — the civic-ai-tools hub repo's server directory JSON and
-// ROADMAP.md — so with NO environment set the fetched bytes and rendered
-// links are identical to before (the same byte-parity bar as the Evidence
-// instance identity set below).
+// Where THIS deployment's `/directory` and `/roadmap` pages get their content
+// resolves through the getters below. UNSET here means one thing only: "this
+// instance has no content source of its own." No getter falls back to another
+// project's roadmap, and the reference deployment configures itself
+// explicitly like any other instance — see docs/deploy.md.
 //
-// An instance stood up from the guide with no environment set otherwise
-// silently fetches and serves the *reference project's* directory and
-// roadmap under its own name and brand (#241). Setting these variables
-// points each page at the instance's own content instead; leaving them
-// unset is a deliberate choice too — see the PR for #241 for the tradeoffs
-// of each no-config behavior, which this seam does not decide.
+// The two pages then diverge, because the two kinds of content do:
+//
+//   /directory — a curated index of public MCP servers is a shared community
+//     resource, useful to any instance. With no instance source configured
+//     the page keeps serving the community index (below) and says so, with
+//     visible attribution to the project that maintains it.
+//
+//   /roadmap — a roadmap is inherently first-person ("our plans"). Another
+//     project's roadmap under an operator's brand is wrong even when
+//     attributed, so with no instance source configured `getRoadmapSource()`
+//     returns null: the page renders as unpublished and the nav drops the
+//     link, rather than presenting someone else's plans as this site's.
 //
 // Values are read at CALL time (not module load), matching the rest of this
 // file.
 
-/** Demo default directory-JSON source (civic-ai-tools hub repo, raw). */
-export const DEMO_DIRECTORY_DATA_URL =
+/**
+ * The shared community MCP-server index this codebase ships against — the
+ * civic-ai-tools hub repo's curated directory. Not a "demo default" in the
+ * sense the rest of this file uses: it is the deliberate content of the
+ * unconfigured `/directory` page, rendered with attribution rather than as
+ * the instance's own list.
+ */
+export const COMMUNITY_DIRECTORY_DATA_URL =
   'https://raw.githubusercontent.com/npstorey/civic-ai-tools/main/data/mcp-servers.json';
 
-/** Demo default roadmap markdown source (civic-ai-tools hub repo, raw). */
-export const DEMO_ROADMAP_RAW_URL =
-  'https://raw.githubusercontent.com/npstorey/civic-ai-tools/main/ROADMAP.md';
-
-/** Demo default roadmap "view on GitHub" link (civic-ai-tools hub repo). */
-export const DEMO_ROADMAP_GITHUB_URL =
-  'https://github.com/npstorey/civic-ai-tools/blob/main/ROADMAP.md';
-
-/**
- * Source URL the `/directory` page fetches its MCP-server list from (JSON,
- * `McpServerEntry[]`). Env: `DIRECTORY_DATA_URL`. On fetch failure the page
- * falls back to the checked-in `directory-fallback.json` snapshot regardless
- * of this value — see `src/lib/mcp/directory-data.ts`.
- */
-export function getDirectoryDataUrl(): string {
-  return process.env.DIRECTORY_DATA_URL || DEMO_DIRECTORY_DATA_URL;
+/** Resolved `/directory` data source, and whether it belongs to this site. */
+export interface DirectorySource {
+  /** URL fetched for the MCP-server list (JSON, `McpServerEntry[]`). */
+  url: string;
+  /** `'instance'` when `DIRECTORY_DATA_URL` is set, else `'community'`. */
+  provenance: Extract<ContentProvenance, 'instance' | 'community'>;
 }
 
 /**
- * Source URL the `/roadmap` page fetches its markdown body from. Env:
- * `ROADMAP_RAW_URL`. On fetch failure the page renders a stub pointing at
- * `getRoadmapGithubUrl()` — see `src/lib/roadmap/data.ts`.
+ * Source the `/directory` page fetches its MCP-server list from. Env:
+ * `DIRECTORY_DATA_URL`; unset yields the community index above, marked as
+ * such so the page can attribute it. On fetch failure the page falls back to
+ * the checked-in `directory-fallback.json` snapshot either way, and says so —
+ * see `src/lib/mcp/directory-data.ts`.
  */
-export function getRoadmapRawUrl(): string {
-  return process.env.ROADMAP_RAW_URL || DEMO_ROADMAP_RAW_URL;
+export function getDirectorySource(): DirectorySource {
+  const configured = process.env.DIRECTORY_DATA_URL;
+  return configured
+    ? { url: configured, provenance: 'instance' }
+    : { url: COMMUNITY_DIRECTORY_DATA_URL, provenance: 'community' };
+}
+
+/** Resolved `/roadmap` source: what to fetch, where to link, what to call it. */
+export interface RoadmapSource {
+  /** URL the page fetches the roadmap markdown from. */
+  rawUrl: string;
+  /** Human-viewable URL behind the "Renders from …" byline. */
+  viewUrl: string;
+  /** The byline's visible label, derived from the URL it links to. */
+  label: string;
 }
 
 /**
- * Human-facing "view on GitHub" link rendered on `/roadmap` (the "Renders
- * from …" byline and the fetch-failure stub). Env: `ROADMAP_GITHUB_URL`.
- * NOTE: the byline's visible label text ("civic-ai-tools/ROADMAP.md") is
- * still hardcoded copy in `roadmap/page.tsx`, independent of this URL — an
- * instance that overrides this var gets a correct link with a stale label.
- * Addressing that is part of the #241 attribution design question, not this
- * seam.
+ * This instance's own roadmap source, or `null` when it has none.
+ *
+ * Env: `ROADMAP_RAW_URL` (the markdown) and optionally `ROADMAP_GITHUB_URL`
+ * (where the byline links). With `ROADMAP_GITHUB_URL` unset the view URL is
+ * derived from the raw URL — a GitHub raw URL resolves to its file page — so
+ * an instance that sets one variable never links out to a *different*
+ * project's roadmap. `label` is derived from whichever URL the byline links
+ * to, which is what keeps label and link from drifting apart.
+ *
+ * `null` is a first-class state, not a misconfiguration: it is what every
+ * instance that has not published a roadmap looks like.
  */
-export function getRoadmapGithubUrl(): string {
-  return process.env.ROADMAP_GITHUB_URL || DEMO_ROADMAP_GITHUB_URL;
+export function getRoadmapSource(): RoadmapSource | null {
+  const rawUrl = process.env.ROADMAP_RAW_URL;
+  if (!rawUrl) return null;
+  const explicitViewUrl = process.env.ROADMAP_GITHUB_URL;
+  const described = describeContentSource(explicitViewUrl || rawUrl);
+  return {
+    rawUrl,
+    viewUrl: explicitViewUrl || described.href,
+    label: described.label,
+  };
 }
 
 // --- Evidence instance identity (ADR-0020: config, not code) ----------------

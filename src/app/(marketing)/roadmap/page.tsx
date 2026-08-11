@@ -3,20 +3,40 @@ import { getRoadmapMarkdown } from '@/lib/roadmap/data';
 import AudienceRoutingStrip from '@/components/roadmap/AudienceRoutingStrip';
 import RoadmapBody from '@/components/roadmap/RoadmapBody';
 import { getBrandName } from '@/lib/brand-config';
-import { getRoadmapGithubUrl } from '@/lib/site-config';
+import { getRoadmapSource, type RoadmapSource } from '@/lib/site-config';
 
-export const metadata: Metadata = {
-  title: `Roadmap - ${getBrandName()}`,
-  description:
-    'The civic-ai-tools public roadmap — vision pillars, trust commitments, near-term plans, and how the evidence-system fork resolved (toward a domain-neutral, spec-first protocol). Mirrored from the hub repo.',
-};
+// A roadmap is first-person content: "our plans". An instance that has not
+// published one renders the unpublished state below rather than another
+// project's roadmap under its own brand (#241) — and the nav drops the link,
+// so the page is a destination for anyone who has the URL, not a dead end in
+// the header. `generateMetadata` (not a static `metadata` object) so the
+// source is read at call time, like every other instance-config read.
+export async function generateMetadata(): Promise<Metadata> {
+  const brand = getBrandName();
+  const source = getRoadmapSource();
+  return {
+    title: `Roadmap - ${brand}`,
+    description: source
+      ? `The public roadmap for ${brand} — what is planned and what is underway. Rendered from ${source.label}.`
+      : `${brand} has not published a roadmap.`,
+  };
+}
 
 export default async function RoadmapPage() {
-  const result = await getRoadmapMarkdown();
+  const source = getRoadmapSource();
+
+  if (!source) {
+    return (
+      <RoadmapShell>
+        <RoadmapUnpublished />
+      </RoadmapShell>
+    );
+  }
+
+  const result = await getRoadmapMarkdown(source.rawUrl);
 
   return (
-    <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '48px 24px' }}>
-      <h1 style={{ marginBottom: '8px' }}>Roadmap</h1>
+    <RoadmapShell>
       <p
         style={{
           fontSize: '13px',
@@ -25,9 +45,12 @@ export default async function RoadmapPage() {
           marginTop: 0,
         }}
       >
+        {/* Label and link are both derived from the configured source, so an
+            instance that re-points the roadmap cannot end up with a correct
+            link under the reference project's file name. */}
         Renders from{' '}
-        <a href={getRoadmapGithubUrl()} target="_blank" rel="noopener noreferrer">
-          civic-ai-tools/ROADMAP.md
+        <a href={source.viewUrl} target="_blank" rel="noopener noreferrer">
+          {source.label}
         </a>
         .
       </p>
@@ -35,15 +58,53 @@ export default async function RoadmapPage() {
       {result.ok && result.markdown ? (
         <RoadmapBody markdown={result.markdown} />
       ) : (
-        <RoadmapStub />
+        <RoadmapStub source={source} />
       )}
 
+      {/* The routing strip's cards point at the reference project's own hub
+          docs — content that belongs with the reference project's roadmap,
+          not with an instance's. It renders only alongside a rendered
+          roadmap; making its cards configurable is a roadmap-change issue
+          (see the component header, website#94). */}
       <AudienceRoutingStrip />
+    </RoadmapShell>
+  );
+}
+
+function RoadmapShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '48px 24px' }}>
+      <h1 style={{ marginBottom: '8px' }}>Roadmap</h1>
+      {children}
     </div>
   );
 }
 
-function RoadmapStub() {
+function RoadmapUnpublished() {
+  return (
+    <div
+      style={{
+        backgroundColor: 'var(--card-background)',
+        border: '1px solid var(--border-color)',
+        borderRadius: '4px',
+        padding: '24px',
+        fontSize: '16px',
+        lineHeight: '1.7',
+        color: 'var(--text-secondary)',
+        marginTop: '24px',
+      }}
+    >
+      <p style={{ margin: 0 }}>This site has not published a roadmap.</p>
+      <p style={{ margin: '12px 0 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
+        Running this site? Point <code>ROADMAP_RAW_URL</code> at the raw Markdown of your own
+        roadmap and redeploy — this page renders it, and the link returns to the nav. See{' '}
+        <code>docs/deploy.md</code> in this codebase.
+      </p>
+    </div>
+  );
+}
+
+function RoadmapStub({ source }: { source: RoadmapSource }) {
   return (
     <div
       style={{
@@ -56,13 +117,11 @@ function RoadmapStub() {
         color: 'var(--text-secondary)',
       }}
     >
-      <p style={{ margin: '0 0 12px 0' }}>
-        The roadmap could not be loaded from GitHub right now.
-      </p>
+      <p style={{ margin: '0 0 12px 0' }}>The roadmap could not be loaded right now.</p>
       <p style={{ margin: 0 }}>
         Read the canonical version at{' '}
-        <a href={getRoadmapGithubUrl()} target="_blank" rel="noopener noreferrer">
-          civic-ai-tools/ROADMAP.md
+        <a href={source.viewUrl} target="_blank" rel="noopener noreferrer">
+          {source.label}
         </a>
         .
       </p>

@@ -1,9 +1,12 @@
 // MCP Server Directory data fetching
-// Fetches from GitHub raw at build time, falls back to checked-in snapshot.
-// Source URL is instance configuration — see src/lib/site-config.ts (#241).
+// Fetches from the configured source at build time, falls back to the
+// checked-in snapshot. Source URL is instance configuration — see
+// src/lib/site-config.ts (#241). The result carries its provenance so the
+// page can attribute entries that are not this instance's own.
 
 import fallbackData from './directory-fallback.json';
-import { getDirectoryDataUrl } from '@/lib/site-config';
+import { getDirectorySource } from '@/lib/site-config';
+import type { ContentProvenance } from '@/lib/content-source';
 
 // Types — compatible subset of civic-ai-tools/data/mcp-server-schema.ts
 
@@ -63,19 +66,32 @@ export interface McpServerEntry {
   priority?: PriorityTier;
 }
 
-export async function getDirectoryData(): Promise<McpServerEntry[]> {
+export interface DirectoryData {
+  servers: McpServerEntry[];
+  /** Whose entries these are: this instance's, the community index's, or the
+   *  snapshot bundled with this codebase after a fetch failure. */
+  provenance: ContentProvenance;
+  /** The URL that was fetched — what the attribution byline points at. */
+  sourceUrl: string;
+}
+
+export async function getDirectoryData(): Promise<DirectoryData> {
+  const { url, provenance } = getDirectorySource();
   try {
-    const res = await fetch(getDirectoryDataUrl(), {
+    const res = await fetch(url, {
       next: { revalidate: 3600 }, // ISR: 1 hour
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return (await res.json()) as McpServerEntry[];
+    return { servers: (await res.json()) as McpServerEntry[], provenance, sourceUrl: url };
   } catch (error) {
     console.warn(
-      '[Directory] Failed to fetch from GitHub, using fallback:',
+      '[Directory] Failed to fetch the configured source, using bundled snapshot:',
       error instanceof Error ? error.message : error
     );
-    return fallbackData as McpServerEntry[];
+    // The snapshot is this codebase's own checked-in copy of the community
+    // index — upstream content whichever source was configured, so it is
+    // attributed as such rather than passed off as the instance's data.
+    return { servers: fallbackData as McpServerEntry[], provenance: 'snapshot', sourceUrl: url };
   }
 }
 
