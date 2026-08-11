@@ -3,7 +3,7 @@ import { createModelClient } from '@/lib/model-client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
-const SUMMARY_MODEL = 'google/gemini-2.0-flash-001';
+const SUMMARY_MODEL = 'google/gemini-3.5-flash-lite';
 
 const SYSTEM_PROMPT = `You are writing a one-paragraph summary of an AI-assisted civic data analysis for a non-technical reader (journalist, community board member, city staff).
 

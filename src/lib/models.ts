@@ -1,15 +1,18 @@
 /**
  * Model pricing and display helpers.
  *
- * Prices per 1M tokens (USD) — current OpenRouter pricing as of 2026-04-12.
- * Update when OpenRouter pricing changes.
+ * Prices per 1M tokens (USD) — current OpenRouter pricing as of 2026-08-11.
+ * Update when OpenRouter pricing changes. Every id offered in `availableModels`
+ * (src/lib/mcp/tools.ts) must have an entry here — see models.test.ts.
  */
 
 export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'openai/gpt-4o':                  { input: 2.50, output: 10.00 },
   'openai/gpt-5.4':                 { input: 2.50, output: 15.00 },
-  'google/gemini-2.0-flash-001':    { input: 0.10, output: 0.40 },
+  'google/gemini-3.5-flash-lite':   { input: 0.30, output: 2.50 },
   'anthropic/claude-sonnet-4':      { input: 3.00, output: 15.00 },
+  'anthropic/claude-sonnet-4-6':    { input: 3.00, output: 15.00 },
+  'anthropic/claude-opus-5':        { input: 5.00, output: 25.00 },
   'anthropic/claude-haiku-4.5':     { input: 1.00, output: 5.00 },
 };
 
@@ -38,8 +41,10 @@ export function formatModelName(id: string): string {
   const map: Record<string, string> = {
     'openai/gpt-4o':                  'GPT-4o',
     'openai/gpt-5.4':                 'GPT-5.4',
-    'google/gemini-2.0-flash-001':    'Gemini 2.0 Flash',
+    'google/gemini-3.5-flash-lite':   'Gemini 3.5 Flash Lite',
     'anthropic/claude-sonnet-4':      'Claude Sonnet 4',
+    'anthropic/claude-sonnet-4-6':    'Claude Sonnet 4.6',
+    'anthropic/claude-opus-5':        'Claude Opus 5',
     'anthropic/claude-haiku-4.5':     'Claude Haiku 4.5',
   };
   return map[id] || id;
