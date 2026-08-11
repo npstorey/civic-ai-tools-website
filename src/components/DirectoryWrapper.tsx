@@ -66,7 +66,7 @@ export default function DirectoryWrapper({
             ) : (
               <>
                 The MCP server entries are the community snapshot bundled with this codebase — the
-                configured directory source could not be loaded.
+                live directory source could not be loaded.
               </>
             )}
           </p>
