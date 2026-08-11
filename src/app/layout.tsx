@@ -98,6 +98,7 @@ export default function RootLayout({
   const brandName = getBrandName();
   const brandTagline = getBrandTagline();
   const brandAttribution = getBrandAttribution();
+  const brandAccent = getBrandAccent();
 
   /**
    * Whether this instance has a roadmap of its own (#241). An instance that
@@ -105,9 +106,9 @@ export default function RootLayout({
    * lands on it — but drops the nav entry, the same "hidden rather than
    * pointed at nothing" treatment the marketing links get on an app-only
    * instance. With `ROADMAP_RAW_URL` set, every link is exactly today's.
+   * Content, not chrome: it reads site-config.ts, not brand-config.ts.
    */
   const showRoadmap = getRoadmapSource() !== null;
-  const brandAccent = getBrandAccent();
 
   /**
    * The instance's sign-in choices (#229 P1 / Q63), derived here for the same
