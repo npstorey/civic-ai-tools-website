@@ -11,6 +11,7 @@ import type { ProgressLogEntry, ProgressGroup, ToolCall, EvidenceTrace } from '@
 import { useSession, signIn } from 'next-auth/react';
 import { useHostLinks } from '@/components/HostLinksProvider';
 import { useSignInOptions } from '@/components/SignInOptionsProvider';
+import { toDisplayHost, useEvidenceSiteOrigin } from '@/components/EvidenceOriginProvider';
 import { resolveSignInAffordance } from '@/lib/auth-provider-options';
 import PublishEvidenceDialog from '@/components/PublishEvidenceDialog';
 
@@ -405,6 +406,12 @@ export default function McpResponseDisplay({
   // #229 P1: the publish button's signed-out, in-place branch starts the
   // provider this instance actually configured — not a hardcoded one (Q63).
   const signInAffordance = resolveSignInAffordance(useSignInOptions());
+  // Instance identity (#227 class): the copied output's attribution line
+  // names the instance the analysis was generated on. That travels off-site
+  // with the copied text — the same identity a published record carries — so
+  // it is evidence identity, not chrome, per brand-config.ts's chrome-vs-
+  // evidence line, and reads EvidenceOriginProvider. Host only, as before.
+  const attributionHost = toDisplayHost(useEvidenceSiteOrigin());
 
   // Use parent-controlled state if provided, otherwise local
   const publishDialogOpen = publishDialogOpenProp ?? publishDialogOpenLocal;
@@ -738,7 +745,7 @@ export default function McpResponseDisplay({
                   if (parts.length > 0) parts.push('---');
                   parts.push(content);
                   // Attribution
-                  parts.push(`\n_Generated via civicaitools.org \u00b7 ${new Date().toLocaleDateString()}_`);
+                  parts.push(`\n_Generated via ${attributionHost} \u00b7 ${new Date().toLocaleDateString()}_`);
                   await navigator.clipboard.writeText(parts.join('\n\n'));
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);

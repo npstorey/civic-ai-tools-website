@@ -56,13 +56,24 @@ import { useSession } from 'next-auth/react';
  * split-host instance carries the app origin — the treatment
  * `resolveDashboardHref` established for the header's Dashboard link.
  * Defaults to `/ask`: today's relative path, for any mount that omits it.
+ *
+ * `dashboardHref` (#236) carries the SAME treatment, via
+ * `resolveDashboardHref()` itself — `/dashboard` is app-private exactly as
+ * `/ask` is, so a plain relative link has the same latent 404 on the
+ * marketing-host `/evidence` pages. Latent, because the strip renders only
+ * with a session and sessions read as unauthenticated cross-host — but the
+ * #229 P3 session-visibility direction is what turns that gap real, so the
+ * link gets the origin treatment before it can. Defaults to `/dashboard`:
+ * today's relative path, for any mount that omits it.
  */
 export default function AppChrome({
   publicSiteHref = '/',
   askHref = '/ask',
+  dashboardHref = '/dashboard',
 }: {
   publicSiteHref?: string | null;
   askHref?: string;
+  dashboardHref?: string;
 }) {
   const { data: session, status } = useSession();
   const pathname = usePathname();
@@ -118,7 +129,7 @@ export default function AppChrome({
               Dashboard
             </span>
           ) : (
-            <Link href="/dashboard" style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
+            <Link href={dashboardHref} style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
               Dashboard
             </Link>
           )}

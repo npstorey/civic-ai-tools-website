@@ -11,6 +11,7 @@ import type { Provider } from 'next-auth/providers/index';
 import {
   DEFAULT_SIGN_IN_OPTIONS,
   resolveSignInAffordance,
+  resolveSignInProse,
   toSignInOptions,
 } from './auth-provider-options.ts';
 import { buildProviders } from './auth-providers.ts';
@@ -142,6 +143,32 @@ test('the reference deployment resolves to exactly the pre-seam button', () => {
     toSignInOptions(buildProviders({ GITHUB_CLIENT_ID: 'id', GITHUB_CLIENT_SECRET: 'secret' })),
   );
   assert.deepEqual(affordance, { kind: 'provider', option: { id: 'github', name: 'GitHub' } });
+});
+
+// --- Prose wording (#235) ---------------------------------------------------
+//
+// The provider-literal class's seventh instance is a SENTENCE, not a control
+// ("Sign in with GitHub to add an attestation."), so it resolves to wording
+// rather than an affordance.
+
+test('resolveSignInProse: one provider ⇒ named; the seam default is today’s exact copy', () => {
+  assert.equal(resolveSignInProse([{ id: 'oidc', name: 'Acme SSO' }]), 'Sign in with Acme SSO');
+  assert.equal(resolveSignInProse(DEFAULT_SIGN_IN_OPTIONS), 'Sign in with GitHub');
+});
+
+test('resolveSignInProse: several providers ⇒ neutral "Sign in" (prose cannot enumerate)', () => {
+  assert.equal(
+    resolveSignInProse([
+      { id: 'github', name: 'GitHub' },
+      { id: 'oidc', name: 'Acme SSO' },
+    ]),
+    'Sign in',
+  );
+});
+
+test('resolveSignInProse: nothing configured ⇒ null — the caller drops the sentence', () => {
+  assert.equal(resolveSignInProse([]), null);
+  assert.equal(resolveSignInProse(toSignInOptions(buildProviders({}))), null);
 });
 
 test('an OIDC-only instance renders its own provider, never GitHub', () => {

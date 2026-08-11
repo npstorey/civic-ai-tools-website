@@ -31,7 +31,7 @@ const CARDS: AudienceCard[] = [
   },
   {
     audience: 'OSS contributors',
-    why: 'Where to file, how the three repos relate, and the template for non-trivial roadmap proposals.',
+    why: 'Where to file, how the four repos relate, and the template for non-trivial roadmap proposals.',
     linkLabel: 'CONTRIBUTING.md',
     href: `${HUB_DOC_BASE}/CONTRIBUTING.md`,
     external: true,

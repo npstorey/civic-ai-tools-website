@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useSignInOptions } from '@/components/SignInOptionsProvider';
+import { resolveSignInProse } from '@/lib/auth-provider-options';
 import AttestationDialog from './AttestationDialog';
 
 type AttestationType = 'consistency' | 'evaluation' | 'expert_attestation';
@@ -47,6 +49,13 @@ interface AttestationSectionProps {
 
 export default function AttestationSection({ slug, analysisModel, promptVisibility }: AttestationSectionProps) {
   const { data: session } = useSession();
+  // #235 — the provider-literal class (#229 P1), prose instance: the
+  // signed-out sentence below derives its wording from the providers this
+  // instance configured rather than hardcoding one. This section ships on
+  // the DUAL-SERVED evidence detail page — the marketing host included — so
+  // the hardcoded name was wrong on every non-GitHub instance's public face.
+  // Null (nothing configured) drops the sentence entirely.
+  const signInProse = resolveSignInProse(useSignInOptions());
   const [attestations, setAttestations] = useState<Attestation[]>([]);
   const [expandedPkgs, setExpandedPkgs] = useState<Record<string, AttestationPackageData | null>>({});
   // Expert attestations render their body inline rather than behind a "Show
@@ -180,11 +189,11 @@ export default function AttestationSection({ slug, analysisModel, promptVisibili
           promptVisibility={promptVisibility}
           onAttestationCreated={handleAttestationCreated}
         />
-      ) : (
+      ) : signInProse !== null ? (
         <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
-          Sign in with GitHub to add an attestation.
+          {signInProse} to add an attestation.
         </p>
-      )}
+      ) : null}
     </div>
   );
 }

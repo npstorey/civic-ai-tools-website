@@ -1,5 +1,9 @@
 import AppChrome from '@/components/AppChrome';
-import { resolveAskHref, resolvePublicSiteHref } from '@/lib/host-routing';
+import {
+  resolveAskHref,
+  resolveDashboardHref,
+  resolvePublicSiteHref,
+} from '@/lib/host-routing';
 
 /**
  * Layout for the `(app)` route group — the gated app surface's shell
@@ -30,7 +34,10 @@ import { resolveAskHref, resolvePublicSiteHref } from '@/lib/host-routing';
  *
  * The "Ask" link (#210) is resolved the same way and for the same reason:
  * this group's `/evidence` pages are dual-served, so the strip can render on
- * the marketing host, where `/ask` is withheld.
+ * the marketing host, where `/ask` is withheld. The "Dashboard" link (#236)
+ * gets the identical treatment — `/dashboard` is app-private exactly as
+ * `/ask` is — threaded the same way the root layout already threads
+ * `resolveDashboardHref` to the header.
  */
 export default function AppLayout({
   children,
@@ -42,6 +49,7 @@ export default function AppLayout({
       <AppChrome
         publicSiteHref={resolvePublicSiteHref(process.env)}
         askHref={resolveAskHref(process.env)}
+        dashboardHref={resolveDashboardHref(process.env)}
       />
       {children}
     </>
