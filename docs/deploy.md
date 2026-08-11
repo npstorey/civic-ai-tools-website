@@ -844,6 +844,36 @@ a section's worth of differences, not a parallel guide:
   exactly as described above. The preflight resolves this as the default
   profile and reports accordingly.
 
+### Ops note: sandbox snapshot expiry
+
+Vercel Sandbox's platform default expires a snapshot **30 days after its
+last use**. `scripts/build-sandbox-snapshot.ts` already opts out of that
+(`sandbox.snapshot({ expiration: 0 })` — `0` is the platform's documented
+sentinel for "never expire"), so a snapshot built via
+`npm run sandbox:build-snapshot` shouldn't be on that clock at all. The
+residual risk is a `SANDBOX_SNAPSHOT_ID` that came from somewhere else —
+hand-built without an equivalent no-expiration flag, or predating this
+override.
+
+**Recognize it:** neither `execute.ts` nor `vercel-sandbox.ts` catches a
+failed snapshot boot, so a lapsed snapshot is more likely to surface as an
+outright execution failure at the sandbox-boot step than as a merely slow
+one. Check proactively with the Sandbox CLI:
+`sandbox snapshots get $SANDBOX_SNAPSHOT_ID` (`created` = healthy,
+`deleted` = expired/removed).
+
+**Refresh:** `npm run sandbox:build-snapshot`, then set the printed id on
+`SANDBOX_SNAPSHOT_ID` in both Vercel scopes.
+
+**Keep-warm:** not worth automating at the current volume (roughly one
+published run a month), and less useful here than usual — the
+`expiration: 0` override already removes the 30-day timer for anything the
+script built, so a scheduled keep-warm job would mostly be insuring
+against the residual-risk case above, not the general platform behavior.
+Left manual: rebuild on a sandbox-boot failure, or whenever pinned library
+versions change (which already forces a rebuild). Revisit if run volume or
+the failure mode changes.
+
 ## Vocabulary notes for integrators
 
 If you build against your instance's API, three vocabulary facts prevent

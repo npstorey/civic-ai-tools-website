@@ -154,6 +154,14 @@ export const ENV_SPEC = [
   // fallback-backed under both (container.ts:47 → DEFAULT_CONTAINER_IMAGE), so
   // it carries no condition: it is never a miss and never a nag either way.
   { name: 'EXECUTOR_CONTAINER_IMAGE', tier: 'optional', purpose: 'Executor image tag (EXECUTOR_DRIVER=container only; default civic-notebook-executor:0.1.0)', hasFallback: true },
+  // Passed into every executed notebook's env by buildNotebookEnv
+  // (src/lib/sandbox/execute.ts), under BOTH executor drivers — read by the
+  // generated notebook's own helper functions (fetch_socrata.py,
+  // fetch_data_commons.py), not by the app itself. Both degrade gracefully
+  // (throttled / anonymous access) rather than hard-failing, so no tier
+  // promotion and no onlyWhen condition.
+  { name: 'SOCRATA_APP_TOKEN', tier: 'optional', purpose: 'Socrata app token for executed notebooks (fetch_socrata.py) — raises the anonymous per-IP rate limit; throttled but functional without it', hasFallback: true },
+  { name: 'DC_API_KEY', tier: 'optional', purpose: 'Data Commons API key for executed notebooks (fetch_data_commons.py) — distinct from DATA_COMMONS_API_KEY (the chat-flow MCP key); anonymous access works for moderate volumes without it', hasFallback: true },
   // Sandbox-only: the container driver boots a local image and reads none of
   // these four (vercel-sandbox.ts:89-96 is behind the driver's dynamic import).
   { name: 'SANDBOX_SNAPSHOT_ID', tier: 'recommended', purpose: 'Prebuilt sandbox snapshot — absent, the vercel-sandbox driver falls back to a slow fresh boot + pip install', hasFallback: true, onlyWhen: { executor: 'vercel-sandbox' } },
