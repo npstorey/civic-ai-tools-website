@@ -2,12 +2,9 @@
 // Fetches ROADMAP.md from the civic-ai-tools hub repo on GitHub raw at build time with 1-hour ISR.
 // Mirrors the pattern in `src/lib/mcp/directory-data.ts` — hub repo is source of truth, drift window
 // is small because the doc refreshes quarterly and carries its own version label in the body.
+// Source URLs are instance configuration — see src/lib/site-config.ts (#241).
 
-export const ROADMAP_RAW_URL =
-  'https://raw.githubusercontent.com/npstorey/civic-ai-tools/main/ROADMAP.md';
-
-export const ROADMAP_GITHUB_URL =
-  'https://github.com/npstorey/civic-ai-tools/blob/main/ROADMAP.md';
+import { getRoadmapRawUrl } from '@/lib/site-config';
 
 export interface RoadmapFetchResult {
   ok: boolean;
@@ -17,7 +14,7 @@ export interface RoadmapFetchResult {
 
 export async function getRoadmapMarkdown(): Promise<RoadmapFetchResult> {
   try {
-    const res = await fetch(ROADMAP_RAW_URL, {
+    const res = await fetch(getRoadmapRawUrl(), {
       next: { revalidate: 3600 }, // ISR: 1 hour
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

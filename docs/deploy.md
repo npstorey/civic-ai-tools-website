@@ -423,6 +423,10 @@ exactly the pre-allowlist behavior; see the sign-in section),
 the host-topology set (`APP_HOST`, `MARKETING_HOST`, `APP_ONLY` — with
 none set, every route serves on every host, exactly the single-host
 behavior; see [Host topology](#host-topology-optional)),
+the content-source set (`DIRECTORY_DATA_URL`, `ROADMAP_RAW_URL`,
+`ROADMAP_GITHUB_URL` — with none set, `/directory` and `/roadmap` fetch
+the civic-ai-tools hub repo's content byte-identically to before; see
+[Content sources](#content-sources-directory-and-roadmap)),
 rate-limit and token-budget tuning knobs
 (`ANONYMOUS_RATE_LIMIT`, `AUTHENTICATED_RATE_LIMIT`,
 `APP_TIER_RATE_LIMIT`, `TOKEN_LIMIT_PER_REQUEST`,
@@ -464,6 +468,28 @@ container configuration for the dynamic pages.
 The favicon is a file, not a variable: replace
 [`src/app/favicon.ico`](../src/app/favicon.ico) in your checkout (the
 App Router serves it at `/favicon.ico`) and rebuild.
+
+### Content sources (directory and roadmap)
+
+`/directory` and `/roadmap` fetch their content from the civic-ai-tools
+hub repo by default — its MCP-server directory JSON and its
+`ROADMAP.md`. Left unset, a self-hosted instance therefore serves the
+*reference project's* server directory and roadmap under its own name
+and brand (civic-ai-tools-website#241). Three variables re-point these
+pages at content of your own, all resolved in
+[`src/lib/site-config.ts`](../src/lib/site-config.ts); with none set,
+the fetched bytes and rendered links are identical to before.
+
+| Variable | Meaning | Default |
+| --- | --- | --- |
+| `DIRECTORY_DATA_URL` | `/directory` page data source — a JSON array matching the `McpServerEntry[]` shape in [`src/lib/mcp/directory-data.ts`](../src/lib/mcp/directory-data.ts). On fetch failure the page falls back to the checked-in `directory-fallback.json` snapshot regardless of this value — that snapshot is also the reference project's own data, so a from-scratch instance should supply both. | the civic-ai-tools hub repo's `data/mcp-servers.json` |
+| `ROADMAP_RAW_URL` | `/roadmap` page data source — raw Markdown. | the civic-ai-tools hub repo's `ROADMAP.md` |
+| `ROADMAP_GITHUB_URL` | The "view on GitHub" link rendered on `/roadmap` (the byline and the fetch-failure stub). The byline's visible label text is separate, hardcoded copy and does not follow this variable — see [issue #241](https://github.com/npstorey/civic-ai-tools-website/issues/241) for the open design question on no-config-instance behavior for these two pages. | the civic-ai-tools hub repo's `ROADMAP.md` GitHub URL |
+
+These three are content, not chrome or evidence: unlike the branding set
+above they only change what `/directory` and `/roadmap` fetch and link
+to, and unlike the `EVIDENCE_*` set they are never emitted inside a
+signed evidence package.
 
 ## Sign-in configuration
 
