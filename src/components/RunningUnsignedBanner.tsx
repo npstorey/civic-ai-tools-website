@@ -71,7 +71,7 @@ export default function RunningUnsignedBanner() {
       }}
     >
       <strong>Running unsigned</strong> — no signing key is configured, so
-      evidence commit and publish are disabled and any output produced here
+      evidence seal and publish are disabled and any output produced here
       carries no cryptographic commitment. Signing is the go-to-production
       step; see the{' '}
       <a
