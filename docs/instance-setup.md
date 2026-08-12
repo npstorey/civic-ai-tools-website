@@ -10,7 +10,7 @@ An instance works unsigned out of the box — analyses run and packages can be
 produced and inspected. Signing is the **go-to-production** step: keygen →
 registry → environment. Nothing unsigned can reach the `sealed` or `public`
 states, and the application enforces this (ADR-0020 Decisions B/C): with no
-signing key configured, the evidence **commit and publish actions are gated
+signing key configured, the evidence **seal and publish actions are gated
 off** server-side and in the UI, verification labels unsigned output
 prominently ("Unsigned package — no cryptographic commitment"), and a
 **running-unsigned banner** shows site-wide outside a dev environment
