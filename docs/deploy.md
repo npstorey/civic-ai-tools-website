@@ -404,6 +404,7 @@ doesn't):
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Durable rate limiting — the counter falls back to per-process memory (resets on restart; not shared across instances). Fine for a single-node instance. |
 | `SANDBOX_SNAPSHOT_ID` | (vercel-sandbox executor only) Prebuilt snapshot — absent, every execution pays a slow fresh boot + pip install. Not read by the container executor. |
 | `SOCRATA_APP_TOKEN` | Socrata API app token passed into executed notebooks — absent, requests run anonymously against Socrata's lower rate limits. |
+| `ROADMAP_RAW_URL` | `/roadmap` — absent, the page states that this instance has published no roadmap and the Roadmap link leaves the header and footer nav. An instance serves its own roadmap or none; there is no upstream fallback. |
 
 **Merely overrides a default.** Everything else, including:
 `MODEL_API_BASE_URL` (endpoint override), the instance-identity set
@@ -420,11 +421,11 @@ exactly the pre-allowlist behavior; see the sign-in section),
 the host-topology set (`APP_HOST`, `MARKETING_HOST`, `APP_ONLY` — with
 none set, every route serves on every host, exactly the single-host
 behavior; see [Host topology](#host-topology-optional)),
-the content-source set (`DIRECTORY_DATA_URL`, `ROADMAP_RAW_URL`,
-`ROADMAP_GITHUB_URL` — with none set, `/directory` serves the shared
-community index with attribution; `ROADMAP_RAW_URL` is the one entry in
-this list that is not merely a default, since absent it means this
-instance has published no roadmap and `/roadmap` says so; see
+the remaining content-source overrides (`DIRECTORY_DATA_URL`,
+`ROADMAP_GITHUB_URL` — with `DIRECTORY_DATA_URL` unset, `/directory`
+serves the shared community index with attribution; `ROADMAP_GITHUB_URL`
+is derived from `ROADMAP_RAW_URL` when unset. `ROADMAP_RAW_URL` itself is
+in the disable-when-absent table above, not here; see
 [Content sources](#content-sources-directory-and-roadmap)),
 rate-limit and token-budget tuning knobs
 (`ANONYMOUS_RATE_LIMIT`, `AUTHENTICATED_RATE_LIMIT`,
