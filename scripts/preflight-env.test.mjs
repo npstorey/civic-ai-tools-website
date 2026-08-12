@@ -107,6 +107,40 @@ test('every spec entry has a known tier and a purpose', () => {
   }
 });
 
+// `readBy` is what scripts/check-compose-env.mjs uses to decide HOW a
+// deployment must deliver a variable (container environment, build argument,
+// or neither). An unrecognized value would be read as the default — "the
+// server reads this at run time" — and could send a build-time variable down
+// a path that cannot deliver it: documented, and inert.
+test('every readBy marker is one of the known consumption sites', () => {
+  for (const s of ENV_SPEC) {
+    if (s.readBy === undefined) continue;
+    assert.ok(
+      ['build', 'build-and-runtime', 'external-tool'].includes(s.readBy),
+      `${s.name}.readBy is a known value (got ${s.readBy})`,
+    );
+  }
+});
+
+// Both build tiers can arrive as an unpassed build argument, which the code
+// must be able to treat as absence. Every NEXT_PUBLIC_* value is inlined at
+// build by definition, so none of them may be marked run-time-only.
+test('every NEXT_PUBLIC_ variable is marked as read at build time', () => {
+  for (const s of ENV_SPEC) {
+    if (!s.name.startsWith('NEXT_PUBLIC_')) continue;
+    assert.equal(s.readBy, 'build', `${s.name} is inlined at build and must say so`);
+  }
+});
+
+test('readBy does not disturb the report: the default profile is unchanged by it', () => {
+  const stripped = ENV_SPEC.map((s) => {
+    const copy = { ...s };
+    delete copy.readBy;
+    return copy;
+  });
+  assert.equal(renderReport(evaluateEnv({}, stripped)), renderReport(evaluateEnv({})));
+});
+
 // --- Driver-aware resolution (instance profiles) ---------------------------
 
 /** Env selecting the plain-Postgres + S3 + container profile. */

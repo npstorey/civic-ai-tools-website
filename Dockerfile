@@ -10,8 +10,10 @@
 #   docker build -t civic-app:dev .
 #   docker build -t civic-app-migrate:dev --target migrate .
 #
-# Configuration is RUN-time only (see .dockerignore): no environment file
-# ever enters the build context.
+# Configuration is RUN-time wherever it can be: no environment file ever
+# enters the build context (see .dockerignore). The exception is the set of
+# values Next.js reads at build and inlines — those arrive as named build
+# args, declared on the builder stage below and nowhere else.
 
 ARG NODE_IMAGE=node:22-bookworm-slim
 # Static docker CLI, copied into the runtime layer for EXECUTOR_DRIVER=container.
@@ -28,6 +30,30 @@ RUN npm ci
 FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# BUILD-TIME CONFIGURATION. Two kinds, and neither can be supplied at run
+# time — hence args rather than container environment:
+#
+#   NEXT_PUBLIC_*    inlined into the emitted bundles by Next.js. A run-time
+#                    value cannot change them; there is nothing left to read.
+#   branding /       read on the server, but ALSO baked into statically
+#   content sources  prerendered pages. docker-compose.yml passes these in
+#                    both places so prerendered and dynamic pages agree.
+#
+# An ARG left unpassed stays unset, so an operator who configures none of
+# them builds exactly the image this file built before they existed. Nothing
+# secret may be added here: build args are readable in image history.
+ARG NEXT_PUBLIC_GA_MEASUREMENT_ID
+ARG NEXT_PUBLIC_SOCRATA_MCP_URL
+ARG NEXT_PUBLIC_CAPTURE_TRACES
+ARG SITE_BRAND_NAME
+ARG SITE_BRAND_ACCENT
+ARG SITE_BRAND_TAGLINE
+ARG SITE_BRAND_ATTRIBUTION
+ARG DIRECTORY_DATA_URL
+ARG ROADMAP_RAW_URL
+ARG ROADMAP_GITHUB_URL
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # `npm run build:standalone` = BUILD_STANDALONE=1 next build (which flips

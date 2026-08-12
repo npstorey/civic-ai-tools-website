@@ -91,6 +91,23 @@ export const DRIVER_SEAMS = {
  *   - `requiredWhen: { <seam>: '<driver>' }` — tier becomes 'required' under
  *     that driver; otherwise the declared `tier` stands.
  *
+ * An orthogonal field records WHERE a value is consumed, which is what a
+ * deployment needs in order to deliver it (scripts/check-compose-env.mjs reads
+ * this field; it has no effect on the preflight report):
+ *   - `readBy` omitted — the running server process. A container deployment
+ *     delivers it in the container's environment.
+ *   - `readBy: 'build'` — inlined at `next build` and unreadable afterwards
+ *     (every NEXT_PUBLIC_* value). A run-time pass-through cannot change it;
+ *     it must be a build argument.
+ *   - `readBy: 'build-and-runtime'` — read by the server AND baked into
+ *     statically prerendered pages, so it must be supplied at both times or
+ *     prerendered and dynamic pages disagree. Constraint: because a build
+ *     argument that is not passed can arrive as an empty string rather than
+ *     absent, a variable marked either build tier must treat empty as absent.
+ *   - `readBy: 'external-tool'` — not read by the app at all (an operator
+ *     script or an eval harness); enumerated here for completeness only, and
+ *     never something a deployment must deliver to the container.
+ *
  * A third conditional field expresses ALTERNATIVES rather than drivers — the
  * case where two variable sets satisfy the same need and an instance picks
  * one:
@@ -241,25 +258,25 @@ export const ENV_SPEC = [
   //     byte-identically. Chrome only — nothing here is emitted inside signed
   //     evidence (that is the EVIDENCE_* identity set above), so these can
   //     never invalidate a package or a registry cross-check. ---
-  { name: 'SITE_BRAND_NAME', tier: 'optional', purpose: 'Instance display name — header wordmark, page titles, citation labels (default "Civic AI Tools")', hasFallback: true },
-  { name: 'SITE_BRAND_ACCENT', tier: 'optional', purpose: 'Accent color (#rgb/#rrggbb) — overrides the accent tokens site-wide; unset or invalid = stylesheet default', hasFallback: true },
-  { name: 'SITE_BRAND_TAGLINE', tier: 'optional', purpose: 'Footer tagline line (default: the demo tagline)', hasFallback: true },
-  { name: 'SITE_BRAND_ATTRIBUTION', tier: 'optional', purpose: 'Footer attribution line, plain text (unset: the demo authored attribution markup)', hasFallback: true },
+  { name: 'SITE_BRAND_NAME', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Instance display name — header wordmark, page titles, citation labels (default "Civic AI Tools")', hasFallback: true },
+  { name: 'SITE_BRAND_ACCENT', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Accent color (#rgb/#rrggbb) — overrides the accent tokens site-wide; unset or invalid = stylesheet default', hasFallback: true },
+  { name: 'SITE_BRAND_TAGLINE', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Footer tagline line (default: the demo tagline)', hasFallback: true },
+  { name: 'SITE_BRAND_ATTRIBUTION', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Footer attribution line, plain text (unset: the demo authored attribution markup)', hasFallback: true },
 
   // --- Instance content sources (#241: src/lib/site-config.ts). All
   //     optional, and unset means one thing: this instance has no content
   //     source of its own. /directory then serves the shared community index
   //     with attribution; /roadmap renders as unpublished and drops out of
   //     the nav rather than showing another project's plans. ---
-  { name: 'DIRECTORY_DATA_URL', tier: 'optional', purpose: '/directory data source — MCP-server JSON (unset: the community index, shown with attribution)', hasFallback: true },
-  { name: 'ROADMAP_RAW_URL', tier: 'optional', purpose: '/roadmap data source — raw Markdown (unset: /roadmap says no roadmap is published and leaves the nav)', hasFallback: true },
-  { name: 'ROADMAP_GITHUB_URL', tier: 'optional', purpose: '/roadmap "view source" link and byline label (unset: derived from ROADMAP_RAW_URL)', hasFallback: true },
+  { name: 'DIRECTORY_DATA_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: '/directory data source — MCP-server JSON (unset: the community index, shown with attribution)', hasFallback: true },
+  { name: 'ROADMAP_RAW_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: '/roadmap data source — raw Markdown (unset: /roadmap says no roadmap is published and leaves the nav)', hasFallback: true },
+  { name: 'ROADMAP_GITHUB_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: '/roadmap "view source" link and byline label (unset: derived from ROADMAP_RAW_URL)', hasFallback: true },
 
   // --- Optional / feature / ops ---
   { name: 'EVIDENCE_TRUST_REGISTRY_URL', tier: 'optional', purpose: 'External trust-registry override', hasFallback: true },
-  { name: 'CIVICAITOOLS_SESSION_TOKEN', tier: 'optional', purpose: 'publish-evidence skill (Claude Code) auth' },
+  { name: 'CIVICAITOOLS_SESSION_TOKEN', readBy: 'external-tool', tier: 'optional', purpose: 'publish-evidence skill (Claude Code) auth' },
   { name: 'CRON_SECRET', tier: 'optional', purpose: 'Cron endpoint auth (blob-gc, portal refresh)' },
-  { name: 'NEXT_PUBLIC_GA_MEASUREMENT_ID', tier: 'optional', purpose: 'Google Analytics 4' },
+  { name: 'NEXT_PUBLIC_GA_MEASUREMENT_ID', readBy: 'build', tier: 'optional', purpose: 'Google Analytics 4' },
 
   // --- Tuning knobs with coded defaults (previously unenumerated; the app
   //     reads them but runs on built-in defaults when absent) ---
@@ -271,12 +288,12 @@ export const ENV_SPEC = [
   { name: 'APP_TIER_RATE_LIMIT', tier: 'optional', purpose: 'Per-day query limit for signed-in users of a gated instance (default: AUTHENTICATED_RATE_LIMIT)', hasFallback: true },
   { name: 'TOKEN_LIMIT_PER_REQUEST', tier: 'optional', purpose: 'Streaming token budget per request (coded default)', hasFallback: true },
   { name: 'MAX_TOOL_RESULT_CHARS', tier: 'optional', purpose: 'Tool-result truncation budget (coded default)', hasFallback: true },
-  { name: 'NEXT_PUBLIC_CAPTURE_TRACES', tier: 'optional', purpose: 'Dev-only BPMN trace capture toggle', hasFallback: true },
-  { name: 'NEXT_PUBLIC_SOCRATA_MCP_URL', tier: 'optional', purpose: 'Client-side Socrata MCP URL for notebook output links', hasFallback: true },
+  { name: 'NEXT_PUBLIC_CAPTURE_TRACES', readBy: 'build', tier: 'optional', purpose: 'Dev-only BPMN trace capture toggle', hasFallback: true },
+  { name: 'NEXT_PUBLIC_SOCRATA_MCP_URL', readBy: 'build', tier: 'optional', purpose: 'Client-side Socrata MCP URL for notebook output links', hasFallback: true },
 
   // --- scripts/-only (not read by the app; enumerated for completeness) ---
-  { name: 'EVAL_MODELS', tier: 'optional', purpose: 'Model-eval harness roster (scripts/eval-models.mjs only)', hasFallback: true },
-  { name: 'EVAL_QUERIES', tier: 'optional', purpose: 'Model-eval harness query set (scripts/eval-models.mjs only)', hasFallback: true },
+  { name: 'EVAL_MODELS', readBy: 'external-tool', tier: 'optional', purpose: 'Model-eval harness roster (scripts/eval-models.mjs only)', hasFallback: true },
+  { name: 'EVAL_QUERIES', readBy: 'external-tool', tier: 'optional', purpose: 'Model-eval harness query set (scripts/eval-models.mjs only)', hasFallback: true },
 ];
 
 /**
