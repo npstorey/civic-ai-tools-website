@@ -51,15 +51,17 @@ You need:
 - **Node.js ≥ 22** on the host if you want to run the preflight and
   rehearsal scripts from the checkout (recommended; the containers
   themselves don't need it).
-- **No egress to `fonts.googleapis.com`** — worth stating because it
-  was a prerequisite here until [#225]. The two typefaces are now
-  self-hosted from `src/fonts/` (SIL OFL 1.1, provenance in that
-  directory's README), so no build path — the compose bring-up's image
-  build below, a bare `next build`, or the standalone build — reaches
-  Google Fonts, and a restricted-egress build environment needs no
-  allowance for it. Changing the typefaces still means editing the
-  `next/font/local` calls in `src/app/layout.tsx`; making them an
-  instance-configuration knob is tracked in [#221].
+
+**Nothing to arrange for fonts.** The two typefaces are self-hosted from
+`src/fonts/` (SIL OFL 1.1, provenance in that directory's README) as of
+[#225], so no build path — the compose bring-up's image build below, a
+bare `next build`, or the standalone build — reaches Google Fonts. It is
+worth stating only because it *was* a prerequisite here: a
+restricted-egress build environment needs no allowance for
+`fonts.googleapis.com`, and a build failing behind one is not a font
+problem. Changing the typefaces still means editing the
+`next/font/local` calls in `src/app/layout.tsx`; making them an
+instance-configuration knob is tracked in [#221].
 
 > **Sign-in prerequisite — read before bring-up.** The notebook/query
 > execution feature (executed-sandbox mode: generate a Jupyter notebook,
@@ -114,7 +116,10 @@ What you will see, and why it is correct:
   signing key is configured, so evidence commit and publish are disabled
   and any output produced here carries no cryptographic commitment.
   Signing is the go-to-production step; see the instance setup guide."*
-- Evidence **commit and publish actions are gated off**, server-side and
+  (Quoted verbatim, including its "commit" — that string predates the
+  [ADR-0016] rename and means what this guide and the API now call
+  **seal**.)
+- Evidence **seal and publish actions are gated off**, server-side and
   in the UI. An unsigned package can reach neither the `sealed` nor the
   `public` state ([ADR-0020]) — the unsigned tier is confined to local
   produce-and-inspect. This is the intended first-run state, not a
@@ -154,17 +159,35 @@ and never commit this file):
 # Model access — required for every query.
 OPENROUTER_API_KEY=<your-model-api-key>
 
-# Real service passwords replacing the local-dev placeholders.
+# Real credentials replacing the compose file's placeholders. The S3
+# pair is both the app's access key AND MinIO's root user/password —
+# docker-compose.yml wires one to the other — so leaving them unset
+# runs your object store on values published in this repository.
 POSTGRES_PASSWORD=<generated>
 S3_ACCESS_KEY_ID=<generated>
 S3_SECRET_ACCESS_KEY=<generated>
 
 # Sign-in (see the sign-in section; enables notebook execution).
+# NEXTAUTH_URL is the origin your browser actually uses, not the one you
+# intend to have. On the loopback bring-up above that is
+# http://localhost:3000; change it to your public origin when the
+# instance is reachable there, and register your OAuth app's callback
+# against whichever origin is current.
 NEXTAUTH_SECRET=<generated: openssl rand -base64 32>
-NEXTAUTH_URL=<your public origin, e.g. https://evidence.example.org>
+NEXTAUTH_URL=http://localhost:3000
 GITHUB_CLIENT_ID=<your OAuth app>
 GITHUB_CLIENT_SECRET=<your OAuth app>
 ```
+
+While you are on the loopback bring-up, browse to the same spelling
+`NEXTAUTH_URL` carries — `http://localhost:3000`, not
+`http://127.0.0.1:3000`. Both reach this server, but they are different
+origins to a browser and the sign-in round-trip is built from the one in
+the variable. Setting `NEXTAUTH_URL` to a public origin you have not
+stood up yet is the trap this ordering avoids: the instance comes up
+perfectly healthy and advertises callback URLs nothing can reach, with
+nothing warning you (see [Sign-in
+configuration](#sign-in-configuration) for the one-command check).
 
 **How a value reaches the app.** Every variable in this guide is spelled
 one of three ways in `docker-compose.yml`, and the spelling tells you
@@ -172,8 +195,8 @@ what your env file can do with it:
 
 | Spelling | What it means | Examples |
 | --- | --- | --- |
-| bare `NAME:` | Pass-through. Set in the container only when your environment has it, **absent otherwise** — which matters, because for several variables absence is the configured state, not a missing value. | the credentials, `SIGN_IN_ALLOWLIST`, `ROADMAP_RAW_URL`, the branding set, the tuning knobs |
-| `${NAME:-default}` | Overridable, with a working local default if you say nothing. | service passwords, host ports, bucket name, `S3_PUBLIC_BASE_URL`, `APP_BIND` / `APP_PORT`, the executor image tag, the identity variables, `NEXTAUTH_URL`, the GC knobs |
+| bare `NAME:` | Pass-through. Set in the container only when your environment has it, **absent otherwise** — which matters, because for several variables absence is the configured state, not a missing value. | `OPENROUTER_API_KEY`, the signing pair, `NEXTAUTH_SECRET`, the OAuth credentials, `CRON_SECRET`, `SIGN_IN_ALLOWLIST`, `ROADMAP_RAW_URL`, the host-topology trio, the registry-URL overrides, the branding set, the tuning knobs |
+| `${NAME:-default}` | Overridable, with a working local default if you say nothing. | the Postgres and object-store credentials (`POSTGRES_PASSWORD`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` — placeholder defaults you are expected to replace), host ports, bucket name, `S3_PUBLIC_BASE_URL`, `APP_BIND` / `APP_PORT`, the executor image tag, the identity variables that carry a local default, `NEXTAUTH_URL`, the GC knobs |
 | a literal value | Hardcoded wiring. Changing it means editing the compose file, not your env file. | the three driver selectors, `S3_ENDPOINT`, the constructed `DATABASE_URL` |
 
 There is no fourth category. A variable this guide documents but the
@@ -214,6 +237,12 @@ one command rather than two.
 > hold nothing but placeholder-initialized dev data, so the reset is
 > free — and the same applies to any later `POSTGRES_*` change: those
 > values take effect at volume initialization, never on restart.
+>
+> `down -v` discards MinIO's volume alongside Postgres's, which makes
+> this the clean moment to move `S3_ACCESS_KEY_ID` /
+> `S3_SECRET_ACCESS_KEY` off their placeholders too: MinIO takes that
+> pair as its root credentials, and starting from an empty store beats
+> reasoning about rotating them against an initialized one.
 
 ```bash
 docker compose down -v   # discard the placeholder-initialized volumes
@@ -318,12 +347,14 @@ is no silent hang to diagnose. Recognize them:
   so the query couldn't run. If you operate this instance, check that
   OPENROUTER_API_KEY is valid for the configured endpoint."*
 
-Both are reproducible from the command line against a running stack:
+Both are reproducible from the command line against a running stack.
+Use a model id this instance actually offers — `GET /api/models` lists
+them, and `openai/gpt-4o` is the default:
 
 ```bash
 curl -s -X POST http://127.0.0.1:3000/api/compare \
   -H 'Content-Type: application/json' \
-  -d '{"query":"test","model":"openai/gpt-5-mini"}'
+  -d '{"query":"test","model":"openai/gpt-4o"}'
 ```
 
 With no key configured this returns HTTP 503 carrying the
@@ -339,6 +370,12 @@ after the status code is the upstream endpoint's own message and varies
 (a malformed key value, for example, yields
 `401 Missing Authentication header`).
 
+Those two are the only typed cases: the classifier maps a missing
+credential and an upstream 401/403, and everything else — including a
+model id the endpoint does not recognize — falls through to a plain
+HTTP 500 carrying the raw message. Hence the id above; a stale one turns
+this reproduction into a different error than the one you came to see.
+
 ## Environment reference, tier by tier
 
 The executable authority on the environment is
@@ -349,20 +386,27 @@ variable against the resolved profile — so a self-hosted instance is
 neither passed while unrunnable nor nagged about variables its profile
 never reads. It also warns when an **all-or-nothing variable group** is
 only partially set — the Vercel Sandbox auth trio, either sign-in
-provider's credential set, the KV pair. The code consumes each of those
-sets only complete, so a partial set is indistinguishable from an empty
-one at run time and the feature silently stays off; the warning names
-the missing members. Preflight reads only the shell environment it runs in. **Run off-stack,
+provider's credential set, the KV pair, and the signing pair. For all
+but the last, the code consumes the set only complete, so a partial set
+is indistinguishable from an empty one at run time and the feature
+silently stays off; the warning names the missing members. The signing
+pair is the loud exception: a key with no key id refuses seal and
+publish and says so on every page rather than degrading quietly (the
+table below has the detail).
+
+Preflight reads only the shell environment it runs in. **Run off-stack,
 it cannot see what compose wires in** — the three driver selectors,
 `DATABASE_URL`, and the `S3_*` set live inside `docker-compose.yml` — so
 a bare `node scripts/preflight-env.mjs` reports the *default managed
 profile* and fails demanding variables the compose path never uses
 (`BLOB_READ_WRITE_TOKEN` among them). To preflight a compose deployment,
 represent the compose profile explicitly. Presence is all that is
-checked, never values, so fixed stand-ins are fine for the
-compose-wired variables. From the checkout, with your own env-file
-values also in the environment (exported, or through your
-secret-manager wrapper):
+checked, never values, so fixed stand-ins do for whatever compose
+supplies — and by the same token a PASS says nothing about the value:
+`S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` pass on a placeholder
+exactly as they pass on a real credential (see the tier notes below).
+From the checkout, with your own env-file values also in the
+environment (exported, or through your secret-manager wrapper):
 
 ```bash
 DB_DRIVER=node-postgres BLOB_DRIVER=s3 EXECUTOR_DRIVER=container \
@@ -384,28 +428,45 @@ profile never reads:
 (the five: `BLOB_READ_WRITE_TOKEN`, `SANDBOX_SNAPSHOT_ID`, and the three
 `VERCEL_*` sandbox-auth variables). Exit code `0` means every required
 variable for the profile is present; `1` otherwise. Run with the
-stand-ins alone, it exits `1` naming exactly the six operator-supplied
+stand-ins alone, it exits `1` naming exactly the seven operator-supplied
 variables — `OPENROUTER_API_KEY`, `EVIDENCE_SIGNING_KEY`,
-`NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `GITHUB_CLIENT_ID`,
-`GITHUB_CLIENT_SECRET`.
+`EVIDENCE_KEY_ID`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`,
+`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`.
 
 **Read preflight's "required" tier honestly.** It is the
 full-production bar, not the boot bar. Nothing on the list prevents the
 process from *starting* — initialization is lazy throughout — so
 "required" means a load-bearing request path fails without it. In
 particular, a deliberate unsigned-tier bring-up **fails preflight**,
-naming `EVIDENCE_SIGNING_KEY` and the sign-in variables: that FAIL is
-your remaining go-to-production to-do list, not a broken stack.
+naming both halves of the signing pair and the sign-in variables: that
+FAIL is your remaining go-to-production to-do list, not a broken stack.
 
 The tiers, stated plainly:
 
-**Provided by the compose stack by construction.** You do not set these
-for the compose path; they are wired between services:
-`DATABASE_URL`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`,
-`S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_BASE_URL`, the three driver
-selectors, and `EXECUTOR_CONTAINER_IMAGE`. (Off compose, they are yours:
-`DATABASE_URL` plus the storage set for your driver are hard
-requirements of the evidence path.)
+**Wired by the compose stack.** Preflight's verdict on these is already
+satisfied on the compose path with nothing in your env file — but wired
+is not the same as handled, and the group splits two ways:
+
+- *Constructed or literal — not yours without editing the compose file:*
+  `DATABASE_URL`, `S3_ENDPOINT`, the three driver selectors.
+- *Wired to a default your env file may override:* `S3_BUCKET`,
+  `S3_PUBLIC_BASE_URL`, `EXECUTOR_CONTAINER_IMAGE` — and
+  `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`, which you should.
+
+**The object-store credentials are the one pair here that is a security
+decision, not a convenience.** Their defaults are placeholders published
+in this repository, and the compose file hands the same two values to
+MinIO as its root user and password — so they are simultaneously the
+app's access key and the object store's administrator login. An instance
+that never sets them is serving evidence storage on credentials anyone
+can read out of the repo: full administrative access for anything that
+can reach the MinIO port. Set them in your env file (the template above
+does) before that port is reachable by anything you do not control, and
+prefer setting them before first bring-up — see the volume-reset note in
+[Supplying your environment](#supplying-your-environment).
+
+(Off compose, all of these are yours: `DATABASE_URL` plus the storage set
+for your driver are hard requirements of the evidence path.)
 
 **The core query path fails without:**
 
@@ -423,7 +484,7 @@ doesn't):
 
 | Variable(s) | Feature disabled when absent |
 | --- | --- |
-| `EVIDENCE_SIGNING_KEY` + `EVIDENCE_KEY_ID` | Evidence commit/publish. **All-or-nothing: both are required, and neither has a coded default.** With neither set the instance stays in the unsigned tier (banner shows, seal and publish gated off). With the key set but no `EVIDENCE_KEY_ID` it still cannot publish — it refuses rather than sign under a key id it never declared, since a kid it did not configure would misattribute the signature and fail verification. |
+| `EVIDENCE_SIGNING_KEY` + `EVIDENCE_KEY_ID` | Evidence seal and publish. **All-or-nothing: both are required, and neither has a coded default.** With neither set the instance stays in the unsigned tier (banner shows, seal and publish gated off). With the key set but no `EVIDENCE_KEY_ID` it still cannot publish — it refuses rather than sign under a key id it never declared, since a kid it did not configure would misattribute the signature and fail verification. |
 | `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and an OAuth app (`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` or the `OIDC_*` set) | Sign-in — and with it the sign-in-gated notebook execution feature, the dashboard, and the higher authenticated rate limit. |
 | `DATA_COMMONS_MCP_URL` + `DATA_COMMONS_API_KEY` | The Data Commons data source — its tool calls fail without the key (the hosted endpoint mandates it). `DC_API_KEY` is the separate key passed into *executed notebooks* for their own Data Commons requests. |
 | `BOSTON_OPENCONTEXT_MCP_URL` | The Boston OpenContext data source. |
@@ -463,8 +524,11 @@ defaults described in the storage section), and analytics
 (`NEXT_PUBLIC_GA_MEASUREMENT_ID`).
 
 One build-time caveat: `NEXT_PUBLIC_*` values are inlined into client
-bundles at build time. They belong to the image build, not to `docker
-compose up` — a pass-through at run time cannot change them.
+bundles at build time, so a run-time pass-through cannot change them —
+they belong to the image build. On the compose path that is not a second
+mechanism to arrange: they are declared as `build.args` and resolved from
+the same env file, so `docker compose --env-file … up -d --build`
+delivers them. A restart without `--build` does not.
 
 ### Branding and theming (chrome only)
 
@@ -488,9 +552,14 @@ Set these **in the build environment as well as at run time**.
 Statically prerendered pages bake their chrome at `next build` (the
 same server-side seam behavior as the host-topology variables), while
 dynamic pages read the runtime environment — with the variables present
-in both, every page agrees. None of these are `NEXT_PUBLIC_*`, and none
-may become so: client inlining is exactly what would break runtime
-container configuration for the dynamic pages.
+in both, every page agrees. On the compose path that is one file and one
+command: they appear in both the app service's `build.args` and its
+`environment`, resolved from your `--env-file`, so a bring-up with
+`--build` supplies both sides at once
+([Build time versus run time](#supplying-your-environment)). None of
+these are `NEXT_PUBLIC_*`, and none may become so: client inlining is
+exactly what would break runtime container configuration for the dynamic
+pages.
 
 The favicon is a file, not a variable: replace
 [`src/app/favicon.ico`](../src/app/favicon.ico) in your checkout (the
@@ -528,7 +597,9 @@ wants nothing upstream in its directory should supply both its own
 
 Set these **in the build environment as well as at run time**: both
 pages prerender with 1-hour ISR, so a change takes effect on the next
-build or revalidation, not immediately.
+build or revalidation, not immediately. As with the branding set,
+compose passes them at both times from your one `--env-file` when you
+bring the stack up with `--build`.
 
 These three are content, not chrome or evidence: unlike the branding set
 above they only change what `/directory` and `/roadmap` fetch and link
@@ -547,7 +618,7 @@ Always:
 | Variable | Meaning |
 | --- | --- |
 | `NEXTAUTH_SECRET` | Session encryption secret. Generate one: `openssl rand -base64 32`. |
-| `NEXTAUTH_URL` | Your instance's public origin (e.g. `https://evidence.example.org`). Must match what browsers actually use — OAuth callbacks are built from it. |
+| `NEXTAUTH_URL` | The origin browsers actually use — OAuth callbacks are built from it, so it tracks where the instance is reachable *now*, not where it is going. On the loopback bring-up that is `http://localhost:3000` (also the compose default); it becomes your public origin (e.g. `https://evidence.example.org`) when the instance is served from one. |
 
 Then one (or both) of:
 
