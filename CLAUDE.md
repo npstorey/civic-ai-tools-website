@@ -92,7 +92,7 @@ The diagram shows the comparison path as the reference deployment runs it. The s
 - Uses `openai` npm package with `baseURL: 'https://openrouter.ai/api/v1'`
 - Tool calling follows OpenAI function calling format
 - Same model used for both with/without MCP comparisons
-- **Max 10 tool iterations** to prevent infinite loops
+- **Tool iteration cap** to prevent infinite loops — see `maxIterations` in `src/lib/openrouter-streaming.ts` for the current value (cited rather than restated here so this line can't drift out of sync with the code)
 - **Force final response**: If iteration limit hit with no content, makes one more call without tools to get a summary
 
 ### MCP Tool Execution Flow
