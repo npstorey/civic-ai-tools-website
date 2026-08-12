@@ -12,6 +12,7 @@ import {
   getActiveSigner,
 } from '@/lib/evidence/signing';
 import { buildAttestationNode, ATTESTATION_WITHDRAWS } from '@/lib/evidence/attestation';
+import { evaluateSealCommitGate } from '@/lib/evidence/unsigned-tier';
 
 /**
  * POST /api/evidence/[slug]/withdraw
@@ -43,6 +44,16 @@ export async function POST(
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
+
+  // A withdrawal is a separately-signed node, so it reaches the same signing
+  // path as a content publish and takes the same gate: an instance that
+  // cannot sign honestly (no key, or a key with no declared EVIDENCE_KEY_ID)
+  // is refused specifically here rather than emitting an attestation labeled
+  // with a key id it never configured.
+  const gate = evaluateSealCommitGate();
+  if (gate) {
+    return NextResponse.json(gate.body, { status: gate.status });
   }
 
   // Look up DB user

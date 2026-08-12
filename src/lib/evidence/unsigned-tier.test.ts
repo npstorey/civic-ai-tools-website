@@ -15,21 +15,45 @@ import assert from 'node:assert/strict';
 
 import {
   isSigningConfigured,
+  isSigningKeyConfigured,
+  isSigningKeyIdConfigured,
   evaluateSealCommitGate,
   evaluateUnsignedRecordPublishGate,
   shouldShowRunningUnsignedIndicator,
+  resolveUnsignedIndicator,
 } from './unsigned-tier.ts';
 
 // Deliberately inert stand-in — presence is all the tier logic reads, so the
 // fixture never needs to look like key material.
 const KEY_PRESENT = 'presence-only-stand-in';
+const KID_PRESENT = 'platform:this-instance-2026-08';
+/** Both halves of the signing pair, the only fully-configured state. */
+const SIGNED = { EVIDENCE_SIGNING_KEY: KEY_PRESENT, EVIDENCE_KEY_ID: KID_PRESENT };
+/** The defect state: custody without a declared identity. */
+const KEY_NO_KID = { EVIDENCE_SIGNING_KEY: KEY_PRESENT };
 
-test('isSigningConfigured: presence-only — set means signed tier, unset/empty means unsigned', () => {
-  assert.equal(isSigningConfigured({ EVIDENCE_SIGNING_KEY: KEY_PRESENT }), true);
+test('isSigningConfigured: BOTH halves required — a key alone is not configured', () => {
+  assert.equal(isSigningConfigured(SIGNED), true);
+  // The defect state. A key with no declared kid used to read as configured,
+  // which is what let an instance sign under the reference deployment's kid.
+  assert.equal(isSigningConfigured(KEY_NO_KID), false);
+  // And the mirror image: a kid with no key cannot sign either.
+  assert.equal(isSigningConfigured({ EVIDENCE_KEY_ID: KID_PRESENT }), false);
   assert.equal(isSigningConfigured({}), false);
-  assert.equal(isSigningConfigured({ EVIDENCE_SIGNING_KEY: undefined }), false);
-  assert.equal(isSigningConfigured({ EVIDENCE_SIGNING_KEY: '' }), false);
-  assert.equal(isSigningConfigured({ EVIDENCE_SIGNING_KEY: '   ' }), false);
+});
+
+test('isSigningConfigured: presence-only, whitespace-only counts as absent on either half', () => {
+  assert.equal(isSigningConfigured({ ...SIGNED, EVIDENCE_SIGNING_KEY: '' }), false);
+  assert.equal(isSigningConfigured({ ...SIGNED, EVIDENCE_SIGNING_KEY: '   ' }), false);
+  assert.equal(isSigningConfigured({ ...SIGNED, EVIDENCE_KEY_ID: '' }), false);
+  assert.equal(isSigningConfigured({ ...SIGNED, EVIDENCE_KEY_ID: '   ' }), false);
+  assert.equal(isSigningConfigured({ ...SIGNED, EVIDENCE_KEY_ID: undefined }), false);
+});
+
+test('the halves are separately observable (the gate and the banner branch on them)', () => {
+  assert.equal(isSigningKeyConfigured(KEY_NO_KID), true);
+  assert.equal(isSigningKeyIdConfigured(KEY_NO_KID), false);
+  assert.equal(isSigningKeyIdConfigured(SIGNED), true);
 });
 
 test('gate-off (ADR-0020 C): an unsigned run cannot reach seal/commit — the gate refuses server-side', () => {
@@ -44,8 +68,28 @@ test('gate-off (ADR-0020 C): an unsigned run cannot reach seal/commit — the ga
   assert.match(refusal!.body.error, /instance-setup/);
 });
 
-test('gate-off: a signed instance passes the gate (the action proceeds)', () => {
-  assert.equal(evaluateSealCommitGate({ EVIDENCE_SIGNING_KEY: KEY_PRESENT }), null);
+test('KEY WITHOUT KID: refused loudly and specifically, not as a generic unsigned tier', () => {
+  const refusal = evaluateSealCommitGate(KEY_NO_KID);
+  assert.ok(refusal, 'a half-configured instance must not pass the gate');
+  // A server misconfiguration, not a policy "you may not" — and a distinct
+  // code so the state is diagnosable from the response alone.
+  assert.equal(refusal!.status, 500);
+  assert.equal(refusal!.body.code, 'signing_key_id_missing');
+  // Actionable: names the missing variable and the guide.
+  assert.match(refusal!.body.error, /EVIDENCE_KEY_ID/);
+  assert.match(refusal!.body.error, /instance-setup/);
+  // States the real consequence — misattribution and unverifiable evidence —
+  // and explicitly rules out the wrong reading (a leaked signing key).
+  assert.match(refusal!.body.error, /misattribution/);
+  assert.match(refusal!.body.error, /not a key disclosure/);
+  // Platform-neutral: instances run on containers, VMs, and PaaS hosts alike.
+  assert.ok(!/vercel|render|heroku|aws/i.test(refusal!.body.error));
+  // NOT the generic tier refusal an operator has already moved past.
+  assert.notEqual(refusal!.body.code, 'unsigned_tier');
+});
+
+test('gate-off: a fully configured instance passes the gate (the action proceeds)', () => {
+  assert.equal(evaluateSealCommitGate(SIGNED), null);
 });
 
 test('per-record gate: a historical unsigned-persisted record cannot be promoted to published', () => {
@@ -73,13 +117,26 @@ test('running-unsigned indicator: shows outside dev, calm in dev/test (ADR-0020 
   assert.equal(shouldShowRunningUnsignedIndicator({ NODE_ENV: 'test' }), false);
 });
 
-test('running-unsigned indicator: never shows when signing is configured', () => {
-  assert.equal(
-    shouldShowRunningUnsignedIndicator({ EVIDENCE_SIGNING_KEY: KEY_PRESENT, NODE_ENV: 'production' }),
-    false,
-  );
-  assert.equal(
-    shouldShowRunningUnsignedIndicator({ EVIDENCE_SIGNING_KEY: KEY_PRESENT, NODE_ENV: 'development' }),
-    false,
-  );
+test('running-unsigned indicator: never shows when BOTH halves are configured', () => {
+  assert.equal(shouldShowRunningUnsignedIndicator({ ...SIGNED, NODE_ENV: 'production' }), false);
+  assert.equal(shouldShowRunningUnsignedIndicator({ ...SIGNED, NODE_ENV: 'development' }), false);
+  assert.equal(resolveUnsignedIndicator({ ...SIGNED, NODE_ENV: 'production' }), null);
+});
+
+test('indicator reason: the two states get different copy', () => {
+  assert.equal(resolveUnsignedIndicator({ NODE_ENV: 'production' }), 'no_signing_key');
+  assert.equal(resolveUnsignedIndicator({ ...KEY_NO_KID, NODE_ENV: 'production' }), 'no_key_id');
+});
+
+test('KEY WITHOUT KID: the indicator shows even in dev — it is not an intended state anywhere', () => {
+  // The dev-calm rule exists because the unsigned tier is the intended
+  // first-run dev state. A half-configured pair is intended nowhere, and dev
+  // is exactly where an operator wiring signing up should catch it.
+  for (const NODE_ENV of ['development', 'test', 'production', undefined]) {
+    assert.equal(
+      resolveUnsignedIndicator({ ...KEY_NO_KID, NODE_ENV }),
+      'no_key_id',
+      `half-configured must surface under NODE_ENV=${NODE_ENV}`,
+    );
+  }
 });

@@ -16,6 +16,7 @@ import {
   ATTESTATION_REINSTATES,
   ATTESTATION_WITHDRAWS,
 } from '@/lib/evidence/attestation';
+import { evaluateSealCommitGate } from '@/lib/evidence/unsigned-tier';
 
 /**
  * POST /api/evidence/[slug]/reinstate
@@ -45,6 +46,14 @@ export async function POST(
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
+
+  // Same gate as withdraw: a reinstatement is a separately-signed attestation
+  // node, so it must not be emitted by an instance that has no key id to put
+  // in it (see unsigned-tier.ts).
+  const gate = evaluateSealCommitGate();
+  if (gate) {
+    return NextResponse.json(gate.body, { status: gate.status });
   }
 
   // Look up DB user

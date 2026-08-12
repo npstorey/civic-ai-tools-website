@@ -396,7 +396,7 @@ doesn't):
 
 | Variable(s) | Feature disabled when absent |
 | --- | --- |
-| `EVIDENCE_SIGNING_KEY` + `EVIDENCE_KEY_ID` | Evidence commit/publish — the instance stays in the unsigned tier: banner shows, seal and publish are gated off. |
+| `EVIDENCE_SIGNING_KEY` + `EVIDENCE_KEY_ID` | Evidence commit/publish. **All-or-nothing: both are required, and neither has a coded default.** With neither set the instance stays in the unsigned tier (banner shows, seal and publish gated off). With the key set but no `EVIDENCE_KEY_ID` it still cannot publish — it refuses rather than sign under a key id it never declared, since a kid it did not configure would misattribute the signature and fail verification. |
 | `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and an OAuth app (`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` or the `OIDC_*` set) | Sign-in — and with it the sign-in-gated notebook execution feature, the dashboard, and the higher authenticated rate limit. |
 | `DATA_COMMONS_MCP_URL` + `DATA_COMMONS_API_KEY` | The Data Commons data source — its tool calls fail without the key (the hosted endpoint mandates it). `DC_API_KEY` is the separate key passed into *executed notebooks* for their own Data Commons requests. |
 | `BOSTON_OPENCONTEXT_MCP_URL` | The Boston OpenContext data source. |
@@ -736,7 +736,9 @@ Two facts worth restating from the deploy side:
 
 - With the signing pair unset, the compose stack runs the unsigned tier
   correctly — this guide's bring-up **is** the unsigned tier. Configuring
-  signing is what makes the seal/publish actions reachable.
+  signing is what makes the seal/publish actions reachable, and it takes
+  **both** variables: an instance with a key but no `EVIDENCE_KEY_ID` refuses
+  to publish rather than sign under an undeclared key id.
 - `EVIDENCE_SIGNING_KEY` is the most sensitive value your instance
   holds. Keep it in your secret manager; never commit it, paste it into
   an agent session, or bake it into an image.

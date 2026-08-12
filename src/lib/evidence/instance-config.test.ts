@@ -55,6 +55,13 @@ import { evidenceRecords, users } from '../db/schema.ts';
 type EvidenceRecord = typeof evidenceRecords.$inferSelect;
 type UserRecord = typeof users.$inferSelect;
 
+// Packages built below carry `metadata.signingKeyId`, and there is no coded
+// default for it (signing.ts) — an instance emits the kid it declared or
+// none. Deliberately NOT one of IDENTITY_VARS: the helpers below unset every
+// name in that list, and the kid is custody-side config the packager requires
+// on every path. `node --test` runs each file in its own process.
+process.env.EVIDENCE_KEY_ID ??= 'platform:test-suite-kid';
+
 /** Every instance-identity variable the getters read. */
 const IDENTITY_VARS = [
   'EVIDENCE_SITE_ORIGIN',

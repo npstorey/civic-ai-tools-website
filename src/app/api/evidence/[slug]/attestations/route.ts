@@ -8,6 +8,7 @@ import { evidenceRecords, attestationPackages, users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { putPackage } from '@/lib/storage';
 import { signPackage, getRfc3161Timestamp } from '@/lib/evidence/signing';
+import { evaluateSealCommitGate } from '@/lib/evidence/unsigned-tier';
 import {
   buildExpertAttestationPayload,
   validateExpertAttestation,
@@ -93,6 +94,15 @@ export async function POST(
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
+
+  // This legacy surface (#173, pending consolidation with the ratified
+  // attestation/* node system) also reaches the signing path, so it takes the
+  // same gate as every other route that does. A half-configured instance is
+  // refused specifically here instead of throwing out of `signPackage` below.
+  const gate = evaluateSealCommitGate();
+  if (gate) {
+    return NextResponse.json(gate.body, { status: gate.status });
   }
 
   // Look up DB user

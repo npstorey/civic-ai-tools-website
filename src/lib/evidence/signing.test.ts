@@ -11,7 +11,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { signPackage, getActiveKeyId, rekorHashForPackage } from './signing.ts';
+import {
+  signPackage,
+  getActiveKeyId,
+  getConfiguredKeyId,
+  rekorHashForPackage,
+} from './signing.ts';
 import { verifySignature } from './verify.ts';
 
 function generateTestKeyEnv(): { privB64: string; pubB64: string } {
@@ -92,17 +97,79 @@ test('verifySignature rejects a malformed signature', () => {
   assert.equal(verifySignature(SAMPLE_HASH, 'AAAA', pubB64), false);
 });
 
-test('getActiveKeyId returns EVIDENCE_KEY_ID when set, default otherwise', () => {
+/** Run `fn` with EVIDENCE_KEY_ID set (or deleted), restoring after. */
+function withKeyId<T>(kid: string | undefined, fn: () => T): T {
   const orig = process.env.EVIDENCE_KEY_ID;
+  if (kid === undefined) delete process.env.EVIDENCE_KEY_ID;
+  else process.env.EVIDENCE_KEY_ID = kid;
   try {
-    process.env.EVIDENCE_KEY_ID = 'platform:custom-kid';
-    assert.equal(getActiveKeyId(), 'platform:custom-kid');
-    delete process.env.EVIDENCE_KEY_ID;
-    assert.equal(getActiveKeyId(), 'platform:evidence-2026-04');
+    return fn();
   } finally {
     if (orig === undefined) delete process.env.EVIDENCE_KEY_ID;
     else process.env.EVIDENCE_KEY_ID = orig;
   }
+}
+
+test('getActiveKeyId returns the configured EVIDENCE_KEY_ID verbatim', () => {
+  withKeyId('platform:custom-kid', () => {
+    assert.equal(getActiveKeyId(), 'platform:custom-kid');
+  });
+});
+
+test('NO FALLBACK KID: getActiveKeyId throws when EVIDENCE_KEY_ID is unset', () => {
+  // The defect this pins: a coded default used to substitute the reference
+  // deployment's kid here, so an instance with a key but no kid signed its
+  // own packages under someone else's registry entry — unverifiable evidence
+  // carrying another party's identity. There is no default to fall back to.
+  withKeyId(undefined, () => {
+    assert.throws(
+      () => getActiveKeyId(),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        // Actionable: names the variable and the guide, and is explicit that
+        // the private key is not what is at stake here.
+        assert.match(err.message, /EVIDENCE_KEY_ID/);
+        assert.match(err.message, /instance-setup/);
+        assert.match(err.message, /misattributes/);
+        // Platform-neutral: instances run on containers, VMs, and PaaS hosts.
+        assert.ok(!/vercel|render|heroku|aws/i.test(err.message));
+        return true;
+      },
+    );
+  });
+});
+
+test('NO FALLBACK KID: a whitespace-only EVIDENCE_KEY_ID is not a key id', () => {
+  withKeyId('   ', () => {
+    assert.equal(getConfiguredKeyId(), null);
+    assert.throws(() => getActiveKeyId(), /EVIDENCE_KEY_ID/);
+  });
+});
+
+test('getConfiguredKeyId is the non-throwing probe: value when set, null when not', () => {
+  withKeyId('platform:custom-kid', () => {
+    assert.equal(getConfiguredKeyId(), 'platform:custom-kid');
+  });
+  withKeyId(undefined, () => {
+    assert.equal(getConfiguredKeyId(), null);
+  });
+});
+
+test('getConfiguredKeyId never normalizes the value it returns', () => {
+  // A configured kid lands in a signed field; silently rewriting it would be
+  // its own defect. Presence is trimmed, the returned string is not.
+  withKeyId(' platform:padded ', () => {
+    assert.equal(getConfiguredKeyId(), ' platform:padded ');
+    assert.equal(getActiveKeyId(), ' platform:padded ');
+  });
+});
+
+test('KEY WITHOUT KID: signPackage refuses rather than signing under a substituted kid', () => {
+  const { privB64 } = generateTestKeyEnv();
+  assert.throws(
+    () => withSigningEnv(privB64, undefined, () => signPackage(SAMPLE_HASH)),
+    /EVIDENCE_KEY_ID/,
+  );
 });
 
 test('rekorHashForPackage: SHA-512 of UTF-8 of hex package hash', () => {

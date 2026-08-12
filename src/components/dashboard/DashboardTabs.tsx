@@ -368,7 +368,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
                          than left as a dead button that errors. */
                       <button
                         disabled
-                        title="Publishing is unavailable \u2014 this instance is running unsigned (no signing key is configured). Signing is the go-to-production step; see docs/instance-setup.md."
+                        title="Publishing is unavailable \u2014 this instance is running unsigned (signing is not configured). Signing is the go-to-production step and takes both EVIDENCE_SIGNING_KEY and EVIDENCE_KEY_ID; see docs/instance-setup.md."
                         style={{
                           background: 'none', border: 'none', padding: 0,
                           fontSize: '12px', color: 'var(--text-muted)',

@@ -371,7 +371,7 @@ Callers publishing through `POST /api/evidence` do not set these themselves — 
 | Env var                        | Purpose                                                                 |
 |--------------------------------|-------------------------------------------------------------------------|
 | `EVIDENCE_SIGNING_KEY`         | Base64 DER PKCS8 Ed25519 private key. Sensitive.                        |
-| `EVIDENCE_KEY_ID`              | Stable kid string (e.g. `platform:evidence-2026-04`). Non-sensitive.    |
+| `EVIDENCE_KEY_ID`              | Stable kid string naming **your** active trust-registry entry (e.g. `platform:evidence-2026-04`). Non-sensitive, no coded default: with a signing key set and this unset, the instance refuses to seal or publish rather than sign under an undeclared key id. |
 | `EVIDENCE_PUBLIC_KEY`          | Public half of the signing key. Used only for registry updates.         |
 | `EVIDENCE_TRUST_REGISTRY_URL`  | Optional override for the default `${NEXTAUTH_URL}/.well-known/...` URL. Useful for previews. |
 

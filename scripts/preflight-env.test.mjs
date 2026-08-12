@@ -56,14 +56,31 @@ test('empty string and whitespace-only count as absent (not present)', () => {
 
 test('a required var with a coded fallback is soft when absent (fallbk, run still passes)', () => {
   const env = envWithAllRequired();
-  delete env.EVIDENCE_KEY_ID; // required, but hasFallback (signing.ts → DEFAULT_KEY_ID)
+  delete env.SOCRATA_MCP_URL; // required, but hasFallback (the hosted endpoint)
   const result = evaluateEnv(env);
   assert.equal(result.ok, true, 'a fallback-backed required var does not fail the run');
   assert.equal(result.missingRequired.length, 0);
-  assert.deepEqual(result.requiredOnFallback.map((r) => r.name), ['EVIDENCE_KEY_ID']);
+  assert.deepEqual(result.requiredOnFallback.map((r) => r.name), ['SOCRATA_MCP_URL']);
   const report = renderReport(result);
   assert.match(report, /fallbk/);
   assert.match(report, /built-in fallback/);
+});
+
+test('EVIDENCE_KEY_ID has NO coded fallback: absent, it is a hard miss that fails the run', () => {
+  // The kid used to carry `hasFallback: true`, pointing at a hardcoded
+  // default in signing.ts that substituted the reference deployment's kid.
+  // That default is gone — an instance emits the kid it declared or none —
+  // so an absent kid is a real miss, not a soft note.
+  const entry = ENV_SPEC.find((s) => s.name === 'EVIDENCE_KEY_ID');
+  assert.equal(entry.tier, 'required');
+  assert.ok(!entry.hasFallback, 'EVIDENCE_KEY_ID must not claim a coded fallback');
+
+  const env = envWithAllRequired();
+  delete env.EVIDENCE_KEY_ID;
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.missingRequired.map((r) => r.name), ['EVIDENCE_KEY_ID']);
+  assert.ok(!result.requiredOnFallback.some((r) => r.name === 'EVIDENCE_KEY_ID'));
 });
 
 test('missing recommended variables do not fail the run', () => {
@@ -522,6 +539,28 @@ test('a partial KV pair warns that durable rate limiting is off, while the run s
   assert.ok(partial);
   assert.deepEqual(partial.missing, ['KV_REST_API_TOKEN']);
   assert.match(renderReport(result), /falls back to per-process memory/);
+});
+
+test('a half-set signing pair warns, naming the missing half and the misattribution risk', () => {
+  // #195 left this pair out of ENV_GROUPS because the kid then had a coded
+  // fallback, so the set was not all-or-nothing. The fallback is gone and
+  // `isSigningConfigured` now requires both halves, so the pair belongs here.
+  const env = envWithAllRequired();
+  delete env.EVIDENCE_KEY_ID; // key set, kid absent — the defect state
+  const result = evaluateEnv(env);
+
+  const partial = result.partialGroups.find((g) => g.name === 'Evidence signing');
+  assert.ok(partial, 'the half-set signing pair is reported as partial');
+  assert.deepEqual(partial.present, ['EVIDENCE_SIGNING_KEY']);
+  assert.deepEqual(partial.missing, ['EVIDENCE_KEY_ID']);
+
+  const report = renderReport(result);
+  assert.match(report, /Evidence signing: 1 of 2 present; off until all 2 are set\. Missing: EVIDENCE_KEY_ID/);
+  assert.match(report, /cannot sign/);
+  assert.match(report, /not a partial success/);
+  // Unlike the other groups, this one ALSO fails the run — both halves are
+  // required with no fallback, so the warning rides on top of a hard miss.
+  assert.equal(result.ok, false);
 });
 
 test('group detection uses the same presence test as everything else: whitespace-only is absent', () => {

@@ -39,6 +39,13 @@ import {
 import type { BlobRef } from './blob-ref.ts';
 import { ed25519, ed25519ph } from '@noble/curves/ed25519.js';
 
+// The attestation-node cases below build envelopes, which carry
+// `metadata.signingKeyId`; there is no coded default for it (signing.ts), so
+// this suite declares one. `node --test` runs each file in its own process.
+process.env.EVIDENCE_KEY_ID ??= 'platform:test-suite-kid';
+
+// Registry fixtures below — the kid strings a verifier LOOKS UP, unrelated to
+// what this process would emit.
 const KID = 'platform:evidence-2026-04';
 const NEW_KID = 'platform:evidence-2027-04';
 const PUB = 'MCowBQYDK2VwAyEA-PLACEHOLDER-ACTIVE-KEY';

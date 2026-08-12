@@ -30,6 +30,7 @@ import {
 } from '@typedstandards/produce-core';
 import { rekorHashForPackage } from './verify-core/signature.ts';
 import { getEvidenceSignerIdentity } from '../site-config.ts';
+import { isSigningKeyIdConfigured } from './unsigned-tier.ts';
 
 export { rekorHashForPackage };
 
@@ -44,22 +45,61 @@ export { rekorHashForPackage };
  */
 export type { SignerIdentity, SignResult };
 
-// Default key identifier used when `EVIDENCE_KEY_ID` is not set — the DEMO
-// deployment's active kid (it mirrors the registry's `kid` the same way the
-// demo signer identity in site-config mirrors the registry's
-// `signerIdentity`). The `platform:` prefix leaves room for per-user scopes
-// in the future (e.g. `user:<uuid>:<key-name>`) without a trust-registry
-// schema migration. An instance sets `EVIDENCE_KEY_ID` to its own kid —
-// see docs/instance-setup.md.
-const DEFAULT_KEY_ID = 'platform:evidence-2026-04';
+// THERE IS NO DEFAULT KEY ID. The kid is the registry lookup handle a
+// verifier uses to find the public key that must validate this instance's
+// signature, so it is an identity claim, not a formatting detail. A coded
+// default here used to substitute the REFERENCE deployment's kid whenever
+// `EVIDENCE_KEY_ID` was unset — which meant any instance with a signing key
+// and no kid signed with its own key and labeled the result with someone
+// else's identifier. Such a package cannot verify (the registry entry for
+// that kid holds a different public key) and misattributes the publisher.
+// The private key was never at risk; the damage was misattribution and
+// unverifiable evidence. So: an instance emits the kid it configured, or it
+// does not sign. See docs/instance-setup.md.
+
+/** The one message every "no kid configured" failure carries. Platform-
+ *  neutral on purpose — instances run on containers, VMs, and PaaS hosts
+ *  alike, so it names the variable and the guide, never a hosting product. */
+export const MISSING_KEY_ID_MESSAGE =
+  'EVIDENCE_KEY_ID is not set in this environment. This instance has no ' +
+  'signing key id to emit and will not substitute one: a package labeled ' +
+  "with a kid it never configured cannot verify and misattributes the " +
+  'publisher. Set EVIDENCE_KEY_ID to the kid of the active entry in this ' +
+  "instance's trust registry — see docs/instance-setup.md.";
 
 /**
- * Read the active key identifier. Returns `EVIDENCE_KEY_ID` when set, and
- * falls back to the default platform kid otherwise. The kid is not secret —
- * it's the registry lookup handle for the matching public key.
+ * The configured key identifier, or `null` when none is set.
+ *
+ * The non-throwing probe, for surfaces that DISPLAY the active kid rather
+ * than commit to it (they can render honest absence). The value is returned
+ * verbatim — presence is tested after trimming, but the string itself is
+ * never normalized, because silently rewriting a value that lands in a
+ * signed field is its own defect. The kid is not secret: it is the registry
+ * lookup handle for the matching public key.
+ */
+export function getConfiguredKeyId(): string | null {
+  return isSigningKeyIdConfigured(process.env)
+    ? (process.env.EVIDENCE_KEY_ID as string)
+    : null;
+}
+
+/**
+ * The active key identifier for anything that COMMITS to it — the value
+ * emitted into `metadata.signingKeyId` (covered by the envelope hash) and
+ * into the signature envelope's `kid`.
+ *
+ * Throws when unset, rather than returning `undefined`, because every caller
+ * writes the result into a required envelope field: returning an absent value
+ * would only move the same guess out to each call site (and the format layer
+ * types the field as a required `string`, so there is no honest empty to
+ * emit). Callers reach this only behind `evaluateSealCommitGate`, which turns
+ * the same condition into a specific, actionable refusal; this throw is the
+ * last-resort guard for any path that forgets the gate.
  */
 export function getActiveKeyId(): string {
-  return process.env.EVIDENCE_KEY_ID || DEFAULT_KEY_ID;
+  const kid = getConfiguredKeyId();
+  if (kid === null) throw new Error(`[signing] ${MISSING_KEY_ID_MESSAGE}`);
+  return kid;
 }
 
 /**
@@ -84,6 +124,11 @@ export function getActiveSigner(): SignerIdentity {
  * to, which is also what Rekor stores as `spec.data.hash`. The mechanism
  * (and the SPKI public-key derivation retained in `SignResult.publicKey`)
  * is produce-core's; only the key custody lives here.
+ *
+ * Null is the answer for "no key" ONLY. With a key but no `EVIDENCE_KEY_ID`
+ * this throws via `getActiveKeyId` instead of degrading: silently skipping
+ * the signature there would hide a misconfiguration behind a state
+ * (deliberately unsigned) that the operator did not choose.
  */
 export function signPackage(packageHash: string): SignResult | null {
   const privKeyB64 = process.env.EVIDENCE_SIGNING_KEY;
