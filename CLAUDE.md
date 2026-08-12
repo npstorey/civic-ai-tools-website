@@ -339,6 +339,20 @@ CSS keyframes (`blink`, `spin`, `pulse`) and component-specific styles use style
 
 ## Known Tech Debt
 
+### `next build` cannot run in a sandboxed agent session
+
+The default (Turbopack) builder cannot complete inside a Claude Code sandbox on
+any branch: its PostCSS worker pool binds a TCP port, and the sandbox denies
+port binding (`Operation not permitted`) — the same restriction behind the
+`listen EPERM` failures in `openrouter-streaming.test.ts`. Agents should build
+with `next build --webpack`, and treat CI's `build` check as the real gate.
+
+Note for anyone diagnosing a build failure here: this is **not** a network
+problem. Google Fonts was blamed for it for two days; the sandbox reaches
+`fonts.googleapis.com` fine, and since #246 the fonts are self-hosted anyway
+(`src/fonts/`), so no build path needs font egress at all.
+
+
 1. **Duplicated SSE event handling** — `useLiveTrace` and `useStreamingComparison` both build progress groups from SSE events. A shared utility could extract the group-building logic.
 2. **`@keyframes` duplication** — `blink` is defined in multiple styled-jsx blocks and could move to `globals.css`. `spin` exists in both `globals.css` and component styles.
 3. **`useLiveTrace` responsibility accumulation** — Manages SSE connection, diagram animation, progress logs, tool tracking, trace capture, slow timers, elapsed time, and abort control. Works but is a code smell.
