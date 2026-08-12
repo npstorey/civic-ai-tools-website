@@ -206,9 +206,9 @@ export function buildCommitmentView(
     packageUrl: record.basePackageStorageKey as unknown as string | undefined,
     // Visibility state (ADR-0010): lets a verifier render "sealed — content
     // not publicly located" instead of treating a missing packageUrl as an
-    // error. (The core defaults an ABSENT value to 'published'; the column is
-    // `NOT NULL`, so that branch is unreachable from this adapter — the
-    // fallback exists for callers whose row shape predates the column.)
+    // error. (The core now REFUSES an absent value rather than defaulting it
+    // — see ADR-0024; the column is `NOT NULL`, so the `: undefined` branch is
+    // unreachable from this adapter and would throw if it ever were reached.)
     //
     // SERVED CANONICAL (ADR-0016 §A, P2). The row's raw label is normalized
     // through the vocabulary boundary before it is emitted, so a historical row
