@@ -142,10 +142,10 @@ database; substitute your own values wherever you override
 
 ### Supplying your environment
 
-Configuration is run-time only — no environment file enters the image
-build. Entries the compose file lists as a bare `NAME` (no value) are
-pass-through: set in the container only when your environment has them,
-absent otherwise. Put your values in a file of `KEY=value` lines.
+Put your values in one file of `KEY=value` lines and hand it to compose;
+that single file feeds both the running container and the image build.
+No environment file enters the build *context* — the build reads only
+the named arguments listed in the compose file's `build.args`.
 
 A minimal first environment file (placeholders — substitute your own,
 and never commit this file):
@@ -166,13 +166,40 @@ GITHUB_CLIENT_ID=<your OAuth app>
 GITHUB_CLIENT_SECRET=<your OAuth app>
 ```
 
-Anything spelled `${VAR:-default}` in the compose file is overridable
-this way — the service passwords, host ports, bucket name,
-`S3_PUBLIC_BASE_URL`, `APP_BIND`/`APP_PORT`, the executor image tag, the
-identity variables, `NEXTAUTH_URL`, and the GC knobs — in addition to
-the bare-`NAME` pass-throughs. The three driver selectors,
-`S3_ENDPOINT`, and the constructed `DATABASE_URL` are hardcoded wiring:
-changing those means editing the compose file, not the env file.
+**How a value reaches the app.** Every variable in this guide is spelled
+one of three ways in `docker-compose.yml`, and the spelling tells you
+what your env file can do with it:
+
+| Spelling | What it means | Examples |
+| --- | --- | --- |
+| bare `NAME:` | Pass-through. Set in the container only when your environment has it, **absent otherwise** — which matters, because for several variables absence is the configured state, not a missing value. | the credentials, `SIGN_IN_ALLOWLIST`, `ROADMAP_RAW_URL`, the branding set, the tuning knobs |
+| `${NAME:-default}` | Overridable, with a working local default if you say nothing. | service passwords, host ports, bucket name, `S3_PUBLIC_BASE_URL`, `APP_BIND` / `APP_PORT`, the executor image tag, the identity variables, `NEXTAUTH_URL`, the GC knobs |
+| a literal value | Hardcoded wiring. Changing it means editing the compose file, not your env file. | the three driver selectors, `S3_ENDPOINT`, the constructed `DATABASE_URL` |
+
+There is no fourth category. A variable this guide documents but the
+compose file does not list would be inert on this path — set it, restart,
+and nothing happens, with no error to debug. That was a real fourth
+category once — the branding set, the content sources, host topology and
+the tuning knobs were all documented here and none of them were listed
+there. `scripts/check-compose-env.mjs` now compares the compose file
+against the app's own variable inventory (`scripts/preflight-env.mjs`) on
+every CI run, so a variable that reaches this guide without reaching the
+container fails the build.
+
+**Build time versus run time.** Most variables are read by the running
+server and arrive through the container's environment. A few are read at
+`next build` instead: `NEXT_PUBLIC_*` values are inlined into the emitted
+bundles, and the branding and content-source variables are additionally
+baked into statically prerendered pages. Those appear under the app
+service's `build.args` as well, resolved from the same env file, so:
+
+```bash
+docker compose --env-file /path/to/your.env up -d --build
+```
+
+supplies both sides at once. A change to a build-time value takes effect
+on the next build, not on the next restart — `--build` is what makes that
+one command rather than two.
 
 > **Reset the dev volumes before switching to your own passwords.**
 > Postgres reads `POSTGRES_PASSWORD` only when its data volume is first

@@ -35,6 +35,15 @@
 #
 #   docker compose --env-file <your env file> up
 #
+# TWO ARRIVAL TIMES. Most values are read by the running server and arrive
+# through the app service's `environment`. A few are read at `next build`
+# instead — NEXT_PUBLIC_* are inlined into bundles, and the branding and
+# content-source variables are additionally baked into prerendered pages —
+# so those also appear under the app service's `build.args`. Use the same
+# env file for both; `docker compose --env-file <file> up --build` supplies
+# each side from it. Changing a build-time value takes effect on the next
+# build, not on restart.
+#
 # An instance that publishes signed evidence supplies EVIDENCE_SIGNING_KEY,
 # EVIDENCE_KEY_ID, and its own identity values; with none set the app runs
 # in the unsigned tier by design (ADR-0020) — publish stays gated off and
@@ -125,6 +134,26 @@ services:
     build:
       context: .
       target: runner
+      # BUILD-TIME values (see the "two arrival times" note in this file's
+      # header). Bare NAME, same pass-through rule as `environment` below: an
+      # arg absent from your environment is not passed, and the image keeps
+      # the coded default. Nothing secret belongs here — build args are
+      # readable in image history.
+      args:
+        # Inlined into bundles at build; a run-time value cannot change them.
+        NEXT_PUBLIC_GA_MEASUREMENT_ID:
+        NEXT_PUBLIC_SOCRATA_MCP_URL:
+        NEXT_PUBLIC_CAPTURE_TRACES:
+        # Read at BOTH times: prerendered pages bake these at build, dynamic
+        # pages read the container's environment. Passed in both places so
+        # every page agrees (docs/deploy.md, branding + content sources).
+        SITE_BRAND_NAME:
+        SITE_BRAND_ACCENT:
+        SITE_BRAND_TAGLINE:
+        SITE_BRAND_ATTRIBUTION:
+        DIRECTORY_DATA_URL:
+        ROADMAP_RAW_URL:
+        ROADMAP_GITHUB_URL:
     restart: unless-stopped
     depends_on:
       postgres:
@@ -169,6 +198,8 @@ services:
       # a browser can reach — not the in-network endpoint above. Keep the
       # last path segment equal to S3_BUCKET.
       S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-http://localhost:9000/evidence}
+      S3_REGION:
+      S3_FORCE_PATH_STYLE:
       EXECUTOR_DRIVER: container
       EXECUTOR_CONTAINER_IMAGE: ${EXECUTOR_CONTAINER_IMAGE:-civic-notebook-executor:0.1.0}
       # --- instance identity (ADR-0020; neutral local values) ---
@@ -186,8 +217,22 @@ services:
       #   EVIDENCE_SIGNING_KEY / EVIDENCE_KEY_ID  unset ⇒ unsigned tier
       #   NEXTAUTH_SECRET                         unset ⇒ sign-in unavailable
       #   CRON_SECRET                             unset ⇒ scheduler rejected (401)
-      # NEXT_PUBLIC_* values are not here: those are inlined into client
-      # bundles at build time, so they belong to the image build, not to run.
+      #
+      # WHY BARE `NAME:` AND NOT `${NAME:-}`: the two are not the same
+      # variable. `${NAME:-}` always sets the variable, to the empty string
+      # when your environment has none — and the app distinguishes the two.
+      # EVIDENCE_TRUST_REGISTRY_LEGACY_URL is the sharpest case: unset means
+      # "emit the legacy registry URL in the signed sidecar", empty string
+      # means "omit it" (src/lib/site-config.ts getSidecarTrustRegistryUrls),
+      # so `${NAME:-}` would silently change signed output on every instance.
+      # Bare NAME is the only form that leaves an unset variable unset.
+      # scripts/check-compose-env.mjs rejects the `${NAME:-}` form here.
+      #
+      # This list is checked against the app's own environment inventory
+      # (scripts/preflight-env.mjs ENV_SPEC) by scripts/check-compose-env.mjs,
+      # which runs in `npm test` and in CI. A new variable the app reads fails
+      # that check until it is added here — which is what keeps a documented
+      # variable from being inert on this path.
       EVIDENCE_SIGNING_KEY:
       EVIDENCE_KEY_ID:
       NEXTAUTH_SECRET:
@@ -197,16 +242,42 @@ services:
       OIDC_CLIENT_ID:
       OIDC_CLIENT_SECRET:
       OIDC_PROVIDER_NAME:
+      SIGN_IN_ALLOWLIST:
       OPENROUTER_API_KEY:
       MODEL_API_BASE_URL:
       SOCRATA_MCP_URL:
       SOCRATA_APP_TOKEN:
       DATA_COMMONS_MCP_URL:
       DATA_COMMONS_API_KEY:
+      BOSTON_OPENCONTEXT_MCP_URL:
       DC_API_KEY:
       CRON_SECRET:
       KV_REST_API_URL:
       KV_REST_API_TOKEN:
+      # Host topology: unset ⇒ no host routing, every route on every host.
+      APP_HOST:
+      MARKETING_HOST:
+      APP_ONLY:
+      # Evidence identity overrides not already given a local default above.
+      EVIDENCE_PLATFORM_AGENT_URL:
+      EVIDENCE_TRUST_REGISTRY_CANONICAL_URL:
+      EVIDENCE_TRUST_REGISTRY_LEGACY_URL:
+      EVIDENCE_TRUST_REGISTRY_URL:
+      # Chrome branding and content sources. Also passed as build args above:
+      # prerendered pages bake them, dynamic pages read them here.
+      SITE_BRAND_NAME:
+      SITE_BRAND_ACCENT:
+      SITE_BRAND_TAGLINE:
+      SITE_BRAND_ATTRIBUTION:
+      DIRECTORY_DATA_URL:
+      ROADMAP_RAW_URL:
+      ROADMAP_GITHUB_URL:
+      # Tuning knobs; each falls back to a coded default when absent.
+      ANONYMOUS_RATE_LIMIT:
+      AUTHENTICATED_RATE_LIMIT:
+      APP_TIER_RATE_LIMIT:
+      TOKEN_LIMIT_PER_REQUEST:
+      MAX_TOOL_RESULT_CHARS:
 
   # Periodic caller for the scheduler endpoint. The endpoint is a plain
   # bearer-authenticated GET (src/app/api/cron/blob-gc/route.ts), so any

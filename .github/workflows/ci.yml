@@ -66,6 +66,18 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # Compose environment coverage. The app service passes an explicit
+      # `environment` map, so a variable absent from it never reaches the
+      # container — silently, with nothing to debug against. This compares that
+      # map against the app's own inventory (scripts/preflight-env.mjs
+      # ENV_SPEC) and fails on a variable the app reads that compose cannot
+      # deliver. Credential-free like every step here: it reads two checked-in
+      # files and no environment. `npm test` above also gates it (the guard's
+      # test file globs in), and the dedicated step is what makes the failure
+      # legible in the log.
+      - name: Compose env coverage
+        run: npm run check:compose-env
+
       # ADR-0012 §3 / spec §8.3.3 parallel-serve: /.well-known/typed-publisher.json
       # (the canonical path) and /.well-known/evidence-public-keys.json (the
       # legacy path) MUST emit byte-identical content. The canonical path is a
