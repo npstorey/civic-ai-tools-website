@@ -49,6 +49,11 @@ const DROPDOWN_ITEM_STYLE: React.CSSProperties = {
  * - `brandName` (#217) — the wordmark text, resolved by the layout from
  *   `SITE_BRAND_NAME` (src/lib/brand-config.ts). The default is the demo
  *   name, so a mount that omits the prop renders today's chrome.
+ * - `showRoadmap` (#241) — whether this instance has a roadmap of its own
+ *   (`ROADMAP_RAW_URL`). `false` hides the Roadmap nav entries rather than
+ *   pointing them at a page that says nothing has been published — the same
+ *   treatment `marketingOrigin: null` gives the marketing links. `true` is
+ *   the default and today's nav.
  * - `signInOptions` (#229 P1) — the providers this instance actually
  *   configured, derived by the layout from `buildProviders()`. Only the
  *   in-place branch below reads it (the split-host branch links to the `/ask`
@@ -65,6 +70,7 @@ export default function Header({
   marketingOrigin = '',
   signInHref = null,
   brandName = 'Civic AI Tools',
+  showRoadmap = true,
   signInOptions = DEFAULT_SIGN_IN_OPTIONS,
   sessionProbe = null,
 }: {
@@ -72,6 +78,7 @@ export default function Header({
   marketingOrigin?: string | null;
   signInHref?: string | null;
   brandName?: string;
+  showRoadmap?: boolean;
   signInOptions?: SignInOption[];
   sessionProbe?: SessionAffordanceTarget | null;
 }) {
@@ -296,6 +303,8 @@ export default function Header({
                   >
                     About
                   </Link>
+                  {/* Roadmap: only for an instance that has one (#241). */}
+                  {showRoadmap && (
                   <Link
                     href={mkt('/roadmap')}
                     onClick={() => setAboutOpen(false)}
@@ -305,6 +314,7 @@ export default function Header({
                   >
                     Roadmap
                   </Link>
+                  )}
                 </div>
               )}
             </div>
@@ -619,6 +629,8 @@ export default function Header({
           >
             About
           </Link>
+          {/* Roadmap: only for an instance that has one (#241). */}
+          {showRoadmap && (
           <Link
             href={mkt('/roadmap')}
             onClick={() => setMobileMenuOpen(false)}
@@ -632,6 +644,7 @@ export default function Header({
           >
             Roadmap
           </Link>
+          )}
             </>
           )}
           {/* Divider */}

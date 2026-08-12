@@ -5,6 +5,7 @@ import DirectoryClient from './DirectoryClient';
 import PortalDirectoryClient from './PortalDirectoryClient';
 import type { McpServerEntry } from '@/lib/mcp/directory-data';
 import type { PortalEntry, PortalCounts } from '@/lib/mcp/portal-data';
+import type { DirectorySourceNote } from '@/lib/content-source';
 import { prose } from '@/styles/page-styles';
 import type { CSSProperties } from 'react';
 
@@ -12,10 +13,15 @@ export default function DirectoryWrapper({
   servers,
   portals,
   portalCounts,
+  sourceNote = null,
 }: {
   servers: McpServerEntry[];
   portals: PortalEntry[];
   portalCounts: PortalCounts;
+  /** Attribution for entries that are not this instance's own (#241);
+   *  `null` — the default, and the case for a configured instance — renders
+   *  no note at all. Resolved server-side by the page. */
+  sourceNote?: DirectorySourceNote | null;
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -47,6 +53,24 @@ export default function DirectoryWrapper({
           Browse {servers.length}+ MCP servers and {portalCounts.total.toLocaleString()} open data
           portals for civic data.
         </p>
+        {sourceNote && (
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '12px 0 0 0' }}>
+            {sourceNote.kind === 'community' ? (
+              <>
+                The MCP server entries come from{' '}
+                <a href={sourceNote.source.href} target="_blank" rel="noopener noreferrer">
+                  {sourceNote.source.label}
+                </a>
+                , a shared community index maintained by that project rather than by this site.
+              </>
+            ) : (
+              <>
+                The MCP server entries are the community snapshot bundled with this codebase — the
+                live directory source could not be loaded.
+              </>
+            )}
+          </p>
+        )}
       </div>
 
       {/* Tab bar */}

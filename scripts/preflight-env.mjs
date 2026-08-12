@@ -234,12 +234,13 @@ export const ENV_SPEC = [
   { name: 'SITE_BRAND_ATTRIBUTION', tier: 'optional', purpose: 'Footer attribution line, plain text (unset: the demo authored attribution markup)', hasFallback: true },
 
   // --- Instance content sources (#241: src/lib/site-config.ts). All
-  //     optional: with none set, /directory and /roadmap fetch the
-  //     civic-ai-tools hub repo's content byte-identically to before. An
-  //     instance with content of its own points these at it instead. ---
-  { name: 'DIRECTORY_DATA_URL', tier: 'optional', purpose: '/directory page data source — MCP-server JSON (default: the civic-ai-tools hub repo)', hasFallback: true },
-  { name: 'ROADMAP_RAW_URL', tier: 'optional', purpose: '/roadmap page data source — raw ROADMAP.md (default: the civic-ai-tools hub repo)', hasFallback: true },
-  { name: 'ROADMAP_GITHUB_URL', tier: 'optional', purpose: '/roadmap "view on GitHub" link target (default: the civic-ai-tools hub repo)', hasFallback: true },
+  //     optional, and unset means one thing: this instance has no content
+  //     source of its own. /directory then serves the shared community index
+  //     with attribution; /roadmap renders as unpublished and drops out of
+  //     the nav rather than showing another project's plans. ---
+  { name: 'DIRECTORY_DATA_URL', tier: 'optional', purpose: '/directory data source — MCP-server JSON (unset: the community index, shown with attribution)', hasFallback: true },
+  { name: 'ROADMAP_RAW_URL', tier: 'optional', purpose: '/roadmap data source — raw Markdown (unset: /roadmap says no roadmap is published and leaves the nav)', hasFallback: true },
+  { name: 'ROADMAP_GITHUB_URL', tier: 'optional', purpose: '/roadmap "view source" link and byline label (unset: derived from ROADMAP_RAW_URL)', hasFallback: true },
 
   // --- Optional / feature / ops ---
   { name: 'EVIDENCE_TRUST_REGISTRY_URL', tier: 'optional', purpose: 'External trust-registry override', hasFallback: true },

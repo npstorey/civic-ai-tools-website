@@ -22,7 +22,7 @@ import {
   getBrandName,
   getBrandTagline,
 } from '@/lib/brand-config';
-import { getEvidenceSiteOrigin } from '@/lib/site-config';
+import { getEvidenceSiteOrigin, getRoadmapSource } from '@/lib/site-config';
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
@@ -101,6 +101,16 @@ export default function RootLayout({
   const brandAccent = getBrandAccent();
 
   /**
+   * Whether this instance has a roadmap of its own (#241). An instance that
+   * has published none keeps the route — it explains itself to anyone who
+   * lands on it — but drops the nav entry, the same "hidden rather than
+   * pointed at nothing" treatment the marketing links get on an app-only
+   * instance. With `ROADMAP_RAW_URL` set, every link is exactly today's.
+   * Content, not chrome: it reads site-config.ts, not brand-config.ts.
+   */
+  const showRoadmap = getRoadmapSource() !== null;
+
+  /**
    * The instance's sign-in choices (#229 P1 / Q63), derived here for the same
    * reason the host links are: `buildProviders()` returns provider configs
    * carrying client secrets, so the derivation is server-only and only the
@@ -171,6 +181,7 @@ export default function RootLayout({
               marketingOrigin={hostLinks.marketingOrigin}
               signInHref={hostLinks.signInHref}
               brandName={brandName}
+              showRoadmap={showRoadmap}
               signInOptions={signInOptions}
               {...(sessionProbe !== null ? { sessionProbe } : {})}
             />
@@ -199,8 +210,13 @@ export default function RootLayout({
                       <Link href={`${hostLinks.marketingOrigin}/learn`}>Learn</Link>
                       {' \u00b7 '}
                       <Link href={`${hostLinks.marketingOrigin}/about`}>About</Link>
-                      {' \u00b7 '}
-                      <Link href={`${hostLinks.marketingOrigin}/roadmap`}>Roadmap</Link>
+                      {/* Roadmap: only for an instance that has one (#241). */}
+                      {showRoadmap && (
+                        <>
+                          {' \u00b7 '}
+                          <Link href={`${hostLinks.marketingOrigin}/roadmap`}>Roadmap</Link>
+                        </>
+                      )}
                     </>
                   )}
                   {' \u00b7 '}

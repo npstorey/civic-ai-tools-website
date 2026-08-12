@@ -424,8 +424,10 @@ the host-topology set (`APP_HOST`, `MARKETING_HOST`, `APP_ONLY` — with
 none set, every route serves on every host, exactly the single-host
 behavior; see [Host topology](#host-topology-optional)),
 the content-source set (`DIRECTORY_DATA_URL`, `ROADMAP_RAW_URL`,
-`ROADMAP_GITHUB_URL` — with none set, `/directory` and `/roadmap` fetch
-the civic-ai-tools hub repo's content byte-identically to before; see
+`ROADMAP_GITHUB_URL` — with none set, `/directory` serves the shared
+community index with attribution; `ROADMAP_RAW_URL` is the one entry in
+this list that is not merely a default, since absent it means this
+instance has published no roadmap and `/roadmap` says so; see
 [Content sources](#content-sources-directory-and-roadmap)),
 rate-limit and token-budget tuning knobs
 (`ANONYMOUS_RATE_LIMIT`, `AUTHENTICATED_RATE_LIMIT`,
@@ -471,20 +473,37 @@ App Router serves it at `/favicon.ico`) and rebuild.
 
 ### Content sources (directory and roadmap)
 
-`/directory` and `/roadmap` fetch their content from the civic-ai-tools
-hub repo by default — its MCP-server directory JSON and its
-`ROADMAP.md`. Left unset, a self-hosted instance therefore serves the
-*reference project's* server directory and roadmap under its own name
-and brand (civic-ai-tools-website#241). Three variables re-point these
-pages at content of your own, all resolved in
-[`src/lib/site-config.ts`](../src/lib/site-config.ts); with none set,
-the fetched bytes and rendered links are identical to before.
+These three variables tell the two content pages where *your* content
+lives. All are resolved in
+[`src/lib/site-config.ts`](../src/lib/site-config.ts), and unset means
+one thing only: this instance has no content source of its own
+(civic-ai-tools-website#241). No variable here falls back to another
+project's roadmap, and the reference deployment at civicaitools.org sets
+them explicitly like any other instance.
 
-| Variable | Meaning | Default |
+| Variable | Meaning | Unset |
 | --- | --- | --- |
-| `DIRECTORY_DATA_URL` | `/directory` page data source — a JSON array matching the `McpServerEntry[]` shape in [`src/lib/mcp/directory-data.ts`](../src/lib/mcp/directory-data.ts). On fetch failure the page falls back to the checked-in `directory-fallback.json` snapshot regardless of this value — that snapshot is also the reference project's own data, so a from-scratch instance should supply both. | the civic-ai-tools hub repo's `data/mcp-servers.json` |
-| `ROADMAP_RAW_URL` | `/roadmap` page data source — raw Markdown. | the civic-ai-tools hub repo's `ROADMAP.md` |
-| `ROADMAP_GITHUB_URL` | The "view on GitHub" link rendered on `/roadmap` (the byline and the fetch-failure stub). The byline's visible label text is separate, hardcoded copy and does not follow this variable — see [issue #241](https://github.com/npstorey/civic-ai-tools-website/issues/241) for the open design question on no-config-instance behavior for these two pages. | the civic-ai-tools hub repo's `ROADMAP.md` GitHub URL |
+| `DIRECTORY_DATA_URL` | `/directory` data source — a JSON array matching the `McpServerEntry[]` shape in [`src/lib/mcp/directory-data.ts`](../src/lib/mcp/directory-data.ts). | The page serves the shared community index (the civic-ai-tools hub repo's `data/mcp-servers.json`) with a visible line attributing it to that project. |
+| `ROADMAP_RAW_URL` | `/roadmap` data source — raw Markdown. | `/roadmap` says this site has not published a roadmap, and the Roadmap link leaves the header and footer nav. |
+| `ROADMAP_GITHUB_URL` | Where `/roadmap`'s "Renders from …" byline links. | Derived from `ROADMAP_RAW_URL` — a GitHub raw URL resolves to its file page. The byline's visible label is derived from whichever URL it links to, so label and link cannot drift apart. |
+
+**Why the two pages differ.** A curated index of public MCP servers is a
+shared community resource: it is useful to any instance, so an
+unconfigured `/directory` keeps serving it and says whose it is. A
+roadmap is first-person — "our plans" — so another project's roadmap
+under your brand is wrong even when attributed, and an unconfigured
+`/roadmap` presents none. The route stays reachable and explains how to
+configure it; only the nav entry disappears.
+
+If your directory source cannot be fetched, the page falls back to the
+`directory-fallback.json` snapshot checked into this codebase and says
+so. That snapshot is a copy of the community index, so an instance that
+wants nothing upstream in its directory should supply both its own
+`DIRECTORY_DATA_URL` and its own snapshot.
+
+Set these **in the build environment as well as at run time**: both
+pages prerender with 1-hour ISR, so a change takes effect on the next
+build or revalidation, not immediately.
 
 These three are content, not chrome or evidence: unlike the branding set
 above they only change what `/directory` and `/roadmap` fetch and link
