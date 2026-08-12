@@ -113,12 +113,9 @@ reaches it too.
 What you will see, and why it is correct:
 
 - A **"Running unsigned" banner** on every page: *"Running unsigned — no
-  signing key is configured, so evidence commit and publish are disabled
+  signing key is configured, so evidence seal and publish are disabled
   and any output produced here carries no cryptographic commitment.
   Signing is the go-to-production step; see the instance setup guide."*
-  (Quoted verbatim, including its "commit" — that string predates the
-  [ADR-0016] rename and means what this guide and the API now call
-  **seal**.)
 - Evidence **seal and publish actions are gated off**, server-side and
   in the UI. An unsigned package can reach neither the `sealed` nor the
   `public` state ([ADR-0020]) — the unsigned tier is confined to local
