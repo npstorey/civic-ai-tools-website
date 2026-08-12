@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
-import { Space_Grotesk, Noto_Sans } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import Link from 'next/link';
 import Providers from '@/components/Providers';
@@ -26,16 +26,44 @@ import { getEvidenceSiteOrigin, getRoadmapSource } from '@/lib/site-config';
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
-const spaceGrotesk = Space_Grotesk({
+/**
+ * Self-hosted typefaces (#225). These were loaded through
+ * `next/font/google` until Next.js 16.2.11 turned an unreachable
+ * `fonts.googleapis.com` from a build-time warning into a hard build
+ * failure — which broke every restricted-egress build environment, the
+ * exact environment the operator-built container path in docs/deploy.md
+ * serves. Loading the same files from the repo removes the build-time
+ * network dependency outright.
+ *
+ * The .woff2 files in `src/fonts/` are the Google Fonts latin-subset
+ * builds, vendored from `@fontsource/*` 5.3.0 (upstream:
+ * github.com/google/fonts; Space Grotesk v22, Noto Sans v42). Both faces
+ * are SIL OFL 1.1 — license texts sit beside the files. Provenance and
+ * the vendor-over-dependency reasoning: `src/fonts/README.md`.
+ *
+ * Weight sets are exactly the ones `next/font/google` was asked for, so
+ * every `var(--font-*)` consumer in globals.css and the components keeps
+ * resolving to the same faces at the same weights. Anything asking for a
+ * weight outside these sets (a markdown `<strong>` in body copy, say)
+ * gets browser-synthesized bold today and still does — adding real 700
+ * Noto Sans here would be a rendering change, not a fix.
+ */
+const spaceGrotesk = localFont({
   variable: '--font-space-grotesk',
-  subsets: ['latin'],
-  weight: ['500', '600', '700'],
+  src: [
+    { path: '../fonts/space-grotesk-latin-500-normal.woff2', weight: '500', style: 'normal' },
+    { path: '../fonts/space-grotesk-latin-600-normal.woff2', weight: '600', style: 'normal' },
+    { path: '../fonts/space-grotesk-latin-700-normal.woff2', weight: '700', style: 'normal' },
+  ],
 });
 
-const notoSans = Noto_Sans({
+const notoSans = localFont({
   variable: '--font-noto-sans',
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
+  src: [
+    { path: '../fonts/noto-sans-latin-400-normal.woff2', weight: '400', style: 'normal' },
+    { path: '../fonts/noto-sans-latin-500-normal.woff2', weight: '500', style: 'normal' },
+    { path: '../fonts/noto-sans-latin-600-normal.woff2', weight: '600', style: 'normal' },
+  ],
 });
 
 export const metadata: Metadata = {

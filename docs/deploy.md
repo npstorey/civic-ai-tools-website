@@ -51,18 +51,15 @@ You need:
 - **Node.js ≥ 22** on the host if you want to run the preflight and
   rehearsal scripts from the checkout (recommended; the containers
   themselves don't need it).
-- **Network egress to `fonts.googleapis.com` from the build
-  environment.** The app loads its two typefaces through
-  `next/font/google`, which fetches them at `next build` time — and
-  since Next.js 16.2.11 an unreachable `fonts.googleapis.com`
-  **hard-fails the build** (16.2.7 and earlier warned and fell back to
-  system fonts). Every path that builds the app is affected: the compose
-  bring-up's image build below, a bare `next build`, and the standalone
-  build. A restricted-egress build environment — common in government
-  and enterprise CI — must allow that host, or the build stops there.
-  This is a build-time requirement only; the running app makes no
-  request to it. Removing the dependency by self-hosting the fonts is
-  tracked in [#225] / [#221].
+- **No egress to `fonts.googleapis.com`** — worth stating because it
+  was a prerequisite here until [#225]. The two typefaces are now
+  self-hosted from `src/fonts/` (SIL OFL 1.1, provenance in that
+  directory's README), so no build path — the compose bring-up's image
+  build below, a bare `next build`, or the standalone build — reaches
+  Google Fonts, and a restricted-egress build environment needs no
+  allowance for it. Changing the typefaces still means editing the
+  `next/font/local` calls in `src/app/layout.tsx`; making them an
+  instance-configuration knob is tracked in [#221].
 
 > **Sign-in prerequisite — read before bring-up.** The notebook/query
 > execution feature (executed-sandbox mode: generate a Jupyter notebook,
