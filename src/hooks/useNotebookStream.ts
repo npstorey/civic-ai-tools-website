@@ -194,7 +194,9 @@ export function useNotebookStream() {
           // Signers section honest pre-publish UX).
           const composedSystemPrompt = raw.composedSystemPrompt as string | undefined;
           const composedSystemPromptHash = raw.composedSystemPromptHash as string | undefined;
-          const signingKeyId = raw.signingKeyId as string | undefined;
+          // Null when the instance declared no key id — keep the prior value
+          // (initially null) so the Signers row renders honest absence.
+          const signingKeyId = raw.signingKeyId as string | null | undefined;
           setState((prev) => ({
             ...prev,
             composedSystemPrompt: composedSystemPrompt ?? prev.composedSystemPrompt,

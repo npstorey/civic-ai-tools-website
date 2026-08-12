@@ -455,10 +455,14 @@ export default function PublishEvidenceDialog({
                 </div>
               </div>
 
-              {/* Unsigned-tier gate-off (ADR-0020, S3a P3): with no signing
-                  key, neither Seal (sealed) nor Publish (public) is
-                  reachable — the action renders disabled with an explanation,
-                  mirroring the server-side gate. */}
+              {/* Unsigned-tier gate-off (ADR-0020, S3a P3): unless this
+                  instance can sign — which takes BOTH a signing key and a
+                  declared key id — neither Seal (sealed) nor Publish (public)
+                  is reachable, and the action renders disabled with an
+                  explanation, mirroring the server-side gate. The copy names
+                  the state, not one particular missing variable: the
+                  operator-facing detail (which half is missing) is on the
+                  site-wide banner and in the server's refusal. */}
               {signingConfigured === false && (
                 <div style={{
                   padding: '12px',
@@ -473,10 +477,10 @@ export default function PublishEvidenceDialog({
                   <strong style={{ color: 'var(--text-primary)' }}>
                     This instance is running unsigned.
                   </strong>{' '}
-                  No signing key is configured, so evidence cannot be sealed
-                  or published — an unsigned package can reach neither the
-                  sealed nor the public state. The analysis itself still works;
-                  an operator enables signing via the instance setup guide.
+                  Signing is not configured, so evidence cannot be sealed or
+                  published — an unsigned package can reach neither the sealed
+                  nor the public state. The analysis itself still works; an
+                  operator enables signing via the instance setup guide.
                 </div>
               )}
 

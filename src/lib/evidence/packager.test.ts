@@ -17,6 +17,12 @@ import {
 } from './canonicalization.ts';
 import type { BlobRef } from './blob-ref.ts';
 
+// Every envelope carries `metadata.signingKeyId`, and there is no coded
+// default for it (signing.ts) — an instance emits the kid it declared or
+// none. So this suite declares one, as any signing instance must. `node
+// --test` runs each file in its own process, so it is local to this suite.
+process.env.EVIDENCE_KEY_ID ??= 'platform:test-suite-kid';
+
 function sha256Hex(content: string): string {
   return crypto.createHash('sha256').update(content).digest('hex');
 }

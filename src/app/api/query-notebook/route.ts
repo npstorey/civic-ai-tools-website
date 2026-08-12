@@ -30,7 +30,7 @@ import {
   type StreamCallbacks,
 } from '@/lib/openrouter-streaming';
 import { TraceBuilder, hash as traceHash } from '@/lib/evidence/trace';
-import { getActiveKeyId } from '@/lib/evidence/signing';
+import { getConfiguredKeyId } from '@/lib/evidence/signing';
 import {
   type PhaseAToolCall,
   stampExecutedNotebook,
@@ -53,7 +53,11 @@ type NotebookEvent =
   | { type: 'phase_a_progress'; message: string; phase?: string; iteration?: number }
   | { type: 'phase_a_tool_call'; name: string; operationType?: string; reason?: string; resultSummary?: { rows: number; columns: number }; args?: Record<string, unknown>; duration_ms?: number }
   | { type: 'phase_a_answer'; content: string }
-  | { type: 'metadata'; composedSystemPrompt: string; composedSystemPromptHash: string; signingKeyId: string }
+  // `signingKeyId` is null when this instance has declared no EVIDENCE_KEY_ID:
+  // the Signers section then shows honest absence rather than some other
+  // deployment's kid. This is a DISPLAY surface, so it reads the non-throwing
+  // probe; nothing here commits to the value.
+  | { type: 'metadata'; composedSystemPrompt: string; composedSystemPromptHash: string; signingKeyId: string | null }
   | { type: 'notebook'; notebook: unknown; sandboxId: string; executionDuration_ms: number; validation: { ok: boolean; issues: { path: string; message: string }[] } }
   // Publish-path inputs (civic-ai-tools-website#112): everything the client
   // needs to publish the executed session through POST /api/evidence without
@@ -140,7 +144,7 @@ export async function POST(request: NextRequest) {
         type: 'metadata',
         composedSystemPrompt: systemPrompt,
         composedSystemPromptHash: systemPromptHash,
-        signingKeyId: getActiveKeyId(),
+        signingKeyId: getConfiguredKeyId(),
       });
       await emit({ type: 'phase', name: 'A', message: 'Discovering datasets…' });
       const phaseAResult = await runPhaseA({

@@ -6,8 +6,8 @@
  * instance of civic-ai-tools-website needs to run, and prints a grouped
  * pass/fail table. Several of these vars fail silently or with a generic
  * error when absent (DATABASE_URL, the storage credentials,
- * EVIDENCE_SIGNING_KEY, EVIDENCE_KEY_ID, the MCP endpoints, the model key),
- * so a one-shot "is everything wired?" check removes that failure mode.
+ * EVIDENCE_SIGNING_KEY, the MCP endpoints, the model key), so a one-shot
+ * "is everything wired?" check removes that failure mode.
  *
  * INSTANCE-AWARE: an instance is not one fixed deployment shape. The three
  * driver-selector variables — DB_DRIVER, BLOB_DRIVER, EXECUTOR_DRIVER — pick
@@ -169,8 +169,13 @@ export const ENV_SPEC = [
   { name: 'VERCEL_TEAM_ID', tier: 'optional', purpose: 'Vercel Sandbox auth for off-platform runs (with VERCEL_TOKEN + VERCEL_PROJECT_ID)', onlyWhen: { executor: 'vercel-sandbox' } },
   { name: 'VERCEL_PROJECT_ID', tier: 'optional', purpose: 'Vercel Sandbox auth for off-platform runs (with VERCEL_TOKEN + VERCEL_TEAM_ID)', onlyWhen: { executor: 'vercel-sandbox' } },
 
+  // The signing pair. NEITHER has a coded fallback: signing.ts has no default
+  // key id, because a substituted kid would label this instance's signature
+  // with another deployment's registry entry (misattribution + unverifiable
+  // evidence). Both halves are hard requirements of a signing instance, and
+  // the SIGNING_PAIR group below adds the all-or-nothing semantics on top.
   { name: 'EVIDENCE_SIGNING_KEY', tier: 'required', purpose: 'Ed25519 private key — signs evidence packages' },
-  { name: 'EVIDENCE_KEY_ID', tier: 'required', purpose: 'Active signing key id (kid) — must match the trust registry', hasFallback: true }, // signing.ts: `EVIDENCE_KEY_ID || DEFAULT_KEY_ID`; the default mirrors the registry's active kid
+  { name: 'EVIDENCE_KEY_ID', tier: 'required', purpose: 'Active signing key id (kid) — must match the trust registry; no coded default' },
 
   // --- Sign-in path (the rate-limit headroom option; OAuth) ---
   { name: 'NEXTAUTH_SECRET', tier: 'required', purpose: 'NextAuth session encryption' },
@@ -276,11 +281,14 @@ export const ENV_SPEC = [
 
 /**
  * All-or-nothing variable groups (#195). Each names a set the code consumes
- * only as a complete set: with any member absent the whole set is ignored —
- * no error, no log — so a partially set group means the operator configured
- * something that is silently not in effect, and preflight is the only place
- * that can be surfaced. Detection is presence-only, same test as everywhere
- * else; no value is ever read or echoed.
+ * only as a complete set: with any member absent the whole set is ignored, so
+ * a partially set group means the operator configured something that is not
+ * in effect. For most groups that is entirely silent at run time and
+ * preflight is the only place it can surface. The signing pair is the one
+ * exception — it refuses loudly at run time — and is listed anyway, because
+ * preflight is where the operator learns the RELATIONSHIP before a deploy
+ * rather than from a refused publish afterwards. Detection is presence-only,
+ * same test as everywhere else; no value is ever read or echoed.
  *
  * Fields:
  *   - members: the variable names (each must also be declared in ENV_SPEC —
@@ -320,6 +328,19 @@ export const ENV_GROUPS = [
     // optional (requiredUnlessAllPresent above), so a half-set pair is
     // otherwise fully silent.
     feature: 'the GitHub provider is not offered on the sign-in screen',
+  },
+  {
+    name: 'Evidence signing',
+    members: ['EVIDENCE_SIGNING_KEY', 'EVIDENCE_KEY_ID'],
+    // src/lib/evidence/unsigned-tier.ts `isSigningConfigured` requires BOTH
+    // halves: custody plus the declared key id. #195 deliberately left this
+    // pair out because the kid then had a coded default, so the set was not
+    // all-or-nothing. That default is gone, so the pair now belongs here.
+    // Unlike the other groups this one is not silent at run time — the gate
+    // refuses and the banner shows — but preflight is where the operator sees
+    // the RELATIONSHIP: a key alone does not turn signing on.
+    feature: 'evidence seal/publish stays gated off — the instance cannot sign',
+    note: 'A key without a key id is not a partial success: the instance refuses to sign rather than emit a kid it never declared. Set EVIDENCE_KEY_ID to the active entry in your trust registry (docs/instance-setup.md).',
   },
   {
     name: 'Durable rate limiting',
@@ -474,10 +495,10 @@ export function evaluateEnv(env, spec = ENV_SPEC) {
   });
 
   // A required var with a coded fallback (`hasFallback`) is NOT a hard miss when
-  // absent — the app substitutes a built-in default (e.g. signing.ts uses
-  // DEFAULT_KEY_ID for EVIDENCE_KEY_ID). It is surfaced separately so the
-  // default's continued correctness (e.g. the kid still matching the trust
-  // registry across a key rotation) can be confirmed, without failing the run.
+  // absent — the app substitutes a built-in default or a degraded in-process
+  // path (e.g. rate-limit.ts falls back to a per-process counter without the
+  // KV pair). It is surfaced separately so the fallback's continued
+  // acceptability can be confirmed, without failing the run.
   const missingRequired = rows.filter((r) => r.tier === 'required' && !r.present && !r.hasFallback);
   const requiredOnFallback = rows.filter((r) => r.tier === 'required' && !r.present && r.hasFallback);
   const missingRecommended = rows.filter((r) => r.tier === 'recommended' && !r.present);

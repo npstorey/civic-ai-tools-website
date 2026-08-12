@@ -22,6 +22,12 @@ import {
   LEGACY_JSON_CANONICALIZATION,
 } from './canonicalization.ts';
 
+// Every attestation envelope carries `metadata.signingKeyId`, and there is no
+// coded default for it (signing.ts) — an instance emits the kid it declared
+// or none. `node --test` runs each file in its own process, so this
+// declaration is local to this suite.
+process.env.EVIDENCE_KEY_ID ??= 'platform:test-suite-kid';
+
 const SIGNER = {
   bindingTier: 'platform',
   identifier: 'platform:civic-ai-tools',

@@ -101,7 +101,22 @@ Signing custody (both required to sign; the app runs unsigned without them):
 | Variable | Meaning |
 | --- | --- |
 | `EVIDENCE_SIGNING_KEY` | Base64 DER PKCS8 private key from step 1. **Sensitive.** |
-| `EVIDENCE_KEY_ID` | The kid from step 2. Must match the registry's active entry. |
+| `EVIDENCE_KEY_ID` | The kid from step 2. Must match the registry's active entry. No default — see below. |
+
+**Neither half has a coded default, and half of the pair is not half of the
+feature.** With a signing key set but no `EVIDENCE_KEY_ID`, the instance
+refuses to seal or publish: it will not substitute a key id it was not given.
+That refusal is deliberate. A kid is an identity claim — the handle a verifier
+uses to look a public key up in a trust registry — so emitting one you did not
+configure would label your signature with someone else's registry entry. The
+package then fails verification (that entry holds a different public key)
+while appearing to claim another party's identity. Your private key is never
+involved either way; the damage is misattribution and unverifiable evidence,
+which is why the instance stops instead of guessing.
+
+You will see the half-configured state three ways: a site-wide banner naming
+`EVIDENCE_KEY_ID`, a `signing_key_id_missing` refusal from any seal/publish
+attempt, and a preflight warning that the signing pair is partially set.
 
 Instance identity (ADR-0020: everything that names your instance inside
 emitted evidence is configuration, resolved in
