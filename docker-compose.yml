@@ -142,7 +142,6 @@ services:
       args:
         # Inlined into bundles at build; a run-time value cannot change them.
         NEXT_PUBLIC_GA_MEASUREMENT_ID:
-        NEXT_PUBLIC_SOCRATA_MCP_URL:
         NEXT_PUBLIC_CAPTURE_TRACES:
         # Read at BOTH times: prerendered pages bake these at build, dynamic
         # pages read the container's environment. Passed in both places so
@@ -154,6 +153,7 @@ services:
         DIRECTORY_DATA_URL:
         ROADMAP_RAW_URL:
         ROADMAP_GITHUB_URL:
+        SITE_NOINDEX:
     restart: unless-stopped
     depends_on:
       postgres:
@@ -272,6 +272,7 @@ services:
       DIRECTORY_DATA_URL:
       ROADMAP_RAW_URL:
       ROADMAP_GITHUB_URL:
+      SITE_NOINDEX:
       # Tuning knobs; each falls back to a coded default when absent.
       ANONYMOUS_RATE_LIMIT:
       AUTHENTICATED_RATE_LIMIT:

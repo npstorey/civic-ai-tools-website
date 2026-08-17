@@ -13,7 +13,9 @@ import RunningUnsignedBanner from '@/components/RunningUnsignedBanner';
 import SponsorLine from '@/components/SponsorLine';
 import { BrandProvider } from '@/components/BrandProvider';
 import { EvidenceOriginProvider } from '@/components/EvidenceOriginProvider';
+import { McpRoutingProvider } from '@/components/McpRoutingProvider';
 import { SignInOptionsProvider } from '@/components/SignInOptionsProvider';
+import { readMcpEnvFromProcess } from '@/lib/mcp/registry';
 import { buildProviders } from '@/lib/auth-providers';
 import { toSignInOptions } from '@/lib/auth-provider-options';
 import {
@@ -22,9 +24,22 @@ import {
   getBrandName,
   getBrandTagline,
 } from '@/lib/brand-config';
-import { getEvidenceSiteOrigin, getRoadmapSource } from '@/lib/site-config';
+import { getInstanceAttribution, getRoadmapSource } from '@/lib/site-config';
+import { resolveRobotsMetadata } from '@/lib/site-indexing';
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+
+/**
+ * `SITE_NOINDEX` (#258 E1): `undefined` (the default — indexable) omits the
+ * `robots` key from the metadata object entirely, so no `<meta
+ * name="robots">` tag renders at all; set truthy, it carries `index: false,
+ * follow: false`. Shared with `src/app/robots.ts` via `site-indexing.ts` so
+ * the two surfaces cannot disagree. Statically prerendered pages bake this
+ * at `next build` — same build-time-plus-runtime caveat as the
+ * `SITE_BRAND_*` chrome set (docs/deploy.md's Branding and theming
+ * section); set it in the build environment too when it matters at build.
+ */
+const robotsMetadata = resolveRobotsMetadata(process.env);
 
 /**
  * Self-hosted typefaces (#225). These were loaded through
@@ -70,10 +85,7 @@ export const metadata: Metadata = {
   title: `${getBrandName()} - MCP Demo`,
   description:
     'See the difference MCP (Model Context Protocol) makes when querying civic data. Compare AI responses with and without live data access.',
-  robots: {
-    index: false,
-    follow: false,
-  },
+  ...(robotsMetadata ? { robots: robotsMetadata } : {}),
   openGraph: {
     title: `${getBrandName()} - MCP Demo`,
     description:
@@ -187,10 +199,18 @@ export default function RootLayout({
               currently the chat citation preview. Same pattern and mount
               point as HostLinksProvider above. */}
           <BrandProvider value={brandName}>
-          {/* Evidence site origin for the same unreachable client surface
-              (#227) — instance identity (EVIDENCE_SITE_ORIGIN), so its own
-              provider rather than a rider on the chrome-brand one. */}
-          <EvidenceOriginProvider value={getEvidenceSiteOrigin()}>
+          {/* Instance attribution identity for the unreachable client
+              surfaces (#227, #258 A2) — the EVIDENCE_* set (origin, host
+              label, display name), so its own provider rather than a rider
+              on the chrome-brand one. Null members mean "not configured";
+              the client surfaces then omit attribution. */}
+          <EvidenceOriginProvider value={getInstanceAttribution()}>
+          {/* Server-resolved Socrata MCP endpoint for the client surfaces
+              that mention it (#258 C5) — one configured value reaches server
+              and client; null means "not configured" and the surfaces omit
+              the host mention. Routing, not identity or chrome, so its own
+              provider. */}
+          <McpRoutingProvider value={readMcpEnvFromProcess().socrataUrl ?? null}>
           {/* Sign-in choices for the affordances inside client trees (#229
               P1) — QueryForm, RateLimitBanner, McpResponseDisplay and
               NotebookOutput all render under the apex page, a client
@@ -269,6 +289,7 @@ export default function RootLayout({
             </footer>
           </div>
           </SignInOptionsProvider>
+          </McpRoutingProvider>
           </EvidenceOriginProvider>
           </BrandProvider>
           </HostLinksProvider>

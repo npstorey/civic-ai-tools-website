@@ -67,9 +67,11 @@ export interface SynthesisOutputs {
 
 function buildHelperCellSource(helperIds: readonly HelperId[]): string {
   const blocks = helperIds.map(id => getHelperSource(id).trimEnd());
+  // #258: name the instance host only when one is declared (honest omission).
+  const host = getPublicationHost();
   return [
     '# Helper functions (embedded inline per ADR-0005 §3).',
-    `# Source of truth: src/lib/notebook-author/helpers/*.py on ${getPublicationHost()}.`,
+    `# Source of truth: src/lib/notebook-author/helpers/*.py${host ? ` on ${host}` : ''}.`,
     '',
     ...blocks,
   ].join('\n\n');

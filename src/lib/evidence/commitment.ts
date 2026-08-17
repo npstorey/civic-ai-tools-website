@@ -5,11 +5,7 @@ import {
   buildCommitmentView as buildCommitmentViewCore,
   type CommitmentLifecycle,
 } from '@typedstandards/produce-core';
-import {
-  getSidecarTrustRegistryUrls,
-  DEMO_TRUST_REGISTRY_CANONICAL_URL,
-  DEMO_TRUST_REGISTRY_LEGACY_URL,
-} from '../site-config.ts';
+import { getSidecarTrustRegistryUrls } from '../site-config.ts';
 import { fromDbValue } from './visibility.ts';
 
 /**
@@ -56,26 +52,15 @@ import { fromDbValue } from './visibility.ts';
 type EvidenceRecord = typeof evidenceRecords.$inferSelect;
 type UserRecord = typeof users.$inferSelect;
 
-/**
- * Canonical trust-registry path (spec §8.3.3, ADR-0012 §3) — the DEMO
- * deployment's value, kept as the exported default. New external clients
- * SHOULD resolve the publisher's keys from this path. Served byte-identical
- * to the legacy path below (parallel-serve).
- *
- * The EMITTED value now resolves per-instance via
- * `getSidecarTrustRegistryUrls()` (ADR-0020: an instance shipping the demo
- * URLs unchanged would emit proofs pointing at a registry that lacks its
- * key); with no config set it equals this constant, byte-for-byte.
- */
-export const CANONICAL_TRUST_REGISTRY_URL = DEMO_TRUST_REGISTRY_CANONICAL_URL;
-
-/**
- * Legacy trust-registry path (pre-ADR-0012) — the DEMO deployment's value.
- * Served indefinitely, byte-identical to the canonical path; emitted
- * alongside the canonical URL so existing clients that only know the legacy
- * path keep resolving. Instances derive their own (or omit it) via config.
- */
-export const LEGACY_TRUST_REGISTRY_URL = DEMO_TRUST_REGISTRY_LEGACY_URL;
+// The trust-registry URLs are resolved per-instance via
+// `getSidecarTrustRegistryUrls()` (ADR-0020) — canonical path (spec §8.3.3,
+// ADR-0012 §3) plus the parallel-served legacy path. As of #258 there are no
+// exported reference-deployment URL constants here: an unconfigured instance
+// REFUSES to build a sidecar (the getter throws `InstanceIdentityError`;
+// serving routes translate that into an `instance_identity_missing` refusal)
+// rather than emit proofs pointing at a registry that lacks its key. The
+// reference values live in `reference-identity-fixture.ts`, injected as env
+// by the byte-parity tests only.
 
 /**
  * Current lifecycle state of the content node, surfaced alongside the proofs so
@@ -191,8 +176,9 @@ export function buildCommitmentView(
 
   const lifecycle = buildCommitmentLifecycle(record);
 
-  // Per-instance trust-registry URLs (ADR-0020). With no config set these are
-  // the demo constants above — byte-identical emission.
+  // Per-instance trust-registry URLs (ADR-0020). Throws when this instance
+  // has not declared its identity (#258) — the serving routes translate that
+  // into an `instance_identity_missing` refusal.
   const registry = getSidecarTrustRegistryUrls();
 
   return buildCommitmentViewCore({

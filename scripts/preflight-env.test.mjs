@@ -56,14 +56,39 @@ test('empty string and whitespace-only count as absent (not present)', () => {
 
 test('a required var with a coded fallback is soft when absent (fallbk, run still passes)', () => {
   const env = envWithAllRequired();
-  delete env.SOCRATA_MCP_URL; // required, but hasFallback (the hosted endpoint)
+  delete env.KV_REST_API_URL; // required, but hasFallback (in-process memory store)
   const result = evaluateEnv(env);
   assert.equal(result.ok, true, 'a fallback-backed required var does not fail the run');
   assert.equal(result.missingRequired.length, 0);
-  assert.deepEqual(result.requiredOnFallback.map((r) => r.name), ['SOCRATA_MCP_URL']);
+  assert.deepEqual(result.requiredOnFallback.map((r) => r.name), ['KV_REST_API_URL']);
   const report = renderReport(result);
   assert.match(report, /fallbk/);
   assert.match(report, /built-in fallback/);
+});
+
+test('#258 C4: SOCRATA_MCP_URL has NO coded fallback — absent, it is a hard miss that fails the run', () => {
+  // The entry used to carry `hasFallback: true`, pointing at a coded default
+  // of the reference deployment's hosted endpoint — which silently routed an
+  // unconfigured instance's queries through infrastructure it does not
+  // operate. That fallback is gone: the query path refuses per-request,
+  // naming this variable, so preflight must fail rather than soft-note.
+  const entry = ENV_SPEC.find((s) => s.name === 'SOCRATA_MCP_URL');
+  assert.equal(entry.tier, 'required');
+  assert.ok(!entry.hasFallback, 'SOCRATA_MCP_URL must not claim a coded fallback');
+
+  const env = envWithAllRequired();
+  delete env.SOCRATA_MCP_URL;
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.missingRequired.map((r) => r.name), ['SOCRATA_MCP_URL']);
+  assert.ok(!result.requiredOnFallback.some((r) => r.name === 'SOCRATA_MCP_URL'));
+});
+
+test('#258 C5: NEXT_PUBLIC_SOCRATA_MCP_URL is no longer part of the environment inventory', () => {
+  // The client reads the server-resolved SOCRATA_MCP_URL through
+  // McpRoutingProvider; a second NEXT_PUBLIC_* name for the same routing
+  // decision is exactly the split #258 C5 closed.
+  assert.ok(!ENV_SPEC.some((s) => s.name === 'NEXT_PUBLIC_SOCRATA_MCP_URL'));
 });
 
 test('EVIDENCE_KEY_ID has NO coded fallback: absent, it is a hard miss that fails the run', () => {
@@ -575,26 +600,70 @@ test('a partial KV pair warns that durable rate limiting is off, while the run s
   assert.match(renderReport(result), /falls back to per-process memory/);
 });
 
-test('a half-set signing pair warns, naming the missing half and the misattribution risk', () => {
+test('a partially-set signing group warns, naming the missing members and the misattribution risk', () => {
   // #195 left this pair out of ENV_GROUPS because the kid then had a coded
   // fallback, so the set was not all-or-nothing. The fallback is gone and
-  // `isSigningConfigured` now requires both halves, so the pair belongs here.
+  // `isSigningConfigured` requires both halves — and as of #258 the group
+  // also carries the instance-identity set, which the seal/commit gate
+  // requires alongside the pair (key + kid + identity travel together).
   const env = envWithAllRequired();
-  delete env.EVIDENCE_KEY_ID; // key set, kid absent — the defect state
+  delete env.EVIDENCE_KEY_ID; // key + identity set, kid absent — a defect state
   const result = evaluateEnv(env);
 
   const partial = result.partialGroups.find((g) => g.name === 'Evidence signing');
-  assert.ok(partial, 'the half-set signing pair is reported as partial');
-  assert.deepEqual(partial.present, ['EVIDENCE_SIGNING_KEY']);
+  assert.ok(partial, 'the partially-set signing group is reported as partial');
+  assert.equal(partial.total, 7);
+  assert.ok(partial.present.includes('EVIDENCE_SIGNING_KEY'));
+  assert.ok(partial.present.includes('EVIDENCE_SITE_ORIGIN'));
   assert.deepEqual(partial.missing, ['EVIDENCE_KEY_ID']);
 
   const report = renderReport(result);
-  assert.match(report, /Evidence signing: 1 of 2 present; off until all 2 are set\. Missing: EVIDENCE_KEY_ID/);
+  assert.match(report, /Evidence signing: 6 of 7 present; off until all 7 are set\. Missing: EVIDENCE_KEY_ID/);
   assert.match(report, /cannot sign/);
-  assert.match(report, /not a partial success/);
-  // Unlike the other groups, this one ALSO fails the run — both halves are
+  assert.match(report, /travel together/);
+  // Unlike the other groups, this one ALSO fails the run — every member is
   // required with no fallback, so the warning rides on top of a hard miss.
   assert.equal(result.ok, false);
+});
+
+test('#258: the identity members of the signing group are required-tier with no coded fallback', () => {
+  const IDENTITY_MEMBERS = [
+    'EVIDENCE_SITE_ORIGIN',
+    'EVIDENCE_SIGNER_BINDING_TIER',
+    'EVIDENCE_SIGNER_IDENTIFIER',
+    'EVIDENCE_SIGNER_DISPLAY_NAME',
+    'EVIDENCE_PLATFORM_AGENT_TITLE',
+  ];
+  const group = ENV_GROUPS.find((g) => g.name === 'Evidence signing');
+  for (const name of IDENTITY_MEMBERS) {
+    const entry = ENV_SPEC.find((s) => s.name === name);
+    assert.ok(entry, `${name} is declared`);
+    assert.equal(entry.tier, 'required', `${name} is required (identity has no default)`);
+    assert.ok(!entry.hasFallback, `${name} must not claim a coded fallback`);
+    assert.ok(group.members.includes(name), `${name} travels with the signing pair`);
+  }
+  // A signing pair with no identity set is a partial group naming exactly
+  // the five identity variables.
+  const env = envWithAllRequired();
+  for (const name of IDENTITY_MEMBERS) delete env[name];
+  const result = evaluateEnv(env);
+  const partial = result.partialGroups.find((g) => g.name === 'Evidence signing');
+  assert.ok(partial);
+  assert.deepEqual(partial.missing, IDENTITY_MEMBERS);
+  assert.equal(result.ok, false, 'missing identity fails the run');
+  // The DERIVED identity overrides stay optional-with-fallback: derivation
+  // from an operator-set origin is real config, not a reference default.
+  for (const name of [
+    'EVIDENCE_PUBLICATION_HOST',
+    'EVIDENCE_TRUST_REGISTRY_CANONICAL_URL',
+    'EVIDENCE_TRUST_REGISTRY_LEGACY_URL',
+    'EVIDENCE_PLATFORM_AGENT_ID',
+    'EVIDENCE_PLATFORM_AGENT_URL',
+  ]) {
+    const entry = ENV_SPEC.find((s) => s.name === name);
+    assert.equal(entry.tier, 'optional', `${name} stays an optional override`);
+    assert.ok(entry.hasFallback, `${name} derives (coded derivation, not a reference value)`);
+  }
 });
 
 test('group detection uses the same presence test as everything else: whitespace-only is absent', () => {

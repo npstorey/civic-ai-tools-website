@@ -105,9 +105,13 @@ export function getActiveKeyId(): string {
 /**
  * Identity bound to the active signing key, for emission as the envelope-side
  * `signer` claim (spec §8.1.1). Resolved from instance config (ADR-0020;
- * `EVIDENCE_SIGNER_*` env vars, demo defaults when unset) — it MUST mirror
- * the active key's `signerIdentity` in the instance's trust registry so
- * verify check #14 cross-checks cleanly.
+ * the `EVIDENCE_SIGNER_*` triple — REQUIRED identity as of #258, no coded
+ * default: throws `InstanceIdentityError` naming the missing variables when
+ * the triple is incomplete; callers reach this only behind
+ * `evaluateSealCommitGate`). It MUST mirror the active key's
+ * `signerIdentity` in the instance's trust registry so verify check #14
+ * cross-checks cleanly. Display surfaces that can render honest absence use
+ * site-config's `getConfiguredSignerIdentity()` instead.
  */
 export function getActiveSigner(): SignerIdentity {
   return getEvidenceSignerIdentity();

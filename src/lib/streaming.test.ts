@@ -133,3 +133,37 @@ test('friendlyStreamError gives distinct, operator-actionable copy for the two c
   assert.match(notConfigured, /no AI model API key configured/i);
   assert.match(rejected, /rejected/i);
 });
+
+test('#258 C4: mcp_not_configured classifies from typed code and from message shape alike', () => {
+  // Typed code (SSE error events, JSON error bodies from the guards).
+  assert.equal(
+    classifyStreamError({ code: 'mcp_not_configured', message: 'whatever' }),
+    'mcp_not_configured',
+  );
+  // Message shape (paths that carry only a message — SSEError from a
+  // pre-stream JSON refusal, a rethrown Error from the client backstop).
+  assert.equal(
+    classifyStreamError('No Socrata MCP endpoint is configured: SOCRATA_MCP_URL is missing or empty in the server environment.'),
+    'mcp_not_configured',
+  );
+  // Beats the broader mcp_unavailable match even though the message says "MCP".
+  assert.equal(
+    classifyStreamError('The MCP server for tool "get_data" is not configured: SOCRATA_MCP_URL is missing or empty in the server environment. Set it and restart the server.'),
+    'mcp_not_configured',
+  );
+});
+
+test('#258 C4: friendlyStreamError names SOCRATA_MCP_URL and stays distinct from the availability kinds', () => {
+  const copy = friendlyStreamError({ code: 'mcp_not_configured' });
+  assert.match(copy, /SOCRATA_MCP_URL/, 'operator-actionable: names the variable');
+  assert.match(copy, /no live data source configured/i);
+  assert.notEqual(copy, friendlyStreamError(new Error('MCP initialization failed for "socrata": 503')));
+  assert.notEqual(copy, friendlyStreamError(new Error('MCP tool "get_data" timed out after 45s')));
+});
+
+test('#258 C4: describeToolFailureForLlm handles the unconfigured kind without leaking configuration detail', () => {
+  const text = describeToolFailureForLlm('get_data', { code: 'mcp_not_configured' });
+  assert.match(text, /Do not estimate, guess, or fabricate/);
+  assert.match(text, /no live data source configured/i);
+  assert.ok(!text.includes('SOCRATA_MCP_URL'), 'env-var names never reach the model-relayed answer');
+});

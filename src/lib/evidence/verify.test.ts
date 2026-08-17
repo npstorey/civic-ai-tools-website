@@ -38,11 +38,20 @@ import {
 } from './attestation.ts';
 import type { BlobRef } from './blob-ref.ts';
 import { ed25519, ed25519ph } from '@noble/curves/ed25519.js';
+import { REFERENCE_IDENTITY_ENV } from './reference-identity-fixture.ts';
 
 // The attestation-node cases below build envelopes, which carry
 // `metadata.signingKeyId`; there is no coded default for it (signing.ts), so
 // this suite declares one. `node --test` runs each file in its own process.
 process.env.EVIDENCE_KEY_ID ??= 'platform:test-suite-kid';
+
+// #258: packages built via buildEvidencePackage below also require a
+// declared instance identity (no coded defaults remain). Injected from the
+// reference fixture so the verify-side assertions keep exercising the
+// historical package shape.
+for (const [name, value] of Object.entries(REFERENCE_IDENTITY_ENV)) {
+  process.env[name] ??= value;
+}
 
 // Registry fixtures below — the kid strings a verifier LOOKS UP, unrelated to
 // what this process would emit.

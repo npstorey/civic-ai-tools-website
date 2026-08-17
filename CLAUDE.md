@@ -213,7 +213,7 @@ This is the local-dev set for the reference deployment; the full tier-by-tier en
 Required in `.env.local`:
 ```
 OPENROUTER_API_KEY=sk-or-...
-SOCRATA_MCP_URL=https://socrata-mcp-server.onrender.com
+SOCRATA_MCP_URL=https://socrata-mcp.civicaitools.org  # Required, no fallback — every data query refuses without it (#258)
 DATA_COMMONS_MCP_URL=https://api.datacommons.org/mcp
 DATA_COMMONS_API_KEY=                # From https://apikeys.datacommons.org (free)
 GITHUB_CLIENT_ID=
@@ -298,7 +298,7 @@ Active work is organized into lightweight sprints in [`/sprints/`](sprints/).
 - **Light mode only** — Simplified styling, no dark mode
 - **NYC Design System colors** — Blue (#103FEF), grays, semantic colors
 - **Compact layout** — Form and button visible above fold on laptop screens
-- **Not indexed** — robots.txt blocks crawlers during demo phase
+- **Indexing is explicit instance config** — `SITE_NOINDEX` (unset/empty = indexable, the standard web default; set truthy = `robots.txt` disallows every path and page metadata carries noindex/nofollow). The reference deployment sets `SITE_NOINDEX=1`. See [`docs/deploy.md`](docs/deploy.md#indexing-optional) and `src/lib/site-indexing.ts`.
 - **Mobile out of scope for BPMN side-by-side** — Desktop only for now; mobile polish (stacked layout, 2x2 trace pills, scroll fade) is a future item
 - **Fullscreen keeps site header** — Overlay renders below the header so users retain navigation context; uses `100dvh`
 

@@ -1,5 +1,6 @@
 import {
   buildMcpRegistry,
+  McpConfigurationError,
   readMcpEnvFromProcess,
   resolveServerForTool,
   type McpRegistry,
@@ -235,11 +236,20 @@ export async function getServerInstructions(sourceId: string): Promise<string | 
 
 /**
  * Look up the server hosting this tool and return it, throwing a clear error
- * if no server claims the tool. Exported for tests.
+ * if no server claims the tool. A tool whose server is known but
+ * unconfigured (#258 C4: `SOCRATA_MCP_URL` unset — no coded fallback host)
+ * throws a typed `McpConfigurationError` naming the variable, as a backstop
+ * behind the routes' own up-front guards. Exported for tests.
  */
 export function routeTool(toolName: string): McpServerConfig {
   const server = resolveServerForTool(registry, toolName);
   if (!server) {
+    const missingVar = registry.unconfiguredTools[toolName];
+    if (missingVar) {
+      throw new McpConfigurationError(
+        `The MCP server for tool "${toolName}" is not configured: ${missingVar} is missing or empty in the server environment. Set it and restart the server.`,
+      );
+    }
     throw new Error(`No MCP server registered for tool "${toolName}"`);
   }
   return server;
@@ -370,7 +380,12 @@ interface McpPromptResult {
 export async function callMcpPrompt(name: string, args: Record<string, string>): Promise<string> {
   const server = registry.servers['socrata'];
   if (!server) {
-    throw new Error('Socrata MCP server is not configured; cannot fetch prompt');
+    // #258 C4: no coded fallback host. The skill layer treats this as a soft
+    // failure (composes from the local fallback text); the message still
+    // names the variable for the operator's logs.
+    throw new McpConfigurationError(
+      'The Socrata MCP server is not configured: SOCRATA_MCP_URL is missing or empty in the server environment; cannot fetch skill prompt.',
+    );
   }
   await ensureInitialized(server);
 

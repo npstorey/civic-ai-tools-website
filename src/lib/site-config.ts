@@ -125,14 +125,35 @@ export function getRoadmapSource(): RoadmapSource | null {
   };
 }
 
-// --- Evidence instance identity (ADR-0020: config, not code) ----------------
+// --- Evidence instance identity (ADR-0020: config, not code; #258:
+//     required for signing, never defaulted) --------------------------------
 //
 // Every value that names THIS deployment inside emitted evidence surfaces —
 // the proof sidecar's trust-registry URLs, the envelope `signer` claim, the
-// publication host label, the PROV platform agent — resolves through the
-// getters below. The demo defaults are the civicaitools.org reference
-// deployment's historical hardcoded values, so with NO environment set the
-// emitted bytes are byte-identical to before (the S3a byte-parity bar).
+// publication host label, the PROV platform agent, notebook attribution —
+// resolves through the getters below, from the ENVIRONMENT ONLY. There are
+// no coded identity defaults (#258, findings A1/A2 of the portability
+// audit): an instance that has not declared who it is cannot have another
+// deployment's name substituted into its output. The reference deployment
+// configures itself explicitly like any other instance; its historical
+// values survive only as an explicitly-injected test fixture
+// (`src/lib/evidence/reference-identity-fixture.ts`).
+//
+// Three dispositions, by the consuming path's nature:
+//
+//   - SIGNING / EMISSION paths (packager, publication pair, sidecar) REFUSE:
+//     the seal/commit gate (src/lib/evidence/unsigned-tier.ts, error code
+//     `instance_identity_missing`) refuses before anything signs, and the
+//     strict resolvers here throw `InstanceIdentityError` as the last-resort
+//     guard for any path that forgets the gate — the `getActiveKeyId`
+//     pattern.
+//   - UNSIGNED display surfaces (downloaded skeleton notebooks, copied chat
+//     output, skill text, page metadata) honestly OMIT: the nullable getters
+//     return `null` and each surface drops its attribution rather than
+//     inventing one. No sentinel values, ever.
+//   - DERIVATION from explicit config stays: host from origin, registry URLs
+//     from origin, platform-agent URL from origin. Operator-supplied values
+//     may ground derived values; reference constants may not.
 //
 // An instance sets `EVIDENCE_SITE_ORIGIN` plus the signer/key variables and
 // every derived surface follows; each item is also individually overridable
@@ -144,68 +165,115 @@ export function getRoadmapSource(): RoadmapSource | null {
 // `org.civicaitools.*` extension keys) are NOT instance identity and must
 // never be parameterized — see the same doc's "Do not parameterize" section.
 
-/** Demo default origin — the civicaitools.org reference deployment. */
-export const DEMO_SITE_ORIGIN = 'https://civicaitools.org';
+/**
+ * The variables an instance MUST set before any signed emission — the
+ * identity half of the go-to-production step (the custody half is the
+ * `EVIDENCE_SIGNING_KEY` + `EVIDENCE_KEY_ID` pair in unsigned-tier.ts).
+ * Everything else in the identity set derives from these (host and URLs from
+ * the origin, the agent id from the host) or is a per-item override.
+ * `evaluateSealCommitGate` refuses with exactly the missing names.
+ */
+export const INSTANCE_IDENTITY_REQUIRED_VARS = [
+  'EVIDENCE_SITE_ORIGIN',
+  'EVIDENCE_SIGNER_BINDING_TIER',
+  'EVIDENCE_SIGNER_IDENTIFIER',
+  'EVIDENCE_SIGNER_DISPLAY_NAME',
+  'EVIDENCE_PLATFORM_AGENT_TITLE',
+] as const;
 
-/** Demo default host label (the origin's host). */
-export const DEMO_PUBLICATION_HOST = 'civicaitools.org';
+/**
+ * Thrown when an identity-bearing emission path runs without the instance
+ * identity it needs. Carries the exact missing variable names so refusals
+ * are actionable. Last-resort guard only — user-reachable paths refuse
+ * earlier and more politely via `evaluateSealCommitGate`
+ * (`instance_identity_missing`).
+ */
+export class InstanceIdentityError extends Error {
+  readonly missing: readonly string[];
 
-/** Demo default canonical trust-registry URL (spec §8.3.3, ADR-0012 §3). */
-export const DEMO_TRUST_REGISTRY_CANONICAL_URL =
-  'https://civicaitools.org/.well-known/typed-publisher.json';
+  constructor(missing: readonly string[], surface: string) {
+    super(
+      `[instance-identity] This instance has not declared its identity: ` +
+        `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not set ` +
+        `in this environment. Refusing to emit ${surface} rather than ` +
+        `substitute another deployment's identity — see docs/instance-setup.md.`,
+    );
+    this.name = 'InstanceIdentityError';
+    this.missing = missing;
+  }
+}
 
-/** Demo default legacy trust-registry URL (pre-ADR-0012 path, parallel-served). */
-export const DEMO_TRUST_REGISTRY_LEGACY_URL =
-  'https://civicaitools.org/.well-known/evidence-public-keys.json';
-
-/** Demo default platform display name — the attribution name inside authored
- *  notebooks and the PROV platform-agent title. Anti-drift-pinned against the
- *  harness's `CIVICAITOOLS_PLATFORM_AGENT.title` in instance-config.test.ts. */
-export const DEMO_PLATFORM_TITLE = 'Civic AI Tools';
-
-/** Demo default envelope-side signer identity (spec §8.5). MUST match the
- *  `signerIdentity` recorded for the active kid in the trust registry so
- *  verify check #14 resolves. */
-export const DEMO_SIGNER_IDENTITY = {
-  bindingTier: 'platform',
-  identifier: 'platform:civic-ai-tools',
-  displayName: 'Civic AI Tools Platform',
-} as const;
+/** THE presence test — non-empty after trim, matching unsigned-tier.ts and
+ *  the preflight. Whitespace-only is absent. */
+function presentOrNull(raw: string | undefined): string | null {
+  return typeof raw === 'string' && raw.trim().length > 0 ? raw : null;
+}
 
 /**
  * Public origin of this instance for evidence emission (absolute URLs inside
- * emitted proofs and signed output). Env: `EVIDENCE_SITE_ORIGIN`. Trailing
- * slash is trimmed so derived URLs stay canonical.
+ * emitted proofs and signed output). Env: `EVIDENCE_SITE_ORIGIN`; `null`
+ * when unset — the caller omits (display surfaces) or refuses (emission
+ * paths; those sit behind the seal/commit gate). Trailing slash is trimmed
+ * so derived URLs stay canonical.
  */
-export function getEvidenceSiteOrigin(): string {
-  return (process.env.EVIDENCE_SITE_ORIGIN || DEMO_SITE_ORIGIN).replace(/\/$/, '');
+export function getEvidenceSiteOrigin(): string | null {
+  const raw = presentOrNull(process.env.EVIDENCE_SITE_ORIGIN);
+  return raw === null ? null : raw.replace(/\/$/, '');
 }
 
 /**
  * Host label of this instance — the `publicationHost` on
- * `attestation/publishes/v1` nodes and the datHere environment extension's
- * `host` field. Env: `EVIDENCE_PUBLICATION_HOST`; defaults to the host of
- * `getEvidenceSiteOrigin()`.
+ * `attestation/publishes/v1` nodes, the datHere environment extension's
+ * `host` field, and the "via …" attribution host. Env:
+ * `EVIDENCE_PUBLICATION_HOST`; derives from the host of
+ * `getEvidenceSiteOrigin()` when unset; `null` when neither is configured.
  */
-export function getPublicationHost(): string {
-  const explicit = process.env.EVIDENCE_PUBLICATION_HOST;
+export function getPublicationHost(): string | null {
+  const explicit = presentOrNull(process.env.EVIDENCE_PUBLICATION_HOST);
   if (explicit) return explicit;
+  const origin = getEvidenceSiteOrigin();
+  if (origin === null) return null;
   try {
-    return new URL(getEvidenceSiteOrigin()).host;
+    return new URL(origin).host;
   } catch {
-    return DEMO_PUBLICATION_HOST;
+    // A non-URL origin (misconfiguration) still names the instance the
+    // operator declared — better than pretending nothing is configured.
+    return origin;
   }
 }
 
 /**
+ * Strict form of `getPublicationHost()` for paths that COMMIT the host into
+ * signed output (the packager's datHere environment extension, the
+ * publication pair). Throws `InstanceIdentityError` when unresolvable —
+ * callers reach this only behind `evaluateSealCommitGate`.
+ */
+export function requirePublicationHost(): string {
+  const host = getPublicationHost();
+  if (host === null) {
+    throw new InstanceIdentityError(
+      ['EVIDENCE_SITE_ORIGIN'],
+      'a publication host label inside signed output',
+    );
+  }
+  return host;
+}
+
+/**
  * Trust-registry URLs emitted into the proof sidecar (spec §8.8.1) — the TOP
- * ADR-0020 correctness item: an instance shipping the demo URLs unchanged
+ * ADR-0020 correctness item: an instance shipping another deployment's URLs
  * emits proofs pointing at a registry that lacks its key. Envs:
  * `EVIDENCE_TRUST_REGISTRY_CANONICAL_URL` / `EVIDENCE_TRUST_REGISTRY_LEGACY_URL`;
  * both default to well-known paths on `getEvidenceSiteOrigin()` (the app
  * parallel-serves both paths from one registry file). Set the legacy var to
  * an empty string to omit `trustRegistryUrlLegacy` entirely — an instance
  * with no pre-ADR-0012 client base has no legacy path to honor.
+ *
+ * Throws `InstanceIdentityError` when the canonical URL is unresolvable
+ * (no origin and no explicit override): the sidecar's `trustRegistryUrl` is
+ * a REQUIRED per-publisher field with no honest absent form, so the serving
+ * routes refuse (`instance_identity_missing`) rather than emit a pointer at
+ * someone else's registry.
  */
 export function getSidecarTrustRegistryUrls(): {
   canonical: string;
@@ -213,13 +281,22 @@ export function getSidecarTrustRegistryUrls(): {
 } {
   const origin = getEvidenceSiteOrigin();
   const canonical =
-    process.env.EVIDENCE_TRUST_REGISTRY_CANONICAL_URL ||
-    `${origin}/.well-known/typed-publisher.json`;
+    presentOrNull(process.env.EVIDENCE_TRUST_REGISTRY_CANONICAL_URL) ??
+    (origin !== null ? `${origin}/.well-known/typed-publisher.json` : null);
+  if (canonical === null) {
+    throw new InstanceIdentityError(
+      ['EVIDENCE_SITE_ORIGIN'],
+      "the proof sidecar's trust-registry URL",
+    );
+  }
   const legacyRaw = process.env.EVIDENCE_TRUST_REGISTRY_LEGACY_URL;
   const legacy =
     legacyRaw === ''
       ? undefined
-      : legacyRaw || `${origin}/.well-known/evidence-public-keys.json`;
+      : legacyRaw ||
+        (origin !== null
+          ? `${origin}/.well-known/evidence-public-keys.json`
+          : undefined);
   return { canonical, legacy };
 }
 
@@ -230,43 +307,80 @@ export function getSidecarTrustRegistryUrls(): {
  * `EVIDENCE_SIGNER_DISPLAY_NAME`. These MUST match the `signerIdentity`
  * recorded for the active `EVIDENCE_KEY_ID` in the instance's trust registry
  * (verify check #14 cross-checks the two).
+ *
+ * Throws `InstanceIdentityError` naming exactly the missing variables when
+ * the triple is incomplete — a partial signer identity is not an identity,
+ * and there is no coded default to fill it with. Callers reach this only
+ * behind `evaluateSealCommitGate`; display surfaces that can render honest
+ * absence use `getConfiguredSignerIdentity()` instead.
  */
 export function getEvidenceSignerIdentity(): {
   bindingTier: string;
   identifier: string;
   displayName: string;
 } {
+  const bindingTier = presentOrNull(process.env.EVIDENCE_SIGNER_BINDING_TIER);
+  const identifier = presentOrNull(process.env.EVIDENCE_SIGNER_IDENTIFIER);
+  const displayName = presentOrNull(process.env.EVIDENCE_SIGNER_DISPLAY_NAME);
+  const missing: string[] = [];
+  if (bindingTier === null) missing.push('EVIDENCE_SIGNER_BINDING_TIER');
+  if (identifier === null) missing.push('EVIDENCE_SIGNER_IDENTIFIER');
+  if (displayName === null) missing.push('EVIDENCE_SIGNER_DISPLAY_NAME');
+  if (missing.length > 0) {
+    throw new InstanceIdentityError(
+      missing,
+      'an envelope signer identity claim',
+    );
+  }
   return {
-    bindingTier:
-      process.env.EVIDENCE_SIGNER_BINDING_TIER || DEMO_SIGNER_IDENTITY.bindingTier,
-    identifier:
-      process.env.EVIDENCE_SIGNER_IDENTIFIER || DEMO_SIGNER_IDENTITY.identifier,
-    displayName:
-      process.env.EVIDENCE_SIGNER_DISPLAY_NAME || DEMO_SIGNER_IDENTITY.displayName,
+    bindingTier: bindingTier as string,
+    identifier: identifier as string,
+    displayName: displayName as string,
   };
+}
+
+/**
+ * The configured signer identity, or `null` when the triple is incomplete —
+ * the non-throwing probe, for surfaces that DISPLAY or cross-check the
+ * platform signer rather than commit to it (they can render honest absence).
+ * The `getConfiguredKeyId` / `getActiveKeyId` split, applied to the signer.
+ */
+export function getConfiguredSignerIdentity(): {
+  bindingTier: string;
+  identifier: string;
+  displayName: string;
+} | null {
+  try {
+    return getEvidenceSignerIdentity();
+  } catch (err) {
+    if (err instanceof InstanceIdentityError) return null;
+    throw err;
+  }
 }
 
 /**
  * Display name of this instance for attribution surfaces — the "Generated
  * by …" lines in authored/downloaded notebooks. Reuses
  * `EVIDENCE_PLATFORM_AGENT_TITLE` (one variable names the instance in both
- * the PROV agent and the human-readable attribution), demo default
- * 'Civic AI Tools'. NOTE: on client-rendered surfaces (the notebook
- * download button) non-NEXT_PUBLIC env is not inlined into the browser
- * bundle, so the demo default renders there regardless of server config —
- * see the flag in the S3a P2 phase record.
+ * the PROV agent and the human-readable attribution); `null` when unset —
+ * attribution surfaces then omit their "Generated by …" line rather than
+ * claim a name (#258 A2). Client-rendered surfaces (the notebook download
+ * button) receive the server-resolved value via `EvidenceOriginProvider`;
+ * this getter reads nothing useful in the browser bundle.
  */
-export function getPlatformTitle(): string {
-  return process.env.EVIDENCE_PLATFORM_AGENT_TITLE || DEMO_PLATFORM_TITLE;
+export function getPlatformTitle(): string | null {
+  return presentOrNull(process.env.EVIDENCE_PLATFORM_AGENT_TITLE);
 }
 
 /**
  * Overrides for the PROV platform agent (WHO published, as a prov:Agent
  * inside the signed provenance graph). Envs: `EVIDENCE_PLATFORM_AGENT_ID` /
- * `EVIDENCE_PLATFORM_AGENT_TITLE` / `EVIDENCE_PLATFORM_AGENT_URL`. All
- * `undefined` (→ the harness's demo defaults) when unset; the agent URL
- * follows `EVIDENCE_SITE_ORIGIN` when that is set, so a one-variable
- * instance setup re-points the agent too.
+ * `EVIDENCE_PLATFORM_AGENT_TITLE` / `EVIDENCE_PLATFORM_AGENT_URL`; the agent
+ * URL follows `EVIDENCE_SITE_ORIGIN` when unset, so a one-variable instance
+ * setup re-points the agent too. `undefined` members mean "not configured" —
+ * the packager (the sole signing-path consumer) requires title + url and
+ * derives a missing id from the publication host; it never substitutes a
+ * reference value (see `instanceProvenanceConfig` in evidence/packager.ts).
  */
 export function getPlatformAgentOverrides(): {
   id?: string;
@@ -274,10 +388,36 @@ export function getPlatformAgentOverrides(): {
   url?: string;
 } {
   return {
-    id: process.env.EVIDENCE_PLATFORM_AGENT_ID || undefined,
-    title: process.env.EVIDENCE_PLATFORM_AGENT_TITLE || undefined,
+    id: presentOrNull(process.env.EVIDENCE_PLATFORM_AGENT_ID) ?? undefined,
+    title: getPlatformTitle() ?? undefined,
     url:
-      process.env.EVIDENCE_PLATFORM_AGENT_URL ||
-      (process.env.EVIDENCE_SITE_ORIGIN ? getEvidenceSiteOrigin() : undefined),
+      presentOrNull(process.env.EVIDENCE_PLATFORM_AGENT_URL) ??
+      getEvidenceSiteOrigin() ??
+      undefined,
+  };
+}
+
+/**
+ * The instance's attribution identity for display surfaces, all members
+ * nullable — `null` means "not configured", and the consuming surface omits
+ * its attribution line (honest absence, never a placeholder). Resolved
+ * server-side (layout.tsx) and carried to client components via
+ * `EvidenceOriginProvider`, so the browser bundle never needs the env.
+ */
+export interface InstanceAttribution {
+  /** Public origin (`EVIDENCE_SITE_ORIGIN`), e.g. `https://example.org`. */
+  origin: string | null;
+  /** Host label (`EVIDENCE_PUBLICATION_HOST` or derived from the origin). */
+  host: string | null;
+  /** Display name (`EVIDENCE_PLATFORM_AGENT_TITLE`). */
+  platformTitle: string | null;
+}
+
+/** Server-side resolution of `InstanceAttribution` from the environment. */
+export function getInstanceAttribution(): InstanceAttribution {
+  return {
+    origin: getEvidenceSiteOrigin(),
+    host: getPublicationHost(),
+    platformTitle: getPlatformTitle(),
   };
 }

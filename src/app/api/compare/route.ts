@@ -7,6 +7,7 @@ import { callMcpTool } from '@/lib/mcp/client';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { getMissingModelCredentialError, classifyModelError } from '@/lib/model-client';
+import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
 import { headers } from 'next/headers';
 
 interface CompareRequest {
@@ -35,6 +36,19 @@ export async function POST(request: NextRequest) {
       console.error('[compare]', credentialError.message);
       return NextResponse.json(
         { error: credentialError.message, code: credentialError.code },
+        { status: 503 }
+      );
+    }
+
+    // Fail fast when no MCP endpoint is configured for the primary data
+    // source (#258 C4) — same guard as the streaming route: SOCRATA_MCP_URL
+    // has no coded fallback, so an unconfigured instance refuses rather than
+    // routing the query through another deployment's infrastructure.
+    const mcpRoutingError = getMissingMcpRoutingError();
+    if (mcpRoutingError) {
+      console.error('[compare]', mcpRoutingError.message);
+      return NextResponse.json(
+        { error: mcpRoutingError.message, code: mcpRoutingError.code },
         { status: 503 }
       );
     }

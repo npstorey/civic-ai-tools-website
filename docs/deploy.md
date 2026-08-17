@@ -123,8 +123,9 @@ What you will see, and why it is correct:
   failure: analyses run, packages can be produced and inspected, and
   signing is a deliberate later step
   ([Instance identity and signing](#instance-identity-and-signing-go-to-production)).
-- Queries fail until you supply a model key (next step), with an error
-  that names the missing variable.
+- Queries fail until you supply a model key and a data-source endpoint
+  (next step), with an error that names the missing variable
+  (`OPENROUTER_API_KEY` / `SOCRATA_MCP_URL` — neither has a fallback).
 
 Verify the bring-up:
 
@@ -155,6 +156,12 @@ and never commit this file):
 ```bash
 # Model access — required for every query.
 OPENROUTER_API_KEY=<your-model-api-key>
+
+# Primary data source — required for every data query; no fallback. Set
+# it to the Socrata MCP deployment this instance should query. Pointing
+# it at another operator's endpoint means your users' queries route
+# through that host's infrastructure, not yours.
+SOCRATA_MCP_URL=<your-socrata-mcp-endpoint>
 
 # Real credentials replacing the compose file's placeholders. The S3
 # pair is both the app's access key AND MinIO's root user/password —
@@ -192,7 +199,7 @@ what your env file can do with it:
 
 | Spelling | What it means | Examples |
 | --- | --- | --- |
-| bare `NAME:` | Pass-through. Set in the container only when your environment has it, **absent otherwise** — which matters, because for several variables absence is the configured state, not a missing value. | `OPENROUTER_API_KEY`, the signing pair, `NEXTAUTH_SECRET`, the OAuth credentials, `CRON_SECRET`, `SIGN_IN_ALLOWLIST`, `ROADMAP_RAW_URL`, the host-topology trio, the registry-URL overrides, the branding set, the tuning knobs |
+| bare `NAME:` | Pass-through. Set in the container only when your environment has it, **absent otherwise** — which matters, because for several variables absence is the configured state, not a missing value. | `OPENROUTER_API_KEY`, `SOCRATA_MCP_URL`, the signing pair, `NEXTAUTH_SECRET`, the OAuth credentials, `CRON_SECRET`, `SIGN_IN_ALLOWLIST`, `ROADMAP_RAW_URL`, the host-topology trio, the registry-URL overrides, the branding set, the tuning knobs |
 | `${NAME:-default}` | Overridable, with a working local default if you say nothing. | the Postgres and object-store credentials (`POSTGRES_PASSWORD`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` — placeholder defaults you are expected to replace), host ports, bucket name, `S3_PUBLIC_BASE_URL`, `APP_BIND` / `APP_PORT`, the executor image tag, the identity variables that carry a local default, `NEXTAUTH_URL`, the GC knobs |
 | a literal value | Hardcoded wiring. Changing it means editing the compose file, not your env file. | the three driver selectors, `S3_ENDPOINT`, the constructed `DATABASE_URL` |
 
@@ -425,10 +432,14 @@ profile never reads:
 (the five: `BLOB_READ_WRITE_TOKEN`, `SANDBOX_SNAPSHOT_ID`, and the three
 `VERCEL_*` sandbox-auth variables). Exit code `0` means every required
 variable for the profile is present; `1` otherwise. Run with the
-stand-ins alone, it exits `1` naming exactly the seven operator-supplied
-variables — `OPENROUTER_API_KEY`, `EVIDENCE_SIGNING_KEY`,
-`EVIDENCE_KEY_ID`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`,
-`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`.
+stand-ins alone, it exits `1` naming exactly the thirteen operator-supplied
+variables — `OPENROUTER_API_KEY`, `SOCRATA_MCP_URL`, `EVIDENCE_SIGNING_KEY`,
+`EVIDENCE_KEY_ID`, the instance-identity set (`EVIDENCE_SITE_ORIGIN`,
+`EVIDENCE_SIGNER_BINDING_TIER`, `EVIDENCE_SIGNER_IDENTIFIER`,
+`EVIDENCE_SIGNER_DISPLAY_NAME`, `EVIDENCE_PLATFORM_AGENT_TITLE` — see
+[Instance identity and signing](#instance-identity-and-signing-go-to-production)),
+`NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `GITHUB_CLIENT_ID`,
+`GITHUB_CLIENT_SECRET`.
 
 **Read preflight's "required" tier honestly.** It is the
 full-production bar, not the boot bar. Nothing on the list prevents the
@@ -470,18 +481,14 @@ for your driver are hard requirements of the evidence path.)
 | Variable | Absent means |
 | --- | --- |
 | `OPENROUTER_API_KEY` | Every query fails fast with the typed error above. No fallback. |
-
-`SOCRATA_MCP_URL` (the demo data source) has a coded fallback to the
-project's hosted endpoint, so queries work without it — but they are
-then leaving your infrastructure; a fully self-contained instance sets
-it to its own Socrata MCP deployment.
+| `SOCRATA_MCP_URL` | Every data query refuses with a typed error naming this variable. No fallback — this used to default to the project's hosted endpoint, which silently routed an unconfigured instance's queries through infrastructure it does not operate. Set it to the Socrata MCP deployment this instance should query. Pointing it at another operator's endpoint (the project's hosted one included) is a real choice, but understand what it means: your users' queries route through that host's infrastructure, not yours. |
 
 **Absence disables a specific feature** (the app runs; the feature
 doesn't):
 
 | Variable(s) | Feature disabled when absent |
 | --- | --- |
-| `EVIDENCE_SIGNING_KEY` + `EVIDENCE_KEY_ID` | Evidence seal and publish. **All-or-nothing: both are required, and neither has a coded default.** With neither set the instance stays in the unsigned tier (banner shows, seal and publish gated off). With the key set but no `EVIDENCE_KEY_ID` it still cannot publish — it refuses rather than sign under a key id it never declared, since a kid it did not configure would misattribute the signature and fail verification. |
+| `EVIDENCE_SIGNING_KEY` + `EVIDENCE_KEY_ID` + the instance-identity set (`EVIDENCE_SITE_ORIGIN`, `EVIDENCE_SIGNER_BINDING_TIER`/`_IDENTIFIER`/`_DISPLAY_NAME`, `EVIDENCE_PLATFORM_AGENT_TITLE`) | Evidence seal and publish. **All-or-nothing: every member is required, and none has a coded default.** With none set the instance stays in the unsigned tier (banner shows, seal and publish gated off) — and unsigned surfaces honestly *omit* instance attribution rather than substitute anyone else's. With the key set but no `EVIDENCE_KEY_ID` it refuses (`signing_key_id_missing`) rather than sign under a key id it never declared. With the pair set but the identity set incomplete it refuses (`instance_identity_missing`, naming the exact missing variables) rather than emit signed output carrying an origin, signer, or registry this instance never configured — either substitution would misattribute the publisher and fail verification. |
 | `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and an OAuth app (`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` or the `OIDC_*` set) | Sign-in — and with it the sign-in-gated notebook execution feature, the dashboard, and the higher authenticated rate limit. |
 | `DATA_COMMONS_MCP_URL` + `DATA_COMMONS_API_KEY` | The Data Commons data source — its tool calls fail without the key (the hosted endpoint mandates it). `DC_API_KEY` is the separate key passed into *executed notebooks* for their own Data Commons requests. |
 | `BOSTON_OPENCONTEXT_MCP_URL` | The Boston OpenContext data source. |
@@ -492,10 +499,12 @@ doesn't):
 | `ROADMAP_RAW_URL` | `/roadmap` — absent, the page states that this instance has published no roadmap and the Roadmap link leaves the header and footer nav. An instance serves its own roadmap or none; there is no upstream fallback. |
 
 **Merely overrides a default.** Everything else, including:
-`MODEL_API_BASE_URL` (endpoint override), the instance-identity set
-(`EVIDENCE_SITE_ORIGIN`, `EVIDENCE_SIGNER_*`, `EVIDENCE_PLATFORM_AGENT_*`,
-`EVIDENCE_PUBLICATION_HOST`, the registry-URL overrides — with none set,
-the demo deployment's values are emitted; see
+`MODEL_API_BASE_URL` (endpoint override), the *derived* identity
+overrides (`EVIDENCE_PUBLICATION_HOST`, the registry-URL overrides,
+`EVIDENCE_PLATFORM_AGENT_ID`, `EVIDENCE_PLATFORM_AGENT_URL` — each
+derives from the required identity set above when unset: host and URLs
+from the origin, the agent id from the host; the *required* identity set
+itself is in the disable-when-absent table, not here — see
 [`docs/instance-setup.md`](instance-setup.md)), the chrome-branding set
 (`SITE_BRAND_NAME`, `SITE_BRAND_ACCENT`, `SITE_BRAND_TAGLINE`,
 `SITE_BRAND_ATTRIBUTION` — with none set, the demo chrome renders
@@ -506,6 +515,8 @@ exactly the pre-allowlist behavior; see the sign-in section),
 the host-topology set (`APP_HOST`, `MARKETING_HOST`, `APP_ONLY` — with
 none set, every route serves on every host, exactly the single-host
 behavior; see [Host topology](#host-topology-optional)),
+`SITE_NOINDEX` (unset/empty = indexable, the standard web default; see
+[Indexing](#indexing-optional)),
 the remaining content-source overrides (`DIRECTORY_DATA_URL`,
 `ROADMAP_GITHUB_URL` — with `DIRECTORY_DATA_URL` unset, `/directory`
 serves the shared community index with attribution; `ROADMAP_GITHUB_URL`
@@ -754,6 +765,48 @@ Two split-host behaviors follow automatically from the same variables
   With no marketing origin configured the endpoint emits no CORS
   headers at all and no probe ever fires.
 
+## Indexing (optional)
+
+By default an instance is indexable — no `robots.txt` disallow, no noindex
+page metadata — the standard web default. Every instance used to hardcode
+the opposite: a permanent `Disallow: /` and `robots: { index: false, follow:
+false }`, undocumented, with no way to opt in (#258 finding E1, owner ruling
+G0-3). One variable now controls it.
+
+| Variable | Meaning |
+| --- | --- |
+| `SITE_NOINDEX` | `1` or `true`: this instance blocks crawler indexing. `robots.txt` (`src/app/robots.ts`) disallows every path for every user agent, and the root layout's page metadata (`src/app/layout.tsx`) carries `index: false, follow: false`. Unset/empty: `robots.txt` explicitly allows every path and no robots metadata renders at all. |
+
+Both surfaces resolve through one shared, unit-tested core
+([`src/lib/site-indexing.ts`](../src/lib/site-indexing.ts)) so they cannot
+disagree — there is no way for `robots.txt` to allow indexing while the page
+metadata says otherwise, or vice versa. This is chrome/ops configuration,
+like the host-topology and branding sets above: it is never emitted into
+signed evidence output, and no signing or verification path reads it.
+
+`robots.txt` is a dynamic metadata route, not a static file — a static
+`public/robots.txt` would shadow the route entirely, which is why the old
+one was deleted rather than left in place. It forces per-request evaluation
+(`export const dynamic = 'force-dynamic'`) specifically so the platform
+reads the live server environment on every request rather than caching a
+build-time snapshot of whichever value `SITE_NOINDEX` happened to hold at
+build.
+
+The page metadata half does not have that option — it is baked at `next
+build` for every statically prerendered page, the same build-time-plus-
+runtime caveat documented in [Branding and
+theming](#branding-and-theming-chrome-only) and in [Environment reference,
+tier by tier](#environment-reference-tier-by-tier)'s "One build-time
+caveat" note for `NEXT_PUBLIC_*` values above (this variable is not
+`NEXT_PUBLIC_*`, but the same "prerendered pages bake it, dynamic pages
+read it live" split applies). Set `SITE_NOINDEX` **in the build environment
+as well as at run time** if you want the page metadata to agree with
+`robots.txt` on every route, including statically prerendered ones. On the
+compose path that is the usual one-file, one-command story: `SITE_NOINDEX`
+appears in both the app service's `build.args` and its `environment`,
+resolved from your `--env-file`, so `docker compose --env-file … up -d
+--build` supplies both sides at once.
+
 ## Database and migrations
 
 Schema migrations are ordinary [Drizzle](https://orm.drizzle.team)
@@ -830,10 +883,17 @@ smoke-test a publish). Key changes after that follow
 Two facts worth restating from the deploy side:
 
 - With the signing pair unset, the compose stack runs the unsigned tier
-  correctly — this guide's bring-up **is** the unsigned tier. Configuring
-  signing is what makes the seal/publish actions reachable, and it takes
-  **both** variables: an instance with a key but no `EVIDENCE_KEY_ID` refuses
-  to publish rather than sign under an undeclared key id.
+  correctly — this guide's bring-up **is** the unsigned tier (instance
+  attribution is then honestly omitted from unsigned surfaces, never
+  defaulted). Configuring signing is what makes the seal/publish actions
+  reachable, and it takes the **whole set**: the key, the key id, and the
+  instance-identity variables (`EVIDENCE_SITE_ORIGIN`, the
+  `EVIDENCE_SIGNER_*` triple, `EVIDENCE_PLATFORM_AGENT_TITLE`). An
+  instance with a key but no `EVIDENCE_KEY_ID` refuses to publish rather
+  than sign under an undeclared key id; one with the pair but an
+  incomplete identity set refuses (`instance_identity_missing`, naming
+  the exact missing variables) rather than emit signed output under an
+  identity it never configured.
 - `EVIDENCE_SIGNING_KEY` is the most sensitive value your instance
   holds. Keep it in your secret manager; never commit it, paste it into
   an agent session, or bake it into an image.

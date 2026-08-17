@@ -10,6 +10,7 @@ import { getPackage } from '@/lib/storage';
 import { canReadRecord } from '@/lib/evidence/sealed-access';
 import { mcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
+import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 
@@ -58,6 +59,19 @@ export async function POST(
   const { openRouterApiKey } = body;
   if (!openRouterApiKey || typeof openRouterApiKey !== 'string') {
     return NextResponse.json({ error: 'OpenRouter API key required' }, { status: 400 });
+  }
+
+  // A replay runs live MCP tool calls, so it needs a configured MCP endpoint
+  // exactly like the query routes (#258 C4): SOCRATA_MCP_URL has no coded
+  // fallback, and an unconfigured instance refuses rather than replaying
+  // through another deployment's infrastructure.
+  const mcpRoutingError = getMissingMcpRoutingError();
+  if (mcpRoutingError) {
+    console.error('[replay]', mcpRoutingError.message);
+    return NextResponse.json(
+      { error: mcpRoutingError.message, code: mcpRoutingError.code },
+      { status: 503 },
+    );
   }
 
   // Fetch evidence record

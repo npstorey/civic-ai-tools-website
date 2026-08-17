@@ -32,6 +32,13 @@ import { buildCommitmentView } from './commitment.ts';
 import { buildRecordReadback } from './readback.ts';
 import { evidenceRecords, users } from '../db/schema.ts';
 import type { EvidencePackage } from './packager.ts';
+import { REFERENCE_IDENTITY_ENV } from './reference-identity-fixture.ts';
+
+// #258: buildCommitmentView refuses without a declared instance identity —
+// injected here explicitly (this suite is about visibility vocabulary).
+for (const [name, value] of Object.entries(REFERENCE_IDENTITY_ENV)) {
+  process.env[name] ??= value;
+}
 
 type EvidenceRecord = typeof evidenceRecords.$inferSelect;
 type UserRecord = typeof users.$inferSelect;

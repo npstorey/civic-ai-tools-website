@@ -16,12 +16,22 @@ import {
   DATHERE_AG_JUPYTER_CANONICALIZATION,
 } from './canonicalization.ts';
 import type { BlobRef } from './blob-ref.ts';
+import { REFERENCE_IDENTITY_ENV } from './reference-identity-fixture.ts';
 
 // Every envelope carries `metadata.signingKeyId`, and there is no coded
 // default for it (signing.ts) — an instance emits the kid it declared or
 // none. So this suite declares one, as any signing instance must. `node
 // --test` runs each file in its own process, so it is local to this suite.
 process.env.EVIDENCE_KEY_ID ??= 'platform:test-suite-kid';
+
+// #258: the packager also refuses without a declared instance identity —
+// there are no coded identity defaults left to fall back to. This suite is
+// about blob-reference pathways, not identity, so it injects the REFERENCE
+// deployment's identity explicitly (that injection is what preserves the
+// historical byte assertions below, e.g. environment.host).
+for (const [name, value] of Object.entries(REFERENCE_IDENTITY_ENV)) {
+  process.env[name] ??= value;
+}
 
 function sha256Hex(content: string): string {
   return crypto.createHash('sha256').update(content).digest('hex');

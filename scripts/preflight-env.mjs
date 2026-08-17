@@ -142,7 +142,11 @@ export const ENV_SPEC = [
   // --- Core query path (every demo query depends on these) ---
   { name: 'OPENROUTER_API_KEY', tier: 'required', purpose: 'LLM access — every query (no fallback)' },
   { name: 'MODEL_API_BASE_URL', tier: 'optional', purpose: 'Chat-completions endpoint override — any OpenAI-compatible endpoint (default: OpenRouter)', hasFallback: true },
-  { name: 'SOCRATA_MCP_URL', tier: 'required', purpose: 'Socrata MCP endpoint (the demo data source)', hasFallback: true },
+  // No coded fallback (#258 C4): the fallback used to point at the reference
+  // deployment's hosted endpoint, silently routing an unconfigured instance's
+  // queries through infrastructure it does not operate. Absent, every data
+  // query refuses with a typed error naming this variable.
+  { name: 'SOCRATA_MCP_URL', tier: 'required', purpose: 'Socrata MCP endpoint (the primary data source) — every data query refuses without it (no fallback)' },
 
   // --- Evidence publish + verify (the demo centerpiece: publish → badge) ---
   { name: 'DATABASE_URL', tier: 'required', purpose: 'Evidence DB — publish + dashboard + detail page' },
@@ -224,6 +228,18 @@ export const ENV_SPEC = [
   { name: 'MARKETING_HOST', tier: 'optional', purpose: 'Split-host: host serving the marketing site — withholds the app-private routes there (unset = no withholding)', hasFallback: true },
   { name: 'APP_ONLY', tier: 'optional', purpose: 'App-only instance: every host serves the gated surface; marketing routes 404 (unset = off)', hasFallback: true },
 
+  // --- Indexing posture (#258 E1, owner ruling G0-3; src/lib/site-indexing.ts).
+  //     A pure opt-in, same shape as the host-topology set above: the coded
+  //     default is the standard web default (indexable, no robots.txt
+  //     disallow, no noindex metadata), so an instance that has never heard
+  //     of this variable is indexable, not silently blocked. ---
+  // readBy build-and-runtime: the root layout's <head> metadata bakes this
+  // at `next build` for statically prerendered pages (same caveat as the
+  // SITE_BRAND_* set below); the robots.txt route itself forces per-request
+  // evaluation (src/app/robots.ts `dynamic = 'force-dynamic'`) and needs it
+  // only at run time.
+  { name: 'SITE_NOINDEX', readBy: 'build-and-runtime', tier: 'optional', purpose: "Block crawler indexing site-wide — robots.txt disallows every path and page metadata carries noindex/nofollow (unset/empty = indexable, the standard web default)", hasFallback: true },
+
   // --- Rate limiting (durable counter; without it, falls back to per-instance memory) ---
   // hasFallback, not a hard miss: rate-limit.ts:53-63 tests both vars and takes
   // an in-process memory store when either is absent — the instance runs, the
@@ -237,21 +253,26 @@ export const ENV_SPEC = [
   { name: 'DATA_COMMONS_API_KEY', tier: 'recommended', purpose: 'Data Commons auth — DC tool calls fail without it' },
   { name: 'BOSTON_OPENCONTEXT_MCP_URL', tier: 'recommended', purpose: 'Boston OpenContext MCP endpoint', hasFallback: true },
 
-  // --- Instance identity (ADR-0020: config-not-code; see docs/instance-setup.md
-  //     and src/lib/site-config.ts). All optional: with none set, every surface
-  //     emits the demo deployment's historical values byte-identically. An
-  //     instance sets EVIDENCE_SITE_ORIGIN (+ the signer set) and every derived
-  //     surface follows; the rest are per-item overrides for split hosts. ---
-  { name: 'EVIDENCE_SITE_ORIGIN', tier: 'optional', purpose: 'Instance origin — registry URLs, verify fallback, platform-agent URL, notebook/bundle attribution links derive from it', hasFallback: true },
-  { name: 'EVIDENCE_PUBLICATION_HOST', tier: 'optional', purpose: 'Host label on publishes-attestations, datHere environment.host, notebook/skill-text host mentions', hasFallback: true },
+  // --- Instance identity (ADR-0020: config-not-code; #258: REQUIRED for
+  //     signing, never defaulted; see docs/instance-setup.md and
+  //     src/lib/site-config.ts). The five identity variables below have NO
+  //     coded fallback: signed output names the publisher's origin, signer,
+  //     and platform agent, and with the signing pair set but any of these
+  //     absent every seal/publish attempt is refused
+  //     (`instance_identity_missing`). They travel with the signing pair —
+  //     the "Evidence signing" group below carries the relationship. The
+  //     remaining five are per-item overrides that DERIVE from the origin
+  //     (host, registry URLs, agent URL) or the host (agent id). ---
+  { name: 'EVIDENCE_SITE_ORIGIN', tier: 'required', purpose: 'Instance origin — required to sign; registry URLs, platform-agent URL, notebook/bundle attribution links derive from it' },
+  { name: 'EVIDENCE_SIGNER_BINDING_TIER', tier: 'required', purpose: 'Envelope signer claim: bindingTier — required to sign; must match the registry entry (check #14)' },
+  { name: 'EVIDENCE_SIGNER_IDENTIFIER', tier: 'required', purpose: 'Envelope signer claim: identifier — required to sign; must match the registry entry (check #14)' },
+  { name: 'EVIDENCE_SIGNER_DISPLAY_NAME', tier: 'required', purpose: 'Envelope signer claim: displayName — required to sign; must match the registry entry (check #14)' },
+  { name: 'EVIDENCE_PLATFORM_AGENT_TITLE', tier: 'required', purpose: 'PROV platform-agent title + notebook attribution display name — required to sign' },
+  { name: 'EVIDENCE_PUBLICATION_HOST', tier: 'optional', purpose: 'Host label override on publishes-attestations, datHere environment.host, notebook/skill-text host mentions (derives from the origin)', hasFallback: true },
   { name: 'EVIDENCE_TRUST_REGISTRY_CANONICAL_URL', tier: 'optional', purpose: 'Sidecar trustRegistryUrl override (defaults to origin + well-known path)', hasFallback: true },
-  { name: 'EVIDENCE_TRUST_REGISTRY_LEGACY_URL', tier: 'optional', purpose: 'Sidecar trustRegistryUrlLegacy override (empty string omits it)', hasFallback: true },
-  { name: 'EVIDENCE_SIGNER_BINDING_TIER', tier: 'optional', purpose: 'Envelope signer claim: bindingTier — must match the registry entry (check #14)', hasFallback: true },
-  { name: 'EVIDENCE_SIGNER_IDENTIFIER', tier: 'optional', purpose: 'Envelope signer claim: identifier — must match the registry entry (check #14)', hasFallback: true },
-  { name: 'EVIDENCE_SIGNER_DISPLAY_NAME', tier: 'optional', purpose: 'Envelope signer claim: displayName — must match the registry entry (check #14)', hasFallback: true },
-  { name: 'EVIDENCE_PLATFORM_AGENT_ID', tier: 'optional', purpose: 'PROV platform-agent id inside the signed provenance graph', hasFallback: true },
-  { name: 'EVIDENCE_PLATFORM_AGENT_TITLE', tier: 'optional', purpose: 'PROV platform-agent title + notebook attribution display name', hasFallback: true },
-  { name: 'EVIDENCE_PLATFORM_AGENT_URL', tier: 'optional', purpose: 'PROV platform-agent URL (defaults to EVIDENCE_SITE_ORIGIN when set)', hasFallback: true },
+  { name: 'EVIDENCE_TRUST_REGISTRY_LEGACY_URL', tier: 'optional', purpose: 'Sidecar trustRegistryUrlLegacy override (empty string omits it; defaults to origin + legacy path)', hasFallback: true },
+  { name: 'EVIDENCE_PLATFORM_AGENT_ID', tier: 'optional', purpose: 'PROV platform-agent id inside the signed provenance graph (derives from the publication host)', hasFallback: true },
+  { name: 'EVIDENCE_PLATFORM_AGENT_URL', tier: 'optional', purpose: 'PROV platform-agent URL (defaults to EVIDENCE_SITE_ORIGIN)', hasFallback: true },
 
   // --- Instance branding (#217: chrome-only theming seam; src/lib/brand-config.ts).
   //     All optional with coded defaults: unset, the demo chrome renders
@@ -289,7 +310,9 @@ export const ENV_SPEC = [
   { name: 'TOKEN_LIMIT_PER_REQUEST', tier: 'optional', purpose: 'Streaming token budget per request (coded default)', hasFallback: true },
   { name: 'MAX_TOOL_RESULT_CHARS', tier: 'optional', purpose: 'Tool-result truncation budget (coded default)', hasFallback: true },
   { name: 'NEXT_PUBLIC_CAPTURE_TRACES', readBy: 'build', tier: 'optional', purpose: 'Dev-only BPMN trace capture toggle', hasFallback: true },
-  { name: 'NEXT_PUBLIC_SOCRATA_MCP_URL', readBy: 'build', tier: 'optional', purpose: 'Client-side Socrata MCP URL for notebook output links', hasFallback: true },
+  // NEXT_PUBLIC_SOCRATA_MCP_URL is gone (#258 C5): client surfaces now read
+  // the server-resolved SOCRATA_MCP_URL via McpRoutingProvider, so there is
+  // no second name for the same routing decision to drift from the first.
 
   // --- scripts/-only (not read by the app; enumerated for completeness) ---
   { name: 'EVAL_MODELS', readBy: 'external-tool', tier: 'optional', purpose: 'Model-eval harness roster (scripts/eval-models.mjs only)', hasFallback: true },
@@ -348,16 +371,28 @@ export const ENV_GROUPS = [
   },
   {
     name: 'Evidence signing',
-    members: ['EVIDENCE_SIGNING_KEY', 'EVIDENCE_KEY_ID'],
-    // src/lib/evidence/unsigned-tier.ts `isSigningConfigured` requires BOTH
-    // halves: custody plus the declared key id. #195 deliberately left this
-    // pair out because the kid then had a coded default, so the set was not
-    // all-or-nothing. That default is gone, so the pair now belongs here.
-    // Unlike the other groups this one is not silent at run time — the gate
-    // refuses and the banner shows — but preflight is where the operator sees
-    // the RELATIONSHIP: a key alone does not turn signing on.
+    members: [
+      'EVIDENCE_SIGNING_KEY',
+      'EVIDENCE_KEY_ID',
+      'EVIDENCE_SITE_ORIGIN',
+      'EVIDENCE_SIGNER_BINDING_TIER',
+      'EVIDENCE_SIGNER_IDENTIFIER',
+      'EVIDENCE_SIGNER_DISPLAY_NAME',
+      'EVIDENCE_PLATFORM_AGENT_TITLE',
+    ],
+    // src/lib/evidence/unsigned-tier.ts: `isSigningConfigured` requires BOTH
+    // custody halves (key + declared kid), and as of #258 the seal/commit
+    // gate additionally requires the instance-identity set
+    // (INSTANCE_IDENTITY_REQUIRED_VARS in src/lib/site-config.ts) — signed
+    // output names the publisher's origin, signer, and platform agent, and
+    // none of those has a coded default anymore. Key + kid + identity set
+    // travel together: any member absent means every seal/publish attempt
+    // is refused. Unlike the other groups this one is not silent at run
+    // time — the gate refuses (`signing_key_id_missing` /
+    // `instance_identity_missing`) and the banner shows — but preflight is
+    // where the operator sees the RELATIONSHIP before a deploy.
     feature: 'evidence seal/publish stays gated off — the instance cannot sign',
-    note: 'A key without a key id is not a partial success: the instance refuses to sign rather than emit a kid it never declared. Set EVIDENCE_KEY_ID to the active entry in your trust registry (docs/instance-setup.md).',
+    note: 'Key, key id, and the instance-identity set travel together: a key without a declared kid refuses rather than emit a kid it never declared, and a signing pair without EVIDENCE_SITE_ORIGIN, the EVIDENCE_SIGNER_* triple, and EVIDENCE_PLATFORM_AGENT_TITLE refuses rather than sign under an identity this instance never configured (docs/instance-setup.md).',
   },
   {
     name: 'Durable rate limiting',

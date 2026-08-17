@@ -9,8 +9,10 @@ import { buildCommitmentView } from '@/lib/evidence/commitment';
 import { canReadRecord } from '@/lib/evidence/sealed-access';
 // Instance-identity config (ADR-0020): the cell-0 reader affordance carries
 // this instance's detail URL, host label, and trust-registry pointer — the
-// same values the embedded commitment view resolves; demo defaults when no
-// config is set.
+// same values the embedded commitment view resolves. No identity defaults
+// (#258): with no declared origin this route REFUSES
+// (`instance_identity_missing`) rather than embed the reference
+// deployment's identity in an exported bundle.
 import {
   getEvidenceSiteOrigin,
   getPublicationHost,
@@ -63,6 +65,9 @@ type UserRecord = typeof users.$inferSelect;
 function buildCellZero(
   record: EvidenceRecord,
   creator: UserRecord | null,
+  /** The instance origin — non-null (the GET handler refuses before calling
+   *  this when no origin is declared, #258). */
+  origin: string,
 ): Record<string, unknown> {
   const hashPrefix = record.basePackageHash
     ? `\`${record.basePackageHash.slice(0, 12)}…\``
@@ -71,7 +76,10 @@ function buildCellZero(
     ? `[${creator.displayName}](${creator.githubProfileUrl})`
     : creator?.displayName ?? 'Unknown';
   const publishedDate = record.createdAt.toISOString().split('T')[0];
-  const detailUrl = `${getEvidenceSiteOrigin()}/evidence/${record.slug}`;
+  const detailUrl = `${origin}/evidence/${record.slug}`;
+  // Non-null with an origin declared (derives from it); `?? origin` only
+  // narrows the type for the template below.
+  const host = getPublicationHost() ?? origin;
   const trustRegistryUrl = getSidecarTrustRegistryUrls().canonical;
   const trustHost = trustRegistryUrl.replace('https://', '');
 
@@ -93,7 +101,7 @@ function buildCellZero(
     `| **Package hash** | ${hashPrefix} |`,
     `| **Captured via** | ${captureMethodFriendly} |`,
     '| **Content profile** | datHere (A-G envelope, reproducible notebook) |',
-    `| **Published** | ${publishedDate} via [${getPublicationHost()}](${detailUrl}) |`,
+    `| **Published** | ${publishedDate} via [${host}](${detailUrl}) |`,
     `| **Trust registry** | [${trustHost}](${trustRegistryUrl}) |`,
     '',
     "*Re-execute the cells below to reproduce the analysis. The cryptographic envelope is in this notebook's root `metadata.org.civicaitools.evidence` namespace — that's what binds the signature to this content. This cell is a reader affordance only.*",
@@ -111,6 +119,26 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
+
+  // #258: the bundle embeds this instance's identity (detail URL, host
+  // label, trust-registry pointer). With no declared origin there is nothing
+  // honest to embed — refuse, naming the variable, rather than export a
+  // bundle carrying the reference deployment's identity.
+  const origin = getEvidenceSiteOrigin();
+  if (origin === null) {
+    return NextResponse.json(
+      {
+        error:
+          'This instance has not declared its identity: EVIDENCE_SITE_ORIGIN ' +
+          'is not set in this environment. The bundle export embeds the ' +
+          "instance's detail URL, host label, and trust-registry pointer, so " +
+          'it is refused rather than emitted under another deployment\'s ' +
+          'identity — see docs/instance-setup.md.',
+        code: 'instance_identity_missing',
+      },
+      { status: 500 },
+    );
+  }
 
   const records = await db
     .select()
@@ -196,7 +224,7 @@ export async function GET(
   const existingCells = Array.isArray(notebook.cells)
     ? (notebook.cells as unknown[])
     : [];
-  notebook.cells = [buildCellZero(record, creator), ...existingCells];
+  notebook.cells = [buildCellZero(record, creator, origin), ...existingCells];
 
   return new NextResponse(JSON.stringify(notebook, null, 2), {
     headers: {
