@@ -29,7 +29,7 @@ import {
   type CompletionResult,
   type StreamCallbacks,
 } from '@/lib/openrouter-streaming';
-import { TraceBuilder, hash as traceHash } from '@/lib/evidence/trace';
+import { TraceBuilder, hash as traceHash, CIVICAITOOLS_TRACE_CONFIG } from '@/lib/evidence/trace';
 import { getConfiguredKeyId } from '@/lib/evidence/signing';
 import {
   type PhaseAToolCall,
@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
     await writer.write(encoder.encode(encodeNotebookEvent(event)));
   };
 
-  const trace = new TraceBuilder();
+  const trace = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);
   trace.startRoot('executed_notebook', {
     'analysis.prompt_hash': traceHash(body.query),
     'analysis.model': model,

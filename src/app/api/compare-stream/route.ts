@@ -9,7 +9,7 @@ import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-li
 import { headers } from 'next/headers';
 import { encodeSSE, panelsForRun, type ModelErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
 import { getMissingModelCredentialError } from '@/lib/model-client';
-import { TraceBuilder, hash } from '@/lib/evidence/trace';
+import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG } from '@/lib/evidence/trace';
 
 const SSE_HEADERS = {
   'Content-Type': 'text/event-stream',
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     await incrementRateLimit(identifier, isAuthenticated);
 
     // --- Evidence trace: initialize ---
-    const trace = new TraceBuilder();
+    const trace = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);
     trace.startRoot('analysis', {
       'analysis.prompt_hash': hash(query),
       'analysis.model': model,

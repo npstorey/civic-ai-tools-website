@@ -8,28 +8,49 @@
 // APP-SIDE knowledge (the MCP registry lives in `../mcp/`), so this shim
 // passes `sourceIdForToolName` into the harness's injectable resolver rather
 // than relying on the harness's exported civic default — the app's own map
-// stays authoritative, per the S3a contract. The display helpers re-export
-// the harness's civic-registry-backed versions (same names, same output,
+// stays authoritative, per the S3a contract. The display helpers wrap the
+// harness's civic-registry-backed versions, passing this instance's registry
+// (`CIVIC_SOURCE_REGISTRY`, the harness's own demo default) explicitly rather
+// than letting the harness apply it implicitly — same names, same output,
 // including the socrata coercion for pre-M9.3 packages and the middle-dot
-// separator).
+// separator. Wiring a non-demo registry is P2 parameterization work, not this
+// shim's.
 
 import { sourceIdForToolName } from '../mcp/operation-types.ts';
 import {
   buildDataSources as harnessBuildDataSources,
   resolveToolSource as harnessResolveToolSource,
-  displayNameForSource,
-  formatDataSourcesSummary,
+  displayNameForSource as harnessDisplayNameForSource,
+  formatDataSourcesSummary as harnessFormatDataSourcesSummary,
+  CIVIC_SOURCE_REGISTRY,
+  type CivicSourceRegistry,
   type DataSourceEntry,
   type ToolCallSummary,
   type ToolSourceResolver,
 } from '@typedstandards/civic-typed-harness';
 
-export {
-  displayNameForSource,
-  formatDataSourcesSummary,
-  type DataSourceEntry,
-  type ToolCallSummary,
-};
+export { CIVIC_SOURCE_REGISTRY, type CivicSourceRegistry, type DataSourceEntry, type ToolCallSummary };
+
+/** Human-friendly display label for a `sourceId`, against this instance's
+ *  source registry. Thin wrapper over the harness function — always passes
+ *  `registry` explicitly (defaulting to `CIVIC_SOURCE_REGISTRY` here at the
+ *  shim boundary) so the harness call never relies on its own default. */
+export function displayNameForSource(
+  sourceId: string | undefined | null,
+  registry: CivicSourceRegistry = CIVIC_SOURCE_REGISTRY,
+): string {
+  return harnessDisplayNameForSource(sourceId, registry);
+}
+
+/** Compact, de-duplicated `dataSources` summary string, against this
+ *  instance's source registry. Same explicit-registry thin-wrapper pattern
+ *  as `displayNameForSource`. */
+export function formatDataSourcesSummary(
+  entries: DataSourceEntry[] | undefined,
+  registry: CivicSourceRegistry = CIVIC_SOURCE_REGISTRY,
+): string | null {
+  return harnessFormatDataSourcesSummary(entries, registry);
+}
 
 /** The app's static tool-name → source-id map (`../mcp/operation-types.ts`)
  *  as a harness resolver — the fallback when a trace span carries no
