@@ -1,19 +1,23 @@
 // Instance-identity configuration tests (S3a P2, #166; ADR-0020: instance
-// identity is config, not code).
+// identity is config, not code — and #258: REQUIRED for signing, never
+// defaulted).
 //
-// NEW file — the pre-existing suites are the byte-compat oracle for the
-// no-config path and are untouched. These tests cover the NEW behavior:
+// What these tests cover, post-#258:
 //
-//   1. DEFAULTS: with no EVIDENCE_* identity env set, every config getter
-//      returns the demo deployment's historical hardcoded value, and those
-//      demo defaults cannot drift from the published packages' own demo
-//      constants (the anti-drift pin).
-//   2. OVERRIDES: alternate registry URLs, signer identity, publication
+//   1. STRICT ABSENCE: with no EVIDENCE_* identity env set, the nullable
+//      getters return null, the strict resolvers throw
+//      `InstanceIdentityError` naming the missing variables, and the
+//      packager/notebook surfaces refuse or honestly omit — nothing ever
+//      falls back to the reference deployment's values.
+//   2. BYTE PARITY BY EXPLICIT INJECTION: with the reference identity
+//      injected as environment (reference-identity-fixture.ts — the same
+//      variables the real deployment sets), every emitted surface carries
+//      the historical bytes exactly. The anti-drift pin ties the fixture to
+//      the published packages' own constants.
+//   3. OVERRIDES: alternate registry URLs, signer identity, publication
 //      host, and platform agent flow through to the emitted sidecar, the
 //      signed envelope surfaces, and the provenance graph.
-//   3. The known packager constraint rides through the re-point: a v0.1
-//      datHere input without a notebook extension throws (civic-ai-tools#116
-//      P1 rider — a pinned invariant, not a bug).
+//   4. The known packager constraint rides through (#116 P1 rider).
 //
 // Config getters read the environment at CALL time, so tests set and restore
 // process.env around each call (same pattern as signing.test.ts).
@@ -24,19 +28,28 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  DEMO_SITE_ORIGIN,
-  DEMO_PUBLICATION_HOST,
-  DEMO_TRUST_REGISTRY_CANONICAL_URL,
-  DEMO_TRUST_REGISTRY_LEGACY_URL,
-  DEMO_SIGNER_IDENTITY,
-  DEMO_PLATFORM_TITLE,
+  INSTANCE_IDENTITY_REQUIRED_VARS,
+  InstanceIdentityError,
   getEvidenceSiteOrigin,
   getPublicationHost,
+  requirePublicationHost,
   getSidecarTrustRegistryUrls,
   getEvidenceSignerIdentity,
+  getConfiguredSignerIdentity,
   getPlatformAgentOverrides,
   getPlatformTitle,
+  getInstanceAttribution,
 } from '../site-config.ts';
+import {
+  REFERENCE_IDENTITY_ENV,
+  REFERENCE_SITE_ORIGIN,
+  REFERENCE_PUBLICATION_HOST,
+  REFERENCE_TRUST_REGISTRY_CANONICAL_URL,
+  REFERENCE_TRUST_REGISTRY_LEGACY_URL,
+  REFERENCE_PLATFORM_TITLE,
+  REFERENCE_PLATFORM_AGENT_ID,
+  REFERENCE_SIGNER_IDENTITY,
+} from './reference-identity-fixture.ts';
 import { buildCell0Source, buildFooterCellSource } from '../notebook-author/prompt.ts';
 import { generateNotebook } from '../notebook.ts';
 import {
@@ -44,11 +57,7 @@ import {
   CIVICAITOOLS_ENVIRONMENT_HOST,
 } from '@typedstandards/civic-typed-harness';
 import { getActiveSigner } from './signing.ts';
-import {
-  buildCommitmentView,
-  CANONICAL_TRUST_REGISTRY_URL,
-  LEGACY_TRUST_REGISTRY_URL,
-} from './commitment.ts';
+import { buildCommitmentView } from './commitment.ts';
 import { buildEvidencePackage, type PackageInput } from './packager.ts';
 import { evidenceRecords, users } from '../db/schema.ts';
 
@@ -118,19 +127,19 @@ async function withIdentityEnvAsync<T>(
   }
 }
 
-// --- 1. Defaults + anti-drift pins ---
+// --- 1. Strict absence: no env → null / refusal, never a reference value ---
 
-test('defaults: with no identity env set, every getter returns the demo value', () => {
+test('absence: with no identity env set, the nullable getters return null', () => {
   withIdentityEnv({}, () => {
-    assert.equal(getEvidenceSiteOrigin(), DEMO_SITE_ORIGIN);
-    assert.equal(getPublicationHost(), DEMO_PUBLICATION_HOST);
-    const registry = getSidecarTrustRegistryUrls();
-    assert.equal(registry.canonical, DEMO_TRUST_REGISTRY_CANONICAL_URL);
-    assert.equal(registry.legacy, DEMO_TRUST_REGISTRY_LEGACY_URL);
-    assert.deepEqual(getEvidenceSignerIdentity(), { ...DEMO_SIGNER_IDENTITY });
-    assert.deepEqual(getActiveSigner(), { ...DEMO_SIGNER_IDENTITY });
-    // No overrides → all undefined, so the packager passes the harness's own
-    // default provenance config through untouched.
+    assert.equal(getEvidenceSiteOrigin(), null);
+    assert.equal(getPublicationHost(), null);
+    assert.equal(getPlatformTitle(), null);
+    assert.equal(getConfiguredSignerIdentity(), null);
+    assert.deepEqual(getInstanceAttribution(), {
+      origin: null,
+      host: null,
+      platformTitle: null,
+    });
     assert.deepEqual(getPlatformAgentOverrides(), {
       id: undefined,
       title: undefined,
@@ -139,19 +148,200 @@ test('defaults: with no identity env set, every getter returns the demo value', 
   });
 });
 
-test('anti-drift: site-config demo defaults equal the published packages’ demo constants', () => {
-  // If the harness bumps its demo identity (or the app edits one side only),
-  // the "defaults are byte-identical" property silently breaks — this pin
-  // makes the drift loud.
-  assert.equal(DEMO_PUBLICATION_HOST, CIVICAITOOLS_ENVIRONMENT_HOST);
-  assert.equal(DEMO_SITE_ORIGIN, CIVICAITOOLS_PLATFORM_AGENT.url);
-  assert.equal(DEMO_PLATFORM_TITLE, CIVICAITOOLS_PLATFORM_AGENT.title);
-  // The commitment module's exported constants are the same demo defaults the
-  // sidecar emits with no config set (the existing commitment.test.ts
-  // equality assertions depend on exactly this).
-  assert.equal(CANONICAL_TRUST_REGISTRY_URL, DEMO_TRUST_REGISTRY_CANONICAL_URL);
-  assert.equal(LEGACY_TRUST_REGISTRY_URL, DEMO_TRUST_REGISTRY_LEGACY_URL);
+test('absence: the strict resolvers throw InstanceIdentityError naming the missing variables', () => {
+  withIdentityEnv({}, () => {
+    assert.throws(
+      () => requirePublicationHost(),
+      (err: unknown) =>
+        err instanceof InstanceIdentityError &&
+        err.missing.includes('EVIDENCE_SITE_ORIGIN'),
+    );
+    assert.throws(
+      () => getSidecarTrustRegistryUrls(),
+      (err: unknown) =>
+        err instanceof InstanceIdentityError &&
+        err.missing.includes('EVIDENCE_SITE_ORIGIN'),
+    );
+    assert.throws(
+      () => getEvidenceSignerIdentity(),
+      (err: unknown) =>
+        err instanceof InstanceIdentityError &&
+        err.missing.length === 3 &&
+        err.missing.includes('EVIDENCE_SIGNER_BINDING_TIER') &&
+        err.missing.includes('EVIDENCE_SIGNER_IDENTIFIER') &&
+        err.missing.includes('EVIDENCE_SIGNER_DISPLAY_NAME'),
+    );
+  });
 });
+
+test('absence: a PARTIAL signer triple throws naming only the missing members', () => {
+  withIdentityEnv(
+    {
+      EVIDENCE_SIGNER_BINDING_TIER: 'platform',
+      EVIDENCE_SIGNER_IDENTIFIER: 'platform:partial',
+    },
+    () => {
+      assert.throws(
+        () => getEvidenceSignerIdentity(),
+        (err: unknown) =>
+          err instanceof InstanceIdentityError &&
+          err.missing.length === 1 &&
+          err.missing[0] === 'EVIDENCE_SIGNER_DISPLAY_NAME',
+      );
+      assert.equal(getConfiguredSignerIdentity(), null);
+    },
+  );
+});
+
+test('absence: the packager refuses — no reference agent or host can reach signed output', () => {
+  withIdentityEnv({}, () => {
+    assert.throws(
+      () => buildEvidencePackage(basePackageInput({ contentProfile: 'datHere' })),
+      (err: unknown) => err instanceof InstanceIdentityError,
+    );
+  });
+});
+
+test('absence: notebook surfaces honestly OMIT attribution (no host, no title, no reference values)', () => {
+  withIdentityEnv({}, () => {
+    const cell0 = buildCell0Source({
+      query: 'How many permits?',
+      generatedAt: '2026-06-01',
+      portals: ['data.example.gov'],
+    });
+    assert.ok(cell0.includes('**Generated:** 2026-06-01'));
+    assert.ok(!cell0.includes(' via ['), 'cell 0 must omit the via-attribution');
+    assert.ok(!cell0.includes('civicaitools.org'));
+    const footer = buildFooterCellSource({
+      citations: [],
+      generatedAt: '2026-06-01',
+      modelName: 'test/model',
+    });
+    assert.ok(!footer.includes('Generated by ['), 'footer must omit Generated-by');
+    assert.ok(!footer.includes('civicaitools.org'));
+    // Client-download notebook builder: attribution is THREADED (#258 A2);
+    // an unconfigured instance threads nulls and the lines are omitted.
+    const nb = JSON.stringify(
+      generateNotebook('q', 'data.example.gov', [], 'answer', getInstanceAttribution()),
+    );
+    assert.ok(!nb.includes(' via ['));
+    assert.ok(!nb.includes('Generated by ['));
+    assert.ok(!nb.includes('civicaitools.org'));
+  });
+});
+
+test('skill text: with no config the host mention is omitted at module load', async () => {
+  // The skill constants are module-level template literals — this first (and
+  // only) import in this process happens under a cleared identity env, so the
+  // baked strings honestly omit the host. The override direction is proven in
+  // src/lib/mcp/skill-instance-config.test.ts (its own process sets the env
+  // BEFORE importing).
+  await withIdentityEnvAsync({}, async () => {
+    const { SOCRATA_SKILL_FALLBACK } = await import('../mcp/socrata-skill.ts');
+    const { DATA_COMMONS_SKILL } = await import('../mcp/data-commons-skill.ts');
+    assert.ok(
+      SOCRATA_SKILL_FALLBACK.includes(
+        'Applies to: Web demo and other HTTP-connected clients.',
+      ),
+      'fallback skill should omit the host with no identity declared',
+    );
+    assert.ok(!SOCRATA_SKILL_FALLBACK.includes('civicaitools.org'));
+    assert.ok(
+      DATA_COMMONS_SKILL.includes(
+        'published as an evidence package, the evidence chain captures',
+      ),
+      'data-commons skill should omit the host with no identity declared',
+    );
+    assert.ok(
+      !DATA_COMMONS_SKILL.includes('published as an evidence package on '),
+    );
+  });
+});
+
+// --- 2. Anti-drift pins: fixture ↔ published packages ---
+
+test('anti-drift: the reference fixture equals the published packages’ demo constants', () => {
+  // If the harness bumps its demo identity (or the fixture is edited alone),
+  // the "reference env reproduces historical bytes" property silently breaks
+  // — this pin makes the drift loud.
+  assert.equal(REFERENCE_PUBLICATION_HOST, CIVICAITOOLS_ENVIRONMENT_HOST);
+  assert.equal(REFERENCE_SITE_ORIGIN, CIVICAITOOLS_PLATFORM_AGENT.url);
+  assert.equal(REFERENCE_PLATFORM_TITLE, CIVICAITOOLS_PLATFORM_AGENT.title);
+  assert.equal(REFERENCE_PLATFORM_AGENT_ID, CIVICAITOOLS_PLATFORM_AGENT.id);
+});
+
+test('anti-drift: the gate’s required-variable list matches the strict getters’ needs', () => {
+  assert.deepEqual([...INSTANCE_IDENTITY_REQUIRED_VARS], [
+    'EVIDENCE_SITE_ORIGIN',
+    'EVIDENCE_SIGNER_BINDING_TIER',
+    'EVIDENCE_SIGNER_IDENTIFIER',
+    'EVIDENCE_SIGNER_DISPLAY_NAME',
+    'EVIDENCE_PLATFORM_AGENT_TITLE',
+  ]);
+  // The fixture env satisfies the required set (plus the agent id, which the
+  // reference deployment also sets explicitly).
+  for (const name of INSTANCE_IDENTITY_REQUIRED_VARS) {
+    assert.ok(
+      (REFERENCE_IDENTITY_ENV as Record<string, string>)[name],
+      `fixture env must set ${name}`,
+    );
+  }
+});
+
+// --- 3. Byte parity by explicit injection (the reference deployment) ---
+
+test('parity: injecting the reference env reproduces every historical getter value', () => {
+  withIdentityEnv({ ...REFERENCE_IDENTITY_ENV }, () => {
+    assert.equal(getEvidenceSiteOrigin(), REFERENCE_SITE_ORIGIN);
+    assert.equal(getPublicationHost(), REFERENCE_PUBLICATION_HOST);
+    const registry = getSidecarTrustRegistryUrls();
+    assert.equal(registry.canonical, REFERENCE_TRUST_REGISTRY_CANONICAL_URL);
+    assert.equal(registry.legacy, REFERENCE_TRUST_REGISTRY_LEGACY_URL);
+    assert.deepEqual(getEvidenceSignerIdentity(), { ...REFERENCE_SIGNER_IDENTITY });
+    assert.deepEqual(getActiveSigner(), { ...REFERENCE_SIGNER_IDENTITY });
+    assert.equal(getPlatformTitle(), REFERENCE_PLATFORM_TITLE);
+  });
+});
+
+test('parity: reference env → the demo agent + host are emitted byte-identically in signed output', () => {
+  withIdentityEnv({ ...REFERENCE_IDENTITY_ENV }, () => {
+    const { pkg } = buildEvidencePackage(
+      basePackageInput({ contentProfile: 'datHere' }),
+    );
+    const env = pkg.extensions?.['org.civicaitools.environment'] as Record<string, unknown>;
+    assert.equal(env.host, CIVICAITOOLS_ENVIRONMENT_HOST);
+    const agent = pkg.provenance!['@graph'].find(
+      (n) => n['@id'] === `urn:civic-evidence:platform:${CIVICAITOOLS_PLATFORM_AGENT.id}`,
+    );
+    assert.ok(agent, 'reference platform agent node should be present');
+    assert.equal(agent!['dcterms:title'], CIVICAITOOLS_PLATFORM_AGENT.title);
+    assert.equal(agent!['civic:url'], CIVICAITOOLS_PLATFORM_AGENT.url);
+  });
+});
+
+test('parity: reference env → notebook attribution carries the historical strings byte-identically', () => {
+  withIdentityEnv({ ...REFERENCE_IDENTITY_ENV }, () => {
+    const cell0 = buildCell0Source({
+      query: 'How many permits?',
+      generatedAt: '2026-06-01',
+      portals: ['data.example.gov'],
+    });
+    assert.ok(cell0.includes('via [civicaitools.org](https://civicaitools.org)'));
+    const footer = buildFooterCellSource({
+      citations: [],
+      generatedAt: '2026-06-01',
+      modelName: 'test/model',
+    });
+    assert.ok(footer.includes('Generated by [Civic AI Tools](https://civicaitools.org).'));
+    const nb = JSON.stringify(
+      generateNotebook('q', 'data.example.gov', [], 'answer', getInstanceAttribution()),
+    );
+    assert.ok(nb.includes('via [civicaitools.org](https://civicaitools.org)'));
+    assert.ok(nb.includes('Generated by [Civic AI Tools](https://civicaitools.org)'));
+  });
+});
+
+// --- 4. Derivation + overrides ---
 
 test('derivation: EVIDENCE_SITE_ORIGIN alone re-points host, registry URLs, and agent URL', () => {
   withIdentityEnv({ EVIDENCE_SITE_ORIGIN: 'https://evidence.example.org/' }, () => {
@@ -213,7 +403,7 @@ test('signer identity: EVIDENCE_SIGNER_* flows through getActiveSigner', () => {
   );
 });
 
-// --- 2. Overrides flow through to emitted output ---
+// --- 5. Overrides flow through to emitted output ---
 
 function makeRecord(overrides: Partial<EvidenceRecord> = {}): EvidenceRecord {
   const base = {
@@ -283,8 +473,7 @@ test('sidecar: alternate registry config flows into the emitted commitment view'
       view.trustRegistryUrlLegacy,
       'https://evidence.example.org/.well-known/evidence-public-keys.json',
     );
-    // The demo constants are untouched exports — the emitted value moved.
-    assert.notEqual(view.trustRegistryUrl, CANONICAL_TRUST_REGISTRY_URL);
+    assert.notEqual(view.trustRegistryUrl, REFERENCE_TRUST_REGISTRY_CANONICAL_URL);
   });
 });
 
@@ -299,6 +488,15 @@ test('sidecar: empty legacy URL omits trustRegistryUrlLegacy entirely', () => {
       assert.equal('trustRegistryUrlLegacy' in view, false);
     },
   );
+});
+
+test('sidecar: with no identity declared the view REFUSES (never a reference registry URL)', () => {
+  withIdentityEnv({}, () => {
+    assert.throws(
+      () => buildCommitmentView(makeRecord(), makeCreator(), null),
+      (err: unknown) => err instanceof InstanceIdentityError,
+    );
+  });
 });
 
 function basePackageInput(overrides: Partial<PackageInput> = {}): PackageInput {
@@ -352,112 +550,47 @@ test('signed output: publication host + platform agent overrides flow into the p
   );
 });
 
-test('signed output: with no identity env set, the demo agent + host are emitted (byte-parity)', () => {
-  withIdentityEnv({}, () => {
-    const { pkg } = buildEvidencePackage(
-      basePackageInput({ contentProfile: 'datHere' }),
-    );
-    const env = pkg.extensions?.['org.civicaitools.environment'] as Record<string, unknown>;
-    assert.equal(env.host, CIVICAITOOLS_ENVIRONMENT_HOST);
-    const agent = pkg.provenance!['@graph'].find(
-      (n) => n['@id'] === `urn:civic-evidence:platform:${CIVICAITOOLS_PLATFORM_AGENT.id}`,
-    );
-    assert.ok(agent, 'demo platform agent node should be present');
-    assert.equal(agent!['dcterms:title'], CIVICAITOOLS_PLATFORM_AGENT.title);
-    assert.equal(agent!['civic:url'], CIVICAITOOLS_PLATFORM_AGENT.url);
-  });
-});
-
-// --- 2b. Attribution sweep (blast-zone extension): notebook surfaces ---
-
-test('notebook attribution: with no config the demo strings are emitted byte-identically', () => {
-  withIdentityEnv({}, () => {
-    assert.equal(getPlatformTitle(), DEMO_PLATFORM_TITLE);
-    const cell0 = buildCell0Source({
-      query: 'How many permits?',
-      generatedAt: '2026-06-01',
-      portals: ['data.example.gov'],
-    });
-    assert.ok(cell0.includes('via [civicaitools.org](https://civicaitools.org)'));
-    const footer = buildFooterCellSource({
-      citations: [],
-      generatedAt: '2026-06-01',
-      modelName: 'test/model',
-    });
-    assert.ok(footer.includes('Generated by [Civic AI Tools](https://civicaitools.org).'));
-    const nb = JSON.stringify(generateNotebook('q', 'data.example.gov', [], 'answer'));
-    assert.ok(nb.includes('via [civicaitools.org](https://civicaitools.org)'));
-    assert.ok(nb.includes('Generated by [Civic AI Tools](https://civicaitools.org)'));
-  });
-});
-
-test('notebook attribution: origin + title overrides flow into authored and downloaded notebooks', () => {
+test('signed output: a missing agent id derives from the publication host (operator-grounded, never the reference URN)', () => {
   withIdentityEnv(
     {
       EVIDENCE_SITE_ORIGIN: 'https://evidence.example.org',
       EVIDENCE_PLATFORM_AGENT_TITLE: 'Example Instance',
+      // no EVIDENCE_PLATFORM_AGENT_ID
     },
     () => {
-      // Authored notebook (signed datHere section E): cell 0 + footer.
-      const cell0 = buildCell0Source({
-        query: 'How many permits?',
-        generatedAt: '2026-06-01',
-        portals: ['data.example.gov'],
-      });
-      assert.ok(cell0.includes('via [evidence.example.org](https://evidence.example.org)'));
-      assert.ok(!cell0.includes('civicaitools.org'));
-      const footer = buildFooterCellSource({
-        citations: [],
-        generatedAt: '2026-06-01',
-        modelName: 'test/model',
-      });
-      assert.ok(footer.includes('Generated by [Example Instance](https://evidence.example.org).'));
-      assert.ok(!footer.includes('civicaitools.org'));
-      // Client-download notebook builder (server-resolvable path).
-      const nb = JSON.stringify(generateNotebook('q', 'data.example.gov', [], 'answer'));
-      assert.ok(nb.includes('via [evidence.example.org](https://evidence.example.org)'));
-      assert.ok(nb.includes('Generated by [Example Instance](https://evidence.example.org)'));
-      assert.ok(!nb.includes('civicaitools.org'));
+      const { pkg } = buildEvidencePackage(
+        basePackageInput({ contentProfile: 'datHere' }),
+      );
+      const agent = pkg.provenance!['@graph'].find(
+        (n) => n['@id'] === 'urn:civic-evidence:platform:evidence.example.org',
+      );
+      assert.ok(agent, 'agent id should derive from the publication host');
+      const referenceAgent = pkg.provenance!['@graph'].find(
+        (n) => n['@id'] === `urn:civic-evidence:platform:${CIVICAITOOLS_PLATFORM_AGENT.id}`,
+      );
+      assert.equal(referenceAgent, undefined, 'the reference URN must not appear');
     },
   );
 });
 
-test('skill text: with no config the demo host is baked at module load', async () => {
-  // The skill constants are module-level template literals — this first (and
-  // only) import in this process happens under a cleared identity env, so the
-  // baked strings are the demo defaults. The override direction is proven in
-  // src/lib/mcp/skill-instance-config.test.ts (its own process sets the env
-  // BEFORE importing).
-  await withIdentityEnvAsync({}, async () => {
-    const { SOCRATA_SKILL_FALLBACK } = await import('../mcp/socrata-skill.ts');
-    const { DATA_COMMONS_SKILL } = await import('../mcp/data-commons-skill.ts');
-    assert.ok(
-      SOCRATA_SKILL_FALLBACK.includes('Web demo (civicaitools.org)'),
-      'fallback skill should carry the demo host by default',
-    );
-    assert.ok(
-      DATA_COMMONS_SKILL.includes(
-        'published as an evidence package on civicaitools.org',
-      ),
-      'data-commons skill should carry the demo host by default',
-    );
-  });
-});
-
-// --- 3. Known constraint rides through the re-point (#116 P1 rider) ---
+// --- 6. Known constraint rides through the re-point (#116 P1 rider) ---
 
 test('known constraint: v0.1 datHere input WITHOUT a notebook extension throws', () => {
   // `computeContentHashSha256` refuses to fingerprint `dathere-ag-jupyter/v1`
   // content with no `org.civicaitools.notebook` extension. The app's real
   // publish flow always supplies one; the re-pointed packager keeps the
-  // invariant rather than silently hashing something else.
-  assert.throws(() =>
-    buildEvidencePackage(
-      basePackageInput({
-        type: 'content/analysis/v1',
-        contentProfile: 'datHere',
-        // no extensions['org.civicaitools.notebook']
-      }),
-    ),
-  );
+  // invariant rather than silently hashing something else. Identity env is
+  // injected so the failure exercised is the CONSTRAINT, not the identity
+  // refusal.
+  withIdentityEnv({ ...REFERENCE_IDENTITY_ENV }, () => {
+    assert.throws(() =>
+      buildEvidencePackage(
+        basePackageInput({
+          type: 'content/analysis/v1',
+          contentProfile: 'datHere',
+          // no extensions['org.civicaitools.notebook']
+        }),
+      ),
+    );
+  });
 });

@@ -575,26 +575,70 @@ test('a partial KV pair warns that durable rate limiting is off, while the run s
   assert.match(renderReport(result), /falls back to per-process memory/);
 });
 
-test('a half-set signing pair warns, naming the missing half and the misattribution risk', () => {
+test('a partially-set signing group warns, naming the missing members and the misattribution risk', () => {
   // #195 left this pair out of ENV_GROUPS because the kid then had a coded
   // fallback, so the set was not all-or-nothing. The fallback is gone and
-  // `isSigningConfigured` now requires both halves, so the pair belongs here.
+  // `isSigningConfigured` requires both halves — and as of #258 the group
+  // also carries the instance-identity set, which the seal/commit gate
+  // requires alongside the pair (key + kid + identity travel together).
   const env = envWithAllRequired();
-  delete env.EVIDENCE_KEY_ID; // key set, kid absent — the defect state
+  delete env.EVIDENCE_KEY_ID; // key + identity set, kid absent — a defect state
   const result = evaluateEnv(env);
 
   const partial = result.partialGroups.find((g) => g.name === 'Evidence signing');
-  assert.ok(partial, 'the half-set signing pair is reported as partial');
-  assert.deepEqual(partial.present, ['EVIDENCE_SIGNING_KEY']);
+  assert.ok(partial, 'the partially-set signing group is reported as partial');
+  assert.equal(partial.total, 7);
+  assert.ok(partial.present.includes('EVIDENCE_SIGNING_KEY'));
+  assert.ok(partial.present.includes('EVIDENCE_SITE_ORIGIN'));
   assert.deepEqual(partial.missing, ['EVIDENCE_KEY_ID']);
 
   const report = renderReport(result);
-  assert.match(report, /Evidence signing: 1 of 2 present; off until all 2 are set\. Missing: EVIDENCE_KEY_ID/);
+  assert.match(report, /Evidence signing: 6 of 7 present; off until all 7 are set\. Missing: EVIDENCE_KEY_ID/);
   assert.match(report, /cannot sign/);
-  assert.match(report, /not a partial success/);
-  // Unlike the other groups, this one ALSO fails the run — both halves are
+  assert.match(report, /travel together/);
+  // Unlike the other groups, this one ALSO fails the run — every member is
   // required with no fallback, so the warning rides on top of a hard miss.
   assert.equal(result.ok, false);
+});
+
+test('#258: the identity members of the signing group are required-tier with no coded fallback', () => {
+  const IDENTITY_MEMBERS = [
+    'EVIDENCE_SITE_ORIGIN',
+    'EVIDENCE_SIGNER_BINDING_TIER',
+    'EVIDENCE_SIGNER_IDENTIFIER',
+    'EVIDENCE_SIGNER_DISPLAY_NAME',
+    'EVIDENCE_PLATFORM_AGENT_TITLE',
+  ];
+  const group = ENV_GROUPS.find((g) => g.name === 'Evidence signing');
+  for (const name of IDENTITY_MEMBERS) {
+    const entry = ENV_SPEC.find((s) => s.name === name);
+    assert.ok(entry, `${name} is declared`);
+    assert.equal(entry.tier, 'required', `${name} is required (identity has no default)`);
+    assert.ok(!entry.hasFallback, `${name} must not claim a coded fallback`);
+    assert.ok(group.members.includes(name), `${name} travels with the signing pair`);
+  }
+  // A signing pair with no identity set is a partial group naming exactly
+  // the five identity variables.
+  const env = envWithAllRequired();
+  for (const name of IDENTITY_MEMBERS) delete env[name];
+  const result = evaluateEnv(env);
+  const partial = result.partialGroups.find((g) => g.name === 'Evidence signing');
+  assert.ok(partial);
+  assert.deepEqual(partial.missing, IDENTITY_MEMBERS);
+  assert.equal(result.ok, false, 'missing identity fails the run');
+  // The DERIVED identity overrides stay optional-with-fallback: derivation
+  // from an operator-set origin is real config, not a reference default.
+  for (const name of [
+    'EVIDENCE_PUBLICATION_HOST',
+    'EVIDENCE_TRUST_REGISTRY_CANONICAL_URL',
+    'EVIDENCE_TRUST_REGISTRY_LEGACY_URL',
+    'EVIDENCE_PLATFORM_AGENT_ID',
+    'EVIDENCE_PLATFORM_AGENT_URL',
+  ]) {
+    const entry = ENV_SPEC.find((s) => s.name === name);
+    assert.equal(entry.tier, 'optional', `${name} stays an optional override`);
+    assert.ok(entry.hasFallback, `${name} derives (coded derivation, not a reference value)`);
+  }
 });
 
 test('group detection uses the same presence test as everything else: whitespace-only is absent', () => {

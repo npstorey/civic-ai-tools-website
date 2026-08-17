@@ -8,10 +8,12 @@
  * The placeholder citation URL `ChatCitationPreview` shows before publish:
  * the instance's own `/evidence/` namespace with `(URL assigned at publish)`
  * where the slug would go. The origin arrives from
- * `getEvidenceSiteOrigin()` (server) via `EvidenceOriginProvider`; with no
- * environment set that is `DEMO_SITE_ORIGIN` and the result is
- * byte-identical to the historical hardcoded string.
+ * `getEvidenceSiteOrigin()` (server) via `EvidenceOriginProvider`. With no
+ * origin declared (#258: no identity defaults) the placeholder is
+ * SITE-RELATIVE — the record will live under this instance's own host,
+ * whatever that turns out to be — rather than claiming another deployment's
+ * origin.
  */
-export function buildCitationPlaceholderUrl(siteOrigin: string): string {
-  return `${siteOrigin}/evidence/(URL assigned at publish)`;
+export function buildCitationPlaceholderUrl(siteOrigin: string | null): string {
+  return `${siteOrigin ?? ''}/evidence/(URL assigned at publish)`;
 }

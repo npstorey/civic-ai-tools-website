@@ -122,6 +122,7 @@ async function main(): Promise<void> {
   );
   const { buildCommitmentView } = await import('../src/lib/evidence/commitment.ts');
   const { generateNotebook } = await import('../src/lib/notebook.ts');
+  const { getInstanceAttribution } = await import('../src/lib/site-config.ts');
 
   // --- 4. Produce: build + sign a package under the alternate identity ----
   const notebook = generateNotebook(
@@ -135,6 +136,10 @@ async function main(): Promise<void> {
       },
     ],
     'About 1,200 permits were filed.',
+    // #258 A2: attribution is threaded, not read from env inside the
+    // builder — resolved here from the alternate-identity environment set
+    // above, exactly as the server-side callers resolve it.
+    getInstanceAttribution(),
   );
 
   const { pkg, hash: packageHash } = buildEvidencePackage({

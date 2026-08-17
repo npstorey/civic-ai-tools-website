@@ -37,12 +37,12 @@ import {
   extractSkillMetadata,
   traceForInspection,
   CIVICAITOOLS_PROVENANCE_CONFIG,
-  CIVICAITOOLS_PLATFORM_AGENT,
   type ProvenanceConfig,
 } from '@typedstandards/civic-typed-harness';
 import {
-  getPublicationHost,
+  requirePublicationHost,
   getPlatformAgentOverrides,
+  InstanceIdentityError,
 } from '../site-config.ts';
 
 // Two-family node type taxonomy (spec §8.1.1, §8.12, ADR-0009): every node
@@ -290,23 +290,36 @@ export interface EvidencePackage {
 }
 
 /**
- * PROV-O graph config for this instance: the harness's demo default with the
- * platform agent re-pointed at any configured instance identity (ADR-0020 —
- * the agent names WHO published inside the signed graph). With no overrides
- * set, the harness's own default config object is passed through untouched,
- * so the emitted graph is byte-identical by construction.
+ * PROV-O graph config for this instance: the harness's config with the
+ * platform agent resolved from instance identity (ADR-0020 — the agent names
+ * WHO published inside the signed graph). As of #258 the agent NEVER falls
+ * back to the harness's reference-deployment values: title and url are
+ * required identity (`EVIDENCE_PLATFORM_AGENT_TITLE`, with url following
+ * `EVIDENCE_SITE_ORIGIN` unless overridden), and a missing agent id derives
+ * from the publication host — operator-grounded, never another deployment's
+ * URN. Callers reach this only behind `evaluateSealCommitGate`; the throw is
+ * the last-resort guard for any path that forgets the gate. The harness's
+ * `CIVICAITOOLS_PLATFORM_AGENT` remains the anti-drift pin for the reference
+ * deployment's own configured values (instance-config.test.ts), not a
+ * runtime fallback.
  */
 function instanceProvenanceConfig(): ProvenanceConfig {
   const overrides = getPlatformAgentOverrides();
-  if (!overrides.id && !overrides.title && !overrides.url) {
-    return CIVICAITOOLS_PROVENANCE_CONFIG;
+  const missing: string[] = [];
+  if (!overrides.title) missing.push('EVIDENCE_PLATFORM_AGENT_TITLE');
+  if (!overrides.url) missing.push('EVIDENCE_SITE_ORIGIN');
+  if (missing.length > 0) {
+    throw new InstanceIdentityError(
+      missing,
+      "the signed provenance graph's platform agent",
+    );
   }
   return {
     ...CIVICAITOOLS_PROVENANCE_CONFIG,
     platformAgent: {
-      id: overrides.id ?? CIVICAITOOLS_PLATFORM_AGENT.id,
-      title: overrides.title ?? CIVICAITOOLS_PLATFORM_AGENT.title,
-      url: overrides.url ?? CIVICAITOOLS_PLATFORM_AGENT.url,
+      id: overrides.id ?? requirePublicationHost(),
+      title: overrides.title as string,
+      url: overrides.url as string,
     },
   };
 }
@@ -390,9 +403,10 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
   // canonicalization-rule selection, the summary-emission gate, and the
   // `org.civicaitools.environment` extension layered onto caller-supplied
   // extensions — all derived by the harness; the environment's `host` is this
-  // instance's publication host (ADR-0020 config; demo default
-  // 'civicaitools.org'). Non-datHere inputs pass through untouched, keeping
-  // their canonical JSON byte-identical.
+  // instance's publication host (ADR-0020 config; REQUIRED identity as of
+  // #258 — the strict resolver throws rather than emit another deployment's
+  // host into canonical JSON). Non-datHere inputs pass through untouched,
+  // keeping their canonical JSON byte-identical.
   const datHere = deriveDatHereEnvelopeFields(
     {
       model: input.model,
@@ -402,7 +416,7 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       skillMcpServerUrl: skillMeta.mcpServerUrl,
       extensions: input.extensions,
     },
-    { host: getPublicationHost() },
+    { host: requirePublicationHost() },
   );
 
   // Envelope assembly + hashing (spec §8.1.1, §8.2) — produce-core, with the

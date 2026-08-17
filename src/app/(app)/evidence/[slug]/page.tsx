@@ -128,7 +128,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const { record, creator } = data;
-  const url = `${getEvidenceSiteOrigin()}/evidence/${slug}`;
+  // #258: the canonical/OG/citation URL exists only when this instance has
+  // declared its origin — honest omission otherwise, never another
+  // deployment's URL in metadata.
+  const origin = getEvidenceSiteOrigin();
+  const url = origin ? `${origin}/evidence/${slug}` : null;
   const description = record.summary.slice(0, 200);
 
   return {
@@ -138,7 +142,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       title: `Evidence: ${record.title}`,
       description,
       type: 'article',
-      url,
+      ...(url ? { url } : {}),
     },
     twitter: {
       card: 'summary',
@@ -149,7 +153,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       'citation_title': record.title,
       'citation_author': creator?.displayName || 'Unknown',
       'citation_date': record.createdAt.toISOString().split('T')[0],
-      'citation_public_url': url,
+      ...(url ? { 'citation_public_url': url } : {}),
     },
   };
 }
@@ -228,10 +232,15 @@ export default async function EvidencePage({ params }: PageProps) {
   // Absolute, publicly-fetchable commitment endpoint for the verify badge
   // (#114), resolved from the request host so the deep-link is correct on
   // production AND preview deploys (the verifier fetches it cross-origin).
+  // The request host is effectively always present; the configured
+  // publication host is the tail fallback (#258: nullable — with neither, a
+  // last-resort relative URL rather than a fabricated absolute one).
   const hdrs = await headers();
   const host = hdrs.get('x-forwarded-host') ?? hdrs.get('host') ?? getPublicationHost();
   const proto = hdrs.get('x-forwarded-proto') ?? 'https';
-  const commitmentUrl = `${proto}://${host}/api/evidence/${slug}/commitment`;
+  const commitmentUrl = host
+    ? `${proto}://${host}/api/evidence/${slug}/commitment`
+    : `/api/evidence/${slug}/commitment`;
 
   // ADR-0004: detail-page layout branches on contentProfile. When the value
   // is 'datHere', the page renders the A-G envelope as its primary structure
@@ -253,7 +262,9 @@ export default async function EvidencePage({ params }: PageProps) {
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-  // Schema.org JSON-LD
+  // Schema.org JSON-LD. `url` only when this instance declared an origin
+  // (#258: honest omission, never another deployment's URL).
+  const jsonLdOrigin = getEvidenceSiteOrigin();
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Dataset',
@@ -261,7 +272,7 @@ export default async function EvidencePage({ params }: PageProps) {
     description: record.summary,
     creator: { '@type': 'Person', name: creator?.displayName || 'Unknown' },
     datePublished: record.createdAt.toISOString().split('T')[0],
-    url: `${getEvidenceSiteOrigin()}/evidence/${slug}`,
+    ...(jsonLdOrigin ? { url: `${jsonLdOrigin}/evidence/${slug}` } : {}),
   };
 
   return (

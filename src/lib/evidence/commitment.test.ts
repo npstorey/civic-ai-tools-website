@@ -8,14 +8,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  buildCommitmentView,
-  buildCommitmentLifecycle,
-  CANONICAL_TRUST_REGISTRY_URL,
-  LEGACY_TRUST_REGISTRY_URL,
-} from './commitment.ts';
+import { buildCommitmentView, buildCommitmentLifecycle } from './commitment.ts';
 import { evidenceRecords, users } from '../db/schema.ts';
 import type { EvidencePackage } from './packager.ts';
+import {
+  REFERENCE_IDENTITY_ENV,
+  REFERENCE_TRUST_REGISTRY_CANONICAL_URL,
+  REFERENCE_TRUST_REGISTRY_LEGACY_URL,
+} from './reference-identity-fixture.ts';
+
+// #258: the sidecar's registry URLs resolve from instance identity with no
+// coded defaults — an unconfigured instance refuses instead (covered in
+// instance-config.test.ts). This suite is about sidecar SHAPE, so it injects
+// the reference identity explicitly; the URL assertions below are the
+// byte-parity proof for the reference deployment.
+for (const [name, value] of Object.entries(REFERENCE_IDENTITY_ENV)) {
+  process.env[name] ??= value;
+}
+const CANONICAL_TRUST_REGISTRY_URL = REFERENCE_TRUST_REGISTRY_CANONICAL_URL;
+const LEGACY_TRUST_REGISTRY_URL = REFERENCE_TRUST_REGISTRY_LEGACY_URL;
 
 type EvidenceRecord = typeof evidenceRecords.$inferSelect;
 type UserRecord = typeof users.$inferSelect;

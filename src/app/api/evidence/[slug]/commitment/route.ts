@@ -9,6 +9,7 @@ import { loadTrustRegistry } from '@/lib/evidence/verify';
 import { loadCarriedLifecycleAttestations } from '@/lib/evidence/lifecycle';
 import { classifyIdentifier, commitmentAccessError } from '@/lib/evidence/identifier';
 import { fromDbValue } from '@/lib/evidence/visibility';
+import { InstanceIdentityError } from '@/lib/site-config';
 
 /**
  * GET /api/evidence/[hash|slug]/commitment
@@ -160,9 +161,24 @@ export async function GET(
   // `visibility` value the view SERVES is also canonical — `buildCommitmentView`
   // normalizes the column rather than passing it through.
   const isSealed = fromDbValue(record.visibility) === 'sealed';
-  const commitment = buildCommitmentView(record, creator, pkg, lifecycleAttestations, {
-    redactContentSurface: isSealed,
-  });
+  let commitment: Record<string, unknown>;
+  try {
+    commitment = buildCommitmentView(record, creator, pkg, lifecycleAttestations, {
+      redactContentSurface: isSealed,
+    });
+  } catch (err) {
+    // #258: the sidecar's `trustRegistryUrl` is required per-publisher
+    // configuration with no honest absent form. An instance that has not
+    // declared its identity refuses, naming the missing variable, rather
+    // than serve a proof object pointing at another deployment's registry.
+    if (err instanceof InstanceIdentityError) {
+      return jsonResponse(
+        { error: err.message, code: 'instance_identity_missing' },
+        500,
+      );
+    }
+    throw err;
+  }
 
   // `?inline=1` → self-contained bundle (#119 Q15a): inline the package + the stamped
   // trust registry so the commitment needs zero network to verify. The package is the

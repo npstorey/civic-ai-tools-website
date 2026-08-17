@@ -22,7 +22,7 @@ import {
   getBrandName,
   getBrandTagline,
 } from '@/lib/brand-config';
-import { getEvidenceSiteOrigin, getRoadmapSource } from '@/lib/site-config';
+import { getInstanceAttribution, getRoadmapSource } from '@/lib/site-config';
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
@@ -187,10 +187,12 @@ export default function RootLayout({
               currently the chat citation preview. Same pattern and mount
               point as HostLinksProvider above. */}
           <BrandProvider value={brandName}>
-          {/* Evidence site origin for the same unreachable client surface
-              (#227) — instance identity (EVIDENCE_SITE_ORIGIN), so its own
-              provider rather than a rider on the chrome-brand one. */}
-          <EvidenceOriginProvider value={getEvidenceSiteOrigin()}>
+          {/* Instance attribution identity for the unreachable client
+              surfaces (#227, #258 A2) — the EVIDENCE_* set (origin, host
+              label, display name), so its own provider rather than a rider
+              on the chrome-brand one. Null members mean "not configured";
+              the client surfaces then omit attribution. */}
+          <EvidenceOriginProvider value={getInstanceAttribution()}>
           {/* Sign-in choices for the affordances inside client trees (#229
               P1) — QueryForm, RateLimitBanner, McpResponseDisplay and
               NotebookOutput all render under the apex page, a client

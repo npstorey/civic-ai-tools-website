@@ -1,31 +1,36 @@
-// #227 — citation placeholder-URL tests. Run with: npm test
+// #227 / #258 — citation placeholder-URL tests. Run with: npm test
 //
-// Same shape as the brand-config / instance-config tests: the unset
-// environment is the byte-compat oracle (the demo default must reproduce the
-// historical hardcoded string exactly), overrides are exercised per-process
-// through the real site-config getter and cleaned up after each test.
+// Same shape as the instance-config tests: overrides are exercised
+// per-process through the real site-config getter and cleaned up after each
+// test. The reference-deployment direction injects the reference origin
+// EXPLICITLY (the byte-parity proof); the unset environment now yields a
+// SITE-RELATIVE placeholder — honest absence, never another deployment's
+// origin.
 
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildCitationPlaceholderUrl } from './citation-placeholder.ts';
-import { DEMO_SITE_ORIGIN, getEvidenceSiteOrigin } from '../../lib/site-config.ts';
+import { getEvidenceSiteOrigin } from '../../lib/site-config.ts';
+import { REFERENCE_SITE_ORIGIN } from '../../lib/evidence/reference-identity-fixture.ts';
 
 afterEach(() => {
   delete process.env.EVIDENCE_SITE_ORIGIN;
 });
 
 describe('buildCitationPlaceholderUrl', () => {
-  test('demo origin reproduces the historical hardcoded string (byte-parity bar)', () => {
+  test('reference origin, explicitly injected, reproduces the historical string (byte-parity bar)', () => {
+    process.env.EVIDENCE_SITE_ORIGIN = REFERENCE_SITE_ORIGIN;
     assert.equal(
-      buildCitationPlaceholderUrl(DEMO_SITE_ORIGIN),
+      buildCitationPlaceholderUrl(getEvidenceSiteOrigin()),
       'https://civicaitools.org/evidence/(URL assigned at publish)',
     );
   });
 
-  test('unset environment resolves to the same bytes through the getter', () => {
+  test('unset environment yields a SITE-RELATIVE placeholder (honest absence, #258)', () => {
+    assert.equal(getEvidenceSiteOrigin(), null);
     assert.equal(
       buildCitationPlaceholderUrl(getEvidenceSiteOrigin()),
-      'https://civicaitools.org/evidence/(URL assigned at publish)',
+      '/evidence/(URL assigned at publish)',
     );
   });
 
