@@ -25,6 +25,9 @@
 *.pem
 /temp
 
+# scripts/generate-signing-key.ts output (never committed; see docs/instance-setup.md §1)
+signing-key.local.txt
+
 # debug
 npm-debug.log*
 yarn-debug.log*

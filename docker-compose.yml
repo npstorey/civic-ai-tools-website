@@ -153,6 +153,7 @@ services:
         DIRECTORY_DATA_URL:
         ROADMAP_RAW_URL:
         ROADMAP_GITHUB_URL:
+        SITE_NOINDEX:
     restart: unless-stopped
     depends_on:
       postgres:
@@ -271,6 +272,7 @@ services:
       DIRECTORY_DATA_URL:
       ROADMAP_RAW_URL:
       ROADMAP_GITHUB_URL:
+      SITE_NOINDEX:
       # Tuning knobs; each falls back to a coded default when absent.
       ANONYMOUS_RATE_LIMIT:
       AUTHENTICATED_RATE_LIMIT:

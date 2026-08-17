@@ -228,6 +228,18 @@ export const ENV_SPEC = [
   { name: 'MARKETING_HOST', tier: 'optional', purpose: 'Split-host: host serving the marketing site — withholds the app-private routes there (unset = no withholding)', hasFallback: true },
   { name: 'APP_ONLY', tier: 'optional', purpose: 'App-only instance: every host serves the gated surface; marketing routes 404 (unset = off)', hasFallback: true },
 
+  // --- Indexing posture (#258 E1, owner ruling G0-3; src/lib/site-indexing.ts).
+  //     A pure opt-in, same shape as the host-topology set above: the coded
+  //     default is the standard web default (indexable, no robots.txt
+  //     disallow, no noindex metadata), so an instance that has never heard
+  //     of this variable is indexable, not silently blocked. ---
+  // readBy build-and-runtime: the root layout's <head> metadata bakes this
+  // at `next build` for statically prerendered pages (same caveat as the
+  // SITE_BRAND_* set below); the robots.txt route itself forces per-request
+  // evaluation (src/app/robots.ts `dynamic = 'force-dynamic'`) and needs it
+  // only at run time.
+  { name: 'SITE_NOINDEX', readBy: 'build-and-runtime', tier: 'optional', purpose: "Block crawler indexing site-wide — robots.txt disallows every path and page metadata carries noindex/nofollow (unset/empty = indexable, the standard web default)", hasFallback: true },
+
   // --- Rate limiting (durable counter; without it, falls back to per-instance memory) ---
   // hasFallback, not a hard miss: rate-limit.ts:53-63 tests both vars and takes
   // an in-process memory store when either is absent — the instance runs, the
