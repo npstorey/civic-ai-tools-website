@@ -142,7 +142,11 @@ export const ENV_SPEC = [
   // --- Core query path (every demo query depends on these) ---
   { name: 'OPENROUTER_API_KEY', tier: 'required', purpose: 'LLM access — every query (no fallback)' },
   { name: 'MODEL_API_BASE_URL', tier: 'optional', purpose: 'Chat-completions endpoint override — any OpenAI-compatible endpoint (default: OpenRouter)', hasFallback: true },
-  { name: 'SOCRATA_MCP_URL', tier: 'required', purpose: 'Socrata MCP endpoint (the demo data source)', hasFallback: true },
+  // No coded fallback (#258 C4): the fallback used to point at the reference
+  // deployment's hosted endpoint, silently routing an unconfigured instance's
+  // queries through infrastructure it does not operate. Absent, every data
+  // query refuses with a typed error naming this variable.
+  { name: 'SOCRATA_MCP_URL', tier: 'required', purpose: 'Socrata MCP endpoint (the primary data source) — every data query refuses without it (no fallback)' },
 
   // --- Evidence publish + verify (the demo centerpiece: publish → badge) ---
   { name: 'DATABASE_URL', tier: 'required', purpose: 'Evidence DB — publish + dashboard + detail page' },
@@ -294,7 +298,9 @@ export const ENV_SPEC = [
   { name: 'TOKEN_LIMIT_PER_REQUEST', tier: 'optional', purpose: 'Streaming token budget per request (coded default)', hasFallback: true },
   { name: 'MAX_TOOL_RESULT_CHARS', tier: 'optional', purpose: 'Tool-result truncation budget (coded default)', hasFallback: true },
   { name: 'NEXT_PUBLIC_CAPTURE_TRACES', readBy: 'build', tier: 'optional', purpose: 'Dev-only BPMN trace capture toggle', hasFallback: true },
-  { name: 'NEXT_PUBLIC_SOCRATA_MCP_URL', readBy: 'build', tier: 'optional', purpose: 'Client-side Socrata MCP URL for notebook output links', hasFallback: true },
+  // NEXT_PUBLIC_SOCRATA_MCP_URL is gone (#258 C5): client surfaces now read
+  // the server-resolved SOCRATA_MCP_URL via McpRoutingProvider, so there is
+  // no second name for the same routing decision to drift from the first.
 
   // --- scripts/-only (not read by the app; enumerated for completeness) ---
   { name: 'EVAL_MODELS', readBy: 'external-tool', tier: 'optional', purpose: 'Model-eval harness roster (scripts/eval-models.mjs only)', hasFallback: true },

@@ -56,14 +56,39 @@ test('empty string and whitespace-only count as absent (not present)', () => {
 
 test('a required var with a coded fallback is soft when absent (fallbk, run still passes)', () => {
   const env = envWithAllRequired();
-  delete env.SOCRATA_MCP_URL; // required, but hasFallback (the hosted endpoint)
+  delete env.KV_REST_API_URL; // required, but hasFallback (in-process memory store)
   const result = evaluateEnv(env);
   assert.equal(result.ok, true, 'a fallback-backed required var does not fail the run');
   assert.equal(result.missingRequired.length, 0);
-  assert.deepEqual(result.requiredOnFallback.map((r) => r.name), ['SOCRATA_MCP_URL']);
+  assert.deepEqual(result.requiredOnFallback.map((r) => r.name), ['KV_REST_API_URL']);
   const report = renderReport(result);
   assert.match(report, /fallbk/);
   assert.match(report, /built-in fallback/);
+});
+
+test('#258 C4: SOCRATA_MCP_URL has NO coded fallback — absent, it is a hard miss that fails the run', () => {
+  // The entry used to carry `hasFallback: true`, pointing at a coded default
+  // of the reference deployment's hosted endpoint — which silently routed an
+  // unconfigured instance's queries through infrastructure it does not
+  // operate. That fallback is gone: the query path refuses per-request,
+  // naming this variable, so preflight must fail rather than soft-note.
+  const entry = ENV_SPEC.find((s) => s.name === 'SOCRATA_MCP_URL');
+  assert.equal(entry.tier, 'required');
+  assert.ok(!entry.hasFallback, 'SOCRATA_MCP_URL must not claim a coded fallback');
+
+  const env = envWithAllRequired();
+  delete env.SOCRATA_MCP_URL;
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.missingRequired.map((r) => r.name), ['SOCRATA_MCP_URL']);
+  assert.ok(!result.requiredOnFallback.some((r) => r.name === 'SOCRATA_MCP_URL'));
+});
+
+test('#258 C5: NEXT_PUBLIC_SOCRATA_MCP_URL is no longer part of the environment inventory', () => {
+  // The client reads the server-resolved SOCRATA_MCP_URL through
+  // McpRoutingProvider; a second NEXT_PUBLIC_* name for the same routing
+  // decision is exactly the split #258 C5 closed.
+  assert.ok(!ENV_SPEC.some((s) => s.name === 'NEXT_PUBLIC_SOCRATA_MCP_URL'));
 });
 
 test('EVIDENCE_KEY_ID has NO coded fallback: absent, it is a hard miss that fails the run', () => {

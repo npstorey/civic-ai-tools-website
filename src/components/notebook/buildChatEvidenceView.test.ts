@@ -6,7 +6,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChatEvidenceView } from './buildChatEvidenceView.ts';
+import { approximateMcpServers, buildChatEvidenceView } from './buildChatEvidenceView.ts';
 import { stampExecutedNotebook } from '../../lib/notebook-author/phase-d.ts';
 import { synthesizeNotebook } from '../../lib/notebook-author/synthesize.ts';
 import { SYNTHESIS_CELL_ROLE } from '../../lib/notebook-author/prompt.ts';
@@ -162,4 +162,20 @@ test('buildChatEvidenceView: fallback path — LLM omits structured blocks → r
   // No structured summary present → derivedSummary is empty too (no legacy
   // markdown cell to derive from now that synthesis is a code cell).
   assert.equal(view.derivedSummary, '');
+});
+
+test('#258 C5: approximateMcpServers shows the configured host and omits on honest absence', () => {
+  // Configured: the host of the SERVER-RESOLVED SOCRATA_MCP_URL (threaded
+  // through McpRoutingProvider), never a NEXT_PUBLIC_* twin or a fallback.
+  assert.deepEqual(
+    approximateMcpServers('data.cityofnewyork.us', 'https://socrata-mcp.example.org'),
+    ['socrata-mcp.example.org'],
+  );
+  // Unconfigured (null): empty list — the "MCP servers" row is omitted
+  // rather than showing a host this instance never configured.
+  assert.deepEqual(approximateMcpServers('data.cityofnewyork.us', null), []);
+  // The all-portals sentinel never lists a server, configured or not.
+  assert.deepEqual(approximateMcpServers('__all__', 'https://socrata-mcp.example.org'), []);
+  // An unparseable value passes through as-is (still the configured value).
+  assert.deepEqual(approximateMcpServers('data.cityofnewyork.us', 'not a url'), ['not a url']);
 });

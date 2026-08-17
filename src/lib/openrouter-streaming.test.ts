@@ -13,7 +13,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks } from './openrouter-streaming.ts';
 import { _resetDefaultModelClientForTests } from './model-client.ts';
-import type { ModelErrorCode, PanelType } from './streaming.ts';
+import type { StreamErrorCode, PanelType } from './streaming.ts';
 
 const FAKE_KEY = 'sk-or-test-obviously-fake-key-do-not-use';
 
@@ -24,7 +24,7 @@ const BOUNDED_MS = 5_000;
 interface RecordedError {
   panel: PanelType;
   message: string;
-  code?: ModelErrorCode;
+  code?: StreamErrorCode;
 }
 
 function makeCallbacks(errors: RecordedError[]): StreamCallbacks {

@@ -48,10 +48,20 @@ export interface CompleteEvent extends StreamEvent {
  */
 export type ModelErrorCode = 'model_not_configured' | 'model_auth_rejected';
 
+/**
+ * The full set of typed pre-flight configuration-refusal codes an `error`
+ * event may carry. Widens `ModelErrorCode` with:
+ * - `mcp_not_configured` — no MCP endpoint for the primary data source
+ *   (`SOCRATA_MCP_URL` missing or empty; #258 C4). Like the model codes,
+ *   detected on the request path before any upstream call — there is no
+ *   coded fallback host to route through instead.
+ */
+export type StreamErrorCode = ModelErrorCode | 'mcp_not_configured';
+
 export interface ErrorEvent extends StreamEvent {
   type: 'error';
   message: string;
-  code?: ModelErrorCode;
+  code?: StreamErrorCode;
 }
 
 // --- Friendly error copy -----------------------------------------------------
@@ -68,6 +78,7 @@ export type StreamErrorKind =
   | 'rate_limit'
   | 'model_not_configured'
   | 'model_auth_rejected'
+  | 'mcp_not_configured'
   | 'mcp_timeout'
   | 'mcp_unavailable'
   | 'connection'
@@ -94,7 +105,9 @@ function errorMessageOf(input: unknown): string {
 export function classifyStreamError(input: unknown): StreamErrorKind {
   if (input !== null && typeof input === 'object' && 'code' in input) {
     const code = (input as { code?: unknown }).code;
-    if (code === 'model_not_configured' || code === 'model_auth_rejected') return code;
+    if (code === 'model_not_configured' || code === 'model_auth_rejected' || code === 'mcp_not_configured') {
+      return code;
+    }
   }
 
   const status =
@@ -107,10 +120,11 @@ export function classifyStreamError(input: unknown): StreamErrorKind {
   if (!m) return 'generic';
 
   if (m.includes('rate limit') || m.includes('429')) return 'rate_limit';
-  // Message-shape fallback for the two credential failures, for paths that
-  // carry only a message (e.g. the non-streaming route's JSON error).
+  // Message-shape fallback for the typed configuration failures, for paths
+  // that carry only a message (e.g. a JSON error body rethrown as an Error).
   if (m.includes('no model api key') || m.includes('missing credentials')) return 'model_not_configured';
   if (m.includes('invalid api key') || m.includes('incorrect api key')) return 'model_auth_rejected';
+  if (m.includes('socrata_mcp_url')) return 'mcp_not_configured';
   if (m.includes('timed out') || m.includes('timeout') || m.includes('did not respond within')) return 'mcp_timeout';
   if (
     m.includes('unavailable') ||
@@ -146,6 +160,12 @@ const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
     'This server has no AI model API key configured, so queries can’t run. If you operate this instance, set OPENROUTER_API_KEY in the server environment and restart.',
   model_auth_rejected:
     'The AI model service rejected this server’s API key, so the query couldn’t run. If you operate this instance, check that OPENROUTER_API_KEY is valid for the configured endpoint.',
+  // Same operator-actionable register as the two credential kinds: this only
+  // appears on an instance with no data-source endpoint configured, where the
+  // reader is the person who can fix it. There is deliberately no fallback
+  // host to route through instead (#258 C4).
+  mcp_not_configured:
+    'This server has no live data source configured, so queries can’t run. If you operate this instance, set SOCRATA_MCP_URL in the server environment and restart.',
   mcp_timeout:
     'The live data source took too long to respond, so this query couldn’t finish. Try again in a moment, or narrow the question (for example, add a date range).',
   mcp_unavailable:
@@ -180,6 +200,13 @@ export function describeToolFailureForLlm(_toolName: string, input: unknown): st
       );
     case 'mcp_unavailable':
       return tellUser('The live data source is temporarily unavailable. Suggest trying again shortly.');
+    case 'mcp_not_configured':
+      // Backstop only: the routes refuse up front when no data source is
+      // configured (#258 C4), but if a tool call still fires the model must
+      // relay honest absence, not raw configuration detail.
+      return tellUser(
+        'This server has no live data source configured, so no data can be retrieved. Suggest contacting whoever operates this instance.',
+      );
     default:
       return tellUser('The request could not be completed. Suggest trying again.');
   }

@@ -40,7 +40,8 @@ import NotebookSection from '@/components/evidence/NotebookSection';
 import ChatSignersSection from './ChatSignersSection';
 import ChatCitationPreview from './ChatCitationPreview';
 import RenderingCellOutputs from './RenderingCellOutputs';
-import { buildChatEvidenceView } from './buildChatEvidenceView';
+import { approximateMcpServers, buildChatEvidenceView } from './buildChatEvidenceView';
+import { useSocrataMcpUrl } from '@/components/McpRoutingProvider';
 import type { Notebook } from '@/lib/notebook-author';
 import type { CapturedToolCall } from '@/hooks/useNotebookStream';
 
@@ -70,26 +71,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function formatHost(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
-}
-
-/** Derive an MCP-server-host string from the portal value the user picked.
- *  Phase 1 always uses the Socrata MCP server for `data.cityofnewyork.us`
- *  and similar portals. This is a chat-time approximation; on publish, the
- *  evidence package carries the real `org.civicaitools.environment.mcpServers`. */
-function approximateMcpServers(portal: string): string[] {
-  const servers: string[] = [];
-  if (portal && portal !== '__all__') {
-    servers.push(formatHost(process.env.NEXT_PUBLIC_SOCRATA_MCP_URL || 'https://socrata-mcp.civicaitools.org'));
-  }
-  return servers;
-}
-
 export default function ChatNotebookOutput({
   notebook,
   prompt,
@@ -111,7 +92,11 @@ export default function ChatNotebookOutput({
     composedSystemPromptHash,
     signingKeyId,
   });
-  const mcpServers = approximateMcpServers(portal);
+  // #258 C5: the server-resolved SOCRATA_MCP_URL, threaded through
+  // McpRoutingProvider — null (not configured) yields an empty list, and the
+  // "MCP servers" row below is omitted rather than showing a fallback host.
+  const socrataMcpUrl = useSocrataMcpUrl();
+  const mcpServers = approximateMcpServers(portal, socrataMcpUrl);
   const portalLabel = portal && portal !== '__all__' ? portal : 'all portals';
 
   // Phase 2a2 item 1: compute line count once for the disclosure label.

@@ -187,6 +187,34 @@ function extractExecutionExtension(notebook: Notebook): {
   };
 }
 
+/** Render a URL as its bare host; pass an unparseable value through as-is. */
+function formatHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Derive the MCP-server-host strings the chat output's "Model + environment"
+ * section shows, from the portal the user picked and the SERVER-RESOLVED
+ * Socrata MCP URL (threaded to the client via `McpRoutingProvider` — #258
+ * C5: one configured value reaches server and client; the client never reads
+ * a `NEXT_PUBLIC_*` twin). `null` means the instance configured no endpoint:
+ * the list is then empty and the surface omits its host mention entirely —
+ * honest absence, never a fallback host. This is a chat-time approximation;
+ * on publish, the package carries the real
+ * `org.civicaitools.environment.mcpServers`.
+ */
+export function approximateMcpServers(portal: string, socrataMcpUrl: string | null): string[] {
+  const servers: string[] = [];
+  if (portal && portal !== '__all__' && socrataMcpUrl !== null) {
+    servers.push(formatHost(socrataMcpUrl));
+  }
+  return servers;
+}
+
 export interface BuildChatEvidenceViewInput {
   notebook: Notebook;
   prompt: string;
