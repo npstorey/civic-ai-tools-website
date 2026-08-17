@@ -123,8 +123,9 @@ What you will see, and why it is correct:
   failure: analyses run, packages can be produced and inspected, and
   signing is a deliberate later step
   ([Instance identity and signing](#instance-identity-and-signing-go-to-production)).
-- Queries fail until you supply a model key (next step), with an error
-  that names the missing variable.
+- Queries fail until you supply a model key and a data-source endpoint
+  (next step), with an error that names the missing variable
+  (`OPENROUTER_API_KEY` / `SOCRATA_MCP_URL` — neither has a fallback).
 
 Verify the bring-up:
 
@@ -155,6 +156,12 @@ and never commit this file):
 ```bash
 # Model access — required for every query.
 OPENROUTER_API_KEY=<your-model-api-key>
+
+# Primary data source — required for every data query; no fallback. Set
+# it to the Socrata MCP deployment this instance should query. Pointing
+# it at another operator's endpoint means your users' queries route
+# through that host's infrastructure, not yours.
+SOCRATA_MCP_URL=<your-socrata-mcp-endpoint>
 
 # Real credentials replacing the compose file's placeholders. The S3
 # pair is both the app's access key AND MinIO's root user/password —
@@ -192,7 +199,7 @@ what your env file can do with it:
 
 | Spelling | What it means | Examples |
 | --- | --- | --- |
-| bare `NAME:` | Pass-through. Set in the container only when your environment has it, **absent otherwise** — which matters, because for several variables absence is the configured state, not a missing value. | `OPENROUTER_API_KEY`, the signing pair, `NEXTAUTH_SECRET`, the OAuth credentials, `CRON_SECRET`, `SIGN_IN_ALLOWLIST`, `ROADMAP_RAW_URL`, the host-topology trio, the registry-URL overrides, the branding set, the tuning knobs |
+| bare `NAME:` | Pass-through. Set in the container only when your environment has it, **absent otherwise** — which matters, because for several variables absence is the configured state, not a missing value. | `OPENROUTER_API_KEY`, `SOCRATA_MCP_URL`, the signing pair, `NEXTAUTH_SECRET`, the OAuth credentials, `CRON_SECRET`, `SIGN_IN_ALLOWLIST`, `ROADMAP_RAW_URL`, the host-topology trio, the registry-URL overrides, the branding set, the tuning knobs |
 | `${NAME:-default}` | Overridable, with a working local default if you say nothing. | the Postgres and object-store credentials (`POSTGRES_PASSWORD`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` — placeholder defaults you are expected to replace), host ports, bucket name, `S3_PUBLIC_BASE_URL`, `APP_BIND` / `APP_PORT`, the executor image tag, the identity variables that carry a local default, `NEXTAUTH_URL`, the GC knobs |
 | a literal value | Hardcoded wiring. Changing it means editing the compose file, not your env file. | the three driver selectors, `S3_ENDPOINT`, the constructed `DATABASE_URL` |
 
@@ -425,8 +432,8 @@ profile never reads:
 (the five: `BLOB_READ_WRITE_TOKEN`, `SANDBOX_SNAPSHOT_ID`, and the three
 `VERCEL_*` sandbox-auth variables). Exit code `0` means every required
 variable for the profile is present; `1` otherwise. Run with the
-stand-ins alone, it exits `1` naming exactly the twelve operator-supplied
-variables — `OPENROUTER_API_KEY`, `EVIDENCE_SIGNING_KEY`,
+stand-ins alone, it exits `1` naming exactly the thirteen operator-supplied
+variables — `OPENROUTER_API_KEY`, `SOCRATA_MCP_URL`, `EVIDENCE_SIGNING_KEY`,
 `EVIDENCE_KEY_ID`, the instance-identity set (`EVIDENCE_SITE_ORIGIN`,
 `EVIDENCE_SIGNER_BINDING_TIER`, `EVIDENCE_SIGNER_IDENTIFIER`,
 `EVIDENCE_SIGNER_DISPLAY_NAME`, `EVIDENCE_PLATFORM_AGENT_TITLE` — see
@@ -474,11 +481,7 @@ for your driver are hard requirements of the evidence path.)
 | Variable | Absent means |
 | --- | --- |
 | `OPENROUTER_API_KEY` | Every query fails fast with the typed error above. No fallback. |
-
-`SOCRATA_MCP_URL` (the demo data source) has a coded fallback to the
-project's hosted endpoint, so queries work without it — but they are
-then leaving your infrastructure; a fully self-contained instance sets
-it to its own Socrata MCP deployment.
+| `SOCRATA_MCP_URL` | Every data query refuses with a typed error naming this variable. No fallback — this used to default to the project's hosted endpoint, which silently routed an unconfigured instance's queries through infrastructure it does not operate. Set it to the Socrata MCP deployment this instance should query. Pointing it at another operator's endpoint (the project's hosted one included) is a real choice, but understand what it means: your users' queries route through that host's infrastructure, not yours. |
 
 **Absence disables a specific feature** (the app runs; the feature
 doesn't):

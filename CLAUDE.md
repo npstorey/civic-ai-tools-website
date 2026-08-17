@@ -213,7 +213,7 @@ This is the local-dev set for the reference deployment; the full tier-by-tier en
 Required in `.env.local`:
 ```
 OPENROUTER_API_KEY=sk-or-...
-SOCRATA_MCP_URL=https://socrata-mcp-server.onrender.com
+SOCRATA_MCP_URL=https://socrata-mcp.civicaitools.org  # Required, no fallback — every data query refuses without it (#258)
 DATA_COMMONS_MCP_URL=https://api.datacommons.org/mcp
 DATA_COMMONS_API_KEY=                # From https://apikeys.datacommons.org (free)
 GITHUB_CLIENT_ID=
