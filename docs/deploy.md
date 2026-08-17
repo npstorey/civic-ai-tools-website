@@ -425,10 +425,14 @@ profile never reads:
 (the five: `BLOB_READ_WRITE_TOKEN`, `SANDBOX_SNAPSHOT_ID`, and the three
 `VERCEL_*` sandbox-auth variables). Exit code `0` means every required
 variable for the profile is present; `1` otherwise. Run with the
-stand-ins alone, it exits `1` naming exactly the seven operator-supplied
+stand-ins alone, it exits `1` naming exactly the twelve operator-supplied
 variables — `OPENROUTER_API_KEY`, `EVIDENCE_SIGNING_KEY`,
-`EVIDENCE_KEY_ID`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`,
-`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`.
+`EVIDENCE_KEY_ID`, the instance-identity set (`EVIDENCE_SITE_ORIGIN`,
+`EVIDENCE_SIGNER_BINDING_TIER`, `EVIDENCE_SIGNER_IDENTIFIER`,
+`EVIDENCE_SIGNER_DISPLAY_NAME`, `EVIDENCE_PLATFORM_AGENT_TITLE` — see
+[Instance identity and signing](#instance-identity-and-signing-go-to-production)),
+`NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `GITHUB_CLIENT_ID`,
+`GITHUB_CLIENT_SECRET`.
 
 **Read preflight's "required" tier honestly.** It is the
 full-production bar, not the boot bar. Nothing on the list prevents the
@@ -481,7 +485,7 @@ doesn't):
 
 | Variable(s) | Feature disabled when absent |
 | --- | --- |
-| `EVIDENCE_SIGNING_KEY` + `EVIDENCE_KEY_ID` | Evidence seal and publish. **All-or-nothing: both are required, and neither has a coded default.** With neither set the instance stays in the unsigned tier (banner shows, seal and publish gated off). With the key set but no `EVIDENCE_KEY_ID` it still cannot publish — it refuses rather than sign under a key id it never declared, since a kid it did not configure would misattribute the signature and fail verification. |
+| `EVIDENCE_SIGNING_KEY` + `EVIDENCE_KEY_ID` + the instance-identity set (`EVIDENCE_SITE_ORIGIN`, `EVIDENCE_SIGNER_BINDING_TIER`/`_IDENTIFIER`/`_DISPLAY_NAME`, `EVIDENCE_PLATFORM_AGENT_TITLE`) | Evidence seal and publish. **All-or-nothing: every member is required, and none has a coded default.** With none set the instance stays in the unsigned tier (banner shows, seal and publish gated off) — and unsigned surfaces honestly *omit* instance attribution rather than substitute anyone else's. With the key set but no `EVIDENCE_KEY_ID` it refuses (`signing_key_id_missing`) rather than sign under a key id it never declared. With the pair set but the identity set incomplete it refuses (`instance_identity_missing`, naming the exact missing variables) rather than emit signed output carrying an origin, signer, or registry this instance never configured — either substitution would misattribute the publisher and fail verification. |
 | `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and an OAuth app (`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` or the `OIDC_*` set) | Sign-in — and with it the sign-in-gated notebook execution feature, the dashboard, and the higher authenticated rate limit. |
 | `DATA_COMMONS_MCP_URL` + `DATA_COMMONS_API_KEY` | The Data Commons data source — its tool calls fail without the key (the hosted endpoint mandates it). `DC_API_KEY` is the separate key passed into *executed notebooks* for their own Data Commons requests. |
 | `BOSTON_OPENCONTEXT_MCP_URL` | The Boston OpenContext data source. |
@@ -492,10 +496,12 @@ doesn't):
 | `ROADMAP_RAW_URL` | `/roadmap` — absent, the page states that this instance has published no roadmap and the Roadmap link leaves the header and footer nav. An instance serves its own roadmap or none; there is no upstream fallback. |
 
 **Merely overrides a default.** Everything else, including:
-`MODEL_API_BASE_URL` (endpoint override), the instance-identity set
-(`EVIDENCE_SITE_ORIGIN`, `EVIDENCE_SIGNER_*`, `EVIDENCE_PLATFORM_AGENT_*`,
-`EVIDENCE_PUBLICATION_HOST`, the registry-URL overrides — with none set,
-the demo deployment's values are emitted; see
+`MODEL_API_BASE_URL` (endpoint override), the *derived* identity
+overrides (`EVIDENCE_PUBLICATION_HOST`, the registry-URL overrides,
+`EVIDENCE_PLATFORM_AGENT_ID`, `EVIDENCE_PLATFORM_AGENT_URL` — each
+derives from the required identity set above when unset: host and URLs
+from the origin, the agent id from the host; the *required* identity set
+itself is in the disable-when-absent table, not here — see
 [`docs/instance-setup.md`](instance-setup.md)), the chrome-branding set
 (`SITE_BRAND_NAME`, `SITE_BRAND_ACCENT`, `SITE_BRAND_TAGLINE`,
 `SITE_BRAND_ATTRIBUTION` — with none set, the demo chrome renders
@@ -830,10 +836,17 @@ smoke-test a publish). Key changes after that follow
 Two facts worth restating from the deploy side:
 
 - With the signing pair unset, the compose stack runs the unsigned tier
-  correctly — this guide's bring-up **is** the unsigned tier. Configuring
-  signing is what makes the seal/publish actions reachable, and it takes
-  **both** variables: an instance with a key but no `EVIDENCE_KEY_ID` refuses
-  to publish rather than sign under an undeclared key id.
+  correctly — this guide's bring-up **is** the unsigned tier (instance
+  attribution is then honestly omitted from unsigned surfaces, never
+  defaulted). Configuring signing is what makes the seal/publish actions
+  reachable, and it takes the **whole set**: the key, the key id, and the
+  instance-identity variables (`EVIDENCE_SITE_ORIGIN`, the
+  `EVIDENCE_SIGNER_*` triple, `EVIDENCE_PLATFORM_AGENT_TITLE`). An
+  instance with a key but no `EVIDENCE_KEY_ID` refuses to publish rather
+  than sign under an undeclared key id; one with the pair but an
+  incomplete identity set refuses (`instance_identity_missing`, naming
+  the exact missing variables) rather than emit signed output under an
+  identity it never configured.
 - `EVIDENCE_SIGNING_KEY` is the most sensitive value your instance
   holds. Keep it in your secret manager; never commit it, paste it into
   an agent session, or bake it into an image.
