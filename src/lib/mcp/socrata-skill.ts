@@ -20,23 +20,24 @@
 import { callMcpPrompt, getServerInstructions } from './client.ts';
 import { DATA_COMMONS_SKILL } from './data-commons-skill.ts';
 import { BOSTON_OPENCONTEXT_SKILL } from './boston-skill.ts';
-// Instance-identity config (ADR-0020): skill text lands inside signed
-// packages (skillMetadata.skillText + skill.text_hash), so the demo-host
-// mention below resolves through config. Evaluated at MODULE LOAD (the
-// constant is a template literal) — boot-time env; with no identity declared
-// the host mention is honestly OMITTED (#258), never defaulted.
-// CAVEATS (flagged in the S3a P2 phase record): `npm run sync-fallback`
-// rewrites this constant's entire body from the MCP server and would clobber
-// the interpolation; the primary runtime path also fetches skill text from
-// the MCP server, whose copy of this line is outside this repo.
-import { getPublicationHost } from '../site-config.ts';
 
-// Fallback constant used when the MCP server is unreachable.
-// NOTE: This may be stale — it was last synced at PR #19 and may be missing
-// guidance added since then (pagination, date interpretation, clarification,
-// planning/phase narration). The runtime fetches fresh guidance from the MCP
-// server's prompt endpoint; this fallback only activates if that fetch fails.
-// To sync: npm run sync-fallback
+// Fallback constant used when the MCP server is unreachable. The runtime
+// fetches fresh guidance from the MCP server's prompt endpoint; this fallback
+// only activates if that fetch fails.
+//
+// GENERIC-ONLY, by design (sprint 154 P4, portability charter): the web-overlay
+// portion below tracks the deployment-NEUTRAL overlay from the source-of-truth
+// skill docs in the civic-ai-tools repo —
+// https://github.com/npstorey/civic-ai-tools/blob/main/docs/skills/README.md
+// — and carries no deployment posture (no host names, no demo-limit numbers,
+// no CTA links). Posture overlays are appended by the MCP server at serve time
+// (SKILL_POSTURE); deployment limits are enforced server-side, so the fallback
+// losing the reference deployment's limits prose on this rare path is accepted.
+//
+// Updates are HAND-SHAPED under test coverage (instance-config.test.ts,
+// skill-instance-config.test.ts) — NOT via scripts/sync-fallback.mjs, whose
+// verbatim-paste model predates the posture split and the fallback's
+// structural adaptations (see that script's header).
 export const SOCRATA_SKILL_FALLBACK = `
 # Socrata MCP Companion Skill — Base Guidance
 
@@ -369,7 +370,7 @@ ORDER BY total_requests DESC
 
 # Socrata MCP Skill — Web Overlay
 
-> Applies to: Web demo${getPublicationHost() ? ` (${getPublicationHost()})` : ''} and other HTTP-connected clients.
+> Applies to: HTTP-connected web clients, on any deployment of the web app.
 
 ## Date Filter Enforcement
 
@@ -378,30 +379,23 @@ ORDER BY total_requests DESC
 If a user's question is open-ended (e.g., "What are the top complaints in NYC?"), default to the last 30 days and tell them:
 - That you scoped to the last 30 days for performance
 - They can ask for a different range
-- For all-time analysis, suggest using the local CLI tools
+- For all-time analysis, suggest using a local (stdio) client
 
-## Web Demo Limits
+## Deployment Limits
 
-This is a public demo with shared resources. Enforce these limits:
-
-- **Result sets**: Limit queries to 10,000 rows max. If more data is needed, suggest narrowing the date range or filters.
-- **Tool calls per response**: Keep to 5 or fewer tool calls. If a query would require more, simplify or break it into follow-up questions.
-- **Response length**: Keep responses concise and token-conscious. Prefer tables and bullet points over long prose. Aim for key findings, not exhaustive analysis.
-- **No cross-portal comparisons**: Do not compare data across multiple cities in a single response. Each city query consumes resources — suggest the user ask about one city at a time, or use the local CLI tools for multi-city analysis.
+Follow the limits your deployment declares; where none are declared, prefer conservative defaults appropriate to shared web environments — modest result sets, few tool calls per response, and concise output.
 
 ## Token-Conscious Formatting
 
 - Lead with the answer, then supporting data
 - Use compact tables rather than verbose explanations
-- Limit to 3–5 key findings per response
+- Keep to a small set of key findings per response
 - Skip the full "Methodology" section — include a brief "Data source" line instead
 - Omit the "Queries Used" table unless the user asks for it
 
-## Local Tools CTA
+## Suggesting a Local Client
 
-When a user hits a limit (complex multi-city query, long date range, deep analysis), suggest:
-
-> For more complex analysis — like cross-city comparisons, longer date ranges, or deeper dives — try the Civic AI Tools CLI (https://github.com/npstorey/civic-ai-tools), which connects directly to these same data sources with no demo limits.
+When a user hits a limit (complex multi-city query, long date range, deep analysis), suggest a local (stdio) client for heavier analysis — local clients connect directly to the same data sources without web-environment constraints. Keep the suggestion neutral unless your deployment declares a specific alternative.
 `;
 
 export const getSkillForPortal = (portal: string): string => {
