@@ -10,6 +10,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildProvenanceGraph } from './provenance.ts';
+// The graph-build config is otherwise a P1-parameterization concern
+// (`../packager.ts` supplies the per-instance version); these tests exercise
+// the builder directly, so they take the harness's own demo default
+// explicitly rather than relying on the harness's implicit default.
+import { CIVICAITOOLS_PROVENANCE_CONFIG } from '@typedstandards/civic-typed-harness';
 
 interface SpanStub {
   name: string;
@@ -74,14 +79,14 @@ function mcpAgents(graph: Array<{ '@id': string; [k: string]: unknown }>): strin
 
 test('Data-Commons-only analysis emits only the data-commons MCP agent', () => {
   const trace = traceOf([skillSpan('skill-hash'), toolSpan('data-commons', 'get_observations', 'span-1')]);
-  const graph = buildProvenanceGraph(trace, BASE_INPUT);
+  const graph = buildProvenanceGraph(trace, BASE_INPUT, CIVICAITOOLS_PROVENANCE_CONFIG);
   const agents = mcpAgents(graph['@graph']);
   assert.deepEqual(agents, ['urn:civic-evidence:mcp-server:data-commons']);
 });
 
 test('Socrata-only analysis emits only the socrata MCP agent', () => {
   const trace = traceOf([skillSpan('skill-hash'), toolSpan('socrata', 'get_data', 'span-1')]);
-  const graph = buildProvenanceGraph(trace, BASE_INPUT);
+  const graph = buildProvenanceGraph(trace, BASE_INPUT, CIVICAITOOLS_PROVENANCE_CONFIG);
   const agents = mcpAgents(graph['@graph']);
   assert.deepEqual(agents, ['urn:civic-evidence:mcp-server:socrata']);
 });
@@ -92,7 +97,7 @@ test('Multi-source analysis emits both MCP agents', () => {
     toolSpan('socrata', 'get_data', 'span-1'),
     toolSpan('data-commons', 'get_observations', 'span-2'),
   ]);
-  const graph = buildProvenanceGraph(trace, BASE_INPUT);
+  const graph = buildProvenanceGraph(trace, BASE_INPUT, CIVICAITOOLS_PROVENANCE_CONFIG);
   const agents = mcpAgents(graph['@graph']);
   assert.equal(agents.length, 2);
   assert.ok(agents.includes('urn:civic-evidence:mcp-server:socrata'));
@@ -101,7 +106,7 @@ test('Multi-source analysis emits both MCP agents', () => {
 
 test('Boston OpenContext only analysis emits only the boston-opencontext MCP agent with correct title', () => {
   const trace = traceOf([skillSpan('skill-hash'), toolSpan('boston-opencontext', 'ckan__search_datasets', 'span-1')]);
-  const graph = buildProvenanceGraph(trace, BASE_INPUT);
+  const graph = buildProvenanceGraph(trace, BASE_INPUT, CIVICAITOOLS_PROVENANCE_CONFIG);
   const agents = mcpAgents(graph['@graph']);
   assert.deepEqual(agents, ['urn:civic-evidence:mcp-server:boston-opencontext']);
 
@@ -121,7 +126,7 @@ test('Three-source analysis emits all three MCP agents, no stray sources', () =>
     toolSpan('data-commons', 'get_observations', 'span-2'),
     toolSpan('boston-opencontext', 'ckan__aggregate_data', 'span-3'),
   ]);
-  const graph = buildProvenanceGraph(trace, BASE_INPUT);
+  const graph = buildProvenanceGraph(trace, BASE_INPUT, CIVICAITOOLS_PROVENANCE_CONFIG);
   const agents = mcpAgents(graph['@graph']);
   assert.equal(agents.length, 3);
   assert.ok(agents.includes('urn:civic-evidence:mcp-server:socrata'));
@@ -133,7 +138,7 @@ test('Skill fetched but no tool calls emits no MCP agent', () => {
   // Regression: pre-M9.3 behaviour always added a socrata agent here even
   // though nothing was ever queried. New rule: no tool calls → no MCP agent.
   const trace = traceOf([skillSpan('skill-hash')]);
-  const graph = buildProvenanceGraph(trace, BASE_INPUT);
+  const graph = buildProvenanceGraph(trace, BASE_INPUT, CIVICAITOOLS_PROVENANCE_CONFIG);
   assert.deepEqual(mcpAgents(graph['@graph']), []);
 });
 
@@ -153,6 +158,6 @@ test('Pre-M9.1 Socrata span without mcp.source attribute still emits the socrata
     }),
   };
   const trace = traceOf([skillSpan('skill-hash'), legacyToolSpan]);
-  const graph = buildProvenanceGraph(trace, BASE_INPUT);
+  const graph = buildProvenanceGraph(trace, BASE_INPUT, CIVICAITOOLS_PROVENANCE_CONFIG);
   assert.deepEqual(mcpAgents(graph['@graph']), ['urn:civic-evidence:mcp-server:socrata']);
 });
