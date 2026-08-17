@@ -515,6 +515,8 @@ exactly the pre-allowlist behavior; see the sign-in section),
 the host-topology set (`APP_HOST`, `MARKETING_HOST`, `APP_ONLY` — with
 none set, every route serves on every host, exactly the single-host
 behavior; see [Host topology](#host-topology-optional)),
+`SITE_NOINDEX` (unset/empty = indexable, the standard web default; see
+[Indexing](#indexing-optional)),
 the remaining content-source overrides (`DIRECTORY_DATA_URL`,
 `ROADMAP_GITHUB_URL` — with `DIRECTORY_DATA_URL` unset, `/directory`
 serves the shared community index with attribution; `ROADMAP_GITHUB_URL`
@@ -762,6 +764,48 @@ Two split-host behaviors follow automatically from the same variables
   of "Sign in" for a visitor who already has a session on the app host.
   With no marketing origin configured the endpoint emits no CORS
   headers at all and no probe ever fires.
+
+## Indexing (optional)
+
+By default an instance is indexable — no `robots.txt` disallow, no noindex
+page metadata — the standard web default. Every instance used to hardcode
+the opposite: a permanent `Disallow: /` and `robots: { index: false, follow:
+false }`, undocumented, with no way to opt in (#258 finding E1, owner ruling
+G0-3). One variable now controls it.
+
+| Variable | Meaning |
+| --- | --- |
+| `SITE_NOINDEX` | `1` or `true`: this instance blocks crawler indexing. `robots.txt` (`src/app/robots.ts`) disallows every path for every user agent, and the root layout's page metadata (`src/app/layout.tsx`) carries `index: false, follow: false`. Unset/empty: `robots.txt` explicitly allows every path and no robots metadata renders at all. |
+
+Both surfaces resolve through one shared, unit-tested core
+([`src/lib/site-indexing.ts`](../src/lib/site-indexing.ts)) so they cannot
+disagree — there is no way for `robots.txt` to allow indexing while the page
+metadata says otherwise, or vice versa. This is chrome/ops configuration,
+like the host-topology and branding sets above: it is never emitted into
+signed evidence output, and no signing or verification path reads it.
+
+`robots.txt` is a dynamic metadata route, not a static file — a static
+`public/robots.txt` would shadow the route entirely, which is why the old
+one was deleted rather than left in place. It forces per-request evaluation
+(`export const dynamic = 'force-dynamic'`) specifically so the platform
+reads the live server environment on every request rather than caching a
+build-time snapshot of whichever value `SITE_NOINDEX` happened to hold at
+build.
+
+The page metadata half does not have that option — it is baked at `next
+build` for every statically prerendered page, the same build-time-plus-
+runtime caveat documented in [Branding and
+theming](#branding-and-theming-chrome-only) and in [Environment reference,
+tier by tier](#environment-reference-tier-by-tier)'s "One build-time
+caveat" note for `NEXT_PUBLIC_*` values above (this variable is not
+`NEXT_PUBLIC_*`, but the same "prerendered pages bake it, dynamic pages
+read it live" split applies). Set `SITE_NOINDEX` **in the build environment
+as well as at run time** if you want the page metadata to agree with
+`robots.txt` on every route, including statically prerendered ones. On the
+compose path that is the usual one-file, one-command story: `SITE_NOINDEX`
+appears in both the app service's `build.args` and its `environment`,
+resolved from your `--env-file`, so `docker compose --env-file … up -d
+--build` supplies both sides at once.
 
 ## Database and migrations
 
