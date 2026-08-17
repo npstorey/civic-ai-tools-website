@@ -230,22 +230,37 @@ test('absence: notebook surfaces honestly OMIT attribution (no host, no title, n
   });
 });
 
-test('skill text: with no config the host mention is omitted at module load', async () => {
+test('skill text: with no config no host appears, and the fallback is generic-only', async () => {
   // The skill constants are module-level template literals — this first (and
-  // only) import in this process happens under a cleared identity env, so the
-  // baked strings honestly omit the host. The override direction is proven in
-  // src/lib/mcp/skill-instance-config.test.ts (its own process sets the env
-  // BEFORE importing).
+  // only) import in this process happens under a cleared identity env.
+  // DATA_COMMONS_SKILL interpolates the instance host and must honestly omit
+  // it here; SOCRATA_SKILL_FALLBACK is generic-only post-P4 (sprint 154) —
+  // host-free and posture-free under EVERY env. The override direction is
+  // proven in src/lib/mcp/skill-instance-config.test.ts (its own process sets
+  // the env BEFORE importing).
   await withIdentityEnvAsync({}, async () => {
     const { SOCRATA_SKILL_FALLBACK } = await import('../mcp/socrata-skill.ts');
     const { DATA_COMMONS_SKILL } = await import('../mcp/data-commons-skill.ts');
     assert.ok(
       SOCRATA_SKILL_FALLBACK.includes(
-        'Applies to: Web demo and other HTTP-connected clients.',
+        'Applies to: HTTP-connected web clients, on any deployment of the web app.',
       ),
-      'fallback skill should omit the host with no identity declared',
+      'fallback skill should carry the host-free generic Applies-to line',
     );
     assert.ok(!SOCRATA_SKILL_FALLBACK.includes('civicaitools.org'));
+    // Generic-only: no reference-demo posture text on the fallback path.
+    for (const marker of [
+      'This is a public demo',
+      'github.com/npstorey/civic-ai-tools',
+      'Web Demo Limits',
+      'Reference-Demo Posture',
+      'Local Tools CTA',
+    ]) {
+      assert.ok(
+        !SOCRATA_SKILL_FALLBACK.includes(marker),
+        `fallback skill must not contain posture marker: ${marker}`,
+      );
+    }
     assert.ok(
       DATA_COMMONS_SKILL.includes(
         'published as an evidence package, the evidence chain captures',
