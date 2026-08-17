@@ -11,7 +11,7 @@ import type { ProgressLogEntry, ProgressGroup, ToolCall, EvidenceTrace } from '@
 import { useSession, signIn } from 'next-auth/react';
 import { useHostLinks } from '@/components/HostLinksProvider';
 import { useSignInOptions } from '@/components/SignInOptionsProvider';
-import { toDisplayHost, useEvidenceSiteOrigin } from '@/components/EvidenceOriginProvider';
+import { useInstanceAttribution } from '@/components/EvidenceOriginProvider';
 import { resolveSignInAffordance } from '@/lib/auth-provider-options';
 import PublishEvidenceDialog from '@/components/PublishEvidenceDialog';
 
@@ -406,12 +406,15 @@ export default function McpResponseDisplay({
   // #229 P1: the publish button's signed-out, in-place branch starts the
   // provider this instance actually configured — not a hardcoded one (Q63).
   const signInAffordance = resolveSignInAffordance(useSignInOptions());
-  // Instance identity (#227 class): the copied output's attribution line
-  // names the instance the analysis was generated on. That travels off-site
-  // with the copied text — the same identity a published record carries — so
-  // it is evidence identity, not chrome, per brand-config.ts's chrome-vs-
-  // evidence line, and reads EvidenceOriginProvider. Host only, as before.
-  const attributionHost = toDisplayHost(useEvidenceSiteOrigin());
+  // Instance identity (#227 class, #258 A2): the copied output's attribution
+  // line and the downloaded notebook's attribution cells name the instance
+  // the analysis was generated on. That travels off-site — the same identity
+  // a published record carries — so it is evidence identity, not chrome, per
+  // brand-config.ts's chrome-vs-evidence line, and reads
+  // EvidenceOriginProvider (server-resolved; env never reaches this bundle).
+  // Null members mean "not configured": attribution is then omitted.
+  const instanceAttribution = useInstanceAttribution();
+  const attributionHost = instanceAttribution.host;
 
   // Use parent-controlled state if provided, otherwise local
   const publishDialogOpen = publishDialogOpenProp ?? publishDialogOpenLocal;
@@ -744,8 +747,11 @@ export default function McpResponseDisplay({
                   }
                   if (parts.length > 0) parts.push('---');
                   parts.push(content);
-                  // Attribution
-                  parts.push(`\n_Generated via ${attributionHost} \u00b7 ${new Date().toLocaleDateString()}_`);
+                  // Attribution: only when this instance declared an
+                  // identity; honest omission otherwise (#258 A2).
+                  if (attributionHost) {
+                    parts.push(`\n_Generated via ${attributionHost} \u00b7 ${new Date().toLocaleDateString()}_`);
+                  }
                   await navigator.clipboard.writeText(parts.join('\n\n'));
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
@@ -789,7 +795,7 @@ export default function McpResponseDisplay({
               <button
                 onClick={() => {
                   const p = (toolsCalled.find(t => t.args.portal)?.args.portal as string) || portal || 'data.cityofnewyork.us';
-                  const notebook = generateNotebook(queryText || '', p, toolsCalled, content);
+                  const notebook = generateNotebook(queryText || '', p, toolsCalled, content, instanceAttribution);
                   downloadNotebook(notebook);
                 }}
                 style={{

@@ -37,6 +37,20 @@
 // identity. That is a misattribution and verifiability defect (the private
 // key is never involved — a clone always supplies its own). There is now no
 // case in which an instance emits a kid it did not configure.
+//
+// IDENTITY IS THE THIRD LEG (#258). The same doctrine now covers the
+// instance-identity set (INSTANCE_IDENTITY_REQUIRED_VARS in site-config.ts):
+// signed output names the publisher's origin, signer, trust registry, and
+// platform agent, and those used to default to the reference deployment's
+// values. A signing pair with no declared identity is refused
+// (`instance_identity_missing`, naming the exact missing variables) rather
+// than signed under someone else's name.
+
+// Identity is the THIRD leg of go-to-production (#258, portability-audit
+// findings A1/A2): custody (key) + declared kid + declared instance
+// identity. The required-variable list lives beside the getters it governs
+// (site-config.ts) so the two cannot drift.
+import { INSTANCE_IDENTITY_REQUIRED_VARS } from '../site-config.ts';
 
 type EnvLike = Record<string, string | undefined>;
 
@@ -71,6 +85,22 @@ export function isSigningConfigured(env: EnvLike = process.env): boolean {
   return isSigningKeyConfigured(env) && isSigningKeyIdConfigured(env);
 }
 
+/**
+ * The instance-identity variables (site-config.ts) NOT set in `env` — empty
+ * when the identity is fully declared. Presence-only, like everything here.
+ * A signing instance without these would emit another deployment's identity
+ * into signed output (#258 A1), so the seal/commit gate refuses on any
+ * non-empty result, naming exactly these variables.
+ */
+export function missingInstanceIdentityVars(env: EnvLike = process.env): string[] {
+  return INSTANCE_IDENTITY_REQUIRED_VARS.filter((name) => !isPresent(env[name]));
+}
+
+/** Whether this instance has declared its identity (all required vars set). */
+export function isInstanceIdentityConfigured(env: EnvLike = process.env): boolean {
+  return missingInstanceIdentityVars(env).length === 0;
+}
+
 /** The refusal a seal/commit attempt receives in the unsigned tier. */
 export interface SealCommitGateRefusal {
   status: number;
@@ -86,7 +116,8 @@ export interface SealCommitGateRefusal {
  * Decision C an unsigned package may reach neither state, so the whole
  * persist action is gated, not just one visibility value.
  *
- * Two distinct refusals, because they are two distinct operator situations:
+ * Three distinct refusals, because they are three distinct operator
+ * situations:
  *
  *   - `unsigned_tier` (403) — no signing key at all. A legitimate tier;
  *     signing is the go-to-production step the operator has not taken yet.
@@ -94,11 +125,38 @@ export interface SealCommitGateRefusal {
  *     legitimate state: the operator intends to sign and the instance is
  *     misconfigured, so this is a server fault, named specifically rather
  *     than folded into the tier message an operator has already moved past.
+ *   - `instance_identity_missing` (500) — the signing pair is configured but
+ *     the instance-identity set (#258) is not. Also not a legitimate state:
+ *     signed output would have to name an origin, signer, and registry this
+ *     instance never declared, and there is no coded default to fill them
+ *     with — the reference deployment's values were removed from the runtime
+ *     path precisely so they cannot be substituted here. The refusal names
+ *     EXACTLY the missing variables.
  */
 export function evaluateSealCommitGate(
   env: EnvLike = process.env,
 ): SealCommitGateRefusal | null {
-  if (isSigningConfigured(env)) return null;
+  if (isSigningConfigured(env)) {
+    const missing = missingInstanceIdentityVars(env);
+    if (missing.length === 0) return null;
+    return {
+      status: 500,
+      body: {
+        error:
+          'This instance can sign but has not declared its identity: ' +
+          `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not ` +
+          'set in this environment. Sealing and publishing are refused ' +
+          'rather than emitted under an identity this instance never ' +
+          'configured — signed output naming an origin, signer, or trust ' +
+          'registry that is not yours misattributes the publisher and ' +
+          "cannot verify against this instance's registry. (The signing key " +
+          'itself is unaffected: this is a misattribution and verifiability ' +
+          'failure, not a key disclosure.) Set the missing variable(s) — ' +
+          'see docs/instance-setup.md.',
+        code: 'instance_identity_missing',
+      },
+    };
+  }
 
   if (isSigningKeyConfigured(env)) {
     return {
@@ -173,13 +231,23 @@ export function evaluateUnsignedRecordPublishGate(
  *     environment, dev included: it is not an intended state anywhere, and
  *     dev is precisely where an operator wiring signing up should see it
  *     before the same half-configuration reaches a deploy.
+ *   - `identity_missing` — the signing pair is configured but the instance-
+ *     identity set (#258) is not. Same treatment as `no_key_id`, for the same
+ *     reason: a can-sign-but-cannot-emit-honestly instance is a
+ *     misconfiguration everywhere, and every seal/publish attempt will be
+ *     refused with `instance_identity_missing`.
  */
-export type UnsignedIndicatorReason = 'no_signing_key' | 'no_key_id';
+export type UnsignedIndicatorReason =
+  | 'no_signing_key'
+  | 'no_key_id'
+  | 'identity_missing';
 
 export function resolveUnsignedIndicator(
   env: EnvLike = process.env,
 ): UnsignedIndicatorReason | null {
-  if (isSigningConfigured(env)) return null;
+  if (isSigningConfigured(env)) {
+    return isInstanceIdentityConfigured(env) ? null : 'identity_missing';
+  }
   if (isSigningKeyConfigured(env)) return 'no_key_id';
   if (env.NODE_ENV === 'development' || env.NODE_ENV === 'test') return null;
   return 'no_signing_key';

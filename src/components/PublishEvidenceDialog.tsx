@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
 import { generateNotebook } from '@/lib/notebook';
+import { useInstanceAttribution } from '@/components/EvidenceOriginProvider';
 import type { Notebook } from '@/lib/notebook-author/cells';
 import { normalizeVisibility, type Visibility } from '@/lib/evidence/visibility';
 
@@ -47,6 +48,13 @@ export default function PublishEvidenceDialog({
   executedNotebook,
   initialSummary,
 }: PublishEvidenceDialogProps) {
+  // Instance attribution for the skeleton notebook (#258 A2): threaded from
+  // the server via EvidenceOriginProvider — this is a client component, so
+  // the site-config getters would read nothing here. The skeleton lands
+  // inside the signed package, and a publish on an identity-less instance is
+  // refused server-side (`instance_identity_missing`) before it could matter.
+  const instanceAttribution = useInstanceAttribution();
+
   const defaultTitle = queryText.length > 80
     ? queryText.slice(0, 77) + '...'
     : queryText;
@@ -156,7 +164,7 @@ export default function PublishEvidenceDialog({
       // Only chat-flow sessions, which never had an executed artifact,
       // generate the skeleton notebook (`notebookProvenance: "skeleton"`
       // semantics per Q31).
-      const notebook = executedNotebook ?? generateNotebook(queryText, portal, toolCalls, output);
+      const notebook = executedNotebook ?? generateNotebook(queryText, portal, toolCalls, output, instanceAttribution);
 
       // captureMethod (ADR-0003/0011) is `chat-flow-stream` for BOTH paths
       // through this dialog: the platform captured the model's bytes at the

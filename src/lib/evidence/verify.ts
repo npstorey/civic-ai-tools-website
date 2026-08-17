@@ -51,12 +51,19 @@ const registryCache: Map<string, CacheEntry> = new Map();
 
 /** Resolve the URL for the platform trust registry. Can be overridden via
  *  `EVIDENCE_TRUST_REGISTRY_URL` for previews or local dev. The fallback
- *  tail is the instance's configured origin (ADR-0020; demo default
- *  `https://civicaitools.org` — see `src/lib/site-config.ts`). */
+ *  tail is the instance's configured origin (ADR-0020), then the reference
+ *  origin literal — the VERIFY path's historical resolution, deliberately
+ *  byte-identical across #258 (which removed identity defaults from
+ *  signing/emission paths only; this resolution's defects are a separate
+ *  charter). In practice the HTTP fetch this URL feeds is the last resort
+ *  behind the bundled and on-disk registries below. */
 export function getTrustRegistryUrl(): string {
   const override = process.env.EVIDENCE_TRUST_REGISTRY_URL;
   if (override) return override;
-  const site = process.env.NEXTAUTH_URL || getEvidenceSiteOrigin();
+  const site =
+    process.env.NEXTAUTH_URL ||
+    getEvidenceSiteOrigin() ||
+    'https://civicaitools.org';
   return `${site.replace(/\/$/, '')}/.well-known/evidence-public-keys.json`;
 }
 

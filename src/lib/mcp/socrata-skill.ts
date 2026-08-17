@@ -23,7 +23,8 @@ import { BOSTON_OPENCONTEXT_SKILL } from './boston-skill.ts';
 // Instance-identity config (ADR-0020): skill text lands inside signed
 // packages (skillMetadata.skillText + skill.text_hash), so the demo-host
 // mention below resolves through config. Evaluated at MODULE LOAD (the
-// constant is a template literal) — boot-time env, demo default when unset.
+// constant is a template literal) — boot-time env; with no identity declared
+// the host mention is honestly OMITTED (#258), never defaulted.
 // CAVEATS (flagged in the S3a P2 phase record): `npm run sync-fallback`
 // rewrites this constant's entire body from the MCP server and would clobber
 // the interpolation; the primary runtime path also fetches skill text from
@@ -368,7 +369,7 @@ ORDER BY total_requests DESC
 
 # Socrata MCP Skill — Web Overlay
 
-> Applies to: Web demo (${getPublicationHost()}) and other HTTP-connected clients.
+> Applies to: Web demo${getPublicationHost() ? ` (${getPublicationHost()})` : ''} and other HTTP-connected clients.
 
 ## Date Filter Enforcement
 

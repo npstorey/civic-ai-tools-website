@@ -16,7 +16,8 @@ import { db } from '@/lib/db';
 import { attestationNodes } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
-import { getActiveSigner, type SignerIdentity } from './signing.ts';
+import { type SignerIdentity } from './signing.ts';
+import { getConfiguredSignerIdentity } from '../site-config.ts';
 import {
   verifyAttestationNode,
   resolveLifecycleFromChain,
@@ -73,8 +74,16 @@ export async function resolveLifecycle(
     }
 
     if (rows.length > 0) {
+      // Fallback signer for the §8.12.3 match when the package's own signer
+      // is unavailable: the CONFIGURED platform identity, or — on an
+      // instance that has declared none (#258) — no expectation at all, so
+      // the match honestly reads false rather than crediting attestations to
+      // a reference identity this instance never configured. The empty
+      // string can never equal a real `signer.identifier`.
       const resolvedSigner =
-        targetSignerIdentifier ?? getActiveSigner().identifier;
+        targetSignerIdentifier ??
+        getConfiguredSignerIdentity()?.identifier ??
+        '';
       const views = await Promise.all(
         rows.map((row) => buildAttestationView(row, resolvedSigner)),
       );
