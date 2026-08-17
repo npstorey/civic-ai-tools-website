@@ -11,8 +11,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildMcpRegistry,
+  getMissingMcpRoutingError,
+  McpConfigurationError,
   resolveServerForTool,
   readMcpEnvFromProcess,
+  skillRoutingTraceAttributes,
 } from './registry.ts';
 import { buildMcpRequestHeaders } from './client.ts';
 
@@ -103,7 +106,7 @@ test('Missing Data Commons API key omits the auth header entirely', () => {
   assert.equal(registry.servers['data-commons'].headers, undefined);
 });
 
-test('readMcpEnvFromProcess falls back to defaults when env vars are unset', () => {
+test('readMcpEnvFromProcess: Socrata has NO fallback; third-party public endpoints keep theirs (#258 C4)', () => {
   const originalSocrata = process.env.SOCRATA_MCP_URL;
   const originalDc = process.env.DATA_COMMONS_MCP_URL;
   const originalKey = process.env.DATA_COMMONS_API_KEY;
@@ -114,16 +117,86 @@ test('readMcpEnvFromProcess falls back to defaults when env vars are unset', () 
   delete process.env.BOSTON_OPENCONTEXT_MCP_URL;
   try {
     const env = readMcpEnvFromProcess();
-    assert.equal(env.socrataUrl, 'https://socrata-mcp.civicaitools.org');
+    // Unset means unconfigured — never a substituted reference host.
+    assert.equal(env.socrataUrl, undefined);
+    // Data Commons + Boston OpenContext defaults are third-party PUBLIC
+    // endpoints, not reference infrastructure; they stay.
     assert.equal(env.dataCommonsUrl, 'https://api.datacommons.org/mcp');
     assert.equal(env.dataCommonsApiKey, undefined);
     assert.equal(env.bostonOpencontextUrl, 'https://data-mcp.boston.gov/mcp');
+
+    // Empty and whitespace-only count as absent, matching the preflight.
+    process.env.SOCRATA_MCP_URL = '   ';
+    assert.equal(readMcpEnvFromProcess().socrataUrl, undefined);
+
+    // Set, the exact configured value comes through.
+    process.env.SOCRATA_MCP_URL = 'https://socrata-mcp.example.org';
+    assert.equal(readMcpEnvFromProcess().socrataUrl, 'https://socrata-mcp.example.org');
   } finally {
     if (originalSocrata !== undefined) process.env.SOCRATA_MCP_URL = originalSocrata;
+    else delete process.env.SOCRATA_MCP_URL;
     if (originalDc !== undefined) process.env.DATA_COMMONS_MCP_URL = originalDc;
     if (originalKey !== undefined) process.env.DATA_COMMONS_API_KEY = originalKey;
     if (originalBoston !== undefined) process.env.BOSTON_OPENCONTEXT_MCP_URL = originalBoston;
   }
+});
+
+test('#258 C4: with no socrataUrl the registry omits the Socrata server and names the variable per tool', () => {
+  const registry = buildMcpRegistry({
+    dataCommonsUrl: 'https://api.datacommons.org/mcp',
+    bostonOpencontextUrl: 'https://data-mcp.boston.example.org/mcp',
+  });
+  assert.equal(registry.servers.socrata, undefined, 'no Socrata server entry');
+  for (const toolName of ['get_data', 'search', 'fetch']) {
+    assert.equal(resolveServerForTool(registry, toolName), undefined, `${toolName} resolves to no server`);
+    assert.equal(registry.unconfiguredTools[toolName], 'SOCRATA_MCP_URL', `${toolName} names its missing variable`);
+  }
+  // The other sources are unaffected.
+  assert.equal(resolveServerForTool(registry, 'search_indicators')!.sourceId, 'data-commons');
+  assert.equal(resolveServerForTool(registry, 'ckan__query_data')!.sourceId, 'boston-opencontext');
+  // A configured registry has nothing unconfigured.
+  assert.deepEqual(buildMcpRegistry(TEST_ENV).unconfiguredTools, {});
+});
+
+test('#258 C4: getMissingMcpRoutingError refuses on unset/empty and passes on a configured value', () => {
+  const originalSocrata = process.env.SOCRATA_MCP_URL;
+  try {
+    delete process.env.SOCRATA_MCP_URL;
+    const missing = getMissingMcpRoutingError();
+    assert.ok(missing instanceof McpConfigurationError);
+    assert.equal(missing!.code, 'mcp_not_configured');
+    assert.match(missing!.message, /SOCRATA_MCP_URL/, 'the error names the variable');
+
+    process.env.SOCRATA_MCP_URL = '   ';
+    assert.ok(getMissingMcpRoutingError() instanceof McpConfigurationError, 'whitespace-only is absent');
+
+    process.env.SOCRATA_MCP_URL = 'https://socrata-mcp.example.org';
+    assert.equal(getMissingMcpRoutingError(), null);
+  } finally {
+    if (originalSocrata !== undefined) process.env.SOCRATA_MCP_URL = originalSocrata;
+    else delete process.env.SOCRATA_MCP_URL;
+  }
+});
+
+test('#258 A9: the trace records exactly the configured Socrata URL, or omits the field entirely', () => {
+  // Configured: the recorded value is the configured value, verbatim.
+  const configured = skillRoutingTraceAttributes({
+    socrataUrl: 'https://socrata-mcp.example.org',
+    dataCommonsUrl: 'https://api.datacommons.org/mcp',
+    bostonOpencontextUrl: 'https://data-mcp.boston.example.org/mcp',
+  });
+  assert.deepEqual(configured, {
+    'skill.mcp_server_url': 'https://socrata-mcp.example.org',
+    'skill.data_commons_url': 'https://api.datacommons.org/mcp',
+  });
+
+  // Unconfigured: the key is ABSENT — not defaulted, not empty-string.
+  const unconfigured = skillRoutingTraceAttributes({
+    dataCommonsUrl: 'https://api.datacommons.org/mcp',
+    bostonOpencontextUrl: 'https://data-mcp.boston.example.org/mcp',
+  });
+  assert.ok(!('skill.mcp_server_url' in unconfigured), 'no defaulted routing in the signed trace');
+  assert.deepEqual(unconfigured, { 'skill.data_commons_url': 'https://api.datacommons.org/mcp' });
 });
 
 test('Stateless server: request headers omit mcp-session-id, keep X-API-Key', () => {

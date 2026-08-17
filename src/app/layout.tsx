@@ -13,7 +13,9 @@ import RunningUnsignedBanner from '@/components/RunningUnsignedBanner';
 import SponsorLine from '@/components/SponsorLine';
 import { BrandProvider } from '@/components/BrandProvider';
 import { EvidenceOriginProvider } from '@/components/EvidenceOriginProvider';
+import { McpRoutingProvider } from '@/components/McpRoutingProvider';
 import { SignInOptionsProvider } from '@/components/SignInOptionsProvider';
+import { readMcpEnvFromProcess } from '@/lib/mcp/registry';
 import { buildProviders } from '@/lib/auth-providers';
 import { toSignInOptions } from '@/lib/auth-provider-options';
 import {
@@ -193,6 +195,12 @@ export default function RootLayout({
               on the chrome-brand one. Null members mean "not configured";
               the client surfaces then omit attribution. */}
           <EvidenceOriginProvider value={getInstanceAttribution()}>
+          {/* Server-resolved Socrata MCP endpoint for the client surfaces
+              that mention it (#258 C5) — one configured value reaches server
+              and client; null means "not configured" and the surfaces omit
+              the host mention. Routing, not identity or chrome, so its own
+              provider. */}
+          <McpRoutingProvider value={readMcpEnvFromProcess().socrataUrl ?? null}>
           {/* Sign-in choices for the affordances inside client trees (#229
               P1) — QueryForm, RateLimitBanner, McpResponseDisplay and
               NotebookOutput all render under the apex page, a client
@@ -271,6 +279,7 @@ export default function RootLayout({
             </footer>
           </div>
           </SignInOptionsProvider>
+          </McpRoutingProvider>
           </EvidenceOriginProvider>
           </BrandProvider>
           </HostLinksProvider>

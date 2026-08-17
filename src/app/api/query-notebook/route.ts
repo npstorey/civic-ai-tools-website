@@ -23,6 +23,7 @@ import { authOptions } from '@/lib/auth';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { mcpTools } from '@/lib/mcp/tools';
 import { callMcpTool, routeTool } from '@/lib/mcp/client';
+import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import {
   queryWithMcpStreaming,
@@ -95,6 +96,21 @@ export async function POST(request: NextRequest) {
   }
   const portal = body.portal || DEFAULT_PORTAL;
   const model = body.model || DEFAULT_MODEL;
+
+  // Fail fast when no MCP endpoint is configured for the primary data source
+  // (#258 C4): Phase A cannot discover datasets without one, and
+  // SOCRATA_MCP_URL has no coded fallback. Checked before rate limiting (a
+  // misconfigured instance must not burn quota). The JSON body rides the
+  // pre-stream error channel the client already handles (SSEError →
+  // friendlyStreamError), carrying the typed code alongside the message.
+  const mcpRoutingError = getMissingMcpRoutingError();
+  if (mcpRoutingError) {
+    console.error('[query-notebook]', mcpRoutingError.message);
+    return new Response(
+      JSON.stringify({ error: mcpRoutingError.message, code: mcpRoutingError.code }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
 
   // Rate-limit identical to /api/compare-stream — per-user when signed in,
   // per-IP otherwise.

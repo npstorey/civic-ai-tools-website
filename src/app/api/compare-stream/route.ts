@@ -7,8 +7,9 @@ import { callMcpTool, routeTool } from '@/lib/mcp/client';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
-import { encodeSSE, panelsForRun, type ModelErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
+import { encodeSSE, panelsForRun, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
 import { getMissingModelCredentialError } from '@/lib/model-client';
+import { getMissingMcpRoutingError, readMcpEnvFromProcess, skillRoutingTraceAttributes } from '@/lib/mcp/registry';
 import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG } from '@/lib/evidence/trace';
 
 const SSE_HEADERS = {
@@ -53,7 +54,29 @@ export async function POST(request: NextRequest) {
             panel,
             message: credentialError.message,
             code: credentialError.code,
-          } as StreamEvent & { message: string; code: ModelErrorCode })
+          } as StreamEvent & { message: string; code: StreamErrorCode })
+        )
+        .join('');
+      return new Response(encoder.encode(body), { headers: SSE_HEADERS });
+    }
+
+    // Fail fast when the instance names no MCP endpoint for the primary data
+    // source (#258 C4). SOCRATA_MCP_URL has no coded fallback — an
+    // unconfigured instance refuses the query rather than routing it through
+    // another deployment's infrastructure. Same shape and ordering rationale
+    // as the model-credential guard above.
+    const mcpRoutingError = getMissingMcpRoutingError();
+    if (mcpRoutingError) {
+      console.error('[compare-stream]', mcpRoutingError.message);
+      const encoder = new TextEncoder();
+      const body = panelsForRun(mcpOnly)
+        .map((panel) =>
+          encodeSSE({
+            type: 'error',
+            panel,
+            message: mcpRoutingError.message,
+            code: mcpRoutingError.code,
+          } as StreamEvent & { message: string; code: StreamErrorCode })
         )
         .join('');
       return new Response(encoder.encode(body), { headers: SSE_HEADERS });
@@ -87,16 +110,18 @@ export async function POST(request: NextRequest) {
       'analysis.portal': portal,
     });
 
-    // Fetch skill guidance (with trace span). The composed prompt now spans
-    // both MCP sources (Socrata + Data Commons), so record both server URLs.
+    // Fetch skill guidance (with trace span). The composed prompt spans both
+    // MCP sources (Socrata + Data Commons), so record both server URLs — as
+    // CONFIGURED, never defaulted (#258 A9): the signed trace records only
+    // routing this instance explicitly set, and honestly omits the Socrata
+    // field when unset (the guard above refused the query in that state).
     const skillFetchSpanId = trace.startSpan('skill_fetch');
     const systemPromptWithMcp = await buildSystemPrompt(portal);
     const systemPromptHash = hash(systemPromptWithMcp);
     trace.endSpan(skillFetchSpanId, {
       'skill.text_hash': systemPromptHash,
       'skill.text': systemPromptWithMcp,
-      'skill.mcp_server_url': process.env.SOCRATA_MCP_URL || 'https://socrata-mcp.civicaitools.org',
-      'skill.data_commons_url': process.env.DATA_COMMONS_MCP_URL || 'https://api.datacommons.org/mcp',
+      ...skillRoutingTraceAttributes(readMcpEnvFromProcess()),
     });
 
     const systemPromptWithoutMcp = `You are a helpful assistant.
@@ -125,13 +150,13 @@ Be honest if you don't have access to current or real-time data.`;
       onComplete: (panel: PanelType, result) => {
         writeEvent({ type: 'complete', panel, data: result });
       },
-      onError: (panel: PanelType, message: string, code?: ModelErrorCode) => {
+      onError: (panel: PanelType, message: string, code?: StreamErrorCode) => {
         writeEvent({
           type: 'error',
           panel,
           message,
           ...(code ? { code } : {}),
-        } as StreamEvent & { message: string; code?: ModelErrorCode });
+        } as StreamEvent & { message: string; code?: StreamErrorCode });
       },
     };
 

@@ -142,7 +142,6 @@ services:
       args:
         # Inlined into bundles at build; a run-time value cannot change them.
         NEXT_PUBLIC_GA_MEASUREMENT_ID:
-        NEXT_PUBLIC_SOCRATA_MCP_URL:
         NEXT_PUBLIC_CAPTURE_TRACES:
         # Read at BOTH times: prerendered pages bake these at build, dynamic
         # pages read the container's environment. Passed in both places so

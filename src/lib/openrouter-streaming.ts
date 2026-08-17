@@ -1,6 +1,6 @@
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 import { getModelClient, classifyModelError } from './model-client.ts';
-import { formatToolProgress, formatToolResult, generateToolReason, describeToolFailureForLlm, type PanelType, type ProgressPhase, type ModelErrorCode } from './streaming.ts';
+import { formatToolProgress, formatToolResult, generateToolReason, describeToolFailureForLlm, type PanelType, type ProgressPhase, type StreamErrorCode } from './streaming.ts';
 import type { TraceBuilder } from './evidence/trace.ts';
 import { hash as traceHash } from './evidence/trace.ts';
 import { deriveOperationType } from './mcp/operation-types.ts';
@@ -28,8 +28,8 @@ export interface StreamCallbacks {
   onProgress: (panel: PanelType, message: string, opts?: ProgressOpts) => void;
   onToken: (panel: PanelType, content: string) => void;
   onComplete: (panel: PanelType, result: CompletionResult) => void;
-  /** `code` is set for typed model-credential failures (#178); undefined otherwise. */
-  onError: (panel: PanelType, error: string, code?: ModelErrorCode) => void;
+  /** `code` is set for typed configuration failures (#178, #258 C4); undefined otherwise. */
+  onError: (panel: PanelType, error: string, code?: StreamErrorCode) => void;
 }
 
 /**
