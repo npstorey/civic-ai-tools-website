@@ -18,21 +18,57 @@ export const TYPED_STANDARDS_URL = 'https://typedstandards.org';
  */
 export const EXPRESS_INTEREST_URL = 'mailto:civicaitools@metagov.org';
 
+// --- Sponsor acknowledgment (#259 P4, portability finding D4) --------------
+
+/** A resolved sponsor acknowledgment. `url` is optional: a sponsor with no
+ *  link renders as plain text. */
+export interface SponsorAcknowledgment {
+  /** Leading words, e.g. "Fiscally sponsored by". */
+  prefix: string;
+  /** The sponsor's name — the linked span when `url` is present. */
+  name: string;
+  /** Where the name links, or `null` to render it unlinked. */
+  url: string | null;
+}
+
 /**
- * Optional sponsor acknowledgment, rendered in the global footer and the
- * /about "Who built this" section when non-null (via components/SponsorLine,
- * as "{prefix} {name}." with the name linked to {url}). While null, both
- * mounts render nothing — zero visual change.
- *
- * The approved wording arrives from the comms side; do not draft or guess it
- * here. When it lands, it is additive to — never a replacement for — the
- * existing "Personal project · Not affiliated with any employer." line.
+ * The words in front of the sponsor's name when the operator does not supply
+ * their own. Generic phrasing, not an identity: it names a RELATIONSHIP, and
+ * only ever renders beside a name the operator configured.
  */
-export const SPONSOR: { prefix: string; name: string; url: string } | null = {
-  prefix: 'Fiscally sponsored by',
-  name: 'Metagov',
-  url: 'https://metagov.org',
-};
+export const DEFAULT_SPONSOR_PREFIX = 'Fiscally sponsored by';
+
+/**
+ * This instance's sponsor acknowledgment, or `null` when it has none —
+ * rendered in the global footer and the /about "Who built this" section via
+ * components/SponsorLine.
+ *
+ * WHY THIS IS CONFIG AND NOT A CONSTANT. It was a hardcoded non-null literal
+ * naming the reference deployment's fiscal sponsor, and the root layout
+ * renders the footer on `(app)` surfaces too — so every instance, including
+ * one with no marketing site at all, told its users it was fiscally
+ * sponsored by an organization that has no relationship with it. A sponsor
+ * acknowledgment is a factual claim about who funds THIS deployment; there
+ * is no honest default for it, so unset means the line does not render and
+ * the reference deployment declares its sponsor like any other instance.
+ *
+ * Envs: `SITE_SPONSOR_NAME` (required — no name, no line), `SITE_SPONSOR_URL`
+ * (optional link target), `SITE_SPONSOR_PREFIX` (optional wording override).
+ * Read at CALL time, matching the rest of this file.
+ *
+ * Chrome, not evidence: nothing here is ever signed or emitted into a
+ * package. It sits in this module rather than brand-config.ts because it is
+ * a statement about the deployment's funding rather than a theming knob.
+ */
+export function getSponsor(): SponsorAcknowledgment | null {
+  const name = process.env.SITE_SPONSOR_NAME;
+  if (!name) return null;
+  return {
+    prefix: process.env.SITE_SPONSOR_PREFIX || DEFAULT_SPONSOR_PREFIX,
+    name,
+    url: process.env.SITE_SPONSOR_URL || null,
+  };
+}
 
 // --- Instance content sources (#241) ----------------------------------------
 //
@@ -67,6 +103,21 @@ export const SPONSOR: { prefix: string; name: string; url: string } | null = {
  */
 export const COMMUNITY_DIRECTORY_DATA_URL =
   'https://raw.githubusercontent.com/npstorey/civic-ai-tools/main/data/mcp-servers.json';
+
+/**
+ * Where a submission to the community index above goes — the same hub repo's
+ * issue template. Paired with the data URL on purpose (#259 P4, D7): the
+ * footer's "Suggest a Server" link is a funnel into THAT list, so the two
+ * URLs describing one shared resource live side by side and cannot drift.
+ *
+ * The footer renders the link only for an instance that both serves a
+ * `/directory` page and is serving the community index on it; an instance
+ * with `DIRECTORY_DATA_URL` set curates its own list, and an app-only
+ * instance has no directory page at all. Neither should be funnelling its
+ * users into another project's issue tracker.
+ */
+export const COMMUNITY_DIRECTORY_SUBMIT_URL =
+  'https://github.com/npstorey/civic-ai-tools/issues/new?template=suggest-server.yml&labels=directory-submission';
 
 /** Resolved `/directory` data source, and whether it belongs to this site. */
 export interface DirectorySource {

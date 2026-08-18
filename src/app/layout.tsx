@@ -22,9 +22,15 @@ import {
   getBrandAccent,
   getBrandAttribution,
   getBrandName,
+  getBrandRepoUrl,
   getBrandTagline,
 } from '@/lib/brand-config';
-import { getInstanceAttribution, getRoadmapSource } from '@/lib/site-config';
+import {
+  COMMUNITY_DIRECTORY_SUBMIT_URL,
+  getDirectorySource,
+  getInstanceAttribution,
+  getRoadmapSource,
+} from '@/lib/site-config';
 import { resolveRobotsMetadata } from '@/lib/site-indexing';
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
@@ -81,22 +87,45 @@ const notoSans = localFont({
   ],
 });
 
+/**
+ * ROOT metadata — the defaults every surface in BOTH route groups inherits,
+ * so nothing reference-specific may live here (#259 P4, D6).
+ *
+ * WHAT WAS ACTUALLY LEAKING, measured rather than assumed. Per-page `title`
+ * overrides already worked: every `(app)` page sets its own, so `/ask`
+ * rendered "Ask - …" and never the root string. What every page inherited,
+ * having no override anywhere in the tree, was the `description` and the
+ * `openGraph`/`twitter` title+description pairs — which carried the
+ * "- MCP Demo" suffix and the with-and-without-MCP comparison copy onto an
+ * operator instance's gated app pages.
+ *
+ * The demo framing did not disappear; it moved DOWN to
+ * `(marketing)/layout.tsx`, where it describes the page it was written for
+ * and travels with the route group. That is also the liftability shape: a
+ * later extraction of the marketing site takes its own metadata with it, and
+ * the root keeps nothing that names one deployment.
+ *
+ * What remains here is instance config only — `SITE_BRAND_NAME` and
+ * `SITE_BRAND_TAGLINE`, both omitted entirely when unset rather than
+ * defaulted, so an unnamed instance emits no `<title>` and no description
+ * instead of somebody else's.
+ */
+const rootBrandName = getBrandName();
+const rootBrandTagline = getBrandTagline();
+
 export const metadata: Metadata = {
-  title: `${getBrandName()} - MCP Demo`,
-  description:
-    'See the difference MCP (Model Context Protocol) makes when querying civic data. Compare AI responses with and without live data access.',
+  ...(rootBrandName !== null ? { title: rootBrandName } : {}),
+  ...(rootBrandTagline !== null ? { description: rootBrandTagline } : {}),
   ...(robotsMetadata ? { robots: robotsMetadata } : {}),
   openGraph: {
-    title: `${getBrandName()} - MCP Demo`,
-    description:
-      'See the difference MCP makes when querying civic data. Compare AI responses with and without live data access.',
+    ...(rootBrandName !== null ? { title: rootBrandName } : {}),
+    ...(rootBrandTagline !== null ? { description: rootBrandTagline } : {}),
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${getBrandName()} - MCP Demo`,
-    description:
-      'See the difference MCP makes when querying civic data. Compare AI responses with and without live data access.',
+    ...(rootBrandName !== null ? { title: rootBrandName } : {}),
+    ...(rootBrandTagline !== null ? { description: rootBrandTagline } : {}),
   },
 };
 
@@ -125,8 +154,10 @@ export default function RootLayout({
 
   /**
    * Instance branding (#217), resolved server-side like the host links
-   * above. All four knobs default to the demo chrome, so with nothing
-   * configured every branch below renders today's exact bytes.
+   * above. Since #259 P4 the two NAMING knobs resolve to `null` when unset
+   * and every consumer below omits rather than substitutes — an instance
+   * that has not named itself must not render the reference deployment's
+   * name in its header, titles or footer.
    *
    * The accent override writes the four accent-family custom properties as
    * an inline style on <html> — inline beats the stylesheet's `:root` block,
@@ -138,6 +169,7 @@ export default function RootLayout({
   const brandName = getBrandName();
   const brandTagline = getBrandTagline();
   const brandAttribution = getBrandAttribution();
+  const brandRepoUrl = getBrandRepoUrl();
   const brandAccent = getBrandAccent();
 
   /**
@@ -159,6 +191,21 @@ export default function RootLayout({
    * `/ask` stop hardcoding one provider.
    */
   const signInOptions = toSignInOptions(buildProviders());
+
+  /**
+   * Whether the footer's "Suggest a Server" funnel renders (#259 P4, D7).
+   *
+   * Two conditions, both about whether the link would be honest here:
+   * `marketingOrigin !== null` says this instance serves a `/directory` page
+   * at all (P3's `instanceServesMarketing`, read through the same host-links
+   * derivation the sibling footer links use), and the community provenance
+   * says the list on that page is the shared community index rather than the
+   * operator's own. An app-only instance has no directory, and an instance
+   * curating `DIRECTORY_DATA_URL` has its own — neither should be sending
+   * its users into another project's issue tracker.
+   */
+  const showCommunitySubmitLink =
+    hostLinks.marketingOrigin !== null && getDirectorySource().provenance === 'community';
   // Conditional SPREAD, not `style={maybeUndefined}`: an explicit
   // `style={undefined}` would still serialize a `"style":"$undefined"` entry
   // into the RSC flight payload, a needless unset-case byte delta. With the
@@ -239,49 +286,73 @@ export default function RootLayout({
             <main>{children}</main>
             <footer className="border-t py-8 text-center" style={{ borderColor: 'var(--border-color)' }}>
               <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-                {/* Footer identity lines (#217): the tagline and attribution
-                    are instance-config knobs. Repo links and the sponsor line
-                    below are NOT part of the seam and stay as they are. */}
-                <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0 }}>
-                  {brandTagline}
-                </p>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '8px 0 0 0' }}>
-                  <a href="https://github.com/npstorey/civic-ai-tools" target="_blank" rel="noopener noreferrer">GitHub</a>
-                  {/* Marketing routes (P4c): prefixed with the marketing
-                      origin on a split host so they resolve from the app
-                      host too, exactly relative when nothing is configured,
-                      and omitted entirely on an app-only instance \u2014 which
-                      has no marketing site for them to point at. */}
-                  {hostLinks.marketingOrigin !== null && (
-                    <>
-                      {' \u00b7 '}
-                      <Link href={`${hostLinks.marketingOrigin}/learn`}>Learn</Link>
-                      {' \u00b7 '}
-                      <Link href={`${hostLinks.marketingOrigin}/about`}>About</Link>
-                      {/* Roadmap: only for an instance that has one (#241). */}
-                      {showRoadmap && (
-                        <>
-                          {' \u00b7 '}
-                          <Link href={`${hostLinks.marketingOrigin}/roadmap`}>Roadmap</Link>
-                        </>
-                      )}
-                    </>
-                  )}
-                  {' \u00b7 '}
-                  <a href="https://github.com/npstorey/civic-ai-tools/issues/new?template=suggest-server.yml&labels=directory-submission" target="_blank" rel="noopener noreferrer">Suggest a Server</a>
-                </p>
-                {/* Attribution: a configured instance supplies its own
-                    plain-text line; unset renders the demo deployment's
-                    authored markup verbatim (it carries a hyperlink, so it
-                    cannot live in the config module as a string default). */}
-                {brandAttribution !== null ? (
+                {/* Footer identity lines. EVERY line in this block is now
+                    instance config (#259 P4) — the tagline and attribution
+                    were already (#217); the repo funnel, the directory
+                    submission link and the sponsor line joined them, because
+                    this footer renders on the `(app)` surfaces too and an
+                    instance with no marketing site of its own was still
+                    showing the reference project's contribution funnels and
+                    the reference deployment's own byline. Nothing here
+                    renders unless this deployment declared it. */}
+                {brandTagline !== null && (
+                  <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0 }}>
+                    {brandTagline}
+                  </p>
+                )}
+                {/* The whole link row, or nothing: with no repo, no
+                    marketing face and no community directory there is no
+                    row, and an empty <p> would still take its margin. */}
+                {(brandRepoUrl !== null ||
+                  hostLinks.marketingOrigin !== null ||
+                  showCommunitySubmitLink) && (
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '8px 0 0 0' }}>
+                    {/* Source repo (D7): this instance's own, or no link. It
+                        pointed at the reference project's hub repo for every
+                        deployment — a contribution funnel into somebody else's
+                        tracker, rendered in an operator's footer. */}
+                    {brandRepoUrl !== null && (
+                      <a href={brandRepoUrl} target="_blank" rel="noopener noreferrer">GitHub</a>
+                    )}
+                    {/* Marketing routes (P4c): prefixed with the marketing
+                        origin on a split host so they resolve from the app
+                        host too, exactly relative when nothing is configured,
+                        and omitted entirely on an app-only instance \u2014 which
+                        has no marketing site for them to point at. */}
+                    {hostLinks.marketingOrigin !== null && (
+                      <>
+                        {brandRepoUrl !== null && ' \u00b7 '}
+                        <Link href={`${hostLinks.marketingOrigin}/learn`}>Learn</Link>
+                        {' \u00b7 '}
+                        <Link href={`${hostLinks.marketingOrigin}/about`}>About</Link>
+                        {/* Roadmap: only for an instance that has one (#241). */}
+                        {showRoadmap && (
+                          <>
+                            {' \u00b7 '}
+                            <Link href={`${hostLinks.marketingOrigin}/roadmap`}>Roadmap</Link>
+                          </>
+                        )}
+                      </>
+                    )}
+                    {/* Suggest a Server (D7): a funnel into the COMMUNITY
+                        index, shown only by an instance that actually serves
+                        that index on a /directory page of its own. */}
+                    {showCommunitySubmitLink && (
+                      <>
+                        {(brandRepoUrl !== null || hostLinks.marketingOrigin !== null) && ' \u00b7 '}
+                        <a href={COMMUNITY_DIRECTORY_SUBMIT_URL} target="_blank" rel="noopener noreferrer">Suggest a Server</a>
+                      </>
+                    )}
+                  </p>
+                )}
+                {/* Attribution (A2): who runs THIS deployment, or nothing.
+                    The unset branch used to render the reference
+                    deployment's own authored byline on every surface of
+                    every instance; there is no neutral markup for "who runs
+                    this", so unset now renders no line at all. */}
+                {brandAttribution !== null && (
                   <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '8px 0 0 0', opacity: 0.8 }}>
                     {brandAttribution}
-                  </p>
-                ) : (
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '8px 0 0 0', opacity: 0.8 }}>
-                    By <a href="https://nathanstorey.com" target="_blank" rel="noopener noreferrer">Nathan Storey</a>
-                    {' \u00b7 '}Personal project{' \u00b7 '}Not affiliated with any employer.
                   </p>
                 )}
                 <SponsorLine style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '8px 0 0 0', opacity: 0.8 }} />

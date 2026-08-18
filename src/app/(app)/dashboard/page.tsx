@@ -8,12 +8,12 @@ import { eq, desc, and, ne, isNull, sql } from 'drizzle-orm';
 import { findDbUserByAccountKey } from '@/lib/db/creator-evidence';
 import DashboardTabs from '@/components/dashboard/DashboardTabs';
 import { isSigningConfigured } from '@/lib/evidence/unsigned-tier';
-import { getBrandName } from '@/lib/brand-config';
+import { pageTitle } from '@/lib/brand-config';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: `Dashboard - ${getBrandName()}`,
+  title: pageTitle('Dashboard'),
   description: 'Manage your evidence records and evaluations.',
 };
 

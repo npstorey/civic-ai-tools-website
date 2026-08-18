@@ -211,6 +211,15 @@ export const MARKETING_PATHS = [
   '/learn',
   '/project',
   '/roadmap',
+  // Standalone talk decks (#259 P4). Not a page but a route all the same:
+  // the decks moved out of `public/talks/` into
+  // `src/app/(marketing)/talks/[deck]/route.ts` precisely so this entry
+  // could exist. An asset under `public/` classifies 'other' and serves
+  // under every host role — a reference-project deck was reachable on an
+  // app-role host at 200 — whereas a route in the `(marketing)` group is
+  // withheld exactly like `/about`. The array stays a mirror of the route
+  // groups; it did not learn about asset prefixes.
+  '/talks',
 ] as const;
 
 /**

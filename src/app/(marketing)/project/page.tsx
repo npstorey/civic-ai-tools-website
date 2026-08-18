@@ -3,10 +3,10 @@ import Link from 'next/link';
 import { prose, sectionHeading, sectionSpacing, card } from '@/styles/page-styles';
 import { EXPRESS_INTEREST_URL, TYPED_STANDARDS_URL } from '@/lib/site-config';
 import { CONSORTIUM_MEMBERS } from '@/lib/consortium';
-import { getBrandName } from '@/lib/brand-config';
+import { pageTitle } from '@/lib/brand-config';
 
 export const metadata: Metadata = {
-  title: `Project - ${getBrandName()}`,
+  title: pageTitle('Project'),
   description:
     'What the Civic AI Tools project is: verifiable AI-assisted analysis of open civic data, the pillars it works across, and real published evidence records.',
 };

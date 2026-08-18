@@ -2,10 +2,10 @@ import Link from 'next/link';
 import { prose, sectionHeading, sectionSpacing } from '@/styles/page-styles';
 import { EXPRESS_INTEREST_URL } from '@/lib/site-config';
 import SponsorLine from '@/components/SponsorLine';
-import { getBrandName } from '@/lib/brand-config';
+import { pageTitle } from '@/lib/brand-config';
 
 export const metadata = {
-  title: `About - ${getBrandName()}`,
+  title: pageTitle('About'),
   description: 'Civic AI Tools is an open-source project that connects AI assistants to government open data using the Model Context Protocol.',
 };
 

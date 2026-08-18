@@ -42,14 +42,21 @@ interface EvidenceActionsProps {
   /** Instance display name for the citation label (#217), resolved
    *  server-side by the detail page from `SITE_BRAND_NAME`
    *  (src/lib/brand-config.ts) — a prop, not context, because the server
-   *  page renders this component directly. Defaults to the demo name. */
-  brandName?: string;
+   *  page renders this component directly.
+   *
+   *  REQUIRED and nullable since #259 P4 (D8). The default was the reference
+   *  deployment's name and it reached user-visible COPY-PASTE text: the Cite
+   *  popover writes it into the clipboard, so a mount that forgot the prop
+   *  would have published citations crediting another deployment. `null`
+   *  means the instance has not named itself, and the citation says
+   *  "Evidence Package" with no publisher rather than inventing one. */
+  brandName: string | null;
 }
 
 /** Exported for render-harness/tests only — the popover mounts on the Cite
  *  button's click, which a DOM-free server render cannot simulate. */
 export function CitePopover({ title, creatorName, createdAt, slug, brandName, onClose }: {
-  title: string; creatorName: string; createdAt: string; slug: string; brandName: string; onClose: () => void;
+  title: string; creatorName: string; createdAt: string; slug: string; brandName: string | null; onClose: () => void;
 }) {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const date = new Date(createdAt);
@@ -60,7 +67,7 @@ export function CitePopover({ title, creatorName, createdAt, slug, brandName, on
   const citations = [
     {
       label: 'Plain text',
-      text: `${creatorName} (${year}). "${title}." ${brandName} Evidence Package. ${url}. Published: ${dateStr}.`,
+      text: `${creatorName} (${year}). "${title}." ${brandName === null ? '' : `${brandName} `}Evidence Package. ${url}. Published: ${dateStr}.`,
     },
     {
       label: 'For deliberative process reference',
@@ -153,7 +160,7 @@ interface VerifyResult {
 
 export default function EvidenceActions({
   slug, title, creatorName, createdAt, packageUrl, captureMethod, visibility, commitmentUrl,
-  brandName = 'Civic AI Tools',
+  brandName,
 }: EvidenceActionsProps) {
   const [linkCopied, setLinkCopied] = useState(false);
   const [showCite, setShowCite] = useState(false);

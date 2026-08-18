@@ -60,15 +60,32 @@ const SPLIT_SERVING = readHostRoutingConfig({
 
 // One representative per route class, plus depth and edge variants.
 const ROOT = '/';
-const MARKETING_SAMPLES = ['/about', '/explore', '/learn', '/project', '/roadmap', '/directory', '/explore/deep/link'];
+const MARKETING_SAMPLES = [
+  '/about',
+  '/explore',
+  '/learn',
+  '/project',
+  '/roadmap',
+  '/directory',
+  '/explore/deep/link',
+  // #259 P4: the talk decks moved out of `public/talks/` and into a route
+  // under `src/app/(marketing)/talks/`, so this URL stopped being an
+  // unclassified asset and became a marketing route. It sat in
+  // OTHER_SAMPLES until then, asserted to pass through on every host —
+  // which was the defect, not the contract.
+  '/talks/ctfg-vibe-code-2026-07.html',
+];
 const APP_PRIVATE_SAMPLES = ['/ask', '/dashboard', '/dashboard/settings', '/auth/device', '/dev/notebook-preview'];
 const DUAL_SAMPLES = ['/evidence', '/evidence/some-published-slug'];
 const OTHER_SAMPLES = [
   '/api/rate-limit', // matcher-excluded in prod, but the function must serve it regardless
   '/_next/static/chunk.js',
   '/.well-known/typed-publisher.json',
+  // Marketing-page supporting assets still under `public/` (#259 P4,
+  // accepted residual): unclassified, so served under every host role.
+  // Unreachable in practice on an app host because the page that
+  // references them is withheld.
   '/bpmn/mcp-query-flow.bpmn',
-  '/talks/some-deck.pdf',
   '/file.svg',
   '/no-such-page',
   '/authors', // prefix-collision guard: not /auth/device
@@ -232,6 +249,26 @@ test('split: the app host withholds every marketing route', () => {
   for (const prefix of MARKETING_PATHS) {
     assert.deepEqual(decideRoute('app.example.org', prefix, SPLIT), { kind: 'withhold' }, prefix);
   }
+});
+
+test('#259 P4: a talk deck is a marketing route, not an unclassified asset', () => {
+  // The decks used to live in `public/talks/`. Files under `public/` are not
+  // routes, so they classified 'other' — and 'other' serves under every host
+  // role, which put a reference-project deck on an operator instance's app
+  // host at 200 (observed on the live deployment). P4 moved the bytes into
+  // `src/app/(marketing)/talks/[deck]/route.ts`, which is what makes the
+  // `/talks` entry in MARKETING_PATHS legitimate rather than a special case:
+  // there is a real route in the marketing group behind it, and
+  // `host-routing.paths.test.ts` checks that in both directions.
+  //
+  // The URL is a link people already hold, so what matters is that the
+  // MARKETING host still serves it. Only the app-role hosts changed.
+  const DECK = '/talks/ctfg-vibe-code-2026-07.html';
+  assert.equal(classifyPath(DECK), 'marketing');
+  assert.deepEqual(decideRoute('example.org', DECK, SPLIT), { kind: 'serve' });
+  assert.deepEqual(decideRoute('app.example.org', DECK, SPLIT), { kind: 'withhold' });
+  assert.deepEqual(decideRoute('anything.example.net', DECK, UNSET), { kind: 'withhold' });
+  assert.deepEqual(decideRoute('anything.example.net', DECK, SERVE_MARKETING), { kind: 'serve' });
 });
 
 test('split: the app host serves the full (app) group, evidence included', () => {

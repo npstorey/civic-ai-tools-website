@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import EvidenceIndex from '@/components/evidence/EvidenceIndex';
-import { getBrandName } from '@/lib/brand-config';
+import { pageTitle } from '@/lib/brand-config';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: `Evidence - ${getBrandName()}`,
+  title: pageTitle('Evidence'),
   description: 'Published evidence packages from AI-assisted civic data analyses.',
 };
 

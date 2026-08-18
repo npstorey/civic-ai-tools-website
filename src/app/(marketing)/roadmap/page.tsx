@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { getRoadmapMarkdown } from '@/lib/roadmap/data';
 import AudienceRoutingStrip from '@/components/roadmap/AudienceRoutingStrip';
 import RoadmapBody from '@/components/roadmap/RoadmapBody';
-import { getBrandName } from '@/lib/brand-config';
+import { getBrandName, pageTitle } from '@/lib/brand-config';
 import { getRoadmapSource, type RoadmapSource } from '@/lib/site-config';
 
 // A roadmap is first-person content: "our plans". An instance that has not
@@ -12,13 +12,17 @@ import { getRoadmapSource, type RoadmapSource } from '@/lib/site-config';
 // the header. `generateMetadata` (not a static `metadata` object) so the
 // source is read at call time, like every other instance-config read.
 export async function generateMetadata(): Promise<Metadata> {
+  // `brand` is null on an instance that has not set SITE_BRAND_NAME (#259
+  // P4, A3). The description then says "This site" rather than naming a
+  // deployment that is not this one; the title drops its suffix.
   const brand = getBrandName();
+  const subject = brand ?? 'This site';
   const source = getRoadmapSource();
   return {
-    title: `Roadmap - ${brand}`,
+    title: pageTitle('Roadmap'),
     description: source
-      ? `The public roadmap for ${brand} — what is planned and what is underway. Rendered from ${source.label}.`
-      : `${brand} has not published a roadmap.`,
+      ? `The public roadmap for ${subject} — what is planned and what is underway. Rendered from ${source.label}.`
+      : `${subject} has not published a roadmap.`,
   };
 }
 

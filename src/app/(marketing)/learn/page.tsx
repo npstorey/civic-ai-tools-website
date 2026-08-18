@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { prose, sectionHeading, sectionSpacing, calloutBox, excerptBlock, card } from '@/styles/page-styles';
-import { getBrandName } from '@/lib/brand-config';
+import { pageTitle } from '@/lib/brand-config';
 
 export const metadata = {
-  title: `Learn - ${getBrandName()}`,
+  title: pageTitle('Learn'),
   description: 'Learn how this demo works, how AI connects to live civic data through MCP, and what shapes the quality of AI responses.',
 };
 

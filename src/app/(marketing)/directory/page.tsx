@@ -2,11 +2,11 @@ import { Suspense } from 'react';
 import { getDirectoryData } from '@/lib/mcp/directory-data';
 import { getPortalData, getPortalCounts } from '@/lib/mcp/portal-data';
 import DirectoryWrapper from '@/components/DirectoryWrapper';
-import { getBrandName } from '@/lib/brand-config';
+import { pageTitle } from '@/lib/brand-config';
 import { directorySourceNote } from '@/lib/content-source';
 
 export const metadata = {
-  title: `Directory - ${getBrandName()}`,
+  title: pageTitle('Directory'),
   description:
     'Browse 65+ MCP servers for civic data and 2,000+ open data portals across Socrata and CKAN platforms.',
 };
