@@ -27,7 +27,7 @@ function GearIcon({ size = 12 }: { size?: number }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: 'var(--nyc-caution)',
+        color: 'var(--caution)',
         flexShrink: 0,
       }}
     >
@@ -42,9 +42,9 @@ function GearIcon({ size = 12 }: { size?: number }) {
 function getPhaseStyle(phase?: string): { color: string; fontWeight: number; accentColor: string } {
   switch (phase) {
     case 'tool_start':
-      return { color: 'var(--text-secondary)', fontWeight: 500, accentColor: 'var(--nyc-caution)' };
+      return { color: 'var(--text-secondary)', fontWeight: 500, accentColor: 'var(--caution)' };
     case 'tool_result':
-      return { color: 'var(--text-muted)', fontWeight: 400, accentColor: 'var(--nyc-success)' };
+      return { color: 'var(--text-muted)', fontWeight: 400, accentColor: 'var(--success)' };
     default:
       return { color: 'var(--text-muted)', fontWeight: 400, accentColor: 'var(--border-color)' };
   }
@@ -59,7 +59,7 @@ function CheckIcon({ size = 14, variant }: { size?: number; variant: 'without-mc
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: variant === 'with-mcp' ? 'var(--nyc-success)' : 'var(--nyc-blue)',
+        color: variant === 'with-mcp' ? 'var(--success)' : 'var(--accent)',
         flexShrink: 0,
       }}
     >
@@ -77,7 +77,7 @@ function Spinner({ variant }: { variant: 'without-mcp' | 'with-mcp' }) {
         width: '16px',
         height: '16px',
         border: '2px solid var(--border-color)',
-        borderTopColor: variant === 'with-mcp' ? 'var(--nyc-success)' : 'var(--nyc-blue)',
+        borderTopColor: variant === 'with-mcp' ? 'var(--success)' : 'var(--accent)',
         borderRadius: '50%',
         animation: 'spin 1s linear infinite',
         flexShrink: 0,
@@ -152,7 +152,7 @@ function GroupCard({
     setUserExpanded(!expanded);
   };
 
-  const accentColor = variant === 'with-mcp' ? 'var(--nyc-success)' : 'var(--nyc-blue)';
+  const accentColor = variant === 'with-mcp' ? 'var(--success)' : 'var(--accent)';
 
   // Filter to show only tool_start entries (with timing) and tool_result entries
   const visibleEntries = group.entries.filter(
@@ -361,7 +361,7 @@ function CompletedSummary({
               target="_blank"
               rel="noopener noreferrer"
               style={{
-                color: 'var(--nyc-blue)',
+                color: 'var(--accent)',
                 textDecoration: 'underline',
                 textUnderlineOffset: '2px',
               }}
@@ -401,9 +401,9 @@ function CompletedSummary({
               style={{
                 padding: '3px 10px',
                 borderRadius: '12px',
-                border: isActive ? '1px solid var(--nyc-success)' : '1px solid var(--border-color)',
+                border: isActive ? '1px solid var(--success)' : '1px solid var(--border-color)',
                 backgroundColor: isActive ? 'rgba(0, 183, 3, 0.08)' : 'var(--card-background)',
-                color: isActive ? 'var(--nyc-success)' : 'var(--text-muted)',
+                color: isActive ? 'var(--success)' : 'var(--text-muted)',
                 fontSize: '12px',
                 fontWeight: 500,
                 cursor: 'pointer',
@@ -434,7 +434,7 @@ function CompletedSummary({
                 paddingLeft: '4px',
               }}
             >
-              <span style={{ color: 'var(--nyc-success)', fontSize: '14px', lineHeight: 1 }}>&#8627;</span>
+              <span style={{ color: 'var(--success)', fontSize: '14px', lineHeight: 1 }}>&#8627;</span>
               <span>Refined from Step {toolIntents[activeIndex].refinedFromIndex! + 1} — the AI is iterating on its query to get better data</span>
             </div>
           )}
@@ -491,7 +491,7 @@ function CompletedSummary({
                         paddingLeft: '4px',
                       }}
                     >
-                      <span style={{ color: 'var(--nyc-success)', fontSize: '14px', lineHeight: 1 }}>&#8627;</span>
+                      <span style={{ color: 'var(--success)', fontSize: '14px', lineHeight: 1 }}>&#8627;</span>
                       <span>Refined from Step {refinedFrom + 1}</span>
                     </div>
                   )}
@@ -534,7 +534,7 @@ function CompletedSummary({
           style={{
             background: 'none',
             border: 'none',
-            color: 'var(--nyc-blue-40)',
+            color: 'var(--accent)',
             fontSize: '12px',
             fontWeight: 500,
             cursor: 'pointer',

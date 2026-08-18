@@ -23,11 +23,11 @@ import PublishEvidenceDialog from '@/components/PublishEvidenceDialog';
  */
 const PUBLISH_BUTTON_STYLE: React.CSSProperties = {
   background: 'none',
-  border: '1px solid var(--nyc-blue)',
+  border: '1px solid var(--accent)',
   borderRadius: '4px',
   padding: '4px 10px',
   fontSize: '12px',
-  color: 'var(--nyc-blue)',
+  color: 'var(--accent)',
   cursor: 'pointer',
   display: 'flex',
   alignItems: 'center',
@@ -230,7 +230,7 @@ function TimingFooter({
             <>{tokens_used.toLocaleString()} total</>
           )}
           {token_limit_exceeded && (
-            <span style={{ color: 'var(--nyc-caution)', marginLeft: '6px' }}>(limit reached)</span>
+            <span style={{ color: 'var(--caution)', marginLeft: '6px' }}>(limit reached)</span>
           )}
         </div>
       )}
@@ -311,7 +311,7 @@ const markdownComponents = {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      style={{ color: 'var(--nyc-blue)', textDecoration: 'underline' }}
+      style={{ color: 'var(--accent)', textDecoration: 'underline' }}
       {...props}
     >
       {children}
@@ -330,7 +330,7 @@ const provenanceComponents = {
       target="_blank"
       rel="noopener noreferrer"
       style={{
-        color: 'var(--nyc-success)',
+        color: 'var(--success)',
         textDecoration: 'underline',
         textUnderlineOffset: '2px',
         fontFamily: 'monospace',
@@ -463,7 +463,7 @@ export default function McpResponseDisplay({
         {queryText && (
           <div
             style={{
-              borderLeft: '3px solid var(--nyc-blue)',
+              borderLeft: '3px solid var(--accent)',
               backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
               padding: '8px 12px',
               marginBottom: '16px',
@@ -505,7 +505,7 @@ export default function McpResponseDisplay({
                 width: '16px',
                 height: '16px',
                 border: '2px solid var(--border-color)',
-                borderTopColor: 'var(--nyc-success)',
+                borderTopColor: 'var(--success)',
                 borderRadius: '50%',
                 animation: 'spin 1s linear infinite',
                 flexShrink: 0,
@@ -557,7 +557,7 @@ export default function McpResponseDisplay({
             {provenance && (
               <div
                 style={{
-                  borderLeft: '3px solid var(--nyc-success)',
+                  borderLeft: '3px solid var(--success)',
                   backgroundColor: 'rgba(0, 183, 3, 0.05)',
                   padding: '6px 10px',
                   marginTop: '16px',
@@ -680,7 +680,7 @@ export default function McpResponseDisplay({
         <div
           style={{
             flexShrink: 0,
-            borderTop: '1px solid var(--nyc-success)',
+            borderTop: '1px solid var(--success)',
             padding: '16px 24px',
             backgroundColor: 'rgba(0, 183, 3, 0.05)',
           }}
@@ -716,7 +716,7 @@ export default function McpResponseDisplay({
               <span>
                 <strong>Tokens:</strong> {tokens_used.toLocaleString()}
                 {token_limit_exceeded && (
-                  <span style={{ color: 'var(--nyc-caution)', marginLeft: '6px' }}>
+                  <span style={{ color: 'var(--caution)', marginLeft: '6px' }}>
                     (limit reached)
                   </span>
                 )}
@@ -763,7 +763,7 @@ export default function McpResponseDisplay({
                   borderRadius: '4px',
                   padding: '4px 10px',
                   fontSize: '12px',
-                  color: copied ? 'var(--nyc-success)' : 'var(--text-muted)',
+                  color: copied ? 'var(--success)' : 'var(--text-muted)',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',

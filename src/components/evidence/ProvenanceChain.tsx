@@ -14,7 +14,7 @@ function StepContainer({ children, isLast }: { children: React.ReactNode; isLast
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '20px', flexShrink: 0 }}>
         <div style={{
           width: '10px', height: '10px', borderRadius: '50%',
-          backgroundColor: 'var(--nyc-blue)', flexShrink: 0, marginTop: '5px',
+          backgroundColor: 'var(--accent)', flexShrink: 0, marginTop: '5px',
         }} />
         {!isLast && (
           <div style={{ width: '2px', flex: 1, backgroundColor: 'var(--border-color)', minHeight: '16px' }} />

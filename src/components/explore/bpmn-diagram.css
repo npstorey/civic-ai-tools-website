@@ -6,7 +6,7 @@
 .bpmn-active .djs-visual > rect,
 .bpmn-active .djs-visual > circle,
 .bpmn-active .djs-visual > polygon {
-  stroke: var(--nyc-success, #008A02) !important;
+  stroke: var(--success, #008A02) !important;
   stroke-width: 3px !important;
   filter: drop-shadow(0 0 8px rgba(0, 138, 2, 0.4));
   transition: all 0.3s ease;
@@ -24,7 +24,7 @@
 
 /* Active flow */
 .bpmn-active-flow .djs-visual > path {
-  stroke: var(--nyc-blue-40) !important;
+  stroke: var(--accent) !important;
   stroke-width: 3px !important;
   transition: all 0.3s ease;
 }
@@ -38,7 +38,7 @@
 
 /* Loop-back flow animated (caution/amber) */
 .bpmn-loop-back .djs-visual > path {
-  stroke: var(--nyc-caution, #FFB320) !important;
+  stroke: var(--caution, #FFB320) !important;
   stroke-width: 4px !important;
   filter: drop-shadow(0 0 6px rgba(255, 179, 32, 0.5));
   transition: all 0.3s ease;
@@ -46,7 +46,7 @@
 
 /* Success flow (green — gateway to synthesis) */
 .bpmn-success-flow .djs-visual > path {
-  stroke: var(--nyc-success, #008A02) !important;
+  stroke: var(--success, #008A02) !important;
   stroke-width: 4px !important;
   filter: drop-shadow(0 0 6px rgba(0, 138, 2, 0.4));
   transition: all 0.3s ease;
@@ -98,7 +98,7 @@
 
 .bpmn-overlay .iteration-badge {
   display: inline-block;
-  background: var(--nyc-blue-40);
+  background: var(--accent);
   color: white;
   font-size: 20px;
   font-weight: 700;
@@ -109,7 +109,7 @@
 }
 
 .bpmn-overlay .result-text {
-  color: var(--nyc-success, #00B703);
+  color: var(--success, #00B703);
   font-weight: 600;
   font-size: 14px;
 }
@@ -170,8 +170,8 @@
 
 .bpmn-zoom-controls button:hover {
   background: var(--card-background, #eee);
-  border-color: var(--nyc-blue-40);
-  color: var(--nyc-blue-40);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .bpmn-zoom-level {

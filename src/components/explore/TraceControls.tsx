@@ -48,13 +48,13 @@ function SpeedSelector({ speed, onSetSpeed }: { speed: PlaybackSpeed; onSetSpeed
             padding: '4px 10px',
             borderRadius: '4px',
             border: s === speed
-              ? '1px solid var(--nyc-blue-40)'
+              ? '1px solid var(--accent)'
               : '1px solid var(--border-color)',
             background: s === speed
               ? 'rgba(var(--accent-rgb), 0.1)'
               : 'var(--background)',
             color: s === speed
-              ? 'var(--nyc-blue-40)'
+              ? 'var(--accent)'
               : 'var(--text-muted)',
             fontSize: '12px',
             fontWeight: 600,
@@ -133,10 +133,10 @@ export default function TraceControls({
             fontFamily: 'inherit',
             cursor: 'pointer',
             border: 'none',
-            borderBottom: mode === 'examples' ? '2px solid var(--nyc-blue-40)' : '2px solid transparent',
+            borderBottom: mode === 'examples' ? '2px solid var(--accent)' : '2px solid transparent',
             marginBottom: '-2px',
             background: 'none',
-            color: mode === 'examples' ? 'var(--nyc-blue-40)' : 'var(--text-muted)',
+            color: mode === 'examples' ? 'var(--accent)' : 'var(--text-muted)',
             transition: 'all 0.15s ease',
           }}
         >
@@ -152,10 +152,10 @@ export default function TraceControls({
             fontFamily: 'inherit',
             cursor: 'pointer',
             border: 'none',
-            borderBottom: mode === 'live' ? '2px solid var(--nyc-blue-40)' : '2px solid transparent',
+            borderBottom: mode === 'live' ? '2px solid var(--accent)' : '2px solid transparent',
             marginBottom: '-2px',
             background: 'none',
-            color: mode === 'live' ? 'var(--nyc-blue-40)' : 'var(--text-muted)',
+            color: mode === 'live' ? 'var(--accent)' : 'var(--text-muted)',
             transition: 'all 0.15s ease',
           }}
         >
@@ -176,10 +176,10 @@ export default function TraceControls({
                   padding: '6px 14px',
                   borderRadius: '16px',
                   border: trace.id === selectedTraceId
-                    ? '1px solid var(--nyc-blue-40)'
+                    ? '1px solid var(--accent)'
                     : '1px solid var(--border-color)',
                   background: trace.id === selectedTraceId
-                    ? 'var(--nyc-blue-40)'
+                    ? 'var(--accent)'
                     : 'var(--background)',
                   color: trace.id === selectedTraceId
                     ? 'white'
@@ -237,7 +237,7 @@ export default function TraceControls({
               style={{
                 height: '100%',
                 width: `${replayState.progress * 100}%`,
-                background: replayState.isComplete ? 'var(--nyc-success)' : 'var(--nyc-blue-40)',
+                background: replayState.isComplete ? 'var(--success)' : 'var(--accent)',
                 borderRadius: '2px',
                 transition: 'width 0.3s ease',
               }}
@@ -362,7 +362,7 @@ export default function TraceControls({
                   <div style={{
                     height: '100%',
                     width: '30%',
-                    background: 'var(--nyc-blue-40)',
+                    background: 'var(--accent)',
                     borderRadius: '2px',
                     animation: 'live-progress-slide 1.5s ease-in-out infinite',
                   }} />
@@ -376,7 +376,7 @@ export default function TraceControls({
                     ? { color: 'var(--text-muted)', fontStyle: 'italic' }
                     : liveSlowMessage.tier === 3
                     ? {
-                        color: 'var(--nyc-blue-40)',
+                        color: 'var(--accent)',
                         padding: '8px 12px',
                         background: 'rgba(var(--accent-rgb), 0.06)',
                         border: '1px solid rgba(var(--accent-rgb), 0.15)',
@@ -427,7 +427,7 @@ export default function TraceControls({
           {/* Complete state: [✓ status] [Replay] [speed] [New query] */}
           {liveStatus === 'complete' && !isReplayingCapture && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '13px', color: 'var(--nyc-success)', fontWeight: 500 }}>
+              <span style={{ fontSize: '13px', color: 'var(--success)', fontWeight: 500 }}>
                 Complete in {(liveElapsedMs / 1000).toFixed(1)}s
               </span>
               <button
@@ -499,7 +499,7 @@ export default function TraceControls({
                   style={{
                     height: '100%',
                     width: `${replayState.progress * 100}%`,
-                    background: replayState.isComplete ? 'var(--nyc-success)' : 'var(--nyc-blue-40)',
+                    background: replayState.isComplete ? 'var(--success)' : 'var(--accent)',
                     borderRadius: '2px',
                     transition: 'width 0.3s ease',
                   }}
@@ -519,7 +519,7 @@ export default function TraceControls({
               border: '1px solid rgba(236, 19, 30, 0.2)',
               borderRadius: '4px',
               fontSize: '13px',
-              color: 'var(--nyc-error)',
+              color: 'var(--error)',
             }}>
               {liveError}
             </div>
@@ -530,21 +530,21 @@ export default function TraceControls({
         .live-query-input:focus-visible {
           outline: none;
           border-style: dashed;
-          border-color: var(--nyc-blue-40);
-          background-color: var(--nyc-blue-80);
+          border-color: var(--accent);
+          background-color: var(--accent-light);
         }
         .trace-pill:hover {
-          border-color: var(--nyc-blue-40) !important;
+          border-color: var(--accent) !important;
         }
         .mode-tab:hover {
-          color: var(--nyc-blue-40) !important;
+          color: var(--accent) !important;
         }
         .secondary-btn:hover {
-          border-color: var(--nyc-gray-70) !important;
+          border-color: var(--neutral-70) !important;
           color: var(--text-secondary) !important;
         }
         .speed-btn:hover {
-          border-color: var(--nyc-blue-40) !important;
+          border-color: var(--accent) !important;
         }
       `}</style>
     </div>

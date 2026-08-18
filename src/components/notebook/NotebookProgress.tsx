@@ -64,7 +64,7 @@ function StatusGlyph({ status }: { status: 'pending' | 'active' | 'done' }) {
       <span aria-hidden style={{
         width: '16px', height: '16px', display: 'inline-flex',
         alignItems: 'center', justifyContent: 'center',
-        borderRadius: '50%', background: 'var(--nyc-success, #00b703)', color: 'white',
+        borderRadius: '50%', background: 'var(--success, #00b703)', color: 'white',
         fontSize: '11px', fontWeight: 700,
       }}>✓</span>
     );
@@ -75,7 +75,7 @@ function StatusGlyph({ status }: { status: 'pending' | 'active' | 'done' }) {
         aria-hidden
         style={{
           width: '16px', height: '16px', display: 'inline-block',
-          border: '2px solid var(--nyc-blue)',
+          border: '2px solid var(--accent)',
           borderTopColor: 'transparent', borderRadius: '50%',
           animation: 'spin 1s linear infinite',
         }}
@@ -129,7 +129,7 @@ export default function NotebookProgress({
         border: '1px solid var(--border-color, #e5e5e5)',
         borderRadius: '8px',
         padding: '20px 24px',
-        background: 'var(--nyc-white, #ffffff)',
+        background: 'var(--white, #ffffff)',
         display: 'flex',
         flexDirection: 'column',
         gap: '12px',

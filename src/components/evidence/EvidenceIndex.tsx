@@ -47,10 +47,10 @@ const SORT_OPTIONS = [
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
     unverified: { bg: 'rgba(0,0,0,0.06)', text: 'var(--text-muted)' },
-    consistency_tested: { bg: 'rgba(var(--accent-rgb), 0.1)', text: 'var(--nyc-blue)' },
-    evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--nyc-success)' },
-    fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--nyc-success)' },
-    withdrawn: { bg: 'rgba(236, 19, 30, 0.08)', text: 'var(--nyc-error)' },
+    consistency_tested: { bg: 'rgba(var(--accent-rgb), 0.1)', text: 'var(--accent)' },
+    evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--success)' },
+    fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--success)' },
+    withdrawn: { bg: 'rgba(236, 19, 30, 0.08)', text: 'var(--error)' },
   };
   const c = colors[status] || colors.unverified;
   return (
@@ -162,7 +162,7 @@ export default function EvidenceIndex() {
               onClick={() => { setQuery(''); setStatus(''); setRange('all'); setSort('newest'); setIncludeWithdrawn(false); }}
               style={{
                 ...selectStyle, cursor: 'pointer', border: 'none',
-                color: 'var(--nyc-blue)', backgroundColor: 'transparent', padding: '6px 4px',
+                color: 'var(--accent)', backgroundColor: 'transparent', padding: '6px 4px',
               }}
             >
               Clear filters
@@ -195,7 +195,7 @@ export default function EvidenceIndex() {
                   marketing host and 307s to `/ask` on the app host, while a
                   direct `/ask` would 404 on the marketing host. Only the
                   wording was wrong — the app host has no "home page". */}
-              <Link href="/" style={{ color: 'var(--nyc-blue)' }}>Run a query</Link> and
+              <Link href="/" style={{ color: 'var(--accent)' }}>Run a query</Link> and
               click &ldquo;Publish as Evidence&rdquo; to create the first one.
             </p>
           )}
@@ -225,7 +225,7 @@ export default function EvidenceIndex() {
                     opacity: isWithdrawn ? 0.6 : 1,
                   }}
                   onMouseOver={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--nyc-blue)';
+                    e.currentTarget.style.borderColor = 'var(--accent)';
                     e.currentTarget.style.boxShadow = '0 2px 8px rgba(var(--accent-rgb), 0.1)';
                   }}
                   onMouseOut={(e) => {
@@ -310,7 +310,7 @@ function PaginationButton({ label, disabled, active, onClick }: {
       style={{
         padding: '6px 12px', border: '1px solid var(--border-color)', borderRadius: '4px',
         fontSize: '13px', cursor: disabled ? 'not-allowed' : 'pointer',
-        backgroundColor: active ? 'var(--nyc-blue)' : 'white',
+        backgroundColor: active ? 'var(--accent)' : 'white',
         color: active ? 'white' : disabled ? 'var(--text-muted)' : 'var(--text-secondary)',
         fontWeight: active ? 600 : 400,
         opacity: disabled ? 0.5 : 1,

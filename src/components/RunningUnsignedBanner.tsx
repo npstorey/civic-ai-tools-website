@@ -39,7 +39,7 @@ export default function RunningUnsignedBanner() {
         role="status"
         style={{
           backgroundColor: 'rgba(255, 179, 32, 0.15)',
-          borderBottom: '1px solid var(--nyc-caution, #FFB320)',
+          borderBottom: '1px solid var(--caution, #FFB320)',
           padding: '8px 24px',
           fontSize: '13px',
           lineHeight: 1.5,
@@ -73,7 +73,7 @@ export default function RunningUnsignedBanner() {
         role="status"
         style={{
           backgroundColor: 'rgba(255, 179, 32, 0.15)',
-          borderBottom: '1px solid var(--nyc-caution, #FFB320)',
+          borderBottom: '1px solid var(--caution, #FFB320)',
           padding: '8px 24px',
           fontSize: '13px',
           lineHeight: 1.5,
@@ -109,7 +109,7 @@ export default function RunningUnsignedBanner() {
       role="status"
       style={{
         backgroundColor: 'rgba(255, 179, 32, 0.15)',
-        borderBottom: '1px solid var(--nyc-caution, #FFB320)',
+        borderBottom: '1px solid var(--caution, #FFB320)',
         padding: '8px 24px',
         fontSize: '13px',
         lineHeight: 1.5,

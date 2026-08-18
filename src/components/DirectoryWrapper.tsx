@@ -37,7 +37,7 @@ export default function DirectoryWrapper({
     fontWeight: isActive ? 600 : 400,
     color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
     border: 'none',
-    borderBottom: isActive ? '2px solid var(--nyc-blue)' : '2px solid transparent',
+    borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
     marginBottom: '-2px',
     background: 'none',
     cursor: 'pointer',

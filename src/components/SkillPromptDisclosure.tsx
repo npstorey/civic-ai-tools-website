@@ -137,7 +137,7 @@ export default function SkillPromptDisclosure() {
         style={{
           background: 'none',
           border: 'none',
-          color: 'var(--nyc-blue-40)',
+          color: 'var(--accent)',
           fontSize: '12px',
           fontWeight: 500,
           cursor: 'pointer',
@@ -241,7 +241,7 @@ export default function SkillPromptDisclosure() {
               href="/learn#system-prompt"
               style={{
                 fontSize: '12px',
-                color: 'var(--nyc-blue)',
+                color: 'var(--accent)',
                 textDecoration: 'underline',
               }}
             >
@@ -253,7 +253,7 @@ export default function SkillPromptDisclosure() {
               rel="noopener noreferrer"
               style={{
                 fontSize: '12px',
-                color: 'var(--nyc-blue)',
+                color: 'var(--accent)',
                 textDecoration: 'underline',
               }}
             >

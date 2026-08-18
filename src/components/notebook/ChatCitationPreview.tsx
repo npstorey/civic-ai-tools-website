@@ -145,7 +145,7 @@ export default function ChatCitationPreview({ prompt, executedAt, structuredSumm
                 style={{
                   background: 'none', border: '1px solid var(--border-color)', borderRadius: '4px',
                   padding: '4px 10px', fontSize: '12px', cursor: 'pointer',
-                  color: copiedIdx === i ? 'var(--nyc-success)' : 'var(--text-muted)',
+                  color: copiedIdx === i ? 'var(--success)' : 'var(--text-muted)',
                 }}
               >
                 {copiedIdx === i ? 'Copied' : 'Copy'}

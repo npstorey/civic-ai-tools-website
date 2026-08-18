@@ -69,9 +69,9 @@ export default function SkillSection({ skillText, skillTextRef, skillHash }: Ski
         <button
           onClick={handleToggle}
           style={{
-            background: 'none', border: '1px solid var(--nyc-blue)', borderRadius: '4px',
+            background: 'none', border: '1px solid var(--accent)', borderRadius: '4px',
             padding: '6px 14px', fontSize: '13px', cursor: 'pointer',
-            color: 'var(--nyc-blue)', fontWeight: 500,
+            color: 'var(--accent)', fontWeight: 500,
           }}
         >
           {buttonLabel}
@@ -91,7 +91,7 @@ export default function SkillSection({ skillText, skillTextRef, skillHash }: Ski
             </div>
           )}
           {usingRef && fetched.status === 'error' && (
-            <div style={{ fontSize: '13px', color: 'var(--nyc-error)' }}>
+            <div style={{ fontSize: '13px', color: 'var(--error)' }}>
               Could not fetch blob: {fetched.error}
             </div>
           )}

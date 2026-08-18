@@ -20,10 +20,10 @@ interface BpmnViewerProps {
 }
 
 const LANE_COLORS: Record<string, string> = {
-  Participant_Browser: 'rgba(var(--accent-rgb), 0.06)',      // accent (nyc-blue-40 alias)
-  Participant_AI: 'rgba(147, 51, 234, 0.06)',           // light purple (no NYC equivalent)
-  Participant_MCP: 'rgba(0, 138, 2, 0.06)',             // nyc-success
-  Participant_Socrata: 'rgba(255, 179, 32, 0.06)',      // nyc-caution
+  Participant_Browser: 'rgba(var(--accent-rgb), 0.06)',      // --accent
+  Participant_AI: 'rgba(147, 51, 234, 0.06)',           // light purple (no palette equivalent)
+  Participant_MCP: 'rgba(0, 138, 2, 0.06)',             // --success
+  Participant_Socrata: 'rgba(255, 179, 32, 0.06)',      // --caution
   Participant_Narration: 'rgba(117, 117, 117, 0.06)',   // text-muted
 };
 

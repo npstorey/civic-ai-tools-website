@@ -76,16 +76,16 @@
   --space-xl: 64px;
 
   /* Applied colors - Light mode only */
-  --background: var(--nyc-white);
-  --foreground: var(--nyc-black);
-  --text-primary: var(--nyc-black);
-  --text-secondary: var(--nyc-gray-20);
+  --background: var(--white);
+  --foreground: var(--black);
+  --text-primary: var(--black);
+  --text-secondary: var(--neutral-20);
   --text-muted: #757575;
-  --border-color: var(--nyc-gray-80);
+  --border-color: var(--neutral-80);
   /* --accent / --accent-hover / --accent-light are defined at the top of
      this block (#217) — they are the settable seam now, not applied aliases. */
-  --card-background: var(--nyc-gray-90);
-  --skeleton-color: var(--nyc-gray-80);
+  --card-background: var(--neutral-90);
+  --skeleton-color: var(--neutral-80);
 }
 
 @theme inline {
@@ -116,7 +116,7 @@ button {
 }
 
 button:focus-visible {
-  outline: 2px dashed var(--nyc-blue-40);
+  outline: 2px dashed var(--accent);
   outline-offset: 2px;
 }
 
@@ -173,14 +173,14 @@ h4 {
 
 /* NYC Design System Link Styles */
 a {
-  color: var(--nyc-blue-40);
+  color: var(--accent);
   text-decoration: underline;
   font-weight: 500;
   transition: color 0.15s ease;
 }
 
 a:hover {
-  color: var(--nyc-blue-10);
+  color: var(--accent-hover);
 }
 
 a:visited {
@@ -188,7 +188,7 @@ a:visited {
 }
 
 a:focus-visible {
-  outline: 2px dashed var(--nyc-blue-40);
+  outline: 2px dashed var(--accent);
   outline-offset: 2px;
 }
 
@@ -220,42 +220,42 @@ a:focus-visible {
 }
 
 .nyc-button:focus-visible {
-  outline: 2px dashed var(--nyc-blue-40);
+  outline: 2px dashed var(--accent);
   outline-offset: 2px;
 }
 
 /* Primary Button */
 .nyc-button-primary,
 .nyc-button-primary:visited {
-  background-color: var(--nyc-blue-40);
-  color: var(--nyc-white);
+  background-color: var(--accent);
+  color: var(--white);
   border: none;
 }
 
 .nyc-button-primary:hover {
-  background-color: var(--nyc-blue-10);
-  color: var(--nyc-white);
+  background-color: var(--accent-hover);
+  color: var(--white);
 }
 
 .nyc-button-primary:disabled {
-  background-color: var(--nyc-gray-70);
+  background-color: var(--neutral-70);
   cursor: not-allowed;
 }
 
 /* Secondary Button */
 .nyc-button-secondary {
-  background-color: var(--nyc-white);
-  color: var(--nyc-blue-40);
-  border: 1px solid var(--nyc-gray-80);
+  background-color: var(--white);
+  color: var(--accent);
+  border: 1px solid var(--neutral-80);
 }
 
 .nyc-button-secondary:hover {
-  color: var(--nyc-blue-10);
-  border-color: var(--nyc-gray-70);
+  color: var(--accent-hover);
+  border-color: var(--neutral-70);
 }
 
 .nyc-button-secondary:disabled {
-  color: var(--nyc-gray-70);
+  color: var(--neutral-70);
   cursor: not-allowed;
 }
 
@@ -277,8 +277,8 @@ a:focus-visible {
   padding: 12px 16px;
   font-size: 16px;
   font-family: inherit;
-  background-color: var(--nyc-white);
-  border: 1px solid var(--nyc-gray-70);
+  background-color: var(--white);
+  border: 1px solid var(--neutral-70);
   border-radius: 4px;
   color: var(--text-primary);
   transition: all 0.15s ease;
@@ -289,15 +289,15 @@ a:focus-visible {
 .nyc-field select:focus-visible {
   outline: none;
   border-style: dashed;
-  border-color: var(--nyc-blue-40);
-  background-color: var(--nyc-blue-80);
+  border-color: var(--accent);
+  background-color: var(--accent-light);
 }
 
 .nyc-field--error input,
 .nyc-field--error textarea,
 .nyc-field--error select {
   background-color: #FEE2E2;
-  border-color: var(--nyc-error);
+  border-color: var(--error);
 }
 
 /* Response panel markdown styles */
@@ -383,7 +383,7 @@ a:focus-visible {
 }
 
 .response-markdown a {
-  color: var(--nyc-blue-40);
+  color: var(--accent);
   text-decoration: underline;
 }
 
@@ -431,7 +431,7 @@ a:focus-visible {
 /* Footer link styling */
 footer a,
 footer a:visited {
-  color: var(--nyc-blue-40);
+  color: var(--accent);
 }
 
 /* CSS-only tooltip system */
@@ -445,8 +445,8 @@ footer a:visited {
   bottom: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
-  background-color: var(--nyc-gray-20);
-  color: var(--nyc-white);
+  background-color: var(--neutral-20);
+  color: var(--white);
   font-size: 12px;
   font-weight: 400;
   line-height: 1.4;
@@ -468,7 +468,7 @@ footer a:visited {
   left: 50%;
   transform: translateX(-50%);
   border: 4px solid transparent;
-  border-top-color: var(--nyc-gray-20);
+  border-top-color: var(--neutral-20);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.15s ease;
@@ -494,7 +494,7 @@ footer a:visited {
   overflow-x: auto;
   padding-bottom: 4px;
   scrollbar-width: thin;
-  scrollbar-color: var(--nyc-gray-70) transparent;
+  scrollbar-color: var(--neutral-70) transparent;
 }
 
 .breadcrumb-trail::-webkit-scrollbar {
@@ -506,13 +506,13 @@ footer a:visited {
 }
 
 .breadcrumb-trail::-webkit-scrollbar-thumb {
-  background-color: var(--nyc-gray-70);
+  background-color: var(--neutral-70);
   border-radius: 2px;
 }
 
 .breadcrumb-trail button:hover {
-  border-color: var(--nyc-success) !important;
-  color: var(--nyc-success) !important;
+  border-color: var(--success) !important;
+  color: var(--success) !important;
 }
 
 /* Fade-in animation for completed summary */
@@ -544,7 +544,7 @@ footer a:visited {
 
 /* About page query suggestion cards */
 .query-suggestion-card:hover {
-  border-color: var(--nyc-blue-40);
+  border-color: var(--accent);
   background-color: rgba(var(--accent-rgb), 0.03);
 }
 

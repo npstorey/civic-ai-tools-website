@@ -5,8 +5,8 @@ import { EXPRESS_INTEREST_URL, TYPED_STANDARDS_URL } from '@/lib/site-config';
 type LegendStatus = 'built' | 'designed' | 'upcoming';
 
 const LEGEND_META: Record<LegendStatus, { label: string; color: string }> = {
-  built: { label: 'Built', color: 'var(--nyc-success)' },
-  designed: { label: 'Designed', color: 'var(--nyc-caution)' },
+  built: { label: 'Built', color: 'var(--success)' },
+  designed: { label: 'Designed', color: 'var(--caution)' },
   upcoming: { label: 'Upcoming', color: 'var(--text-muted)' },
 };
 

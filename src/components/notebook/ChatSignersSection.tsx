@@ -94,7 +94,7 @@ function PlatformPendingSignerRow({
               fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em',
               textTransform: 'uppercase',
               padding: '1px 6px', borderRadius: '999px',
-              background: 'rgba(var(--accent-rgb), 0.1)', color: 'var(--nyc-blue)',
+              background: 'rgba(var(--accent-rgb), 0.1)', color: 'var(--accent)',
             }}
           >
             Pre-publish preview
@@ -182,7 +182,7 @@ export default function ChatSignersSection({ executedAt, signingKeyId }: ChatSig
           <span style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             width: '22px', height: '22px', borderRadius: '50%',
-            background: 'rgba(var(--accent-rgb), 0.1)', color: 'var(--nyc-blue)',
+            background: 'rgba(var(--accent-rgb), 0.1)', color: 'var(--accent)',
             fontSize: '11px', fontWeight: 700,
           }}>↻</span>
           <div>

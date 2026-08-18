@@ -75,9 +75,9 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
         <div
           role="alert"
           style={{
-            border: '1px solid var(--nyc-error, #ec131e)',
+            border: '1px solid var(--error, #ec131e)',
             background: 'rgba(236, 19, 30, 0.06)',
-            color: 'var(--nyc-error, #ec131e)',
+            color: 'var(--error, #ec131e)',
             borderRadius: '4px',
             padding: '16px 20px',
             display: 'flex',
@@ -150,11 +150,11 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
                   href={signInAffordance.href}
                   style={{
                     background: 'none',
-                    border: '1px solid var(--nyc-blue)',
+                    border: '1px solid var(--accent)',
                     borderRadius: '4px',
                     padding: '6px 14px',
                     fontSize: '13px',
-                    color: 'var(--nyc-blue)',
+                    color: 'var(--accent)',
                     cursor: 'pointer',
                     fontWeight: 500,
                     textDecoration: 'none',
@@ -176,11 +176,11 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
                 }}
                 style={{
                   background: 'none',
-                  border: '1px solid var(--nyc-blue)',
+                  border: '1px solid var(--accent)',
                   borderRadius: '4px',
                   padding: '6px 14px',
                   fontSize: '13px',
-                  color: 'var(--nyc-blue)',
+                  color: 'var(--accent)',
                   cursor: 'pointer',
                   fontWeight: 500,
                 }}

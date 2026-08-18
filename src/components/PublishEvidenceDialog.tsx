@@ -353,7 +353,7 @@ export default function PublishEvidenceDialog({
                       <span style={{
                         width: '10px', height: '10px',
                         border: '1.5px solid var(--border-color)',
-                        borderTopColor: 'var(--nyc-blue)',
+                        borderTopColor: 'var(--accent)',
                         borderRadius: '50%',
                         animation: 'spin 1s linear infinite',
                       }} />
@@ -477,7 +477,7 @@ export default function PublishEvidenceDialog({
                   marginBottom: '12px',
                   borderRadius: '4px',
                   backgroundColor: 'rgba(255, 179, 32, 0.12)',
-                  border: '1px solid var(--nyc-caution, #FFB320)',
+                  border: '1px solid var(--caution, #FFB320)',
                   fontSize: '13px',
                   lineHeight: 1.5,
                   color: 'var(--text-secondary)',
@@ -498,7 +498,7 @@ export default function PublishEvidenceDialog({
                 style={{
                   width: '100%',
                   padding: '10px 20px',
-                  backgroundColor: 'var(--nyc-blue)',
+                  backgroundColor: 'var(--accent)',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
@@ -522,7 +522,7 @@ export default function PublishEvidenceDialog({
                 width: '24px',
                 height: '24px',
                 border: '3px solid var(--border-color)',
-                borderTopColor: 'var(--nyc-blue)',
+                borderTopColor: 'var(--accent)',
                 borderRadius: '50%',
                 animation: 'spin 1s linear infinite',
                 margin: '0 auto 12px',
@@ -544,7 +544,7 @@ export default function PublishEvidenceDialog({
                 alignItems: 'center',
                 gap: '8px',
                 marginBottom: '16px',
-                color: 'var(--nyc-success)',
+                color: 'var(--success)',
               }}>
                 <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
@@ -578,7 +578,7 @@ export default function PublishEvidenceDialog({
                       flex: 1,
                       fontSize: '13px',
                       wordBreak: 'break-all',
-                      color: 'var(--nyc-blue)',
+                      color: 'var(--accent)',
                     }}>
                       {typeof window !== 'undefined' ? window.location.origin : ''}{resultUrl}
                     </code>
@@ -596,7 +596,7 @@ export default function PublishEvidenceDialog({
                         padding: '4px 10px',
                         fontSize: '12px',
                         cursor: 'pointer',
-                        color: urlCopied ? 'var(--nyc-success)' : 'var(--text-muted)',
+                        color: urlCopied ? 'var(--success)' : 'var(--text-muted)',
                         whiteSpace: 'nowrap',
                       }}
                     >
@@ -614,7 +614,7 @@ export default function PublishEvidenceDialog({
                     style={{
                       width: '100%',
                       padding: '10px 20px',
-                      backgroundColor: 'var(--nyc-blue)',
+                      backgroundColor: 'var(--accent)',
                       color: 'white',
                       border: 'none',
                       borderRadius: '4px',
@@ -643,7 +643,7 @@ export default function PublishEvidenceDialog({
                     style={{
                       width: '100%',
                       padding: '10px 20px',
-                      backgroundColor: 'var(--nyc-blue)',
+                      backgroundColor: 'var(--accent)',
                       color: 'white',
                       border: 'none',
                       borderRadius: '4px',
@@ -662,7 +662,7 @@ export default function PublishEvidenceDialog({
                       width: '100%',
                       padding: '10px 20px',
                       backgroundColor: 'white',
-                      color: urlCopied ? 'var(--nyc-success)' : 'var(--text-secondary)',
+                      color: urlCopied ? 'var(--success)' : 'var(--text-secondary)',
                       border: '1px solid var(--border-color)',
                       borderRadius: '4px',
                       fontSize: '14px',
@@ -706,7 +706,7 @@ export default function PublishEvidenceDialog({
                 borderRadius: '4px',
                 marginBottom: '16px',
                 fontSize: '14px',
-                color: 'var(--nyc-error)',
+                color: 'var(--error)',
               }}>
                 {errorMessage}
               </div>
@@ -730,7 +730,7 @@ export default function PublishEvidenceDialog({
                   style={{
                     flex: 1,
                     padding: '10px 20px',
-                    backgroundColor: 'var(--nyc-blue)',
+                    backgroundColor: 'var(--accent)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
