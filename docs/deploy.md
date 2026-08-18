@@ -512,9 +512,11 @@ byte-identically; see [Branding and
 theming](#branding-and-theming-chrome-only) below), `OIDC_PROVIDER_NAME`
 (button label), `SIGN_IN_ALLOWLIST` (unset or empty = open sign-in,
 exactly the pre-allowlist behavior; see the sign-in section),
-the host-topology set (`APP_HOST`, `MARKETING_HOST`, `APP_ONLY` — with
-none set, every route serves on every host, exactly the single-host
-behavior; see [Host topology](#host-topology-optional)),
+the host-topology set (`APP_HOST`, `MARKETING_HOST`, `SERVE_MARKETING`,
+`APP_ONLY` — with none set, the instance serves the app surface only:
+the marketing pages 404 and `/` redirects to `/ask`. `SERVE_MARKETING`
+is the one variable whose unset state is the correct state for an
+instance; see [Host topology](#host-topology-optional)),
 `SITE_NOINDEX` (unset/empty = indexable, the standard web default; see
 [Indexing](#indexing-optional)),
 the remaining content-source overrides (`DIRECTORY_DATA_URL`,
@@ -701,31 +703,65 @@ recorded in the instance's own database on first sign-in.
 
 ## Host topology (optional)
 
-By default an instance is a single host and every route serves on it —
-nothing in this section is required, and with none of the three
-variables set the routing middleware passes every request through
-untouched. Set them to split the public face from the gated app
-surface, or to run an app-only instance with no public face at all.
-The decision logic lives in `src/lib/host-routing.ts` (unit-tested;
-`src/proxy.ts` is a thin adapter over it).
+**Every variable in this section is optional. An instance that sets none
+of them serves the app surface only** — the marketing pages return 404
+and `/` redirects to `/ask`. That is the portable default, and for most
+instances it is also the finished configuration: nothing here needs to be
+set at all.
 
-| Variable | Meaning |
-| --- | --- |
-| `APP_HOST` | The host that serves the gated app surface. On it, `/` redirects (307) to `/ask` — the signed-in query surface — the marketing pages return 404, and `/ask`, the dashboard, device pairing, and evidence routes all serve. |
-| `MARKETING_HOST` | The host that serves the public face. On it, the marketing pages and the public evidence registry serve exactly as on a single host, and the app-private routes — `/ask`, `/dashboard`, `/auth/device`, `/dev/notebook-preview` — return 404. |
-| `APP_ONLY` | `1` or `true`: an app-only instance. Every request on every host gets the app-surface behavior above; `APP_HOST`/`MARKETING_HOST` are ignored. For operators deploying only the gated surface, with no marketing site. |
+The marketing site — the home page, `/about`, `/explore`, `/learn`,
+`/project`, `/roadmap`, `/directory` — is the reference deployment's own
+website, not part of what an instance is expected to publish. It is
+withheld by **configuration, never by deleting files**, so your instance
+stays cleanly `git pull`-able from upstream; the pages remain in the tree
+and simply do not serve.
 
-Values are host names (`app.example.org`); a full origin
-(`http://localhost:3000`) is also accepted, and matching is
-case-, port-, and `www.`-insensitive. Three properties worth
+Set the variables below to serve that marketing face anyway, or to split
+it onto a separate host from the gated app surface. The decision logic
+lives in `src/lib/host-routing.ts` (unit-tested; `src/proxy.ts` is a thin
+adapter over it).
+
+| Variable | Required? | Meaning |
+| --- | --- | --- |
+| `APP_HOST` | Optional — unset means no host is named | The host that serves the gated app surface. On it, `/` redirects (307) to `/ask` — the signed-in query surface — the marketing pages return 404, and `/ask`, the dashboard, device pairing, and evidence routes all serve. |
+| `MARKETING_HOST` | Optional — unset means no host is named | The host that serves the public face. On it, the marketing pages and the public evidence registry serve exactly as on a single host, and the app-private routes — `/ask`, `/dashboard`, `/auth/device`, `/dev/notebook-preview` — return 404. |
+| `SERVE_MARKETING` | Optional — **leave it unset** | `1` or `true`: hosts matching *neither* variable above serve everything, marketing pages included. Unset, those hosts get the app surface only. Governs unnamed hosts and nothing else: a host you *have* named behaves identically either way. |
+| `APP_ONLY` | Optional — rarely needed | `1` or `true`: every request on every host gets the app-surface behavior, and `APP_HOST`/`MARKETING_HOST` are ignored entirely. Redundant with the default unless you have named a marketing host and want to override it. |
+
+`SERVE_MARKETING` is the one variable here whose **unset state is the
+correct state for an instance**. It exists for the reference deployment
+and for anyone deliberately republishing the marketing pages; if you are
+standing up your own instance, do not set it, and the marketing site
+stays withheld with no further action.
+
+Values for the two host variables are host names (`app.example.org`); a
+full origin (`http://localhost:3000`) is also accepted, and matching is
+case-, port-, and `www.`-insensitive. Four properties worth
 internalizing:
 
-- **Roles are claimed, never assumed.** A request on a host matching
-  neither variable — a preview deployment, a health check by IP, an
-  alias you have not named — is served exactly as if no topology were
-  configured. That makes the rollout incremental: set `APP_HOST` first
-  and verify the app host, then set `MARKETING_HOST` to switch on the
-  withholding.
+- **Named hosts claim their role; unnamed hosts take the default.** A
+  host you named behaves exactly as its row above says, and nothing else
+  changes that. A request on a host matching *neither* variable — a
+  preview deployment, a health check by IP, an alias you have not named —
+  gets the app surface, unless `SERVE_MARKETING` says otherwise. This
+  reverses the previous behavior, under which an unnamed host was served
+  exactly as if no topology were configured, so it changes what an
+  **incremental rollout** looks like. The sequence is now:
+
+  1. Set `SERVE_MARKETING=1` **first**. Every host you have not named
+     keeps serving everything, which is what makes the following steps
+     verifiable one at a time.
+  2. Set `APP_HOST` and verify the app host in isolation — the apex is
+     still unnamed, so it is unaffected.
+  3. Set `MARKETING_HOST` to switch on the withholding there, and verify
+     the split.
+  4. Decide about `SERVE_MARKETING`. Keep it if you want preview
+     deployments and unnamed aliases to serve the full site; drop it to
+     have every host but the two you named behave as the app surface.
+
+  Skipping step 1 is not dangerous, but it means the apex starts
+  withholding its marketing pages the moment you deploy, before you have
+  had a chance to verify anything on the app host.
 - **The evidence registry is dual-served on purpose.** `/evidence` and
   `/evidence/<slug>` are public product surface; published links must
   keep resolving on the public face, and the app surface serves them
@@ -737,6 +773,26 @@ internalizing:
   identically on every host. `/ask` is the visible case: a signed-out
   visitor gets a sign-in prompt there rather than a redirect, on any
   host that serves it.
+- **The chrome follows the routing.** Whether the instance serves a
+  marketing surface at all is derived from these same variables, so the
+  header nav's marketing links, the footer funnels, and the app
+  surface's "Public site" exit link hide themselves on an instance that
+  serves no marketing face, rather than pointing at pages that would
+  404. Nothing extra to configure — but it does mean that setting
+  `SERVE_MARKETING` changes the chrome as well as the routing, in step
+  with each other.
+
+Two notes on host spellings. A request that matches a configured host but
+spells it with the other `www.` form is 307-redirected to the spelling
+you configured (`/api/*` and `/.well-known/*` are exempt, so cross-origin
+verifier fetches are never broken by a redirect). Unnamed hosts are never
+steered anywhere, since there is no configured spelling for them to be
+steered toward — that holds under the app-surface default just as it did
+when unnamed hosts passed through. And a follow-up worth recording rather
+than doing now: **if indexing is ever enabled on a host that has aliases,
+add `<link rel=canonical>` at that point.** No `rel=canonical` work is
+warranted while `SITE_NOINDEX` is set, since search-engine
+canonicalization is moot for a site that disallows crawling outright.
 
 Two split-host interactions to plan for: `NEXTAUTH_URL` can point at
 only one host, and sessions are per-host cookies — decide which host

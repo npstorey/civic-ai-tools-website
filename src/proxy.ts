@@ -28,8 +28,13 @@ const NOT_FOUND_ROUTE = '/_not-found';
  * interception file convention, and the old name emits a deprecation
  * warning on every build. Same standard mechanism, current name.
  *
- * With none of APP_HOST / MARKETING_HOST / APP_ONLY set, every request
- * resolves to `serve` and this proxy is a pass-through.
+ * THE DEFAULT CHANGED IN #259 P3. With nothing configured, every request
+ * now resolves to the APP role: `/` redirects to `/ask` and the marketing
+ * routes 404, because the marketing face is the reference deployment's own
+ * website rather than part of what an instance ships. The former default —
+ * every request a pass-through — is now spelled `SERVE_MARKETING=1`, which
+ * governs hosts matching neither `APP_HOST` nor `MARKETING_HOST` and is
+ * what keeps preview deployments serving both route groups.
  */
 export function proxy(request: NextRequest) {
   const action = decideRoute(

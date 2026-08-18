@@ -244,3 +244,46 @@ test('session affordance rule zero: null topology, app-only, and partial rollout
   // NEXTAUTH_URL alone never conjures an affordance.
   assert.equal(resolveSessionAffordance({ NEXTAUTH_URL: 'https://example.test' }), null);
 });
+
+// --- #259 P3: the flip must not widen any origin set ------------------------
+
+test('SERVE_MARKETING changes nothing here, in any combination', () => {
+  // The consumer-audit verdict, pinned. Every origin this module can emit
+  // has to be NAMED by a host variable first, so a flag that names no host
+  // cannot move any of these answers. Stated as an equality across the knob
+  // rather than as literals, so it keeps holding if the values change.
+  const envs = [
+    {},
+    { NEXTAUTH_URL: 'https://example.test' },
+    { APP_HOST: 'app.example.test' },
+    { MARKETING_HOST: 'example.test' },
+    SPLIT,
+    { ...SPLIT, APP_ONLY: '1' },
+  ];
+  for (const env of envs) {
+    const label = JSON.stringify(env);
+    for (const on of ['1', 'true']) {
+      const knobbed = { ...env, SERVE_MARKETING: on };
+      assert.deepEqual(resolveTrustedOrigins(knobbed), resolveTrustedOrigins(env), label);
+      assert.equal(resolveMarketingCorsOrigin(knobbed), resolveMarketingCorsOrigin(env), label);
+      assert.deepEqual(resolveSessionAffordance(knobbed), resolveSessionAffordance(env), label);
+    }
+  }
+});
+
+test('an unconfigured instance still trusts exactly NEXTAUTH_URL and grants no CORS', () => {
+  // The post-flip default, spelled out: routing behaves app-only, but the
+  // instance still owns exactly one origin and has no marketing host to
+  // grant the session-status CORS header to. Nothing about the flip may
+  // turn the inert endpoint on.
+  const env = { NEXTAUTH_URL: 'https://instance.example.test' };
+  assert.deepEqual(resolveTrustedOrigins(env), ['https://instance.example.test']);
+  assert.equal(resolveMarketingCorsOrigin(env), null);
+  assert.equal(
+    isConfiguredMarketingOrigin('https://instance.example.test', env),
+    false,
+    'the endpoint stays inert — its own origin is not a marketing origin',
+  );
+  assert.equal(isTrustedRequestOrigin('https://instance.example.test', 'instance.example.test', env), true);
+  assert.equal(isTrustedRequestOrigin('https://evil.example.test', 'instance.example.test', env), false);
+});

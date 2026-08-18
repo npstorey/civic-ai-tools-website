@@ -48,6 +48,21 @@
 //     Origin, by design — and must still match the apex value the
 //     operator configured.
 //
+// `SERVE_MARKETING` DELIBERATELY DOES NOT APPEAR HERE (#259 P3 consumer
+// audit). All three `APP_ONLY` branches below survived the flip unchanged,
+// and the reason is the same one each time: every origin this module can
+// emit has to be NAMED by a host variable before it exists at all. Change
+// the role an UNNAMED host takes and none of these answers move —
+// `resolveTrustedOrigins` adds only origins `APP_HOST`/`MARKETING_HOST`
+// spell out, and both `resolveMarketingCorsOrigin` and
+// `resolveSessionAffordance` are already null whenever `MARKETING_HOST` is
+// unset, whatever `APP_ONLY` says. An instance with nothing configured
+// therefore keeps exactly the singleton `{NEXTAUTH_URL}` trust set and the
+// inert session-status endpoint it had before, which is correct: it owns no
+// second origin and has no marketing host to grant CORS to. Wiring the new
+// flag in would have widened a security-relevant set on the strength of a
+// flag that names no origin.
+//
 // Pure module: no Next.js imports, env passed as a record — runs under
 // `node --test` like host-routing.ts and host-links.ts.
 

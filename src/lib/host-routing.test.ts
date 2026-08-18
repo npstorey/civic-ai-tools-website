@@ -1,10 +1,18 @@
-// Tests for the host-topology decision logic (app front-door v0.1.0, P3).
+// Tests for the host-topology decision logic (app front-door v0.1.0, P3;
+// portable default flipped in #259 P3).
 //
-// The core property, matching the seam convention everywhere else in this
-// codebase: with none of APP_HOST / MARKETING_HOST / APP_ONLY set, every
-// (host, path) pair resolves to `serve` — no withholding, no rewrites,
-// anywhere. The full matrix (two-host split × every route class, app-only ×
-// every route class, unmatched hosts, partial configuration) is pinned below.
+// THE CORE PROPERTY CHANGED, and this file is where the change is pinned.
+// It used to be "with none of APP_HOST / MARKETING_HOST / APP_ONLY set,
+// every (host, path) pair resolves to `serve`". The portable default is now
+// APP-ONLY: an instance that configures nothing withholds the marketing
+// routes and hops `/` to `/ask`, because the marketing face is the
+// reference deployment's own website rather than part of what an instance
+// ships. The former default did not disappear — it is `SERVE_MARKETING=1`,
+// and both halves are pinned side by side below.
+//
+// The full matrix (two-host split × every route class, app-only × every
+// route class, UNNAMED hosts in both knob states, partial configuration,
+// and the canonicalization non-interaction) is pinned below.
 //
 // Run with: npm test
 
@@ -23,6 +31,7 @@ import {
   resolveAppOrigin,
   resolveAskHref,
   resolveDashboardHref,
+  instanceServesMarketing,
   resolveHostRole,
   resolvePublicSiteHref,
   APP_PRIVATE_PATHS,
@@ -38,7 +47,16 @@ const SPLIT = readHostRoutingConfig({
   MARKETING_HOST: 'example.org',
 });
 const APP_ONLY = readHostRoutingConfig({ APP_ONLY: '1' });
+/** Nothing configured — the PORTABLE DEFAULT, app-only since #259 P3. */
 const UNSET = readHostRoutingConfig({});
+/** Nothing configured but the knob: the pre-#259 pass-through default. */
+const SERVE_MARKETING = readHostRoutingConfig({ SERVE_MARKETING: '1' });
+/** A split-host instance that also keeps unnamed hosts (previews) passing through. */
+const SPLIT_SERVING = readHostRoutingConfig({
+  APP_HOST: 'app.example.org',
+  MARKETING_HOST: 'example.org',
+  SERVE_MARKETING: '1',
+});
 
 // One representative per route class, plus depth and edge variants.
 const ROOT = '/';
@@ -59,19 +77,79 @@ const OTHER_SAMPLES = [
 ];
 const EVERY_PATH = [ROOT, ...MARKETING_SAMPLES, ...APP_PRIVATE_SAMPLES, ...DUAL_SAMPLES, ...OTHER_SAMPLES];
 
-// --- Rule zero: unset config is a universal pass-through ---------------------
+// --- THE PORTABLE DEFAULT and the knob that restores the old one -------------
 
-test('unset config: every route class on every host passes through', () => {
-  const hosts = ['example.org', 'app.example.org', 'localhost:3000', 'preview-abc.vercel.app', null];
-  for (const host of hosts) {
+// Every host an unconfigured instance can be addressed on, including the
+// degenerate no-Host-header case, which takes the same branch on purpose.
+const UNNAMED_HOSTS = [
+  'example.org',
+  'app.example.org',
+  'localhost:3000',
+  'preview-abc.vercel.app',
+  '127.0.0.1:3000',
+  null,
+];
+
+test('portable default: nothing configured serves the app surface only', () => {
+  for (const host of UNNAMED_HOSTS) {
+    // The marketing face is withheld — this is the flip, and the whole
+    // reason instances need no deletion script to not ship it.
+    for (const path of MARKETING_SAMPLES) {
+      assert.deepEqual(decideRoute(host, path, UNSET), { kind: 'withhold' }, `${host} ${path}`);
+    }
+    // The app front door hops to the query mount...
+    assert.deepEqual(decideRoute(host, ROOT, UNSET), APP_ROOT_ACTION, String(host));
+    // ...and everything the app surface owns still serves.
+    for (const path of [...APP_PRIVATE_SAMPLES, ...DUAL_SAMPLES, ...OTHER_SAMPLES]) {
+      assert.deepEqual(decideRoute(host, path, UNSET), { kind: 'serve' }, `${host} ${path}`);
+    }
+  }
+});
+
+test('portable default and APP_ONLY agree on every (host, path) pair', () => {
+  // APP_ONLY stays honored as the EXPLICIT form (it is the only way to say
+  // "app-only even though a marketing host is named"), and where both apply
+  // they must not disagree — two spellings of one behavior, not two
+  // behaviors. Redundancy here is the property, not an accident.
+  for (const host of UNNAMED_HOSTS) {
     for (const path of EVERY_PATH) {
       assert.deepEqual(
         decideRoute(host, path, UNSET),
-        { kind: 'serve' },
-        `unset config must serve ${path} on host ${host}`,
+        decideRoute(host, path, APP_ONLY),
+        `${host} ${path}`,
       );
     }
   }
+});
+
+test('SERVE_MARKETING=1 restores the pre-#259 universal pass-through', () => {
+  for (const host of UNNAMED_HOSTS) {
+    for (const path of EVERY_PATH) {
+      assert.deepEqual(
+        decideRoute(host, path, SERVE_MARKETING),
+        { kind: 'serve' },
+        `SERVE_MARKETING must serve ${path} on host ${host}`,
+      );
+    }
+  }
+});
+
+test('the knob is a boolean parsed exactly like APP_ONLY — nothing else turns it on', () => {
+  for (const on of ['1', 'true', 'TRUE', ' True ']) {
+    assert.equal(readHostRoutingConfig({ SERVE_MARKETING: on }).serveMarketing, true, on);
+    assert.equal(resolveHostRole('anything.example.net', readHostRoutingConfig({ SERVE_MARKETING: on })), 'passthrough', on);
+  }
+  for (const off of [undefined, '', '0', 'false', 'yes', 'on', 'marketing']) {
+    const config = readHostRoutingConfig({ SERVE_MARKETING: off });
+    assert.equal(config.serveMarketing, false, String(off));
+    assert.equal(resolveHostRole('anything.example.net', config), 'app', String(off));
+  }
+});
+
+test('APP_ONLY beats SERVE_MARKETING: the explicit form wins over the unnamed-host default', () => {
+  const config = readHostRoutingConfig({ APP_ONLY: '1', SERVE_MARKETING: '1' });
+  assert.equal(resolveHostRole('anything.example.net', config), 'app');
+  assert.deepEqual(decideRoute('anything.example.net', '/about', config), { kind: 'withhold' });
 });
 
 // --- Split-host: the marketing host ------------------------------------------
@@ -137,10 +215,13 @@ test('the query mount is app-private: served on the app host, withheld on the ma
   assert.equal(classifyPath('/ask'), 'app-private');
   assert.deepEqual(decideRoute('app.example.org', '/ask', SPLIT), { kind: 'serve' });
   assert.deepEqual(decideRoute('example.org', '/ask', SPLIT), { kind: 'withhold' });
-  // ...and with no topology configured it serves everywhere, like every
-  // other route on a single-host instance.
+  // ...and it serves on every host under BOTH portable defaults: it is
+  // app-private, so the app role serves it, and `passthrough` serves
+  // everything. There is no instance shape on which the app front door's
+  // own destination fails to resolve.
   for (const host of ['example.org', 'app.example.org', 'localhost:3000']) {
     assert.deepEqual(decideRoute(host, '/ask', UNSET), { kind: 'serve' }, host);
+    assert.deepEqual(decideRoute(host, '/ask', SERVE_MARKETING), { kind: 'serve' }, host);
   }
 });
 
@@ -167,38 +248,95 @@ test('split: the app host passes through assets, API paths, and unknown URLs', (
 
 // --- Split-host: hosts that match neither variable ---------------------------
 
-test('split: an unmatched host (preview, IP, unnamed alias) is untouched everywhere', () => {
-  for (const host of ['preview-abc.vercel.app', '127.0.0.1:3000', 'staging.example.net']) {
+const UNMATCHED = ['preview-abc.vercel.app', '127.0.0.1:3000', 'staging.example.net'];
+
+test('split: an unmatched host takes the app role, named hosts unaffected', () => {
+  // #259 P3. A host the operator never named is not a marketing host, so on
+  // a split-host instance WITHOUT the knob it now behaves as the app
+  // surface. This is the flip's one visible effect on a configured
+  // deployment — and it is confined to hosts the configuration does not
+  // mention, which is exactly the blast radius the knob was shaped for.
+  for (const host of UNMATCHED) {
+    for (const path of MARKETING_SAMPLES) {
+      assert.deepEqual(decideRoute(host, path, SPLIT), { kind: 'withhold' }, `${host} ${path}`);
+    }
+    assert.deepEqual(decideRoute(host, ROOT, SPLIT), APP_ROOT_ACTION, host);
+  }
+});
+
+test('split + SERVE_MARKETING: unmatched hosts are untouched, named hosts still split', () => {
+  // The reference deployment's shape: preview URLs match neither variable
+  // and cannot be made to (they are minted per deployment), so the knob is
+  // the only thing that keeps them serving both route groups.
+  for (const host of UNMATCHED) {
     for (const path of EVERY_PATH) {
-      assert.deepEqual(decideRoute(host, path, SPLIT), { kind: 'serve' }, `${host} ${path}`);
+      assert.deepEqual(decideRoute(host, path, SPLIT_SERVING), { kind: 'serve' }, `${host} ${path}`);
+    }
+  }
+  // ...while the NAMED hosts behave identically with and without the knob.
+  for (const host of ['app.example.org', 'example.org', 'www.example.org']) {
+    for (const path of EVERY_PATH) {
+      assert.deepEqual(
+        decideRoute(host, path, SPLIT_SERVING),
+        decideRoute(host, path, SPLIT),
+        `${host} ${path}`,
+      );
     }
   }
 });
 
-test('a missing Host header is passthrough, never a role', () => {
-  assert.deepEqual(decideRoute(null, '/dashboard', SPLIT), { kind: 'serve' });
-  assert.deepEqual(decideRoute(undefined, '/', SPLIT), { kind: 'serve' });
+test('a missing Host header takes the unnamed-host branch, in both knob states', () => {
+  // Maximally unnamed: it matched nothing, so it gets whatever an unnamed
+  // host gets. Splitting it out would leave the withholding with a hole
+  // that depends on whether a client sent a header HTTP/1.1 requires.
+  assert.deepEqual(decideRoute(null, '/dashboard', SPLIT), { kind: 'serve' }); // app role serves it
+  assert.deepEqual(decideRoute(null, '/about', SPLIT), { kind: 'withhold' });
+  assert.deepEqual(decideRoute(undefined, '/', SPLIT), APP_ROOT_ACTION);
+  assert.equal(resolveHostRole(null, SPLIT), 'app');
+  assert.equal(resolveHostRole(undefined, SPLIT_SERVING), 'passthrough');
+  assert.deepEqual(decideRoute(null, '/about', SPLIT_SERVING), { kind: 'serve' });
 });
 
 // --- Partial configuration ----------------------------------------------------
 
-test('APP_HOST alone: app role on that host, NO withholding anywhere else', () => {
+test('APP_HOST alone: app role on that host, and on every unnamed host too', () => {
   const config = readHostRoutingConfig({ APP_HOST: 'app.example.org' });
   // The app host takes its role...
   assert.deepEqual(decideRoute('app.example.org', '/about', config), { kind: 'withhold' });
-  assert.deepEqual(decideRoute('app.example.org', '/', config), { kind: 'redirect', destination: '/ask' });
-  // ...and every other host keeps today's behavior — withholding on the
-  // marketing face starts only when MARKETING_HOST is set (incremental
-  // rollout: stand up the app host first, flip the apex second).
+  assert.deepEqual(decideRoute('app.example.org', '/', config), APP_ROOT_ACTION);
+  // ...and since #259 P3 so does every host the operator has not named,
+  // because naming NO marketing host is now a statement rather than a gap.
+  for (const path of MARKETING_SAMPLES) {
+    assert.deepEqual(decideRoute('example.org', path, config), { kind: 'withhold' }, path);
+  }
+});
+
+test('APP_HOST alone + SERVE_MARKETING: the incremental-rollout stage, unnamed hosts intact', () => {
+  // The rollout sequence gained a step at the front: set SERVE_MARKETING
+  // FIRST, then APP_HOST, then MARKETING_HOST. This pins the middle stage —
+  // the app host verifiable in isolation while the apex still serves
+  // everything, which is what made the old sequence safe.
+  const config = readHostRoutingConfig({ APP_HOST: 'app.example.org', SERVE_MARKETING: '1' });
+  assert.deepEqual(decideRoute('app.example.org', '/about', config), { kind: 'withhold' });
   for (const path of EVERY_PATH) {
     assert.deepEqual(decideRoute('example.org', path, config), { kind: 'serve' }, path);
   }
 });
 
-test('MARKETING_HOST alone: withholding on that host, all other hosts untouched', () => {
+test('MARKETING_HOST alone: withholding on that host, unnamed hosts take the app role', () => {
   const config = readHostRoutingConfig({ MARKETING_HOST: 'example.org' });
   assert.deepEqual(decideRoute('example.org', '/dashboard', config), { kind: 'withhold' });
   assert.deepEqual(decideRoute('example.org', '/', config), { kind: 'serve' });
+  // The named marketing host still serves the marketing face; an unnamed
+  // host no longer does.
+  assert.deepEqual(decideRoute('example.org', '/about', config), { kind: 'serve' });
+  assert.deepEqual(decideRoute('app.example.org', '/about', config), { kind: 'withhold' });
+  assert.deepEqual(decideRoute('app.example.org', '/dashboard', config), { kind: 'serve' });
+});
+
+test('MARKETING_HOST alone + SERVE_MARKETING: unnamed hosts untouched', () => {
+  const config = readHostRoutingConfig({ MARKETING_HOST: 'example.org', SERVE_MARKETING: '1' });
+  assert.deepEqual(decideRoute('example.org', '/dashboard', config), { kind: 'withhold' });
   for (const path of EVERY_PATH) {
     assert.deepEqual(decideRoute('app.example.org', path, config), { kind: 'serve' }, path);
   }
@@ -243,13 +381,18 @@ test('host matching is case-, port-, and www-insensitive', () => {
 });
 
 test('config values accept a full origin as well as a bare host', () => {
-  const config = readHostRoutingConfig({
+  const origins = {
     APP_HOST: 'https://app.example.org/',
     MARKETING_HOST: 'http://localhost:3000',
-  });
+  };
+  const config = readHostRoutingConfig(origins);
   assert.equal(resolveHostRole('app.example.org', config), 'app');
   assert.equal(resolveHostRole('localhost:4000', config), 'marketing'); // port never participates in matching
-  assert.equal(resolveHostRole('other.example.org', config), 'passthrough');
+  assert.equal(resolveHostRole('other.example.org', config), 'app'); // unnamed → the portable default
+  assert.equal(
+    resolveHostRole('other.example.org', readHostRoutingConfig({ ...origins, SERVE_MARKETING: '1' })),
+    'passthrough',
+  );
 });
 
 test('normalizeHost edge cases', () => {
@@ -293,8 +436,85 @@ test('classifyPath covers every declared prefix and resists prefix collisions', 
 
 // --- URL helpers (AppChrome exit link, device-flow pairing origin) ---------------
 
-test('resolvePublicSiteHref: unset topology keeps the relative link', () => {
-  assert.equal(resolvePublicSiteHref({}), '/');
+// --- instanceServesMarketing: the predicate the chrome branches on -----------
+
+test('instanceServesMarketing mirrors resolveHostRole row for row', () => {
+  // Explicit app-only: no, whatever else is set.
+  assert.equal(instanceServesMarketing({ APP_ONLY: '1' }), false);
+  assert.equal(instanceServesMarketing({ APP_ONLY: '1', MARKETING_HOST: 'example.org' }), false);
+  assert.equal(instanceServesMarketing({ APP_ONLY: '1', SERVE_MARKETING: '1' }), false);
+  // A NAMED marketing host serves marketing, on that host — true on both
+  // hosts of a split instance, because the hrefs it gates are absolute.
+  assert.equal(instanceServesMarketing({ MARKETING_HOST: 'example.org' }), true);
+  assert.equal(
+    instanceServesMarketing({ APP_HOST: 'app.example.org', MARKETING_HOST: 'example.org' }),
+    true,
+  );
+  // No marketing host named: the unnamed-host default decides.
+  assert.equal(instanceServesMarketing({ SERVE_MARKETING: '1' }), true);
+  assert.equal(instanceServesMarketing({ APP_HOST: 'app.example.org', SERVE_MARKETING: '1' }), true);
+  assert.equal(instanceServesMarketing({}), false); // ← the flip
+  assert.equal(instanceServesMarketing({ APP_HOST: 'app.example.org' }), false);
+  // Empty/whitespace values are unset, exactly as everywhere else here.
+  assert.equal(instanceServesMarketing({ MARKETING_HOST: '   ', SERVE_MARKETING: '' }), false);
+});
+
+test('instanceServesMarketing agrees with what decideRoute actually serves', () => {
+  // The predicate must not become a second, drifting reading of the
+  // topology: whenever it says a marketing surface exists, SOME host must
+  // actually serve a marketing path, and when it says none does, none may.
+  const cases: Array<[Record<string, string | undefined>, string[]]> = [
+    [{}, ['example.org', 'app.example.org', 'anything.example.net']],
+    [{ SERVE_MARKETING: '1' }, ['example.org', 'anything.example.net']],
+    [{ APP_ONLY: '1' }, ['example.org', 'anything.example.net']],
+    [{ APP_HOST: 'app.example.org' }, ['app.example.org', 'other.example.net']],
+    [{ APP_HOST: 'app.example.org', MARKETING_HOST: 'example.org' }, ['example.org', 'app.example.org']],
+  ];
+  for (const [env, hosts] of cases) {
+    const config = readHostRoutingConfig(env);
+    const anyHostServesMarketing = hosts.some(
+      (h) => decideRoute(h, '/about', config).kind === 'serve',
+    );
+    assert.equal(
+      instanceServesMarketing(env),
+      anyHostServesMarketing,
+      `predicate disagrees with routing for ${JSON.stringify(env)}`,
+    );
+  }
+});
+
+// --- Chrome affordances -------------------------------------------------------
+
+test('resolvePublicSiteHref: nothing configured now HIDES the exit link (#259 P3)', () => {
+  // It used to return '/', and after the flip '/' is the path that redirects
+  // to /ask — so the "Public site" exit out of the app would have led back
+  // into the app, past no error, to no public site. AppChrome guards on
+  // this exact null.
+  assert.equal(resolvePublicSiteHref({}), null);
+  assert.equal(resolvePublicSiteHref({ APP_HOST: 'app.example.org' }), null);
+});
+
+test('resolvePublicSiteHref: SERVE_MARKETING keeps the relative link', () => {
+  assert.equal(resolvePublicSiteHref({ SERVE_MARKETING: '1' }), '/');
+  assert.equal(resolvePublicSiteHref({ APP_HOST: 'app.example.org', SERVE_MARKETING: '1' }), '/');
+});
+
+test('resolvePublicSiteHref never points at a path the same config withholds or hops', () => {
+  // The property the '/' regression violated, stated directly: whatever
+  // this returns as a RELATIVE path must `serve` on every host that config
+  // can produce. An absolute origin is out of scope — it names another host.
+  for (const env of [{}, { SERVE_MARKETING: '1' }, { APP_ONLY: '1' }, { APP_HOST: 'app.example.org' }]) {
+    const href = resolvePublicSiteHref(env);
+    if (href === null || href.startsWith('http')) continue;
+    const config = readHostRoutingConfig(env);
+    for (const host of ['example.org', 'app.example.org', 'anything.example.net']) {
+      assert.deepEqual(
+        decideRoute(host, href, config),
+        { kind: 'serve' },
+        `${JSON.stringify(env)} → ${href} does not serve on ${host}`,
+      );
+    }
+  }
 });
 
 test('resolvePublicSiteHref: split-host points at the marketing origin', () => {
@@ -307,6 +527,28 @@ test('resolvePublicSiteHref: split-host points at the marketing origin', () => {
 
 test('resolvePublicSiteHref: app-only hides the affordance (null)', () => {
   assert.equal(resolvePublicSiteHref({ APP_ONLY: '1', MARKETING_HOST: 'example.org' }), null);
+  // ...and the explicit form still beats the knob.
+  assert.equal(resolvePublicSiteHref({ APP_ONLY: '1', SERVE_MARKETING: '1' }), null);
+});
+
+test('the app-private hrefs are UNCHANGED by the flip (audited, not assumed)', () => {
+  // Both name app-private paths, and the flip gives an unnamed host the role
+  // that SERVES app-private paths — so the relative fallbacks were already
+  // right. Pinned so a future edit cannot quietly move them onto the
+  // marketing predicate, which would be wrong for a different reason.
+  for (const env of [{}, { SERVE_MARKETING: '1' }, { APP_ONLY: '1' }]) {
+    const config = readHostRoutingConfig(env);
+    for (const href of [resolveDashboardHref(env), resolveAskHref(env)]) {
+      assert.ok(!href.startsWith('http'), `${JSON.stringify(env)} → ${href} should stay relative`);
+      for (const host of ['example.org', 'anything.example.net']) {
+        assert.deepEqual(
+          decideRoute(host, href, config),
+          { kind: 'serve' },
+          `${JSON.stringify(env)} → ${href} does not serve on ${host}`,
+        );
+      }
+    }
+  }
 });
 
 test('resolveDashboardHref: relative today and on app-only; app origin on a split host', () => {
@@ -448,20 +690,48 @@ test('canonicalize TERMINATES: the destination host is itself canonical, one hop
   }
 });
 
-test('canonicalize: rule zero — nothing configured, nothing canonicalized', () => {
-  for (const host of ['www.example.org', 'example.org', 'www.app.example.org']) {
-    for (const path of EVERY_PATH) {
-      assert.deepEqual(decideRoute(host, path, UNSET), { kind: 'serve' }, `${host} ${path}`);
+test('canonicalize: nothing configured, nothing canonicalized — in either knob state', () => {
+  // #259 P3 made this worth stating as its own property rather than folding
+  // it into "everything serves". An unnamed host now has a ROLE, so for the
+  // first time the canonicalization question is live on one — and the
+  // answer must still be "never", because `matchedOrigin` keys on the MATCH
+  // and not on the role. The assertion is therefore about the ABSENCE of a
+  // host hop, not about the path decision, which legitimately differs.
+  for (const config of [UNSET, SERVE_MARKETING]) {
+    for (const host of ['www.example.org', 'example.org', 'www.app.example.org', 'WWW.Example.Org']) {
+      for (const path of EVERY_PATH) {
+        assert.equal(canonicalHostRedirect(host, path, config), null, `${host} ${path}`);
+        const action = decideRoute(host, path, config);
+        assert.ok(
+          action.kind !== 'redirect' || action.destination === '/ask',
+          `${host} ${path} must never redirect to another HOST (got ${JSON.stringify(action)})`,
+        );
+      }
     }
   }
 });
 
-test('canonicalize: a passthrough host has no configured spelling to steer toward', () => {
-  // Preview URLs, IP health checks and unnamed aliases match no variable.
-  for (const host of ['www.preview-abc.vercel.app', 'preview-abc.vercel.app', '127.0.0.1:3000']) {
-    for (const path of EVERY_PATH) {
-      assert.deepEqual(decideRoute(host, path, SPLIT), { kind: 'serve' }, `${host} ${path}`);
+test('canonicalize: an unnamed host is never steered, whatever role it takes', () => {
+  // Preview URLs, IP health checks and unnamed aliases match no variable, so
+  // there is no configured spelling to steer them toward. Under SPLIT they
+  // now take the app role (the flip); under SPLIT_SERVING they pass
+  // through. Neither is canonicalized, and the `www.` spellings are the
+  // point — those are the ones a steer would have moved.
+  for (const config of [SPLIT, SPLIT_SERVING]) {
+    for (const host of ['www.preview-abc.vercel.app', 'preview-abc.vercel.app', '127.0.0.1:3000']) {
+      for (const path of EVERY_PATH) {
+        assert.equal(canonicalHostRedirect(host, path, config), null, `${host} ${path}`);
+        const action = decideRoute(host, path, config);
+        assert.ok(
+          action.kind !== 'redirect' || action.destination === '/ask',
+          `${host} ${path} must never redirect to another HOST (got ${JSON.stringify(action)})`,
+        );
+      }
     }
+  }
+  // ...and under the knob they are untouched entirely, as before.
+  for (const path of EVERY_PATH) {
+    assert.deepEqual(decideRoute('www.preview-abc.vercel.app', path, SPLIT_SERVING), { kind: 'serve' }, path);
   }
 });
 
