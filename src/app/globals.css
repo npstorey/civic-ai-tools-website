@@ -20,37 +20,53 @@
   --accent-hover: #050560;
   --accent-light: #B5DBFF;
 
-  /* Primary Brand Colors */
-  --nyc-black: #000000;
-  --nyc-white: #FFFFFF;
-  /* Accent-family NYC names — aliased to the neutral tokens above (#217) so
-     every existing --nyc-* reference keeps resolving to the same computed
-     value. New code and operators use the neutral names; the wholesale
-     reference migration is #220's, not this seam's. */
-  --nyc-blue-40: var(--accent);
-  --nyc-blue: var(--accent);
-
-  /* Interactive State Colors */
-  --nyc-blue-80: var(--accent-light);
-  --nyc-blue-10: var(--accent-hover);
-
-  /* Foreground Colors (Text & Elements) */
-  --nyc-gray-20: #333333;
-  --nyc-gray-30: #555555;
-  --nyc-gray-40: #777777;
-  --nyc-gray-70: #CCCCCC;
-  --nyc-gray-80: #DDDDDD;
-  --nyc-gray-90: #EEEEEE;
+  /* Structural neutrals.
+     The numbers ascend with LIGHTNESS (20 is near-black, 90 is near-white) —
+     the inverse of the Tailwind/Material convention. That inversion predates
+     this file's neutral naming and is deliberately preserved: renumbering
+     would change what every existing call site means, which a rename must
+     not do. Read the number as "how light", not "how dark". */
+  --black: #000000;
+  --white: #FFFFFF;
+  --neutral-20: #333333;
+  --neutral-70: #CCCCCC;
+  --neutral-80: #DDDDDD;
+  --neutral-90: #EEEEEE;
 
   /* Semantic/Auxiliary Colors */
-  --nyc-info: #70BAFF;
-  --nyc-success: #008A02;
-  --nyc-caution: #FFB320;
-  --nyc-error: #EC131E;
+  --info: #70BAFF;
+  --success: #008A02;
+  --caution: #FFB320;
+  --error: #EC131E;
   /* Trust-signal "Attention" tier (civic-ai-tools-website#110). Aliased to the
-     existing NYC caution amber rather than introducing a second amber token, so
-     the verify panel's amber stays in lockstep with the design-system palette. */
-  --nyc-warning: var(--nyc-caution);
+     existing caution amber rather than introducing a second amber token, so
+     the verify panel's amber stays in lockstep with the design-system palette.
+     Keep the indirection — a duplicated literal would let the two drift. */
+  --warning: var(--caution);
+
+  /* --nyc-* compatibility aliases (#220 P3).
+     Nothing in src/ references these any more; they exist so that anything
+     outside this repo's own sweep — a fork, an in-flight branch, a snippet
+     pasted from an older revision — keeps resolving to the same computed
+     value rather than to nothing. Retiring them is a separate, later ruling,
+     not a side effect of the rename.
+     The accent four alias the operator-facing theming seam (#217), so a
+     configured instance re-colors them too. */
+  --nyc-black: var(--black);
+  --nyc-white: var(--white);
+  --nyc-blue: var(--accent);
+  --nyc-blue-40: var(--accent);
+  --nyc-blue-80: var(--accent-light);
+  --nyc-blue-10: var(--accent-hover);
+  --nyc-gray-20: var(--neutral-20);
+  --nyc-gray-70: var(--neutral-70);
+  --nyc-gray-80: var(--neutral-80);
+  --nyc-gray-90: var(--neutral-90);
+  --nyc-info: var(--info);
+  --nyc-success: var(--success);
+  --nyc-caution: var(--caution);
+  --nyc-error: var(--error);
+  --nyc-warning: var(--warning);
 
   /* Spacing Scale */
   --space-xs: 8px;
