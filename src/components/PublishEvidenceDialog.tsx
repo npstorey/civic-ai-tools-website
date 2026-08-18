@@ -570,7 +570,13 @@ export default function PublishEvidenceDialog({
                     alignItems: 'center',
                     gap: '8px',
                     padding: '10px 12px',
-                    backgroundColor: 'var(--nyc-gray-50, #f5f5f5)',
+                    /* Literal, not a token: --nyc-gray-50 was never defined
+                       anywhere, so #f5f5f5 is what has always rendered here.
+                       It is a one-off with no membership in the neutral scale
+                       (which runs 20/70/80/90), and inventing --neutral-95 for
+                       one call site, or rounding it to --neutral-90 (#EEEEEE),
+                       would each change the palette rather than rename it. */
+                    backgroundColor: '#f5f5f5',
                     borderRadius: '4px',
                     marginBottom: '16px',
                   }}>
