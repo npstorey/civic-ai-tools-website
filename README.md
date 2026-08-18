@@ -84,6 +84,18 @@ Other useful scripts: `npm test` (unit tests), `npm run lint`, `npm run build`.
 
 ## Self-hosting
 
+**You are deploying the application.** The marketing pages at
+civicaitools.org — home, `/about`, `/explore`, `/learn`, `/project`,
+`/roadmap`, `/directory`, and the talk decks under `/talks` — are the reference
+project's own website; they are not part of an instance. An instance that
+configures nothing serves the app surface and withholds them: the files stay in
+your checkout, so it stays cleanly `git pull`-able, and they simply do not
+serve. The same rule governs the shared chrome — brand name, tagline,
+attribution, source-repo link, sponsor acknowledgment are all instance
+configuration with no default, so an unconfigured instance renders none of them
+rather than this project's
+([`docs/deploy.md`](docs/deploy.md#branding-and-theming-chrome-only)).
+
 The repository ships a [`docker-compose.yml`](docker-compose.yml) that wires the
 whole self-hosted profile — app, Postgres, S3-compatible object storage with
 bucket init, a one-shot migration runner, and a scheduler sidecar:

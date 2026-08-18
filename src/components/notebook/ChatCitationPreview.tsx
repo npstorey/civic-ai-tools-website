@@ -47,9 +47,20 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function deriveTitle(prompt: string, brandName: string): string {
+/**
+ * The citation's publisher label. An instance that has not set
+ * `SITE_BRAND_NAME` publishes an "Evidence Package" with no publisher named,
+ * rather than a package credited to whatever deployment the code shipped
+ * with (#259 P4, A3) — this string is copied to the clipboard, so a wrong
+ * name here travels into somebody's document.
+ */
+function brandLabel(brandName: string | null): string {
+  return brandName === null ? 'Evidence Package' : `${brandName} Evidence Package`;
+}
+
+function deriveTitle(prompt: string, brandName: string | null): string {
   const trimmed = prompt.trim();
-  if (trimmed.length === 0) return `${brandName} Evidence Package`;
+  if (trimmed.length === 0) return brandLabel(brandName);
   // Use the first sentence-ish chunk, capped.
   const firstChunk = trimmed.split(/[?.!\n]/)[0]?.trim() || trimmed;
   if (firstChunk.length <= 100) return firstChunk;
@@ -85,7 +96,7 @@ export default function ChatCitationPreview({ prompt, executedAt, structuredSumm
   const citations = [
     {
       label: 'Plain text',
-      text: `${creatorName} (${year}). "${title}." ${brandName} Evidence Package. ${placeholderUrl}. Published: (date assigned at publish).${headlineSuffix}`,
+      text: `${creatorName} (${year}). "${title}." ${brandLabel(brandName)}. ${placeholderUrl}. Published: (date assigned at publish).${headlineSuffix}`,
     },
     {
       label: 'For deliberative process reference',

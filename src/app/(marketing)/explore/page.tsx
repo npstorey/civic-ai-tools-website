@@ -1,8 +1,8 @@
 import McpFlowDiagramWrapper from '@/components/explore/McpFlowDiagramWrapper';
-import { getBrandName } from '@/lib/brand-config';
+import { pageTitle } from '@/lib/brand-config';
 
 export const metadata = {
-  title: `Data Flow | ${getBrandName()}`,
+  title: pageTitle('Data Flow', '|'),
   description: 'Watch how AI connects to live civic data. Replay example traces or run your own query to see the process in real time.',
 };
 

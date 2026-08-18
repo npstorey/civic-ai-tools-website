@@ -1,19 +1,27 @@
-import { SPONSOR } from '@/lib/site-config';
+import { getSponsor } from '@/lib/site-config';
 
 /**
  * Sponsor acknowledgment mount. Renders "{prefix} {name}." with the name
- * linked, styled by the caller for its surface. Renders nothing while
- * SPONSOR is unset in site-config, so mounting this component is a
- * zero-visual-change operation until approved wording lands there.
+ * linked when a link is configured, styled by the caller for its surface.
+ *
+ * Renders nothing unless this instance has declared a sponsor
+ * (`SITE_SPONSOR_NAME`; see `getSponsor` for the full variable set). That is
+ * the default: an acknowledgment names who funds THIS deployment, so an
+ * unconfigured instance has nothing true to say here (#259 P4, D4).
  */
 export default function SponsorLine({ style }: { style?: React.CSSProperties }) {
-  if (!SPONSOR) return null;
+  const sponsor = getSponsor();
+  if (!sponsor) return null;
   return (
     <p style={style}>
-      {SPONSOR.prefix}{' '}
-      <a href={SPONSOR.url} target="_blank" rel="noopener noreferrer">
-        {SPONSOR.name}
-      </a>
+      {sponsor.prefix}{' '}
+      {sponsor.url !== null ? (
+        <a href={sponsor.url} target="_blank" rel="noopener noreferrer">
+          {sponsor.name}
+        </a>
+      ) : (
+        sponsor.name
+      )}
       .
     </p>
   );

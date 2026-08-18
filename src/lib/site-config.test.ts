@@ -12,14 +12,73 @@ import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert';
 import {
   COMMUNITY_DIRECTORY_DATA_URL,
+  COMMUNITY_DIRECTORY_SUBMIT_URL,
+  DEFAULT_SPONSOR_PREFIX,
   getDirectorySource,
   getRoadmapSource,
+  getSponsor,
 } from './site-config.ts';
 
-const CONTENT_SOURCE_VARS = ['DIRECTORY_DATA_URL', 'ROADMAP_RAW_URL', 'ROADMAP_GITHUB_URL'];
+const CONTENT_SOURCE_VARS = [
+  'DIRECTORY_DATA_URL',
+  'ROADMAP_RAW_URL',
+  'ROADMAP_GITHUB_URL',
+  'SITE_SPONSOR_NAME',
+  'SITE_SPONSOR_URL',
+  'SITE_SPONSOR_PREFIX',
+];
 
 afterEach(() => {
   for (const v of CONTENT_SOURCE_VARS) delete process.env[v];
+});
+
+describe('getSponsor (#259 P4, D4 — a funding claim has no default)', () => {
+  // This was a hardcoded non-null literal naming the reference deployment's
+  // fiscal sponsor, rendered by the ROOT layout's footer — so it appeared on
+  // the `(app)` surfaces of every instance, telling an operator's users that
+  // their deployment was sponsored by an organization with no relationship
+  // to it. There is no honest default for who funds a deployment.
+  test('unset: no sponsor, so no line', () => {
+    assert.equal(getSponsor(), null);
+  });
+
+  test('a URL alone is not a sponsor — the NAME is what gates the line', () => {
+    process.env.SITE_SPONSOR_URL = 'https://example.org';
+    process.env.SITE_SPONSOR_PREFIX = 'Funded by';
+    assert.equal(getSponsor(), null);
+  });
+
+  test('name only: rendered unlinked, with the generic prefix', () => {
+    process.env.SITE_SPONSOR_NAME = 'Alt City Civic Trust';
+    assert.deepEqual(getSponsor(), {
+      prefix: DEFAULT_SPONSOR_PREFIX,
+      name: 'Alt City Civic Trust',
+      url: null,
+    });
+  });
+
+  test('full configuration, read at call time', () => {
+    process.env.SITE_SPONSOR_NAME = 'Alt City Civic Trust';
+    process.env.SITE_SPONSOR_URL = 'https://trust.example.org';
+    process.env.SITE_SPONSOR_PREFIX = 'Funded by';
+    assert.deepEqual(getSponsor(), {
+      prefix: 'Funded by',
+      name: 'Alt City Civic Trust',
+      url: 'https://trust.example.org',
+    });
+  });
+
+  test('the default prefix names a relationship, not an organization', () => {
+    assert.equal(DEFAULT_SPONSOR_PREFIX, 'Fiscally sponsored by');
+  });
+});
+
+describe('COMMUNITY_DIRECTORY_SUBMIT_URL (#259 P4, D7)', () => {
+  test('points at the same project as the community index it feeds', () => {
+    const submitHost = new URL(COMMUNITY_DIRECTORY_SUBMIT_URL).pathname.split('/').slice(1, 3).join('/');
+    assert.equal(submitHost, 'npstorey/civic-ai-tools');
+    assert.ok(COMMUNITY_DIRECTORY_DATA_URL.includes('npstorey/civic-ai-tools'));
+  });
 });
 
 describe('getDirectorySource (shared community index when unconfigured)', () => {

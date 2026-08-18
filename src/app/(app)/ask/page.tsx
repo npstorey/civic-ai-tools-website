@@ -10,7 +10,7 @@ import {
 } from '@/lib/sign-in-intent';
 import QuerySurface from '@/components/shared/QuerySurface';
 import AskSignInPanel from './AskSignInPanel';
-import { getBrandName } from '@/lib/brand-config';
+import { pageTitle } from '@/lib/brand-config';
 import { hasPublishedEvidence } from '@/lib/db/creator-evidence';
 
 /**
@@ -84,7 +84,7 @@ import { hasPublishedEvidence } from '@/lib/db/creator-evidence';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: `Ask - ${getBrandName()}`,
+  title: pageTitle('Ask'),
   description:
     'Ask a question about public data and publish the answer as a signed evidence package.',
 };

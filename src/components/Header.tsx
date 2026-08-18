@@ -5,6 +5,7 @@ import { signIn, signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { TYPED_STANDARDS_URL } from '@/lib/site-config';
+import { UNNAMED_WORDMARK } from '@/lib/brand-config';
 import {
   DEFAULT_SIGN_IN_OPTIONS,
   resolveSignInAffordance,
@@ -47,8 +48,13 @@ const DROPDOWN_ITEM_STYLE: React.CSSProperties = {
  *   turns the button into a plain link to the app surface's sign-in panel;
  *   `null` (the default, and unset topology) keeps today's in-place button.
  * - `brandName` (#217) — the wordmark text, resolved by the layout from
- *   `SITE_BRAND_NAME` (src/lib/brand-config.ts). The default is the demo
- *   name, so a mount that omits the prop renders today's chrome.
+ *   `SITE_BRAND_NAME` (src/lib/brand-config.ts). REQUIRED, and nullable:
+ *   there is no default (#259 P4, D8). It used to default to the reference
+ *   deployment's name — latent, since the one live mount passes the prop,
+ *   but a trap set for the next mount, which would have shipped that name
+ *   into an operator's header without anyone editing a config file. `null`
+ *   means the instance has not named itself and the wordmark falls back to
+ *   `UNNAMED_WORDMARK`, a navigation label rather than an identity.
  * - `showRoadmap` (#241) — whether this instance has a roadmap of its own
  *   (`ROADMAP_RAW_URL`). `false` hides the Roadmap nav entries rather than
  *   pointing them at a page that says nothing has been published — the same
@@ -69,7 +75,7 @@ export default function Header({
   dashboardHref = '/dashboard',
   marketingOrigin = '',
   signInHref = null,
-  brandName = 'Civic AI Tools',
+  brandName,
   showRoadmap = true,
   signInOptions = DEFAULT_SIGN_IN_OPTIONS,
   sessionProbe = null,
@@ -77,7 +83,7 @@ export default function Header({
   dashboardHref?: string;
   marketingOrigin?: string | null;
   signInHref?: string | null;
-  brandName?: string;
+  brandName: string | null;
   showRoadmap?: boolean;
   signInOptions?: SignInOption[];
   sessionProbe?: SessionAffordanceTarget | null;
@@ -170,7 +176,7 @@ export default function Header({
               color: 'var(--text-primary)',
             }}
           >
-            {brandName}
+            {brandName ?? UNNAMED_WORDMARK}
           </Link>
           <nav className="hidden sm:flex items-center gap-6">
             {/* Explore dropdown */}

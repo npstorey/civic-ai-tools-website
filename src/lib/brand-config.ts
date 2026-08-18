@@ -3,10 +3,27 @@
 // Every value that names or colors THIS deployment in the SITE CHROME — the
 // header wordmark, page titles, the footer identity lines, the citation
 // labels, and the accent-token override — resolves through the getters
-// below. The demo defaults are the civicaitools.org reference deployment's
-// historical hardcoded values, so with NO environment set the rendered
-// chrome is byte-identical to before (the same byte-parity bar as
-// site-config.ts).
+// below.
+//
+// UNSET NAMES NOBODY (#259 P4, portability finding A3). These getters used
+// to fall back to the civicaitools.org reference deployment's own strings,
+// on a byte-parity argument: with nothing configured the chrome rendered
+// exactly as it always had. That argument was written when the marketing
+// face and the app were one deployment. Since #259 an instance that
+// configures nothing serves the APP surface — so the fallback stopped being
+// "this repo's historical chrome" and became "somebody else's name in an
+// operator's header, page titles and citation text". A required prop cannot
+// fix that on its own: it only pushes the substitution one level up if the
+// resolver still answers with the reference name.
+//
+// So the nameable getters now return `null` when unset, and each surface
+// renders honest absence — the `EVIDENCE_*` disposition in site-config.ts,
+// applied to chrome. Titles drop their suffix, the footer tagline is
+// omitted, citations say "Evidence Package" rather than naming a
+// deployment, and the ONE surface that structurally needs a visible string
+// (the header wordmark) falls back to `UNNAMED_WORDMARK` below, which is a
+// navigation label rather than an identity claim. The reference deployment
+// sets `SITE_BRAND_NAME` and `SITE_BRAND_TAGLINE` like any other instance.
 //
 // CHROME, NOT EVIDENCE. This module is deliberately separate from the
 // `EVIDENCE_*` instance-identity set in src/lib/site-config.ts: those values
@@ -30,39 +47,78 @@
 // (Header, the footer), context where the client boundary blocks a prop
 // chain (components/BrandProvider.tsx) — the host-links precedent.
 
-/** Demo default site/brand display name — the header wordmark and title base. */
-export const DEMO_BRAND_NAME = 'Civic AI Tools';
-
-/** Demo default footer tagline. */
-export const DEMO_BRAND_TAGLINE = 'Open-source tools for AI-powered civic data access';
+/**
+ * What the header wordmark says on an instance that has not named itself.
+ *
+ * The wordmark is a link to the site root, and a link needs a label — it is
+ * the only brand-name consumer with no honest empty rendering. "Home"
+ * describes what the link DOES; it makes no claim about whose deployment
+ * this is, which is the whole point. Every other consumer omits instead.
+ */
+export const UNNAMED_WORDMARK = 'Home';
 
 /**
  * Display name of this instance in site chrome — the header wordmark, the
  * page `<title>`s, and the "… Evidence Package" citation labels.
- * Env: `SITE_BRAND_NAME`.
+ * Env: `SITE_BRAND_NAME`; `null` when unset (see the module note).
  */
-export function getBrandName(): string {
-  return process.env.SITE_BRAND_NAME || DEMO_BRAND_NAME;
+export function getBrandName(): string | null {
+  return process.env.SITE_BRAND_NAME || null;
 }
 
 /**
  * Footer tagline line (the first line of the footer identity block).
- * Env: `SITE_BRAND_TAGLINE`.
+ * Env: `SITE_BRAND_TAGLINE`; `null` when unset — the footer omits the line.
  */
-export function getBrandTagline(): string {
-  return process.env.SITE_BRAND_TAGLINE || DEMO_BRAND_TAGLINE;
+export function getBrandTagline(): string | null {
+  return process.env.SITE_BRAND_TAGLINE || null;
 }
 
 /**
- * Footer attribution line, as plain text. Env: `SITE_BRAND_ATTRIBUTION`.
+ * A page `<title>`, brand suffix included only when there is a brand.
  *
- * `null` (unset) means "render the demo deployment's authored attribution
- * markup" — that line carries a hyperlink, so it lives as JSX in the root
- * layout rather than as a string default here. A configured instance
- * replaces the whole line with its own plain-text attribution.
+ * Every page in both route groups funnels through here so the unnamed case
+ * is spelled once rather than ten times, and so no page can reintroduce a
+ * `${page} - ${maybeNull}` template that renders the word "null" at an
+ * instance that never named itself. `separator` exists because `/explore`
+ * has always used a pipe; with `SITE_BRAND_NAME` set, every call site
+ * produces the exact string it produced before.
+ */
+export function pageTitle(page: string, separator: string = '-'): string {
+  const brand = getBrandName();
+  return brand === null ? page : `${page} ${separator} ${brand}`;
+}
+
+/**
+ * Footer attribution line, as plain text — who runs this deployment.
+ * Env: `SITE_BRAND_ATTRIBUTION`; `null` when unset, and the footer then
+ * renders NO attribution line at all.
+ *
+ * `null` used to mean "render the reference deployment's authored
+ * attribution markup", which lived as JSX in the root layout because it
+ * carries a hyperlink. That made the unset case a statement about a named
+ * person on every instance's every surface, `(app)` included (#259 P4,
+ * portability finding A2). The markup is gone; the reference deployment
+ * sets this variable like any other instance, in exchange for the line
+ * being plain text rather than linked.
  */
 export function getBrandAttribution(): string | null {
   return process.env.SITE_BRAND_ATTRIBUTION || null;
+}
+
+/**
+ * This instance's own source repository, linked as "GitHub" in the footer.
+ * Env: `SITE_BRAND_REPO_URL`; `null` when unset, and the link is omitted.
+ *
+ * It was a hardcoded link to the reference project's hub repo (#259 P4,
+ * finding D7). The footer renders on the `(app)` surfaces too, so every
+ * instance — including one that ships no marketing site at all — carried a
+ * contribution funnel into a repository its operator does not own and its
+ * users have no reason to file against. There is no honest default for
+ * "where does this deployment's source live", so unset renders nothing.
+ */
+export function getBrandRepoUrl(): string | null {
+  return process.env.SITE_BRAND_REPO_URL || null;
 }
 
 /**

@@ -37,6 +37,19 @@ The guide is ordered the way a first deployment actually proceeds:
 
 ## Before you start
 
+**You are deploying the application.** The marketing pages at
+civicaitools.org — the home page, `/about`, `/explore`, `/learn`,
+`/project`, `/roadmap`, `/directory`, and the talk decks under `/talks` —
+are the reference project's own website. They are not part of an
+instance. An instance that configures nothing serves the app surface and
+withholds those pages ([Host topology](#host-topology-optional)); the
+files stay in your checkout so it remains cleanly `git pull`-able, and
+they simply do not serve. Everything that names or funds *this* project
+in the shared chrome — brand name, tagline, attribution, source-repo
+link, sponsor acknowledgment — is instance configuration with no default,
+so an unconfigured instance renders none of it rather than the reference
+deployment's ([Branding and theming](#branding-and-theming-chrome-only)).
+
 You need:
 
 - A host with **Docker Engine and Compose v2** (`docker compose`, not the
@@ -497,6 +510,7 @@ doesn't):
 | `SANDBOX_SNAPSHOT_ID` | (vercel-sandbox executor only) Prebuilt snapshot — absent, every execution pays a slow fresh boot + pip install. Not read by the container executor. |
 | `SOCRATA_APP_TOKEN` | Socrata API app token passed into executed notebooks — absent, requests run anonymously against Socrata's lower rate limits. |
 | `ROADMAP_RAW_URL` | `/roadmap` — absent, the page states that this instance has published no roadmap and the Roadmap link leaves the header and footer nav. An instance serves its own roadmap or none; there is no upstream fallback. |
+| `SITE_BRAND_NAME`, `SITE_BRAND_TAGLINE`, `SITE_BRAND_ATTRIBUTION`, `SITE_BRAND_REPO_URL`, `SITE_SPONSOR_NAME` | The chrome surfaces that would *name, credit, or fund a deployment*. Absent, each one renders nothing rather than the reference deployment's version of it — page titles drop their brand suffix, citations name no publisher, the header wordmark reads "Home", and the footer's tagline, attribution, repo link and sponsor line are simply not there. Nothing breaks; the site is anonymous until you name it. See [Branding and theming](#branding-and-theming-chrome-only). |
 
 **Merely overrides a default.** Everything else, including:
 `MODEL_API_BASE_URL` (endpoint override), the *derived* identity
@@ -505,10 +519,10 @@ overrides (`EVIDENCE_PUBLICATION_HOST`, the registry-URL overrides,
 derives from the required identity set above when unset: host and URLs
 from the origin, the agent id from the host; the *required* identity set
 itself is in the disable-when-absent table, not here — see
-[`docs/instance-setup.md`](instance-setup.md)), the chrome-branding set
-(`SITE_BRAND_NAME`, `SITE_BRAND_ACCENT`, `SITE_BRAND_TAGLINE`,
-`SITE_BRAND_ATTRIBUTION` — with none set, the demo chrome renders
-byte-identically; see [Branding and
+[`docs/instance-setup.md`](instance-setup.md)), `SITE_BRAND_ACCENT` and `SITE_SPONSOR_URL`/`SITE_SPONSOR_PREFIX`
+(a palette and a preposition are not identity claims, so those three do
+have defaults; the rest of the chrome set is in the disable-when-absent
+table above — see [Branding and
 theming](#branding-and-theming-chrome-only) below), `OIDC_PROVIDER_NAME`
 (button label), `SIGN_IN_ALLOWLIST` (unset or empty = open sign-in,
 exactly the pre-allowlist behavior; see the sign-in section),
@@ -542,21 +556,35 @@ delivers them. A restart without `--build` does not.
 
 ### Branding and theming (chrome only)
 
-Four variables rebrand the site chrome — and only the chrome. Nothing
+These variables rebrand the site chrome — and only the chrome. Nothing
 here touches emitted evidence: the values that name your instance
 *inside signed packages* are the `EVIDENCE_*` set
 ([`docs/instance-setup.md`](instance-setup.md)), and the two sets are
 read independently so a chrome change can never invalidate a package or
-a registry cross-check. All four resolve in
-[`src/lib/brand-config.ts`](../src/lib/brand-config.ts); with none set,
-the demo chrome renders byte-identically.
+a registry cross-check. They resolve in
+[`src/lib/brand-config.ts`](../src/lib/brand-config.ts), except the
+sponsor line, which is in
+[`src/lib/site-config.ts`](../src/lib/site-config.ts).
 
-| Variable | Meaning | Default |
+**Unset names nobody** (civic-ai-tools-website#259). Every value here
+that could name, credit, or fund a deployment has *no default*: unset,
+the surface renders nothing rather than the reference deployment's
+version of it. Until #259 these fell back to civicaitools.org's own
+strings on a byte-parity argument, which held while the marketing face
+and the app were one deployment and stopped holding the moment an
+unconfigured instance served the app surface on its own. The reference
+deployment now sets them explicitly like any other instance.
+
+| Variable | Meaning | Unset |
 | --- | --- | --- |
-| `SITE_BRAND_NAME` | Display name in chrome: the header wordmark, the page `<title>`s, and the "… Evidence Package" citation labels. Prose *about* the reference project (the About/Project pages) is content, not chrome, and does not follow this variable. | `Civic AI Tools` |
-| `SITE_BRAND_ACCENT` | Accent color as `#rgb`/`#rrggbb`. Overrides the accent tokens (`--accent` and companions in `src/app/globals.css`) via one inline style on `<html>`; every accent-colored surface follows, including the aliased NYC-palette names. The darker hover and lighter fill companions are derived from this one value. Invalid values are ignored — the stylesheet default renders. Semantic status colors (success green, caution amber, error red) are governed by `docs/design-principles.md` and are deliberately NOT themable. | the NYC blue `#103FEF` |
-| `SITE_BRAND_TAGLINE` | The footer's first identity line. | the demo tagline |
-| `SITE_BRAND_ATTRIBUTION` | The footer's attribution line, as plain text (replaces the demo deployment's authored line, which carries a hyperlink). The footer's repo links and the sponsor line are not part of this seam. | the demo attribution |
+| `SITE_BRAND_NAME` | Display name in chrome: the header wordmark, the page `<title>`s, and the "… Evidence Package" citation labels. Prose *about* the reference project (the About/Project pages) is content, not chrome, and does not follow this variable. | Page titles drop their brand suffix, citations name no publisher, and the header wordmark reads "Home" — a navigation label, not a name. |
+| `SITE_BRAND_ACCENT` | Accent color as `#rgb`/`#rrggbb`. Overrides the accent tokens (`--accent` and companions in `src/app/globals.css`) via one inline style on `<html>`; every accent-colored surface follows, including the aliased NYC-palette names. The darker hover and lighter fill companions are derived from this one value. Invalid values are ignored — the stylesheet default renders. Semantic status colors (success green, caution amber, error red) are governed by `docs/design-principles.md` and are deliberately NOT themable. | The stylesheet default renders (the NYC blue `#103FEF`). A palette is not an identity claim, so this one still has a default. |
+| `SITE_BRAND_TAGLINE` | The footer's first identity line, and the default page description. | No tagline line, and no `<meta name="description">` default. |
+| `SITE_BRAND_ATTRIBUTION` | The footer's attribution line, as plain text — who runs this deployment. | No attribution line at all. |
+| `SITE_BRAND_REPO_URL` | Where the footer's "GitHub" link points — *your* source repository. | No repo link. It is a contribution funnel, and sending your users into another project's issue tracker helps nobody. |
+| `SITE_SPONSOR_NAME` | A sponsor acknowledgment in the footer and on `/about`: "{prefix} {name}." | No sponsor line. |
+| `SITE_SPONSOR_URL` | Where the sponsor's name links. | The name renders unlinked. |
+| `SITE_SPONSOR_PREFIX` | Wording in front of the name. | `Fiscally sponsored by` — generic phrasing that names a *relationship*, and only ever renders beside a name you configured. |
 
 Set these **in the build environment as well as at run time**.
 Statically prerendered pages bake their chrome at `next build` (the
@@ -710,8 +738,9 @@ instances it is also the finished configuration: nothing here needs to be
 set at all.
 
 The marketing site — the home page, `/about`, `/explore`, `/learn`,
-`/project`, `/roadmap`, `/directory` — is the reference deployment's own
-website, not part of what an instance is expected to publish. It is
+`/project`, `/roadmap`, `/directory`, and the talk decks under `/talks` —
+is the reference deployment's own website, not part of what an instance
+is expected to publish. It is
 withheld by **configuration, never by deleting files**, so your instance
 stays cleanly `git pull`-able from upstream; the pages remain in the tree
 and simply do not serve.

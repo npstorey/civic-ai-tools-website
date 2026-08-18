@@ -6,12 +6,12 @@ import { buildProviders } from '@/lib/auth-providers';
 import { toSignInOptions } from '@/lib/auth-provider-options';
 import DeviceApprovalPanel from './DeviceApprovalPanel';
 import DeviceSignInPanel from './DeviceSignInPanel';
-import { getBrandName } from '@/lib/brand-config';
+import { pageTitle } from '@/lib/brand-config';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: `Authorize device - ${getBrandName()}`,
+  title: pageTitle('Authorize device'),
   description: 'Authorize a CLI or external client to publish evidence on your behalf.',
 };
 
