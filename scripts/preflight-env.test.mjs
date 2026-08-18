@@ -458,19 +458,23 @@ test('the sign-in gate and app-tier knobs are optional with coded fallbacks', ()
   assert.ok(!result.missingRecommended.some((r) => r.name === 'APP_TIER_RATE_LIMIT'));
 });
 
-test('the host-topology trio is optional with coded fallbacks (unset = single host, no withholding)', () => {
-  // All three reproduce today's behavior when unset — the middleware passes
-  // every request through — so none may ever fail or nag a run (the P3 seam
-  // convention, same shape as the sign-in gate above).
-  for (const name of ['APP_HOST', 'MARKETING_HOST', 'APP_ONLY']) {
+test('all four host-topology variables are optional with coded fallbacks (unset = the portable default)', () => {
+  // All four have coded defaults, so none may ever fail or nag a run (the P3
+  // seam convention, same shape as the sign-in gate above). What unset MEANS
+  // changed in #259 P3 — the default is now app-only rather than passthrough —
+  // but it still means a working instance, which is what this asserts.
+  // SERVE_MARKETING joins the loop here: it was enumerated in the spec module
+  // and exercised by the compose-env check, but sat outside this assertion.
+  const TOPOLOGY = ['APP_HOST', 'MARKETING_HOST', 'APP_ONLY', 'SERVE_MARKETING'];
+  for (const name of TOPOLOGY) {
     const entry = ENV_SPEC.find((s) => s.name === name);
     assert.ok(entry, `${name} is enumerated`);
     assert.equal(entry.tier, 'optional', `${name} is optional`);
     assert.equal(entry.hasFallback, true, `${name} has a coded fallback`);
   }
-  const result = evaluateEnv(envWithAllRequired()); // all three absent
+  const result = evaluateEnv(envWithAllRequired()); // all four absent
   assert.equal(result.ok, true);
-  for (const name of ['APP_HOST', 'MARKETING_HOST', 'APP_ONLY']) {
+  for (const name of TOPOLOGY) {
     assert.ok(!result.missingRequired.some((r) => r.name === name));
     assert.ok(!result.missingRecommended.some((r) => r.name === name));
   }

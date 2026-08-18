@@ -49,14 +49,19 @@ export interface CompleteEvent extends StreamEvent {
 export type ModelErrorCode = 'model_not_configured' | 'model_auth_rejected';
 
 /**
- * The full set of typed pre-flight configuration-refusal codes an `error`
- * event may carry. Widens `ModelErrorCode` with:
- * - `mcp_not_configured` — no MCP endpoint for the primary data source
- *   (`SOCRATA_MCP_URL` missing or empty; #258 C4). Like the model codes,
- *   detected on the request path before any upstream call — there is no
- *   coded fallback host to route through instead.
+ * The value set the `code` field of an `error` event may carry.
+ *
+ * It began as the three typed pre-flight configuration refusals
+ * (`model_not_configured`, `model_auth_rejected` from #178,
+ * `mcp_not_configured` from #258 C4). Since #154 it is the full
+ * `StreamErrorKind` set: the server classifies every streaming failure once
+ * and puts the resulting kind on the wire, which is what lets the `message`
+ * field carry reader-facing copy instead of raw error text. This is the app's
+ * own streaming wire and carries no protocol vocabulary, so widening the
+ * accepted value set renames nothing; every consumer already treats `code` as
+ * optional and unrecognized values fall through to message-shape matching.
  */
-export type StreamErrorCode = ModelErrorCode | 'mcp_not_configured';
+export type StreamErrorCode = StreamErrorKind;
 
 export interface ErrorEvent extends StreamEvent {
   type: 'error';
@@ -74,15 +79,28 @@ export interface ErrorEvent extends StreamEvent {
 // implementation jargon; no new trust/status vocabulary). They are the single
 // place error-to-copy mapping lives, consumed by every SSE-consuming hook.
 
-export type StreamErrorKind =
-  | 'rate_limit'
-  | 'model_not_configured'
-  | 'model_auth_rejected'
-  | 'mcp_not_configured'
-  | 'mcp_timeout'
-  | 'mcp_unavailable'
-  | 'connection'
-  | 'generic';
+/**
+ * The eight kinds every streaming failure classifies into. Single-sourced as
+ * an array rather than a bare union so the round-trip test can enumerate them
+ * (#154): a ninth kind is covered by that test the moment it is added here.
+ */
+export const STREAM_ERROR_KINDS = [
+  'rate_limit',
+  'model_not_configured',
+  'model_auth_rejected',
+  'mcp_not_configured',
+  'mcp_timeout',
+  'mcp_unavailable',
+  'connection',
+  'generic',
+] as const;
+
+export type StreamErrorKind = (typeof STREAM_ERROR_KINDS)[number];
+
+/** True for a value that is one of the eight kinds (an unknown code is not). */
+export function isStreamErrorKind(value: unknown): value is StreamErrorKind {
+  return typeof value === 'string' && (STREAM_ERROR_KINDS as readonly string[]).includes(value);
+}
 
 /** Pull a lowercased message string out of any error-ish input. */
 function errorMessageOf(input: unknown): string {
@@ -105,9 +123,12 @@ function errorMessageOf(input: unknown): string {
 export function classifyStreamError(input: unknown): StreamErrorKind {
   if (input !== null && typeof input === 'object' && 'code' in input) {
     const code = (input as { code?: unknown }).code;
-    if (code === 'model_not_configured' || code === 'model_auth_rejected' || code === 'mcp_not_configured') {
-      return code;
-    }
+    // Any kind, not just the three configuration-refusal codes this branch
+    // started with (#154). The server classifies once and carries the kind, so
+    // a payload that has one is never re-derived from its own prose — which
+    // would silently downgrade the kinds whose reader-facing copy was written
+    // for readers rather than for the matchers below.
+    if (isStreamErrorKind(code)) return code;
   }
 
   const status =
@@ -116,6 +137,18 @@ export function classifyStreamError(input: unknown): StreamErrorKind {
       : undefined;
   if (status === 429) return 'rate_limit';
 
+  // --- Fallback: matching the shape of the message text --------------------
+  // Secondary by design since #154, never the primary path for a payload that
+  // carries a kind — but still load-bearing, not vestigial. It runs for every
+  // input with no `code`: an `Error` thrown client-side, an `SSEError` built
+  // from a non-2xx JSON body, a raw error handed to `describeToolFailureForLlm`
+  // server-side, and — during a rollout — a browser still running the previous
+  // bundle, whose narrower code branch recognizes only the three configuration
+  // refusals and reads the message for the rest. That client renders calm copy
+  // in every case (it is now matching against reader-facing copy, not raw
+  // text); two of the eight kinds land on the generic message until it
+  // reloads.
+  // -------------------------------------------------------------------------
   const m = errorMessageOf(input).toLowerCase();
   if (!m) return 'generic';
 
@@ -177,6 +210,17 @@ const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
 /** Map any streaming error into calm, reader-facing copy. Never leaks raw text. */
 export function friendlyStreamError(input: unknown): string {
   return FRIENDLY_STREAM_COPY[classifyStreamError(input)];
+}
+
+/**
+ * Server-side: the sanitized `error`-event payload for an already-classified
+ * failure. The message is the reader-facing copy and the code is the kind, so
+ * the raw error text never leaves the server (#154) while the render side
+ * receives the kind as data instead of re-deriving it from prose. The raw
+ * error still goes to the server log, which is where an operator reads it.
+ */
+export function streamErrorPayload(kind: StreamErrorKind): { message: string; code: StreamErrorCode } {
+  return { message: FRIENDLY_STREAM_COPY[kind], code: kind };
 }
 
 /**

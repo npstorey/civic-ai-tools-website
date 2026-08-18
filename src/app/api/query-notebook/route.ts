@@ -30,6 +30,7 @@ import {
   type CompletionResult,
   type StreamCallbacks,
 } from '@/lib/openrouter-streaming';
+import { isStreamErrorKind, type StreamErrorCode } from '@/lib/streaming';
 import { TraceBuilder, hash as traceHash, CIVICAITOOLS_TRACE_CONFIG } from '@/lib/evidence/trace';
 import { getConfiguredKeyId } from '@/lib/evidence/signing';
 import {
@@ -72,7 +73,7 @@ type NotebookEvent =
       answer: string;
       duration_ms: number;
     }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string; code?: StreamErrorCode };
 
 function encodeNotebookEvent(event: NotebookEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
@@ -254,7 +255,15 @@ export async function POST(request: NextRequest) {
       const message = err instanceof NotebookExecutionError
         ? `Notebook execution failed (exit ${err.exitCode ?? 'n/a'}): ${err.message}${err.stderr ? `\n${stderrTail(err.stderr)}` : ''}`
         : err instanceof Error ? err.message : 'Unknown error';
-      await emit({ type: 'error', message });
+      // Phase A attaches the classified kind to its rejection (#154). Guarded
+      // rather than forwarded blind: plenty of unrelated errors carry a `code`
+      // of their own (`ENOENT`, `ERR_*`), and only a real kind belongs on the
+      // wire — anything else would just fall through to prose matching anyway.
+      const rejectionCode = err !== null && typeof err === 'object' && 'code' in err
+        ? (err as { code?: unknown }).code
+        : undefined;
+      const code = isStreamErrorKind(rejectionCode) ? rejectionCode : undefined;
+      await emit({ type: 'error', message, ...(code ? { code } : {}) });
     } finally {
       trace.endRoot();
       await writer.close();
@@ -328,9 +337,13 @@ async function runPhaseA(args: {
         }
         void emit({ type: 'phase_a_answer', content: result.content });
       },
-      onError: (panel, message) => {
+      onError: (panel, message, code) => {
         if (panel !== 'withMcp') return;
-        reject(new Error(`Phase A failed: ${message}`));
+        // `message` is already reader-facing copy and `code` the classified
+        // kind (#154). Carry the kind on the rejection so the client renders
+        // the specific copy for it rather than re-deriving a kind from this
+        // prefixed prose, which would flatten several kinds to the generic one.
+        reject(Object.assign(new Error(`Phase A failed: ${message}`), { code }));
       },
     };
 

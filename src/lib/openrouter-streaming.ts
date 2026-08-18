@@ -1,6 +1,6 @@
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 import { getModelClient, classifyModelError } from './model-client.ts';
-import { formatToolProgress, formatToolResult, generateToolReason, describeToolFailureForLlm, type PanelType, type ProgressPhase, type StreamErrorCode } from './streaming.ts';
+import { formatToolProgress, formatToolResult, generateToolReason, describeToolFailureForLlm, classifyStreamError, streamErrorPayload, type PanelType, type ProgressPhase, type StreamErrorCode, type StreamErrorKind } from './streaming.ts';
 import type { TraceBuilder } from './evidence/trace.ts';
 import { hash as traceHash } from './evidence/trace.ts';
 import { deriveOperationType } from './mcp/operation-types.ts';
@@ -28,19 +28,37 @@ export interface StreamCallbacks {
   onProgress: (panel: PanelType, message: string, opts?: ProgressOpts) => void;
   onToken: (panel: PanelType, content: string) => void;
   onComplete: (panel: PanelType, result: CompletionResult) => void;
-  /** `code` is set for typed configuration failures (#178, #258 C4); undefined otherwise. */
+  /**
+   * `error` is reader-facing copy, never a raw error string, and `code` carries
+   * the classified kind for every failure — not just the typed configuration
+   * refusals of #178 and #258 C4 (#154). It stays optional because callers
+   * other than `reportStreamFailure` may still omit it.
+   */
   onError: (panel: PanelType, error: string, code?: StreamErrorCode) => void;
 }
 
 /**
  * Shared failure tail for both streaming query functions: classify the error,
  * log it server-side (previously this path was silent — the error only went to
- * the SSE callback), and forward message + typed code to the caller.
+ * the SSE callback), and forward a sanitized payload to the caller.
+ *
+ * #154: this used to forward `error.message`. Every render site maps that
+ * through `friendlyStreamError`, so nothing raw was ever displayed — but the
+ * raw string still travelled on the SSE `error` event, where MCP server names,
+ * status codes and timeout text were readable in devtools. Both streaming
+ * functions funnel their failures through here, so classifying ONCE at this
+ * single chokepoint is enough: the wire now carries reader-facing copy plus
+ * the classified kind, and the raw error goes only to the server log above.
+ *
+ * `classifyModelError` runs first because it classifies structurally (a
+ * `ModelConfigurationError` instance, a 401/403 status) where the text matcher
+ * could only guess from wording; `classifyStreamError` covers everything else.
  */
 function reportStreamFailure(panel: PanelType, error: unknown, callbacks: StreamCallbacks): void {
-  const code = classifyModelError(error) ?? undefined;
-  console.error(`[stream:${panel}] query failed${code ? ` (${code})` : ''}:`, error);
-  callbacks.onError(panel, error instanceof Error ? error.message : 'Unknown error', code);
+  const kind: StreamErrorKind = classifyModelError(error) ?? classifyStreamError(error);
+  console.error(`[stream:${panel}] query failed (${kind}):`, error);
+  const { message, code } = streamErrorPayload(kind);
+  callbacks.onError(panel, message, code);
 }
 
 export interface CompletionResult {
