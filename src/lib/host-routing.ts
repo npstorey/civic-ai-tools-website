@@ -36,10 +36,58 @@
  * access classification), the whole `/api/*` family, `_next`, and static
  * assets.
  *
- * Host matching mirrors `api-auth.ts`'s origin normalization:
- * case-insensitive, port-insensitive, and `www.`-insensitive — the
- * production deployment 307-redirects apex → www for GET, so browsers land
- * on `www.` even when the configured host is the apex.
+ * Host MATCHING mirrors `api-auth.ts`'s origin normalization:
+ * case-insensitive, port-insensitive, and `www.`-insensitive, so an
+ * operator names a host once and either spelling of it resolves to the
+ * role they configured.
+ *
+ * HOST CANONICALIZATION (#263). Matching is `www.`-insensitive; SERVING is
+ * not. A request whose host matches a configured value but spells it with
+ * the other `www.` form is 307-redirected to the spelling the operator
+ * actually configured — www→apex or apex→www, whichever direction the
+ * configuration points. Four properties are load-bearing:
+ *
+ *  - CONFIG-DERIVED, never a literal. The canonical spelling IS the
+ *    `APP_HOST` / `MARKETING_HOST` value; this module knows no host names
+ *    and needs no new variable to learn one.
+ *  - Rule zero survives. A `passthrough` host — a preview URL, a health
+ *    check by IP, an unnamed alias — has no configured spelling to be
+ *    steered toward, so it is never canonicalized. Neither is an
+ *    `APP_ONLY` instance, which ignores both host variables by definition.
+ *  - The CORS-sensitive path families are EXEMPT — see
+ *    `CANONICALIZATION_EXEMPT_PREFIXES`, which is the entire point of
+ *    #263. Per the Fetch spec, a cross-origin request that meets a
+ *    redirect requires the REDIRECT RESPONSE ITSELF to pass the CORS
+ *    check; a redirect carrying no `access-control-allow-origin` turns
+ *    the fetch into a network error no matter how simple the request is.
+ *    So `/api/*` and `/.well-known/*` must serve DIRECTLY on whichever
+ *    spelling was addressed, and a third-party verifier resolving a
+ *    commitment URL gets an answer instead of "Failed to fetch".
+ *  - It composes with the path decision instead of stacking on top of it:
+ *    a `www.` request to `/` on the app host produces ONE redirect
+ *    straight to the canonical host's `/ask`, not a host hop followed by
+ *    a path hop. Withholding wins outright — a route this host does not
+ *    serve 404s on the spelling it was asked on, rather than redirecting
+ *    to a second 404.
+ *
+ * 307, NOT 308, deliberately: browsers cache permanent redirects (the same
+ * reasoning already recorded at `APP_ROOT_ACTION` below), and the platform
+ * redirect this replaces is exactly why that matters — a cached 308
+ * outlives its own fix. No `rel=canonical` work accompanies this; the
+ * reference deployment sets `SITE_NOINDEX=1` (its `robots.txt` is
+ * `Disallow: /`), so search-engine canonicalization is moot there.
+ *
+ * WHERE THIS WAS MEASURED — and where it was not. The redirect and CORS
+ * behavior described above was measured against the PRODUCTION deployment
+ * with `curl` and an explicit `Origin` header on 2026-08-18. It has not
+ * been observed in a preview deployment or locally, and cannot be: a
+ * preview host matches neither variable, so nothing is canonicalized or
+ * withheld there. This app-layer canonicalization also ships INERT — while
+ * the hosting platform's own domain-level redirect is enabled it fires at
+ * the edge and no `www.` request ever reaches this module. That is
+ * intentional: canonicalization and the CORS fix then go live in the same
+ * instant the platform setting is turned off, with no window in which
+ * `www.` serves duplicate, uncanonicalized content.
  */
 
 /** What a request's host entitles it to. */
@@ -47,10 +95,17 @@ export type HostRole = 'app' | 'marketing' | 'passthrough';
 
 /** Parsed host-topology configuration (see module doc). */
 export interface HostRoutingConfig {
-  /** Normalized `APP_HOST`, or null when unset. */
+  /** Normalized `APP_HOST` — what MATCHING compares against. Null when unset. */
   appHost: string | null;
-  /** Normalized `MARKETING_HOST`, or null when unset. */
+  /** Normalized `MARKETING_HOST` — what MATCHING compares against. Null when unset. */
   marketingHost: string | null;
+  /**
+   * `APP_HOST` as an origin, preserving the spelling the operator
+   * configured — what CANONICALIZATION steers toward. Null when unset.
+   */
+  appOrigin: string | null;
+  /** `MARKETING_HOST` as an origin, preserving the configured spelling. */
+  marketingOrigin: string | null;
   /** `APP_ONLY` flag. */
   appOnly: boolean;
 }
@@ -58,10 +113,19 @@ export interface HostRoutingConfig {
 /**
  * The action the middleware should take for one request.
  * - `serve`    — pass through untouched (NextResponse.next()).
- * - `withhold` — 404: rewrite to a path no route claims, so the standard
- *                not-found page renders and the response status is 404 —
- *                indistinguishable from a route that does not exist.
- * - `redirect` — temporary (307) redirect to `destination`.
+ * - `withhold` — render the not-found page WITH a 404 status. The adapter
+ *                in `src/proxy.ts` carries the mechanism and the exact
+ *                limits of what has been verified about it.
+ * - `redirect` — temporary (307) redirect to `destination`: a path for the
+ *                app-root hop, an absolute URL for a host canonicalization.
+ *
+ * CORRECTION (#259 P2). This comment previously claimed a withheld route
+ * was "indistinguishable from a route that does not exist". It was not.
+ * Measured on the production deployment on 2026-08-18, a withheld route
+ * returned HTTP 200 carrying a not-found BODY, while a genuinely unknown
+ * URL on the same host returned 404 — so the two were distinguishable by
+ * status alone. The content withholding always worked; only the status was
+ * wrong. Nothing in the code had ever set the 404 the comment promised.
  */
 export type RouteAction =
   | { kind: 'serve' }
@@ -152,13 +216,14 @@ export function classifyPath(pathname: string): PathClass {
 }
 
 /**
- * Normalize a host for comparison: lowercase, scheme/path/port stripped,
- * leading `www.` and trailing dot dropped. Accepts a bare hostname
- * (recommended), a `host:port`, or a full origin — so the same variable
- * value works for matching and for origin construction (below). Returns
- * null for unset/empty input.
+ * The shared parse: lowercase, trim, and strip scheme, path/query and port
+ * from a host-shaped value. Accepts a bare hostname (recommended), a
+ * `host:port`, or a full origin — so one variable value works for
+ * matching, for canonicalization, and for origin construction (below).
+ * Leaves both the leading `www.` and any trailing dot alone; the two
+ * exported wrappers differ only in what they do about those.
  */
-export function normalizeHost(raw: string | null | undefined): string | null {
+function hostPart(raw: string | null | undefined): string | null {
   if (typeof raw !== 'string') return null;
   let host = raw.trim().toLowerCase();
   if (host.length === 0) return null;
@@ -173,9 +238,44 @@ export function normalizeHost(raw: string | null | undefined): string | null {
   } else {
     host = host.split(':')[0];
   }
-  // www-insensitive, matching api-auth.ts isSameOrigin.
-  host = host.replace(/^www\./, '').replace(/\.$/, '');
   return host.length > 0 ? host : null;
+}
+
+/**
+ * A host reduced to the form CANONICALIZATION compares on: everything
+ * `normalizeHost` does EXCEPT dropping the leading `www.`.
+ *
+ * The asymmetry is the whole design. `www.` presence is the only thing
+ * `normalizeHost` erases that names a genuinely different host; case, port
+ * and trailing dot are one name written differently. Steering on those
+ * would be actively harmful rather than merely useless — an instance
+ * configured as `example.org` but addressed on `example.org:8443` would be
+ * redirected to a port it does not listen on, and one configured as
+ * `http://localhost:3000` would redirect to itself forever, because the
+ * literal config string never equals the Host header the browser sends
+ * back. Comparing bare hosts makes both of those no-ops by construction.
+ */
+export function bareHost(raw: string | null | undefined): string | null {
+  const host = hostPart(raw);
+  if (host === null) return null;
+  const trimmed = host.replace(/\.$/, '');
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
+ * Normalize a host for MATCHING: lowercase, scheme/path/port stripped,
+ * leading `www.` and trailing dot dropped. Returns null for unset/empty
+ * input. `www.`-insensitive, matching api-auth.ts `isSameOrigin` — which
+ * is why a request can match a configured host and still be spelled
+ * differently from it, and why `bareHost` above exists.
+ */
+export function normalizeHost(raw: string | null | undefined): string | null {
+  const host = hostPart(raw);
+  if (host === null) return null;
+  // Order matters: `www.` first, then the trailing dot, so the degenerate
+  // input `www.` reduces to empty (null) rather than to the host `www`.
+  const stripped = host.replace(/^www\./, '').replace(/\.$/, '');
+  return stripped.length > 0 ? stripped : null;
 }
 
 /** `1`/`true` (any case, trimmed) is on; anything else — including unset — is off. */
@@ -195,6 +295,11 @@ export function readHostRoutingConfig(
   return {
     appHost: normalizeHost(env.APP_HOST),
     marketingHost: normalizeHost(env.MARKETING_HOST),
+    // The same values a second time, un-normalized, because matching and
+    // canonicalization need different things from them: matching wants the
+    // `www.`-insensitive form, canonicalization wants the literal spelling.
+    appOrigin: originFromHostValue(env.APP_HOST),
+    marketingOrigin: originFromHostValue(env.MARKETING_HOST),
     appOnly: parseBooleanFlag(env.APP_ONLY),
   };
 }
@@ -220,18 +325,96 @@ export function resolveHostRole(
 }
 
 /**
- * THE decision function: (host, pathname, config) → action. Pure; the
- * middleware adapter contributes nothing but the translation to
- * NextResponse. See the module doc for the full behavior matrix.
+ * Path families that are NEVER host-canonicalized, whatever the topology.
+ *
+ * This list is the #263 fix. `/api/*` and `/.well-known/*` are the paths
+ * third parties fetch cross-origin — evidence commitments, the trust
+ * registry — and per the Fetch spec a redirect met by a cross-origin
+ * request must ITSELF carry `access-control-allow-origin` or the fetch
+ * fails as a network error. Redirecting them is therefore not a detour,
+ * it is an outage for every browser caller, preflights included. They
+ * serve directly on whichever spelling was addressed.
+ *
+ * It deliberately DUPLICATES the matcher exclusions in `src/proxy.ts`
+ * rather than trusting them. The matcher already keeps these requests out
+ * of the proxy entirely — that is the primary mechanism and it is the one
+ * that runs in production — but the matcher is a deployment-time
+ * optimization living in a different file, while this function is the
+ * documented authority for what happens to a request. Encoding the
+ * exemption in both places means a future edit to the matcher cannot
+ * silently reintroduce the defect.
  */
-export function decideRoute(
+export const CANONICALIZATION_EXEMPT_PREFIXES = [
+  '/api',
+  '/_next',
+  '/.well-known',
+] as const;
+
+/** Exact paths that are never canonicalized (see the prefixes above). */
+export const CANONICALIZATION_EXEMPT_PATHS = ['/favicon.ico', '/robots.txt'] as const;
+
+/** True when `pathname` must serve on the host it was addressed on. Pure. */
+export function isCanonicalizationExempt(pathname: string): boolean {
+  if (CANONICALIZATION_EXEMPT_PATHS.some((p) => p === pathname)) return true;
+  return CANONICALIZATION_EXEMPT_PREFIXES.some((p) => underPath(pathname, p));
+}
+
+/**
+ * The origin whose SPELLING this request's host should be canonicalized
+ * to, or null when there is none to steer toward.
+ *
+ * Mirrors `resolveHostRole`'s precedence exactly — `APP_HOST` before
+ * `MARKETING_HOST` — so a request can never be matched as one role and
+ * canonicalized toward the other. Returns null for `APP_ONLY`, which
+ * ignores both host variables by definition and therefore has no
+ * configured spelling, and null for a host that matched neither (rule
+ * zero: a preview URL or an unnamed alias is not steered anywhere).
+ */
+function matchedOrigin(
+  rawHost: string | null | undefined,
+  config: HostRoutingConfig,
+): string | null {
+  if (config.appOnly) return null;
+  const host = normalizeHost(rawHost);
+  if (host === null) return null;
+  if (config.appHost !== null && host === config.appHost) return config.appOrigin;
+  if (config.marketingHost !== null && host === config.marketingHost) {
+    return config.marketingOrigin;
+  }
+  return null;
+}
+
+/**
+ * Where a non-canonical spelling of a configured host should be sent, or
+ * null when the request is already canonical (or must not be moved).
+ *
+ * TERMINATION is a property, not a hope: the destination's host IS
+ * `bareHost(origin)`, so the follow-up request compares equal and returns
+ * null here. Exactly one hop, always — pinned by a test that feeds the
+ * redirect target back through this function.
+ */
+export function canonicalHostRedirect(
   rawHost: string | null | undefined,
   pathname: string,
   config: HostRoutingConfig,
-): RouteAction {
-  const role = resolveHostRole(rawHost, config);
-  if (role === 'passthrough') return SERVE;
+  search = '',
+): string | null {
+  if (isCanonicalizationExempt(pathname)) return null;
+  const origin = matchedOrigin(rawHost, config);
+  if (origin === null) return null;
+  const requested = bareHost(rawHost);
+  const canonical = bareHost(origin);
+  if (requested === null || canonical === null) return null;
+  if (requested === canonical) return null;
+  return `${origin}${pathname}${search}`;
+}
 
+/**
+ * What this role does with this PATH, before any host spelling is
+ * considered. Extracted from `decideRoute` so canonicalization can compose
+ * with the answer rather than run before or after it.
+ */
+function decidePathAction(role: 'app' | 'marketing', pathname: string): RouteAction {
   const pathClass = classifyPath(pathname);
 
   if (role === 'marketing') {
@@ -252,6 +435,55 @@ export function decideRoute(
       // under a non-excluded matcher miss, unknown URLs → natural 404).
       return SERVE;
   }
+}
+
+/**
+ * THE decision function: (host, pathname, config) → action. Pure; the
+ * middleware adapter contributes nothing but the translation to
+ * NextResponse. See the module doc for the full behavior matrix.
+ *
+ * `search` is optional and defaults to empty, so every existing caller and
+ * test keeps its exact meaning. It exists only so a canonicalizing
+ * redirect can carry the query string — `/explore?trace=…` is a documented
+ * deep link, and dropping its query would break the link rather than move
+ * it. The app-root hop deliberately does not take it: that redirect
+ * discarded the query before this change and still does.
+ *
+ * PRECEDENCE, decided rather than inherited from evaluation order:
+ *
+ *  1. `passthrough` short-circuits everything. Rule zero.
+ *  2. `withhold` beats canonicalization. A route this host does not serve
+ *     404s on the spelling it was asked on. Redirecting first would spend
+ *     a hop to arrive at the same 404, and would make the withheld status
+ *     depend on which spelling the caller happened to use.
+ *  3. Otherwise canonicalization COMPOSES with the path decision: the path
+ *     action picks the destination path, the host check picks the host,
+ *     and the two are emitted as ONE redirect. A `www.` request to `/` on
+ *     the app host lands on the canonical host's `/ask` in a single hop,
+ *     never a host hop followed by a path hop, and never a loop.
+ */
+export function decideRoute(
+  rawHost: string | null | undefined,
+  pathname: string,
+  config: HostRoutingConfig,
+  search = '',
+): RouteAction {
+  const role = resolveHostRole(rawHost, config);
+  if (role === 'passthrough') return SERVE;
+
+  const pathAction = decidePathAction(role, pathname);
+  if (pathAction.kind === 'withhold') return pathAction;
+
+  // Compose: where the path decision already redirects, canonicalize its
+  // destination instead of the requested path, collapsing two hops to one.
+  const isPathRedirect = pathAction.kind === 'redirect';
+  const destination = canonicalHostRedirect(
+    rawHost,
+    isPathRedirect ? pathAction.destination : pathname,
+    config,
+    isPathRedirect ? '' : search,
+  );
+  return destination === null ? pathAction : { kind: 'redirect', destination };
 }
 
 /**

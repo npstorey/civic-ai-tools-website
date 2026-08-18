@@ -34,9 +34,19 @@
 //     (an explicit non-default port must match; default ports are elided
 //     by URL parsing on both sides).
 //   - `www.`-insensitive on the host, matching `normalizeHost` in
-//     host-routing.ts (see the comment there): the production deployment
-//     307-redirects apex → www for GET, so browsers send the `www.` form
-//     of an origin the operator configured as the apex.
+//     host-routing.ts (see the comment there). Direction corrected in
+//     #259 P2: this used to cite a production "307 apex → www for GET"
+//     redirect. Measured with curl against the PRODUCTION deployment on
+//     2026-08-18, the redirect ran the other way and was platform-level
+//     rather than ours — a 308 www → apex. The rule survives on firmer
+//     ground than the story it replaced. Since #263 the app canonicalizes
+//     PAGES to the configured spelling, while `/api/*` and
+//     `/.well-known/*` are EXEMPT and serve directly on whichever
+//     spelling was addressed (a cross-origin fetch cannot follow a
+//     redirect carrying no CORS header). So an API request from a browser
+//     on the `www.` spelling genuinely arrives here bearing a `www.`
+//     Origin, by design — and must still match the apex value the
+//     operator configured.
 //
 // Pure module: no Next.js imports, env passed as a record — runs under
 // `node --test` like host-routing.ts and host-links.ts.

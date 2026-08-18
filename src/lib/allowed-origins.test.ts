@@ -65,7 +65,12 @@ test('unset topology: the trusted set is exactly NEXTAUTH_URL — pre-#213 behav
   const env = { NEXTAUTH_URL: 'https://example.test' };
   assert.deepEqual(resolveTrustedOrigins(env), ['https://example.test']);
   assert.equal(isTrustedRequestOrigin('https://example.test', null, env), true);
-  // www-insensitive in both directions (the production apex→www redirect).
+  // www-insensitive in BOTH directions, and both directions are real:
+  // `/api/*` is exempt from host canonicalization (#263), so a browser on
+  // either spelling reaches the API on that spelling and sends that
+  // Origin. (This note used to cite a production apex→www redirect;
+  // measured against production on 2026-08-18 the redirect ran www→apex
+  // and was platform-level, not ours. Corrected in #259 P2.)
   assert.equal(isTrustedRequestOrigin('https://www.example.test', null, env), true);
   assert.equal(
     isTrustedRequestOrigin('https://example.test', null, { NEXTAUTH_URL: 'https://www.example.test' }),

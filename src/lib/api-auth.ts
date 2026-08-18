@@ -80,10 +80,25 @@ export function hasScope(auth: AuthResult, required: string): boolean {
  * token-revoke POST from the app host 403'd. With topology unset the set
  * is exactly `{NEXTAUTH_URL}` — the pre-#213 behavior.
  *
- * Matching is www-insensitive (the production deployment 307-redirects
- * apex → www for GET, so browsers send the www form even when the
- * configured value is the apex), scheme- and port-sensitive, and always
+ * Matching is www-insensitive, scheme- and port-sensitive, and always
  * exact — see the predicate module for the full rules.
+ *
+ * WHY www-insensitive — direction corrected, rationale re-founded
+ * (#259 P2). This note used to justify the rule with a production
+ * "307 apex → www for GET" redirect. Measured with curl against the
+ * PRODUCTION deployment on 2026-08-18, the redirect ran the other way and
+ * was not ours at all: a platform-level 308 www → apex. The stated
+ * direction was wrong; the behavior it justified is right, and the real
+ * reason is stronger than the one it replaces. Since #263 this app
+ * canonicalizes PAGES to the spelling the operator configured (a 307
+ * www → apex for the reference deployment), while `/api/*` and
+ * `/.well-known/*` are EXEMPT and serve directly on whichever spelling was
+ * addressed — a cross-origin fetch cannot follow a redirect that carries
+ * no CORS header, so redirecting them would break the fetch outright.
+ * A browser on the `www.` spelling therefore reaches this check ON the
+ * www host and sends a `www.` Origin by design, not as the residue of a
+ * bounce. www-insensitive matching is exactly what lets that request pass
+ * instead of 403.
  *
  * Returns false for cross-origin POSTs and for requests with no Origin
  * header (e.g. plain curl without `-H Origin`) — callers who want to
