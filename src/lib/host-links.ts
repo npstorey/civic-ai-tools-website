@@ -1,7 +1,10 @@
 // Cross-host link targets (app front-door v0.1.0, P4c).
 //
-// THE PROBLEM THIS SOLVES. Once host topology is configured, two families of
-// in-place affordance break, each in the mirror-image way:
+// THE PROBLEM THIS SOLVES. Wherever the app surface and the marketing face
+// are not the same thing, two families of in-place affordance break, each in
+// the mirror-image way. That used to require configuring host topology;
+// since #259 P3 it is also the DEFAULT, because an instance that configures
+// nothing serves the app surface alone:
 //
 //   - SIGN-IN affordances on the MARKETING host. `signIn('github')` starts an
 //     OAuth flow whose state cookie is written for the host the click
@@ -26,6 +29,7 @@
 // own.
 
 import {
+  instanceServesMarketing,
   originFromHostValue,
   parseBooleanFlag,
   resolveAppOrigin,
@@ -64,14 +68,17 @@ export interface HostLinks {
   /**
    * Prefix to put in front of a marketing route's path.
    *
-   * - `''` — no topology configured: hrefs stay exactly the relative ones
-   *   they are today. This is the seam convention, and it is what makes the
-   *   unset case byte-identical rather than merely equivalent.
+   * - `''` — the marketing routes serve on whatever host the visitor is on
+   *   (`SERVE_MARKETING`, and any deployment that has not split its hosts):
+   *   hrefs stay exactly the relative ones they have always been.
    * - an origin — a split-host instance: marketing routes resolve on the
    *   marketing host from wherever they are rendered.
-   * - `null` — an app-only instance: there IS no marketing site, so the
-   *   affordances are hidden rather than pointed somewhere. Same treatment
-   *   `resolvePublicSiteHref` gives the `AppChrome` exit link (P3).
+   * - `null` — the instance serves NO marketing surface: the affordances
+   *   are hidden rather than pointed somewhere. Same treatment
+   *   `resolvePublicSiteHref` gives the `AppChrome` exit link (P3), and
+   *   every consumer already guards on this exact null — the root layout's
+   *   footer funnels, `Header`'s `showMarketingNav`, and the two
+   *   `McpResponseDisplay` `/learn` deep links.
    */
   marketingOrigin: string | null;
 
@@ -94,12 +101,27 @@ export const DEFAULT_HOST_LINKS: HostLinks = {
  * argument (never `process.env` directly) so tests pass fixtures, matching
  * `readHostRoutingConfig`.
  *
- * The two fields are independent on purpose, because the rollout is
- * incremental (P3: "set `APP_HOST` first and verify the app host, then set
- * `MARKETING_HOST` to switch on the withholding"). With only `APP_HOST` set,
- * sign-in already redirects to the app surface while marketing links stay
- * relative — there is no marketing origin to name yet. With only
- * `MARKETING_HOST` set, the reverse. Neither half waits for the other.
+ * The two fields are independent on purpose, and they answer two DIFFERENT
+ * topology questions — which is what let #259 P3 move one without the other:
+ *
+ *   - `marketingOrigin` asks "does a marketing surface exist, and where?"
+ *     It is gated by `instanceServesMarketing`, so it goes null the moment
+ *     the instance serves no marketing face. This CHANGED at the flip:
+ *     it used to fall through to `''` (relative) for anything short of
+ *     `APP_ONLY`, which after the flip would have rendered footer and nav
+ *     links to `/learn`, `/about` and `/roadmap` on a host where those
+ *     paths 404.
+ *   - `signInHref` asks "where do sessions live?" — a question only
+ *     `APP_HOST` answers, and one the flip does not touch. Null still means
+ *     sign in IN PLACE, which is correct on any instance with no separate
+ *     app host to send anyone to.
+ *
+ * INCREMENTAL ROLLOUT, restated for the post-flip world. It used to be "set
+ * `APP_HOST` first, then `MARKETING_HOST`", on the strength of unnamed hosts
+ * passing through in the meantime. They no longer do, so the sequence gains
+ * a step at the front: set `SERVE_MARKETING=1` FIRST — that reinstates the
+ * pass-through for every host you have not named yet — then `APP_HOST`, then
+ * `MARKETING_HOST`. Neither host half waits for the other, exactly as before.
  */
 export function resolveHostLinks(
   env: Record<string, string | undefined>,
@@ -114,7 +136,7 @@ export function resolveHostLinks(
   const marketingOrigin = originFromHostValue(env.MARKETING_HOST);
 
   return {
-    marketingOrigin: marketingOrigin ?? '',
+    marketingOrigin: instanceServesMarketing(env) ? (marketingOrigin ?? '') : null,
     signInHref: appOrigin !== null ? `${appOrigin}${SIGN_IN_HREF}` : null,
   };
 }

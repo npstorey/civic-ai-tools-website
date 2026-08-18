@@ -219,14 +219,20 @@ export const ENV_SPEC = [
   // coded default, never load-bearing for an instance that does not want it.
   { name: 'SIGN_IN_ALLOWLIST', tier: 'optional', purpose: 'Allowlist of provider-account keys permitted to sign in (unset/empty = open)', hasFallback: true },
 
-  // --- Host topology (app front door P3; src/lib/host-routing.ts). All three
-  //     are pure opt-ins whose coded default is "no host routing": with none
-  //     set the middleware passes every request through and every route keeps
-  //     serving on every host, exactly the pre-topology behavior — so none is
-  //     ever load-bearing for a single-host instance. ---
-  { name: 'APP_HOST', tier: 'optional', purpose: 'Split-host: host serving the gated app surface (unset = no host routing)', hasFallback: true },
-  { name: 'MARKETING_HOST', tier: 'optional', purpose: 'Split-host: host serving the marketing site — withholds the app-private routes there (unset = no withholding)', hasFallback: true },
-  { name: 'APP_ONLY', tier: 'optional', purpose: 'App-only instance: every host serves the gated surface; marketing routes 404 (unset = off)', hasFallback: true },
+  // --- Host topology (app front door P3; src/lib/host-routing.ts). All four
+  //     are optional with coded defaults, so none may ever fail or nag a run.
+  //     What the CODED DEFAULT IS changed in #259 P3: an instance that sets
+  //     none of them now serves the app surface only — the marketing routes
+  //     404 and `/` hops to `/ask` — because the marketing face is the
+  //     reference deployment's own website rather than part of what an
+  //     instance ships. SERVE_MARKETING is the flagship "unset is correct"
+  //     variable of this set: instances leave it alone, and the reference
+  //     deployment sets it so its own site and its preview URLs keep serving
+  //     both route groups. ---
+  { name: 'APP_HOST', tier: 'optional', purpose: 'Split-host: host serving the gated app surface (unset = no host named)', hasFallback: true },
+  { name: 'MARKETING_HOST', tier: 'optional', purpose: 'Split-host: host serving the marketing site — withholds the app-private routes there (unset = no host named)', hasFallback: true },
+  { name: 'APP_ONLY', tier: 'optional', purpose: 'App-only instance: every host serves the gated surface even when a marketing host is named (unset = off; the default is already app-only)', hasFallback: true },
+  { name: 'SERVE_MARKETING', tier: 'optional', purpose: 'Serve the marketing site on hosts matching neither APP_HOST nor MARKETING_HOST — previews, aliases, a single-host site (unset = app surface only, the portable default)', hasFallback: true },
 
   // --- Indexing posture (#258 E1, owner ruling G0-3; src/lib/site-indexing.ts).
   //     A pure opt-in, same shape as the host-topology set above: the coded

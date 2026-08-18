@@ -6,10 +6,17 @@
  * no Next.js imports so the module runs under `node --test` and in the edge
  * runtime alike.
  *
- * THE SEAM CONVENTION (rule zero): with none of the three variables below
- * set, every request passes through untouched — no withholding, no
- * rewrites, anywhere. An instance that has never heard of host topology
- * behaves exactly as before this module existed.
+ * THE PORTABLE DEFAULT (#259 P3): an instance that configures NOTHING
+ * serves the app surface only. Every host it is addressed on takes the
+ * `app` role — `/` redirects to `/ask`, the marketing routes 404. The
+ * marketing face is the reference deployment's own website, not part of
+ * what an instance ships, and this is how it is withheld: by
+ * configuration, never by deleting files, so instances stay cleanly
+ * `git pull`-able.
+ *
+ * This REPLACED an earlier default (rule zero) under which nothing was
+ * configured meant every request passed through untouched. The old
+ * behavior did not disappear; it is now spelled `SERVE_MARKETING=1`.
  *
  * Configuration (all optional; host names are env-driven, never literals):
  *
@@ -22,13 +29,27 @@
  *   everything else serves byte-identically to a single-host deployment.
  * - `APP_ONLY` — `1`/`true`: a single-host instance that deploys ONLY the
  *   gated surface (no marketing site). Every request, on every host, gets
- *   the app role; `APP_HOST`/`MARKETING_HOST` are ignored.
+ *   the app role; `APP_HOST`/`MARKETING_HOST` are ignored. Redundant with
+ *   the default above for an instance that configures nothing else, and
+ *   deliberately KEPT: it is the explicit way to say "app-only even
+ *   though a marketing host is named", which the default cannot express.
+ * - `SERVE_MARKETING` — `1`/`true`: an UNNAMED host (one matching neither
+ *   `APP_HOST` nor `MARKETING_HOST`) passes through and serves both route
+ *   groups, the pre-#259 default. Governs unnamed hosts ONLY; a
+ *   configured split-host deployment is unaffected by it either way.
  *
- * Roles are claimed EXPLICITLY: a request on a host that matches neither
- * variable (a preview deployment, a health check by IP, a not-yet-flipped
- * alias) passes through — today's behavior, on purpose. Withholding is
- * topology, not security: the access gate is sign-in
- * (`SIGN_IN_ALLOWLIST`), and routes keep enforcing their own sessions.
+ * WHY THE MARKETING KNOB IS HOST-INDEPENDENT, which is the whole reason it
+ * is a boolean and not a third host name. Hosting-platform preview URLs
+ * match neither host variable, so before this change they resolved
+ * `passthrough` and served everything. Naming hosts in the preview
+ * environment would not help — a preview URL still matches neither, being
+ * freshly minted per deployment. Only a host-independent boolean can keep
+ * preview deployments serving both route groups after the flip.
+ *
+ * Roles are otherwise claimed EXPLICITLY: a named host takes the role it
+ * was named for, and nothing else changes it. Withholding is topology,
+ * not security: the access gate is sign-in (`SIGN_IN_ALLOWLIST`), and
+ * routes keep enforcing their own sessions.
  *
  * Deliberately DUAL-SERVED either way: `/evidence` and `/evidence/[slug]`
  * (public product surface — published URLs must keep resolving on the
@@ -50,10 +71,14 @@
  *  - CONFIG-DERIVED, never a literal. The canonical spelling IS the
  *    `APP_HOST` / `MARKETING_HOST` value; this module knows no host names
  *    and needs no new variable to learn one.
- *  - Rule zero survives. A `passthrough` host — a preview URL, a health
- *    check by IP, an unnamed alias — has no configured spelling to be
- *    steered toward, so it is never canonicalized. Neither is an
- *    `APP_ONLY` instance, which ignores both host variables by definition.
+ *  - UNNAMED HOSTS ARE NEVER STEERED. A preview URL, a health check by
+ *    IP, an unnamed alias — none of them matched a configured value, so
+ *    there is no spelling to steer them toward. That holds whatever role
+ *    the unnamed host ends up with: since #259 P3 an unnamed host takes
+ *    the `app` role by default rather than `passthrough`, and it is still
+ *    canonicalized nowhere, because `matchedOrigin` keys on the MATCH and
+ *    not on the role. Neither is an `APP_ONLY` instance canonicalized,
+ *    which ignores both host variables by definition.
  *  - The CORS-sensitive path families are EXEMPT — see
  *    `CANONICALIZATION_EXEMPT_PREFIXES`, which is the entire point of
  *    #263. Per the Fetch spec, a cross-origin request that meets a
@@ -108,6 +133,13 @@ export interface HostRoutingConfig {
   marketingOrigin: string | null;
   /** `APP_ONLY` flag. */
   appOnly: boolean;
+  /**
+   * `SERVE_MARKETING` flag — the role an UNNAMED host takes. True gives it
+   * `passthrough` (the pre-#259 default, and what preview deployments
+   * need); false gives it `app` (the portable default). Named hosts do not
+   * consult it.
+   */
+  serveMarketing: boolean;
 }
 
 /**
@@ -301,16 +333,30 @@ export function readHostRoutingConfig(
     appOrigin: originFromHostValue(env.APP_HOST),
     marketingOrigin: originFromHostValue(env.MARKETING_HOST),
     appOnly: parseBooleanFlag(env.APP_ONLY),
+    serveMarketing: parseBooleanFlag(env.SERVE_MARKETING),
   };
 }
 
 /**
  * Which role does this request's host get?
  *
- * Precedence: `APP_ONLY` beats host matching; `APP_HOST` beats
- * `MARKETING_HOST` if both are (mis)configured to the same value; a host
- * matching neither is `passthrough` — today's behavior, so previews and
- * unnamed aliases are never withheld from.
+ * PRECEDENCE, in evaluation order and decided rather than inherited:
+ *
+ *   1. `APP_ONLY` set             → `app`, on every host.
+ *   2. host === `APP_HOST`        → `app`.
+ *   3. host === `MARKETING_HOST`  → `marketing`.
+ *   4. otherwise (an UNNAMED host) → `SERVE_MARKETING` ? `passthrough` : `app`.
+ *
+ * Rows 1-3 are untouched by #259 P3, which is the property that makes the
+ * flip safe: a configured split-host deployment behaves exactly as it did
+ * before, and `APP_HOST` still beats `MARKETING_HOST` when both are
+ * (mis)configured to the same value.
+ *
+ * Row 4 is the flip. It used to be `passthrough` unconditionally; the
+ * portable default is now `app`, with `SERVE_MARKETING` restoring the old
+ * answer. A MISSING or unparseable Host header takes row 4 as well — it is
+ * maximally unnamed, and splitting it out would leave the withholding with
+ * a hole that depends on whether a client sent a header HTTP/1.1 requires.
  */
 export function resolveHostRole(
   rawHost: string | null | undefined,
@@ -318,10 +364,11 @@ export function resolveHostRole(
 ): HostRole {
   if (config.appOnly) return 'app';
   const host = normalizeHost(rawHost);
-  if (host === null) return 'passthrough';
-  if (config.appHost !== null && host === config.appHost) return 'app';
-  if (config.marketingHost !== null && host === config.marketingHost) return 'marketing';
-  return 'passthrough';
+  if (host !== null) {
+    if (config.appHost !== null && host === config.appHost) return 'app';
+    if (config.marketingHost !== null && host === config.marketingHost) return 'marketing';
+  }
+  return config.serveMarketing ? 'passthrough' : 'app';
 }
 
 /**
@@ -451,7 +498,9 @@ function decidePathAction(role: 'app' | 'marketing', pathname: string): RouteAct
  *
  * PRECEDENCE, decided rather than inherited from evaluation order:
  *
- *  1. `passthrough` short-circuits everything. Rule zero.
+ *  1. `passthrough` short-circuits everything — no withholding, no
+ *     canonicalization, no root hop. Since #259 P3 an unnamed host reaches
+ *     this only when `SERVE_MARKETING` says so; a named host never does.
  *  2. `withhold` beats canonicalization. A route this host does not serve
  *     404s on the spelling it was asked on. Redirecting first would spend
  *     a hop to arrive at the same 404, and would make the withheld status
@@ -511,12 +560,55 @@ export function resolveAppOrigin(env: Record<string, string | undefined>): strin
 }
 
 /**
+ * DOES THIS INSTANCE SERVE A MARKETING SURFACE AT ALL? — the predicate the
+ * chrome needs, and the one #259 P3 had to introduce because `APP_ONLY`
+ * stopped being able to answer it.
+ *
+ * Before the flip, "no marketing site" and "`APP_ONLY`" were the same
+ * statement, so every affordance that had to hide itself branched on
+ * `APP_ONLY` directly. After the flip they came apart: an instance with
+ * NOTHING configured routes as app-only while `APP_ONLY` is still false,
+ * and a consumer still asking `APP_ONLY` would take the has-a-marketing-site
+ * branch and render links into a surface that now 404s.
+ *
+ * So this asks the question the consumers actually mean, and it mirrors
+ * `resolveHostRole` row for row rather than inventing a second topology
+ * reading:
+ *
+ *   | `APP_ONLY` | `MARKETING_HOST` | `SERVE_MARKETING` | serves marketing |
+ *   | set        | any              | any               | NO  (explicit)   |
+ *   | unset      | named            | any               | YES (that host)  |
+ *   | unset      | unnamed          | set               | YES (unnamed →   |
+ *   |            |                  |                   |      passthrough)|
+ *   | unset      | unnamed          | unset             | NO  (the flip)   |
+ *
+ * INSTANCE-level, not host-level, and deliberately: every resolver in this
+ * file is env-only and host-independent (see the note in host-links.ts),
+ * because reading request headers in a layout would force the static
+ * marketing pages to render dynamically. On a split-host instance marketing
+ * IS served — on the marketing host — so this is true on BOTH hosts, and the
+ * hrefs the consumers build are absolute, which is what makes that correct.
+ */
+export function instanceServesMarketing(env: Record<string, string | undefined>): boolean {
+  if (parseBooleanFlag(env.APP_ONLY)) return false;
+  if (normalizeHost(env.MARKETING_HOST) !== null) return true;
+  return parseBooleanFlag(env.SERVE_MARKETING);
+}
+
+/**
  * Where the site header's Dashboard links should point. The header renders
  * on EVERY page — including the marketing host, where `/dashboard` is
  * withheld once a split topology is configured — so on a split-host
  * deployment the link must carry the app origin. Relative everywhere else:
  * unset topology is today's exact href, and an app-only instance serves
  * the dashboard on whatever host the request came in on.
+ *
+ * UNCHANGED BY #259 P3, audited rather than assumed. The relative fallback
+ * names an APP-PRIVATE path, and the flip gives an unnamed host the `app`
+ * role — the role that SERVES app-private paths — so the href was already
+ * right for the post-flip default. The `APP_ONLY` branch stays: here it
+ * answers "where does the app surface live", not "does a marketing surface
+ * exist", and only the latter question moved.
  */
 export function resolveDashboardHref(env: Record<string, string | undefined>): string {
   if (parseBooleanFlag(env.APP_ONLY)) return '/dashboard';
@@ -533,6 +625,12 @@ export function resolveDashboardHref(env: Record<string, string | undefined>): s
  * href there is a 404, so a split-host instance must carry the app origin.
  * Relative everywhere else: unset topology serves `/ask` on whatever host the
  * request arrived on, and an app-only instance is its own app host.
+ *
+ * UNCHANGED BY #259 P3, for `resolveDashboardHref`'s reason exactly —
+ * `/ask` is app-private, an unnamed host now takes the role that serves
+ * app-private paths, and the relative fallback lands on a route that
+ * serves. It is also the destination `APP_ROOT_ACTION` sends `/` to, so
+ * this href and the root hop cannot disagree.
  */
 export function resolveAskHref(env: Record<string, string | undefined>): string {
   if (parseBooleanFlag(env.APP_ONLY)) return '/ask';
@@ -543,16 +641,23 @@ export function resolveAskHref(env: Record<string, string | undefined>): string 
 /**
  * Where the app surface's "Public site" affordances should point (the
  * `AppChrome` exit link):
- * - app-only instance → null: there IS no public marketing site — hide the
- *   affordance rather than link a gated user to a 404 or back to the
- *   dashboard.
+ * - instance serves no marketing surface → null: there IS no public site —
+ *   hide the affordance rather than link a gated user to a 404 or back to
+ *   the dashboard. `AppChrome` guards on exactly this null.
  * - split-host → the marketing origin.
- * - no topology configured → `/` (today's relative link, byte-identical).
+ * - unnamed hosts passing through (`SERVE_MARKETING`) → `/`, the relative
+ *   link this has always emitted for a single-host instance.
+ *
+ * THE GATE MOVED FROM `APP_ONLY` TO `instanceServesMarketing` (#259 P3),
+ * and it had to. Left on `APP_ONLY`, an instance with nothing configured
+ * would have returned `/` — and `/` is precisely the path that now
+ * redirects to `/ask`. The exit link out of the app would have led back
+ * into the app: one hop, no error, and no public site at the end of it.
  */
 export function resolvePublicSiteHref(
   env: Record<string, string | undefined>,
 ): string | null {
-  if (parseBooleanFlag(env.APP_ONLY)) return null;
+  if (!instanceServesMarketing(env)) return null;
   const marketingOrigin = originFromHostValue(env.MARKETING_HOST);
   if (marketingOrigin !== null) return marketingOrigin;
   return '/';

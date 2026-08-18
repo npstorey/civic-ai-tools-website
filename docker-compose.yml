@@ -254,10 +254,14 @@ services:
       CRON_SECRET:
       KV_REST_API_URL:
       KV_REST_API_TOKEN:
-      # Host topology: unset ⇒ no host routing, every route on every host.
+      # Host topology. Unset ⇒ the app surface only: marketing routes 404 and
+      # `/` hops to `/ask`. Bare `NAME:` passes the variable through only when
+      # the environment has it — which is the point for SERVE_MARKETING,
+      # whose ABSENCE is the configured state for an instance.
       APP_HOST:
       MARKETING_HOST:
       APP_ONLY:
+      SERVE_MARKETING:
       # Evidence identity overrides not already given a local default above.
       EVIDENCE_PLATFORM_AGENT_URL:
       EVIDENCE_TRUST_REGISTRY_CANONICAL_URL:
