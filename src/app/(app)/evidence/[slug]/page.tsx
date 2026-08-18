@@ -27,6 +27,10 @@ import DashboardLink from '@/components/evidence/DashboardLink';
 import ProvenanceGraphSection from '@/components/evidence/ProvenanceGraphSection';
 import NotebookSection from '@/components/evidence/NotebookSection';
 import SkillSection from '@/components/evidence/SkillSection';
+// Machine-readable metadata shapes (JSON-LD + Highwire citation tags). Pure
+// builders in lib so the SHAPE is unit-testable — including what it omits
+// (#256: no publication date is stored, so none is asserted).
+import { buildEvidenceJsonLd, buildEvidenceCitationTags } from '@/lib/evidence/page-metadata';
 import { formatModelName, estimateCostUsd } from '@/lib/models';
 import { formatDataSourcesSummary } from '@/lib/evidence/data-sources';
 import { isBlobRef, fetchBlobRefText, type BlobRef } from '@/lib/evidence/blob-ref';
@@ -149,12 +153,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       title: `Evidence: ${record.title}`,
       description,
     },
-    other: {
-      'citation_title': record.title,
-      'citation_author': creator?.displayName || 'Unknown',
-      'citation_date': record.createdAt.toISOString().split('T')[0],
-      ...(url ? { 'citation_public_url': url } : {}),
-    },
+    // Highwire-Press citation tags — what Zotero and Google Scholar read.
+    // #256: no `citation_date`. That tag is a publication-date assertion in
+    // this vocabulary, and no publication timestamp is stored (`created_at` is
+    // row-insert time = SEAL time for a sealed-then-published record). Its
+    // absence is deliberate and unconditional; see lib/evidence/page-metadata.ts.
+    other: buildEvidenceCitationTags({
+      title: record.title,
+      creatorName: creator?.displayName || 'Unknown',
+      url,
+    }),
   };
 }
 
@@ -227,6 +235,12 @@ export default async function EvidencePage({ params }: PageProps) {
   // (the vast majority of historical records), `resolution.pkg === pkg`
   // modulo the shallow clone.
   const renderPkg = resolution?.pkg ?? pkg;
+  // Byline date. Deliberately LEFT as `created_at` by #256, and deliberately
+  // left UNLABELLED: it names no field, so unlike `datePublished`,
+  // `citation_date`, and the former "Published on" row it asserts nothing a
+  // machine or a citation manager will read as a publication date. Not an
+  // oversight in the #256 sweep — the other three sites were changed and this
+  // one was examined and kept.
   const dateStr = record.createdAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   // Absolute, publicly-fetchable commitment endpoint for the verify badge
@@ -264,16 +278,20 @@ export default async function EvidencePage({ params }: PageProps) {
 
   // Schema.org JSON-LD. `url` only when this instance declared an origin
   // (#258: honest omission, never another deployment's URL).
+  // #256 applies the same rule to dates: the block carries NO `datePublished`,
+  // because no publication timestamp is stored — `created_at` is row-insert
+  // time, which for a record sealed first and published later is the SEAL
+  // time. `datePublished` is exactly the field search engines and citation
+  // tooling read to date a work, so emitting seal time there is a
+  // machine-readable false claim. Absent on purpose, not an oversight; the
+  // reasoning and the regression tests live in lib/evidence/page-metadata.ts.
   const jsonLdOrigin = getEvidenceSiteOrigin();
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'Dataset',
-    name: record.title,
-    description: record.summary,
-    creator: { '@type': 'Person', name: creator?.displayName || 'Unknown' },
-    datePublished: record.createdAt.toISOString().split('T')[0],
-    ...(jsonLdOrigin ? { url: `${jsonLdOrigin}/evidence/${slug}` } : {}),
-  };
+  const jsonLd = buildEvidenceJsonLd({
+    title: record.title,
+    summary: record.summary,
+    creatorName: creator?.displayName || 'Unknown',
+    url: jsonLdOrigin ? `${jsonLdOrigin}/evidence/${slug}` : null,
+  });
 
   return (
     <>
@@ -661,11 +679,21 @@ export default async function EvidencePage({ params }: PageProps) {
               borderRadius: '6px', backgroundColor: 'white',
               fontSize: '13px', lineHeight: 1.7, color: 'var(--text-secondary)',
             }}>
-              <div>
-                <strong style={{ color: 'var(--text-primary)' }}>Published</strong>
-                {' on '}
-                {record.createdAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-              </div>
+              {/* #256: the "Published on <date>" row that used to lead this
+                  list is gone. It rendered `created_at` — row-insert time,
+                  which for a record sealed first and published later is the
+                  SEAL time, not the publication date. Omitted rather than
+                  relabelled: every remaining row here is a signed lifecycle
+                  event resolved from the attestation chain, so a row sourced
+                  from an unsigned column of a different kind reads as the same
+                  claim without being one. Relabelling it "Created on" would
+                  stay technically true while a reader skimming a
+                  Published→Withdrawn sequence still takes the first date as the
+                  publication — the misread survives the wording fix (design
+                  principles 3 "no false precision" and 7 "three orthogonal
+                  axes"). "Sealed on" is ruled out separately by principle 9:
+                  the seal/publish split is implementation language. The
+                  record's date is still visible, unlabelled, in the byline. */}
               <div>
                 <strong style={{ color: 'var(--text-primary)' }}>Withdrawn</strong>
                 {' on '}
