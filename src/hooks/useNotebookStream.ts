@@ -220,7 +220,14 @@ export function useNotebookStream() {
           break;
         }
         case 'error': {
-          const message = friendlyStreamError((raw.message as string | undefined) || 'Notebook generation failed');
+          // Pass the carried kind alongside the text: since #154 the Phase A
+          // failure path puts a classified `code` on the event, and the message
+          // is already reader-facing copy. Without the code, prefixed copy
+          // would be re-classified from prose and flatten to the generic line.
+          const message = friendlyStreamError({
+            message: (raw.message as string | undefined) || 'Notebook generation failed',
+            code: raw.code,
+          });
           setState((prev) => ({
             ...prev,
             error: message,

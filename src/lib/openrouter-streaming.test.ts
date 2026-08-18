@@ -13,7 +13,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks } from './openrouter-streaming.ts';
 import { _resetDefaultModelClientForTests } from './model-client.ts';
-import type { StreamErrorCode, PanelType } from './streaming.ts';
+import { streamErrorPayload, type StreamErrorCode, type PanelType } from './streaming.ts';
 
 const FAKE_KEY = 'sk-or-test-obviously-fake-key-do-not-use';
 
@@ -70,6 +70,10 @@ test('queryWithoutMcpStreaming: missing credential yields typed onError in bound
   assert.equal(errors.length, 1);
   assert.equal(errors[0].panel, 'withoutMcp');
   assert.equal(errors[0].code, 'model_not_configured');
+  // #154: the wire carries the sanitized payload, not `error.message`. The
+  // env-var name survives because the copy for this kind names it on purpose
+  // (#178) — the reader of that message is the operator who can fix it.
+  assert.equal(errors[0].message, streamErrorPayload('model_not_configured').message);
   assert.match(errors[0].message, /OPENROUTER_API_KEY/);
   assert.ok(elapsed < BOUNDED_MS, `bounded time: took ${elapsed}ms`);
 });
@@ -125,6 +129,11 @@ test('queryWithoutMcpStreaming: upstream 401 yields typed model_auth_rejected on
     assert.equal(errors.length, 1);
     assert.equal(errors[0].panel, 'withoutMcp');
     assert.equal(errors[0].code, 'model_auth_rejected');
+    // #154: the upstream body's text reached the SSE payload before this
+    // change; now only the classified kind and its reader-facing copy do. The
+    // raw error still goes to the server log.
+    assert.equal(errors[0].message, streamErrorPayload('model_auth_rejected').message);
+    assert.ok(!errors[0].message.includes('test fixture'), 'no upstream error text on the wire');
     assert.ok(elapsed < BOUNDED_MS, `bounded time: took ${elapsed}ms`);
   } finally {
     await new Promise((resolve) => server.close(resolve));
