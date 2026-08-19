@@ -42,6 +42,14 @@ What we don't do, and shouldn't: invent confidence percentages on AI outputs, fa
 
 The page's honesty is set by its worst-case element: one fake confidence score anywhere damages trust across every chip. Show what we know, label what we don't know, and never simulate precision we haven't earned.
 
+### Corollary: a state signal reaches every reader, or it isn't shown
+
+Almost everything on these surfaces discloses. The exception is a form field marked invalid — the one element that validates, and the only one making a claim about the reader's own input. It therefore carries the strictest form of the rule above: the visual marking (`.ui-field--error`), the programmatic state (`aria-invalid`), and the visible message saying what is wrong (associated by `aria-describedby`, announced when it appears) are one signal in three channels. They are introduced together, by the condition that drives all three, or not introduced at all.
+
+A red border on its own is not a partial signal. It is the signal delivered to some readers and withheld from others — a reader who can't see it gets a form that silently refuses, with the refusal rendered in a channel they don't have. That is worse than marking nothing, because the visible half also reads as finished to whoever reviews it. The failure is cheap to ship and invisible to catch, which is why it is written down here and guarded by a test (`src/app/ui-field-error-a11y.test.ts`) rather than left to be noticed.
+
+The rule runs in the other direction too: don't mark a field invalid to report a failure that isn't the field's. A source list that failed to load is not a bad selection, and painting the control red claims the reader chose wrong when the network did. That is Principle 3's false precision wearing a different coat.
+
 ---
 
 ## Family 2 — Hierarchy and restraint
