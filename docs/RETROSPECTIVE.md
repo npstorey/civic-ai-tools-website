@@ -1,8 +1,74 @@
 # Retrospectives
 
-> **Dormant log.** Entries stop at 2026-03-05, the Sprint 004 retro (the 2026-03-07 commit only moved this file into `docs/`, without changing content). The practice lapsed rather than moving elsewhere — the one per-sprint retro under [`../sprints/completed/`](../sprints/completed/) predates that last entry. This file is retained as the early-project record.
+> **Log resumed 2026-08-19.** Entries ran to 2026-03-05 (the Sprint 004 retro; the 2026-03-07 commit only moved this file into `docs/`, without changing content), then the practice lapsed for five months rather than moving elsewhere — the one per-sprint retro under [`../sprints/completed/`](../sprints/completed/) predates that last entry. The #220 retro below resumes it. Whether the practice continues is not asserted here.
 
 Reverse-chronological session retros for the civic-ai-tools-website project.
+
+---
+
+## 2026-08-19 — Sprint #220: Pre-Deployment Hygiene (five gated phases)
+
+**Scope:** Excise the NYC design-system association from the brand layer — token names, CSS class names, styling attribution — plus three riders folded in: a wrong `datePublished` assertion (#256), the raw error string on the SSE wire (#154), and a stale preflight topology assertion. Run as a gated ORCH sprint against anchor #220, with a coordinating planning seat and the owner holding a second key at every merge.
+
+**Phases:** P1 `aa4afc1` (#269) · P2 `c0ccbb1` (#270) · P3 `a9784fb` (#272) · P4 `8f981ab` (#274) · P5 `ad5a52c` (#276). Tagged `sprint-220-complete`. `main` auto-deploys, so all five merges were production deploys; all five green.
+
+### What we did
+
+**P1 — honest absence (#256).** The evidence page asserted a publication date it could not know: `created_at` is row-insert time, which for a sealed-then-published record is the *seal* time. Removed `datePublished` from the JSON-LD, `citation_date` from the Highwire tags (a second machine-readable site the issue never named), and the labelled "Published on" row. New pure-builder seam plus tests, with the negative assertions mutation-checked.
+
+**P2 — the wire carries a kind, not a string (#154).** The raw infra string still travelled in the SSE `error` payload. The charter's fix — send friendly copy instead — was measured and rejected: it would have re-classified that copy at render and silently downgraded four of eight error kinds. Instead the server classifies once at the single chokepoint and puts the *kind* on the wire; prose matching demoted to fallback. Plus the preflight topology assertion, and the environment-example line (owner-run).
+
+**P3 — the token sweep.** 308 `var(--nyc-*)` call sites migrated, via expand→flip: neutral names became the definitions with `--nyc-*` aliased beneath, so a missed reference still resolved.
+
+**P4 — the class layer.** `.nyc-button`/`.nyc-field` → `.ui-*`, via a dual-selector expand→flip→retire so a missed usage still styled during migration.
+
+**P5 — closeout.** Aliases retired (owner ruling), brand prose swept, acceptance recorded.
+
+### What went well
+
+- **Expand→flip made both renames safe rather than lucky.** In P3 a missed token still resolved through the alias; in P4 a missed class still styled through the dual selector. Neither phase depended on the sweep being exhaustive on the first pass.
+- **Acceptance was built where the charter's was unassertable.** "Rendered CSS byte-identical" cannot be checked in CI. P3 replaced it with three layers — a permanent dangling-token test, a diff-level mapping check, and an emitted-output comparison against a baseline build (compiled CSS across 279 selectors and 643 declarations identical; 936 bundle-resolved `var()` occurrences in identical buckets).
+- **Two permanent guards outlived the sprint** — `design-tokens.test.ts` and `ui-class-names.test.ts`. P5 didn't just assert the first was a safety net for alias retirement; it dropped a real `var(--nyc-blue, #103FEF)` probe in and watched it fail, proving the net catches the fallback form specifically.
+- **Two live defects surfaced by measuring rather than sweeping.** `--nyc-gray-50` was referenced and never defined — invisible because the call site carried a fallback. `--nyc-gray-30`/`-40` were dead and were dropped rather than renamed.
+
+### What didn't go well
+
+**Seven premise or measurement errors, five of them in the sprint's own instructions.**
+
+1. The charter's `~1,186` sizing counted inline style objects, not token references.
+2. The charter's #154 fix-shape would have silently downgraded four of eight error kinds.
+3. An owner-run commit fused two lines in a file agents may not read, because the append command wasn't newline-defensive.
+4. The corrected `294` census missed a whole syntactic form — `var(--token, #fallback)`.
+5. That correction was itself wrong: it hand-patched the one instance of the form it *had* seen back into a total blind to the other fourteen, which made the number look considered while being wrong twice.
+6. The `listen EPERM` failure class, recorded as ubiquitous, turned out to be environment-dependent (#249).
+7. The "complete" brand-prose surface was two sites short — including `docs/deploy.md`'s operator table, which would have shipped documenting an alias layer that no longer existed.
+
+None were caught by general suspicion. Each was caught by one specific measurement someone chose to run instead of reasoning.
+
+### Lessons
+
+- **A rename phase's true surface is every statement that would become false, not every occurrence of the string.** The two P5 misses contained no brand string at all — they were sentences asserting the alias layer existed. A grep-shaped survey is structurally incapable of finding those. Rename work needs a *statements pass* distinct from the occurrence sweep. (This entry's own dormancy banner was corrected under that rule.)
+- **The grep that finds your example may still not count its class.** The dangling `--nyc-gray-50` was found *in* the fallback form, and the counting grep written afterwards still couldn't see that form.
+- **If you can't test a command against the real target, build a replica and test it there.** The fused-line defect came from an untestable append; the repair was verified against a synthetic replica of the exact failure before being handed over.
+- **An owner-run commit on an agent branch is the one commit nothing reviews.** No IMPL saw it, CI didn't validate it, and the agent was forbidden to read it. Content-free structural verification of the patch — numstat, newline-marker side, prefix and identity tests — is the compensating control.
+- **A test that can't fail is theater.** Negative assertions and guards were mutation-checked throughout, not observed passing.
+- **Historical records don't get rewritten.** Completed sprints, this file's older entries, and a dated "deviations" section kept their `--nyc-*` references. Rewriting them to describe work that didn't happen that way would falsify them.
+- **Dead and unconsumed are different.** Dead tokens (something replaced them) were dropped, because renaming them launders debt under a cleaner name. An unconsumed selector (nothing replaced it) was kept, because dropping it would have removed the codebase's only invalid-field styling.
+
+### Filed rather than left to evaporate
+
+| Issue | What |
+|---|---|
+| #271 | Notebook execution stderr is put on the wire and then discarded at render — a disclosure decision, not a bug |
+| #273 | ~12 stale `var(--token, #hex)` fallback literals, including the `#777` that sprint-003 removed for a WCAG AA failure |
+| #275 | Invalid-field styling exists with no consumer, and `aria-invalid` appears nowhere — a trap for whoever first adds a required field |
+| #249 | Premise corrected: its stated symptom didn't reproduce across three clean runs; rider declined on that measurement, fix shape pre-scoped |
+
+### Files changed
+
+Across five phases: `src/app/globals.css` (token layer rebuilt, aliases retired, prose swept), 43 component and page files (token references), 12 files (class names), `src/lib/openrouter-streaming.ts` + `src/lib/streaming.ts` (the error chokepoint), `src/app/(app)/evidence/[slug]/page.tsx` + new `src/lib/evidence/page-metadata.ts` (honest absence), `scripts/preflight-env.test.mjs`, `docs/deploy.md`, `CLAUDE.md`, and two new guard tests under `src/app/`.
+
+**Re-theming an instance, which is what this and #217 were for:** one variable, `SITE_BRAND_ACCENT`. Companions are derived from it and written as a single inline style on `<html>`. No file is edited and there's no second place to keep in sync.
 
 ---
 
