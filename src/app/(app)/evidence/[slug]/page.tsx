@@ -312,7 +312,7 @@ export default async function EvidencePage({ params }: PageProps) {
           <div style={{
             padding: '16px 20px', marginBottom: '24px',
             backgroundColor: 'rgba(255, 179, 32, 0.12)',
-            border: '1px solid var(--caution, #FFB320)',
+            border: '1px solid var(--caution)',
             borderRadius: '6px',
           }}>
             <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
