@@ -24,3 +24,27 @@ coverage
 *.tsbuildinfo
 npm-debug.log*
 .DS_Store
+
+# Repository material, not application material (#179). Standalone tracing
+# copies from the project directory, so the surest way to keep something out
+# of the runtime image is to keep it out of the build context. next.config.ts
+# excludes these from the traced output as well — belt and braces, because
+# only one of the two layers survives a change of build method.
+docs
+sprints
+CLAUDE.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+README.md
+
+# Untracked local scratch (gitignored). A build host is not guaranteed clean,
+# and whatever is lying here would otherwise be copied into the image.
+temp
+
+# The build stage runs exactly one repository script — the standalone asset
+# check chained into `npm run build:standalone`. Admitting only that one keeps
+# the built stages from doubling as a place to run the rest of the repo's
+# tooling. A new build-time script must be added here explicitly; forgetting
+# fails the build loudly rather than silently enlarging the image.
+scripts/*
+!scripts/check-standalone-assets.mjs
