@@ -75,9 +75,9 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
         <div
           role="alert"
           style={{
-            border: '1px solid var(--error, #ec131e)',
+            border: '1px solid var(--error)',
             background: 'rgba(236, 19, 30, 0.06)',
-            color: 'var(--error, #ec131e)',
+            color: 'var(--error)',
             borderRadius: '4px',
             padding: '16px 20px',
             display: 'flex',

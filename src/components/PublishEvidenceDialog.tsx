@@ -477,7 +477,7 @@ export default function PublishEvidenceDialog({
                   marginBottom: '12px',
                   borderRadius: '4px',
                   backgroundColor: 'rgba(255, 179, 32, 0.12)',
-                  border: '1px solid var(--caution, #FFB320)',
+                  border: '1px solid var(--caution)',
                   fontSize: '13px',
                   lineHeight: 1.5,
                   color: 'var(--text-secondary)',

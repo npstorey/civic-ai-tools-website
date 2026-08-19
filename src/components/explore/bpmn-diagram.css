@@ -6,7 +6,7 @@
 .bpmn-active .djs-visual > rect,
 .bpmn-active .djs-visual > circle,
 .bpmn-active .djs-visual > polygon {
-  stroke: var(--success, #008A02) !important;
+  stroke: var(--success) !important;
   stroke-width: 3px !important;
   filter: drop-shadow(0 0 8px rgba(0, 138, 2, 0.4));
   transition: all 0.3s ease;
@@ -38,7 +38,7 @@
 
 /* Loop-back flow animated (caution/amber) */
 .bpmn-loop-back .djs-visual > path {
-  stroke: var(--caution, #FFB320) !important;
+  stroke: var(--caution) !important;
   stroke-width: 4px !important;
   filter: drop-shadow(0 0 6px rgba(255, 179, 32, 0.5));
   transition: all 0.3s ease;
@@ -46,7 +46,7 @@
 
 /* Success flow (green — gateway to synthesis) */
 .bpmn-success-flow .djs-visual > path {
-  stroke: var(--success, #008A02) !important;
+  stroke: var(--success) !important;
   stroke-width: 4px !important;
   filter: drop-shadow(0 0 6px rgba(0, 138, 2, 0.4));
   transition: all 0.3s ease;
@@ -58,7 +58,7 @@
 
 .bpmn-overlay {
   background: white;
-  border: 1px solid var(--border-color, #ddd);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 10px 14px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
@@ -80,8 +80,8 @@
   width: 12px;
   height: 12px;
   background: white;
-  border-right: 1px solid var(--border-color, #ddd);
-  border-bottom: 1px solid var(--border-color, #ddd);
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
   transform: rotate(45deg);
   box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.05);
 }
@@ -91,7 +91,7 @@
   font-size: 11px;
   white-space: pre-wrap;
   word-break: break-all;
-  color: var(--text-secondary, #333);
+  color: var(--text-secondary);
   margin: 0;
   line-height: 1.5;
 }
@@ -109,13 +109,13 @@
 }
 
 .bpmn-overlay .result-text {
-  color: var(--success, #00B703);
+  color: var(--success);
   font-weight: 600;
   font-size: 14px;
 }
 
 .bpmn-overlay .info-text {
-  color: var(--text-secondary, #333);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -124,7 +124,7 @@
    ================================================================ */
 
 .bpmn-container {
-  border: 1px solid var(--border-color, #ddd);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   background: white;
   position: relative;
@@ -153,10 +153,10 @@
 .bpmn-zoom-controls button {
   width: 32px;
   height: 32px;
-  border: 1px solid var(--border-color, #ddd);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   background: white;
-  color: var(--text-secondary, #333);
+  color: var(--text-secondary);
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
@@ -169,14 +169,14 @@
 }
 
 .bpmn-zoom-controls button:hover {
-  background: var(--card-background, #eee);
+  background: var(--card-background);
   border-color: var(--accent);
   color: var(--accent);
 }
 
 .bpmn-zoom-level {
   font-size: 11px;
-  color: var(--text-muted, #777);
+  color: var(--text-muted);
   margin-left: 4px;
   min-width: 36px;
   text-align: center;
@@ -189,7 +189,7 @@
 .bpmn-interaction-hint {
   text-align: center;
   font-size: 12px;
-  color: var(--text-muted, #777);
+  color: var(--text-muted);
   margin-top: 6px;
   opacity: 0.7;
 }
