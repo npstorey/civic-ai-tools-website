@@ -171,7 +171,7 @@ export default function QueryForm({
     flex: 1,
     padding: '8px 14px',
     border: 'none',
-    background: active ? 'var(--white, #fff)' : 'transparent',
+    background: active ? 'var(--white)' : 'transparent',
     color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
     fontSize: '13px',
     fontWeight: active ? 600 : 500,
@@ -326,9 +326,9 @@ export default function QueryForm({
                     display: 'flex',
                     padding: '3px',
                     gap: '4px',
-                    background: 'var(--card-background, #f3f3f3)',
+                    background: 'var(--card-background)',
                     borderRadius: '999px',
-                    border: '1px solid var(--border-color, #e5e5e5)',
+                    border: '1px solid var(--border-color)',
                     width: '100%',
                   }}
                 >
@@ -373,9 +373,9 @@ export default function QueryForm({
               <div
                 style={{
                   padding: '12px 14px',
-                  border: '1px dashed var(--border-color, #e5e5e5)',
+                  border: '1px dashed var(--border-color)',
                   borderRadius: '6px',
-                  background: 'var(--card-background, #f8f8f8)',
+                  background: 'var(--card-background)',
                   fontSize: '13px',
                   color: 'var(--text-secondary)',
                   lineHeight: 1.5,

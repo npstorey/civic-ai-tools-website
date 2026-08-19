@@ -57,7 +57,7 @@ function ExpandableStep({ label, detail, children }: { label: string; detail?: s
       {expanded && (
         <div style={{
           marginTop: '8px', marginLeft: '18px', padding: '10px 12px',
-          backgroundColor: 'var(--card-background, #f9f9f9)', borderRadius: '4px',
+          backgroundColor: 'var(--card-background)', borderRadius: '4px',
           border: '1px solid var(--border-color)', fontSize: '13px',
           fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
           maxHeight: '300px', overflow: 'auto',

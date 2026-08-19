@@ -441,7 +441,7 @@ export default function McpFlowDiagram() {
             height: '40px',
             borderRadius: '4px',
             border: 'none',
-            background: 'var(--text-primary, #1a1a1a)',
+            background: 'var(--text-primary)',
             color: 'white',
             fontSize: '13px',
             fontWeight: 600,
