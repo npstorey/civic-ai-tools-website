@@ -137,7 +137,7 @@ export default function ChatNotebookOutput({
       <Section title="A · Initial prompt">
         <div style={{
           padding: '16px 20px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
-          borderLeft: '3px solid var(--nyc-blue)', borderRadius: '0 4px 4px 0',
+          borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
           fontSize: '15px', lineHeight: 1.6, color: 'var(--text-primary)',
           whiteSpace: 'pre-wrap',
         }}>
@@ -180,7 +180,7 @@ export default function ChatNotebookOutput({
           )}
           {view.composedSystemPrompt ? (
             <details>
-              <summary style={{ cursor: 'pointer', color: 'var(--nyc-blue)', fontSize: '13px', padding: '4px 0' }}>
+              <summary style={{ cursor: 'pointer', color: 'var(--accent)', fontSize: '13px', padding: '4px 0' }}>
                 Show full system prompt ({composedPromptLineCount.toLocaleString()} lines)
               </summary>
               <pre style={{
@@ -337,7 +337,7 @@ export default function ChatNotebookOutput({
       <Section title="G · Summary">
         <div style={{
           padding: '12px 16px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
-          borderLeft: '3px solid var(--nyc-blue)', borderRadius: '0 4px 4px 0',
+          borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
           fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)',
         }}>
           {view.structuredSummary ? (

@@ -215,7 +215,7 @@ function TocRail({ headings }: { headings: SectionHeading[] }) {
         }
         .toc-rail-desktop a:hover,
         .toc-rail-mobile a:hover {
-          color: var(--nyc-blue);
+          color: var(--accent);
           text-decoration: underline;
         }
         .toc-rail-mobile {

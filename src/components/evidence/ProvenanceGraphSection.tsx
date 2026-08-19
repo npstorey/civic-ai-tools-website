@@ -112,7 +112,7 @@ export default function ProvenanceGraphSection({ provenance, slug }: ProvenanceG
             onClick={() => setExpanded(!expanded)}
             style={{
               background: 'none', border: 'none', padding: '4px 8px',
-              fontSize: '12px', cursor: 'pointer', color: 'var(--nyc-blue)',
+              fontSize: '12px', cursor: 'pointer', color: 'var(--accent)',
             }}
           >
             {expanded ? 'Collapse' : 'Expand'}
@@ -129,9 +129,9 @@ export default function ProvenanceGraphSection({ provenance, slug }: ProvenanceG
               onClick={() => setShowJson(false)}
               style={{
                 padding: '6px 12px', border: 'none', background: 'none',
-                borderBottom: !showJson ? '2px solid var(--nyc-blue)' : '2px solid transparent',
+                borderBottom: !showJson ? '2px solid var(--accent)' : '2px solid transparent',
                 marginBottom: '-1px', fontSize: '12px', fontWeight: !showJson ? 600 : 400,
-                color: !showJson ? 'var(--nyc-blue)' : 'var(--text-muted)', cursor: 'pointer',
+                color: !showJson ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer',
               }}
             >
               Summary
@@ -140,9 +140,9 @@ export default function ProvenanceGraphSection({ provenance, slug }: ProvenanceG
               onClick={() => setShowJson(true)}
               style={{
                 padding: '6px 12px', border: 'none', background: 'none',
-                borderBottom: showJson ? '2px solid var(--nyc-blue)' : '2px solid transparent',
+                borderBottom: showJson ? '2px solid var(--accent)' : '2px solid transparent',
                 marginBottom: '-1px', fontSize: '12px', fontWeight: showJson ? 600 : 400,
-                color: showJson ? 'var(--nyc-blue)' : 'var(--text-muted)', cursor: 'pointer',
+                color: showJson ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer',
               }}
             >
               JSON-LD

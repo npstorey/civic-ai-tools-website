@@ -74,9 +74,9 @@ export default function ResponsePanel({
       style={{
         padding: '12px 16px',
         backgroundColor: 'rgba(236, 19, 30, 0.1)',
-        color: 'var(--nyc-error)',
+        color: 'var(--error)',
         borderRadius: '4px',
-        border: '1px solid var(--nyc-error)',
+        border: '1px solid var(--error)',
         fontSize: '14px',
         marginBottom: '16px',
       }}
@@ -107,7 +107,7 @@ export default function ResponsePanel({
   return (
     <div
       style={{
-        border: `2px solid ${isMcp ? 'var(--nyc-success)' : 'var(--border-color)'}`,
+        border: `2px solid ${isMcp ? 'var(--success)' : 'var(--border-color)'}`,
         borderRadius: '4px',
         display: 'flex',
         flexDirection: 'column',
@@ -120,7 +120,7 @@ export default function ResponsePanel({
         style={{
           padding: '16px 24px',
           backgroundColor: isMcp ? 'rgba(0, 183, 3, 0.1)' : 'var(--card-background)',
-          borderBottom: `1px solid ${isMcp ? 'var(--nyc-success)' : 'var(--border-color)'}`,
+          borderBottom: `1px solid ${isMcp ? 'var(--success)' : 'var(--border-color)'}`,
         }}
       >
         <h3
@@ -188,7 +188,7 @@ export default function ResponsePanel({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div
                   style={{
-                    borderLeft: '3px solid var(--nyc-caution)',
+                    borderLeft: '3px solid var(--caution)',
                     padding: '8px 12px',
                     fontSize: '14px',
                     fontStyle: 'italic',
@@ -245,7 +245,7 @@ export default function ResponsePanel({
             {isStreaming && !content && !error && (
               <div
                 style={{
-                  borderLeft: '3px solid var(--nyc-caution)',
+                  borderLeft: '3px solid var(--caution)',
                   padding: '8px 12px',
                   fontSize: '14px',
                   fontStyle: 'italic',
@@ -281,7 +281,7 @@ export default function ResponsePanel({
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: 'var(--nyc-blue)',
+                          color: 'var(--accent)',
                           flexShrink: 0,
                         }}
                       >
@@ -295,7 +295,7 @@ export default function ResponsePanel({
                           width: '16px',
                           height: '16px',
                           border: '2px solid var(--border-color)',
-                          borderTopColor: 'var(--nyc-blue)',
+                          borderTopColor: 'var(--accent)',
                           borderRadius: '50%',
                           animation: 'spin 1s linear infinite',
                           flexShrink: 0,

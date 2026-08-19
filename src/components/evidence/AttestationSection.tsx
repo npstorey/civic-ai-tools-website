@@ -211,8 +211,8 @@ function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
   });
 
   const typeBadge = attestation.type === 'consistency'
-    ? { label: 'Consistency Test', bg: 'rgba(var(--accent-rgb), 0.1)', color: 'var(--nyc-blue)' }
-    : { label: 'Evaluation', bg: 'rgba(0, 183, 3, 0.1)', color: 'var(--nyc-success)' };
+    ? { label: 'Consistency Test', bg: 'rgba(var(--accent-rgb), 0.1)', color: 'var(--accent)' }
+    : { label: 'Evaluation', bg: 'rgba(0, 183, 3, 0.1)', color: 'var(--success)' };
 
   return (
     <div style={{
@@ -229,7 +229,7 @@ function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
         <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
           by{' '}
           <a href={attestation.creatorGithubUrl} target="_blank" rel="noopener noreferrer"
-            style={{ color: 'var(--nyc-blue)', textDecoration: 'none' }}>
+            style={{ color: 'var(--accent)', textDecoration: 'none' }}>
             {attestation.creatorDisplayName}
           </a>
         </span>
@@ -238,7 +238,7 @@ function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
           onClick={onToggle}
           style={{
             marginLeft: 'auto', background: 'none', border: 'none',
-            fontSize: '12px', color: 'var(--nyc-blue)', cursor: 'pointer',
+            fontSize: '12px', color: 'var(--accent)', cursor: 'pointer',
           }}
         >
           {isExpanded ? 'Hide details' : 'Show details'}
@@ -260,10 +260,10 @@ function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
           <span style={{
             fontWeight: 600,
             color: expanded.metrics.consistencyClassification === 'highly_reproducible'
-              ? 'var(--nyc-success)'
+              ? 'var(--success)'
               : expanded.metrics.consistencyClassification === 'moderately_stable'
-                ? 'var(--nyc-blue)'
-                : 'var(--nyc-error)',
+                ? 'var(--accent)'
+                : 'var(--error)',
             textTransform: 'capitalize',
           }}>
             {expanded.metrics.consistencyClassification.replace(/_/g, ' ')}
@@ -277,9 +277,9 @@ function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
             <span style={{ fontWeight: 600 }}>Overall:</span>
             <span style={{
               fontSize: '16px', fontWeight: 700,
-              color: (expanded.overallScore || 0) >= 8 ? 'var(--nyc-success)'
-                : (expanded.overallScore || 0) >= 5 ? 'var(--nyc-blue)'
-                : 'var(--nyc-error)',
+              color: (expanded.overallScore || 0) >= 8 ? 'var(--success)'
+                : (expanded.overallScore || 0) >= 5 ? 'var(--accent)'
+                : 'var(--error)',
             }}>
               {(expanded.overallScore || 0).toFixed(1)}/10
             </span>
@@ -294,7 +294,7 @@ function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
               <div key={key} style={{ display: 'flex', gap: '6px', color: 'var(--text-secondary)' }}>
                 <span style={{
                   fontWeight: 700, minWidth: '18px', textAlign: 'right',
-                  color: val.score >= 8 ? 'var(--nyc-success)' : val.score >= 5 ? 'var(--nyc-blue)' : 'var(--nyc-error)',
+                  color: val.score >= 8 ? 'var(--success)' : val.score >= 5 ? 'var(--accent)' : 'var(--error)',
                 }}>
                   {val.score}
                 </span>
@@ -328,9 +328,9 @@ function formatCriterionLabel(key: string): string {
 // --- Expert attestation card (human-submitted review) ---
 
 const RATING_STYLES: Record<ExpertRating, { label: string; bg: string; color: string }> = {
-  endorse: { label: 'Endorsed', bg: 'rgba(0, 183, 3, 0.10)', color: 'var(--nyc-success)' },
+  endorse: { label: 'Endorsed', bg: 'rgba(0, 183, 3, 0.10)', color: 'var(--success)' },
   concerns: { label: 'Concerns', bg: 'rgba(255, 183, 0, 0.15)', color: '#8a5a00' },
-  dispute: { label: 'Disputed', bg: 'rgba(236, 19, 30, 0.08)', color: 'var(--nyc-error)' },
+  dispute: { label: 'Disputed', bg: 'rgba(236, 19, 30, 0.08)', color: 'var(--error)' },
   neutral: { label: 'Neutral note', bg: 'rgba(0, 0, 0, 0.06)', color: 'var(--text-secondary)' },
 };
 
@@ -368,7 +368,7 @@ function ExpertAttestationCard({ attestation, payload }: {
         <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
           by{' '}
           <a href={attestation.creatorGithubUrl} target="_blank" rel="noopener noreferrer"
-            style={{ color: 'var(--nyc-blue)', textDecoration: 'none', fontWeight: 500 }}>
+            style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>
             {attestation.creatorDisplayName}
           </a>
         </span>
@@ -435,7 +435,7 @@ function ExpertAttestationCard({ attestation, payload }: {
           margin-bottom: 4px;
         }
         .expert-attestation-body :global(a) {
-          color: var(--nyc-blue);
+          color: var(--accent);
         }
         .expert-attestation-body :global(code) {
           font-family: monospace;

@@ -98,7 +98,7 @@ function FilterDropdown({
           fontSize: '14px',
           border: '1px solid var(--border-color)',
           borderRadius: '4px',
-          backgroundColor: 'var(--nyc-white)',
+          backgroundColor: 'var(--white)',
           color: value ? 'var(--text-primary)' : 'var(--text-muted)',
           cursor: 'pointer',
           appearance: 'none' as const,
@@ -132,7 +132,7 @@ function FilterDropdown({
             margin: '2px 0 0 0',
             padding: '4px 0',
             listStyle: 'none',
-            backgroundColor: 'var(--nyc-white)',
+            backgroundColor: 'var(--white)',
             border: '1px solid var(--border-color)',
             borderRadius: '4px',
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
@@ -465,7 +465,7 @@ export default function PortalDirectoryClient({
               border: '1px solid var(--border-color)',
               borderRadius: '4px',
               fontFamily: 'inherit',
-              backgroundColor: 'var(--nyc-white)',
+              backgroundColor: 'var(--white)',
               color: 'var(--text-primary)',
             }}
           />
@@ -547,7 +547,7 @@ export default function PortalDirectoryClient({
                 fontSize: '13px',
                 border: '1px solid var(--border-color)',
                 borderRadius: '4px',
-                background: 'var(--nyc-white)',
+                background: 'var(--white)',
                 cursor: 'pointer',
                 color: 'var(--text-muted)',
                 fontFamily: 'inherit',
@@ -580,7 +580,7 @@ export default function PortalDirectoryClient({
             fontSize: '13px',
             border: '1px solid var(--border-color)',
             borderRadius: '4px',
-            background: 'var(--nyc-white)',
+            background: 'var(--white)',
             cursor: 'pointer',
             color: 'var(--text-secondary)',
             fontFamily: 'inherit',
@@ -673,7 +673,7 @@ export default function PortalDirectoryClient({
                         rel="noopener noreferrer"
                         style={{
                           fontSize: '13px',
-                          color: 'var(--nyc-blue)',
+                          color: 'var(--accent)',
                           textDecoration: 'none',
                         }}
                       >
@@ -688,7 +688,7 @@ export default function PortalDirectoryClient({
                             rel="noopener noreferrer"
                             style={{
                               fontSize: '13px',
-                              color: 'var(--nyc-blue)',
+                              color: 'var(--accent)',
                               textDecoration: 'none',
                             }}
                           >
@@ -723,7 +723,7 @@ export default function PortalDirectoryClient({
                   fontSize: '14px',
                   border: '1px solid var(--border-color)',
                   borderRadius: '4px',
-                  background: 'var(--nyc-white)',
+                  background: 'var(--white)',
                   cursor: clampedPage <= 1 ? 'default' : 'pointer',
                   color:
                     clampedPage <= 1 ? 'var(--text-muted)' : 'var(--text-secondary)',
@@ -744,7 +744,7 @@ export default function PortalDirectoryClient({
                   fontSize: '14px',
                   border: '1px solid var(--border-color)',
                   borderRadius: '4px',
-                  background: 'var(--nyc-white)',
+                  background: 'var(--white)',
                   cursor: clampedPage >= totalPages ? 'default' : 'pointer',
                   color:
                     clampedPage >= totalPages

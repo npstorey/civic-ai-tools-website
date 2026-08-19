@@ -26,10 +26,10 @@ The fix is a shared **trust-signal vocabulary**: every verification status maps 
 
 | Tier | Reads as | Color token | Icon | Meaning |
 |---|---|---|---|---|
-| **Verified** | green, affirmative | `--nyc-success` `#008A02` | check | An affirmative check passed. |
+| **Verified** | green, affirmative | `--success` `#008A02` | check | An affirmative check passed. |
 | **Normal** | neutral, calm, informational | `--text-muted` `#757575` | info (`i`) | "Not `ok`" but **expected**. The home of every legacy/back-compat status. **Not a warning.** |
-| **Attention** | amber | `--nyc-warning` (→ `--nyc-caution` `#FFB320`) | warning (`!` triangle) | Something **unconfirmed / unrecognized** — not proven-bad. "Look closer." |
-| **Alarm** | red | `--nyc-error` `#EC131E` | error (`!` octagon) | A **genuine integrity failure** — altered content, a forged signature, a revoked key. |
+| **Attention** | amber | `--warning` (→ `--caution` `#FFB320`) | warning (`!` triangle) | Something **unconfirmed / unrecognized** — not proven-bad. "Look closer." |
+| **Alarm** | red | `--error` `#EC131E` | error (`!` octagon) | A **genuine integrity failure** — altered content, a forged signature, a revoked key. |
 
 The line that matters most is **Normal vs Attention vs Alarm**. Normal is calm (an expected state). Attention is amber (we could not confirm something). Alarm is red (something is provably wrong). Getting a status into the right one of those three is the whole job.
 
@@ -250,7 +250,7 @@ The four outer shapes (check / circle / triangle / octagon) are distinct without
 | Vocabulary library | `src/lib/evidence/trust-signal.ts` | `TrustTier`, `TIER_META`, the per-check `*_SIGNALS` maps, resolver helpers (`resolveSignature`, `resolveRekor`, …), `CAPTURE_METHOD_LABELS`, `NOTEBOOK_PROVENANCE_SIGNALS`. Pure data — type-only upstream imports, so client-safe. |
 | Coverage test | `src/lib/evidence/trust-signal.test.ts` | Proves total coverage of the emitted status codes, the load-bearing splits, and the synthetic-legacy all-calm guarantee. |
 | Component | `src/components/evidence/TrustSignal.tsx` | Presentational `<TrustSignal tier label detail? icon? />`; the four glyphs; consumes `TIER_META`. |
-| Amber token | `src/app/globals.css` | `--nyc-warning` (→ `--nyc-caution`). |
+| Amber token | `src/app/globals.css` | `--warning` (→ `--caution`). |
 
 **How total coverage holds by construction.** Each verify-library status union was refactored (behavior-preservingly) into a source-of-truth const-array, e.g. `KEY_TRUST_STATUSES` with `type KeyTrustStatus = typeof KEY_TRUST_STATUSES[number]`. The signal maps are typed `Record<KeyTrustStatus, …>`, so a status added upstream fails the compile until it is tiered here; the coverage test iterates the same arrays at runtime as a belt-and-suspenders and to assert the load-bearing tier *values*. The array and the map cannot drift.
 

@@ -37,7 +37,7 @@ const SIGN_IN_PROMPT = 'Sign in for a higher daily limit';
 
 /** Shared by all three shapes of the prompt so they render identically. */
 const PROMPT_LINK_STYLE: React.CSSProperties = {
-  color: 'var(--nyc-blue-40)',
+  color: 'var(--accent)',
   textDecoration: 'underline',
   fontSize: 'inherit',
 };
@@ -80,9 +80,9 @@ export default function RateLimitBanner({ refreshTrigger = 0 }: RateLimitBannerP
   const isExhausted = rateLimit.remaining === 0;
 
   const textColor = isExhausted
-    ? 'var(--nyc-error)'
+    ? 'var(--error)'
     : isLow
-    ? 'var(--nyc-caution)'
+    ? 'var(--caution)'
     : 'var(--text-muted)';
 
   return (
@@ -117,7 +117,7 @@ export default function RateLimitBanner({ refreshTrigger = 0 }: RateLimitBannerP
                 background: 'none',
                 border: 'none',
                 padding: 0,
-                color: 'var(--nyc-blue-40)',
+                color: 'var(--accent)',
                 textDecoration: 'underline',
                 cursor: 'pointer',
                 fontSize: 'inherit',

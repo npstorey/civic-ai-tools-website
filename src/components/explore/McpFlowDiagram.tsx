@@ -371,7 +371,7 @@ export default function McpFlowDiagram() {
                     style={{
                       fontSize: '13px',
                       fontWeight: 500,
-                      color: 'var(--nyc-blue-40)',
+                      color: 'var(--accent)',
                       background: 'none',
                       border: 'none',
                       padding: 0,

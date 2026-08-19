@@ -169,9 +169,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
     unverified: { bg: 'rgba(0,0,0,0.06)', text: 'var(--text-muted)' },
-    consistency_tested: { bg: 'rgba(var(--accent-rgb), 0.1)', text: 'var(--nyc-blue)' },
-    evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--nyc-success)' },
-    fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--nyc-success)' },
+    consistency_tested: { bg: 'rgba(var(--accent-rgb), 0.1)', text: 'var(--accent)' },
+    evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--success)' },
+    fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--success)' },
   };
   const c = colors[status] || colors.unverified;
   const label = status.replace(/_/g, ' ');
@@ -312,7 +312,7 @@ export default async function EvidencePage({ params }: PageProps) {
           <div style={{
             padding: '16px 20px', marginBottom: '24px',
             backgroundColor: 'rgba(255, 179, 32, 0.12)',
-            border: '1px solid var(--nyc-caution, #FFB320)',
+            border: '1px solid var(--caution, #FFB320)',
             borderRadius: '6px',
           }}>
             <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
@@ -340,7 +340,7 @@ export default async function EvidencePage({ params }: PageProps) {
             border: '1px solid rgba(var(--accent-rgb), 0.25)',
             borderRadius: '6px',
           }}>
-            <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--nyc-blue)', marginBottom: '6px' }}>
+            <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--accent)', marginBottom: '6px' }}>
               Sealed — not published
             </div>
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
@@ -375,7 +375,7 @@ export default async function EvidencePage({ params }: PageProps) {
             border: '1px solid rgba(236, 19, 30, 0.2)',
             borderRadius: '6px',
           }}>
-            <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--nyc-error)', marginBottom: '6px' }}>
+            <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--error)', marginBottom: '6px' }}>
               This evidence was withdrawn by the author on{' '}
               {fmtDate(lifecycle.withdrawnAt)}
             </div>
@@ -399,7 +399,7 @@ export default async function EvidencePage({ params }: PageProps) {
           <span>By{' '}
             {creator?.githubProfileUrl ? (
               <a href={creator.githubProfileUrl} target="_blank" rel="noopener noreferrer"
-                style={{ color: 'var(--nyc-blue)', textDecoration: 'none' }}>
+                style={{ color: 'var(--accent)', textDecoration: 'none' }}>
                 {creator.displayName}
               </a>
             ) : (
@@ -427,7 +427,7 @@ export default async function EvidencePage({ params }: PageProps) {
           <Section title="Summary">
             <div style={{
               padding: '16px 20px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
-              borderLeft: '3px solid var(--nyc-blue)', borderRadius: '0 4px 4px 0',
+              borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
               fontSize: '15px', lineHeight: 1.6, color: 'var(--text-secondary)',
             }}>
               {record.summary}
@@ -452,14 +452,14 @@ export default async function EvidencePage({ params }: PageProps) {
               href="https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-evidence-standard.md#91-dathere-content-profile"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: 'var(--nyc-blue)' }}
+              style={{ color: 'var(--accent)' }}
             >
               OES §9.1
             </a>
             <span>{'·'}</span>
             <a
               href={`/api/evidence/${slug}/bundle`}
-              style={{ color: 'var(--nyc-blue)' }}
+              style={{ color: 'var(--accent)' }}
             >
               Download notebook (.ipynb)
             </a>
@@ -478,7 +478,7 @@ export default async function EvidencePage({ params }: PageProps) {
               {renderPkg.prompt.text ? (
                 <div style={{
                   padding: '16px 20px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
-                  borderLeft: '3px solid var(--nyc-blue)', borderRadius: '0 4px 4px 0',
+                  borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
                   fontSize: '15px', lineHeight: 1.6, color: 'var(--text-primary)',
                   whiteSpace: 'pre-wrap',
                 }}>
@@ -601,7 +601,7 @@ export default async function EvidencePage({ params }: PageProps) {
               <Section title="E · Answer notebook">
                 <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--text-secondary)' }}>
                   Re-executing this notebook against the documented runtime + stable upstream data reproduces section F (OES §9.1.3).{' '}
-                  <a href={`/api/evidence/${slug}/bundle`} style={{ color: 'var(--nyc-blue)' }}>
+                  <a href={`/api/evidence/${slug}/bundle`} style={{ color: 'var(--accent)' }}>
                     Download notebook (.ipynb)
                   </a>
                 </div>
@@ -631,7 +631,7 @@ export default async function EvidencePage({ params }: PageProps) {
             <Section title="G · Summary">
               <div style={{
                 padding: '12px 16px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
-                borderLeft: '3px solid var(--nyc-blue)', borderRadius: '0 4px 4px 0',
+                borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
                 fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)',
               }}>
                 {renderPkg.summary ?? record.summary}

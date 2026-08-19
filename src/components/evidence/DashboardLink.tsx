@@ -19,7 +19,7 @@ export default function DashboardLink({ creatorGithubId }: { creatorGithubId: st
       href="/dashboard"
       style={{
         fontSize: '13px',
-        color: 'var(--nyc-blue)',
+        color: 'var(--accent)',
         textDecoration: 'none',
       }}
     >

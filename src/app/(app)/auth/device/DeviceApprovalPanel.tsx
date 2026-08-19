@@ -63,13 +63,13 @@ const buttonPrimary: React.CSSProperties = {
   fontSize: '14px',
   fontWeight: 600,
   cursor: 'pointer',
-  backgroundColor: 'var(--nyc-blue)',
+  backgroundColor: 'var(--accent)',
   color: 'white',
 };
 
 const buttonDanger: React.CSSProperties = {
   ...buttonPrimary,
-  backgroundColor: 'var(--nyc-error)',
+  backgroundColor: 'var(--error)',
 };
 
 const buttonSecondary: React.CSSProperties = {
@@ -307,7 +307,7 @@ export default function DeviceApprovalPanel({
             style={{
               marginTop: '8px',
               fontSize: '13px',
-              color: 'var(--nyc-error)',
+              color: 'var(--error)',
             }}
           >
             {phase.message}

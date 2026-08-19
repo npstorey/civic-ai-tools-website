@@ -171,7 +171,7 @@ export default function QueryForm({
     flex: 1,
     padding: '8px 14px',
     border: 'none',
-    background: active ? 'var(--nyc-white, #fff)' : 'transparent',
+    background: active ? 'var(--white, #fff)' : 'transparent',
     color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
     fontSize: '13px',
     fontWeight: active ? 600 : 500,
@@ -229,7 +229,7 @@ export default function QueryForm({
             height: '32px',
             borderRadius: '6px',
             border: 'none',
-            backgroundColor: query.trim() && !isLoading ? 'var(--nyc-blue)' : 'var(--border-color)',
+            backgroundColor: query.trim() && !isLoading ? 'var(--accent)' : 'var(--border-color)',
             color: 'white',
             cursor: query.trim() && !isLoading ? 'pointer' : 'not-allowed',
             display: 'flex',
@@ -273,8 +273,8 @@ export default function QueryForm({
               }}
               onMouseOver={(e) => {
                 if (!isLoading) {
-                  e.currentTarget.style.backgroundColor = 'var(--nyc-blue-80)';
-                  e.currentTarget.style.borderColor = 'var(--nyc-blue-40)';
+                  e.currentTarget.style.backgroundColor = 'var(--accent-light)';
+                  e.currentTarget.style.borderColor = 'var(--accent)';
                 }
               }}
               onMouseOut={(e) => {
@@ -493,7 +493,7 @@ export default function QueryForm({
                     fontSize: '14px',
                     border: '1px solid var(--border-color)',
                     borderRadius: '4px',
-                    backgroundColor: 'var(--nyc-white)',
+                    backgroundColor: 'var(--white)',
                     color: 'var(--text-primary)',
                     cursor: isLoading ? 'not-allowed' : 'pointer',
                     appearance: 'none',
@@ -522,7 +522,7 @@ export default function QueryForm({
                     margin: '2px 0 0 0',
                     padding: '4px 0',
                     listStyle: 'none',
-                    backgroundColor: 'var(--nyc-white)',
+                    backgroundColor: 'var(--white)',
                     border: '1px solid var(--border-color)',
                     borderRadius: '4px',
                     boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
@@ -567,7 +567,7 @@ export default function QueryForm({
                     fontSize: '14px',
                     border: '1px solid var(--border-color)',
                     borderRadius: '4px',
-                    backgroundColor: 'var(--nyc-white)',
+                    backgroundColor: 'var(--white)',
                     color: 'var(--text-primary)',
                     cursor: isLoading ? 'not-allowed' : 'pointer',
                     appearance: 'none',
@@ -596,7 +596,7 @@ export default function QueryForm({
                     margin: '2px 0 0 0',
                     padding: '4px 0',
                     listStyle: 'none',
-                    backgroundColor: 'var(--nyc-white)',
+                    backgroundColor: 'var(--white)',
                     border: '1px solid var(--border-color)',
                     borderRadius: '4px',
                     boxShadow: '0 4px 12px rgba(0,0,0,0.1)',

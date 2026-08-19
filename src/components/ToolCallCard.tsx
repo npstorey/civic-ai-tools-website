@@ -125,7 +125,7 @@ export default function ToolCallCard({
             width: '20px',
             height: '20px',
             borderRadius: '50%',
-            backgroundColor: 'var(--nyc-success)',
+            backgroundColor: 'var(--success)',
             color: 'white',
             display: 'flex',
             alignItems: 'center',
@@ -223,7 +223,7 @@ export default function ToolCallCard({
               style={{
                 fontSize: '12px',
                 fontFamily: 'monospace',
-                color: 'var(--nyc-success)',
+                color: 'var(--success)',
                 fontWeight: 600,
               }}
             >
@@ -238,7 +238,7 @@ export default function ToolCallCard({
               {plainEnglish && (
                 <div
                   style={{
-                    borderLeft: '3px solid var(--nyc-info)',
+                    borderLeft: '3px solid var(--info)',
                     backgroundColor: 'rgba(112, 186, 255, 0.08)',
                     padding: '6px 10px',
                     marginTop: '6px',

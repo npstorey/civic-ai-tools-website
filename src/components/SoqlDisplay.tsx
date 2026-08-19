@@ -47,7 +47,7 @@ export default function SoqlDisplay({ args }: SoqlDisplayProps) {
             data-tooltip={CLAUSE_TOOLTIPS[clause.keyword]}
             style={{
               fontWeight: 700,
-              color: 'var(--nyc-blue-40)',
+              color: 'var(--accent)',
               cursor: 'help',
               position: 'relative',
               whiteSpace: 'nowrap',

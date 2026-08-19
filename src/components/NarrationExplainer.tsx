@@ -32,7 +32,7 @@ export default function NarrationExplainer() {
         style={{
           background: 'none',
           border: 'none',
-          color: 'var(--nyc-blue-40)',
+          color: 'var(--accent)',
           fontSize: '12px',
           fontWeight: 500,
           cursor: 'pointer',
@@ -68,7 +68,7 @@ export default function NarrationExplainer() {
                   href={`${GITHUB_BASE}${fn.lines}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ fontFamily: 'monospace', color: 'var(--nyc-blue)', textDecoration: 'underline' }}
+                  style={{ fontFamily: 'monospace', color: 'var(--accent)', textDecoration: 'underline' }}
                 >
                   {fn.name}
                 </a>
@@ -84,7 +84,7 @@ export default function NarrationExplainer() {
 
           <a
             href="/learn#narration"
-            style={{ fontSize: '12px', color: 'var(--nyc-blue)', textDecoration: 'underline' }}
+            style={{ fontSize: '12px', color: 'var(--accent)', textDecoration: 'underline' }}
           >
             Learn more about how the demo works &rarr;
           </a>

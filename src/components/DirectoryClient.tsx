@@ -119,7 +119,7 @@ function FilterDropdown({
           fontSize: '14px',
           border: '1px solid var(--border-color)',
           borderRadius: '4px',
-          backgroundColor: 'var(--nyc-white)',
+          backgroundColor: 'var(--white)',
           color: value ? 'var(--text-primary)' : 'var(--text-muted)',
           cursor: 'pointer',
           appearance: 'none' as const,
@@ -150,7 +150,7 @@ function FilterDropdown({
           margin: '2px 0 0 0',
           padding: '4px 0',
           listStyle: 'none',
-          backgroundColor: 'var(--nyc-white)',
+          backgroundColor: 'var(--white)',
           border: '1px solid var(--border-color)',
           borderRadius: '4px',
           boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
@@ -342,7 +342,7 @@ export default function DirectoryClient({ servers, portalCounts }: { servers: Mc
             style={{
               background: 'none',
               border: 'none',
-              color: 'var(--nyc-blue)',
+              color: 'var(--accent)',
               fontWeight: 500,
               fontSize: '14px',
               cursor: 'pointer',
@@ -388,7 +388,7 @@ export default function DirectoryClient({ servers, portalCounts }: { servers: Mc
               border: '1px solid var(--border-color)',
               borderRadius: '4px',
               fontFamily: 'inherit',
-              backgroundColor: 'var(--nyc-white)',
+              backgroundColor: 'var(--white)',
               color: 'var(--text-primary)',
             }}
           />
@@ -507,7 +507,7 @@ export default function DirectoryClient({ servers, portalCounts }: { servers: Mc
                 fontSize: '13px',
                 border: '1px solid var(--border-color)',
                 borderRadius: '4px',
-                background: 'var(--nyc-white)',
+                background: 'var(--white)',
                 cursor: 'pointer',
                 color: 'var(--text-muted)',
                 fontFamily: 'inherit',
@@ -540,7 +540,7 @@ export default function DirectoryClient({ servers, portalCounts }: { servers: Mc
             fontSize: '13px',
             border: '1px solid var(--border-color)',
             borderRadius: '4px',
-            background: 'var(--nyc-white)',
+            background: 'var(--white)',
             cursor: 'pointer',
             color: 'var(--text-secondary)',
             fontFamily: 'inherit',
@@ -661,7 +661,7 @@ function ServerCard({ server }: { server: McpServerEntry }) {
   return (
     <div
       style={{
-        border: `1px solid ${server.included ? 'var(--nyc-blue)' : 'var(--border-color)'}`,
+        border: `1px solid ${server.included ? 'var(--accent)' : 'var(--border-color)'}`,
         borderRadius: '4px',
         padding: '20px',
         backgroundColor: server.included ? 'rgba(var(--accent-rgb), 0.03)' : 'var(--background)',
@@ -683,7 +683,7 @@ function ServerCard({ server }: { server: McpServerEntry }) {
           </a>
           {server.included && <Badge color="var(--accent)" bg="rgba(var(--accent-rgb), 0.1)">Included</Badge>}
           {server.verificationStatus === 'official' && (
-            <Badge color="var(--nyc-success)" bg="rgba(0, 138, 2, 0.1)">Official</Badge>
+            <Badge color="var(--success)" bg="rgba(0, 138, 2, 0.1)">Official</Badge>
           )}
           {server.verificationStatus === 'commercial' && (
             <Badge color="#B8860B" bg="rgba(184, 134, 11, 0.1)">Commercial</Badge>
@@ -816,7 +816,7 @@ function ActionLink({ href, label }: { href: string; label: string }) {
       style={{
         fontSize: '12px',
         fontWeight: 500,
-        color: 'var(--nyc-blue)',
+        color: 'var(--accent)',
         textDecoration: 'none',
       }}
     >

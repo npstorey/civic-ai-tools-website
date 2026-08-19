@@ -73,15 +73,15 @@ export interface TierMeta {
 /**
  * Canonical tier → { icon, color, aria } mapping. The single source of truth for
  * tier visuals: the `<TrustSignal>` component consumes this directly (it is a
- * client-safe value because this module is pure data). `--nyc-warning` is aliased
- * to the existing `--nyc-caution` amber (added in globals.css for #110); the
+ * client-safe value because this module is pure data). `--warning` is aliased
+ * to the existing `--caution` amber (added in globals.css for #110); the
  * other three tokens predate this change.
  */
 export const TIER_META: Record<TrustTier, TierMeta> = {
-  verified: { icon: 'check', colorVar: 'var(--nyc-success)', ariaLabel: 'Verified' },
+  verified: { icon: 'check', colorVar: 'var(--success)', ariaLabel: 'Verified' },
   normal: { icon: 'info', colorVar: 'var(--text-muted)', ariaLabel: 'Informational' },
-  attention: { icon: 'warning', colorVar: 'var(--nyc-warning)', ariaLabel: 'Attention' },
-  alarm: { icon: 'error', colorVar: 'var(--nyc-error)', ariaLabel: 'Alarm' },
+  attention: { icon: 'warning', colorVar: 'var(--warning)', ariaLabel: 'Attention' },
+  alarm: { icon: 'error', colorVar: 'var(--error)', ariaLabel: 'Alarm' },
 };
 
 /** A descriptor plus the icon its tier resolves to — the full `status →

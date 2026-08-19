@@ -59,9 +59,9 @@ export default function NotebookSection({ notebook, slug }: NotebookSectionProps
         <button
           onClick={handleDownload}
           style={{
-            background: 'none', border: '1px solid var(--nyc-blue)', borderRadius: '4px',
+            background: 'none', border: '1px solid var(--accent)', borderRadius: '4px',
             padding: '6px 14px', fontSize: '13px', cursor: 'pointer',
-            color: 'var(--nyc-blue)', fontWeight: 500,
+            color: 'var(--accent)', fontWeight: 500,
           }}
         >
           Download Notebook (.ipynb)
@@ -70,7 +70,7 @@ export default function NotebookSection({ notebook, slug }: NotebookSectionProps
           onClick={() => setPreviewOpen(!previewOpen)}
           style={{
             background: 'none', border: 'none', padding: '6px 8px',
-            fontSize: '12px', cursor: 'pointer', color: 'var(--nyc-blue)',
+            fontSize: '12px', cursor: 'pointer', color: 'var(--accent)',
           }}
         >
           {previewOpen ? 'Hide preview' : `Preview cells (${codeCells.length} code, ${totalCells} total)`}

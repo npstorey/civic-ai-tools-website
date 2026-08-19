@@ -198,9 +198,9 @@ export default function QuerySurface({
               marginBottom: '32px',
               padding: '16px 24px',
               backgroundColor: 'rgba(236, 19, 30, 0.1)',
-              color: 'var(--nyc-error)',
+              color: 'var(--error)',
               borderRadius: '4px',
-              border: '1px solid var(--nyc-error)',
+              border: '1px solid var(--error)',
             }}
           >
             {streaming.error}

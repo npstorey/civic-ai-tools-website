@@ -63,10 +63,10 @@ export default function LearnPage() {
               backgroundColor: 'var(--background)',
               borderRadius: '4px',
               padding: '16px',
-              border: '1px solid var(--nyc-error)',
+              border: '1px solid var(--error)',
             }}
           >
-            <h4 style={{ fontSize: '16px', color: 'var(--nyc-error)', marginBottom: '8px' }}>
+            <h4 style={{ fontSize: '16px', color: 'var(--error)', marginBottom: '8px' }}>
               Without Data Tools
             </h4>
             <ul
@@ -92,10 +92,10 @@ export default function LearnPage() {
               backgroundColor: 'rgba(0, 183, 3, 0.1)',
               borderRadius: '4px',
               padding: '16px',
-              border: '1px solid var(--nyc-success)',
+              border: '1px solid var(--success)',
             }}
           >
-            <h4 style={{ fontSize: '16px', color: 'var(--nyc-success)', marginBottom: '8px' }}>
+            <h4 style={{ fontSize: '16px', color: 'var(--success)', marginBottom: '8px' }}>
               With MCP
             </h4>
             <ul
@@ -619,7 +619,7 @@ export default function LearnPage() {
                 transition: 'border-color 0.15s, background-color 0.15s',
               }}
             >
-              <p style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: 600, color: 'var(--nyc-blue)' }}>
+              <p style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: 600, color: 'var(--accent)' }}>
                 &ldquo;{item.query}&rdquo;
               </p>
               <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>
@@ -847,7 +847,7 @@ function NarrationLayer({
           href={`${GITHUB_STREAMING_BASE}${githubLines}`}
           target="_blank"
           rel="noopener noreferrer"
-          style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--nyc-blue)' }}
+          style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--accent)' }}
         >
           {functionName}
         </a>
@@ -859,7 +859,7 @@ function NarrationLayer({
         <div style={{ color: 'var(--text-muted)' }}>
           <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{example.raw}</span>
         </div>
-        <div style={{ color: 'var(--nyc-success)', fontWeight: 500, marginTop: '2px' }}>
+        <div style={{ color: 'var(--success)', fontWeight: 500, marginTop: '2px' }}>
           &rarr; &ldquo;{example.displayed}&rdquo;
         </div>
       </div>

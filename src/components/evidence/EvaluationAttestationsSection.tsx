@@ -100,7 +100,7 @@ export default function EvaluationAttestationsSection({
                 style={{
                   cursor: 'pointer',
                   fontSize: '12px',
-                  color: 'var(--nyc-blue)',
+                  color: 'var(--accent)',
                   padding: '2px 0',
                 }}
               >

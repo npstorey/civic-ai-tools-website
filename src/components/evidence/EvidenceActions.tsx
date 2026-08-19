@@ -112,7 +112,7 @@ export function CitePopover({ title, creatorName, createdAt, slug, brandName, on
               style={{
                 background: 'none', border: '1px solid var(--border-color)', borderRadius: '4px',
                 padding: '4px 10px', fontSize: '12px', cursor: 'pointer',
-                color: copiedIdx === i ? 'var(--nyc-success)' : 'var(--text-muted)',
+                color: copiedIdx === i ? 'var(--success)' : 'var(--text-muted)',
               }}
             >
               {copiedIdx === i ? 'Copied' : 'Copy'}
@@ -278,7 +278,7 @@ export default function EvidenceActions({
                 border: 'none',
                 padding: 0,
                 fontSize: '13px',
-                color: 'var(--nyc-blue)',
+                color: 'var(--accent)',
                 textDecoration: 'underline',
                 cursor: 'pointer',
               }}
@@ -307,7 +307,7 @@ export default function EvidenceActions({
           </svg>
           Download Package
         </button>
-        <button onClick={handleCopyLink} style={{ ...btnStyle, color: linkCopied ? 'var(--nyc-success)' : btnStyle.color }}>
+        <button onClick={handleCopyLink} style={{ ...btnStyle, color: linkCopied ? 'var(--success)' : btnStyle.color }}>
           {linkCopied ? 'Copied' : 'Copy Link'}
         </button>
         <button onClick={() => setShowCite(true)} style={btnStyle}>

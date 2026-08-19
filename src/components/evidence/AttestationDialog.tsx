@@ -338,10 +338,10 @@ export default function AttestationDialog({
         onClick={() => setOpen(true)}
         style={{
           padding: '6px 14px',
-          border: '1px solid var(--nyc-blue)',
+          border: '1px solid var(--accent)',
           borderRadius: '4px',
           fontSize: '13px',
-          color: 'var(--nyc-blue)',
+          color: 'var(--accent)',
           backgroundColor: 'white',
           cursor: 'pointer',
           fontWeight: 500,
@@ -479,9 +479,9 @@ function TabButton({ active, onClick, disabled, children }: {
       onClick={onClick}
       disabled={disabled}
       style={{
-        padding: '8px 16px', border: 'none', borderBottom: active ? '2px solid var(--nyc-blue)' : '2px solid transparent',
+        padding: '8px 16px', border: 'none', borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
         background: 'none', fontSize: '13px', fontWeight: active ? 600 : 400,
-        color: disabled ? 'var(--text-muted)' : active ? 'var(--nyc-blue)' : 'var(--text-secondary)',
+        color: disabled ? 'var(--text-muted)' : active ? 'var(--accent)' : 'var(--text-secondary)',
         cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
       }}
     >
@@ -534,7 +534,7 @@ function EvaluationTab({ apiKey, evaluatorModel, setEvaluatorModel, filteredMode
         style={{
           padding: '8px 20px', border: 'none', borderRadius: '4px',
           fontSize: '13px', fontWeight: 600, cursor: !apiKey || !evaluatorModel || status === 'running' ? 'not-allowed' : 'pointer',
-          backgroundColor: !apiKey || !evaluatorModel ? '#e0e0e0' : 'var(--nyc-blue)',
+          backgroundColor: !apiKey || !evaluatorModel ? '#e0e0e0' : 'var(--accent)',
           color: !apiKey || !evaluatorModel ? 'var(--text-muted)' : 'white',
           opacity: status === 'running' ? 0.7 : 1,
         }}
@@ -543,7 +543,7 @@ function EvaluationTab({ apiKey, evaluatorModel, setEvaluatorModel, filteredMode
       </button>
 
       {error && (
-        <div style={{ marginTop: '12px', padding: '10px', fontSize: '13px', color: 'var(--nyc-error)', backgroundColor: 'rgba(236, 19, 30, 0.06)', borderRadius: '4px' }}>
+        <div style={{ marginTop: '12px', padding: '10px', fontSize: '13px', color: 'var(--error)', backgroundColor: 'rgba(236, 19, 30, 0.06)', borderRadius: '4px' }}>
           {error}
         </div>
       )}
@@ -563,7 +563,7 @@ function EvaluationTab({ apiKey, evaluatorModel, setEvaluatorModel, filteredMode
             style={{
               marginTop: '16px', padding: '8px 20px', border: 'none', borderRadius: '4px',
               fontSize: '13px', fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer',
-              backgroundColor: 'var(--nyc-success)', color: 'white',
+              backgroundColor: 'var(--success)', color: 'white',
               opacity: submitting ? 0.7 : 1,
             }}
           >
@@ -619,7 +619,7 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
         style={{
           padding: '8px 20px', border: 'none', borderRadius: '4px',
           fontSize: '13px', fontWeight: 600, cursor: !apiKey || status === 'running' ? 'not-allowed' : 'pointer',
-          backgroundColor: !apiKey ? '#e0e0e0' : 'var(--nyc-blue)',
+          backgroundColor: !apiKey ? '#e0e0e0' : 'var(--accent)',
           color: !apiKey ? 'var(--text-muted)' : 'white',
           opacity: status === 'running' ? 0.7 : 1,
         }}
@@ -637,7 +637,7 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
               borderRadius: '2px', overflow: 'hidden',
             }}>
               <div style={{
-                height: '100%', backgroundColor: 'var(--nyc-blue)',
+                height: '100%', backgroundColor: 'var(--accent)',
                 width: `${(completedRuns.length / numRuns) * 100}%`,
                 transition: 'width 0.3s ease',
               }} />
@@ -647,7 +647,7 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
       )}
 
       {status === 'error' && (
-        <div style={{ marginTop: '12px', padding: '10px', fontSize: '13px', color: 'var(--nyc-error)', backgroundColor: 'rgba(236, 19, 30, 0.06)', borderRadius: '4px' }}>
+        <div style={{ marginTop: '12px', padding: '10px', fontSize: '13px', color: 'var(--error)', backgroundColor: 'rgba(236, 19, 30, 0.06)', borderRadius: '4px' }}>
           {progress}
         </div>
       )}
@@ -660,20 +660,20 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
             <MetricCard
               label="Tool Call Overlap"
               value={`${Math.round(metrics.toolCallOverlap * 100)}%`}
-              color={metrics.toolCallOverlap >= 0.9 ? 'var(--nyc-success)' : metrics.toolCallOverlap >= 0.7 ? 'var(--nyc-blue)' : 'var(--nyc-error)'}
+              color={metrics.toolCallOverlap >= 0.9 ? 'var(--success)' : metrics.toolCallOverlap >= 0.7 ? 'var(--accent)' : 'var(--error)'}
             />
             <MetricCard
               label="Output Similarity"
               value={`${Math.round(metrics.outputSimilarity * 100)}%`}
-              color={metrics.outputSimilarity >= 0.9 ? 'var(--nyc-success)' : metrics.outputSimilarity >= 0.7 ? 'var(--nyc-blue)' : 'var(--nyc-error)'}
+              color={metrics.outputSimilarity >= 0.9 ? 'var(--success)' : metrics.outputSimilarity >= 0.7 ? 'var(--accent)' : 'var(--error)'}
             />
             <MetricCard
               label="Classification"
               value={metrics.consistencyClassification.replace(/_/g, ' ')}
               color={
-                metrics.consistencyClassification === 'highly_reproducible' ? 'var(--nyc-success)'
-                : metrics.consistencyClassification === 'moderately_stable' ? 'var(--nyc-blue)'
-                : 'var(--nyc-error)'
+                metrics.consistencyClassification === 'highly_reproducible' ? 'var(--success)'
+                : metrics.consistencyClassification === 'moderately_stable' ? 'var(--accent)'
+                : 'var(--error)'
               }
             />
           </div>
@@ -696,7 +696,7 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
             style={{
               padding: '8px 20px', border: 'none', borderRadius: '4px',
               fontSize: '13px', fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer',
-              backgroundColor: 'var(--nyc-success)', color: 'white',
+              backgroundColor: 'var(--success)', color: 'white',
               opacity: submitting ? 0.7 : 1,
             }}
           >
@@ -714,7 +714,7 @@ const EXPERT_RATING_OPTIONS: { value: ExpertRating; label: string; hint: string;
     label: 'Endorse',
     hint: 'The analysis is sound given the available data.',
     bg: 'rgba(0, 183, 3, 0.08)',
-    color: 'var(--nyc-success)',
+    color: 'var(--success)',
   },
   {
     value: 'concerns',
@@ -728,7 +728,7 @@ const EXPERT_RATING_OPTIONS: { value: ExpertRating; label: string; hint: string;
     label: 'Dispute',
     hint: 'The conclusion is not supported by the data or method.',
     bg: 'rgba(236, 19, 30, 0.08)',
-    color: 'var(--nyc-error)',
+    color: 'var(--error)',
   },
   {
     value: 'neutral',
@@ -779,7 +779,7 @@ function ExpertTab({
           }}
         />
         <div style={{
-          fontSize: '11px', color: bodyCharCount > EXPERT_BODY_MAX_CHARS ? 'var(--nyc-error)' : 'var(--text-muted)',
+          fontSize: '11px', color: bodyCharCount > EXPERT_BODY_MAX_CHARS ? 'var(--error)' : 'var(--text-muted)',
           textAlign: 'right', marginTop: '2px',
         }}>
           {bodyCharCount.toLocaleString()} / {EXPERT_BODY_MAX_CHARS.toLocaleString()}
@@ -803,7 +803,7 @@ function ExpertTab({
           }}
         />
         <div style={{
-          fontSize: '11px', color: expertiseCharCount > EXPERT_EXPERTISE_MAX_CHARS ? 'var(--nyc-error)' : 'var(--text-muted)',
+          fontSize: '11px', color: expertiseCharCount > EXPERT_EXPERTISE_MAX_CHARS ? 'var(--error)' : 'var(--text-muted)',
           textAlign: 'right', marginTop: '2px',
         }}>
           {expertiseCharCount} / {EXPERT_EXPERTISE_MAX_CHARS}
@@ -846,7 +846,7 @@ function ExpertTab({
       </div>
 
       {error && (
-        <div style={{ marginBottom: '12px', padding: '10px', fontSize: '13px', color: 'var(--nyc-error)', backgroundColor: 'rgba(236, 19, 30, 0.06)', borderRadius: '4px' }}>
+        <div style={{ marginBottom: '12px', padding: '10px', fontSize: '13px', color: 'var(--error)', backgroundColor: 'rgba(236, 19, 30, 0.06)', borderRadius: '4px' }}>
           {error}
         </div>
       )}
@@ -857,7 +857,7 @@ function ExpertTab({
         style={{
           padding: '8px 20px', border: 'none', borderRadius: '4px',
           fontSize: '13px', fontWeight: 600, cursor: canSubmit ? 'pointer' : 'not-allowed',
-          backgroundColor: canSubmit ? 'var(--nyc-success)' : '#e0e0e0',
+          backgroundColor: canSubmit ? 'var(--success)' : '#e0e0e0',
           color: canSubmit ? 'white' : 'var(--text-muted)',
           opacity: submitting ? 0.7 : 1,
         }}
@@ -895,7 +895,7 @@ function RubricDisplay({ rubric, overallScore }: { rubric: EvaluationResult['rub
   ] as const;
 
   const scoreColor = (s: number) =>
-    s >= 8 ? 'var(--nyc-success)' : s >= 5 ? 'var(--nyc-blue)' : 'var(--nyc-error)';
+    s >= 8 ? 'var(--success)' : s >= 5 ? 'var(--accent)' : 'var(--error)';
 
   return (
     <div>

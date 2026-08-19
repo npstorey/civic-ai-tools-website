@@ -75,7 +75,7 @@ const tabStyle = (isActive: boolean): CSSProperties => ({
   fontWeight: isActive ? 600 : 400,
   color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
   border: 'none',
-  borderBottom: isActive ? '2px solid var(--nyc-blue)' : '2px solid transparent',
+  borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
   marginBottom: '-2px',
   background: 'none',
   cursor: 'pointer',
@@ -85,11 +85,11 @@ const tabStyle = (isActive: boolean): CSSProperties => ({
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
     unverified: { bg: 'rgba(0,0,0,0.06)', text: 'var(--text-muted)' },
-    consistency_tested: { bg: 'rgba(var(--accent-rgb), 0.1)', text: 'var(--nyc-blue)' },
-    evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--nyc-success)' },
-    fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--nyc-success)' },
-    withdrawn: { bg: 'rgba(236, 19, 30, 0.08)', text: 'var(--nyc-error)' },
-    sealed: { bg: 'rgba(var(--accent-rgb), 0.08)', text: 'var(--nyc-blue)' },
+    consistency_tested: { bg: 'rgba(var(--accent-rgb), 0.1)', text: 'var(--accent)' },
+    evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--success)' },
+    fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--success)' },
+    withdrawn: { bg: 'rgba(236, 19, 30, 0.08)', text: 'var(--error)' },
+    sealed: { bg: 'rgba(var(--accent-rgb), 0.08)', text: 'var(--accent)' },
   };
   const c = colors[status] || colors.unverified;
   return (
@@ -110,7 +110,7 @@ function TypeBadge({ type }: { type: string }) {
       display: 'inline-block', padding: '2px 8px', borderRadius: '10px',
       fontSize: '11px', fontWeight: 600,
       backgroundColor: isConsistency ? 'rgba(var(--accent-rgb), 0.1)' : 'rgba(0, 183, 3, 0.1)',
-      color: isConsistency ? 'var(--nyc-blue)' : 'var(--nyc-success)',
+      color: isConsistency ? 'var(--accent)' : 'var(--success)',
       textTransform: 'capitalize',
     }}>
       {type}
@@ -130,7 +130,7 @@ function EmptyState({ message, cta }: { message: string; cta?: { text: string; h
     }}>
       <p style={{ fontSize: '14px', margin: 0, lineHeight: 1.6 }}>{message}</p>
       {cta && (
-        <Link href={cta.href} style={{ color: 'var(--nyc-blue)', fontSize: '14px', marginTop: '8px', display: 'inline-block' }}>
+        <Link href={cta.href} style={{ color: 'var(--accent)', fontSize: '14px', marginTop: '8px', display: 'inline-block' }}>
           {cta.text}
         </Link>
       )}
@@ -327,13 +327,13 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
                 {isCurrentlyWithdrawn && (
                   <>
                     <span>{'\u00b7'}</span>
-                    <span style={{ color: 'var(--nyc-error)' }}>Withdrawn {formatDate(r.withdrawnAt!)}</span>
+                    <span style={{ color: 'var(--error)' }}>Withdrawn {formatDate(r.withdrawnAt!)}</span>
                     <span>{'\u00b7'}</span>
                     <button
                       onClick={() => { setReinstateTarget(r); setReinstateReason(''); setReinstateError(''); }}
                       style={{
                         background: 'none', border: 'none', padding: 0,
-                        fontSize: '12px', color: 'var(--nyc-blue)', cursor: 'pointer',
+                        fontSize: '12px', color: 'var(--accent)', cursor: 'pointer',
                         textDecoration: 'underline',
                       }}
                     >
@@ -344,7 +344,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
                 {isReinstated && (
                   <>
                     <span>{'\u00b7'}</span>
-                    <span style={{ color: 'var(--nyc-success)' }}>Reinstated {formatDate(r.reinstatedAt!)}</span>
+                    <span style={{ color: 'var(--success)' }}>Reinstated {formatDate(r.reinstatedAt!)}</span>
                   </>
                 )}
                 {normalizeVisibility(r.visibility) === 'sealed' && !isCurrentlyWithdrawn && (
@@ -355,7 +355,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
                         onClick={() => { setPublishTarget(r); setPublishRunEval(true); setPublishError(''); }}
                         style={{
                           background: 'none', border: 'none', padding: 0,
-                          fontSize: '12px', color: 'var(--nyc-blue)', cursor: 'pointer',
+                          fontSize: '12px', color: 'var(--accent)', cursor: 'pointer',
                           textDecoration: 'underline', fontWeight: 600,
                         }}
                       >
@@ -442,7 +442,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
             {publishError && (
               <div style={{
                 padding: '8px 12px', marginBottom: '12px', borderRadius: '4px',
-                backgroundColor: 'rgba(236, 19, 30, 0.08)', color: 'var(--nyc-error)', fontSize: '13px',
+                backgroundColor: 'rgba(236, 19, 30, 0.08)', color: 'var(--error)', fontSize: '13px',
               }}>
                 {publishError}
               </div>
@@ -465,7 +465,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
                   padding: '8px 16px', border: 'none', borderRadius: '4px',
                   fontSize: '13px', fontWeight: 600,
                   cursor: publishing ? 'wait' : 'pointer',
-                  backgroundColor: 'var(--nyc-blue)', color: 'white',
+                  backgroundColor: 'var(--accent)', color: 'white',
                   opacity: publishing ? 0.7 : 1,
                 }}
               >
@@ -514,7 +514,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
               }}
             />
             {withdrawError && (
-              <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--nyc-error)' }}>
+              <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--error)' }}>
                 {withdrawError}
               </div>
             )}
@@ -536,7 +536,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
                 style={{
                   padding: '8px 16px', border: 'none', borderRadius: '4px',
                   fontSize: '13px', fontWeight: 600, cursor: !withdrawReason.trim() || withdrawing ? 'not-allowed' : 'pointer',
-                  backgroundColor: 'var(--nyc-error)', color: 'white',
+                  backgroundColor: 'var(--error)', color: 'white',
                   opacity: !withdrawReason.trim() || withdrawing ? 0.6 : 1,
                 }}
               >
@@ -586,7 +586,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
               }}
             />
             {reinstateError && (
-              <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--nyc-error)' }}>
+              <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--error)' }}>
                 {reinstateError}
               </div>
             )}
@@ -609,7 +609,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
                   padding: '8px 16px', border: 'none', borderRadius: '4px',
                   fontSize: '13px', fontWeight: 600,
                   cursor: !reinstateReason.trim() || reinstating ? 'not-allowed' : 'pointer',
-                  backgroundColor: 'var(--nyc-success)', color: 'white',
+                  backgroundColor: 'var(--success)', color: 'white',
                   opacity: !reinstateReason.trim() || reinstating ? 0.6 : 1,
                 }}
               >
@@ -646,7 +646,7 @@ function MyEvaluationsTab({ rows }: { rows: EvaluationRow[] }) {
             textDecoration: 'none', color: 'inherit',
             transition: 'border-color 0.15s',
           }}
-          onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--nyc-blue)'; }}
+          onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
           onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--border-color)'; }}
         >
           <TypeBadge type={r.type} />
@@ -721,7 +721,7 @@ function TokensTab({ rows }: { rows: TokenRow[] }) {
                   <span style={{
                     display: 'inline-block', padding: '2px 8px', borderRadius: '10px',
                     fontSize: '11px', fontWeight: 600,
-                    backgroundColor: 'rgba(var(--accent-rgb), 0.1)', color: 'var(--nyc-blue)',
+                    backgroundColor: 'rgba(var(--accent-rgb), 0.1)', color: 'var(--accent)',
                   }}>
                     {t.scope}
                   </span>
@@ -733,7 +733,7 @@ function TokensTab({ rows }: { rows: TokenRow[] }) {
                 <span>Created {formatDate(t.createdAt)}</span>
                 <span>{'\u00b7'}</span>
                 {expired ? (
-                  <span style={{ color: 'var(--nyc-error)' }}>Expired {formatDate(t.expiresAt)}</span>
+                  <span style={{ color: 'var(--error)' }}>Expired {formatDate(t.expiresAt)}</span>
                 ) : (
                   <span>Expires {formatDate(t.expiresAt)}</span>
                 )}
@@ -746,7 +746,7 @@ function TokensTab({ rows }: { rows: TokenRow[] }) {
                   onClick={() => { setRevokeTarget(t); setRevokeError(''); }}
                   style={{
                     background: 'none', border: 'none', padding: 0,
-                    fontSize: '12px', color: 'var(--nyc-error)', cursor: 'pointer',
+                    fontSize: '12px', color: 'var(--error)', cursor: 'pointer',
                     textDecoration: 'underline',
                   }}
                 >
@@ -782,7 +782,7 @@ function TokensTab({ rows }: { rows: TokenRow[] }) {
               &ldquo;{revokeTarget.name}&rdquo; <code style={{ fontSize: '12px', color: 'var(--text-muted)' }}>({revokeTarget.tokenPrefix}...)</code>
             </div>
             {revokeError && (
-              <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--nyc-error)' }}>
+              <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--error)' }}>
                 {revokeError}
               </div>
             )}
@@ -804,7 +804,7 @@ function TokensTab({ rows }: { rows: TokenRow[] }) {
                 style={{
                   padding: '8px 16px', border: 'none', borderRadius: '4px',
                   fontSize: '13px', fontWeight: 600, cursor: revoking ? 'not-allowed' : 'pointer',
-                  backgroundColor: 'var(--nyc-error)', color: 'white',
+                  backgroundColor: 'var(--error)', color: 'white',
                   opacity: revoking ? 0.6 : 1,
                 }}
               >
@@ -840,7 +840,7 @@ function ActivityTab({ rows }: { rows: ActivityRow[] }) {
             textDecoration: 'none', color: 'inherit',
             transition: 'border-color 0.15s',
           }}
-          onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--nyc-blue)'; }}
+          onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
           onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--border-color)'; }}
         >
           <TypeBadge type={r.type} />
