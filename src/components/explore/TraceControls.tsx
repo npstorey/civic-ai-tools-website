@@ -200,7 +200,7 @@ export default function TraceControls({
           <div className="playback-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
               onClick={replayState.isPlaying ? onPause : onPlay}
-              className="nyc-button nyc-button-secondary"
+              className="ui-button ui-button-secondary"
               style={{ padding: '6px 16px', fontSize: '13px', minWidth: '70px' }}
             >
               {replayState.isPlaying ? 'Pause' : replayState.isComplete ? 'Replay' : 'Play'}
@@ -285,7 +285,7 @@ export default function TraceControls({
               <button
                 type="submit"
                 disabled={!liveQuery.trim()}
-                className="nyc-button nyc-button-primary"
+                className="ui-button ui-button-primary"
                 style={{
                   padding: '8px 20px',
                   fontSize: '13px',
@@ -432,7 +432,7 @@ export default function TraceControls({
               </span>
               <button
                 onClick={onLiveReplay}
-                className="nyc-button nyc-button-secondary"
+                className="ui-button ui-button-secondary"
                 style={{ padding: '6px 16px', fontSize: '13px' }}
               >
                 Replay
@@ -463,7 +463,7 @@ export default function TraceControls({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 onClick={replayState.isPlaying ? onPause : onLiveReplay}
-                className="nyc-button nyc-button-secondary"
+                className="ui-button ui-button-secondary"
                 style={{ padding: '6px 16px', fontSize: '13px', minWidth: '70px' }}
               >
                 {replayState.isPlaying ? 'Pause' : replayState.isComplete ? 'Replay' : 'Play'}

@@ -450,7 +450,7 @@ export default function Header({
                inactive label is hidden but keeps contributing its width. */
             <a
               href={crossHostSignedIn ? sessionProbe.openAppHref : signInHref}
-              className="nyc-button nyc-button-primary"
+              className="ui-button ui-button-primary"
               style={{
                 padding: '8px 16px',
                 fontSize: '14px',
@@ -486,7 +486,7 @@ export default function Header({
                providers the instance actually configured. */
             <a
               href={signInHref}
-              className="nyc-button nyc-button-primary"
+              className="ui-button ui-button-primary"
               style={{ padding: '8px 16px', fontSize: '14px', textDecoration: 'none' }}
             >
               Sign in
@@ -494,7 +494,7 @@ export default function Header({
           ) : signInAffordance.kind === 'provider' ? (
             <button
               onClick={() => signIn(signInAffordance.option.id)}
-              className="nyc-button nyc-button-primary"
+              className="ui-button ui-button-primary"
               style={{ padding: '8px 16px', fontSize: '14px' }}
             >
               Sign in with {signInAffordance.option.name}
@@ -502,7 +502,7 @@ export default function Header({
           ) : signInAffordance.kind === 'panel' ? (
             <a
               href={signInAffordance.href}
-              className="nyc-button nyc-button-primary"
+              className="ui-button ui-button-primary"
               style={{ padding: '8px 16px', fontSize: '14px', textDecoration: 'none' }}
             >
               Sign in

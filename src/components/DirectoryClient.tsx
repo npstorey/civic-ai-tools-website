@@ -365,7 +365,7 @@ export default function DirectoryClient({ servers, portalCounts }: { servers: Mc
           href={SUGGEST_SERVER_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="nyc-button nyc-button-secondary"
+          className="ui-button ui-button-secondary"
           style={{ fontSize: '14px', padding: '8px 16px', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}
         >
           Suggest a Server
@@ -566,7 +566,7 @@ export default function DirectoryClient({ servers, portalCounts }: { servers: Mc
           </p>
           <button
             onClick={clearFilters}
-            className="nyc-button nyc-button-secondary"
+            className="ui-button ui-button-secondary"
             style={{ fontSize: '14px', padding: '8px 16px' }}
           >
             Clear all filters

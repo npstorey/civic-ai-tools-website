@@ -298,7 +298,7 @@ export default function PositioningBand() {
             href={EXPRESS_INTEREST_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="nyc-button nyc-button-primary"
+            className="ui-button ui-button-primary"
             style={{
               textDecoration: 'none',
               fontSize: '14px',

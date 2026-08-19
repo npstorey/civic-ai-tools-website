@@ -203,7 +203,7 @@ a:focus-visible {
 }
 
 /* NYC Design System Button Base */
-.nyc-button {
+.ui-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -219,61 +219,61 @@ a:focus-visible {
   transition: all 0.15s ease;
 }
 
-.nyc-button:focus-visible {
+.ui-button:focus-visible {
   outline: 2px dashed var(--accent);
   outline-offset: 2px;
 }
 
 /* Primary Button */
-.nyc-button-primary,
-.nyc-button-primary:visited {
+.ui-button-primary,
+.ui-button-primary:visited {
   background-color: var(--accent);
   color: var(--white);
   border: none;
 }
 
-.nyc-button-primary:hover {
+.ui-button-primary:hover {
   background-color: var(--accent-hover);
   color: var(--white);
 }
 
-.nyc-button-primary:disabled {
+.ui-button-primary:disabled {
   background-color: var(--neutral-70);
   cursor: not-allowed;
 }
 
 /* Secondary Button */
-.nyc-button-secondary {
+.ui-button-secondary {
   background-color: var(--white);
   color: var(--accent);
   border: 1px solid var(--neutral-80);
 }
 
-.nyc-button-secondary:hover {
+.ui-button-secondary:hover {
   color: var(--accent-hover);
   border-color: var(--neutral-70);
 }
 
-.nyc-button-secondary:disabled {
+.ui-button-secondary:disabled {
   color: var(--neutral-70);
   cursor: not-allowed;
 }
 
 /* NYC Design System Form Fields */
-.nyc-field {
+.ui-field {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
 }
 
-.nyc-field label {
+.ui-field label {
   font-weight: 500;
   color: var(--text-primary);
 }
 
-.nyc-field input,
-.nyc-field textarea,
-.nyc-field select {
+.ui-field input,
+.ui-field textarea,
+.ui-field select {
   padding: 12px 16px;
   font-size: 16px;
   font-family: inherit;
@@ -284,18 +284,18 @@ a:focus-visible {
   transition: all 0.15s ease;
 }
 
-.nyc-field input:focus-visible,
-.nyc-field textarea:focus-visible,
-.nyc-field select:focus-visible {
+.ui-field input:focus-visible,
+.ui-field textarea:focus-visible,
+.ui-field select:focus-visible {
   outline: none;
   border-style: dashed;
   border-color: var(--accent);
   background-color: var(--accent-light);
 }
 
-.nyc-field--error input,
-.nyc-field--error textarea,
-.nyc-field--error select {
+.ui-field--error input,
+.ui-field--error textarea,
+.ui-field--error select {
   background-color: #FEE2E2;
   border-color: var(--error);
 }
