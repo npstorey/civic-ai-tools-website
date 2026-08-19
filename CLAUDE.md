@@ -296,7 +296,7 @@ Active work is organized into lightweight sprints in [`/sprints/`](sprints/).
 ## Design Notes
 
 - **Light mode only** — Simplified styling, no dark mode
-- **NYC Design System colors** — Blue (#103FEF), grays, semantic colors
+- **Palette is a configurable seam** — `src/app/globals.css` defines a per-instance accent family (`--accent` and companions, set from `SITE_BRAND_ACCENT`, default `#103FEF`), a fixed neutral scale, and fixed semantic status colors. Reference tokens by name, never by hex; `src/app/design-tokens.test.ts` fails on a token that resolves to nothing.
 - **Compact layout** — Form and button visible above fold on laptop screens
 - **Indexing is explicit instance config** — `SITE_NOINDEX` (unset/empty = indexable, the standard web default; set truthy = `robots.txt` disallows every path and page metadata carries noindex/nofollow). The reference deployment sets `SITE_NOINDEX=1`. See [`docs/deploy.md`](docs/deploy.md#indexing-optional) and `src/lib/site-indexing.ts`.
 - **Mobile out of scope for BPMN side-by-side** — Desktop only for now; mobile polish (stacked layout, 2x2 trace pills, scroll fade) is a future item

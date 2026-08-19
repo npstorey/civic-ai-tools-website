@@ -161,10 +161,9 @@ export default function RootLayout({
    *
    * The accent override writes the four accent-family custom properties as
    * an inline style on <html> — inline beats the stylesheet's `:root` block,
-   * so every `var(--accent…)` reference (including the aliased `--nyc-*`
-   * names) follows the configured color. `null` (unset or invalid) writes NO
-   * style attribute at all: the stylesheet defaults render, a zero-byte
-   * delta.
+   * so every `var(--accent…)` reference follows the configured color.
+   * `null` (unset or invalid) writes NO style attribute at all: the
+   * stylesheet defaults render, a zero-byte delta.
    */
   const brandName = getBrandName();
   const brandTagline = getBrandTagline();
