@@ -80,9 +80,13 @@ export interface ErrorEvent extends StreamEvent {
 // place error-to-copy mapping lives, consumed by every SSE-consuming hook.
 
 /**
- * The eight kinds every streaming failure classifies into. Single-sourced as
+ * The nine kinds every streaming failure classifies into. Single-sourced as
  * an array rather than a bare union so the round-trip test can enumerate them
- * (#154): a ninth kind is covered by that test the moment it is added here.
+ * (#154): a tenth kind is covered by that test the moment it is added here.
+ *
+ * `notebook_execution` (#271) is set explicitly by the server — never derived
+ * from message-shape matching below — because its reader-facing copy carries
+ * a per-failure correlation id and exit code that no static string can hold.
  */
 export const STREAM_ERROR_KINDS = [
   'rate_limit',
@@ -92,6 +96,7 @@ export const STREAM_ERROR_KINDS = [
   'mcp_timeout',
   'mcp_unavailable',
   'connection',
+  'notebook_execution',
   'generic',
 ] as const;
 
@@ -204,6 +209,12 @@ const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
   mcp_unavailable:
     'The live data source is temporarily unavailable, so this query couldn’t be completed. Please try again shortly.',
   connection: 'The connection was interrupted before the response finished. Please try again.',
+  // Static fallback only — used when a wire payload carries this kind's code
+  // without the correlation id (a stale client, or the rollout-window /
+  // message-shape fallback tested below). The normal path builds copy with
+  // `notebookExecutionErrorMessage()` instead, so a reader can actually trace
+  // the failure back to its server log line (#271).
+  notebook_execution: 'The notebook could not finish running. Please try again.',
   generic: 'Something went wrong while running this query. Please try again in a moment.',
 };
 
@@ -221,6 +232,27 @@ export function friendlyStreamError(input: unknown): string {
  */
 export function streamErrorPayload(kind: StreamErrorKind): { message: string; code: StreamErrorCode } {
   return { message: FRIENDLY_STREAM_COPY[kind], code: kind };
+}
+
+/**
+ * Reader-facing copy for a notebook execution failure (#271). The disclosure
+ * ruling: the sandbox's stderr is a debugging surface, not a reader surface —
+ * it is logged server-side in full (see `route.ts`'s catch block) but never
+ * put on the wire. What the reader gets instead is the exit code (already
+ * plain, non-sensitive) and a correlation id that ties their report back to
+ * that server log line.
+ *
+ * Deliberately takes only these two typed, non-sensitive values as
+ * parameters — never a free-text message or the stderr itself — so the copy
+ * can never carry raw infrastructure text by construction, not just by
+ * convention.
+ */
+export function notebookExecutionErrorMessage(
+  exitCode: number | undefined,
+  correlationId: string,
+): string {
+  const exit = typeof exitCode === 'number' ? exitCode : 'n/a';
+  return `Notebook execution failed (exit ${exit}). Reference: ${correlationId}. Try again, or include this reference if you report the problem.`;
 }
 
 /**

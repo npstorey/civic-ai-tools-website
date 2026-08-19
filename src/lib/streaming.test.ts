@@ -13,6 +13,7 @@ import {
   friendlyStreamError,
   describeToolFailureForLlm,
   streamErrorPayload,
+  notebookExecutionErrorMessage,
   STREAM_ERROR_KINDS,
 } from './streaming.ts';
 
@@ -194,9 +195,10 @@ test('#258 C4: describeToolFailureForLlm handles the unconfigured kind without l
 // them, because no assertion here depends on the wording of any message.
 
 test('#154: every StreamErrorKind round-trips server -> wire -> render into its own bucket', () => {
-  // Guard the "eight kinds" this phase enumerated: a ninth must be added to
-  // STREAM_ERROR_KINDS deliberately, and the loop below then covers it.
-  assert.equal(STREAM_ERROR_KINDS.length, 8, 'the eight classified kinds');
+  // Guard the "nine kinds" this phase (plus #271's notebook_execution)
+  // enumerated: a tenth must be added to STREAM_ERROR_KINDS deliberately, and
+  // the loop below then covers it.
+  assert.equal(STREAM_ERROR_KINDS.length, 9, 'the nine classified kinds');
 
   for (const kind of STREAM_ERROR_KINDS) {
     // `streamErrorPayload` is the exact call the server chokepoint
@@ -268,4 +270,64 @@ test('#154: rollout window — a client ignoring the code still renders calm cop
     const staleClientView = friendlyStreamError(streamErrorPayload(kind).message);
     assert.ok(CALM.has(staleClientView), `stale-client copy for ${kind} is calm copy`);
   }
+});
+
+// --- #271: a notebook execution failure carries a correlation id, not stderr ---
+//
+// The defect: `/api/query-notebook` embedded a bounded tail of the sandbox's
+// raw stderr into the wire `message`, and `useNotebookStream` then discarded
+// it anyway via `friendlyStreamError` in favour of fixed copy — so the raw
+// text was BOTH exposed on the wire (devtools-readable, the #154 exposure)
+// AND unavailable to the reader it was collected for. The ruling: the
+// stderr tail is not for the reader. It now stays server-side, logged in
+// full (route.ts's catch block); the reader gets the exit code plus a
+// correlation id that ties a report back to that exact log line.
+
+test('#271: notebookExecutionErrorMessage carries the exit code and correlation id', () => {
+  const message = notebookExecutionErrorMessage(1, 'nb-a1b2c3d4');
+  assert.match(message, /exit 1/);
+  assert.match(message, /nb-a1b2c3d4/);
+});
+
+test('#271: notebookExecutionErrorMessage falls back to "n/a" for a missing exit code', () => {
+  const message = notebookExecutionErrorMessage(undefined, 'nb-deadbeef');
+  assert.match(message, /exit n\/a/);
+  assert.match(message, /nb-deadbeef/);
+});
+
+test('#271: notebookExecutionErrorMessage cannot carry stderr content — it takes no stderr parameter', () => {
+  // The function's signature only accepts (exitCode, correlationId): there is
+  // no stderr parameter for a raw traceback to ride in on. This checks a
+  // representative call for the raw fragments a real nbconvert traceback (the
+  // Python exception text `stderrTail` used to slice out) would contain.
+  const message = notebookExecutionErrorMessage(1, 'nb-a1b2c3d4');
+  const RAW_FRAGMENTS = ['traceback', 'nameerror', 'preprocess_cell', 'file "', 'nbconvert', 'stderr'];
+  const lower = message.toLowerCase();
+  for (const frag of RAW_FRAGMENTS) {
+    assert.ok(!lower.includes(frag), `message leaks "${frag}": ${message}`);
+  }
+});
+
+test('#271: notebook_execution is part of the classified-kind round trip', () => {
+  const payload = streamErrorPayload('notebook_execution');
+  assert.equal(payload.code, 'notebook_execution');
+  assert.equal(classifyStreamError(payload), 'notebook_execution');
+  assert.equal(friendlyStreamError(payload), payload.message);
+});
+
+test('#271: friendlyStreamError alone collapses a notebook_execution payload to generic copy — why the client rebuilds it from typed fields', () => {
+  // This is the exact trap the naive fix would fall into: routing the
+  // per-failure message through friendlyStreamError() the same way every
+  // other kind does silently drops the correlation id, because
+  // FRIENDLY_STREAM_COPY maps a kind to one fixed string. useNotebookStream's
+  // `error` case special-cases `code === 'notebook_execution'` precisely to
+  // avoid this — it calls notebookExecutionErrorMessage() with the typed
+  // `correlationId` / `exitCode` fields instead of trusting `message`.
+  const perFailureMessage = notebookExecutionErrorMessage(2, 'nb-12345678');
+  const collapsed = friendlyStreamError({ message: perFailureMessage, code: 'notebook_execution' });
+  assert.equal(collapsed, streamErrorPayload('notebook_execution').message);
+  assert.ok(
+    !collapsed.includes('nb-12345678'),
+    'friendlyStreamError alone drops the correlation id — confirms the client must rebuild it from typed fields',
+  );
 });

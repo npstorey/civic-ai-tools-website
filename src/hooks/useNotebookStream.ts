@@ -15,7 +15,7 @@
  */
 import { useCallback, useRef, useState } from 'react';
 import { connectSSE } from '@/lib/sse-client';
-import { friendlyStreamError } from '@/lib/streaming';
+import { friendlyStreamError, notebookExecutionErrorMessage } from '@/lib/streaming';
 import type { Notebook } from '@/lib/notebook-author';
 import type { NotebookPhase } from '@/components/notebook/NotebookProgress';
 
@@ -220,14 +220,24 @@ export function useNotebookStream() {
           break;
         }
         case 'error': {
-          // Pass the carried kind alongside the text: since #154 the Phase A
-          // failure path puts a classified `code` on the event, and the message
-          // is already reader-facing copy. Without the code, prefixed copy
-          // would be re-classified from prose and flatten to the generic line.
-          const message = friendlyStreamError({
-            message: (raw.message as string | undefined) || 'Notebook generation failed',
-            code: raw.code,
-          });
+          const code = raw.code as string | undefined;
+          const correlationId = raw.correlationId as string | undefined;
+          // #271: a notebook execution failure is rebuilt CLIENT-SIDE from
+          // the typed `correlationId` + `exitCode` fields only — never from
+          // `raw.message` — so the reader-facing copy can never carry raw
+          // stderr no matter what the server happened to put in `message`.
+          // Falls back to the generic friendly copy if a correlation id
+          // wasn't sent (a stale server, or this event predating #271).
+          const message = code === 'notebook_execution' && correlationId
+            ? notebookExecutionErrorMessage(raw.exitCode as number | undefined, correlationId)
+            // Pass the carried kind alongside the text: since #154 the Phase A
+            // failure path puts a classified `code` on the event, and the message
+            // is already reader-facing copy. Without the code, prefixed copy
+            // would be re-classified from prose and flatten to the generic line.
+            : friendlyStreamError({
+                message: (raw.message as string | undefined) || 'Notebook generation failed',
+                code: raw.code,
+              });
           setState((prev) => ({
             ...prev,
             error: message,

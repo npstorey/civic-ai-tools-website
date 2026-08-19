@@ -18,6 +18,7 @@
  */
 import { NextRequest } from 'next/server';
 import { headers } from 'next/headers';
+import { randomUUID } from 'node:crypto';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
@@ -30,7 +31,7 @@ import {
   type CompletionResult,
   type StreamCallbacks,
 } from '@/lib/openrouter-streaming';
-import { isStreamErrorKind, type StreamErrorCode } from '@/lib/streaming';
+import { isStreamErrorKind, notebookExecutionErrorMessage, type StreamErrorCode } from '@/lib/streaming';
 import { TraceBuilder, hash as traceHash, CIVICAITOOLS_TRACE_CONFIG } from '@/lib/evidence/trace';
 import { getConfiguredKeyId } from '@/lib/evidence/signing';
 import {
@@ -73,7 +74,12 @@ type NotebookEvent =
       answer: string;
       duration_ms: number;
     }
-  | { type: 'error'; message: string; code?: StreamErrorCode };
+  // `correlationId` + `exitCode` are set only for `code: 'notebook_execution'`
+  // (#271): they let the reader trace a failure to its full-stderr server log
+  // line without the wire ever carrying that stderr. See
+  // `notebookExecutionErrorMessage()` in lib/streaming.ts, which builds
+  // `message` from exactly these two values and nothing else.
+  | { type: 'error'; message: string; code?: StreamErrorCode; correlationId?: string; exitCode?: number };
 
 function encodeNotebookEvent(event: NotebookEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
@@ -228,42 +234,48 @@ export async function POST(request: NextRequest) {
         duration_ms: Date.now() - pipelineStart,
       });
     } catch (err) {
-      // Log full stderr server-side (Vercel function logs) so the actual
-      // preprocess_cell exception is recoverable for debugging — the SSE
-      // payload only carries a tail of the traceback to keep the UI sane.
       if (err instanceof NotebookExecutionError) {
+        // #271 disclosure ruling: the stderr tail is not for the reader. It
+        // used to be flattened into the wire `message` and then discarded at
+        // render (friendlyStreamError never showed it) — exposed on the wire
+        // while unavailable to the reader it was collected for. Now it stays
+        // server-side only, logged here in FULL (not just a tail — the log
+        // has no wire-size constraint, so this only ever captures at least as
+        // much as the old `stderrTail` bound did), tagged with a correlation
+        // id the reader *does* see, so a reported failure is traceable back
+        // to this exact log line. Prefix + shape are stable for grepping:
+        // `[query-notebook] NotebookExecutionError` with a `correlationId`.
+        const correlationId = `nb-${randomUUID().slice(0, 8)}`;
         console.error('[query-notebook] NotebookExecutionError', {
+          correlationId,
           exitCode: err.exitCode,
           message: err.message,
           stderr: err.stderr,
         });
-      } else if (err instanceof Error) {
-        console.error('[query-notebook] error', { message: err.message, stack: err.stack });
+        await emit({
+          type: 'error',
+          message: notebookExecutionErrorMessage(err.exitCode, correlationId),
+          code: 'notebook_execution',
+          correlationId,
+          exitCode: err.exitCode,
+        });
       } else {
-        console.error('[query-notebook] unknown error', err);
+        if (err instanceof Error) {
+          console.error('[query-notebook] error', { message: err.message, stack: err.stack });
+        } else {
+          console.error('[query-notebook] unknown error', err);
+        }
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        // Phase A attaches the classified kind to its rejection (#154). Guarded
+        // rather than forwarded blind: plenty of unrelated errors carry a `code`
+        // of their own (`ENOENT`, `ERR_*`), and only a real kind belongs on the
+        // wire — anything else would just fall through to prose matching anyway.
+        const rejectionCode = err !== null && typeof err === 'object' && 'code' in err
+          ? (err as { code?: unknown }).code
+          : undefined;
+        const code = isStreamErrorKind(rejectionCode) ? rejectionCode : undefined;
+        await emit({ type: 'error', message, ...(code ? { code } : {}) });
       }
-
-      // The Python exception nbconvert raises lives at the TAIL of stderr
-      // (the cell traceback + `<exception type>: <message>` is the last
-      // thing printed). Slice the last 8000 chars so the user sees the
-      // smoking gun rather than the warmup boilerplate.
-      const STDERR_TAIL_CHARS = 8000;
-      const stderrTail = (s: string): string => {
-        if (s.length <= STDERR_TAIL_CHARS) return s;
-        return `…(stderr truncated; full output in server logs)…\n${s.slice(-STDERR_TAIL_CHARS)}`;
-      };
-      const message = err instanceof NotebookExecutionError
-        ? `Notebook execution failed (exit ${err.exitCode ?? 'n/a'}): ${err.message}${err.stderr ? `\n${stderrTail(err.stderr)}` : ''}`
-        : err instanceof Error ? err.message : 'Unknown error';
-      // Phase A attaches the classified kind to its rejection (#154). Guarded
-      // rather than forwarded blind: plenty of unrelated errors carry a `code`
-      // of their own (`ENOENT`, `ERR_*`), and only a real kind belongs on the
-      // wire — anything else would just fall through to prose matching anyway.
-      const rejectionCode = err !== null && typeof err === 'object' && 'code' in err
-        ? (err as { code?: unknown }).code
-        : undefined;
-      const code = isStreamErrorKind(rejectionCode) ? rejectionCode : undefined;
-      await emit({ type: 'error', message, ...(code ? { code } : {}) });
     } finally {
       trace.endRoot();
       await writer.close();
