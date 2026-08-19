@@ -188,7 +188,7 @@ export default function QueryForm({
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {/* Chat-style textarea with inline send button */}
-      <div className="nyc-field" style={{ position: 'relative' }}>
+      <div className="ui-field" style={{ position: 'relative' }}>
         <textarea
           id="query"
           ref={textareaRef}
@@ -402,7 +402,7 @@ export default function QueryForm({
                      loading state: the destination decides server-side. */
                   <a
                     href={signInHref}
-                    className="nyc-button nyc-button-primary"
+                    className="ui-button ui-button-primary"
                     style={{ fontSize: '13px', padding: '6px 14px', textDecoration: 'none' }}
                   >
                     Sign in
@@ -412,7 +412,7 @@ export default function QueryForm({
                   type="button"
                   onClick={() => signIn(signInAffordance.option.id)}
                   disabled={authStatus === 'loading'}
-                  className="nyc-button nyc-button-primary"
+                  className="ui-button ui-button-primary"
                   style={{
                     fontSize: '13px',
                     padding: '6px 14px',
@@ -425,7 +425,7 @@ export default function QueryForm({
                   /* More than one provider: the panel that can list them. */
                   <a
                     href={signInAffordance.href}
-                    className="nyc-button nyc-button-primary"
+                    className="ui-button ui-button-primary"
                     style={{ fontSize: '13px', padding: '6px 14px', textDecoration: 'none' }}
                   >
                     Sign in
@@ -480,7 +480,7 @@ export default function QueryForm({
 
           <div className="form-controls-row">
               {/* Model dropdown */}
-              <div className="nyc-field" ref={modelDropdownRef} style={{ position: 'relative' }}>
+              <div className="ui-field" ref={modelDropdownRef} style={{ position: 'relative' }}>
                 <label style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 400 }}>Model</label>
                 <button
                   type="button"
@@ -554,7 +554,7 @@ export default function QueryForm({
               </div>
 
               {/* Portal dropdown */}
-              <div className="nyc-field" ref={portalDropdownRef} style={{ position: 'relative' }}>
+              <div className="ui-field" ref={portalDropdownRef} style={{ position: 'relative' }}>
                 <label style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 400 }}>Data portal</label>
                 <button
                   type="button"

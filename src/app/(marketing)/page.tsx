@@ -54,7 +54,7 @@ export default function Home() {
               href="https://github.com/npstorey/civic-ai-tools"
               target="_blank"
               rel="noopener noreferrer"
-              className="nyc-button nyc-button-primary"
+              className="ui-button ui-button-primary"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -75,7 +75,7 @@ export default function Home() {
             </a>
             <Link
               href="/learn#try-it"
-              className="nyc-button nyc-button-secondary"
+              className="ui-button ui-button-secondary"
               style={{ textDecoration: 'none', fontSize: '14px', padding: '10px 24px' }}
             >
               Learn how it works

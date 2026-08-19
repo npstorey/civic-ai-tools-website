@@ -125,7 +125,7 @@ export default function AskSignInPanel({
               <button
                 key={option.id}
                 onClick={() => signIn(option.id, { callbackUrl: '/ask' })}
-                className="nyc-button nyc-button-primary"
+                className="ui-button ui-button-primary"
                 style={{ padding: '10px 18px', fontSize: '14px' }}
               >
                 Sign in with {option.name}

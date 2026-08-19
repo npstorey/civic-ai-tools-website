@@ -606,7 +606,7 @@ export default function PortalDirectoryClient({
           </p>
           <button
             onClick={clearFilters}
-            className="nyc-button nyc-button-secondary"
+            className="ui-button ui-button-secondary"
             style={{ fontSize: '14px', padding: '8px 16px' }}
           >
             Clear all filters

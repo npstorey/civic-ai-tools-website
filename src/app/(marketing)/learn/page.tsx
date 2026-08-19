@@ -177,7 +177,7 @@ export default function LearnPage() {
 
         <Link
           href="/explore"
-          className="nyc-button nyc-button-primary"
+          className="ui-button ui-button-primary"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -735,7 +735,7 @@ cd socrata-mcp-server && npm install && npm run build`}</pre>
             href="https://github.com/npstorey/civic-ai-tools"
             target="_blank"
             rel="noopener noreferrer"
-            className="nyc-button nyc-button-primary"
+            className="ui-button ui-button-primary"
             style={{ textDecoration: 'none' }}
           >
             View on GitHub

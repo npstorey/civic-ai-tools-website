@@ -97,7 +97,7 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
             <button
               type="button"
               onClick={onRetry}
-              className="nyc-button nyc-button-secondary"
+              className="ui-button ui-button-secondary"
               style={{ alignSelf: 'flex-start', fontSize: '13px', padding: '6px 14px' }}
             >
               Retry
