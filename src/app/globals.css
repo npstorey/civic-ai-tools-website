@@ -1,14 +1,16 @@
 @import "tailwindcss";
 
-/* NYC Design System Color Palette */
+/* Color palette. Three layers, in the order they appear below: the
+   configurable accent seam (#217), a fixed neutral scale, and the semantic
+   status colors. Only the accent family is meant to vary per instance. */
 :root {
   /* Accent tokens — the operator-facing theming seam (#217).
      These four are the ONLY color tokens an instance is ever told to change,
      and they are set through configuration (SITE_BRAND_ACCENT → an inline
      style on <html> in the root layout), not by editing this file. The
-     values here are the reference deployment's NYC-palette defaults; with no
-     brand configuration the rendered output is byte-identical to before the
-     seam existed.
+     values here are this stylesheet's own defaults, which the reference
+     deployment ships unchanged; with no brand configuration the rendered
+     output is byte-identical to before the seam existed.
      --accent-rgb is --accent's channel triplet. The pair MUST stay in
      lockstep: rgba(var(--accent-rgb), α) is the sanctioned form for every
      translucent accent (no hardcoded rgba(16, 63, 239, …) call sites), and
@@ -43,30 +45,6 @@
      the verify panel's amber stays in lockstep with the design-system palette.
      Keep the indirection — a duplicated literal would let the two drift. */
   --warning: var(--caution);
-
-  /* --nyc-* compatibility aliases (#220 P3).
-     Nothing in src/ references these any more; they exist so that anything
-     outside this repo's own sweep — a fork, an in-flight branch, a snippet
-     pasted from an older revision — keeps resolving to the same computed
-     value rather than to nothing. Retiring them is a separate, later ruling,
-     not a side effect of the rename.
-     The accent four alias the operator-facing theming seam (#217), so a
-     configured instance re-colors them too. */
-  --nyc-black: var(--black);
-  --nyc-white: var(--white);
-  --nyc-blue: var(--accent);
-  --nyc-blue-40: var(--accent);
-  --nyc-blue-80: var(--accent-light);
-  --nyc-blue-10: var(--accent-hover);
-  --nyc-gray-20: var(--neutral-20);
-  --nyc-gray-70: var(--neutral-70);
-  --nyc-gray-80: var(--neutral-80);
-  --nyc-gray-90: var(--neutral-90);
-  --nyc-info: var(--info);
-  --nyc-success: var(--success);
-  --nyc-caution: var(--caution);
-  --nyc-error: var(--error);
-  --nyc-warning: var(--warning);
 
   /* Spacing Scale */
   --space-xs: 8px;
@@ -104,7 +82,8 @@ body {
   overflow-x: clip;
 }
 
-/* NYC Design System Typography */
+/* Typography: heading family and weight, the button font reset, and the
+   shared focus ring. The type scale follows. */
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-space-grotesk), 'Space Grotesk', Arial, sans-serif;
   font-weight: 600;
@@ -171,7 +150,7 @@ h4 {
   }
 }
 
-/* NYC Design System Link Styles */
+/* Link styles */
 a {
   color: var(--accent);
   text-decoration: underline;
@@ -202,7 +181,7 @@ a:focus-visible {
   text-decoration: none !important;
 }
 
-/* NYC Design System Button Base */
+/* Button base — the .ui-button family (see ui-class-names.test.ts) */
 .ui-button {
   display: inline-flex;
   align-items: center;
@@ -259,7 +238,7 @@ a:focus-visible {
   cursor: not-allowed;
 }
 
-/* NYC Design System Form Fields */
+/* Form fields — the .ui-field family (see ui-class-names.test.ts) */
 .ui-field {
   display: flex;
   flex-direction: column;
