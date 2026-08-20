@@ -76,7 +76,19 @@ const MARKETING_SAMPLES = [
   '/talks/ctfg-vibe-code-2026-07.html',
 ];
 const APP_PRIVATE_SAMPLES = ['/ask', '/dashboard', '/dashboard/settings', '/auth/device', '/dev/notebook-preview'];
-const DUAL_SAMPLES = ['/evidence', '/evidence/some-published-slug'];
+// The published-record pages under BOTH of their addresses (civic-ai-tools#160
+// P3): `/records` is the settlement-era segment, `/evidence` its permanent
+// prior-era alias. Listing both here means every topology assertion in this
+// file — withholding, serving, canonicalization, the loop check — runs against
+// each address, which is the property the settlement actually promises: the
+// two addresses are one surface, so no topology may ever treat them
+// differently.
+const DUAL_SAMPLES = [
+  '/evidence',
+  '/evidence/some-published-slug',
+  '/records',
+  '/records/some-published-slug',
+];
 const OTHER_SAMPLES = [
   '/api/rate-limit', // matcher-excluded in prod, but the function must serve it regardless
   '/_next/static/chunk.js',
@@ -464,11 +476,66 @@ test('classifyPath covers every declared prefix and resists prefix collisions', 
   for (const p of APP_PRIVATE_PATHS) assert.equal(classifyPath(p), 'app-private', p);
   assert.equal(classifyPath('/evidence'), 'dual-served');
   assert.equal(classifyPath('/evidence/slug/extra'), 'dual-served');
+  assert.equal(classifyPath('/records'), 'dual-served');
+  assert.equal(classifyPath('/records/slug/extra'), 'dual-served');
   assert.equal(classifyPath('/aboutus'), 'other');
+  assert.equal(classifyPath('/recordsets'), 'other'); // prefix-collision guard: not /records
   assert.equal(classifyPath('/dashboard-widgets'), 'other');
   assert.equal(classifyPath('/asked'), 'other');
   assert.equal(classifyPath('/auth'), 'other'); // no page lives at /auth itself
   assert.equal(classifyPath('/auth/device/extra'), 'app-private');
+});
+
+// --- The record/evidence segment pair (civic-ai-tools#160 P3) -----------------
+//
+// Appendix J of the Typed Standards specification makes `/records` the
+// canonical address of the published-record pages and keeps `/evidence` as a
+// PERMANENT alias — published links carry the prior-era form. Two addresses,
+// one surface, so the topology must never be able to tell them apart. The
+// tests above already run both through every scenario (see DUAL_SAMPLES); this
+// one states the invariant directly, so a failure names it rather than leaving
+// someone to infer it from four scattered reds.
+
+test('the topology cannot tell /records from /evidence, under any configuration', () => {
+  const configs: [string, ReturnType<typeof readHostRoutingConfig>][] = [
+    ['unset', UNSET],
+    ['split', SPLIT],
+    ['app-only', APP_ONLY],
+    ['serve-marketing', SERVE_MARKETING],
+    ['www-marketing', WWW_MARKETING],
+  ];
+  const hosts = ['example.org', 'app.example.org', 'www.example.org', 'preview-abc.vercel.app', null];
+  const suffixes = ['', '/some-published-slug', '/some-slug/nested'];
+
+  for (const [label, config] of configs) {
+    for (const host of hosts) {
+      for (const suffix of suffixes) {
+        const viaRecords = decideRoute(host, `/records${suffix}`, config);
+        const viaEvidence = decideRoute(host, `/evidence${suffix}`, config);
+        // Canonicalizing redirects carry the pathname, which differs by
+        // construction — compare the DECISION and, for a redirect, the host it
+        // steers to and the path it preserves.
+        assert.equal(
+          viaRecords.kind,
+          viaEvidence.kind,
+          `${label} / ${host} / ${suffix}: '/records${suffix}' decided ` +
+            `'${viaRecords.kind}' while '/evidence${suffix}' decided ` +
+            `'${viaEvidence.kind}'. The two addresses are one surface — a\n` +
+            `topology that withholds or redirects one and serves the other makes\n` +
+            `a published link's survival depend on which spelling it used.`,
+        );
+        if (viaRecords.kind === 'redirect' && viaEvidence.kind === 'redirect') {
+          assert.equal(
+            viaRecords.destination.replace('/records', '/evidence'),
+            viaEvidence.destination,
+            `${label} / ${host} / ${suffix}: the two addresses redirect to ` +
+              `different places ('${viaRecords.destination}' vs ` +
+              `'${viaEvidence.destination}').`,
+          );
+        }
+      }
+    }
+  }
 });
 
 // --- URL helpers (AppChrome exit link, device-flow pairing origin) ---------------
@@ -787,6 +854,11 @@ test('canonicalize: APP_ONLY ignores the host variables, so it canonicalizes not
 test('canonicalize: the CORS-sensitive families are exempt on every host spelling', () => {
   const exempt = [
     '/api/evidence/some-slug/commitment',
+    // The same endpoint under its settlement-era segment (#160 P3). A
+    // third-party verifier resolving a commitment URL is the exact caller
+    // #263 exists for, and it must not start meeting a redirect just because
+    // it used the canonical spelling.
+    '/api/records/some-slug/commitment',
     '/api/session-status',
     '/api',
     '/.well-known/typed-publisher.json',
