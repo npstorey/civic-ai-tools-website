@@ -11,7 +11,7 @@ import { evaluateSealCommitGate } from '@/lib/evidence/unsigned-tier';
  * explanation) instead of a dead button that errors.
  *
  * "Can sign" means the WHOLE seal/commit gate passes (#258): key custody, a
- * declared `EVIDENCE_KEY_ID`, and the declared instance-identity set. A
+ * declared `PUBLISHER_KEY_ID`, and the declared instance-identity set. A
  * partially-configured instance answers `false` here, same as one with no
  * key at all — it is not a partial success, and the client must not offer
  * an action the server will refuse. Which piece is missing is

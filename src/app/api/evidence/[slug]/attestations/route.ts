@@ -128,13 +128,13 @@ export async function POST(
     .where(eq(evidenceRecords.slug, slug))
     .limit(1);
   if (records.length === 0) {
-    return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Record not found' }, { status: 404 });
   }
   const record = records[0];
 
   // Sealed records are creator-only (civic-ai-tools#71).
   if (!(await canReadRecord(request, record))) {
-    return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Record not found' }, { status: 404 });
   }
 
   const body = await request.json();

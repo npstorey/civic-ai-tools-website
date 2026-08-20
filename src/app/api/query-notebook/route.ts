@@ -56,14 +56,14 @@ type NotebookEvent =
   | { type: 'phase_a_progress'; message: string; phase?: string; iteration?: number }
   | { type: 'phase_a_tool_call'; name: string; operationType?: string; reason?: string; resultSummary?: { rows: number; columns: number }; args?: Record<string, unknown>; duration_ms?: number }
   | { type: 'phase_a_answer'; content: string }
-  // `signingKeyId` is null when this instance has declared no EVIDENCE_KEY_ID:
+  // `signingKeyId` is null when this instance has declared no PUBLISHER_KEY_ID:
   // the Signers section then shows honest absence rather than some other
   // deployment's kid. This is a DISPLAY surface, so it reads the non-throwing
   // probe; nothing here commits to the value.
   | { type: 'metadata'; composedSystemPrompt: string; composedSystemPromptHash: string; signingKeyId: string | null }
   | { type: 'notebook'; notebook: unknown; sandboxId: string; executionDuration_ms: number; validation: { ok: boolean; issues: { path: string; message: string }[] } }
   // Publish-path inputs (civic-ai-tools-website#112): everything the client
-  // needs to publish the executed session through POST /api/evidence without
+  // needs to publish the executed session through POST /api/records without
   // regenerating a skeleton — the finalized OTel trace, token usage, and the
   // Phase A answer text (the package `output`). Emitted once, on success,
   // after the `complete` phase event.

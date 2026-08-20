@@ -110,7 +110,7 @@ export async function GET(
         .limit(1);
 
   if (records.length === 0) {
-    return jsonResponse({ error: 'Evidence not found' }, 404);
+    return jsonResponse({ error: 'Record not found' }, 404);
   }
   const record = records[0];
 
