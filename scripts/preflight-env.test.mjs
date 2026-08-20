@@ -707,7 +707,7 @@ test('a partially-set signing group warns, naming the missing members and the mi
   delete env.PUBLISHER_KEY_ID; // key + identity set, kid absent — a defect state
   const result = evaluateEnv(env);
 
-  const partial = result.partialGroups.find((g) => g.name === 'Evidence signing');
+  const partial = result.partialGroups.find((g) => g.name === 'Record signing');
   assert.ok(partial, 'the partially-set signing group is reported as partial');
   assert.equal(partial.total, 7);
   assert.ok(partial.present.includes('PUBLISHER_SIGNING_KEY'));
@@ -715,7 +715,7 @@ test('a partially-set signing group warns, naming the missing members and the mi
   assert.deepEqual(partial.missing, ['PUBLISHER_KEY_ID']);
 
   const report = renderReport(result);
-  assert.match(report, /Evidence signing: 6 of 7 present; off until all 7 are set\. Missing: PUBLISHER_KEY_ID/);
+  assert.match(report, /Record signing: 6 of 7 present; off until all 7 are set\. Missing: PUBLISHER_KEY_ID/);
   assert.match(report, /cannot sign/);
   assert.match(report, /travel together/);
   // Unlike the other groups, this one ALSO fails the run — every member is
@@ -731,7 +731,7 @@ test('#258: the identity members of the signing group are required-tier with no 
     'PUBLISHER_SIGNER_DISPLAY_NAME',
     'PUBLISHER_PLATFORM_AGENT_TITLE',
   ];
-  const group = ENV_GROUPS.find((g) => g.name === 'Evidence signing');
+  const group = ENV_GROUPS.find((g) => g.name === 'Record signing');
   for (const name of IDENTITY_MEMBERS) {
     const entry = ENV_SPEC.find((s) => s.name === name);
     assert.ok(entry, `${name} is declared`);
@@ -744,7 +744,7 @@ test('#258: the identity members of the signing group are required-tier with no 
   const env = envWithAllRequired();
   for (const name of IDENTITY_MEMBERS) delete env[name];
   const result = evaluateEnv(env);
-  const partial = result.partialGroups.find((g) => g.name === 'Evidence signing');
+  const partial = result.partialGroups.find((g) => g.name === 'Record signing');
   assert.ok(partial);
   assert.deepEqual(partial.missing, IDENTITY_MEMBERS);
   assert.equal(result.ok, false, 'missing identity fails the run');

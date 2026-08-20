@@ -161,8 +161,8 @@ export const ENV_SPEC = [
   // query refuses with a typed error naming this variable.
   { name: 'SOCRATA_MCP_URL', tier: 'required', purpose: 'Socrata MCP endpoint (the primary data source) — every data query refuses without it (no fallback)' },
 
-  // --- Evidence publish + verify (the demo centerpiece: publish → badge) ---
-  { name: 'DATABASE_URL', tier: 'required', purpose: 'Evidence DB — publish + dashboard + detail page' },
+  // --- Record publish + verify (the demo centerpiece: publish → badge) ---
+  { name: 'DATABASE_URL', tier: 'required', purpose: 'Record DB — publish + dashboard + detail page' },
   // Selector, not a setting: unset declares the managed serverless driver.
   // DATABASE_URL is load-bearing under BOTH drivers (neon() and pg.Pool both
   // read it), so the db seam has no tier flips — only the selector itself.
@@ -170,14 +170,14 @@ export const ENV_SPEC = [
   // Vercel Blob credential: not read at all off that driver (src/lib/storage/index.ts
   // dynamic-imports only the selected driver), so demanding it under s3 would
   // fail an instance that is not on Vercel.
-  { name: 'BLOB_READ_WRITE_TOKEN', tier: 'required', purpose: 'Evidence package storage (Vercel Blob)', onlyWhen: { blob: 'vercel-blob' } },
+  { name: 'BLOB_READ_WRITE_TOKEN', tier: 'required', purpose: 'Record package storage (Vercel Blob)', onlyWhen: { blob: 'vercel-blob' } },
   { name: 'BLOB_DRIVER', tier: 'optional', purpose: "Blob storage driver — 'vercel-blob' (default) or 's3' (any S3-compatible endpoint)", hasFallback: true },
   // S3-compatible storage (read only when BLOB_DRIVER=s3; see src/lib/storage/s3.ts).
   // The three credentials below are hard throws in resolveS3ConfigFromEnv
   // (s3.ts:67-69); the rest resolve to coded defaults.
   { name: 'S3_ENDPOINT', tier: 'optional', purpose: 'S3-compatible endpoint URL (BLOB_DRIVER=s3; omit for AWS S3 proper)', hasFallback: true },
   { name: 'S3_REGION', tier: 'optional', purpose: 'S3 region (BLOB_DRIVER=s3; default us-east-1)', hasFallback: true },
-  { name: 'S3_BUCKET', tier: 'optional', purpose: 'S3 bucket for evidence blobs (required when BLOB_DRIVER=s3)', requiredWhen: { blob: 's3' } },
+  { name: 'S3_BUCKET', tier: 'optional', purpose: 'S3 bucket for record-package blobs (required when BLOB_DRIVER=s3)', requiredWhen: { blob: 's3' } },
   { name: 'S3_ACCESS_KEY_ID', tier: 'optional', purpose: 'S3 access key (required when BLOB_DRIVER=s3)', requiredWhen: { blob: 's3' } },
   { name: 'S3_SECRET_ACCESS_KEY', tier: 'optional', purpose: 'S3 secret key (required when BLOB_DRIVER=s3)', requiredWhen: { blob: 's3' } },
   { name: 'S3_FORCE_PATH_STYLE', tier: 'optional', purpose: 'Path-style S3 addressing (default: on when S3_ENDPOINT is set — MinIO)', hasFallback: true },
@@ -205,10 +205,10 @@ export const ENV_SPEC = [
 
   // The signing pair. NEITHER has a coded fallback: signing.ts has no default
   // key id, because a substituted kid would label this instance's signature
-  // with another deployment's registry entry (misattribution + unverifiable
-  // evidence). Both halves are hard requirements of a signing instance, and
+  // with another deployment's registry entry (misattribution + an
+  // unverifiable record). Both halves are hard requirements of a signing instance, and
   // the SIGNING_PAIR group below adds the all-or-nothing semantics on top.
-  { name: 'PUBLISHER_SIGNING_KEY', priorEraName: 'EVIDENCE_SIGNING_KEY', tier: 'required', purpose: 'Ed25519 private key — signs evidence packages' },
+  { name: 'PUBLISHER_SIGNING_KEY', priorEraName: 'EVIDENCE_SIGNING_KEY', tier: 'required', purpose: 'Ed25519 private key — signs record packages' },
   { name: 'PUBLISHER_KEY_ID', priorEraName: 'EVIDENCE_KEY_ID', tier: 'required', purpose: 'Active signing key id (kid) — must match the trust registry; no coded default' },
 
   // --- Sign-in path (the rate-limit headroom option; OAuth) ---
@@ -279,7 +279,7 @@ export const ENV_SPEC = [
   //     and platform agent, and with the signing pair set but any of these
   //     absent every seal/publish attempt is refused
   //     (`instance_identity_missing`). They travel with the signing pair —
-  //     the "Evidence signing" group below carries the relationship. The
+  //     the "Record signing" group below carries the relationship. The
   //     remaining five are per-item overrides that DERIVE from the origin
   //     (host, registry URLs, agent URL) or the host (agent id). ---
   { name: 'PUBLISHER_SITE_ORIGIN', priorEraName: 'EVIDENCE_SITE_ORIGIN', tier: 'required', purpose: 'Instance origin — required to sign; registry URLs, platform-agent URL, notebook/bundle attribution links derive from it' },
@@ -296,7 +296,7 @@ export const ENV_SPEC = [
   // --- Instance branding (#217: chrome-only theming seam; src/lib/brand-config.ts).
   //     All optional with coded defaults: unset, the demo chrome renders
   //     byte-identically. Chrome only — nothing here is emitted inside signed
-  //     evidence (that is the PUBLISHER_* identity set above), so these can
+  //     output (that is the PUBLISHER_* identity set above), so these can
   //     never invalidate a package or a registry cross-check. ---
   { name: 'SITE_BRAND_NAME', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Instance display name — header wordmark, page titles, citation labels (default "Civic AI Tools")', hasFallback: true },
   { name: 'SITE_BRAND_ACCENT', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Accent color (#rgb/#rrggbb) — overrides the accent tokens site-wide; unset or invalid = stylesheet default', hasFallback: true },
@@ -322,7 +322,7 @@ export const ENV_SPEC = [
   // `external-tool` so it is enumerated for completeness without a deployment
   // ever being asked to deliver it to the container.
   { name: 'PUBLISHER_PUBLIC_KEY', priorEraName: 'EVIDENCE_PUBLIC_KEY', readBy: 'external-tool', tier: 'optional', purpose: 'Public half of the signing keypair — written by scripts/generate-signing-key.ts for the trust-registry entry; never read by the app' },
-  { name: 'CIVICAITOOLS_SESSION_TOKEN', readBy: 'external-tool', tier: 'optional', purpose: 'publish-evidence skill (Claude Code) auth' },
+  { name: 'CIVICAITOOLS_SESSION_TOKEN', readBy: 'external-tool', tier: 'optional', purpose: 'publish-record skill (Claude Code) auth' },
   { name: 'CRON_SECRET', tier: 'optional', purpose: 'Cron endpoint auth (blob-gc, portal refresh)' },
   { name: 'NEXT_PUBLIC_GA_MEASUREMENT_ID', readBy: 'build', tier: 'optional', purpose: 'Google Analytics 4' },
 
@@ -397,7 +397,7 @@ export const ENV_GROUPS = [
     feature: 'the GitHub provider is not offered on the sign-in screen',
   },
   {
-    name: 'Evidence signing',
+    name: 'Record signing',
     members: [
       'PUBLISHER_SIGNING_KEY',
       'PUBLISHER_KEY_ID',
@@ -418,7 +418,7 @@ export const ENV_GROUPS = [
     // time — the gate refuses (`signing_key_id_missing` /
     // `instance_identity_missing`) and the banner shows — but preflight is
     // where the operator sees the RELATIONSHIP before a deploy.
-    feature: 'evidence seal/publish stays gated off — the instance cannot sign',
+    feature: 'record seal/publish stays gated off — the instance cannot sign',
     note: 'Key, key id, and the instance-identity set travel together: a key without a declared kid refuses rather than emit a kid it never declared, and a signing pair without PUBLISHER_SITE_ORIGIN, the PUBLISHER_SIGNER_* triple, and PUBLISHER_PLATFORM_AGENT_TITLE refuses rather than sign under an identity this instance never configured (docs/instance-setup.md). Each of those also answers to its prior-era EVIDENCE_* spelling.',
   },
   {

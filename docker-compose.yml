@@ -44,10 +44,20 @@
 # each side from it. Changing a build-time value takes effect on the next
 # build, not on restart.
 #
-# An instance that publishes signed evidence supplies EVIDENCE_SIGNING_KEY,
-# EVIDENCE_KEY_ID, and its own identity values; with none set the app runs
+# An instance that publishes signed records supplies PUBLISHER_SIGNING_KEY,
+# PUBLISHER_KEY_ID, and its own identity values; with none set the app runs
 # in the unsigned tier by design (ADR-0020) — publish stays gated off and
 # the running-unsigned banner shows. See docs/instance-setup.md.
+#
+# THE PUBLISHER_* NAMES, AND WHAT HAPPENS IF YOURS ARE STILL EVIDENCE_*.
+# The 2026-08-19 vocabulary settlement (Appendix J of the Typed Standards
+# specification; civic-ai-tools#160) renamed this file's publisher-identity
+# variables from the EVIDENCE_ prefix to PUBLISHER_. YOU DO NOT HAVE TO EDIT
+# YOUR ENV FILE: every entry below reads your prior-era name when the
+# canonical one is unset, so an existing stack keeps its exact configuration
+# on the next `up`. The app logs a one-time deprecation warning per variable
+# resolved that way. Rename them in your env file when convenient; the
+# prior-era names are removed only at a future major version.
 
 services:
   postgres:
@@ -203,25 +213,30 @@ services:
       EXECUTOR_DRIVER: container
       EXECUTOR_CONTAINER_IMAGE: ${EXECUTOR_CONTAINER_IMAGE:-civic-notebook-executor:0.1.0}
       # --- instance identity (ADR-0020; neutral local values) ---
-      EVIDENCE_SITE_ORIGIN: ${EVIDENCE_SITE_ORIGIN:-http://localhost:3000}
-      EVIDENCE_PUBLICATION_HOST: ${EVIDENCE_PUBLICATION_HOST:-localhost:3000}
-      EVIDENCE_SIGNER_BINDING_TIER: ${EVIDENCE_SIGNER_BINDING_TIER:-platform}
-      EVIDENCE_SIGNER_IDENTIFIER: ${EVIDENCE_SIGNER_IDENTIFIER:-platform:local-instance}
-      EVIDENCE_SIGNER_DISPLAY_NAME: ${EVIDENCE_SIGNER_DISPLAY_NAME:-Local Instance}
-      EVIDENCE_PLATFORM_AGENT_ID: ${EVIDENCE_PLATFORM_AGENT_ID:-local-instance}
-      EVIDENCE_PLATFORM_AGENT_TITLE: ${EVIDENCE_PLATFORM_AGENT_TITLE:-Local Instance}
+      # Each reads your canonical name, then your prior-era one, then the
+      # neutral local default — so renaming your env file is optional and a
+      # stack configured before the settlement is not silently reset to the
+      # localhost defaults. (Compose resolves these nested defaults itself;
+      # the app's own two-name fallback is a separate, later layer.)
+      PUBLISHER_SITE_ORIGIN: ${PUBLISHER_SITE_ORIGIN:-${EVIDENCE_SITE_ORIGIN:-http://localhost:3000}}
+      PUBLISHER_PUBLICATION_HOST: ${PUBLISHER_PUBLICATION_HOST:-${EVIDENCE_PUBLICATION_HOST:-localhost:3000}}
+      PUBLISHER_SIGNER_BINDING_TIER: ${PUBLISHER_SIGNER_BINDING_TIER:-${EVIDENCE_SIGNER_BINDING_TIER:-platform}}
+      PUBLISHER_SIGNER_IDENTIFIER: ${PUBLISHER_SIGNER_IDENTIFIER:-${EVIDENCE_SIGNER_IDENTIFIER:-platform:local-instance}}
+      PUBLISHER_SIGNER_DISPLAY_NAME: ${PUBLISHER_SIGNER_DISPLAY_NAME:-${EVIDENCE_SIGNER_DISPLAY_NAME:-Local Instance}}
+      PUBLISHER_PLATFORM_AGENT_ID: ${PUBLISHER_PLATFORM_AGENT_ID:-${EVIDENCE_PLATFORM_AGENT_ID:-local-instance}}
+      PUBLISHER_PLATFORM_AGENT_TITLE: ${PUBLISHER_PLATFORM_AGENT_TITLE:-${EVIDENCE_PLATFORM_AGENT_TITLE:-Local Instance}}
       # --- auth ---
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       # --- pass-through (key with no value): set in the container only when
       # present in the caller's environment, absent otherwise ---
-      #   EVIDENCE_SIGNING_KEY / EVIDENCE_KEY_ID  unset ⇒ unsigned tier
+      #   PUBLISHER_SIGNING_KEY / PUBLISHER_KEY_ID  unset ⇒ unsigned tier
       #   NEXTAUTH_SECRET                         unset ⇒ sign-in unavailable
       #   CRON_SECRET                             unset ⇒ scheduler rejected (401)
       #
       # WHY BARE `NAME:` AND NOT `${NAME:-}`: the two are not the same
       # variable. `${NAME:-}` always sets the variable, to the empty string
       # when your environment has none — and the app distinguishes the two.
-      # EVIDENCE_TRUST_REGISTRY_LEGACY_URL is the sharpest case: unset means
+      # PUBLISHER_TRUST_REGISTRY_LEGACY_URL is the sharpest case: unset means
       # "emit the legacy registry URL in the signed sidecar", empty string
       # means "omit it" (src/lib/site-config.ts getSidecarTrustRegistryUrls),
       # so `${NAME:-}` would silently change signed output on every instance.
@@ -233,7 +248,14 @@ services:
       # which runs in `npm test` and in CI. A new variable the app reads fails
       # that check until it is added here — which is what keeps a documented
       # variable from being inert on this path.
+      # Both spellings are listed for every bare pass-through: a bare entry
+      # sets the variable in the container ONLY when the caller's environment
+      # has it, so listing the pair delivers whichever one you set and neither
+      # when you set neither. The unset-vs-empty distinction above survives
+      # under both names.
+      PUBLISHER_SIGNING_KEY:
       EVIDENCE_SIGNING_KEY:
+      PUBLISHER_KEY_ID:
       EVIDENCE_KEY_ID:
       NEXTAUTH_SECRET:
       GITHUB_CLIENT_ID:
@@ -262,10 +284,15 @@ services:
       MARKETING_HOST:
       APP_ONLY:
       SERVE_MARKETING:
-      # Evidence identity overrides not already given a local default above.
+      # Publisher-identity overrides not already given a local default above,
+      # each under both accepted spellings (see the bare-pass-through note).
+      PUBLISHER_PLATFORM_AGENT_URL:
       EVIDENCE_PLATFORM_AGENT_URL:
+      PUBLISHER_TRUST_REGISTRY_CANONICAL_URL:
       EVIDENCE_TRUST_REGISTRY_CANONICAL_URL:
+      PUBLISHER_TRUST_REGISTRY_LEGACY_URL:
       EVIDENCE_TRUST_REGISTRY_LEGACY_URL:
+      PUBLISHER_TRUST_REGISTRY_URL:
       EVIDENCE_TRUST_REGISTRY_URL:
       # Chrome branding and content sources. Also passed as build args above:
       # prerendered pages bake them, dynamic pages read them here.
