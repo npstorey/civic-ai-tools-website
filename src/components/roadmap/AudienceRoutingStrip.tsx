@@ -38,7 +38,7 @@ const CARDS: AudienceCard[] = [
   },
   {
     audience: 'Journalists',
-    why: 'How the evidence chain works, how to verify a package, what withdrawal means.',
+    why: 'How the signed-record chain works, how to verify a package, what withdrawal means.',
     linkLabel: 'docs/trust-and-evidence.md',
     href: `${HUB_DOC_BASE}/docs/trust-and-evidence.md`,
     external: true,
@@ -52,7 +52,7 @@ const CARDS: AudienceCard[] = [
   },
   {
     audience: 'End users',
-    why: 'The demo. Try a query; publish an analysis as evidence.',
+    why: 'The demo. Try a query; publish an analysis as a signed record.',
     linkLabel: 'civicaitools.org home',
     href: '/',
     external: false,

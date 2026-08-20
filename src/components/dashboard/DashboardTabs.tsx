@@ -147,7 +147,7 @@ export default function DashboardTabs({ myEvidence, myEvaluations, activity, tok
     <>
       <div style={{ display: 'flex', borderBottom: '2px solid var(--border-color)', marginBottom: '24px' }}>
         <button onClick={() => setActiveTab('evidence')} style={tabStyle(activeTab === 'evidence')}>
-          My Evidence ({myEvidence.length})
+          My Records ({myEvidence.length})
         </button>
         <button onClick={() => setActiveTab('evaluations')} style={tabStyle(activeTab === 'evaluations')}>
           My Evaluations ({myEvaluations.length})
@@ -187,7 +187,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
     setWithdrawing(true);
     setWithdrawError('');
     try {
-      const res = await fetch(`/api/evidence/${withdrawTarget.slug}/withdraw`, {
+      const res = await fetch(`/api/records/${withdrawTarget.slug}/withdraw`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: withdrawReason.trim() }),
@@ -211,7 +211,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
     setReinstating(true);
     setReinstateError('');
     try {
-      const res = await fetch(`/api/evidence/${reinstateTarget.slug}/reinstate`, {
+      const res = await fetch(`/api/records/${reinstateTarget.slug}/reinstate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: reinstateReason.trim() }),
@@ -242,7 +242,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
     setPublishing(true);
     setPublishError('');
     try {
-      const res = await fetch(`/api/evidence/${publishTarget.slug}/publish`, {
+      const res = await fetch(`/api/records/${publishTarget.slug}/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ runEvaluation: publishRunEval }),
@@ -271,7 +271,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
          definition, so the relative href is correct on all three shapes with
          no origin treatment needed. */
       <EmptyState
-        message="You haven't published any evidence yet. Ask a question, then click 'Publish as Evidence' to get started."
+        message="You haven't published any records yet. Ask a question, then click 'Publish as Record' to get started."
         cta={{ text: 'Ask a question', href: '/ask' }}
       />
     );
@@ -294,7 +294,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', marginBottom: '6px' }}>
                 <Link
-                  href={`/evidence/${r.slug}`}
+                  href={`/records/${r.slug}`}
                   style={{
                     fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)',
                     textDecoration: isCurrentlyWithdrawn ? 'line-through' : 'none',
@@ -368,7 +368,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
                          than left as a dead button that errors. */
                       <button
                         disabled
-                        title="Publishing is unavailable \u2014 this instance is running unsigned (signing is not configured). Signing is the go-to-production step and takes both EVIDENCE_SIGNING_KEY and EVIDENCE_KEY_ID; see docs/instance-setup.md."
+                        title="Publishing is unavailable \u2014 this instance is running unsigned (signing is not configured). Signing is the go-to-production step and takes both PUBLISHER_SIGNING_KEY and PUBLISHER_KEY_ID; see docs/instance-setup.md."
                         style={{
                           background: 'none', border: 'none', padding: 0,
                           fontSize: '12px', color: 'var(--text-muted)',
@@ -416,7 +416,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
             margin: '16px', padding: '24px',
             boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
           }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Publish Evidence</h3>
+            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Publish Record</h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 12px' }}>
               Publishing makes the content of <strong>{publishTarget.title}</strong> publicly
               accessible, lists it in the registry, and emits signed publication
@@ -491,10 +491,10 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
             margin: '16px', padding: '24px',
             boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
           }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Withdraw Evidence</h3>
+            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Withdraw Record</h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
-              Withdrawing evidence is a public, permanent action. The record and its cryptographic
-              proofs remain accessible, but the evidence will be flagged as withdrawn.
+              Withdrawing a record is a public, permanent action. The record and its cryptographic
+              proofs remain accessible, but the record will be flagged as withdrawn.
             </p>
             <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', color: 'var(--text-primary)' }}>
               &ldquo;{withdrawTarget.title}&rdquo;
@@ -562,9 +562,9 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
             margin: '16px', padding: '24px',
             boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
           }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Reinstate Evidence</h3>
+            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Reinstate Record</h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
-              Reinstating will make this evidence visible again in the public index. The prior
+              Reinstating will make this record visible again in the public index. The prior
               withdrawal record is preserved — both the withdrawal and reinstatement will appear
               in the status history for transparency.
             </p>
@@ -627,8 +627,8 @@ function MyEvaluationsTab({ rows }: { rows: EvaluationRow[] }) {
   if (rows.length === 0) {
     return (
       <EmptyState
-        message="You haven't run any evaluations yet. Visit any evidence page and click 'Add evaluation' to evaluate someone's analysis."
-        cta={{ text: 'Browse evidence', href: '/evidence' }}
+        message="You haven't run any evaluations yet. Visit any record page and click 'Add evaluation' to evaluate someone's analysis."
+        cta={{ text: 'Browse records', href: '/records' }}
       />
     );
   }
@@ -638,7 +638,7 @@ function MyEvaluationsTab({ rows }: { rows: EvaluationRow[] }) {
       {rows.map((r) => (
         <Link
           key={r.id}
-          href={`/evidence/${r.evidenceSlug}`}
+          href={`/records/${r.evidenceSlug}`}
           style={{
             display: 'flex', alignItems: 'center', gap: '12px',
             padding: '14px 18px',
@@ -822,7 +822,7 @@ function ActivityTab({ rows }: { rows: ActivityRow[] }) {
   if (rows.length === 0) {
     return (
       <EmptyState
-        message="No activity yet. When others evaluate your evidence, you'll see it here."
+        message="No activity yet. When others evaluate your records, you'll see it here."
       />
     );
   }
@@ -832,7 +832,7 @@ function ActivityTab({ rows }: { rows: ActivityRow[] }) {
       {rows.map((r) => (
         <Link
           key={r.id}
-          href={`/evidence/${r.evidenceSlug}`}
+          href={`/records/${r.evidenceSlug}`}
           style={{
             display: 'flex', alignItems: 'center', gap: '12px',
             padding: '14px 18px',

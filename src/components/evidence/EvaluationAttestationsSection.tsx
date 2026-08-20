@@ -1,4 +1,4 @@
-// Adversarial-evaluation attestations on the evidence detail page
+// Adversarial-evaluation attestations on the record detail page
 // (civic-ai-tools#72 Phase 3; spec §8.12.4 verifier expectations).
 //
 // Server component — pure rendering over independently-verified views from

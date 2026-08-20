@@ -44,6 +44,7 @@ import {
   getPlatformAgentOverrides,
   InstanceIdentityError,
 } from '../site-config.ts';
+import { canonicalEnvName } from '../publisher-env.ts';
 
 // Two-family node type taxonomy (spec §8.1.1, §8.12, ADR-0009): every node
 // carries `type` of the form `content/<noun>/v<N>` or `attestation/<verb>/v<N>`.
@@ -294,8 +295,8 @@ export interface EvidencePackage {
  * platform agent resolved from instance identity (ADR-0020 — the agent names
  * WHO published inside the signed graph). As of #258 the agent NEVER falls
  * back to the harness's reference-deployment values: title and url are
- * required identity (`EVIDENCE_PLATFORM_AGENT_TITLE`, with url following
- * `EVIDENCE_SITE_ORIGIN` unless overridden), and a missing agent id derives
+ * required identity (`PUBLISHER_PLATFORM_AGENT_TITLE`, with url following
+ * `PUBLISHER_SITE_ORIGIN` unless overridden), and a missing agent id derives
  * from the publication host — operator-grounded, never another deployment's
  * URN. Callers reach this only behind `evaluateSealCommitGate`; the throw is
  * the last-resort guard for any path that forgets the gate. The harness's
@@ -306,8 +307,14 @@ export interface EvidencePackage {
 function instanceProvenanceConfig(): ProvenanceConfig {
   const overrides = getPlatformAgentOverrides();
   const missing: string[] = [];
-  if (!overrides.title) missing.push('EVIDENCE_PLATFORM_AGENT_TITLE');
-  if (!overrides.url) missing.push('EVIDENCE_SITE_ORIGIN');
+  // Report the CANONICAL names (civic-ai-tools#160 P5). The presence LOGIC is
+  // two-name and unchanged — `getPlatformAgentOverrides` resolves
+  // `PUBLISHER_*`-then-`EVIDENCE_*` — but an operator told to set a retiring
+  // variable is told the wrong thing, and this string is the one they act on.
+  // Names come from `canonicalEnvName` rather than literals so the report and
+  // the resolver cannot drift apart.
+  if (!overrides.title) missing.push(canonicalEnvName('PLATFORM_AGENT_TITLE'));
+  if (!overrides.url) missing.push(canonicalEnvName('SITE_ORIGIN'));
   if (missing.length > 0) {
     throw new InstanceIdentityError(
       missing,

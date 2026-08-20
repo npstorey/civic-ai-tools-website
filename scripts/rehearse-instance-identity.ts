@@ -327,7 +327,7 @@ async function main(): Promise<void> {
   assert.equal(env.host, REHEARSAL_HOST, 'environment host must be the alternate host');
 
   const agent = pkg.provenance!['@graph'].find(
-    (n) => n['@id'] === `urn:civic-evidence:platform:${REHEARSAL_AGENT_ID}`,
+    (n) => n['@id'] === `urn:civic-record:platform:${REHEARSAL_AGENT_ID}`,
   );
   assert.ok(agent, 'PROV platform agent must carry the alternate id');
   assert.equal(agent!['dcterms:title'], REHEARSAL_SIGNER.displayName);
@@ -347,7 +347,7 @@ async function main(): Promise<void> {
   // identifiers are NOT instance identity — the civic: namespace must still
   // point at the shared vocabulary URL even under a fully alternate identity.
   assert.ok(
-    JSON.stringify(pkg.provenance!['@context']).includes('https://civicaitools.org/ns/evidence/'),
+    JSON.stringify(pkg.provenance!['@context']).includes('https://civicaitools.org/ns/civic/'),
     'civic: vocabulary namespace must remain unparameterized (Tier-2 guard)',
   );
   log('[6/6] alternate identity present throughout: signer, sidecar registry URLs, environment host, PROV agent, notebook attribution; vocabulary identifiers unchanged');

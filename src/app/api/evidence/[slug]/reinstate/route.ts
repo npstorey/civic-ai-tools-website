@@ -75,21 +75,21 @@ export async function POST(
     .where(eq(evidenceRecords.slug, slug))
     .limit(1);
   if (records.length === 0) {
-    return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Record not found' }, { status: 404 });
   }
   const record = records[0];
 
   // Publisher-only: only the creator can reinstate (§8.12.3 authorization rule).
   if (record.creatorId !== userId) {
-    return NextResponse.json({ error: 'Only the creator can reinstate evidence' }, { status: 403 });
+    return NextResponse.json({ error: 'Only the creator can reinstate a record' }, { status: 403 });
   }
 
   // Single-cycle parity: must be currently withdrawn and not already reinstated.
   if (!record.withdrawnAt) {
-    return NextResponse.json({ error: 'Evidence is not withdrawn' }, { status: 400 });
+    return NextResponse.json({ error: 'Record is not withdrawn' }, { status: 400 });
   }
   if (record.reinstatedAt) {
-    return NextResponse.json({ error: 'Evidence has already been reinstated' }, { status: 400 });
+    return NextResponse.json({ error: 'Record has already been reinstated' }, { status: 400 });
   }
 
   const body = await request.json();

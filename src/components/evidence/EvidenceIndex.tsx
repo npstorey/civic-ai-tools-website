@@ -106,7 +106,7 @@ export default function EvidenceIndex() {
     if (page > 1) params.set('page', String(page));
 
     try {
-      const res = await fetch(`/api/evidence/list?${params}`);
+      const res = await fetch(`/api/records/list?${params}`);
       if (res.ok) {
         setData(await res.json());
       }
@@ -129,7 +129,7 @@ export default function EvidenceIndex() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search evidence by title or summary..."
+          placeholder="Search records by title or summary..."
           style={{
             width: '100%', padding: '10px 14px',
             border: '1px solid var(--border-color)', borderRadius: '6px',
@@ -183,20 +183,21 @@ export default function EvidenceIndex() {
         }}>
           <p style={{ fontSize: '16px', margin: '0 0 8px' }}>
             {debouncedQuery || status || range !== 'all'
-              ? 'No evidence matches your filters.'
-              : 'No evidence packages published yet.'}
+              ? 'No records match your filters.'
+              : 'No record packages published yet.'}
           </p>
           {!debouncedQuery && !status && range === 'all' && (
             <p style={{ fontSize: '14px', margin: 0 }}>
               {/* Topology-stale copy fixed in #229 P1 — the second instance
-                  of the "home page" noun the dashboard carried. `/evidence`
-                  is DUAL-SERVED, so this line renders on both hosts, and the
+                  of the "home page" noun the dashboard carried. `/records`
+                  (and its permanent `/evidence` alias) is DUAL-SERVED, so this
+                  line renders on both hosts, and the
                   href must stay relative: `/` is the query surface on the
                   marketing host and 307s to `/ask` on the app host, while a
                   direct `/ask` would 404 on the marketing host. Only the
                   wording was wrong — the app host has no "home page". */}
               <Link href="/" style={{ color: 'var(--accent)' }}>Run a query</Link> and
-              click &ldquo;Publish as Evidence&rdquo; to create the first one.
+              click &ldquo;Publish as Record&rdquo; to create the first one.
             </p>
           )}
         </div>
@@ -216,7 +217,7 @@ export default function EvidenceIndex() {
               return (
                 <Link
                   key={r.id}
-                  href={`/evidence/${r.slug}`}
+                  href={`/records/${r.slug}`}
                   style={{
                     display: 'block', padding: '16px 20px',
                     border: '1px solid var(--border-color)', borderRadius: '6px',

@@ -238,13 +238,13 @@ export default function Header({
                   )}
                   {/* Dual-served by design (P3): stays relative on both hosts. */}
                   <Link
-                    href="/evidence"
+                    href="/records"
                     onClick={() => setExploreOpen(false)}
                     style={DROPDOWN_ITEM_STYLE}
                     onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
                     onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                   >
-                    Evidence
+                    Records
                   </Link>
                 </div>
               )}
@@ -566,7 +566,7 @@ export default function Header({
             </>
           )}
           <Link
-            href="/evidence"
+            href="/records"
             onClick={() => setMobileMenuOpen(false)}
             style={{
               color: 'var(--text-secondary)',
@@ -576,7 +576,7 @@ export default function Header({
               paddingLeft: '12px',
             }}
           >
-            Evidence
+            Records
           </Link>
           {showMarketingNav && (
             <>

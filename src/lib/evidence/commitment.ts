@@ -25,10 +25,11 @@ import { fromDbValue } from './visibility.ts';
  * (WS1 of civic-ai-tools-website#116) so the same self-describing proof
  * object is produced by two surfaces:
  *
- *   1. the notebook-embedded bundle (`/api/evidence/[slug]/bundle`), where it
- *      lives under the notebook root's `org.civicaitools.evidence` namespace;
+ *   1. the notebook-embedded bundle (`/api/records/[slug]/bundle`), where it
+ *      lives under the notebook root's commitment-view namespace (dual-era —
+ *      see `COMMITMENT_NAMESPACE_KEY` below);
  *   2. the public, hash-addressable commitment endpoint
- *      (`/api/evidence/[hash|slug]/commitment`), which returns it directly so a
+ *      (`/api/records/[hash|slug]/commitment`), which returns it directly so a
  *      third party can resolve a package's proofs and verify INDEPENDENTLY
  *      (client-side, against public infra) rather than trusting a
  *      civicaitools.org-rendered verdict.
@@ -51,6 +52,55 @@ import { fromDbValue } from './visibility.ts';
 
 type EvidenceRecord = typeof evidenceRecords.$inferSelect;
 type UserRecord = typeof users.$inferSelect;
+
+/**
+ * Reverse-DNS namespace the commitment view is carried under inside a
+ * notebook-embedded bundle (spec §8.8.2).
+ *
+ * DUAL-ERA, accepted forever — settlement ruling D3 (spec Appendix J §J.3),
+ * taken deliberately against the default alias-and-deprecate recommendation.
+ * The two constants are NOT a deprecation window:
+ *
+ *   - `COMMITMENT_NAMESPACE_KEY` is what new bundles MINT.
+ *   - `COMMITMENT_NAMESPACE_KEY_PRIOR_ERA` is what bundles exported before the
+ *     2026-08-19 cutover carry. Those files are already on readers' disks and
+ *     inside published notebooks; they are never rewritten, and acceptance of
+ *     the prior-era key has no end date.
+ *
+ * Read through `readCommitmentNamespace` rather than indexing either constant
+ * directly, so the preference rule (§8.8.2: prefer the settlement-era key when
+ * both are present) has exactly one implementation.
+ *
+ * Related namespaces (`org.civicaitools.notebook` / `.environment` /
+ * `.execution` / `.summary`) carry no excised word and are unaffected.
+ */
+export const COMMITMENT_NAMESPACE_KEY = 'org.civicaitools.record';
+
+/** @see COMMITMENT_NAMESPACE_KEY — the pre-cutover spelling, accepted forever. */
+export const COMMITMENT_NAMESPACE_KEY_PRIOR_ERA = 'org.civicaitools.evidence';
+
+/**
+ * Resolve the commitment view out of a notebook's root `metadata`, reading
+ * BOTH eras and preferring the settlement-era key when both are present
+ * (spec §8.8.2 / Appendix J rule J.4.2 — era is not a trust signal).
+ *
+ * Returns `null` when neither key is present, so a caller can distinguish
+ * "not a bundle" from "a bundle whose view is empty".
+ */
+export function readCommitmentNamespace(
+  metadata: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  if (!metadata) return null;
+  const settlementEra = metadata[COMMITMENT_NAMESPACE_KEY];
+  if (settlementEra && typeof settlementEra === 'object') {
+    return settlementEra as Record<string, unknown>;
+  }
+  const priorEra = metadata[COMMITMENT_NAMESPACE_KEY_PRIOR_ERA];
+  if (priorEra && typeof priorEra === 'object') {
+    return priorEra as Record<string, unknown>;
+  }
+  return null;
+}
 
 // The trust-registry URLs are resolved per-instance via
 // `getSidecarTrustRegistryUrls()` (ADR-0020) — canonical path (spec §8.3.3,

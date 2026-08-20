@@ -48,7 +48,7 @@ export async function POST(
 
   // A withdrawal is a separately-signed node, so it reaches the same signing
   // path as a content publish and takes the same gate: an instance that
-  // cannot sign honestly (no key, or a key with no declared EVIDENCE_KEY_ID)
+  // cannot sign honestly (no key, or a key with no declared PUBLISHER_KEY_ID)
   // is refused specifically here rather than emitting an attestation labeled
   // with a key id it never configured.
   const gate = evaluateSealCommitGate();
@@ -75,20 +75,20 @@ export async function POST(
     .where(eq(evidenceRecords.slug, slug))
     .limit(1);
   if (records.length === 0) {
-    return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Record not found' }, { status: 404 });
   }
   const record = records[0];
 
   // Publisher-only: only the creator can withdraw (§8.12.3 authorization rule).
   if (record.creatorId !== userId) {
-    return NextResponse.json({ error: 'Only the creator can withdraw evidence' }, { status: 403 });
+    return NextResponse.json({ error: 'Only the creator can withdraw a record' }, { status: 403 });
   }
 
   // Single-cycle parity: reject if already withdrawn. The current status is read
   // from the legacy column mirror, which the dual-write keeps in sync with the
   // attestation chain.
   if (record.withdrawnAt) {
-    return NextResponse.json({ error: 'Evidence is already withdrawn' }, { status: 400 });
+    return NextResponse.json({ error: 'Record is already withdrawn' }, { status: 400 });
   }
 
   // An attestation MUST reference a content node by nodeId (§8.12.3). Published

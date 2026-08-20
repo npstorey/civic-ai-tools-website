@@ -86,7 +86,7 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: pageTitle('Ask'),
   description:
-    'Ask a question about public data and publish the answer as a signed evidence package.',
+    'Ask a question about public data and publish the answer as a signed record package.',
 };
 
 interface AskPageProps {
@@ -120,7 +120,7 @@ export default async function AskPage({ searchParams }: AskPageProps) {
         >
           This is the signed-in workspace: ask a question in plain language,
           get an answer built from live public data, and publish it as a
-          signed evidence package anyone can verify independently.
+          signed record package anyone can verify independently.
         </p>
         <AskSignInPanel options={options} autoSignIn={autoSignIn} />
       </div>
@@ -165,7 +165,7 @@ export default async function AskPage({ searchParams }: AskPageProps) {
           }}
         >
           Ask in plain language. The answer is built from live public data, and
-          you can publish it as a signed evidence package anyone can verify
+          you can publish it as a signed record package anyone can verify
           independently.
         </p>
         {showFirstRunOrientation && (
@@ -188,7 +188,7 @@ export default async function AskPage({ searchParams }: AskPageProps) {
             Ask a question below and the answer is assembled from live public
             data, with every query it ran shown alongside the result. When an
             answer is worth keeping, publish it: publishing creates a signed
-            evidence package — a permanent, independently verifiable record of
+            record package — a permanent, independently verifiable account of
             the answer and how it was produced — listed on your dashboard.
             This note disappears after your first publish.
           </div>

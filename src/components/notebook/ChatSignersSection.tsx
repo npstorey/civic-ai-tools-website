@@ -6,7 +6,7 @@ import { toDisplayHost, useEvidenceSiteOrigin } from '@/components/EvidenceOrigi
  * Phase 2a1 — Signers + attestations placeholder beneath the A-G output.
  * Phase 2a2 item 4 (Option A): the platform signer row is reframed to be
  * honest about pre-publish state. The signature does not yet exist; it is
- * created at publish time by /api/evidence after the user signs in and
+ * created at publish time by /api/records after the user signs in and
  * triggers publish. The chat-time output carries execution metadata
  * (`executedAt`, environment, sandboxId) but those are captured, not
  * signed. Option B (formalizing execution-time signing as a real signature
@@ -57,9 +57,10 @@ function PlatformPendingSignerRow({
   executedAt: string | null;
 }) {
   // Instance identity (#227 class): this row names WHO will sign at publish
-  // time — the platform signer, which is evidence identity (site-config.ts's
-  // EVIDENCE_* family), never chrome, per brand-config.ts's chrome-vs-
-  // evidence line. So it reads EvidenceOriginProvider, not BrandProvider.
+  // time — the platform signer, which is publisher identity (site-config.ts's
+  // PUBLISHER_* family), never chrome, per brand-config.ts's
+  // chrome-vs-publisher-identity line. So it reads EvidenceOriginProvider,
+  // not BrandProvider.
   // Host only, as the row always rendered it.
   const platformHost = toDisplayHost(useEvidenceSiteOrigin());
   const keyIdLabel = signingKeyId ?? 'platform key (will resolve at publish)';

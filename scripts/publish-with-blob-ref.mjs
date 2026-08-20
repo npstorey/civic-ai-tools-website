@@ -3,7 +3,7 @@
 // Phase B.6 (website#75) — end-to-end BlobRef publish walkthrough.
 //
 // Uploads a sample output string as a content-addressable blob, then
-// publishes an evidence package that references it instead of inlining.
+// publishes a record package that references it instead of inlining.
 // Run against production (or the Vercel preview, with a preview session
 // cookie) to confirm the full upload-token → publish → verify path works.
 //
@@ -147,7 +147,7 @@ if (tokenJson.uploadMethod === 'presigned-put') {
 }
 console.log(`  ✓ stored at ${BLOB_URL}`);
 
-// Build the BlobRef object. This is what the evidence schema expects in the
+// Build the BlobRef object. This is what the record-package schema expects in the
 // `output` field (or any BlobRef-capable field).
 const outputBlobRef = {
   ref: `blob:sha256:${OUTPUT_HASH}`,
@@ -156,10 +156,10 @@ const outputBlobRef = {
   size: OUTPUT_BYTES.byteLength,
 };
 
-// --- 3. Publish the evidence package referencing the blob ----------------
+// --- 3. Publish the record package referencing the blob ------------------
 
-console.log('[3/4] Publishing evidence package with BlobRef output…');
-const publishRes = await fetch(`${BASE_URL}/api/evidence`, {
+console.log('[3/4] Publishing record package with BlobRef output…');
+const publishRes = await fetch(`${BASE_URL}/api/records`, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -193,7 +193,7 @@ console.log(`  ✓ hash: ${publishJson.packageHash}`);
 // --- 4. Verify the published package -------------------------------------
 
 console.log('[4/4] Verifying the package…');
-const verifyRes = await fetch(`${BASE_URL}/api/evidence/${publishJson.slug}/verify`);
+const verifyRes = await fetch(`${BASE_URL}/api/records/${publishJson.slug}/verify`);
 if (!verifyRes.ok) {
   console.error(`Verify failed (${verifyRes.status}): ${await verifyRes.text()}`);
   process.exit(1);

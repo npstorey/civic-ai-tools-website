@@ -8,7 +8,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildCommitmentView, buildCommitmentLifecycle } from './commitment.ts';
+import {
+  buildCommitmentView,
+  buildCommitmentLifecycle,
+  readCommitmentNamespace,
+  COMMITMENT_NAMESPACE_KEY,
+  COMMITMENT_NAMESPACE_KEY_PRIOR_ERA,
+} from './commitment.ts';
 import { evidenceRecords, users } from '../db/schema.ts';
 import type { EvidencePackage } from './packager.ts';
 import {
@@ -35,8 +41,17 @@ type UserRecord = typeof users.$inferSelect;
 // unintended leak. This is the load-bearing assertion of the security audit:
 // no email, no internal DB UUID (record.id / creatorId / users.id), no private
 // columns (promptText / systemPromptHash / withdrawalSignature / …).
+//
+// The wire version key is `protocolVersion` as of the 2026-08-19 vocabulary
+// settlement (spec §8.8.1 / Appendix J; produce-core 0.3.0). The prior-era
+// spelling `evidenceProtocolVersion` is deliberately ABSENT from this
+// allowlist: post-cutover emissions mint the settlement-era key only, and a
+// view carrying the old key would now be a defect. Dual-era acceptance is a
+// verifier-side rule (both eras valid on READ, forever) — not a licence for
+// this publisher to keep emitting the old key. Views minted before the
+// cutover keep theirs; nothing already exported is rewritten.
 const ALLOWED_KEYS = new Set([
-  'evidenceProtocolVersion',
+  'protocolVersion',
   'packageHash',
   'packageUrl',
   'captureMethod',
@@ -160,7 +175,59 @@ test('non-datHere package (contentProfile null) yields a coherent default sideca
   assert.equal(view.rekorEntryId, 'rekor-entry-123');
   // The Rekor entry body is carried so inclusion can be verified offline (#119 P1).
   assert.equal(view.rekorEntryBody, 'eyJhcGlWZXJzaW9uIjoiMC4wLjEifQ==');
-  assert.equal(view.evidenceProtocolVersion, '0.1.0');
+  assert.equal(view.protocolVersion, '0.1.0');
+});
+
+// The settlement cutover pin (civic-ai-tools#160 P5, spec §8.8.1 / Appendix J).
+// Two halves, because the flip has two failure modes: emitting nothing under
+// the new key, and continuing to emit the old one beside it. produce-core
+// 0.3.0 guards the second internally; this pins the reference publisher's own
+// wire form so a future dependency change that reintroduced the old key would
+// fail HERE, at the surface external verifiers read.
+test('wire key: new commitment views carry protocolVersion and NOT the prior-era key', () => {
+  const view = buildCommitmentView(makeRecord(), makeCreator(), makePkg());
+
+  assert.equal(view.protocolVersion, '0.1.0');
+  assert.equal(
+    'evidenceProtocolVersion' in view,
+    false,
+    'post-cutover emissions must not carry the prior-era wire key',
+  );
+});
+
+// Dual-era honesty at the READ surface (Appendix J rules J.4.1–J.4.3). The
+// commitment view is assembled at read time from the DB row plus the stored
+// blob — it is not itself a signed artifact — so a record published BEFORE the
+// cutover is served today with the settlement-era wire key, while the package
+// it points at keeps its prior-era identifiers frozen inside the signature.
+// Both halves are asserted together, because the pair is exactly what an
+// external verifier receives for an old record after this phase ships.
+// (The stored package's own hash/signature survival is pinned end-to-end in
+// packager.test.ts, over a package built by the real builder.)
+test('dual-era: a stored prior-era package serves a settlement-era commitment view, unmodified', () => {
+  const priorEraPkg = makePkg({
+    provenance: {
+      '@context': {
+        civic: 'https://civicaitools.org/ns/evidence/',
+      },
+      '@graph': [{ '@id': 'urn:civic-evidence:platform:civic-ai-tools' }],
+    },
+  } as unknown as Partial<EvidencePackage>);
+
+  const view = buildCommitmentView(makeRecord(), makeCreator(), priorEraPkg);
+
+  // New era on the wire...
+  assert.equal(view.protocolVersion, '0.1.0');
+  assert.equal('evidenceProtocolVersion' in view, false);
+
+  // ...prior era inside the package, passed through verbatim. The view carries
+  // the envelope fields the signature commits to; none of them is rewritten.
+  assert.equal(view.contentHash, priorEraPkg.contentHash);
+  assert.equal(view.type, priorEraPkg.type);
+  assert.equal(view.contentCanonicalization, priorEraPkg.contentCanonicalization);
+  const storedJson = JSON.stringify(priorEraPkg);
+  assert.ok(storedJson.includes('urn:civic-evidence:'));
+  assert.ok(storedJson.includes('https://civicaitools.org/ns/evidence/'));
 });
 
 test('rekorEntryBody is omitted (not null) when the column is empty', () => {
@@ -413,4 +480,49 @@ test('public records carry visibility "public" and stay unredacted', () => {
   assert.equal(view.visibility, 'public');
   assert.ok(view.packageUrl);
   assert.equal(view.subjectTitle, 'Sample analysis');
+});
+
+// --- Ruling D3: the dual-era commitment-view extension namespace ---
+//
+// spec §8.8.2 / Appendix J §J.3. The owner took this row as "dual-era,
+// accepted forever" rather than the default alias-and-deprecate, so the two
+// halves need separate coverage: what a NEW bundle mints, and what a bundle
+// exported BEFORE the cutover still resolves to. Measured scope in this repo:
+// exactly one writer (the bundle route) and — before this phase — zero
+// readers, which is why the preference rule now has a single named
+// implementation instead of an inline lookup at each future call site.
+
+test('D3 namespace: the settlement-era key is what new bundles mint', () => {
+  assert.equal(COMMITMENT_NAMESPACE_KEY, 'org.civicaitools.record');
+});
+
+test('D3 namespace: a PRIOR-ERA bundle still resolves (accepted forever)', () => {
+  assert.equal(COMMITMENT_NAMESPACE_KEY_PRIOR_ERA, 'org.civicaitools.evidence');
+  const priorEraNotebookMetadata = {
+    [COMMITMENT_NAMESPACE_KEY_PRIOR_ERA]: { packageHash: 'abc', protocolVersion: '0.1.0' },
+  };
+  const view = readCommitmentNamespace(priorEraNotebookMetadata);
+  assert.ok(view, 'a pre-cutover bundle must still resolve its commitment view');
+  assert.equal(view.packageHash, 'abc');
+});
+
+test('D3 namespace: a SETTLEMENT-ERA bundle resolves', () => {
+  const view = readCommitmentNamespace({
+    [COMMITMENT_NAMESPACE_KEY]: { packageHash: 'def' },
+  });
+  assert.equal(view?.packageHash, 'def');
+});
+
+test('D3 namespace: with both keys present the settlement-era one wins', () => {
+  const view = readCommitmentNamespace({
+    [COMMITMENT_NAMESPACE_KEY_PRIOR_ERA]: { packageHash: 'old' },
+    [COMMITMENT_NAMESPACE_KEY]: { packageHash: 'new' },
+  });
+  assert.equal(view?.packageHash, 'new');
+});
+
+test('D3 namespace: metadata carrying neither key resolves to null (not a bundle)', () => {
+  assert.equal(readCommitmentNamespace({ 'org.civicaitools.notebook': {} }), null);
+  assert.equal(readCommitmentNamespace(null), null);
+  assert.equal(readCommitmentNamespace(undefined), null);
 });

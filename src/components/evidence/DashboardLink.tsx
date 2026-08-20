@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 
 /**
- * Shows a "View in Dashboard" link if the logged-in user is the evidence creator.
+ * Shows a "View in Dashboard" link if the logged-in user is the record creator.
  * Compares the session's GitHub ID against the creator's GitHub ID.
  */
 export default function DashboardLink({ creatorGithubId }: { creatorGithubId: string }) {

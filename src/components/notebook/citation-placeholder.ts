@@ -6,7 +6,7 @@
 
 /**
  * The placeholder citation URL `ChatCitationPreview` shows before publish:
- * the instance's own `/evidence/` namespace with `(URL assigned at publish)`
+ * the instance's own `/records/` namespace with `(URL assigned at publish)`
  * where the slug would go. The origin arrives from
  * `getEvidenceSiteOrigin()` (server) via `EvidenceOriginProvider`. With no
  * origin declared (#258: no identity defaults) the placeholder is
@@ -15,5 +15,5 @@
  * origin.
  */
 export function buildCitationPlaceholderUrl(siteOrigin: string | null): string {
-  return `${siteOrigin ?? ''}/evidence/(URL assigned at publish)`;
+  return `${siteOrigin ?? ''}/records/(URL assigned at publish)`;
 }

@@ -18,7 +18,7 @@ import { createContext, useContext, type ReactNode } from 'react';
  * where the client boundary blocks it.
  *
  * WHY NOT `EvidenceOriginProvider`. The MCP endpoint is data-source ROUTING,
- * not instance identity (`EVIDENCE_*` set) and not chrome branding
+ * not instance identity (`PUBLISHER_*` set) and not chrome branding
  * (`SITE_BRAND_*`) — a third family, so its own provider, matching how those
  * two deliberately never share a context.
  *

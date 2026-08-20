@@ -49,7 +49,7 @@ interface EvidenceActionsProps {
    *  popover writes it into the clipboard, so a mount that forgot the prop
    *  would have published citations crediting another deployment. `null`
    *  means the instance has not named itself, and the citation says
-   *  "Evidence Package" with no publisher rather than inventing one. */
+   *  "Record Package" with no publisher rather than inventing one. */
   brandName: string | null;
 }
 
@@ -62,16 +62,20 @@ export function CitePopover({ title, creatorName, createdAt, slug, brandName, on
   const date = new Date(createdAt);
   const year = date.getFullYear();
   const dateStr = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const url = typeof window !== 'undefined' ? `${window.location.origin}/evidence/${slug}` : `/evidence/${slug}`;
+  // Settlement-era canonical address (civic-ai-tools#160 P5, spec Appendix J).
+  // Citations are copied into documents that outlive the app, so what they
+  // carry is the canonical form; `/evidence/<slug>` stays served forever, so
+  // every citation already in circulation keeps resolving.
+  const url = typeof window !== 'undefined' ? `${window.location.origin}/records/${slug}` : `/records/${slug}`;
 
   const citations = [
     {
       label: 'Plain text',
-      text: `${creatorName} (${year}). "${title}." ${brandName === null ? '' : `${brandName} `}Evidence Package. ${url}. Published: ${dateStr}.`,
+      text: `${creatorName} (${year}). "${title}." ${brandName === null ? '' : `${brandName} `}Record Package. ${url}. Published: ${dateStr}.`,
     },
     {
       label: 'For deliberative process reference',
-      text: `Evidence: ${title} [Verified: ${dateStr}] ${url}`,
+      text: `Record: ${title} [Verified: ${dateStr}] ${url}`,
     },
   ];
 
@@ -95,7 +99,7 @@ export function CitePopover({ title, creatorName, createdAt, slug, brandName, on
         margin: '16px', padding: '24px', boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Cite this evidence</h3>
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Cite this record</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-muted)' }}>&times;</button>
         </div>
         {citations.map((c, i) => (
@@ -173,7 +177,7 @@ export default function EvidenceActions({
   const captureMethodCaption = resolveCaptureMethodLabel(captureMethod);
 
   const handleCopyLink = async () => {
-    const url = `${window.location.origin}/evidence/${slug}`;
+    const url = `${window.location.origin}/records/${slug}`;
     await navigator.clipboard.writeText(url);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
@@ -182,7 +186,7 @@ export default function EvidenceActions({
   const handleDownload = () => {
     const a = document.createElement('a');
     a.href = packageUrl;
-    a.download = `evidence-${slug}.json`;
+    a.download = `record-${slug}.json`;
     a.click();
   };
 
@@ -194,7 +198,7 @@ export default function EvidenceActions({
   const runVerify = async () => {
     setVerifyState('loading');
     try {
-      const res = await fetch(`/api/evidence/${slug}/verify`);
+      const res = await fetch(`/api/records/${slug}/verify`);
       if (!res.ok) throw new Error(`${res.status}`);
       const data = await res.json();
       setVerifyResult(data);

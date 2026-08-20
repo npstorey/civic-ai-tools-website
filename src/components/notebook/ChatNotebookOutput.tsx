@@ -155,7 +155,7 @@ export default function ChatNotebookOutput({
             The system prompt is composed from the base civic-data skill
             guidance plus the web overlay (and any portal-specific overlays).
             The content hash below is captured at execution time and embedded
-            in the evidence package when this analysis is published.
+            in the record package when this analysis is published.
           </p>
           {view.composedSystemPromptHash && (
             <div style={{
@@ -174,7 +174,7 @@ export default function ChatNotebookOutput({
                 {view.composedSystemPromptHash.slice(0, 16)}…
               </code>
               <span style={{ fontStyle: 'italic' }}>
-                (truncated; full hash is what the evidence package will sign)
+                (truncated; full hash is what the record package will sign)
               </span>
             </div>
           )}

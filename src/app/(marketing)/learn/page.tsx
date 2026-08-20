@@ -36,10 +36,10 @@ export default function LearnPage() {
           cares about trustworthy civic information.
         </p>
         <p style={prose}>
-          Responses can be published as <Link href="/evidence">signed evidence packages</Link> &mdash;
+          Responses can be published as <Link href="/records">signed record packages</Link> &mdash;
           cryptographically signed, timestamped, and independently verifiable records of the question,
           tool calls, data sources, and model output. Browse the{' '}
-          <Link href="/evidence">evidence index</Link> to see published analyses.
+          <Link href="/records">record index</Link> to see published analyses.
         </p>
       </section>
 

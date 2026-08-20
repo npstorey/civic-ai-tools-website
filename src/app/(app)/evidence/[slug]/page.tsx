@@ -10,7 +10,7 @@ import { evidenceRecords, users } from '@/lib/db/schema';
 // available at request time; demo defaults when unset).
 import { getEvidenceSiteOrigin, getPublicationHost } from '@/lib/site-config';
 // Chrome branding (#217): the citation label's display name — chrome-only,
-// never part of the signed package (that is the EVIDENCE_* set above).
+// never part of the signed package (that is the PUBLISHER_* set above).
 import { getBrandName } from '@/lib/brand-config';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
@@ -122,13 +122,13 @@ async function getEvidenceData(slug: string) {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const data = await getEvidenceData(slug);
-  if (!data) return { title: 'Evidence Not Found' };
+  if (!data) return { title: 'Record Not Found' };
 
   // Sealed records (civic-ai-tools#71): title/summary are content-derived
   // and creator-only — emit generic metadata regardless of viewer so nothing
   // content-bearing lands in OG tags, caches, or link previews.
   if (fromDbValue(data.record.visibility) === 'sealed') {
-    return { title: 'Sealed evidence record', robots: { index: false } };
+    return { title: 'Sealed record', robots: { index: false } };
   }
 
   const { record, creator } = data;
@@ -136,21 +136,24 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // declared its origin — honest omission otherwise, never another
   // deployment's URL in metadata.
   const origin = getEvidenceSiteOrigin();
-  const url = origin ? `${origin}/evidence/${slug}` : null;
+  // Settlement-era canonical address (civic-ai-tools#160 P5, spec Appendix J).
+  // `/evidence/<slug>` stays served as a permanent alias, so links already in the
+  // wild resolve; what this page DECLARES canonical is the new segment.
+  const url = origin ? `${origin}/records/${slug}` : null;
   const description = record.summary.slice(0, 200);
 
   return {
-    title: `Evidence: ${record.title}`,
+    title: `Record: ${record.title}`,
     description,
     openGraph: {
-      title: `Evidence: ${record.title}`,
+      title: `Record: ${record.title}`,
       description,
       type: 'article',
       ...(url ? { url } : {}),
     },
     twitter: {
       card: 'summary',
-      title: `Evidence: ${record.title}`,
+      title: `Record: ${record.title}`,
       description,
     },
     // Highwire-Press citation tags — what Zotero and Google Scholar read.
@@ -253,8 +256,8 @@ export default async function EvidencePage({ params }: PageProps) {
   const host = hdrs.get('x-forwarded-host') ?? hdrs.get('host') ?? getPublicationHost();
   const proto = hdrs.get('x-forwarded-proto') ?? 'https';
   const commitmentUrl = host
-    ? `${proto}://${host}/api/evidence/${slug}/commitment`
-    : `/api/evidence/${slug}/commitment`;
+    ? `${proto}://${host}/api/records/${slug}/commitment`
+    : `/api/records/${slug}/commitment`;
 
   // ADR-0004: detail-page layout branches on contentProfile. When the value
   // is 'datHere', the page renders the A-G envelope as its primary structure
@@ -290,7 +293,7 @@ export default async function EvidencePage({ params }: PageProps) {
     title: record.title,
     summary: record.summary,
     creatorName: creator?.displayName || 'Unknown',
-    url: jsonLdOrigin ? `${jsonLdOrigin}/evidence/${slug}` : null,
+    url: jsonLdOrigin ? `${jsonLdOrigin}/records/${slug}` : null,
   });
 
   return (
@@ -376,7 +379,7 @@ export default async function EvidencePage({ params }: PageProps) {
             borderRadius: '6px',
           }}>
             <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--error)', marginBottom: '6px' }}>
-              This evidence was withdrawn by the author on{' '}
+              This record was withdrawn by the author on{' '}
               {fmtDate(lifecycle.withdrawnAt)}
             </div>
             {lifecycle.withdrawnReason && (
@@ -458,7 +461,7 @@ export default async function EvidencePage({ params }: PageProps) {
             </a>
             <span>{'·'}</span>
             <a
-              href={`/api/evidence/${slug}/bundle`}
+              href={`/api/records/${slug}/bundle`}
               style={{ color: 'var(--accent)' }}
             >
               Download notebook (.ipynb)
@@ -601,7 +604,7 @@ export default async function EvidencePage({ params }: PageProps) {
               <Section title="E · Answer notebook">
                 <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--text-secondary)' }}>
                   Re-executing this notebook against the documented runtime + stable upstream data reproduces section F (OES §9.1.3).{' '}
-                  <a href={`/api/evidence/${slug}/bundle`} style={{ color: 'var(--accent)' }}>
+                  <a href={`/api/records/${slug}/bundle`} style={{ color: 'var(--accent)' }}>
                     Download notebook (.ipynb)
                   </a>
                 </div>
@@ -783,7 +786,7 @@ export default async function EvidencePage({ params }: PageProps) {
                 fontSize: '13px', color: 'var(--text-secondary)',
               }}>
                 <p style={{ margin: '0 0 6px' }}>
-                  This evidence package contains artifacts from other extensions:
+                  This record package contains artifacts from other extensions:
                 </p>
                 <ul style={{ margin: 0, paddingLeft: '20px', fontFamily: 'monospace', fontSize: '12px' }}>
                   {unknown.map(k => <li key={k}>{k}</li>)}

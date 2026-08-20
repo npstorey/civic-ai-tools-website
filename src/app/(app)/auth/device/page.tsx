@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: pageTitle('Authorize device'),
-  description: 'Authorize a CLI or external client to publish evidence on your behalf.',
+  description: 'Authorize a CLI or external client to publish records on your behalf.',
 };
 
 interface PageProps {
@@ -41,7 +41,7 @@ export default async function DeviceAuthPage({ searchParams }: PageProps) {
           lineHeight: 1.5,
         }}
       >
-        A CLI or external client is requesting permission to publish evidence on
+        A CLI or external client is requesting permission to publish records on
         your behalf. Review the details below and approve only if you initiated
         this request.
       </p>

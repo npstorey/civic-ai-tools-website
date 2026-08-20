@@ -27,13 +27,17 @@
  *      by EITHER accepted name for the publisher-identity set: since the
  *      2026-08-19 vocabulary settlement each of those has a canonical
  *      `PUBLISHER_*` spelling and a prior-era `EVIDENCE_*` one, and the app
- *      reads both (Appendix J; civic-ai-tools#160). The compose file names the
- *      prior-era spellings today; a NOTE lists them, because that list is
- *      exactly the work the flip phase has to do here.
+ *      reads both (Appendix J; civic-ai-tools#160). Since the cutover the
+ *      compose file names the canonical spellings, and lists the prior-era
+ *      twin beside each BARE pass-through so an env file written before the
+ *      settlement still delivers its values (a bare entry sets the variable
+ *      only when the caller has it, so the pair is safe). A NOTE lists every
+ *      prior-era name found: with a canonical twin present it is that
+ *      deliberate pair; alone, it is a variable still to be renamed.
  *   2. FORM — an `environment` entry written `${NAME:-}` is rejected. That
  *      form does NOT pass a variable through: it always sets the variable, to
  *      the empty string when the caller's environment has none. Empty is not
- *      absent. `EVIDENCE_TRUST_REGISTRY_LEGACY_URL` is the proof — unset means
+ *      absent. `PUBLISHER_TRUST_REGISTRY_LEGACY_URL` is the proof — unset means
  *      "emit the legacy registry URL in the signed sidecar", empty means "omit
  *      it" (src/lib/site-config.ts) — and `SIGN_IN_ALLOWLIST`, `ROADMAP_RAW_URL`
  *      and the host-topology trio all carry meaning in their absence too. Bare
@@ -340,8 +344,10 @@ export function renderComposeReport(result, service = APP_SERVICE) {
     lines.push(
       `  NOTE: ${result.priorEraNamesInUse.length} variable(s) passed through under a prior-era`,
     );
-    lines.push('        name. Both spellings reach the app, so this is not a failure — it is');
-    lines.push('        the inventory of what the vocabulary flip has to rename here:');
+    lines.push('        name. Both spellings reach the app, so this is not a failure. Where');
+    lines.push('        the canonical twin is listed beside it, the pair is the deliberate');
+    lines.push('        dual pass-through that keeps a pre-settlement env file working;');
+    lines.push('        where it stands alone, the entry is still to be renamed:');
     for (const e of result.priorEraNamesInUse) {
       lines.push(`          - ${e.priorEraName} → ${e.name}`);
     }

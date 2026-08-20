@@ -5,7 +5,10 @@ import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 import { loadCarriedLifecycleAttestations } from '@/lib/evidence/lifecycle';
-import { buildCommitmentView } from '@/lib/evidence/commitment';
+import {
+  buildCommitmentView,
+  COMMITMENT_NAMESPACE_KEY,
+} from '@/lib/evidence/commitment';
 import { canReadRecord } from '@/lib/evidence/sealed-access';
 // Instance-identity config (ADR-0020): the cell-0 reader affordance carries
 // this instance's detail URL, host label, and trust-registry pointer — the
@@ -24,9 +27,15 @@ import {
  *
  * Returns a datHere-content-profile package as a notebook-embedded
  * serialization per OES §9.2.2 — a single .ipynb file whose root
- * metadata carries the commitment view under the `org.civicaitools.evidence`
+ * metadata carries the commitment view under the commitment-view extension
  * namespace, with a cell-0 metadata table prepended per the §9.2.4
  * reader-affordance convention.
+ *
+ * The namespace is DUAL-ERA (spec §8.8.2, settlement ruling D3): new bundles
+ * mint `org.civicaitools.record`; bundles exported before the cutover carry
+ * `org.civicaitools.evidence` and stay valid forever — a conformant verifier
+ * MUST read either, preferring the settlement-era key when both are present.
+ * Nothing already downloaded is rewritten.
  *
  * Authentication: none. The bundle endpoint serves the same content the
  * canonical package URL already serves publicly, just reformatted for
@@ -44,7 +53,6 @@ import {
  */
 
 const NOTEBOOK_EXTENSION_KEY = 'org.civicaitools.notebook';
-const EVIDENCE_NAMESPACE_KEY = 'org.civicaitools.evidence';
 
 type EvidenceRecord = typeof evidenceRecords.$inferSelect;
 type UserRecord = typeof users.$inferSelect;
@@ -57,7 +65,7 @@ type UserRecord = typeof users.$inferSelect;
 /**
  * Build a cell-0 markdown metadata table per OES §9.2.4 (SHOULD-level
  * reader affordance). Verification does NOT depend on this cell — the
- * authoritative metadata is the `org.civicaitools.evidence` namespace at
+ * authoritative metadata is the commitment-view namespace at
  * the notebook's root. The cell exists so a reader opening the .ipynb in
  * Jupyter / Colab / VS Code / GitHub's viewer sees the signer + package
  * hash + capture-method context immediately.
@@ -76,7 +84,9 @@ function buildCellZero(
     ? `[${creator.displayName}](${creator.githubProfileUrl})`
     : creator?.displayName ?? 'Unknown';
   const publishedDate = record.createdAt.toISOString().split('T')[0];
-  const detailUrl = `${origin}/evidence/${record.slug}`;
+  // Settlement-era segment (spec Appendix J); `/evidence/<slug>` stays served
+  // as a permanent alias for every bundle already exported with it.
+  const detailUrl = `${origin}/records/${record.slug}`;
   // Non-null with an origin declared (derives from it); `?? origin` only
   // narrows the type for the template below.
   const host = getPublicationHost() ?? origin;
@@ -93,7 +103,7 @@ function buildCellZero(
           : 'Unknown';
 
   const lines: string[] = [
-    '## Evidence package',
+    '## Record package',
     '',
     '| Field | Value |',
     '| --- | --- |',
@@ -104,7 +114,7 @@ function buildCellZero(
     `| **Published** | ${publishedDate} via [${host}](${detailUrl}) |`,
     `| **Trust registry** | [${trustHost}](${trustRegistryUrl}) |`,
     '',
-    "*Re-execute the cells below to reproduce the analysis. The cryptographic envelope is in this notebook's root `metadata.org.civicaitools.evidence` namespace — that's what binds the signature to this content. This cell is a reader affordance only.*",
+        `*Re-execute the cells below to reproduce the analysis. The cryptographic envelope is in this notebook's root \`metadata.${COMMITMENT_NAMESPACE_KEY}\` namespace — that's what binds the signature to this content. This cell is a reader affordance only.*`,
   ];
 
   return {
@@ -129,7 +139,7 @@ export async function GET(
     return NextResponse.json(
       {
         error:
-          'This instance has not declared its identity: EVIDENCE_SITE_ORIGIN ' +
+          'This instance has not declared its identity: PUBLISHER_SITE_ORIGIN ' +
           'is not set in this environment. The bundle export embeds the ' +
           "instance's detail URL, host label, and trust-registry pointer, so " +
           'it is refused rather than emitted under another deployment\'s ' +
@@ -147,7 +157,7 @@ export async function GET(
     .limit(1);
   if (records.length === 0) {
     return NextResponse.json(
-      { error: 'Evidence not found' },
+      { error: 'Record not found' },
       { status: 404 },
     );
   }
@@ -157,7 +167,7 @@ export async function GET(
   // creator-only (civic-ai-tools#71) — the creator exports it to distribute
   // to chosen recipients; it is not a public surface until publication.
   if (!(await canReadRecord(request, record))) {
-    return NextResponse.json({ error: 'Evidence not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Record not found' }, { status: 404 });
   }
 
   // Bundle export is datHere-content-profile specific. Other content
@@ -217,7 +227,7 @@ export async function GET(
     ? await loadCarriedLifecycleAttestations(record.basePackageHash)
     : [];
   const metadata = (notebook.metadata as Record<string, unknown>) ?? {};
-  metadata[EVIDENCE_NAMESPACE_KEY] = buildCommitmentView(record, creator, pkg, lifecycleAttestations);
+  metadata[COMMITMENT_NAMESPACE_KEY] = buildCommitmentView(record, creator, pkg, lifecycleAttestations);
   notebook.metadata = metadata;
 
   // Prepend cell-0 reader-affordance table (OES §9.2.4)

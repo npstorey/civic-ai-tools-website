@@ -35,8 +35,8 @@ import {
 } from './attestation.ts';
 
 // Publication host label on `attestation/publishes/v1` nodes — resolved from
-// instance config (ADR-0020; `EVIDENCE_PUBLICATION_HOST` / derived from
-// `EVIDENCE_SITE_ORIGIN`; REQUIRED identity as of #258, no coded default).
+// instance config (ADR-0020; `PUBLISHER_PUBLICATION_HOST` / derived from
+// `PUBLISHER_SITE_ORIGIN`; REQUIRED identity as of #258, no coded default).
 // Read at call time via `requirePublicationHost()` below — callers reach it
 // only behind `evaluateSealCommitGate`; the throw is the last-resort guard.
 

@@ -86,7 +86,7 @@ export default function PublishEvidenceDialog({
   const [errorMessage, setErrorMessage] = useState('');
   const [urlCopied, setUrlCopied] = useState(false);
   // Unsigned-tier gate-off (ADR-0020, S3a P3): whether this instance holds a
-  // signing key, fetched presence-only from /api/evidence/signing-status.
+  // signing key, fetched presence-only from /api/records/signing-status.
   // null = not yet known (treated as available; the SERVER gate is the
   // enforcement — this state only drives the explanatory affordance).
   const [signingConfigured, setSigningConfigured] = useState<boolean | null>(null);
@@ -104,7 +104,7 @@ export default function PublishEvidenceDialog({
   useEffect(() => {
     if (!isOpen || signingStatusRequested.current) return;
     signingStatusRequested.current = true;
-    fetch('/api/evidence/signing-status')
+    fetch('/api/records/signing-status')
       .then(async (res) => {
         if (!res.ok) throw new Error(`${res.status}`);
         const data = await res.json();
@@ -126,7 +126,7 @@ export default function PublishEvidenceDialog({
     summaryRequested.current = true;
     setSummaryLoading(true);
 
-    fetch('/api/evidence/generate-summary', {
+    fetch('/api/records/generate-summary', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -184,7 +184,7 @@ export default function PublishEvidenceDialog({
       // retains its existing shape (summary stays DB-only).
       const contentProfile = promptVisibility === 'full_text' ? 'datHere' : 'default';
 
-      const response = await fetch('/api/evidence', {
+      const response = await fetch('/api/records', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -216,7 +216,9 @@ export default function PublishEvidenceDialog({
       const data = await response.json();
       // `url` is absent for sealed-visibility responses; the slug-derived
       // page is creator-only until the record is published.
-      setResultUrl(data.url ?? `/evidence/${data.slug}`);
+      // The route emits the settlement-era `/records/<slug>` form (spec
+      // Appendix J); this fallback only fires if the response omitted `url`.
+      setResultUrl(data.url ?? `/records/${data.slug}`);
       // Still normalized on read (ADR-0016 §A): this instance's API now echoes
       // the canonical value, but the dialog must not assume the server it is
       // talking to has flipped — a fork mid-migration can still answer with a
@@ -241,7 +243,7 @@ export default function PublishEvidenceDialog({
 
   // #86 (published path) — the highest-frequency post-publish intent is "let me
   // see what I just published", so it is the primary affordance: client-side
-  // navigation to the evidence page (not an auto-redirect — the user chooses).
+  // navigation to the record page (not an auto-redirect — the user chooses).
   const handleView = () => {
     router.push(resultUrl);
   };
@@ -299,7 +301,7 @@ export default function PublishEvidenceDialog({
           justifyContent: 'space-between',
         }}>
           <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>
-            Publish as Evidence
+            Publish as Record
           </h2>
           <button
             onClick={handleClose}
@@ -485,7 +487,7 @@ export default function PublishEvidenceDialog({
                   <strong style={{ color: 'var(--text-primary)' }}>
                     This instance is running unsigned.
                   </strong>{' '}
-                  Signing is not configured, so evidence cannot be sealed or
+                  Signing is not configured, so records cannot be sealed or
                   published — an unsigned package can reach neither the sealed
                   nor the public state. The analysis itself still works; an
                   operator enables signing via the instance setup guide.
@@ -528,7 +530,7 @@ export default function PublishEvidenceDialog({
                 margin: '0 auto 12px',
               }} />
               <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0 }}>
-                Packaging and storing evidence...
+                Packaging and storing the record...
               </p>
               <style jsx>{`
                 @keyframes spin { to { transform: rotate(360deg); } }
@@ -561,7 +563,7 @@ export default function PublishEvidenceDialog({
                    and a shared link is meaningless to anyone else (#86). */
                 <>
                   <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>
-                    Your evidence is sealed — signed and registered, content private to you.
+                    Your record is sealed — signed and registered, content private to you.
                     Only you can open this page; publish it anytime from your dashboard:
                   </p>
 
@@ -641,7 +643,7 @@ export default function PublishEvidenceDialog({
                    chat to continue. */
                 <>
                   <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 16px' }}>
-                    Your evidence page is live.
+                    Your record page is live.
                   </p>
 
                   <button
@@ -659,7 +661,7 @@ export default function PublishEvidenceDialog({
                       marginBottom: '8px',
                     }}
                   >
-                    View your evidence page →
+                    View your record page →
                   </button>
 
                   <button

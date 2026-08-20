@@ -131,7 +131,7 @@ function serveCommitment(
   identifier: string,
 ): { status: number; error?: string; body?: Record<string, unknown> } {
   const record = resolveFromStore(store, identifier);
-  if (!record) return { status: 404, error: 'Evidence not found' };
+  if (!record) return { status: 404, error: 'Record not found' };
   const accessError = commitmentAccessError(record);
   if (accessError) return { status: 404, error: accessError };
   return { status: 200, body: buildCommitmentView(record, creator, null) };
@@ -181,11 +181,11 @@ test('commitmentAccessError: public, published record is served', () => {
 test('commitmentAccessError: unpublished (no base hash) and non-public are 404', () => {
   assert.equal(
     commitmentAccessError(makeRecord({ basePackageHash: null })),
-    'No published evidence package for this identifier',
+    'No published record package for this identifier',
   );
   assert.equal(
     commitmentAccessError(makeRecord({ isPublic: false })),
-    'Evidence not found',
+    'Record not found',
   );
 });
 
@@ -232,7 +232,7 @@ test('a non-public package stays unreachable by hash AND by slug (identical auth
 
   assert.equal(byHash.status, 404);
   assert.equal(bySlug.status, 404);
-  assert.equal(byHash.error, 'Evidence not found');
+  assert.equal(byHash.error, 'Record not found');
   // Addressing by hash reveals no more than addressing by slug: same status,
   // same body, no proof fields leaked.
   assert.deepEqual(byHash, bySlug);

@@ -4,7 +4,7 @@ import { createContext, useContext, type ReactNode } from 'react';
 import type { InstanceAttribution } from '@/lib/site-config';
 
 /**
- * Carries the server-resolved instance attribution identity (`EVIDENCE_*`
+ * Carries the server-resolved instance attribution identity (`PUBLISHER_*`
  * set, ADR-0020 — src/lib/site-config.ts `getInstanceAttribution()`) to
  * client components that props cannot reach (#227, #258 A2) — the exact
  * shape of `BrandProvider` and `HostLinksProvider`, and mounted beside them
@@ -18,9 +18,9 @@ import type { InstanceAttribution } from '@/lib/site-config';
  * the same reasoning documented in `BrandProvider`. The rule: props where
  * the server can reach, context only where the client boundary blocks it.
  *
- * WHY NOT `BrandProvider`. The origin is evidence instance identity
- * (`EVIDENCE_*` set), deliberately separate from the `SITE_BRAND_*` chrome
- * seam — brand-config.ts's "CHROME, NOT EVIDENCE" contract says the two
+ * WHY NOT `BrandProvider`. The origin is publisher instance identity
+ * (`PUBLISHER_*` set), deliberately separate from the `SITE_BRAND_*` chrome
+ * seam — brand-config.ts's "CHROME, NOT PUBLISHER IDENTITY" contract says the two
  * families never read each other, so they don't share a context either.
  *
  * The default value is honest absence (all null): a component rendered
