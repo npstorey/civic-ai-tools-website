@@ -1,7 +1,7 @@
-# Evidence signing key rotation
+# Record signing key rotation
 
 This runbook describes how to rotate the Ed25519 platform signing key that
-anchors the cryptographic evidence chain. (First-time key + registry setup
+anchors the cryptographic chain over published records. (First-time key + registry setup
 for a new instance is covered in [`docs/instance-setup.md`](instance-setup.md);
 this runbook picks up once an active key exists.) Follow it for both preventive
 rotations (scheduled) and compromise rotations (incident response). The two
@@ -10,11 +10,18 @@ paths differ only in the final registry status you flip the previous key to
 
 ## Background
 
-Evidence packages are signed with an Ed25519 key referenced by a stable
+Record packages are signed with an Ed25519 key referenced by a stable
 identifier (`kid`) embedded in both the package's canonical hash and its
 signature blob. The platform publishes the set of authorized keys and their
-lifecycle status at
-[`/.well-known/evidence-public-keys.json`](../public/.well-known/evidence-public-keys.json).
+lifecycle status as a trust registry, served at **two paths with
+byte-identical content** (ADR-0012 §3):
+
+| Path | Role |
+| --- | --- |
+| `/.well-known/typed-publisher.json` | **Canonical.** What the proof sidecar's `trustRegistryUrl` points at, and what new external clients should fetch. Served by `src/app/.well-known/typed-publisher.json/route.ts`, which returns the legacy file's exact bytes. |
+| `/.well-known/evidence-public-keys.json` | Legacy, served indefinitely for clients that only know the older path. This is the **one file on disk** and the one you edit: [`public/.well-known/evidence-public-keys.json`](../public/.well-known/evidence-public-keys.json). Its name is **exempt-frozen** under the 2026-08-19 vocabulary settlement (ruling D2, Appendix J of the Typed Standards specification) — the trust-registry rename already happened at ADR-0012, and the legacy leg is recorded rather than renamed again. |
+
+Editing the one file therefore updates both paths at once.
 Verifiers fetch the registry, match on `(kid, publicKey)`, and apply the
 status semantics encoded in that file.
 
@@ -26,7 +33,7 @@ Per-key fields in the registry:
 
 | Field           | Meaning                                                                          |
 | --------------- | -------------------------------------------------------------------------------- |
-| `kid`           | Stable identifier, e.g. `platform:evidence-2026-04`.                             |
+| `kid`           | Stable identifier, e.g. `platform:evidence-2026-04`. The reference deployment's live kid is **exempt-frozen** (Appendix J): it is embedded in every envelope that key has signed, so it is never rewritten. The next rotation names its successor under the settlement vocabulary — no rotation is forced by the rename. |
 | `publicKey`     | Base64 DER-encoded Ed25519 public key.                                           |
 | `status`        | `active` \| `deprecated` \| `revoked`.                                           |
 | `activatedAt`   | ISO timestamp when the key started signing packages.                             |
@@ -39,25 +46,59 @@ need a separate scope field.
 
 ## Environment variables
 
+**Names.** All four variables below took the `EVIDENCE_` prefix before the
+2026-08-19 vocabulary settlement (Appendix J; [civic-ai-tools#160](https://github.com/npstorey/civic-ai-tools/issues/160)).
+The prior-era spelling of each is **still read** as a fallback, so an existing
+deployment keeps working with no edit; it logs a one-time deprecation warning
+per variable and is removed only at a future major version. Set the
+`PUBLISHER_*` names on a new instance, and rename an existing one when
+convenient. Do not set both spellings of the same variable — the canonical one
+wins whenever it is **defined**, including when it is defined empty.
+
 The running website reads two variables to sign packages:
 
-- `EVIDENCE_SIGNING_KEY` — base64 DER PKCS8 private key. **Sensitive.**
-- `EVIDENCE_KEY_ID` — stable kid string. Non-sensitive.
+- `PUBLISHER_SIGNING_KEY` (prior era: `EVIDENCE_SIGNING_KEY`) — base64 DER
+  PKCS8 private key. **Sensitive.**
+- `PUBLISHER_KEY_ID` (prior era: `EVIDENCE_KEY_ID`) — stable kid string.
+  Non-sensitive. Both are required to sign: a key with no declared kid is a
+  refusal, not a default.
 
-A third variable, `EVIDENCE_PUBLIC_KEY`, holds the public key counterpart and
-is not directly read by the signing code — it exists so the registry file
-can be updated from a shell without re-deriving the public key from the
-private one.
+A third variable, `PUBLISHER_PUBLIC_KEY` (prior era: `EVIDENCE_PUBLIC_KEY`),
+holds the public key counterpart and is not directly read by the signing code
+— it exists so the registry file can be updated from a shell without
+re-deriving the public key from the private one. It is written by
+`scripts/generate-signing-key.ts`.
 
-A fourth variable, `EVIDENCE_TRUST_REGISTRY_URL`, is optional and overrides
-the default registry URL (`${NEXTAUTH_URL}/.well-known/evidence-public-keys.json`).
-Useful for previews or local dev when you want the verifier to hit a
-different registry.
+A fourth variable, **`PUBLISHER_TRUST_REGISTRY_URL`** (prior era:
+`EVIDENCE_TRUST_REGISTRY_URL`), is optional. It is the **verify-side consume
+override**: it changes which registry *this instance's own verify route*
+fetches when it checks a package's key trust. Useful for previews or local dev
+when you want verification to hit a different registry.
+
+Its default resolution, in order, is `NEXTAUTH_URL`, then
+`PUBLISHER_SITE_ORIGIN`, then the reference origin — with
+`/.well-known/evidence-public-keys.json` appended (the legacy path; both paths
+serve the same bytes). In practice this HTTP fetch is the **last resort**: the
+verify path tries the bundled and on-disk registries first, so an instance
+serving its own registry rarely reaches it.
+
+It is deliberately **distinct from the two emit-side variables**, which control
+what the signed proof sidecar tells a *third-party* verifier to fetch:
+
+| Variable | Direction | Effect |
+| --- | --- | --- |
+| `PUBLISHER_TRUST_REGISTRY_URL` | consume | Which registry this instance fetches when verifying. Never appears in signed output. |
+| `PUBLISHER_TRUST_REGISTRY_CANONICAL_URL` | emit | The sidecar's `trustRegistryUrl`. Defaults to `<origin>/.well-known/typed-publisher.json`. |
+| `PUBLISHER_TRUST_REGISTRY_LEGACY_URL` | emit | The sidecar's `trustRegistryUrlLegacy`. Defaults to `<origin>/.well-known/evidence-public-keys.json`; set it to the **empty string** to omit the field entirely. Empty is not absent here — an instance with no pre-ADR-0012 client base has no legacy path to honor. |
+
+Setting the consume override when you meant an emit variable is the mistake
+this table exists to prevent: it changes nothing a third party sees.
+The full tier-by-tier reference is [`docs/deploy.md`](deploy.md).
 
 ## Preventive rotation
 
 Run when the previous key has been in service long enough to warrant a
-scheduled swap. No incident. Pre-rotation evidence packages remain
+scheduled swap. No incident. Pre-rotation record packages remain
 verifiable after the rotation.
 
 1. **Generate a new keypair outside Claude Code.** In a separate terminal:
@@ -93,25 +134,28 @@ verifiable after the rotation.
    it.
 
 5. **Update Vercel env vars.** In the Vercel dashboard (not the CLI from a
-   Claude Code session), set `EVIDENCE_SIGNING_KEY` and
-   `EVIDENCE_KEY_ID` to the new values on both production and preview.
+   Claude Code session), set `PUBLISHER_SIGNING_KEY` and
+   `PUBLISHER_KEY_ID` to the new values on both production and preview.
+   (If this instance still carries the prior-era `EVIDENCE_*` names, rotating
+   is the natural moment to rename them — set the `PUBLISHER_*` pair and
+   delete the old one rather than leaving both.)
    Trigger a redeploy.
 
-6. **Smoke test.** Publish a fresh evidence package, verify it via the
-   `/evidence/[slug]` verify action (key trust should read "Signed with
+6. **Smoke test.** Publish a fresh record package, verify it via the
+   `/records/[slug]` verify action (key trust should read "Signed with
    active key"), then verify a known pre-rotation package (key trust
    should read "Signed with deprecated key before rotation").
 
 ## Compromise rotation
 
-Run when the previous `EVIDENCE_SIGNING_KEY` has been exposed and must be
+Run when the previous `PUBLISHER_SIGNING_KEY` has been exposed and must be
 treated as untrusted. The steps are the same as preventive rotation with
 two differences: the previous key becomes `revoked` rather than
 `deprecated`, and pre-exposure packages are **not** preserved as verifiable
 (because we cannot distinguish legitimate pre-exposure signatures from
 forged ones).
 
-1. **Rotate `EVIDENCE_SIGNING_KEY` in Vercel first.** Do not wait for the
+1. **Rotate `PUBLISHER_SIGNING_KEY` in Vercel first.** Do not wait for the
    registry PR. Exposure time is the variable that matters most; every
    minute the compromised key stays active is a minute an attacker could
    mint a forged signature.
@@ -130,7 +174,7 @@ forged ones).
    while surfacing the revoked state to readers. Re-publish any that can
    be, now signed under the new key.
 
-5. **Smoke test.** Publish a fresh evidence package under the new key,
+5. **Smoke test.** Publish a fresh record package under the new key,
    verify it, then re-verify a package signed under the revoked key — its
    key trust row should read "Key revoked — do not trust" and its
    `verified` flag should be `false`.

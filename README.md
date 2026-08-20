@@ -1,16 +1,16 @@
 # Civic AI Tools Website
 
-The reference implementation of an evidence-publishing platform for AI-assisted
+The reference implementation of a record-publishing platform for AI-assisted
 analysis of civic open data. Ask a plain-language question about public data;
 the app answers it against live sources through
 [Model Context Protocol (MCP)](https://modelcontextprotocol.io) servers, can
 re-run the analysis as an executed notebook, and packages the result as a
-**signed evidence package** anyone can verify independently.
+**signed record package** anyone can verify independently.
 
 Side-by-side comparison of a model answering with and without live data access
-is one of the surfaces this app offers — the thing it publishes is the evidence.
+is one of the surfaces this app offers — the thing it publishes is the record.
 
-> **Integrating?** Start at [`docs/api/evidence-publish.md`](docs/api/evidence-publish.md) — the evidence-publish contract, including the "Repositories & layers" orientation and the integration-contract section.
+> **Integrating?** Start at [`docs/api/records-publish.md`](docs/api/records-publish.md) — the record-publish contract, including the "Repositories & layers" orientation and the integration-contract section.
 
 > **Running your own instance?** [`docs/deploy.md`](docs/deploy.md) is the guide, from `git clone` to a configured instance.
 
@@ -23,11 +23,11 @@ is one of the surfaces this app offers — the thing it publishes is the evidenc
 | Home | Ask a question; see the answer with and without live data access, side by side. |
 | Explore | The same query as an animated BPMN process diagram — live, or replayed from recorded traces. |
 | Directory | A browsable inventory of MCP servers for civic data and the open-data portals they cover. |
-| Evidence | The published registry, and a detail page per analysis carrying its signature, timestamp, and provenance. |
+| Records | The published registry, and a detail page per analysis carrying its signature, timestamp, and provenance. |
 | Learn / About / Project / Roadmap | Educational and project prose. |
-| Dashboard | A signed-in publisher's own evidence records and API tokens. |
+| Dashboard | A signed-in publisher's own records and API tokens. |
 
-An analysis becomes evidence in two states: **`sealed`** — signed, timestamped,
+An analysis becomes a published record in two states: **`sealed`** — signed, timestamped,
 transparency-logged, unlisted — and **`public`**, which adds the publication
 attestation and served content. An instance with no signing key configured runs
 in the **unsigned tier**: analyses run and packages can be produced and
@@ -65,7 +65,7 @@ OPENROUTER_API_KEY=<your model API key>
 ```
 
 Any OpenAI-compatible chat-completions endpoint works via `MODEL_API_BASE_URL`;
-the key stays in `OPENROUTER_API_KEY` either way. Publishing evidence
+the key stays in `OPENROUTER_API_KEY` either way. Publishing records
 additionally needs a database, object storage, sign-in, and a signing key —
 don't guess that set. The executable authority is the preflight, which checks
 the **presence** (never the value) of every variable the app reads and tiers
@@ -117,10 +117,16 @@ stack to a network needs to have read.
 External clients — CLIs, CI jobs, publish skills — talk to the same publish
 endpoint the website's own UI uses. The contract, the OAuth 2.0 device flow for
 bearer tokens, the request schema, and a worked example are in
-[`docs/api/evidence-publish.md`](docs/api/evidence-publish.md); the read-only
+[`docs/api/records-publish.md`](docs/api/records-publish.md); the read-only
 proof sidecar that lets a third party verify a package without trusting this
 host is in
-[`docs/api/evidence-commitment.md`](docs/api/evidence-commitment.md).
+[`docs/api/records-commitment.md`](docs/api/records-commitment.md).
+
+The canonical route segments are `/api/records/*` and `/records/*` as of the
+2026-08-19 vocabulary settlement; the prior-era `/api/evidence/*` and
+`/evidence/*` segments are **permanent aliases**, so an integration written
+against them keeps working with no change. Both API documents were renamed in
+the same pass and their old filenames remain as permanent stubs.
 
 ## Documentation
 
@@ -129,8 +135,8 @@ host is in
 | [`docs/deploy.md`](docs/deploy.md) | Self-hosted deployment end to end: bring-up, driver seams, environment reference, sign-in, migrations, storage, scheduler, managed-platform notes. |
 | [`docs/instance-setup.md`](docs/instance-setup.md) | Instance identity and signing — keygen, trust registry, identity variables. The go-to-production step. |
 | [`docs/key-rotation.md`](docs/key-rotation.md) | Signing-key rotation runbook, preventive and incident-response. |
-| [`docs/api/evidence-publish.md`](docs/api/evidence-publish.md) | The publish API contract and integrator entry point. |
-| [`docs/api/evidence-commitment.md`](docs/api/evidence-commitment.md) | The public proof sidecar served for each published package. |
+| [`docs/api/records-publish.md`](docs/api/records-publish.md) | The publish API contract and integrator entry point. |
+| [`docs/api/records-commitment.md`](docs/api/records-commitment.md) | The public proof sidecar served for each published package. |
 | [`docs/design-principles.md`](docs/design-principles.md) | UX and data-model principles for AI-output and provenance surfaces. |
 | [`civic-ai-tools/docs/architecture/`](https://github.com/npstorey/civic-ai-tools/tree/main/docs/architecture) | Canonical architecture in the hub repo: ADRs, spec drafts, and the open-questions registry. |
 

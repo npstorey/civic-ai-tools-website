@@ -126,10 +126,10 @@ reaches it too.
 What you will see, and why it is correct:
 
 - A **"Running unsigned" banner** on every page: *"Running unsigned — no
-  signing key is configured, so evidence seal and publish are disabled
+  signing key is configured, so record seal and publish are disabled
   and any output produced here carries no cryptographic commitment.
   Signing is the go-to-production step; see the instance setup guide."*
-- Evidence **seal and publish actions are gated off**, server-side and
+- **Seal and publish actions are gated off**, server-side and
   in the UI. An unsigned package can reach neither the `sealed` nor the
   `public` state ([ADR-0020]) — the unsigned tier is confined to local
   produce-and-inspect. This is the intended first-run state, not a
@@ -144,7 +144,7 @@ Verify the bring-up:
 
 ```bash
 # Unsigned tier, reported truthfully:
-curl -s http://127.0.0.1:3000/api/evidence/signing-status
+curl -s http://127.0.0.1:3000/api/records/signing-status
 # → {"signingConfigured":false}
 
 # Migrations applied — the visibility enum lists four labels
@@ -446,10 +446,10 @@ profile never reads:
 `VERCEL_*` sandbox-auth variables). Exit code `0` means every required
 variable for the profile is present; `1` otherwise. Run with the
 stand-ins alone, it exits `1` naming exactly the thirteen operator-supplied
-variables — `OPENROUTER_API_KEY`, `SOCRATA_MCP_URL`, `EVIDENCE_SIGNING_KEY`,
-`EVIDENCE_KEY_ID`, the instance-identity set (`EVIDENCE_SITE_ORIGIN`,
-`EVIDENCE_SIGNER_BINDING_TIER`, `EVIDENCE_SIGNER_IDENTIFIER`,
-`EVIDENCE_SIGNER_DISPLAY_NAME`, `EVIDENCE_PLATFORM_AGENT_TITLE` — see
+variables — `OPENROUTER_API_KEY`, `SOCRATA_MCP_URL`, `PUBLISHER_SIGNING_KEY`,
+`PUBLISHER_KEY_ID`, the instance-identity set (`PUBLISHER_SITE_ORIGIN`,
+`PUBLISHER_SIGNER_BINDING_TIER`, `PUBLISHER_SIGNER_IDENTIFIER`,
+`PUBLISHER_SIGNER_DISPLAY_NAME`, `PUBLISHER_PLATFORM_AGENT_TITLE` — see
 [Instance identity and signing](#instance-identity-and-signing-go-to-production)),
 `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `GITHUB_CLIENT_ID`,
 `GITHUB_CLIENT_SECRET`.
@@ -479,7 +479,7 @@ decision, not a convenience.** Their defaults are placeholders published
 in this repository, and the compose file hands the same two values to
 MinIO as its root user and password — so they are simultaneously the
 app's access key and the object store's administrator login. An instance
-that never sets them is serving evidence storage on credentials anyone
+that never sets them is serving record storage on credentials anyone
 can read out of the repo: full administrative access for anything that
 can reach the MinIO port. Set them in your env file (the template above
 does) before that port is reachable by anything you do not control, and
@@ -487,7 +487,7 @@ prefer setting them before first bring-up — see the volume-reset note in
 [Supplying your environment](#supplying-your-environment).
 
 (Off compose, all of these are yours: `DATABASE_URL` plus the storage set
-for your driver are hard requirements of the evidence path.)
+for your driver are hard requirements of the publish path.)
 
 **The core query path fails without:**
 
@@ -501,7 +501,7 @@ doesn't):
 
 | Variable(s) | Feature disabled when absent |
 | --- | --- |
-| `EVIDENCE_SIGNING_KEY` + `EVIDENCE_KEY_ID` + the instance-identity set (`EVIDENCE_SITE_ORIGIN`, `EVIDENCE_SIGNER_BINDING_TIER`/`_IDENTIFIER`/`_DISPLAY_NAME`, `EVIDENCE_PLATFORM_AGENT_TITLE`) | Evidence seal and publish. **All-or-nothing: every member is required, and none has a coded default.** With none set the instance stays in the unsigned tier (banner shows, seal and publish gated off) — and unsigned surfaces honestly *omit* instance attribution rather than substitute anyone else's. With the key set but no `EVIDENCE_KEY_ID` it refuses (`signing_key_id_missing`) rather than sign under a key id it never declared. With the pair set but the identity set incomplete it refuses (`instance_identity_missing`, naming the exact missing variables) rather than emit signed output carrying an origin, signer, or registry this instance never configured — either substitution would misattribute the publisher and fail verification. |
+| `PUBLISHER_SIGNING_KEY` + `PUBLISHER_KEY_ID` + the instance-identity set (`PUBLISHER_SITE_ORIGIN`, `PUBLISHER_SIGNER_BINDING_TIER`/`_IDENTIFIER`/`_DISPLAY_NAME`, `PUBLISHER_PLATFORM_AGENT_TITLE`) | Record seal and publish. **All-or-nothing: every member is required, and none has a coded default.** With none set the instance stays in the unsigned tier (banner shows, seal and publish gated off) — and unsigned surfaces honestly *omit* instance attribution rather than substitute anyone else's. With the key set but no `PUBLISHER_KEY_ID` it refuses (`signing_key_id_missing`) rather than sign under a key id it never declared. With the pair set but the identity set incomplete it refuses (`instance_identity_missing`, naming the exact missing variables) rather than emit signed output carrying an origin, signer, or registry this instance never configured — either substitution would misattribute the publisher and fail verification. |
 | `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and an OAuth app (`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` or the `OIDC_*` set) | Sign-in — and with it the sign-in-gated notebook execution feature, the dashboard, and the higher authenticated rate limit. |
 | `DATA_COMMONS_MCP_URL` + `DATA_COMMONS_API_KEY` | The Data Commons data source — its tool calls fail without the key (the hosted endpoint mandates it). `DC_API_KEY` is the separate key passed into *executed notebooks* for their own Data Commons requests. |
 | `BOSTON_OPENCONTEXT_MCP_URL` | The Boston OpenContext data source. |
@@ -514,12 +514,24 @@ doesn't):
 
 **Merely overrides a default.** Everything else, including:
 `MODEL_API_BASE_URL` (endpoint override), the *derived* identity
-overrides (`EVIDENCE_PUBLICATION_HOST`, the registry-URL overrides,
-`EVIDENCE_PLATFORM_AGENT_ID`, `EVIDENCE_PLATFORM_AGENT_URL` — each
+overrides (`PUBLISHER_PUBLICATION_HOST`, the two emit-side registry-URL
+overrides `PUBLISHER_TRUST_REGISTRY_CANONICAL_URL` /
+`PUBLISHER_TRUST_REGISTRY_LEGACY_URL`,
+`PUBLISHER_PLATFORM_AGENT_ID`, `PUBLISHER_PLATFORM_AGENT_URL` — each
 derives from the required identity set above when unset: host and URLs
 from the origin, the agent id from the host; the *required* identity set
 itself is in the disable-when-absent table, not here — see
-[`docs/instance-setup.md`](instance-setup.md)), `SITE_BRAND_ACCENT` and `SITE_SPONSOR_URL`/`SITE_SPONSOR_PREFIX`
+[`docs/instance-setup.md`](instance-setup.md)),
+**`PUBLISHER_TRUST_REGISTRY_URL`** (the **consume**-side counterpart, and
+the one publisher variable that is not about what you emit: it changes
+which trust registry *this instance's own verify route* fetches, useful on
+previews and in local dev, and never appears in signed output. Unset, it
+resolves `NEXTAUTH_URL` → `PUBLISHER_SITE_ORIGIN` → the reference origin
+with the legacy well-known path appended, and is in any case the last
+resort behind the bundled and on-disk registries — see
+[`docs/key-rotation.md`](key-rotation.md#environment-variables), which
+documents it alongside `PUBLISHER_PUBLIC_KEY`, the keygen-written public
+half the app never reads), `SITE_BRAND_ACCENT` and `SITE_SPONSOR_URL`/`SITE_SPONSOR_PREFIX`
 (a palette and a preposition are not identity claims, so those three do
 have defaults; the rest of the chrome set is in the disable-when-absent
 table above — see [Branding and
@@ -557,8 +569,8 @@ delivers them. A restart without `--build` does not.
 ### Branding and theming (chrome only)
 
 These variables rebrand the site chrome — and only the chrome. Nothing
-here touches emitted evidence: the values that name your instance
-*inside signed packages* are the `EVIDENCE_*` set
+here touches an emitted record package: the values that name your instance
+*inside signed packages* are the `PUBLISHER_*` set
 ([`docs/instance-setup.md`](instance-setup.md)), and the two sets are
 read independently so a chrome change can never invalidate a package or
 a registry cross-check. They resolve in
@@ -577,7 +589,7 @@ deployment now sets them explicitly like any other instance.
 
 | Variable | Meaning | Unset |
 | --- | --- | --- |
-| `SITE_BRAND_NAME` | Display name in chrome: the header wordmark, the page `<title>`s, and the "… Evidence Package" citation labels. Prose *about* the reference project (the About/Project pages) is content, not chrome, and does not follow this variable. | Page titles drop their brand suffix, citations name no publisher, and the header wordmark reads "Home" — a navigation label, not a name. |
+| `SITE_BRAND_NAME` | Display name in chrome: the header wordmark, the page `<title>`s, and the "… Record Package" citation labels. Prose *about* the reference project (the About/Project pages) is content, not chrome, and does not follow this variable. | Page titles drop their brand suffix, citations name no publisher, and the header wordmark reads "Home" — a navigation label, not a name. |
 | `SITE_BRAND_ACCENT` | Accent color as `#rgb`/`#rrggbb`. Overrides the accent tokens (`--accent` and companions in `src/app/globals.css`) via one inline style on `<html>`; every accent-colored surface follows. The darker hover and lighter fill companions are derived from this one value. Invalid values are ignored — the stylesheet default renders. Semantic status colors (success green, caution amber, error red) are governed by `docs/design-principles.md` and are deliberately NOT themable. | The stylesheet default renders (`#103FEF`). A palette is not an identity claim, so this one still has a default. |
 | `SITE_BRAND_TAGLINE` | The footer's first identity line, and the default page description. | No tagline line, and no `<meta name="description">` default. |
 | `SITE_BRAND_ATTRIBUTION` | The footer's attribution line, as plain text — who runs this deployment. | No attribution line at all. |
@@ -639,10 +651,10 @@ build or revalidation, not immediately. As with the branding set,
 compose passes them at both times from your one `--env-file` when you
 bring the stack up with `--build`.
 
-These three are content, not chrome or evidence: unlike the branding set
-above they only change what `/directory` and `/roadmap` fetch and link
-to, and unlike the `EVIDENCE_*` set they are never emitted inside a
-signed evidence package.
+These three are content, not chrome or publisher identity: unlike the
+branding set above they only change what `/directory` and `/roadmap` fetch
+and link to, and unlike the `PUBLISHER_*` set they are never emitted inside
+a signed record package.
 
 ## Sign-in configuration
 
@@ -656,7 +668,7 @@ Always:
 | Variable | Meaning |
 | --- | --- |
 | `NEXTAUTH_SECRET` | Session encryption secret. Generate one: `openssl rand -base64 32`. |
-| `NEXTAUTH_URL` | The origin browsers actually use — OAuth callbacks are built from it, so it tracks where the instance is reachable *now*, not where it is going. On the loopback bring-up that is `http://localhost:3000` (also the compose default); it becomes your public origin (e.g. `https://evidence.example.org`) when the instance is served from one. |
+| `NEXTAUTH_URL` | The origin browsers actually use — OAuth callbacks are built from it, so it tracks where the instance is reachable *now*, not where it is going. On the loopback bring-up that is `http://localhost:3000` (also the compose default); it becomes your public origin (e.g. `https://records.example.org`) when the instance is served from one. |
 
 Then one (or both) of:
 
@@ -752,8 +764,8 @@ adapter over it).
 
 | Variable | Required? | Meaning |
 | --- | --- | --- |
-| `APP_HOST` | Optional — unset means no host is named | The host that serves the gated app surface. On it, `/` redirects (307) to `/ask` — the signed-in query surface — the marketing pages return 404, and `/ask`, the dashboard, device pairing, and evidence routes all serve. |
-| `MARKETING_HOST` | Optional — unset means no host is named | The host that serves the public face. On it, the marketing pages and the public evidence registry serve exactly as on a single host, and the app-private routes — `/ask`, `/dashboard`, `/auth/device`, `/dev/notebook-preview` — return 404. |
+| `APP_HOST` | Optional — unset means no host is named | The host that serves the gated app surface. On it, `/` redirects (307) to `/ask` — the signed-in query surface — the marketing pages return 404, and `/ask`, the dashboard, device pairing, and the record routes all serve. |
+| `MARKETING_HOST` | Optional — unset means no host is named | The host that serves the public face. On it, the marketing pages and the public record registry serve exactly as on a single host, and the app-private routes — `/ask`, `/dashboard`, `/auth/device`, `/dev/notebook-preview` — return 404. |
 | `SERVE_MARKETING` | Optional — **leave it unset** | `1` or `true`: hosts matching *neither* variable above serve everything, marketing pages included. Unset, those hosts get the app surface only. Governs unnamed hosts and nothing else: a host you *have* named behaves identically either way. |
 | `APP_ONLY` | Optional — rarely needed | `1` or `true`: every request on every host gets the app-surface behavior, and `APP_HOST`/`MARKETING_HOST` are ignored entirely. Redundant with the default unless you have named a marketing host and want to override it. |
 
@@ -791,10 +803,11 @@ internalizing:
   Skipping step 1 is not dangerous, but it means the apex starts
   withholding its marketing pages the moment you deploy, before you have
   had a chance to verify anything on the app host.
-- **The evidence registry is dual-served on purpose.** `/evidence` and
-  `/evidence/<slug>` are public product surface; published links must
-  keep resolving on the public face, and the app surface serves them
-  too. `/api/*`, `/.well-known/*`, and static assets likewise serve on
+- **The record registry is dual-served on purpose.** `/records` and
+  `/records/<slug>` — together with their permanent prior-era aliases
+  `/evidence` and `/evidence/<slug>` (spec Appendix J) — are public
+  product surface; published links must keep resolving on the public
+  face, and the app surface serves them too. `/api/*`, `/.well-known/*`, and static assets likewise serve on
   every host.
 - **Withholding is topology, not security.** The 404s shape which host
   presents which surface; access control is sign-in
@@ -867,7 +880,7 @@ Both surfaces resolve through one shared, unit-tested core
 disagree — there is no way for `robots.txt` to allow indexing while the page
 metadata says otherwise, or vice versa. This is chrome/ops configuration,
 like the host-topology and branding sets above: it is never emitted into
-signed evidence output, and no signing or verification path reads it.
+signed record output, and no signing or verification path reads it.
 
 `robots.txt` is a dynamic metadata route, not a static file — a static
 `public/robots.txt` would shadow the route entirely, which is why the old
@@ -961,7 +974,7 @@ environment. It is deliberately **not** duplicated here —
 [`docs/instance-setup.md`](instance-setup.md) is the canonical
 walkthrough (generate an Ed25519 keypair outside any AI-agent session,
 pick a kid, publish your `/.well-known` trust registry, set
-`EVIDENCE_SIGNING_KEY` + `EVIDENCE_KEY_ID` and the identity variables,
+`PUBLISHER_SIGNING_KEY` + `PUBLISHER_KEY_ID` and the identity variables,
 smoke-test a publish). Key changes after that follow
 [`docs/key-rotation.md`](key-rotation.md).
 
@@ -972,14 +985,14 @@ Two facts worth restating from the deploy side:
   attribution is then honestly omitted from unsigned surfaces, never
   defaulted). Configuring signing is what makes the seal/publish actions
   reachable, and it takes the **whole set**: the key, the key id, and the
-  instance-identity variables (`EVIDENCE_SITE_ORIGIN`, the
-  `EVIDENCE_SIGNER_*` triple, `EVIDENCE_PLATFORM_AGENT_TITLE`). An
-  instance with a key but no `EVIDENCE_KEY_ID` refuses to publish rather
+  instance-identity variables (`PUBLISHER_SITE_ORIGIN`, the
+  `PUBLISHER_SIGNER_*` triple, `PUBLISHER_PLATFORM_AGENT_TITLE`). An
+  instance with a key but no `PUBLISHER_KEY_ID` refuses to publish rather
   than sign under an undeclared key id; one with the pair but an
   incomplete identity set refuses (`instance_identity_missing`, naming
   the exact missing variables) rather than emit signed output under an
   identity it never configured.
-- `EVIDENCE_SIGNING_KEY` is the most sensitive value your instance
+- `PUBLISHER_SIGNING_KEY` is the most sensitive value your instance
   holds. Keep it in your secret manager; never commit it, paste it into
   an agent session, or bake it into an image.
 
@@ -991,7 +1004,7 @@ endpoint. The contract (resolved in
 
 | Variable | Required | Meaning / default |
 | --- | --- | --- |
-| `S3_BUCKET` | yes | Bucket for evidence objects. |
+| `S3_BUCKET` | yes | Bucket for record-package objects. |
 | `S3_ACCESS_KEY_ID` | yes | Access key. |
 | `S3_SECRET_ACCESS_KEY` | yes | Secret key. |
 | `S3_ENDPOINT` | no | Endpoint URL (e.g. `http://minio:9000`). **Omit for AWS S3 proper.** |
@@ -1004,7 +1017,7 @@ an address a browser can reach — not an in-network endpoint like
 `http://minio:9000`. Keep its last path segment equal to `S3_BUCKET`
 (the compose default does this).
 
-Objects are world-readable by design: published evidence packages are
+Objects are world-readable by design: published record packages are
 public content, and the confidentiality of a not-yet-published (sealed)
 package rests on its unguessable random key, not on bucket ACLs. The
 compose stack's `minio-init` applies this policy for you; on a public
@@ -1155,7 +1168,7 @@ wrong turns:
 
 The integrator-facing API contract, including the publish endpoint,
 bundle export, and the full lifecycle semantics, is
-[`docs/api/evidence-publish.md`](api/evidence-publish.md).
+[`docs/api/records-publish.md`](api/records-publish.md).
 
 ## Appendix A: first-time S3 on a public cloud
 
@@ -1196,7 +1209,7 @@ In the S3 console, create a bucket with:
   addressed differently — the driver's URL construction does not exist
   for them).
 - **Name:** lowercase, hyphens, no dots — e.g.
-  `example-evidence-store`.
+  `example-record-store`.
 - **Object ownership: ACLs disabled** (public access comes from the
   bucket policy, not per-object ACLs).
 - **Block-public-access: off** — uncheck "Block all public access" and
@@ -1233,7 +1246,7 @@ Bucket → Permissions → Bucket policy:
 
 This grants reading of objects only — anonymous users still cannot
 list, upload, or delete. The console then badges the bucket **publicly
-accessible**, which is expected: published evidence packages are
+accessible**, which is expected: published record packages are
 world-readable by design, and pre-publication content is protected by
 unguessable keys, not ACLs
 ([Object storage](#object-storage-configuration-and-rehearsal)).
