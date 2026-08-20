@@ -320,12 +320,12 @@ test('skill text: with no config no host appears, and the fallback is generic-on
     }
     assert.ok(
       DATA_COMMONS_SKILL.includes(
-        'published as an evidence package, the evidence chain captures',
+        'published as a record package, the provenance graph captures',
       ),
       'data-commons skill should omit the host with no identity declared',
     );
     assert.ok(
-      !DATA_COMMONS_SKILL.includes('published as an evidence package on '),
+      !DATA_COMMONS_SKILL.includes('published as a record package on '),
     );
   });
 });

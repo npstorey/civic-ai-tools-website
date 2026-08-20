@@ -42,7 +42,7 @@ export const PINNED_LIBRARIES = {
 /** Default Python runtime version baked into the Vercel Sandbox snapshot. */
 export const PYTHON_RUNTIME_VERSION = '3.13';
 
-/** Reverse-DNS extension keys per OES §9.1.4. */
+/** Reverse-DNS extension keys per the Typed Standards Specification §8.7.4. */
 export const NOTEBOOK_EXTENSION_KEY = 'org.civicaitools.notebook';
 export const EXECUTION_EXTENSION_KEY = 'org.civicaitools.execution';
 /** Phase 2a2: structured two-clause summary populated by the LLM in reproducible-notebook mode. */
@@ -254,7 +254,7 @@ export function buildSynthesisCellSource(args: {
     const llmBody = args.synthesisCode.trimEnd();
     return [
       '# Synthesis — rendered answer for the query above. This cell\'s outputs',
-      '# become section F of the evidence A-G envelope (OES §9.1.4 / ADR-0005).',
+      '# become section F of the A-G envelope (Typed Standards Specification §8.7.4 / ADR-0005).',
       'from IPython.display import display, Markdown',
       '',
       'try:',
@@ -272,7 +272,7 @@ export function buildSynthesisCellSource(args: {
   }
   return [
     '# Synthesis — rendered answer for the query above. This cell\'s outputs',
-    '# become section F of the evidence A-G envelope (OES §9.1.4 / ADR-0005).',
+    '# become section F of the A-G envelope (Typed Standards Specification §8.7.4 / ADR-0005).',
     '# Fallback path: the LLM did not emit a ```python``` block, so the chat-flow',
     '# answer is rendered verbatim as markdown.',
     'from IPython.display import display, Markdown',
