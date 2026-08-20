@@ -18,6 +18,9 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { validateRegistry, type TrustRegistry } from './verify-core/index.ts';
 import { getEvidenceSiteOrigin } from '../site-config.ts';
+// Two accepted names for the verify-side registry override since the
+// 2026-08-19 vocabulary settlement (Appendix J) — see `publisher-env.ts`.
+import { readPublisherEnv } from '../publisher-env.ts';
 
 // Re-export the entire browser-safe verification core: the §9.2 check functions,
 // the `verifyEvidence` orchestrator, every status vocabulary, and all result
@@ -50,7 +53,9 @@ interface CacheEntry {
 const registryCache: Map<string, CacheEntry> = new Map();
 
 /** Resolve the URL for the platform trust registry. Can be overridden via
- *  `EVIDENCE_TRUST_REGISTRY_URL` for previews or local dev. The fallback
+ *  `PUBLISHER_TRUST_REGISTRY_URL` (or its prior-era spelling
+ *  `EVIDENCE_TRUST_REGISTRY_URL`, still accepted — the 2026-08-19 vocabulary
+ *  settlement, Appendix J) for previews or local dev. The fallback
  *  tail is the instance's configured origin (ADR-0020), then the reference
  *  origin literal — the VERIFY path's historical resolution, deliberately
  *  byte-identical across #258 (which removed identity defaults from
@@ -58,7 +63,7 @@ const registryCache: Map<string, CacheEntry> = new Map();
  *  charter). In practice the HTTP fetch this URL feeds is the last resort
  *  behind the bundled and on-disk registries below. */
 export function getTrustRegistryUrl(): string {
-  const override = process.env.EVIDENCE_TRUST_REGISTRY_URL;
+  const override = readPublisherEnv('TRUST_REGISTRY_URL');
   if (override) return override;
   const site =
     process.env.NEXTAUTH_URL ||

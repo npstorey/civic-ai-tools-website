@@ -26,9 +26,14 @@
 // read at call time) so the decisions are unit-testable without touching the
 // process environment. No values are ever read beyond presence.
 //
-// SIGNING IS A PAIR. Custody is `EVIDENCE_SIGNING_KEY`; identity is
-// `EVIDENCE_KEY_ID` — the kid a verifier uses to look this instance's public
-// key up in its trust registry. Both halves are required, with no coded
+// SIGNING IS A PAIR. Custody is `PUBLISHER_SIGNING_KEY`; identity is
+// `PUBLISHER_KEY_ID` — the kid a verifier uses to look this instance's public
+// key up in its trust registry. Each also answers to its prior-era `EVIDENCE_`
+// spelling (the 2026-08-19 vocabulary settlement, Appendix J; the precedence
+// rule and the deprecation warning live in `src/lib/publisher-env.ts`), which
+// is why every presence test below goes through `lookupPublisherEnv` rather
+// than indexing the env record by a literal name. Both halves are required,
+// with no coded
 // default for either. A hardcoded default kid used to stand in for the second
 // half, which meant an operator who set a key but no kid left this tier
 // silently and signed every package under the REFERENCE deployment's kid: the
@@ -39,7 +44,8 @@
 // case in which an instance emits a kid it did not configure.
 //
 // IDENTITY IS THE THIRD LEG (#258). The same doctrine now covers the
-// instance-identity set (INSTANCE_IDENTITY_REQUIRED_VARS in site-config.ts):
+// instance-identity set (INSTANCE_IDENTITY_REQUIRED_SUFFIXES in
+// site-config.ts):
 // signed output names the publisher's origin, signer, trust registry, and
 // platform agent, and those used to default to the reference deployment's
 // values. A signing pair with no declared identity is refused
@@ -50,7 +56,8 @@
 // findings A1/A2): custody (key) + declared kid + declared instance
 // identity. The required-variable list lives beside the getters it governs
 // (site-config.ts) so the two cannot drift.
-import { INSTANCE_IDENTITY_REQUIRED_VARS } from '../site-config.ts';
+import { INSTANCE_IDENTITY_REQUIRED_SUFFIXES } from '../site-config.ts';
+import { canonicalEnvName, lookupPublisherEnv } from '../publisher-env.ts';
 
 type EnvLike = Record<string, string | undefined>;
 
@@ -60,18 +67,20 @@ function isPresent(raw: string | undefined): boolean {
   return typeof raw === 'string' && raw.trim().length > 0;
 }
 
-/** Whether this instance holds signing-key custody (`EVIDENCE_SIGNING_KEY`). */
+/** Whether this instance holds signing-key custody (`PUBLISHER_SIGNING_KEY`,
+ *  or its prior-era spelling). */
 export function isSigningKeyConfigured(env: EnvLike = process.env): boolean {
-  return isPresent(env.EVIDENCE_SIGNING_KEY);
+  return isPresent(lookupPublisherEnv('SIGNING_KEY', env).value);
 }
 
 /**
  * Whether this instance has declared its signing identity
- * (`EVIDENCE_KEY_ID`). No default: the kid names a specific entry in a
- * specific trust registry, so guessing one is asserting an identity.
+ * (`PUBLISHER_KEY_ID`, or its prior-era spelling). No default: the kid names a
+ * specific entry in a specific trust registry, so guessing one is asserting an
+ * identity.
  */
 export function isSigningKeyIdConfigured(env: EnvLike = process.env): boolean {
-  return isPresent(env.EVIDENCE_KEY_ID);
+  return isPresent(lookupPublisherEnv('KEY_ID', env).value);
 }
 
 /**
@@ -87,13 +96,19 @@ export function isSigningConfigured(env: EnvLike = process.env): boolean {
 
 /**
  * The instance-identity variables (site-config.ts) NOT set in `env` — empty
- * when the identity is fully declared. Presence-only, like everything here.
+ * when the identity is fully declared. Presence-only, like everything here,
+ * and two-name aware: a variable set under EITHER accepted spelling counts as
+ * present, while a MISSING one is reported under its canonical name (naming
+ * the prior-era spelling in a refusal would tell an operator to set the name
+ * this settlement is retiring).
  * A signing instance without these would emit another deployment's identity
  * into signed output (#258 A1), so the seal/commit gate refuses on any
  * non-empty result, naming exactly these variables.
  */
 export function missingInstanceIdentityVars(env: EnvLike = process.env): string[] {
-  return INSTANCE_IDENTITY_REQUIRED_VARS.filter((name) => !isPresent(env[name]));
+  return INSTANCE_IDENTITY_REQUIRED_SUFFIXES.filter(
+    (suffix) => !isPresent(lookupPublisherEnv(suffix, env).value),
+  ).map(canonicalEnvName);
 }
 
 /** Whether this instance has declared its identity (all required vars set). */

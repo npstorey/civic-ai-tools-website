@@ -34,7 +34,10 @@ const KID_PRESENT = 'platform:this-instance-2026-08';
 const SIGNED = { EVIDENCE_SIGNING_KEY: KEY_PRESENT, EVIDENCE_KEY_ID: KID_PRESENT };
 /** The defect state: custody without a declared identity. */
 const KEY_NO_KID = { EVIDENCE_SIGNING_KEY: KEY_PRESENT };
-/** The declared instance identity (#258) — presence-only stand-ins. */
+/** The declared instance identity (#258), under the CANONICAL spellings —
+ *  presence-only stand-ins. The prior-era spellings are exercised by the
+ *  partial-identity test below, which is the state a mid-rename instance is
+ *  actually in. */
 const IDENTITY: Record<string, string> = Object.fromEntries(
   INSTANCE_IDENTITY_REQUIRED_VARS.map((name) => [name, 'presence-only-stand-in']),
 );
@@ -122,26 +125,73 @@ test('IDENTITY MISSING: signing pair set + no identity → refused, naming EVERY
 });
 
 test('IDENTITY PARTIAL: names ONLY the missing variables', () => {
+  // Deliberately configured under the PRIOR-ERA spellings — the state a real
+  // instance is in during the expand phase. Presence is satisfied by either
+  // name; the missing ones are reported under their CANONICAL name, because a
+  // refusal must name the variable to set rather than the one being retired
+  // (civic-ai-tools#160 P3).
   const env = {
     ...SIGNED,
     EVIDENCE_SITE_ORIGIN: 'https://instance.example.org',
     EVIDENCE_SIGNER_BINDING_TIER: 'platform',
     EVIDENCE_SIGNER_IDENTIFIER: 'platform:instance',
-    // EVIDENCE_SIGNER_DISPLAY_NAME and EVIDENCE_PLATFORM_AGENT_TITLE absent.
+    // The display name and the platform-agent title are absent under BOTH
+    // spellings.
   };
   const refusal = evaluateSealCommitGate(env);
   assert.ok(refusal);
   assert.equal(refusal!.body.code, 'instance_identity_missing');
-  assert.match(refusal!.body.error, /EVIDENCE_SIGNER_DISPLAY_NAME/);
-  assert.match(refusal!.body.error, /EVIDENCE_PLATFORM_AGENT_TITLE/);
-  // The present variables are NOT named as missing.
-  assert.ok(!refusal!.body.error.includes('EVIDENCE_SITE_ORIGIN'));
-  assert.ok(!refusal!.body.error.includes('EVIDENCE_SIGNER_BINDING_TIER'));
-  assert.ok(!refusal!.body.error.includes('EVIDENCE_SIGNER_IDENTIFIER'));
+  assert.match(refusal!.body.error, /PUBLISHER_SIGNER_DISPLAY_NAME/);
+  assert.match(refusal!.body.error, /PUBLISHER_PLATFORM_AGENT_TITLE/);
+  // The present variables are NOT named as missing — under either spelling.
+  assert.ok(!refusal!.body.error.includes('SITE_ORIGIN'));
+  assert.ok(!refusal!.body.error.includes('SIGNER_BINDING_TIER'));
+  assert.ok(!refusal!.body.error.includes('SIGNER_IDENTIFIER'));
   assert.deepEqual(missingInstanceIdentityVars(env), [
-    'EVIDENCE_SIGNER_DISPLAY_NAME',
-    'EVIDENCE_PLATFORM_AGENT_TITLE',
+    'PUBLISHER_SIGNER_DISPLAY_NAME',
+    'PUBLISHER_PLATFORM_AGENT_TITLE',
   ]);
+});
+
+test('IDENTITY two-name expand: either spelling satisfies the gate; canonical wins a tie', () => {
+  // The whole identity set under the CANONICAL names passes the gate.
+  const canonical = {
+    PUBLISHER_SIGNING_KEY: KEY_PRESENT,
+    PUBLISHER_KEY_ID: KID_PRESENT,
+    ...Object.fromEntries(
+      INSTANCE_IDENTITY_REQUIRED_VARS.map((name) => [name, 'presence-only-stand-in']),
+    ),
+  };
+  assert.equal(evaluateSealCommitGate(canonical), null);
+  assert.deepEqual(missingInstanceIdentityVars(canonical), []);
+
+  // Mixed spellings across the set are fine too — an operator part-way
+  // through the rename is not a broken instance.
+  assert.equal(
+    evaluateSealCommitGate({
+      PUBLISHER_SIGNING_KEY: KEY_PRESENT,
+      EVIDENCE_KEY_ID: KID_PRESENT,
+      PUBLISHER_SITE_ORIGIN: 'https://instance.example.org',
+      EVIDENCE_SIGNER_BINDING_TIER: 'platform',
+      PUBLISHER_SIGNER_IDENTIFIER: 'platform:instance',
+      EVIDENCE_SIGNER_DISPLAY_NAME: 'Instance',
+      PUBLISHER_PLATFORM_AGENT_TITLE: 'Instance',
+    }),
+    null,
+  );
+
+  // Precedence: an EMPTY canonical name shadows a set prior-era one. Empty is
+  // a value in this set, not an absence (`TRUST_REGISTRY_LEGACY_URL=''` omits
+  // a URL from signed output), so the resolver cannot treat it as a miss —
+  // and an operator who explicitly emptied the canonical name meant it.
+  assert.deepEqual(
+    missingInstanceIdentityVars({
+      ...IDENTITY,
+      PUBLISHER_SITE_ORIGIN: '',
+      EVIDENCE_SITE_ORIGIN: 'https://prior-era.example.org',
+    }),
+    ['PUBLISHER_SITE_ORIGIN'],
+  );
 });
 
 test('IDENTITY: precedence — the signing-pair refusals come first (identity is the third check)', () => {
@@ -158,12 +208,12 @@ test('isInstanceIdentityConfigured: presence-only, whitespace counts as absent',
   assert.equal(isInstanceIdentityConfigured(IDENTITY), true);
   assert.equal(isInstanceIdentityConfigured({}), false);
   assert.equal(
-    isInstanceIdentityConfigured({ ...IDENTITY, EVIDENCE_SITE_ORIGIN: '   ' }),
+    isInstanceIdentityConfigured({ ...IDENTITY, PUBLISHER_SITE_ORIGIN: '   ' }),
     false,
   );
   assert.deepEqual(
-    missingInstanceIdentityVars({ ...IDENTITY, EVIDENCE_SITE_ORIGIN: '' }),
-    ['EVIDENCE_SITE_ORIGIN'],
+    missingInstanceIdentityVars({ ...IDENTITY, PUBLISHER_SITE_ORIGIN: '' }),
+    ['PUBLISHER_SITE_ORIGIN'],
   );
 });
 

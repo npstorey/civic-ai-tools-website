@@ -6,16 +6,25 @@
  * With ZERO code edits, configuration only, this script:
  *
  *   1. generates an EPHEMERAL Ed25519 keypair in-process (never the real
- *      `EVIDENCE_SIGNING_KEY`; nothing is read from or written to any
+ *      signing key; nothing is read from or written to any
  *      secret store — the keypair lives and dies with this run);
  *   2. builds a local trust-registry JSON from the docs/instance-setup.md §3
  *      template, carrying the ephemeral PUBLIC key under a rehearsal kid;
  *   3. runs the app's produce path under a fully alternate identity
- *      (`EVIDENCE_SITE_ORIGIN` / `EVIDENCE_PUBLICATION_HOST` /
- *      `EVIDENCE_SIGNER_*` / registry URLs pointed at the local registry);
+ *      (`PUBLISHER_SITE_ORIGIN` / `PUBLISHER_PUBLICATION_HOST` /
+ *      `PUBLISHER_SIGNER_*` / registry URLs pointed at the local registry);
  *   4. verifies the emitted package OFFLINE (verify-core §9.2 checks) against
  *      that local registry, resolved from the sidecar's own
  *      `trustRegistryUrl` — the same bootstrap a third-party verifier uses.
+ *
+ * WHICH SPELLING IT REHEARSES, and why that matters (civic-ai-tools#160 P3).
+ * Since the 2026-08-19 vocabulary settlement every one of these variables has
+ * two accepted names — canonical `PUBLISHER_*`, prior-era `EVIDENCE_*`. This
+ * rehearsal drives the CANONICAL ones, and explicitly UNSETS each prior-era
+ * twin before it starts, so a PASS is proof that the canonical names carry the
+ * whole produce path on their own rather than proof that something in the
+ * ambient environment answered. (The prior-era leg has its own coverage: the
+ * reference-identity fixture in the unit suite is entirely prior-era.)
  *
  * PASS means: the emitted package carries the alternate identity throughout
  * (envelope signer, sidecar registry URLs, environment-extension host, PROV
@@ -38,6 +47,12 @@ import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { pathToFileURL, fileURLToPath } from 'node:url';
+// The publisher-variable census, so the prior-era names this rehearsal clears
+// cannot drift from the names the readers accept.
+import {
+  PUBLISHER_ENV_SUFFIXES,
+  priorEraEnvName,
+} from '../src/lib/publisher-env.ts';
 
 // --- The alternate identity (pure config; every value is synthetic) --------
 
@@ -100,17 +115,23 @@ async function main(): Promise<void> {
   log(`[2/6] local trust registry written from the instance-setup template`);
 
   // --- 3. Alternate identity via CONFIG ONLY (the ADR-0020 claim) ---------
-  process.env.EVIDENCE_SIGNING_KEY = privB64;
-  process.env.EVIDENCE_KEY_ID = REHEARSAL_KID;
-  process.env.EVIDENCE_SITE_ORIGIN = REHEARSAL_ORIGIN;
-  process.env.EVIDENCE_PUBLICATION_HOST = REHEARSAL_HOST;
-  process.env.EVIDENCE_SIGNER_BINDING_TIER = REHEARSAL_SIGNER.bindingTier;
-  process.env.EVIDENCE_SIGNER_IDENTIFIER = REHEARSAL_SIGNER.identifier;
-  process.env.EVIDENCE_SIGNER_DISPLAY_NAME = REHEARSAL_SIGNER.displayName;
-  process.env.EVIDENCE_TRUST_REGISTRY_CANONICAL_URL = registryUrl;
-  process.env.EVIDENCE_TRUST_REGISTRY_LEGACY_URL = ''; // omit — no legacy client base
-  process.env.EVIDENCE_PLATFORM_AGENT_ID = REHEARSAL_AGENT_ID;
-  process.env.EVIDENCE_PLATFORM_AGENT_TITLE = REHEARSAL_SIGNER.displayName;
+  // Every prior-era twin is cleared first. Without this the rehearsal could
+  // pass on a machine where the operator's shell already exports the old
+  // names — a green that says nothing about the canonical ones.
+  for (const suffix of PUBLISHER_ENV_SUFFIXES) {
+    delete process.env[priorEraEnvName(suffix)];
+  }
+  process.env.PUBLISHER_SIGNING_KEY = privB64;
+  process.env.PUBLISHER_KEY_ID = REHEARSAL_KID;
+  process.env.PUBLISHER_SITE_ORIGIN = REHEARSAL_ORIGIN;
+  process.env.PUBLISHER_PUBLICATION_HOST = REHEARSAL_HOST;
+  process.env.PUBLISHER_SIGNER_BINDING_TIER = REHEARSAL_SIGNER.bindingTier;
+  process.env.PUBLISHER_SIGNER_IDENTIFIER = REHEARSAL_SIGNER.identifier;
+  process.env.PUBLISHER_SIGNER_DISPLAY_NAME = REHEARSAL_SIGNER.displayName;
+  process.env.PUBLISHER_TRUST_REGISTRY_CANONICAL_URL = registryUrl;
+  process.env.PUBLISHER_TRUST_REGISTRY_LEGACY_URL = ''; // omit — no legacy client base
+  process.env.PUBLISHER_PLATFORM_AGENT_ID = REHEARSAL_AGENT_ID;
+  process.env.PUBLISHER_PLATFORM_AGENT_TITLE = REHEARSAL_SIGNER.displayName;
 
   // App modules are imported AFTER the environment is set (config getters
   // read at call time; the late import simply removes any load-order doubt).

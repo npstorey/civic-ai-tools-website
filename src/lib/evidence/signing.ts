@@ -7,7 +7,7 @@
 // `TimeStampReq` DER builder, and the Rekor `hashedrekord` proposal/response
 // codecs. What stays HERE is deliberately implementation-side (ADR-0021 §B):
 //
-//   - CUSTODY — the `EVIDENCE_SIGNING_KEY` env read and the warn-and-null
+//   - CUSTODY — the signing-key env read and the warn-and-null
 //     unsigned fallback (ADR-0021 §E: the core has no env probe; the app's
 //     decision not to sign IS the unsigned tier);
 //   - SUBMISSION — the TSA and Rekor `fetch` legs (no network in the core);
@@ -30,6 +30,11 @@ import {
 } from '@typedstandards/produce-core';
 import { rekorHashForPackage } from './verify-core/signature.ts';
 import { getEvidenceSignerIdentity } from '../site-config.ts';
+// Two accepted names per publisher variable since the 2026-08-19 vocabulary
+// settlement: `PUBLISHER_SIGNING_KEY` / `PUBLISHER_KEY_ID` canonically, with
+// the prior-era `EVIDENCE_*` spellings still honored (Appendix J; see
+// `src/lib/publisher-env.ts` for the precedence rule and the warning).
+import { canonicalEnvName, priorEraEnvName, readPublisherEnv } from '../publisher-env.ts';
 import { isSigningKeyIdConfigured } from './unsigned-tier.ts';
 
 export { rekorHashForPackage };
@@ -49,7 +54,7 @@ export type { SignerIdentity, SignResult };
 // verifier uses to find the public key that must validate this instance's
 // signature, so it is an identity claim, not a formatting detail. A coded
 // default here used to substitute the REFERENCE deployment's kid whenever
-// `EVIDENCE_KEY_ID` was unset — which meant any instance with a signing key
+// the key id was unset — which meant any instance with a signing key
 // and no kid signed with its own key and labeled the result with someone
 // else's identifier. Such a package cannot verify (the registry entry for
 // that kid holds a different public key) and misattributes the publisher.
@@ -61,11 +66,13 @@ export type { SignerIdentity, SignResult };
  *  neutral on purpose — instances run on containers, VMs, and PaaS hosts
  *  alike, so it names the variable and the guide, never a hosting product. */
 export const MISSING_KEY_ID_MESSAGE =
-  'EVIDENCE_KEY_ID is not set in this environment. This instance has no ' +
-  'signing key id to emit and will not substitute one: a package labeled ' +
-  "with a kid it never configured cannot verify and misattributes the " +
-  'publisher. Set EVIDENCE_KEY_ID to the kid of the active entry in this ' +
-  "instance's trust registry — see docs/instance-setup.md.";
+  `${canonicalEnvName('KEY_ID')} is not set in this environment (nor its ` +
+  `prior-era name ${priorEraEnvName('KEY_ID')}, which is still accepted). ` +
+  'This instance has no signing key id to emit and will not substitute one: a ' +
+  'package labeled with a kid it never configured cannot verify and ' +
+  `misattributes the publisher. Set ${canonicalEnvName('KEY_ID')} to the kid ` +
+  "of the active entry in this instance's trust registry — see " +
+  'docs/instance-setup.md.';
 
 /**
  * The configured key identifier, or `null` when none is set.
@@ -79,7 +86,7 @@ export const MISSING_KEY_ID_MESSAGE =
  */
 export function getConfiguredKeyId(): string | null {
   return isSigningKeyIdConfigured(process.env)
-    ? (process.env.EVIDENCE_KEY_ID as string)
+    ? (readPublisherEnv('KEY_ID') as string)
     : null;
 }
 
@@ -105,7 +112,7 @@ export function getActiveKeyId(): string {
 /**
  * Identity bound to the active signing key, for emission as the envelope-side
  * `signer` claim (spec §8.1.1). Resolved from instance config (ADR-0020;
- * the `EVIDENCE_SIGNER_*` triple — REQUIRED identity as of #258, no coded
+ * the `PUBLISHER_SIGNER_*` triple — REQUIRED identity as of #258, no coded
  * default: throws `InstanceIdentityError` naming the missing variables when
  * the triple is incomplete; callers reach this only behind
  * `evaluateSealCommitGate`). It MUST mirror the active key's
@@ -119,8 +126,8 @@ export function getActiveSigner(): SignerIdentity {
 
 /**
  * Sign a package hash with the instance's Ed25519 key using Ed25519ph
- * (SHA-512 pre-hash). Returns null if EVIDENCE_SIGNING_KEY is not
- * configured — the unsigned dev tier (ADR-0020 §B).
+ * (SHA-512 pre-hash). Returns null if the signing key is not configured under
+ * either accepted name — the unsigned dev tier (ADR-0020 §B).
  *
  * The signed message is the UTF-8 bytes of the package hex hash — same
  * convention used on the verify side. Ed25519ph prehashes this internally
@@ -129,15 +136,17 @@ export function getActiveSigner(): SignerIdentity {
  * (and the SPKI public-key derivation retained in `SignResult.publicKey`)
  * is produce-core's; only the key custody lives here.
  *
- * Null is the answer for "no key" ONLY. With a key but no `EVIDENCE_KEY_ID`
+ * Null is the answer for "no key" ONLY. With a key but no configured key id
  * this throws via `getActiveKeyId` instead of degrading: silently skipping
  * the signature there would hide a misconfiguration behind a state
  * (deliberately unsigned) that the operator did not choose.
  */
 export function signPackage(packageHash: string): SignResult | null {
-  const privKeyB64 = process.env.EVIDENCE_SIGNING_KEY;
+  const privKeyB64 = readPublisherEnv('SIGNING_KEY');
   if (!privKeyB64) {
-    console.warn('[signing] EVIDENCE_SIGNING_KEY not set — skipping signature');
+    console.warn(
+      `[signing] ${canonicalEnvName('SIGNING_KEY')} not set — skipping signature`,
+    );
     return null;
   }
   return signEnvelopeHash(packageHash, privKeyB64, getActiveKeyId());
