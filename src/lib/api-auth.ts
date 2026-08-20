@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { apiTokens, users } from '@/lib/db/schema';
 import { isTrustedRequestOrigin } from '@/lib/allowed-origins';
+import { scopesAuthorizePublish } from '@/lib/publish-scope';
 
 /**
  * Auth resolution for write endpoints (POST /api/evidence,
@@ -65,9 +66,30 @@ export function mintRawToken(): { raw: string; hash: string; prefix: string } {
  * Checks a required scope against an auth result. Cookie auth holds `*`
  * (browser flows are already gated by NextAuth + user session, not by
  * scope). Bearer tokens carry an explicit scope assigned at mint time.
+ *
+ * EXACT-MATCH, deliberately. For the publish scope — the only scope this
+ * deployment mints — use `hasPublishScope` below instead: since the
+ * 2026-08-19 vocabulary settlement that scope has two accepted spellings, and
+ * an exact-match check against either one alone would refuse half the live
+ * tokens.
  */
 export function hasScope(auth: AuthResult, required: string): boolean {
   return auth.scopes.includes('*') || auth.scopes.includes(required);
+}
+
+/**
+ * Does this caller hold publish authorization?
+ *
+ * THE ONE PREDICATE every publish-gated route asks, and the reason it exists
+ * rather than three `hasScope(auth, …) || hasScope(auth, …)` pairs: the
+ * settlement (Appendix J; civic-ai-tools#160) gave the scope a second name,
+ * live 90-day tokens carry the first, and three hand-rolled disjunctions is
+ * three chances for one route to end up refusing a token the other two
+ * accept. The vocabulary itself lives in `src/lib/publish-scope.ts`, which is
+ * free of Next.js imports so the rule is unit-testable on its own.
+ */
+export function hasPublishScope(auth: AuthResult): boolean {
+  return scopesAuthorizePublish(auth.scopes);
 }
 
 /**

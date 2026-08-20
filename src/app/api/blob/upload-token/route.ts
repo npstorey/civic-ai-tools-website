@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { grantClientUpload } from '@/lib/storage';
-import { resolveRequestUser, hasScope } from '@/lib/api-auth';
+import { resolveRequestUser, hasPublishScope } from '@/lib/api-auth';
+import { MISSING_PUBLISH_SCOPE_ERROR } from '@/lib/publish-scope';
 
 /**
  * Client-upload grant endpoint for evidence blob references
@@ -67,8 +68,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         if (!auth) {
           throw new Error('Authentication required');
         }
-        if (!hasScope(auth, 'evidence:publish')) {
-          throw new Error('Token missing required scope: evidence:publish');
+        // Either accepted spelling authorizes — see the note at
+        // POST /api/evidence. This route gates the blob store that the
+        // publish path writes through, so a disagreement with the two
+        // publish routes would let a token start a publish it cannot finish.
+        if (!hasPublishScope(auth)) {
+          throw new Error(MISSING_PUBLISH_SCOPE_ERROR);
         }
 
         // Pathname validation: lock uploads to `evidence-refs/<sha256>[.ext]`.

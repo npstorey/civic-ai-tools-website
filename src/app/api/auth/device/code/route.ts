@@ -10,6 +10,11 @@ import {
   generateUserCode,
   getBaseUrl,
 } from '@/lib/device-flow';
+import {
+  ACCEPTED_PUBLISH_SCOPES,
+  isAcceptedMintScope,
+  resolveMintScope,
+} from '@/lib/publish-scope';
 
 /**
  * Device authorization grant start (RFC 8628 §3.1).
@@ -18,6 +23,17 @@ import {
  * user_code, and the verification URL to display to the user. The
  * client then polls /api/auth/device/token with the device_code until
  * the user approves the flow in a browser.
+ *
+ * SCOPE, under two names (civic-ai-tools#160 P3). The 2026-08-19 vocabulary
+ * settlement renames the publish scope `evidence:publish` → `records:publish`
+ * as an alias-and-deprecate: BOTH are accepted here, an omitted scope now
+ * takes the canonical `records:publish`, and an explicitly requested scope is
+ * granted VERBATIM. Verbatim matters — this endpoint and the token endpoint
+ * echo the granted scope back, and RFC 8628 clients compare that against what
+ * they asked for. Silently upgrading a client's string would fail that
+ * comparison for a client that did nothing wrong. Enforcement treats the two
+ * as one authorization (`hasPublishScope`), so which string a token ends up
+ * carrying never changes what it can do.
  */
 
 interface DeviceCodeRequest {
@@ -25,7 +41,7 @@ interface DeviceCodeRequest {
   scope?: string;
 }
 
-const ALLOWED_SCOPES = new Set(['evidence:publish']);
+const ALLOWED_SCOPES = new Set(ACCEPTED_PUBLISH_SCOPES);
 const MAX_NAME_LENGTH = 80;
 const MAX_USER_CODE_COLLISION_RETRIES = 5;
 
@@ -37,10 +53,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'invalid_request' }, { status: 400 });
   }
 
-  const scope = (body.scope ?? 'evidence:publish').trim();
-  if (!ALLOWED_SCOPES.has(scope)) {
+  const scope = resolveMintScope(body.scope);
+  if (!isAcceptedMintScope(scope)) {
     return NextResponse.json(
-      { error: 'invalid_scope', error_description: `Unknown scope: ${scope}` },
+      {
+        error: 'invalid_scope',
+        error_description:
+          `Unknown scope: ${scope}. Accepted: ${[...ALLOWED_SCOPES].join(', ')}`,
+      },
       { status: 400 },
     );
   }
