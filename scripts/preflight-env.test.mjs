@@ -12,6 +12,7 @@ import {
   evaluateGroups,
   renderReport,
   resolveDrivers,
+  resolveEnvName,
   resolveSpec,
   ENV_SPEC,
   ENV_GROUPS,
@@ -46,12 +47,12 @@ test('ok=false and the missing required var is reported when one is absent', () 
 test('empty string and whitespace-only count as absent (not present)', () => {
   const env = envWithAllRequired();
   // Two required vars with NO coded fallback, so they count as hard misses.
-  env.EVIDENCE_SIGNING_KEY = '';
+  env.PUBLISHER_SIGNING_KEY = '';
   env.NEXTAUTH_SECRET = '   ';
   const result = evaluateEnv(env);
   assert.equal(result.ok, false);
   const names = result.missingRequired.map((r) => r.name).sort();
-  assert.deepEqual(names, ['EVIDENCE_SIGNING_KEY', 'NEXTAUTH_SECRET']);
+  assert.deepEqual(names, ['NEXTAUTH_SECRET', 'PUBLISHER_SIGNING_KEY']);
 });
 
 test('a required var with a coded fallback is soft when absent (fallbk, run still passes)', () => {
@@ -91,21 +92,113 @@ test('#258 C5: NEXT_PUBLIC_SOCRATA_MCP_URL is no longer part of the environment 
   assert.ok(!ENV_SPEC.some((s) => s.name === 'NEXT_PUBLIC_SOCRATA_MCP_URL'));
 });
 
-test('EVIDENCE_KEY_ID has NO coded fallback: absent, it is a hard miss that fails the run', () => {
+test('the signing key id has NO coded fallback: absent, it is a hard miss that fails the run', () => {
   // The kid used to carry `hasFallback: true`, pointing at a hardcoded
   // default in signing.ts that substituted the reference deployment's kid.
   // That default is gone — an instance emits the kid it declared or none —
   // so an absent kid is a real miss, not a soft note.
-  const entry = ENV_SPEC.find((s) => s.name === 'EVIDENCE_KEY_ID');
+  const entry = ENV_SPEC.find((s) => s.name === 'PUBLISHER_KEY_ID');
   assert.equal(entry.tier, 'required');
-  assert.ok(!entry.hasFallback, 'EVIDENCE_KEY_ID must not claim a coded fallback');
+  assert.ok(!entry.hasFallback, 'the key id must not claim a coded fallback');
 
   const env = envWithAllRequired();
-  delete env.EVIDENCE_KEY_ID;
+  delete env.PUBLISHER_KEY_ID;
   const result = evaluateEnv(env);
   assert.equal(result.ok, false);
-  assert.deepEqual(result.missingRequired.map((r) => r.name), ['EVIDENCE_KEY_ID']);
-  assert.ok(!result.requiredOnFallback.some((r) => r.name === 'EVIDENCE_KEY_ID'));
+  assert.deepEqual(result.missingRequired.map((r) => r.name), ['PUBLISHER_KEY_ID']);
+  assert.ok(!result.requiredOnFallback.some((r) => r.name === 'PUBLISHER_KEY_ID'));
+
+  // ...and the prior-era spelling satisfies it, because the app still reads
+  // that name (civic-ai-tools#160 P3). An instance that has not renamed
+  // anything must not be told it is unconfigured.
+  env[entry.priorEraName] = 'present';
+  const viaPriorEra = evaluateEnv(env);
+  assert.equal(viaPriorEra.ok, true);
+  assert.ok(!viaPriorEra.missingRequired.some((r) => r.canonicalName === 'PUBLISHER_KEY_ID'));
+});
+
+// --- The two-name expand (civic-ai-tools#160 P3) ------------------------------
+//
+// Group A of the 2026-08-19 vocabulary settlement moves the publisher-identity
+// set from `EVIDENCE_*` to `PUBLISHER_*`. Everything that READS these accepts
+// both names; this preflight has to agree with the readers exactly, or it
+// passes configurations the app refuses (and refuses ones the app accepts).
+
+test('two-name expand: either spelling satisfies presence, and the report names the one found', () => {
+  const env = {};
+  for (const entry of ENV_SPEC.filter((e) => e.tier === 'required')) {
+    // Deliberately the PRIOR-ERA spelling wherever there is one — the state
+    // every existing instance is in on the day this ships.
+    env[entry.priorEraName ?? entry.name] = 'present';
+  }
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, true, 'an entirely prior-era instance still passes');
+
+  // The row reports the name that ANSWERED, so an operator sees what they set.
+  const keyIdRow = result.rows.find((r) => r.canonicalName === 'PUBLISHER_KEY_ID');
+  assert.equal(keyIdRow.present, true);
+  assert.equal(keyIdRow.name, 'EVIDENCE_KEY_ID');
+  assert.equal(keyIdRow.viaPriorEra, true);
+
+  // And the deprecation notice lists every one of them, with its successor.
+  assert.ok(result.deprecatedNames.length > 0);
+  assert.ok(
+    result.deprecatedNames.every((r) => r.name.startsWith('EVIDENCE_')),
+    'only prior-era names are listed as deprecated',
+  );
+  const report = renderReport(result);
+  assert.match(report, /EVIDENCE_KEY_ID → rename to PUBLISHER_KEY_ID/);
+  assert.match(report, /removed at a future/);
+  // A NOTE, never a failure: the value reached the app.
+  assert.ok(!report.includes('RESULT: FAIL'));
+});
+
+test('two-name expand: the canonical name wins whenever it is DEFINED, empty included', () => {
+  // The precedence rule is `defined`, not `truthy`, and it must match
+  // src/lib/publisher-env.ts exactly. Empty is a VALUE in this set —
+  // TRUST_REGISTRY_LEGACY_URL='' omits a URL from signed output — so a
+  // preflight that fell through on empty would report PASS for a
+  // configuration the app treats as unset.
+  const entry = ENV_SPEC.find((s) => s.name === 'PUBLISHER_SITE_ORIGIN');
+  assert.equal(
+    resolveEnvName(entry, { PUBLISHER_SITE_ORIGIN: 'a', EVIDENCE_SITE_ORIGIN: 'b' }).name,
+    'PUBLISHER_SITE_ORIGIN',
+  );
+  const shadowed = resolveEnvName(entry, {
+    PUBLISHER_SITE_ORIGIN: '',
+    EVIDENCE_SITE_ORIGIN: 'https://prior-era.example.org',
+  });
+  assert.equal(shadowed.name, 'PUBLISHER_SITE_ORIGIN');
+  assert.equal(shadowed.raw, '');
+  assert.equal(shadowed.viaPriorEra, false);
+
+  const env = envWithAllRequired();
+  env.PUBLISHER_SITE_ORIGIN = '';
+  env.EVIDENCE_SITE_ORIGIN = 'https://prior-era.example.org';
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, false, 'an emptied canonical name is a miss, not a fall-through');
+  assert.deepEqual(result.missingRequired.map((r) => r.name), ['PUBLISHER_SITE_ORIGIN']);
+});
+
+test('two-name expand: every publisher variable in the census is declared with both names', () => {
+  // The census is Appendix J's environment row: fourteen variables. This
+  // inventory used to hold thirteen — PUBLIC_KEY is written by the keygen
+  // script and never read, so an inventory derived from `process.env.*` reads
+  // could not see it. Pinned at fourteen so the gap cannot reopen.
+  const publisherEntries = ENV_SPEC.filter((s) => s.name.startsWith('PUBLISHER_'));
+  assert.equal(publisherEntries.length, 14, 'the settlement names fourteen variables');
+  for (const entry of publisherEntries) {
+    assert.equal(
+      entry.priorEraName,
+      entry.name.replace(/^PUBLISHER_/, 'EVIDENCE_'),
+      `${entry.name} must declare its prior-era spelling`,
+    );
+  }
+  // Nothing is left behind under the old prefix.
+  assert.deepEqual(
+    ENV_SPEC.filter((s) => s.name.startsWith('EVIDENCE_')).map((s) => s.name),
+    [],
+  );
 });
 
 test('missing recommended variables do not fail the run', () => {
@@ -611,18 +704,18 @@ test('a partially-set signing group warns, naming the missing members and the mi
   // also carries the instance-identity set, which the seal/commit gate
   // requires alongside the pair (key + kid + identity travel together).
   const env = envWithAllRequired();
-  delete env.EVIDENCE_KEY_ID; // key + identity set, kid absent — a defect state
+  delete env.PUBLISHER_KEY_ID; // key + identity set, kid absent — a defect state
   const result = evaluateEnv(env);
 
   const partial = result.partialGroups.find((g) => g.name === 'Evidence signing');
   assert.ok(partial, 'the partially-set signing group is reported as partial');
   assert.equal(partial.total, 7);
-  assert.ok(partial.present.includes('EVIDENCE_SIGNING_KEY'));
-  assert.ok(partial.present.includes('EVIDENCE_SITE_ORIGIN'));
-  assert.deepEqual(partial.missing, ['EVIDENCE_KEY_ID']);
+  assert.ok(partial.present.includes('PUBLISHER_SIGNING_KEY'));
+  assert.ok(partial.present.includes('PUBLISHER_SITE_ORIGIN'));
+  assert.deepEqual(partial.missing, ['PUBLISHER_KEY_ID']);
 
   const report = renderReport(result);
-  assert.match(report, /Evidence signing: 6 of 7 present; off until all 7 are set\. Missing: EVIDENCE_KEY_ID/);
+  assert.match(report, /Evidence signing: 6 of 7 present; off until all 7 are set\. Missing: PUBLISHER_KEY_ID/);
   assert.match(report, /cannot sign/);
   assert.match(report, /travel together/);
   // Unlike the other groups, this one ALSO fails the run — every member is
@@ -632,11 +725,11 @@ test('a partially-set signing group warns, naming the missing members and the mi
 
 test('#258: the identity members of the signing group are required-tier with no coded fallback', () => {
   const IDENTITY_MEMBERS = [
-    'EVIDENCE_SITE_ORIGIN',
-    'EVIDENCE_SIGNER_BINDING_TIER',
-    'EVIDENCE_SIGNER_IDENTIFIER',
-    'EVIDENCE_SIGNER_DISPLAY_NAME',
-    'EVIDENCE_PLATFORM_AGENT_TITLE',
+    'PUBLISHER_SITE_ORIGIN',
+    'PUBLISHER_SIGNER_BINDING_TIER',
+    'PUBLISHER_SIGNER_IDENTIFIER',
+    'PUBLISHER_SIGNER_DISPLAY_NAME',
+    'PUBLISHER_PLATFORM_AGENT_TITLE',
   ];
   const group = ENV_GROUPS.find((g) => g.name === 'Evidence signing');
   for (const name of IDENTITY_MEMBERS) {
@@ -658,11 +751,11 @@ test('#258: the identity members of the signing group are required-tier with no 
   // The DERIVED identity overrides stay optional-with-fallback: derivation
   // from an operator-set origin is real config, not a reference default.
   for (const name of [
-    'EVIDENCE_PUBLICATION_HOST',
-    'EVIDENCE_TRUST_REGISTRY_CANONICAL_URL',
-    'EVIDENCE_TRUST_REGISTRY_LEGACY_URL',
-    'EVIDENCE_PLATFORM_AGENT_ID',
-    'EVIDENCE_PLATFORM_AGENT_URL',
+    'PUBLISHER_PUBLICATION_HOST',
+    'PUBLISHER_TRUST_REGISTRY_CANONICAL_URL',
+    'PUBLISHER_TRUST_REGISTRY_LEGACY_URL',
+    'PUBLISHER_PLATFORM_AGENT_ID',
+    'PUBLISHER_PLATFORM_AGENT_URL',
   ]) {
     const entry = ENV_SPEC.find((s) => s.name === name);
     assert.equal(entry.tier, 'optional', `${name} stays an optional override`);

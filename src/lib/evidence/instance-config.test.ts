@@ -4,7 +4,10 @@
 //
 // What these tests cover, post-#258:
 //
-//   1. STRICT ABSENCE: with no EVIDENCE_* identity env set, the nullable
+//   1. STRICT ABSENCE: with no identity env set under EITHER accepted name
+//      (the 2026-08-19 vocabulary settlement gave each variable a canonical
+//      `PUBLISHER_*` spelling beside its prior-era `EVIDENCE_*` one), the
+//      nullable
 //      getters return null, the strict resolvers throw
 //      `InstanceIdentityError` naming the missing variables, and the
 //      packager/notebook surfaces refuse or honestly omit — nothing ever
@@ -27,7 +30,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { missingInstanceIdentityVars } from './unsigned-tier.ts';
 import {
+  INSTANCE_IDENTITY_REQUIRED_SUFFIXES,
   INSTANCE_IDENTITY_REQUIRED_VARS,
   InstanceIdentityError,
   getEvidenceSiteOrigin,
@@ -71,7 +76,17 @@ type UserRecord = typeof users.$inferSelect;
 // on every path. `node --test` runs each file in its own process.
 process.env.EVIDENCE_KEY_ID ??= 'platform:test-suite-kid';
 
-/** Every instance-identity variable the getters read. */
+/**
+ * Every instance-identity variable the getters read, under BOTH accepted
+ * spellings (civic-ai-tools#160 P3).
+ *
+ * Both families are listed because `withIdentityEnv` UNSETS everything it does
+ * not set, and an absence test that cleared only one prefix would be answered
+ * by the other — silently, since the fallback is exactly the mechanism under
+ * test. The prior-era half is also what the reference fixture still uses, so
+ * the parity tests below exercise the fallback path end to end rather than
+ * asserting it in the abstract.
+ */
 const IDENTITY_VARS = [
   'EVIDENCE_SITE_ORIGIN',
   'EVIDENCE_PUBLICATION_HOST',
@@ -83,6 +98,16 @@ const IDENTITY_VARS = [
   'EVIDENCE_PLATFORM_AGENT_ID',
   'EVIDENCE_PLATFORM_AGENT_TITLE',
   'EVIDENCE_PLATFORM_AGENT_URL',
+  'PUBLISHER_SITE_ORIGIN',
+  'PUBLISHER_PUBLICATION_HOST',
+  'PUBLISHER_TRUST_REGISTRY_CANONICAL_URL',
+  'PUBLISHER_TRUST_REGISTRY_LEGACY_URL',
+  'PUBLISHER_SIGNER_BINDING_TIER',
+  'PUBLISHER_SIGNER_IDENTIFIER',
+  'PUBLISHER_SIGNER_DISPLAY_NAME',
+  'PUBLISHER_PLATFORM_AGENT_ID',
+  'PUBLISHER_PLATFORM_AGENT_TITLE',
+  'PUBLISHER_PLATFORM_AGENT_URL',
 ] as const;
 
 /** Run `fn` with the given identity env vars set (and everything else in the
@@ -154,22 +179,22 @@ test('absence: the strict resolvers throw InstanceIdentityError naming the missi
       () => requirePublicationHost(),
       (err: unknown) =>
         err instanceof InstanceIdentityError &&
-        err.missing.includes('EVIDENCE_SITE_ORIGIN'),
+        err.missing.includes('PUBLISHER_SITE_ORIGIN'),
     );
     assert.throws(
       () => getSidecarTrustRegistryUrls(),
       (err: unknown) =>
         err instanceof InstanceIdentityError &&
-        err.missing.includes('EVIDENCE_SITE_ORIGIN'),
+        err.missing.includes('PUBLISHER_SITE_ORIGIN'),
     );
     assert.throws(
       () => getEvidenceSignerIdentity(),
       (err: unknown) =>
         err instanceof InstanceIdentityError &&
         err.missing.length === 3 &&
-        err.missing.includes('EVIDENCE_SIGNER_BINDING_TIER') &&
-        err.missing.includes('EVIDENCE_SIGNER_IDENTIFIER') &&
-        err.missing.includes('EVIDENCE_SIGNER_DISPLAY_NAME'),
+        err.missing.includes('PUBLISHER_SIGNER_BINDING_TIER') &&
+        err.missing.includes('PUBLISHER_SIGNER_IDENTIFIER') &&
+        err.missing.includes('PUBLISHER_SIGNER_DISPLAY_NAME'),
     );
   });
 });
@@ -181,14 +206,46 @@ test('absence: a PARTIAL signer triple throws naming only the missing members', 
       EVIDENCE_SIGNER_IDENTIFIER: 'platform:partial',
     },
     () => {
+      // Set under the PRIOR-ERA spelling and satisfied all the same — while
+      // the one genuinely missing member is reported under its CANONICAL
+      // name, because a refusal must tell the operator the name to set, not
+      // the name being retired (civic-ai-tools#160 P3).
       assert.throws(
         () => getEvidenceSignerIdentity(),
         (err: unknown) =>
           err instanceof InstanceIdentityError &&
           err.missing.length === 1 &&
-          err.missing[0] === 'EVIDENCE_SIGNER_DISPLAY_NAME',
+          err.missing[0] === 'PUBLISHER_SIGNER_DISPLAY_NAME',
       );
       assert.equal(getConfiguredSignerIdentity(), null);
+    },
+  );
+});
+
+test('two-name expand: the canonical spelling is honored, and it wins a tie', () => {
+  // The settlement's expand half, stated where the getters live. The
+  // reference fixture (used throughout this file) is entirely prior-era, so
+  // the FALLBACK leg is already proven by every parity test below; this pins
+  // the other two legs.
+  withIdentityEnv(
+    {
+      PUBLISHER_SITE_ORIGIN: 'https://canonical.example.org',
+      PUBLISHER_PLATFORM_AGENT_TITLE: 'Canonical Instance',
+    },
+    () => {
+      assert.equal(getEvidenceSiteOrigin(), 'https://canonical.example.org');
+      assert.equal(getPlatformTitle(), 'Canonical Instance');
+      // Derivation follows the canonical value, not just the direct read.
+      assert.equal(getPublicationHost(), 'canonical.example.org');
+    },
+  );
+  withIdentityEnv(
+    {
+      PUBLISHER_SITE_ORIGIN: 'https://canonical.example.org',
+      EVIDENCE_SITE_ORIGIN: 'https://prior-era.example.org',
+    },
+    () => {
+      assert.equal(getEvidenceSiteOrigin(), 'https://canonical.example.org');
     },
   );
 });
@@ -286,19 +343,26 @@ test('anti-drift: the reference fixture equals the published packages’ demo co
 });
 
 test('anti-drift: the gate’s required-variable list matches the strict getters’ needs', () => {
+  // The CANONICAL spellings — what a refusal names and what an operator
+  // should set (civic-ai-tools#160 P3). The prior-era `EVIDENCE_*` spelling of
+  // each is still accepted; `missingInstanceIdentityVars` is the one place
+  // that answers the two-name presence question.
   assert.deepEqual([...INSTANCE_IDENTITY_REQUIRED_VARS], [
-    'EVIDENCE_SITE_ORIGIN',
-    'EVIDENCE_SIGNER_BINDING_TIER',
-    'EVIDENCE_SIGNER_IDENTIFIER',
-    'EVIDENCE_SIGNER_DISPLAY_NAME',
-    'EVIDENCE_PLATFORM_AGENT_TITLE',
+    'PUBLISHER_SITE_ORIGIN',
+    'PUBLISHER_SIGNER_BINDING_TIER',
+    'PUBLISHER_SIGNER_IDENTIFIER',
+    'PUBLISHER_SIGNER_DISPLAY_NAME',
+    'PUBLISHER_PLATFORM_AGENT_TITLE',
   ]);
   // The fixture env satisfies the required set (plus the agent id, which the
-  // reference deployment also sets explicitly).
-  for (const name of INSTANCE_IDENTITY_REQUIRED_VARS) {
+  // reference deployment also sets explicitly) — under the PRIOR-ERA names it
+  // still carries, which is the fallback leg proven against a real
+  // configuration rather than a synthetic one.
+  assert.deepEqual(missingInstanceIdentityVars(REFERENCE_IDENTITY_ENV), []);
+  for (const suffix of INSTANCE_IDENTITY_REQUIRED_SUFFIXES) {
     assert.ok(
-      (REFERENCE_IDENTITY_ENV as Record<string, string>)[name],
-      `fixture env must set ${name}`,
+      (REFERENCE_IDENTITY_ENV as Record<string, string>)[`EVIDENCE_${suffix}`],
+      `fixture env must set EVIDENCE_${suffix}`,
     );
   }
 });

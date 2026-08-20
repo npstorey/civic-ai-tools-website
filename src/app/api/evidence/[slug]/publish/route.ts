@@ -6,7 +6,8 @@ import { getPackage, putPackage, deletePackageBlob } from '@/lib/storage';
 import { emitPublicationPair } from '@/lib/evidence/publication';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
 import type { EvidencePackage } from '@/lib/evidence/packager';
-import { resolveRequestUser, hasScope } from '@/lib/api-auth';
+import { resolveRequestUser, hasPublishScope } from '@/lib/api-auth';
+import { MISSING_PUBLISH_SCOPE_ERROR } from '@/lib/publish-scope';
 import {
   runAdversarialEval,
   emitEvaluationAttestation,
@@ -70,9 +71,10 @@ export async function POST(
   if (!auth) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
-  if (!hasScope(auth, 'evidence:publish')) {
+  // Either accepted spelling authorizes — see the note at POST /api/evidence.
+  if (!hasPublishScope(auth)) {
     return NextResponse.json(
-      { error: 'Token missing required scope: evidence:publish' },
+      { error: MISSING_PUBLISH_SCOPE_ERROR },
       { status: 403 },
     );
   }

@@ -6,7 +6,7 @@
  * instance of civic-ai-tools-website needs to run, and prints a grouped
  * pass/fail table. Several of these vars fail silently or with a generic
  * error when absent (DATABASE_URL, the storage credentials,
- * EVIDENCE_SIGNING_KEY, the MCP endpoints, the model key), so a one-shot
+ * PUBLISHER_SIGNING_KEY, the MCP endpoints, the model key), so a one-shot
  * "is everything wired?" check removes that failure mode.
  *
  * INSTANCE-AWARE: an instance is not one fixed deployment shape. The three
@@ -108,6 +108,19 @@ export const DRIVER_SEAMS = {
  *     script or an eval harness); enumerated here for completeness only, and
  *     never something a deployment must deliver to the container.
  *
+ * TWO ACCEPTED NAMES for the publisher-identity set:
+ *   - `priorEraName: 'EVIDENCE_X'` — the entry's `name` is the CANONICAL
+ *     `PUBLISHER_X` spelling introduced by the 2026-08-19 vocabulary
+ *     settlement (Appendix J of the Typed Standards specification;
+ *     civic-ai-tools#160), and the prior-era spelling is still read by the
+ *     app. Presence is satisfied by EITHER name; the report shows the one that
+ *     answered and warns when it was the prior-era one. The precedence rule
+ *     mirrors `src/lib/publisher-env.ts` exactly — the CANONICAL name wins
+ *     whenever it is DEFINED, empty string included, because empty is a value
+ *     in this set (`TRUST_REGISTRY_LEGACY_URL=''` omits a URL from signed
+ *     output) and a preflight that disagreed with the app's own resolver would
+ *     pass a configuration the app then refuses.
+ *
  * A third conditional field expresses ALTERNATIVES rather than drivers — the
  * case where two variable sets satisfy the same need and an instance picks
  * one:
@@ -195,8 +208,8 @@ export const ENV_SPEC = [
   // with another deployment's registry entry (misattribution + unverifiable
   // evidence). Both halves are hard requirements of a signing instance, and
   // the SIGNING_PAIR group below adds the all-or-nothing semantics on top.
-  { name: 'EVIDENCE_SIGNING_KEY', tier: 'required', purpose: 'Ed25519 private key — signs evidence packages' },
-  { name: 'EVIDENCE_KEY_ID', tier: 'required', purpose: 'Active signing key id (kid) — must match the trust registry; no coded default' },
+  { name: 'PUBLISHER_SIGNING_KEY', priorEraName: 'EVIDENCE_SIGNING_KEY', tier: 'required', purpose: 'Ed25519 private key — signs evidence packages' },
+  { name: 'PUBLISHER_KEY_ID', priorEraName: 'EVIDENCE_KEY_ID', tier: 'required', purpose: 'Active signing key id (kid) — must match the trust registry; no coded default' },
 
   // --- Sign-in path (the rate-limit headroom option; OAuth) ---
   { name: 'NEXTAUTH_SECRET', tier: 'required', purpose: 'NextAuth session encryption' },
@@ -269,21 +282,21 @@ export const ENV_SPEC = [
   //     the "Evidence signing" group below carries the relationship. The
   //     remaining five are per-item overrides that DERIVE from the origin
   //     (host, registry URLs, agent URL) or the host (agent id). ---
-  { name: 'EVIDENCE_SITE_ORIGIN', tier: 'required', purpose: 'Instance origin — required to sign; registry URLs, platform-agent URL, notebook/bundle attribution links derive from it' },
-  { name: 'EVIDENCE_SIGNER_BINDING_TIER', tier: 'required', purpose: 'Envelope signer claim: bindingTier — required to sign; must match the registry entry (check #14)' },
-  { name: 'EVIDENCE_SIGNER_IDENTIFIER', tier: 'required', purpose: 'Envelope signer claim: identifier — required to sign; must match the registry entry (check #14)' },
-  { name: 'EVIDENCE_SIGNER_DISPLAY_NAME', tier: 'required', purpose: 'Envelope signer claim: displayName — required to sign; must match the registry entry (check #14)' },
-  { name: 'EVIDENCE_PLATFORM_AGENT_TITLE', tier: 'required', purpose: 'PROV platform-agent title + notebook attribution display name — required to sign' },
-  { name: 'EVIDENCE_PUBLICATION_HOST', tier: 'optional', purpose: 'Host label override on publishes-attestations, datHere environment.host, notebook/skill-text host mentions (derives from the origin)', hasFallback: true },
-  { name: 'EVIDENCE_TRUST_REGISTRY_CANONICAL_URL', tier: 'optional', purpose: 'Sidecar trustRegistryUrl override (defaults to origin + well-known path)', hasFallback: true },
-  { name: 'EVIDENCE_TRUST_REGISTRY_LEGACY_URL', tier: 'optional', purpose: 'Sidecar trustRegistryUrlLegacy override (empty string omits it; defaults to origin + legacy path)', hasFallback: true },
-  { name: 'EVIDENCE_PLATFORM_AGENT_ID', tier: 'optional', purpose: 'PROV platform-agent id inside the signed provenance graph (derives from the publication host)', hasFallback: true },
-  { name: 'EVIDENCE_PLATFORM_AGENT_URL', tier: 'optional', purpose: 'PROV platform-agent URL (defaults to EVIDENCE_SITE_ORIGIN)', hasFallback: true },
+  { name: 'PUBLISHER_SITE_ORIGIN', priorEraName: 'EVIDENCE_SITE_ORIGIN', tier: 'required', purpose: 'Instance origin — required to sign; registry URLs, platform-agent URL, notebook/bundle attribution links derive from it' },
+  { name: 'PUBLISHER_SIGNER_BINDING_TIER', priorEraName: 'EVIDENCE_SIGNER_BINDING_TIER', tier: 'required', purpose: 'Envelope signer claim: bindingTier — required to sign; must match the registry entry (check #14)' },
+  { name: 'PUBLISHER_SIGNER_IDENTIFIER', priorEraName: 'EVIDENCE_SIGNER_IDENTIFIER', tier: 'required', purpose: 'Envelope signer claim: identifier — required to sign; must match the registry entry (check #14)' },
+  { name: 'PUBLISHER_SIGNER_DISPLAY_NAME', priorEraName: 'EVIDENCE_SIGNER_DISPLAY_NAME', tier: 'required', purpose: 'Envelope signer claim: displayName — required to sign; must match the registry entry (check #14)' },
+  { name: 'PUBLISHER_PLATFORM_AGENT_TITLE', priorEraName: 'EVIDENCE_PLATFORM_AGENT_TITLE', tier: 'required', purpose: 'PROV platform-agent title + notebook attribution display name — required to sign' },
+  { name: 'PUBLISHER_PUBLICATION_HOST', priorEraName: 'EVIDENCE_PUBLICATION_HOST', tier: 'optional', purpose: 'Host label override on publishes-attestations, datHere environment.host, notebook/skill-text host mentions (derives from the origin)', hasFallback: true },
+  { name: 'PUBLISHER_TRUST_REGISTRY_CANONICAL_URL', priorEraName: 'EVIDENCE_TRUST_REGISTRY_CANONICAL_URL', tier: 'optional', purpose: 'Sidecar trustRegistryUrl override (defaults to origin + well-known path)', hasFallback: true },
+  { name: 'PUBLISHER_TRUST_REGISTRY_LEGACY_URL', priorEraName: 'EVIDENCE_TRUST_REGISTRY_LEGACY_URL', tier: 'optional', purpose: 'Sidecar trustRegistryUrlLegacy override (empty string omits it; defaults to origin + legacy path)', hasFallback: true },
+  { name: 'PUBLISHER_PLATFORM_AGENT_ID', priorEraName: 'EVIDENCE_PLATFORM_AGENT_ID', tier: 'optional', purpose: 'PROV platform-agent id inside the signed provenance graph (derives from the publication host)', hasFallback: true },
+  { name: 'PUBLISHER_PLATFORM_AGENT_URL', priorEraName: 'EVIDENCE_PLATFORM_AGENT_URL', tier: 'optional', purpose: 'PROV platform-agent URL (defaults to PUBLISHER_SITE_ORIGIN)', hasFallback: true },
 
   // --- Instance branding (#217: chrome-only theming seam; src/lib/brand-config.ts).
   //     All optional with coded defaults: unset, the demo chrome renders
   //     byte-identically. Chrome only — nothing here is emitted inside signed
-  //     evidence (that is the EVIDENCE_* identity set above), so these can
+  //     evidence (that is the PUBLISHER_* identity set above), so these can
   //     never invalidate a package or a registry cross-check. ---
   { name: 'SITE_BRAND_NAME', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Instance display name — header wordmark, page titles, citation labels (default "Civic AI Tools")', hasFallback: true },
   { name: 'SITE_BRAND_ACCENT', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Accent color (#rgb/#rrggbb) — overrides the accent tokens site-wide; unset or invalid = stylesheet default', hasFallback: true },
@@ -300,7 +313,15 @@ export const ENV_SPEC = [
   { name: 'ROADMAP_GITHUB_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: '/roadmap "view source" link and byline label (unset: derived from ROADMAP_RAW_URL)', hasFallback: true },
 
   // --- Optional / feature / ops ---
-  { name: 'EVIDENCE_TRUST_REGISTRY_URL', tier: 'optional', purpose: 'External trust-registry override', hasFallback: true },
+  { name: 'PUBLISHER_TRUST_REGISTRY_URL', priorEraName: 'EVIDENCE_TRUST_REGISTRY_URL', tier: 'optional', purpose: 'External trust-registry override', hasFallback: true },
+  // WRITTEN, NEVER READ — the fourteenth variable of the settlement's Group A,
+  // and the one this inventory used to miss precisely because the inventory
+  // was derived from `process.env.*` reads. scripts/generate-signing-key.ts
+  // emits it beside the private key so an operator has the public half to
+  // publish in their trust registry; no app code loads it. Listed as
+  // `external-tool` so it is enumerated for completeness without a deployment
+  // ever being asked to deliver it to the container.
+  { name: 'PUBLISHER_PUBLIC_KEY', priorEraName: 'EVIDENCE_PUBLIC_KEY', readBy: 'external-tool', tier: 'optional', purpose: 'Public half of the signing keypair — written by scripts/generate-signing-key.ts for the trust-registry entry; never read by the app' },
   { name: 'CIVICAITOOLS_SESSION_TOKEN', readBy: 'external-tool', tier: 'optional', purpose: 'publish-evidence skill (Claude Code) auth' },
   { name: 'CRON_SECRET', tier: 'optional', purpose: 'Cron endpoint auth (blob-gc, portal refresh)' },
   { name: 'NEXT_PUBLIC_GA_MEASUREMENT_ID', readBy: 'build', tier: 'optional', purpose: 'Google Analytics 4' },
@@ -378,13 +399,13 @@ export const ENV_GROUPS = [
   {
     name: 'Evidence signing',
     members: [
-      'EVIDENCE_SIGNING_KEY',
-      'EVIDENCE_KEY_ID',
-      'EVIDENCE_SITE_ORIGIN',
-      'EVIDENCE_SIGNER_BINDING_TIER',
-      'EVIDENCE_SIGNER_IDENTIFIER',
-      'EVIDENCE_SIGNER_DISPLAY_NAME',
-      'EVIDENCE_PLATFORM_AGENT_TITLE',
+      'PUBLISHER_SIGNING_KEY',
+      'PUBLISHER_KEY_ID',
+      'PUBLISHER_SITE_ORIGIN',
+      'PUBLISHER_SIGNER_BINDING_TIER',
+      'PUBLISHER_SIGNER_IDENTIFIER',
+      'PUBLISHER_SIGNER_DISPLAY_NAME',
+      'PUBLISHER_PLATFORM_AGENT_TITLE',
     ],
     // src/lib/evidence/unsigned-tier.ts: `isSigningConfigured` requires BOTH
     // custody halves (key + declared kid), and as of #258 the seal/commit
@@ -398,7 +419,7 @@ export const ENV_GROUPS = [
     // `instance_identity_missing`) and the banner shows — but preflight is
     // where the operator sees the RELATIONSHIP before a deploy.
     feature: 'evidence seal/publish stays gated off — the instance cannot sign',
-    note: 'Key, key id, and the instance-identity set travel together: a key without a declared kid refuses rather than emit a kid it never declared, and a signing pair without EVIDENCE_SITE_ORIGIN, the EVIDENCE_SIGNER_* triple, and EVIDENCE_PLATFORM_AGENT_TITLE refuses rather than sign under an identity this instance never configured (docs/instance-setup.md).',
+    note: 'Key, key id, and the instance-identity set travel together: a key without a declared kid refuses rather than emit a kid it never declared, and a signing pair without PUBLISHER_SITE_ORIGIN, the PUBLISHER_SIGNER_* triple, and PUBLISHER_PLATFORM_AGENT_TITLE refuses rather than sign under an identity this instance never configured (docs/instance-setup.md). Each of those also answers to its prior-era EVIDENCE_* spelling.',
   },
   {
     name: 'Durable rate limiting',
@@ -461,6 +482,44 @@ function allPresent(names, env) {
   return names.every((name) => isPresent(env[name]));
 }
 
+/** ENV_SPEC indexed by canonical name, so a group member resolves to its
+ *  entry (and therefore to its two-name rule) rather than to a bare lookup. */
+function specIndex(spec) {
+  const byName = new Map();
+  for (const s of spec) byName.set(s.name, s);
+  return byName;
+}
+
+/**
+ * Resolve ONE spec entry against `env`, honoring the two accepted names.
+ *
+ * Mirrors `src/lib/publisher-env.ts` deliberately and exactly: the canonical
+ * name wins whenever it is DEFINED — empty string included — and only an
+ * entirely unset canonical name falls through to the prior-era spelling. A
+ * preflight that resolved differently from the app's own reader would pass a
+ * configuration the app then refuses, which is worse than no preflight.
+ *
+ * Returns the name that ANSWERED (the canonical one when neither did), the raw
+ * value for the presence test, and whether the prior-era name supplied it.
+ * Nothing is echoed: the raw value is consumed by `isPresent` alone.
+ *
+ * @param {{ name: string, priorEraName?: string }} entry
+ * @param {Record<string, string | undefined>} env
+ */
+export function resolveEnvName(entry, env) {
+  const canonical = env[entry.name];
+  if (typeof canonical === 'string') {
+    return { name: entry.name, raw: canonical, viaPriorEra: false };
+  }
+  if (typeof entry.priorEraName === 'string') {
+    const priorEra = env[entry.priorEraName];
+    if (typeof priorEra === 'string') {
+      return { name: entry.priorEraName, raw: priorEra, viaPriorEra: true };
+    }
+  }
+  return { name: entry.name, raw: undefined, viaPriorEra: false };
+}
+
 /**
  * Detect partially set all-or-nothing groups (#195). A group whose
  * `onlyWhen` condition the resolved drivers do not meet is skipped entirely
@@ -473,11 +532,17 @@ function allPresent(names, env) {
  * @param {typeof ENV_GROUPS} [groups]
  * @returns {{ name: string, feature: string, note?: string, total: number, present: string[], missing: string[] }[]}
  */
-export function evaluateGroups(env, drivers, groups = ENV_GROUPS) {
+export function evaluateGroups(env, drivers, groups = ENV_GROUPS, spec = ENV_SPEC) {
+  const byName = specIndex(spec);
+  // A member counts as present under EITHER of its accepted names; a member
+  // that is MISSING is named canonically, because the warning tells an
+  // operator what to set and the prior-era spelling is the one being retired.
+  const memberPresent = (name) =>
+    isPresent(resolveEnvName(byName.get(name) ?? { name }, env).raw);
   const partial = [];
   for (const g of groups) {
     if (g.onlyWhen && !conditionMet(g.onlyWhen, drivers)) continue;
-    const present = g.members.filter((name) => isPresent(env[name]));
+    const present = g.members.filter(memberPresent);
     if (present.length === 0 || present.length === g.members.length) continue;
     partial.push({
       name: g.name,
@@ -485,7 +550,7 @@ export function evaluateGroups(env, drivers, groups = ENV_GROUPS) {
       note: g.note,
       total: g.members.length,
       present,
-      missing: g.members.filter((name) => !isPresent(env[name])),
+      missing: g.members.filter((name) => !memberPresent(name)),
     });
   }
   return partial;
@@ -542,13 +607,18 @@ export function evaluateEnv(env, spec = ENV_SPEC) {
   const { applicable, notApplicable } = resolveSpec(drivers, spec, env);
 
   const rows = applicable.map((s) => {
-    const present = isPresent(env[s.name]);
+    const resolved = resolveEnvName(s, env);
     return {
-      name: s.name,
+      // The name that ANSWERED — so an instance still on the prior-era
+      // spelling sees the variable it actually set, not one it did not.
+      name: resolved.name,
+      // The name to set from here on; drives the deprecation notice below.
+      canonicalName: s.name,
+      viaPriorEra: resolved.viaPriorEra,
       tier: s.tier,
       purpose: s.purpose,
       hasFallback: Boolean(s.hasFallback),
-      present,
+      present: isPresent(resolved.raw),
     };
   });
 
@@ -560,7 +630,11 @@ export function evaluateEnv(env, spec = ENV_SPEC) {
   const missingRequired = rows.filter((r) => r.tier === 'required' && !r.present && !r.hasFallback);
   const requiredOnFallback = rows.filter((r) => r.tier === 'required' && !r.present && r.hasFallback);
   const missingRecommended = rows.filter((r) => r.tier === 'recommended' && !r.present);
-  const partialGroups = evaluateGroups(env, drivers);
+  const partialGroups = evaluateGroups(env, drivers, ENV_GROUPS, spec);
+  // Variables supplied under a prior-era name. Warn-only and never a failure:
+  // both spellings work, and the expand half of the settlement exists exactly
+  // so that an instance mid-rename is a working instance.
+  const deprecatedNames = rows.filter((r) => r.viaPriorEra);
 
   return {
     rows,
@@ -571,6 +645,7 @@ export function evaluateEnv(env, spec = ENV_SPEC) {
     // a partial group never flips `ok` — each member's own tier already
     // governs pass/fail, and the group adds the set semantics on top.
     partialGroups,
+    deprecatedNames,
     // Profile context. `notApplicable` is deliberately NOT rendered as rows:
     // an instance must not be told about variables its profile never reads.
     profile: { drivers, isDefault },
@@ -649,6 +724,22 @@ export function renderReport(result) {
       lines.push(`            - ${g.name}: ${g.present.length} of ${g.total} present; off until all ${g.total} are set. Missing: ${g.missing.join(', ')}`);
       lines.push(`              (while partial: ${g.feature})`);
       if (g.note) lines.push(`              Note: ${g.note}`);
+    }
+  }
+  // Prior-era variable names still in use (civic-ai-tools#160 P3). A NOTE,
+  // not a WARN and never a failure: the value reached the app, the instance
+  // works, and the rename is the operator's to schedule. It is reported at all
+  // because the alternative — silence — leaves an operator to discover the new
+  // names from a release note, and because this list is exactly the work the
+  // eventual removal will require.
+  if (result.deprecatedNames && result.deprecatedNames.length > 0) {
+    lines.push(
+      `  NOTE: ${result.deprecatedNames.length} variable(s) supplied under a prior-era name.`,
+    );
+    lines.push('        Both spellings work today; the prior-era one is removed at a future');
+    lines.push('        major version (2026-08-19 vocabulary settlement):');
+    for (const r of result.deprecatedNames) {
+      lines.push(`            - ${r.name} → rename to ${r.canonicalName}`);
     }
   }
   if (result.requiredOnFallback && result.requiredOnFallback.length > 0) {

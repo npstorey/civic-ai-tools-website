@@ -8,7 +8,8 @@ import { hash } from '@/lib/evidence/trace';
 import { signPackage, getRfc3161Timestamp, publishToRekor, getActiveSigner, type SignerIdentity } from '@/lib/evidence/signing';
 import { captureVocabForProfile } from '@/lib/evidence/profiles';
 import { type BlobRef } from '@/lib/evidence/blob-ref';
-import { resolveRequestUser, hasScope } from '@/lib/api-auth';
+import { resolveRequestUser, hasPublishScope } from '@/lib/api-auth';
+import { MISSING_PUBLISH_SCOPE_ERROR } from '@/lib/publish-scope';
 import { emitPublicationPair } from '@/lib/evidence/publication';
 import { evaluateSealCommitGate } from '@/lib/evidence/unsigned-tier';
 import {
@@ -134,9 +135,12 @@ export async function POST(request: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-    if (!hasScope(auth, 'evidence:publish')) {
+    // Either accepted spelling of the publish scope authorizes here — live
+    // tokens minted before the 2026-08-19 vocabulary settlement carry the
+    // prior-era one (civic-ai-tools#160 P3).
+    if (!hasPublishScope(auth)) {
       return NextResponse.json(
-        { error: 'Token missing required scope: evidence:publish' },
+        { error: MISSING_PUBLISH_SCOPE_ERROR },
         { status: 403 },
       );
     }

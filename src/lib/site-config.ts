@@ -5,6 +5,15 @@
 // graph (via the evidence modules), which resolves neither the `@/` alias nor
 // extensionless specifiers — the same convention as evidence/verify.ts.
 import { describeContentSource, type ContentProvenance } from './content-source.ts';
+// The two-name resolver for the publisher-identity variables (Group A of the
+// 2026-08-19 vocabulary settlement): `PUBLISHER_*` first, `EVIDENCE_*` as the
+// prior-era fallback, with a once-per-variable deprecation warning. Every
+// getter below reads through it rather than touching `process.env` directly.
+import {
+  canonicalEnvName,
+  readPublisherEnv,
+  type PublisherEnvSuffix,
+} from './publisher-env.ts';
 
 /** The Typed Standards protocol site — spec home and neutral verifier. */
 export const TYPED_STANDARDS_URL = 'https://typedstandards.org';
@@ -176,10 +185,21 @@ export function getRoadmapSource(): RoadmapSource | null {
   };
 }
 
-// --- Evidence instance identity (ADR-0020: config, not code; #258:
+// --- Publisher instance identity (ADR-0020: config, not code; #258:
 //     required for signing, never defaulted) --------------------------------
 //
-// Every value that names THIS deployment inside emitted evidence surfaces —
+// TWO ACCEPTED NAMES PER VARIABLE, and the rule is stated here once rather
+// than repeated at every getter. The 2026-08-19 vocabulary settlement
+// (Appendix J of the Typed Standards specification; civic-ai-tools#160) moves
+// this set from the `EVIDENCE_` prefix to `PUBLISHER_`, under the
+// `expand-then-flip` migration class. Every getter below reads
+// `PUBLISHER_<NAME>` first and falls back to `EVIDENCE_<NAME>`, warning once
+// per variable when the prior-era name is what answered — see
+// `src/lib/publisher-env.ts`, which owns the census and the precedence rule.
+// Variable names written below are the CANONICAL ones; the prior-era spelling
+// of each is the same name under the other prefix, and it still works.
+//
+// Every value that names THIS deployment inside emitted record surfaces —
 // the proof sidecar's trust-registry URLs, the envelope `signer` claim, the
 // publication host label, the PROV platform agent, notebook attribution —
 // resolves through the getters below, from the ENVIRONMENT ONLY. There are
@@ -206,7 +226,7 @@ export function getRoadmapSource(): RoadmapSource | null {
 //     from origin, platform-agent URL from origin. Operator-supplied values
 //     may ground derived values; reference constants may not.
 //
-// An instance sets `EVIDENCE_SITE_ORIGIN` plus the signer/key variables and
+// An instance sets `PUBLISHER_SITE_ORIGIN` plus the signer/key variables and
 // every derived surface follows; each item is also individually overridable
 // for split-host deployments. Values are read at CALL time (not module load)
 // so tests and rotation drills can vary them per-process.
@@ -219,18 +239,32 @@ export function getRoadmapSource(): RoadmapSource | null {
 /**
  * The variables an instance MUST set before any signed emission — the
  * identity half of the go-to-production step (the custody half is the
- * `EVIDENCE_SIGNING_KEY` + `EVIDENCE_KEY_ID` pair in unsigned-tier.ts).
- * Everything else in the identity set derives from these (host and URLs from
- * the origin, the agent id from the host) or is a per-item override.
- * `evaluateSealCommitGate` refuses with exactly the missing names.
+ * signing-key + key-id pair in unsigned-tier.ts). Everything else in the
+ * identity set derives from these (host and URLs from the origin, the agent id
+ * from the host) or is a per-item override.
+ *
+ * Declared by SUFFIX because each one has two accepted names since the
+ * 2026-08-19 vocabulary settlement — `PUBLISHER_SITE_ORIGIN` canonically, with
+ * `EVIDENCE_SITE_ORIGIN` still honored. Presence is therefore a two-name
+ * question, and the one place that answers it is
+ * `missingInstanceIdentityVars` in unsigned-tier.ts.
  */
-export const INSTANCE_IDENTITY_REQUIRED_VARS = [
-  'EVIDENCE_SITE_ORIGIN',
-  'EVIDENCE_SIGNER_BINDING_TIER',
-  'EVIDENCE_SIGNER_IDENTIFIER',
-  'EVIDENCE_SIGNER_DISPLAY_NAME',
-  'EVIDENCE_PLATFORM_AGENT_TITLE',
-] as const;
+export const INSTANCE_IDENTITY_REQUIRED_SUFFIXES = [
+  'SITE_ORIGIN',
+  'SIGNER_BINDING_TIER',
+  'SIGNER_IDENTIFIER',
+  'SIGNER_DISPLAY_NAME',
+  'PLATFORM_AGENT_TITLE',
+] as const satisfies readonly PublisherEnvSuffix[];
+
+/**
+ * The same five variables under their CANONICAL names — what a refusal names
+ * and what an operator should set. `evaluateSealCommitGate` refuses with
+ * exactly the missing names from this list, noting that the prior-era
+ * `EVIDENCE_*` spellings are still accepted.
+ */
+export const INSTANCE_IDENTITY_REQUIRED_VARS: readonly string[] =
+  INSTANCE_IDENTITY_REQUIRED_SUFFIXES.map(canonicalEnvName);
 
 /**
  * Thrown when an identity-bearing emission path runs without the instance
@@ -261,14 +295,14 @@ function presentOrNull(raw: string | undefined): string | null {
 }
 
 /**
- * Public origin of this instance for evidence emission (absolute URLs inside
- * emitted proofs and signed output). Env: `EVIDENCE_SITE_ORIGIN`; `null`
+ * Public origin of this instance for record emission (absolute URLs inside
+ * emitted proofs and signed output). Env: `PUBLISHER_SITE_ORIGIN`; `null`
  * when unset — the caller omits (display surfaces) or refuses (emission
  * paths; those sit behind the seal/commit gate). Trailing slash is trimmed
  * so derived URLs stay canonical.
  */
 export function getEvidenceSiteOrigin(): string | null {
-  const raw = presentOrNull(process.env.EVIDENCE_SITE_ORIGIN);
+  const raw = presentOrNull(readPublisherEnv('SITE_ORIGIN'));
   return raw === null ? null : raw.replace(/\/$/, '');
 }
 
@@ -276,11 +310,11 @@ export function getEvidenceSiteOrigin(): string | null {
  * Host label of this instance — the `publicationHost` on
  * `attestation/publishes/v1` nodes, the datHere environment extension's
  * `host` field, and the "via …" attribution host. Env:
- * `EVIDENCE_PUBLICATION_HOST`; derives from the host of
+ * `PUBLISHER_PUBLICATION_HOST`; derives from the host of
  * `getEvidenceSiteOrigin()` when unset; `null` when neither is configured.
  */
 export function getPublicationHost(): string | null {
-  const explicit = presentOrNull(process.env.EVIDENCE_PUBLICATION_HOST);
+  const explicit = presentOrNull(readPublisherEnv('PUBLICATION_HOST'));
   if (explicit) return explicit;
   const origin = getEvidenceSiteOrigin();
   if (origin === null) return null;
@@ -303,7 +337,7 @@ export function requirePublicationHost(): string {
   const host = getPublicationHost();
   if (host === null) {
     throw new InstanceIdentityError(
-      ['EVIDENCE_SITE_ORIGIN'],
+      [canonicalEnvName('SITE_ORIGIN')],
       'a publication host label inside signed output',
     );
   }
@@ -314,7 +348,8 @@ export function requirePublicationHost(): string {
  * Trust-registry URLs emitted into the proof sidecar (spec §8.8.1) — the TOP
  * ADR-0020 correctness item: an instance shipping another deployment's URLs
  * emits proofs pointing at a registry that lacks its key. Envs:
- * `EVIDENCE_TRUST_REGISTRY_CANONICAL_URL` / `EVIDENCE_TRUST_REGISTRY_LEGACY_URL`;
+ * `PUBLISHER_TRUST_REGISTRY_CANONICAL_URL` /
+ * `PUBLISHER_TRUST_REGISTRY_LEGACY_URL`;
  * both default to well-known paths on `getEvidenceSiteOrigin()` (the app
  * parallel-serves both paths from one registry file). Set the legacy var to
  * an empty string to omit `trustRegistryUrlLegacy` entirely — an instance
@@ -332,15 +367,15 @@ export function getSidecarTrustRegistryUrls(): {
 } {
   const origin = getEvidenceSiteOrigin();
   const canonical =
-    presentOrNull(process.env.EVIDENCE_TRUST_REGISTRY_CANONICAL_URL) ??
+    presentOrNull(readPublisherEnv('TRUST_REGISTRY_CANONICAL_URL')) ??
     (origin !== null ? `${origin}/.well-known/typed-publisher.json` : null);
   if (canonical === null) {
     throw new InstanceIdentityError(
-      ['EVIDENCE_SITE_ORIGIN'],
+      [canonicalEnvName('SITE_ORIGIN')],
       "the proof sidecar's trust-registry URL",
     );
   }
-  const legacyRaw = process.env.EVIDENCE_TRUST_REGISTRY_LEGACY_URL;
+  const legacyRaw = readPublisherEnv('TRUST_REGISTRY_LEGACY_URL');
   const legacy =
     legacyRaw === ''
       ? undefined
@@ -354,9 +389,9 @@ export function getSidecarTrustRegistryUrls(): {
 /**
  * Envelope-side signer identity claim for this instance (spec §8.1.1, §8.5)
  * — emitted verbatim inside signed output. Envs:
- * `EVIDENCE_SIGNER_BINDING_TIER` / `EVIDENCE_SIGNER_IDENTIFIER` /
- * `EVIDENCE_SIGNER_DISPLAY_NAME`. These MUST match the `signerIdentity`
- * recorded for the active `EVIDENCE_KEY_ID` in the instance's trust registry
+ * `PUBLISHER_SIGNER_BINDING_TIER` / `PUBLISHER_SIGNER_IDENTIFIER` /
+ * `PUBLISHER_SIGNER_DISPLAY_NAME`. These MUST match the `signerIdentity`
+ * recorded for the active `PUBLISHER_KEY_ID` in the instance's trust registry
  * (verify check #14 cross-checks the two).
  *
  * Throws `InstanceIdentityError` naming exactly the missing variables when
@@ -370,13 +405,13 @@ export function getEvidenceSignerIdentity(): {
   identifier: string;
   displayName: string;
 } {
-  const bindingTier = presentOrNull(process.env.EVIDENCE_SIGNER_BINDING_TIER);
-  const identifier = presentOrNull(process.env.EVIDENCE_SIGNER_IDENTIFIER);
-  const displayName = presentOrNull(process.env.EVIDENCE_SIGNER_DISPLAY_NAME);
+  const bindingTier = presentOrNull(readPublisherEnv('SIGNER_BINDING_TIER'));
+  const identifier = presentOrNull(readPublisherEnv('SIGNER_IDENTIFIER'));
+  const displayName = presentOrNull(readPublisherEnv('SIGNER_DISPLAY_NAME'));
   const missing: string[] = [];
-  if (bindingTier === null) missing.push('EVIDENCE_SIGNER_BINDING_TIER');
-  if (identifier === null) missing.push('EVIDENCE_SIGNER_IDENTIFIER');
-  if (displayName === null) missing.push('EVIDENCE_SIGNER_DISPLAY_NAME');
+  if (bindingTier === null) missing.push(canonicalEnvName('SIGNER_BINDING_TIER'));
+  if (identifier === null) missing.push(canonicalEnvName('SIGNER_IDENTIFIER'));
+  if (displayName === null) missing.push(canonicalEnvName('SIGNER_DISPLAY_NAME'));
   if (missing.length > 0) {
     throw new InstanceIdentityError(
       missing,
@@ -412,7 +447,7 @@ export function getConfiguredSignerIdentity(): {
 /**
  * Display name of this instance for attribution surfaces — the "Generated
  * by …" lines in authored/downloaded notebooks. Reuses
- * `EVIDENCE_PLATFORM_AGENT_TITLE` (one variable names the instance in both
+ * `PUBLISHER_PLATFORM_AGENT_TITLE` (one variable names the instance in both
  * the PROV agent and the human-readable attribution); `null` when unset —
  * attribution surfaces then omit their "Generated by …" line rather than
  * claim a name (#258 A2). Client-rendered surfaces (the notebook download
@@ -420,14 +455,14 @@ export function getConfiguredSignerIdentity(): {
  * this getter reads nothing useful in the browser bundle.
  */
 export function getPlatformTitle(): string | null {
-  return presentOrNull(process.env.EVIDENCE_PLATFORM_AGENT_TITLE);
+  return presentOrNull(readPublisherEnv('PLATFORM_AGENT_TITLE'));
 }
 
 /**
  * Overrides for the PROV platform agent (WHO published, as a prov:Agent
- * inside the signed provenance graph). Envs: `EVIDENCE_PLATFORM_AGENT_ID` /
- * `EVIDENCE_PLATFORM_AGENT_TITLE` / `EVIDENCE_PLATFORM_AGENT_URL`; the agent
- * URL follows `EVIDENCE_SITE_ORIGIN` when unset, so a one-variable instance
+ * inside the signed provenance graph). Envs: `PUBLISHER_PLATFORM_AGENT_ID` /
+ * `PUBLISHER_PLATFORM_AGENT_TITLE` / `PUBLISHER_PLATFORM_AGENT_URL`; the agent
+ * URL follows `PUBLISHER_SITE_ORIGIN` when unset, so a one-variable instance
  * setup re-points the agent too. `undefined` members mean "not configured" —
  * the packager (the sole signing-path consumer) requires title + url and
  * derives a missing id from the publication host; it never substitutes a
@@ -439,10 +474,10 @@ export function getPlatformAgentOverrides(): {
   url?: string;
 } {
   return {
-    id: presentOrNull(process.env.EVIDENCE_PLATFORM_AGENT_ID) ?? undefined,
+    id: presentOrNull(readPublisherEnv('PLATFORM_AGENT_ID')) ?? undefined,
     title: getPlatformTitle() ?? undefined,
     url:
-      presentOrNull(process.env.EVIDENCE_PLATFORM_AGENT_URL) ??
+      presentOrNull(readPublisherEnv('PLATFORM_AGENT_URL')) ??
       getEvidenceSiteOrigin() ??
       undefined,
   };
@@ -456,11 +491,11 @@ export function getPlatformAgentOverrides(): {
  * `EvidenceOriginProvider`, so the browser bundle never needs the env.
  */
 export interface InstanceAttribution {
-  /** Public origin (`EVIDENCE_SITE_ORIGIN`), e.g. `https://example.org`. */
+  /** Public origin (`PUBLISHER_SITE_ORIGIN`), e.g. `https://example.org`. */
   origin: string | null;
-  /** Host label (`EVIDENCE_PUBLICATION_HOST` or derived from the origin). */
+  /** Host label (`PUBLISHER_PUBLICATION_HOST` or derived from the origin). */
   host: string | null;
-  /** Display name (`EVIDENCE_PLATFORM_AGENT_TITLE`). */
+  /** Display name (`PUBLISHER_PLATFORM_AGENT_TITLE`). */
   platformTitle: string | null;
 }
 

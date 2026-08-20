@@ -23,7 +23,13 @@
  *      its `build.args`; one read at both must appear in both (see `readBy`
  *      in ENV_SPEC). Not-applicable variables (a driver this profile does not
  *      select) and `external-tool` variables are excluded — an instance must
- *      not be asked to deliver what it will never read.
+ *      not be asked to deliver what it will never read. Coverage is satisfied
+ *      by EITHER accepted name for the publisher-identity set: since the
+ *      2026-08-19 vocabulary settlement each of those has a canonical
+ *      `PUBLISHER_*` spelling and a prior-era `EVIDENCE_*` one, and the app
+ *      reads both (Appendix J; civic-ai-tools#160). The compose file names the
+ *      prior-era spellings today; a NOTE lists them, because that list is
+ *      exactly the work the flip phase has to do here.
  *   2. FORM — an `environment` entry written `${NAME:-}` is rejected. That
  *      form does NOT pass a variable through: it always sets the variable, to
  *      the empty string when the caller's environment has none. Empty is not
@@ -33,8 +39,9 @@
  *      and the host-topology trio all carry meaning in their absence too. Bare
  *      `NAME:` is the form that leaves an unset variable unset.
  *   3. DRIFT, the other way — a variable in the app service's `environment`
- *      that ENV_SPEC does not declare. Either the app stopped reading it, or
- *      the inventory is stale; both are worth knowing.
+ *      that ENV_SPEC does not declare under EITHER of its accepted names.
+ *      Either the app stopped reading it, or the inventory is stale; both are
+ *      worth knowing.
  *
  * It reads NO values from the environment and prints none: it compares two
  * checked-in files. Exit 0 clean, 1 on any failure.
@@ -206,6 +213,13 @@ export function checkComposeEnvCoverage(composeText, spec = ENV_SPEC, service = 
   const missingBuildArg = [];
   const emptyDefaultForm = [];
   const runtimeInert = [];
+  const priorEraNamesInUse = [];
+
+  /** Every name a spec entry answers to — canonical first. */
+  const acceptedNames = (entry) =>
+    typeof entry.priorEraName === 'string' ? [entry.name, entry.priorEraName] : [entry.name];
+  /** Whether ANY accepted name of `entry` appears in `map`. */
+  const covered = (map, entry) => acceptedNames(entry).some((n) => map.has(n));
 
   for (const entry of applicable) {
     const readBy = entry.readBy ?? 'runtime';
@@ -214,16 +228,21 @@ export function checkComposeEnvCoverage(composeText, spec = ENV_SPEC, service = 
     const needsRuntime = readBy === 'runtime' || readBy === 'build-and-runtime';
     const needsBuildArg = readBy === 'build' || readBy === 'build-and-runtime';
 
-    if (needsRuntime && coverageProvable && !environment.has(entry.name)) {
+    if (needsRuntime && coverageProvable && !covered(environment, entry)) {
       missingRuntime.push(entry);
     }
-    if (needsBuildArg && !buildArgs.has(entry.name)) {
+    if (needsBuildArg && !covered(buildArgs, entry)) {
       missingBuildArg.push(entry);
     }
     // A build-only value in `environment` reads as though setting it at run
     // time would do something. It cannot: the value is already inlined.
-    if (readBy === 'build' && environment.has(entry.name)) {
+    if (readBy === 'build' && covered(environment, entry)) {
       runtimeInert.push(entry);
+    }
+    // Delivered under the retiring spelling — reported, never failed. The
+    // compose file is the flip phase's surface, not this phase's.
+    if (typeof entry.priorEraName === 'string' && environment.has(entry.priorEraName)) {
+      priorEraNamesInUse.push(entry);
     }
   }
 
@@ -231,7 +250,9 @@ export function checkComposeEnvCoverage(composeText, spec = ENV_SPEC, service = 
     if (typeof value === 'string' && EMPTY_DEFAULT_FORM.test(value)) emptyDefaultForm.push(name);
   }
 
-  const declared = new Set(spec.map((s) => s.name));
+  // Both accepted names count as declared: the compose file naming the
+  // prior-era spelling is the CURRENT state of that file, not inventory drift.
+  const declared = new Set(spec.flatMap(acceptedNames));
   const notApplicableNames = new Set(notApplicable.map((s) => s.name));
   const undeclared = [...environment.keys()].filter((n) => !declared.has(n));
   // Present but inert under this profile: not a failure (an operator may be
@@ -254,6 +275,7 @@ export function checkComposeEnvCoverage(composeText, spec = ENV_SPEC, service = 
     missingBuildArg,
     emptyDefaultForm,
     runtimeInert,
+    priorEraNamesInUse,
     undeclared,
     inapplicablePresent,
     counts: { environment: environment.size, buildArgs: buildArgs.size, applicable: applicable.length },
@@ -312,6 +334,17 @@ export function renderComposeReport(result, service = APP_SERVICE) {
     lines.push(`  FAIL: ${result.undeclared.length} variable(s) passed to the container that ENV_SPEC does not`);
     lines.push('        declare — either the app stopped reading them, or the inventory is stale:');
     for (const n of result.undeclared) lines.push(`          - ${n}`);
+    lines.push('');
+  }
+  if (result.priorEraNamesInUse && result.priorEraNamesInUse.length > 0) {
+    lines.push(
+      `  NOTE: ${result.priorEraNamesInUse.length} variable(s) passed through under a prior-era`,
+    );
+    lines.push('        name. Both spellings reach the app, so this is not a failure — it is');
+    lines.push('        the inventory of what the vocabulary flip has to rename here:');
+    for (const e of result.priorEraNamesInUse) {
+      lines.push(`          - ${e.priorEraName} → ${e.name}`);
+    }
     lines.push('');
   }
   if (result.inapplicablePresent.length > 0) {

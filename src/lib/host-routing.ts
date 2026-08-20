@@ -51,11 +51,13 @@
  * not security: the access gate is sign-in (`SIGN_IN_ALLOWLIST`), and
  * routes keep enforcing their own sessions.
  *
- * Deliberately DUAL-SERVED either way: `/evidence` and `/evidence/[slug]`
- * (public product surface — published URLs must keep resolving on the
- * marketing host; their `(app)` group placement is structural, not an
- * access classification), the whole `/api/*` family, `_next`, and static
- * assets.
+ * Deliberately DUAL-SERVED either way: the published-record pages under BOTH
+ * of their addresses — `/records` and `/records/[slug]` (the settlement-era
+ * segment) and `/evidence` and `/evidence/[slug]` (its permanent prior-era
+ * alias; Appendix J, civic-ai-tools#160) — because they are the public product
+ * surface and published URLs must keep resolving on the marketing host; their
+ * `(app)` group placement is structural, not an access classification. Also
+ * the whole `/api/*` family, `_next`, and static assets.
  *
  * Host MATCHING mirrors `api-auth.ts`'s origin normalization:
  * case-insensitive, port-insensitive, and `www.`-insensitive, so an
@@ -237,8 +239,20 @@ export const APP_PRIVATE_PATHS = [
   '/dev/notebook-preview',
 ] as const;
 
-/** Public product surface served on BOTH hosts (owner-decided; see module doc). */
-export const DUAL_SERVED_PATHS = ['/evidence'] as const;
+/**
+ * Public product surface served on BOTH hosts (owner-decided; see module doc).
+ *
+ * TWO ENTRIES, ONE SURFACE. `/records` is the settlement-era address of the
+ * published-record pages and `/evidence` is its permanent prior-era alias
+ * (Appendix J of the Typed Standards specification; civic-ai-tools#160). They
+ * render the same pages, so they must classify the same way: a `/records` URL
+ * that fell through to `'other'` would still SERVE on both hosts today, but it
+ * would do so by accident rather than by decision, and the reverse guard in
+ * `host-routing.paths.test.ts` would stop noticing if the pages moved.
+ * Whatever the topology does to one address it must do to the other — which is
+ * exactly what listing both here buys.
+ */
+export const DUAL_SERVED_PATHS = ['/evidence', '/records'] as const;
 
 export type PathClass = 'root' | 'marketing' | 'app-private' | 'dual-served' | 'other';
 
@@ -475,8 +489,9 @@ function decidePathAction(role: 'app' | 'marketing', pathname: string): RouteAct
 
   if (role === 'marketing') {
     // The marketing host serves everything it serves today EXCEPT the
-    // app-private routes. Root, marketing pages, evidence, and everything
-    // unclassified are untouched — the apex demo stays byte-identical.
+    // app-private routes. Root, marketing pages, the published-record pages
+    // (under both `/records` and `/evidence`), and everything unclassified are
+    // untouched — the apex demo stays byte-identical.
     return pathClass === 'app-private' ? WITHHOLD : SERVE;
   }
 
@@ -487,8 +502,9 @@ function decidePathAction(role: 'app' | 'marketing', pathname: string): RouteAct
     case 'marketing':
       return WITHHOLD;
     default:
-      // app-private, dual-served evidence, and unclassified (assets, API
-      // under a non-excluded matcher miss, unknown URLs → natural 404).
+      // app-private, the dual-served record pages (either address), and
+      // unclassified (assets, API under a non-excluded matcher miss, unknown
+      // URLs → natural 404).
       return SERVE;
   }
 }
@@ -629,9 +645,10 @@ export function resolveDashboardHref(env: Record<string, string | undefined>): s
  * Where an "Ask" affordance should point (#210 — the `AppChrome` strip).
  *
  * Exactly `resolveDashboardHref`'s shape, and for exactly its reason: the
- * strip renders on the DUAL-SERVED `/evidence` pages, which serve on the
- * marketing host too — where `/ask` is app-private and withheld. A relative
- * href there is a 404, so a split-host instance must carry the app origin.
+ * strip renders on the DUAL-SERVED published-record pages — `/records` and its
+ * permanent prior-era alias `/evidence` — which serve on the marketing host
+ * too, where `/ask` is app-private and withheld. A relative href there is a
+ * 404, so a split-host instance must carry the app origin.
  * Relative everywhere else: unset topology serves `/ask` on whatever host the
  * request arrived on, and an app-only instance is its own app host.
  *

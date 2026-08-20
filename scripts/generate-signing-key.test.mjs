@@ -1,7 +1,7 @@
 // Tests for scripts/generate-signing-key.ts (#258 E2).
 //
 // The script must never print the private key to stdout — it writes
-// EVIDENCE_SIGNING_KEY=... to a local, git-ignored, 0600-permission file
+// PUBLISHER_SIGNING_KEY=... to a local, git-ignored, 0600-permission file
 // instead. Spawned as a CHILD PROCESS in a throwaway temp directory, exactly
 // the command an operator runs — the same idiom
 // src/lib/evidence/instance-rehearsal.test.ts uses for
@@ -39,14 +39,23 @@ test('never prints the private key to stdout; writes it to a 0600 local file ins
     );
 
     // --- stdout carries guidance but no private-key material --------------
-    // Mentioning the variable NAME (e.g. "copy the EVIDENCE_SIGNING_KEY
+    // Mentioning the variable NAME (e.g. "copy the PUBLISHER_SIGNING_KEY
     // line") is fine; an actual assignment — the name followed by `=` and a
-    // base64-looking value — is the thing that must never appear.
+    // base64-looking value — is the thing that must never appear. Checked
+    // under BOTH accepted spellings (civic-ai-tools#160 P3): the secret is the
+    // same secret whichever name introduces it, so the leak guard must not
+    // have a hole the rename could walk through.
+    assert.doesNotMatch(result.stdout, /PUBLISHER_SIGNING_KEY=[A-Za-z0-9+/]/);
     assert.doesNotMatch(result.stdout, /EVIDENCE_SIGNING_KEY=[A-Za-z0-9+/]/);
     assert.match(result.stdout, /Public key/i);
-    assert.match(result.stdout, /EVIDENCE_KEY_ID/);
+    assert.match(result.stdout, /PUBLISHER_KEY_ID/);
     assert.match(result.stdout, /signing_key_id_missing/);
     assert.match(result.stdout, /docs\/instance-setup\.md/);
+    // A writer has to pick one name; it picks the canonical one and NAMES the
+    // prior-era spelling so an operator meeting it in a deployment guide
+    // recognizes it rather than assuming one of the two is wrong.
+    assert.match(result.stdout, /EVIDENCE_\*/);
+    assert.match(result.stdout, /docker-compose/);
 
     // --- the private key landed in the file, not the terminal -------------
     const keyFilePath = path.join(tmpDir, KEY_FILE_NAME);
@@ -61,13 +70,23 @@ test('never prints the private key to stdout; writes it to a 0600 local file ins
     );
 
     const fileContents = fs.readFileSync(keyFilePath, 'utf-8');
-    assert.match(fileContents, /^EVIDENCE_SIGNING_KEY=[A-Za-z0-9+/=]+$/m);
-    assert.match(fileContents, /^EVIDENCE_PUBLIC_KEY=[A-Za-z0-9+/=]+$/m);
+    assert.match(fileContents, /^PUBLISHER_SIGNING_KEY=[A-Za-z0-9+/=]+$/m);
+    assert.match(fileContents, /^PUBLISHER_PUBLIC_KEY=[A-Za-z0-9+/=]+$/m);
+    // EXACTLY ONE private-key line. The obvious way to be helpful during a
+    // rename is to write the secret under both names; that doubles the
+    // material a leak, a stale backup, or a scrollback has to expose, and no
+    // naming convenience is worth it. The reader accepts both names, so one
+    // line is enough.
+    assert.equal(
+      fileContents.match(/^[A-Z_]*SIGNING_KEY=/gm)?.length,
+      1,
+      'the key file must carry the private key exactly once',
+    );
 
     // The public key printed to stdout must be the SAME keypair as the file
     // — only the private half is withheld from stdout, not a different key.
-    const pubMatch = fileContents.match(/^EVIDENCE_PUBLIC_KEY=([A-Za-z0-9+/=]+)$/m);
-    assert.ok(pubMatch, 'file did not contain EVIDENCE_PUBLIC_KEY');
+    const pubMatch = fileContents.match(/^PUBLISHER_PUBLIC_KEY=([A-Za-z0-9+/=]+)$/m);
+    assert.ok(pubMatch, 'file did not contain PUBLISHER_PUBLIC_KEY');
     assert.ok(
       result.stdout.includes(pubMatch[1]),
       'stdout did not echo the same public key written to the file',
