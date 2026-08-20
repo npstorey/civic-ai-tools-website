@@ -339,13 +339,17 @@ CSS keyframes (`blink`, `spin`, `pulse`) and component-specific styles use style
 
 ## Known Tech Debt
 
-### `next build` cannot run in a sandboxed agent session
+### `next build` in a sandboxed agent session: re-measure in your environment
 
-The default (Turbopack) builder cannot complete inside a Claude Code sandbox on
-any branch: its PostCSS worker pool binds a TCP port, and the sandbox denies
-port binding (`Operation not permitted`) — the same restriction behind the
-`listen EPERM` failures in `openrouter-streaming.test.ts`. Agents should build
-with `next build --webpack`, and treat CI's `build` check as the real gate.
+Whether the default (Turbopack) builder completes inside a Claude Code sandbox
+is environment-dependent, not absolute. Its PostCSS worker pool binds a TCP
+port, and a sandbox that denies port binding (`Operation not permitted`) kills
+the build — the same restriction behind the `listen EPERM` failures in
+`openrouter-streaming.test.ts` — but measured 2026-08-19, Turbopack built
+repeatedly (exit 0) in a sandboxed agent session. Re-measure in your
+environment (`npm run build`); if port binding is denied there, `next build
+--webpack` completes without the worker pool. Either way, treat CI's `build`
+check as the real gate.
 
 Note for anyone diagnosing a build failure here: this is **not** a network
 problem. Google Fonts was blamed for it for two days; the sandbox reaches
