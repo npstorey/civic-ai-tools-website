@@ -186,7 +186,7 @@ export default function AttestationDialog({
     try {
       for (let i = 0; i < numRuns; i++) {
         setConsistencyProgress(`Running replay ${i + 1} of ${numRuns}...`);
-        const res = await fetch(`/api/evidence/${slug}/replay`, {
+        const res = await fetch(`/api/records/${slug}/replay`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ openRouterApiKey: apiKey }),
@@ -220,7 +220,7 @@ export default function AttestationDialog({
     setEvalError('');
 
     try {
-      const res = await fetch(`/api/evidence/${slug}/evaluate`, {
+      const res = await fetch(`/api/records/${slug}/evaluate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ openRouterApiKey: apiKey, evaluatorModel }),
@@ -306,7 +306,7 @@ export default function AttestationDialog({
         return;
       }
 
-      const res = await fetch(`/api/evidence/${slug}/attestations`, {
+      const res = await fetch(`/api/records/${slug}/attestations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(attestationData),
@@ -446,7 +446,7 @@ export default function AttestationDialog({
             />
           ) : (
             <div style={{ fontSize: '13px', color: 'var(--text-muted)', padding: '12px 0' }}>
-              Consistency testing requires full prompt text. This evidence was published with hash-only visibility.
+              Consistency testing requires full prompt text. This record was published with hash-only visibility.
             </div>
           )
         )}
@@ -759,7 +759,7 @@ function ExpertTab({
     <>
       <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
         A signed, timestamped review from a domain expert. Your GitHub identity, self-described expertise,
-        and the review text are all published publicly and attached to this evidence record.
+        and the review text are all published publicly and attached to this record.
       </p>
 
       {/* Body */}

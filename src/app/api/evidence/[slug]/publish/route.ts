@@ -94,14 +94,14 @@ export async function POST(
     .where(eq(evidenceRecords.slug, slug))
     .limit(1);
   if (records.length === 0) {
-    return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Record not found' }, { status: 404 });
   }
   const record = records[0];
 
   // Publisher-only (§8.12.3): only the creator can publish. 404 (not 403) for
   // non-creators so a sealed record's existence isn't confirmed by probing.
   if (record.creatorId !== auth.userId) {
-    return NextResponse.json({ error: 'Evidence record not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Record not found' }, { status: 404 });
   }
 
   // Precondition, keyed on the canonical state so a row holding EITHER label
@@ -109,7 +109,7 @@ export async function POST(
   // mixed-state property in its sharpest form: between this deploy and the M2
   // backfill the table holds both spellings at once.
   if (fromDbValue(record.visibility) !== 'sealed') {
-    return NextResponse.json({ error: 'Evidence is already published' }, { status: 400 });
+    return NextResponse.json({ error: 'Record is already published' }, { status: 400 });
   }
 
   // Per-record form of the same gate: a historical row persisted WITHOUT a
@@ -132,7 +132,7 @@ export async function POST(
   const lifecycle = await resolveLifecycle(record);
   if (lifecycle.status === 'withdrawn') {
     return NextResponse.json(
-      { error: 'Evidence is withdrawn; reinstate it before publishing' },
+      { error: 'Record is withdrawn; reinstate it before publishing' },
       { status: 400 },
     );
   }
@@ -249,7 +249,7 @@ export async function POST(
     .returning({ id: evidenceRecords.id });
   if (won.length === 0) {
     return NextResponse.json(
-      { error: 'Evidence was published concurrently by another request' },
+      { error: 'Record was published concurrently by another request' },
       { status: 409 },
     );
   }
@@ -307,6 +307,8 @@ export async function POST(
     ...(evaluationNodeId ? { evaluationNodeId } : {}),
     publishesNodeId: pair.publishesNodeId,
     locatedAtNodeId: pair.locatedAtNodeId,
-    url: `/evidence/${slug}`,
+    // Settlement-era segment (civic-ai-tools#160 P5, spec Appendix J); the
+    // `/evidence` segment stays served as a permanent alias.
+    url: `/records/${slug}`,
   });
 }

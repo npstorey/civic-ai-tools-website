@@ -388,7 +388,11 @@ export async function POST(request: NextRequest) {
         ? { slug, packageHash, visibility }
         : {
             slug,
-            url: `/evidence/${slug}`,
+            // Settlement-era segment (civic-ai-tools#160 P5, spec Appendix J).
+            // `/evidence/${slug}` remains a permanent alias, so links a client
+            // already stored keep resolving; new responses point at the
+            // canonical address.
+            url: `/records/${slug}`,
             packageHash,
             visibility,
             ...(publicationPair ?? {}),
@@ -406,7 +410,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Evidence publish error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to publish evidence' },
+      { error: error instanceof Error ? error.message : 'Failed to publish the record' },
       { status: 500 },
     );
   }

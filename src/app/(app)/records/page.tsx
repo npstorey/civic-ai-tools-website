@@ -6,8 +6,9 @@
 // The page is defined ONCE, at the prior-era path, and re-exported here — the
 // direction is measured in `src/app/api/records/segment-alias.test.ts`. Both
 // addresses therefore render the same tree, with the same metadata, under the
-// same `(app)` layout; nothing here advertises the new address, which is the
-// cutover phase's job.
+// same `(app)` layout. As of the cutover (civic-ai-tools#160 P5) the site now
+// ADVERTISES this address: the header nav, the index and dashboard cards, the
+// marketing links, and every publish response point here.
 export { default, metadata } from '@/app/(app)/evidence/page';
 
 // DECLARED, NOT RE-EXPORTED, and the distinction is load-bearing. Next reads

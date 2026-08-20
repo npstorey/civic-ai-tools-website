@@ -65,7 +65,7 @@ export default function AttestationSection({ slug, analysisModel, promptVisibili
 
   const fetchAttestations = useCallback(async () => {
     try {
-      const res = await fetch(`/api/evidence/${slug}/attestations`);
+      const res = await fetch(`/api/records/${slug}/attestations`);
       if (res.ok) {
         const data = await res.json();
         setAttestations(data.attestations || []);
@@ -154,7 +154,7 @@ export default function AttestationSection({ slug, analysisModel, promptVisibili
           <p style={{ margin: '0 0 8px', fontSize: '14px', color: 'var(--text-muted)' }}>No attestations yet.</p>
           <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
             Attestations are independent evaluations — consistency tests, adversarial reviews,
-            expert attestations, or corrections — that anyone can attach to this evidence record.
+            expert attestations, or corrections — that anyone can attach to this record.
           </p>
         </>
       ) : (

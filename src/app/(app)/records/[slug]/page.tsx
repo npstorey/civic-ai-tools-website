@@ -7,10 +7,11 @@
 // The page is defined ONCE, at the prior-era path, and re-exported here — the
 // direction is measured in `src/app/api/records/segment-alias.test.ts`.
 //
-// `generateMetadata` comes across with it, which means this address emits the
-// PRIOR-ERA canonical/OG/citation URL (`…/evidence/<slug>`) for now. That is
-// deliberate for this phase: the new segments SERVE, and nothing advertises
-// them until the cutover phase flips what the site emits. No route-segment
-// config to mirror here — neither address declares any, so both render on
+// `generateMetadata` comes across with it. As of the cutover (civic-ai-tools#160
+// P5) that shared implementation emits the SETTLEMENT-ERA canonical/OG/citation
+// URL (`…/records/<slug>`), so both addresses declare the same canonical one --
+// which is the point: a reader arriving at either address is pointed at the
+// address the site now advertises, while the prior-era address keeps serving.
+// No route-segment config to mirror here — neither address declares any, so both render on
 // demand for the same reason (a dynamic segment with no `generateStaticParams`).
 export { default, generateMetadata } from '@/app/(app)/evidence/[slug]/page';

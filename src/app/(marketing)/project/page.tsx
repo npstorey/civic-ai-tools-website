@@ -8,13 +8,13 @@ import { pageTitle } from '@/lib/brand-config';
 export const metadata: Metadata = {
   title: pageTitle('Project'),
   description:
-    'What the Civic AI Tools project is: verifiable AI-assisted analysis of open civic data, the pillars it works across, and real published evidence records.',
+    'What the Civic AI Tools project is: verifiable AI-assisted analysis of open civic data, the pillars it works across, and real published records.',
 };
 
-// Case cards reference REAL records in this site's public evidence registry.
-// Every fact below is sourced from the linked evidence page (title, summary,
+// Case cards reference REAL records in this site's public record registry.
+// Every fact below is sourced from the linked record page (title, summary,
 // publisher, model, date) — do not edit a card without re-checking its record,
-// and do not add cards that aren't already public at /evidence.
+// and do not add cards that aren't already public at /records.
 interface CaseRecord {
   slug: string;
   question: string;
@@ -94,7 +94,7 @@ export default function ProjectPage() {
           data for humans: anyone &mdash; a journalist, a student, a researcher, a public servant
           &mdash; can ask a plain-language question against live public data portals (NYC Open
           Data and other Socrata portals, Google Data Commons, Boston 311), watch every query the
-          AI issues, and publish the result as a cryptographically signed evidence record that
+          AI issues, and publish the result as a cryptographically signed record that
           others can verify independently.
         </p>
         <p style={prose}>
@@ -232,7 +232,7 @@ export default function ProjectPage() {
         <h2 style={sectionHeading}>Cases</h2>
         <p style={prose}>
           Real analyses published to this site&apos;s{' '}
-          <Link href="/evidence">public evidence registry</Link>. Each card links to the signed
+          <Link href="/records">public record registry</Link>. Each card links to the signed
           record, where everything stated here can be read and independently verified. A record
           documents how an answer was produced &mdash; it does not certify that the answer is
           correct.
@@ -241,7 +241,7 @@ export default function ProjectPage() {
           {CASES.map((c) => (
             <div key={c.slug} style={card}>
               <p style={{ ...pillarLabel, marginBottom: '8px' }}>
-                <Link href={`/evidence/${c.slug}`}>{c.question}</Link>
+                <Link href={`/records/${c.slug}`}>{c.question}</Link>
               </p>
               <p style={{ ...prose, fontSize: '14px', marginBottom: '12px' }}>{c.finding}</p>
               <p style={cardMeta}>

@@ -41,11 +41,13 @@
 //      standalone-asset checker names no route directory — so the move was
 //      never forced by the build either.
 //
-// The consequence to keep in view: the implementation currently sits at the
-// PRIOR-ERA path while the CANONICAL name is `records`. That inversion is
-// deliberate for the expand phase and is a follow-up for whoever flips what
-// the site emits; it is invisible from outside, because which file holds the
-// body never crosses a public surface.
+// The consequence to keep in view: the implementation sits at the PRIOR-ERA
+// path while the CANONICAL name is `records`. That inversion is deliberate and
+// PERMANENT — it is invisible from outside, because which file holds the body
+// never crosses a public surface, and moving it would put the seventeen live
+// handlers behind the re-export mechanism for no external gain. The cutover
+// phase (P5) flipped what the site EMITS without moving any implementation;
+// the emissions half is guarded separately in `emissions-form.test.ts`.
 //
 // WHAT THIS FILE CAN AND CANNOT PROVE. It reads source text. It can prove
 // that both segments exist, that they are paired one-for-one in both
