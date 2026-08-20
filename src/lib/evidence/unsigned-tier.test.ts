@@ -87,8 +87,14 @@ test('KEY WITHOUT KID: refused loudly and specifically, not as a generic unsigne
   // code so the state is diagnosable from the response alone.
   assert.equal(refusal!.status, 500);
   assert.equal(refusal!.body.code, 'signing_key_id_missing');
-  // Actionable: names the missing variable and the guide.
+  // Actionable: names the missing variable and the guide. The CANONICAL
+  // spelling is what an operator is told to set, with the prior-era one named
+  // as still accepted — a refusal that pointed only at the retiring name
+  // would send an operator to configure the variable being removed
+  // (civic-ai-tools#160 P3).
+  assert.match(refusal!.body.error, /PUBLISHER_KEY_ID/);
   assert.match(refusal!.body.error, /EVIDENCE_KEY_ID/);
+  assert.match(refusal!.body.error, /still accepted/);
   assert.match(refusal!.body.error, /instance-setup/);
   // States the real consequence — misattribution and unverifiable evidence —
   // and explicitly rules out the wrong reading (a leaked signing key).

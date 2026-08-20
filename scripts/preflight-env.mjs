@@ -321,7 +321,7 @@ export const ENV_SPEC = [
   // publish in their trust registry; no app code loads it. Listed as
   // `external-tool` so it is enumerated for completeness without a deployment
   // ever being asked to deliver it to the container.
-  { name: 'PUBLISHER_PUBLIC_KEY', priorEraName: 'EVIDENCE_PUBLIC_KEY', readBy: 'external-tool', tier: 'optional', purpose: 'Public half of the signing keypair — written by scripts/generate-signing-key.ts for the trust-registry entry; never read by the app', hasFallback: true },
+  { name: 'PUBLISHER_PUBLIC_KEY', priorEraName: 'EVIDENCE_PUBLIC_KEY', readBy: 'external-tool', tier: 'optional', purpose: 'Public half of the signing keypair — written by scripts/generate-signing-key.ts for the trust-registry entry; never read by the app' },
   { name: 'CIVICAITOOLS_SESSION_TOKEN', readBy: 'external-tool', tier: 'optional', purpose: 'publish-evidence skill (Claude Code) auth' },
   { name: 'CRON_SECRET', tier: 'optional', purpose: 'Cron endpoint auth (blob-gc, portal refresh)' },
   { name: 'NEXT_PUBLIC_GA_MEASUREMENT_ID', readBy: 'build', tier: 'optional', purpose: 'Google Analytics 4' },

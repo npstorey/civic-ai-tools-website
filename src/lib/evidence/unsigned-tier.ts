@@ -57,7 +57,11 @@
 // identity. The required-variable list lives beside the getters it governs
 // (site-config.ts) so the two cannot drift.
 import { INSTANCE_IDENTITY_REQUIRED_SUFFIXES } from '../site-config.ts';
-import { canonicalEnvName, lookupPublisherEnv } from '../publisher-env.ts';
+import {
+  canonicalEnvName,
+  lookupPublisherEnv,
+  priorEraEnvName,
+} from '../publisher-env.ts';
 
 type EnvLike = Record<string, string | undefined>;
 
@@ -136,7 +140,8 @@ export interface SealCommitGateRefusal {
  *
  *   - `unsigned_tier` (403) — no signing key at all. A legitimate tier;
  *     signing is the go-to-production step the operator has not taken yet.
- *   - `signing_key_id_missing` (500) — a key but no `EVIDENCE_KEY_ID`. NOT a
+ *   - `signing_key_id_missing` (500) — a key but no `PUBLISHER_KEY_ID` (nor
+ *     its prior-era spelling). NOT a
  *     legitimate state: the operator intends to sign and the instance is
  *     misconfigured, so this is a server fault, named specifically rather
  *     than folded into the tier message an operator has already moved past.
@@ -179,14 +184,16 @@ export function evaluateSealCommitGate(
       body: {
         error:
           'This instance has a signing key but has not declared its signing ' +
-          'key id: EVIDENCE_KEY_ID is not set in this environment. Sealing ' +
+          `key id: ${canonicalEnvName('KEY_ID')} is not set in this ` +
+          `environment (nor its prior-era name ${priorEraEnvName('KEY_ID')}, ` +
+          'which is still accepted). Sealing ' +
           'and publishing are refused rather than signed under a key id this ' +
           'instance never configured — a package labeled with a kid that ' +
           "resolves to some other deployment's public key cannot verify, and " +
           'claims an identity that is not this instance\'s. (The signing key ' +
           'itself is unaffected: this is a misattribution and verifiability ' +
-          'failure, not a key disclosure.) Set EVIDENCE_KEY_ID to the kid of ' +
-          "the active entry in this instance's trust registry — see " +
+          `failure, not a key disclosure.) Set ${canonicalEnvName('KEY_ID')} ` +
+          "to the kid of the active entry in this instance's trust registry — see " +
           'docs/instance-setup.md.',
         code: 'signing_key_id_missing',
       },
@@ -201,7 +208,9 @@ export function evaluateSealCommitGate(
         'Sealing or publishing evidence requires a signature: an unsigned ' +
         'package can reach neither the sealed nor the public state (ADR-0020). ' +
         'Analyses still run and can be inspected locally; an operator enables ' +
-        'signing (EVIDENCE_SIGNING_KEY and EVIDENCE_KEY_ID, both required) ' +
+        `signing (${canonicalEnvName('SIGNING_KEY')} and ` +
+        `${canonicalEnvName('KEY_ID')}, both required; each also answers to ` +
+        'its prior-era EVIDENCE_* spelling) ' +
         'via docs/instance-setup.md.',
       code: 'unsigned_tier',
     },
@@ -242,7 +251,8 @@ export function evaluateUnsignedRecordPublishGate(
  *     Dev (and test) stay calm: the unsigned tier is the intended first-run
  *     state there. Anywhere else, running unsigned must never be silent, so
  *     an unknown NODE_ENV shows the indicator too.
- *   - `no_key_id` — a signing key with no `EVIDENCE_KEY_ID`. Shown in EVERY
+ *   - `no_key_id` — a signing key with no `PUBLISHER_KEY_ID` (nor its
+ *     prior-era spelling). Shown in EVERY
  *     environment, dev included: it is not an intended state anywhere, and
  *     dev is precisely where an operator wiring signing up should see it
  *     before the same half-configuration reaches a deploy.
