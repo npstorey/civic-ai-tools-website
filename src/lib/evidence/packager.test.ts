@@ -10,10 +10,11 @@ import assert from 'node:assert/strict';
 import crypto from 'crypto';
 import canonicalize from 'canonicalize';
 import { buildEvidencePackage, type PackageInput } from './packager.ts';
-import { recomputePackageHash } from './verify.ts';
+import { recomputePackageHash, verifyContentHash } from './verify.ts';
 import {
   LEGACY_JSON_CANONICALIZATION,
   DATHERE_AG_JUPYTER_CANONICALIZATION,
+  computeContentHashSha256,
 } from './canonicalization.ts';
 import type { BlobRef } from './blob-ref.ts';
 import { REFERENCE_IDENTITY_ENV } from './reference-identity-fixture.ts';
@@ -569,4 +570,127 @@ test('round-trip: v0.1 package re-verifies even if storage reorders top-level ke
     reordered[k] = (pkg as unknown as Record<string, unknown>)[k];
   }
   assert.equal(recomputePackageHash(reordered), hash);
+});
+
+// --- Dual-era honesty: a package STORED before the vocabulary cutover ---
+//
+// civic-ai-tools#160 P5. The settlement (spec Appendix J, rules J.4.1/J.4.2)
+// froze two identifiers inside already-signed packages: the URN scheme
+// (`urn:civic-evidence:` → `urn:civic-record:`) and the JSON-LD vocabulary URI
+// (`.../ns/evidence/` → `.../ns/civic/`). Every package this instance published
+// before harness 0.3.0 carries the prior-era pair in its provenance graph, and
+// that graph is INSIDE the canonical JSON — so it is covered by `contentHash`
+// and by the envelope hash, and therefore by the platform signature.
+//
+// The failure this pins is a silent one: any code path that normalized a stored
+// package's vocabulary on read — even cosmetically, even for display — would
+// change the bytes that hash, and every prior-era record on the site would
+// start reporting a hash mismatch and an invalid signature. The check must
+// therefore be end-to-end over a package built exactly as the prior era built
+// it, not over a hand-written fragment.
+//
+// The prior-era package below is constructed the way the prior-era publisher
+// constructed it: the same builder, with the two Appendix J literals put back,
+// and the hashes then computed by the SAME shared chain (`computeContentHashSha256`
+// / `recomputePackageHash`) the publisher used. No fixture bytes are invented.
+
+/** Rewrite a settlement-era package into the prior-era form, verbatim
+ *  everywhere else — the shape a pre-cutover blob actually holds. */
+function toPriorEraVocabulary(pkg: Record<string, unknown>): Record<string, unknown> {
+  const json = JSON.stringify(pkg)
+    .split('urn:civic-record:')
+    .join('urn:civic-evidence:')
+    .split('https://civicaitools.org/ns/civic/')
+    .join('https://civicaitools.org/ns/evidence/');
+  return JSON.parse(json) as Record<string, unknown>;
+}
+
+test('dual-era: a stored PRIOR-ERA package re-verifies unchanged (hash + contentHash)', () => {
+  const built = buildEvidencePackage(baseInput({ type: 'content/analysis/v1' }));
+
+  // Settlement-era emissions are the new vocabulary — the P4/harness-0.3.0 flip,
+  // observed here rather than assumed.
+  const settlementJson = JSON.stringify(built.pkg);
+  assert.ok(
+    settlementJson.includes('urn:civic-record:'),
+    'new emissions must carry the settlement-era URN scheme',
+  );
+  assert.ok(
+    settlementJson.includes('https://civicaitools.org/ns/civic/'),
+    'new emissions must carry the settlement-era vocabulary URI',
+  );
+
+  // The stored prior-era artifact: same package, prior-era identifiers, with
+  // contentHash recomputed over ITS OWN bytes exactly as its publisher did.
+  const priorEraBase = toPriorEraVocabulary(
+    built.pkg as unknown as Record<string, unknown>,
+  );
+  delete priorEraBase.contentHash;
+  const priorEraPkg: Record<string, unknown> = {
+    ...priorEraBase,
+    contentHash: {
+      sha256: computeContentHashSha256(priorEraBase, LEGACY_JSON_CANONICALIZATION),
+    },
+  };
+  const priorEraHash = recomputePackageHash(priorEraPkg);
+
+  // 1. The frozen identifiers survive the round-trip byte-for-byte — nothing
+  //    on the read path rewrites them.
+  const stored = storageRoundTrip(priorEraPkg);
+  const storedJson = JSON.stringify(stored);
+  assert.ok(
+    storedJson.includes('urn:civic-evidence:'),
+    'a stored prior-era package keeps its prior-era URN scheme',
+  );
+  assert.ok(
+    storedJson.includes('https://civicaitools.org/ns/evidence/'),
+    'a stored prior-era package keeps its prior-era vocabulary URI',
+  );
+  assert.equal(storedJson.includes('urn:civic-record:'), false);
+  assert.equal(storedJson.includes('/ns/civic/'), false);
+
+  // 2. It recomputes to the hash it was published under — the signature over
+  //    that hash still verifies.
+  assert.equal(recomputePackageHash(stored), priorEraHash);
+
+  // 3. Its contentHash still matches the content it covers (verify check #13).
+  assert.equal(
+    verifyContentHash(stored, {
+      status: 'ok',
+      rule: LEGACY_JSON_CANONICALIZATION,
+    }).status,
+    'ok',
+  );
+
+  // 4. THE VOCABULARY IS INSIDE THE HASHED BYTES — the property that makes a
+  //    normalizing read path fatal rather than cosmetic.
+  //
+  //    This is asserted against a package that differs from the prior-era one
+  //    ONLY in the two Appendix J literals, with every other byte (including
+  //    the stored `contentHash` field) held identical. Their recomputed hashes
+  //    must differ. If a read path normalized old vocabulary to new before
+  //    hashing, these two would collide — and every prior-era record on the
+  //    site would start reporting a hash mismatch against its stored value.
+  //
+  //    Assertion 2 above deliberately does NOT carry this weight: it compares
+  //    two calls to the same function, so a normalizer applied to both sides
+  //    cancels out and the check passes vacuously. That was measured, not
+  //    assumed — an injected normalizer left assertion 2 green. The collision
+  //    check below is what actually fires.
+  const settlementEraTwin = JSON.parse(
+    JSON.stringify(priorEraPkg)
+      .split('urn:civic-evidence:')
+      .join('urn:civic-record:')
+      .split('https://civicaitools.org/ns/evidence/')
+      .join('https://civicaitools.org/ns/civic/'),
+  ) as Record<string, unknown>;
+  assert.notEqual(
+    recomputePackageHash(stored),
+    recomputePackageHash(settlementEraTwin),
+    'the URN scheme and vocabulary URI must be inside the hashed bytes — ' +
+      'if these collide, a read path is normalizing frozen vocabulary',
+  );
+
+  // 5. And the two ERAS of the same analysis are distinct artifacts end to end.
+  assert.notEqual(priorEraHash, built.hash);
 });

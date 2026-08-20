@@ -390,7 +390,7 @@ test('parity: reference env → the demo agent + host are emitted byte-identical
     const env = pkg.extensions?.['org.civicaitools.environment'] as Record<string, unknown>;
     assert.equal(env.host, CIVICAITOOLS_ENVIRONMENT_HOST);
     const agent = pkg.provenance!['@graph'].find(
-      (n) => n['@id'] === `urn:civic-evidence:platform:${CIVICAITOOLS_PLATFORM_AGENT.id}`,
+      (n) => n['@id'] === `urn:civic-record:platform:${CIVICAITOOLS_PLATFORM_AGENT.id}`,
     );
     assert.ok(agent, 'reference platform agent node should be present');
     assert.equal(agent!['dcterms:title'], CIVICAITOOLS_PLATFORM_AGENT.title);
@@ -620,7 +620,7 @@ test('signed output: publication host + platform agent overrides flow into the p
       // PROV platform agent (inside the signed graph) carries the override
       // identity, and its URL follows the origin.
       const agent = pkg.provenance!['@graph'].find(
-        (n) => n['@id'] === 'urn:civic-evidence:platform:example-instance',
+        (n) => n['@id'] === 'urn:civic-record:platform:example-instance',
       );
       assert.ok(agent, 'platform agent node should carry the override id');
       assert.equal(agent!['dcterms:title'], 'Example Instance');
@@ -641,11 +641,11 @@ test('signed output: a missing agent id derives from the publication host (opera
         basePackageInput({ contentProfile: 'datHere' }),
       );
       const agent = pkg.provenance!['@graph'].find(
-        (n) => n['@id'] === 'urn:civic-evidence:platform:evidence.example.org',
+        (n) => n['@id'] === 'urn:civic-record:platform:evidence.example.org',
       );
       assert.ok(agent, 'agent id should derive from the publication host');
       const referenceAgent = pkg.provenance!['@graph'].find(
-        (n) => n['@id'] === `urn:civic-evidence:platform:${CIVICAITOOLS_PLATFORM_AGENT.id}`,
+        (n) => n['@id'] === `urn:civic-record:platform:${CIVICAITOOLS_PLATFORM_AGENT.id}`,
       );
       assert.equal(referenceAgent, undefined, 'the reference URN must not appear');
     },

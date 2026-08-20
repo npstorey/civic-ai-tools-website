@@ -73,7 +73,7 @@ const BASE_INPUT = {
 
 function mcpAgents(graph: Array<{ '@id': string; [k: string]: unknown }>): string[] {
   return graph
-    .filter((node) => typeof node['@id'] === 'string' && node['@id'].startsWith('urn:civic-evidence:mcp-server:'))
+    .filter((node) => typeof node['@id'] === 'string' && node['@id'].startsWith('urn:civic-record:mcp-server:'))
     .map((node) => node['@id'] as string);
 }
 
@@ -81,14 +81,14 @@ test('Data-Commons-only analysis emits only the data-commons MCP agent', () => {
   const trace = traceOf([skillSpan('skill-hash'), toolSpan('data-commons', 'get_observations', 'span-1')]);
   const graph = buildProvenanceGraph(trace, BASE_INPUT, CIVICAITOOLS_PROVENANCE_CONFIG);
   const agents = mcpAgents(graph['@graph']);
-  assert.deepEqual(agents, ['urn:civic-evidence:mcp-server:data-commons']);
+  assert.deepEqual(agents, ['urn:civic-record:mcp-server:data-commons']);
 });
 
 test('Socrata-only analysis emits only the socrata MCP agent', () => {
   const trace = traceOf([skillSpan('skill-hash'), toolSpan('socrata', 'get_data', 'span-1')]);
   const graph = buildProvenanceGraph(trace, BASE_INPUT, CIVICAITOOLS_PROVENANCE_CONFIG);
   const agents = mcpAgents(graph['@graph']);
-  assert.deepEqual(agents, ['urn:civic-evidence:mcp-server:socrata']);
+  assert.deepEqual(agents, ['urn:civic-record:mcp-server:socrata']);
 });
 
 test('Multi-source analysis emits both MCP agents', () => {
@@ -100,18 +100,18 @@ test('Multi-source analysis emits both MCP agents', () => {
   const graph = buildProvenanceGraph(trace, BASE_INPUT, CIVICAITOOLS_PROVENANCE_CONFIG);
   const agents = mcpAgents(graph['@graph']);
   assert.equal(agents.length, 2);
-  assert.ok(agents.includes('urn:civic-evidence:mcp-server:socrata'));
-  assert.ok(agents.includes('urn:civic-evidence:mcp-server:data-commons'));
+  assert.ok(agents.includes('urn:civic-record:mcp-server:socrata'));
+  assert.ok(agents.includes('urn:civic-record:mcp-server:data-commons'));
 });
 
 test('Boston OpenContext only analysis emits only the boston-opencontext MCP agent with correct title', () => {
   const trace = traceOf([skillSpan('skill-hash'), toolSpan('boston-opencontext', 'ckan__search_datasets', 'span-1')]);
   const graph = buildProvenanceGraph(trace, BASE_INPUT, CIVICAITOOLS_PROVENANCE_CONFIG);
   const agents = mcpAgents(graph['@graph']);
-  assert.deepEqual(agents, ['urn:civic-evidence:mcp-server:boston-opencontext']);
+  assert.deepEqual(agents, ['urn:civic-record:mcp-server:boston-opencontext']);
 
   const bostonAgentNode = graph['@graph'].find(
-    (n) => n['@id'] === 'urn:civic-evidence:mcp-server:boston-opencontext',
+    (n) => n['@id'] === 'urn:civic-record:mcp-server:boston-opencontext',
   );
   assert.ok(bostonAgentNode, 'expected Boston OpenContext agent node in graph');
   assert.equal(bostonAgentNode!['dcterms:title'], 'Boston OpenContext MCP Server');
@@ -129,9 +129,9 @@ test('Three-source analysis emits all three MCP agents, no stray sources', () =>
   const graph = buildProvenanceGraph(trace, BASE_INPUT, CIVICAITOOLS_PROVENANCE_CONFIG);
   const agents = mcpAgents(graph['@graph']);
   assert.equal(agents.length, 3);
-  assert.ok(agents.includes('urn:civic-evidence:mcp-server:socrata'));
-  assert.ok(agents.includes('urn:civic-evidence:mcp-server:data-commons'));
-  assert.ok(agents.includes('urn:civic-evidence:mcp-server:boston-opencontext'));
+  assert.ok(agents.includes('urn:civic-record:mcp-server:socrata'));
+  assert.ok(agents.includes('urn:civic-record:mcp-server:data-commons'));
+  assert.ok(agents.includes('urn:civic-record:mcp-server:boston-opencontext'));
 });
 
 test('Skill fetched but no tool calls emits no MCP agent', () => {
@@ -159,5 +159,5 @@ test('Pre-M9.1 Socrata span without mcp.source attribute still emits the socrata
   };
   const trace = traceOf([skillSpan('skill-hash'), legacyToolSpan]);
   const graph = buildProvenanceGraph(trace, BASE_INPUT, CIVICAITOOLS_PROVENANCE_CONFIG);
-  assert.deepEqual(mcpAgents(graph['@graph']), ['urn:civic-evidence:mcp-server:socrata']);
+  assert.deepEqual(mcpAgents(graph['@graph']), ['urn:civic-record:mcp-server:socrata']);
 });
