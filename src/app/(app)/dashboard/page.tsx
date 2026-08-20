@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: pageTitle('Dashboard'),
-  description: 'Manage your evidence records and evaluations.',
+  description: 'Manage your records and evaluations.',
 };
 
 export default async function DashboardPage() {
@@ -33,7 +33,7 @@ export default async function DashboardPage() {
   const userId = dbUser.id;
   const displayName = dbUser.displayName;
 
-  // --- Tab 1: My Evidence ---
+  // --- Tab 1: My Records ---
   const myEvidence = await db
     .select({
       id: evidenceRecords.id,
@@ -52,7 +52,7 @@ export default async function DashboardPage() {
     .where(eq(evidenceRecords.creatorId, userId))
     .orderBy(desc(evidenceRecords.createdAt));
 
-  // Get attestation counts per evidence record
+  // Get attestation counts per record
   const attestationCounts = myEvidence.length > 0
     ? await db
         .select({
@@ -99,7 +99,7 @@ export default async function DashboardPage() {
     createdAt: e.createdAt.toISOString(),
   }));
 
-  // --- Tab 3: Activity (others' attestations on my evidence) ---
+  // --- Tab 3: Activity (others' attestations on my records) ---
   const activity = await db
     .select({
       id: attestationPackages.id,

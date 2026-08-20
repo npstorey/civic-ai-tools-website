@@ -5,7 +5,7 @@
  *   - error (shown alongside any partial state),
  *   - in-progress → multi-stage NotebookProgress,
  *   - completed → ChatNotebookOutput (A-G section layout matching the
- *     evidence detail page for datHere-profile packages).
+ *     record detail page for datHere-profile packages).
  *
  * Consumers pass the state object from `useNotebookStream` plus the prompt /
  * model / portal context the renderer needs for sections A and C. The page
@@ -185,7 +185,7 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
                   fontWeight: 500,
                 }}
               >
-                {session?.user ? 'Publish as Evidence' : 'Sign in to publish'}
+                {session?.user ? 'Publish as Record' : 'Sign in to publish'}
               </button>
               )}
               {(session?.user || signInAffordance.kind !== 'none') && (

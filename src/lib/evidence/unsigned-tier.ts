@@ -9,8 +9,8 @@
 // produce-and-inspect. Three guards bound the tier (ADR-0020 §Consequences):
 //
 //   1. the seal/commit action is unreachable unsigned  → `evaluateSealCommitGate`
-//      (server-side, wired into POST /api/evidence and POST
-//      /api/evidence/[slug]/publish) + `evaluateUnsignedRecordPublishGate`
+//      (server-side, wired into POST /api/records and POST
+//      /api/records/[slug]/publish) + `evaluateUnsignedRecordPublishGate`
 //      (the per-record form: a historical row persisted without a signature
 //      cannot be promoted to public even on a signed instance);
 //   2. mandatory labeling                              → trust-signal.ts
@@ -38,7 +38,7 @@
 // half, which meant an operator who set a key but no kid left this tier
 // silently and signed every package under the REFERENCE deployment's kid: the
 // signature is theirs, the label points at someone else's registry entry, so
-// the evidence fails verification while appearing to claim another party's
+// the record fails verification while appearing to claim another party's
 // identity. That is a misattribution and verifiability defect (the private
 // key is never involved — a clone always supplies its own). There is now no
 // case in which an instance emits a kid it did not configure.
@@ -205,7 +205,7 @@ export function evaluateSealCommitGate(
     body: {
       error:
         'This instance is running unsigned — no signing key is configured. ' +
-        'Sealing or publishing evidence requires a signature: an unsigned ' +
+        'Sealing or publishing a record requires a signature: an unsigned ' +
         'package can reach neither the sealed nor the public state (ADR-0020). ' +
         'Analyses still run and can be inspected locally; an operator enables ' +
         `signing (${canonicalEnvName('SIGNING_KEY')} and ` +

@@ -39,7 +39,7 @@ export default function NotebookSection({ notebook, slug }: NotebookSectionProps
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `evidence-${slug}.ipynb`;
+    a.download = `record-${slug}.ipynb`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

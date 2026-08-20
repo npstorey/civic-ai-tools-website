@@ -164,7 +164,7 @@ export default function PositioningBand() {
               Ask a real question against live portal data and watch the work:
               every query the AI issues is visible as actual SoQL, exportable
               as a Jupyter notebook you can re-run yourself, and publishable as
-              a signed evidence record others can verify without taking your
+              a signed record others can verify without taking your
               word for it.
             </p>
           </div>
@@ -217,7 +217,7 @@ export default function PositioningBand() {
                 Retrieval vs. analysis.
               </strong>{' '}
               The AI here both retrieves records with citations and runs
-              multi-step analysis, published as signed evidence records{' '}
+              multi-step analysis, published as signed records{' '}
               <LegendLabel status="built" />. Extracting typed, machine-checkable claims
               from an analysis is specified but not yet running{' '}
               <LegendLabel status="designed" />.

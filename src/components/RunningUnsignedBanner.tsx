@@ -16,7 +16,7 @@ const SETUP_GUIDE_URL =
  *
  *   - no signing key — the unsigned tier, a legitimate state; shown outside a
  *     dev environment so "stayed unsigned" is never a SILENT choice.
- *   - a signing key but no `EVIDENCE_KEY_ID` — a misconfiguration, shown in
+ *   - a signing key but no `PUBLISHER_KEY_ID` — a misconfiguration, shown in
  *     every environment including dev, because it is not an intended state
  *     anywhere and dev is where it should be caught.
  *   - a signing pair but no declared instance identity (#258) — same
@@ -48,10 +48,10 @@ export default function RunningUnsignedBanner() {
         }}
       >
         <strong>Signing is half-configured</strong> — this instance has a
-        signing key but no <code>EVIDENCE_KEY_ID</code>, so seal and publish
-        are refused. It will not sign under a key id it never declared:
-        evidence labeled with another deployment&rsquo;s key id cannot verify
-        and misattributes the publisher. Set <code>EVIDENCE_KEY_ID</code> to
+        signing key but no <code>PUBLISHER_KEY_ID</code>, so seal and publish
+        are refused. It will not sign under a key id it never declared: a
+        record labeled with another deployment&rsquo;s key id cannot verify
+        and misattributes the publisher. Set <code>PUBLISHER_KEY_ID</code> to
         your trust registry&rsquo;s active kid — see the{' '}
         <a
           href={SETUP_GUIDE_URL}
@@ -118,7 +118,7 @@ export default function RunningUnsignedBanner() {
       }}
     >
       <strong>Running unsigned</strong> — no signing key is configured, so
-      evidence seal and publish are disabled and any output produced here
+      record seal and publish are disabled and any output produced here
       carries no cryptographic commitment. Signing is the go-to-production
       step; see the{' '}
       <a

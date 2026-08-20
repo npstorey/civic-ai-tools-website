@@ -246,7 +246,7 @@ export default function RootLayout({
               point as HostLinksProvider above. */}
           <BrandProvider value={brandName}>
           {/* Instance attribution identity for the unreachable client
-              surfaces (#227, #258 A2) — the EVIDENCE_* set (origin, host
+              surfaces (#227, #258 A2) — the PUBLISHER_* set (origin, host
               label, display name), so its own provider rather than a rider
               on the chrome-brand one. Null members mean "not configured";
               the client surfaces then omit attribution. */}

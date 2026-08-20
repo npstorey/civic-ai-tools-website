@@ -32,7 +32,7 @@ export interface ResolvedIdentifier {
 }
 
 /**
- * Classify a `[slug]`-segment identifier as a base-package hash or an evidence
+ * Classify a `[slug]`-segment identifier as a base-package hash or a record
  * slug, and return the normalized DB lookup for it. This is the single seam that
  * makes the two identifier forms interchangeable for a public read.
  *
@@ -69,12 +69,12 @@ export function commitmentAccessError(
   // A row with no base-package hash never completed publishing — there are no
   // proofs to commit to. (A bare-hash lookup could never have matched it either.)
   if (!record.basePackageHash) {
-    return 'No published evidence package for this identifier';
+    return 'No published record package for this identifier';
   }
   // Non-public records are not exposed — mirrors the slug read-back. The public
   // flag is independent of withdrawal (withdrawn-but-public is still served).
   if (!record.isPublic) {
-    return 'Evidence not found';
+    return 'Record not found';
   }
   return null;
 }

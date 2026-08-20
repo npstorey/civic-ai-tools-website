@@ -31,7 +31,11 @@
 
 const TYPEDSTANDARDS_VERIFY_BASE = 'https://typedstandards.org/verify';
 const TYPEDSTANDARDS_BADGE_SVG = 'https://typedstandards.org/badge/typed-standards-verify.svg';
-const BADGE_ALT = 'Verify this evidence with Typed Standards';
+// Alt text is authored and rendered HERE, in this instance's own HTML — the
+// remote asset is only the <img> src. So it is ours to excise (settlement
+// ruling D5 defers only the text baked INTO the typedstandards.org SVG and
+// that site's own badge copy, tracked at typedstandards#52).
+const BADGE_ALT = 'Verify this record with Typed Standards';
 const BADGE_WIDTH = 248;
 const BADGE_HEIGHT = 30;
 

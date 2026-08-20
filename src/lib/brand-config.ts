@@ -17,22 +17,22 @@
 // resolver still answers with the reference name.
 //
 // So the nameable getters now return `null` when unset, and each surface
-// renders honest absence — the `EVIDENCE_*` disposition in site-config.ts,
+// renders honest absence — the `PUBLISHER_*` disposition in site-config.ts,
 // applied to chrome. Titles drop their suffix, the footer tagline is
-// omitted, citations say "Evidence Package" rather than naming a
+// omitted, citations say "Record Package" rather than naming a
 // deployment, and the ONE surface that structurally needs a visible string
 // (the header wordmark) falls back to `UNNAMED_WORDMARK` below, which is a
 // navigation label rather than an identity claim. The reference deployment
 // sets `SITE_BRAND_NAME` and `SITE_BRAND_TAGLINE` like any other instance.
 //
-// CHROME, NOT EVIDENCE. This module is deliberately separate from the
-// `EVIDENCE_*` instance-identity set in src/lib/site-config.ts: those values
-// are emitted INSIDE signed evidence artifacts and are cross-checked against
-// the instance's trust registry (verify check #14). Nothing here is ever
-// signed, verified, or emitted into a package — changing a `SITE_BRAND_*`
-// variable can never invalidate an evidence surface. A fully renamed
+// CHROME, NOT PUBLISHER IDENTITY. This module is deliberately separate from
+// the `PUBLISHER_*` instance-identity set in src/lib/site-config.ts: those
+// values are emitted INSIDE signed record packages and are cross-checked
+// against the instance's trust registry (verify check #14). Nothing here is
+// ever signed, verified, or emitted into a package — changing a `SITE_BRAND_*`
+// variable can never invalidate a record surface. A fully renamed
 // instance typically sets BOTH `SITE_BRAND_NAME` (chrome) and
-// `EVIDENCE_PLATFORM_AGENT_TITLE` (evidence attribution); the two do not
+// `PUBLISHER_PLATFORM_AGENT_TITLE` (publisher attribution); the two do not
 // read each other on purpose, so neither can surprise the other.
 //
 // Values are read at CALL time (not module load) so tests can vary them

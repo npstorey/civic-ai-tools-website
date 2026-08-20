@@ -820,7 +820,7 @@ export default function McpResponseDisplay({
               </button>
             )}
 
-            {/* Publish as Evidence button */}
+            {/* Publish as Record button */}
             {canPublish && (
               <>
                 {!session?.user && signInHref !== null ? (
@@ -877,7 +877,7 @@ export default function McpResponseDisplay({
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
                     <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z" />
                   </svg>
-                  {session?.user ? 'Publish as Evidence' : 'Sign in to publish'}
+                  {session?.user ? 'Publish as Record' : 'Sign in to publish'}
                 </button>
                 )}
                 {/* Suppressed only when there is no way to sign in at all —
@@ -926,7 +926,7 @@ export default function McpResponseDisplay({
         </div>
       )}
 
-      {/* Publish Evidence Dialog */}
+      {/* Publish Record Dialog */}
       {publishDialogOpen && canPublish && queryText && (
         <PublishEvidenceDialog
           isOpen={publishDialogOpen}
