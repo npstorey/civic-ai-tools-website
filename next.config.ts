@@ -38,7 +38,11 @@ const nextConfig: NextConfig = {
   // the include is dropped, and the build still succeeds — which is exactly
   // the trapdoor `scripts/check-standalone-assets.mjs` exists to catch.
   outputFileTracingIncludes: {
-    '/api/query-notebook': [
+    // DEMO breakage 1 of 2 (never merge): the pre-#281 source-path key form.
+    // Next matches keys against generated route strings, never source paths,
+    // so this key matches nothing and the include is silently dropped.
+    // The static net (standalone-tracing-keys.test.ts) must go red on this.
+    'src/app/api/query-notebook/route': [
       './src/lib/notebook-author/helpers/*.py',
     ],
   },
@@ -61,6 +65,15 @@ const nextConfig: NextConfig = {
         outputFileTracingExcludes: {
           // '**' matches every route: these are not per-route concerns.
           '**': [
+            // DEMO breakage 2 of 2 (never merge): strips the runtime-read
+            // helpers from the traced modules. Measured 2026-08-19 under
+            // Turbopack 16.3.0: breakage 1 alone does NOT fail the build —
+            // the helpers still ship as traced modules (the loader's node:fs
+            // read is statically traced), so the empirical net only fires
+            // when this exclude removes them AND the inert key above fails
+            // to re-add them. Together they make `npm run check:standalone`
+            // exit 1.
+            'src/lib/notebook-author/helpers/**',
             // Documentation and process material.
             'docs/**',
             'sprints/**',
