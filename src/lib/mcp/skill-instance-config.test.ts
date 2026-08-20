@@ -48,13 +48,13 @@ test('skill text: override host bakes into DATA_COMMONS_SKILL; SOCRATA fallback 
   // Data Commons skill: host interpolation unchanged (out of P4 scope).
   assert.ok(
     DATA_COMMONS_SKILL.includes(
-      'published as an evidence package on skills.example.org',
+      'published as a record package on skills.example.org',
     ),
     'data-commons skill should carry the override host',
   );
   assert.ok(
     !DATA_COMMONS_SKILL.includes(
-      'published as an evidence package on civicaitools.org',
+      'published as a record package on civicaitools.org',
     ),
     'data-commons skill should not carry the demo host under override',
   );

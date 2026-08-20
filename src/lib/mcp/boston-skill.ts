@@ -69,5 +69,5 @@ Neighborhoods do NOT map cleanly to Census tracts. When joining Boston operation
 
 ## Attribution
 
-Cite Boston OpenContext analyses with: dataset title, resource UUID, data.boston.gov portal URL, and the SQL / aggregation spec that produced the number. The evidence-package layer captures tool calls and args automatically; your job in the text output is to make the citation human-readable.
+Cite Boston OpenContext analyses with: dataset title, resource UUID, data.boston.gov portal URL, and the SQL / aggregation spec that produced the number. The record-package layer captures tool calls and args automatically; your job in the text output is to make the citation human-readable.
 `;
