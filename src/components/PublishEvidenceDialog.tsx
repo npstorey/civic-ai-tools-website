@@ -180,7 +180,7 @@ export default function PublishEvidenceDialog({
       // a datHere-content-profile envelope. The packager auto-adds the
       // `org.civicaitools.environment` extension and promotes `summary`
       // into canonical JSON. For `hash_only` prompts the contentProfile
-      // falls back to default (OES §9.1.1 requires full_text); the package
+      // falls back to default (spec §8.7.1 requires full_text); the package
       // retains its existing shape (summary stays DB-only).
       const contentProfile = promptVisibility === 'full_text' ? 'datHere' : 'default';
 

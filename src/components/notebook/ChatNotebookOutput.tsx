@@ -308,7 +308,7 @@ export default function ChatNotebookOutput({
       <Section title="E · Answer notebook">
         <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--text-secondary)' }}>
           Re-executing this notebook against the documented runtime + stable
-          upstream data reproduces section F (OES §9.1.3). The notebook
+          upstream data reproduces section F (Typed Standards §8.7.3). The notebook
           metadata records the sandbox runtime versions used at execution.
         </div>
         <NotebookSection notebook={view.notebook} slug={placeholderSlug} />

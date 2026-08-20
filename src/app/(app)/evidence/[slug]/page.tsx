@@ -201,7 +201,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 // Type-narrowing accessor for the org.civicaitools.environment extension
-// (OES §9.1.1 requirement 3). Returns null when absent or malformed so
+// (spec §8.7.1 requirement 3). Returns null when absent or malformed so
 // callers can default-fallback for non-datHere packages.
 function getEnvironmentExtension(pkg: EvidencePackage | null | undefined): {
   modelVersion?: string;
@@ -452,12 +452,12 @@ export default async function EvidencePage({ params }: PageProps) {
             <span>datHere content profile</span>
             <span>{'·'}</span>
             <a
-              href="https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-evidence-standard.md#91-dathere-content-profile"
+              href="https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/typed-standards-specification.md#87-content-profile-dathere"
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: 'var(--accent)' }}
             >
-              OES §9.1
+              Typed Standards §8.7
             </a>
             <span>{'·'}</span>
             <a
@@ -470,7 +470,7 @@ export default async function EvidencePage({ params }: PageProps) {
         )}
 
         {/* A-G sections AS the page structure for datHere-content-profile
-            packages. ADR-0004 + OES §9.1. The legacy ProvenanceChain /
+            packages. ADR-0004 + spec §8.7. The legacy ProvenanceChain /
             Skill Guidance / Jupyter Notebook / Resources Used sections
             below are suppressed for datHere; their content is subsumed
             here as sections A, B, E, and C respectively. */}
@@ -603,7 +603,7 @@ export default async function EvidencePage({ params }: PageProps) {
             {renderPkg.extensions?.[NOTEBOOK_EXTENSION_KEY] !== undefined ? (
               <Section title="E · Answer notebook">
                 <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  Re-executing this notebook against the documented runtime + stable upstream data reproduces section F (OES §9.1.3).{' '}
+                  Re-executing this notebook against the documented runtime + stable upstream data reproduces section F (Typed Standards §8.7.3).{' '}
                   <a href={`/api/records/${slug}/bundle`} style={{ color: 'var(--accent)' }}>
                     Download notebook (.ipynb)
                   </a>
@@ -833,7 +833,7 @@ export default async function EvidencePage({ params }: PageProps) {
               if (resolution?.outputIsBlob) blobFields.push('output');
               if (resolution?.skillTextIsBlob) blobFields.push('skill text');
               // Section-C environment metadata (datHere captureMethod only;
-              // org.civicaitools.environment extension per OES §9.1.1).
+              // org.civicaitools.environment extension per spec §8.7.1).
               const env = getEnvironmentExtension(renderPkg);
               const envMcpHosts = env?.mcpServers
                 ?.map((s) => {

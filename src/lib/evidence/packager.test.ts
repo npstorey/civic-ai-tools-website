@@ -229,9 +229,9 @@ test('buildEvidencePackage: with captureMethod, metadata.captureMethod matches i
 
 // --- ADR-0004: datHere content profile ---
 //
-// The datHere content profile (OES §9.1, ADR-0004) promotes `summary` to
+// The datHere content profile (spec §8.7, ADR-0004) promotes `summary` to
 // canonical-JSON and auto-emits the `org.civicaitools.environment`
-// extension. Both are required for datHere conformance per §9.1.1. For
+// extension. Both are required for datHere conformance per §8.7.1. For
 // non-datHere content profiles the canonical JSON shape stays byte-
 // identical to pre-ADR-0004 — neither field appears, so pre-ADR packages
 // hash the same. contentProfile is orthogonal to captureMethod (ADR-0003).

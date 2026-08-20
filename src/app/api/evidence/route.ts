@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ADR-0004 §9.1.1: contentProfile=datHere requires full_text prompt
+    // ADR-0004 / spec §8.7.1: contentProfile=datHere requires full_text prompt
     // visibility (the A-G envelope needs section A readable) and a
     // non-empty summary (section G). Other content profiles don't require
     // either. captureMethod is orthogonal — chat-flow-stream, claude-code-
@@ -250,7 +250,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error:
-              'contentProfile "datHere" requires promptVisibility "full_text" (OES §9.1.1 requirement 1).',
+              'contentProfile "datHere" requires promptVisibility "full_text" (Typed Standards §8.7.1 requirement 1).',
           },
           { status: 400 },
         );
@@ -259,7 +259,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error:
-              'contentProfile "datHere" requires a non-empty summary (OES §9.1.1 requirement 6).',
+              'contentProfile "datHere" requires a non-empty summary (Typed Standards §8.7.1 requirement 6).',
           },
           { status: 400 },
         );

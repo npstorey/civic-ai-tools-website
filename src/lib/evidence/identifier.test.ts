@@ -1,6 +1,6 @@
 // Tests for identifier resolution on the public commitment endpoint
 // (civic-ai-tools-website#116 durable backend half): a bare base-package hash
-// and a slug MUST resolve to the same §9.2.1 commitment, hash matching MUST be
+// and a slug MUST resolve to the same §8.8.1 commitment, hash matching MUST be
 // case-insensitive, slug resolution MUST be unchanged, and a non-public package
 // MUST stay unreachable by hash.
 //
@@ -121,7 +121,7 @@ function resolveFromStore(
 
 /**
  * Mirror of the commitment route's full pipeline: resolve → public-visibility
- * gate → build the §9.2.1 view. `pkg` is passed null (the route degrades to
+ * gate → build the §8.8.1 view. `pkg` is passed null (the route degrades to
  * DB-sourced proofs when the blob can't be fetched), which is enough to compare
  * commitment identity across address forms.
  */

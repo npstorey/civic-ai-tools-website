@@ -1,4 +1,4 @@
-// Unit tests for the §9.2.1 proof-sidecar builder (commitment.ts), the WS1
+// Unit tests for the §8.8.1 proof-sidecar builder (commitment.ts), the WS1
 // core of civic-ai-tools-website#116. These prove the generalization beyond the
 // datHere-shaped inline original AND the security-audit invariants for the
 // net-new public exposure: only intended-public fields leave the server.
