@@ -1,0 +1,61 @@
+name: Standalone
+
+# The empirical net for the standalone build (wave N5 P1, anchor #282).
+#
+# `npm run build:standalone` (BUILD_STANDALONE=1 next build, then
+# scripts/check-standalone-assets.mjs) otherwise runs only inside
+# `docker build` — which no workflow performs — so a change that breaks
+# standalone tracing of the runtime-read helper files would first surface in
+# an operator's image build. This leg runs the same command directly, on the
+# paths that can break it.
+#
+# Credential-free by construction, same charter as ci.yml: zero `secrets.`
+# references, no `env:` blocks of placeholder credentials, first-party
+# actions only. The standalone build needing no secret is part of the same
+# tested invariant.
+#
+# NOT a required check, on purpose: a required check backed by a
+# paths-filtered workflow never reports on non-matching PRs and would block
+# every one of them forever. If this is ever promoted to required, the shape
+# must change to an always-run job that early-exits green on non-matching
+# changes — do not just add the current check name to the ruleset.
+
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - 'next.config.*'
+      - 'scripts/**'
+      - 'src/lib/notebook-author/helpers/**'
+      - '.github/workflows/standalone.yml'
+
+permissions:
+  contents: read
+
+# Superseded runs on the same ref are pointless spend — cancel them.
+concurrency:
+  group: standalone-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-standalone:
+    name: standalone build + asset check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same Node source of truth as ci.yml: .nvmrc pins 22, matching
+      # package.json engines and the container base image.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Install
+        run: npm ci
+
+      # BUILD_STANDALONE=1 next build, then the runtime-read asset check.
+      # The check is the point: standalone file tracing can drop node:fs-read
+      # files silently, and a successful build that ships without them fails
+      # only later, in front of a user (#179 P4).
+      - name: Build standalone + check runtime-read assets
+        run: npm run build:standalone
