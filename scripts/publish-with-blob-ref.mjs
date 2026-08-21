@@ -9,11 +9,15 @@
 //
 // Usage:
 //   export CIVICAITOOLS_SESSION_TOKEN="<__Secure-next-auth.session-token value>"
-//   node scripts/publish-with-blob-ref.mjs [--base-url https://...]
+//   node scripts/publish-with-blob-ref.mjs --base-url https://...
 //
-// When --base-url is omitted, defaults to https://www.civicaitools.org.
-// For preview URLs, supply the full hostname (including the path-protection
-// cookie value if the preview has SSO — upload flow will 401 without it).
+// --base-url is required (civic-ai-tools#155 P1 E4): this script exists to
+// smoke-test a specific deployed instance end-to-end, so it refuses to guess
+// which one rather than silently defaulting to the reference production
+// host — the same reasoning behind removing SOCRATA_MCP_URL's hosted-host
+// default (see docs/deploy.md). For preview URLs, supply the full hostname
+// (including the path-protection cookie value if the preview has SSO —
+// upload flow will 401 without it).
 
 import crypto from 'node:crypto';
 import process from 'node:process';
@@ -24,7 +28,15 @@ function arg(name, fallback) {
   return i >= 0 ? args[i + 1] : fallback;
 }
 
-const BASE_URL = arg('--base-url', 'https://www.civicaitools.org').replace(/\/$/, '');
+const rawBaseUrl = arg('--base-url', undefined);
+if (!rawBaseUrl) {
+  console.error(
+    'Missing required flag --base-url. This script targets a specific deployed ' +
+      'instance and refuses to guess which one — pass e.g. --base-url https://your-instance.example.',
+  );
+  process.exit(2);
+}
+const BASE_URL = rawBaseUrl.replace(/\/$/, '');
 const SESSION_TOKEN = process.env.CIVICAITOOLS_SESSION_TOKEN;
 if (!SESSION_TOKEN) {
   console.error(
