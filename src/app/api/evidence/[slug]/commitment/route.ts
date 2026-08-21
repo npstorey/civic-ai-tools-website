@@ -14,8 +14,8 @@ import { InstanceIdentityError } from '@/lib/site-config';
 /**
  * GET /api/evidence/[hash|slug]/commitment
  *
- * Public, unauthenticated proof sidecar (spec §9.2.1) — the WS1 "unlock" of
- * civic-ai-tools-website#116. Returns the §9.2.1 commitment view for a package
+ * Public, unauthenticated proof sidecar (spec §8.8.1) — the WS1 "unlock" of
+ * civic-ai-tools-website#116. Returns the §8.8.1 commitment view for a package
  * so a third party can resolve its proofs and verify INDEPENDENTLY (client-side,
  * against public infra) instead of trusting a civicaitools.org-rendered verdict.
  * The view is self-describing (carries `packageUrl` + `trustRegistryUrl`), so a

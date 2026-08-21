@@ -26,9 +26,9 @@ import {
  * GET /api/evidence/[slug]/bundle
  *
  * Returns a datHere-content-profile package as a notebook-embedded
- * serialization per OES §9.2.2 — a single .ipynb file whose root
+ * serialization per spec §8.8.2 — a single .ipynb file whose root
  * metadata carries the commitment view under the commitment-view extension
- * namespace, with a cell-0 metadata table prepended per the §9.2.4
+ * namespace, with a cell-0 metadata table prepended per the §8.8.4
  * reader-affordance convention.
  *
  * The namespace is DUAL-ERA (spec §8.8.2, settlement ruling D3): new bundles
@@ -43,7 +43,7 @@ import {
  *
  * Limitations (prototype):
  * - Returns only the notebook-embedded serialization. Sibling-YAML
- *   serialization (OES §9.2.3) for non-notebook outputs is future work.
+ *   serialization (spec §8.8.3) for non-notebook outputs is future work.
  * - Bundle endpoint refuses non-datHere content profiles with 400. The
  *   spec does not require bundle export for other content profiles, and
  *   the existing canonical package URL remains available for them. The
@@ -57,13 +57,13 @@ const NOTEBOOK_EXTENSION_KEY = 'org.civicaitools.notebook';
 type EvidenceRecord = typeof evidenceRecords.$inferSelect;
 type UserRecord = typeof users.$inferSelect;
 
-// `buildCommitmentView` (the §9.2.1 proof sidecar) now lives in
+// `buildCommitmentView` (the §8.8.1 proof sidecar) now lives in
 // `@/lib/evidence/commitment` so the public commitment endpoint and this
 // notebook-embedded bundle emit the same self-describing proof object
 // (civic-ai-tools-website#116 WS1).
 
 /**
- * Build a cell-0 markdown metadata table per OES §9.2.4 (SHOULD-level
+ * Build a cell-0 markdown metadata table per spec §8.8.4 (SHOULD-level
  * reader affordance). Verification does NOT depend on this cell — the
  * authoritative metadata is the commitment-view namespace at
  * the notebook's root. The cell exists so a reader opening the .ipynb in
@@ -221,7 +221,7 @@ export async function GET(
   // Deep-clone so we don't mutate the cached package
   const notebook = JSON.parse(JSON.stringify(notebookRaw)) as Record<string, unknown>;
 
-  // Inject commitment view at notebook root metadata (OES §9.2.2), carrying the
+  // Inject commitment view at notebook root metadata (spec §8.8.2), carrying the
   // signed lifecycle attestation chain (#119 P3) for offline #10 resolution.
   const lifecycleAttestations = record.basePackageHash
     ? await loadCarriedLifecycleAttestations(record.basePackageHash)
@@ -230,7 +230,7 @@ export async function GET(
   metadata[COMMITMENT_NAMESPACE_KEY] = buildCommitmentView(record, creator, pkg, lifecycleAttestations);
   notebook.metadata = metadata;
 
-  // Prepend cell-0 reader-affordance table (OES §9.2.4)
+  // Prepend cell-0 reader-affordance table (spec §8.8.4)
   const existingCells = Array.isArray(notebook.cells)
     ? (notebook.cells as unknown[])
     : [];

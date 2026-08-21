@@ -9,7 +9,7 @@ import { getSidecarTrustRegistryUrls } from '../site-config.ts';
 import { fromDbValue } from './visibility.ts';
 
 /**
- * Proof sidecar ("commitment view") builder — spec §9.2.1.
+ * Proof sidecar ("commitment view") builder — spec §8.8.1.
  *
  * As of S3a P2 (#166) the neutral §8.8.1 sidecar ASSEMBLY lives in
  * @typedstandards/produce-core (`buildCommitmentView` there takes every proof
@@ -130,7 +130,7 @@ export function readCommitmentNamespace(
 export type { CommitmentLifecycle };
 
 /**
- * Build the §9.2.1 lifecycle summary from a record's legacy columns, or null
+ * Build the §8.8.1 lifecycle summary from a record's legacy columns, or null
  * when the package has no lifecycle history (never withdrawn) — in which case
  * the commitment view omits the `lifecycle` field entirely.
  *
@@ -162,7 +162,7 @@ export function buildCommitmentLifecycle(
 }
 
 /**
- * Build the spec §9.2.1 commitment view from the evidence record + creator + the
+ * Build the spec §8.8.1 commitment view from the evidence record + creator + the
  * signed package JSON. Optional fields (envelope taxonomy, canonicalization,
  * RFC 3161 timestamp, Rekor entry/proof, lifecycle) are conditionally spread so
  * absent values don't appear as `null` in the serialized output — the

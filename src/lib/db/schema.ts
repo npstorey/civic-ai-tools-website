@@ -75,7 +75,7 @@ export const captureMethodEnum = pgEnum('capture_method', [
 // `default` — legacy / default content shape. Equivalent to the column
 // being NULL on legacy rows (the route layer never writes 'default'
 // explicitly; absence is treated as default by surfaces).
-// `datHere` — A-G envelope content profile per OES §9.1, with a
+// `datHere` — A-G envelope content profile per spec §8.7, with a
 // deterministic Jupyter notebook in section E reproducing the rendered
 // answer (F). When set, the packager promotes `summary` into canonical
 // JSON and auto-emits the `org.civicaitools.environment` extension.

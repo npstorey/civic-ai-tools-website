@@ -1,6 +1,6 @@
 /**
  * Light-touch schema validator for the executed-notebook extensions per
- * OES §9.1.4 (specified by ADR-0005). Phase 1 owns this local sanity check
+ * spec §8.7.4 (specified by ADR-0005). Phase 1 owns this local sanity check
  * before the route returns the notebook; Phase 3 owns the full packager-
  * side enforcement when executed notebooks become evidence-package
  * payloads.
@@ -61,7 +61,7 @@ export function validateNotebookProvenance(notebook: Notebook): ValidationResult
 
 /**
  * Validate that `metadata.extensions[org.civicaitools.execution]` matches
- * the OES §9.1.4 shape: executedAt (ISO-8601 UTC), environment.python
+ * the spec §8.7.4 shape: executedAt (ISO-8601 UTC), environment.python
  * (non-empty string), environment.libraries (object), executionDuration_ms
  * (non-negative integer); sandboxId and comparisonCellPresent are optional.
  */

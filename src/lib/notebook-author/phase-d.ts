@@ -5,7 +5,7 @@
  * outputs embedded. It:
  *   1. Extracts prominent metrics from the metric-capture cell's stdout
  *      (the cell synthesize.ts inserts before the synthesis cell).
- *   2. Appends the comparison cell per ADR-0005 §5 / OES §9.1.4: original
+ *   2. Appends the comparison cell per ADR-0005 §5 / spec §8.7.4: original
  *      values as Python literals, `recompute_key_metrics()` reading from
  *      the dfN DataFrames in the notebook's namespace, and a delta loop.
  *   3. Stamps `metadata.extensions[org.civicaitools.execution]` with the
@@ -153,7 +153,7 @@ export function buildComparisonCell(args: {
     '# Original values were captured when the notebook was first executed by the',
     '# publisher\'s pipeline. On re-execution against live data, the same metrics',
     '# are extracted from the DataFrames computed above and a per-key delta is',
-    '# printed below. See ADR-0005 §5 / OES §9.1.4 for the canonical shape.',
+    '# printed below. See ADR-0005 §5 / Typed Standards §8.7.4 for the canonical shape.',
     '',
     `# ORIGINAL VALUES (captured at executedAt = ${executedAt})`,
     ...literalLines,

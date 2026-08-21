@@ -82,11 +82,11 @@ export type CaptureMethod =
  *
  * - `default` — legacy content shape. Pre-ADR-0004 packages omit the
  *   `contentProfile` field entirely; verifiers treat absence as `default`.
- *   No additional normative requirements beyond §4 of the standard.
- * - `datHere` — A-G envelope content profile (OES §9.1) with a
+ *   No additional normative requirements beyond §8.1 of the specification.
+ * - `datHere` — A-G envelope content profile (spec §8.7) with a
  *   deterministic Jupyter notebook in section E reproducing the rendered
  *   answer (F) against the documented runtime + stable upstream data.
- *   Packages with this profile MUST satisfy §9.1.1 requirements
+ *   Packages with this profile MUST satisfy §8.7.1 requirements
  *   (full-text prompt, system prompt present, environment metadata
  *   present, notebook present, rendered answer present, summary present).
  *
@@ -136,7 +136,7 @@ export interface PackageInput {
   /**
    * Content profile label per ADR-0004. Optional; absence is treated as
    * `default`. Set to `'datHere'` to produce an A-G envelope package
-   * (OES §9.1), which triggers two additional packager behaviors:
+   * (spec §8.7), which triggers two additional packager behaviors:
    * `summary` is emitted into canonical JSON (covered by the package
    * hash) and `extensions["org.civicaitools.environment"]` is auto-
    * emitted. Both behaviors are no-ops when contentProfile is `default`
@@ -274,7 +274,7 @@ export interface EvidencePackage {
   output: string | BlobRef;
   /** OTel trace, either inline or referenced by hash. */
   trace: Record<string, unknown> | BlobRef;
-  /** Short, indexable, citation-ready summary (OES §4.1, ADR-0004).
+  /** Short, indexable, citation-ready summary (spec §8.1.1, ADR-0004).
    *  Required when `metadata.captureMethod === 'datHere'`; optional and
    *  typically absent for other capture methods (where summary lives on
    *  the DB row only). When present in the canonical JSON, it is covered
@@ -406,7 +406,7 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
     instanceProvenanceConfig(),
   );
 
-  // datHere policy (ADR-0004/0006, OES §9.1.1): producerProfile auto-derive,
+  // datHere policy (ADR-0004/0006, spec §8.7.1): producerProfile auto-derive,
   // canonicalization-rule selection, the summary-emission gate, and the
   // `org.civicaitools.environment` extension layered onto caller-supplied
   // extensions — all derived by the harness; the environment's `host` is this
