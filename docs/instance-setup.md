@@ -39,11 +39,16 @@ or a log.
 
 ## 2. Pick a key identifier (kid)
 
-Conventionally `platform:evidence-YYYY-MM` (the year-month you activate it).
+Conventionally `platform:record-YYYY-MM` (the year-month you activate it) —
+the settlement vocabulary (civic-ai-tools#160) for kids minted from now on.
 Keep the `platform:` prefix — it scopes the key to your instance's platform
 identity and leaves room for per-user scopes later without a registry schema
 migration. The kid is not secret; it is the registry lookup handle for the
-matching public key.
+matching public key. (The reference deployment's own live kid,
+`platform:evidence-2026-04`, predates this convention and is exempt-frozen —
+see [`docs/key-rotation.md`](key-rotation.md) — but a first-time kid on a
+new instance has no such history to preserve, so mint it under the current
+convention.)
 
 ## 3. Publish your trust registry
 
@@ -65,7 +70,7 @@ Replace the demo deployment's registry file with your own. Template:
   },
   "keys": [
     {
-      "kid": "platform:evidence-YYYY-MM",
+      "kid": "platform:record-YYYY-MM",
       "publicKey": "<base64 DER SPKI public key from step 1>",
       "signerIdentity": {
         "bindingTier": "platform",

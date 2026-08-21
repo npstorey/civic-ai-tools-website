@@ -22,6 +22,18 @@ This document describes the request and response contract so external clients ca
 > Already-published packages are byte-identical and still verify: identifiers
 > frozen inside a signature are never rewritten (Appendix J §J.4).
 
+**Substitute your own origin.** This contract describes the reference
+deployment, civicaitools.org — every `civicaitools.org` URL below that a
+client is instructed to call (sign-in, dashboard, `POST /api/records`, the
+well-known registry paths, and so on) is that deployment's concrete example.
+Running your own instance means substituting its own origin
+(`PUBLISHER_SITE_ORIGIN`; see [`docs/instance-setup.md`](../instance-setup.md))
+wherever this document names `civicaitools.org` as a host to call. Where the
+text instead states a fact about what the reference deployment itself does
+— e.g. "signed by the civicaitools.org platform" — that's describing that
+specific deployment's behavior, not instructing a reader to call that host;
+those references are left as-is.
+
 ## Repositories & layers
 
 This contract spans three repositories. If you're integrating, here's how they relate:
@@ -45,7 +57,7 @@ _Last updated: 2026-08-05 — see the [change log](#change-log) for dated change
 A successful publish:
 
 1. Builds a structured record package from the request body (canonical JSON, SHA-256 hashed).
-2. Writes the package JSON blob to Vercel Blob at `evidence-packages/<packageHash>.json` (public, content-addressable).
+2. Writes the package JSON blob to Vercel Blob at `evidence-packages/<packageHash>.json` (public, content-addressable; the `evidence-packages/` prefix is **exempt-frozen** under Appendix J — the path is hash-frozen inside every already-signed `packageUrl`, so it is recorded rather than renamed).
 3. Signs the hash with the platform Ed25519 key (Ed25519ph), requests an RFC 3161 timestamp from freetsa.org, and publishes to the Sigstore Rekor transparency log. Signing and external calls are best-effort — publishing still succeeds if any of them fail.
 4. Inserts an `evidence_records` row in the Neon Postgres database, keyed by a content-addressable slug `{title-slug}-{6-char-hex-of-packageHash}`.
 5. Returns the slug, the page URL, and the package hash.
@@ -63,7 +75,7 @@ The endpoint accepts two auth methods. **Bearer tokens are preferred for program
 External clients — Claude Code publish skills, CI jobs, local CLIs, anything not running in a signed-in browser — should authenticate with a bearer token obtained through the [device authorization grant (RFC 8628)](https://datatracker.ietf.org/doc/html/rfc8628):
 
 1. **Client starts the flow.** POST `/api/auth/device/code` with a JSON body `{ "name": "my client", "scope": "records:publish" }`. Both `records:publish` and the prior-era `evidence:publish` are accepted; an explicit request is granted **verbatim**, so a client comparing the granted scope against what it asked for still matches. Omitting `scope` mints `records:publish`. The response includes a `device_code` (opaque, client-held), a short `user_code` for the human to type, a `verification_uri`, a `verification_uri_complete` (prefilled with the user code), an `expires_in` (seconds until the codes expire — currently 900 = 15 min), and a polling `interval` (seconds between polls — currently 5).
-2. **User approves in a browser.** The client displays the `user_code` and directs the user to `verification_uri_complete`. The user signs in at civicaitools.org with GitHub if not already signed in, reviews the client name and scope, and clicks **Approve** (or **Deny**).
+2. **User approves in a browser.** The client displays the `user_code` and directs the user to `verification_uri_complete`. The user signs in (at civicaitools.org with GitHub on the reference deployment — your own instance's origin and sign-in provider otherwise) if not already signed in, reviews the client name and scope, and clicks **Approve** (or **Deny**).
 3. **Client polls for the token.** POST `/api/auth/device/token` with `{ "device_code": "..." }` at the returned interval. Responses:
     - `200 OK` with `{ access_token, token_type: "Bearer", expires_at, expires_in, scope }` — approved; save the token.
     - `400 { "error": "authorization_pending" }` — keep polling.
@@ -72,11 +84,11 @@ External clients — Claude Code publish skills, CI jobs, local CLIs, anything n
     - `400 { "error": "invalid_grant" }` — unknown or already-exchanged code.
 4. **Use the token.** Send `Authorization: Bearer <access_token>` on subsequent writes to `/api/records` and `/api/blob/upload-token`. Tokens are valid for 90 days; re-run the flow when the token expires or is revoked.
 
-Tokens are stored server-side as SHA-256 hashes — a database compromise leaks hashes, not usable tokens. Each token carries a scope. Two spellings of the publish scope exist and **both authorize identically, permanently**: `records:publish` (canonical, minted by default) and `evidence:publish` (prior era — carried by every token minted before 2026-08-19, and still mintable on explicit request). There is no migration and no token is invalidated. Future capabilities will introduce new scope names rather than widening either of these. Tokens can be revoked anytime from the [dashboard Tokens tab](https://www.civicaitools.org/dashboard); a revoked token starts returning `401` on the next request.
+Tokens are stored server-side as SHA-256 hashes — a database compromise leaks hashes, not usable tokens. Each token carries a scope. Two spellings of the publish scope exist and **both authorize identically, permanently**: `records:publish` (canonical, minted by default) and `evidence:publish` (prior era — carried by every token minted before 2026-08-19, and still mintable on explicit request). There is no migration and no token is invalidated. Future capabilities will introduce new scope names rather than widening either of these. Tokens can be revoked anytime from the [dashboard Tokens tab](https://civicaitools.org/dashboard); a revoked token starts returning `401` on the next request.
 
 ### Session cookie (legacy, browser-friendly)
 
-The endpoint still accepts a NextAuth session cookie — `__Secure-next-auth.session-token` in production, `next-auth.session-token` in development — for browser flows and one-off scripts. Sign in at `https://civicaitools.org` with GitHub, then send the cookie as a `Cookie` header. Cookie-authed writes receive an `X-Auth-Deprecated: cookie` response header and a server-side log line nudging toward bearer tokens; no removal date is set.
+The endpoint still accepts a NextAuth session cookie — `__Secure-next-auth.session-token` in production, `next-auth.session-token` in development — for browser flows and one-off scripts. Sign in (at `https://civicaitools.org` on the reference deployment, or your own instance's origin) with GitHub, then send the cookie as a `Cookie` header. Cookie-authed writes receive an `X-Auth-Deprecated: cookie` response header and a server-side log line nudging toward bearer tokens; no removal date is set.
 
 ### Server-side validation
 
@@ -156,7 +168,7 @@ Send exactly one auth header — when both are present, the `Authorization` head
 - **`datHere` requirements (OES §9.1.1)** — When `contentProfile === "datHere"`, the route additionally enforces:
     1. `promptVisibility` MUST be `"full_text"` (the A-G envelope needs section A readable). 400 with explicit error on `"hash_only"`.
     2. `summary` MUST be non-empty (section G). 400 on missing or blank.
-    3. The packager auto-emits `extensions["org.civicaitools.environment"]` with section-C metadata: `modelVersion` (from `model`), `temperature` (prototype placeholder `0` pending capture work), `mcpServers` (derived from `skillMetadata.mcpServerUrl`), `toolDefinitions` (prototype placeholder `[]`), `host` (`"civicaitools.org"`).
+    3. The packager auto-emits `extensions["org.civicaitools.environment"]` with section-C metadata: `modelVersion` (from `model`), `temperature` (prototype placeholder `0` pending capture work), `mcpServers` (derived from `skillMetadata.mcpServerUrl`), `toolDefinitions` (prototype placeholder `[]`), `host` (derived from `PUBLISHER_PUBLICATION_HOST` — see [`docs/instance-setup.md`](../instance-setup.md); `"civicaitools.org"` on the reference deployment).
     4. `summary` is also promoted to a top-level field in canonical JSON (so it is covered by the package hash); for non-datHere content profiles, `summary` continues to live on the database row only and the package JSON shape stays byte-identical to pre-ADR-0004.
   Callers supplying their own `extensions["org.civicaitools.notebook"]` (e.g., the chat-flow publish dialog) see it preserved alongside the auto-emitted environment extension.
 
@@ -321,7 +333,7 @@ await fetch('https://civicaitools.org/api/records', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    Cookie: `__Secure-next-auth.session-token=${process.env.CIVIC_EVIDENCE_SESSION_COOKIE}`,
+    Cookie: `__Secure-next-auth.session-token=${process.env.CIVIC_RECORD_SESSION_COOKIE}`,
   },
   body: JSON.stringify({
     trace: { resourceSpans: [] },
@@ -540,7 +552,7 @@ Two honesty notes integrating clients should know:
 A sealed claim is promoted to the public state by creating the publication pair:
 
 - **`POST /api/records/:slug/publish`** — authorization: publisher-only (the record's creator, via bearer token holding the publish scope under either accepted spelling, or session cookie; delegated-publisher is a future ADR per Q20). Body: `{ "runEvaluation"?: boolean, "evaluatorModel"?: string }` — see [the publication gate](#the-publication-gate-live-since-2026-06-12) for the default-on adversarial evaluation that runs first. Flow: the adversarial eval runs and its signed node is emitted; the visibility transition is a compare-and-set (a concurrent second publish loses the race and gets `409`); then the content is re-homed from its random sealed-mode capability key to the canonical hash-addressed key and two independently signed + timestamped + Rekor-included nodes are emitted:
-  1. `attestation/publishes/v1` — payload `targetNodeId` (the package's envelope hash), `publicationHost` (`"civicaitools.org"`), `releasedAt`.
+  1. `attestation/publishes/v1` — payload `targetNodeId` (the package's envelope hash), `publicationHost` (derived from `PUBLISHER_PUBLICATION_HOST` — see [`docs/instance-setup.md`](../instance-setup.md); `"civicaitools.org"` on the reference deployment), `releasedAt`.
   2. `attestation/locatedAt/v1` — payload `targetNodeId`, `uri` (the now-public content URL), `targetContentHash` (multihash; matches the target's own `contentHash` — named `targetContentHash` rather than the §8.12.1 table's `contentHash` because that key is the attestation envelope's own fingerprint; registered as open-questions Q48), optional `contentLength`.
 
   Returns `{ published: true, evaluationNodeId?, publishesNodeId, locatedAtNodeId, url }` (`evaluationNodeId` present unless `runEvaluation: false`). On pair-emission failure the canonical blob is rolled back, the visibility flip is reverted, and the record stays sealed (`500`; retryable — never half-published; an already-emitted evaluation node survives harmlessly and counts for the retry).
@@ -609,7 +621,7 @@ Hosts express the eval requirement in their self-attestation — a `content/host
 }
 ```
 
-`requiresAdversarialEvalOnPublication` accepts `false`, `true` (presence-only), or the structured form above (score floor and/or evaluator binding-tier floor — `null` means no floor on that axis). Hosts that declare a requirement refuse to serve publication records lacking a conforming evaluation; hosts that don't declare it serve either. The full host self-attestation (well-known location, transparency-log registration, third-party host evaluations) is the proposed-issue 008 deliverable and lands when that work is promoted; this contract fixes only the field shape so partner pipelines can implement the consumer-side check now.
+`requiresAdversarialEvalOnPublication` accepts `false`, `true` (presence-only), or the structured form above (score floor and/or evaluator binding-tier floor — `null` means no floor on that axis). Hosts that declare a requirement refuse to serve publication records lacking a conforming evaluation; hosts that don't declare it serve either. The full host self-attestation (well-known location, transparency-log registration, third-party host evaluations) is the proposed-issue 008 deliverable and lands when that work is promoted; this contract fixes only the field shape so partner pipelines can implement the consumer-side check now. Unlike `publicationHost` above, `hostIdentifier` is not derived from any `PUBLISHER_*` variable today — this whole node is a specified-but-unbuilt shape (nothing in `src/` constructs a `content/host/v1` node yet); when it is implemented, `hostIdentifier` is expected to be the instance's own public origin (`PUBLISHER_SITE_ORIGIN`), shown as `https://civicaitools.org` here as the reference deployment's value.
 
 ---
 
@@ -641,7 +653,7 @@ RFC 3161 timestamp and Rekor submission are non-blocking. Failures for either ar
 ### 1. Publish an analysis with `curl`
 
 ```bash
-# Preferred: $CIVIC_EVIDENCE_TOKEN holds a bearer token obtained via
+# Preferred: $CIVIC_RECORD_TOKEN holds a bearer token obtained via
 # `publish.py --login` or a direct device-flow exchange against
 # /api/auth/device/{code,token}.
 #
@@ -650,7 +662,7 @@ RFC 3161 timestamp and Rekor submission are non-blocking. Failures for either ar
 
 curl -sS -X POST https://civicaitools.org/api/records \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ${CIVIC_EVIDENCE_TOKEN}" \
+  -H "Authorization: Bearer ${CIVIC_RECORD_TOKEN}" \
   -d '{
     "trace": { "resourceSpans": [] },
     "prompt": "How many 311 noise complaints did Manhattan receive last year?",
@@ -757,9 +769,9 @@ const res = await fetch('https://civicaitools.org/api/records', {
   headers: {
     'Content-Type': 'application/json',
     // Preferred bearer path:
-    'Authorization': `Bearer ${process.env.CIVIC_EVIDENCE_TOKEN}`,
+    'Authorization': `Bearer ${process.env.CIVIC_RECORD_TOKEN}`,
     // Legacy alternative (cookie):
-    // 'Cookie': `__Secure-next-auth.session-token=${process.env.CIVIC_EVIDENCE_SESSION_COOKIE}`,
+    // 'Cookie': `__Secure-next-auth.session-token=${process.env.CIVIC_RECORD_SESSION_COOKIE}`,
   },
   body: JSON.stringify({
     trace: { resourceSpans: [] },

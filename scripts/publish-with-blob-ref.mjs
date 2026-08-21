@@ -64,6 +64,9 @@ const SAMPLE_OUTPUT = [
 ].join('\n');
 const OUTPUT_BYTES = new TextEncoder().encode(SAMPLE_OUTPUT);
 const OUTPUT_HASH = crypto.createHash('sha256').update(OUTPUT_BYTES).digest('hex');
+// `evidence-refs/` is exempt-frozen under Appendix J (civic-ai-tools#160): the
+// prefix is hash-frozen inside every already-signed BlobRef, so it's
+// recorded rather than renamed. See docs/api/records-publish.md.
 const OUTPUT_PATHNAME = `evidence-refs/${OUTPUT_HASH}.md`;
 const OUTPUT_CONTENT_TYPE = 'text/markdown';
 
