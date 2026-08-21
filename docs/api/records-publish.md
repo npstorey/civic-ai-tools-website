@@ -412,7 +412,7 @@ Callers publishing through `POST /api/records` do not set these themselves — t
 | `PUBLISHER_SIGNING_KEY`        | `EVIDENCE_SIGNING_KEY` | Base64 DER PKCS8 Ed25519 private key. Sensitive.                        |
 | `PUBLISHER_KEY_ID`             | `EVIDENCE_KEY_ID` | Stable kid string naming **your** active trust-registry entry (e.g. `platform:evidence-2026-04` — kids are exempt-frozen; each lives inside every envelope its key has signed). Non-sensitive, no coded default: with a signing key set and this unset, the instance refuses to seal or publish rather than sign under an undeclared key id. |
 | `PUBLISHER_PUBLIC_KEY`         | `EVIDENCE_PUBLIC_KEY` | Public half of the signing key. Used only for registry updates.         |
-| `PUBLISHER_TRUST_REGISTRY_URL` | `EVIDENCE_TRUST_REGISTRY_URL` | Optional override for the default `${NEXTAUTH_URL}/.well-known/...` URL that **this instance's own verify route** fetches. Never part of signed output. Useful for previews. |
+| `PUBLISHER_TRUST_REGISTRY_URL` | `EVIDENCE_TRUST_REGISTRY_URL` | Optional override for the default `${NEXTAUTH_URL}/.well-known/...` URL that **this instance's own verify route** would fetch if it ever reached that step. Never part of signed output. In practice inert — see [`docs/key-rotation.md`](../key-rotation.md#environment-variables). |
 
 The full instance-identity set (origin, signer claim, platform agent, the emit-side registry URLs) is in [`docs/instance-setup.md`](../instance-setup.md).
 

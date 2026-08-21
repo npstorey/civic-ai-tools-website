@@ -8,10 +8,18 @@
  * token usage, latency, and tools called for manual scoring.
  *
  * Usage:
- *   OPENROUTER_API_KEY=sk-or-... node scripts/eval-models.mjs
+ *   OPENROUTER_API_KEY=<your-key> SOCRATA_MCP_URL=https://your-mcp-host \
+ *     node scripts/eval-models.mjs
+ *
+ * Required env vars:
+ *   SOCRATA_MCP_URL  — MCP server URL. No fallback (civic-ai-tools#155 P1
+ *                      E4): this used to default to the project's hosted
+ *                      endpoint, which would silently route an
+ *                      unconfigured run's queries through infrastructure
+ *                      the caller does not operate. Point it at the Socrata
+ *                      MCP deployment this eval run should query.
  *
  * Optional env vars:
- *   SOCRATA_MCP_URL  — MCP server URL (default: https://socrata-mcp.civicaitools.org)
  *   EVAL_MODELS      — comma-separated model IDs to test (default: all)
  *   EVAL_QUERIES     — comma-separated query indices to test, 1-based (default: all)
  *
@@ -33,7 +41,11 @@ if (!OPENROUTER_API_KEY) {
   process.exit(1);
 }
 
-const MCP_URL = process.env.SOCRATA_MCP_URL || 'https://socrata-mcp.civicaitools.org';
+const MCP_URL = process.env.SOCRATA_MCP_URL;
+if (!MCP_URL) {
+  console.error('Error: SOCRATA_MCP_URL environment variable is required (no reference-host default)');
+  process.exit(1);
+}
 
 const openrouter = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',

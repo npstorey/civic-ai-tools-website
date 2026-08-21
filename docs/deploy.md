@@ -523,15 +523,18 @@ from the origin, the agent id from the host; the *required* identity set
 itself is in the disable-when-absent table, not here — see
 [`docs/instance-setup.md`](instance-setup.md)),
 **`PUBLISHER_TRUST_REGISTRY_URL`** (the **consume**-side counterpart, and
-the one publisher variable that is not about what you emit: it changes
-which trust registry *this instance's own verify route* fetches, useful on
-previews and in local dev, and never appears in signed output. Unset, it
-resolves `NEXTAUTH_URL` → `PUBLISHER_SITE_ORIGIN` → the reference origin
-with the legacy well-known path appended, and is in any case the last
-resort behind the bundled and on-disk registries — see
-[`docs/key-rotation.md`](key-rotation.md#environment-variables), which
-documents it alongside `PUBLISHER_PUBLIC_KEY`, the keygen-written public
-half the app never reads), `SITE_BRAND_ACCENT` and `SITE_SPONSOR_URL`/`SITE_SPONSOR_PREFIX`
+the one publisher variable that is not about what you emit: it supplies the
+URL fed to the HTTP-fetch fallback in this instance's own verify route, and
+never appears in signed output. Unset, it resolves `NEXTAUTH_URL` →
+`PUBLISHER_SITE_ORIGIN` → the reference origin with the legacy well-known
+path appended — but that resolved URL is dead code on the real call path,
+not merely a last resort: the verify route always resolves the registry
+from a build-time-embedded import of the checked-in registry file first,
+which cannot fail short of corrupting that file, so the on-disk read and
+this HTTP fetch never run. See
+[`docs/key-rotation.md`](key-rotation.md#environment-variables) for the
+measurement, where it's documented alongside `PUBLISHER_PUBLIC_KEY`, the
+keygen-written public half the app never reads), `SITE_BRAND_ACCENT` and `SITE_SPONSOR_URL`/`SITE_SPONSOR_PREFIX`
 (a palette and a preposition are not identity claims, so those three do
 have defaults; the rest of the chrome set is in the disable-when-absent
 table above — see [Branding and

@@ -62,7 +62,14 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const MCP_URL = process.env.SOCRATA_MCP_URL || 'https://socrata-mcp.civicaitools.org';
+// civic-ai-tools#155 P1 E4 (premise-checked): this script refuses to run at
+// all unless --force-clobber overrides the REFUSAL below, and that path is
+// itself discouraged (see the header) — so stripping this default is
+// cosmetic, not a live-defect fix; the script is inert on every normal
+// invocation regardless. Stripped anyway for consistency with the rest of
+// this repo's reference-host-default removal (civic-ai-tools#155 P1 E4):
+// no fallback to the hosted MCP endpoint, even on the discouraged path.
+const MCP_URL = process.env.SOCRATA_MCP_URL;
 
 async function fetchGuidance() {
   // 1. Initialize MCP session
@@ -145,6 +152,13 @@ async function fetchGuidance() {
 async function main() {
   if (!process.argv.includes('--force-clobber')) {
     console.error(REFUSAL);
+    process.exit(1);
+  }
+  if (!MCP_URL) {
+    console.error(
+      'sync-fallback: SOCRATA_MCP_URL environment variable is required (no reference-host default). ' +
+        'Even on this discouraged --force-clobber path, this script will not guess which MCP server to fetch from.',
+    );
     process.exit(1);
   }
   console.warn(

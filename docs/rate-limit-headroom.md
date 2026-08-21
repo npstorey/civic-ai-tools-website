@@ -83,5 +83,5 @@ Optional, independent of the above: set `AUTHENTICATED_RATE_LIMIT` (now also env
 
 ## Demo-day checklist tie-in
 
-- Run `op run --env-file=.env.local -- node scripts/preflight-env.mjs` — confirms the auth + KV vars Option A/B depend on are present.
+- Confirm the auth + KV vars Option A/B depend on are present: `node scripts/preflight-env.mjs`, with the environment supplied however you inject secrets (`op run --env-file=.env.local -- node scripts/preflight-env.mjs` is one convention, not a requirement — any env-injection mechanism works, just never a plaintext dot-file literal).
 - If Option B is active, confirm `ANONYMOUS_RATE_LIMIT` is set in Vercel **production** (not just preview) and remember to delete it after the event.

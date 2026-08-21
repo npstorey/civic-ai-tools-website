@@ -28,10 +28,15 @@
  * NAME alone. No unbounded input from the environment reaches the output,
  * which is what the "never echoed" test in the suite pins down.
  *
- * Run it through 1Password so the op:// references in .env.local resolve into
- * this process's environment:
+ * `op run` is recommended for local use so the op:// references in
+ * .env.local resolve into this process's environment:
  *
  *   op run --env-file=.env.local -- node scripts/preflight-env.mjs
+ *
+ * Any env-injection mechanism is acceptable — CI secrets, container
+ * secrets, a secret manager — as long as the values reach this process's
+ * environment some other way. The one hard line: never a plaintext literal
+ * in a checked-in or local dot-file.
  *
  * Exit code is 0 when every REQUIRED variable (as resolved for the selected
  * profile) is present and the selectors are all recognized; 1 otherwise, so
@@ -313,7 +318,7 @@ export const ENV_SPEC = [
   { name: 'ROADMAP_GITHUB_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: '/roadmap "view source" link and byline label (unset: derived from ROADMAP_RAW_URL)', hasFallback: true },
 
   // --- Optional / feature / ops ---
-  { name: 'PUBLISHER_TRUST_REGISTRY_URL', priorEraName: 'EVIDENCE_TRUST_REGISTRY_URL', tier: 'optional', purpose: 'External trust-registry override', hasFallback: true },
+  { name: 'PUBLISHER_TRUST_REGISTRY_URL', priorEraName: 'EVIDENCE_TRUST_REGISTRY_URL', tier: 'optional', purpose: 'Trust-registry HTTP-fetch override — inert on every real call path (the embedded registry preempts it); retire-or-repair decision pending at G1', hasFallback: true },
   // WRITTEN, NEVER READ — the fourteenth variable of the settlement's Group A,
   // and the one this inventory used to miss precisely because the inventory
   // was derived from `process.env.*` reads. scripts/generate-signing-key.ts
