@@ -166,13 +166,18 @@ operator-supplied configuration, never from another deployment's identity:
 | `PUBLISHER_PLATFORM_AGENT_ID` | `EVIDENCE_PLATFORM_AGENT_ID` | PROV platform-agent id inside the signed provenance graph. | the publication host |
 | `PUBLISHER_PLATFORM_AGENT_URL` | `EVIDENCE_PLATFORM_AGENT_URL` | PROV platform-agent URL. | `PUBLISHER_SITE_ORIGIN` |
 
-Two more publisher variables exist outside this table:
+One more publisher variable exists outside this table:
 `PUBLISHER_PUBLIC_KEY` (written by the keygen script for registry edits, never
-read at run time) and `PUBLISHER_TRUST_REGISTRY_URL` (the **verify-side
-consume** override — feeds the HTTP-fetch fallback your verify route would
-use if it ever reached that step, which in practice it doesn't; never part
-of signed output). Both are documented in
+read at run time). Documented in
 [`docs/key-rotation.md`](key-rotation.md#environment-variables).
+
+A second variable used to live here too — `PUBLISHER_TRUST_REGISTRY_URL`, the
+**verify-side consume** override, which fed an HTTP-fetch fallback your
+verify route would use if it ever reached that step. civic-ai-tools#155 P1
+measured that it never did on any real call path, and civic-ai-tools#155 P1b
+retired the variable outright; see
+[`docs/key-rotation.md`](key-rotation.md#environment-variables) for the
+history.
 
 Check the wiring with the presence-only preflight (no values are read or
 printed): `node scripts/preflight-env.mjs`.

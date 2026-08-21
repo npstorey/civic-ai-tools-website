@@ -181,12 +181,25 @@ test('two-name expand: the canonical name wins whenever it is DEFINED, empty inc
 });
 
 test('two-name expand: every publisher variable in the census is declared with both names', () => {
-  // The census is Appendix J's environment row: fourteen variables. This
-  // inventory used to hold thirteen — PUBLIC_KEY is written by the keygen
-  // script and never read, so an inventory derived from `process.env.*` reads
-  // could not see it. Pinned at fourteen so the gap cannot reopen.
+  // The census is Appendix J's environment row (typed-standards-specification.md
+  // §Appendix J): fourteen variables at the time the vocabulary settlement
+  // shipped. This inventory used to hold thirteen — PUBLIC_KEY is written by
+  // the keygen script and never read, so an inventory derived from
+  // `process.env.*` reads could not see it — then fourteen once PUBLIC_KEY
+  // was added.
+  //
+  // civic-ai-tools#155 P1b retired PUBLISHER_TRUST_REGISTRY_URL /
+  // EVIDENCE_TRUST_REGISTRY_URL outright (it fed a dead on-disk-read/
+  // HTTP-fetch fallback in loadTrustRegistry that P1 measured as unreachable
+  // on every real call path; the owner ruled to retire rather than repair).
+  // That drops this inventory to thirteen. Appendix J's shipped census still
+  // says fourteen and still lists EVIDENCE_TRUST_REGISTRY_URL — this test
+  // now diverges from that normative table on purpose, tracking the
+  // reference implementation's actual (smaller) surface. Reconciling
+  // Appendix J's census with the retirement is an owner-level spec decision
+  // out of scope for P1b; flagged at the P1b gate, not resolved here.
   const publisherEntries = ENV_SPEC.filter((s) => s.name.startsWith('PUBLISHER_'));
-  assert.equal(publisherEntries.length, 14, 'the settlement names fourteen variables');
+  assert.equal(publisherEntries.length, 13, 'civic-ai-tools#155 P1b retired PUBLISHER_TRUST_REGISTRY_URL, dropping the census from fourteen to thirteen');
   for (const entry of publisherEntries) {
     assert.equal(
       entry.priorEraName,

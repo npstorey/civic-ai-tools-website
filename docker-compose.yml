@@ -292,8 +292,10 @@ services:
       EVIDENCE_TRUST_REGISTRY_CANONICAL_URL:
       PUBLISHER_TRUST_REGISTRY_LEGACY_URL:
       EVIDENCE_TRUST_REGISTRY_LEGACY_URL:
-      PUBLISHER_TRUST_REGISTRY_URL:
-      EVIDENCE_TRUST_REGISTRY_URL:
+      # PUBLISHER_TRUST_REGISTRY_URL / EVIDENCE_TRUST_REGISTRY_URL retired
+      # (civic-ai-tools#155 P1b) — fed a dead on-disk-read/HTTP-fetch fallback
+      # in loadTrustRegistry that P1 measured as unreachable on every real
+      # call path; the owner ruled to retire rather than repair.
       # Chrome branding and content sources. Also passed as build args above:
       # prerendered pages bake them, dynamic pages read them here.
       SITE_BRAND_NAME:
