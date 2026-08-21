@@ -522,19 +522,7 @@ derives from the required identity set above when unset: host and URLs
 from the origin, the agent id from the host; the *required* identity set
 itself is in the disable-when-absent table, not here — see
 [`docs/instance-setup.md`](instance-setup.md)),
-**`PUBLISHER_TRUST_REGISTRY_URL`** (the **consume**-side counterpart, and
-the one publisher variable that is not about what you emit: it supplies the
-URL fed to the HTTP-fetch fallback in this instance's own verify route, and
-never appears in signed output. Unset, it resolves `NEXTAUTH_URL` →
-`PUBLISHER_SITE_ORIGIN` → the reference origin with the legacy well-known
-path appended — but that resolved URL is dead code on the real call path,
-not merely a last resort: the verify route always resolves the registry
-from a build-time-embedded import of the checked-in registry file first,
-which cannot fail short of corrupting that file, so the on-disk read and
-this HTTP fetch never run. See
-[`docs/key-rotation.md`](key-rotation.md#environment-variables) for the
-measurement, where it's documented alongside `PUBLISHER_PUBLIC_KEY`, the
-keygen-written public half the app never reads), `SITE_BRAND_ACCENT` and `SITE_SPONSOR_URL`/`SITE_SPONSOR_PREFIX`
+`SITE_BRAND_ACCENT` and `SITE_SPONSOR_URL`/`SITE_SPONSOR_PREFIX`
 (a palette and a preposition are not identity claims, so those three do
 have defaults; the rest of the chrome set is in the disable-when-absent
 table above — see [Branding and
@@ -561,6 +549,15 @@ rate-limit and token-budget tuning knobs
 `S3_REGION` / `S3_FORCE_PATH_STYLE` / `S3_PUBLIC_BASE_URL` (coded
 defaults described in the storage section), and analytics
 (`NEXT_PUBLIC_GA_MEASUREMENT_ID`).
+
+**Retired:** `PUBLISHER_TRUST_REGISTRY_URL` (prior era:
+`EVIDENCE_TRUST_REGISTRY_URL`) used to sit in this list — the verify-side
+consume override, distinct from the two emit-side registry-URL overrides
+above. civic-ai-tools#155 P1 measured the HTTP fetch it fed as dead code on
+every real call path, and civic-ai-tools#155 P1b retired the variable and
+that fetch outright. See
+[`docs/key-rotation.md`](key-rotation.md#environment-variables) for the
+full history.
 
 One build-time caveat: `NEXT_PUBLIC_*` values are inlined into client
 bundles at build time, so a run-time pass-through cannot change them —

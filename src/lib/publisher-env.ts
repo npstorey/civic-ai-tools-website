@@ -2,9 +2,13 @@
 //
 // WHAT THIS IS. The 2026-08-19 vocabulary settlement (Appendix J of the Typed
 // Standards specification) retires "evidence" from the infrastructure brand.
-// The fourteen variables that name THIS deployment's publishing identity move
+// The thirteen variables that name THIS deployment's publishing identity move
 // from the `EVIDENCE_` prefix to `PUBLISHER_`, under the settlement's
-// `expand-then-flip` migration class:
+// `expand-then-flip` migration class. (Appendix J's shipped environment row
+// still says fourteen and still lists `EVIDENCE_TRUST_REGISTRY_URL` — that
+// variable was retired outright, not renamed, by civic-ai-tools#155 P1b;
+// reconciling the spec's census is a follow-up owner decision, not done
+// here.)
 //
 //   EXPAND (this module, this phase) — every runtime read accepts BOTH names,
 //   canonical first, and says so out loud when the prior-era name is the one
@@ -17,7 +21,7 @@
 //
 //   DROP (a later major) — the fallback in `lookupPublisherEnv` goes away.
 //
-// ONE HELPER, NOT FOURTEEN FALLBACKS. Hand-rolling `process.env.PUBLISHER_X ??
+// ONE HELPER, NOT THIRTEEN FALLBACKS. Hand-rolling `process.env.PUBLISHER_X ??
 // process.env.EVIDENCE_X` at each of the ~20 read sites would put the
 // migration rule in twenty places and the deprecation warning in none of them.
 // Everything that reads one of these variables goes through here, which is
@@ -61,15 +65,23 @@ export const CANONICAL_ENV_PREFIX = 'PUBLISHER_';
 export const PRIOR_ERA_ENV_PREFIX = 'EVIDENCE_';
 
 /**
- * The fourteen variables in the settlement's Group A, by the suffix the two
+ * The thirteen variables in the settlement's Group A, by the suffix the two
  * prefixes share. This list IS the census (Appendix J's environment row); it
- * is not derived from anything, so adding a fifteenth publisher variable means
- * adding it here.
+ * is not derived from anything, so adding a fourteenth publisher variable
+ * means adding it here.
  *
  * `PUBLIC_KEY` is the odd one: nothing reads it at run time — the key-
  * generation script WRITES it, and the deployment guide documents it. It is
  * listed because the settlement lists it, and because the writer emits the
  * canonical name from this list rather than a literal of its own.
+ *
+ * `TRUST_REGISTRY_URL` used to be the fourteenth entry — the verify-side
+ * consume override. civic-ai-tools#155 P1b retired it outright (not renamed):
+ * `readPublisherEnv('TRUST_REGISTRY_URL')` had exactly one caller
+ * (`getTrustRegistryUrl` in `src/lib/evidence/verify.ts`), which P1 measured
+ * as feeding dead code, and P1b deleted along with it. Appendix J's shipped
+ * environment row still lists it and still says fourteen; reconciling that is
+ * a follow-up spec decision, not done here.
  */
 export const PUBLISHER_ENV_SUFFIXES = [
   'SIGNING_KEY',
@@ -83,12 +95,11 @@ export const PUBLISHER_ENV_SUFFIXES = [
   'PLATFORM_AGENT_URL',
   'PUBLICATION_HOST',
   'SITE_ORIGIN',
-  'TRUST_REGISTRY_URL',
   'TRUST_REGISTRY_CANONICAL_URL',
   'TRUST_REGISTRY_LEGACY_URL',
 ] as const;
 
-/** One of the fourteen suffixes above. */
+/** One of the thirteen suffixes above. */
 export type PublisherEnvSuffix = (typeof PUBLISHER_ENV_SUFFIXES)[number];
 
 /** An env-shaped record. Always passed in, never reached for implicitly. */

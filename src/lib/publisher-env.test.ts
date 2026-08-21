@@ -1,9 +1,12 @@
 // The two-name expand for the publisher-identity variables (#160 P3).
 //
 // Group A of the 2026-08-19 vocabulary settlement (Appendix J of the Typed
-// Standards specification) moves fourteen variables from the `EVIDENCE_`
-// prefix to `PUBLISHER_`, under the `expand-then-flip` migration class. This
-// file pins the expand half: both names are read, the canonical one wins, the
+// Standards specification) moves thirteen variables from the `EVIDENCE_`
+// prefix to `PUBLISHER_`, under the `expand-then-flip` migration class. (A
+// fourteenth, `TRUST_REGISTRY_URL`, was also moved at the time — it was
+// retired outright, not renamed, by civic-ai-tools#155 P1b; see
+// `PUBLISHER_ENV_SUFFIXES`'s docstring in `publisher-env.ts`.) This file pins
+// the expand half: both names are read, the canonical one wins, the
 // prior-era one warns exactly once, and nothing that already worked stops.
 //
 // WHY THE PRECEDENCE RULE IS TESTED SO HARD. It is `defined`, not `truthy`,
@@ -52,9 +55,13 @@ function captureWarnings<T>(fn: () => T): { result: T; warnings: string[] } {
 
 // --- The census ---------------------------------------------------------------
 
-test('the census is Appendix J\'s fourteen variables, with no duplicates', () => {
-  assert.equal(PUBLISHER_ENV_SUFFIXES.length, 14);
-  assert.equal(new Set(PUBLISHER_ENV_SUFFIXES).size, 14, 'no suffix appears twice');
+// civic-ai-tools#155 P1b: Appendix J's shipped environment row still says
+// fourteen and still lists `EVIDENCE_TRUST_REGISTRY_URL`; that variable was
+// retired outright (not renamed) here, dropping this census to thirteen.
+// Reconciling the spec's count is a follow-up owner decision, not this test's.
+test('the census is Appendix J\'s thirteen variables (post-#155-P1b), with no duplicates', () => {
+  assert.equal(PUBLISHER_ENV_SUFFIXES.length, 13);
+  assert.equal(new Set(PUBLISHER_ENV_SUFFIXES).size, 13, 'no suffix appears twice');
   assert.deepEqual(
     [...PUBLISHER_ENV_NAMES].sort(),
     [...PUBLISHER_ENV_SUFFIXES].map((s) => `${CANONICAL_ENV_PREFIX}${s}`).sort(),

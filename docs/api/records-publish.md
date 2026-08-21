@@ -412,7 +412,14 @@ Callers publishing through `POST /api/records` do not set these themselves — t
 | `PUBLISHER_SIGNING_KEY`        | `EVIDENCE_SIGNING_KEY` | Base64 DER PKCS8 Ed25519 private key. Sensitive.                        |
 | `PUBLISHER_KEY_ID`             | `EVIDENCE_KEY_ID` | Stable kid string naming **your** active trust-registry entry (e.g. `platform:evidence-2026-04` — kids are exempt-frozen; each lives inside every envelope its key has signed). Non-sensitive, no coded default: with a signing key set and this unset, the instance refuses to seal or publish rather than sign under an undeclared key id. |
 | `PUBLISHER_PUBLIC_KEY`         | `EVIDENCE_PUBLIC_KEY` | Public half of the signing key. Used only for registry updates.         |
-| `PUBLISHER_TRUST_REGISTRY_URL` | `EVIDENCE_TRUST_REGISTRY_URL` | Optional override for the default `${NEXTAUTH_URL}/.well-known/...` URL that **this instance's own verify route** would fetch if it ever reached that step. Never part of signed output. In practice inert — see [`docs/key-rotation.md`](../key-rotation.md#environment-variables). |
+
+`PUBLISHER_TRUST_REGISTRY_URL` (prior era: `EVIDENCE_TRUST_REGISTRY_URL`) used
+to be listed here — an optional override for the URL this instance's own
+verify route would fetch if it ever reached that step. civic-ai-tools#155 P1
+measured that it never did on any real call path, and civic-ai-tools#155 P1b
+retired the variable outright; it is no longer read anywhere. See
+[`docs/key-rotation.md`](../key-rotation.md#environment-variables) for the
+history.
 
 The full instance-identity set (origin, signer claim, platform agent, the emit-side registry URLs) is in [`docs/instance-setup.md`](../instance-setup.md).
 
@@ -793,6 +800,8 @@ These are implementation details that may surprise an external client. None of t
 ---
 
 ## Change log
+
+- **2026-08-21** — **`PUBLISHER_TRUST_REGISTRY_URL` retired** (civic-ai-tools#155 P1b, following the P1 measurement below). The verify-side consume override — the URL an HTTP fetch would use if `loadTrustRegistry()` ever reached that step — is deleted outright, along with the on-disk-read and HTTP-fetch code paths it fed. `loadTrustRegistry()` now takes no `url` argument and resolves solely from the build-time-embedded trust registry; that was already the sole source on every real call path (see the 2026-04-18 entry below and [`docs/key-rotation.md`](../key-rotation.md#environment-variables) for the full history). The prior-era spelling `EVIDENCE_TRUST_REGISTRY_URL` is retired identically. Every instance replaces the checked-in registry file at build time, so no instance needed the lever, and it was never part of signed output — no client-visible or wire change.
 
 - **2026-08-19** — **Vocabulary settlement: `evidence` → `records` on this API's public surface** (Appendix J of the [Typed Standards specification](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/typed-standards-specification.md); [ADR-0025](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0025-vocabulary-settlement-evidence-excision.md); anchor [civic-ai-tools#160](https://github.com/npstorey/civic-ai-tools/issues/160)). The word "evidence" overclaimed in the artifact/infrastructure position — a signed package shows *how* an answer was produced, not that it is correct — so it is excised there and retained only in its epistemic sense (`content/evidence/v1`, `contentType: "evidence"`, the `supportedBy`/`opposedBy` relations, all unchanged). **Nothing an existing integration does stops working**, by design:
     - **Route segments.** `/api/records/*` and `/records/*` are canonical; `/api/evidence/*` and `/evidence/*` are **permanent aliases** serving the identical handlers — not a deprecation window. Every published link, citation, and OG card carrying the prior-era form keeps resolving forever.

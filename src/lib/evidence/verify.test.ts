@@ -7,7 +7,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
-import os from 'node:os';
 import canonicalize from 'canonicalize';
 import {
   verifySignature,
@@ -264,29 +263,29 @@ test('Rotation scenario: old key deprecated + new key active, both resolve corre
   assert.equal(forged.verified, false);
 });
 
-// --- loadTrustRegistry: resolves without ever reaching the network ---
+// --- loadTrustRegistry: resolves solely from the embedded JSON import ---
 //
-// NOTE (civic-ai-tools#155 P1 B1, corrected): these two tests were
-// originally written to exercise the on-disk read path, on the theory that
-// Vercel preview deployments put an HTML auth wall in front of
-// `/.well-known/*` URLs, so the loader falls back to reading the registry
-// from disk instead of fetching HTTP. Measurement showed that's not what
-// actually happens: `loadTrustRegistry`'s step 1 (the build-time-embedded
-// JSON import) resolves the registry unconditionally, before the on-disk
-// read is ever attempted — so what these tests actually exercise is step 1,
-// not the disk fallback. They're kept (and still pass) because they
-// correctly assert the outward behavior — an unreachable HTTP URL doesn't
-// stop the loader from returning a real registry — the "filesystem path"
-// framing just wasn't the accurate mechanism. See the "B1" test below for a
-// test that pins down which step actually supplies the result.
+// civic-ai-tools#155 P1b: `loadTrustRegistry` used to be a three-step
+// resolution chain (build-time bundled JSON → on-disk read → HTTP fetch),
+// with the last two steps fed by an optional `PUBLISHER_TRUST_REGISTRY_URL`
+// / `EVIDENCE_TRUST_REGISTRY_URL` override. civic-ai-tools#155 P1 measured
+// that steps 2-3 were dead code on every real call path — the embedded
+// import always resolves first, and neither production caller ever passed a
+// `url`. The owner ruled to retire the override rather than repair it, so
+// P1b deleted `getTrustRegistryUrl`, the on-disk read, and the HTTP fetch
+// outright. `loadTrustRegistry` now takes NO arguments (the `url` parameter
+// is gone along with what it fed) and resolves only from the build-time
+// embedded registry. The tests below replace the old three (two "resolves
+// without reaching the network" tests plus the "B1" override-unreachability
+// test) — there is no longer a disk/network step or an override to prove
+// unreachable, so those tests' premises no longer apply. What's still worth
+// pinning: the loader returns valid registry data, and it caches across
+// calls.
 
-test('loadTrustRegistry resolves the checked-in registry even with an unreachable HTTP URL', async () => {
+test('loadTrustRegistry resolves the checked-in registry from the embedded JSON', async () => {
   clearTrustRegistryCache();
-  // Point the HTTP URL at a guaranteed-invalid host; the loader should
-  // still succeed because an earlier resolution step (embedded JSON; see
-  // the B1 test below) already supplies a valid registry.
-  const registry = await loadTrustRegistry('http://127.0.0.1:1/invalid');
-  assert.ok(registry, 'loadTrustRegistry returned undefined even though the embedded/on-disk registry exists');
+  const registry = await loadTrustRegistry();
+  assert.ok(registry, 'loadTrustRegistry returned undefined even though the embedded registry exists');
   assert.ok(registry!.keys.length > 0);
   const activeKey = registry!.keys.find((k) => k.status === 'active');
   assert.ok(activeKey, 'registry should have at least one active key');
@@ -296,70 +295,10 @@ test('loadTrustRegistry resolves the checked-in registry even with an unreachabl
 
 test('loadTrustRegistry caches the resolved registry across calls', async () => {
   clearTrustRegistryCache();
-  const a = await loadTrustRegistry('http://127.0.0.1:1/invalid');
-  const b = await loadTrustRegistry('http://127.0.0.1:1/invalid');
+  const a = await loadTrustRegistry();
+  const b = await loadTrustRegistry();
   // Same reference → served from cache, not re-resolved.
   assert.strictEqual(a, b);
-});
-
-// --- B1 (civic-ai-tools#155 P1): PUBLISHER_TRUST_REGISTRY_URL is unreachable
-// via the real callers ---
-//
-// The two production callers (`/api/evidence/[slug]/verify` and
-// `/commitment`) both invoke `loadTrustRegistry()` with NO argument, so the
-// only way `PUBLISHER_TRUST_REGISTRY_URL` (or its prior-era alias) can
-// affect the result is by changing the `url` fed to the HTTP-fetch step —
-// and that step only runs when BOTH the build-time embedded import AND the
-// on-disk read fail.
-//
-// This test measures BOTH intermediate steps, not just the final one: it
-// `process.chdir()`s to a directory with no `public/.well-known/...` file
-// before calling `loadTrustRegistry()`, which makes the on-disk read
-// (step 2) genuinely non-viable in-process (ENOENT, silently swallowed —
-// see `readTrustRegistryFromDisk`), and spies `fetch` to fail the test if
-// the HTTP step (step 3) is ever reached. If the registry still resolves
-// under BOTH of those conditions, step 1 — the build-time embedded import —
-// is provably the sole source, not merely the likely one. (Step 1 itself
-// cannot fail at runtime without corrupting the checked-in
-// `public/.well-known/evidence-public-keys.json`, which would break
-// verification for every package; signing itself does not read this file.)
-test('B1: PUBLISHER_TRUST_REGISTRY_URL override never reaches the disk or fetch steps via the real call path', async () => {
-  clearTrustRegistryCache();
-  const priorOverride = process.env.PUBLISHER_TRUST_REGISTRY_URL;
-  const priorLegacy = process.env.EVIDENCE_TRUST_REGISTRY_URL;
-  process.env.PUBLISHER_TRUST_REGISTRY_URL = 'https://override.invalid.example/registry.json';
-  delete process.env.EVIDENCE_TRUST_REGISTRY_URL;
-
-  const originalCwd = process.cwd();
-  // Not the project root, so readTrustRegistryFromDisk's
-  // path.join(process.cwd(), 'public/.well-known/...') is guaranteed ENOENT
-  // — step 2 becomes genuinely non-viable, not just untested.
-  process.chdir(os.tmpdir());
-
-  let fetchCalled = false;
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = (() => {
-    fetchCalled = true;
-    throw new Error('fetch must not be called: embedded JSON should resolve the registry first');
-  }) as typeof fetch;
-
-  try {
-    // Mirrors the real callers: no url argument, so getTrustRegistryUrl()
-    // (which reads the override above) supplies the default — and that
-    // default is never used because step 1 (embedded JSON) already succeeds.
-    const registry = await loadTrustRegistry();
-    assert.equal(fetchCalled, false, 'the HTTP fetch step ran even though the embedded registry should have resolved first');
-    assert.ok(registry, 'loadTrustRegistry returned undefined even with the disk step made non-viable');
-    assert.ok(registry!.keys.some((k) => k.kid === 'platform:evidence-2026-04'));
-  } finally {
-    globalThis.fetch = originalFetch;
-    process.chdir(originalCwd);
-    if (priorOverride === undefined) delete process.env.PUBLISHER_TRUST_REGISTRY_URL;
-    else process.env.PUBLISHER_TRUST_REGISTRY_URL = priorOverride;
-    if (priorLegacy === undefined) delete process.env.EVIDENCE_TRUST_REGISTRY_URL;
-    else process.env.EVIDENCE_TRUST_REGISTRY_URL = priorLegacy;
-    clearTrustRegistryCache();
-  }
 });
 
 // --- Legacy embedded keys (pre-#66 packages) ---
