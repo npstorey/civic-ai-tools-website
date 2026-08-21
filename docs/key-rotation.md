@@ -71,23 +71,46 @@ re-deriving the public key from the private one. It is written by
 
 A fourth variable, **`PUBLISHER_TRUST_REGISTRY_URL`** (prior era:
 `EVIDENCE_TRUST_REGISTRY_URL`), is optional. It is the **verify-side consume
-override**: it changes which registry *this instance's own verify route*
-fetches when it checks a package's key trust. Useful for previews or local dev
-when you want verification to hit a different registry.
+override**: it feeds the URL an HTTP fetch would use if the verify path ever
+reached that step when it checks a package's key trust.
 
 Its default resolution, in order, is `NEXTAUTH_URL`, then
 `PUBLISHER_SITE_ORIGIN`, then the reference origin — with
 `/.well-known/evidence-public-keys.json` appended (the legacy path; both paths
-serve the same bytes). In practice this HTTP fetch is the **last resort**: the
-verify path tries the bundled and on-disk registries first, so an instance
-serving its own registry rarely reaches it.
+serve the same bytes). **In practice this HTTP fetch is dead code on this
+instance's own verify route, not merely a last resort:** `loadTrustRegistry()`
+resolves the registry from a build-time-embedded import of the checked-in
+`public/.well-known/evidence-public-keys.json` first, and that import is
+compiled into the bundle unconditionally — it cannot fail at runtime short of
+corrupting the checked-in file, which would break verification for every
+package (the same malformed file also backs the on-disk step and the
+default HTTP URL, which points at this instance's own copy of it). The on-disk
+read and the HTTP fetch (fed by this variable) never run, in dev, test,
+preview, or production alike (validation accepts any well-formed `keys`
+array, including an empty one, so even a degenerate registry file
+short-circuits the chain — nothing short of removing or malforming the
+file makes step 1 fail). This is not a "rarely reaches it" case of
+last-resort behavior; the two callers (`/api/evidence/[slug]/verify` and
+`/commitment`) both call `loadTrustRegistry()` with no URL argument, so the
+override changes a value that is never consumed. Measured directly in
+`src/lib/evidence/verify.test.ts` ("B1" test): with the override set, the
+process `chdir`'d away from the project root so the on-disk read is
+genuinely non-viable (not merely untested — it hits ENOENT), and `fetch`
+spied to fail the test if invoked, `loadTrustRegistry()` still returns the
+real embedded registry. Both intermediate steps are ruled out this way,
+not just the final one — the override is provably never reached through
+the real call path. Treat this variable as inert on a normal
+deployment; it is not a lever for making a preview or local-dev instance
+verify against a different registry. (Why the HTTP-fetch fallback exists
+at all despite being unreachable here is not independently verified by
+this measurement — see `verify.ts`'s `getTrustRegistryUrl` docstring.)
 
 It is deliberately **distinct from the two emit-side variables**, which control
 what the signed proof sidecar tells a *third-party* verifier to fetch:
 
 | Variable | Direction | Effect |
 | --- | --- | --- |
-| `PUBLISHER_TRUST_REGISTRY_URL` | consume | Which registry this instance fetches when verifying. Never appears in signed output. |
+| `PUBLISHER_TRUST_REGISTRY_URL` | consume | Feeds the HTTP-fetch fallback in `loadTrustRegistry()`, which the embedded-registry step preempts on every real call path (see above) — inert in practice. Never appears in signed output. |
 | `PUBLISHER_TRUST_REGISTRY_CANONICAL_URL` | emit | The sidecar's `trustRegistryUrl`. Defaults to `<origin>/.well-known/typed-publisher.json`. |
 | `PUBLISHER_TRUST_REGISTRY_LEGACY_URL` | emit | The sidecar's `trustRegistryUrlLegacy`. Defaults to `<origin>/.well-known/evidence-public-keys.json`; set it to the **empty string** to omit the field entirely. Empty is not absent here — an instance with no pre-ADR-0012 client base has no legacy path to honor. |
 

@@ -52,16 +52,43 @@ interface CacheEntry {
 
 const registryCache: Map<string, CacheEntry> = new Map();
 
-/** Resolve the URL for the platform trust registry. Can be overridden via
- *  `PUBLISHER_TRUST_REGISTRY_URL` (or its prior-era spelling
- *  `EVIDENCE_TRUST_REGISTRY_URL`, still accepted — the 2026-08-19 vocabulary
- *  settlement, Appendix J) for previews or local dev. The fallback
- *  tail is the instance's configured origin (ADR-0020), then the reference
- *  origin literal — the VERIFY path's historical resolution, deliberately
- *  byte-identical across #258 (which removed identity defaults from
- *  signing/emission paths only; this resolution's defects are a separate
- *  charter). In practice the HTTP fetch this URL feeds is the last resort
- *  behind the bundled and on-disk registries below. */
+/** Resolve the URL fed to the HTTP-fetch fallback in `loadTrustRegistry`.
+ *  Can be overridden via `PUBLISHER_TRUST_REGISTRY_URL` (or its prior-era
+ *  spelling `EVIDENCE_TRUST_REGISTRY_URL`, still accepted — the 2026-08-19
+ *  vocabulary settlement, Appendix J). The fallback tail is the instance's
+ *  configured origin (ADR-0020), then the reference origin literal — the
+ *  VERIFY path's historical resolution, deliberately byte-identical across
+ *  #258 (which removed identity defaults from signing/emission paths only;
+ *  this resolution's defects are a separate charter).
+ *
+ *  This is NOT a "useful for previews or local dev" lever: on this
+ *  instance's own verify route (`loadTrustRegistry()` called with no
+ *  argument, as both callers do — see below), the URL this function
+ *  produces is never actually fetched. Step 1 of `loadTrustRegistry`'s
+ *  resolution chain — the build-time-embedded import of the checked-in
+ *  registry file — succeeds unconditionally: `validateRegistry` accepts
+ *  ANY object whose `keys` is an array (including an empty one — `[].every`
+ *  is vacuously true), so step 1 returns a value for every well-formed JSON
+ *  file, not only a populated one. Only outright corrupting or removing the
+ *  checked-in file could make step 1 fail. That preempts both the on-disk
+ *  read and this HTTP fetch on every real call path, in dev, test, preview,
+ *  and production alike. Measured in `verify.test.ts` ("B1" test) for BOTH
+ *  intermediate steps, not just the final one: with this override set, the
+ *  process `chdir`'d away from the project root so the on-disk read is
+ *  genuinely non-viable (ENOENT, not merely untested), and `fetch` spied to
+ *  fail the test if invoked, `loadTrustRegistry()` still returns the
+ *  embedded registry untouched.
+ *
+ *  Why steps 2–3 (and this function) exist at all despite being unreachable
+ *  from this app's own callers is NOT independently verified here — this
+ *  function has no importer besides `loadTrustRegistry`'s default parameter
+ *  in this same file (confirmed by search: no other module in this repo
+ *  calls `getTrustRegistryUrl` or passes a non-default `url` to
+ *  `loadTrustRegistry`). An "external adopters reusing this module" story
+ *  is plausible but unmeasured; don't repeat it as settled fact (civic-ai-
+ *  tools#155 P1 B1 — this replaces the prior docstring's unqualified
+ *  "useful for previews" claim, which the measurement disproved; avoid
+ *  swapping in a second unmeasured rationale in its place). */
 export function getTrustRegistryUrl(): string {
   const override = readPublisherEnv('TRUST_REGISTRY_URL');
   if (override) return override;
@@ -86,8 +113,12 @@ export async function loadTrustRegistry(
   //   1. Build-time bundled JSON (always present in the deploy artifact)
   //   2. On-disk read (dev server, tests running from project root)
   //   3. HTTP fetch (external verifiers / cross-origin)
-  // The HTTP path exists for external adopters; our own verify route should never
-  // need it because the bundled import is authoritative.
+  // On OUR OWN verify route (both callers pass no `url`), steps 2 and 3 are
+  // dead code, not merely a fallback: step 1 succeeds for any well-formed
+  // checked-in registry file, including a degenerate `{"keys":[]}` — see
+  // getTrustRegistryUrl's docstring above for the measurement (B1 test in
+  // verify.test.ts) and for what is and isn't verified about why steps 2-3
+  // exist at all.
   const resolved =
     validateRegistry(embeddedTrustRegistry as unknown) ??
     (await readTrustRegistryFromDisk()) ??

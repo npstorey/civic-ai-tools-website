@@ -169,8 +169,9 @@ operator-supplied configuration, never from another deployment's identity:
 Two more publisher variables exist outside this table:
 `PUBLISHER_PUBLIC_KEY` (written by the keygen script for registry edits, never
 read at run time) and `PUBLISHER_TRUST_REGISTRY_URL` (the **verify-side
-consume** override — which registry *your* verify route fetches, never part of
-signed output). Both are documented in
+consume** override — feeds the HTTP-fetch fallback your verify route would
+use if it ever reached that step, which in practice it doesn't; never part
+of signed output). Both are documented in
 [`docs/key-rotation.md`](key-rotation.md#environment-variables).
 
 Check the wiring with the presence-only preflight (no values are read or
