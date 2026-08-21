@@ -231,7 +231,10 @@ Optional (production only):
 NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX  # Google Analytics 4
 ```
 
-Required in production (Upstash via Vercel KV):
+Recommended in production, not required (Upstash via Vercel KV) — the rate
+limiter degrades gracefully without it, falling back to per-process memory
+(resets on restart; not shared across instances), which is fine for a
+single-node instance but not durable or shared across serverless instances:
 ```
 KV_URL=
 KV_REST_API_URL=
