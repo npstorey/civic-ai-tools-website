@@ -318,7 +318,7 @@ export const ENV_SPEC = [
   { name: 'ROADMAP_GITHUB_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: '/roadmap "view source" link and byline label (unset: derived from ROADMAP_RAW_URL)', hasFallback: true },
 
   // --- Optional / feature / ops ---
-  { name: 'PUBLISHER_TRUST_REGISTRY_URL', priorEraName: 'EVIDENCE_TRUST_REGISTRY_URL', tier: 'optional', purpose: 'External trust-registry override', hasFallback: true },
+  { name: 'PUBLISHER_TRUST_REGISTRY_URL', priorEraName: 'EVIDENCE_TRUST_REGISTRY_URL', tier: 'optional', purpose: 'Trust-registry HTTP-fetch override — inert on every real call path (the embedded registry preempts it); retire-or-repair decision pending at G1', hasFallback: true },
   // WRITTEN, NEVER READ — the fourteenth variable of the settlement's Group A,
   // and the one this inventory used to miss precisely because the inventory
   // was derived from `process.env.*` reads. scripts/generate-signing-key.ts
