@@ -37,11 +37,16 @@
  *   node --experimental-strip-types scripts/executor-parity.mjs run \
  *     --driver container --out parity-container.json
  *
- * Usage (vercel-sandbox leg — needs Vercel Sandbox auth; run through the
- * 1Password wrapper so the op:// references resolve; ONE command):
+ * Usage (vercel-sandbox leg — needs Vercel Sandbox auth). `op run` is
+ * recommended so the op:// references in .env.parity.local resolve into the
+ * process environment in one command:
  *
  *   op run --env-file=.env.parity.local -- node --experimental-strip-types \
  *     scripts/executor-parity.mjs run --driver vercel-sandbox --out parity-vercel.json
+ *
+ * Any env-injection mechanism that gets the Vercel Sandbox auth values into
+ * the process environment is acceptable (CI secrets, container secrets, a
+ * secret manager) — never a plaintext literal in a dot-file.
  *
  * Compare (exit 0 = parity, exit 1 = mismatch, differences listed):
  *
@@ -76,7 +81,8 @@ function usage(message) {
       '                          [--out <path>] [--timeout-ms <n>] [--expect <success|error|timeout>]',
       '  executor-parity.mjs compare <a.json> <b.json>',
       '',
-      'vercel-sandbox leg (auth via 1Password wrapper), one command:',
+      'vercel-sandbox leg (op run recommended for auth; any env-injection',
+      'mechanism works — never a plaintext dot-file literal), one command:',
       '  op run --env-file=.env.parity.local -- node --experimental-strip-types \\',
       '    scripts/executor-parity.mjs run --driver vercel-sandbox --out parity-vercel.json',
     ].join('\n'),

@@ -18,6 +18,11 @@
  * DRY RUN by default (writes nothing, reports the plan). Pass `--apply` to write.
  * Migration 0011 (the nullable column) must already be applied.
  *
+ * `op run` is recommended so DATABASE_URL and friends reach the process
+ * environment this way; any env-injection mechanism is acceptable (CI
+ * secrets, container secrets, a secret manager) — never a plaintext literal
+ * in a dot-file:
+ *
  *   Dry run:  op run --env-file=.env.local -- npx tsx scripts/backfill-rekor-entry-body.ts
  *   Apply:    op run --env-file=.env.local -- npx tsx scripts/backfill-rekor-entry-body.ts --apply
  */

@@ -38,8 +38,10 @@
  *   - Per-leg PASS/FAIL output, final summary line, non-zero exit on any
  *     failure — the transcript is the phase evidence.
  *
- * Intended invocation for the real-bucket run (credentials via the
- * 1Password env-injection wrapper only; never a dot-file):
+ * Intended invocation for the real-bucket run. `op run` is recommended for
+ * credentials; any env-injection mechanism is acceptable (CI secrets,
+ * container secrets, a secret manager) — never a plaintext literal in a
+ * dot-file:
  *
  *   op run --env-file=<file> -- node scripts/rehearse-storage-s3.mjs
  *
@@ -91,11 +93,15 @@ S5 P2 hosted-S3 storage rehearsal harness — four legs:
 round-trip byte parity, presigned-PUT grant (incl. rejections),
 anonymous public read, GC sweep (fresh + aged).
 
-usage:
+usage (op run recommended; any env-injection mechanism that gets these
+variables into the process environment is acceptable — CI secrets,
+container secrets, a secret manager — never a plaintext literal in a
+dot-file):
   op run --env-file=<file> -- node scripts/rehearse-storage-s3.mjs
 
-The env file provides (op:// references resolved by the wrapper — the
-harness itself never reads a dot-file and never prints a credential value):
+With op run, the env file provides op:// references resolved by the
+wrapper — the harness itself never reads a dot-file and never prints a
+credential value. The variables it needs either way:
 
   BLOB_DRIVER=s3          required — the harness refuses any other driver
   S3_BUCKET               required
