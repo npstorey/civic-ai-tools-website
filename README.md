@@ -134,7 +134,8 @@ the same pass and their old filenames remain as permanent stubs.
 | --- | --- |
 | [`docs/deploy.md`](docs/deploy.md) | Self-hosted deployment end to end: bring-up, driver seams, environment reference, sign-in, migrations, storage, scheduler, managed-platform notes. |
 | [`docs/instance-setup.md`](docs/instance-setup.md) | Instance identity and signing — keygen, trust registry, identity variables. The go-to-production step. |
-| [`docs/key-rotation.md`](docs/key-rotation.md) | Signing-key rotation runbook, preventive and incident-response. |
+| [`docs/key-rotation.md`](docs/key-rotation.md) | Signing-key rotation runbook, preventive and incident-response — host/tool-agnostic. |
+| [`docs/reference-operator/key-rotation.md`](docs/reference-operator/key-rotation.md) | The same runbook's reference-deployment-specific mechanics (registry-edit PR flow, Vercel dashboard, 1Password). |
 | [`docs/api/records-publish.md`](docs/api/records-publish.md) | The publish API contract and integrator entry point. |
 | [`docs/api/records-commitment.md`](docs/api/records-commitment.md) | The public proof sidecar served for each published package. |
 | [`docs/design-principles.md`](docs/design-principles.md) | UX and data-model principles for AI-output and provenance surfaces. |
