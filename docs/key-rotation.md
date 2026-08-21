@@ -8,6 +8,13 @@ rotations (scheduled) and compromise rotations (incident response). The two
 paths differ only in the final registry status you flip the previous key to
 — `deprecated` for preventive, `revoked` for compromise.
 
+This is the host/tool-agnostic version of the runbook — it describes the
+*shape* of each step so it applies to any instance, regardless of how you
+host it or where you store secrets. For how the reference deployment
+(civicaitools.org) does each reference-specific step concretely — the
+registry-edit PR flow, the Vercel dashboard, 1Password — see
+[`docs/reference-operator/key-rotation.md`](reference-operator/key-rotation.md).
+
 ## Background
 
 Record packages are signed with an Ed25519 key referenced by a stable
@@ -97,6 +104,11 @@ verifier to fetch:
 | `PUBLISHER_TRUST_REGISTRY_CANONICAL_URL` | emit | The sidecar's `trustRegistryUrl`. Defaults to `<origin>/.well-known/typed-publisher.json`. |
 | `PUBLISHER_TRUST_REGISTRY_LEGACY_URL` | emit | The sidecar's `trustRegistryUrlLegacy`. Defaults to `<origin>/.well-known/evidence-public-keys.json`; set it to the **empty string** to omit the field entirely. Empty is not absent here — an instance with no pre-ADR-0012 client base has no legacy path to honor. |
 
+Both are read by `getSidecarTrustRegistryUrls()` in
+[`src/lib/site-config.ts`](../src/lib/site-config.ts), which the publish
+route calls to build each package's proof sidecar — this is the emit-side
+code path the table above describes.
+
 The full tier-by-tier reference is [`docs/deploy.md`](deploy.md).
 
 ## Preventive rotation
@@ -105,22 +117,29 @@ Run when the previous key has been in service long enough to warrant a
 scheduled swap. No incident. Pre-rotation record packages remain
 verifiable after the rotation.
 
-1. **Generate a new keypair outside Claude Code.** In a separate terminal:
+1. **Generate a new keypair outside any AI-agent session.** In a separate
+   terminal:
 
    ```bash
-   openssl genpkey -algorithm Ed25519 -out new-evidence.pem
+   openssl genpkey -algorithm Ed25519 -out new-signing-key.pem
    ```
 
    Derive the base64 DER PKCS8 encoding of the private key and the DER SPKI
-   encoding of the public key. Record both in 1Password as a new item named
-   after the new kid.
+   encoding of the public key. Store both securely in your secret manager,
+   under an entry named after the new kid. See
+   [`docs/reference-operator/key-rotation.md`](reference-operator/key-rotation.md)
+   for how the reference deployment does this specifically.
 
-2. **Pick a new kid.** Conventionally `platform:evidence-YYYY-MM`, bumped
-   by the rotation month. Keep the `platform:` prefix.
+2. **Pick a new kid.** Conventionally `platform:record-YYYY-MM` for kids
+   minted from now on (the settlement vocabulary — civic-ai-tools#160),
+   bumped by the rotation month. Keep the `platform:` prefix. The reference
+   deployment's live kid, `platform:evidence-2026-04`, is **exempt-frozen**
+   (Appendix J, see the per-key fields table above) and never changes —
+   rotating away from it names a successor under the new convention, it
+   does not rename the existing entry.
 
-3. **Update the trust registry.** In a PR on the `civic-ai-tools-website`
-   repo, edit
-   [`public/.well-known/evidence-public-keys.json`](../public/.well-known/evidence-public-keys.json):
+3. **Update your trust registry**, however your instance publishes config
+   changes:
 
    - Insert the new key as `active` with the new `activatedAt` ISO
      timestamp.
@@ -133,17 +152,22 @@ verifiable after the rotation.
      **every** registry edit, not only rotations — a verifier that only has a
      stale snapshot cannot see a revocation made after this date.
 
-4. **Merge and deploy the registry** before rotating env vars. Verifiers
+   See [`docs/reference-operator/key-rotation.md`](reference-operator/key-rotation.md)
+   for the reference deployment's PR-based registry-edit flow.
+
+4. **Deploy the registry** before rotating env vars. Verifiers
    must be able to see the new key before they see any package signed by
    it.
 
-5. **Update Vercel env vars.** In the Vercel dashboard (not the CLI from a
-   Claude Code session), set `PUBLISHER_SIGNING_KEY` and
-   `PUBLISHER_KEY_ID` to the new values on both production and preview.
-   (If this instance still carries the prior-era `EVIDENCE_*` names, rotating
-   is the natural moment to rename them — set the `PUBLISHER_*` pair and
-   delete the old one rather than leaving both.)
-   Trigger a redeploy.
+5. **Update your signing env vars.** Set `PUBLISHER_SIGNING_KEY` and
+   `PUBLISHER_KEY_ID` to the new values, via whatever mechanism your
+   deployment uses, on every environment that serves production traffic.
+   (If this instance still carries the prior-era `EVIDENCE_*` names,
+   rotating is the natural moment to rename them — set the `PUBLISHER_*`
+   pair and delete the old one rather than leaving both.) Redeploy or
+   restart so the new values take effect. See
+   [`docs/reference-operator/key-rotation.md`](reference-operator/key-rotation.md)
+   for the reference deployment's Vercel-dashboard mechanic.
 
 6. **Smoke test.** Publish a fresh record package, verify it via the
    `/records/[slug]` verify action (key trust should read "Signed with
@@ -159,18 +183,21 @@ two differences: the previous key becomes `revoked` rather than
 (because we cannot distinguish legitimate pre-exposure signatures from
 forged ones).
 
-1. **Rotate `PUBLISHER_SIGNING_KEY` in Vercel first.** Do not wait for the
-   registry PR. Exposure time is the variable that matters most; every
-   minute the compromised key stays active is a minute an attacker could
-   mint a forged signature.
+1. **Rotate your signing env var first.** Do not wait for the registry
+   update. Exposure time is the variable that matters most; every minute
+   the compromised key stays active is a minute an attacker could mint a
+   forged signature. See
+   [`docs/reference-operator/key-rotation.md`](reference-operator/key-rotation.md)
+   for the reference deployment's Vercel-dashboard mechanic, and why it
+   deliberately isn't done from the CLI inside an AI-agent session.
 
-2. **Generate the new keypair, pick a new kid, update 1Password** as in
-   preventive rotation.
+2. **Generate the new keypair, pick a new kid, and store both securely** as
+   in preventive rotation.
 
 3. **Update the trust registry.** Insert the new key as `active`, flip the
    compromised key's `status` to `revoked`, set `revokedAt` to the exposure
    detection timestamp (or earlier if known), and leave `deprecatedAt` as
-   `null`. Merge and deploy.
+   `null`. Deploy.
 
 4. **Audit exposed packages.** Enumerate every package previously signed
    with the revoked key. Withdraw any that cannot be re-published (public
@@ -183,22 +210,35 @@ forged ones).
    key trust row should read "Key revoked — do not trust" and its
    `verified` flag should be `false`.
 
-6. **Post-mortem.** Write up the exposure vector and add any new harness
-   controls (PreToolUse hook patterns, deny rules, 1Password migrations)
-   to the security hardening plan.
+6. **Post-mortem.** Write up the exposure vector and add any new controls
+   (secret-manager migrations, access-pattern guardrails, agent-harness
+   deny rules) to your security hardening plan. See
+   [`docs/reference-operator/key-rotation.md`](reference-operator/key-rotation.md)
+   for the reference deployment's specific checklist.
 
 ## Notes
 
-- Never paste private key material into a Claude Code session. Always use a
-  separate terminal for key generation and 1Password for storage.
+- Never paste private key material into an AI-agent session. Always use a
+  separate terminal for key generation, and store the result in your secret
+  manager. See
+  [`docs/reference-operator/key-rotation.md`](reference-operator/key-rotation.md)
+  for the reference deployment's specific tooling.
 - Rekor entries from the previous key remain in the transparency log
   forever — that's by design. After rotation, those entries are still
   fetchable but verifying them against the trust registry applies the new
   `deprecated` or `revoked` semantics.
 - The in-memory registry cache on the verify route is scoped to the
-  serverless function instance. After the registry file changes, callers
-  may see the old file for up to an hour per warm instance; force
-  invalidation by redeploying.
+  running process, not to any one deployment topology. After the registry
+  file changes, callers may see the old file for up to an hour per warm
+  process — until that process is replaced or restarted. What "force
+  invalidation" means depends on your deployment:
+  - **Serverless (e.g. Vercel).** A redeploy spins up fresh function
+    instances, which is sufficient — each starts with an empty cache.
+  - **Long-lived process (e.g. this repo's `docker-compose.yml`, where the
+    app runs as one `restart: unless-stopped` container).** A "redeploy"
+    doesn't happen automatically the way it does on Vercel; the equivalent
+    action is restarting the app service — `docker compose restart app`,
+    or whatever your actual redeploy mechanism is.
 - When rotating the kid, every subsequent published package hashes the new
   kid into its canonical JSON. Pre-rotation packages keep their old kid
   baked in, so the verify route must look up both old and new keys in the
