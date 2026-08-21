@@ -210,7 +210,7 @@ explore/page.tsx
 
 This is the local-dev set for the reference deployment; the full tier-by-tier environment reference for an instance (drivers, signing, instance identity) is [`docs/deploy.md`](docs/deploy.md).
 
-The 14 publisher-identity variables take the `PUBLISHER_` prefix as of the 2026-08-19 vocabulary settlement (Appendix J); each prior-era `EVIDENCE_` spelling is still read as a fallback, canonical-wins-when-defined, with a one-time server-side deprecation warning. `src/lib/publisher-env.ts` is the single resolver.
+The 13 publisher-identity variables take the `PUBLISHER_` prefix as of the 2026-08-19 vocabulary settlement (Appendix J); each prior-era `EVIDENCE_` spelling is still read as a fallback, canonical-wins-when-defined, with a one-time server-side deprecation warning. `src/lib/publisher-env.ts` is the single resolver. A fourteenth, the verify-side trust-registry consume override (`PUBLISHER_TRUST_REGISTRY_URL`), was retired outright in civic-ai-tools#155 P1b rather than renamed — it fed dead code on every real call path, so it was deleted along with that path instead of joining this list.
 
 Required in `.env.local`:
 ```
