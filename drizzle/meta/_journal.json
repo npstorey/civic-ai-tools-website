@@ -113,6 +113,13 @@
       "when": 1786190400000,
       "tag": "0015_flip_visibility_to_sealed_public",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787411920318,
+      "tag": "0016_add_attestation_signature_columns",
+      "breakpoints": true
     }
   ]
 }

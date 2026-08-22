@@ -11,7 +11,7 @@
 The Open Evidence Standard currently treats typed claims (`claims.jsonld`, the Civic Claim Vocabulary layer) and attestations (`consistency`, `evaluation`, `expert_attestation`) as architecturally separate concepts:
 
 - **Typed claims** (Open Evidence Standard §11) are an optional companion file that asserts structured statements derived from the analysis, conforming to the Civic Claim Vocabulary. The `caco:AnalyticalDerivation` requirement (CCV draft spec §4.6) requires every typed claim to link back to the analytical step that produced it (which prompt, which model, which span of the source output).
-- **Attestations** (Open Evidence Standard §15) are signed artifacts that comment on a previously-published package without modifying it. Attestation kinds in current use: `consistency` (repeat-publish runs), `evaluation` (LLM-as-judge), `expert_attestation` (named human reviewer).
+- **Attestations** (Open Evidence Standard §15) are signed artifacts that comment on a previously-published package without modifying it. Attestation kinds in current use: `consistency` (repeat-publish runs), `evaluation` (LLM-as-judge), `expert_attestation` (named human reviewer). (Attestation packages recorded before signing was enforced carry no signature and are labeled unsigned; the signing path is `lib/evidence/attestation-signing.ts`.)
 
 Looked at structurally, these are the same shape. A typed claim is:
 - A signed assertion *about* a package's content.

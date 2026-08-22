@@ -29,8 +29,11 @@ export const consistencyClassificationEnum = pgEnum('consistency_classification'
   'inconsistent',
 ]);
 
-// `expert_attestation` is a free-text, signed review attached by a
-// human domain expert (issue #53). The term "attestation" carries formal
+// `expert_attestation` is a free-text review attached by a human domain
+// expert (issue #53), signed by the instance that records it; reviews
+// submitted before signing was enforced are labeled unsigned on the record.
+// See `attestationPackages` below for the columns that carry the signature
+// and for what a null one means. The term "attestation" carries formal
 // AICPA Statements-on-Standards meaning in accounting / audit contexts;
 // this implementation is not bound by those standards — it's a signed
 // claim that something is true, in the broader tech sense (cryptographic
@@ -224,6 +227,49 @@ export const attestationPackages = pgTable('attestation_packages', {
   packageHash: text('package_hash').notNull(),
   storageKey: text('storage_key').notNull(),
   referencesBaseHash: text('references_base_hash').notNull(),
+  // --- Signature columns (migration 0016) ------------------------------
+  //
+  // ALL NULLABLE, and deliberately so. This is an EXPAND migration: the write
+  // path only began persisting a signature at 0016, so every row that already
+  // existed when it ran is legitimately null in all five columns and stays
+  // that way until the backfill. A NOT NULL column here would have required
+  // inventing a value for rows whose signature was computed and discarded —
+  // there is nothing honest to put there.
+  //
+  // A NULL `signature` therefore means one of TWO different things, and the
+  // difference matters to a reader weighing the review:
+  //
+  //   * `unsigned_reason` IS NULL  — the row predates 0016. Nothing wrote the
+  //     column because nothing was writing these columns at all.
+  //   * `unsigned_reason` IS NOT NULL — the row was written by the current
+  //     path on an instance with no signing key (ADR-0020 §B's intended
+  //     unsigned tier), which recorded WHY it did not sign.
+  //
+  // That asymmetry is the whole discriminator: no date comparison can separate
+  // the two honestly, since an instance may adopt a key at any time and the
+  // rows carry no record of the instance's state when they were written. The
+  // reading logic and the user-facing copy live together in
+  // `evidence/trust-signal.ts` (`resolveReviewSignature`); the writing logic is
+  // `evidence/attestation-signing.ts`.
+  //
+  // Signature envelope JSON — `{signature, publicKey, algorithm, kid}`,
+  // matching how the publish route writes `base_package_signature`.
+  signature: text('signature'),
+  // The envelope's `kid`, duplicated into its own column so "which key signed
+  // this" is queryable without extracting it from JSON.
+  signingKeyId: text('signing_key_id'),
+  // Base64 RFC 3161 token; null when the timestamp authority was unreachable.
+  // Never a reason to refuse a submission — a signed, untimestamped review is
+  // a legitimate state, and the third-party TSA's uptime is not this
+  // instance's to guarantee.
+  rfc3161Timestamp: text('rfc3161_timestamp'),
+  // When the signature was produced. Null exactly when `signature` is null:
+  // this column never claims a signing time for a row that has none.
+  signedAt: timestamp('signed_at', { withTimezone: true }),
+  // Why this row carries no signature, recorded at the moment that decision
+  // was made — the only point at which the answer is actually knowable.
+  // `no_signing_key` is the only value written today.
+  unsignedReason: text('unsigned_reason'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),

@@ -771,3 +771,121 @@ export const NOTEBOOK_PROVENANCE_SIGNALS: Record<NotebookProvenance, TrustSignal
 // RESERVED in the design note (a mismatch on either → Alarm) but intentionally
 // have no runtime map here, and the coverage test asserts only the codes the
 // route actually emits. When #6/#13 gain discrete statuses, add their maps here.
+
+// --- Review signature status (attestation_packages) ----------------------
+//
+// Per-review signing disclosure for the rows in `attestation_packages` — the
+// reviews and machine attestations attached to a record. Migration 0016 added
+// the `signature` / `signing_key_id` / `rfc3161_timestamp` / `signed_at` /
+// `unsigned_reason` columns; before it, the route computed a signature and
+// discarded it, so every row written until then is genuinely unsigned.
+//
+// FOUR states, because a missing signature means two DIFFERENT things and
+// collapsing them would be exactly the false precision Principle 3 forbids:
+// a row that predates signing is a historical artifact awaiting backfill,
+// while a row from a keyless instance is the intended unsigned tier
+// (ADR-0020 §B) working as designed. A reader deciding how much weight to
+// put on a review needs to be able to tell those apart.
+//
+// The discriminator is `unsigned_reason`, NOT the absence of a signature:
+// see `resolveReviewSignature` below for why a NULL signature alone cannot
+// separate the two.
+//
+// Tiers follow the established posture: unsigned is `attention` (prominent,
+// never alarm — the unsigned tier is legitimate), signed is `normal` or
+// `verified`. Copy is user language (P9): "review", "signed", "independent
+// timestamp" — never "envelope", "kid", or "RFC 3161".
+export const REVIEW_SIGNATURE_STATUSES = [
+  'signed_timestamped',
+  'signed_untimestamped',
+  'unsigned_no_signing_key',
+  'unsigned_pre_backfill',
+] as const;
+export type ReviewSignatureStatus = (typeof REVIEW_SIGNATURE_STATUSES)[number];
+
+export const REVIEW_SIGNATURE_SIGNALS: Record<
+  ReviewSignatureStatus,
+  TrustSignalDescriptor
+> = {
+  signed_timestamped: {
+    tier: 'verified',
+    label: 'Signed and timestamped',
+    detail:
+      "Signed with this instance's key, and stamped by an independent time authority — so both who recorded this review and when it was recorded can be checked against the published key.",
+  },
+  signed_untimestamped: {
+    tier: 'normal',
+    label: 'Signed, not timestamped',
+    detail:
+      "Signed with this instance's key. The independent timestamp was not available when the review was submitted, so the signature stands on its own — what it commits to is unaffected.",
+  },
+  unsigned_no_signing_key: {
+    // The seat-specified wording. Kept verbatim, and deliberately distinct
+    // from any signing-FAILURE copy: a keyless instance is a configuration
+    // choice, not a fault, and must not read as one.
+    tier: 'attention',
+    label: 'Unsigned — this instance has no signing key',
+    detail:
+      'This instance is running without a signing key, so reviews are recorded but not signed. The review text and its author are stored exactly as submitted; what is missing is the cryptographic commitment tying them to this instance.',
+  },
+  unsigned_pre_backfill: {
+    tier: 'attention',
+    label: 'Unsigned — recorded before reviews were signed',
+    detail:
+      'This review was submitted before this instance began signing reviews, so no signature was kept for it. The review text, its author, and its content hash are unchanged; only the signature is absent.',
+  },
+};
+
+/** The row shape `resolveReviewSignature` reads. Mirrors the five columns
+ *  migration 0016 added, so a caller can pass a DB row straight in. */
+export interface ReviewSignatureRow {
+  signature: string | null;
+  rfc3161Timestamp: string | null;
+  unsignedReason: string | null;
+}
+
+/**
+ * Which of the four states a stored review is in.
+ *
+ * WHY `unsigned_reason` EXISTS. A NULL signature cannot, on its own,
+ * distinguish "recorded before signing was implemented" from "recorded on an
+ * instance that has no key": both are NULL in every other column, and no
+ * date comparison can separate them honestly (an instance may adopt a key at
+ * any time, and rows carry no record of the instance's state when they were
+ * written). So the writing path records WHY it did not sign, at the moment it
+ * made that decision — the only point at which the answer is actually known.
+ * Rows written before 0016 have `unsigned_reason` NULL because nothing wrote
+ * it, which is precisely what marks them as pre-backfill.
+ */
+export function resolveReviewSignature(
+  row: ReviewSignatureRow,
+): TrustSignalDescriptor & { status: ReviewSignatureStatus } {
+  const status = resolveReviewSignatureStatus(row);
+  return { status, ...REVIEW_SIGNATURE_SIGNALS[status] };
+}
+
+/**
+ * The only `unsigned_reason` any code path writes today: the instance held no
+ * signing key when the review was recorded (ADR-0020 §B, the intended unsigned
+ * tier). Declared here, beside the status that renders it, so the writer and
+ * the reader cannot drift onto different spellings.
+ *
+ * Matched EXACTLY rather than by truthiness. A reason this vocabulary does not
+ * know about must not be silently relabeled "no signing key" — that would
+ * assert a specific cause the row does not actually claim. An unrecognized
+ * reason therefore falls through to the neutral pre-backfill reading, which
+ * says only "unsigned", and a new reason is expected to arrive with its own
+ * status and copy.
+ */
+export const REVIEW_UNSIGNED_REASON_NO_KEY = 'no_signing_key';
+
+export function resolveReviewSignatureStatus(
+  row: ReviewSignatureRow,
+): ReviewSignatureStatus {
+  if (row.signature) {
+    return row.rfc3161Timestamp ? 'signed_timestamped' : 'signed_untimestamped';
+  }
+  return row.unsignedReason === REVIEW_UNSIGNED_REASON_NO_KEY
+    ? 'unsigned_no_signing_key'
+    : 'unsigned_pre_backfill';
+}

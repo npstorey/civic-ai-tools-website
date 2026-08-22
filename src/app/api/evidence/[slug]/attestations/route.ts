@@ -7,8 +7,11 @@ import { db } from '@/lib/db';
 import { evidenceRecords, attestationPackages, users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { putPackage } from '@/lib/storage';
-import { signPackage, getRfc3161Timestamp } from '@/lib/evidence/signing';
-import { evaluateSealCommitGate } from '@/lib/evidence/unsigned-tier';
+import {
+  evaluateAttestationSigningGate,
+  signAndStoreAttestationPackage,
+} from '@/lib/evidence/attestation-signing';
+import { resolveReviewSignature } from '@/lib/evidence/trust-signal';
 import {
   buildExpertAttestationPayload,
   validateExpertAttestation,
@@ -51,13 +54,18 @@ export async function GET(
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  const attestations = await db
+  const rows = await db
     .select({
       id: attestationPackages.id,
       type: attestationPackages.type,
       packageHash: attestationPackages.packageHash,
       storageKey: attestationPackages.storageKey,
       createdAt: attestationPackages.createdAt,
+      signature: attestationPackages.signature,
+      signingKeyId: attestationPackages.signingKeyId,
+      rfc3161Timestamp: attestationPackages.rfc3161Timestamp,
+      signedAt: attestationPackages.signedAt,
+      unsignedReason: attestationPackages.unsignedReason,
       creatorDisplayName: users.displayName,
       creatorGithubUrl: users.githubProfileUrl,
     })
@@ -65,7 +73,44 @@ export async function GET(
     .innerJoin(users, eq(attestationPackages.creatorId, users.id))
     .where(eq(attestationPackages.evidenceRecordId, records[0].id));
 
+  // Every attestation carries its own signing disclosure. Per-review, never a
+  // page-level summary: the rows on one record can legitimately be in
+  // different states (reviews predating migration 0016 sit alongside signed
+  // ones), and a single banner would either overclaim for the old rows or
+  // underclaim for the new.
+  const attestations = rows.map((row) => {
+    const { signature, signingKeyId, rfc3161Timestamp, signedAt, unsignedReason, ...rest } = row;
+    const resolved = resolveReviewSignature({ signature, rfc3161Timestamp, unsignedReason });
+    return {
+      ...rest,
+      signature: {
+        status: resolved.status,
+        tier: resolved.tier,
+        label: resolved.label,
+        detail: resolved.detail,
+        keyId: signingKeyId,
+        signedAt: signedAt ? signedAt.toISOString() : null,
+        rfc3161Timestamped: rfc3161Timestamp !== null,
+        // The envelope is served so a reader can check the signature rather
+        // than take the label's word for it — the signature and public key are
+        // public by construction. Parsed defensively: a row whose JSON cannot
+        // be read reports absence rather than failing the whole listing.
+        envelope: parseSignatureEnvelope(signature),
+      },
+    };
+  });
+
   return NextResponse.json({ attestations });
+}
+
+function parseSignatureEnvelope(raw: string | null): Record<string, unknown> | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -74,14 +119,24 @@ export async function GET(
  * Stores a new attestation package. Supports three types:
  *   - `consistency`  — N-run replay metrics (machine-generated)
  *   - `evaluation`   — adversarial LLM rubric (machine-generated)
- *   - `expert_attestation` — signed free-text review by a human reviewer
+ *   - `expert_attestation` — free-text review by a human reviewer
  *
- * Signs the package hash with the platform key, requests an RFC 3161
- * timestamp, stores the package body in Vercel Blob, inserts the DB row,
- * and (for machine types only) advances the parent record's verification
- * status. `expert_attestation` is a separate dimension of review and does
- * not advance `verification_status` in v1; issue #67 will revisit when
- * multi-signer and identity tiers land.
+ * Signs the package hash with the instance key and PERSISTS the resulting
+ * envelope, requests an RFC 3161 timestamp, stores the package body in blob
+ * storage, inserts the DB row, and (for machine types only) advances the
+ * parent record's verification status.
+ *
+ * The signature is persisted as of migration 0016. Before it, this handler
+ * computed a signature, discarded it, and inserted a row into a table with no
+ * column to hold one — so rows written before then are unsigned, and the
+ * record page labels them as such rather than inferring a signature they
+ * never had.
+ *
+ * `expert_attestation` is a separate dimension of review and does not advance
+ * `verification_status` in v1; issue #67 will revisit when multi-signer and
+ * identity tiers land. Signing it does NOT change that: a signed review is
+ * still not a verification input (spec §9.2 #10, ADR-0010) — the signature
+ * attests who recorded the review, never that the analysis is correct.
  *
  * Body: { type: <AttestationType>, data: <type-specific payload> }
  */
@@ -97,10 +152,21 @@ export async function POST(
   }
 
   // This legacy surface (#173, pending consolidation with the ratified
-  // attestation/* node system) also reaches the signing path, so it takes the
-  // same gate as every other route that does. A half-configured instance is
-  // refused specifically here instead of throwing out of `signPackage` below.
-  const gate = evaluateSealCommitGate();
+  // attestation/* node system) reaches the signing path, so a half-configured
+  // instance is refused specifically here instead of throwing out of the
+  // signing call below.
+  //
+  // NARROWER than the seal/commit gate this used to call. That gate also
+  // refuses the KEYLESS tier (403 `unsigned_tier`), which meant a first-run
+  // self-hoster or a keyless CI instance could not accept a review at all.
+  // Sealing and publishing are genuinely unreachable unsigned (ADR-0020
+  // Decision C bounds what an unsigned RECORD may reach), but attaching a
+  // review neither seals nor publishes anything — the review inherits the
+  // visibility of the record it hangs on and has none of its own. So a keyless
+  // instance stores the review and labels it unsigned, and only the two
+  // MISCONFIGURATION states (key without kid, signing pair without declared
+  // identity) still refuse. See `evaluateAttestationSigningGate`.
+  const gate = evaluateAttestationSigningGate();
   if (gate) {
     return NextResponse.json(gate.body, { status: gate.status });
   }
@@ -185,26 +251,57 @@ export async function POST(
   const canonical = JSON.stringify(attestationPkg);
   const packageHash = sha256(canonical);
 
-  const blobUrl = await putPackage(
-    `attestation-${packageHash}`,
-    attestationPkg,
+  // Sign, timestamp, store, insert — IN THAT ORDER. The signing decision runs
+  // and completes before any external write, so a refusal leaves nothing
+  // behind. The previous ordering wrote the blob first, which was harmless
+  // only while signing could not fail the request; now that it can, that
+  // ordering would orphan a blob on every refusal.
+  const signing = await signAndStoreAttestationPackage(
+    { packageHash, attestationPkg },
+    {
+      putPackage,
+      insertRow: async (columns) => {
+        await db.insert(attestationPackages).values({
+          evidenceRecordId: record.id,
+          type: attestationType,
+          creatorId: user.id,
+          packageHash,
+          referencesBaseHash: record.basePackageHash || '',
+          ...columns,
+        });
+      },
+    },
   );
 
-  // Sign (non-blocking — failures don't prevent storage)
-  signPackage(packageHash);
+  if (!signing.ok) {
+    // The cause is logged server-side and never returned: it can carry raw
+    // infrastructure detail, and a reviewer can do nothing with it.
+    console.error(
+      '[attestations] signing failed — review not stored:',
+      signing.cause instanceof Error ? signing.cause.message : signing.cause,
+    );
+    return NextResponse.json(signing.refusal.body, { status: signing.refusal.status });
+  }
 
-  // Timestamp (best-effort)
-  await getRfc3161Timestamp(packageHash).catch(() => null);
+  const blobUrl = signing.storageKey;
 
-  // Create DB record
-  await db.insert(attestationPackages).values({
-    evidenceRecordId: record.id,
-    type: attestationType,
-    creatorId: user.id,
-    packageHash,
-    storageKey: blobUrl,
-    referencesBaseHash: record.basePackageHash || '',
+  // Echo the signing disclosure back, so a client knows what was actually
+  // recorded without having to re-list. A keyless instance gets `unsigned_no_
+  // signing_key` here — a successful store, honestly labeled, not a failure.
+  const stored = resolveReviewSignature({
+    signature: signing.columns.signature,
+    rfc3161Timestamp: signing.columns.rfc3161Timestamp,
+    unsignedReason: signing.columns.unsignedReason,
   });
+  const signatureResponse = {
+    status: stored.status,
+    tier: stored.tier,
+    label: stored.label,
+    detail: stored.detail,
+    keyId: signing.columns.signingKeyId,
+    signedAt: signing.columns.signedAt ? signing.columns.signedAt.toISOString() : null,
+    rfc3161Timestamped: signing.columns.rfc3161Timestamp !== null,
+  };
 
   // Update evidence record verification status — only machine attestations
   // (`consistency`, `evaluation`) feed into the existing state machine.
@@ -240,6 +337,7 @@ export async function POST(
       id: packageHash,
       storageKey: blobUrl,
       verificationStatus: newStatus,
+      signature: signatureResponse,
     });
   }
 
@@ -247,6 +345,7 @@ export async function POST(
     id: packageHash,
     storageKey: blobUrl,
     verificationStatus: record.verificationStatus,
+    signature: signatureResponse,
   });
 }
 
