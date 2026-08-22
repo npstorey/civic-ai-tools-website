@@ -236,18 +236,21 @@ export const attestationPackages = pgTable('attestation_packages', {
   // inventing a value for rows whose signature was computed and discarded —
   // there is nothing honest to put there.
   //
-  // A NULL `signature` therefore means one of TWO different things, and the
+  // A NULL `signature` therefore means one of THREE different things, and the
   // difference matters to a reader weighing the review:
   //
-  //   * `unsigned_reason` IS NULL  — the row predates 0016. Nothing wrote the
-  //     column because nothing was writing these columns at all.
-  //   * `unsigned_reason` IS NOT NULL — the row was written by the current
-  //     path on an instance with no signing key (ADR-0020 §B's intended
-  //     unsigned tier), which recorded WHY it did not sign.
+  //   * `unsigned_reason` IS NULL — the row predates 0016 AND the P2 signing
+  //     pass has not reached it. Nothing wrote the column because nothing was
+  //     writing these columns at all.
+  //   * `unsigned_reason` = 'no_signing_key' — the write path recorded it on
+  //     an instance with no signing key (ADR-0020 §B's intended unsigned
+  //     tier), at a moment it actually knew that.
+  //   * `unsigned_reason` = 'backfill_signing_failed' — the P2 pass reached
+  //     the row with a key present and could not sign it.
   //
   // That asymmetry is the whole discriminator: no date comparison can separate
-  // the two honestly, since an instance may adopt a key at any time and the
-  // rows carry no record of the instance's state when they were written. The
+  // them honestly, since an instance may adopt a key at any time and the rows
+  // carry no record of the instance's state when they were written. The
   // reading logic and the user-facing copy live together in
   // `evidence/trust-signal.ts` (`resolveReviewSignature`); the writing logic is
   // `evidence/attestation-signing.ts`.
@@ -272,9 +275,14 @@ export const attestationPackages = pgTable('attestation_packages', {
   // CLOSED VOCABULARY. `text` at the database level, but the permitted values
   // are a closed, named set — not free-form text. The full vocabulary today:
   //
-  //   'no_signing_key'  — the instance held no signing key when the review was
-  //                       recorded (ADR-0020 §B, the intended unsigned tier).
-  //                       This is the ONLY value any P1 code path writes.
+  //   'no_signing_key'          — the instance held no signing key when the
+  //                               review was recorded (ADR-0020 §B, the
+  //                               intended unsigned tier).
+  //   'backfill_signing_failed' — the P2 backfill reached this row with a key
+  //                               present and could not sign it. Written at
+  //                               decision time so the row is never left
+  //                               indistinguishable from one the pass never
+  //                               reached.
   //
   // The set is declared ONCE, as `REVIEW_UNSIGNED_REASONS` in
   // `evidence/trust-signal.ts`, and mirrored there into
@@ -282,10 +290,9 @@ export const attestationPackages = pgTable('attestation_packages', {
   // a value with no rendering status is a build error rather than a row that
   // silently renders as something else. The write path types this column as
   // that union too, so it cannot emit a reason the read path has no copy for.
-  // Adding a value (P2's backfill will need one for any row it cannot sign)
-  // means appending in that one file; it needs no migration, and there is no
-  // second list here to keep in sync — this comment names the vocabulary, and
-  // `trust-signal.ts` defines it.
+  // Adding a value means appending in that one file; it needs no migration,
+  // and there is no second list here to keep in sync — this comment names the
+  // vocabulary, and `trust-signal.ts` defines it.
   //
   // A value this build does not recognize reads as the conservative unsigned
   // state and is NEVER relabeled as 'no_signing_key'.

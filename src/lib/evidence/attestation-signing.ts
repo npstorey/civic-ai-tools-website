@@ -154,9 +154,10 @@ export interface AttestationSignatureColumns {
    *
    *  Typed as the CLOSED vocabulary (`ReviewUnsignedReason`), not as `string`:
    *  the write path is structurally incapable of inventing a reason that the
-   *  read path has no copy for. New reasons — P2's backfill will need one —
-   *  are added to `REVIEW_UNSIGNED_REASONS` in `trust-signal.ts`, which is the
-   *  single source of truth for both sides. */
+   *  read path has no copy for. New reasons are added to
+   *  `REVIEW_UNSIGNED_REASONS` in `trust-signal.ts`, which is the single
+   *  source of truth for both sides — P2's backfill added
+   *  `backfill_signing_failed` there for a row it reaches and cannot sign. */
   unsignedReason: ReviewUnsignedReason | null;
 }
 
