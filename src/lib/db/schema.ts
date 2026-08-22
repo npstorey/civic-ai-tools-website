@@ -268,7 +268,27 @@ export const attestationPackages = pgTable('attestation_packages', {
   signedAt: timestamp('signed_at', { withTimezone: true }),
   // Why this row carries no signature, recorded at the moment that decision
   // was made — the only point at which the answer is actually knowable.
-  // `no_signing_key` is the only value written today.
+  //
+  // CLOSED VOCABULARY. `text` at the database level, but the permitted values
+  // are a closed, named set — not free-form text. The full vocabulary today:
+  //
+  //   'no_signing_key'  — the instance held no signing key when the review was
+  //                       recorded (ADR-0020 §B, the intended unsigned tier).
+  //                       This is the ONLY value any P1 code path writes.
+  //
+  // The set is declared ONCE, as `REVIEW_UNSIGNED_REASONS` in
+  // `evidence/trust-signal.ts`, and mirrored there into
+  // `REVIEW_UNSIGNED_REASON_STATUS` — a `Record<>` keyed by the vocabulary, so
+  // a value with no rendering status is a build error rather than a row that
+  // silently renders as something else. The write path types this column as
+  // that union too, so it cannot emit a reason the read path has no copy for.
+  // Adding a value (P2's backfill will need one for any row it cannot sign)
+  // means appending in that one file; it needs no migration, and there is no
+  // second list here to keep in sync — this comment names the vocabulary, and
+  // `trust-signal.ts` defines it.
+  //
+  // A value this build does not recognize reads as the conservative unsigned
+  // state and is NEVER relabeled as 'no_signing_key'.
   unsignedReason: text('unsigned_reason'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()

@@ -837,11 +837,81 @@ export const REVIEW_SIGNATURE_SIGNALS: Record<
 };
 
 /** The row shape `resolveReviewSignature` reads. Mirrors the five columns
- *  migration 0016 added, so a caller can pass a DB row straight in. */
+ *  migration 0016 added, so a caller can pass a DB row straight in.
+ *
+ *  `unsignedReason` is typed `string | null` and NOT as the closed vocabulary
+ *  below, deliberately: this is the READ side, and the database can hold a
+ *  value this build has never heard of (a row written by a newer deploy, or by
+ *  hand). Narrowing happens at the guard, not at the type. */
 export interface ReviewSignatureRow {
   signature: string | null;
   rfc3161Timestamp: string | null;
   unsignedReason: string | null;
+}
+
+// --- The closed `unsigned_reason` vocabulary -----------------------------
+//
+// The permitted values of `attestation_packages.unsigned_reason`. CLOSED and
+// named, not free-form text, and declared ONCE here: this array is the single
+// source of truth that the writer (`evidence/attestation-signing.ts`), the
+// reader (`resolveReviewSignatureStatus` below), and the schema comment on the
+// column (`db/schema.ts`) all refer back to.
+//
+// Follows the same idiom as every other closed vocabulary on this path
+// (`REVIEW_SIGNATURE_STATUSES`, `NOTEBOOK_PROVENANCE_VALUES`): a const array
+// whose element type IS the union, plus a `Record<>` keyed by that union — so
+// total coverage holds BY CONSTRUCTION rather than by anyone remembering.
+//
+// ADDING A VALUE IS A TWO-PLACE CHANGE, AND THE COMPILER ENFORCES BOTH. Append
+// to this array and `REVIEW_UNSIGNED_REASON_STATUS` below stops type-checking
+// until the new value is mapped to a status; that status in turn must exist in
+// `REVIEW_SIGNATURE_STATUSES` and carry copy in `REVIEW_SIGNATURE_SIGNALS`,
+// which are `Record`-keyed for the same reason. There is no way to add a
+// reason that renders as nothing, and no second source of truth to update.
+//
+// THIS IS WHAT P2 EXTENDS. The backfill will need its own reason for any row
+// it cannot sign, and must never leave a backfilled-but-unsigned row at NULL —
+// a NULL there would be indistinguishable from a pre-0016 row and would
+// reintroduce exactly the ambiguity this column exists to remove. Extending
+// the vocabulary is an append here plus a status; it needs no migration,
+// because the column is free-text at the database level and closed at this
+// boundary.
+export const REVIEW_UNSIGNED_REASONS = ['no_signing_key'] as const;
+export type ReviewUnsignedReason = (typeof REVIEW_UNSIGNED_REASONS)[number];
+
+/**
+ * The only `unsigned_reason` any code path writes today: the instance held no
+ * signing key when the review was recorded (ADR-0020 §B, the intended unsigned
+ * tier). Named so the writer refers to the vocabulary rather than repeating a
+ * bare string literal.
+ */
+export const REVIEW_UNSIGNED_REASON_NO_KEY: ReviewUnsignedReason = 'no_signing_key';
+
+/**
+ * The mirror the rider requires: every permitted reason mapped to the status
+ * that renders it. `Record<ReviewUnsignedReason, …>` is what makes the mapping
+ * and the vocabulary unable to drift — a reason with no status is a build
+ * error, not a row that quietly renders as something else.
+ */
+export const REVIEW_UNSIGNED_REASON_STATUS: Record<
+  ReviewUnsignedReason,
+  ReviewSignatureStatus
+> = {
+  no_signing_key: 'unsigned_no_signing_key',
+};
+
+/**
+ * Whether a stored value is one this build actually knows.
+ *
+ * Matched EXACTLY against the vocabulary, never by truthiness. A reason this
+ * build has never heard of must NOT be relabeled as a cause the row does not
+ * claim — in particular it must never be read as "no signing key", which would
+ * assert a specific instance configuration on no evidence.
+ */
+export function isReviewUnsignedReason(
+  value: string | null,
+): value is ReviewUnsignedReason {
+  return value !== null && (REVIEW_UNSIGNED_REASONS as readonly string[]).includes(value);
 }
 
 /**
@@ -856,6 +926,11 @@ export interface ReviewSignatureRow {
  * made that decision — the only point at which the answer is actually known.
  * Rows written before 0016 have `unsigned_reason` NULL because nothing wrote
  * it, which is precisely what marks them as pre-backfill.
+ *
+ * An UNRECOGNIZED reason falls back to the pre-backfill reading. That is the
+ * conservative end of the vocabulary rather than a neutral one — see the note
+ * on `unsigned_pre_backfill`'s copy — but the load-bearing property holds: an
+ * unknown value is never reported as "no signing key".
  */
 export function resolveReviewSignature(
   row: ReviewSignatureRow,
@@ -864,28 +939,13 @@ export function resolveReviewSignature(
   return { status, ...REVIEW_SIGNATURE_SIGNALS[status] };
 }
 
-/**
- * The only `unsigned_reason` any code path writes today: the instance held no
- * signing key when the review was recorded (ADR-0020 §B, the intended unsigned
- * tier). Declared here, beside the status that renders it, so the writer and
- * the reader cannot drift onto different spellings.
- *
- * Matched EXACTLY rather than by truthiness. A reason this vocabulary does not
- * know about must not be silently relabeled "no signing key" — that would
- * assert a specific cause the row does not actually claim. An unrecognized
- * reason therefore falls through to the neutral pre-backfill reading, which
- * says only "unsigned", and a new reason is expected to arrive with its own
- * status and copy.
- */
-export const REVIEW_UNSIGNED_REASON_NO_KEY = 'no_signing_key';
-
 export function resolveReviewSignatureStatus(
   row: ReviewSignatureRow,
 ): ReviewSignatureStatus {
   if (row.signature) {
     return row.rfc3161Timestamp ? 'signed_timestamped' : 'signed_untimestamped';
   }
-  return row.unsignedReason === REVIEW_UNSIGNED_REASON_NO_KEY
-    ? 'unsigned_no_signing_key'
+  return isReviewUnsignedReason(row.unsignedReason)
+    ? REVIEW_UNSIGNED_REASON_STATUS[row.unsignedReason]
     : 'unsigned_pre_backfill';
 }

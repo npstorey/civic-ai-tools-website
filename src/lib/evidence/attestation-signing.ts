@@ -55,7 +55,10 @@ import {
   isSigningKeyConfigured,
   type SealCommitGateRefusal,
 } from './unsigned-tier.ts';
-import { REVIEW_UNSIGNED_REASON_NO_KEY } from './trust-signal.ts';
+import {
+  REVIEW_UNSIGNED_REASON_NO_KEY,
+  type ReviewUnsignedReason,
+} from './trust-signal.ts';
 
 type EnvLike = Record<string, string | undefined>;
 
@@ -147,8 +150,14 @@ export interface AttestationSignatureColumns {
   /** Why this row is unsigned, recorded at the moment the decision was made.
    *  Null for signed rows AND for rows written before 0016 — see
    *  `resolveReviewSignature` for why that asymmetry is what makes the two
-   *  unsigned states distinguishable at all. */
-  unsignedReason: string | null;
+   *  unsigned states distinguishable at all.
+   *
+   *  Typed as the CLOSED vocabulary (`ReviewUnsignedReason`), not as `string`:
+   *  the write path is structurally incapable of inventing a reason that the
+   *  read path has no copy for. New reasons — P2's backfill will need one —
+   *  are added to `REVIEW_UNSIGNED_REASONS` in `trust-signal.ts`, which is the
+   *  single source of truth for both sides. */
+  unsignedReason: ReviewUnsignedReason | null;
 }
 
 export interface AttestationSigningPorts {

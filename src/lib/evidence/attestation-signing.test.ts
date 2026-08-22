@@ -42,9 +42,12 @@ import { verifySignature } from './verify.ts';
 import {
   resolveReviewSignature,
   resolveReviewSignatureStatus,
+  isReviewUnsignedReason,
   REVIEW_SIGNATURE_SIGNALS,
   REVIEW_SIGNATURE_STATUSES,
   REVIEW_UNSIGNED_REASON_NO_KEY,
+  REVIEW_UNSIGNED_REASON_STATUS,
+  REVIEW_UNSIGNED_REASONS,
 } from './trust-signal.ts';
 import { INSTANCE_IDENTITY_REQUIRED_VARS } from '../site-config.ts';
 
@@ -409,4 +412,71 @@ test('REFUSAL: the named error is stable and carries no key material', () => {
   // appear is PEM armor or an encoded blob.
   assert.doesNotMatch(r.body.error, /-----BEGIN|MII[A-Za-z0-9+/]{8}/);
   assert.doesNotMatch(r.body.error, /[A-Za-z0-9+/]{40,}={0,2}/, 'looks like encoded key material');
+});
+
+// --- The closed `unsigned_reason` vocabulary ----------------------------
+
+test('VOCABULARY: `unsigned_reason` is a closed, named set with no second source of truth', () => {
+  // The vocabulary is pinned here so widening it is a deliberate act that
+  // shows up in a diff, not an incidental side effect of some other change.
+  assert.deepEqual([...REVIEW_UNSIGNED_REASONS], ['no_signing_key']);
+  assert.equal(REVIEW_UNSIGNED_REASON_NO_KEY, 'no_signing_key');
+  assert.ok(
+    REVIEW_UNSIGNED_REASONS.includes(REVIEW_UNSIGNED_REASON_NO_KEY),
+    'the named constant must be a member of the vocabulary it claims to belong to',
+  );
+
+  // EVERY permitted reason maps to a status, and every one of those statuses
+  // is a declared status carrying copy. This is the anti-drift property the
+  // `Record<>` keying enforces at compile time, asserted again at runtime so
+  // it survives a refactor that loosens the types.
+  for (const reason of REVIEW_UNSIGNED_REASONS) {
+    const status = REVIEW_UNSIGNED_REASON_STATUS[reason];
+    assert.ok(status, `reason ${reason} maps to no status`);
+    assert.ok(
+      REVIEW_SIGNATURE_STATUSES.includes(status),
+      `reason ${reason} maps to undeclared status ${status}`,
+    );
+    const signal = REVIEW_SIGNATURE_SIGNALS[status];
+    assert.ok(signal?.label, `status ${status} for reason ${reason} has no copy`);
+    // A reason explains an UNSIGNED row; it must never render as signed.
+    assert.match(signal.label, /^Unsigned/);
+  }
+
+  // The mapping has no entries beyond the vocabulary.
+  assert.deepEqual(
+    Object.keys(REVIEW_UNSIGNED_REASON_STATUS).sort(),
+    [...REVIEW_UNSIGNED_REASONS].sort(),
+  );
+
+  // A row written by the current path is readable through the vocabulary —
+  // writer and reader agree on the spelling.
+  assert.equal(
+    resolveReviewSignatureStatus({
+      signature: null,
+      rfc3161Timestamp: null,
+      unsignedReason: REVIEW_UNSIGNED_REASON_NO_KEY,
+    }),
+    REVIEW_UNSIGNED_REASON_STATUS[REVIEW_UNSIGNED_REASON_NO_KEY],
+  );
+});
+
+test('VOCABULARY: membership is exact — an unknown value is never admitted', () => {
+  assert.equal(isReviewUnsignedReason('no_signing_key'), true);
+  assert.equal(isReviewUnsignedReason(null), false);
+  // Not truthiness, not prefix, not case-insensitive matching.
+  assert.equal(isReviewUnsignedReason(''), false);
+  assert.equal(isReviewUnsignedReason('no_signing_key_v2'), false);
+  assert.equal(isReviewUnsignedReason('NO_SIGNING_KEY'), false);
+  assert.equal(isReviewUnsignedReason('backfill_unsignable'), false);
+
+  // ...and an unadmitted value never borrows the keyless label.
+  const unknown = resolveReviewSignature({
+    signature: null,
+    rfc3161Timestamp: null,
+    unsignedReason: 'backfill_unsignable',
+  });
+  assert.notEqual(unknown.status, 'unsigned_no_signing_key');
+  assert.doesNotMatch(unknown.label, /no signing key/i);
+  assert.match(unknown.label, /^Unsigned/);
 });
