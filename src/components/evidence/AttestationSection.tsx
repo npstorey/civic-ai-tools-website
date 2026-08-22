@@ -6,10 +6,35 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useSignInOptions } from '@/components/SignInOptionsProvider';
 import { resolveSignInProse } from '@/lib/auth-provider-options';
+import type { ReviewSignatureStatus } from '@/lib/evidence/trust-signal';
+import type { TrustTier } from '@/lib/evidence/trust-signal';
+import TrustSignal from './TrustSignal';
 import AttestationDialog from './AttestationDialog';
 
 type AttestationType = 'consistency' | 'evaluation' | 'expert_attestation';
 type ExpertRating = 'endorse' | 'concerns' | 'dispute' | 'neutral';
+
+/**
+ * Per-attestation signing disclosure, served by
+ * `GET /api/records/[slug]/attestations`. FOUR states, and the two unsigned
+ * ones are deliberately NOT collapsed into each other: "recorded before
+ * reviews were signed" and "this instance has no signing key" are different
+ * facts about a review, and a reader weighing it needs to be able to tell
+ * which one applies. Copy is resolved server-side from the shared vocabulary
+ * in `lib/evidence/trust-signal.ts` so this component never invents wording.
+ *
+ * Optional because a client may be talking to an instance that has not
+ * deployed migration 0016 yet; absent means "say nothing", never "signed".
+ */
+interface AttestationSignatureDisclosure {
+  status: ReviewSignatureStatus;
+  tier: TrustTier;
+  label: string;
+  detail: string;
+  keyId: string | null;
+  signedAt: string | null;
+  rfc3161Timestamped: boolean;
+}
 
 interface Attestation {
   id: string;
@@ -19,6 +44,7 @@ interface Attestation {
   createdAt: string;
   creatorDisplayName: string;
   creatorGithubUrl: string;
+  signature?: AttestationSignatureDisclosure | null;
 }
 
 interface AttestationPackageData {
@@ -198,6 +224,26 @@ export default function AttestationSection({ slug, analysisModel, promptVisibili
   );
 }
 
+/**
+ * The per-review signing line. Renders through the shared `TrustSignal`
+ * primitive rather than a parallel badge, so severity reaches a reader by
+ * glyph silhouette and screen-reader label, not by color alone.
+ *
+ * The one-line `label` IS the signal; the longer `detail` is elaboration and
+ * stays out of the list (P8: default renders collapse). Renders NOTHING when
+ * the field is absent — an instance that has not deployed the signature
+ * columns yet says nothing rather than implying either state (P3: if we don't
+ * have a signal, don't show one).
+ */
+function ReviewSignatureLine({ signature }: { signature?: AttestationSignatureDisclosure | null }) {
+  if (!signature) return null;
+  return (
+    <div style={{ marginTop: '8px' }}>
+      <TrustSignal tier={signature.tier} label={signature.label} />
+    </div>
+  );
+}
+
 // --- Machine attestation card (consistency / evaluation) ---
 
 function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
@@ -309,6 +355,8 @@ function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
           )}
         </div>
       )}
+
+      <ReviewSignatureLine signature={attestation.signature} />
     </div>
   );
 }
@@ -411,6 +459,8 @@ function ExpertAttestationCard({ attestation, payload }: {
           Loading review...
         </div>
       )}
+
+      <ReviewSignatureLine signature={attestation.signature} />
 
       <style jsx>{`
         .expert-attestation-body :global(p) {

@@ -1,0 +1,71 @@
+-- EXPAND migration for civic-ai-tools-website#294 P1: give `attestation_packages`
+-- somewhere to put the signature it was already computing.
+--
+-- WHY. The attestations route called `signPackage(hash)` without awaiting it and
+-- discarded the result, then awaited an RFC 3161 timestamp and discarded that
+-- too, then inserted a row into a table with no column for either. Every review
+-- and machine attestation stored before this migration is content-addressed and
+-- hash-bound to its base package, and UNSIGNED. These five columns are where the
+-- write path starts keeping what it produces.
+--
+-- EXPAND ONLY. Every column is NULLABLE and nothing is backfilled or rewritten
+-- here. Rows that already exist are legitimately null in all five and stay that
+-- way: their signatures were computed and thrown away, so there is no honest
+-- value to write. The backfill is a separate, separately-gated phase (P2), and
+-- there is no NOT NULL flip in this one.
+--
+-- WHAT EACH COLUMN HOLDS
+--   signature         Signature envelope JSON — {signature, publicKey,
+--                     algorithm, kid} — matching how the publish route writes
+--                     evidence_records.base_package_signature.
+--   signing_key_id    The envelope's `kid` again, as its own column, so "which
+--                     key signed this" is queryable without JSON extraction.
+--   rfc3161_timestamp Base64 RFC 3161 token; null when the timestamp authority
+--                     was unreachable. A signed, untimestamped review is a
+--                     legitimate state and never a reason to refuse one.
+--   signed_at         When the signature was produced. Null exactly when
+--                     `signature` is null — it never claims a signing time for
+--                     a row that has no signature.
+--   unsigned_reason   Why the row carries no signature, recorded at the moment
+--                     the decision was made. `no_signing_key` is the only value
+--                     written today.
+--
+-- THE TWO NULL SIGNATURES ARE NOT THE SAME THING, and `unsigned_reason` is what
+-- tells them apart:
+--   * signature NULL, unsigned_reason NULL      -> predates this migration.
+--   * signature NULL, unsigned_reason NOT NULL  -> written by the current path
+--     on an instance with no signing key (the intended unsigned tier).
+-- No date comparison can separate those honestly — an instance may adopt a
+-- signing key at any time, and the rows record nothing about the instance's
+-- state when they were written. Hence a column rather than an inference.
+--
+-- OWNER-RUN. Applied by hand via psql, ahead of the deploy that starts writing
+-- these columns. A downstream fork applies this same file through an ordinary
+-- `drizzle-kit migrate`, so both paths must be safe on a database that already
+-- has the columns: `IF NOT EXISTS` makes each statement idempotent by
+-- construction and re-running the file is a no-op. (Same reasoning as
+-- 0014_add_sealed_public_visibility.sql, which needed it for the same
+-- two-application-paths reason. `drizzle-kit generate` does not emit
+-- `IF NOT EXISTS`; it was added by hand here and should stay.)
+--
+-- ORDERING IS SAFE IN BOTH DIRECTIONS. Applying this BEFORE the deploy leaves
+-- five unused nullable columns, which nothing reads. Applying it AFTER would
+-- error the write path on a missing column, so apply it first.
+--
+-- VERIFY AFTER APPLYING — do not skip, and do not trust a tool's exit status:
+--
+--     \d attestation_packages
+--
+-- must list all five columns, every one of them nullable (no "not null"), with
+-- signed_at as `timestamp with time zone`. `drizzle-kit` can report success
+-- without having applied anything, so the catalog is the only acceptable
+-- evidence that this landed.
+--
+-- REVERSIBILITY. `ALTER TABLE attestation_packages DROP COLUMN IF EXISTS <col>`
+-- for each of the five. Dropping them destroys every signature stored since the
+-- deploy, so it is a real rollback with data loss, not a free undo.
+ALTER TABLE "attestation_packages" ADD COLUMN IF NOT EXISTS "signature" text;--> statement-breakpoint
+ALTER TABLE "attestation_packages" ADD COLUMN IF NOT EXISTS "signing_key_id" text;--> statement-breakpoint
+ALTER TABLE "attestation_packages" ADD COLUMN IF NOT EXISTS "rfc3161_timestamp" text;--> statement-breakpoint
+ALTER TABLE "attestation_packages" ADD COLUMN IF NOT EXISTS "signed_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "attestation_packages" ADD COLUMN IF NOT EXISTS "unsigned_reason" text;

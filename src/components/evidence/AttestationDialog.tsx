@@ -758,8 +758,9 @@ function ExpertTab({
   return (
     <>
       <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
-        A signed, timestamped review from a domain expert. Your GitHub identity, self-described expertise,
-        and the review text are all published publicly and attached to this record.
+        A review from a domain expert, published as part of this record. Your GitHub identity,
+        self-described expertise, and the review text are all published publicly. Each review
+        shows its own signing status once submitted.
       </p>
 
       {/* Body */}
@@ -862,7 +863,7 @@ function ExpertTab({
           opacity: submitting ? 0.7 : 1,
         }}
       >
-        {submitting ? 'Signing and publishing...' : 'Publish attestation'}
+        {submitting ? 'Publishing...' : 'Publish attestation'}
       </button>
     </>
   );
