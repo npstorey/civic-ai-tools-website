@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/drizzle-migrate-guard.sh",
+            "timeout": 5,
+            "statusMessage": "Checking for schema-applying migrations..."
+          }
+        ]
+      }
+    ]
+  },
+  "sandbox": {
+    "_shakedown": "Measured 2026-08-22 with enabled:true. `npm ci` passed under the sandbox, so the allowlist and excludedCommands below are right. The rest of the check set needs loopback socket binds, which the sandbox denies: `npm test` went 872 pass/0 fail -> 870 pass/2 fail, both `listen EPERM: operation not permitted 127.0.0.1` in src/lib/openrouter-streaming.test.ts (issue #249), and `npm run build` died with 'binding to a port / Operation not permitted (os error 1)' in Turbopack's PostCSS worker pool. Hence enabled:false. TWO THINGS WORTH KNOWING BEFORE YOU FLIP IT BACK. (1) Enabling the sandbox once is sticky for the rest of that session: after flipping to false, in-process binds and `npm test` recovered (872/0) but every SPAWNED process still hit the bind denial, and `npm run build` stayed red even with this whole file moved aside. Start a fresh session to measure, not a flipped one. (2) `npx next build --webpack` builds clean under exactly those conditions, because it skips the worker pool — which is the CLAUDE.md rule, confirmed rather than assumed.",
+    "enabled": false,
+    "allowUnsandboxedCommands": false,
+    "excludedCommands": ["gh *", "git *"],
+    "filesystem": {
+      "allowWrite": ["~/.npm"]
+    },
+    "network": {
+      "allowedDomains": [
+        "registry.npmjs.org",
+        "github.com",
+        "api.github.com",
+        "objects.githubusercontent.com",
+        "codeload.github.com",
+        "openrouter.ai",
+        "socrata-mcp-server.onrender.com",
+        "api.datacommons.org",
+        "fonts.googleapis.com",
+        "fonts.gstatic.com"
+      ]
+    }
+  }
+}

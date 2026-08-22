@@ -24,6 +24,12 @@ Thank you for your interest in contributing! This is the demo website for the ci
 4. Create a branch for your changes
 5. Submit a pull request
 
+## If you use Claude Code
+
+Cloning this repo installs its checked-in Claude Code configuration: `.claude/settings.json` (a network allowlist, a sandbox block, and a `PreToolUse` hook at `.claude/hooks/drizzle-migrate-guard.sh` that pauses schema-applying `drizzle-kit` runs so you verify them with a read-back), plus the agent definitions in `.claude/agents/` and the path-scoped rules in `.claude/rules/`.
+
+Those files are ordinary shell and JSON — read them before you trust them, the same as any other code you clone. Personal overrides belong in `.claude/settings.local.json`, which is gitignored.
+
 ## Guidelines
 
 - Keep changes focused — one fix or feature per PR
