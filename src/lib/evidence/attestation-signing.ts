@@ -5,10 +5,12 @@
 // WITHOUT awaiting it and discard the return value, then await
 // `getRfc3161Timestamp(hash)` and discard that too, then insert a row into a
 // table with no column to hold either. A signature was computed on every
-// submission and thrown away, so every review stored since the feature shipped
-// is content-addressed, hash-bound to its base package, and unsigned — while
-// four surfaces told readers it was signed. Migration 0016 adds the columns;
-// this module makes the write path actually use them.
+// submission and thrown away, so every review stored between the feature
+// shipping and this module landing WAS content-addressed, hash-bound to its
+// base package, and unsigned — while four surfaces told readers it was signed.
+// Migration 0016 adds the columns; this module makes the write path actually
+// use them, and P2's backfill (`attestation-backfill.ts`) signed the rows that
+// were already there.
 //
 // WHY THE ORCHESTRATION LIVES HERE RATHER THAN IN THE ROUTE. Two reasons, one
 // of them load-bearing:

@@ -1,9 +1,8 @@
 // Validation + canonicalisation helpers for the `expert_attestation` type
 // (issue #53). A human domain expert submits a free-text review on an
-// evidence package, signed by the instance that records it; reviews recorded
-// before signing was enforced are labeled unsigned on the record. These
-// helpers enforce the payload shape so the route handler and the Drizzle row
-// stay in lock-step.
+// evidence package, signed by the instance that records it. These helpers
+// enforce the payload shape so the route handler and the Drizzle row stay in
+// lock-step.
 //
 // AICPA has formal attestation-engagement standards (SSAE) in the
 // accounting world. This implementation uses "attestation" in the broader

@@ -228,9 +228,8 @@ export default function PositioningBand() {
               </strong>{' '}
               Everything the AI produces is permanently labeled AI-generated,
               and human review attaches as its own signed attestation{' '}
-              <LegendLabel status="built" />; reviews recorded before signing was
-              enforced are labeled unsigned on the record. AI-generated work is never
-              silently promoted to human-validated.
+              <LegendLabel status="built" />. AI-generated work is never silently promoted
+              to human-validated.
             </li>
           </ul>
         </div>
@@ -270,8 +269,7 @@ export default function PositioningBand() {
             <li style={bodyText}>
               <strong style={{ color: 'var(--text-primary)' }}>Human-in-the-loop</strong>{' '}
               &mdash; publishing is a deliberate human action, and human review
-              is recorded as its own signed attestation; reviews recorded before
-              signing was enforced are labeled unsigned on the record.
+              is recorded as its own signed attestation.
             </li>
           </ul>
           <p style={bodyText}>

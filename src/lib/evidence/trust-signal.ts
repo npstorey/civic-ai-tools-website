@@ -778,7 +778,9 @@ export const NOTEBOOK_PROVENANCE_SIGNALS: Record<NotebookProvenance, TrustSignal
 // reviews and machine attestations attached to a record. Migration 0016 added
 // the `signature` / `signing_key_id` / `rfc3161_timestamp` / `signed_at` /
 // `unsigned_reason` columns; before it, the route computed a signature and
-// discarded it, so every row written until then is genuinely unsigned.
+// discarded it, so every row written until then was genuinely unsigned. P2's
+// backfill signed those rows, stamping `signed_at` with when it actually ran
+// rather than backdating it to the review.
 //
 // FIVE states, because a missing signature means three DIFFERENT things and
 // collapsing them would be exactly the false precision Principle 3 forbids:

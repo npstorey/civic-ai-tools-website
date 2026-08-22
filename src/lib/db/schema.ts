@@ -30,10 +30,9 @@ export const consistencyClassificationEnum = pgEnum('consistency_classification'
 ]);
 
 // `expert_attestation` is a free-text review attached by a human domain
-// expert (issue #53), signed by the instance that records it; reviews
-// submitted before signing was enforced are labeled unsigned on the record.
-// See `attestationPackages` below for the columns that carry the signature
-// and for what a null one means. The term "attestation" carries formal
+// expert (issue #53), signed by the instance that records it. See
+// `attestationPackages` below for the columns that carry the signature and
+// for what a null one means. The term "attestation" carries formal
 // AICPA Statements-on-Standards meaning in accounting / audit contexts;
 // this implementation is not bound by those standards — it's a signed
 // claim that something is true, in the broader tech sense (cryptographic
@@ -231,10 +230,12 @@ export const attestationPackages = pgTable('attestation_packages', {
   //
   // ALL NULLABLE, and deliberately so. This is an EXPAND migration: the write
   // path only began persisting a signature at 0016, so every row that already
-  // existed when it ran is legitimately null in all five columns and stays
-  // that way until the backfill. A NOT NULL column here would have required
-  // inventing a value for rows whose signature was computed and discarded —
-  // there is nothing honest to put there.
+  // existed when it ran was legitimately null in all five columns until P2's
+  // backfill signed it. A NOT NULL column here would have required inventing a
+  // value for rows whose signature was computed and discarded — there is
+  // nothing honest to put there. They stay nullable afterwards too: the
+  // keyless tier still writes null signatures by design, and an instance that
+  // has not run the backfill still holds rows the pass never reached.
   //
   // A NULL `signature` therefore means one of THREE different things, and the
   // difference matters to a reader weighing the review:
