@@ -16,12 +16,13 @@ type ExpertRating = 'endorse' | 'concerns' | 'dispute' | 'neutral';
 
 /**
  * Per-attestation signing disclosure, served by
- * `GET /api/records/[slug]/attestations`. FOUR states, and the two unsigned
+ * `GET /api/records/[slug]/attestations`. FIVE states, and the three unsigned
  * ones are deliberately NOT collapsed into each other: "recorded before
- * reviews were signed" and "this instance has no signing key" are different
- * facts about a review, and a reader weighing it needs to be able to tell
- * which one applies. Copy is resolved server-side from the shared vocabulary
- * in `lib/evidence/trust-signal.ts` so this component never invents wording.
+ * reviews were signed", "this instance has no signing key", and "signing this
+ * review did not succeed" are different facts about a review, and a reader
+ * weighing it needs to be able to tell which one applies. Copy is resolved
+ * server-side from the shared vocabulary in `lib/evidence/trust-signal.ts` so
+ * this component never invents wording.
  *
  * Optional because a client may be talking to an instance that has not
  * deployed migration 0016 yet; absent means "say nothing", never "signed".
@@ -225,6 +226,24 @@ export default function AttestationSection({ slug, analysisModel, promptVisibili
 }
 
 /**
+ * Whether the signature was produced on a later DAY than the review was
+ * recorded — i.e. whether this is a review the P2 signing pass reached rather
+ * than one signed as it was submitted.
+ *
+ * Day granularity, not millisecond: the live path signs a review moments after
+ * it is recorded, and surfacing a two-second gap as "signed later" would be
+ * noise dressed as disclosure (Principle 3 — precision we have not earned).
+ * A gap that crosses a calendar day is a real, reader-relevant fact; anything
+ * smaller is the same event.
+ */
+function signedOnALaterDay(createdAt: string, signedAt: string): boolean {
+  const c = new Date(createdAt);
+  const s = new Date(signedAt);
+  if (Number.isNaN(c.getTime()) || Number.isNaN(s.getTime())) return false;
+  return s.toDateString() !== c.toDateString();
+}
+
+/**
  * The per-review signing line. Renders through the shared `TrustSignal`
  * primitive rather than a parallel badge, so severity reaches a reader by
  * glyph silhouette and screen-reader label, not by color alone.
@@ -234,14 +253,56 @@ export default function AttestationSection({ slug, analysisModel, promptVisibili
  * the field is absent — an instance that has not deployed the signature
  * columns yet says nothing rather than implying either state (P3: if we don't
  * have a signal, don't show one).
+ *
+ * WHEN THE SIGNATURE IS YOUNGER THAN THE REVIEW, that gap is shown, and this
+ * is the honesty property that makes the P2 backfill a disclosable correction
+ * rather than a quiet rewrite. Those reviews were recorded before this
+ * instance signed reviews at all; a later pass signed them, and `signed_at`
+ * records when that actually happened rather than being backdated to the
+ * review. A reader who is told only "Signed" would reasonably infer the
+ * signature is as old as the review — so the two dates are shown together,
+ * in narrative rather than as a metadata pair (P5), whenever they differ.
  */
-function ReviewSignatureLine({ signature }: { signature?: AttestationSignatureDisclosure | null }) {
+function ReviewSignatureLine({
+  signature,
+  createdAt,
+}: {
+  signature?: AttestationSignatureDisclosure | null;
+  createdAt: string;
+}) {
   if (!signature) return null;
+
+  const signedLater =
+    signature.signedAt !== null && signedOnALaterDay(createdAt, signature.signedAt);
+
   return (
     <div style={{ marginTop: '8px' }}>
       <TrustSignal tier={signature.tier} label={signature.label} />
+      {signedLater && (
+        <p style={{
+          margin: '4px 0 0 0',
+          fontSize: '12px',
+          lineHeight: 1.5,
+          color: 'var(--text-muted)',
+        }}>
+          Signed {formatReviewDate(signature.signedAt!)}, after the review itself was
+          recorded. This review predates signing on this instance; the signature was
+          added later and is dated when it was actually produced, not backdated to the
+          review.
+        </p>
+      )}
     </div>
   );
+}
+
+/** One date format for both the review date and the signing date, so a reader
+ *  comparing them is comparing like with like. */
+function formatReviewDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 }
 
 // --- Machine attestation card (consistency / evaluation) ---
@@ -356,7 +417,7 @@ function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
         </div>
       )}
 
-      <ReviewSignatureLine signature={attestation.signature} />
+      <ReviewSignatureLine signature={attestation.signature} createdAt={attestation.createdAt} />
     </div>
   );
 }
@@ -460,7 +521,7 @@ function ExpertAttestationCard({ attestation, payload }: {
         </div>
       )}
 
-      <ReviewSignatureLine signature={attestation.signature} />
+      <ReviewSignatureLine signature={attestation.signature} createdAt={attestation.createdAt} />
 
       <style jsx>{`
         .expert-attestation-body :global(p) {

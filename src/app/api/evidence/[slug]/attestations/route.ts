@@ -128,9 +128,11 @@ function parseSignatureEnvelope(raw: string | null): Record<string, unknown> | n
  *
  * The signature is persisted as of migration 0016. Before it, this handler
  * computed a signature, discarded it, and inserted a row into a table with no
- * column to hold one — so rows written before then are unsigned, and the
- * record page labels them as such rather than inferring a signature they
- * never had.
+ * column to hold one — so rows written before then were unsigned until P2's
+ * backfill (`lib/evidence/attestation-backfill.ts`) signed them. The record
+ * page labels whatever state a row is actually in rather than inferring a
+ * signature, and shows the signing date alongside the review date wherever the
+ * two differ.
  *
  * `expert_attestation` is a separate dimension of review and does not advance
  * `verification_status` in v1; issue #67 will revisit when multi-signer and

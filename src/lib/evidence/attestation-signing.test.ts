@@ -334,9 +334,14 @@ test('GATE: a fully configured instance passes', () => {
   );
 });
 
-// --- The four states, and why two of them must stay distinct ------------
+// --- The five states, and why the unsigned ones must stay distinct ------
+//
+// P2 added the fifth (`unsigned_backfill_failed`) when the backfill gained a
+// reason of its own. Its own behavior is pinned in `attestation-backfill.test.ts`;
+// what this file asserts is that adding it did not collapse or relabel any
+// state that was already here.
 
-test('STATUS: all four states resolve, and the two unsigned ones are NOT collapsed', () => {
+test('STATUS: all five states resolve, and the unsigned ones are NOT collapsed', () => {
   assert.equal(
     resolveReviewSignatureStatus({ signature: '{}', rfc3161Timestamp: 'tok', unsignedReason: null }),
     'signed_timestamped',
@@ -359,17 +364,32 @@ test('STATUS: all four states resolve, and the two unsigned ones are NOT collaps
     resolveReviewSignatureStatus({ signature: null, rfc3161Timestamp: null, unsignedReason: null }),
     'unsigned_pre_backfill',
   );
+  // A row the P2 backfill reached and could not sign (P2).
+  assert.equal(
+    resolveReviewSignatureStatus({
+      signature: null,
+      rfc3161Timestamp: null,
+      unsignedReason: 'backfill_signing_failed',
+    }),
+    'unsigned_backfill_failed',
+  );
 
-  // The distinction is the point: same NULL signature, different fact.
+  // The distinction is the point: same NULL signature, three different facts,
+  // three different labels. None of them borrows another's cause.
   const preBackfill = resolveReviewSignature({
     signature: null, rfc3161Timestamp: null, unsignedReason: null,
   });
   const noKey = resolveReviewSignature({
     signature: null, rfc3161Timestamp: null, unsignedReason: 'no_signing_key',
   });
-  assert.notEqual(preBackfill.label, noKey.label);
+  const backfillFailed = resolveReviewSignature({
+    signature: null, rfc3161Timestamp: null, unsignedReason: 'backfill_signing_failed',
+  });
+  const labels = [preBackfill.label, noKey.label, backfillFailed.label];
+  assert.equal(new Set(labels).size, 3, 'two unsigned states share a label');
   assert.match(noKey.label, /no signing key/);
   assert.match(preBackfill.label, /before reviews were signed/);
+  assert.doesNotMatch(backfillFailed.label, /no signing key/i);
 });
 
 test('STATUS: an unrecognized unsigned reason is not relabeled "no signing key"', () => {
@@ -419,7 +439,7 @@ test('REFUSAL: the named error is stable and carries no key material', () => {
 test('VOCABULARY: `unsigned_reason` is a closed, named set with no second source of truth', () => {
   // The vocabulary is pinned here so widening it is a deliberate act that
   // shows up in a diff, not an incidental side effect of some other change.
-  assert.deepEqual([...REVIEW_UNSIGNED_REASONS], ['no_signing_key']);
+  assert.deepEqual([...REVIEW_UNSIGNED_REASONS], ['no_signing_key', 'backfill_signing_failed']);
   assert.equal(REVIEW_UNSIGNED_REASON_NO_KEY, 'no_signing_key');
   assert.ok(
     REVIEW_UNSIGNED_REASONS.includes(REVIEW_UNSIGNED_REASON_NO_KEY),
@@ -468,13 +488,15 @@ test('VOCABULARY: membership is exact — an unknown value is never admitted', (
   assert.equal(isReviewUnsignedReason(''), false);
   assert.equal(isReviewUnsignedReason('no_signing_key_v2'), false);
   assert.equal(isReviewUnsignedReason('NO_SIGNING_KEY'), false);
-  assert.equal(isReviewUnsignedReason('backfill_unsignable'), false);
+  assert.equal(isReviewUnsignedReason('not_a_reason_this_build_knows'), false);
+  // Near-misses of REAL vocabulary values are still not members.
+  assert.equal(isReviewUnsignedReason('backfill_signing_failure'), false);
 
   // ...and an unadmitted value never borrows the keyless label.
   const unknown = resolveReviewSignature({
     signature: null,
     rfc3161Timestamp: null,
-    unsignedReason: 'backfill_unsignable',
+    unsignedReason: 'not_a_reason_this_build_knows',
   });
   assert.notEqual(unknown.status, 'unsigned_no_signing_key');
   assert.doesNotMatch(unknown.label, /no signing key/i);

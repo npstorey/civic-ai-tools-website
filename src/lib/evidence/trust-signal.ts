@@ -778,18 +778,22 @@ export const NOTEBOOK_PROVENANCE_SIGNALS: Record<NotebookProvenance, TrustSignal
 // reviews and machine attestations attached to a record. Migration 0016 added
 // the `signature` / `signing_key_id` / `rfc3161_timestamp` / `signed_at` /
 // `unsigned_reason` columns; before it, the route computed a signature and
-// discarded it, so every row written until then is genuinely unsigned.
+// discarded it, so every row written until then was genuinely unsigned. P2's
+// backfill signed those rows, stamping `signed_at` with when it actually ran
+// rather than backdating it to the review.
 //
-// FOUR states, because a missing signature means two DIFFERENT things and
+// FIVE states, because a missing signature means three DIFFERENT things and
 // collapsing them would be exactly the false precision Principle 3 forbids:
-// a row that predates signing is a historical artifact awaiting backfill,
-// while a row from a keyless instance is the intended unsigned tier
-// (ADR-0020 §B) working as designed. A reader deciding how much weight to
-// put on a review needs to be able to tell those apart.
+// a row that predates signing is a historical artifact the backfill has not
+// reached; a row from a keyless instance is the intended unsigned tier
+// (ADR-0020 §B) working as designed; and a row the backfill REACHED and could
+// not sign is a third fact again — the attempt was made and it failed. A
+// reader deciding how much weight to put on a review needs to be able to tell
+// those apart.
 //
 // The discriminator is `unsigned_reason`, NOT the absence of a signature:
 // see `resolveReviewSignature` below for why a NULL signature alone cannot
-// separate the two.
+// separate them.
 //
 // Tiers follow the established posture: unsigned is `attention` (prominent,
 // never alarm — the unsigned tier is legitimate), signed is `normal` or
@@ -800,6 +804,7 @@ export const REVIEW_SIGNATURE_STATUSES = [
   'signed_untimestamped',
   'unsigned_no_signing_key',
   'unsigned_pre_backfill',
+  'unsigned_backfill_failed',
 ] as const;
 export type ReviewSignatureStatus = (typeof REVIEW_SIGNATURE_STATUSES)[number];
 
@@ -833,6 +838,22 @@ export const REVIEW_SIGNATURE_SIGNALS: Record<
     label: 'Unsigned — recorded before reviews were signed',
     detail:
       'This review was submitted before this instance began signing reviews, so no signature was kept for it. The review text, its author, and its content hash are unchanged; only the signature is absent.',
+  },
+  // Still `attention`, not `alarm`, and that is a deliberate reading of the
+  // established posture rather than an oversight. What failed is this
+  // instance's later attempt to add a signature; the review itself — its text,
+  // its author, its content hash, its binding to the base package — is exactly
+  // as it always was. Alarming a reader about the review would point the
+  // signal at the wrong object (Principle 1: this discloses process, it does
+  // not judge the review). The copy says an attempt was made and did not
+  // succeed, because the alternative — leaving the row silently identical to
+  // one the backfill never reached — is the information loss this whole
+  // column exists to prevent.
+  unsigned_backfill_failed: {
+    tier: 'attention',
+    label: 'Unsigned — signing this review did not succeed',
+    detail:
+      'This review was recorded before this instance began signing reviews, and a later attempt to add a signature to it did not succeed. The review text, its author, and its content hash are unchanged; what is missing is the signature. This is recorded rather than left blank so the review is not mistaken for one the signing pass never reached.',
   },
 };
 
@@ -869,14 +890,15 @@ export interface ReviewSignatureRow {
 // which are `Record`-keyed for the same reason. There is no way to add a
 // reason that renders as nothing, and no second source of truth to update.
 //
-// THIS IS WHAT P2 EXTENDS. The backfill will need its own reason for any row
-// it cannot sign, and must never leave a backfilled-but-unsigned row at NULL —
-// a NULL there would be indistinguishable from a pre-0016 row and would
-// reintroduce exactly the ambiguity this column exists to remove. Extending
-// the vocabulary is an append here plus a status; it needs no migration,
-// because the column is free-text at the database level and closed at this
-// boundary.
-export const REVIEW_UNSIGNED_REASONS = ['no_signing_key'] as const;
+// P2 EXTENDED IT, exactly as that path describes. `backfill_signing_failed`
+// is what the backfill writes for a row it reached and could not sign. It
+// must never leave such a row at NULL — a NULL there would be
+// indistinguishable from a pre-0016 row and would reintroduce exactly the
+// ambiguity this column exists to remove, silently converting "the signing
+// pass never got here" into a claim no one made. Extending the vocabulary was
+// an append here plus a status; it needed no migration, because the column is
+// free-text at the database level and closed at this boundary.
+export const REVIEW_UNSIGNED_REASONS = ['no_signing_key', 'backfill_signing_failed'] as const;
 export type ReviewUnsignedReason = (typeof REVIEW_UNSIGNED_REASONS)[number];
 
 /**
@@ -886,6 +908,21 @@ export type ReviewUnsignedReason = (typeof REVIEW_UNSIGNED_REASONS)[number];
  * bare string literal.
  */
 export const REVIEW_UNSIGNED_REASON_NO_KEY: ReviewUnsignedReason = 'no_signing_key';
+
+/**
+ * The reason the P2 backfill writes for a row it REACHED and could not sign
+ * (civic-ai-tools-website#294 P2).
+ *
+ * Written at decision time, with `signature` / `signing_key_id` /
+ * `rfc3161_timestamp` / `signed_at` all left NULL — the row is unsigned and
+ * says so. The backfill never writes this because it lacked a key: a keyless
+ * run REFUSES outright rather than stamping every historical row with a
+ * reason, which would assert something false about this instance across the
+ * whole table. So this value means, narrowly and only: a key was present, this
+ * row was tried, and signing it failed.
+ */
+export const REVIEW_UNSIGNED_REASON_BACKFILL_FAILED: ReviewUnsignedReason =
+  'backfill_signing_failed';
 
 /**
  * The mirror the rider requires: every permitted reason mapped to the status
@@ -898,6 +935,7 @@ export const REVIEW_UNSIGNED_REASON_STATUS: Record<
   ReviewSignatureStatus
 > = {
   no_signing_key: 'unsigned_no_signing_key',
+  backfill_signing_failed: 'unsigned_backfill_failed',
 };
 
 /**
@@ -915,7 +953,7 @@ export function isReviewUnsignedReason(
 }
 
 /**
- * Which of the four states a stored review is in.
+ * Which of the five states a stored review is in.
  *
  * WHY `unsigned_reason` EXISTS. A NULL signature cannot, on its own,
  * distinguish "recorded before signing was implemented" from "recorded on an
@@ -925,7 +963,10 @@ export function isReviewUnsignedReason(
  * written). So the writing path records WHY it did not sign, at the moment it
  * made that decision — the only point at which the answer is actually known.
  * Rows written before 0016 have `unsigned_reason` NULL because nothing wrote
- * it, which is precisely what marks them as pre-backfill.
+ * it, which is precisely what marks them as not yet reached by the signing
+ * pass. The backfill never leaves a row it touched in that state: a row it
+ * signs gets a signature, and a row it fails to sign gets
+ * `backfill_signing_failed`. NULL therefore keeps meaning exactly one thing.
  *
  * An UNRECOGNIZED reason falls back to the pre-backfill reading. That is the
  * conservative end of the vocabulary rather than a neutral one — see the note
