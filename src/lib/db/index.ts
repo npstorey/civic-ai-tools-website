@@ -2,7 +2,12 @@ import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { drizzle, type NeonHttpDatabase } from 'drizzle-orm/neon-http';
 import { drizzle as drizzleNodePostgres } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import * as schema from './schema';
+// Extension-qualified, matching the style already used across
+// `src/lib/evidence/` (`./signing.ts`, `./trust-signal.ts`, …). Required so
+// this module is loadable by `node --experimental-strip-types` — the runner
+// `npm test` uses, and the only one that can currently load this repo's
+// signing chain — whose ESM resolver does not guess extensions.
+import * as schema from './schema.ts';
 
 let _db: NeonHttpDatabase<typeof schema> | null = null;
 
