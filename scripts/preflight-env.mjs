@@ -9,18 +9,19 @@
  * PUBLISHER_SIGNING_KEY, the MCP endpoints, the model key), so a one-shot
  * "is everything wired?" check removes that failure mode.
  *
- * INSTANCE-AWARE: an instance is not one fixed deployment shape. The three
- * driver-selector variables — DB_DRIVER, BLOB_DRIVER, EXECUTOR_DRIVER — pick
- * which backing service each seam talks to, and which OTHER variables are
- * load-bearing follows from that choice. This script resolves the selectors
- * first, then resolves every other variable's tier against them, so a
- * self-hosted instance is neither passed while unrunnable nor nagged about
- * variables its profile will never read. See `resolveSpec` below.
+ * INSTANCE-AWARE: an instance is not one fixed deployment shape. The four
+ * driver-selector variables — DB_DRIVER, BLOB_DRIVER, EXECUTOR_DRIVER,
+ * MODEL_API_KIND — pick which backing service each seam talks to, and which
+ * OTHER variables are load-bearing follows from that choice. This script
+ * resolves the selectors first, then resolves every other variable's tier
+ * against them, so a self-hosted instance is neither passed while unrunnable
+ * nor nagged about variables its profile will never read. See `resolveSpec`
+ * below.
  *
- * SECRET HYGIENE (absolute): for every variable except the three driver
+ * SECRET HYGIENE (absolute): for every variable except the four driver
  * selectors, this script reads only whether `process.env[NAME]` is a
  * non-empty string — it never prints, logs, hashes, stores, or transmits any
- * value, not even its length. The three selectors are the sole exception and
+ * value, not even its length. The four selectors are the sole exception and
  * are not secrets: their value space is a closed set of non-secret enum
  * literals (see DRIVER_SEAMS). Even for those, the raw string is never
  * echoed: it is matched against the known literals, and the output carries
@@ -58,11 +59,19 @@
 import { fileURLToPath } from 'node:url';
 
 /**
- * The three driver seams. Each maps a selector variable to its closed set of
+ * The four driver seams. Each maps a selector variable to its closed set of
  * accepted values and the value the code substitutes when the selector is
  * unset. The defaults MUST mirror the app: src/lib/db/index.ts,
- * src/lib/storage/index.ts, src/lib/sandbox/execute.ts each read
- * `env.X_DRIVER || '<default>'` and throw on anything outside `values`.
+ * src/lib/storage/index.ts, src/lib/sandbox/execute.ts, src/lib/model-client.ts
+ * each read `env.X || '<default>'` and throw on anything outside `values`.
+ *
+ * MODEL_API_KIND is a seam and not a plain row on purpose. It selects a WIRE
+ * DIALECT, and which other variables are load-bearing follows from that choice
+ * exactly as it does for the storage and executor seams — `azure-openai`
+ * promotes MODEL_API_VERSION and MODEL_API_BASE_URL to required. The
+ * alternative idiom (`requiredUnlessAllPresent`) does not fit: it DEMOTES a
+ * required tier when a substitute set is present, and this is a PROMOTION
+ * driven by a selector, which is what `requiredWhen` already expresses.
  *
  * These are the only variables whose VALUE this script reads (see the secret
  * hygiene note at the top): they are non-secret enum selectors, and only a
@@ -72,6 +81,7 @@ export const DRIVER_SEAMS = {
   db: { env: 'DB_DRIVER', default: 'neon-http', values: ['neon-http', 'node-postgres'] },
   blob: { env: 'BLOB_DRIVER', default: 'vercel-blob', values: ['vercel-blob', 's3'] },
   executor: { env: 'EXECUTOR_DRIVER', default: 'vercel-sandbox', values: ['vercel-sandbox', 'container'] },
+  model: { env: 'MODEL_API_KIND', default: 'openai-compatible', values: ['openai-compatible', 'azure-openai'] },
 };
 
 /**
@@ -113,7 +123,11 @@ export const DRIVER_SEAMS = {
  *     script or an eval harness); enumerated here for completeness only, and
  *     never something a deployment must deliver to the container.
  *
- * TWO ACCEPTED NAMES for the publisher-identity set:
+ * TWO ACCEPTED NAMES. Used by the publisher-identity set (thirteen rows) and,
+ * since website#30 P1, by the model credential — MODEL_API_KEY, whose
+ * prior-era spelling is OPENROUTER_API_KEY. The mechanism is the same in both
+ * cases; only the rename it serves differs, so nothing below is specific to
+ * the publisher prefix beyond its worked example:
  *   - `priorEraName: 'EVIDENCE_X'` — the entry's `name` is the CANONICAL
  *     `PUBLISHER_X` spelling introduced by the 2026-08-19 vocabulary
  *     settlement (Appendix J of the Typed Standards specification;
@@ -158,8 +172,30 @@ export const OIDC_PROVIDER_SET = ['OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_
 
 export const ENV_SPEC = [
   // --- Core query path (every demo query depends on these) ---
-  { name: 'OPENROUTER_API_KEY', tier: 'required', purpose: 'LLM access — every query (no fallback)' },
-  { name: 'MODEL_API_BASE_URL', tier: 'optional', purpose: 'Chat-completions endpoint override — any OpenAI-compatible endpoint (default: OpenRouter)', hasFallback: true },
+  // The model endpoint is a WIRE DIALECT, not merely a base URL — see
+  // src/lib/model-client.ts. MODEL_API_KIND is the `model` seam above; the
+  // three rows under it are what that seam makes load-bearing.
+  //
+  // MODEL_API_KEY is the canonical name; OPENROUTER_API_KEY is its prior-era
+  // spelling and is still read by the app (expand half — nothing flips in this
+  // phase). Same two-name mechanism as the publisher set below.
+  { name: 'MODEL_API_KEY', priorEraName: 'OPENROUTER_API_KEY', tier: 'required', purpose: 'LLM access — every query (no fallback)' },
+  // Selector, not a setting: unset declares the OpenAI-compatible dialect.
+  { name: 'MODEL_API_KIND', tier: 'optional', purpose: "Model wire dialect — 'openai-compatible' (default) or 'azure-openai' (deployment-name routing, api-key header, api-version query)", hasFallback: true },
+  // Under the default dialect this is an override with a coded fallback.
+  // Under `azure-openai` it is the RESOURCE ENDPOINT and there is no fallback
+  // to borrow — the built-in default names a different service in a different
+  // dialect — so the seam promotes it, and the promotion drops the fallback
+  // claim (see resolveSpec).
+  { name: 'MODEL_API_BASE_URL', tier: 'optional', purpose: 'Chat-completions endpoint — any OpenAI-compatible endpoint (default: OpenRouter); the resource endpoint when MODEL_API_KIND=azure-openai', hasFallback: true, requiredWhen: { model: 'azure-openai' } },
+  // No coded default is possible: an api-version gates which request and
+  // response fields the endpoint honors, so a guessed one silently changes
+  // what comes back. Inert under the default dialect.
+  { name: 'MODEL_API_VERSION', tier: 'optional', purpose: 'Azure OpenAI api-version query parameter (required when MODEL_API_KIND=azure-openai; ignored otherwise)', requiredWhen: { model: 'azure-openai' } },
+  // Derived from MODEL_API_KIND unless declared: 'bearer' under the default
+  // dialect, 'api-key' under azure-openai. 'entra' is RESERVED in the enum
+  // with no code behind it — setting it is a typed refusal, not a fallback.
+  { name: 'MODEL_API_AUTH', tier: 'optional', purpose: "Model auth mode — 'bearer' or 'api-key'; derived from MODEL_API_KIND when unset ('entra' is reserved, not implemented)", hasFallback: true },
   // No coded fallback (#258 C4): the fallback used to point at the reference
   // deployment's hosted endpoint, silently routing an unconfigured instance's
   // queries through infrastructure it does not operate. Absent, every data
@@ -171,7 +207,9 @@ export const ENV_SPEC = [
   // Selector, not a setting: unset declares the managed serverless driver.
   // DATABASE_URL is load-bearing under BOTH drivers (neon() and pg.Pool both
   // read it), so the db seam has no tier flips — only the selector itself.
-  { name: 'DB_DRIVER', tier: 'optional', purpose: "DB driver — 'neon-http' (default) or 'node-postgres' (any Postgres over TCP)", hasFallback: true },
+  // web#194 #5: the hazard was in a code comment, where the operator who needs
+  // it cannot see it. It now renders in the report.
+  { name: 'DB_DRIVER', tier: 'optional', purpose: "DB driver — 'neon-http' (default) or 'node-postgres' (any Postgres over TCP). Unset silently selects the managed serverless driver: a plain Postgres host is never reached", hasFallback: true },
   // Vercel Blob credential: not read at all off that driver (src/lib/storage/index.ts
   // dynamic-imports only the selected driver), so demanding it under s3 would
   // fail an instance that is not on Vercel.
@@ -218,7 +256,17 @@ export const ENV_SPEC = [
 
   // --- Sign-in path (the rate-limit headroom option; OAuth) ---
   { name: 'NEXTAUTH_SECRET', tier: 'required', purpose: 'NextAuth session encryption' },
-  { name: 'NEXTAUTH_URL', tier: 'required', purpose: 'OAuth callback base URL (must match the deploy origin)' },
+  // web#194 #1, ruled (sprint #30 G0 D9): STAYS `required`, and declares no
+  // `hasFallback`. Three app-side reads do derive an origin when this is unset
+  // — api-auth.ts from the request host, device-flow.ts from the request
+  // origin then localhost, evidence/verify.ts from getEvidenceSiteOrigin() —
+  // but those are REQUEST-DERIVED VALUES, not configuration: they answer "what
+  // host is this request on", which is not the same question as "what origin
+  // did the OAuth app register". NextAuth itself is a fourth consumer and
+  // infers only from VERCEL_URL, i.e. not at all off that platform. Declaring
+  // a fallback here would pass a self-hosted instance whose sign-in callbacks
+  // are broken, which is the worse failure.
+  { name: 'NEXTAUTH_URL', tier: 'required', purpose: 'OAuth callback base URL (must match the deploy origin) — no fallback: the app-side origins are request-derived, not configuration, and none covers the OAuth callback' },
   // The GitHub pair now GATES its provider (auth-providers.ts): with either
   // half absent the button is not rendered at all, rather than rendered
   // broken. That is what makes an honest retier possible — the pair is
@@ -335,7 +383,13 @@ export const ENV_SPEC = [
   // ever being asked to deliver it to the container.
   { name: 'PUBLISHER_PUBLIC_KEY', priorEraName: 'EVIDENCE_PUBLIC_KEY', readBy: 'external-tool', tier: 'optional', purpose: 'Public half of the signing keypair — written by scripts/generate-signing-key.ts for the trust-registry entry; never read by the app' },
   { name: 'CIVICAITOOLS_SESSION_TOKEN', readBy: 'external-tool', tier: 'optional', purpose: 'publish-record skill (Claude Code) auth' },
-  { name: 'CRON_SECRET', tier: 'optional', purpose: 'Cron endpoint auth (blob-gc, portal refresh)' },
+  // web#194 #2: retiered from `optional`. The one scheduled job this repo
+  // declares (vercel.json, `0 4 * * *` → src/app/api/cron/blob-gc/route.ts)
+  // fails closed on an absent secret, so without it the sweep 401s on every
+  // invocation, forever, with no operator-visible signal. The purpose text
+  // also named a "portal refresh" endpoint that does not exist — blob-gc is
+  // the only cron route in the tree.
+  { name: 'CRON_SECRET', tier: 'recommended', purpose: 'Cron endpoint auth (orphan-blob GC, the only scheduled job) — absent, every run 401s and abandoned uploads accumulate' },
   { name: 'NEXT_PUBLIC_GA_MEASUREMENT_ID', readBy: 'build', tier: 'optional', purpose: 'Google Analytics 4' },
 
   // --- Tuning knobs with coded defaults (previously unenumerated; the app
@@ -594,7 +648,18 @@ export function resolveSpec(drivers, spec = ENV_SPEC, env = {}) {
     }
     const promoted = s.requiredWhen && conditionMet(s.requiredWhen, drivers);
     if (promoted) {
-      applicable.push({ ...s, tier: 'required' });
+      // The promotion also drops any `hasFallback` claim. A driver that makes
+      // a variable load-bearing is by definition a driver the coded fallback
+      // does not cover — MODEL_API_BASE_URL's fallback is an OpenAI-compatible
+      // gateway, which is the wrong service in the wrong dialect for
+      // MODEL_API_KIND=azure-openai. Left in place, the row would land in the
+      // soft `requiredOnFallback` bucket and the run would PASS a
+      // configuration the app refuses at the first request. No pre-existing
+      // row carries both fields, so this is inert for every profile that
+      // shipped before the model seam.
+      const promotedEntry = { ...s, tier: 'required' };
+      delete promotedEntry.hasFallback;
+      applicable.push(promotedEntry);
       continue;
     }
     // An alternative set covers this variable's need: demote rather than
@@ -641,7 +706,13 @@ export function evaluateEnv(env, spec = ENV_SPEC) {
   // acceptability can be confirmed, without failing the run.
   const missingRequired = rows.filter((r) => r.tier === 'required' && !r.present && !r.hasFallback);
   const requiredOnFallback = rows.filter((r) => r.tier === 'required' && !r.present && r.hasFallback);
-  const missingRecommended = rows.filter((r) => r.tier === 'recommended' && !r.present);
+  // web#194 #6: `hasFallback` excludes a recommended row from the degraded-
+  // feature nag for the same reason it softens a required one — the code
+  // substitutes a built-in default, so the feature is not degraded, it is
+  // running on the coded value. Without the filter the report named
+  // DATA_COMMONS_MCP_URL and BOSTON_OPENCONTEXT_MCP_URL as degraded features
+  // when both have working defaults.
+  const missingRecommended = rows.filter((r) => r.tier === 'recommended' && !r.present && !r.hasFallback);
   const partialGroups = evaluateGroups(env, drivers, ENV_GROUPS, spec);
   // Variables supplied under a prior-era name. Warn-only and never a failure:
   // both spellings work, and the expand half of the settlement exists exactly

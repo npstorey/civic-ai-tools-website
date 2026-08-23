@@ -24,8 +24,10 @@
 #
 # EXTERNAL BY DESIGN: the model endpoint and the MCP data endpoints are
 # network services, not containers here. Supply them by environment
-# (MODEL_API_BASE_URL / OPENROUTER_API_KEY, SOCRATA_MCP_URL,
-# DATA_COMMONS_MCP_URL / DATA_COMMONS_API_KEY).
+# (MODEL_API_KIND / MODEL_API_BASE_URL / MODEL_API_KEY, SOCRATA_MCP_URL,
+# DATA_COMMONS_MCP_URL / DATA_COMMONS_API_KEY). The model endpoint is a wire
+# dialect, not just a URL: MODEL_API_KIND=azure-openai additionally needs
+# MODEL_API_VERSION, and reads MODEL_API_BASE_URL as the resource endpoint.
 #
 # CONFIGURATION: every value written into this file is a neutral
 # local-development placeholder. Entries listed as a bare NAME are
@@ -265,8 +267,18 @@ services:
       OIDC_CLIENT_SECRET:
       OIDC_PROVIDER_NAME:
       SIGN_IN_ALLOWLIST:
+      # The model endpoint. MODEL_API_KEY is the canonical credential name and
+      # OPENROUTER_API_KEY its prior-era spelling; both are listed as bare
+      # pass-throughs so an env file written under either name still delivers
+      # its value. MODEL_API_KIND selects the wire dialect and is left unpinned
+      # (bare) so this file stays on the OpenAI-compatible default;
+      # MODEL_API_VERSION is required only under `azure-openai`.
+      MODEL_API_KEY:
       OPENROUTER_API_KEY:
+      MODEL_API_KIND:
       MODEL_API_BASE_URL:
+      MODEL_API_VERSION:
+      MODEL_API_AUTH:
       SOCRATA_MCP_URL:
       SOCRATA_APP_TOKEN:
       DATA_COMMONS_MCP_URL:
