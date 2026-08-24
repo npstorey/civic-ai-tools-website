@@ -58,8 +58,15 @@ export * from './adversarial-eval-core.ts';
  */
 export async function runAdversarialEval(
   pkg: EvidencePackage,
-  opts: { apiKey: string; evaluatorModel: string },
+  opts: { apiKey?: string; evaluatorModel: string },
 ): Promise<ParsedEvaluation> {
+  // `apiKey` is OPTIONAL: omitted, `createModelClient` resolves the platform
+  // credential itself, under either accepted name (MODEL_API_KEY, or its
+  // prior-era spelling). The publication gate takes that path, which is why it
+  // no longer reads a variable out of `process.env` and hands it down as a
+  // string — one fewer code path holding a credential
+  // (civic-ai-tools-website#30 P1 flag, closed in P2). The parameter stays for
+  // a caller-supplied key; #30 P4 renames the wire field that carries one.
   const openrouter = createModelClient({ apiKey: opts.apiKey });
   const response = await openrouter.chat.completions.create({
     model: opts.evaluatorModel,

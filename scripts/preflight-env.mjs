@@ -153,6 +153,17 @@ export const DRIVER_SEAMS = {
  *     degrade" nag. Same no-nagging principle as `onlyWhen`; the entry stays
  *     listed so the operator can still see the option exists.
  *
+ * WHEN AN ENTRY CARRIES BOTH `requiredWhen` AND `requiredUnlessAllPresent`,
+ * the alternative wins: `resolveSpec` checks the alternative FIRST, so a driver
+ * that makes a NEED load-bearing does not make THIS variable load-bearing while
+ * a sibling already supplies it. The model catalog is the case that forced the
+ * question — MODEL_CATALOG and MODEL_CATALOG_PATH are two deliveries of one
+ * document, and the app REFUSES both being set, so a profile that promotes the
+ * need must promote at most the delivery that is still absent. Promotion-first
+ * would have failed a correctly-configured instance by demanding the variable
+ * it was refused for setting. Inert for every row that shipped before this:
+ * no other entry carries both fields.
+ *
  * CONSTRAINT: all three fields must leave the default profile untouched. With
  * no selector set (or every selector set to its default) and no alternative
  * set complete, the resolved spec is identical to the declared one, so the
@@ -196,6 +207,25 @@ export const ENV_SPEC = [
   // dialect, 'api-key' under azure-openai. 'entra' is RESERVED in the enum
   // with no code behind it — setting it is a typed refusal, not a fallback.
   { name: 'MODEL_API_AUTH', tier: 'optional', purpose: "Model auth mode — 'bearer' or 'api-key'; derived from MODEL_API_KIND when unset ('entra' is reserved, not implemented)", hasFallback: true },
+  // The model catalog — the models this instance offers, and the identity each
+  // one asserts in a signed record. Two delivery forms carrying ONE schema:
+  // MODEL_CATALOG holds the JSON document itself (a hosting platform's
+  // environment, or an `op run` injection), MODEL_CATALOG_PATH names a file
+  // holding the same document (a container that mounts configuration). Either
+  // satisfies the need and setting BOTH is refused by the app, which is why
+  // each row lists the other as its alternative rather than both promoting.
+  //
+  // ADR-0024 §C — ON THE EVIDENCE PATH, so absent-or-error off the built-in
+  // endpoint: an entry's `model` is the identity that lands under the signature
+  // in cost.model, environment.modelVersion and the PROV model agent (§C.1),
+  // and its `endpointModel` selects which deployment actually answers, an input
+  // to those same bytes (§C.3). The coded built-in list is admissible under the
+  // OpenRouter default alone, where the slug called IS the slug recorded, so it
+  // asserts nothing (§B). `hasFallback` is therefore true only in the default
+  // profile, and the promotion below drops it exactly as it does for
+  // MODEL_API_BASE_URL.
+  { name: 'MODEL_CATALOG', tier: 'optional', purpose: 'Model catalog as a JSON document — required unless this instance uses the built-in OpenRouter endpoint (MODEL_CATALOG_PATH is the file-delivered alternative; setting both is refused)', hasFallback: true, requiredWhen: { model: 'azure-openai' }, requiredUnlessAllPresent: ['MODEL_CATALOG_PATH'] },
+  { name: 'MODEL_CATALOG_PATH', tier: 'optional', purpose: 'Path to a file holding the model catalog — the container-friendly delivery of MODEL_CATALOG, same schema; setting both is refused', hasFallback: true, requiredWhen: { model: 'azure-openai' }, requiredUnlessAllPresent: ['MODEL_CATALOG'] },
   // No coded fallback (#258 C4): the fallback used to point at the reference
   // deployment's hosted endpoint, silently routing an unconfigured instance's
   // queries through infrastructure it does not operate. Absent, every data
@@ -646,6 +676,15 @@ export function resolveSpec(drivers, spec = ENV_SPEC, env = {}) {
       notApplicable.push(s);
       continue;
     }
+    // An alternative set already covers this variable's need — checked BEFORE
+    // promotion (see the both-fields note on ENV_SPEC). Demote rather than
+    // suppress, so the option stays visible without being nagged about.
+    const satisfiedByAlternative =
+      s.requiredUnlessAllPresent && allPresent(s.requiredUnlessAllPresent, env);
+    if (satisfiedByAlternative) {
+      applicable.push({ ...s, tier: 'optional' });
+      continue;
+    }
     const promoted = s.requiredWhen && conditionMet(s.requiredWhen, drivers);
     if (promoted) {
       // The promotion also drops any `hasFallback` claim. A driver that makes
@@ -662,10 +701,7 @@ export function resolveSpec(drivers, spec = ENV_SPEC, env = {}) {
       applicable.push(promotedEntry);
       continue;
     }
-    // An alternative set covers this variable's need: demote rather than
-    // suppress, so the option stays visible without being nagged about.
-    const demoted = s.requiredUnlessAllPresent && allPresent(s.requiredUnlessAllPresent, env);
-    applicable.push(demoted ? { ...s, tier: 'optional' } : s);
+    applicable.push(s);
   }
   return { applicable, notApplicable };
 }

@@ -305,30 +305,89 @@ test('the model seam is a declared driver seam whose default is the current beha
   assert.deepEqual(result.notApplicable, []);
 });
 
-test('MODEL_API_KIND=azure-openai promotes the version and the resource endpoint to HARD misses', () => {
+test('MODEL_API_KIND=azure-openai promotes the version, the resource endpoint and the catalog to HARD misses', () => {
   const env = { ...envWithAllRequired(), MODEL_API_KIND: 'azure-openai' };
   const result = evaluateEnv(env);
   assert.equal(result.ok, false);
   const missing = result.missingRequired.map((r) => r.name).sort();
-  assert.deepEqual(missing, ['MODEL_API_BASE_URL', 'MODEL_API_VERSION']);
+  // The catalog joins the promotion in website#30 P2: off the built-in
+  // endpoint the coded model list names slugs that may resolve to nothing, and
+  // the identity it would put in a signed record would be a guess.
+  assert.deepEqual(missing, [
+    'MODEL_API_BASE_URL',
+    'MODEL_API_VERSION',
+    'MODEL_CATALOG',
+    'MODEL_CATALOG_PATH',
+  ]);
   // MODEL_API_BASE_URL declares hasFallback for the DEFAULT dialect. The
   // promotion must drop that claim, or the row lands in the soft
   // `requiredOnFallback` bucket and the run PASSES a configuration
-  // src/lib/model-client.ts refuses at the first request.
-  assert.ok(!result.requiredOnFallback.some((r) => r.name === 'MODEL_API_BASE_URL'));
+  // src/lib/model-client.ts refuses at the first request. Same for the catalog.
+  for (const name of ['MODEL_API_BASE_URL', 'MODEL_CATALOG', 'MODEL_CATALOG_PATH']) {
+    assert.ok(!result.requiredOnFallback.some((r) => r.name === name), `${name} is a hard miss`);
+  }
 
   env.MODEL_API_BASE_URL = 'https://example-resource.example.net';
   env.MODEL_API_VERSION = '2099-01-01-preview';
+  env.MODEL_CATALOG = '[]';
   const configured = evaluateEnv(env);
   assert.equal(configured.ok, true);
   assert.match(renderReport(configured), /PROFILE:.*model=azure-openai/);
 });
 
-test('the promotion is inert for every row that shipped before the model seam', () => {
+test('either catalog delivery satisfies the azure promotion — the alternative blocks it', () => {
+  // The two forms carry one schema and the app REFUSES both being set, so a
+  // promotion that demanded both would fail a correctly-configured instance.
+  const base = {
+    ...envWithAllRequired(),
+    MODEL_API_KIND: 'azure-openai',
+    MODEL_API_BASE_URL: 'https://example-resource.example.net',
+    MODEL_API_VERSION: '2099-01-01-preview',
+  };
+  for (const delivered of ['MODEL_CATALOG', 'MODEL_CATALOG_PATH']) {
+    const result = evaluateEnv({ ...base, [delivered]: 'present' });
+    assert.equal(result.ok, true, `${delivered} alone should satisfy the promotion`);
+    assert.deepEqual(result.missingRequired.map((r) => r.name), []);
+  }
+  // Neither delivered: both are named, so the operator can see both options.
+  const neither = evaluateEnv(base);
+  assert.equal(neither.ok, false);
+  assert.deepEqual(neither.missingRequired.map((r) => r.name).sort(), [
+    'MODEL_CATALOG',
+    'MODEL_CATALOG_PATH',
+  ]);
+});
+
+test('REGRESSION: the catalog rows are inert in the default profile', () => {
+  // The CONSTRAINT on ENV_SPEC: with every selector at its default, resolveSpec
+  // is the identity transform, so neither the promotion nor its blocker fires.
+  const result = evaluateEnv(envWithAllRequired());
+  assert.equal(result.ok, true);
+  for (const name of ['MODEL_CATALOG', 'MODEL_CATALOG_PATH']) {
+    const row = result.rows.find((r) => r.name === name);
+    assert.equal(row.tier, 'optional', `${name} stays optional under the built-in endpoint`);
+    assert.equal(row.hasFallback, true, `${name} keeps its fallback claim there`);
+    assert.ok(!result.missingRequired.some((r) => r.name === name));
+    assert.ok(!result.missingRecommended.some((r) => r.name === name));
+  }
+});
+
+test('the promotion is inert for every row that does not declare both fields', () => {
   // The `hasFallback`-dropping promotion is a shared code path. It can only
-  // change a row that declares BOTH fields; MODEL_API_BASE_URL is the first.
+  // change a row that declares BOTH fields, and every such row belongs to the
+  // model seam this sprint added.
   const both = ENV_SPEC.filter((s) => s.requiredWhen && s.hasFallback).map((s) => s.name);
-  assert.deepEqual(both, ['MODEL_API_BASE_URL']);
+  assert.deepEqual(both, ['MODEL_API_BASE_URL', 'MODEL_CATALOG', 'MODEL_CATALOG_PATH']);
+});
+
+test('the catalog rows are declared as the two deliveries of one document', () => {
+  const inline = ENV_SPEC.find((s) => s.name === 'MODEL_CATALOG');
+  const file = ENV_SPEC.find((s) => s.name === 'MODEL_CATALOG_PATH');
+  assert.deepEqual(inline.requiredUnlessAllPresent, ['MODEL_CATALOG_PATH']);
+  assert.deepEqual(file.requiredUnlessAllPresent, ['MODEL_CATALOG']);
+  // Read by the server process, not at build time and not by an external tool.
+  assert.equal(inline.readBy, undefined);
+  assert.equal(file.readBy, undefined);
 });
 
 test('an unrecognized MODEL_API_KIND fails the run and is never echoed', () => {
@@ -666,9 +725,15 @@ test('every requiredUnlessAllPresent names variables the spec itself declares', 
     if (!s.requiredUnlessAllPresent) continue;
     assert.ok(Array.isArray(s.requiredUnlessAllPresent), `${s.name}.requiredUnlessAllPresent is a list`);
     assert.ok(s.requiredUnlessAllPresent.length > 0, `${s.name}.requiredUnlessAllPresent is non-empty`);
-    // Demotion only makes sense from 'required' — anything else is a no-op
-    // that would silently mislead a reader of the spec.
-    assert.equal(s.tier, 'required', `${s.name} declares 'required' so the demotion is meaningful`);
+    // Demotion has to be able to change something, or the field is decoration
+    // that misleads a reader of the spec. It can in two shapes: the declared
+    // tier is 'required' and the alternative lowers it (the sign-in
+    // providers), or a `requiredWhen` promotion exists for the alternative to
+    // block (the model catalog's two delivery forms, website#30 P2).
+    assert.ok(
+      s.tier === 'required' || s.requiredWhen,
+      `${s.name} declares 'required', or a requiredWhen the alternative can block, so the demotion is meaningful`,
+    );
     for (const name of s.requiredUnlessAllPresent) {
       assert.ok(declared.has(name), `${s.name} names a declared variable (${name})`);
     }

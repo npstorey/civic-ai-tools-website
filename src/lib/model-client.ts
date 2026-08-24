@@ -37,7 +37,15 @@ import type { ModelErrorCode } from './streaming.ts';
  * hang.
  */
 
-const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
+/**
+ * Exported so the built-in-catalog retention rule has ONE source of truth for
+ * "the default endpoint" (website#30 G0 D2, enforced in `model-resolver.ts`):
+ * the built-in model list is kept only while the RESOLVED base URL is this
+ * value. A second copy of the literal would let the two drift silently in the
+ * direction that matters — a catalog trusted against an endpoint it no longer
+ * describes.
+ */
+export const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 
 /** The credential's canonical name, and the prior-era name still accepted. */
 const CANONICAL_KEY_NAME = 'MODEL_API_KEY';

@@ -25,6 +25,8 @@ import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-li
 import { mcpTools } from '@/lib/mcp/tools';
 import { callMcpTool, routeTool } from '@/lib/mcp/client';
 import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
+import { getDefaultModel, resolveModel, ModelNotOfferedError } from '@/lib/model-resolver';
+import { ModelConfigurationError } from '@/lib/model-client';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import {
   queryWithMcpStreaming,
@@ -43,7 +45,6 @@ import {
 import { executeNotebook, NotebookExecutionError } from '@/lib/sandbox';
 
 const DEFAULT_PORTAL = 'data.cityofnewyork.us';
-const DEFAULT_MODEL = 'anthropic/claude-sonnet-4-6';
 
 interface QueryNotebookRequest {
   query: string;
@@ -102,7 +103,36 @@ export async function POST(request: NextRequest) {
     );
   }
   const portal = body.portal || DEFAULT_PORTAL;
-  const model = body.model || DEFAULT_MODEL;
+
+  // The model comes from this instance's catalog, not from a literal in this
+  // file (civic-ai-tools-website#30 P2). Two things changed here:
+  //   - the default is the catalog's `default` entry rather than a slug
+  //     duplicated between this route and the publication gate;
+  //   - a caller-named id is RESOLVED. Before, an unknown id was forwarded and
+  //     the endpoint decided; now an id this instance does not offer is a 400
+  //     raised before any upstream call, so it is never billed and never
+  //     reaches a record's `cost.model`.
+  // A catalog the instance cannot read is 503 (operator) rather than 400
+  // (caller) — the two failures are not the same and do not share a status.
+  let model: string;
+  try {
+    model = body.model ? resolveModel(body.model).id : getDefaultModel().id;
+  } catch (error) {
+    if (error instanceof ModelNotOfferedError) {
+      return new Response(
+        JSON.stringify({ error: error.message }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+    if (error instanceof ModelConfigurationError) {
+      console.error('[query-notebook]', error.message);
+      return new Response(
+        JSON.stringify({ error: error.message, code: error.code }),
+        { status: 503, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+    throw error;
+  }
 
   // Fail fast when no MCP endpoint is configured for the primary data source
   // (#258 C4): Phase A cannot discover datasets without one, and
