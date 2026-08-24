@@ -7,6 +7,7 @@ import { callMcpTool } from '@/lib/mcp/client';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { getMissingModelCredentialError, classifyModelError } from '@/lib/model-client';
+import { modelIdentityForValue } from '@/lib/model-resolver';
 import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
 import { headers } from 'next/headers';
 
@@ -19,10 +20,10 @@ interface CompareRequest {
 export async function POST(request: NextRequest) {
   try {
     const body: CompareRequest = await request.json();
-    const { query, model, portal: rawPortal = 'data.cityofnewyork.us' } = body;
+    const { query, model: modelId, portal: rawPortal = 'data.cityofnewyork.us' } = body;
     const portal = rawPortal || 'data.cityofnewyork.us';
 
-    if (!query || !model) {
+    if (!query || !modelId) {
       return NextResponse.json(
         { error: 'Query and model are required' },
         { status: 400 }
@@ -84,6 +85,10 @@ export async function POST(request: NextRequest) {
 When answering questions about civic data, government statistics, or local information,
 do your best to provide helpful information based on your training data.
 Be honest if you don't have access to current or real-time data.`;
+
+    // website#30 P3: same tolerant split as /api/compare-stream — the wire
+    // gets `endpointModel`, and nothing here records an identity.
+    const model = modelIdentityForValue(modelId);
 
     // Run both queries in parallel
     const [withoutMcpResult, withMcpResult] = await Promise.all([

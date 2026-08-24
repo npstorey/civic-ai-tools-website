@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createModelClient } from '@/lib/model-client';
+import { modelIdentityForValue } from '@/lib/model-resolver';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -70,8 +71,16 @@ export async function POST(
     return NextResponse.json({ error: 'Record package not found in storage' }, { status: 404 });
   }
 
+  // website#30 P3. Resolved tolerantly: this preview runs on a caller's own
+  // key against a model they named from a dialog whose list #30 P4 still owns,
+  // so an unoffered id is carried through exactly as before rather than newly
+  // refused. Independence is checked declared-against-declared — `pkg.cost.model`
+  // is a recorded identity, and comparing it to a catalog id compares two
+  // namespaces.
+  const evaluator = modelIdentityForValue(evaluatorModel);
+
   // Evaluator model must differ from analysis model
-  if (evaluatorModel === pkg.cost.model) {
+  if (evaluator.declared === pkg.cost.model) {
     return NextResponse.json(
       { error: 'Evaluator model must differ from the analysis model' },
       { status: 400 },
@@ -84,7 +93,9 @@ export async function POST(
     const evaluationContent = buildEvaluationPrompt(pkg);
 
     const response = await openrouter.chat.completions.create({
-      model: evaluatorModel,
+      // The wire gets the endpoint string; the response below reports the
+      // declared identity, which is what a reader would compare a record to.
+      model: evaluator.endpointModel,
       messages: [
         { role: 'system', content: EVALUATION_RUBRIC },
         { role: 'user', content: evaluationContent },
@@ -111,7 +122,7 @@ export async function POST(
       },
       overallScore,
       assessment,
-      evaluatorModel,
+      evaluatorModel: evaluator.declared,
     });
   } catch (error) {
     console.error('[evaluate] Error:', error);

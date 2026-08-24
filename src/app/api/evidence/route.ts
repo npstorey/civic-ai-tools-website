@@ -4,6 +4,7 @@ import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { putPackage, putCommittedPackage } from '@/lib/storage';
 import { buildEvidencePackage, type PackageInput, type CaptureMethod, type ContentProfile, DEFAULT_CONTENT_TYPE } from '@/lib/evidence/packager';
+import { modelIdentityForValue } from '@/lib/model-resolver';
 import { hash } from '@/lib/evidence/trace';
 import { signPackage, getRfc3161Timestamp, publishToRekor, getActiveSigner, type SignerIdentity } from '@/lib/evidence/signing';
 import { captureVocabForProfile } from '@/lib/evidence/profiles';
@@ -266,13 +267,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // website#30 P3: `body.model` is a catalog id when this app's own client
+    // publishes, and an external publisher's own model string otherwise. An id
+    // the catalog describes becomes the identity the operator DECLARED for it —
+    // which under the azure dialect is the difference between a record naming a
+    // model and a record naming a deployment alias. Anything else is carried
+    // through: this field predates the catalog and has never been validated
+    // against it, and refusing an id it does not describe would break
+    // publishing from outside the app to close a hole that does not exist.
+    const declaredModel = modelIdentityForValue(body.model).declared;
+
     // Build evidence package
     const packageInput: PackageInput = {
       trace: body.trace,
       prompt: body.prompt,
       output: body.output,
       toolCalls: body.toolCalls,
-      model: body.model,
+      model: declaredModel,
       portal: body.portal,
       tokenUsage: body.tokenUsage,
       duration_ms: body.duration_ms,
@@ -325,7 +336,7 @@ export async function POST(request: NextRequest) {
       creatorId: userId,
       title: body.title,
       summary: body.summary,
-      model: body.model,
+      model: declaredModel,
       promptHash,
       promptVisibility: body.promptVisibility,
       promptText: body.promptVisibility === 'full_text' ? body.prompt : null,

@@ -1,5 +1,6 @@
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 import { getModelClient } from './model-client.ts';
+import type { ModelIdentity } from './model-catalog.ts';
 
 export interface CompletionResult {
   content: string;
@@ -13,7 +14,7 @@ export interface CompletionResult {
 
 export async function queryWithoutMcp(
   query: string,
-  model: string,
+  model: ModelIdentity,
   systemPrompt?: string
 ): Promise<CompletionResult> {
   const startTime = Date.now();
@@ -26,7 +27,7 @@ export async function queryWithoutMcp(
   messages.push({ role: 'user', content: query });
 
   const response = await getModelClient().chat.completions.create({
-    model,
+    model: model.endpointModel,
     messages,
     max_tokens: 2000,
   });
@@ -44,7 +45,7 @@ export async function queryWithoutMcp(
 
 export async function queryWithMcp(
   query: string,
-  model: string,
+  model: ModelIdentity,
   tools: ChatCompletionTool[],
   executeToolCall: (name: string, args: Record<string, unknown>) => Promise<string>,
   systemPrompt?: string
@@ -60,7 +61,7 @@ export async function queryWithMcp(
   messages.push({ role: 'user', content: query });
 
   let response = await getModelClient().chat.completions.create({
-    model,
+    model: model.endpointModel,
     messages,
     tools,
     tool_choice: 'auto',
@@ -103,7 +104,7 @@ export async function queryWithMcp(
 
     // Get next response
     response = await getModelClient().chat.completions.create({
-      model,
+      model: model.endpointModel,
       messages,
       tools,
       tool_choice: 'auto',
@@ -132,7 +133,7 @@ export async function queryWithMcp(
 
     // Make final call without tools to force a text response
     response = await getModelClient().chat.completions.create({
-      model,
+      model: model.endpointModel,
       messages: [
         ...messages,
         {

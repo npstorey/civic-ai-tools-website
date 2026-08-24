@@ -9,6 +9,7 @@ import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-li
 import { headers } from 'next/headers';
 import { encodeSSE, panelsForRun, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
 import { getMissingModelCredentialError } from '@/lib/model-client';
+import { modelIdentityForValue } from '@/lib/model-resolver';
 import { getMissingMcpRoutingError, readMcpEnvFromProcess, skillRoutingTraceAttributes } from '@/lib/mcp/registry';
 import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG } from '@/lib/evidence/trace';
 
@@ -28,10 +29,10 @@ interface CompareRequest {
 export async function POST(request: NextRequest) {
   try {
     const body: CompareRequest = await request.json();
-    const { query, model, portal: rawPortal = 'data.cityofnewyork.us', mcpOnly = false } = body;
+    const { query, model: modelId, portal: rawPortal = 'data.cityofnewyork.us', mcpOnly = false } = body;
     const portal = rawPortal || 'data.cityofnewyork.us';
 
-    if (!query || !model) {
+    if (!query || !modelId) {
       return new Response(
         JSON.stringify({ error: 'Query and model are required' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
@@ -59,6 +60,13 @@ export async function POST(request: NextRequest) {
         .join('');
       return new Response(encoder.encode(body), { headers: SSE_HEADERS });
     }
+
+    // website#30 P3: the wire string and the recorded identity separate here.
+    // Resolved tolerantly rather than strictly — this route has never validated
+    // a caller's model id (the notebook route does), and adding a refusal is a
+    // product change, not this phase's. An id the catalog describes yields its
+    // pair; anything else is carried through on both sides exactly as before.
+    const model = modelIdentityForValue(modelId);
 
     // Fail fast when the instance names no MCP endpoint for the primary data
     // source (#258 C4). SOCRATA_MCP_URL has no coded fallback — an
@@ -106,7 +114,7 @@ export async function POST(request: NextRequest) {
     const trace = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);
     trace.startRoot('analysis', {
       'analysis.prompt_hash': hash(query),
-      'analysis.model': model,
+      'analysis.model': model.declared,
       'analysis.portal': portal,
     });
 

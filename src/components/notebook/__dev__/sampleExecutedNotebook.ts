@@ -16,6 +16,7 @@ import {
   stampExecutedNotebook,
   synthesizeNotebook,
 } from '@/lib/notebook-author';
+import { modelAccessPhrase } from '@/lib/model-catalog';
 
 // 1×1 transparent PNG (base64); placeholder chart for matplotlib visualization.
 const PLACEHOLDER_CHART_PNG_BASE64 =
@@ -44,6 +45,7 @@ const SYNTH_INPUTS = {
   query: 'Show me top 5 311 complaint types in Brooklyn over the past 30 days',
   defaultPortal: 'data.cityofnewyork.us',
   modelName: 'anthropic/claude-sonnet-4-6',
+  modelAccess: modelAccessPhrase('openai-compatible'),
   finalAnswer: [
     'In the past 30 days, the top 311 complaint types in Brooklyn were:',
     '',

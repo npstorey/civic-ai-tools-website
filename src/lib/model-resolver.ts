@@ -1,13 +1,18 @@
 import { readFileSync } from 'node:fs';
 import {
   BUILT_IN_CATALOG,
+  carriedModelIdentity,
   catalogDefaultEntry,
   catalogEvaluatorOrder,
+  catalogSummarizerEntry,
+  declaredModelIdentity,
   findCatalogEntry,
+  modelIdentity,
   selectableModels,
   validateCatalog,
   type CatalogEntry,
   type ModelDefinition,
+  type ModelIdentity,
 } from './model-catalog.ts';
 import {
   DEFAULT_BASE_URL,
@@ -45,17 +50,15 @@ import {
  * MEMOIZATION mirrors `getModelClient()` in model-client.ts: resolved once per
  * process, so a catalog change needs a restart. Every refusal below says so.
  *
- * WHAT THIS PHASE DELIBERATELY DOES NOT DO. Call sites resolve an id to an
- * entry and still send `entry.id` on the wire, not `entry.endpointModel`. That
- * is not an oversight: today every call site uses ONE string for two jobs — the
- * wire parameter AND the identity that lands in `analysis.model`, in the
- * notebook stamp, and in an evaluation attestation's methodology. Swapping in
- * `endpointModel` here without splitting those two jobs would push a deployment
- * name into signed output, which is the exact defect this sprint exists to
- * prevent. The split belongs to website#30 P3, which owns the identity sites.
- * Nothing is wrong in the meantime: under the built-in catalog every entry's
- * `endpointModel` IS its `id` (pinned by a test), and a catalog where they
- * differ only reaches an endpoint that P3 lands before P4 documents.
+ * THE SPLIT, PERFORMED (website#30 P3). P2 resolved an id to an entry and then
+ * sent `entry.id` on the wire, because one string was still doing two jobs —
+ * the wire parameter AND the identity that lands in `analysis.model`, in the
+ * notebook stamp, in `cost.model`, and in an evaluation attestation's
+ * methodology. Threading `endpointModel` before separating those jobs would
+ * have pushed a deployment name into signed output, which is the defect this
+ * sprint exists to prevent. Call sites now take a `ModelIdentity` — both
+ * strings, each addressed to exactly one audience — so the wire gets
+ * `endpointModel` and every recorded field gets `declared`.
  *
  * WHY THIS FILE IS SEPARATE FROM `model-catalog.ts`: this one reaches
  * `node:fs` and `process.env` and imports the SDK-bearing endpoint layer, so it
@@ -209,8 +212,68 @@ export function getDefaultModel(): CatalogEntry {
  * first candidate that is not the analysis model wins. Null when every declared
  * candidate IS the analysis model — an instance-configuration answer the caller
  * cannot fix by retrying, which the publish route reports as such.
+ *
+ * The argument is the analysis model's DECLARED identity, because the only
+ * place the caller can read it from is `pkg.cost.model` inside a signed
+ * package — so the comparison is declared-against-declared (website#30 P3).
+ * Comparing an id against a recorded identity would be comparing two
+ * namespaces, and under a catalog where they differ the gate would happily
+ * pick the analysis model to grade itself.
  */
-export function resolveEvaluatorModel(analysisModelId: string): CatalogEntry | null {
+export function resolveEvaluatorModel(analysisModel: string): CatalogEntry | null {
   const candidates = catalogEvaluatorOrder(getModelCatalog());
-  return candidates.find((e) => e.id !== analysisModelId) ?? null;
+  return candidates.find((e) => declaredModelIdentity(e) !== analysisModel) ?? null;
+}
+
+/** The entry that drafts publish-dialog summaries (`summarizer`, else default). */
+export function getSummarizerModel(): CatalogEntry {
+  return catalogSummarizerEntry(getModelCatalog());
+}
+
+// --- The identity pair every call site carries (website#30 P3) --------------
+
+/** The wire/record pair for an id this instance offers, or a typed refusal. */
+export function resolveModelIdentity(id: string): ModelIdentity {
+  return modelIdentity(resolveModel(id));
+}
+
+/**
+ * Best-effort pair for a string that need not be an offered id.
+ *
+ * An id the catalog describes resolves to its pair; anything else is carried
+ * through on both sides, unchanged. A catalog this instance cannot read is the
+ * same case, deliberately: the three callers of this function — publishing
+ * from outside the app, replaying a published record, and previewing an
+ * evaluation with a caller's own key — all worked before there was a catalog
+ * and none of them is a model selection, so a broken catalog must not be the
+ * thing that turns them into failures. The paths that DO select a model
+ * (`resolveModelIdentity`, `getDefaultModel`) refuse loudly instead.
+ */
+export function modelIdentityForValue(value: string): ModelIdentity {
+  let catalog: readonly CatalogEntry[];
+  try {
+    catalog = getModelCatalog();
+  } catch {
+    return carriedModelIdentity(value);
+  }
+  const entry = findCatalogEntry(catalog, value);
+  return entry ? modelIdentity(entry) : carriedModelIdentity(value);
+}
+
+/**
+ * The reverse direction: given an identity read out of an already-signed
+ * package, the wire string that reaches that model at THIS instance's
+ * endpoint. Falls back to the recorded string when no entry declares it —
+ * a record may name a model this instance no longer offers, which the replay
+ * path has always had to tolerate.
+ */
+export function endpointModelForDeclared(declared: string): string {
+  let catalog: readonly CatalogEntry[];
+  try {
+    catalog = getModelCatalog();
+  } catch {
+    return declared;
+  }
+  const entry = catalog.find((e) => declaredModelIdentity(e) === declared);
+  return entry ? entry.endpointModel : declared;
 }

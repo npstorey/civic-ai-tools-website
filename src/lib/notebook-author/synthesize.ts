@@ -49,8 +49,15 @@ export interface PhaseAOutputs {
   toolCalls: readonly PhaseAToolCall[];
   /** The chat-flow's final answer; becomes the synthesis cell body. */
   finalAnswer: string;
-  /** Model identifier (e.g. `anthropic/claude-3.5-sonnet`). */
+  /** The operator-declared model identity — never a deployment name. */
   modelName: string;
+  /**
+   * How this instance reached that model, from `modelAccessPhrase()`
+   * (src/lib/model-catalog.ts). Threaded from the route rather than read here
+   * so this module stays free of the SDK-bearing endpoint layer
+   * (civic-ai-tools-website#30 P3, E6).
+   */
+  modelAccess: string;
   /** Override for deterministic tests; defaults to current UTC time. */
   generatedAt?: string;
 }
@@ -156,6 +163,7 @@ export function synthesizeNotebook(inputs: PhaseAOutputs): SynthesisOutputs {
     citations: [...citationMap.values()],
     generatedAt,
     modelName: inputs.modelName,
+    modelAccess: inputs.modelAccess,
   })));
 
   // Stamp notebook-provenance discriminator (org.civicaitools.notebook.provenance).

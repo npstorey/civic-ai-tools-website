@@ -22,14 +22,18 @@ import {
   catalogDefaultEntry,
   catalogEvaluatorOrder,
   declaredModelIdentity,
+  modelIdentity,
   selectableModels,
   validateCatalog,
   type CatalogEntry,
 } from './model-catalog.ts';
 import {
+  endpointModelForDeclared,
   getDefaultModel,
   getModelCatalog,
   getOfferedModels,
+  getSummarizerModel,
+  modelIdentityForValue,
   resolveEvaluatorModel,
   resolveModel,
   ModelNotOfferedError,
@@ -187,19 +191,45 @@ test('INSTANCE: evaluator independence picks the same model the two literals did
 
 test('CATALOG: an omitted `model` under the default dialect declares the endpoint string', () => {
   // Which is what makes the built-in list safe there: the slug called is the
-  // slug recorded. P3 consumes `model`; P2 only carries it.
+  // slug recorded.
   //
-  // The third assertion is also the licence for this phase's call sites to keep
-  // sending `entry.id` on the wire rather than `entry.endpointModel`: under the
-  // built-in catalog they are the same string. A catalog where they differ
-  // needs P3's split of the wire parameter from the recorded identity first —
-  // see the note on model-resolver.ts. If this ever fails, that split is
-  // overdue, not this test.
+  // WHAT THIS TEST MEANT IN P2, AND WHAT IT MEANS NOW (website#30 P3). P2 wrote
+  // the third assertion as a LICENCE: its call sites kept sending `entry.id` on
+  // the wire rather than `entry.endpointModel`, and this test was the standing
+  // proof that doing so was harmless, because under the built-in catalog the
+  // two are the same string. Its comment said that if the assertion ever
+  // failed, the split was overdue rather than the test wrong.
+  //
+  // The split has now happened, so the licence is spent and this test's job
+  // changes rather than ending. The same three assertions now pin something
+  // else: that the built-in catalog is the case where the split is a NO-OP, and
+  // therefore that the reference instance's canonical JSON does not move. If
+  // one of them fails now, the built-in list has started asserting a model
+  // identity distinct from the slug it calls — a deliberate act, and one that
+  // changes what every new reference-instance record says.
   for (const entry of BUILT_IN_CATALOG) {
     assert.equal(entry.model, undefined);
     assert.equal(declaredModelIdentity(entry), entry.id);
     assert.equal(entry.endpointModel, entry.id);
+    // The pair every call site now carries. Both halves equal here — which is
+    // exactly why nothing about the reference instance changed.
+    assert.deepEqual(modelIdentity(entry), { endpointModel: entry.id, declared: entry.id });
   }
+});
+
+test('CATALOG: the identity pair separates the two audiences when an entry declares one', () => {
+  const azure: CatalogEntry = {
+    id: 'fast',
+    name: 'Fast',
+    provider: 'Example Vendor',
+    supports_tools: true,
+    endpointModel: 'example-deployment-alias',
+    model: 'vendor/model-1',
+  };
+  assert.deepEqual(modelIdentity(azure), {
+    endpointModel: 'example-deployment-alias',
+    declared: 'vendor/model-1',
+  });
 });
 
 // --- Criterion 2: both delivery forms, one schema, both together refuse -----
@@ -533,4 +563,86 @@ test('CATALOG: every built-in entry carries pricing, so no offered model reports
   for (const entry of BUILT_IN_CATALOG) {
     assert.ok(entry.pricing, `${entry.id} has no pricing`);
   }
+});
+
+// --- The sixth site: the summary-draft route (website#30 P3) ---------------
+
+test('INSTANCE: the built-in summariser is the id the route used to hardcode', () => {
+  // `SUMMARY_MODEL = 'google/gemini-3.5-flash-lite'` lived in
+  // api/evidence/generate-summary/route.ts — the fifth hardcoded table, missed
+  // by P2's inventory and routed to P3. Same model, now a catalog role: this
+  // instance's behaviour is unchanged and the choice is configurable.
+  assert.equal(getSummarizerModel().id, 'google/gemini-3.5-flash-lite');
+});
+
+test('INSTANCE: a catalog that declares no summariser falls back to its default', () => {
+  // Not the absent-or-error case ADR-0024 §A governs: the draft is a
+  // convenience the publisher edits before anything is signed, so refusing to
+  // publish over an undeclared summariser would be out of all proportion. Every
+  // catalog written before this field existed keeps working.
+  process.env.MODEL_CATALOG = JSON.stringify(sampleCatalog());
+  assert.equal(getSummarizerModel().id, 'fast');
+  assert.equal(getDefaultModel().id, 'fast');
+});
+
+test('INSTANCE: a catalog claiming the summariser role names it', () => {
+  const catalog = sampleCatalog() as Record<string, unknown>[];
+  catalog[1].summarizer = true;
+  process.env.MODEL_CATALOG = JSON.stringify(catalog);
+  assert.equal(getSummarizerModel().id, 'careful');
+});
+
+test('CATALOG: two entries claiming the summariser role are refused, both named', () => {
+  const catalog = sampleCatalog() as Record<string, unknown>[];
+  catalog[0].summarizer = true;
+  catalog[1].summarizer = true;
+  const result = validateCatalog(catalog, { source: 'MODEL_CATALOG', kind: 'azure-openai' });
+  assert.equal(result.ok, false);
+  const message = (result as { message: string }).message;
+  assert.match(message, /"fast"/);
+  assert.match(message, /"careful"/);
+  assert.match(message, /summarizer/);
+});
+
+// --- The identity pair at the resolver boundary (website#30 P3) ------------
+
+test('INSTANCE: an offered id resolves to both strings; anything else is carried through', () => {
+  process.env.MODEL_CATALOG = JSON.stringify(sampleCatalog());
+
+  assert.deepEqual(modelIdentityForValue('careful'), {
+    endpointModel: 'example-careful-deployment',
+    declared: 'vendor/model-careful-1',
+  });
+
+  // A model string this instance does not offer — the shape `POST
+  // /api/evidence` receives from an external publisher, and one that has never
+  // been validated against a catalog. Carried, not refused: an id the catalog
+  // does not describe has no second string to be wrong about.
+  assert.deepEqual(modelIdentityForValue('anthropic/claude-opus-5'), {
+    endpointModel: 'anthropic/claude-opus-5',
+    declared: 'anthropic/claude-opus-5',
+  });
+});
+
+test('INSTANCE: a recorded identity maps back to the wire string that reaches it', () => {
+  process.env.MODEL_CATALOG = JSON.stringify(sampleCatalog());
+  // The replay path's direction: `pkg.cost.model` is a declared identity, and
+  // under this catalog it is not a string any endpoint answers to.
+  assert.equal(endpointModelForDeclared('vendor/model-careful-1'), 'example-careful-deployment');
+  // A record naming a model this instance no longer offers replays as before.
+  assert.equal(endpointModelForDeclared('anthropic/claude-opus-5'), 'anthropic/claude-opus-5');
+});
+
+test('INSTANCE: evaluator independence is checked declared-against-declared', () => {
+  // The analysis model is only ever read out of `pkg.cost.model`, which holds a
+  // DECLARED identity. Comparing it against catalog ids would compare two
+  // namespaces, and under this catalog the gate would pick the analysis model
+  // to grade its own work.
+  process.env.MODEL_CATALOG = JSON.stringify(sampleCatalog());
+  assert.equal(resolveEvaluatorModel('vendor/model-careful-1')?.id, 'fast');
+  assert.equal(resolveEvaluatorModel('vendor/model-fast-1')?.id, 'careful');
+  // Passing the ID rather than the declared identity is what the bug looked
+  // like: 'careful' matches no declared identity, so the gate would happily
+  // return 'careful' — the model under evaluation.
+  assert.equal(resolveEvaluatorModel('careful')?.id, 'careful');
 });

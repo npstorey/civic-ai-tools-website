@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createModelClient } from '@/lib/model-client';
+import { endpointModelForDeclared } from '@/lib/model-resolver';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -109,7 +110,13 @@ export async function POST(
   }
 
   const prompt = pkg.prompt.text;
-  const model = pkg.cost.model;
+  // website#30 P3, the split read in reverse. `pkg.cost.model` is a DECLARED
+  // identity — under a catalog where the two strings differ it is not a string
+  // any endpoint answers to, so replaying it verbatim would fail the request.
+  // Mapped back to the wire string this instance reaches that model with;
+  // carried through unchanged when no entry declares it, which is what a record
+  // naming a model this instance no longer offers has always done.
+  const model = endpointModelForDeclared(pkg.cost.model);
   const portal = pkg.dataSources[0]?.portalUrl?.replace('https://', '') || 'data.cityofnewyork.us';
 
   // Build system prompt (regenerated fresh — may differ slightly if guidance updated)

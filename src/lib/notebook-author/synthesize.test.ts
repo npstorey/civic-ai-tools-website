@@ -13,11 +13,13 @@ import {
   SUMMARY_EXTENSION_KEY,
   SYNTHESIS_CELL_ROLE,
 } from './prompt.ts';
+import { modelAccessPhrase } from '../model-catalog.ts';
 
 const BROOKLYN_311_FIXTURE = {
   query: 'Show me top 5 311 complaint types in Brooklyn over the past 30 days',
   defaultPortal: 'data.cityofnewyork.us',
   modelName: 'anthropic/claude-sonnet-4-6',
+  modelAccess: modelAccessPhrase('openai-compatible'),
   generatedAt: '2026-05-21T14:23:45.000Z',
   finalAnswer: 'In Brooklyn over the past 30 days, the top 311 complaint types were Noise — Residential (1,234), Illegal Parking, ...',
   toolCalls: [
@@ -208,4 +210,33 @@ test('synthesizeNotebook: synthesis cell falls back to display(Markdown(...)) wr
   assert.equal(out.summary, null);
   const exts = out.notebook.metadata.extensions as Record<string, unknown>;
   assert.equal(exts[SUMMARY_EXTENSION_KEY], undefined);
+});
+
+test('synthesizeNotebook: the reproducibility stamp names the declared model and the dialect, never a gateway (website#30 P3, E6)', () => {
+  // ANNOUNCED BYTE CHANGE. This line read
+  //   "- **Author model:** <id> via OpenRouter."
+  // on every instance, including instances that have never touched OpenRouter,
+  // and would have read the same on an instance whose model access is a private
+  // Azure resource. The notebook is section E of a datHere package, so the line
+  // is inside the content the package hash fingerprints.
+  const out = synthesizeNotebook({ ...BROOKLYN_311_FIXTURE });
+  const footer = out.notebook.cells.at(-1)!.source.join('');
+  assert.match(
+    footer,
+    /- \*\*Author model:\*\* anthropic\/claude-sonnet-4-6, reached over an OpenAI-compatible chat-completions API\./,
+  );
+  assert.equal(footer.includes('OpenRouter'), false);
+
+  // Under the other dialect the same line names no vendor and no resource.
+  const azure = synthesizeNotebook({
+    ...BROOKLYN_311_FIXTURE,
+    modelName: 'vendor/model-1',
+    modelAccess: modelAccessPhrase('azure-openai'),
+  });
+  const azureFooter = azure.notebook.cells.at(-1)!.source.join('');
+  assert.match(
+    azureFooter,
+    /- \*\*Author model:\*\* vendor\/model-1, reached over a deployment-routed chat-completions API\./,
+  );
+  assert.equal(/azure/i.test(azureFooter), false);
 });

@@ -131,7 +131,15 @@ export const CELL_4_HEADER = '## Data Analysis Pipeline\n\nEach step below corre
 export function buildFooterCellSource(args: {
   citations: readonly { id: string; label: string; url: string }[];
   generatedAt: string;
+  /** The operator-declared model identity — never a deployment name. */
   modelName: string;
+  /**
+   * How this instance reached that model, from `modelAccessPhrase()`
+   * (src/lib/model-catalog.ts). Supplied by the caller rather than read here:
+   * this module is imported by client components, and the dialect lives behind
+   * the SDK-bearing endpoint layer.
+   */
+  modelAccess: string;
 }): string {
   const lines = [
     '---',
@@ -151,7 +159,12 @@ export function buildFooterCellSource(args: {
     '## Reproducibility',
     '',
     `- **Runtime:** Python ${PYTHON_RUNTIME_VERSION} with pinned libraries (\`${pinnedLibrariesPipList()}\`).`,
-    `- **Author model:** ${args.modelName} via OpenRouter.`,
+    // website#30 P3 (E6): "via OpenRouter" was the reference deployment's own
+    // gateway, hardcoded into every instance's notebook. The identity is now
+    // the operator-declared one and the endpoint is described by dialect —
+    // never by resource host, which belongs to whoever deployed this and not
+    // in a published record.
+    `- **Author model:** ${args.modelName}, reached over ${args.modelAccess}.`,
     `- **Generated:** ${args.generatedAt}.`,
     '',
     'To re-execute: open in any Jupyter environment with the pinned versions installed and run all cells top-to-bottom. Compare original-vs-current values via the comparison cell appended at publish time.',

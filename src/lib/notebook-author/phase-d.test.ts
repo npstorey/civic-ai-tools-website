@@ -8,12 +8,14 @@ import assert from 'node:assert/strict';
 import { synthesizeNotebook } from './synthesize.ts';
 import { stampExecutedNotebook, extractCapturedMetrics } from './phase-d.ts';
 import { EXECUTION_EXTENSION_KEY, NOTEBOOK_EXTENSION_KEY } from './prompt.ts';
+import { modelAccessPhrase } from '../model-catalog.ts';
 import { validateExecutedNotebook } from './validate.ts';
 
 const BASE_INPUTS = {
   query: 'Top 5 complaint types in Brooklyn over the past 30 days',
   defaultPortal: 'data.cityofnewyork.us',
   modelName: 'anthropic/claude-sonnet-4-6',
+  modelAccess: modelAccessPhrase('openai-compatible'),
   generatedAt: '2026-05-21T14:00:00.000Z',
   finalAnswer: 'Noise was the top complaint type.',
   toolCalls: [

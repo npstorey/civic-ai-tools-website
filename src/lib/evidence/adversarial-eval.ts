@@ -20,6 +20,7 @@
 // evaluator model, scoring rubric identifier.
 
 import { createModelClient } from '@/lib/model-client';
+import type { ModelIdentity } from '@/lib/model-catalog';
 import { db } from '@/lib/db';
 import { attestationNodes } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
@@ -52,13 +53,14 @@ import {
 export * from './adversarial-eval-core.ts';
 
 /**
- * Run the rubric against a package via OpenRouter. Throws on transport/LLM
+ * Run the rubric against a package at this instance's configured model
+ * endpoint. Throws on transport/LLM
  * errors; returns a ParsedEvaluation for response-shape problems so callers
  * can distinguish "evaluator unreachable" from "evaluator returned garbage".
  */
 export async function runAdversarialEval(
   pkg: EvidencePackage,
-  opts: { apiKey?: string; evaluatorModel: string },
+  opts: { apiKey?: string; evaluatorModel: ModelIdentity },
 ): Promise<ParsedEvaluation> {
   // `apiKey` is OPTIONAL: omitted, `createModelClient` resolves the platform
   // credential itself, under either accepted name (MODEL_API_KEY, or its
@@ -69,7 +71,10 @@ export async function runAdversarialEval(
   // a caller-supplied key; #30 P4 renames the wire field that carries one.
   const openrouter = createModelClient({ apiKey: opts.apiKey });
   const response = await openrouter.chat.completions.create({
-    model: opts.evaluatorModel,
+    // website#30 P3: the wire gets the endpoint string. The identity that
+    // lands in the signed attestation's methodology is `declared`, supplied by
+    // the caller to `emitEvaluationAttestation` — see below.
+    model: opts.evaluatorModel.endpointModel,
     messages: [
       { role: 'system', content: EVALUATION_RUBRIC },
       { role: 'user', content: buildEvaluationPrompt(pkg) },
@@ -86,6 +91,13 @@ export async function runAdversarialEval(
  */
 export async function emitEvaluationAttestation(input: {
   targetNodeId: string;
+  /**
+   * The operator-DECLARED identity of the evaluator, not the wire string. It
+   * lands in `methodology.evaluatorModel` inside a signed attestation node, so
+   * the rule governing `cost.model` governs it too (website#30 P3): an Azure
+   * deployment alias is an operator's private label and asserts nothing about
+   * which model scored the analysis.
+   */
   evaluatorModel: string;
   results: EvaluationResults;
   creatorId: string;
