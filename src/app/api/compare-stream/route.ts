@@ -8,8 +8,9 @@ import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import { encodeSSE, panelsForRun, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
-import { getMissingModelCredentialError } from '@/lib/model-client';
-import { modelIdentityForValue } from '@/lib/model-resolver';
+import { getMissingModelCredentialError, ModelConfigurationError } from '@/lib/model-client';
+import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
+import type { ModelIdentity } from '@/lib/model-catalog';
 import { getMissingMcpRoutingError, readMcpEnvFromProcess, skillRoutingTraceAttributes } from '@/lib/mcp/registry';
 import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG } from '@/lib/evidence/trace';
 
@@ -62,11 +63,44 @@ export async function POST(request: NextRequest) {
     }
 
     // website#30 P3: the wire string and the recorded identity separate here.
-    // Resolved tolerantly rather than strictly — this route has never validated
-    // a caller's model id (the notebook route does), and adding a refusal is a
-    // product change, not this phase's. An id the catalog describes yields its
-    // pair; anything else is carried through on both sides exactly as before.
-    const model = modelIdentityForValue(modelId);
+    // P6 F1: resolved STRICTLY. Until this phase an unknown id was carried
+    // through on both sides, on the premise that this route records no
+    // identity. It does: `analysis.model` on the root span below, and
+    // `gen_ai.request.model` on every inference span — and the publish dialog
+    // carries this trace into a signed package. So a caller-supplied
+    // deployment alias became its own "declared identity" and was signed.
+    //
+    // The refusal is the one the notebook route already raises, in the same
+    // shape and with the same reader copy: a caller failure is 400, an
+    // operator's unreadable catalog is 503, and both are raised before any
+    // upstream call — before the skill fetch, before MCP init, before the
+    // model.
+    //
+    // WHAT THE UI SENDS, checked rather than assumed. `QueryForm` offers only
+    // ids from /api/models, which is this same catalog. `/explore` did NOT:
+    // it sent a module constant naming a historical, unresolvable id, and
+    // tolerant resolution was the only thing keeping that page working
+    // (#314). It now reads the offered list too, so "the UI sends an id this
+    // instance offers" is true by construction on both surfaces.
+    let model: ModelIdentity;
+    try {
+      model = resolveModelIdentity(modelId);
+    } catch (error) {
+      if (error instanceof ModelNotOfferedError) {
+        return new Response(
+          JSON.stringify({ error: error.message }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (error instanceof ModelConfigurationError) {
+        console.error('[compare-stream]', error.message);
+        return new Response(
+          JSON.stringify({ error: error.message, code: error.code }),
+          { status: 503, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      throw error;
+    }
 
     // Fail fast when the instance names no MCP endpoint for the primary data
     // source (#258 C4). SOCRATA_MCP_URL has no coded fallback — an

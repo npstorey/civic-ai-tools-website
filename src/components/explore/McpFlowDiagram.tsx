@@ -11,8 +11,8 @@ import { useTraceReplay } from '@/hooks/useTraceReplay';
 import { useLiveTrace } from '@/hooks/useLiveTrace';
 import type { ReplayState } from '@/lib/bpmn/animation';
 import { traceEventsToProgressData } from '@/lib/bpmn/trace-progress';
+import { parseModelsResponse } from '@/lib/model-list';
 
-const DEFAULT_MODEL = 'anthropic/claude-sonnet-4';
 const DEFAULT_PORTAL = 'data.cityofnewyork.us';
 
 export default function McpFlowDiagram() {
@@ -32,6 +32,58 @@ export default function McpFlowDiagram() {
 
   // Live trace
   const liveTrace = useLiveTrace();
+
+  /**
+   * The model this instance offers, for the live query (#314, closed as part
+   * of website#30 P6 F1).
+   *
+   * WHAT WAS HERE, AND WHY IT HAD TO GO. A module constant,
+   * `anthropic/claude-sonnet-4`, passed straight to `liveTrace.start` and out
+   * to `POST /api/compare-stream` as the `model` field — a WIRE VALUE, not a
+   * diagram label. That id is not in any catalog: website#30 P2 placed it in
+   * `HISTORICAL_MODELS`, the table that exists to render already-published
+   * records and is deliberately never resolvable. It survived only because the
+   * compare routes resolved a caller's id tolerantly, forwarding it upstream
+   * where the built-in endpoint happened to know the slug — so `/explore`'s
+   * live trace, which is publishable, asserted a model this instance does not
+   * offer. P6 makes those routes refuse an unoffered id, which turns a quiet
+   * wrong answer into a loud one; either way the constant was the defect.
+   *
+   * THE REPLACEMENT is the one `QueryForm` already uses since website#30 P4,
+   * which had the identical defect (a hardcoded initial model id): the first
+   * model `/api/models` offers, read from the instance rather than asserted
+   * here. Memoized in a ref so a reader who runs several queries fetches once,
+   * and warmed on mount so the click does not wait. An instance whose
+   * `/api/models` cannot answer yields the empty string, and the route's
+   * existing "Query and model are required" refusal surfaces in the live
+   * panel — an error the reader can see, rather than a button that does
+   * nothing.
+   *
+   * #314 asks a further question this does NOT answer: whether `/explore`
+   * should instead have its own catalog role, or reach the `default` entry
+   * (which is `selectable: false` and therefore absent from `/api/models`).
+   * That is a product decision; this only stops the page naming a model the
+   * instance never offered.
+   */
+  const offeredModelRef = useRef<Promise<string> | null>(null);
+  const offeredModel = useCallback((): Promise<string> => {
+    if (!offeredModelRef.current) {
+      offeredModelRef.current = fetch('/api/models')
+        .then((res) => res.json())
+        .then((data) => {
+          const parsed = parseModelsResponse(data);
+          return parsed && parsed.length > 0 ? parsed[0].id : '';
+        })
+        .catch((error) => {
+          console.error('Failed to fetch models:', error);
+          return '';
+        });
+    }
+    return offeredModelRef.current;
+  }, []);
+  useEffect(() => {
+    void offeredModel();
+  }, [offeredModel]);
 
   // Derive which state drives the viewer
   let activeState: ReplayState;
@@ -138,16 +190,20 @@ export default function McpFlowDiagram() {
     reset();
     viewerRef.current?.resetAll();
     // Auto-enter fullscreen on first live query
-    if (!isFullscreen) {
+    const enteringFullscreen = !isFullscreen;
+    if (enteringFullscreen) {
       setIsFullscreen(true);
       setHasPlayedOnce(true);
-      setTimeout(() => {
-        liveTrace.start(query, DEFAULT_MODEL, DEFAULT_PORTAL);
-      }, 400);
-    } else {
-      liveTrace.start(query, DEFAULT_MODEL, DEFAULT_PORTAL);
     }
-  }, [reset, liveTrace, isFullscreen]);
+    // The model is resolved before the query starts (#314). Usually already
+    // resolved: the fetch is warmed on mount and memoized, so this settles in
+    // a microtask and the 400ms fullscreen beat is unchanged.
+    void offeredModel().then((model) => {
+      const begin = () => liveTrace.start(query, model, DEFAULT_PORTAL);
+      if (enteringFullscreen) setTimeout(begin, 400);
+      else begin();
+    });
+  }, [reset, liveTrace, isFullscreen, offeredModel]);
 
   const handleLiveCancel = useCallback(() => {
     liveTrace.cancel();

@@ -73,8 +73,8 @@ endpoint also means declaring its model list — see
 Publishing records
 additionally needs a database, object storage, sign-in, and a signing key —
 don't guess that set. The executable authority is the preflight, which checks
-the **presence** (never the value) of every variable the app reads and tiers
-each one against your instance's drivers:
+the **presence** of every variable the app reads — printing no value, ever —
+and tiers each one against your instance's drivers:
 
 ```bash
 node scripts/preflight-env.mjs

@@ -7,7 +7,8 @@ import { callMcpTool } from '@/lib/mcp/client';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { getMissingModelCredentialError, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
-import { modelIdentityForValue } from '@/lib/model-resolver';
+import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
+import type { ModelIdentity } from '@/lib/model-catalog';
 import { streamErrorPayload } from '@/lib/streaming';
 import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
 import { headers } from 'next/headers';
@@ -55,6 +56,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // website#30 P3 split the wire string from the recorded identity; P6 F1
+    // made the resolution STRICT and moved it here, above everything that
+    // costs anything. An id this instance does not offer is refused before the
+    // skill fetch, before rate limiting and before any model call — the same
+    // refusal, shape and reader copy the notebook route already raises (400
+    // for a caller's bad id, 503 for an operator's unreadable catalog).
+    //
+    // This route records no identity of its own, but it is one of a pair with
+    // /api/compare-stream, which does; a caller-supplied id that this route
+    // accepted and its twin signed would be the same defect with an extra
+    // step. The UI reaches neither refusal — `QueryForm` offers only ids from
+    // /api/models, and `/explore` reads the same list since #314; both were
+    // checked rather than assumed, because /explore's hardcoded id was
+    // precisely what tolerant resolution had been hiding.
+    let model: ModelIdentity;
+    try {
+      model = resolveModelIdentity(modelId);
+    } catch (error) {
+      if (error instanceof ModelNotOfferedError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      if (error instanceof ModelConfigurationError) {
+        console.error('[compare]', error.message);
+        return NextResponse.json(
+          { error: error.message, code: error.code },
+          { status: 503 }
+        );
+      }
+      throw error;
+    }
+
     // Get session and identifier for rate limiting
     const session = await getServerSession(authOptions);
     const headersList = await headers();
@@ -88,10 +120,6 @@ export async function POST(request: NextRequest) {
 When answering questions about civic data, government statistics, or local information,
 do your best to provide helpful information based on your training data.
 Be honest if you don't have access to current or real-time data.`;
-
-    // website#30 P3: same tolerant split as /api/compare-stream — the wire
-    // gets `endpointModel`, and nothing here records an identity.
-    const model = modelIdentityForValue(modelId);
 
     // Run both queries in parallel
     const [withoutMcpResult, withMcpResult] = await Promise.all([

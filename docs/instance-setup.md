@@ -228,7 +228,7 @@ never treated as the default.
 | --- | --- | --- | --- |
 | `MODEL_API_KEY` | The key the configured endpoint reads. Prior-era name `OPENROUTER_API_KEY`, still accepted — the canonical name wins whenever it is **defined**, empty string included. **Sensitive.** | always | **No.** A wrong value fails the request; it never reaches a byte a verifier reads. |
 | `MODEL_API_KIND` | `openai-compatible` (default) or `azure-openai`. | never — but see the rest of this table | **Yes (§C.1).** It derives `gen_ai.system` on the signed trace and the wording of the PROV model agent's description. |
-| `MODEL_API_BASE_URL` | The chat-completions endpoint. Under `azure-openai` this is the **resource endpoint** — the `https://` origin, no path. | `MODEL_API_KIND=azure-openai` | **Yes, indirectly (§C.3).** It never appears in a package — a public record must not carry your infrastructure hostnames — but it selects `gen_ai.system` and decides whether the built-in model list is trusted at all. |
+| `MODEL_API_BASE_URL` | The chat-completions endpoint. Under `azure-openai` this is the **resource endpoint** — the `https://` origin, no path. | `MODEL_API_KIND=azure-openai` | **Yes, indirectly (§C.3).** It never appears in a package — a public record must not carry your infrastructure hostnames — and it decides whether the built-in model list is trusted at all. It reaches `gen_ai.system` in two narrow cases only: the built-in default endpoint records `openrouter`, and OpenAI's own host records `openai`. Any other endpoint records the **dialect** you declared in `MODEL_API_KIND`, because naming a vendor your configuration never mentioned would be a guess printed under a signature. |
 | `MODEL_API_VERSION` | The api-version query parameter. There is no safe default: an api-version gates which request and response fields exist. | `MODEL_API_KIND=azure-openai` | **Yes, indirectly (§C.3).** It decides which response fields exist, and `gen_ai.response.model` — the endpoint's own report of what it ran, recorded under the signature — is read from the response body. |
 | `MODEL_API_AUTH` | `bearer` or `api-key`. Derived from the dialect when unset; a value contradicting the dialect is refused rather than ignored. `entra` is reserved in the enum and refused — there is no code behind it. | never | **No.** Authentication mechanics only. |
 | `MODEL_CATALOG` | This instance's model list, as a JSON document. | any endpoint other than the built-in one | **Yes (§C.1).** Each entry's `model` is the identity a signed record asserts. |
@@ -314,12 +314,24 @@ Field notes, all of them things the validator will tell you about anyway:
   `model` is required under `azure-openai`. `supports_tools` must be a boolean —
   this app's whole point is tool calls, so an entry that cannot make them is a
   configuration worth making explicit.
-- `tag` and `description` are shown in the picker. `maxTokenBudget` overrides
-  the per-request token ceiling for one model.
+- `tag` and `description` are shown in the picker. `maxTokenBudget` is
+  validated and served on `/api/models`, but **nothing reads it**: no code path
+  applies it as a ceiling. The per-request token budget is one module-level
+  constant for the whole instance — `TOKEN_LIMIT_PER_REQUEST` (default 200,000,
+  read in `src/lib/openrouter-streaming.ts`) — and there is no per-model route
+  to it. Setting the field is not an error; it just has no effect today.
 - `selectable: false` keeps an entry out of the picker while leaving it
   resolvable — the shape used above for a model that only fills a role.
-- `pricing` is per **1M** tokens, in USD, and is what a record's cost estimate is
-  computed from. Omit it and the estimate is omitted rather than guessed.
+- `pricing` is per **1M** tokens, in USD. **A configured catalog's `pricing` is
+  never read.** The cost estimate a record page renders consults the built-in
+  catalog and the historical price table only (`builtInPricing`,
+  `src/lib/model-catalog.ts`), and it looks a model up by the *declared*
+  identity recorded in `cost.model` while a catalog is keyed by `id` — so the
+  two do not even share a namespace. On an instance running its own catalog the
+  estimate is therefore **omitted rather than wrong**, which is the failure
+  direction to want; `src/lib/models.ts` states the same limitation at the
+  source. Whether the field should exist at all is
+  [#315](https://github.com/npstorey/civic-ai-tools-website/issues/315).
 - **An unknown field is refused, not ignored**, so a misspelling cannot silently
   do nothing.
 
@@ -328,7 +340,9 @@ Field notes, all of them things the validator will tell you about anyway:
 Bring the instance up and work outward from the cheapest check.
 
 ```bash
-# 1. Presence only — no values are read or printed.
+# 1. Presence — and one comparison. No value is ever printed; MODEL_API_BASE_URL
+#    is the sole value read, and only to ask whether it is the built-in default,
+#    because any other endpoint needs a MODEL_CATALOG.
 node scripts/preflight-env.mjs
 
 # 2. The catalog parsed, and the models this instance now offers.
@@ -345,7 +359,8 @@ What the failures mean:
 
 | What you see | What it is |
 | --- | --- |
-| `503` with `code: "model_not_configured"` | No key resolved. The message names the variable, and no upstream call was made. |
+| `400` naming the model you asked for | That id is not in this instance's catalog. Both comparison routes and `/api/query-notebook` refuse an id the catalog does not describe, before any upstream call — so a typo costs no tokens and reaches no record. (The refusal lists the ids it does accept, which includes any `selectable: false` entries `/api/models` does not show.) |
+| `503` with `code: "model_not_configured"` | The environment cannot describe a usable endpoint — no key, or a dialect missing a setting it requires. The message names the variable at fault, no upstream call was made, and nothing was charged against the day's request budget. |
 | `502` with `code: "model_auth_rejected"` | The endpoint refused the key — it exists and is wrong for this endpoint. |
 | `502` with `code: "model_rate_limited"` | The **endpoint** is rate-limiting this server. Not the app's own per-day limiter, which answers `429` with `Rate limit exceeded`. Under deployment routing, quota is per-model and per-region, so this points at one deployment's pool rather than at the whole resource. |
 | A `404`-ish or "deployment not found" error from the endpoint | `endpointModel` does not name a deployment on that resource. This is the failure mode nobody here has seen — see §5.5. |
@@ -448,6 +463,23 @@ Unverified against any real deployment-routed endpoint:
   cost estimate** — omitted rather than recorded as zero. If you measure which
   api-versions do admit it, that is the finding most likely to change this
   build's behavior.
+
+  **The other half of that parameter is no longer an unknown, and it is
+  recorded here because it was one.** Under `openai-compatible` the app *does*
+  send `stream_options`, including on the built-in default endpoint, and the
+  worry was that an endpoint rejecting the parameter answers 400 — which costs
+  the answer, not just the token count. On the built-in default it does
+  neither: OpenRouter's own usage-accounting documentation, read 2026-08-24,
+  says that `usage: { include: true }` and `stream_options: { include_usage:
+  true }` "are deprecated and have no effect" and that usage is "included in
+  the last SSE message for streaming responses … No additional parameters are
+  required." Accepted and ignored, in other words — and a live query run
+  against the reference deployment's production instance on 2026-08-24 (by the
+  project owner, not from a fixture) returned an answer. The parameter is still
+  sent, because `openai-compatible` is a dialect rather than one endpoint and
+  an endpoint that has not made the same change still has to be asked. What
+  remains genuinely unmeasured is the third case: an OpenAI-compatible endpoint
+  that *rejects* the parameter outright. If you run one, that is worth an issue.
 - **Error mapping under load.** Real 429s, content-filter refusals and quota
   exhaustion are mapped from synthetic statuses in tests. The mapping is
   structural — it reads the status, not the wording — which is the property most

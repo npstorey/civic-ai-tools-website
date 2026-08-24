@@ -427,9 +427,9 @@ this reproduction into a different error than the one you came to see.
 
 The executable authority on the environment is
 [`scripts/preflight-env.mjs`](../scripts/preflight-env.mjs): it checks
-the **presence** (never the value) of every variable the app reads,
-resolves the three driver selectors first, and tiers every other
-variable against the resolved profile — so a self-hosted instance is
+the **presence** of every variable the app reads — and prints no
+value, ever — resolves the four driver selectors first, and tiers every
+other variable against the resolved profile — so a self-hosted instance is
 neither passed while unrunnable nor nagged about variables its profile
 never reads. It also warns when an **all-or-nothing variable group** is
 only partially set — the Vercel Sandbox auth trio, either sign-in
@@ -447,9 +447,14 @@ it cannot see what compose wires in** — the three driver selectors,
 a bare `node scripts/preflight-env.mjs` reports the *default managed
 profile* and fails demanding variables the compose path never uses
 (`BLOB_READ_WRITE_TOKEN` among them). To preflight a compose deployment,
-represent the compose profile explicitly. Presence is all that is
-checked, never values, so fixed stand-ins do for whatever compose
-supplies — and by the same token a PASS says nothing about the value:
+represent the compose profile explicitly. Presence is what is
+checked — no value is ever printed — so fixed stand-ins do for whatever
+compose supplies, with **one exception**: `MODEL_API_BASE_URL` is
+compared against the built-in default, because an endpoint that is not
+the default needs a `MODEL_CATALOG` and the app refuses the query
+without one. Give that variable its real value (or leave it unset for
+the built-in endpoint); a stand-in would tier the catalog rows wrongly.
+By the same token a PASS says nothing about the values it never read:
 `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` pass on a placeholder
 exactly as they pass on a real credential (see the tier notes below).
 From the checkout, with your own env-file values also in the

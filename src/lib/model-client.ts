@@ -193,42 +193,108 @@ export function getModelApiBaseUrl(): string {
 }
 
 /**
+ * OpenAI's own chat-completions host. The ONE base URL for which `openai` is a
+ * statement about the configuration rather than a guess about it.
+ *
+ * Compared by hostname rather than by prefix so that a path, a trailing slash
+ * or a port cannot make a lookalike host match, and a legitimately-written
+ * `https://api.openai.com/v1` fails to.
+ */
+const OPENAI_OWN_HOST = 'api.openai.com';
+
+function isOpenAiOwnHost(baseUrl: string): boolean {
+  try {
+    return new URL(baseUrl).hostname.toLowerCase() === OPENAI_OWN_HOST;
+  } catch {
+    // An unparseable base URL is certainly not OpenAI's host. It is not this
+    // function's job to refuse it — `createModelClient` does that.
+    return false;
+  }
+}
+
+/**
  * The OTel `gen_ai.system` value for the resolved endpoint — the trace
- * attribute naming which GenAI API answered (website#30 P3, E5).
+ * attribute naming which GenAI API answered (website#30 P3 E5, corrected in P6
+ * F4).
  *
- * MEASURED, not assumed. `CIVICAITOOLS_TRACE_CONFIG` (the harness's
- * `capture/trace.ts`, re-exported by `src/lib/evidence/trace.ts`) declares
- * `semconvVersion: '1.30.0'`, and every span this app writes carries that
- * version as `otel.semconv.version`. Read against the 1.30.0 attribute set:
- * `az.ai.openai` and `openai` are both REGISTERED values of `gen_ai.system`;
- * `openrouter` is NOT, and never has been — it was already the emitted value
- * before this phase.
+ * VERIFIED AGAINST THE DECLARED VERSION, not assumed. `CIVICAITOOLS_TRACE_CONFIG`
+ * (the harness's `capture/trace.ts`, re-exported by `src/lib/evidence/trace.ts`)
+ * declares `semconvVersion: '1.30.0'`, and every span this app writes carries
+ * that version as `otel.semconv.version`. Read against the v1.30.0 text of
+ * `docs/gen-ai/gen-ai-spans.md` (2026-08-24):
  *
- * So the mapping uses a registered value wherever one exists, and keeps the
- * unregistered one only where semconv itself has nothing to offer: for an
- * endpoint with no registered value the convention is the provider's name in
- * lowercase, which is exactly what `openrouter` is. Keeping it also means the
- * reference instance's traces do not silently change value in a phase whose
- * whole claim is that its bytes do not move — and replacing it with `openai`
- * would be a downgrade in honesty, since a router is not the OpenAI API.
+ *   - `gen_ai.system` is **Required**, so it is emitted on every inference
+ *     span. Omitting it where no listed value fits — the tempting move — is
+ *     not available: it would break conformance with the version the package
+ *     itself declares.
+ *   - Its well-known values are fourteen vendor names; `az.ai.openai` and
+ *     `openai` are among them, `openrouter` is not, and neither is `_OTHER`
+ *     (that value is in the table for `error.type`). What the same document
+ *     says instead is: "If one of them applies, then the respective value MUST
+ *     be used; otherwise, a custom value MAY be used", and, in the attribute's
+ *     own note, "For custom model, a custom friendly name SHOULD be used."
  *
- * `azure-openai` is the one dialect whose value this phase adds. Note what it
- * does NOT add: `server.address`. The resource hostname is the deployer's
- * infrastructure, and the trace is inside the signed package.
+ * WHY NOT DEFAULT TO `openai`. The note also says that where several systems
+ * are reachable through OpenAI client libraries the value "is set to `openai`
+ * based on the instrumentation's best knowledge", and that "the `server.address`
+ * attribute may help identify the actual system in use for `openai`". That
+ * disambiguation is exactly what this app does not offer: a resource hostname
+ * is the deployer's infrastructure and never enters a signed package (P3). So
+ * the reading that leans on `server.address` is the wrong reading HERE — it
+ * would put a vendor name nobody configured into a public trace with nothing
+ * beside it to correct the impression.
+ *
+ * WHAT IS EMITTED, and what each value is derived from:
+ *
+ *   azure-openai                      → `az.ai.openai`   (well-known)
+ *   openai-compatible @ the default   → `openrouter`     (custom, unchanged)
+ *   openai-compatible @ OpenAI's host → `openai`         (well-known)
+ *   openai-compatible @ anywhere else → `openai-compatible`, the CUSTOM value
+ *
+ * The last one is the correction. It is `MODEL_API_KIND` itself — declared
+ * configuration, not an inference about a URL — so the span says what the
+ * operator told this build and nothing more. It also agrees with the PROV model
+ * agent's description in the same package, which already says "an
+ * OpenAI-compatible chat-completions API" rather than naming a vendor.
+ *
+ * The built-in default keeps `openrouter`: semconv's escape for a system with
+ * no well-known value is a custom one, the provider's name in lowercase is what
+ * that convention produces, and the reference instance's traces therefore do
+ * not move on this attribute.
+ *
+ * Note what this still does NOT add: `server.address`. See above — the
+ * omission is deliberate and it is why the fallback had to change.
  */
 export function getGenAiSystem(): string {
-  if (getModelApiKind() === 'azure-openai') return 'az.ai.openai';
-  return getModelApiBaseUrl() === DEFAULT_BASE_URL ? 'openrouter' : 'openai';
+  const kind = getModelApiKind();
+  if (kind === 'azure-openai') return 'az.ai.openai';
+  const baseUrl = getModelApiBaseUrl();
+  if (baseUrl === DEFAULT_BASE_URL) return 'openrouter';
+  if (isOpenAiOwnHost(baseUrl)) return 'openai';
+  return kind;
 }
 
 /**
  * Whether a streaming request may ask the endpoint to report token usage.
  *
- * Usage is read only from the final chunk, and a streaming response carries no
- * `usage` object at all unless it is requested — which is why every streamed
- * answer this app has published recorded zero prompt and completion tokens
- * (website#30 P3, §2.5). `stream_options: { include_usage: true }` is the
- * OpenAI-dialect parameter that asks for it.
+ * Usage is read only from the final chunk, and under the OpenAI dialect a
+ * streaming response carries no `usage` object at all unless it is requested —
+ * which is why every streamed answer this app has published recorded zero
+ * prompt and completion tokens (website#30 P3, §2.5).
+ * `stream_options: { include_usage: true }` is the OpenAI-dialect parameter
+ * that asks for it.
+ *
+ * ON THE BUILT-IN DEFAULT ENDPOINT THE PARAMETER IS A NO-OP, and that is
+ * recorded rather than assumed (website#30 P6 F4/F7). OpenRouter's own
+ * usage-accounting documentation, read 2026-08-24, says: "The
+ * `usage: { include: true }` and `stream_options: { include_usage: true }`
+ * parameters are deprecated and have no effect. Full usage details are now
+ * always included automatically in every response" — "in the last SSE message
+ * for streaming responses". So on the reference instance the parameter is
+ * accepted and ignored, not a 400 waiting to happen; a live production query
+ * on 2026-08-24 confirmed the path answers. It is still sent, because this
+ * dialect is not one endpoint: an OpenAI-compatible endpoint that has not
+ * made the same change still needs to be asked.
  *
  * Asked only under `openai-compatible`. Under `azure-openai` the parameter's
  * availability is an api-version question — an api-version that does not know

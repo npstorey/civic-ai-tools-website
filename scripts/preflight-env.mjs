@@ -29,6 +29,15 @@
  * NAME alone. No unbounded input from the environment reaches the output,
  * which is what the "never echoed" test in the suite pins down.
  *
+ * ONE VARIABLE IS COMPARED WITHOUT BEING READ OUT: `MODEL_API_BASE_URL`, whose
+ * value `requiredWhenCustomized` (below) tests for equality against a coded
+ * default. The comparison yields a boolean and nothing else — the value is
+ * never printed, and the row it promotes is reported by NAME like every other.
+ * It is called out here rather than folded into the sentence above because
+ * "reads only presence" stopped being literally true of this script when the
+ * condition was added, and an endpoint URL is infrastructure even though it is
+ * not a credential.
+ *
  * `op run` is recommended for local use so the op:// references in
  * .env.local resolve into this process's environment:
  *
@@ -140,9 +149,35 @@ export const DRIVER_SEAMS = {
  *     output) and a preflight that disagreed with the app's own resolver would
  *     pass a configuration the app then refuses.
  *
- * A third conditional field expresses ALTERNATIVES rather than drivers — the
- * case where two variable sets satisfy the same need and an instance picks
- * one:
+ * A conditional field that is keyed by VARIABLE rather than by seam
+ * (website#30 P6 F2):
+ *   - `requiredWhenCustomized: { <VAR>: '<the app's coded default>' }` — tier
+ *     becomes 'required' when <VAR> is set to anything other than the coded
+ *     default named here. This is the "differs from its default" promotion,
+ *     and it exists because a driver seam cannot express it: a seam is a
+ *     closed set of enum literals, and a base URL is an open-valued setting
+ *     whose DEFAULT is what a coded fallback depends on.
+ *
+ *     THE CASE IT WAS MINTED FOR, measured. `src/lib/model-resolver.ts`
+ *     (`isBuiltInEndpoint`, `loadCatalog`) keeps the built-in model list only
+ *     while the dialect is `openai-compatible` AND the base URL is the coded
+ *     default; against ANY other endpoint, under EITHER dialect, a catalog is
+ *     required and the first request is refused by name without one. The seam
+ *     covered only the `azure-openai` half of that, so
+ *     `openai-compatible` + a custom `MODEL_API_BASE_URL` + no catalog passed
+ *     preflight and was then refused by the app — the exact failure a
+ *     preflight exists to prevent, on the check `docs/instance-setup.md` §5.3
+ *     makes step 1 of bringing an instance up.
+ *
+ *     THE COMPARISON MIRRORS THE APP'S OWN READ and is deliberately not
+ *     trimmed: `getModelApiBaseUrl()` is `process.env.MODEL_API_BASE_URL ||
+ *     DEFAULT_BASE_URL`, so empty falls back to the default and any other
+ *     string — whitespace included — is a custom endpoint. A trimming
+ *     comparison here would pass a configuration the app refuses, which is the
+ *     same failure mode the two-name precedence rule above is written to avoid.
+ *
+ * A field that expresses ALTERNATIVES rather than drivers — the case where two
+ * variable sets satisfy the same need and an instance picks one:
  *   - `requiredUnlessAllPresent: ['A', 'B', ...]` — the entry's declared
  *     'required' tier is DEMOTED TO 'optional' when every named variable is
  *     present. Used for the sign-in providers: an instance needs *a* provider,
@@ -153,21 +188,26 @@ export const DRIVER_SEAMS = {
  *     degrade" nag. Same no-nagging principle as `onlyWhen`; the entry stays
  *     listed so the operator can still see the option exists.
  *
- * WHEN AN ENTRY CARRIES BOTH `requiredWhen` AND `requiredUnlessAllPresent`,
- * the alternative wins: `resolveSpec` checks the alternative FIRST, so a driver
- * that makes a NEED load-bearing does not make THIS variable load-bearing while
- * a sibling already supplies it. The model catalog is the case that forced the
- * question — MODEL_CATALOG and MODEL_CATALOG_PATH are two deliveries of one
- * document, and the app REFUSES both being set, so a profile that promotes the
- * need must promote at most the delivery that is still absent. Promotion-first
- * would have failed a correctly-configured instance by demanding the variable
- * it was refused for setting. Inert for every row that shipped before this:
- * no other entry carries both fields.
+ * WHEN AN ENTRY CARRIES AN ALTERNATIVE AND EITHER PROMOTION, the alternative
+ * wins: `resolveSpec` checks `requiredUnlessAllPresent` FIRST, so a profile
+ * that makes a NEED load-bearing does not make THIS variable load-bearing
+ * while a sibling already supplies it. The model catalog is the case that
+ * forced the question — MODEL_CATALOG and MODEL_CATALOG_PATH are two
+ * deliveries of one document, and the app REFUSES both being set, so a profile
+ * that promotes the need must promote at most the delivery that is still
+ * absent. Promotion-first would have failed a correctly-configured instance by
+ * demanding the variable it was refused for setting. The two promotions are
+ * ORed: the catalog rows carry both (`azure-openai` under the seam, a custom
+ * base URL under the variable condition), which is exactly the app's own rule
+ * — built-in catalog only at the default endpoint in the default dialect.
+ * Inert for every row that shipped before the model seam: no other entry
+ * carries more than one of these fields.
  *
- * CONSTRAINT: all three fields must leave the default profile untouched. With
- * no selector set (or every selector set to its default) and no alternative
- * set complete, the resolved spec is identical to the declared one, so the
- * report is byte-identical to the pre-driver-awareness output. That is why the
+ * CONSTRAINT: all four fields must leave the default profile untouched. With
+ * no selector set (or every selector set to its default), no customized
+ * variable and no alternative set complete, the resolved spec is identical to
+ * the declared one, so the report is byte-identical to the
+ * pre-driver-awareness output — measured again for the new field. That is why the
  * S3_* knobs stay listed under the Vercel Blob profile rather than being
  * suppressed as not-applicable — the suppression only runs in the direction
  * that the frozen default output does not cover. The same holds for the
@@ -180,6 +220,22 @@ export const DRIVER_SEAMS = {
  * condition below is asserting. Named once so the two sides cannot drift.
  */
 export const OIDC_PROVIDER_SET = ['OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET'];
+
+/**
+ * The model endpoint the built-in catalog describes — the app's coded default
+ * for MODEL_API_BASE_URL, and the one value of it that leaves the built-in
+ * model list admissible.
+ *
+ * A DUPLICATED LITERAL, declared as one. `DEFAULT_BASE_URL` in
+ * `src/lib/model-client.ts` is the original; this script is `.mjs` and cannot
+ * import TypeScript, the same limitation that already forces a second copy of
+ * the two-name precedence rule. The hazard is real — a preflight comparing
+ * against a stale default would promote the catalog rows for an instance the
+ * app considers default, or fail to promote them for one it does not — so the
+ * test asserts this constant against that file's source rather than trusting
+ * the two to be kept in step by hand.
+ */
+export const BUILT_IN_MODEL_BASE_URL = 'https://openrouter.ai/api/v1';
 
 export const ENV_SPEC = [
   // --- Core query path (every demo query depends on these) ---
@@ -224,8 +280,14 @@ export const ENV_SPEC = [
   // asserts nothing (§B). `hasFallback` is therefore true only in the default
   // profile, and the promotion below drops it exactly as it does for
   // MODEL_API_BASE_URL.
-  { name: 'MODEL_CATALOG', tier: 'optional', purpose: 'Model catalog as a JSON document — required unless this instance uses the built-in OpenRouter endpoint (MODEL_CATALOG_PATH is the file-delivered alternative; setting both is refused)', hasFallback: true, requiredWhen: { model: 'azure-openai' }, requiredUnlessAllPresent: ['MODEL_CATALOG_PATH'] },
-  { name: 'MODEL_CATALOG_PATH', tier: 'optional', purpose: 'Path to a file holding the model catalog — the container-friendly delivery of MODEL_CATALOG, same schema; setting both is refused', hasFallback: true, requiredWhen: { model: 'azure-openai' }, requiredUnlessAllPresent: ['MODEL_CATALOG'] },
+  //
+  // TWO promotions, ORed, because the app's rule has two halves and the seam
+  // expresses only one (website#30 P6 F2): `azure-openai` promotes, and so does
+  // an endpoint that is not the built-in default under EITHER dialect. Without
+  // the second, `openai-compatible` + a custom MODEL_API_BASE_URL + no catalog
+  // PASSED here and was refused by the app at the first request.
+  { name: 'MODEL_CATALOG', tier: 'optional', purpose: 'Model catalog as a JSON document — required unless this instance uses the built-in OpenRouter endpoint (MODEL_CATALOG_PATH is the file-delivered alternative; setting both is refused)', hasFallback: true, requiredWhen: { model: 'azure-openai' }, requiredWhenCustomized: { MODEL_API_BASE_URL: BUILT_IN_MODEL_BASE_URL }, requiredUnlessAllPresent: ['MODEL_CATALOG_PATH'] },
+  { name: 'MODEL_CATALOG_PATH', tier: 'optional', purpose: 'Path to a file holding the model catalog — the container-friendly delivery of MODEL_CATALOG, same schema; setting both is refused', hasFallback: true, requiredWhen: { model: 'azure-openai' }, requiredWhenCustomized: { MODEL_API_BASE_URL: BUILT_IN_MODEL_BASE_URL }, requiredUnlessAllPresent: ['MODEL_CATALOG'] },
   // No coded fallback (#258 C4): the fallback used to point at the reference
   // deployment's hosted endpoint, silently routing an unconfigured instance's
   // queries through infrastructure it does not operate. Absent, every data
@@ -565,6 +627,27 @@ function conditionMet(condition, drivers) {
 }
 
 /**
+ * True when any variable named in a `requiredWhenCustomized` condition is set
+ * to something other than the coded default declared beside it.
+ *
+ * NOT TRIMMED, and not `isPresent`-based, on purpose — this mirrors the app's
+ * own read (`env.X || '<default>'`) exactly. Empty string falls back to the
+ * default there and so it does here; every other string, whitespace included,
+ * is a custom value there and so it is here. A preflight that resolved this
+ * differently from the app would pass a configuration the app then refuses,
+ * which is the whole failure this condition exists to close.
+ *
+ * The value is compared and discarded: only the boolean leaves this function.
+ */
+function customizedFromDefault(condition, env) {
+  return Object.entries(condition).some(([name, codedDefault]) => {
+    const raw = env[name];
+    if (typeof raw !== 'string' || raw === '') return false;
+    return raw !== codedDefault;
+  });
+}
+
+/**
  * THE presence test — non-empty after trim. Every check in this script
  * (tiers, alternatives, groups) uses this one boolean; no value is read
  * beyond it.
@@ -685,7 +768,9 @@ export function resolveSpec(drivers, spec = ENV_SPEC, env = {}) {
       applicable.push({ ...s, tier: 'optional' });
       continue;
     }
-    const promoted = s.requiredWhen && conditionMet(s.requiredWhen, drivers);
+    const promoted =
+      (s.requiredWhen && conditionMet(s.requiredWhen, drivers)) ||
+      (s.requiredWhenCustomized && customizedFromDefault(s.requiredWhenCustomized, env));
     if (promoted) {
       // The promotion also drops any `hasFallback` claim. A driver that makes
       // a variable load-bearing is by definition a driver the coded fallback
@@ -849,16 +934,31 @@ export function renderReport(result) {
   // not a WARN and never a failure: the value reached the app, the instance
   // works, and the rename is the operator's to schedule. It is reported at all
   // because the alternative — silence — leaves an operator to discover the new
-  // names from a release note, and because this list is exactly the work the
-  // eventual removal will require.
+  // names from a release note, and because this list is exactly the work a
+  // rename will require.
+  //
+  // TWO RENAMES SHARE THIS MECHANISM AND THEIR LIFETIMES DIFFER (website#30
+  // P6 F8), so the copy below states each rather than one promise covering
+  // both. The publisher-identity set has a documented removal at a future
+  // major version (docs/instance-setup.md §4, docs/key-rotation.md); the model
+  // credential's prior-era name has no removal scheduled anywhere in this
+  // repo — `src/lib/model-client.ts` says only that it keeps working, and a
+  // preflight that announced a removal date the project has not set would be
+  // telling operators to schedule work nobody has committed to. Not the same
+  // as calling it permanent, which is equally unsupported: the wire-field
+  // rename beside it (`openRouterApiKey` → `modelApiKey`,
+  // `src/lib/caller-model-key.ts`) IS classed alias-permanent, and that
+  // classification is about the request body, not about this variable.
   if (result.deprecatedNames && result.deprecatedNames.length > 0) {
     lines.push(
       `  NOTE: ${result.deprecatedNames.length} variable(s) supplied under a prior-era name.`,
     );
-    lines.push('        Both spellings work today; the prior-era one is removed at a future');
-    lines.push('        major version. The publisher-identity renames are the 2026-08-19');
-    lines.push('        vocabulary settlement; MODEL_API_KEY is a separate rename');
-    lines.push('        (civic-ai-tools-website#30) that reuses the same mechanism:');
+    lines.push('        Both spellings work today. The publisher-identity renames are the');
+    lines.push('        2026-08-19 vocabulary settlement, whose prior-era spellings are');
+    lines.push('        removed at a future major version (docs/instance-setup.md §4).');
+    lines.push('        MODEL_API_KEY is a SEPARATE rename (civic-ai-tools-website#30)');
+    lines.push('        reusing the same mechanism: OPENROUTER_API_KEY is still read and');
+    lines.push('        no removal is scheduled for it. Rename either way at your pace:');
     for (const r of result.deprecatedNames) {
       lines.push(`            - ${r.name} → rename to ${r.canonicalName}`);
     }
