@@ -33,7 +33,13 @@
  *      settlement still delivers its values (a bare entry sets the variable
  *      only when the caller has it, so the pair is safe). A NOTE lists every
  *      prior-era name found: with a canonical twin present it is that
- *      deliberate pair; alone, it is a variable still to be renamed.
+ *      deliberate pair; alone, the entry still names the prior-era spelling
+ *      and the canonical one is the entry to move to. The NOTE says which
+ *      spelling is canonical and stops there (website#30 P6 F8): the two
+ *      renames sharing this mechanism have different lifetimes — the
+ *      publisher-identity set has a documented removal at a future major
+ *      version, MODEL_API_KEY's prior-era name has no removal scheduled — and
+ *      neither is the compose file's business.
  *   2. FORM — an `environment` entry written `${NAME:-}` is rejected. That
  *      form does NOT pass a variable through: it always sets the variable, to
  *      the empty string when the caller's environment has none. Empty is not
@@ -347,7 +353,7 @@ export function renderComposeReport(result, service = APP_SERVICE) {
     lines.push('        name. Both spellings reach the app, so this is not a failure. Where');
     lines.push('        the canonical twin is listed beside it, the pair is the deliberate');
     lines.push('        dual pass-through that keeps a pre-settlement env file working;');
-    lines.push('        where it stands alone, the entry is still to be renamed:');
+    lines.push('        where it stands alone, the canonical spelling is the one to move to:');
     for (const e of result.priorEraNamesInUse) {
       lines.push(`          - ${e.priorEraName} → ${e.name}`);
     }

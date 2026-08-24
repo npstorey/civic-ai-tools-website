@@ -26,7 +26,7 @@ import { mcpTools } from '@/lib/mcp/tools';
 import { callMcpTool, routeTool } from '@/lib/mcp/client';
 import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
 import { getDefaultModel, resolveModel, ModelNotOfferedError } from '@/lib/model-resolver';
-import { ModelConfigurationError, getModelApiKind } from '@/lib/model-client';
+import { ModelConfigurationError, getMissingModelCredentialError, getModelApiKind } from '@/lib/model-client';
 import { modelAccessPhrase, modelIdentity, type ModelIdentity } from '@/lib/model-catalog';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import {
@@ -104,6 +104,38 @@ export async function POST(request: NextRequest) {
     );
   }
   const portal = body.portal || DEFAULT_PORTAL;
+
+  // Fail fast when the environment cannot describe a usable model endpoint
+  // (#178, and website#30 P6 F3). This is the guard /api/compare,
+  // /api/compare-stream and the publication gate have used since #178, and its
+  // absence here was a defect with two halves:
+  //
+  //   1. THE OPERATOR WAS TOLD THE WRONG VARIABLE. Without it, an endpoint
+  //      failure surfaced only when the pipeline reached the model, where the
+  //      typed ModelConfigurationError is classified to `model_not_configured`
+  //      and rendered as the kind's reader copy — "no AI model API key
+  //      configured … set MODEL_API_KEY". Measured with a valid key and
+  //      MODEL_API_VERSION absent, that copy is simply false: the key is
+  //      there, and the variable at fault is named nowhere the operator looks.
+  //      The typed message names the variable and the fix, and it survives
+  //      because it is returned from here rather than classified downstream.
+  //   2. IT BURNED QUOTA TO FAIL. `incrementRateLimit` below ran before
+  //      anything had established the endpoint was usable, so every attempt
+  //      against a misconfigured instance spent a day's allowance of a reader
+  //      who could never have got an answer. Guard first, then increment.
+  //
+  // Ahead of the catalog read for the same reason it is ahead of the limiter:
+  // the endpoint is the more fundamental configuration, and a catalog refusal
+  // raised first would send an operator after the wrong variable again. 503,
+  // not 400 — an operability failure, not a bad request.
+  const credentialError = getMissingModelCredentialError();
+  if (credentialError) {
+    console.error('[query-notebook]', credentialError.message);
+    return new Response(
+      JSON.stringify({ error: credentialError.message, code: credentialError.code }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
 
   // The model comes from this instance's catalog, not from a literal in this
   // file (civic-ai-tools-website#30 P2). Two things changed here:

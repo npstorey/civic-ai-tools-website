@@ -243,17 +243,29 @@ export function resolveModelIdentity(id: string): ModelIdentity {
  * An id the catalog describes resolves to its pair; anything else is carried
  * through on both sides, unchanged.
  *
- * Four call sites take this path and none of them is a model selection:
- * `POST /api/evidence`, whose `model` field an external publisher supplies for
- * an analysis this instance never ran; the evaluation preview, which runs a
+ * TWO call sites take this path, and neither of them selects a model for a run
+ * this instance is about to make: `POST /api/records` (served from
+ * `/api/evidence`), whose `model` field an external publisher supplies for an
+ * analysis this instance never ran, and the evaluation preview, which runs a
  * caller's own key against a model they named from a dialog whose list
- * website#30 P4 still owns; and the two comparison routes, which have never
- * validated a caller's model id. All four predate the catalog, so introducing
- * a refusal here would be a product change rather than this phase's split.
+ * website#30 P4 still owns. Both predate the catalog.
  *
- * A catalog this instance cannot read is the same case, deliberately: none of
- * those four depended on one, so a broken catalog must not be the thing that
- * turns them into failures. The paths that DO select a model
+ * THE TWO COMPARISON ROUTES USED TO BE HERE AND ARE NOT ANY MORE (website#30
+ * P6 F1). Leaving them tolerant was justified on the premise that they record
+ * no identity. That premise was false for `/api/compare-stream`: it writes
+ * `analysis.model` onto the root span and `gen_ai.request.model` onto every
+ * inference span, and the publish dialog carries that trace into a signed
+ * package — so a caller-supplied deployment alias was reaching canonical JSON
+ * as its own "declared identity". Both routes now call `resolveModelIdentity`
+ * and refuse an unoffered id before any upstream call.
+ *
+ * `POST /api/records`' own tolerance of `body.model` is a separate question
+ * with a separate history — it predates this sprint and is filed rather than
+ * folded in here.
+ *
+ * A catalog this instance cannot read is deliberately the same case: neither
+ * remaining caller depends on one, so a broken catalog must not be the thing
+ * that turns them into failures. The paths that DO select a model
  * (`resolveModelIdentity`, `getDefaultModel`, `getSummarizerModel`) refuse
  * loudly instead.
  */

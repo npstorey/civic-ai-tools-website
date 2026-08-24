@@ -7,7 +7,9 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
+  BUILT_IN_MODEL_BASE_URL,
   evaluateEnv,
   evaluateGroups,
   renderReport,
@@ -374,9 +376,12 @@ test('REGRESSION: the catalog rows are inert in the default profile', () => {
 
 test('the promotion is inert for every row that does not declare both fields', () => {
   // The `hasFallback`-dropping promotion is a shared code path. It can only
-  // change a row that declares BOTH fields, and every such row belongs to the
-  // model seam this sprint added.
-  const both = ENV_SPEC.filter((s) => s.requiredWhen && s.hasFallback).map((s) => s.name);
+  // change a row that declares a promotion AND a fallback claim, and every
+  // such row belongs to the model seam this sprint added. Both promotion
+  // fields are counted since website#30 P6 added the second one.
+  const both = ENV_SPEC.filter(
+    (s) => (s.requiredWhen || s.requiredWhenCustomized) && s.hasFallback,
+  ).map((s) => s.name);
   assert.deepEqual(both, ['MODEL_API_BASE_URL', 'MODEL_CATALOG', 'MODEL_CATALOG_PATH']);
 });
 
@@ -388,6 +393,127 @@ test('the catalog rows are declared as the two deliveries of one document', () =
   // Read by the server process, not at build time and not by an external tool.
   assert.equal(inline.readBy, undefined);
   assert.equal(file.readBy, undefined);
+});
+
+// --- website#30 P6 F2: preflight refuses what the app refuses -------------
+//
+// THE MEASURED DEFECT. The app requires a catalog for ANY endpoint that is not
+// the built-in default, under BOTH dialects (`isBuiltInEndpoint` and
+// `loadCatalog` in src/lib/model-resolver.ts). The seam expressed only the
+// azure half, and a seam is the only thing `conditionMet` can read — so
+// `openai-compatible` + a custom MODEL_API_BASE_URL + no catalog reported
+// `RESULT: PASS` here and was refused by the app at the first request, with
+// `MODEL_CATALOG is required…`. That is the exact failure a preflight exists
+// to prevent, on the check docs/instance-setup.md §5.3 makes step 1.
+
+const CUSTOM_ENDPOINT = 'https://gateway.example.net/v1';
+
+test('#30 P6 F2: a custom endpoint under the DEFAULT dialect promotes the catalog', () => {
+  const env = { ...envWithAllRequired(), MODEL_API_BASE_URL: CUSTOM_ENDPOINT };
+  const result = evaluateEnv(env);
+
+  // The run fails, which is the whole point: this configuration cannot answer
+  // a query, and the operator learns it here instead of at the first request.
+  assert.equal(result.ok, false);
+  for (const name of ['MODEL_CATALOG', 'MODEL_CATALOG_PATH']) {
+    assert.ok(
+      result.missingRequired.some((r) => r.name === name),
+      `${name} is a hard miss against an endpoint the built-in list does not describe`,
+    );
+    const row = result.rows.find((r) => r.canonicalName === name);
+    assert.equal(row.tier, 'required');
+    // The promotion drops the fallback claim exactly as the seam's does — the
+    // built-in catalog IS the fallback, and it is not admissible here. Left in
+    // place, the row lands in the soft `requiredOnFallback` bucket below and
+    // the run PASSES the configuration the app refuses.
+    assert.equal(row.hasFallback, false);
+    assert.ok(
+      !result.requiredOnFallback.some((r) => r.name === name),
+      `${name} must not land in the soft bucket, which would PASS the run`,
+    );
+  }
+
+  // The dialect is still the default one: this promotion is not a disguised
+  // driver change, and the profile line still reads openai-compatible.
+  assert.equal(result.profile.drivers.model, 'openai-compatible');
+
+  const report = renderReport(result);
+  assert.ok(report.includes('RESULT: FAIL'));
+  // SECRET HYGIENE. The condition is the one place this script reads a value
+  // other than a driver selector. It is compared and discarded: the endpoint
+  // must not appear anywhere in the output.
+  assert.ok(!report.includes(CUSTOM_ENDPOINT), 'the endpoint value is never echoed');
+  assert.ok(!report.includes('gateway.example.net'), 'not even its host');
+});
+
+test('#30 P6 F2: either catalog delivery satisfies the custom-endpoint promotion', () => {
+  for (const delivered of ['MODEL_CATALOG', 'MODEL_CATALOG_PATH']) {
+    const env = {
+      ...envWithAllRequired(),
+      MODEL_API_BASE_URL: CUSTOM_ENDPOINT,
+      [delivered]: delivered === 'MODEL_CATALOG' ? '[]' : '/etc/civicaitools/models.json',
+    };
+    const result = evaluateEnv(env);
+    assert.equal(result.ok, true, `${delivered} alone satisfies the need`);
+    // The sibling is demoted rather than demanded: the app REFUSES both being
+    // set, so promoting the absent one would fail a correct instance.
+    assert.ok(!result.missingRequired.some((r) => r.name.startsWith('MODEL_CATALOG')));
+  }
+});
+
+test('#30 P6 F2: the comparison agrees with the app’s own read of the variable', () => {
+  // `getModelApiBaseUrl()` is `process.env.MODEL_API_BASE_URL || DEFAULT`, so:
+  // unset and empty both mean the default, and every other string — the
+  // default written out, a trailing slash, whitespace — is read literally.
+  // A preflight that resolved any of these differently would pass a
+  // configuration the app refuses, or fail one it accepts.
+  const base = envWithAllRequired();
+  const promoted = (env) =>
+    evaluateEnv(env).rows.find((r) => r.canonicalName === 'MODEL_CATALOG').tier === 'required';
+
+  assert.equal(promoted({ ...base }), false, 'unset is the built-in endpoint');
+  assert.equal(promoted({ ...base, MODEL_API_BASE_URL: '' }), false, 'empty falls back');
+  assert.equal(
+    promoted({ ...base, MODEL_API_BASE_URL: BUILT_IN_MODEL_BASE_URL }),
+    false,
+    'the default written out explicitly is still the default',
+  );
+  assert.equal(
+    promoted({ ...base, MODEL_API_BASE_URL: `${BUILT_IN_MODEL_BASE_URL}/` }),
+    true,
+    'a trailing slash is a different string to the app, so it is one here',
+  );
+  assert.equal(promoted({ ...base, MODEL_API_BASE_URL: CUSTOM_ENDPOINT }), true);
+});
+
+test('#30 P6 F2: the coded default this script compares against is the app’s', () => {
+  // A DUPLICATED LITERAL — this script is .mjs and cannot import TypeScript.
+  // A stale copy would promote the catalog for an instance the app considers
+  // default, or fail to promote for one it does not, which is the same class
+  // of disagreement the two-name precedence rule is written to avoid. So it is
+  // asserted against the source of record rather than kept in step by hand.
+  const source = readFileSync(
+    new URL('../src/lib/model-client.ts', import.meta.url),
+    'utf8',
+  );
+  const match = source.match(/export const DEFAULT_BASE_URL = '([^']+)'/);
+  assert.ok(match, 'model-client.ts should declare DEFAULT_BASE_URL');
+  assert.equal(BUILT_IN_MODEL_BASE_URL, match[1]);
+});
+
+test('#30 P6 F2: the default profile is untouched by the new condition', () => {
+  // The standing constraint on every conditional field: with no selector set
+  // and nothing customized, the resolved spec is the declared one.
+  const { applicable, notApplicable } = resolveSpec(
+    resolveDrivers({}).drivers,
+    ENV_SPEC,
+    envWithAllRequired(),
+  );
+  assert.equal(notApplicable.length, 0);
+  assert.deepEqual(
+    applicable.map((s) => `${s.name}:${s.tier}:${s.hasFallback ?? false}`),
+    ENV_SPEC.map((s) => `${s.name}:${s.tier}:${s.hasFallback ?? false}`),
+  );
 });
 
 test('an unrecognized MODEL_API_KIND fails the run and is never echoed', () => {
