@@ -279,6 +279,14 @@ services:
       MODEL_API_BASE_URL:
       MODEL_API_VERSION:
       MODEL_API_AUTH:
+      # The model catalog, in either delivery form. Both are bare
+      # pass-throughs and neither is pinned here: the app REFUSES both being
+      # set, so a compose file that supplied one would break the other. Unset
+      # under the built-in endpoint means the built-in model list; against any
+      # other endpoint one of these is required. MODEL_CATALOG_PATH names a
+      # path INSIDE the container, so the file has to be mounted there.
+      MODEL_CATALOG:
+      MODEL_CATALOG_PATH:
       SOCRATA_MCP_URL:
       SOCRATA_APP_TOKEN:
       DATA_COMMONS_MCP_URL:

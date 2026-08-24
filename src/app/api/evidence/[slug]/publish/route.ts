@@ -17,6 +17,8 @@ import {
   evaluateUnsignedRecordPublishGate,
 } from '@/lib/evidence/unsigned-tier';
 import { fromDbValue, toDbValue } from '@/lib/evidence/visibility';
+import { resolveEvaluatorModel, resolveModel, ModelNotOfferedError } from '@/lib/model-resolver';
+import { getMissingModelCredentialError, ModelConfigurationError } from '@/lib/model-client';
 import { visibilityMatches } from '@/lib/evidence/visibility-sql';
 
 /**
@@ -31,7 +33,7 @@ import { visibilityMatches } from '@/lib/evidence/visibility-sql';
  *
  * Flow:
  *   1. Default-on adversarial eval (skippable via runEvaluation:false): the
- *      platform runs the six-criterion rubric with its own OpenRouter key and
+ *      platform runs the six-criterion rubric with its own model credential and
  *      emits a signed `attestation/evaluates/v1` node targeting the content
  *      node. The gate is PRESENCE-based — the eval and the publication record
  *      relate via the shared targetNodeId; `publishes/v1` stays at its
@@ -56,10 +58,11 @@ import { visibilityMatches } from '@/lib/evidence/visibility-sql';
  * withdrawal is a new attestation in the chain, not an unpublish.
  */
 
-// Default evaluator for the publication gate. Must differ from the analysis
-// model (evaluator independence); when they collide, the fallback is used.
-const DEFAULT_EVALUATOR_MODEL = 'anthropic/claude-sonnet-4-6';
-const FALLBACK_EVALUATOR_MODEL = 'openai/gpt-4o';
+// The evaluator for the publication gate comes from this instance's catalog
+// (`evaluator` ranks, civic-ai-tools-website#30 P2), not from two literals
+// here. Evaluator independence is unchanged: the gate walks the declared
+// preference order and takes the first candidate that is not the analysis
+// model.
 
 export async function POST(
   request: NextRequest,
@@ -171,8 +174,17 @@ export async function POST(
   // 1. Default-on adversarial evaluation (civic-ai-tools#72; Q25 (b)+(c)).
   let evaluationNodeId: string | undefined;
   if (runEvaluation) {
-    const platformKey = process.env.OPENROUTER_API_KEY;
-    if (!platformKey) {
+    // The platform credential is resolved by the endpoint layer, under either
+    // accepted name (MODEL_API_KEY, or its prior-era spelling
+    // OPENROUTER_API_KEY). This route used to read the prior-era variable from
+    // `process.env` directly, so an instance configured with MODEL_API_KEY
+    // alone was told "Evaluation unavailable" by the publication gate despite a
+    // fully configured model layer (flagged by #30 P1, closed here). It also
+    // stops this path from holding a credential as a string at all: the client
+    // resolves its own key, so nothing is threaded through.
+    const credentialError = getMissingModelCredentialError();
+    if (credentialError) {
+      console.error('[publish]', credentialError.message);
       return NextResponse.json(
         {
           error:
@@ -181,26 +193,57 @@ export async function POST(
         { status: 502 },
       );
     }
+
     // Evaluator independence: the evaluator model must differ from the model
     // that produced the analysis (same invariant as the interactive route).
-    // An explicit override that collides is the caller's error (400); the
-    // DEFAULT colliding silently falls back instead.
-    let evaluatorModel = evaluatorModelOverride ?? DEFAULT_EVALUATOR_MODEL;
-    if (evaluatorModelOverride && evaluatorModelOverride === pkg.cost.model) {
-      return NextResponse.json(
-        { error: 'Evaluator model must differ from the analysis model' },
-        { status: 400 },
-      );
-    }
-    if (evaluatorModel === pkg.cost.model) {
-      evaluatorModel = FALLBACK_EVALUATOR_MODEL;
+    // An explicit override that collides is the caller's error (400), as is an
+    // override this instance does not offer — refused here, before any upstream
+    // call, instead of being forwarded for the endpoint to reject.
+    let evaluatorModel: string;
+    try {
+      if (evaluatorModelOverride !== undefined) {
+        if (evaluatorModelOverride === pkg.cost.model) {
+          return NextResponse.json(
+            { error: 'Evaluator model must differ from the analysis model' },
+            { status: 400 },
+          );
+        }
+        evaluatorModel = resolveModel(evaluatorModelOverride).id;
+      } else {
+        const preferred = resolveEvaluatorModel(pkg.cost.model);
+        if (!preferred) {
+          // Every declared candidate IS the analysis model. Not a bad request
+          // and not retryable by the caller: the instance's catalog declares no
+          // second evaluator, which only an operator can change.
+          return NextResponse.json(
+            {
+              error:
+                'Evaluation unavailable (this instance declares no evaluator model other than the one that produced this analysis); retry with {"runEvaluation": false} to publish without an evaluation.',
+            },
+            { status: 502 },
+          );
+        }
+        evaluatorModel = preferred.id;
+      }
+    } catch (error) {
+      if (error instanceof ModelNotOfferedError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      if (error instanceof ModelConfigurationError) {
+        console.error('[publish]', error.message);
+        return NextResponse.json(
+          {
+            error:
+              'Evaluation unavailable (this instance has no usable model catalog); retry with {"runEvaluation": false} to publish without an evaluation.',
+          },
+          { status: 502 },
+        );
+      }
+      throw error;
     }
 
     try {
-      const parsed = await runAdversarialEval(pkg, {
-        apiKey: platformKey,
-        evaluatorModel,
-      });
+      const parsed = await runAdversarialEval(pkg, { evaluatorModel });
       if (!parsed.ok) {
         return NextResponse.json(
           {

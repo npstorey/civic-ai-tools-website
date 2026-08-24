@@ -385,41 +385,8 @@ export const mcpTools: ChatCompletionTool[] = [
   ...bostonOpencontextMcpTools,
 ];
 
-// Model definitions for the model selector
-export interface ModelDefinition {
-  id: string;
-  name: string;
-  tag?: string; // short descriptor shown in dropdown only (e.g. "recommended")
-  provider: string;
-  supports_tools: boolean;
-  description?: string;
-  maxTokenBudget?: number; // per-model token limit override
-}
-
-export const availableModels: ModelDefinition[] = [
-  {
-    id: 'openai/gpt-4o',
-    name: 'GPT-4o',
-    tag: 'recommended',
-    provider: 'OpenAI',
-    supports_tools: true,
-    description: 'Best balance of quality and speed',
-  },
-  {
-    id: 'openai/gpt-5.4',
-    name: 'GPT-5.4',
-    tag: 'premium',
-    provider: 'OpenAI',
-    supports_tools: true,
-    description: 'Highest quality analysis, newest model',
-  },
-  {
-    id: 'google/gemini-3.5-flash-lite',
-    name: 'Gemini 3.5 Flash Lite',
-    tag: 'fastest',
-    provider: 'Google',
-    supports_tools: true,
-    description: 'Fast and budget-friendly',
-    maxTokenBudget: 150_000,
-  },
-];
+// Model definitions moved to src/lib/model-catalog.ts (civic-ai-tools-website#30
+// P2). `ModelDefinition`, the offered list, its pricing and its display names
+// were four tables in three files describing the same ids; they are now one
+// catalog with one resolver (src/lib/model-resolver.ts). Nothing about MCP
+// tooling lived in them, which is why they left this file rather than staying.
