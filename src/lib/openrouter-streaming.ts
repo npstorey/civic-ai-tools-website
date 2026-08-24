@@ -1,5 +1,5 @@
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
-import { getModelClient, classifyModelError, getGenAiSystem, includeStreamUsage } from './model-client.ts';
+import { getModelClient, classifyModelError, getGenAiSystem, includeStreamUsage, getModelApiKind } from './model-client.ts';
 import type { ModelIdentity } from './model-catalog.ts';
 import { formatToolProgress, formatToolResult, generateToolReason, describeToolFailureForLlm, classifyStreamError, streamErrorPayload, type PanelType, type ProgressPhase, type StreamErrorCode, type StreamErrorKind } from './streaming.ts';
 import type { TraceBuilder } from './evidence/trace.ts';
@@ -39,6 +39,21 @@ export interface StreamCallbacks {
 }
 
 /**
+ * The wire dialect, for the operator log line below. Never throws: an
+ * unrecognized `MODEL_API_KIND` is a typed refusal from `getModelApiKind()`,
+ * and although that state cannot produce an upstream 429 (the client refuses
+ * to be built at all), a failure handler must not fail on its own account.
+ */
+function dialectNote(kind: StreamErrorKind): string {
+  if (kind !== 'model_rate_limited') return '';
+  try {
+    return ` [model endpoint dialect: ${getModelApiKind()}]`;
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Shared failure tail for both streaming query functions: classify the error,
  * log it server-side (previously this path was silent — the error only went to
  * the SSE callback), and forward a sanitized payload to the caller.
@@ -52,12 +67,21 @@ export interface StreamCallbacks {
  * the classified kind, and the raw error goes only to the server log above.
  *
  * `classifyModelError` runs first because it classifies structurally (a
- * `ModelConfigurationError` instance, a 401/403 status) where the text matcher
- * could only guess from wording; `classifyStreamError` covers everything else.
+ * `ModelConfigurationError` instance, a 401/403 status, a 429 from the
+ * endpoint) where the text matcher could only guess from wording;
+ * `classifyStreamError` covers everything else. That ordering is what keeps an
+ * upstream 429 (`model_rate_limited`) apart from this app's own per-day limiter
+ * (`rate_limit`) — see `classifyModelError` for why the split lives there.
+ *
+ * The operator log names the wire dialect on an upstream rate limit
+ * (website#30 P4). It is the fact an operator needs first and cannot get from
+ * the reader-facing copy, which deliberately carries no infrastructure detail:
+ * under a deployment-routed dialect the quota being hit is per-model and
+ * per-region, so "which endpoint is refusing us" is the start of the diagnosis.
  */
 function reportStreamFailure(panel: PanelType, error: unknown, callbacks: StreamCallbacks): void {
   const kind: StreamErrorKind = classifyModelError(error) ?? classifyStreamError(error);
-  console.error(`[stream:${panel}] query failed (${kind}):`, error);
+  console.error(`[stream:${panel}] query failed (${kind})${dialectNote(kind)}:`, error);
   const { message, code } = streamErrorPayload(kind);
   callbacks.onError(panel, message, code);
 }

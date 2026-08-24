@@ -54,11 +54,13 @@ You need:
 
 - A host with **Docker Engine and Compose v2** (`docker compose`, not the
   legacy `docker-compose`).
-- A **model API key**. The app speaks the OpenAI-compatible
-  chat-completions API; by default it points at OpenRouter and reads
-  `OPENROUTER_API_KEY`. Any OpenAI-compatible endpoint works via
-  `MODEL_API_BASE_URL` (the key stays in `OPENROUTER_API_KEY` either
-  way). Without a key the app starts and serves pages, but every query
+- A **model API key**, in `MODEL_API_KEY`. The app speaks two wire
+  dialects: the OpenAI-compatible chat-completions API (the default,
+  pointed at OpenRouter unless you say otherwise) and a deployment-routed
+  one. `MODEL_API_BASE_URL` selects the endpoint and `MODEL_API_KIND`
+  selects the dialect; the key stays in `MODEL_API_KEY` either way, and
+  `OPENROUTER_API_KEY` is that variable's prior-era name, still read.
+  Without a key the app starts and serves pages, but every query
   fails fast with an operator-actionable error (shown
   [below](#the-model-seam)).
 - **Node.js ≥ 22** on the host if you want to run the preflight and
@@ -138,7 +140,7 @@ What you will see, and why it is correct:
   ([Instance identity and signing](#instance-identity-and-signing-go-to-production)).
 - Queries fail until you supply a model key and a data-source endpoint
   (next step), with an error that names the missing variable
-  (`OPENROUTER_API_KEY` / `SOCRATA_MCP_URL` — neither has a fallback).
+  (`MODEL_API_KEY` / `SOCRATA_MCP_URL` — neither has a fallback).
 
 Verify the bring-up:
 
@@ -167,8 +169,9 @@ A minimal first environment file (placeholders — substitute your own,
 and never commit this file):
 
 ```bash
-# Model access — required for every query.
-OPENROUTER_API_KEY=<your-model-api-key>
+# Model access — required for every query. `OPENROUTER_API_KEY` is this
+# variable's prior-era name and still works; set one, not both.
+MODEL_API_KEY=<your-model-api-key>
 
 # Primary data source — required for every data query; no fallback. Set
 # it to the Socrata MCP deployment this instance should query. Pointing
@@ -212,7 +215,7 @@ what your env file can do with it:
 
 | Spelling | What it means | Examples |
 | --- | --- | --- |
-| bare `NAME:` | Pass-through. Set in the container only when your environment has it, **absent otherwise** — which matters, because for several variables absence is the configured state, not a missing value. | `OPENROUTER_API_KEY`, `SOCRATA_MCP_URL`, the signing pair, `NEXTAUTH_SECRET`, the OAuth credentials, `CRON_SECRET`, `SIGN_IN_ALLOWLIST`, `ROADMAP_RAW_URL`, the host-topology trio, the registry-URL overrides, the branding set, the tuning knobs |
+| bare `NAME:` | Pass-through. Set in the container only when your environment has it, **absent otherwise** — which matters, because for several variables absence is the configured state, not a missing value. | the model-endpoint set (`MODEL_API_KEY` and its prior-era `OPENROUTER_API_KEY`, `MODEL_API_KIND`, `MODEL_API_BASE_URL`, `MODEL_API_VERSION`, `MODEL_API_AUTH`, `MODEL_CATALOG`, `MODEL_CATALOG_PATH`), `SOCRATA_MCP_URL`, the signing pair, `NEXTAUTH_SECRET`, the OAuth credentials, `CRON_SECRET`, `SIGN_IN_ALLOWLIST`, `ROADMAP_RAW_URL`, the host-topology trio, the registry-URL overrides, the branding set, the tuning knobs |
 | `${NAME:-default}` | Overridable, with a working local default if you say nothing. | the Postgres and object-store credentials (`POSTGRES_PASSWORD`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` — placeholder defaults you are expected to replace), host ports, bucket name, `S3_PUBLIC_BASE_URL`, `APP_BIND` / `APP_PORT`, the executor image tag, the identity variables that carry a local default, `NEXTAUTH_URL`, the GC knobs |
 | a literal value | Hardcoded wiring. Changing it means editing the compose file, not your env file. | the three driver selectors, `S3_ENDPOINT`, the constructed `DATABASE_URL` |
 
@@ -341,32 +344,59 @@ use (and fails the preflight). What the defaults hide:
 ### The model seam
 
 The model endpoint is a seam too, but external by design — a network
-service you supply, not a container in the stack. `MODEL_API_BASE_URL`
-selects any OpenAI-compatible chat-completions endpoint (default:
-OpenRouter); `OPENROUTER_API_KEY` is the credential in either case.
+service you supply, not a container in the stack. It is a **wire dialect**
+rather than only a URL: `MODEL_API_KIND` picks `openai-compatible` (the
+default) or `azure-openai`, which routes by deployment name, authenticates
+with an `api-key` header and carries an api-version. `MODEL_API_BASE_URL`
+selects the endpoint — under the default dialect any OpenAI-compatible
+chat-completions endpoint, and under `azure-openai` the resource endpoint.
+`MODEL_API_KEY` is the credential in every case; `OPENROUTER_API_KEY` is
+its prior-era name and is still read, canonical winning whenever it is
+defined.
 
-Missing or rejected model keys **fail fast with typed errors** — there
-is no silent hang to diagnose. Recognize them:
+Against any endpoint other than the built-in default the instance also
+requires a **model catalog** (`MODEL_CATALOG`, or `MODEL_CATALOG_PATH` for
+a file — setting both is refused). The built-in list names public slugs of
+the default endpoint, which against yours may name nothing or name
+something else. Wiring an instance to your own endpoint end to end,
+including what to check in the resulting signed bytes, is
+[`docs/instance-setup.md` §5](instance-setup.md#5-point-the-instance-at-a-model-endpoint).
+
+Missing, rejected, and rate-limited model keys **fail fast with typed
+errors** — there is no silent hang to diagnose. Recognize them:
 
 - Key missing or empty — the server logs and streams:
 
-  > No model API key is configured: OPENROUTER_API_KEY is missing or
-  > empty in the server environment. Set it (any OpenAI-compatible
-  > endpoint configured via MODEL_API_BASE_URL still reads its key from
-  > OPENROUTER_API_KEY) and restart the server.
+  > No model API key is configured: MODEL_API_KEY is missing or empty in
+  > the server environment (its prior-era name OPENROUTER_API_KEY is still
+  > accepted and was not set either). Set MODEL_API_KEY and restart the
+  > server; whichever endpoint MODEL_API_BASE_URL names reads its key from
+  > it.
 
   and the page shows: *"This server has no AI model API key configured,
-  so queries can't run. If you operate this instance, set
-  OPENROUTER_API_KEY in the server environment and restart."*
+  so queries can't run. If you operate this instance, set MODEL_API_KEY
+  in the server environment and restart."*
 
 - Key present but refused upstream (HTTP 401/403 from the endpoint) —
   the page shows: *"The AI model service rejected this server's API key,
-  so the query couldn't run. If you operate this instance, check that
-  OPENROUTER_API_KEY is valid for the configured endpoint."*
+  so the query couldn't run. If you operate this instance, check that the
+  key in MODEL_API_KEY — or in its still-accepted prior-era name
+  OPENROUTER_API_KEY — is valid for the endpoint this instance is
+  configured to call."*
 
-Both are reproducible from the command line against a running stack.
+- Endpoint rate-limiting this server (HTTP 429 from the endpoint) — the
+  page shows: *"The AI model service is limiting how many requests this
+  server can make right now, so this query couldn't run. This is not your
+  own daily limit — please try again shortly."* **This is not the app's
+  own per-day request limiter**, which also answers 429 but is about one
+  reader's allowance; the two are separate kinds precisely so a reader is
+  never told they exhausted a budget they never touched. The server log
+  names the wire dialect on this one, because quota on a deployment-routed
+  endpoint is per-model and per-region.
+
+All three are reproducible from the command line against a running stack.
 Use a model id this instance actually offers — `GET /api/models` lists
-them, and `openai/gpt-4o` is the default:
+them, and on the built-in catalog `openai/gpt-4o` is the first:
 
 ```bash
 curl -s -X POST http://127.0.0.1:3000/api/compare \
@@ -446,7 +476,7 @@ profile never reads:
 `VERCEL_*` sandbox-auth variables). Exit code `0` means every required
 variable for the profile is present; `1` otherwise. Run with the
 stand-ins alone, it exits `1` naming exactly the thirteen operator-supplied
-variables — `OPENROUTER_API_KEY`, `SOCRATA_MCP_URL`, `PUBLISHER_SIGNING_KEY`,
+variables — `MODEL_API_KEY`, `SOCRATA_MCP_URL`, `PUBLISHER_SIGNING_KEY`,
 `PUBLISHER_KEY_ID`, the instance-identity set (`PUBLISHER_SITE_ORIGIN`,
 `PUBLISHER_SIGNER_BINDING_TIER`, `PUBLISHER_SIGNER_IDENTIFIER`,
 `PUBLISHER_SIGNER_DISPLAY_NAME`, `PUBLISHER_PLATFORM_AGENT_TITLE` — see
@@ -493,7 +523,8 @@ for your driver are hard requirements of the publish path.)
 
 | Variable | Absent means |
 | --- | --- |
-| `OPENROUTER_API_KEY` | Every query fails fast with the typed error above. No fallback. |
+| `MODEL_API_KEY` | Every query fails fast with the typed error above. No fallback. Its prior-era name `OPENROUTER_API_KEY` still satisfies it. |
+| `MODEL_CATALOG` / `MODEL_CATALOG_PATH` | Only when `MODEL_API_BASE_URL` names something other than the built-in endpoint, or `MODEL_API_KIND=azure-openai`: the instance refuses rather than trusting a model list written for a different endpoint. Under the built-in endpoint, absence is the configured state. |
 | `SOCRATA_MCP_URL` | Every data query refuses with a typed error naming this variable. No fallback — this used to default to the project's hosted endpoint, which silently routed an unconfigured instance's queries through infrastructure it does not operate. Set it to the Socrata MCP deployment this instance should query. Pointing it at another operator's endpoint (the project's hosted one included) is a real choice, but understand what it means: your users' queries route through that host's infrastructure, not yours. |
 
 **Absence disables a specific feature** (the app runs; the feature

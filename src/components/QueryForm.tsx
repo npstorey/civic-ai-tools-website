@@ -25,13 +25,19 @@ export type { QueryMode };
  * failed fetch/JSON parse and a 200 response whose body doesn't carry a
  * usable `models` array. Both are the same class of failure to the reader
  * (the model list didn't load), so both route through this one message
- * rather than a raw error or a silent render crash. The default model still
- * works, so this discloses a degraded state rather than a blocking one — see
- * docs/design-principles.md Principle 3 and its corollary (a list that failed
- * to load is not a bad selection; don't mark the picker invalid).
+ * rather than a raw error or a silent render crash.
+ *
+ * It used to say "only the default model is available right now", which was
+ * true while this form carried a hardcoded model id to fall back on. It no
+ * longer does (website#30 P4): which models exist is instance configuration,
+ * and a form that cannot read the list has nothing to substitute. So the
+ * message now discloses a blocking state, because that is what it is — and
+ * the send control is withdrawn rather than the picker being marked invalid,
+ * per docs/design-principles.md Principle 3 and its corollary (a list that
+ * failed to load is not a bad selection).
  */
 const MODELS_LOAD_ERROR =
-  "Couldn't load the list of AI models, so only the default model is available right now. Refresh the page to try again.";
+  "Couldn't load the list of AI models this site offers, so a query can't be sent right now. Refresh the page to try again.";
 
 /**
  * Sticky-per-session mode persistence (§10 Q7), on the shared
@@ -96,7 +102,15 @@ export default function QueryForm({
   comparisonControl,
 }: QueryFormProps) {
   const [query, setQuery] = useState('');
-  const [model, setModel] = useState('openai/gpt-4o');
+  // Empty until `/api/models` answers, then the first model THIS instance
+  // offers (website#30 P4). It used to initialize to a hardcoded `openai/gpt-4o`
+  // — a statement that this instance offers that id, true only of the built-in
+  // catalog. On an instance with its own catalog the selector rendered
+  // "Select model" while the state still held an id the instance does not
+  // offer, so a submit before any selection sent it upstream. The built-in
+  // catalog's first offered model is still `openai/gpt-4o`, so the reference
+  // instance's behavior is unchanged; it is now read rather than asserted.
+  const [model, setModel] = useState('');
   const [portal, setPortal] = useState('');
   // Phase 2a1 gate: executed-sandbox mode is signed-in-only. Anonymous users
   // cannot invoke /api/query-notebook through the UI. `useStoredMode` keeps
@@ -150,6 +164,11 @@ export default function QueryForm({
         }
         setModels(parsed);
         setModelsError(false);
+        // Adopt this instance's first offered model, once, if the reader has
+        // not already chosen. `/api/models` serves selectable entries in
+        // catalog order, and the catalog's `default` flag names the notebook
+        // route's model, which is deliberately not in this list.
+        setModel((current) => (current === '' && parsed.length > 0 ? parsed[0].id : current));
       } catch (error) {
         console.error('Failed to fetch models:', error);
         if (isMounted) setModelsError(true);
@@ -173,9 +192,16 @@ export default function QueryForm({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [modelOpen, portalOpen]);
 
+  // No model chosen yet means `/api/models` has not answered (a few hundred ms
+  // on first paint) or could not answer at all. Either way there is no id to
+  // send: the routes require one, and this form no longer has a hardcoded id to
+  // guess with. The `modelsError` message above says so when the failure is
+  // durable.
+  const canSubmit = query.trim().length > 0 && model !== '' && !isLoading;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (query.trim() && !isLoading) {
+    if (canSubmit) {
       onSubmit(query.trim(), model, portal, mode);
     }
   };
@@ -218,7 +244,7 @@ export default function QueryForm({
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
-              if (query.trim() && !isLoading) {
+              if (canSubmit) {
                 onSubmit(query.trim(), model, portal, mode);
               }
             }
@@ -240,7 +266,7 @@ export default function QueryForm({
         />
         <button
           type="submit"
-          disabled={isLoading || !query.trim()}
+          disabled={!canSubmit}
           style={{
             position: 'absolute',
             right: '8px',

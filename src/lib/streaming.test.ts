@@ -120,6 +120,12 @@ test('classifyStreamError honors a typed code before any message parsing', () =>
 test('classifyStreamError falls back to message shape for credential failures', () => {
   // The guard's own message (non-streaming route JSON path).
   assert.equal(
+    classifyStreamError('No model API key is configured: MODEL_API_KEY is missing or empty in the server environment.'),
+    'model_not_configured',
+  );
+  // The prior-era variable name in the same guard message classifies alike —
+  // the matcher keys on the sentence, not on which name it carries.
+  assert.equal(
     classifyStreamError('No model API key is configured: OPENROUTER_API_KEY is missing or empty in the server environment.'),
     'model_not_configured',
   );
@@ -133,12 +139,65 @@ test('friendlyStreamError gives distinct, operator-actionable copy for the two c
   const notConfigured = friendlyStreamError({ code: 'model_not_configured' });
   const rejected = friendlyStreamError({ code: 'model_auth_rejected' });
   assert.notEqual(notConfigured, rejected);
-  // Both name the env var so the operator knows exactly what to fix.
-  assert.match(notConfigured, /OPENROUTER_API_KEY/);
+  // Both name the env var so the operator knows exactly what to fix. Since
+  // website#30 P1 that variable is MODEL_API_KEY; `OPENROUTER_API_KEY` is its
+  // prior-era name and still works, which is why the rejection copy — the case
+  // where a key demonstrably already exists somewhere — names both, while the
+  // not-configured copy names only the one to set.
+  assert.match(notConfigured, /MODEL_API_KEY/);
+  assert.doesNotMatch(notConfigured, /OPENROUTER_API_KEY/);
+  assert.match(rejected, /MODEL_API_KEY/);
   assert.match(rejected, /OPENROUTER_API_KEY/);
   // Distinguishing language: absent vs rejected.
   assert.match(notConfigured, /no AI model API key configured/i);
   assert.match(rejected, /rejected/i);
+});
+
+// --- website#30 P4 (G0 D6): two limiters, two kinds -------------------------
+//
+// A 429 means one of two entirely different things, and before this split a
+// reader was told the wrong one whenever it was the model service's. These
+// pin BOTH halves, because the value of the split is that each stays put.
+
+test('#30 P4: this app’s own limiter still classifies as rate_limit', () => {
+  // The exact shapes the app's own 429 takes on the way to a reader: the JSON
+  // body the query routes answer with, and the SSEError `sse-client.ts` builds
+  // from it. `classifyModelError` is not in this path at all — the client
+  // never sees an SDK error.
+  assert.equal(classifyStreamError({ status: 429, message: 'Rate limit exceeded' }), 'rate_limit');
+  assert.equal(classifyStreamError('Rate limit exceeded'), 'rate_limit');
+  assert.equal(classifyStreamError({ status: 429 }), 'rate_limit');
+  // And its copy is untouched — the reader's own daily allowance, with the
+  // sign-in affordance that only applies to it.
+  assert.match(friendlyStreamError({ status: 429 }), /today’s request limit/);
+  assert.match(friendlyStreamError({ status: 429 }), /Sign in/);
+});
+
+test('#30 P4: a carried model_rate_limited code renders its own copy', () => {
+  const copy = friendlyStreamError({ code: 'model_rate_limited', message: 'whatever' });
+  assert.equal(classifyStreamError({ code: 'model_rate_limited' }), 'model_rate_limited');
+  assert.notEqual(copy, friendlyStreamError({ status: 429 }), 'the two limits read differently');
+  // Honest about whose limit it is, in both directions.
+  assert.match(copy, /AI model service/i);
+  assert.match(copy, /not your own daily limit/i);
+  assert.match(copy, /try again shortly/i);
+  // No promised retry time — nothing here knows one (design-principles P3).
+  assert.doesNotMatch(copy, /\d+\s*(second|minute|hour)/i);
+});
+
+test('#30 P4: message text alone never produces model_rate_limited', () => {
+  // Prose cannot tell the two limiters apart, so it must not try. Every
+  // rate-limit-shaped string stays on the app's own kind; the upstream kind is
+  // reachable only from a carried code or from `classifyModelError`'s
+  // structural read of an SDK status.
+  for (const raw of [
+    'Rate limit exceeded',
+    '429 Too Many Requests',
+    'rate limit reached for this deployment',
+    { status: 429, message: 'rate limit' },
+  ]) {
+    assert.equal(classifyStreamError(raw), 'rate_limit', `stays rate_limit: ${JSON.stringify(raw)}`);
+  }
 });
 
 test('#258 C4: mcp_not_configured classifies from typed code and from message shape alike', () => {
@@ -195,10 +254,11 @@ test('#258 C4: describeToolFailureForLlm handles the unconfigured kind without l
 // them, because no assertion here depends on the wording of any message.
 
 test('#154: every StreamErrorKind round-trips server -> wire -> render into its own bucket', () => {
-  // Guard the "nine kinds" this phase (plus #271's notebook_execution)
-  // enumerated: a tenth must be added to STREAM_ERROR_KINDS deliberately, and
-  // the loop below then covers it.
-  assert.equal(STREAM_ERROR_KINDS.length, 9, 'the nine classified kinds');
+  // Guard the enumerated kinds: an eleventh must be added to
+  // STREAM_ERROR_KINDS deliberately, and the loop below then covers it. Nine
+  // at #154 (plus #271's notebook_execution); ten since website#30 P4 split
+  // `model_rate_limited` off `rate_limit`.
+  assert.equal(STREAM_ERROR_KINDS.length, 10, 'the ten classified kinds');
 
   for (const kind of STREAM_ERROR_KINDS) {
     // `streamErrorPayload` is the exact call the server chokepoint

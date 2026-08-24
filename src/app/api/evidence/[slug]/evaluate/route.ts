@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createModelClient } from '@/lib/model-client';
+import { createModelClient, classifyModelError } from '@/lib/model-client';
+import {
+  CALLER_MODEL_KEY_REJECTED_MESSAGE,
+  callerModelKeyFailure,
+  resolveCallerModelKey,
+} from '@/lib/caller-model-key';
 import { modelIdentityForValue } from '@/lib/model-resolver';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -21,9 +26,13 @@ import {
  * POST /api/evidence/[slug]/evaluate
  *
  * Sends the evidence package to an evaluator model with a structured rubric.
- * Uses the caller's OpenRouter API key — never stored.
+ * Uses a model API key the caller supplies — the key for whatever
+ * chat-completions endpoint THIS instance is configured to call, not any
+ * particular vendor's. Never stored.
  *
- * Body: { openRouterApiKey: string, evaluatorModel: string }
+ * Body: { modelApiKey: string, evaluatorModel: string }
+ *   `openRouterApiKey` is the prior-era name for the key field and is accepted
+ *   indefinitely (website#30 G0 D7) — see `src/lib/caller-model-key.ts`.
  * Returns: { rubric, overallScore, assessment, evaluatorModel }
  */
 export async function POST(
@@ -38,9 +47,10 @@ export async function POST(
   }
 
   const body = await request.json();
-  const { openRouterApiKey, evaluatorModel } = body;
-  if (!openRouterApiKey || typeof openRouterApiKey !== 'string') {
-    return NextResponse.json({ error: 'OpenRouter API key required' }, { status: 400 });
+  const { evaluatorModel } = body;
+  const callerKey = resolveCallerModelKey(body);
+  if (!callerKey.ok) {
+    return NextResponse.json({ error: callerKey.error }, { status: 400 });
   }
   if (!evaluatorModel || typeof evaluatorModel !== 'string') {
     return NextResponse.json({ error: 'Evaluator model required' }, { status: 400 });
@@ -71,12 +81,16 @@ export async function POST(
     return NextResponse.json({ error: 'Record package not found in storage' }, { status: 404 });
   }
 
-  // website#30 P3. Resolved tolerantly: this preview runs on a caller's own
-  // key against a model they named from a dialog whose list #30 P4 still owns,
-  // so an unoffered id is carried through exactly as before rather than newly
-  // refused. Independence is checked declared-against-declared — `pkg.cost.model`
-  // is a recorded identity, and comparing it to a catalog id compares two
-  // namespaces.
+  // website#30 P3, unchanged by P4. Resolved tolerantly: this preview runs on a
+  // caller's own key, and the route has never validated the id against the
+  // catalog, so an unoffered id is carried through exactly as before rather
+  // than newly refused. P4 removed the reason this was most likely to happen —
+  // the dialog now offers this instance's own catalog rather than a stale
+  // hardcoded five — but the route is an API, not only the dialog's backend,
+  // and tightening it is a product change that belongs with the same decision
+  // for `/api/compare*`. Independence is checked declared-against-declared —
+  // `pkg.cost.model` is a recorded identity, and comparing it to a catalog id
+  // compares two namespaces.
   const evaluator = modelIdentityForValue(evaluatorModel);
 
   // Evaluator model must differ from analysis model
@@ -87,7 +101,7 @@ export async function POST(
     );
   }
 
-  const openrouter = createModelClient({ apiKey: openRouterApiKey });
+  const openrouter = createModelClient({ apiKey: callerKey.apiKey });
 
   try {
     const evaluationContent = buildEvaluationPrompt(pkg);
@@ -126,9 +140,21 @@ export async function POST(
     });
   } catch (error) {
     console.error('[evaluate] Error:', error);
+    // Same structural-first handling as the replay route (website#30 P4): the
+    // SDK's status classifies an upstream refusal, which is what keeps the
+    // model service's 429 apart from this app's own per-day limiter and keeps
+    // the copy addressed to the CALLER whose key it is. The text probe stays as
+    // a fallback for shapes that carry only a message.
+    const typed = callerModelKeyFailure(classifyModelError(error));
+    if (typed) {
+      return NextResponse.json({ error: typed.error, code: typed.code }, { status: typed.status });
+    }
     const message = error instanceof Error ? error.message : 'Evaluation failed';
     if (message.includes('401') || message.includes('Unauthorized') || message.includes('invalid')) {
-      return NextResponse.json({ error: 'Invalid OpenRouter API key' }, { status: 401 });
+      return NextResponse.json(
+        { error: CALLER_MODEL_KEY_REJECTED_MESSAGE, code: 'model_auth_rejected' },
+        { status: 401 },
+      );
     }
     return NextResponse.json({ error: message }, { status: 500 });
   }

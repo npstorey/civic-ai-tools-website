@@ -7,6 +7,18 @@
  * using the Socrata MCP server for tool calls. Captures raw responses,
  * token usage, latency, and tools called for manual scoring.
  *
+ * THIS HARNESS IS PINNED TO OPENROUTER, AND THE APP IS NOT. Since
+ * civic-ai-tools-website#30 the app reaches a configurable endpoint through
+ * `src/lib/model-client.ts`, reading `MODEL_API_KEY` (with `OPENROUTER_API_KEY`
+ * as its prior-era name) and `MODEL_API_BASE_URL` / `MODEL_API_KIND`. This
+ * script reads none of that: it is `.mjs` run as bare `node`, so it cannot
+ * import that TypeScript module, and it hardcodes OpenRouter's base URL and
+ * requires `OPENROUTER_API_KEY` specifically. That is why the variable name
+ * below differs from the one an operator now sets — the statement is accurate
+ * about this script, not stale about the app. Repointing the harness at the
+ * endpoint layer is tracked in civic-ai-tools#155 and is deliberately not a
+ * find-and-replace.
+ *
  * Usage:
  *   OPENROUTER_API_KEY=<your-key> SOCRATA_MCP_URL=https://your-mcp-host \
  *     node scripts/eval-models.mjs

@@ -32,6 +32,7 @@ import {
   classifyModelError,
   _resetDefaultModelClientForTests,
 } from './model-client.ts';
+import { STREAM_ERROR_KINDS } from './streaming.ts';
 
 const FAKE_KEY = 'sk-or-test-obviously-fake-key-do-not-use';
 const FAKE_AZURE_KEY = 'azure-test-obviously-fake-key-do-not-use';
@@ -149,6 +150,34 @@ test('classifyModelError distinguishes not-configured from auth-rejected', () =>
   assert.equal(classifyModelError({ status: 500, message: 'Internal' }), null);
   assert.equal(classifyModelError(new Error('fetch failed')), null);
   assert.equal(classifyModelError(null), null);
+});
+
+test('#30 P4: an upstream 429 is model_rate_limited, never this app’s rate_limit', () => {
+  // The split lives HERE rather than in `classifyStreamError` because only an
+  // error thrown by the SDK reaches this function: a 429 seen here is
+  // unambiguously the endpoint's. A 429 seen by the stream classifier is this
+  // app's own per-day limiter answering a request, and stays `rate_limit`.
+  assert.equal(
+    classifyModelError({ status: 429, message: '429 Too Many Requests' }),
+    'model_rate_limited',
+  );
+  // Shape, not wording — an endpoint whose 429 body says nothing recognizable
+  // still classifies, which is the property text matching cannot give.
+  assert.equal(classifyModelError({ status: 429 }), 'model_rate_limited');
+  assert.equal(classifyModelError({ status: 429, message: '' }), 'model_rate_limited');
+  // And a rate-limit-shaped message WITHOUT a status is not this function's
+  // business: it has no way to know whose limit it was.
+  assert.equal(classifyModelError(new Error('Rate limit exceeded')), null);
+});
+
+test('#30 P4: the model error codes are a strict subset of the stream kinds', () => {
+  // `reportStreamFailure` assigns `classifyModelError(...) ?? classifyStreamError(...)`
+  // to a `StreamErrorKind`, so every code this function can return must be one.
+  // A code added here without a kind (and its copy) would be a compile error
+  // there and an unrenderable payload on the wire.
+  for (const code of ['model_not_configured', 'model_auth_rejected', 'model_rate_limited']) {
+    assert.ok(STREAM_ERROR_KINDS.includes(code as never), `${code} is a stream kind`);
+  }
 });
 
 // --- The default dialect is untouched --------------------------------------

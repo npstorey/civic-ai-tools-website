@@ -1,6 +1,6 @@
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 
-// Unified OpenRouter function-calling schema spanning every MCP source the
+// Unified OpenAI-style function-calling schema spanning every MCP source the
 // website talks to. The client in `./client.ts` uses the tool name to route
 // each call to the correct MCP server via `./registry.ts`.
 
@@ -378,7 +378,7 @@ Example:
   },
 ];
 
-/** Unified tool schema exposed to OpenRouter. The client in ./client.ts routes each call to the correct MCP server by tool name. */
+/** Unified tool schema sent to whichever chat-completions endpoint this instance is configured to call (see src/lib/model-client.ts). The client in ./client.ts routes each call to the correct MCP server by tool name. */
 export const mcpTools: ChatCompletionTool[] = [
   ...socrataMcpTools,
   ...dataCommonsMcpTools,

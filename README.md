@@ -61,11 +61,16 @@ Configuration goes in `.env.local`, which the dev server loads automatically
 (never commit it). The minimum for working queries is one variable:
 
 ```bash
-OPENROUTER_API_KEY=<your model API key>
+MODEL_API_KEY=<your model API key>
 ```
 
-Any OpenAI-compatible chat-completions endpoint works via `MODEL_API_BASE_URL`;
-the key stays in `OPENROUTER_API_KEY` either way. Publishing records
+`MODEL_API_BASE_URL` points the app at any endpoint, and `MODEL_API_KIND` says
+which wire dialect it speaks — OpenAI-compatible by default, or deployment-routed.
+The key stays in `MODEL_API_KEY` either way; `OPENROUTER_API_KEY` is that
+variable's prior-era name and is still read. Pointing an instance at your own
+endpoint also means declaring its model list — see
+[`docs/instance-setup.md`](docs/instance-setup.md#5-point-the-instance-at-a-model-endpoint).
+Publishing records
 additionally needs a database, object storage, sign-in, and a signing key —
 don't guess that set. The executable authority is the preflight, which checks
 the **presence** (never the value) of every variable the app reads and tiers
@@ -133,7 +138,7 @@ the same pass and their old filenames remain as permanent stubs.
 | Document | What it covers |
 | --- | --- |
 | [`docs/deploy.md`](docs/deploy.md) | Self-hosted deployment end to end: bring-up, driver seams, environment reference, sign-in, migrations, storage, scheduler, managed-platform notes. |
-| [`docs/instance-setup.md`](docs/instance-setup.md) | Instance identity and signing — keygen, trust registry, identity variables. The go-to-production step. |
+| [`docs/instance-setup.md`](docs/instance-setup.md) | Instance identity and signing — keygen, trust registry, identity variables. The go-to-production step. Also the model-endpoint wiring checklist for an instance calling its own endpoint. |
 | [`docs/key-rotation.md`](docs/key-rotation.md) | Signing-key rotation runbook, preventive and incident-response — host/tool-agnostic. |
 | [`docs/reference-operator/key-rotation.md`](docs/reference-operator/key-rotation.md) | The same runbook's reference-deployment-specific mechanics (registry-edit PR flow, Vercel dashboard, 1Password). |
 | [`docs/api/records-publish.md`](docs/api/records-publish.md) | The publish API contract and integrator entry point. |

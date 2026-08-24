@@ -339,8 +339,8 @@ export function getMissingModelCredentialError(): ModelConfigurationError | null
 
 /**
  * Classify a request-path model failure into a typed, operator-actionable
- * code, or null for anything else (network errors, rate limits, model errors —
- * those keep their existing handling).
+ * code, or null for anything else (network errors, model errors — those keep
+ * their existing handling).
  *
  * - `model_not_configured`: our typed guard error, or the SDK's own
  *   missing-credentials constructor error (belt and braces — the guard should
@@ -349,6 +349,18 @@ export function getMissingModelCredentialError(): ModelConfigurationError | null
  *   equivalent auth rejection), i.e. a credential exists but was refused
  *   upstream. Shape-based (`status` on the SDK's APIError) rather than
  *   instanceof so it survives SDK class-identity quirks and stays unit-testable.
+ * - `model_rate_limited`: the configured endpoint answered 429, i.e. the MODEL
+ *   SERVICE is limiting this instance (website#30 G0 D6). This is where the two
+ *   429s part company, and it is deliberately here rather than in
+ *   `classifyStreamError`: only an error thrown by the SDK reaches this
+ *   function, so a 429 seen here is unambiguously the endpoint's, while a 429
+ *   seen by the stream classifier is this app's own limiter answering a
+ *   request. Text could not tell them apart; the shape can.
+ *
+ *   This matters most under a deployment-routed dialect, where quota is
+ *   per-model and per-region: an upstream 429 there is routine operational
+ *   information about one deployment's pool, and reporting it as the reader's
+ *   own exhausted daily allowance is simply false.
  */
 export function classifyModelError(error: unknown): ModelErrorCode | null {
   if (error instanceof ModelConfigurationError) return 'model_not_configured';
@@ -358,6 +370,7 @@ export function classifyModelError(error: unknown): ModelErrorCode | null {
   if (error !== null && typeof error === 'object' && 'status' in error) {
     const status = (error as { status?: unknown }).status;
     if (status === 401 || status === 403) return 'model_auth_rejected';
+    if (status === 429) return 'model_rate_limited';
   }
   return null;
 }

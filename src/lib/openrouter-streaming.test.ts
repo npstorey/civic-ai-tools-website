@@ -80,7 +80,9 @@ test('queryWithoutMcpStreaming: missing credential yields typed onError in bound
   // env-var name survives because the copy for this kind names it on purpose
   // (#178) — the reader of that message is the operator who can fix it.
   assert.equal(errors[0].message, streamErrorPayload('model_not_configured').message);
-  assert.match(errors[0].message, /OPENROUTER_API_KEY/);
+  // website#30 P4: the copy names MODEL_API_KEY, the canonical variable since
+  // P1. Its prior-era name still works but is not what a fresh instance sets.
+  assert.match(errors[0].message, /MODEL_API_KEY/);
   assert.ok(elapsed < BOUNDED_MS, `bounded time: took ${elapsed}ms`);
 });
 

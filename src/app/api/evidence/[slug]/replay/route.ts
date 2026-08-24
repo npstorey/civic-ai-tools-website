@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createModelClient } from '@/lib/model-client';
+import { createModelClient, classifyModelError } from '@/lib/model-client';
+import {
+  CALLER_MODEL_KEY_REJECTED_MESSAGE,
+  callerModelKeyFailure,
+  resolveCallerModelKey,
+} from '@/lib/caller-model-key';
 import { endpointModelForDeclared } from '@/lib/model-resolver';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { getServerSession } from 'next-auth';
@@ -39,10 +44,14 @@ function truncateToolResult(result: string): string {
 /**
  * POST /api/evidence/[slug]/replay
  *
- * Runs one full MCP-enabled analysis replay using the caller's OpenRouter API key.
+ * Runs one full MCP-enabled analysis replay using a model API key the caller
+ * supplies — the key for whatever chat-completions endpoint THIS instance is
+ * configured to call, not any particular vendor's. Never stored.
  * Used by the consistency test flow — the client calls this N times and aggregates results.
  *
- * Body: { openRouterApiKey: string }
+ * Body: { modelApiKey: string }
+ *   `openRouterApiKey` is the prior-era name for that field and is accepted
+ *   indefinitely (website#30 G0 D7) — see `src/lib/caller-model-key.ts`.
  * Returns: { toolCalls, output, tokenUsage, durationMs }
  */
 export async function POST(
@@ -57,9 +66,9 @@ export async function POST(
   }
 
   const body = await request.json();
-  const { openRouterApiKey } = body;
-  if (!openRouterApiKey || typeof openRouterApiKey !== 'string') {
-    return NextResponse.json({ error: 'OpenRouter API key required' }, { status: 400 });
+  const callerKey = resolveCallerModelKey(body);
+  if (!callerKey.ok) {
+    return NextResponse.json({ error: callerKey.error }, { status: 400 });
   }
 
   // A replay runs live MCP tool calls, so it needs a configured MCP endpoint
@@ -123,7 +132,7 @@ export async function POST(
   const systemPrompt = await buildSystemPrompt(portal);
 
   // Create a model client with the user's API key
-  const openrouter = createModelClient({ apiKey: openRouterApiKey });
+  const openrouter = createModelClient({ apiKey: callerKey.apiKey });
 
   const startTime = Date.now();
   const toolsCalled: { name: string; args: Record<string, unknown> }[] = [];
@@ -244,10 +253,24 @@ export async function POST(
     });
   } catch (error) {
     console.error('[replay] Error:', error);
+    // Structural first (website#30 P4): an SDK `APIError` carries a status, so
+    // an upstream refusal is classified by shape rather than guessed from
+    // wording — which also separates the model service's 429 from this app's
+    // own per-day limiter, and returns copy scoped to the CALLER's key rather
+    // than to a server environment variable that is not at fault here. The
+    // text probe below is kept as a fallback for error shapes that carry only a
+    // message; it is deliberately narrower than the classifier, not a
+    // replacement for it.
+    const typed = callerModelKeyFailure(classifyModelError(error));
+    if (typed) {
+      return NextResponse.json({ error: typed.error, code: typed.code }, { status: typed.status });
+    }
     const message = error instanceof Error ? error.message : 'Replay failed';
-    // Surface auth errors clearly
     if (message.includes('401') || message.includes('Unauthorized') || message.includes('invalid')) {
-      return NextResponse.json({ error: 'Invalid OpenRouter API key' }, { status: 401 });
+      return NextResponse.json(
+        { error: CALLER_MODEL_KEY_REJECTED_MESSAGE, code: 'model_auth_rejected' },
+        { status: 401 },
+      );
     }
     return NextResponse.json({ error: message }, { status: 500 });
   }
