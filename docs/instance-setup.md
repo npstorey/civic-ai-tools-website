@@ -229,7 +229,7 @@ never treated as the default.
 | `MODEL_API_KEY` | The key the configured endpoint reads. Prior-era name `OPENROUTER_API_KEY`, still accepted — the canonical name wins whenever it is **defined**, empty string included. **Sensitive.** | always | **No.** A wrong value fails the request; it never reaches a byte a verifier reads. |
 | `MODEL_API_KIND` | `openai-compatible` (default) or `azure-openai`. | never — but see the rest of this table | **Yes (§C.1).** It derives `gen_ai.system` on the signed trace and the wording of the PROV model agent's description. |
 | `MODEL_API_BASE_URL` | The chat-completions endpoint. Under `azure-openai` this is the **resource endpoint** — the `https://` origin, no path. | `MODEL_API_KIND=azure-openai` | **Yes, indirectly (§C.3).** It never appears in a package — a public record must not carry your infrastructure hostnames — but it selects `gen_ai.system` and decides whether the built-in model list is trusted at all. |
-| `MODEL_API_VERSION` | The api-version query parameter. There is no safe default: an api-version gates which request and response fields exist. | `MODEL_API_KIND=azure-openai` | **Yes, indirectly (§C.3).** It decides whether token usage can be requested at all, and usage is what `cost.*` is built from. |
+| `MODEL_API_VERSION` | The api-version query parameter. There is no safe default: an api-version gates which request and response fields exist. | `MODEL_API_KIND=azure-openai` | **Yes, indirectly (§C.3).** It decides which response fields exist, and `gen_ai.response.model` — the endpoint's own report of what it ran, recorded under the signature — is read from the response body. |
 | `MODEL_API_AUTH` | `bearer` or `api-key`. Derived from the dialect when unset; a value contradicting the dialect is refused rather than ignored. `entra` is reserved in the enum and refused — there is no code behind it. | never | **No.** Authentication mechanics only. |
 | `MODEL_CATALOG` | This instance's model list, as a JSON document. | any endpoint other than the built-in one | **Yes (§C.1).** Each entry's `model` is the identity a signed record asserts. |
 | `MODEL_CATALOG_PATH` | The same document, delivered as a file the server reads. Same schema. **Setting both is refused**, not resolved by precedence: whichever one lost would be a list of models you believe this instance offers and it does not. | as above | **Yes (§C.1).** |
@@ -438,10 +438,16 @@ Unverified against any real deployment-routed endpoint:
 - **Streaming.** The fixture exercises only non-streaming `create`. **The app's
   real query path streams.** This is the largest single gap in the list.
 - **Token usage on the deployment-routed dialect.** `stream_options` — how this
-  app asks for usage on a streamed request — is api-version-gated there, so
-  usage is not requested. The app omits absent usage rather than recording zero,
-  so a record from such an endpoint may legitimately carry no token counts and
-  no cost estimate. Confirm which of your api-versions changes that.
+  app asks for usage on a streamed request — is sent **only** under the
+  OpenAI-compatible dialect. Under `azure-openai` this build does not send it at
+  all, deliberately: whether the parameter is admitted is an api-version
+  question, and an api-version that does not know it answers 400 for the whole
+  request rather than ignoring the field, which would cost the answer instead of
+  the token count. The consequence is real and worth expecting: a streamed
+  record from such an endpoint legitimately carries **no token counts and no
+  cost estimate** — omitted rather than recorded as zero. If you measure which
+  api-versions do admit it, that is the finding most likely to change this
+  build's behavior.
 - **Error mapping under load.** Real 429s, content-filter refusals and quota
   exhaustion are mapped from synthetic statuses in tests. The mapping is
   structural — it reads the status, not the wording — which is the property most
