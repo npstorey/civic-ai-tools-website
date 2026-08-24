@@ -22,6 +22,10 @@ import {
 
 const REQUIRED = ENV_SPEC.filter((s) => s.tier === 'required').map((s) => s.name);
 const RECOMMENDED = ENV_SPEC.filter((s) => s.tier === 'recommended').map((s) => s.name);
+// web#194 #6: a recommended variable with a coded fallback is not a degraded
+// feature and is not nagged about, so the two sets are counted separately.
+const RECOMMENDED_WITH_FALLBACK = ENV_SPEC.filter((s) => s.tier === 'recommended' && s.hasFallback).map((s) => s.name);
+const RECOMMENDED_NO_FALLBACK = ENV_SPEC.filter((s) => s.tier === 'recommended' && !s.hasFallback).map((s) => s.name);
 
 /** Build an env object with every required var present (non-empty). */
 function envWithAllRequired() {
@@ -142,10 +146,21 @@ test('two-name expand: either spelling satisfies presence, and the report names 
 
   // And the deprecation notice lists every one of them, with its successor.
   assert.ok(result.deprecatedNames.length > 0);
+  // Only prior-era names are listed as deprecated. Asserted against each
+  // entry's DECLARED `priorEraName` rather than against the `EVIDENCE_`
+  // prefix: since website#30 P1 the mechanism carries a second rename
+  // (MODEL_API_KEY ← OPENROUTER_API_KEY) that shares no prefix with the first.
+  const priorEraNames = new Set(
+    ENV_SPEC.filter((s) => typeof s.priorEraName === 'string').map((s) => s.priorEraName),
+  );
   assert.ok(
-    result.deprecatedNames.every((r) => r.name.startsWith('EVIDENCE_')),
+    result.deprecatedNames.every((r) => priorEraNames.has(r.name)),
     'only prior-era names are listed as deprecated',
   );
+  // Both renames are represented, so the assertion above cannot pass vacuously
+  // on a single-prefix census.
+  assert.ok(result.deprecatedNames.some((r) => r.name.startsWith('EVIDENCE_')));
+  assert.ok(result.deprecatedNames.some((r) => r.canonicalName === 'MODEL_API_KEY'));
   const report = renderReport(result);
   assert.match(report, /EVIDENCE_KEY_ID → rename to PUBLISHER_KEY_ID/);
   assert.match(report, /removed at a future/);
@@ -214,20 +229,205 @@ test('two-name expand: every publisher variable in the census is declared with b
   );
 });
 
+// --- The model credential's two names (website#30 P1, D4) --------------------
+
+test('MODEL_API_KEY alone satisfies the run', () => {
+  const env = envWithAllRequired(); // sets the canonical name
+  assert.ok(env.MODEL_API_KEY, 'the canonical name is the one the spec declares');
+  assert.equal(env.OPENROUTER_API_KEY, undefined);
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, true);
+  assert.ok(!result.missingRequired.some((r) => r.canonicalName === 'MODEL_API_KEY'));
+  // Nothing deprecated is reported when only the canonical name is set.
+  assert.ok(!result.deprecatedNames.some((r) => r.canonicalName === 'MODEL_API_KEY'));
+});
+
+test('OPENROUTER_API_KEY alone satisfies the run and warns via viaPriorEra', () => {
+  const env = envWithAllRequired();
+  delete env.MODEL_API_KEY;
+  env.OPENROUTER_API_KEY = 'present';
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, true, 'an instance that never renamed still passes');
+
+  const row = result.rows.find((r) => r.canonicalName === 'MODEL_API_KEY');
+  assert.equal(row.present, true);
+  assert.equal(row.name, 'OPENROUTER_API_KEY', 'the report names the variable the operator set');
+  assert.equal(row.viaPriorEra, true);
+
+  const deprecated = result.deprecatedNames.find((r) => r.canonicalName === 'MODEL_API_KEY');
+  assert.ok(deprecated, 'the prior-era spelling is reported as deprecated');
+  assert.equal(deprecated.name, 'OPENROUTER_API_KEY');
+
+  const report = renderReport(result);
+  assert.match(report, /OPENROUTER_API_KEY → rename to MODEL_API_KEY/);
+  // A NOTE, never a failure — expand-before-flip: nothing flips in this phase.
+  assert.ok(!report.includes('RESULT: FAIL'));
+});
+
+test('both names set resolves to the canonical one, without error', () => {
+  const env = envWithAllRequired();
+  env.OPENROUTER_API_KEY = 'prior-era';
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, true);
+  const row = result.rows.find((r) => r.canonicalName === 'MODEL_API_KEY');
+  assert.equal(row.name, 'MODEL_API_KEY');
+  assert.equal(row.viaPriorEra, false);
+  assert.ok(!result.deprecatedNames.some((r) => r.canonicalName === 'MODEL_API_KEY'));
+
+  // Same DEFINED-not-truthy precedence as the publisher set: an emptied
+  // canonical name shadows a prior-era name that still holds a value. The rule
+  // must match src/lib/model-client.ts, which resolves the credential the same
+  // way — a preflight that fell through on empty would PASS a configuration
+  // the app refuses.
+  const entry = ENV_SPEC.find((s) => s.name === 'MODEL_API_KEY');
+  const shadowed = resolveEnvName(entry, { MODEL_API_KEY: '', OPENROUTER_API_KEY: 'prior-era' });
+  assert.equal(shadowed.name, 'MODEL_API_KEY');
+  assert.equal(shadowed.raw, '');
+  assert.equal(shadowed.viaPriorEra, false);
+
+  env.MODEL_API_KEY = '';
+  assert.equal(evaluateEnv(env).ok, false, 'an emptied canonical name is a miss, not a fall-through');
+});
+
+// --- The model seam (website#30 P1) -----------------------------------------
+
+test('the model seam is a declared driver seam whose default is the current behavior', () => {
+  assert.deepEqual(DRIVER_SEAMS.model, {
+    env: 'MODEL_API_KIND',
+    default: 'openai-compatible',
+    values: ['openai-compatible', 'azure-openai'],
+  });
+  // Unset, the profile is still the default one: no banner, nothing promoted.
+  const result = evaluateEnv(envWithAllRequired());
+  assert.equal(result.profile.drivers.model, 'openai-compatible');
+  assert.equal(result.profile.isDefault, true);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.notApplicable, []);
+});
+
+test('MODEL_API_KIND=azure-openai promotes the version and the resource endpoint to HARD misses', () => {
+  const env = { ...envWithAllRequired(), MODEL_API_KIND: 'azure-openai' };
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, false);
+  const missing = result.missingRequired.map((r) => r.name).sort();
+  assert.deepEqual(missing, ['MODEL_API_BASE_URL', 'MODEL_API_VERSION']);
+  // MODEL_API_BASE_URL declares hasFallback for the DEFAULT dialect. The
+  // promotion must drop that claim, or the row lands in the soft
+  // `requiredOnFallback` bucket and the run PASSES a configuration
+  // src/lib/model-client.ts refuses at the first request.
+  assert.ok(!result.requiredOnFallback.some((r) => r.name === 'MODEL_API_BASE_URL'));
+
+  env.MODEL_API_BASE_URL = 'https://example-resource.example.net';
+  env.MODEL_API_VERSION = '2099-01-01-preview';
+  const configured = evaluateEnv(env);
+  assert.equal(configured.ok, true);
+  assert.match(renderReport(configured), /PROFILE:.*model=azure-openai/);
+});
+
+test('the promotion is inert for every row that shipped before the model seam', () => {
+  // The `hasFallback`-dropping promotion is a shared code path. It can only
+  // change a row that declares BOTH fields; MODEL_API_BASE_URL is the first.
+  const both = ENV_SPEC.filter((s) => s.requiredWhen && s.hasFallback).map((s) => s.name);
+  assert.deepEqual(both, ['MODEL_API_BASE_URL']);
+});
+
+test('an unrecognized MODEL_API_KIND fails the run and is never echoed', () => {
+  const env = { ...envWithAllRequired(), MODEL_API_KIND: 'anthropic-native-SENTINEL' };
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, false);
+  assert.ok(result.driverErrors.includes('MODEL_API_KIND'));
+  const report = renderReport(result);
+  assert.ok(!report.includes('anthropic-native-SENTINEL'), 'the offending value never reaches the report');
+  assert.ok(report.includes('MODEL_API_KIND'));
+  // Resolution falls back to the seam default so the rest of the table renders.
+  assert.equal(result.profile.drivers.model, 'openai-compatible');
+});
+
 test('missing recommended variables do not fail the run', () => {
   const env = envWithAllRequired(); // recommended vars all absent
   const result = evaluateEnv(env);
   assert.equal(result.ok, true);
-  assert.equal(result.missingRecommended.length, RECOMMENDED.length);
+  assert.equal(result.missingRecommended.length, RECOMMENDED_NO_FALLBACK.length);
+});
+
+test('web#194 #6: a recommended variable with a coded fallback is not nagged as degraded', () => {
+  // A fallback-backed variable is not a degraded feature — the code runs on
+  // its built-in default. The report used to list these anyway.
+  const result = evaluateEnv(envWithAllRequired());
+  const named = result.missingRecommended.map((r) => r.name);
+  for (const name of RECOMMENDED_WITH_FALLBACK) {
+    assert.ok(!named.includes(name), `${name} has a coded fallback and must not be nagged`);
+  }
+  // …and the ones that genuinely degrade are still named.
+  assert.deepEqual(named.sort(), [...RECOMMENDED_NO_FALLBACK].sort());
+  assert.ok(RECOMMENDED_WITH_FALLBACK.length > 0, 'the exclusion is exercised, not vacuous');
+  assert.ok(RECOMMENDED_NO_FALLBACK.length > 0, 'the nag still has something to say');
+  // The two sets partition the recommended tier — nothing is counted twice or
+  // dropped by the split.
+  assert.deepEqual(
+    [...RECOMMENDED_WITH_FALLBACK, ...RECOMMENDED_NO_FALLBACK].sort(),
+    [...RECOMMENDED].sort(),
+  );
+});
+
+test('web#194 #2: CRON_SECRET is recommended, and its purpose names the job that exists', () => {
+  // The only scheduled job in the tree is the orphan-blob sweep
+  // (vercel.json → src/app/api/cron/blob-gc/route.ts), which fails closed on
+  // an absent secret. The prior purpose text also named a "portal refresh"
+  // endpoint that does not exist.
+  const entry = ENV_SPEC.find((s) => s.name === 'CRON_SECRET');
+  assert.equal(entry.tier, 'recommended');
+  assert.ok(!entry.hasFallback, 'a dead cron job is not a coded fallback');
+  assert.ok(!/portal refresh/i.test(entry.purpose), 'the phantom endpoint is gone');
+  assert.match(entry.purpose, /orphan-blob GC/);
+  // Absent, it is named as a degraded feature — and never fails the run.
+  const result = evaluateEnv(envWithAllRequired());
+  assert.equal(result.ok, true);
+  assert.ok(result.missingRecommended.some((r) => r.name === 'CRON_SECRET'));
+});
+
+test('web#194 #5: the DB_DRIVER hazard renders in the report, not only in a code comment', () => {
+  const entry = ENV_SPEC.find((s) => s.name === 'DB_DRIVER');
+  assert.match(entry.purpose, /Unset silently selects the managed serverless driver/);
+  assert.ok(renderReport(evaluateEnv(envWithAllRequired())).includes('Unset silently selects'));
+});
+
+test('D9: NEXTAUTH_URL stays required and declares no fallback', () => {
+  // Ruled at sprint #30 G0. The three app-side origins (api-auth.ts,
+  // device-flow.ts, evidence/verify.ts) are request-derived values, not
+  // configuration, and NextAuth's own inference covers only one platform — so
+  // a declared fallback would pass an instance whose OAuth callbacks are
+  // broken.
+  const entry = ENV_SPEC.find((s) => s.name === 'NEXTAUTH_URL');
+  assert.equal(entry.tier, 'required');
+  assert.ok(!entry.hasFallback);
+  assert.match(entry.purpose, /request-derived, not configuration/);
+
+  const env = envWithAllRequired();
+  delete env.NEXTAUTH_URL;
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, false, 'an absent callback URL is a hard miss, not a soft note');
+  assert.ok(result.missingRequired.some((r) => r.name === 'NEXTAUTH_URL'));
+  assert.ok(!result.requiredOnFallback.some((r) => r.name === 'NEXTAUTH_URL'));
+});
+
+test('#4b (already shipped): CIVICAITOOLS_SESSION_TOKEN is untouched by this pass', () => {
+  const entry = ENV_SPEC.find((s) => s.name === 'CIVICAITOOLS_SESSION_TOKEN');
+  assert.deepEqual(entry, {
+    name: 'CIVICAITOOLS_SESSION_TOKEN',
+    readBy: 'external-tool',
+    tier: 'optional',
+    purpose: 'publish-record skill (Claude Code) auth',
+  });
 });
 
 test('renderReport never emits a variable value — only names and statuses', () => {
   const env = envWithAllRequired();
   // Use a recognizable sentinel value; it must never appear in the report.
-  env.OPENROUTER_API_KEY = 'sk-or-SECRET-SENTINEL-DO-NOT-LEAK';
+  env.MODEL_API_KEY = 'sk-SECRET-SENTINEL-DO-NOT-LEAK';
   const report = renderReport(evaluateEnv(env));
   assert.ok(!report.includes('SECRET-SENTINEL'), 'report must not contain any env value');
-  assert.ok(report.includes('OPENROUTER_API_KEY'), 'report should list the variable name');
+  assert.ok(report.includes('MODEL_API_KEY'), 'report should list the variable name');
   assert.ok(report.includes('PASS'), 'report should show an overall PASS');
 });
 
