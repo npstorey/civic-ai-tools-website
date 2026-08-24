@@ -241,13 +241,21 @@ export function resolveModelIdentity(id: string): ModelIdentity {
  * Best-effort pair for a string that need not be an offered id.
  *
  * An id the catalog describes resolves to its pair; anything else is carried
- * through on both sides, unchanged. A catalog this instance cannot read is the
- * same case, deliberately: the three callers of this function — publishing
- * from outside the app, replaying a published record, and previewing an
- * evaluation with a caller's own key — all worked before there was a catalog
- * and none of them is a model selection, so a broken catalog must not be the
- * thing that turns them into failures. The paths that DO select a model
- * (`resolveModelIdentity`, `getDefaultModel`) refuse loudly instead.
+ * through on both sides, unchanged.
+ *
+ * Four call sites take this path and none of them is a model selection:
+ * `POST /api/evidence`, whose `model` field an external publisher supplies for
+ * an analysis this instance never ran; the evaluation preview, which runs a
+ * caller's own key against a model they named from a dialog whose list
+ * website#30 P4 still owns; and the two comparison routes, which have never
+ * validated a caller's model id. All four predate the catalog, so introducing
+ * a refusal here would be a product change rather than this phase's split.
+ *
+ * A catalog this instance cannot read is the same case, deliberately: none of
+ * those four depended on one, so a broken catalog must not be the thing that
+ * turns them into failures. The paths that DO select a model
+ * (`resolveModelIdentity`, `getDefaultModel`, `getSummarizerModel`) refuse
+ * loudly instead.
  */
 export function modelIdentityForValue(value: string): ModelIdentity {
   let catalog: readonly CatalogEntry[];

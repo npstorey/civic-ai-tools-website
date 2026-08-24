@@ -239,13 +239,11 @@ export function modelIdentity(entry: CatalogEntry): ModelIdentity {
 /**
  * A string that is not an offered catalog id, carried on both sides.
  *
- * Two call sites need this and neither is a model selection: `POST
- * /api/evidence`, whose `model` field an external publisher supplies for an
- * analysis this instance never ran, and the replay path, which reads an
- * identity out of an already-signed package. Both predate the catalog and
- * neither has ever been validated against it; refusing them here would break
- * publishing from outside the app to close a hole that does not exist, since
- * an id the catalog does not describe has no second string to be wrong about.
+ * A model string the catalog does not describe has no second string to be
+ * wrong about, so there is nothing to separate: the same value is both the
+ * wire parameter and whatever identity it already stood for. Reached through
+ * `modelIdentityForValue` in `model-resolver.ts`, which explains which call
+ * sites take that path and why none of them is a model selection.
  */
 export function carriedModelIdentity(value: string): ModelIdentity {
   return { endpointModel: value, declared: value };
