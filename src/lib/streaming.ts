@@ -45,8 +45,15 @@ export interface CompleteEvent extends StreamEvent {
  *   any upstream call.
  * - `model_auth_rejected` — a credential exists but the model endpoint refused
  *   it (401/403).
+ * - `model_rate_limited` — the model endpoint is rate-limiting this instance
+ *   (429). Distinct from `rate_limit`, which is this app's OWN per-day request
+ *   limiter (website#30 G0 D6). Both are "429" somewhere, and conflating them
+ *   tells a reader they personally hit a daily cap they did not hit.
  */
-export type ModelErrorCode = 'model_not_configured' | 'model_auth_rejected';
+export type ModelErrorCode =
+  | 'model_not_configured'
+  | 'model_auth_rejected'
+  | 'model_rate_limited';
 
 /**
  * The value set the `code` field of an `error` event may carry.
@@ -80,16 +87,25 @@ export interface ErrorEvent extends StreamEvent {
 // place error-to-copy mapping lives, consumed by every SSE-consuming hook.
 
 /**
- * The nine kinds every streaming failure classifies into. Single-sourced as
+ * The ten kinds every streaming failure classifies into. Single-sourced as
  * an array rather than a bare union so the round-trip test can enumerate them
- * (#154): a tenth kind is covered by that test the moment it is added here.
+ * (#154): an eleventh kind is covered by that test the moment it is added here.
  *
  * `notebook_execution` (#271) is set explicitly by the server — never derived
  * from message-shape matching below — because its reader-facing copy carries
  * a per-failure correlation id and exit code that no static string can hold.
+ *
+ * `rate_limit` and `model_rate_limited` are two different limiters and are
+ * deliberately two kinds (website#30 G0 D6). `rate_limit` is THIS APP's per-day
+ * request budget (`src/lib/rate-limit.ts`), which the query routes answer with
+ * their own HTTP 429; `model_rate_limited` is the model endpoint refusing this
+ * server. Their copy differs because the reader's next move differs: one is
+ * "sign in, or come back tomorrow", the other is "this is not about you, try
+ * again shortly".
  */
 export const STREAM_ERROR_KINDS = [
   'rate_limit',
+  'model_rate_limited',
   'model_not_configured',
   'model_auth_rejected',
   'mcp_not_configured',
@@ -102,7 +118,7 @@ export const STREAM_ERROR_KINDS = [
 
 export type StreamErrorKind = (typeof STREAM_ERROR_KINDS)[number];
 
-/** True for a value that is one of the eight kinds (an unknown code is not). */
+/** True for a value that is one of the ten kinds (an unknown code is not). */
 export function isStreamErrorKind(value: unknown): value is StreamErrorKind {
   return typeof value === 'string' && (STREAM_ERROR_KINDS as readonly string[]).includes(value);
 }
@@ -140,6 +156,16 @@ export function classifyStreamError(input: unknown): StreamErrorKind {
     input !== null && typeof input === 'object' && 'status' in input
       ? (input as { status?: unknown }).status
       : undefined;
+  // website#30 P4 (G0 D6): `rate_limit` here, NOT `model_rate_limited`, and the
+  // split is structural rather than a guess. An upstream 429 is an SDK
+  // `APIError` thrown server-side, and `classifyModelError` (model-client.ts)
+  // classifies it before this function is ever reached — see
+  // `reportStreamFailure`. What still arrives here carrying a 429 is this app's
+  // OWN limiter answering a request: the query routes reply
+  // `{ error: 'Rate limit exceeded', rateLimit }` with HTTP 429, `sse-client.ts`
+  // turns that into an `SSEError` with `status: 429`, and the client classifies
+  // it here. Two limiters, two paths, two kinds — a reader is told which one
+  // stopped them.
   if (status === 429) return 'rate_limit';
 
   // --- Fallback: matching the shape of the message text --------------------
@@ -157,6 +183,13 @@ export function classifyStreamError(input: unknown): StreamErrorKind {
   const m = errorMessageOf(input).toLowerCase();
   if (!m) return 'generic';
 
+  // Also `rate_limit` rather than `model_rate_limited`, for the same reason as
+  // the status branch above plus one more: message text cannot tell the two
+  // limiters apart. "Rate limit exceeded" is this app's own wording; an
+  // upstream 429's wording varies by endpoint and never reaches here anyway,
+  // having been classified structurally upstream of this fallback. Guessing
+  // `model_rate_limited` from prose would misattribute the app's own limit to
+  // the model service in exactly the cases where the reader has no other signal.
   if (m.includes('rate limit') || m.includes('429')) return 'rate_limit';
   // Message-shape fallback for the typed configuration failures, for paths
   // that carry only a message (e.g. a JSON error body rethrown as an Error).
@@ -190,14 +223,27 @@ export function classifyStreamError(input: unknown): StreamErrorKind {
 }
 
 const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
+  // THIS APP's own per-day budget — the reader's own allowance, and the only
+  // one of the two limits they can do anything about.
   rate_limit: 'You’ve reached today’s request limit. Sign in for more requests, or try again tomorrow.',
+  // The MODEL SERVICE's limit, which has nothing to do with the reader's
+  // allowance (website#30 G0 D6). Saying so explicitly is the point: without
+  // this kind, every upstream limit told a reader they had hit a daily cap they
+  // had not hit. No retry time is promised — nothing here knows one, and
+  // inventing a number would be false precision (design-principles P3).
+  model_rate_limited:
+    'The AI model service is limiting how many requests this server can make right now, so this query couldn’t run. This is not your own daily limit — please try again shortly.',
   // The two credential kinds are deliberately operator-actionable (they name
   // the env var): they only appear on self-hosted instances with a broken
   // configuration, where the reader is the person who can fix it (#178).
+  // They name `MODEL_API_KEY`, the canonical variable since website#30 P1.
+  // `OPENROUTER_API_KEY` still works and is named only where a key demonstrably
+  // already exists — telling an operator whose key lives under the prior-era
+  // name to check a variable they never set would send them the wrong way.
   model_not_configured:
-    'This server has no AI model API key configured, so queries can’t run. If you operate this instance, set OPENROUTER_API_KEY in the server environment and restart.',
+    'This server has no AI model API key configured, so queries can’t run. If you operate this instance, set MODEL_API_KEY in the server environment and restart.',
   model_auth_rejected:
-    'The AI model service rejected this server’s API key, so the query couldn’t run. If you operate this instance, check that OPENROUTER_API_KEY is valid for the configured endpoint.',
+    'The AI model service rejected this server’s API key, so the query couldn’t run. If you operate this instance, check that the key in MODEL_API_KEY — or in its still-accepted prior-era name OPENROUTER_API_KEY — is valid for the endpoint this instance is configured to call.',
   // Same operator-actionable register as the two credential kinds: this only
   // appears on an instance with no data-source endpoint configured, where the
   // reader is the person who can fix it. There is deliberately no fallback

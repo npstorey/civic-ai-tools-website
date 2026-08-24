@@ -2,8 +2,9 @@
 // (civic-ai-tools#72 Phase 3; spec §8.12.1 `attestation/evaluates/v1`; Q25/Q26).
 //
 // Two consumers share this module:
-//   1. POST /api/evidence/[slug]/evaluate — the interactive route (caller's
-//      OpenRouter key, transient response; behavior unchanged from PR-#62-era).
+//   1. POST /api/evidence/[slug]/evaluate — the interactive route (a
+//      caller-supplied model API key, transient response; behavior unchanged
+//      from PR-#62-era).
 //   2. POST /api/evidence/[slug]/publish — the publication gate: default-runs
 //      the eval with the PLATFORM key and emits a signed
 //      `attestation/evaluates/v1` node targeting the content node BEFORE the

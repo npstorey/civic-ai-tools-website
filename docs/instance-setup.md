@@ -199,7 +199,270 @@ typically sets both `SITE_BRAND_NAME` (chrome) and
 `PUBLISHER_PLATFORM_AGENT_TITLE` (publisher attribution); the two are read
 independently on purpose, so neither can surprise the other.
 
-## 5. Smoke test
+## 5. Point the instance at a model endpoint
+
+Steps 1–4 make this instance a publisher. This step decides **which AI model
+endpoint it calls and what a signed record says the model was** — two different
+questions, which is why there are two groups of variables below.
+
+An instance that leaves all of these unset runs against the built-in endpoint
+with the built-in model list, exactly as before, and can skip to step 6. Read
+this step if you are pointing the instance at your own endpoint.
+
+**Read this section as a checklist, not as a report.** The wire behavior of the
+deployment-routed dialect is proven in this repository against a local fake
+HTTP server (`src/lib/model-client.test.ts`, whose test names carry that scope)
+and **has never been run against a real deployment-routed resource**.
+Everything the fake necessarily stubs is listed at the end of this section. You
+are the first person to run this leg; the checks below are written so that you
+find out, rather than assume.
+
+### 5.1 The endpoint variables
+
+`MODEL_API_KIND` selects a **wire dialect**, not merely a base URL — the
+dialects differ in how a model is addressed, how the request authenticates, and
+whether an api-version is part of the URL. An unrecognized value is refused,
+never treated as the default.
+
+| Variable | Meaning | Required when | On the evidence path? (ADR-0024 §C) |
+| --- | --- | --- | --- |
+| `MODEL_API_KEY` | The key the configured endpoint reads. Prior-era name `OPENROUTER_API_KEY`, still accepted — the canonical name wins whenever it is **defined**, empty string included. **Sensitive.** | always | **No.** A wrong value fails the request; it never reaches a byte a verifier reads. |
+| `MODEL_API_KIND` | `openai-compatible` (default) or `azure-openai`. | never — but see the rest of this table | **Yes (§C.1).** It derives `gen_ai.system` on the signed trace and the wording of the PROV model agent's description. |
+| `MODEL_API_BASE_URL` | The chat-completions endpoint. Under `azure-openai` this is the **resource endpoint** — the `https://` origin, no path. | `MODEL_API_KIND=azure-openai` | **Yes, indirectly (§C.3).** It never appears in a package — a public record must not carry your infrastructure hostnames — but it selects `gen_ai.system` and decides whether the built-in model list is trusted at all. |
+| `MODEL_API_VERSION` | The api-version query parameter. There is no safe default: an api-version gates which request and response fields exist. | `MODEL_API_KIND=azure-openai` | **Yes, indirectly (§C.3).** It decides which response fields exist, and `gen_ai.response.model` — the endpoint's own report of what it ran, recorded under the signature — is read from the response body. |
+| `MODEL_API_AUTH` | `bearer` or `api-key`. Derived from the dialect when unset; a value contradicting the dialect is refused rather than ignored. `entra` is reserved in the enum and refused — there is no code behind it. | never | **No.** Authentication mechanics only. |
+| `MODEL_CATALOG` | This instance's model list, as a JSON document. | any endpoint other than the built-in one | **Yes (§C.1).** Each entry's `model` is the identity a signed record asserts. |
+| `MODEL_CATALOG_PATH` | The same document, delivered as a file the server reads. Same schema. **Setting both is refused**, not resolved by precedence: whichever one lost would be a list of models you believe this instance offers and it does not. | as above | **Yes (§C.1).** |
+
+Two refusals to expect while you are wiring this, both deliberate and both
+raised before any upstream call is made:
+
+- **No catalog against a non-built-in endpoint.** The built-in list names public
+  slugs of the default endpoint. Against yours those ids may name nothing, or
+  name something else, and the identity they would write into a signed record
+  would be a guess. Declare your models or the instance refuses.
+- **An `azure-openai` entry with no `model` field.** Under that dialect
+  `endpointModel` is a deployment name you chose, which is not a model identity.
+  The catalog must say what the model actually is.
+
+### 5.2 The catalog
+
+The catalog is a JSON **array** of entries. `endpointModel` is what goes on the
+wire as the `model` parameter — under `azure-openai`, your deployment name.
+`model` is the identity signed output asserts. Keeping them apart is the whole
+reason this step exists: a deployment name is an operator-chosen alias, and a
+record that published it would be telling a reader that "prod-analysis-1" is a
+model.
+
+Three roles are claimed by flags rather than by hardcoded ids, so that every
+model this instance calls is one you declared:
+
+- `default: true` — **exactly one** entry. The model the executed-notebook route
+  uses when a caller names none.
+- `evaluator: <rank>` — the publication gate's preference order, lower first. It
+  walks that order and takes the first entry that is not the analysis model, so
+  **declare at least two** or an analysis by your only evaluator cannot be
+  independently evaluated.
+- `summarizer: true` — **at most one**. Drafts the one-paragraph plain-language
+  summary the publish dialog offers. Optional: the default entry stands in.
+
+An example, with placeholder deployment names — substitute your own:
+
+```json
+[
+  {
+    "id": "analysis",
+    "name": "Analysis Model",
+    "tag": "recommended",
+    "provider": "Example Provider",
+    "description": "General-purpose analysis over civic data",
+    "supports_tools": true,
+    "endpointModel": "example-analysis-deployment",
+    "model": "vendor/example-model-4",
+    "default": true,
+    "evaluator": 2,
+    "pricing": { "input": 2.5, "output": 10.0 }
+  },
+  {
+    "id": "reviewer",
+    "name": "Reviewer Model",
+    "provider": "Example Provider",
+    "description": "Scores an analysis against the adversarial rubric",
+    "supports_tools": true,
+    "endpointModel": "example-reviewer-deployment",
+    "model": "vendor/example-model-5",
+    "evaluator": 1,
+    "pricing": { "input": 3.0, "output": 15.0 }
+  },
+  {
+    "id": "summariser",
+    "name": "Summary Model",
+    "provider": "Example Provider",
+    "supports_tools": true,
+    "endpointModel": "example-summary-deployment",
+    "model": "vendor/example-model-mini",
+    "selectable": false,
+    "summarizer": true,
+    "pricing": { "input": 0.3, "output": 2.5 }
+  }
+]
+```
+
+Field notes, all of them things the validator will tell you about anyway:
+
+- `id`, `name`, `provider` and `endpointModel` are required on every entry;
+  `model` is required under `azure-openai`. `supports_tools` must be a boolean —
+  this app's whole point is tool calls, so an entry that cannot make them is a
+  configuration worth making explicit.
+- `tag` and `description` are shown in the picker. `maxTokenBudget` overrides
+  the per-request token ceiling for one model.
+- `selectable: false` keeps an entry out of the picker while leaving it
+  resolvable — the shape used above for a model that only fills a role.
+- `pricing` is per **1M** tokens, in USD, and is what a record's cost estimate is
+  computed from. Omit it and the estimate is omitted rather than guessed.
+- **An unknown field is refused, not ignored**, so a misspelling cannot silently
+  do nothing.
+
+### 5.3 The first-query check
+
+Bring the instance up and work outward from the cheapest check.
+
+```bash
+# 1. Presence only — no values are read or printed.
+node scripts/preflight-env.mjs
+
+# 2. The catalog parsed, and the models this instance now offers.
+#    A 503 here means the catalog could not be read; the body names the variable.
+curl -s http://127.0.0.1:3000/api/models
+
+# 3. One real query, against a model id from step 2.
+curl -s -X POST http://127.0.0.1:3000/api/compare \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"test","model":"<an id from step 2>"}'
+```
+
+What the failures mean:
+
+| What you see | What it is |
+| --- | --- |
+| `503` with `code: "model_not_configured"` | No key resolved. The message names the variable, and no upstream call was made. |
+| `502` with `code: "model_auth_rejected"` | The endpoint refused the key — it exists and is wrong for this endpoint. |
+| `502` with `code: "model_rate_limited"` | The **endpoint** is rate-limiting this server. Not the app's own per-day limiter, which answers `429` with `Rate limit exceeded`. Under deployment routing, quota is per-model and per-region, so this points at one deployment's pool rather than at the whole resource. |
+| A `404`-ish or "deployment not found" error from the endpoint | `endpointModel` does not name a deployment on that resource. This is the failure mode nobody here has seen — see §5.5. |
+
+Watch the server log as well as the response. A line reading
+`endpoint reported a different model than this instance declares` means your
+`model` field and what the endpoint answered with disagree. That is **often
+benign** — an endpoint answering a dated build for an undated request — and it
+never blocks a publish. It is worth reading once, because it is also exactly
+what a mislabelled deployment looks like.
+
+### 5.4 What to check in a published record's bytes
+
+The point of the catalog is that a signed record names a model rather than your
+deployment alias. Verify that on real bytes rather than trusting this document.
+Publish one record, then fetch the package. A sealed record's content is
+creator-only, so this call needs the creator's session cookie or bearer token —
+or publish the record publicly first, or take the bytes from the detail page's
+download:
+
+```bash
+curl -s http://127.0.0.1:3000/api/records/<slug>/package > package.json
+```
+
+Four checks, in order of how badly a failure would matter:
+
+1. **`cost.model` is the identity you declared** — the `model` field of the
+   catalog entry, never its `endpointModel`.
+
+   ```bash
+   jq '.cost.model' package.json
+   ```
+
+2. **`gen_ai.response.model` is what the endpoint itself reported.** It is
+   recorded next to the declared identity, under the same signature, precisely
+   so a reader can compare the two without trusting either of us. It is absent
+   when the endpoint reported nothing — absent, not zero and not a copy of the
+   declaration.
+
+   ```bash
+   jq '[.. | objects | select(has("gen_ai.response.model"))
+        | {declared: .["gen_ai.request.model"], reported: .["gen_ai.response.model"]}]' package.json
+   ```
+
+3. **No deployment name and no hostname anywhere in the package.** Your resource
+   is your infrastructure; it does not belong in someone else's reading of a
+   civic-data analysis.
+
+   ```bash
+   grep -c 'example-analysis-deployment' package.json   # expect 0
+   grep -c 'example-resource' package.json              # expect 0
+   ```
+
+   Substitute your real deployment names and resource host. This is a check
+   worth running once per catalog change, not once ever.
+
+4. **`extensions["org.civicaitools.environment"].modelVersion` agrees with
+   `cost.model`**, and the provenance graph's model agent carries the same
+   identity in `dcterms:title`. They are filled from one value; a disagreement
+   means something reached one site and not another.
+
+### 5.5 What nobody has verified — read this before you trust the above
+
+This project's proof of the deployment-routed dialect is a **local fake HTTP
+server**, exercised under Node in this repository's test suite. That fixture was
+built from the request the SDK actually emits, observed rather than described,
+and it pins the path shape, the api-version query parameter, the `api-key`
+header, and the absence of an `Authorization` header. It cannot pin anything
+that requires a real resource to answer.
+
+The live wiring is deliberately outside this project's acceptance: a
+proof-of-concept endpoint belonging to another party's infrastructure is not
+something this project can hold as a gate. That decision is recorded rather than
+hidden, and this list is what it leaves you.
+
+Unverified against any real deployment-routed endpoint:
+
+- **Auth acceptance and key rotation.** That the `api-key` header is sent is
+  pinned; that your resource accepts it, and what rotation does to a running
+  instance, is not.
+- **Which api-version strings a deployment admits.** The app refuses a missing
+  `MODEL_API_VERSION` and names the variable; it has never had a real endpoint
+  reject a value it was given.
+- **Deployment-name resolution, and its failure mode.** What a resource answers
+  for an `endpointModel` naming no deployment — and therefore how legible that
+  failure is to you — is unmeasured.
+- **The real response body.** Content-filter annotations, `prompt_filter_results`,
+  and where token usage actually appears on a streamed response are all shapes
+  this app has only seen from a fixture.
+- **Streaming.** The fixture exercises only non-streaming `create`. **The app's
+  real query path streams.** This is the largest single gap in the list.
+- **Token usage on the deployment-routed dialect.** `stream_options` — how this
+  app asks for usage on a streamed request — is sent **only** under the
+  OpenAI-compatible dialect. Under `azure-openai` this build does not send it at
+  all, deliberately: whether the parameter is admitted is an api-version
+  question, and an api-version that does not know it answers 400 for the whole
+  request rather than ignoring the field, which would cost the answer instead of
+  the token count. The consequence is real and worth expecting: a streamed
+  record from such an endpoint legitimately carries **no token counts and no
+  cost estimate** — omitted rather than recorded as zero. If you measure which
+  api-versions do admit it, that is the finding most likely to change this
+  build's behavior.
+- **Error mapping under load.** Real 429s, content-filter refusals and quota
+  exhaustion are mapped from synthetic statuses in tests. The mapping is
+  structural — it reads the status, not the wording — which is the property most
+  likely to survive contact, but it has not made contact.
+- **Tool and function calling.** Every analysis this app performs is a tool-call
+  loop. The fixture does not exercise one against this dialect.
+
+If you run this leg, the useful thing to send back is what disagreed with this
+list — an issue on
+[civic-ai-tools-website](https://github.com/npstorey/civic-ai-tools-website/issues)
+naming the api-version and the dialect is enough. This section is the honest
+state of the project's knowledge, and it should stop being a list of unknowns
+the first time someone runs it.
+
+## 6. Smoke test
 
 Publish a fresh package and verify it on your instance's detail page: the
 signature check should pass, key trust should read "Signed with active key",

@@ -856,7 +856,9 @@ export function renderReport(result) {
       `  NOTE: ${result.deprecatedNames.length} variable(s) supplied under a prior-era name.`,
     );
     lines.push('        Both spellings work today; the prior-era one is removed at a future');
-    lines.push('        major version (2026-08-19 vocabulary settlement):');
+    lines.push('        major version. The publisher-identity renames are the 2026-08-19');
+    lines.push('        vocabulary settlement; MODEL_API_KEY is a separate rename');
+    lines.push('        (civic-ai-tools-website#30) that reuses the same mechanism:');
     for (const r of result.deprecatedNames) {
       lines.push(`            - ${r.name} → rename to ${r.canonicalName}`);
     }

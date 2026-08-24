@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { parseModelsResponse, type Model } from '@/lib/model-list';
 
 // --- Types ---
 
@@ -121,15 +122,6 @@ function computeConsistencyMetrics(runs: ReplayResult[]): ConsistencyMetrics {
   };
 }
 
-// --- Available evaluator models (fetched from /api/models, filtered) ---
-const EVALUATOR_MODELS = [
-  { id: 'openai/gpt-4o', name: 'GPT-4o' },
-  { id: 'openai/gpt-5.4', name: 'GPT-5.4' },
-  { id: 'google/gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite' },
-  { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4' },
-  { id: 'anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5' },
-];
-
 // --- Component ---
 
 export default function AttestationDialog({
@@ -151,6 +143,8 @@ export default function AttestationDialog({
 
   // Evaluation state
   const [evaluatorModel, setEvaluatorModel] = useState('');
+  const [evaluatorModels, setEvaluatorModels] = useState<Model[]>([]);
+  const [modelsUnavailable, setModelsUnavailable] = useState(false);
   const [evalStatus, setEvalStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [evalResult, setEvalResult] = useState<EvaluationResult | null>(null);
   const [evalError, setEvalError] = useState('');
@@ -165,8 +159,58 @@ export default function AttestationDialog({
   const [submitting, setSubmitting] = useState(false);
 
   const canReplay = promptVisibility === 'full_text';
-  const filteredModels = EVALUATOR_MODELS.filter(m => m.id !== analysisModel);
+  // `analysisModel` is a DECLARED identity read out of a signed package, while
+  // these are catalog ids. Under the built-in catalog the two namespaces
+  // coincide; under a catalog where they diverge this filter may fail to hide
+  // the analysis model. That degrades safely — the evaluate route refuses a
+  // same-model evaluation server-side, which is the check that actually
+  // protects evaluator independence. Serving declared identities from
+  // `/api/models` instead would change a response shape pinned by
+  // `parseModelsResponse` (#283) and by a frozen-body test.
+  const filteredModels = evaluatorModels.filter(m => m.id !== analysisModel);
   const requiresApiKey = tab === 'consistency' || tab === 'evaluation';
+
+  // The evaluator list comes from `/api/models` — the models THIS instance
+  // offers, served from its catalog (website#30 P2). It used to be a hardcoded
+  // array of five ids under a comment claiming it was fetched: false the day it
+  // was written, and consequential once the catalog arrived, because on any
+  // instance whose catalog is not the built-in one four of those five ids name
+  // nothing, and the evaluate route resolves a caller's id tolerantly.
+  //
+  // Fetched when the dialog OPENS rather than on mount: this component renders
+  // on every record detail page and most readers never open it. `/api/models`
+  // answers 503 rather than an empty list when a catalog cannot be read, so a
+  // failure here means "we cannot say what this instance offers" — reported as
+  // an absence rather than rendered as an empty dropdown, which would look like
+  // a finished answer.
+  useEffect(() => {
+    if (!open) return;
+    let isMounted = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/models');
+        const parsed = parseModelsResponse(await res.json());
+        if (!isMounted) return;
+        if (!res.ok || parsed === null) {
+          console.error('[attestation] could not load the model list this instance offers');
+          setModelsUnavailable(true);
+          return;
+        }
+        setEvaluatorModels(parsed);
+        setModelsUnavailable(false);
+        // Drop a selection the instance no longer offers. Without this the
+        // select falls back to showing its placeholder while the state still
+        // holds the old id, and Run would send it.
+        setEvaluatorModel((current) =>
+          current !== '' && !parsed.some((m) => m.id === current) ? '' : current,
+        );
+      } catch (err) {
+        console.error('[attestation] could not load the model list this instance offers', err);
+        if (isMounted) setModelsUnavailable(true);
+      }
+    })();
+    return () => { isMounted = false; };
+  }, [open]);
 
   const handleClose = () => {
     if (consistencyStatus === 'running' || evalStatus === 'running' || submitting) return;
@@ -189,7 +233,10 @@ export default function AttestationDialog({
         const res = await fetch(`/api/records/${slug}/replay`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ openRouterApiKey: apiKey }),
+          // The canonical field name (website#30 G0 D7). The prior-era
+          // `openRouterApiKey` is still accepted by the route, indefinitely, so
+          // an older client keeps working; this one sends the current name.
+          body: JSON.stringify({ modelApiKey: apiKey }),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -223,7 +270,8 @@ export default function AttestationDialog({
       const res = await fetch(`/api/records/${slug}/evaluate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ openRouterApiKey: apiKey, evaluatorModel }),
+        // Canonical field name — see the replay call above.
+        body: JSON.stringify({ modelApiKey: apiKey, evaluatorModel }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -380,18 +428,23 @@ export default function AttestationDialog({
               borderRadius: '4px', fontSize: '12px', color: 'var(--text-secondary)',
               marginBottom: '16px', lineHeight: 1.5,
             }}>
-              Your API key is used for this request only and is never stored. It is sent to our server to make LLM calls on your behalf, then discarded.
+              Your API key is used for this request only and is never stored. It is sent to our server to make AI model calls on your behalf, then discarded.
             </div>
 
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }}>
-                OpenRouter API Key
+              <label htmlFor="attestation-model-api-key" style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }}>
+                Model API key
               </label>
+              <p id="attestation-model-api-key-hint" style={{ margin: '0 0 6px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                The key for the AI model endpoint this site is configured to use. Which service that is depends on how this instance is set up.
+              </p>
               <input
+                id="attestation-model-api-key"
+                aria-describedby="attestation-model-api-key-hint"
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-or-..."
+                placeholder="Paste your key"
                 style={{
                   width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)',
                   borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
@@ -421,6 +474,7 @@ export default function AttestationDialog({
             evaluatorModel={evaluatorModel}
             setEvaluatorModel={setEvaluatorModel}
             filteredModels={filteredModels}
+            modelsUnavailable={modelsUnavailable}
             status={evalStatus}
             result={evalResult}
             error={evalError}
@@ -490,11 +544,12 @@ function TabButton({ active, onClick, disabled, children }: {
   );
 }
 
-function EvaluationTab({ apiKey, evaluatorModel, setEvaluatorModel, filteredModels, status, result, error, onRun, onSubmit, submitting }: {
+function EvaluationTab({ apiKey, evaluatorModel, setEvaluatorModel, filteredModels, modelsUnavailable, status, result, error, onRun, onSubmit, submitting }: {
   apiKey: string;
   evaluatorModel: string;
   setEvaluatorModel: (m: string) => void;
   filteredModels: { id: string; name: string }[];
+  modelsUnavailable: boolean;
   status: string;
   result: EvaluationResult | null;
   error: string;
@@ -516,16 +571,27 @@ function EvaluationTab({ apiKey, evaluatorModel, setEvaluatorModel, filteredMode
         <select
           value={evaluatorModel}
           onChange={(e) => setEvaluatorModel(e.target.value)}
+          disabled={modelsUnavailable}
           style={{
             width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)',
             borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box', backgroundColor: 'white',
           }}
         >
-          <option value="">Select a model...</option>
+          <option value="">{modelsUnavailable ? 'Model list unavailable' : 'Select a model...'}</option>
           {filteredModels.map(m => (
             <option key={m.id} value={m.id}>{m.name}</option>
           ))}
         </select>
+        {modelsUnavailable && (
+          /* Disclosure, not validation (design-principles P3 and the state-signal
+             corollary): the reader chose nothing wrong, so the control is not
+             marked invalid. It says what is missing and stops offering a choice
+             it cannot describe, rather than presenting an empty list as an
+             answer. */
+          <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            This site could not load the list of AI models it offers, so an evaluation can’t be started right now.
+          </p>
+        )}
       </div>
 
       <button

@@ -6,8 +6,9 @@ import { mcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
-import { getMissingModelCredentialError, classifyModelError } from '@/lib/model-client';
+import { getMissingModelCredentialError, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
 import { modelIdentityForValue } from '@/lib/model-resolver';
+import { streamErrorPayload } from '@/lib/streaming';
 import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
 import { headers } from 'next/headers';
 
@@ -62,7 +63,9 @@ export async function POST(request: NextRequest) {
     const identifier = session?.user?.id || ip;
     const isAuthenticated = !!session?.user?.id;
 
-    // Check rate limit
+    // THIS APP's own per-day request budget — never the model endpoint's.
+    // It answers HTTP 429 and classifies as `rate_limit`; an endpoint's 429 is
+    // `model_rate_limited` and is handled in the catch below (website#30 G0 D6).
     const rateLimitInfo = await checkRateLimit(identifier, isAuthenticated);
     if (isRateLimited(rateLimitInfo)) {
       return NextResponse.json(
@@ -118,8 +121,22 @@ Be honest if you don't have access to current or real-time data.`;
     // from other failures so the operator gets a typed, actionable response.
     const code = classifyModelError(error);
     if (code) {
+      // website#30 P4: `model_rate_limited` joins the two credential codes here,
+      // so an upstream rate limit is no longer reported as an unclassified 500.
+      //
+      // What the body says depends on whose message it is. A
+      // `ModelConfigurationError` is THIS app's own typed, operator-actionable
+      // text and names the variable to fix — it stays, verbatim. Anything else
+      // classified here came from the endpoint, so the body carries the calm
+      // reader-facing copy instead: the same #154 rule the streaming path
+      // follows, applied to this JSON path, which is what keeps upstream status
+      // codes and server names out of an API response.
+      const message =
+        error instanceof ModelConfigurationError
+          ? error.message
+          : streamErrorPayload(code).message;
       return NextResponse.json(
-        { error: error instanceof Error ? error.message : 'Model credential error', code },
+        { error: message, code },
         { status: code === 'model_not_configured' ? 503 : 502 }
       );
     }
