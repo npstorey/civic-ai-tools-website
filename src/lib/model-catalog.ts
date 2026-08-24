@@ -95,8 +95,34 @@ export interface CatalogEntry extends ModelDefinition {
    * the analysis model (evaluator independence).
    */
   evaluator?: number;
+  /**
+   * At most one entry carries `true`: the model that drafts the one-paragraph
+   * plain-language summary the publish dialog offers. Optional — the catalog
+   * default stands in when no entry claims the role. That stand-in is not the
+   * absent-or-error case ADR-0024 §A governs: the draft is a convenience the
+   * publisher edits before anything is signed, so it is not on the evidence
+   * path, and refusing to publish because no summariser was declared would be
+   * a refusal out of all proportion to what the field decides.
+   */
+  summarizer?: boolean;
   /** Per-1M-token prices. Absent means cost estimation returns null. */
   pricing?: ModelPricing;
+}
+
+/**
+ * The two strings this phase separates (civic-ai-tools-website#30 P3).
+ *
+ * Everything upstream of a request carries the pair; nothing carries one
+ * string doing both jobs. `endpointModel` is addressed to the endpoint and is
+ * never recorded; `declared` is addressed to the reader of a signed record and
+ * is never sent. Under the built-in catalog they are the same string, which is
+ * why the reference instance's bytes do not move.
+ */
+export interface ModelIdentity {
+  /** Sent as `model` on the wire. A slug, or an Azure deployment name. */
+  endpointModel: string;
+  /** The operator-declared identity a signed record asserts. */
+  declared: string;
 }
 
 /**
@@ -148,6 +174,12 @@ export const BUILT_IN_CATALOG: readonly CatalogEntry[] = Object.freeze([
     maxTokenBudget: 150_000,
     endpointModel: 'google/gemini-3.5-flash-lite',
     pricing: { input: 0.3, output: 2.5 },
+    // The summary-draft route's model, which was the fifth hardcoded slug —
+    // `SUMMARY_MODEL` in api/evidence/generate-summary/route.ts, missed by P2's
+    // inventory and routed here. Naming it as a role rather than a literal is
+    // what makes it configurable per instance and visible to catalog
+    // validation; the id is unchanged, so the route calls what it always did.
+    summarizer: true,
   },
   {
     id: 'anthropic/claude-sonnet-4-6',
@@ -199,6 +231,65 @@ export function declaredModelIdentity(entry: CatalogEntry): string {
   return entry.model ?? entry.endpointModel;
 }
 
+/** The wire/record pair for one entry. The only way to obtain both strings. */
+export function modelIdentity(entry: CatalogEntry): ModelIdentity {
+  return { endpointModel: entry.endpointModel, declared: declaredModelIdentity(entry) };
+}
+
+/**
+ * A string that is not an offered catalog id, carried on both sides.
+ *
+ * A model string the catalog does not describe has no second string to be
+ * wrong about, so there is nothing to separate: the same value is both the
+ * wire parameter and whatever identity it already stood for. Reached through
+ * `modelIdentityForValue` in `model-resolver.ts`, which explains which call
+ * sites take that path and why none of them is a model selection.
+ */
+export function carriedModelIdentity(value: string): ModelIdentity {
+  return { endpointModel: value, declared: value };
+}
+
+/**
+ * How a record describes the endpoint a model was reached through, per wire
+ * dialect (civic-ai-tools-website#30 P3, E4/E6).
+ *
+ * WHAT THIS DELIBERATELY DOES NOT SAY. Not the resource host, not the
+ * deployment name, not the vendor's product name — a public record must not
+ * carry the deployer's infrastructure identifiers, and the operator of an
+ * Azure resource did not choose to publish its brand alongside their analysis.
+ * What is left is the only part a reader can act on: how the endpoint is
+ * addressed. One dialect addresses a model by slug at a shared path; the other
+ * addresses a deployment by name. That is the whole difference, and it is
+ * exactly what `MODEL_API_KIND` selects.
+ *
+ * Before this phase both strings were the reference deployment's own — "via
+ * OpenRouter", spread out of the harness's reference config and stamped into
+ * the notebook — so every instance asserted a fact about somebody else's
+ * gateway.
+ */
+const MODEL_ACCESS_PHRASE: Record<ModelApiKind, string> = Object.freeze({
+  'openai-compatible': 'an OpenAI-compatible chat-completions API',
+  'azure-openai': 'a deployment-routed chat-completions API',
+});
+
+/** The phrase completing "…reached over ___" for this instance's dialect. */
+export function modelAccessPhrase(kind: ModelApiKind): string {
+  return MODEL_ACCESS_PHRASE[kind];
+}
+
+/**
+ * `dcterms:description` for the PROV-O model agent (E4).
+ *
+ * Replaces the harness's `CIVICAITOOLS_PROVENANCE_CONFIG.modelAgentDescription`,
+ * which reads "Large language model via OpenRouter" — the reference
+ * deployment's value, and false on any instance pointed elsewhere. The harness
+ * treats an absent description as honest omission; a derived one is preferred
+ * here because the field still has something true to say.
+ */
+export function modelAgentDescription(kind: ModelApiKind): string {
+  return `Large language model reached over ${modelAccessPhrase(kind)}`;
+}
+
 /**
  * Project one entry down to the seven served fields, in the response's
  * historical key order, omitting absent optionals rather than emitting them.
@@ -238,6 +329,15 @@ export function catalogDefaultEntry(catalog: readonly CatalogEntry[]): CatalogEn
     throw new Error('model catalog has no default entry');
   }
   return entry;
+}
+
+/**
+ * The entry that drafts publish-dialog summaries: the one carrying
+ * `summarizer: true`, or the catalog default when no entry claims the role.
+ * Validation guarantees at most one claimant.
+ */
+export function catalogSummarizerEntry(catalog: readonly CatalogEntry[]): CatalogEntry {
+  return catalog.find((e) => e.summarizer === true) ?? catalogDefaultEntry(catalog);
 }
 
 /** Evaluator candidates in preference order (lowest `evaluator` rank first). */
@@ -286,6 +386,7 @@ const KNOWN_ENTRY_KEYS = new Set([
   'selectable',
   'default',
   'evaluator',
+  'summarizer',
   'pricing',
 ]);
 
@@ -356,6 +457,7 @@ export function validateCatalog(
   const seenIds = new Set<string>();
   const seenEvaluatorRanks = new Map<number, string>();
   const defaults: string[] = [];
+  const summarizers: string[] = [];
 
   for (const [index, raw] of document.entries()) {
     if (!isPlainObject(raw)) {
@@ -426,7 +528,7 @@ export function validateCatalog(
       }
     }
 
-    for (const field of ['selectable', 'default'] as const) {
+    for (const field of ['selectable', 'default', 'summarizer'] as const) {
       if (raw[field] !== undefined && typeof raw[field] !== 'boolean') {
         return {
           ok: false,
@@ -455,6 +557,7 @@ export function validateCatalog(
     }
 
     if (raw.default === true) defaults.push(id);
+    if (raw.summarizer === true) summarizers.push(id);
 
     if (raw.evaluator !== undefined) {
       const rank = raw.evaluator;
@@ -511,6 +614,15 @@ export function validateCatalog(
       message:
         `${source} declares more than one default model: ${defaults.map((d) => `"${d}"`).join(', ')} all carry "default": true. ` +
         `Exactly one entry may. Mark one and restart the server.`,
+    };
+  }
+
+  if (summarizers.length > 1) {
+    return {
+      ok: false,
+      message:
+        `${source} declares more than one summariser: ${summarizers.map((s) => `"${s}"`).join(', ')} all carry "summarizer": true. ` +
+        `At most one entry may. Mark one — or none, in which case the default model drafts summaries — and restart the server.`,
     };
   }
 

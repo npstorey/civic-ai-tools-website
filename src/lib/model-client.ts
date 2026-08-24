@@ -193,6 +193,55 @@ export function getModelApiBaseUrl(): string {
 }
 
 /**
+ * The OTel `gen_ai.system` value for the resolved endpoint — the trace
+ * attribute naming which GenAI API answered (website#30 P3, E5).
+ *
+ * MEASURED, not assumed. `CIVICAITOOLS_TRACE_CONFIG` (the harness's
+ * `capture/trace.ts`, re-exported by `src/lib/evidence/trace.ts`) declares
+ * `semconvVersion: '1.30.0'`, and every span this app writes carries that
+ * version as `otel.semconv.version`. Read against the 1.30.0 attribute set:
+ * `az.ai.openai` and `openai` are both REGISTERED values of `gen_ai.system`;
+ * `openrouter` is NOT, and never has been — it was already the emitted value
+ * before this phase.
+ *
+ * So the mapping uses a registered value wherever one exists, and keeps the
+ * unregistered one only where semconv itself has nothing to offer: for an
+ * endpoint with no registered value the convention is the provider's name in
+ * lowercase, which is exactly what `openrouter` is. Keeping it also means the
+ * reference instance's traces do not silently change value in a phase whose
+ * whole claim is that its bytes do not move — and replacing it with `openai`
+ * would be a downgrade in honesty, since a router is not the OpenAI API.
+ *
+ * `azure-openai` is the one dialect whose value this phase adds. Note what it
+ * does NOT add: `server.address`. The resource hostname is the deployer's
+ * infrastructure, and the trace is inside the signed package.
+ */
+export function getGenAiSystem(): string {
+  if (getModelApiKind() === 'azure-openai') return 'az.ai.openai';
+  return getModelApiBaseUrl() === DEFAULT_BASE_URL ? 'openrouter' : 'openai';
+}
+
+/**
+ * Whether a streaming request may ask the endpoint to report token usage.
+ *
+ * Usage is read only from the final chunk, and a streaming response carries no
+ * `usage` object at all unless it is requested — which is why every streamed
+ * answer this app has published recorded zero prompt and completion tokens
+ * (website#30 P3, §2.5). `stream_options: { include_usage: true }` is the
+ * OpenAI-dialect parameter that asks for it.
+ *
+ * Asked only under `openai-compatible`. Under `azure-openai` the parameter's
+ * availability is an api-version question — an api-version that does not know
+ * it answers 400 for the whole request rather than ignoring the field — and
+ * this build cannot know which version an operator's deployment admits. A
+ * missing token count is recorded as missing (see `packager.ts`); a refused
+ * request would be a lost answer.
+ */
+export function includeStreamUsage(): boolean {
+  return getModelApiKind() === 'openai-compatible';
+}
+
+/**
  * The Azure client's base URL, derived from the resource endpoint.
  *
  * Measured, not assumed (Node 22, local fake server — see the test): the SDK's

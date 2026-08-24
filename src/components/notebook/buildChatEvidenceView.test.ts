@@ -10,6 +10,7 @@ import { approximateMcpServers, buildChatEvidenceView } from './buildChatEvidenc
 import { stampExecutedNotebook } from '../../lib/notebook-author/phase-d.ts';
 import { synthesizeNotebook } from '../../lib/notebook-author/synthesize.ts';
 import { SYNTHESIS_CELL_ROLE } from '../../lib/notebook-author/prompt.ts';
+import { modelAccessPhrase } from '../../lib/model-catalog.ts';
 
 const LLM_STRUCTURED_ANSWER = [
   '```json',
@@ -29,6 +30,7 @@ const SYNTH_INPUTS = {
   query: 'Top 5 complaint types in Brooklyn over the past 30 days',
   defaultPortal: 'data.cityofnewyork.us',
   modelName: 'anthropic/claude-sonnet-4-6',
+  modelAccess: modelAccessPhrase('openai-compatible'),
   finalAnswer: LLM_STRUCTURED_ANSWER,
   generatedAt: '2026-05-21T14:00:00.000Z',
   toolCalls: [

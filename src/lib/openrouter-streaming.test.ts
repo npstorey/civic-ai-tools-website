@@ -12,10 +12,16 @@ import assert from 'node:assert/strict';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks } from './openrouter-streaming.ts';
+import { carriedModelIdentity } from './model-catalog.ts';
 import { _resetDefaultModelClientForTests } from './model-client.ts';
 import { streamErrorPayload, type StreamErrorCode, type PanelType } from './streaming.ts';
 
 const FAKE_KEY = 'sk-or-test-obviously-fake-key-do-not-use';
+
+// website#30 P3: both streaming functions take the wire/record pair rather than
+// one string. These cases are about failure classification, not identity, so
+// the two halves are the same fixture string.
+const FAKE_MODEL = carriedModelIdentity('fake/model');
 
 // A promptly-failing path should resolve well inside this bound; the
 // pre-#178 behavior this guards against surfaced no signal at all.
@@ -64,7 +70,7 @@ afterEach(() => {
 test('queryWithoutMcpStreaming: missing credential yields typed onError in bounded time', async () => {
   const errors: RecordedError[] = [];
   const t0 = Date.now();
-  await queryWithoutMcpStreaming('test question', 'fake/model', undefined, makeCallbacks(errors));
+  await queryWithoutMcpStreaming('test question', FAKE_MODEL, undefined, makeCallbacks(errors));
   const elapsed = Date.now() - t0;
 
   assert.equal(errors.length, 1);
@@ -83,7 +89,7 @@ test('queryWithMcpStreaming: missing credential yields typed onError in bounded 
   const t0 = Date.now();
   await queryWithMcpStreaming(
     'test question',
-    'fake/model',
+    FAKE_MODEL,
     [],
     async () => {
       assert.fail('no tool call should ever run without a credential');
@@ -123,7 +129,7 @@ test('queryWithoutMcpStreaming: upstream 401 yields typed model_auth_rejected on
 
     const errors: RecordedError[] = [];
     const t0 = Date.now();
-    await queryWithoutMcpStreaming('test question', 'fake/model', undefined, makeCallbacks(errors));
+    await queryWithoutMcpStreaming('test question', FAKE_MODEL, undefined, makeCallbacks(errors));
     const elapsed = Date.now() - t0;
 
     assert.equal(errors.length, 1);
@@ -150,7 +156,7 @@ test('queryWithMcpStreaming: upstream 401 yields typed model_auth_rejected onErr
     const errors: RecordedError[] = [];
     await queryWithMcpStreaming(
       'test question',
-      'fake/model',
+      FAKE_MODEL,
       [],
       async () => {
         assert.fail('no tool call should run when the credential is rejected');

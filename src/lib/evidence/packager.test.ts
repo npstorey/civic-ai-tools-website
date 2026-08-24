@@ -694,3 +694,73 @@ test('dual-era: a stored PRIOR-ERA package re-verifies unchanged (hash + content
   // 5. And the two ERAS of the same analysis are distinct artifacts end to end.
   assert.notEqual(priorEraHash, built.hash);
 });
+
+// --- website#30 P3: declared identity, the description, and zero-vs-absent ---
+
+test('buildEvidencePackage: the declared identity reaches all three package sites', () => {
+  // `PackageInput.model` is the operator-DECLARED identity and the only model
+  // string this module has a name for — there is deliberately no way to hand
+  // the packager a deployment alias. These are the three places it lands, all
+  // inside canonical JSON and therefore all under the signature.
+  const { pkg } = buildEvidencePackage(
+    baseInput({ contentProfile: 'datHere', model: 'vendor/model-1' }),
+  );
+  assert.equal(pkg.cost.model, 'vendor/model-1');
+  const env = pkg.extensions?.['org.civicaitools.environment'] as Record<string, unknown>;
+  assert.equal(env.modelVersion, 'vendor/model-1');
+  const modelAgent = pkg.provenance!['@graph'].find((n) =>
+    (n['@id'] as string).includes(':model:'),
+  );
+  assert.equal(modelAgent!['dcterms:title'], 'vendor/model-1');
+});
+
+test('buildEvidencePackage: the PROV model description is derived from the dialect, not the harness constant (E4)', () => {
+  // THE ONE ANNOUNCED PACKAGER-LEVEL BYTE CHANGE. Before this phase the field
+  // was spread out of `CIVICAITOOLS_PROVENANCE_CONFIG` and read
+  //   "Large language model via OpenRouter"
+  // on EVERY instance, including instances that have never touched OpenRouter —
+  // the same spread-a-reference-constant shape #258 and #294 removed from the
+  // platform agent. Under the default dialect it now reads:
+  const { pkg } = buildEvidencePackage(baseInput());
+  const modelAgent = pkg.provenance!['@graph'].find((n) =>
+    (n['@id'] as string).includes(':model:'),
+  );
+  assert.equal(
+    modelAgent!['dcterms:description'],
+    'Large language model reached over an OpenAI-compatible chat-completions API',
+  );
+  // Whatever it says, it says nothing about anyone's gateway or resource.
+  assert.equal(String(modelAgent!['dcterms:description']).includes('OpenRouter'), false);
+});
+
+test('buildEvidencePackage: absent token usage is absent, not zero', () => {
+  // A streamed answer whose endpoint reported no usage recorded
+  // `promptTokens: 0` — a claim that zero tokens were used, which is false,
+  // and which the detail page renders as a cost of $0.00. Design principle 3:
+  // no false precision. The `totalTokens || undefined` idiom already did this
+  // for the total; this extends it to the two counts that feed it.
+  //
+  // Asserted over the CANONICAL FORM, not the in-memory object: produce-core
+  // leaves the key present holding `undefined` (the same shape the existing
+  // `totalTokens || undefined` idiom produces), and canonicalization drops it.
+  // The canonical bytes are what the hash and the signature cover, and what a
+  // reader downloads — so they are what "absent" has to mean here.
+  const { pkg } = buildEvidencePackage(baseInput({ tokenUsage: {} }));
+  const cost = JSON.parse(canonicalize(pkg) as string).cost as Record<string, unknown>;
+  assert.deepEqual(Object.keys(cost), ['model']);
+
+  // An explicit zero is treated the same way: an endpoint reporting
+  // `prompt_tokens: 0` for a request that plainly consumed tokens is reporting
+  // an absence, not a measurement.
+  const { pkg: zeroed } = buildEvidencePackage(
+    baseInput({ tokenUsage: { promptTokens: 0, completionTokens: 0 } }),
+  );
+  const zeroedCost = JSON.parse(canonicalize(zeroed) as string).cost as Record<string, unknown>;
+  assert.deepEqual(Object.keys(zeroedCost), ['model']);
+
+  // Real counts are untouched — the reference instance's bytes do not move.
+  const { pkg: measured } = buildEvidencePackage(baseInput());
+  assert.equal(measured.cost.promptTokens, 100);
+  assert.equal(measured.cost.completionTokens, 20);
+  assert.equal(measured.cost.totalTokens, 120);
+});

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createModelClient } from '@/lib/model-client';
+import { createModelClient, ModelConfigurationError } from '@/lib/model-client';
+import { getSummarizerModel } from '@/lib/model-resolver';
+import { modelIdentity, type ModelIdentity } from '@/lib/model-catalog';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-
-const SUMMARY_MODEL = 'google/gemini-3.5-flash-lite';
 
 const SYSTEM_PROMPT = `You are writing a one-paragraph summary of an AI-assisted civic data analysis for a non-technical reader (journalist, community board member, city staff).
 
@@ -22,7 +22,13 @@ interface ToolCallSummary {
  * POST /api/evidence/generate-summary
  *
  * Generates a one-paragraph non-technical summary of an analysis.
- * Uses the platform OpenRouter key (convenience feature, not an attestation).
+ * Uses the platform model credential (convenience feature, not an attestation).
+ *
+ * The model is this instance's `summarizer` catalog entry, or its default when
+ * no entry claims that role (website#30 P3). It was a slug hardcoded in this
+ * file — the fifth such table, missed by P2's inventory and routed here — which
+ * meant this route could call an id the instance does not offer, could not be
+ * configured per instance, and was invisible to catalog validation.
  *
  * Body: { prompt: string, output: string, toolCalls: ToolCallSummary[] }
  * Returns: { summary: string }
@@ -64,11 +70,27 @@ Data sources used: ${sourceList || '(none)'}
 Analysis output:
 ${output.slice(0, 4000)}`;
 
+  // A catalog this instance cannot read is an operator failure, not a caller
+  // failure: 503, and the publish dialog falls back to a hand-written summary.
+  let summarizer: ModelIdentity;
+  try {
+    summarizer = modelIdentity(getSummarizerModel());
+  } catch (error) {
+    if (error instanceof ModelConfigurationError) {
+      console.error('[generate-summary]', error.message);
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 503 });
+    }
+    throw error;
+  }
+
   try {
     const openrouter = createModelClient();
 
     const response = await openrouter.chat.completions.create({
-      model: SUMMARY_MODEL,
+      // The wire gets `endpointModel`. Nothing this route produces is signed —
+      // the publisher edits the draft before publishing — so no identity is
+      // recorded here.
+      model: summarizer.endpointModel,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userMessage },

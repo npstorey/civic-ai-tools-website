@@ -17,7 +17,12 @@ import {
   evaluateUnsignedRecordPublishGate,
 } from '@/lib/evidence/unsigned-tier';
 import { fromDbValue, toDbValue } from '@/lib/evidence/visibility';
-import { resolveEvaluatorModel, resolveModel, ModelNotOfferedError } from '@/lib/model-resolver';
+import {
+  resolveEvaluatorModel,
+  resolveModelIdentity,
+  ModelNotOfferedError,
+} from '@/lib/model-resolver';
+import { modelIdentity, type ModelIdentity } from '@/lib/model-catalog';
 import { getMissingModelCredentialError, ModelConfigurationError } from '@/lib/model-client';
 import { visibilityMatches } from '@/lib/evidence/visibility-sql';
 
@@ -199,16 +204,24 @@ export async function POST(
     // An explicit override that collides is the caller's error (400), as is an
     // override this instance does not offer — refused here, before any upstream
     // call, instead of being forwarded for the endpoint to reject.
-    let evaluatorModel: string;
+    // website#30 P3: both strings, each addressed to one audience — the wire
+    // takes `endpointModel`, the signed methodology takes `declared`.
+    let evaluatorModel: ModelIdentity;
     try {
       if (evaluatorModelOverride !== undefined) {
-        if (evaluatorModelOverride === pkg.cost.model) {
+        // Resolve BEFORE comparing (website#30 P3). `pkg.cost.model` is a
+        // declared identity read out of a signed package and the override is a
+        // catalog id; under a catalog where the two differ, comparing them
+        // directly compares two namespaces and lets the analysis model be
+        // selected to grade itself. The comparison is declared-against-declared.
+        const candidate = resolveModelIdentity(evaluatorModelOverride);
+        if (candidate.declared === pkg.cost.model) {
           return NextResponse.json(
             { error: 'Evaluator model must differ from the analysis model' },
             { status: 400 },
           );
         }
-        evaluatorModel = resolveModel(evaluatorModelOverride).id;
+        evaluatorModel = candidate;
       } else {
         const preferred = resolveEvaluatorModel(pkg.cost.model);
         if (!preferred) {
@@ -223,7 +236,7 @@ export async function POST(
             { status: 502 },
           );
         }
-        evaluatorModel = preferred.id;
+        evaluatorModel = modelIdentity(preferred);
       }
     } catch (error) {
       if (error instanceof ModelNotOfferedError) {
@@ -254,7 +267,7 @@ export async function POST(
       }
       const emitted = await emitEvaluationAttestation({
         targetNodeId: record.basePackageHash,
-        evaluatorModel,
+        evaluatorModel: evaluatorModel.declared,
         results: parsed.results,
         creatorId: record.creatorId,
       });

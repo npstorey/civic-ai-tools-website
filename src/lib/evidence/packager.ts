@@ -45,6 +45,8 @@ import {
   InstanceIdentityError,
 } from '../site-config.ts';
 import { canonicalEnvName } from '../publisher-env.ts';
+import { getModelApiKind } from '../model-client.ts';
+import { modelAgentDescription } from '../model-catalog.ts';
 
 // Two-family node type taxonomy (spec §8.1.1, §8.12, ADR-0009): every node
 // carries `type` of the form `content/<noun>/v<N>` or `attestation/<verb>/v<N>`.
@@ -118,6 +120,23 @@ export interface PackageInput {
    *  reference and confirms the hash matches. */
   output: string | BlobRef;
   toolCalls: ToolCallInput[];
+  /**
+   * The operator-DECLARED model identity, and the only model string this
+   * module has a name for (website#30 P3).
+   *
+   * It reaches three places, all inside canonical JSON and therefore all under
+   * the signature: `cost.model`, the PROV-O model agent's `dcterms:title`, and
+   * — via the harness's `deriveDatHereEnvelopeFields` —
+   * `extensions["org.civicaitools.environment"].modelVersion`.
+   *
+   * What must NEVER arrive here is a `CatalogEntry.endpointModel`: under the
+   * `azure-openai` dialect that is a deployment name, an operator's private
+   * label for a resource, and a record that asserted it would be claiming an
+   * alias is a model. Callers hold both strings as a `ModelIdentity` and pass
+   * `declared`; the packager is deliberately blind to the other half, which is
+   * what makes "no deployment alias in the package" a property of this
+   * module's interface rather than of every call site's discipline.
+   */
   model: string;
   portal: string;
   tokenUsage: { promptTokens?: number; completionTokens?: number };
@@ -323,6 +342,16 @@ function instanceProvenanceConfig(): ProvenanceConfig {
   }
   return {
     ...CIVICAITOOLS_PROVENANCE_CONFIG,
+    // E4 (website#30 P3). The one field the reference config carries that is
+    // an ENDPOINT fact rather than a vocabulary fact: "Large language model via
+    // OpenRouter", true of civicaitools.org and false of any instance pointed
+    // somewhere else — and the same spread-a-reference-constant shape #258 and
+    // #294 removed from the platform agent below. It is now derived from this
+    // instance's `MODEL_API_KIND`, which is the only thing about the endpoint a
+    // record may safely say: not the resource host, not the deployment name.
+    // `sourceRegistry` stays spread — that one is shared vocabulary, not
+    // deployment identity.
+    modelAgentDescription: modelAgentDescription(getModelApiKind()),
     platformAgent: {
       id: overrides.id ?? requirePublicationHost(),
       title: overrides.title as string,
@@ -438,8 +467,14 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
     queries,
     dataSources,
     cost: {
-      promptTokens: input.tokenUsage.promptTokens,
-      completionTokens: input.tokenUsage.completionTokens,
+      // Zero is not a measurement (website#30 P3, §2.5). A streamed answer
+      // whose endpoint reported no usage used to record `promptTokens: 0` —
+      // a claim that zero tokens were consumed, which is false, and which the
+      // detail page then renders as a cost of $0.00. Absent usage is now
+      // absent, extending the `totalTokens || undefined` idiom below to the
+      // two counts that fed it. Design principle 3: no false precision.
+      promptTokens: input.tokenUsage.promptTokens || undefined,
+      completionTokens: input.tokenUsage.completionTokens || undefined,
       totalTokens: totalTokens || undefined,
       model: input.model,
       durationMs: input.duration_ms,

@@ -26,7 +26,8 @@ import { mcpTools } from '@/lib/mcp/tools';
 import { callMcpTool, routeTool } from '@/lib/mcp/client';
 import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
 import { getDefaultModel, resolveModel, ModelNotOfferedError } from '@/lib/model-resolver';
-import { ModelConfigurationError } from '@/lib/model-client';
+import { ModelConfigurationError, getModelApiKind } from '@/lib/model-client';
+import { modelAccessPhrase, modelIdentity, type ModelIdentity } from '@/lib/model-catalog';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import {
   queryWithMcpStreaming,
@@ -114,9 +115,12 @@ export async function POST(request: NextRequest) {
   //     reaches a record's `cost.model`.
   // A catalog the instance cannot read is 503 (operator) rather than 400
   // (caller) — the two failures are not the same and do not share a status.
-  let model: string;
+  // website#30 P3: the resolved entry now yields BOTH strings. `endpointModel`
+  // is addressed to the endpoint and `declared` to the reader of the signed
+  // record; nothing downstream carries one string doing both jobs.
+  let model: ModelIdentity;
   try {
-    model = body.model ? resolveModel(body.model).id : getDefaultModel().id;
+    model = modelIdentity(body.model ? resolveModel(body.model) : getDefaultModel());
   } catch (error) {
     if (error instanceof ModelNotOfferedError) {
       return new Response(
@@ -180,7 +184,7 @@ export async function POST(request: NextRequest) {
   const trace = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);
   trace.startRoot('executed_notebook', {
     'analysis.prompt_hash': traceHash(body.query),
-    'analysis.model': model,
+    'analysis.model': model.declared,
     'analysis.portal': portal,
   });
 
@@ -215,7 +219,8 @@ export async function POST(request: NextRequest) {
       const synthesis = synthesizeNotebook({
         query: body.query,
         defaultPortal: portal,
-        modelName: model,
+        modelName: model.declared,
+        modelAccess: modelAccessPhrase(getModelApiKind()),
         finalAnswer: phaseAResult.content,
         toolCalls,
       });
@@ -332,7 +337,7 @@ export async function POST(request: NextRequest) {
 async function runPhaseA(args: {
   query: string;
   portal: string;
-  model: string;
+  model: ModelIdentity;
   emit: (event: NotebookEvent) => Promise<void>;
   trace: TraceBuilder;
   systemPrompt: string;

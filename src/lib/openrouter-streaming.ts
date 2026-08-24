@@ -1,5 +1,6 @@
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
-import { getModelClient, classifyModelError } from './model-client.ts';
+import { getModelClient, classifyModelError, getGenAiSystem, includeStreamUsage } from './model-client.ts';
+import type { ModelIdentity } from './model-catalog.ts';
 import { formatToolProgress, formatToolResult, generateToolReason, describeToolFailureForLlm, classifyStreamError, streamErrorPayload, type PanelType, type ProgressPhase, type StreamErrorCode, type StreamErrorKind } from './streaming.ts';
 import type { TraceBuilder } from './evidence/trace.ts';
 import { hash as traceHash } from './evidence/trace.ts';
@@ -82,6 +83,39 @@ export interface CompletionResult {
 const MAX_TOKENS_PER_REQUEST = Number(process.env.TOKEN_LIMIT_PER_REQUEST) || 200_000;
 const MAX_TOOL_RESULT_CHARS = Number(process.env.MAX_TOOL_RESULT_CHARS) || 50_000;
 
+/**
+ * The span attributes recording what the endpoint said it used, next to what
+ * this instance declared (website#30 P3, E5 — G0 D3: record both, warn, never
+ * gate).
+ *
+ * `gen_ai.request.model` carries the DECLARED identity, not the wire string.
+ * The trace is inside the signed package, so the rule that governs
+ * `cost.model` governs it too: a deployment alias is the operator's private
+ * label and does not go into a public record. `gen_ai.response.model` is the
+ * endpoint's own report, which is the only half of the pair this app does not
+ * choose — and having both under one signature is what lets a reader check the
+ * declaration against the report without trusting either of us.
+ *
+ * A mismatch is a disclosure, not a failure. It is normal and benign (an
+ * endpoint answering `gpt-4o-2024-11-20` for a request that said `gpt-4o`),
+ * and where it is not benign the record now carries the evidence either way.
+ * Gating on it would turn a routing detail into a lost answer.
+ */
+export function responseModelAttributes(
+  declared: string,
+  reported: string | undefined,
+  context: string,
+): Record<string, string> {
+  if (!reported) return {};
+  if (reported !== declared) {
+    console.warn(
+      `[stream:${context}] endpoint reported a different model than this instance declares`,
+      { declared, reported },
+    );
+  }
+  return { 'gen_ai.response.model': reported };
+}
+
 // Truncate large tool results to limit input token growth
 function truncateToolResult(result: string): string {
   if (result.length <= MAX_TOOL_RESULT_CHARS) return result;
@@ -107,7 +141,7 @@ function truncateToolResult(result: string): string {
 
 export async function queryWithoutMcpStreaming(
   query: string,
-  model: string,
+  model: ModelIdentity,
   systemPrompt: string | undefined,
   callbacks: StreamCallbacks
 ): Promise<void> {
@@ -124,10 +158,11 @@ export async function queryWithoutMcpStreaming(
     messages.push({ role: 'user', content: query });
 
     const stream = await getModelClient().chat.completions.create({
-      model,
+      model: model.endpointModel,
       messages,
       max_tokens: 4000,
       stream: true,
+      ...(includeStreamUsage() ? { stream_options: { include_usage: true } } : {}),
     });
 
     let content = '';
@@ -159,7 +194,7 @@ export async function queryWithoutMcpStreaming(
 
 export async function queryWithMcpStreaming(
   query: string,
-  model: string,
+  model: ModelIdentity,
   tools: ChatCompletionTool[],
   executeToolCall: (name: string, args: Record<string, unknown>) => Promise<string>,
   systemPrompt: string | undefined,
@@ -181,13 +216,13 @@ export async function queryWithMcpStreaming(
 
     // First call - check if tools needed (non-streaming to check for tool_calls)
     let llmSpanId = trace?.builder.startSpan('llm_inference', trace.parentSpanId, {
-      'gen_ai.system': 'openrouter',
-      'gen_ai.request.model': model,
+      'gen_ai.system': getGenAiSystem(),
+      'gen_ai.request.model': model.declared,
       ...(trace.systemPromptHash ? { 'gen_ai.system_prompt_hash': trace.systemPromptHash } : {}),
       'gen_ai.inference_index': 0,
     });
     let response = await getModelClient().chat.completions.create({
-      model,
+      model: model.endpointModel,
       messages,
       tools,
       tool_choice: 'auto',
@@ -197,6 +232,7 @@ export async function queryWithMcpStreaming(
       trace!.builder.endSpan(llmSpanId, {
         'gen_ai.response.prompt_tokens': response.usage?.prompt_tokens || 0,
         'gen_ai.response.completion_tokens': response.usage?.completion_tokens || 0,
+        ...responseModelAttributes(model.declared, response.model, panel),
       });
     }
 
@@ -320,12 +356,12 @@ export async function queryWithMcpStreaming(
 
       // Get next response
       llmSpanId = trace?.builder.startSpan('llm_inference', trace.parentSpanId, {
-        'gen_ai.system': 'openrouter',
-        'gen_ai.request.model': model,
+        'gen_ai.system': getGenAiSystem(),
+        'gen_ai.request.model': model.declared,
         'gen_ai.inference_index': currentIteration,
       });
       response = await getModelClient().chat.completions.create({
-        model,
+        model: model.endpointModel,
         messages,
         tools,
         tool_choice: 'auto',
@@ -335,6 +371,7 @@ export async function queryWithMcpStreaming(
         trace!.builder.endSpan(llmSpanId, {
           'gen_ai.response.prompt_tokens': response.usage?.prompt_tokens || 0,
           'gen_ai.response.completion_tokens': response.usage?.completion_tokens || 0,
+          ...responseModelAttributes(model.declared, response.model, panel),
         });
       }
 
@@ -372,7 +409,7 @@ export async function queryWithMcpStreaming(
 
       // Make final streaming call without tools
       const finalStream = await getModelClient().chat.completions.create({
-        model,
+        model: model.endpointModel,
         messages: [
           ...messages,
           {
@@ -382,12 +419,14 @@ export async function queryWithMcpStreaming(
         ],
         max_tokens: 4000,
         stream: true,
+        ...(includeStreamUsage() ? { stream_options: { include_usage: true } } : {}),
       });
 
       let content = '';
       let finalCallTokens = 0;
       let finalPromptTokens = 0;
       let finalCompletionTokens = 0;
+      let finalReportedModel: string | undefined;
 
       for await (const chunk of finalStream) {
         const delta = chunk.choices[0]?.delta?.content;
@@ -395,6 +434,9 @@ export async function queryWithMcpStreaming(
           content += delta;
           callbacks.onToken(panel, delta);
         }
+        // Every chunk repeats the model the endpoint answered with; the last
+        // one wins, so the recorded report is the one that finished the answer.
+        if (chunk.model) finalReportedModel = chunk.model;
         if (chunk.usage) {
           if (chunk.usage.total_tokens) finalCallTokens = chunk.usage.total_tokens;
           if (chunk.usage.prompt_tokens) finalPromptTokens = chunk.usage.prompt_tokens;
@@ -413,6 +455,7 @@ export async function queryWithMcpStreaming(
           'output.length': content.length,
           'gen_ai.response.prompt_tokens': finalPromptTokens,
           'gen_ai.response.completion_tokens': finalCompletionTokens,
+          ...responseModelAttributes(model.declared, finalReportedModel, panel),
         });
       }
 
@@ -466,16 +509,18 @@ export async function queryWithMcpStreaming(
       callbacks.onProgress(panel, 'Synthesizing findings into response...', { phase: 'synthesize' });
 
       const finalStream = await getModelClient().chat.completions.create({
-        model,
+        model: model.endpointModel,
         messages,
         max_tokens: 4000,
         stream: true,
+        ...(includeStreamUsage() ? { stream_options: { include_usage: true } } : {}),
       });
 
       let content = '';
       let finalCallTokens = 0;
       let finalPromptTokens = 0;
       let finalCompletionTokens = 0;
+      let finalReportedModel: string | undefined;
 
       for await (const chunk of finalStream) {
         const delta = chunk.choices[0]?.delta?.content;
@@ -483,6 +528,9 @@ export async function queryWithMcpStreaming(
           content += delta;
           callbacks.onToken(panel, delta);
         }
+        // Every chunk repeats the model the endpoint answered with; the last
+        // one wins, so the recorded report is the one that finished the answer.
+        if (chunk.model) finalReportedModel = chunk.model;
         if (chunk.usage) {
           if (chunk.usage.total_tokens) finalCallTokens = chunk.usage.total_tokens;
           if (chunk.usage.prompt_tokens) finalPromptTokens = chunk.usage.prompt_tokens;
@@ -501,6 +549,7 @@ export async function queryWithMcpStreaming(
           'output.length': content.length,
           'gen_ai.response.prompt_tokens': finalPromptTokens,
           'gen_ai.response.completion_tokens': finalCompletionTokens,
+          ...responseModelAttributes(model.declared, finalReportedModel, panel),
         });
       }
 
