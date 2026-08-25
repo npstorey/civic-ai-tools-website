@@ -203,20 +203,33 @@ test('#30 P6 F3: the guard reports the variable actually missing, not the key', 
 // /explore's headline feature into a 400 on every instance.
 
 test('#30 P6 F1 / #314: no query client names a model id in its own source', () => {
+  // website#30 P7 extracted /explore's fetch+parse into a plain module
+  // (`offered-model.ts`) so its retry/caching policy is unit-testable by
+  // node:test — McpFlowDiagram.tsx is JSX, which the test runner's
+  // `--experimental-strip-types` cannot parse. So /explore's "client" for
+  // this check is McpFlowDiagram.tsx plus the module it delegates to;
+  // QueryForm still does its own fetch inline.
   const clients = [
-    ['../../components/explore/McpFlowDiagram.tsx', '/explore’s live query'],
-    ['../../components/QueryForm.tsx', 'the home/ask query form'],
+    [
+      ['../../components/explore/McpFlowDiagram.tsx', '../../lib/offered-model.ts'],
+      '/explore’s live query',
+    ],
+    [
+      ['../../components/QueryForm.tsx'],
+      'the home/ask query form',
+    ],
   ] as const;
-  for (const [relative, what] of clients) {
-    const source = readFileSync(join(HERE, relative), 'utf8');
+  for (const [relatives, what] of clients) {
+    const sources = relatives.map((relative) => readFileSync(join(HERE, relative), 'utf8'));
+    const combined = sources.join('\n');
     // Read from the instance, not asserted here.
-    assert.ok(source.includes("'/api/models'"), `${what} reads the offered list`);
-    assert.ok(source.includes('parseModelsResponse'), `${what} uses the shared parser`);
+    assert.ok(combined.includes("'/api/models'"), `${what} reads the offered list`);
+    assert.ok(combined.includes('parseModelsResponse'), `${what} uses the shared parser`);
     // A model id sent on the wire may not be a literal in a client. Comment
-    // prose naming an id is fine and both files have some; what must not
+    // prose naming an id is fine and these files have some; what must not
     // appear is a literal in code, so the check is scoped to lines that are
     // not comments.
-    const codeLines = source
+    const codeLines = combined
       .split('\n')
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line));
     for (const line of codeLines) {

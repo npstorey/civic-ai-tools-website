@@ -14,30 +14,12 @@ import {
   type QueryMode,
 } from '@/lib/query-presentation';
 import { parseModelsResponse, type Model } from '@/lib/model-list';
+import { MODELS_LOAD_ERROR } from '@/lib/streaming';
 import RateLimitBanner from './RateLimitBanner';
 
 // Re-exported for existing importers; the type itself lives in
 // src/lib/query-presentation.ts alongside the derivations that use it.
 export type { QueryMode };
-
-/**
- * Reader-facing copy for a `/api/models` load failure (#283) — covers both a
- * failed fetch/JSON parse and a 200 response whose body doesn't carry a
- * usable `models` array. Both are the same class of failure to the reader
- * (the model list didn't load), so both route through this one message
- * rather than a raw error or a silent render crash.
- *
- * It used to say "only the default model is available right now", which was
- * true while this form carried a hardcoded model id to fall back on. It no
- * longer does (website#30 P4): which models exist is instance configuration,
- * and a form that cannot read the list has nothing to substitute. So the
- * message now discloses a blocking state, because that is what it is — and
- * the send control is withdrawn rather than the picker being marked invalid,
- * per docs/design-principles.md Principle 3 and its corollary (a list that
- * failed to load is not a bad selection).
- */
-const MODELS_LOAD_ERROR =
-  "Couldn't load the list of AI models this site offers, so a query can't be sent right now. Refresh the page to try again.";
 
 /**
  * Sticky-per-session mode persistence (§10 Q7), on the shared

@@ -11,7 +11,7 @@ import { useTraceReplay } from '@/hooks/useTraceReplay';
 import { useLiveTrace } from '@/hooks/useLiveTrace';
 import type { ReplayState } from '@/lib/bpmn/animation';
 import { traceEventsToProgressData } from '@/lib/bpmn/trace-progress';
-import { parseModelsResponse } from '@/lib/model-list';
+import { createOfferedModelResolver, type OfferedModelResolver } from '@/lib/offered-model';
 
 const DEFAULT_PORTAL = 'data.cityofnewyork.us';
 
@@ -45,19 +45,24 @@ export default function McpFlowDiagram() {
    * records and is deliberately never resolvable. It survived only because the
    * compare routes resolved a caller's id tolerantly, forwarding it upstream
    * where the built-in endpoint happened to know the slug — so `/explore`'s
-   * live trace, which is publishable, asserted a model this instance does not
-   * offer. P6 makes those routes refuse an unoffered id, which turns a quiet
-   * wrong answer into a loud one; either way the constant was the defect.
+   * live trace queried and billed a model this instance does not offer. That
+   * trace is recorded server-side (`analysis.model` and `gen_ai.request.model`
+   * in `compare-stream/route.ts`) but DISCARDED on this surface, not
+   * published: `useLiveTrace.ts` has no handler for the `trace` SSE event
+   * `compare-stream/route.ts` emits (it switches on `progress`/`token`/
+   * `complete`/`error` only), so `LiveResponsePanel` renders
+   * `McpResponseDisplay` with no `evidenceTrace` prop, and `canPublish` in
+   * `McpResponseDisplay.tsx` requires `!!evidenceTrace` — never true on this
+   * page. P6 makes the compare routes refuse an unoffered id, which turns a
+   * quiet wrong answer into a loud one; either way the constant was the
+   * defect. (Corrected here in P7: the previous version of this comment
+   * claimed the live trace "is publishable" — it verifiably is not, by the
+   * three facts above.)
    *
    * THE REPLACEMENT is the one `QueryForm` already uses since website#30 P4,
    * which had the identical defect (a hardcoded initial model id): the first
    * model `/api/models` offers, read from the instance rather than asserted
-   * here. Memoized in a ref so a reader who runs several queries fetches once,
-   * and warmed on mount so the click does not wait. An instance whose
-   * `/api/models` cannot answer yields the empty string, and the route's
-   * existing "Query and model are required" refusal surfaces in the live
-   * panel — an error the reader can see, rather than a button that does
-   * nothing.
+   * here. Warmed on mount so the click does not wait.
    *
    * #314 asks a further question this does NOT answer: whether `/explore`
    * should instead have its own catalog role, or reach the `default` entry
@@ -65,22 +70,43 @@ export default function McpFlowDiagram() {
    * That is a product decision; this only stops the page naming a model the
    * instance never offered.
    */
-  const offeredModelRef = useRef<Promise<string> | null>(null);
+  // Lazy `useState` initializer, not a ref read during render: the latter
+  // trips `react-hooks/refs` ("refs should only be accessed outside of
+  // render"), even for the read-then-lazily-assign-once idiom. `useState`'s
+  // initializer function is the sanctioned way to construct something once
+  // per mount; the setter is never called again, so this is otherwise
+  // identical to a ref holding a stable instance.
+  const [offeredModelResolver] = useState<OfferedModelResolver>(() => createOfferedModelResolver());
+
+  /**
+   * True once an `/api/models` attempt has settled without producing a
+   * usable id — a network failure, a malformed body, or an empty catalog
+   * (website#30 P7). Mirrors `QueryForm`'s identically-named flag (website#30
+   * P4, #283): it clears on a later success, and while it is set the
+   * live-query Run control is withdrawn (`TraceControls`) rather than left to
+   * invite a click.
+   *
+   * That click would otherwise reach `/api/compare-stream` with an empty
+   * `model` and hit its "Query and model are required" 400 — a refusal whose
+   * body carries no `code` field (`compare-stream/route.ts`), so
+   * `classifyStreamError` falls through to `generic` and the reader would see
+   * only "Something went wrong while running this query. Please try again in
+   * a moment." (Corrected here in P7: the previous version of this comment
+   * claimed that refusal "surfaces in the live panel — an error the reader
+   * can see," as if the generic fallback were informative. `handleLiveStart`
+   * below now checks for an empty id itself and never sends that request, so
+   * the reader sees the disclosure below instead of a round trip to a
+   * mismatched-code 400.)
+   */
+  const [modelsError, setModelsError] = useState(false);
+
   const offeredModel = useCallback((): Promise<string> => {
-    if (!offeredModelRef.current) {
-      offeredModelRef.current = fetch('/api/models')
-        .then((res) => res.json())
-        .then((data) => {
-          const parsed = parseModelsResponse(data);
-          return parsed && parsed.length > 0 ? parsed[0].id : '';
-        })
-        .catch((error) => {
-          console.error('Failed to fetch models:', error);
-          return '';
-        });
-    }
-    return offeredModelRef.current;
-  }, []);
+    return offeredModelResolver.resolve().then((id) => {
+      setModelsError(id === '');
+      return id;
+    });
+  }, [offeredModelResolver]);
+
   useEffect(() => {
     void offeredModel();
   }, [offeredModel]);
@@ -196,9 +222,21 @@ export default function McpFlowDiagram() {
       setHasPlayedOnce(true);
     }
     // The model is resolved before the query starts (#314). Usually already
-    // resolved: the fetch is warmed on mount and memoized, so this settles in
-    // a microtask and the 400ms fullscreen beat is unchanged.
+    // resolved: the fetch is warmed on mount, so this settles in a microtask
+    // and the 400ms fullscreen beat is unchanged. `TraceControls` withdraws
+    // the Run control while `modelsError` is set, so this form should not be
+    // submittable with an empty id — the guard below is defense against the
+    // narrow race where a click lands before the mount-warmed fetch has
+    // settled and that settlement turns out to be a failure. In that case
+    // back out of the fullscreen entry rather than opening it onto nothing.
     void offeredModel().then((model) => {
+      if (!model) {
+        if (enteringFullscreen) {
+          setIsFullscreen(false);
+          setHasPlayedOnce(false);
+        }
+        return;
+      }
       const begin = () => liveTrace.start(query, model, DEFAULT_PORTAL);
       if (enteringFullscreen) setTimeout(begin, 400);
       else begin();
@@ -332,6 +370,7 @@ export default function McpFlowDiagram() {
           liveError={liveTrace.error}
           liveElapsedMs={liveTrace.elapsedMs}
           liveSlowMessage={liveTrace.slowMessage}
+          modelsUnavailable={modelsError}
           onLiveStart={handleLiveStart}
           onLiveCancel={handleLiveCancel}
           onLiveReplay={handleLiveReplay}
