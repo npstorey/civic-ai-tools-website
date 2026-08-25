@@ -270,6 +270,26 @@ export function friendlyStreamError(input: unknown): string {
 }
 
 /**
+ * Reader-facing copy for a `/api/models` load failure (#283) — covers both a
+ * failed fetch/JSON parse and a 200 response whose body doesn't carry a
+ * usable `models` array. Both are the same class of failure to the reader
+ * (the model list didn't load), so both route through this one message
+ * rather than a raw error or a silent render crash.
+ *
+ * The send/run control is withdrawn rather than the model picker (where one
+ * exists) being marked invalid, per docs/design-principles.md Principle 3
+ * and its corollary (a list that failed to load is not a bad selection).
+ *
+ * Cross-cutting per this file's own rule (CLAUDE.md): shared by every surface
+ * that needs an offered model id to submit a query and has nothing to
+ * substitute when the catalog can't be read — `QueryForm` (#283, website#30
+ * P4) and `/explore`'s live-query form (website#30 P7, which found the
+ * identical defect: a cached failed fetch poisoning every later click).
+ */
+export const MODELS_LOAD_ERROR =
+  "Couldn't load the list of AI models this site offers, so a query can't be sent right now. Refresh the page to try again.";
+
+/**
  * Server-side: the sanitized `error`-event payload for an already-classified
  * failure. The message is the reader-facing copy and the code is the kind, so
  * the raw error text never leaves the server (#154) while the render side

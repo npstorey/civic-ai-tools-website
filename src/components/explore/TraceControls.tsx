@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { PreRecordedTrace } from '@/lib/bpmn/traces';
 import type { PlaybackSpeed, ReplayState } from '@/lib/bpmn/animation';
 import type { LiveTraceStatus, SlowQueryMessage } from '@/hooks/useLiveTrace';
+import { MODELS_LOAD_ERROR } from '@/lib/streaming';
 
 export type DiagramMode = 'examples' | 'live';
 
@@ -25,6 +26,17 @@ interface TraceControlsProps {
   liveError: string | null;
   liveElapsedMs: number;
   liveSlowMessage: SlowQueryMessage | null;
+  /**
+   * True when this instance's `/api/models` catalog could not be read
+   * (website#30 P7) — the live query has no id to send. Withdraws the Run
+   * control and shows `MODELS_LOAD_ERROR` in its place, rather than letting a
+   * click reach `/api/compare-stream` with an empty `model` and land on that
+   * route's generic-error fallback. Not a validation state on the query
+   * input: per docs/design-principles.md Principle 3's corollary, a list
+   * that failed to load is not a bad selection, so nothing here is marked
+   * invalid.
+   */
+  modelsUnavailable: boolean;
   onLiveStart: (query: string) => void;
   onLiveCancel: () => void;
   onLiveReplay: () => void;
@@ -85,6 +97,7 @@ export default function TraceControls({
   liveError,
   liveElapsedMs,
   liveSlowMessage,
+  modelsUnavailable,
   onLiveStart,
   onLiveCancel,
   onLiveReplay,
@@ -284,13 +297,13 @@ export default function TraceControls({
               />
               <button
                 type="submit"
-                disabled={!liveQuery.trim()}
+                disabled={!liveQuery.trim() || modelsUnavailable}
                 className="ui-button ui-button-primary"
                 style={{
                   padding: '8px 20px',
                   fontSize: '13px',
-                  opacity: liveQuery.trim() ? 1 : 0.5,
-                  cursor: liveQuery.trim() ? 'pointer' : 'not-allowed',
+                  opacity: liveQuery.trim() && !modelsUnavailable ? 1 : 0.5,
+                  cursor: liveQuery.trim() && !modelsUnavailable ? 'pointer' : 'not-allowed',
                 }}
               >
                 Run
@@ -298,7 +311,19 @@ export default function TraceControls({
             </form>
           )}
 
-          {liveStatus === 'idle' && !isReplayingCapture && (
+          {/* Model-catalog load failure (website#30 P7): disclosed in place
+              of the Run control's helper text, not painted onto the query
+              input — the input didn't fail, the background fetch did (see
+              docs/design-principles.md's corollary). */}
+          {modelsUnavailable
+            && (liveStatus === 'idle' || liveStatus === 'error' || liveStatus === 'cancelled')
+            && !isReplayingCapture && (
+            <div role="status" style={{ fontSize: '13px', color: 'var(--caution)' }}>
+              {MODELS_LOAD_ERROR}
+            </div>
+          )}
+
+          {liveStatus === 'idle' && !isReplayingCapture && !modelsUnavailable && (
             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
               Uses one of your daily queries. Watch the diagram animate in real time.
             </div>
