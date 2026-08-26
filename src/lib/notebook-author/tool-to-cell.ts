@@ -43,9 +43,27 @@ function pyRepr(value: unknown, indent = ''): string {
   return JSON.stringify(value);
 }
 
-function pyKwargs(args: Record<string, unknown>, order: readonly string[]): string {
+/**
+ * Render `args` as Python keyword-argument lines: `order` first (in that
+ * order), then every remaining arg the caller did not enumerate, so a field
+ * this renderer doesn't know about yet is still emitted instead of silently
+ * dropped.
+ *
+ * `handledKeys` lists args the caller has already accounted for elsewhere in
+ * the generated cell — rendered by hand as explicit kwargs (e.g.
+ * `portal=...`), or consumed only as call-routing metadata that never
+ * appears in the rendered Python at all (e.g. `type`, which selects which
+ * renderer runs and is not itself a `fetch_*` parameter). Either way,
+ * `pyKwargs` must not append them a second time — the caller, not a
+ * hard-coded list here, owns which keys those are.
+ */
+function pyKwargs(
+  args: Record<string, unknown>,
+  order: readonly string[],
+  handledKeys: readonly string[] = [],
+): string {
   const lines: string[] = [];
-  const seen = new Set<string>();
+  const seen = new Set<string>(handledKeys);
   for (const key of order) {
     if (args[key] === undefined || args[key] === null) continue;
     lines.push(`    ${key}=${pyRepr(args[key], '    ')},`);
@@ -55,7 +73,6 @@ function pyKwargs(args: Record<string, unknown>, order: readonly string[]): stri
   for (const [key, value] of Object.entries(args)) {
     if (seen.has(key)) continue;
     if (value === undefined || value === null) continue;
-    if (key === 'type' || key === 'portal' || key === 'dataset_id') continue; // already positional-ish
     lines.push(`    ${key}=${pyRepr(value, '    ')},`);
   }
   return lines.join('\n');
@@ -106,7 +123,7 @@ function renderSocrataQueryCell(
     `${dfVar} = fetch_socrata(`,
     `    portal=${JSON.stringify(portal)},`,
     `    dataset_id=${JSON.stringify(datasetId)},`,
-    pyKwargs(call.args, SOCRATA_QUERY_KWARGS),
+    pyKwargs(call.args, SOCRATA_QUERY_KWARGS, ['portal', 'dataset_id', 'type']),
     ')',
     dfVar,
   ].filter(Boolean).join('\n');
@@ -137,7 +154,7 @@ function renderDataCommonsObsCell(
     `${dfVar} = fetch_data_commons(`,
     `    variable_dcid=${JSON.stringify(variable)},`,
     `    place_dcid=${JSON.stringify(place)},`,
-    pyKwargs(call.args, DC_OBS_KWARGS),
+    pyKwargs(call.args, DC_OBS_KWARGS, ['variable_dcid', 'place_dcid']),
     ')',
     dfVar,
   ].filter(Boolean).join('\n');
