@@ -11,68 +11,53 @@
  * in the output (civic-ai-tools-website#323 — the preamble told the model it
  * had `search` and `fetch` Socrata tools; only `get_data` was ever wired up).
  *
- * This test does not hardcode the expected tool list. It reads the preamble
- * source text directly, extracts every `Tools: a, b, c.` list via regex, and
- * checks each extracted name against the real `mcpTools` export. Re-adding
- * any uncallable name to the preamble in the future — not just `search` or
- * `fetch` specifically — fails this test.
+ * This test does not hardcode the expected tool list. It imports the real
+ * `CROSS_SOURCE_PREAMBLE` constant, extracts every `Tools: a, b, c.` list
+ * out of it via regex, and checks each extracted name against the real
+ * `mcpTools` export. Re-adding any uncallable name to the preamble in the
+ * future — not just `search` or `fetch` specifically — fails this test.
+ *
+ * Composing the full system prompt (`composeSkillPrompt` /
+ * `buildSystemPrompt`) was considered and rejected here: the property under
+ * test is a relation between the preamble text and `mcpTools`, and building
+ * intro + preamble + stub source bodies + outro around it doesn't strengthen
+ * that assertion — it only reintroduces a stray-"Tools:" hazard from
+ * whatever stub text stands in for the other sources. Importing the
+ * constant directly and asserting on it is the whole test.
  */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { CROSS_SOURCE_PREAMBLE } from './socrata-skill.ts';
 import { mcpTools } from './tools.ts';
-
-const HERE = fileURLToPath(import.meta.url);
-const MCP_ROOT = path.dirname(HERE);
-const SOCRATA_SKILL_SOURCE = path.join(MCP_ROOT, 'socrata-skill.ts');
-
-/**
- * Pulls the `CROSS_SOURCE_PREAMBLE` template literal's body out of the raw
- * source text. Scoping the search to just this declaration (rather than
- * scanning the whole file for "Tools:") keeps the extraction from picking up
- * an unrelated "Tools:" mention elsewhere in the module.
- */
-function extractCrossSourcePreamble(sourceText: string): string {
-  const match = sourceText.match(/const CROSS_SOURCE_PREAMBLE = `([\s\S]*?)`;/);
-  assert.ok(
-    match,
-    'Expected to find `const CROSS_SOURCE_PREAMBLE = `...`;` in socrata-skill.ts — has the declaration moved or been renamed?',
-  );
-  return match![1];
-}
 
 /**
  * Extracts every tool name out of every "Tools: a, b, c." list in the given
  * text. Tool names in this codebase never contain periods or commas, so a
  * comma-separated run up to the next period is a reliable list boundary.
  */
-function extractAdvertisedToolNames(preambleText: string): string[] {
-  const names: string[] = [];
+function extractAdvertisedToolLists(preambleText: string): string[][] {
+  const lists: string[][] = [];
   const listRegex = /Tools:\s*([^.\n]+)\./g;
   let listMatch: RegExpExecArray | null;
   while ((listMatch = listRegex.exec(preambleText)) !== null) {
-    for (const rawName of listMatch[1].split(',')) {
-      names.push(rawName.trim());
-    }
+    lists.push(listMatch[1].split(',').map((name) => name.trim()));
   }
-  return names;
+  return lists;
 }
 
 test('every tool name the cross-source preamble advertises exists in mcpTools', () => {
-  const sourceText = fs.readFileSync(SOCRATA_SKILL_SOURCE, 'utf8');
-  const preambleText = extractCrossSourcePreamble(sourceText);
-  const advertisedNames = extractAdvertisedToolNames(preambleText);
+  const advertisedLists = extractAdvertisedToolLists(CROSS_SOURCE_PREAMBLE);
 
-  // Sanity check on the extraction itself: the preamble names three source
-  // sections ("1.", "2.", "3."), each with its own "Tools:" list. If this
-  // count changes, the regex is no longer matching what the preamble says
-  // and the test below would pass vacuously.
-  assert.ok(
-    advertisedNames.length >= 3,
-    `Expected to extract at least 3 tool names from the preamble's "Tools:" lists, got ${advertisedNames.length}: ${JSON.stringify(advertisedNames)}`,
+  // Structural guard: the preamble describes exactly three sources (Socrata,
+  // Data Commons, Boston OpenContext), each with its own "Tools:" list. If
+  // this count changes — a source added, removed, or a list reworded past
+  // what the regex recognizes — that is a deliberate change this test
+  // should be updated for, not something it should silently pass through.
+  assert.equal(
+    advertisedLists.length,
+    3,
+    `Expected exactly 3 "Tools:" lists in CROSS_SOURCE_PREAMBLE (one per MCP source), found ${advertisedLists.length}: ${JSON.stringify(advertisedLists)}`,
   );
 
   const callableToolNames = new Set(
@@ -81,7 +66,7 @@ test('every tool name the cross-source preamble advertises exists in mcpTools', 
       .map((tool) => tool.function.name),
   );
 
-  for (const advertisedName of advertisedNames) {
+  for (const advertisedName of advertisedLists.flat()) {
     assert.ok(
       callableToolNames.has(advertisedName),
       `Preamble advertises tool "${advertisedName}" but it is not in mcpTools (src/lib/mcp/tools.ts) — the model will plan around a capability that does not exist.`,
