@@ -1,13 +1,23 @@
 name: Standalone
 
-# The empirical net for the standalone build (wave N5 P1, anchor #282).
+# The empirical net for the standalone build ON A HOST (wave N5 P1, anchor
+# #282; scope narrowed by #295).
 #
 # `npm run build:standalone` (BUILD_STANDALONE=1 next build, then
-# scripts/check-standalone-assets.mjs) otherwise runs only inside
-# `docker build` — which no workflow performs — so a change that breaks
-# standalone tracing of the runtime-read helper files would first surface in
-# an operator's image build. This leg runs the same command directly, on the
-# paths that can break it.
+# scripts/check-standalone-assets.mjs) runs in two environments that are not
+# interchangeable, and each needs its own leg:
+#
+#   host       — the whole repository present. This workflow, on the paths
+#                that can break standalone tracing of the runtime-read
+#                helper files.
+#   container  — a `.dockerignore`-filtered context. ci.yml's
+#                `container image build` job, always-run and unfiltered.
+#
+# This leg used to be the only one, and its own header said so: the command
+# "otherwise runs only inside `docker build` — which no workflow performs."
+# That was true and it was the gap. A defect visible only in the filtered
+# context passed here for two days (#295), because on this runner nothing is
+# filtered. Do not treat a green run here as evidence about an image build.
 #
 # Credential-free by construction, same charter as ci.yml: zero `secrets.`
 # references, no `env:` blocks of placeholder credentials, first-party

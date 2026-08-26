@@ -41,10 +41,33 @@ README.md
 # and whatever is lying here would otherwise be copied into the image.
 temp
 
+# Tests are repository material as well — and keeping them out is not a size
+# saving, it is what makes the build's type-check scope match the context
+# (#295). `next build` type-checks everything tsconfig.json's `**/*.ts` glob
+# matches, test files included, but this context is deliberately NOT the whole
+# repository. A test that imports a path filtered out below therefore fails
+# the IMAGE build while every host-run check stays green — which is how a test
+# importing `scripts/preflight-env.mjs` broke the documented
+# `docker compose up --build` bring-up with CI green throughout.
+#
+# Excluding them makes the two scopes agree by construction: the image build
+# type-checks application code; `npm run typecheck` and CI type-check
+# application code AND tests, on a host where the whole repository is present.
+# The superset still runs, so nothing loses coverage.
+**/*.test.ts
+**/*.test.tsx
+**/*.test.mts
+**/*.test.mjs
+
 # The build stage runs exactly one repository script — the standalone asset
 # check chained into `npm run build:standalone`. Admitting only that one keeps
 # the built stages from doubling as a place to run the rest of the repo's
 # tooling. A new build-time script must be added here explicitly; forgetting
 # fails the build loudly rather than silently enlarging the image.
+#
+# This allowlist is for scripts the BUILD runs, not for scripts a test
+# imports. Test files no longer reach the context at all (see above), so a
+# test import can neither justify an entry here nor break the image build;
+# application code importing a filtered path still fails loudly, as intended.
 scripts/*
 !scripts/check-standalone-assets.mjs
