@@ -512,3 +512,113 @@ test('queryWithMcpStreaming: buildStatsSummary and buildProvenanceLine sum data.
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+// --- Case 5: a tool call the data source did not answer (#321, website#325 P3) ---
+//
+// The recorded tool-call entry must carry `failed` + `failureKind`, set at the
+// catch site where the rejection is already known. Nothing downstream can
+// recover the fact: `toolEntry` is pushed into `toolsCalled` BEFORE the await,
+// so without this the notebook synthesizer saw a call indistinguishable from a
+// successful one and rendered it as an executable fetch cell that then threw.
+//
+// Same harness as Case 3 — `executeToolCall` is an injected parameter, so
+// these drive the real loop in `queryWithMcpStreaming` with no MCP server and
+// no credential. The injected function THROWS instead of returning a payload,
+// which is the one difference.
+
+/**
+ * One full tool-call round trip whose tool execution throws `error`. The loop
+ * is expected to survive it: the catch feeds the model neutral guidance and
+ * the run completes with a final answer, so `onError` must never fire.
+ */
+async function runFailingToolCallRoundTrip(
+  toolArgs: Record<string, unknown>,
+  error: unknown,
+): Promise<CompletionResult> {
+  const { server, url } = await startToolCallModelServer('get_data', toolArgs);
+  try {
+    process.env.OPENROUTER_API_KEY = FAKE_KEY;
+    process.env.MODEL_API_BASE_URL = url;
+    _resetDefaultModelClientForTests();
+
+    let result: CompletionResult | undefined;
+    await queryWithMcpStreaming(
+      'test question',
+      FAKE_MODEL,
+      [],
+      async () => {
+        throw error;
+      },
+      undefined,
+      {
+        onProgress: () => {},
+        onToken: () => {},
+        onComplete: (_panel, completion) => {
+          result = completion;
+        },
+        onError: (_panel, message) => {
+          assert.fail(`a failed tool call must not fail the whole query: ${message}`);
+        },
+      },
+    );
+
+    assert.ok(result, 'onComplete must fire — one dead tool call is not a dead query');
+    return result!;
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
+test('#321: a tool call that throws is recorded with failed + failureKind', async () => {
+  // RED: revert the two lines in the catch block of openrouter-streaming.ts —
+  // `failed` is undefined and this fails.
+  const result = await runFailingToolCallRoundTrip(
+    { type: 'query', dataset_id: 'erm2-nwe9', portal: 'data.cityofnewyork.us' },
+    new Error('Request to the data source timed out after 60000ms'),
+  );
+
+  assert.equal(result.tools_called?.length, 1, 'the call is still recorded — it was attempted');
+  const call = result.tools_called![0];
+  assert.equal(call.failed, true);
+  assert.equal(call.failureKind, 'timeout');
+  // The distinction #321 turns on: no summary, but that is NOT what says it
+  // failed. A zero-row success has no rows either (see the Case 3 test above).
+  assert.equal(call.resultSummary, undefined);
+  // The arguments survive, so the notebook's failure note can say what was
+  // attempted rather than just that something was.
+  assert.equal(call.args.dataset_id, 'erm2-nwe9');
+});
+
+test('#321: failureKind narrows honestly — an unreachable source is `unavailable`', async () => {
+  const result = await runFailingToolCallRoundTrip(
+    { type: 'query', dataset_id: 'erm2-nwe9' },
+    new Error('fetch failed'),
+  );
+  assert.equal(result.tools_called?.[0].failed, true);
+  assert.equal(result.tools_called?.[0].failureKind, 'unavailable');
+});
+
+test('#321: an unclassifiable failure is `unknown`, never a guessed cause', async () => {
+  // design-principles.md Principle 3: an error we cannot classify must not be
+  // asserted as a timeout or a refusal. `unknown` is a real member of the
+  // vocabulary, not a placeholder.
+  const result = await runFailingToolCallRoundTrip(
+    { type: 'query', dataset_id: 'erm2-nwe9' },
+    new Error('something we have no branch for'),
+  );
+  assert.equal(result.tools_called?.[0].failed, true);
+  assert.equal(result.tools_called?.[0].failureKind, 'unknown');
+});
+
+test('#321: a SUCCESSFUL tool call is not marked failed', async () => {
+  // The control. Without it, an implementation that sets `failed` on every
+  // call would pass every test above — and would suppress the code cell for
+  // every fetch in the notebook.
+  const { result } = await runToolCallRoundTrip(
+    { type: 'query', dataset_id: 'erm2-nwe9' },
+    JSON.stringify({ data: [{ unique_key: '1', complaint_type: 'Noise' }], total_rows: 1 }),
+  );
+  assert.equal(result.tools_called?.[0].failed, undefined);
+  assert.equal(result.tools_called?.[0].failureKind, undefined);
+  assert.deepEqual(result.tools_called?.[0].resultSummary, { rows: 1, columns: 2 });
+});

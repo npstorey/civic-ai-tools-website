@@ -138,7 +138,12 @@ export function synthesizeNotebook(inputs: PhaseAOutputs): SynthesisOutputs {
     if (rendered.citation) {
       citationMap.set(rendered.citation.id, rendered.citation);
     }
-    dataFrameIndex += 1;
+    // Only a call that actually produced a DataFrame consumes a step number.
+    // Since #321 a rendered call is no longer necessarily a fetching one — a
+    // failed call renders a markdown note and no DataFrame — and advancing on
+    // it would number the following fetch "Step 2" with no Step 1 in the
+    // notebook, or leave a gap mid-sequence.
+    if (rendered.producedDataFrame) dataFrameIndex += 1;
   }
 
   // Metric capture — prints a single `_civic_capture=…` line that Phase D
