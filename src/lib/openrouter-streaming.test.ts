@@ -14,7 +14,7 @@ import type { AddressInfo } from 'node:net';
 import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks, type CompletionResult } from './openrouter-streaming.ts';
 import { carriedModelIdentity } from './model-catalog.ts';
 import { _resetDefaultModelClientForTests } from './model-client.ts';
-import { streamErrorPayload, type StreamErrorCode, type PanelType, type ProgressPhase } from './streaming.ts';
+import { streamErrorPayload, buildStatsSummary, buildProvenanceLine, type StreamErrorCode, type PanelType, type ProgressPhase } from './streaming.ts';
 
 const FAKE_KEY = 'sk-or-test-obviously-fake-key-do-not-use';
 
@@ -372,4 +372,143 @@ test('queryWithMcpStreaming: an envelope without a data array leaves resultSumma
   assert.equal(result.tools_called?.length, 1);
   assert.equal(result.tools_called?.[0].resultSummary, undefined);
   assert.equal(toolResultNarration(progress), 'Query to 311 Service Requests complete');
+});
+
+// --- Case 4: the rollups downstream of resultSummary (#322 follow-up) -------
+//
+// `resultSummary.rows` has two more readers beyond `formatToolResult`, both in
+// streaming.ts and both reached from the primary answer surface via
+// McpResponseDisplay.tsx (CLAUDE.md's canonical shared component, imported by
+// both ResponsePanel and LiveResponsePanel): `buildStatsSummary`'s "N records
+// analyzed" and `buildProvenanceLine`'s "N rows returned". Both `reduce` over
+// `resultSummary?.rows` across every tool call. Before this phase's fix they
+// summed to zero for every Socrata call, because resultSummary was always
+// null; after it they carry a real number onto the reader-facing answer. That
+// is a newly-activated provenance claim, and it rests on the same
+// rows-means-data.length-not-total_rows judgment call as the parse itself: if
+// that judgment is ever reversed, this is the test that says why not, by
+// making a mismatched, materially wrong total (300) visibly different from
+// the correct one (5).
+
+function startMultiToolCallModelServer(
+  toolName: string,
+  toolArgsList: Record<string, unknown>[],
+): Promise<{ server: Server; url: string }> {
+  return new Promise((resolve) => {
+    let callCount = 0;
+    const server = createServer((_req, res) => {
+      callCount++;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      if (callCount === 1) {
+        res.end(JSON.stringify({
+          id: 'chatcmpl-test-multi-tool-call',
+          object: 'chat.completion',
+          created: Math.floor(Date.now() / 1000),
+          model: 'fake/model',
+          choices: [{
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: toolArgsList.map((args, i) => ({
+                id: `call_${i + 1}`,
+                type: 'function',
+                function: { name: toolName, arguments: JSON.stringify(args) },
+              })),
+            },
+            finish_reason: 'tool_calls',
+          }],
+          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        }));
+      } else {
+        res.end(JSON.stringify({
+          id: 'chatcmpl-test-final',
+          object: 'chat.completion',
+          created: Math.floor(Date.now() / 1000),
+          model: 'fake/model',
+          choices: [{
+            index: 0,
+            message: { role: 'assistant', content: 'Final answer.' },
+            finish_reason: 'stop',
+          }],
+          usage: { prompt_tokens: 20, completion_tokens: 8, total_tokens: 28 },
+        }));
+      }
+    });
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address() as AddressInfo;
+      resolve({ server, url: `http://127.0.0.1:${port}/v1` });
+    });
+  });
+}
+
+test('queryWithMcpStreaming: buildStatsSummary and buildProvenanceLine sum data.length (5) across calls, never total_rows (300) and never 0', async () => {
+  const call1Args = { type: 'query', dataset_id: 'erm2-nwe9', portal: 'data.cityofnewyork.us' };
+  const call2Args = { type: 'query', dataset_id: '43nn-pn8j', portal: 'data.cityofnewyork.us' };
+
+  // Both envelopes carry a total_rows far larger than data.length - a capped
+  // page, same as production Socrata pagination - so summing the wrong field
+  // would produce a visibly different (and false) total.
+  const envelope1 = JSON.stringify({
+    data: [
+      { unique_key: '1', complaint_type: 'Noise' },
+      { unique_key: '2', complaint_type: 'Illegal Parking' },
+    ],
+    total_rows: 100,
+  });
+  const envelope2 = JSON.stringify({
+    data: [
+      { camis: 'a', dba: 'Restaurant A' },
+      { camis: 'b', dba: 'Restaurant B' },
+      { camis: 'c', dba: 'Restaurant C' },
+    ],
+    total_rows: 200,
+  });
+
+  const { server, url } = await startMultiToolCallModelServer('get_data', [call1Args, call2Args]);
+  try {
+    process.env.OPENROUTER_API_KEY = FAKE_KEY;
+    process.env.MODEL_API_BASE_URL = url;
+    _resetDefaultModelClientForTests();
+
+    let result: CompletionResult | undefined;
+
+    await queryWithMcpStreaming(
+      'test question',
+      FAKE_MODEL,
+      [],
+      async (_name, args) => (args.dataset_id === 'erm2-nwe9' ? envelope1 : envelope2),
+      undefined,
+      {
+        onProgress: () => {},
+        onToken: () => {},
+        onComplete: (_panel, completion) => {
+          result = completion;
+        },
+        onError: (_panel, message) => {
+          assert.fail(`unexpected onError: ${message}`);
+        },
+      },
+    );
+
+    assert.ok(result, 'onComplete must fire');
+    const toolsCalled = result!.tools_called ?? [];
+    assert.equal(toolsCalled.length, 2);
+    assert.deepEqual(toolsCalled.map((t) => t.resultSummary), [
+      { rows: 2, columns: 2 },
+      { rows: 3, columns: 2 },
+    ]);
+
+    const stats = buildStatsSummary(toolsCalled, result!.duration_ms);
+    assert.match(stats, /\b5 records analyzed\b/);
+    assert.doesNotMatch(stats, /\b300\b/);
+    assert.doesNotMatch(stats, /\b0 records analyzed\b/);
+
+    const provenance = buildProvenanceLine(toolsCalled);
+    assert.ok(provenance, 'buildProvenanceLine must return a line for query-type tool calls');
+    assert.match(provenance!, /\b5 rows returned\b/);
+    assert.doesNotMatch(provenance!, /\b300\b/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
