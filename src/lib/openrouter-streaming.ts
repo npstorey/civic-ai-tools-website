@@ -309,17 +309,53 @@ export async function queryWithMcpStreaming(
             const toolDuration = Date.now() - toolStartTime;
             toolEntry.duration_ms = toolDuration;
 
-            // Parse result to extract row/column counts
+            // Parse result to extract row/column counts. Socrata (and any MCP
+            // server that paginates) answers with an envelope —
+            // { data: [...], total_rows: N, ... } — not a bare array, so the
+            // bare-array-only check below always missed it and `resultSummary`
+            // was silently null for every Socrata call (#322).
+            //
+            // `rows` is what THIS CALL actually delivered — `data.length` —
+            // never `total_rows`. `total_rows` is the size of the matching set
+            // upstream; a capped page can return far fewer rows than that, and
+            // every downstream reader of `resultSummary.rows` (the narration
+            // copy below, and the "records analyzed" / "rows returned" rollups
+            // in buildNarrativeSummary/buildProvenanceLine in streaming.ts)
+            // means "how much data flowed through this call," not "how large
+            // is the source dataset." Reporting `total_rows` there would claim
+            // the model analyzed rows it never saw.
             try {
-              const parsed = JSON.parse(result);
-              if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object') {
-                toolEntry.resultSummary = {
-                  rows: parsed.length,
-                  columns: Object.keys(parsed[0]).length,
-                };
+              const parsed: unknown = JSON.parse(result);
+              const rows: unknown[] | undefined = Array.isArray(parsed)
+                ? parsed
+                : parsed && typeof parsed === 'object' && Array.isArray((parsed as Record<string, unknown>).data)
+                  ? (parsed as Record<string, unknown>).data as unknown[]
+                  : undefined;
+
+              if (rows) {
+                const firstRow = rows[0];
+                if (rows.length === 0) {
+                  // A valid, empty result set is a real answer ("no matching
+                  // records"), not a parse failure — worth distinguishing from
+                  // the silent-skip cases below so a zero-row response is
+                  // diagnosable rather than indistinguishable from "did not
+                  // parse."
+                  toolEntry.resultSummary = { rows: 0, columns: 0 };
+                } else if (typeof firstRow === 'object' && firstRow !== null) {
+                  toolEntry.resultSummary = {
+                    rows: rows.length,
+                    columns: Object.keys(firstRow).length,
+                  };
+                }
+                // else: a non-empty array whose elements are not objects
+                // (e.g. an array of strings) - not tabular, skip, matching
+                // the prior bare-array behavior.
               }
+              // else: not JSON-parseable as a bare array or a { data: [...] }
+              // envelope (e.g. a metadata/metrics payload, or an envelope with
+              // no `data` field) - skip, `resultSummary` stays unset.
             } catch {
-              // Not JSON or not an array - skip
+              // Not JSON - skip
             }
 
             // Trace: end tool call span with response metadata
