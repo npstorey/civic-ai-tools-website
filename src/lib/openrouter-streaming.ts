@@ -5,6 +5,7 @@ import { formatToolProgress, formatToolResult, generateToolReason, describeToolF
 import type { TraceBuilder } from './evidence/trace.ts';
 import { hash as traceHash } from './evidence/trace.ts';
 import { deriveOperationType } from './mcp/operation-types.ts';
+import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 
 export interface TraceContext {
   builder: TraceBuilder;
@@ -100,7 +101,40 @@ export interface CompletionResult {
     duration_ms?: number;
     operationType?: string;
     reason?: string;
+    /** Set when the tool call threw; see the catch block below (#321). */
+    failed?: boolean;
+    failureKind?: ToolFailureKind;
   }[];
+}
+
+/**
+ * Map a thrown tool-call error onto the notebook's failure vocabulary (#321).
+ *
+ * `classifyStreamError` is already this file's classifier for the same error
+ * shapes (`reportStreamFailure` uses it), so failure is classified ONCE, in
+ * one place, rather than re-derived downstream from prose. The mapping is
+ * narrowing and deliberately lossy: `ToolFailureKind` describes what a
+ * notebook reader needs to know about ONE request, so the six kinds that
+ * describe a whole query rather than a single tool call — this app's own rate
+ * limit, the two model-credential kinds, notebook execution — collapse into
+ * `unknown` rather than being asserted as something more specific than was
+ * measured (design-principles.md Principle 3).
+ *
+ * `connection` joins `mcp_unavailable`: to a reader deciding whether to re-run
+ * the notebook, "the source could not be reached" is the same fact either way.
+ */
+function toolFailureKindOf(error: unknown): ToolFailureKind {
+  switch (classifyStreamError(error)) {
+    case 'mcp_timeout':
+      return 'timeout';
+    case 'mcp_unavailable':
+    case 'connection':
+      return 'unavailable';
+    case 'mcp_not_configured':
+      return 'not_configured';
+    default:
+      return 'unknown';
+  }
 }
 
 // Token safety limits (configurable via env vars)
@@ -227,7 +261,7 @@ export async function queryWithMcpStreaming(
 ): Promise<void> {
   const startTime = Date.now();
   const panel: PanelType = 'withMcp';
-  const toolsCalled: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string }[] = [];
+  const toolsCalled: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string; failed?: boolean; failureKind?: ToolFailureKind }[] = [];
 
   try {
     callbacks.onProgress(panel, 'Reading your question...', { phase: 'analyze' });
@@ -386,6 +420,16 @@ export async function queryWithMcpStreaming(
               content: truncatedResult,
             });
           } catch (error) {
+            // #321: record the rejection ON the tool-call entry, here, where
+            // it is already known. `toolEntry` was pushed into `toolsCalled`
+            // before the await, so this mutation reaches every consumer of
+            // `CompletionResult.tools_called` — including the notebook
+            // synthesizer, which was rendering this call as an executable
+            // fetch cell that then threw on execution. Nothing downstream can
+            // recover this fact: a failed call is not distinguishable from a
+            // successful zero-row one by its `resultSummary`.
+            toolEntry.failed = true;
+            toolEntry.failureKind = toolFailureKindOf(error);
             if (toolTraceSpanId) {
               trace!.builder.endSpan(toolTraceSpanId, {
                 'error': true,

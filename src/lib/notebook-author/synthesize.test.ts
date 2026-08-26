@@ -6,7 +6,9 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { synthesizeNotebook } from './synthesize.ts';
+import type { PhaseAToolCall } from './tool-to-cell.ts';
 import {
   NOTEBOOK_EXTENSION_KEY,
   PYTHON_RUNTIME_VERSION,
@@ -239,4 +241,97 @@ test('synthesizeNotebook: the reproducibility stamp names the declared model and
     /- \*\*Author model:\*\* vendor\/model-1, reached over a deployment-routed chat-completions API\./,
   );
   assert.equal(/azure/i.test(azureFooter), false);
+});
+
+// --- #321: a whole notebook containing a rejected call ----------------------
+//
+// The tool-to-cell tests pin one renderer at a time. This pins the assembled
+// document — the artifact a reader actually opens — for the anchor's "the
+// notebook still executes end to end", static half: every code cell compiles,
+// and the rejected call contributes none.
+
+/** The fixture, with a REJECTED query call inserted before the good one. */
+const FIXTURE_WITH_REJECTED_CALL = {
+  ...BROOKLYN_311_FIXTURE,
+  toolCalls: [
+    BROOKLYN_311_FIXTURE.toolCalls[0],
+    BROOKLYN_311_FIXTURE.toolCalls[1],
+    {
+      name: 'get_data',
+      operationType: 'query',
+      args: {
+        type: 'query',
+        portal: 'data.cityofnewyork.us',
+        dataset_id: 'w7w3-xahh',
+        select: 'complaint_type, count(*) as count',
+      },
+      reason: 'to aggregate the legacy 311 archive by complaint_type',
+      failed: true,
+      failureKind: 'unavailable',
+    },
+    BROOKLYN_311_FIXTURE.toolCalls[2],
+  ] as readonly PhaseAToolCall[],
+};
+
+test('#321: a rejected call adds no code cell to the assembled notebook, and every cell still compiles', () => {
+  const out = synthesizeNotebook({ ...FIXTURE_WITH_REJECTED_CALL });
+  const codeCells = out.notebook.cells.filter(c => c.cell_type === 'code');
+
+  // Same six code cells as the all-succeeding fixture: env, imports, helpers,
+  // ONE fetch, metric capture, synthesis. The rejected call added none.
+  assert.equal(
+    codeCells.length,
+    6,
+    `rejected call must add no code cell:\n${codeCells.map(c => c.source.join('')).join('\n---\n')}`,
+  );
+  // Its dataset id appears nowhere in any executable cell.
+  for (const cell of codeCells) {
+    assert.doesNotMatch(cell.source.join(''), /w7w3-xahh/);
+  }
+  // It IS disclosed, in markdown, saying what was attempted and why nothing
+  // came back — the reader is told, just not handed a cell that throws.
+  const markdown = out.notebook.cells.filter(c => c.cell_type === 'markdown').map(c => c.source.join('')).join('\n');
+  assert.match(markdown, /Not reproduced/);
+  assert.match(markdown, /w7w3-xahh/);
+  assert.match(markdown, /could not be reached/);
+
+  // Every code cell in the assembled notebook is valid Python.
+  for (const [i, cell] of codeCells.entries()) {
+    const source = cell.source.join('');
+    const result = spawnSync(
+      'python3',
+      ['-c', "import sys; compile(sys.stdin.read(), '<cell>', 'exec')"],
+      { input: source, encoding: 'utf-8' },
+    );
+    assert.equal(result.status, 0, `code cell ${i} is not valid Python:\n${source}\n${result.stderr}`);
+  }
+});
+
+test('#321: a rejected call does not consume a step number', () => {
+  // `dataFrameIndex` advances only on a call that produced a DataFrame. Before
+  // that gate the surviving fetch here would have been numbered "Step 2" with
+  // no Step 1 anywhere in the notebook, and its variable would have been df2.
+  const out = synthesizeNotebook({ ...FIXTURE_WITH_REJECTED_CALL });
+  assert.deepEqual(out.dataFrameVariables, ['df1']);
+
+  const allText = out.notebook.cells.map(c => c.source.join('')).join('\n');
+  assert.match(allText, /### Step 1: Query `erm2-nwe9`/);
+  assert.doesNotMatch(allText, /### Step 2:/);
+
+  // The surviving fetch is still guarded and still the good dataset.
+  const fetchCell = out.notebook.cells.filter(c => c.cell_type === 'code')[3].source.join('');
+  assert.match(fetchCell, /^try:/m);
+  assert.match(fetchCell, /df1 = fetch_socrata\(/);
+  assert.match(fetchCell, /dataset_id="erm2-nwe9"/);
+});
+
+test('#321: a rejected call is not listed among the discovery steps of a full notebook', () => {
+  const out = synthesizeNotebook({ ...FIXTURE_WITH_REJECTED_CALL });
+  const discovery = out.notebook.cells
+    .map(c => c.source.join(''))
+    .find(t => t.startsWith('### Discovery'));
+  assert.ok(discovery, 'the two genuine discovery calls still produce a summary');
+  // The two real discovery calls are listed; the rejected query call is not.
+  assert.equal(discovery!.split('\n').filter(l => l.startsWith('- `')).length, 2);
+  assert.doesNotMatch(discovery!, /w7w3-xahh/);
 });
