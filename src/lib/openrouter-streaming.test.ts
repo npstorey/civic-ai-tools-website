@@ -11,10 +11,10 @@ import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks } from './openrouter-streaming.ts';
+import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks, type CompletionResult } from './openrouter-streaming.ts';
 import { carriedModelIdentity } from './model-catalog.ts';
 import { _resetDefaultModelClientForTests } from './model-client.ts';
-import { streamErrorPayload, type StreamErrorCode, type PanelType } from './streaming.ts';
+import { streamErrorPayload, type StreamErrorCode, type PanelType, type ProgressPhase } from './streaming.ts';
 
 const FAKE_KEY = 'sk-or-test-obviously-fake-key-do-not-use';
 
@@ -173,4 +173,203 @@ test('queryWithMcpStreaming: upstream 401 yields typed model_auth_rejected onErr
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+// --- Case 3: resultSummary from a real tool-call round trip (#322, website#325 P2) ---
+//
+// `executeToolCall` is an injected parameter (not an import), so these fixtures
+// drive the real tool-calling loop in `queryWithMcpStreaming` end to end with no
+// network call to any MCP server and no credential — only a local mock model
+// server standing in for the chat-completions endpoint, following the idiom of
+// `startAuthRejectingServer` above. The model server always answers with one
+// tool call on its first reply and a content-only final answer on its second,
+// which is the minimal shape that drives the tool-result parse block at
+// `openrouter-streaming.ts` and its narration consumer, `formatToolResult` in
+// `streaming.ts` — the two surfaces the anchor calls out.
+
+interface RecordedProgress {
+  panel: PanelType;
+  message: string;
+  phase?: ProgressPhase;
+}
+
+function startToolCallModelServer(toolName: string, toolArgs: Record<string, unknown>): Promise<{ server: Server; url: string }> {
+  return new Promise((resolve) => {
+    let callCount = 0;
+    const server = createServer((_req, res) => {
+      callCount++;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      if (callCount === 1) {
+        res.end(JSON.stringify({
+          id: 'chatcmpl-test-tool-call',
+          object: 'chat.completion',
+          created: Math.floor(Date.now() / 1000),
+          model: 'fake/model',
+          choices: [{
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [{
+                id: 'call_1',
+                type: 'function',
+                function: { name: toolName, arguments: JSON.stringify(toolArgs) },
+              }],
+            },
+            finish_reason: 'tool_calls',
+          }],
+          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        }));
+      } else {
+        res.end(JSON.stringify({
+          id: 'chatcmpl-test-final',
+          object: 'chat.completion',
+          created: Math.floor(Date.now() / 1000),
+          model: 'fake/model',
+          choices: [{
+            index: 0,
+            message: { role: 'assistant', content: 'Final answer.' },
+            finish_reason: 'stop',
+          }],
+          usage: { prompt_tokens: 20, completion_tokens: 8, total_tokens: 28 },
+        }));
+      }
+    });
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address() as AddressInfo;
+      resolve({ server, url: `http://127.0.0.1:${port}/v1` });
+    });
+  });
+}
+
+/**
+ * Runs one full tool-call round trip against a local mock model server, with
+ * `toolResult` handed back verbatim by the injected `executeToolCall` — the
+ * exact string `queryWithMcpStreaming` parses at the site this phase fixes.
+ * Returns the completed result and every progress event, so a test can assert
+ * both surfaces: the parsed `resultSummary` (`CompletionResult.tools_called`)
+ * and the narration line `formatToolResult` produces from it (the
+ * `phase: 'tool_result'` progress event).
+ */
+async function runToolCallRoundTrip(
+  toolArgs: Record<string, unknown>,
+  toolResult: string,
+): Promise<{ result: CompletionResult; progress: RecordedProgress[] }> {
+  const { server, url } = await startToolCallModelServer('get_data', toolArgs);
+  try {
+    process.env.OPENROUTER_API_KEY = FAKE_KEY;
+    process.env.MODEL_API_BASE_URL = url;
+    _resetDefaultModelClientForTests();
+
+    const progress: RecordedProgress[] = [];
+    let result: CompletionResult | undefined;
+
+    await queryWithMcpStreaming(
+      'test question',
+      FAKE_MODEL,
+      [],
+      async () => toolResult,
+      undefined,
+      {
+        onProgress: (panel, message, opts) => {
+          progress.push({ panel, message, phase: opts?.phase });
+        },
+        onToken: () => {},
+        onComplete: (_panel, completion) => {
+          result = completion;
+        },
+        onError: (_panel, message) => {
+          assert.fail(`unexpected onError: ${message}`);
+        },
+      },
+    );
+
+    assert.ok(result, 'onComplete must fire');
+    return { result: result!, progress };
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
+function toolResultNarration(progress: RecordedProgress[]): string | undefined {
+  return progress.find((p) => p.phase === 'tool_result')?.message;
+}
+
+test('queryWithMcpStreaming: a Socrata envelope ({data, total_rows}) populates resultSummary from data.length, not total_rows', async () => {
+  // total_rows (100) disagrees with data.length (2) - a capped page. rows
+  // must reflect what this call actually delivered, since that is what every
+  // downstream reader (narration, the "records analyzed" rollups in
+  // streaming.ts) means by "rows".
+  const envelope = JSON.stringify({
+    data: [
+      { unique_key: '1', complaint_type: 'Noise' },
+      { unique_key: '2', complaint_type: 'Illegal Parking' },
+    ],
+    total_rows: 100,
+  });
+
+  const { result, progress } = await runToolCallRoundTrip(
+    { type: 'query', dataset_id: 'erm2-nwe9' },
+    envelope,
+  );
+
+  assert.equal(result.tools_called?.length, 1);
+  assert.deepEqual(result.tools_called?.[0].resultSummary, { rows: 2, columns: 2 });
+
+  // Second surface: the live-panel narration, `formatToolResult` at
+  // openrouter-streaming.ts:339, keyed off the same resultSummary.
+  assert.equal(toolResultNarration(progress), 'Retrieved 2 records from 311 Service Requests');
+});
+
+test('queryWithMcpStreaming: a bare JSON array still populates resultSummary (no regression)', async () => {
+  const bareArray = JSON.stringify([
+    { id: 'abcd-1234', name: 'Restaurant Inspections' },
+    { id: 'wvxf-dwi5', name: 'Housing Violations' },
+    { id: 'vw6y-z8j6', name: '311 Cases' },
+  ]);
+
+  const { result, progress } = await runToolCallRoundTrip(
+    { type: 'catalog', query: 'inspections' },
+    bareArray,
+  );
+
+  assert.equal(result.tools_called?.length, 1);
+  assert.deepEqual(result.tools_called?.[0].resultSummary, { rows: 3, columns: 2 });
+  assert.equal(toolResultNarration(progress), 'Found 3 datasets matching the search');
+});
+
+test('queryWithMcpStreaming: a zero-row envelope yields resultSummary {rows: 0, columns: 0}, not null', async () => {
+  // Deliberate: a query that legitimately matched nothing is a real, valid
+  // answer ("no matching records"), distinct from a result this app could not
+  // parse at all. Collapsing both to `resultSummary: undefined` is exactly
+  // the always-null failure mode #322 reports - a diagnostic that never fires
+  // is worse than one that is simply absent, because P3's replay work reads
+  // this field as a failure signal.
+  const emptyEnvelope = JSON.stringify({ data: [], total_rows: 0 });
+
+  const { result, progress } = await runToolCallRoundTrip(
+    { type: 'query', dataset_id: 'erm2-nwe9' },
+    emptyEnvelope,
+  );
+
+  assert.equal(result.tools_called?.length, 1);
+  assert.deepEqual(result.tools_called?.[0].resultSummary, { rows: 0, columns: 0 });
+  assert.equal(toolResultNarration(progress), 'Retrieved 0 records from 311 Service Requests');
+});
+
+test('queryWithMcpStreaming: an envelope without a data array leaves resultSummary unset', async () => {
+  // Not every Socrata response is a row envelope (metadata/metrics payloads
+  // are objects with no `data` array at all). Absent a `data` array to count,
+  // resultSummary must stay unset rather than guess - the same "skip" outcome
+  // as the pre-existing not-JSON / not-an-array case.
+  const notARowEnvelope = JSON.stringify({ total_rows: 5, note: 'no data field' });
+
+  const { result, progress } = await runToolCallRoundTrip(
+    { type: 'query', dataset_id: 'erm2-nwe9' },
+    notARowEnvelope,
+  );
+
+  assert.equal(result.tools_called?.length, 1);
+  assert.equal(result.tools_called?.[0].resultSummary, undefined);
+  assert.equal(toolResultNarration(progress), 'Query to 311 Service Requests complete');
 });
