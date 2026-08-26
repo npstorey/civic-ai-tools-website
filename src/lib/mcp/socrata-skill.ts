@@ -480,9 +480,9 @@ export interface SkillEntry {
  */
 export type SkillRegistry = Partial<Record<SourceId, SkillEntry>>;
 
-const CROSS_SOURCE_PREAMBLE = `You have access to THREE MCP data sources through the tools below.
+export const CROSS_SOURCE_PREAMBLE = `You have access to THREE MCP data sources through the tools below.
 
-1. **Socrata open data portals** — city operational data such as 311 requests, building permits, inspections, crime, housing violations, payroll, and licenses. Covers NYC, Chicago, SF, Seattle, LA, and hundreds of other portals — but not Boston. Tools: get_data, search, fetch.
+1. **Socrata open data portals** — city operational data such as 311 requests, building permits, inspections, crime, housing violations, payroll, and licenses. Covers NYC, Chicago, SF, Seattle, LA, and hundreds of other portals — but not Boston. Tools: get_data.
 2. **Google Data Commons** — authoritative federal and international statistical data from the U.S. Census Bureau (ACS, Decennial), BLS, CDC, Department of Education, EPA, and other official agencies. Tools: search_indicators, get_observations.
 3. **Boston OpenContext** — the City of Boston's CKAN-native open-data MCP, fronting data.boston.gov. 311, permits, crime, inspections, property, elections, schools, parcels, and neighborhoods for Boston specifically. Tools: ckan__search_datasets, ckan__get_dataset, ckan__query_data, ckan__get_schema, ckan__execute_sql, ckan__aggregate_data.
 
