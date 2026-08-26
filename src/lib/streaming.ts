@@ -1170,3 +1170,5 @@ export function encodeSSE(event: StreamEvent): string {
 export function panelsForRun(mcpOnly: boolean): PanelType[] {
   return mcpOnly ? ['withMcp'] : ['withoutMcp', 'withMcp'];
 }
+
+// #325 P1 negative check — throwaway branch, never merged.
