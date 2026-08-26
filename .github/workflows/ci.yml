@@ -103,3 +103,45 @@ jobs:
             exit 1
           fi
           echo "byte-identical (sha256 $(sha256sum "$SOURCE" | cut -d' ' -f1))"
+
+  # THE FILTERED-CONTEXT BUILD (#295). Every step in `verify` above runs on the
+  # runner, where the whole repository is present. `docker build` does not: the
+  # builder stage sees a `.dockerignore`-filtered context, and `next build`
+  # type-checks whatever tsconfig.json's globs match *within that context*. The
+  # two scopes can therefore disagree, and when they do, only the image build
+  # notices — which is exactly what happened: a test file's import of a filtered
+  # script broke the documented `docker compose up --build` bring-up for two
+  # days while `verify` and `standalone.yml` stayed green on every PR.
+  #
+  # Running `npm run build:standalone` on the runner cannot see that class of
+  # defect — standalone.yml's own header says so — because on the runner nothing
+  # is filtered. Only a build whose context is actually filtered can. So this
+  # job builds the real image, with the operator's own command shape.
+  #
+  # NO PATHS FILTER, deliberately. The trigger for this class is "any file the
+  # build type-checks changed", which is most of the repository — a paths filter
+  # would have to enumerate that, get it wrong, and go quiet. It lives in this
+  # workflow rather than the paths-filtered standalone.yml for the same reason:
+  # here, always-run is the file's existing property rather than a promise.
+  #
+  # Credential-free like the rest of this workflow: no `secrets.`, no `env:`,
+  # and no `--build-arg`. The image building with nothing passed in is part of
+  # the same tested invariant — an operator's first build supplies no config.
+  #
+  # If anonymous Docker Hub pulls ever rate-limit this job, the seam is the
+  # Dockerfile's NODE_IMAGE / DOCKER_CLI_IMAGE args, not a registry credential.
+  container-image:
+    name: container image build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The default target (runner), not `--target builder`: it is what
+      # `docker compose up --build` builds, and it additionally exercises the
+      # standalone copy and the Dockerfile's sharp resolve-and-run smoke test,
+      # neither of which any other job covers. The runtime stage costs little
+      # on top of the builder stage — a cold `--no-cache` full build measured
+      # 41s on one developer machine with the base images already local. That
+      # is not a runner measurement; budget for the base-image pulls too.
+      - name: Build the application image (dockerignore-filtered context)
+        run: docker build --progress=plain -t civic-app:ci .
