@@ -15,6 +15,7 @@ import { queryWithoutMcpStreaming, queryWithMcpStreaming, announcesUnrunWork, ty
 import { carriedModelIdentity } from './model-catalog.ts';
 import { _resetDefaultModelClientForTests } from './model-client.ts';
 import { streamErrorPayload, buildStatsSummary, buildProvenanceLine, type StreamErrorCode, type PanelType, type ProgressPhase } from './streaming.ts';
+import { startScriptedModelServer, type ScriptedReply } from './model-loop/test-harness.ts';
 
 const FAKE_KEY = 'sk-or-test-obviously-fake-key-do-not-use';
 
@@ -638,94 +639,11 @@ test('#321: a SUCCESSFUL tool call is not marked failed', async () => {
 // "no extra model call on a good answer" and "at most one extra answering
 // turn" are pinned, neither of which is visible from the completion alone.
 
-interface ScriptedReply {
-  content?: string | null;
-  toolCalls?: { id: string; name: string; args: Record<string, unknown> }[];
-  totalTokens?: number;
-}
-
-/**
- * A model server that answers from a script. Reply N serves request N; the
- * LAST reply repeats for every request beyond the script, which is what makes
- * an unbounded re-ask observable — a loop would keep drawing the same
- * unsatisfying answer and the request count would climb past the bound.
- *
- * Unlike `startToolCallModelServer` above it reads the request body, so it can
- * answer `stream: true` with real SSE (the answering turn streams) and record
- * what was actually sent (tools omitted, contract restated, transcript intact).
- */
-function startScriptedModelServer(replies: ScriptedReply[]): Promise<{
-  server: Server;
-  url: string;
-  requests: Record<string, unknown>[];
-}> {
-  const requests: Record<string, unknown>[] = [];
-  return new Promise((resolve) => {
-    const server = createServer((req, res) => {
-      const chunks: Buffer[] = [];
-      req.on('data', (c: Buffer) => chunks.push(c));
-      req.on('end', () => {
-        const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
-        requests.push(body);
-        const reply = replies[Math.min(requests.length - 1, replies.length - 1)];
-        const usage = {
-          prompt_tokens: 10,
-          completion_tokens: 5,
-          total_tokens: reply.totalTokens ?? 15,
-        };
-
-        if (body.stream === true) {
-          res.writeHead(200, { 'Content-Type': 'text/event-stream' });
-          const frame = (payload: Record<string, unknown>) =>
-            `data: ${JSON.stringify({
-              id: 'chatcmpl-test-scripted',
-              object: 'chat.completion.chunk',
-              created: 1,
-              model: 'fake/model',
-              ...payload,
-            })}\n\n`;
-          res.write(frame({
-            choices: [{ index: 0, delta: { content: reply.content ?? '' }, finish_reason: null }],
-          }));
-          res.write(frame({ choices: [], usage }));
-          res.write('data: [DONE]\n\n');
-          res.end();
-          return;
-        }
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          id: 'chatcmpl-test-scripted',
-          object: 'chat.completion',
-          created: 1,
-          model: 'fake/model',
-          choices: [{
-            index: 0,
-            message: {
-              role: 'assistant',
-              content: reply.content ?? null,
-              ...(reply.toolCalls
-                ? {
-                    tool_calls: reply.toolCalls.map((tc) => ({
-                      id: tc.id,
-                      type: 'function',
-                      function: { name: tc.name, arguments: JSON.stringify(tc.args) },
-                    })),
-                  }
-                : {}),
-            },
-            finish_reason: reply.toolCalls ? 'tool_calls' : 'stop',
-          }],
-          usage,
-        }));
-      });
-    });
-    server.listen(0, '127.0.0.1', () => {
-      const { port } = server.address() as AddressInfo;
-      resolve({ server, url: `http://127.0.0.1:${port}/v1`, requests });
-    });
-  });
-}
+// `startScriptedModelServer` used to be defined here. It moved to
+// `model-loop/test-harness.ts` when the loop became shared (#345): every
+// caller of `runToolLoop` needs the same instrument, and a second copy of a
+// mock endpoint is how two callers start disagreeing about what they are
+// testing. The cases below are unchanged.
 
 async function runScripted(replies: ScriptedReply[]): Promise<{
   result: CompletionResult;
@@ -901,6 +819,27 @@ test('#319: the token-limit answering turn does not duplicate the assistant turn
   assert.equal(assistants.length, 1, 'the assistant turn the loop already pushed must not be pushed again');
   const answered = messages.filter((m) => m.role === 'tool').map((m) => m.tool_call_id);
   assert.deepEqual(answered, ['call_1'], `expected one answer for call_1, saw ${JSON.stringify(answered)}`);
+});
+
+// --- The completion's shape, which differs by path on purpose --------------
+
+test('#345 P2: token_limit_exceeded is present on the answering-turn completion and ABSENT on the pass-through one', async () => {
+  // Wire-visible on the SSE `complete` event, and the easiest thing in this
+  // module for an adapter to flatten: the two completions carry different keys
+  // deliberately. A run that took the answering turn is the only one that can
+  // have been cut short, so it reports the flag the reader's truncation banner
+  // is keyed on; a run the model answered on its own account omits the key
+  // rather than asserting `false` on every ordinary query.
+  const answering = await runScripted([FETCH_CALL, { content: NARRATION }, { content: REAL_ANSWER }]);
+  assert.equal('token_limit_exceeded' in answering.result, true, 'the answering turn reports the flag');
+  assert.equal(answering.result.token_limit_exceeded, false);
+
+  const passThrough = await runScripted([FETCH_CALL, { content: REAL_ANSWER }]);
+  assert.equal(
+    'token_limit_exceeded' in passThrough.result,
+    false,
+    'the pass-through completion omits the key rather than sending token_limit_exceeded: false',
+  );
 });
 
 // --- The rule itself: where the line is drawn ------------------------------

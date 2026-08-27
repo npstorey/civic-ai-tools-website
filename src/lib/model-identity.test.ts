@@ -21,7 +21,9 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { AddressInfo } from 'node:net';
 import canonicalize from 'canonicalize';
 import {
@@ -761,19 +763,47 @@ test('#30 P6 F4: every inference span carries gen_ai.system (measured on a trace
 });
 
 test('#30 P6 F4: no inference span is started without gen_ai.system', () => {
-  // The drift guard the trace test cannot give: a THIRD `llm_inference` span
-  // added later without the attribute would not show up in a fixture that
-  // never takes that branch. Both current sites are in this one file.
-  const source = readFileSync(
-    new URL('./openrouter-streaming.ts', import.meta.url),
-    'utf8',
+  // The drift guard the trace test cannot give: a `llm_inference` span added
+  // later without the attribute would not show up in a fixture that never
+  // takes that branch.
+  //
+  // This walks the whole tree rather than naming a file. It used to read
+  // `openrouter-streaming.ts` and say "both current sites are in this one
+  // file" — true when it was written, false the moment the tool-calling loop
+  // moved into `model-loop/run-tool-loop.ts` (#345), at which point a guard
+  // that named a file went red while the invariant it protects was untouched.
+  // A guard on a tree-wide property does not need editing when code moves.
+  const sites = inferenceSpanStarts();
+  assert.ok(
+    sites.length >= 2,
+    `expected at least two llm_inference span sites under src/, found ${sites.length}`,
   );
-  const starts = [...source.matchAll(/startSpan\('llm_inference'[\s\S]{0,240}?\}\)/g)];
-  assert.ok(starts.length >= 2, 'both inference sites should be found');
-  for (const match of starts) {
+  for (const site of sites) {
     assert.ok(
-      match[0].includes("'gen_ai.system': getGenAiSystem()"),
-      'an inference span without gen_ai.system breaks conformance with the declared version',
+      site.source.includes("'gen_ai.system': getGenAiSystem()"),
+      `an inference span without gen_ai.system breaks conformance with the declared version (${site.file})`,
     );
   }
 });
+
+/** Every `startSpan('llm_inference'…)` call site in non-test source under `src/`. */
+function inferenceSpanStarts(): { file: string; source: string }[] {
+  const srcRoot = fileURLToPath(new URL('..', import.meta.url));
+  return sourceFilesUnder(srcRoot).flatMap((file) => {
+    const source = readFileSync(file, 'utf8');
+    return [...source.matchAll(/startSpan\('llm_inference'[\s\S]{0,240}?\}\)/g)].map((match) => ({
+      file: relative(srcRoot, file),
+      source: match[0],
+    }));
+  });
+}
+
+function sourceFilesUnder(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) return sourceFilesUnder(full);
+    if (!/\.tsx?$/.test(entry.name)) return [];
+    if (/\.test\.tsx?$/.test(entry.name)) return [];
+    return [full];
+  });
+}
