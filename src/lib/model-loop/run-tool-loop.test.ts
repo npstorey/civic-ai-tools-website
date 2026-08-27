@@ -274,6 +274,21 @@ test('#349 (c): a malformed argument set does NOT end the run — the loop conti
   assert.equal(requests.length, 3);
 });
 
+test('#349: JSON that parses but is not an argument set is the same failure', async () => {
+  // `null` parses cleanly and then throws on the first property read, one step
+  // further along — outside the guard if the guard only watches the parse.
+  const { result, requests } = await runCore({}, [
+    { toolCalls: [{ id: 'call_null', name: 'get_data', args: {}, rawArguments: 'null' }] },
+    { content: REAL_ANSWER },
+  ]);
+
+  assert.equal(result.toolCalls[0].failed, true);
+  assert.equal(result.toolCalls[0].failureKind, 'unknown');
+  assert.deepEqual(result.toolCalls[0].args, {}, 'the record carries an empty set, never null');
+  assert.equal(result.content, REAL_ANSWER);
+  assert.equal(toolMessages(requests).length, 1);
+});
+
 // --- The args-identity constraint ------------------------------------------
 
 test('the args on the record is the SAME object handed to executeToolCall', async () => {

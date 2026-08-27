@@ -539,7 +539,15 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       let argumentsMalformed = false;
       let args: Record<string, unknown> = {};
       try {
-        args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+        const parsed: unknown = JSON.parse(toolCall.function.arguments);
+        if (parsed !== null && typeof parsed === 'object') {
+          args = parsed as Record<string, unknown>;
+        } else {
+          // `null`, a number, a bare string: valid JSON that is not an
+          // argument set. It parses and then breaks the first reader that
+          // touches a property, which is the same failure one step later.
+          argumentsMalformed = true;
+        }
       } catch {
         argumentsMalformed = true;
       }
