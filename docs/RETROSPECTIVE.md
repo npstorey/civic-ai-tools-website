@@ -28,7 +28,7 @@ Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ### The finding worth more than the six fixes
 
-**Three phases fixed one instance of a defect that lived in a class, and each honoured its blast zone exactly while doing so.** P6 fixed the preamble and left `SOCRATA_SKILL_FALLBACK`; P3 fixed the executed-notebook path and left `notebook.ts:123`; P4 fixed `openrouter-streaming.ts` and left `openrouter.ts:120`, which still carries the literal pre-fix condition, plus `replay` and `evaluate`. Six files call the model outside the one that was fixed.
+**Three phases fixed one instance of a defect that lived in a class, and each honoured its blast zone exactly while doing so.** P6 fixed the preamble and left `SOCRATA_SKILL_FALLBACK`; P3 fixed the executed-notebook path and left `notebook.ts:123`; P4 fixed `openrouter-streaming.ts` and left `openrouter.ts:120`, which still carries the literal pre-fix condition, plus `replay`. Five files call the model outside the one that was fixed — six in total.
 
 No phase did anything wrong. The blast zone is the instrument that produced this, three times, from three authors. A zone scoped by file cannot see a defect scoped to a class. Now a rule in `CLAUDE.md`.
 
