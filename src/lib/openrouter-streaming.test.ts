@@ -11,7 +11,7 @@ import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks, type CompletionResult } from './openrouter-streaming.ts';
+import { queryWithoutMcpStreaming, queryWithMcpStreaming, announcesUnrunWork, type StreamCallbacks, type CompletionResult } from './openrouter-streaming.ts';
 import { carriedModelIdentity } from './model-catalog.ts';
 import { _resetDefaultModelClientForTests } from './model-client.ts';
 import { streamErrorPayload, buildStatsSummary, buildProvenanceLine, type StreamErrorCode, type PanelType, type ProgressPhase } from './streaming.ts';
@@ -621,4 +621,334 @@ test('#321: a SUCCESSFUL tool call is not marked failed', async () => {
   assert.equal(result.tools_called?.[0].failed, undefined);
   assert.equal(result.tools_called?.[0].failureKind, undefined);
   assert.deepEqual(result.tools_called?.[0].resultSummary, { rows: 1, columns: 2 });
+});
+
+// --- #319: a final answering turn, and what counts as an answer ------------
+//
+// The defect, measured on a live portal: eight tool calls completed, then a
+// 235-character "answer" ending "...I'll query the fraction of records that
+// close within 14 and 30 days per type". It validated. It was publishable. The
+// loop had treated the first message carrying no `tool_calls` as the final
+// answer, so a statement of intent to run a query that was never run was
+// published under the same signature and the same visual treatment as a real
+// finding.
+//
+// These cases drive the REAL loop against a scripted model server, so the
+// number of requests that server receives is itself an assertion: it is how
+// "no extra model call on a good answer" and "at most one extra answering
+// turn" are pinned, neither of which is visible from the completion alone.
+
+interface ScriptedReply {
+  content?: string | null;
+  toolCalls?: { id: string; name: string; args: Record<string, unknown> }[];
+  totalTokens?: number;
+}
+
+/**
+ * A model server that answers from a script. Reply N serves request N; the
+ * LAST reply repeats for every request beyond the script, which is what makes
+ * an unbounded re-ask observable — a loop would keep drawing the same
+ * unsatisfying answer and the request count would climb past the bound.
+ *
+ * Unlike `startToolCallModelServer` above it reads the request body, so it can
+ * answer `stream: true` with real SSE (the answering turn streams) and record
+ * what was actually sent (tools omitted, contract restated, transcript intact).
+ */
+function startScriptedModelServer(replies: ScriptedReply[]): Promise<{
+  server: Server;
+  url: string;
+  requests: Record<string, unknown>[];
+}> {
+  const requests: Record<string, unknown>[] = [];
+  return new Promise((resolve) => {
+    const server = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
+        requests.push(body);
+        const reply = replies[Math.min(requests.length - 1, replies.length - 1)];
+        const usage = {
+          prompt_tokens: 10,
+          completion_tokens: 5,
+          total_tokens: reply.totalTokens ?? 15,
+        };
+
+        if (body.stream === true) {
+          res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+          const frame = (payload: Record<string, unknown>) =>
+            `data: ${JSON.stringify({
+              id: 'chatcmpl-test-scripted',
+              object: 'chat.completion.chunk',
+              created: 1,
+              model: 'fake/model',
+              ...payload,
+            })}\n\n`;
+          res.write(frame({
+            choices: [{ index: 0, delta: { content: reply.content ?? '' }, finish_reason: null }],
+          }));
+          res.write(frame({ choices: [], usage }));
+          res.write('data: [DONE]\n\n');
+          res.end();
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          id: 'chatcmpl-test-scripted',
+          object: 'chat.completion',
+          created: 1,
+          model: 'fake/model',
+          choices: [{
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: reply.content ?? null,
+              ...(reply.toolCalls
+                ? {
+                    tool_calls: reply.toolCalls.map((tc) => ({
+                      id: tc.id,
+                      type: 'function',
+                      function: { name: tc.name, arguments: JSON.stringify(tc.args) },
+                    })),
+                  }
+                : {}),
+            },
+            finish_reason: reply.toolCalls ? 'tool_calls' : 'stop',
+          }],
+          usage,
+        }));
+      });
+    });
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address() as AddressInfo;
+      resolve({ server, url: `http://127.0.0.1:${port}/v1`, requests });
+    });
+  });
+}
+
+async function runScripted(replies: ScriptedReply[]): Promise<{
+  result: CompletionResult;
+  requests: Record<string, unknown>[];
+}> {
+  const { server, url, requests } = await startScriptedModelServer(replies);
+  try {
+    process.env.OPENROUTER_API_KEY = FAKE_KEY;
+    process.env.MODEL_API_BASE_URL = url;
+    _resetDefaultModelClientForTests();
+
+    let result: CompletionResult | undefined;
+    await queryWithMcpStreaming(
+      'How long do these requests take to close?',
+      FAKE_MODEL,
+      [],
+      async () => JSON.stringify({ data: [{ request_type: 'A', days_to_close: 9 }], total_rows: 1 }),
+      undefined,
+      {
+        onProgress: () => {},
+        onToken: () => {},
+        onComplete: (_panel, completion) => {
+          result = completion;
+        },
+        onError: (_panel, message) => {
+          assert.fail(`unexpected onError: ${message}`);
+        },
+      },
+    );
+    assert.ok(result, 'onComplete must fire');
+    return { result: result!, requests };
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
+const FETCH_CALL: ScriptedReply = {
+  toolCalls: [{ id: 'call_1', name: 'get_data', args: { type: 'query', dataset_id: 'abcd-1234' } }],
+};
+
+/**
+ * The measured shape of #319, in neutral fixture wording: work reported, then
+ * a query announced rather than run.
+ */
+const NARRATION =
+  "I now have the counts by request type for both years. Next, I'll query the fraction of " +
+  'records that close within 14 and 30 days per type.';
+
+const REAL_ANSWER =
+  'Across both years the portal recorded 4,812 requests of this type. The median time to close ' +
+  'was 9 days, and 71% closed within 14 days (dataset abcd-1234).';
+
+// --- Criterion 1: a mid-plan narration does not become the answer ----------
+
+test('#319: a tool_calls-free message that ANNOUNCES the next query is not published as the answer', async () => {
+  const { result, requests } = await runScripted([FETCH_CALL, { content: NARRATION }, { content: REAL_ANSWER }]);
+
+  // The whole point. Before the fix this assertion fails: `result.content` IS
+  // the narration, because the loop ended on the first message with no
+  // `tool_calls` and the content branch shipped it verbatim.
+  assert.notEqual(result.content, NARRATION);
+  assert.ok(
+    !result.content.includes("I'll query"),
+    `the announcement reached the published answer:\n${result.content}`,
+  );
+  assert.equal(result.content, REAL_ANSWER);
+
+  // Three requests: the opening call, the post-tool call that narrated, and
+  // exactly one answering turn.
+  assert.equal(requests.length, 3, 'one answering turn, no more');
+});
+
+// --- Criterion 2: a genuine answer passes through, at no extra cost --------
+
+test('#319: a genuine answer is published untouched, with NO extra model call', async () => {
+  const { result, requests } = await runScripted([FETCH_CALL, { content: REAL_ANSWER }]);
+
+  assert.equal(result.content, REAL_ANSWER);
+  // The counterweight to criterion 1, and it matters as much: a check that
+  // fires on a good answer would put a model call on the front of every query
+  // and rewrite answers that were already correct. Two requests, not three.
+  assert.equal(requests.length, 2, 'a good answer must not be re-asked');
+});
+
+// --- Criterion 3: the re-ask is bounded ------------------------------------
+
+test('#319: at most ONE answering turn — a second unsatisfying answer is not re-asked forever', async () => {
+  // The scripted server repeats its last reply, so a model that keeps
+  // announcing keeps announcing. An unbounded implementation never stops.
+  const { result, requests } = await runScripted([
+    FETCH_CALL,
+    { content: NARRATION },
+    { content: "Let me first compute the 30-day closure rates, then I'll summarize." },
+  ]);
+
+  assert.equal(requests.length, 3, `expected exactly one answering turn, saw ${requests.length - 2}`);
+  // Documented limitation, asserted so it stays deliberate: the second turn is
+  // taken at its word. Streamed tokens have already reached the reader by the
+  // time it can be judged, so they cannot be retracted — only appended to.
+  assert.match(result.content, /Let me first compute/);
+});
+
+// --- Criterion 4: the `!lastMessage?.content` guard ------------------------
+
+test('#319: a token-limit-exceeded run with content asks for a summary instead of shipping that content', async () => {
+  // Deliberately NOT an announcement: this content is plain working notes, so
+  // the only thing that can route it into an answering turn is the guard fix,
+  // not the announcement rule. The two halves of this phase stay separable.
+  const MID_RUN_NOTES =
+    'Working notes so far: 4,812 rows returned across the two years, and the request-type ' +
+    'column has 12 distinct values.';
+  assert.equal(
+    announcesUnrunWork(MID_RUN_NOTES),
+    false,
+    'the fixture must not be caught by the announcement rule — that would test the wrong half',
+  );
+
+  const { result, requests } = await runScripted([
+    // Content AND tool calls on one reply, with usage over the 200k budget:
+    // the loop executes the call, then breaks on the token check with a
+    // content-bearing message in hand. `!lastMessage?.content` was false, so
+    // the answering turn was skipped and these notes were published.
+    { content: MID_RUN_NOTES, toolCalls: FETCH_CALL.toolCalls, totalTokens: 250_000 },
+    { content: REAL_ANSWER },
+  ]);
+
+  assert.notEqual(result.content, MID_RUN_NOTES);
+  assert.equal(result.content, REAL_ANSWER);
+  assert.equal(requests.length, 2);
+  // The content branch never set this, so a truncated run did not even carry
+  // the flag its own banner is keyed on.
+  assert.equal(result.token_limit_exceeded, true);
+});
+
+// --- The answering turn's request, on the wire -----------------------------
+
+test('#319: the answering turn omits tools, restates the contract, and keeps the transcript well-formed', async () => {
+  const { requests } = await runScripted([FETCH_CALL, { content: NARRATION }, { content: REAL_ANSWER }]);
+
+  const final = requests[requests.length - 1];
+  assert.equal(final.stream, true);
+  // Tools omitted: the model cannot answer this turn with another tool call.
+  assert.equal('tools' in final, false, 'the answering turn must offer no tools');
+
+  const messages = final.messages as { role: string; content?: string; tool_call_id?: string }[];
+  const last = messages[messages.length - 1];
+  assert.equal(last.role, 'user');
+  assert.match(last.content!, /a statement of intent is not an answer/);
+  assert.match(last.content!, /no further tool calls will be made/);
+
+  // The narration stays in the transcript it is being corrected in.
+  assert.ok(
+    messages.some((m) => m.role === 'assistant' && m.content === NARRATION),
+    'the turn being corrected must still be in the history',
+  );
+
+  // Every tool call is answered exactly once. The old block pushed the last
+  // message and re-answered its tool calls even when the loop had already done
+  // both, which duplicates an assistant turn and answers one `tool_call_id`
+  // twice.
+  const answered = messages.filter((m) => m.role === 'tool').map((m) => m.tool_call_id);
+  assert.deepEqual(answered, [...new Set(answered)], `a tool_call_id was answered twice: ${answered}`);
+});
+
+test('#319: the token-limit answering turn does not duplicate the assistant turn or re-answer its tool call', async () => {
+  const { requests } = await runScripted([
+    { content: 'Working notes.', toolCalls: FETCH_CALL.toolCalls, totalTokens: 250_000 },
+    { content: REAL_ANSWER },
+  ]);
+
+  const messages = requests[requests.length - 1].messages as { role: string; content?: string; tool_call_id?: string }[];
+  const assistants = messages.filter((m) => m.role === 'assistant' && m.content === 'Working notes.');
+  assert.equal(assistants.length, 1, 'the assistant turn the loop already pushed must not be pushed again');
+  const answered = messages.filter((m) => m.role === 'tool').map((m) => m.tool_call_id);
+  assert.deepEqual(answered, ['call_1'], `expected one answer for call_1, saw ${JSON.stringify(answered)}`);
+});
+
+// --- The rule itself: where the line is drawn ------------------------------
+
+test('#319: announcesUnrunWork catches commitment to an unrun data step', () => {
+  assert.equal(announcesUnrunWork(NARRATION), true);
+  assert.equal(
+    announcesUnrunWork("I'll query the fraction of records that close within 14 and 30 days per type."),
+    true,
+  );
+  assert.equal(announcesUnrunWork('Let me check the closure rates for each type.'), true);
+  assert.equal(announcesUnrunWork('Now I will run the comparison across both years.'), true);
+  assert.equal(announcesUnrunWork('I need to fetch the 2023 rows before I can compare.'), true);
+});
+
+test('#319: announcesUnrunWork does NOT fire on a genuine answer, an offer, or a courtesy', () => {
+  // The false-positive side, which costs a model call and a rewrite of an
+  // answer that was already correct.
+  assert.equal(announcesUnrunWork(REAL_ANSWER), false);
+  assert.equal(announcesUnrunWork('Around 400,000.'), false);
+  // An OFFER of further work, made after answering, is not a commitment to it.
+  assert.equal(
+    announcesUnrunWork('71% closed within 14 days (dataset abcd-1234). I can pull the 30-day rates too.'),
+    false,
+  );
+  assert.equal(
+    announcesUnrunWork('The median was 9 days. Would you like me to compare this against last year?'),
+    false,
+  );
+  assert.equal(
+    announcesUnrunWork('The median was 9 days (dataset abcd-1234). Let me know if you want the monthly breakdown.'),
+    false,
+  );
+  // Blank is not an announcement — the call site handles "no answer at all"
+  // as its own condition.
+  assert.equal(announcesUnrunWork(''), false);
+  assert.equal(announcesUnrunWork('   '), false);
+  assert.equal(announcesUnrunWork(null), false);
+  assert.equal(announcesUnrunWork(undefined), false);
+});
+
+test('#319: a long answer that closes with an aside is not re-asked', () => {
+  // The length bound is the conservatism in the rule. A message that has
+  // already summarized findings at length has answered, whatever it says last.
+  const long =
+    'Across both years the portal recorded 4,812 requests of this type (dataset abcd-1234). ' +
+    'The median time to close was 9 days. '.repeat(14) +
+    "Next, I'll query the seasonal breakdown.";
+  assert.ok(long.length > 600, 'fixture must exceed the bound to test it');
+  assert.equal(announcesUnrunWork(long), false);
 });

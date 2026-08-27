@@ -142,6 +142,101 @@ const MAX_TOKENS_PER_REQUEST = Number(process.env.TOKEN_LIMIT_PER_REQUEST) || 20
 const MAX_TOOL_RESULT_CHARS = Number(process.env.MAX_TOOL_RESULT_CHARS) || 50_000;
 
 /**
+ * A final turn that ANNOUNCES a query instead of answering it (#319).
+ *
+ * The tool-call loop treats any assistant message carrying no `tool_calls` as
+ * the final answer. When the model narrates its next step in prose instead of
+ * emitting the call, that narration becomes the published answer. The measured
+ * case: eight tool calls completed, then 235 characters ending "...I'll query
+ * the fraction of records that close within 14 and 30 days per type". The
+ * notebook validated. The record was publishable. It is a statement of intent
+ * to run a query that was never run, published under the same signature and
+ * the same visual treatment as a real finding, and a reader cannot tell the
+ * two apart.
+ *
+ * THE RULE. A final message fails the output contract when BOTH hold:
+ *
+ *   1. it COMMITS, in the first person, to a data step it has not taken
+ *      ("I'll query...", "Let me check...", "Next I'll compute..."), and
+ *   2. the whole message is shorter than `ANNOUNCEMENT_MAX_CHARS`.
+ *
+ * Commitment rather than offer is the first half's whole point. "I can pull
+ * the 30-day rates too" and "would you like me to..." offer further work
+ * AFTER answering; they are not matched, and must not be. Only forms that
+ * assert the model is about to act are.
+ *
+ * The length bound is the conservatism. A long answer that closes with an
+ * aside has already answered, and re-asking it would cost a model call and a
+ * rewrite for nothing. The measured narration was 235 characters; 600 leaves
+ * room for a wordier one while sitting below any message that has actually
+ * summarized findings and cited a source.
+ *
+ * WHAT THIS DELIBERATELY DOES NOT DO is inspect the answer's substance — no
+ * citation check, no "must reference a computed value" (#333). The output
+ * contract's only concrete requirement is citation, and a citation gate has no
+ * measured definition yet; a wrong one re-asks correct answers, which is a
+ * failure that looks like rigour. The distinction drawn here is the narrower
+ * one #319 is actually about: answering rather than announcing.
+ *
+ * COST WHEN WRONG, in each direction. A false positive costs one extra model
+ * call and a re-worded answer — a real cost, which is why both conjuncts are
+ * required rather than either alone. A false negative publishes a statement of
+ * intent as a signed finding. The second is much worse, but not so much worse
+ * that the rule should be loose.
+ *
+ * Not to be confused with `detectIncompleteResponse` in
+ * components/shared/McpResponseDisplay.tsx, which is display-only and matches
+ * the opposite admission — a model saying it could NOT finish. None of its
+ * patterns fire on a confident announcement, which is why #319 reached the
+ * reader with no banner at all. If a second caller ever needs this predicate,
+ * export it toward that one rather than growing a parallel matcher.
+ */
+const ANNOUNCEMENT_MAX_CHARS = 600;
+
+/**
+ * First-person commitment, then a data-acquisition or computation verb within
+ * two words. `let me` carries a negative lookahead for "know", because "let me
+ * know if you want the monthly breakdown" is a courtesy at the end of a real
+ * answer, not a plan. No `g` flag: this is shared module state and `test()`
+ * would otherwise carry `lastIndex` between calls.
+ */
+const DATA_STEP_COMMITMENT =
+  /(?:\bi['’]?ll\b|\bi\s+will\b|\bi['’]?m\s+going\s+to\b|\bi\s+am\s+going\s+to\b|\bi\s+need\s+to\b|\bi\s+plan\s+to\b|\bi\s+intend\s+to\b|\bi['’]?m\s+about\s+to\b|\bi\s+am\s+about\s+to\b|\blet\s+me\b(?!\s+know)|\blet['’]?s\b|\bnext,?\s+i\b|\bnow\s+i\b|\bthen\s+i\b)(?:\s+\w+){0,2}\s+(?:quer(?:y|ies|ying)|fetch(?:ing)?|retriev\w*|re-?run(?:ning)?|run(?:ning)?|pull(?:ing)?|request(?:ing)?|check(?:ing)?|search(?:ing)?|count(?:ing)?|calculat\w*|comput\w*|analyz\w*|analys\w*|examin\w*|inspect(?:ing)?|compar\w*|aggregat\w*|cross-?\s?referenc\w*|look(?:ing)?\s+(?:at|up|into))\b/i;
+
+/**
+ * True when `content` announces work the model has not done rather than
+ * answering. An absent or blank message is NOT this: "no answer at all" is a
+ * separate condition at the call site, handled by the same path but for its
+ * own reason.
+ */
+export function announcesUnrunWork(content: string | null | undefined): boolean {
+  const text = content?.trim();
+  if (!text) return false;
+  if (text.length >= ANNOUNCEMENT_MAX_CHARS) return false;
+  return DATA_STEP_COMMITMENT.test(text);
+}
+
+/**
+ * The output contract, restated at the one moment the model has demonstrably
+ * lost it. The previous wording ("Based on all the data you have collected
+ * from the tool calls above, please provide a comprehensive answer to my
+ * original question. Summarize the key findings.") asked for an answer but
+ * never said that announcing one does not count — which is the exact failure
+ * being corrected, so it is now said outright, along with the fact that this
+ * turn is the published one.
+ *
+ * Source identifiers are named by KIND, not by source: this string is the
+ * app's own copy and stays free of any particular server's vocabulary.
+ */
+const FINAL_ANSWER_REQUEST =
+  'This is the final turn: no further tool calls will be made, and what you write now is the ' +
+  'published answer. Answer my original question using only the data already collected above. ' +
+  'Do not describe a query you plan to run or a step you intend to take next — a statement of ' +
+  'intent is not an answer. State the findings themselves, and cite the source of each figure ' +
+  '(dataset ID, variable DCID plus source dataset, or resource UUID plus dataset title). If the ' +
+  'data collected is not enough to answer, say so plainly and state what it does show.';
+
+/**
  * The span attributes recording what the endpoint said it used, next to what
  * this instance declared (website#30 P3, E5 — G0 D3: record both, warn, never
  * gate).
@@ -300,12 +395,22 @@ export async function queryWithMcpStreaming(
     let cumulativePromptTokens = response.usage?.prompt_tokens || 0;
     let cumulativeCompletionTokens = response.usage?.completion_tokens || 0;
     let tokenLimitExceeded = false;
+    /**
+     * True when `response`'s message is ALREADY in `messages`. The loop pushes
+     * each assistant turn before executing its tools, so the token-limit break
+     * below leaves the loop with the final message already in the transcript,
+     * its tool calls already answered with real results. The terminal block
+     * must not push it a second time: that would duplicate the assistant turn
+     * and answer the same `tool_call_id` twice, which is a malformed request.
+     */
+    let lastMessageAlreadyInTranscript = false;
 
     // Handle tool calls iteratively
     while (response.choices[0]?.message?.tool_calls && iterations < maxIterations) {
       const assistantMessage = response.choices[0].message;
       const toolCalls = assistantMessage.tool_calls;
       messages.push(assistantMessage);
+      lastMessageAlreadyInTranscript = true;
 
       if (!toolCalls) break;
 
@@ -471,6 +576,7 @@ export async function queryWithMcpStreaming(
         tool_choice: 'auto',
         max_tokens: 4000,
       });
+      lastMessageAlreadyInTranscript = false;
       if (llmSpanId) {
         trace!.builder.endSpan(llmSpanId, {
           'gen_ai.response.prompt_tokens': response.usage?.prompt_tokens || 0,
@@ -490,15 +596,46 @@ export async function queryWithMcpStreaming(
     // Trace: start synthesis span (covers final output generation)
     const synthesisSpanId = trace?.builder.startSpan('synthesis', trace.parentSpanId);
 
-    // Handle max iterations, token limit, or pending tool calls
     const lastMessage = response.choices[0]?.message;
-    if (!lastMessage?.content && (iterations >= maxIterations || tokenLimitExceeded || lastMessage?.tool_calls)) {
-      if (lastMessage?.tool_calls) {
+    const pendingToolCalls = lastMessage?.tool_calls;
+
+    // Why this run cannot end on `lastMessage` as it stands. Three reasons,
+    // one answering turn — the machinery below already existed, gated on the
+    // wrong condition, so this extends that path rather than adding a second.
+    //
+    // `abortedMidPlan` is the pre-existing reason: a budget stopped the loop
+    // instead of the model finishing. It no longer also requires the message
+    // to be EMPTY. The old condition led with `!lastMessage?.content`, so a
+    // token-limit-exceeded run that happened to carry prose shipped that prose
+    // as the answer — mid-run working notes published as a finding, and
+    // without even the `token_limit_exceeded` flag that would have banner-ed
+    // them, because the content branch below never set it (#319).
+    //
+    // `answeredNothing` is the old else-branch, folded in: an empty final
+    // message now gets the same restated contract as every other re-ask
+    // instead of a bare re-stream of the same transcript.
+    //
+    // `announcesUnrunWork` is the new one, and the reason this phase exists.
+    const abortedMidPlan =
+      iterations >= maxIterations || tokenLimitExceeded || Boolean(pendingToolCalls);
+    const answeredNothing = !lastMessage?.content?.trim();
+
+    if (abortedMidPlan || answeredNothing || announcesUnrunWork(lastMessage?.content)) {
+      // Keep the transcript faithful. The model really did produce this turn,
+      // and the re-ask corrects it explicitly; re-asking into a history that no
+      // longer contains the turn being corrected would be a silent rewrite,
+      // and it would read oddly in the signed trace. Skipped when the loop
+      // already pushed this message (see `lastMessageAlreadyInTranscript`) and
+      // when there is nothing to push.
+      if (!lastMessageAlreadyInTranscript && lastMessage && (lastMessage.content || pendingToolCalls)) {
         messages.push(lastMessage);
+      }
+      // Only for tool calls the loop did NOT already answer with real results.
+      if (pendingToolCalls && !lastMessageAlreadyInTranscript) {
         const abortReason = tokenLimitExceeded
           ? 'Token budget exceeded. Please provide a summary based on the data already collected.'
           : 'Tool call limit reached. Please provide a summary based on the data already collected.';
-        for (const toolCall of lastMessage.tool_calls) {
+        for (const toolCall of pendingToolCalls) {
           messages.push({
             role: 'tool',
             tool_call_id: toolCall.id,
@@ -518,7 +655,7 @@ export async function queryWithMcpStreaming(
           ...messages,
           {
             role: 'user',
-            content: 'Based on all the data you have collected from the tool calls above, please provide a comprehensive answer to my original question. Summarize the key findings.',
+            content: FINAL_ANSWER_REQUEST,
           },
         ],
         max_tokens: 4000,
@@ -575,97 +712,53 @@ export async function queryWithMcpStreaming(
       return;
     }
 
-    // If we have content, stream the final response
-    if (lastMessage?.content) {
-      // We already have the content from non-streaming call, send it as tokens
-      callbacks.onProgress(panel, 'Synthesizing findings into response...', { phase: 'synthesize' });
+    // Everything above returned. What is left is a genuine answer: content the
+    // model produced on its own account, that no budget cut short and that
+    // does not announce work it has not done. It is published exactly as
+    // written, with NO extra model call — the fix for #319 must cost nothing on
+    // the common path, which is the great majority of queries.
+    const finalContent = lastMessage?.content;
+    if (!finalContent) {
+      // Unreachable: `answeredNothing` routes a blank final message into the
+      // answering turn above, which returns. Kept as a typed refusal rather
+      // than a silent fall-through, because a path that reaches the end
+      // without calling `onComplete` would hang the reader's stream instead of
+      // failing visibly. The message never reaches a reader: it goes through
+      // `reportStreamFailure`, which logs it server-side and puts sanitized
+      // copy on the wire.
+      throw new Error('final assistant message had no content after the answering turn');
+    }
 
-      // Send the content in chunks to simulate streaming
-      const content = lastMessage.content;
-      const chunkSize = 20; // characters per chunk
-      for (let i = 0; i < content.length; i += chunkSize) {
-        const chunk = content.slice(i, i + chunkSize);
-        callbacks.onToken(panel, chunk);
-        // Small delay to make it feel like streaming
-        await new Promise(resolve => setTimeout(resolve, 10));
-      }
+    callbacks.onProgress(panel, 'Synthesizing findings into response...', { phase: 'synthesize' });
 
-      const duration_ms = Date.now() - startTime;
+    // Send the content in chunks to simulate streaming
+    const content = finalContent;
+    const chunkSize = 20; // characters per chunk
+    for (let i = 0; i < content.length; i += chunkSize) {
+      const chunk = content.slice(i, i + chunkSize);
+      callbacks.onToken(panel, chunk);
+      // Small delay to make it feel like streaming
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
 
-      if (synthesisSpanId) {
-        trace!.builder.endSpan(synthesisSpanId, {
-          'output.hash': traceHash(content),
-          'output.length': content.length,
-        });
-      }
+    const duration_ms = Date.now() - startTime;
 
-      // cumulativeTokens already includes this response's tokens from the loop
-      callbacks.onComplete(panel, {
-        content,
-        duration_ms,
-        tokens_used: cumulativeTokens,
-        prompt_tokens: cumulativePromptTokens || undefined,
-        completion_tokens: cumulativeCompletionTokens || undefined,
-        tools_called: toolsCalled.length > 0 ? toolsCalled : undefined,
-      });
-    } else {
-      // No content - make a final streaming call
-      callbacks.onProgress(panel, 'Synthesizing findings into response...', { phase: 'synthesize' });
-
-      const finalStream = await getModelClient().chat.completions.create({
-        model: model.endpointModel,
-        messages,
-        max_tokens: 4000,
-        stream: true,
-        ...(includeStreamUsage() ? { stream_options: { include_usage: true } } : {}),
-      });
-
-      let content = '';
-      let finalCallTokens = 0;
-      let finalPromptTokens = 0;
-      let finalCompletionTokens = 0;
-      let finalReportedModel: string | undefined;
-
-      for await (const chunk of finalStream) {
-        const delta = chunk.choices[0]?.delta?.content;
-        if (delta) {
-          content += delta;
-          callbacks.onToken(panel, delta);
-        }
-        // Every chunk repeats the model the endpoint answered with; the last
-        // one wins, so the recorded report is the one that finished the answer.
-        if (chunk.model) finalReportedModel = chunk.model;
-        if (chunk.usage) {
-          if (chunk.usage.total_tokens) finalCallTokens = chunk.usage.total_tokens;
-          if (chunk.usage.prompt_tokens) finalPromptTokens = chunk.usage.prompt_tokens;
-          if (chunk.usage.completion_tokens) finalCompletionTokens = chunk.usage.completion_tokens;
-        }
-      }
-
-      cumulativeTokens += finalCallTokens;
-      cumulativePromptTokens += finalPromptTokens;
-      cumulativeCompletionTokens += finalCompletionTokens;
-      const duration_ms = Date.now() - startTime;
-
-      if (synthesisSpanId) {
-        trace!.builder.endSpan(synthesisSpanId, {
-          'output.hash': traceHash(content),
-          'output.length': content.length,
-          'gen_ai.response.prompt_tokens': finalPromptTokens,
-          'gen_ai.response.completion_tokens': finalCompletionTokens,
-          ...responseModelAttributes(model.declared, finalReportedModel, panel),
-        });
-      }
-
-      callbacks.onComplete(panel, {
-        content,
-        duration_ms,
-        tokens_used: cumulativeTokens,
-        prompt_tokens: cumulativePromptTokens || undefined,
-        completion_tokens: cumulativeCompletionTokens || undefined,
-        tools_called: toolsCalled.length > 0 ? toolsCalled : undefined,
+    if (synthesisSpanId) {
+      trace!.builder.endSpan(synthesisSpanId, {
+        'output.hash': traceHash(content),
+        'output.length': content.length,
       });
     }
+
+    // cumulativeTokens already includes this response's tokens from the loop
+    callbacks.onComplete(panel, {
+      content,
+      duration_ms,
+      tokens_used: cumulativeTokens,
+      prompt_tokens: cumulativePromptTokens || undefined,
+      completion_tokens: cumulativeCompletionTokens || undefined,
+      tools_called: toolsCalled.length > 0 ? toolsCalled : undefined,
+    });
   } catch (error) {
     reportStreamFailure(panel, error, callbacks);
   }
