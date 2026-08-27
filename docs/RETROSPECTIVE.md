@@ -6,6 +6,52 @@ Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ---
 
+## 2026-08-27 — Wave N6 (#325): the answer path, and the diagnostics that should have caught it (six gated phases)
+
+**Scope:** Six defects in the code an operator deploys, gathered into one wave so merges into `main` serialized through a single lane. Five found by running the app against a live Socrata portal; one a container-build break that had been on `main` since 2026-08-20. Run as a gated ORCH sprint against anchor #325, with a coordinating planning seat and the owner holding a second key at every merge.
+
+**Phases:** P1 `e053b5c` (#295) · P6 `02ca11a` (#323) · P5 `87297eb` (#320) · P2 `7522d4b` (#322) · P3 `22170da` (#321) · P4 `1ddd61a` (#319). Twelve `rollback/pre-325-*` tags. Tests 1010 → 1044, none moved or removed at any step. `main` auto-deploys, so all six merges were production deploys; all six green.
+
+### What we did
+
+**P1 — the container build, and the gap that hid it (#295).** The image build ran a whole-repo type-check over a context that is deliberately not the whole repo, so a test importing a filtered path failed the image build while every host check stayed green. The anchor offered three fix shapes; the phase measured all three and took a fourth — keep test files out of the build context, so scope and context agree by construction. Its case against the allowlist patch was a measurement nobody had: **two** test files already import into `scripts/`, and the second passes only because the script it reaches for happens to be allow-listed for an unrelated reason. Added an always-run `container image build` CI job, then **showed it failing on a runner** against a reverted tree — a check observed only green is indistinguishable from one that cannot fail.
+
+**P6 — advertised tools (#323).** Removed two uncallable tool names from the cross-source preamble and added a subset guard. See the correction below: **this issue is reopened.**
+
+**P5 — Data Commons cells (#320).** Every notebook containing a Data Commons fetch had been invalid Python since the renderer was written. The fix removed the hard-coded skip list rather than widening it — callers now declare their handled keys. The phase also **caught a specification error**: the contract said to detect duplicate keyword arguments with `ast.parse`, which cannot detect them; only `compile()` does. A test built as specified would have passed green against the broken renderer.
+
+**P2 — `resultSummary` (#322).** The field was never populated for Socrata, so the "returned N rows × M columns" line had never appeared in any notebook. Chose `rows = data.length`, never `total_rows`, on provenance grounds: two functions reduce that field into reader-facing totals, and `total_rows` would claim the model analyzed rows it never received. Measured and disclosed a third site sharing the same premise (#331) rather than silently fixing or silently leaving it.
+
+**P3 — replayed rejected calls (#321).** Rejected calls now render as an honest markdown note instead of an executable cell, and surviving fetch cells are guarded. The phase **tested its own instrument**: the try/except check walks the Python AST rather than matching `"try:"`, and a meta-test feeds it a decoy carrying that string in a comment and a SQL literal. It also declined a belt-and-braces guard on the discovery filter because it would have made the regression test unable to fail.
+
+**P4 — the mid-plan answer (#319).** A turn announcing its next query was published as the answer, under the same signature as a real finding. The answering machinery already existed and was gated on the wrong condition; the phase re-gated it rather than adding a parallel path. Found and fixed a latent malformed-request defect on the token-limit path that its own change would have widened.
+
+### The finding worth more than the six fixes
+
+**Three phases fixed one instance of a defect that lived in a class, and each honoured its blast zone exactly while doing so.** P6 fixed the preamble and left `SOCRATA_SKILL_FALLBACK`; P3 fixed the executed-notebook path and left `notebook.ts:123`; P4 fixed `openrouter-streaming.ts` and left `openrouter.ts:120`, which still carries the literal pre-fix condition, plus `replay`. Five files call the model outside the one that was fixed — six in total.
+
+No phase did anything wrong. The blast zone is the instrument that produced this, three times, from three authors. A zone scoped by file cannot see a defect scoped to a class. Now a rule in `CLAUDE.md`.
+
+### Gate 6 earned its ruling
+
+The cold read was ruled **required** over a recommendation that it be optional. It found the class problem above, a second unfixed notebook path, the survival of #323's harm, and two defects created by correct changes meeting — including a helper-signature `TypeError` reported to the reader as a live-data outage beneath a line asserting a row count.
+
+Every phase passed its own gate. Every gate record reconciled. The wave would have closed clean with seven ticks and been wrong about three of them.
+
+### What the ledger says about where errors came from
+
+Twenty falsified premises. Four the anchor's, five the seat's, **ten the ORCH's**, one a phase's. All three fix-on-top rounds were caused by contract errors, not phase errors; no phase failed a criterion on first pass. Two entries were promoted out of the wave: *a criterion that cannot fail is the same defect as a check that cannot see*, demonstrated three times by three authors; and *a blast zone derived from issue bodies rather than the call graph will be wrong in both directions*.
+
+### Honest close
+
+Criterion 6 is met **literally** while its harm survives — **#323 is reopened** rather than re-filed, because closing it would assert a fix that does not exist. Criterion 3 is met on the executed notebook path **only**. Criterion 3's live half was never exercised: no preview can authenticate (#336) and no local instance could run a query at all (#337).
+
+Filed: #331, #333, #336, #337, #338 (replay route carries #319 twice and feeds a signed attestation), #339, #340, #341, #342, #343. Recommended and not chartered: a sprint scoped to the class, whose first phase is a census of all six model-calling sites.
+
+These six defects are fixed. Nothing here addressed anything beyond them, and this close is not a statement that the instance is ready to deploy.
+
+---
+
 ## 2026-08-19 — Sprint #220: Pre-Deployment Hygiene (five gated phases)
 
 **Scope:** Excise the NYC design-system association from the brand layer — token names, CSS class names, styling attribution — plus three riders folded in: a wrong `datePublished` assertion (#256), the raw error string on the SSE wire (#154), and a stale preflight topology assertion. Run as a gated ORCH sprint against anchor #220, with a coordinating planning seat and the owner holding a second key at every merge.
