@@ -10,8 +10,8 @@
  *
  * This test says it out loud. Adding a `chat.completions.create` call to a
  * file that is not on the list below fails the suite, and the list carries one
- * line of justification per entry — including, for the two files this wave has
- * not migrated yet, the phase that removes them.
+ * line of justification per entry — including, for the file this wave has not
+ * migrated yet, the phase that removes it.
  *
  * TWO ASSERTIONS, ONE INSTRUMENT. The first is the registry: who calls the
  * model at all. The second is narrower and is the wave's own criterion: how
@@ -47,8 +47,6 @@ const ALLOWED_MODEL_CALLERS: Record<string, string> = {
     'The shared tool-calling loop — the one implementation the wave consolidates onto.',
   'src/lib/openrouter-streaming.ts':
     'queryWithoutMcpStreaming: the no-tools A-side of the comparison. One turn, no loop, not loop-class.',
-  'src/app/api/evidence/[slug]/replay/route.ts':
-    'Its own loop, until P3 moves it onto the shared core (#338, #347).',
   'src/lib/openrouter.ts':
     'Its own loop, until P4 moves it onto the shared core (#344).',
   'src/lib/evidence/adversarial-eval.ts':
@@ -65,7 +63,6 @@ const ALLOWED_MODEL_CALLERS: Record<string, string> = {
  */
 const ALLOWED_TOOL_LOOPS: Record<string, string> = {
   'src/lib/model-loop/run-tool-loop.ts': 'The shared core.',
-  'src/app/api/evidence/[slug]/replay/route.ts': 'Removed by P3.',
   'src/lib/openrouter.ts': 'Removed by P4.',
 };
 
