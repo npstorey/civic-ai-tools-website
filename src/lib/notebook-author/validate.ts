@@ -12,6 +12,7 @@
  */
 import type { Notebook } from './cells.ts';
 import { EXECUTION_EXTENSION_KEY, NOTEBOOK_EXTENSION_KEY } from './prompt.ts';
+import { countReproducedFetchCells } from './tool-to-cell.ts';
 
 export interface ValidationIssue {
   path: string;
@@ -136,10 +137,39 @@ export function validateExecutionExtension(notebook: Notebook): ValidationResult
   return { ok: issues.length === 0, issues };
 }
 
-/** Run both validators and merge their issues. */
+/**
+ * Report a notebook in which no step re-runs a data fetch (#341).
+ *
+ * Until this existed, a notebook whose every fetching tool call had failed
+ * validated `ok`: the two validators above check extension shape, and the
+ * shape of an all-failed notebook is perfectly well formed. Meanwhile its
+ * synthesis cell falls back to displaying the original answer text, so the
+ * original figures rendered as the document's conclusion with nothing behind
+ * them, under cover text that called the analysis reproducible.
+ *
+ * Derived from the cells rather than from a stamped count, so it cannot be
+ * satisfied by a claim: `isReproducedFetchCell` recognises the assignment the
+ * renderer emits, and it is exported from the module that emits it.
+ */
+export function validateReproducedFetches(notebook: Notebook): ValidationResult {
+  const issues: ValidationIssue[] = [];
+  if (countReproducedFetchCells(notebook.cells) === 0) {
+    issues.push({
+      path: 'cells',
+      message:
+        'no step re-runs a data fetch — every fetching tool call in the original ' +
+        'analysis returned no data, so nothing in this notebook is reproducible ' +
+        'against a live source',
+    });
+  }
+  return { ok: issues.length === 0, issues };
+}
+
+/** Run every validator and merge their issues. */
 export function validateExecutedNotebook(notebook: Notebook): ValidationResult {
   const provenance = validateNotebookProvenance(notebook);
   const execution = validateExecutionExtension(notebook);
-  const issues = [...provenance.issues, ...execution.issues];
+  const fetches = validateReproducedFetches(notebook);
+  const issues = [...provenance.issues, ...execution.issues, ...fetches.issues];
   return { ok: issues.length === 0, issues };
 }

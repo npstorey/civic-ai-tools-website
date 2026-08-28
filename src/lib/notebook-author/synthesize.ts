@@ -39,6 +39,7 @@ import {
 } from './prompt.ts';
 import {
   type PhaseAToolCall,
+  countReproducibleFetches,
   renderDiscoverySummaryCell,
   renderFetchToolCell,
 } from './tool-to-cell.ts';
@@ -102,11 +103,15 @@ export function synthesizeNotebook(inputs: PhaseAOutputs): SynthesisOutputs {
 
   const notebook = emptyNotebook(PYTHON_RUNTIME_VERSION);
 
-  // Cell 0 — branding + query + onboarding
+  // Cell 0 — branding + query + onboarding. The fetch count is computed from
+  // the tool calls, not from the cells: cell 0 is written before the step
+  // cells exist, and its claim about what this notebook reproduces has to be
+  // true of the document that follows it (#341).
   notebook.cells.push(markdownCell(buildCell0Source({
     query: inputs.query,
     generatedAt,
     portals,
+    reproducedFetchCount: countReproducibleFetches(inputs.toolCalls),
   })));
   // Cell 1 — environment setup
   notebook.cells.push(codeCell(buildCell1Source()));
