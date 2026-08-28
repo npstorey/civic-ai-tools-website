@@ -343,7 +343,7 @@ export function responseModelAttributes(
 
 /**
  * Bound one tool result before it is fed back as context, keeping what is fed
- * back READABLE (#331).
+ * back READABLE (#331) and keeping it INSIDE THE BUDGET (#355).
  *
  * A bare JSON array was the only shape this recognised. A paginated envelope —
  * `{"data": [...], "total_rows": N}` — is not an array, so an oversized one
@@ -360,7 +360,17 @@ export function responseModelAttributes(
  *
  * The output contract, for every branch: a body the model can read, followed
  * by one `[Truncated: ...]` line saying what was dropped. The character bound
- * is on the body, not on the marker.
+ * is on the body, not on the marker — and the marker appears only when rows
+ * were actually dropped.
+ *
+ * WHY THE BOUND IS MEASURED ON THE ASSEMBLED STRING. The first version of the
+ * row-dropping branch sized the kept-row count from `rows[0]` alone. Socrata's
+ * SODA JSON omits the columns a record has no value for, so a sparse record at
+ * the head of a page of full ones is an ordinary response — and it made every
+ * row look that small. Measured at `45aa6c0` with a 50,000-character budget on
+ * a 3,000-row page with one 62-character first row and 569-character rows
+ * after it: 444,691 characters fed back, 8.9 times the budget. Sizing against
+ * a sample can only ever be right for the one shape the sample matches.
  */
 function truncateToolResult(result: string, maxChars: number): string {
   if (result.length <= maxChars) return result;
@@ -369,16 +379,16 @@ function truncateToolResult(result: string, maxChars: number): string {
     const parsed: unknown = JSON.parse(result);
 
     if (Array.isArray(parsed) && parsed.length > 0) {
-      const kept = keepRowsWithinBudget(parsed, maxChars);
-      return `${JSON.stringify(kept)}\n[Truncated: showing ${kept.length} of ${parsed.length} rows]`;
-    }
-
-    if (parsed && typeof parsed === 'object') {
+      const bounded = boundedRows(parsed, maxChars, (kept) => JSON.stringify(kept));
+      if (bounded !== undefined) return bounded;
+    } else if (parsed && typeof parsed === 'object') {
       const envelope = parsed as Record<string, unknown>;
       const rows = envelope.data;
       if (Array.isArray(rows) && rows.length > 0) {
-        const kept = keepRowsWithinBudget(rows, maxChars);
-        return `${JSON.stringify({ ...envelope, data: kept })}\n[Truncated: showing ${kept.length} of ${rows.length} rows]`;
+        const bounded = boundedRows(rows, maxChars, (kept) =>
+          JSON.stringify({ ...envelope, data: kept }),
+        );
+        if (bounded !== undefined) return bounded;
       }
     }
   } catch {
@@ -389,12 +399,73 @@ function truncateToolResult(result: string, maxChars: number): string {
     `\n[Truncated: result was ${result.length} characters]`;
 }
 
-/** How many whole rows fit in the budget, never fewer than five. */
-function keepRowsWithinBudget(rows: unknown[], maxChars: number): unknown[] {
-  const sampleRow = JSON.stringify(rows[0]);
-  const rowSize = (sampleRow ? sampleRow.length : 0) + 2; // comma + newline
-  const maxRows = Math.max(5, Math.floor(maxChars / Math.max(rowSize, 1)));
-  return rows.slice(0, maxRows);
+/**
+ * One bounded body plus, if and only if rows were dropped, the marker saying
+ * so — or `undefined` when even zero rows will not fit, which sends the caller
+ * to raw truncation rather than letting the bound break.
+ *
+ * THE MARKER IS CONDITIONAL BECAUSE IT IS A CLAIM. A result can exceed the
+ * budget as it arrives and fit once re-serialised — a pretty-printed page is
+ * the ordinary case — and the earlier version announced `showing 300 of 300
+ * rows` on exactly that input. A model told rows were dropped may caveat a
+ * complete answer, or spend another call re-querying data it already has.
+ */
+function boundedRows(
+  rows: unknown[],
+  maxChars: number,
+  render: (kept: unknown[]) => string,
+): string | undefined {
+  const kept = keepRowsWithinBudget(rows, maxChars, render);
+  const body = render(kept);
+  if (body.length > maxChars) return undefined;
+  if (kept.length === rows.length) return body;
+  return `${body}\n[Truncated: showing ${kept.length} of ${rows.length} rows]`;
+}
+
+/**
+ * The longest leading run of `rows` whose RENDERED body fits `maxChars`.
+ *
+ * `render` assembles the body the model will actually receive — the bare array
+ * or the whole envelope — so the framing and the envelope's other fields are
+ * counted, not estimated. Its length grows monotonically with the number of
+ * rows, which is what makes the search below valid.
+ *
+ * The search doubles and then bisects, so its cost tracks the number of rows
+ * KEPT rather than the number received: a 200,000-row page that yields 90 rows
+ * renders a few hundred rows, not 200,000.
+ *
+ * ZERO ROWS IS A REAL ANSWER, not a failure. When one row does not fit the
+ * budget the model is handed the envelope with an empty `data`, its
+ * `total_rows` intact and `showing 0 of N rows`, which is a signal it can act
+ * on — narrow the query, ask for fewer columns. The version this replaces kept
+ * a floor of five rows that could exceed the budget by any factor, and a floor
+ * that breaks the bound is not a floor, it is the defect.
+ */
+function keepRowsWithinBudget(
+  rows: unknown[],
+  maxChars: number,
+  render: (kept: unknown[]) => string,
+): unknown[] {
+  const fits = (count: number) => render(rows.slice(0, count)).length <= maxChars;
+
+  if (fits(rows.length)) return rows;
+
+  // Double until a count does not fit; `low` is the largest count known to fit.
+  let low = 0;
+  let high = 1;
+  while (high < rows.length && fits(high)) {
+    low = high;
+    high *= 2;
+  }
+  if (high > rows.length) high = rows.length;
+
+  // Bisect (low, high): low fits, high does not.
+  while (high - low > 1) {
+    const mid = Math.floor((low + high) / 2);
+    if (fits(mid)) low = mid;
+    else high = mid;
+  }
+  return rows.slice(0, low);
 }
 
 /**

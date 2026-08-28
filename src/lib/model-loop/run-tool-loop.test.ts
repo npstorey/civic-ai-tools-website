@@ -199,6 +199,157 @@ test('#331: a result inside the bound is fed back untouched', async () => {
   assert.equal(toolMessages(requests)[0]!.content, ONE_ROW);
 });
 
+// --- #355: the character bound must actually bound -------------------------
+//
+// The row-dropping branch #331 added sized the kept-row count from `rows[0]`
+// alone and never re-checked the assembled string, so a page whose rows differ
+// in size breached the budget by any factor. Socrata's SODA JSON omits the
+// columns a record has no value for, so a sparsely-populated record at the
+// head of a page of fully-populated ones is an ordinary response rather than a
+// contrived one — and that one row set the assumed row size for the whole
+// page.
+//
+// A HOMOGENEOUS FIXTURE CANNOT FAIL HERE. It is the one shape where sizing
+// from `rows[0]` happens to be right, which is why `replay-loop.test.ts` and
+// `compare-loop.test.ts` each assert `body.length <= maxChars` and were both
+// true by construction of their fixtures. Every fixture below is
+// heterogeneous, or oversized per row, on purpose.
+
+const BUDGET = 50_000;
+
+/** One fully-populated 311 record — the wide end of a real page. */
+function fullComplaint(i: number): Record<string, string> {
+  return {
+    unique_key: String(100_000 + i),
+    created_date: '2026-01-01T00:00:00.000',
+    closed_date: '2026-01-03T14:22:00.000',
+    agency: 'NYPD',
+    agency_name: 'New York City Police Department',
+    complaint_type: 'Noise - Residential',
+    descriptor: 'Loud Music/Party',
+    location_type: 'Residential Building/House',
+    incident_zip: '11201',
+    incident_address: '123 EXAMPLE STREET',
+    street_name: 'EXAMPLE STREET',
+    city: 'BROOKLYN',
+    status: 'Closed',
+    resolution_description: 'The Police Department responded and a report was prepared.',
+    borough: 'BROOKLYN',
+    latitude: '40.694000',
+    longitude: '-73.990000',
+  };
+}
+
+/** The same record as SODA returns it when only two columns are populated. */
+const SPARSE_COMPLAINT = { unique_key: '100000', complaint_type: 'Noise - Residential' };
+
+/** A page whose FIRST row is sparse and whose remaining rows are full. */
+function sparseFirstEnvelope(rows: number): string {
+  return JSON.stringify({
+    data: [SPARSE_COMPLAINT, ...Array.from({ length: rows - 1 }, (_, i) => fullComplaint(i + 1))],
+    total_rows: rows,
+  });
+}
+
+test('#355: a sparse first row does not lift the bound off the envelope branch', async () => {
+  const envelope = sparseFirstEnvelope(3_000);
+  assert.ok(envelope.length > BUDGET, `the fixture must exceed the budget: ${envelope.length}`);
+
+  const { requests } = await runCore(
+    { executeToolCall: async () => envelope, maxToolResultChars: BUDGET },
+    [FETCH_CALL, { content: REAL_ANSWER }],
+  );
+
+  const fed = toolMessages(requests)[0]?.content;
+  assert.ok(fed, 'the tool result must reach the model');
+
+  const { body, kept, total } = splitTruncated(fed!);
+
+  // RED at 45aa6c0: the kept-row count came from the 60-character sparse row,
+  // so 806 full rows were kept and the body ran far past the budget.
+  assert.ok(
+    body.length <= BUDGET,
+    `the body fed to the model must fit the budget: ${body.length} > ${BUDGET}`,
+  );
+
+  // #331 must not regress: still valid JSON, still an envelope, still carrying
+  // the size of the matching set upstream.
+  const parsed = JSON.parse(body) as { data: unknown[]; total_rows: number };
+  assert.ok(Array.isArray(parsed.data), 'the envelope framing must survive truncation');
+  assert.equal(parsed.total_rows, 3_000, '`total_rows` survives');
+  assert.equal(total, 3_000, 'the marker names the whole page');
+  assert.equal(parsed.data.length, kept, 'the marker counts the rows actually present');
+  assert.ok(kept > 0, `a page this shape still carries rows, kept ${kept}`);
+});
+
+test('#355: the bare-array branch is bounded on heterogeneous rows too', async () => {
+  const bare = JSON.stringify([
+    SPARSE_COMPLAINT,
+    ...Array.from({ length: 2_999 }, (_, i) => fullComplaint(i + 1)),
+  ]);
+  assert.ok(bare.length > BUDGET, `the fixture must exceed the budget: ${bare.length}`);
+
+  const { requests } = await runCore(
+    { executeToolCall: async () => bare, maxToolResultChars: BUDGET },
+    [FETCH_CALL, { content: REAL_ANSWER }],
+  );
+
+  const { body, kept, total } = splitTruncated(toolMessages(requests)[0]!.content!);
+  assert.ok(
+    body.length <= BUDGET,
+    `the body fed to the model must fit the budget: ${body.length} > ${BUDGET}`,
+  );
+  const parsed = JSON.parse(body) as unknown[];
+  assert.equal(parsed.length, kept, 'the marker counts the rows actually present');
+  assert.equal(total, 3_000);
+  assert.ok(kept > 0, `a page this shape still carries rows, kept ${kept}`);
+});
+
+test('#355: rows too large to fit are dropped, and the marker counts what is there', async () => {
+  // The issue's fourth row: three 100 KB records. At 45aa6c0 the five-row
+  // floor kept all three — 300,082 characters, three times the budget — and
+  // the marker still announced `showing 3 of 3 rows`.
+  const rows = Array.from({ length: 3 }, (_, i) => ({ id: i, blob: 'x'.repeat(100_000) }));
+  const envelope = JSON.stringify({ data: rows, total_rows: 3 });
+
+  const { requests } = await runCore(
+    { executeToolCall: async () => envelope, maxToolResultChars: BUDGET },
+    [FETCH_CALL, { content: REAL_ANSWER }],
+  );
+
+  const { body, kept, total } = splitTruncated(toolMessages(requests)[0]!.content!);
+  assert.ok(
+    body.length <= BUDGET,
+    `the body fed to the model must fit the budget: ${body.length} > ${BUDGET}`,
+  );
+  const parsed = JSON.parse(body) as { data: unknown[]; total_rows: number };
+  assert.equal(parsed.data.length, kept, 'the marker counts the rows actually present');
+  assert.equal(total, 3);
+  assert.equal(parsed.total_rows, 3, 'the model is still told how large the page was');
+});
+
+test('#355: a result that loses no rows makes no truncation claim', async () => {
+  // A pretty-printed page: over the budget as it arrives, under it once
+  // re-serialised, and every row survives. RED at 45aa6c0: all 300 rows were
+  // kept AND the model was told `[Truncated: showing 300 of 300 rows]` — a
+  // model told rows were dropped may caveat a complete answer, or re-query for
+  // data it already has.
+  const pretty = JSON.stringify(JSON.parse(socrataEnvelope(300)), null, 2);
+  assert.ok(pretty.length > BUDGET, `the fixture must exceed the budget: ${pretty.length}`);
+
+  const { requests } = await runCore(
+    { executeToolCall: async () => pretty, maxToolResultChars: BUDGET },
+    [FETCH_CALL, { content: REAL_ANSWER }],
+  );
+
+  const fed = toolMessages(requests)[0]!.content!;
+  assert.doesNotMatch(fed, ROW_MARKER, 'nothing was dropped, so nothing may claim it was');
+  const parsed = JSON.parse(fed) as { data: unknown[]; total_rows: number };
+  assert.equal(parsed.data.length, 300, 'every row is still there');
+  assert.equal(parsed.total_rows, 300);
+  assert.ok(fed.length <= BUDGET, `the body still fits the budget: ${fed.length}`);
+});
+
 // --- #349: a tool call whose arguments will not parse -----------------------
 //
 // All three loops parsed the endpoint's tool-call arguments with a bare
