@@ -25,12 +25,15 @@
  * cost of a call anyone can make. The caps are this caller's, not the core's,
  * which is precisely why they are parameters.
  *
- * THE ARGS-IDENTITY CONSTRAINT. `executeToolCall` below injects `portal` into
- * the `args` object the core has already recorded — the same object, by
- * reference (see the header of `run-tool-loop.ts`). The recorded arguments are
- * what `tools_called[].args` reports to an API client, and they must show what
- * was actually sent. Clone the object here and the injected portal stops
- * reaching the record, with nothing in the diff pointing at the cause.
+ * PORTAL INJECTION AND THE TOOL BOUND ARE THE CORE'S NOW (#359, #352). This
+ * factory used to inject `portal` inside its own `executeToolCall` closure —
+ * which the core invokes after it has recorded the call, emitted `tool_start`
+ * and stringified the arguments onto the `mcp_tool_call` span, so the span
+ * disagreed with the record on every injected call. Both are options the core
+ * reads before it builds any of that; this module supplies the two values and
+ * nothing else. The args-identity constraint they rest on is unchanged and
+ * still stated in `run-tool-loop.ts`'s header: the recorded object IS the
+ * injected one, and `tools_called[].args` is what an API client reads.
  */
 
 import type OpenAI from 'openai';
@@ -54,6 +57,21 @@ export const COMPARE_MAX_TOKENS = 2000;
  * JSON with a row marker rather than as a fragment cut mid-record (#331).
  */
 export const COMPARE_MAX_TOOL_RESULT_CHARS = 50_000;
+/**
+ * Per-tool-call timeout. NEW FOR THIS CALLER (#352): `/api/compare` has never
+ * had one, so a source that accepted the connection and then stopped
+ * responding held the request open until the platform killed the invocation —
+ * and the caller, who is waiting on one JSON body with nothing streamed, got a
+ * platform error page naming no tool. With the bound, the hung call fails on
+ * its own account, is recorded `failed`/`timeout` like any other tool failure,
+ * and the comparison still answers from what did come back.
+ *
+ * 45 seconds, the same bound the three other callers use. The counterweight,
+ * stated because it is real: this is the blocking caller, so the bound is a
+ * hard ceiling with no partial output already delivered — a legitimately slow
+ * query that today would eventually succeed now fails instead.
+ */
+export const COMPARE_MCP_TOOL_TIMEOUT_MS = 45_000;
 
 /** The tool transport. Substitutable so a test can drive the real loop. */
 export type CompareToolTransport = (
@@ -82,8 +100,8 @@ export interface CompareLoopInputs {
 
 /**
  * Everything `runToolLoop` needs to run the MCP half of one comparison. The
- * caps, the tool set and the portal injection are all fixed here; the route
- * supplies only what it read off the request.
+ * caps, the tool set, the portal and the tool bound are all fixed here; the
+ * route supplies only what it read off the request.
  */
 export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
   const { client, endpointModel, prompt, systemPrompt, portal, callTool = callMcpTool } = inputs;
@@ -104,13 +122,11 @@ export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
     // model call to stream an answer to.
     finalTurn: 'blocking',
     logContext: 'compare',
-    executeToolCall: async (name, args) => {
-      // Socrata tools expect a portal; Data Commons tools don't — only inject
-      // the request's portal for Socrata's `get_data`. Mutating `args` IN
-      // PLACE is required, not incidental: see this file's header.
-      if (name === 'get_data' && !args.portal) args.portal = portal;
-      return callTool(name, args);
-    },
+    // The core injects this into a Socrata `get_data` call that omits a
+    // portal, above the record and the span; Data Commons tools are untouched.
+    portal,
+    toolTimeoutMs: COMPARE_MCP_TOOL_TIMEOUT_MS,
+    executeToolCall: callTool,
   };
 }
 

@@ -224,6 +224,26 @@ export async function queryWithoutMcpStreaming(
   }
 }
 
+/**
+ * The two tool-call concerns the core owns (#359, #352), forwarded rather than
+ * performed here.
+ *
+ * Both of this module's callers — `/api/compare-stream` and
+ * `/api/query-notebook` — used to do these inside the `executeToolCall`
+ * closure they hand down, which is two frames below the seam and, worse,
+ * below the point where the core has already recorded the call and
+ * stringified its arguments onto the `mcp_tool_call` span. Passing them as
+ * values means the span and the record agree on this path too, and the
+ * per-call timer is armed and cleared once, in the core, instead of being
+ * armed per call and never cleared in each route.
+ */
+export interface ToolCallOptions {
+  /** Default portal for a Socrata `get_data` call whose arguments omit one. */
+  portal?: string;
+  /** Per-tool-call timeout in ms. Omitted = unbounded. */
+  toolTimeoutMs?: number;
+}
+
 export async function queryWithMcpStreaming(
   query: string,
   model: ModelIdentity,
@@ -232,6 +252,7 @@ export async function queryWithMcpStreaming(
   systemPrompt: string | undefined,
   callbacks: StreamCallbacks,
   trace?: TraceContext,
+  toolCallOptions?: ToolCallOptions,
 ): Promise<void> {
   const startTime = Date.now();
   const panel: PanelType = 'withMcp';
@@ -247,9 +268,12 @@ export async function queryWithMcpStreaming(
       systemPrompt,
       tools,
       // Handed straight through: whatever this closure injects into `args`
-      // (a portal, most often) is what the record shows, because the loop
-      // hands it the same object it recorded.
+      // is what the record shows, because the loop hands it the same object
+      // it recorded. The portal is no longer one of those things — it is the
+      // option below, applied before the record and the span exist.
       executeToolCall,
+      portal: toolCallOptions?.portal,
+      toolTimeoutMs: toolCallOptions?.toolTimeoutMs,
       maxIterations: MAX_ITERATIONS,
       maxTokens: MAX_TOKENS_PER_RESPONSE,
       maxCumulativeTokens: MAX_TOKENS_PER_REQUEST,

@@ -18,13 +18,13 @@
  * error-classification tail. This module owns only what the LOOP is given.
  *
  * THE ARGS-IDENTITY CONSTRAINT, restated because this is the caller it bites.
- * `executeToolCall` below injects `portal` into the `args` object the core
- * already recorded — the same object, by reference (see the header of
- * `run-tool-loop.ts`). `AttestationDialog.canonicalizeToolCall` keys a replay
- * run on `name:args.type:args.dataset_id:args.portal`, and those keys are an
- * input to a signed consistency attestation. Clone the object here and the
- * injected portal stops reaching the record, every key changes, and nothing in
- * the diff points at the cause.
+ * The core injects `portal` into the very `args` object it records — the same
+ * object, by reference (see the header of `run-tool-loop.ts`).
+ * `AttestationDialog.canonicalizeToolCall` keys a replay run on
+ * `name:args.type:args.dataset_id:args.portal`, and those keys are an input to
+ * a signed consistency attestation. Clone or freeze that object anywhere on
+ * this path and the injected portal stops reaching the record, every key
+ * changes, and nothing in the diff points at the cause.
  */
 
 import type OpenAI from 'openai';
@@ -87,8 +87,19 @@ export interface ReplayLoopInputs {
 
 /**
  * Everything `runToolLoop` needs to run one replay. The caps, the tool set,
- * the portal injection and the per-call timeout are all fixed here; the route
- * supplies only what it read off the record.
+ * the portal and the per-call timeout are all fixed here; the route supplies
+ * only what it read off the record.
+ *
+ * The portal and the timeout are now VALUES this factory hands the core
+ * rather than behaviour it performs (#359, #352). This module held the
+ * reference implementation of both — the `get_data` guard three other callers
+ * copied, and the only timer of the four that was cleared — and what it kept
+ * is the two numbers and the one portal that are genuinely replay's. The
+ * injection had to move because it ran inside `executeToolCall`, which the
+ * core invokes after it has already recorded the call and stringified the
+ * arguments onto the `mcp_tool_call` span: the span disagreed with the record,
+ * and on a replay the record is what a signed consistency attestation is
+ * computed over.
  */
 export function replayLoopOptions(inputs: ReplayLoopInputs): ToolLoopOptions {
   const {
@@ -116,28 +127,12 @@ export function replayLoopOptions(inputs: ReplayLoopInputs): ToolLoopOptions {
     // published output of this run.
     finalTurn: 'blocking',
     logContext: 'replay',
-    executeToolCall: async (name, args) => {
-      // Socrata's get_data expects a portal; Data Commons tools don't — only
-      // inject for Socrata. Mutating `args` IN PLACE is required, not
-      // incidental: see this file's header.
-      if (name === 'get_data' && !args.portal) args.portal = portal;
-
-      // Race the source against a timeout so one unresponsive tool call
-      // cannot hold the replay open indefinitely.
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      try {
-        return await Promise.race([
-          callTool(name, args),
-          new Promise<never>((_, reject) => {
-            timer = setTimeout(
-              () => reject(new Error(`MCP tool "${name}" timed out after ${toolTimeoutMs / 1000}s`)),
-              toolTimeoutMs,
-            );
-          }),
-        ]);
-      } finally {
-        if (timer) clearTimeout(timer);
-      }
-    },
+    // Injected by the core into a Socrata `get_data` call that omits a portal,
+    // above the record and the span; Data Commons tools are untouched.
+    portal,
+    // Raced and cleared by the core, so one unresponsive source fails its own
+    // call rather than holding the replay open.
+    toolTimeoutMs,
+    executeToolCall: callTool,
   };
 }
