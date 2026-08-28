@@ -205,33 +205,26 @@ Be honest if you don't have access to current or real-time data.`;
     // Run queries (both in parallel, or MCP-only when mcpOnly flag is set)
     const runQueries = async () => {
       try {
-        const MCP_TOOL_TIMEOUT_MS = 45_000; // 45s timeout per individual tool call
+        // 45s per individual tool call. The route states the value; the race
+        // and the timer's disposal live in the loop core (#352) — this file
+        // used to arm a timer inside the tool closure and never clear it, so a
+        // call that answered in 200 ms left one pending for the rest of the
+        // bound.
+        const MCP_TOOL_TIMEOUT_MS = 45_000;
 
         const mcpQuery = queryWithMcpStreaming(
           query,
           model,
           mcpTools,
-          async (name, args) => {
-            // Socrata tools expect a portal; Data Commons tools don't.
-            if (name === 'get_data' && !args.portal) {
-              args.portal = portal;
-            }
-            // Race the MCP call against a timeout so one slow tool call
-            // cannot hang the entire SSE stream indefinitely.
-            const result = await Promise.race([
-              callMcpTool(name, args),
-              new Promise<never>((_, reject) =>
-                setTimeout(
-                  () => reject(new Error(`MCP tool "${name}" timed out after ${MCP_TOOL_TIMEOUT_MS / 1000}s`)),
-                  MCP_TOOL_TIMEOUT_MS,
-                )
-              ),
-            ]);
-            return result;
-          },
+          // Just the transport. Portal injection moved into the core (#359):
+          // done here, it ran after the core had recorded the call and
+          // stringified its arguments onto the span, so the span reported no
+          // portal on exactly the calls that had just been given one.
+          callMcpTool,
           systemPromptWithMcp,
           callbacks,
           { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: (name) => routeTool(name).sourceId },
+          { portal, toolTimeoutMs: MCP_TOOL_TIMEOUT_MS },
         );
 
         if (mcpOnly) {

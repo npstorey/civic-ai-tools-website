@@ -379,6 +379,8 @@ async function runPhaseA(args: {
   return new Promise<CompletionResult>((resolve, reject) => {
     let completionResult: CompletionResult | null = null;
     const sentToolCalls = new Set<string>();
+    // 45s per individual tool call. The route states the value; the race and
+    // the timer's disposal live in the loop core (#352).
     const MCP_TOOL_TIMEOUT_MS = 45_000;
 
     const callbacks: StreamCallbacks = {
@@ -430,23 +432,15 @@ async function runPhaseA(args: {
       query,
       model,
       mcpTools,
-      async (name, toolArgs) => {
-        if (name === 'get_data' && !toolArgs.portal) {
-          toolArgs.portal = portal;
-        }
-        return Promise.race([
-          callMcpTool(name, toolArgs),
-          new Promise<never>((_, rj) =>
-            setTimeout(
-              () => rj(new Error(`MCP tool "${name}" timed out after ${MCP_TOOL_TIMEOUT_MS / 1000}s`)),
-              MCP_TOOL_TIMEOUT_MS,
-            ),
-          ),
-        ]);
-      },
+      // Just the transport. Portal injection and the timeout race are the loop
+      // core's now (#359, #352): performed here they ran after the core had
+      // recorded the call and stringified its arguments onto the span, and the
+      // timer this file armed per tool call was never cleared.
+      callMcpTool,
       systemPrompt,
       callbacks,
       { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: (name) => routeTool(name).sourceId },
+      { portal, toolTimeoutMs: MCP_TOOL_TIMEOUT_MS },
     )
       .then(() => {
         if (completionResult) resolve(completionResult);

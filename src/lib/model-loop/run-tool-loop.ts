@@ -21,13 +21,25 @@
  * parameters.
  *
  * THE ONE HARD CONSTRAINT: this loop never clones or freezes a tool call's
- * `args`. The object recorded on the tool-call entry is the SAME object
- * handed to `executeToolCall`, because callers inject fields into it inside
- * that closure (a portal, for one) and the recorded arguments — which reach a
- * signed package and the replay identity key — must show what was actually
- * sent. Cloning or freezing here changes those recorded arguments with
- * nothing in the diff pointing at the cause. `run-tool-loop.test.ts` holds a
- * probe on the identity.
+ * `args`. The object recorded on the tool-call entry is the SAME object the
+ * `portal` option is injected into and the SAME object handed to
+ * `executeToolCall`, and the recorded arguments — which reach a signed
+ * package and the replay identity key — must show what was actually sent.
+ * Cloning or freezing here changes those recorded arguments with nothing in
+ * the diff pointing at the cause. `run-tool-loop.test.ts` holds a probe on
+ * the identity, and a caller may still inject a field of its own inside its
+ * `executeToolCall` closure on the same terms.
+ *
+ * WHAT MOVED IN, AND WHY (#359, #352). Portal injection and the per-tool-call
+ * timeout used to live in every caller's `executeToolCall` closure — four
+ * copies in `src/`, three different timeout shapes, one of which did not
+ * exist. Injection there runs AFTER this loop has already built the record,
+ * emitted `tool_start` and opened the `mcp_tool_call` span, so the span
+ * serialised arguments the caller was about to change: `tool.portal_domain`
+ * was absent on exactly the calls the portal was injected into, while the
+ * signed record carried it. Both are now options — injection happens above
+ * the record, the timer is cleared in one `finally` — because neither is a
+ * caller concern: what differs between callers is the value, not the rule.
  *
  * SSE is not a concept here. The loop reports through `onEvent`/`onDelta`;
  * panels, event encoding and reader-facing progress copy belong to whichever
@@ -102,11 +114,26 @@ export interface ToolLoopOptions {
   systemPrompt?: string;
   tools: ChatCompletionTool[];
   /**
-   * The seam every caller-side tool concern goes through: portal injection, a
-   * per-call timeout race, source routing. Receives the SAME args object the
-   * record holds — see the constraint in this file's header.
+   * The tool transport: source routing, and whatever else a caller still owns
+   * about reaching a server. Portal injection and the per-call timeout are NOT
+   * among them any more — they are the two options below. Receives the SAME
+   * args object the record holds — see the constraint in this file's header.
    */
   executeToolCall: (name: string, args: Record<string, unknown>) => Promise<string>;
+  /**
+   * Default portal for a Socrata `get_data` call whose arguments omit one.
+   * Injected into the SAME args object the record holds, BEFORE the record,
+   * the `tool_start` event and the `mcp_tool_call` span are built (#359), so
+   * every consumer of the call sees what was actually sent.
+   * Omitted = no injection; the loop passes arguments through untouched.
+   */
+  portal?: string;
+  /**
+   * Per-tool-call timeout in milliseconds. The call is raced against it and
+   * the timer is cleared in a `finally`, once, here (#352).
+   * Omitted = unbounded, the same idiom `maxCumulativeTokens` above uses.
+   */
+  toolTimeoutMs?: number;
   /** Tool-calling rounds before the loop gives up and asks for an answer. */
   maxIterations?: number;
   /** `max_tokens` on every request this loop makes. */
@@ -290,6 +317,49 @@ function toolFailureKindOf(error: unknown): ToolFailureKind {
       return 'not_configured';
     default:
       return 'unknown';
+  }
+}
+
+/**
+ * Race one tool call against its bound, and clear the timer in a `finally` —
+ * once, here (#352).
+ *
+ * Three shapes of this existed on the caller side and only one of them was
+ * right: `replay-loop.ts` cleared in a `finally`, `compare-stream/route.ts`
+ * and `query-notebook/route.ts` armed a 45-second timer per tool call and
+ * never cleared it (a call that answered in 200 ms left a timer holding the
+ * event loop for the rest of the bound), and `/api/compare` had no bound at
+ * all. The timer is a property of making a bounded call, not of being a
+ * particular caller, so it lives with the call.
+ *
+ * No bound is `undefined`, not a number: a default here would hand every
+ * caller a ceiling it never chose and make "unbounded" inexpressible.
+ *
+ * The message keeps the wording every caller-side copy used, because
+ * `classifyStreamError` reads it — "timed out" is what makes the recorded
+ * failure `timeout` rather than `unknown`. It never reaches a reader or the
+ * model: `describeToolFailureForLlm` restates it (#154).
+ */
+async function boundToolCall(
+  call: Promise<string>,
+  name: string,
+  timeoutMs: number | undefined,
+): Promise<string> {
+  if (timeoutMs === undefined) return call;
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      call,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`MCP tool "${name}" timed out after ${timeoutMs / 1000}s`)),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -524,6 +594,8 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
     systemPrompt,
     tools,
     executeToolCall,
+    portal,
+    toolTimeoutMs,
     maxIterations = DEFAULT_MAX_ITERATIONS,
     maxTokens = DEFAULT_MAX_TOKENS,
     maxCumulativeTokens,
@@ -623,6 +695,50 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         argumentsMalformed = true;
       }
 
+      /**
+       * Portal injection, ABOVE everything that reads or serialises `args`
+       * (#359). Four callers used to do this inside their `executeToolCall`
+       * closure, which the loop invokes below — after the record, after
+       * `tool_start`, and thirteen lines after the span stringified `args`.
+       * The span therefore reported no `tool.portal_domain` on precisely the
+       * calls a portal had been injected into, while the signed package
+       * (`packager.ts`) and the replay identity key read the mutated object
+       * and did carry it. One site above the record makes the two agree by
+       * construction, for every caller, instead of four sites agreeing by
+       * luck.
+       *
+       * `!argumentsMalformed` is load-bearing and is NEW here. A caller's
+       * closure never ran on a malformed argument set, because the throw
+       * below precedes `executeToolCall`. Injection at this height does run,
+       * on the `{}` the failed parse left behind — so without this clause a
+       * call whose arguments never parsed would be recorded, spanned and
+       * SIGNED carrying a portal it never had. The move creates the exposure;
+       * the clause closes it.
+       *
+       * `name === 'get_data'` stays literal and must not widen to a source
+       * lookup. The data-source server does implement `search` and `fetch`,
+       * but their input schemas are `additionalProperties: false` with no
+       * portal property, so an injected portal would be stripped upstream and
+       * would still corrupt the recorded arguments that feed the signed
+       * package and the replay identity key.
+       *
+       * KNOWN LATENT DIVERGENCE, named here because the trigger is
+       * foreseeable. The data-source server treats `portal` as an alias for
+       * `domain` and resolves them as `domain || portal` — `domain` WINS.
+       * This guard looks only at `portal`. So a `get_data` call that supplied
+       * `domain` and omitted `portal` would receive an injected portal the
+       * server then ignores, and that ignored value would still reach
+       * `tool.arguments`, `tool.portal_domain`, the signed package and the
+       * replay identity key: a signed record asserting a portal that was not
+       * queried. It cannot fire today — this instance's `get_data` schema
+       * advertises no `domain` property, so a model cannot supply one — and
+       * the guard is deliberately left byte-identical rather than widened to
+       * a condition no test could exercise. It becomes live the moment
+       * `src/lib/mcp/tools.ts` gains a `domain` property on `get_data`;
+       * whoever adds one owes this guard a second look.
+       */
+      if (portal && !argumentsMalformed && name === 'get_data' && !args.portal) args.portal = portal;
+
       const operationType = deriveOperationType(name, args);
       const reason = generateToolReason(args);
       // `args` goes onto the record BY REFERENCE and is handed to
@@ -650,7 +766,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         if (argumentsMalformed) throw malformedToolArgumentsError();
 
         const toolStartTime = Date.now();
-        const result = await executeToolCall(name, args);
+        const result = await boundToolCall(executeToolCall(name, args), name, toolTimeoutMs);
         const toolDuration = Date.now() - toolStartTime;
         toolEntry.duration_ms = toolDuration;
         toolEntry.resultSummary = summarizeToolResult(result);
