@@ -102,8 +102,15 @@ export function generateNotebook(
     attribution.host && attribution.origin
       ? ` via [${attribution.host}](${attribution.origin})`
       : '';
+  // #324: the same conditional, one line up. The heading hardcoded the
+  // reference deployment's name on every instance, inside a file readers
+  // download — an instance that has declared no identity gets the description
+  // without the name, never a borrowed one.
+  const title = attribution.platformTitle
+    ? `# ${attribution.platformTitle} Data Analysis`
+    : '# Data Analysis';
   cells.push(markdownCell([
-    '# Civic AI Data Analysis',
+    title,
     '',
     `**Query:** ${query}  `,
     `**Portal${uniquePortals.length > 1 ? 's' : ''}:** ${displayPortal}  `,

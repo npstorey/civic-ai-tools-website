@@ -63,7 +63,11 @@ test('synthesizeNotebook: produces an executed-flavor notebook with the expected
   // Cell 0: title
   assert.equal(cells[0].cell_type, 'markdown');
   const cell0Source = cells[0].source.join('');
-  assert.match(cell0Source, /Civic AI Data Analysis/);
+  // #324: the heading is the instance's declared identity plus the
+  // description, or the description alone when no identity is declared. This
+  // suite runs with no identity env, so it is the latter — and in particular
+  // it is no longer the reference deployment's name on every instance.
+  assert.match(cell0Source, /^# Data Analysis$/m);
   assert.match(cell0Source, /Show me top 5 311 complaint types/);
   assert.match(cell0Source, /data\.cityofnewyork\.us/);
 

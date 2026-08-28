@@ -90,35 +90,175 @@ function pyRepr(value: unknown, indent = ''): string {
  *
  * `handledKeys` lists args the caller has already accounted for elsewhere in
  * the generated cell — rendered by hand as explicit kwargs (e.g.
- * `portal=...`), or consumed only as call-routing metadata that never
- * appears in the rendered Python at all (e.g. `type`, which selects which
- * renderer runs and is not itself a `fetch_*` parameter). Either way,
- * `pyKwargs` must not append them a second time — the caller, not a
- * hard-coded list here, owns which keys those are.
+ * `portal=...`), consumed only as call-routing metadata that never appears in
+ * the rendered Python at all (e.g. `type`, which selects which renderer runs
+ * and is not itself a `fetch_*` parameter), or explained by a generated
+ * comment (the clauses a full SoQL `query` supersedes, #340). Either way,
+ * `pyKwargs` must not emit them — the caller, not a hard-coded list here, owns
+ * which keys those are.
+ *
+ * `supportedKeys`, when given, is the target helper's parameter list and
+ * bounds the unenumerated append: "emitted instead of silently dropped" holds
+ * only for a key the helper can actually receive. Emitting any other key makes
+ * the cell raise `TypeError` and tells the reader live data could not be
+ * fetched — which is #340, and is a worse outcome than not writing it. The
+ * caller discloses those keys instead; see `unsupportedArgKeys`.
  */
 function pyKwargs(
   args: Record<string, unknown>,
   order: readonly string[],
   handledKeys: readonly string[] = [],
+  supportedKeys?: readonly string[],
 ): string {
   const lines: string[] = [];
   const seen = new Set<string>(handledKeys);
+  const supported = supportedKeys ? new Set<string>(supportedKeys) : null;
   for (const key of order) {
+    // A key the caller has already accounted for is never emitted here, even
+    // when it is in `order`: since #340 a renderer can hand a clause to
+    // `handledKeys` because the generated comment explains its absence.
+    if (seen.has(key)) continue;
     if (args[key] === undefined || args[key] === null) continue;
     lines.push(`    ${key}=${pyRepr(args[key], '    ')},`);
     seen.add(key);
   }
-  // Append any extra args we did not enumerate so nothing silently drops.
+  // Append any extra args we did not enumerate so nothing silently drops —
+  // unless the helper has no such parameter, in which case emitting it would
+  // make the cell raise `TypeError` on execution and the reader would be told
+  // live data could not be fetched (#340). Those keys are reported by
+  // `unsupportedArgKeys` and disclosed in the cell instead.
   for (const [key, value] of Object.entries(args)) {
     if (seen.has(key)) continue;
     if (value === undefined || value === null) continue;
+    if (supported && !supported.has(key)) continue;
     lines.push(`    ${key}=${pyRepr(value, '    ')},`);
   }
   return lines.join('\n');
 }
 
+/**
+ * Args this call carried that the target helper has no parameter for, and
+ * that the caller has not accounted for by hand — the set `pyKwargs` refuses
+ * to emit. Named so a renderer can disclose them in the generated cell:
+ * nothing is silently ignored, because nothing ignored is written.
+ */
+function unsupportedArgKeys(
+  args: Record<string, unknown>,
+  supportedKeys: readonly string[],
+  handledKeys: readonly string[],
+): string[] {
+  const supported = new Set<string>(supportedKeys);
+  const handled = new Set<string>(handledKeys);
+  return Object.keys(args)
+    .filter(key => args[key] !== undefined && args[key] !== null)
+    .filter(key => !supported.has(key) && !handled.has(key))
+    .sort();
+}
+
 const SOCRATA_QUERY_KWARGS = ['select', 'where', 'group', 'order', 'limit', 'offset'] as const;
 const DC_OBS_KWARGS = ['date', 'child_place_type'] as const;
+
+/**
+ * Parameters of `helpers/fetch_socrata.py` a generated cell may pass, and the
+ * only keys the Socrata renderer will emit. Credential and transport
+ * parameters (`app_token`, `timeout_s`) are deliberately absent: a generated
+ * cell never writes them.
+ *
+ * Pinned against the helper's real signature by a test — a parameter added to
+ * the .py and not added here would be silently dropped from every cell, and a
+ * name here that the .py does not have would put back exactly the `TypeError`
+ * #340 is about.
+ */
+const FETCH_SOCRATA_PARAMS = [
+  'portal', 'dataset_id', 'query', 'select', 'where', 'group', 'order', 'limit', 'offset',
+] as const;
+
+/** Same contract as `FETCH_SOCRATA_PARAMS`, for `helpers/fetch_data_commons.py`. */
+const FETCH_DATA_COMMONS_PARAMS = [
+  'variable_dcid', 'place_dcid', 'date', 'child_place_type',
+] as const;
+
+/** Test-only view of the helper-parameter constants above. */
+export const HELPER_PARAMETERS: Record<string, readonly string[]> = {
+  fetch_socrata: FETCH_SOCRATA_PARAMS,
+  fetch_data_commons: FETCH_DATA_COMMONS_PARAMS,
+};
+
+/**
+ * The sniff that decides what a `query` argument on `get_data` means — copied
+ * deliberately, because the behaviour it selects belongs to another
+ * repository.
+ *
+ * MIRRORS: `socrata-mcp-server/src/tools/socrata-tools.ts:546`, at commit
+ * `116f46ce1e84e3608014599f9b63ea01acfd913a`:
+ *
+ *     if (queryField && /^\s*select/i.test(queryField)) { … }
+ *
+ * A `query` that matches becomes the whole SoQL request (`$query`) and the
+ * service sets `select`/`where`/`order`/`group`/`having`/`q` aside (`:547-553`);
+ * the request it then builds carries `$query` alone — `$limit` and `$offset`
+ * are not sent either (`:283-293`). A `query` that does not match becomes a
+ * full-text search term (`$q`, `:555-557`) with every other clause preserved.
+ *
+ * This constant, `helpers/fetch_socrata.py`'s `_is_full_soql_query`, and the
+ * service's line above are three copies of one rule. If the service changes
+ * its sniff, the fix is an issue on THIS repository so both copies move
+ * together — not a silent divergence discovered later in a published notebook.
+ * `tool-to-cell.test.ts` carries the service's regex literally and drives a
+ * fixture lifted from its own suite.
+ */
+export const SOQL_QUERY_SNIFF = /^\s*select/i;
+
+/** True when a `query` argument is a full SoQL statement rather than a phrase. */
+export function isFullSoqlQuery(query: string): boolean {
+  return SOQL_QUERY_SNIFF.test(query);
+}
+
+/**
+ * Clauses a full SoQL `query` supersedes: the service sets each aside
+ * (`socrata-tools.ts:547-553`) and then sends neither `$limit` nor `$offset`
+ * with a `$query` (`:283-293`). A cell that wrote any of them beside `query=`
+ * would show the reader an argument that had no effect on the numbers below —
+ * the false precision docs/design-principles.md Principle 3 forbids.
+ */
+const SOQL_SUPERSEDED_KWARGS = [
+  'select', 'where', 'group', 'order', 'having', 'q', 'limit', 'offset',
+] as const;
+
+/**
+ * The assignment every fetch cell in this module emits, as a fact about the
+ * rendered source: `dfN = fetch_<helper>(`, at any indentation (the fetch sits
+ * inside a `try` body). Owned here, beside the renderers that emit it, so a
+ * change to the emitted shape is made next to its only detector rather than
+ * silently breaking a scan that lives in another file (`validate.ts`).
+ */
+const REPRODUCED_FETCH_ASSIGNMENT = /^[ \t]*df\d+ = fetch_[a-z_]+\(/m;
+
+/** True when this cell re-runs a data fetch — see `REPRODUCED_FETCH_ASSIGNMENT`. */
+export function isReproducedFetchCell(cell: NotebookCell): boolean {
+  if (cell.cell_type !== 'code') return false;
+  return REPRODUCED_FETCH_ASSIGNMENT.test(cell.source.join(''));
+}
+
+/**
+ * How many of a notebook's cells re-run a data fetch. Zero means no step in
+ * the document rests on data it fetched itself (#341).
+ */
+export function countReproducedFetchCells(cells: readonly NotebookCell[]): number {
+  return cells.filter(isReproducedFetchCell).length;
+}
+
+/**
+ * How many of this analysis's tool calls will render as a re-runnable fetch —
+ * computed from the calls rather than from the cells, so a caller can ask
+ * before any cell exists (`synthesize.ts` builds the cover cell first).
+ */
+export function countReproducibleFetches(calls: readonly PhaseAToolCall[]): number {
+  return calls.filter(call => {
+    const out = renderFetchToolCell(call, { dataFrameIndex: 1, defaultPortal: '' });
+    return out !== null && out.producedDataFrame;
+  }).length;
+}
 
 export interface ToolCellOutput {
   /** Cells appended to the notebook for this tool call. */
@@ -190,14 +330,116 @@ function guardedFetch(dfVar: string, stepLabel: string, fetchCode: string): stri
   ].join('\n');
 }
 
+/**
+ * The generated comment that makes a `query` argument's effect legible (#340).
+ *
+ * Two things a reader cannot see from the arguments alone, and both change how
+ * they should read the numbers below:
+ *
+ *   - which clauses the data source did NOT apply, and why they are therefore
+ *     absent from the cell (they would be arguments with no effect);
+ *   - what bounds the row count once `limit` is gone — the statement's own
+ *     LIMIT, or the portal's default page, never the `limit` the original call
+ *     carried.
+ *
+ * Reader-facing text: "data source", never "MCP server" (design-principles.md
+ * Principle 9), and no repository paths — the coupling those cite is recorded
+ * beside `SOQL_QUERY_SNIFF`, in source a notebook reader never downloads.
+ */
+function socrataQueryComment(args: Record<string, unknown>, soql: boolean): string[] {
+  const lines: string[] = [];
+  if (soql) {
+    const superseded = SOQL_SUPERSEDED_KWARGS.filter(k => args[k] !== undefined && args[k] !== null);
+    lines.push(
+      '# `query` here is a full SoQL statement, so the data source applied it as the',
+      '# whole query: select / where / group / order — and limit / offset — are not',
+      '# sent alongside it. They are omitted below rather than written as arguments',
+      '# that would have no effect on the rows this cell returns.',
+    );
+    if (superseded.length > 0) {
+      lines.push(`# Superseded on this call, for that reason: ${superseded.join(', ')}.`);
+    }
+    lines.push(
+      '# The row count is therefore bounded by the statement\'s own LIMIT, or by the',
+      '# portal\'s default page size when the statement carries none.',
+    );
+  } else {
+    lines.push(
+      '# `query` here is a search phrase rather than a SoQL statement, so the data',
+      '# source ran it as a full-text search across the dataset and applied the',
+      '# clauses below alongside it.',
+    );
+  }
+  lines.push(
+    '# One deliberate difference from the original run: this helper always requires',
+    '# an explicit dataset_id and never derives one from `query`.',
+  );
+  return lines;
+}
+
+/**
+ * A `type=query` call that named no dataset (#340, rider c).
+ *
+ * The data source has a third behaviour here: given a `query` that is not a
+ * SoQL statement and no `dataset_id`, it treats the query string itself as the
+ * dataset id. This notebook does not reproduce that. A dataset id guessed from
+ * a search phrase is a guess, and a step that reads a dataset it cannot name
+ * is not a reproduction of anything.
+ *
+ * So the step becomes a markdown note, for the reason `renderFailedToolCell`
+ * already records: a cell that always raises is a broken step in a document
+ * whose cover text tells the reader it runs.
+ */
+function renderUnnamedDatasetCell(
+  call: PhaseAToolCall,
+  ctx: ToolCellContext,
+): ToolCellOutput {
+  const portal = (call.args.portal as string) || ctx.defaultPortal;
+  const reason = call.reason ? ` ${call.reason}` : '';
+  const md = [
+    `#### Not reproduced: \`get_data\` on \`${portal}\``,
+    '',
+    `The original analysis queried a dataset it did not name${reason}. The data source ` +
+      'derived one from the search phrase it was given; this notebook does not derive ' +
+      'dataset ids, because a dataset id guessed from a phrase is a guess.',
+    '',
+    'No code cell is generated for it. To reproduce this step, add the dataset ' +
+      'identifier to a `fetch_socrata(...)` call of your own.',
+  ].join('\n');
+  return {
+    cells: [markdownCell(md)],
+    producedDataFrame: false,
+    dataFrameVariable: null,
+    // Nothing may be cited: we cannot say which dataset was read.
+    citation: null,
+  };
+}
+
 function renderSocrataQueryCell(
   call: PhaseAToolCall,
   ctx: ToolCellContext,
 ): ToolCellOutput {
   const portal = (call.args.portal as string) || ctx.defaultPortal;
-  const datasetId = (call.args.dataset_id as string) || 'unknown';
+  const datasetId = typeof call.args.dataset_id === 'string' && call.args.dataset_id
+    ? call.args.dataset_id
+    : null;
+  if (!datasetId) return renderUnnamedDatasetCell(call, ctx);
+
+  const rawQuery = typeof call.args.query === 'string' && call.args.query.length > 0
+    ? call.args.query
+    : null;
+  const soql = rawQuery !== null && isFullSoqlQuery(rawQuery);
+
   const dfVar = `df${ctx.dataFrameIndex}`;
   const reason = call.reason ? ` ${call.reason}` : '';
+  // Under a full SoQL query the superseded clauses are accounted for by the
+  // generated comment, so `pyKwargs` must not emit them; they are "handled",
+  // exactly as `portal` and `dataset_id` are.
+  const handledKeys = soql
+    ? ['portal', 'dataset_id', 'type', 'query', ...SOQL_SUPERSEDED_KWARGS]
+    : ['portal', 'dataset_id', 'type', 'query'];
+  const unsupported = unsupportedArgKeys(call.args, FETCH_SOCRATA_PARAMS, handledKeys);
+
   const md = [
     `### Step ${ctx.dataFrameIndex}: Query \`${datasetId}\``,
     '',
@@ -206,13 +448,27 @@ function renderSocrataQueryCell(
       ? `Original execution returned ${call.resultSummary.rows} rows × ${call.resultSummary.columns} columns.`
       : '',
   ].filter(Boolean).join('\n');
-  const code = guardedFetch(dfVar, `Step ${ctx.dataFrameIndex}`, [
-    `${dfVar} = fetch_socrata(`,
-    `    portal=${JSON.stringify(portal)},`,
-    `    dataset_id=${JSON.stringify(datasetId)},`,
-    pyKwargs(call.args, SOCRATA_QUERY_KWARGS, ['portal', 'dataset_id', 'type']),
-    ')',
-  ].filter(Boolean).join('\n'));
+
+  const commentLines = rawQuery !== null ? socrataQueryComment(call.args, soql) : [];
+  if (unsupported.length > 0) {
+    commentLines.push(
+      `# The original call also passed ${unsupported.join(', ')}, which this helper has`,
+      '# no parameter for; disclosed here rather than passed and silently ignored.',
+    );
+  }
+
+  const code = [
+    ...commentLines,
+    guardedFetch(dfVar, `Step ${ctx.dataFrameIndex}`, [
+      `${dfVar} = fetch_socrata(`,
+      `    portal=${JSON.stringify(portal)},`,
+      `    dataset_id=${JSON.stringify(datasetId)},`,
+      rawQuery !== null ? `    query=${JSON.stringify(rawQuery)},` : '',
+      pyKwargs(call.args, SOCRATA_QUERY_KWARGS, handledKeys, FETCH_SOCRATA_PARAMS),
+      ')',
+    ].filter(Boolean).join('\n')),
+  ].join('\n');
+
   return {
     cells: [markdownCell(md), codeCell(code)],
     producedDataFrame: true,
@@ -236,13 +492,27 @@ function renderDataCommonsObsCell(
       ? `Original execution returned ${call.resultSummary.rows} observation rows.`
       : '',
   ].filter(Boolean).join('\n');
-  const code = guardedFetch(dfVar, `Step ${ctx.dataFrameIndex}`, [
-    `${dfVar} = fetch_data_commons(`,
-    `    variable_dcid=${JSON.stringify(variable)},`,
-    `    place_dcid=${JSON.stringify(place)},`,
-    pyKwargs(call.args, DC_OBS_KWARGS, ['variable_dcid', 'place_dcid']),
-    ')',
-  ].filter(Boolean).join('\n'));
+  // Same bound as the Socrata renderer (#340): a key `fetch_data_commons` has
+  // no parameter for is disclosed, never emitted — emitting it would raise
+  // `TypeError` and the reader would be told live data could not be fetched.
+  const handledKeys = ['variable_dcid', 'place_dcid'];
+  const unsupported = unsupportedArgKeys(call.args, FETCH_DATA_COMMONS_PARAMS, handledKeys);
+  const commentLines = unsupported.length > 0
+    ? [
+        `# The original call also passed ${unsupported.join(', ')}, which this helper has`,
+        '# no parameter for; disclosed here rather than passed and silently ignored.',
+      ]
+    : [];
+  const code = [
+    ...commentLines,
+    guardedFetch(dfVar, `Step ${ctx.dataFrameIndex}`, [
+      `${dfVar} = fetch_data_commons(`,
+      `    variable_dcid=${JSON.stringify(variable)},`,
+      `    place_dcid=${JSON.stringify(place)},`,
+      pyKwargs(call.args, DC_OBS_KWARGS, handledKeys, FETCH_DATA_COMMONS_PARAMS),
+      ')',
+    ].filter(Boolean).join('\n')),
+  ].join('\n');
   return {
     cells: [markdownCell(md), codeCell(code)],
     producedDataFrame: true,
@@ -331,24 +601,72 @@ const FAILURE_REASON: Record<ToolFailureKind, string> = {
  * the same args the matching renderer would have used. Falls back to the tool
  * name for a call with no dedicated renderer (a discovery call that failed),
  * which is still more than the reader had before.
+ *
+ * `get_data` dispatches on name AND `args.type` (#342), the way
+ * `renderFetchToolCell` does. It used to dispatch on the name alone, so a
+ * rejected CATALOG SEARCH was reported to the reader as "tried to query the
+ * `unknown` dataset on …" — an operation that never ran, against a dataset
+ * that never existed, named by a placeholder. Three false claims in one
+ * sentence, in a document a reader downloads to scrutinise.
+ *
+ * There is no `unknown` here any more, in either direction: a field the call
+ * did not carry is left out of the sentence rather than filled with a word
+ * that looks like a value (docs/design-principles.md Principle 3). The
+ * `metadata` and `metrics` branches read the id from `query` when
+ * `dataset_id` is absent because that is what the data source does with it.
  */
 function describeAttempt(call: PhaseAToolCall, ctx: ToolCellContext): string {
   if (call.name === 'get_data') {
     const portal = (call.args.portal as string) || ctx.defaultPortal;
-    const datasetId = (call.args.dataset_id as string) || 'unknown';
-    return `query the \`${datasetId}\` dataset on \`${portal}\``;
+    const datasetId = typeof call.args.dataset_id === 'string' && call.args.dataset_id
+      ? call.args.dataset_id
+      : null;
+    const queryArg = typeof call.args.query === 'string' && call.args.query
+      ? call.args.query
+      : null;
+    const type = typeof call.args.type === 'string' ? call.args.type : undefined;
+    const namedDataset = datasetId ?? queryArg;
+    if (type === 'catalog') {
+      return queryArg
+        ? `search the \`${portal}\` data catalog for \`${queryArg}\``
+        : `search the \`${portal}\` data catalog`;
+    }
+    if (type === 'metadata') {
+      return namedDataset
+        ? `look up the description of the \`${namedDataset}\` dataset on \`${portal}\``
+        : `look up a dataset description on \`${portal}\``;
+    }
+    if (type === 'metrics') {
+      return namedDataset
+        ? `check row counts and update times for the \`${namedDataset}\` dataset on \`${portal}\``
+        : `check row counts and update times for a dataset on \`${portal}\``;
+    }
+    if (type === 'query') {
+      return datasetId
+        ? `query the \`${datasetId}\` dataset on \`${portal}\``
+        : `query a dataset on \`${portal}\``;
+    }
+    // No `type` at all: say what we know — the portal — and nothing else.
+    return `request data from \`${portal}\``;
   }
   if (call.name === 'get_observations') {
-    const variable = (call.args.variable_dcid as string) || 'unknown';
-    const place = (call.args.place_dcid as string) || 'unknown';
-    return `fetch \`${variable}\` for \`${place}\` from Google Data Commons`;
+    const variable = typeof call.args.variable_dcid === 'string' ? call.args.variable_dcid : null;
+    const place = typeof call.args.place_dcid === 'string' ? call.args.place_dcid : null;
+    if (variable && place) return `fetch \`${variable}\` for \`${place}\` from Google Data Commons`;
+    if (variable) return `fetch \`${variable}\` from Google Data Commons`;
+    if (place) return `fetch an indicator for \`${place}\` from Google Data Commons`;
+    return 'fetch an indicator from Google Data Commons';
   }
   if (call.name === 'ckan__execute_sql') {
     return 'run the analyst-authored SQL statement against the Boston open-data store';
   }
   if (call.name === 'ckan__query_data') {
-    const resourceId = (call.args.resource_id as string) || 'unknown';
-    return `fetch records from Boston open-data resource \`${resourceId}\``;
+    const resourceId = typeof call.args.resource_id === 'string' && call.args.resource_id
+      ? call.args.resource_id
+      : null;
+    return resourceId
+      ? `fetch records from Boston open-data resource \`${resourceId}\``
+      : 'fetch records from the Boston open-data store';
   }
   return `run the \`${call.name}\` request`;
 }

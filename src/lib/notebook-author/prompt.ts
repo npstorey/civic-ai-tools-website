@@ -60,6 +60,24 @@ export function buildCell0Source(args: {
   query: string;
   generatedAt: string;
   portals: readonly string[];
+  /**
+   * How many steps in this notebook re-run a data fetch (#341). Zero switches
+   * the cover text to the honest version below: a notebook whose every fetch
+   * failed contains no reproducible analysis, and the synthesis cell falls
+   * back to displaying the original answer, so its figures would otherwise
+   * read as a conclusion with nothing behind them.
+   *
+   * The alternative text says what is true of the DOCUMENT — that no step
+   * re-runs a fetch — rather than asserting that every request failed. Zero
+   * also covers an analysis that only ever ran discovery calls, and telling
+   * that reader their catalog searches "returned no data" would be the same
+   * false precision one step to the left.
+   *
+   * Optional so the parameter can be added without a silent behaviour change
+   * at call sites that do not know the count; the production caller
+   * (`synthesize.ts`) always passes it, and a test pins that it does.
+   */
+  reproducedFetchCount?: number;
 }): string {
   const portalLine = args.portals.length === 0
     ? ''
@@ -69,8 +87,15 @@ export function buildCell0Source(args: {
   const host = getPublicationHost();
   const origin = getEvidenceSiteOrigin();
   const viaSuffix = host && origin ? ` via [${host}](${origin})` : '';
+  // #324: the same conditional, applied to the title one line up. The heading
+  // used to name the reference deployment on every instance, inside a file
+  // readers download — while the attribution three lines below was already
+  // honest about an undeclared identity. An instance that has declared none
+  // gets the description without the name, never a borrowed one.
+  const platformTitle = getPlatformTitle();
+  const nothingReproduced = args.reproducedFetchCount === 0;
   return [
-    '# Civic AI Data Analysis',
+    platformTitle ? `# ${platformTitle} Data Analysis` : '# Data Analysis',
     '',
     `**Query:** ${args.query}  `,
     portalLine.trimEnd(),
@@ -78,10 +103,20 @@ export function buildCell0Source(args: {
     '',
     '## How to use this notebook',
     '',
-    'This notebook contains a complete, reproducible analysis of the query above.',
-    'Every code cell that fetches data uses the helper functions defined below,',
-    'so the same numbers can be reproduced against live data by re-running cells',
-    'top-to-bottom. The final "Synthesis" cell explains what the data shows.',
+    ...(nothingReproduced
+      ? [
+        'This notebook reproduces no data fetch: no step below re-runs a request',
+        'against a live data source. The steps record what the original analysis',
+        'attempted, and why each step produced nothing to re-run. Any figures in',
+        'the "Synthesis" cell come from that analysis text, not from data this',
+        'notebook fetched — re-running the cells will not reproduce them.',
+      ]
+      : [
+        'This notebook contains a complete, reproducible analysis of the query above.',
+        'Every code cell that fetches data uses the helper functions defined below,',
+        'so the same numbers can be reproduced against live data by re-running cells',
+        'top-to-bottom. The final "Synthesis" cell explains what the data shows.',
+      ]),
     '',
     '## Notebook structure',
     '',

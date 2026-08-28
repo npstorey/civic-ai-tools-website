@@ -42,7 +42,13 @@ Examples:
           },
           query: {
             type: 'string',
-            description: 'For type=catalog: search query. For type=metadata: the dataset ID. For type=query: optional full-text search within data.',
+            // #340: this used to describe only the $q branch. The data-access
+            // handler splits on whether the value starts with SELECT, and the
+            // SoQL branch supersedes the individual clauses AND drops
+            // limit/offset — so a model reading the old text could send both a
+            // SELECT and a limit and be silently given neither bound it asked
+            // for. Both branches are stated here because both are reachable.
+            description: 'For type=catalog: search query. For type=metadata: the dataset ID. For type=query: either a full SoQL statement starting with SELECT, which is applied as the entire query and supersedes select/where/order/group (limit and offset are not applied either — bound the rows with the statement\'s own LIMIT), or a search phrase, applied as a full-text search within the data alongside the other clauses.',
           },
           dataset_id: {
             type: 'string',
