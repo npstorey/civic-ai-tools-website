@@ -196,17 +196,42 @@ Demonstrate the tangible value of MCP by letting users see the difference betwee
     "tokens_used": 450,
     "tools_called": [
       {
-        "name": "search_datasets",
-        "args": { "query": "311 complaints" }
+        "name": "get_data",
+        "args": { "type": "catalog", "query": "311 complaints", "portal": "data.sfgov.org" },
+        "operationType": "catalog",
+        "reason": "to find datasets about \"311 complaints\"",
+        "duration_ms": 210,
+        "resultSummary": { "rows": 1, "columns": 3 }
       },
       {
-        "name": "query_dataset",
-        "args": { "dataset_id": "abc123", "query": "..." }
+        "name": "get_data",
+        "args": { "type": "query", "dataset_id": "vw9i-7mzq", "query": "...", "portal": "data.sfgov.org" },
+        "operationType": "query",
+        "reason": "to query dataset vw9i-7mzq",
+        "duration_ms": 890,
+        "resultSummary": { "rows": 2, "columns": 2 }
       }
     ]
   }
 }
 ```
+
+Both halves ask one model the same question; only the MCP half is given tools.
+That half runs on the shared tool-calling loop
+(`src/lib/model-loop/run-tool-loop.ts`, configured by `compare-loop.ts`) — the
+same implementation `/api/compare-stream` and a record replay use, since #345.
+Reading the body:
+
+- `tokens_used` on the MCP half is the run's **cumulative** total across every
+  model call the loop made, not the last call's.
+- `tools_called` is **omitted** rather than empty when no tool ran. Each entry
+  carries `name` and `args` — the arguments actually sent, the portal this route
+  injects into Socrata calls included — plus `operationType`, `reason`,
+  `duration_ms` and `resultSummary` where each can be derived.
+- A call that **failed** carries `"failed": true` and a `failureKind` (`timeout`,
+  `unavailable`, `not_configured` or `unknown`) in place of a `resultSummary`. A
+  failed call and a zero-row one are otherwise indistinguishable (#321), and one
+  failed call does not fail the comparison.
 
 ### GET /api/models
 

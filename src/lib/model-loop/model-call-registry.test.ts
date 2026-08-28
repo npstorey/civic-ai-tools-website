@@ -10,8 +10,9 @@
  *
  * This test says it out loud. Adding a `chat.completions.create` call to a
  * file that is not on the list below fails the suite, and the list carries one
- * line of justification per entry — including, for the file this wave has not
- * migrated yet, the phase that removes it.
+ * line of justification per entry. The wave closed with every tool-calling
+ * loop consolidated: the second list below now names exactly one module, and
+ * a second entry appearing on it is a regression this test reports by name.
  *
  * TWO ASSERTIONS, ONE INSTRUMENT. The first is the registry: who calls the
  * model at all. The second is narrower and is the wave's own criterion: how
@@ -48,7 +49,7 @@ const ALLOWED_MODEL_CALLERS: Record<string, string> = {
   'src/lib/openrouter-streaming.ts':
     'queryWithoutMcpStreaming: the no-tools A-side of the comparison. One turn, no loop, not loop-class.',
   'src/lib/openrouter.ts':
-    'Its own loop, until P4 moves it onto the shared core (#344).',
+    'queryWithoutMcp: the no-tools A-side of the comparison. One turn, no loop, not loop-class.',
   'src/lib/evidence/adversarial-eval.ts':
     'One rubric call, no loop. Out of this wave by ruling D4; the eval pair is #348.',
   'src/app/api/evidence/[slug]/evaluate/route.ts':
@@ -59,11 +60,12 @@ const ALLOWED_MODEL_CALLERS: Record<string, string> = {
 
 /**
  * Modules carrying a tool-calling loop — a `chat.completions.create` that
- * passes `tools`. Three at this wave's base; one when it closes.
+ * passes `tools`. Three when this wave opened (`openrouter-streaming.ts`,
+ * `evidence/[slug]/replay/route.ts`, `openrouter.ts`); one now. That count is
+ * the wave's own first acceptance criterion, and this is where it is measured.
  */
 const ALLOWED_TOOL_LOOPS: Record<string, string> = {
   'src/lib/model-loop/run-tool-loop.ts': 'The shared core.',
-  'src/lib/openrouter.ts': 'Removed by P4.',
 };
 
 const MODEL_CALL = 'chat.completions.create';

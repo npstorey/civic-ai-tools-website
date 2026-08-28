@@ -1,15 +1,37 @@
-import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
+/**
+ * The A-side of `/api/compare`: one model call, no tools, no loop.
+ *
+ * WHAT USED TO BE HERE. This file held the ORIGINAL tool-calling loop — the
+ * January implementation `openrouter-streaming.ts` was forked from, and the one
+ * every defect in the family was written in first: the exit condition that
+ * returned an announcement as the answer (#319 / #344), raw error text fed to
+ * the model instead of `describeToolFailureForLlm`, tool-call records with no
+ * failure fields (#321), no truncation at all, an unguarded argument parse
+ * (#349). Wave #345 P4 deleted it: `/api/compare`'s MCP side now runs on the
+ * shared core (`model-loop/run-tool-loop.ts`), configured by
+ * `model-loop/compare-loop.ts`.
+ *
+ * WHY WHAT IS LEFT STAYS. `queryWithoutMcp` is the control half of the
+ * comparison — the same model, the same question, no data source — and it is
+ * deliberately not loop-class: one completion, no `tools`, nothing to
+ * consolidate. It keeps its entry on `model-call-registry.test.ts`'s
+ * ALLOWED_MODEL_CALLERS for exactly that reason, and has none on
+ * ALLOWED_TOOL_LOOPS.
+ */
+
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { getModelClient } from './model-client.ts';
 import type { ModelIdentity } from './model-catalog.ts';
 
+/**
+ * The `withoutMcp` half of the `POST /api/compare` response body. The `withMcp`
+ * half is `CompareCompletionResult` in `model-loop/compare-loop.ts`; it carries
+ * a `tools_called[]` as well, which this side never has.
+ */
 export interface CompletionResult {
   content: string;
   duration_ms: number;
   tokens_used: number;
-  tools_called?: {
-    name: string;
-    args: Record<string, unknown>;
-  }[];
 }
 
 export async function queryWithoutMcp(
@@ -40,120 +62,5 @@ export async function queryWithoutMcp(
     content,
     duration_ms,
     tokens_used,
-  };
-}
-
-export async function queryWithMcp(
-  query: string,
-  model: ModelIdentity,
-  tools: ChatCompletionTool[],
-  executeToolCall: (name: string, args: Record<string, unknown>) => Promise<string>,
-  systemPrompt?: string
-): Promise<CompletionResult> {
-  const startTime = Date.now();
-  const toolsCalled: { name: string; args: Record<string, unknown> }[] = [];
-
-  const messages: ChatCompletionMessageParam[] = [];
-
-  if (systemPrompt) {
-    messages.push({ role: 'system', content: systemPrompt });
-  }
-  messages.push({ role: 'user', content: query });
-
-  let response = await getModelClient().chat.completions.create({
-    model: model.endpointModel,
-    messages,
-    tools,
-    tool_choice: 'auto',
-    max_tokens: 2000,
-  });
-
-  // Handle tool calls iteratively
-  let iterations = 0;
-  const maxIterations = 10; // Prevent infinite loops
-
-  while (response.choices[0]?.message?.tool_calls && iterations < maxIterations) {
-    const assistantMessage = response.choices[0].message;
-    const toolCalls = assistantMessage.tool_calls;
-    messages.push(assistantMessage);
-
-    // Execute each tool call
-    if (!toolCalls) break;
-    for (const toolCall of toolCalls) {
-      // Handle both function and custom tool call types
-      if (toolCall.type === 'function') {
-        const args = JSON.parse(toolCall.function.arguments);
-        toolsCalled.push({ name: toolCall.function.name, args });
-
-        try {
-          const result = await executeToolCall(toolCall.function.name, args);
-          messages.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: result,
-          });
-        } catch (error) {
-          messages.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: `Error executing tool: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          });
-        }
-      }
-    }
-
-    // Get next response
-    response = await getModelClient().chat.completions.create({
-      model: model.endpointModel,
-      messages,
-      tools,
-      tool_choice: 'auto',
-      max_tokens: 2000,
-    });
-
-    iterations++;
-  }
-
-  // If we hit max iterations or the response still has tool_calls but no content,
-  // force a final response without tools
-  const lastMessage = response.choices[0]?.message;
-  if (!lastMessage?.content && (iterations >= maxIterations || lastMessage?.tool_calls)) {
-    // Add the last assistant message if it has tool calls
-    if (lastMessage?.tool_calls) {
-      messages.push(lastMessage);
-      // Add placeholder tool responses for any pending calls
-      for (const toolCall of lastMessage.tool_calls) {
-        messages.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: 'Tool call limit reached. Please provide a summary based on the data already collected.',
-        });
-      }
-    }
-
-    // Make final call without tools to force a text response
-    response = await getModelClient().chat.completions.create({
-      model: model.endpointModel,
-      messages: [
-        ...messages,
-        {
-          role: 'user',
-          content: 'Based on all the data you have collected from the tool calls above, please provide a comprehensive answer to my original question. Summarize the key findings.',
-        },
-      ],
-      max_tokens: 2000,
-      // No tools - forces text response
-    });
-  }
-
-  const duration_ms = Date.now() - startTime;
-  const content = response.choices[0]?.message?.content || '';
-  const tokens_used = response.usage?.total_tokens || 0;
-
-  return {
-    content,
-    duration_ms,
-    tokens_used,
-    tools_called: toolsCalled.length > 0 ? toolsCalled : undefined,
   };
 }
