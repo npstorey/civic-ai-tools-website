@@ -2,6 +2,11 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { parseModelsResponse, type Model } from '@/lib/model-list';
+// The tool-call identity key, in ONE place. It used to be a private function
+// here with a verbatim copy in `replay-loop.test.ts`, because no `.test.ts` in
+// this tree can import a `.tsx` — so the shipped function had no test and the
+// copy could only ever agree with itself. Both now import this module.
+import { canonicalizeToolCall } from '@/lib/evidence/tool-call-identity';
 
 // --- Types ---
 
@@ -51,16 +56,6 @@ interface AttestationDialogProps {
 }
 
 // --- Metric computation ---
-
-function canonicalizeToolCall(tc: { name: string; args: Record<string, unknown> }): string {
-  const key = [
-    tc.name,
-    tc.args.type as string || '',
-    tc.args.dataset_id as string || '',
-    tc.args.portal as string || '',
-  ].join(':');
-  return key;
-}
 
 function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
   const intersection = new Set([...a].filter(x => b.has(x)));
