@@ -11,8 +11,19 @@
  * This test says it out loud. Adding a `chat.completions.create` call to a
  * file that is not on the list below fails the suite, and the list carries one
  * line of justification per entry. The wave closed with every tool-calling
- * loop consolidated: the second list below now names exactly one module, and
- * a second entry appearing on it is a regression this test reports by name.
+ * loop in the application consolidated: the second list below names the shared
+ * core and one script, and a further entry appearing on it is a regression
+ * this test reports by name.
+ *
+ * WHAT "A FILE" MEANS HERE, because getting this wrong is what #356 was. The
+ * scan first rooted at `src/` and accepted only `.ts`/`.tsx`, so a fourth
+ * tool-calling loop in `scripts/eval-models.mjs` was invisible to it and the
+ * claim in the paragraph above was false as written, with a live
+ * counter-example in the tree. It now covers `src/`, `scripts/` and the
+ * configuration files at the repository root — every JavaScript or TypeScript
+ * file this repository tracks — in every extension of the family (`.ts`,
+ * `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`). A guard whose header
+ * overstates its reach is worse than no guard, because it is trusted.
  *
  * TWO ASSERTIONS, ONE INSTRUMENT. The first is the registry: who calls the
  * model at all. The second is narrower and is the wave's own criterion: how
@@ -36,7 +47,14 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SRC_ROOT = fileURLToPath(new URL('../..', import.meta.url));
+const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
+
+/**
+ * Where the scan looks. `src` and `scripts` are walked; the repository root is
+ * read one level deep, which is where the four configuration modules live and
+ * is what keeps `node_modules`, `.next` and the build output out of the walk.
+ */
+const SCAN_DIRECTORIES = ['src', 'scripts'];
 
 /**
  * Every file permitted to call `chat.completions.create`, with the reason it
@@ -56,16 +74,27 @@ const ALLOWED_MODEL_CALLERS: Record<string, string> = {
     'The second copy of that same rubric call, caller-keyed. Out of this wave by ruling D4 (#348).',
   'src/app/api/evidence/generate-summary/route.ts':
     'One summary call, no loop. Out of this wave.',
+  'scripts/eval-models.mjs':
+    'The model-selection harness: a fourth tool-calling loop that carries the full class. Migration is the next wave’s (#356).',
 };
 
 /**
  * Modules carrying a tool-calling loop — a `chat.completions.create` that
- * passes `tools`. Three when this wave opened (`openrouter-streaming.ts`,
- * `evidence/[slug]/replay/route.ts`, `openrouter.ts`); one now. That count is
- * the wave's own first acceptance criterion, and this is where it is measured.
+ * passes `tools`. Three in `src/` when this wave opened
+ * (`openrouter-streaming.ts`, `evidence/[slug]/replay/route.ts`,
+ * `openrouter.ts`); one now. That count is the wave's own first acceptance
+ * criterion, and this is where it is measured.
+ *
+ * The second entry is the debt #356 found, listed rather than fixed: the point
+ * of naming it here is that it stops being invisible to the suite. It is not a
+ * fourth application loop — nothing it writes is served, signed or
+ * user-facing — but it is the same shape, and it chooses which models this
+ * instance offers.
  */
 const ALLOWED_TOOL_LOOPS: Record<string, string> = {
   'src/lib/model-loop/run-tool-loop.ts': 'The shared core.',
+  'scripts/eval-models.mjs':
+    'The model-selection harness: carries the full class; migration is the next wave’s (#356).',
 };
 
 const MODEL_CALL = 'chat.completions.create';
@@ -118,9 +147,9 @@ function passesTools(call: ModelCall): boolean {
 }
 
 function modelCallSites(): ModelCall[] {
-  return sourceFiles(SRC_ROOT).flatMap((path) => {
+  return scannedFiles().flatMap((path) => {
     const source = readFileSync(path, 'utf8');
-    const file = `src/${relative(SRC_ROOT, path).split(sep).join('/')}`;
+    const file = relative(REPO_ROOT, path).split(sep).join('/');
     const calls: ModelCall[] = [];
     let from = 0;
     for (;;) {
@@ -181,12 +210,34 @@ function endOfString(source: string, start: number): number {
   return source.length;
 }
 
+/** Every JavaScript/TypeScript source file in the scanned scope. */
+function scannedFiles(): string[] {
+  return [
+    ...rootLevelFiles(),
+    ...SCAN_DIRECTORIES.flatMap((dir) => sourceFiles(join(REPO_ROOT, dir))),
+  ];
+}
+
+/** The configuration modules at the repository root — read, never walked. */
+function rootLevelFiles(): string[] {
+  return readdirSync(REPO_ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && isSource(entry.name))
+    .map((entry) => join(REPO_ROOT, entry.name));
+}
+
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) return sourceFiles(full);
-    if (!/\.tsx?$/.test(entry.name)) return [];
-    if (/\.test\.tsx?$/.test(entry.name)) return [];
-    return [full];
+    return isSource(entry.name) ? [full] : [];
   });
+}
+
+/**
+ * A source file of the JavaScript/TypeScript family, tests excluded. Written
+ * as one predicate over the whole family rather than as `.tsx?`, because the
+ * gap #356 found was an extension the filter had never been asked about.
+ */
+function isSource(name: string): boolean {
+  return /\.(c|m)?[jt]sx?$/.test(name) && !/\.test\.(c|m)?[jt]sx?$/.test(name);
 }
