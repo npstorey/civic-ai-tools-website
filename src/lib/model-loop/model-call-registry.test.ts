@@ -46,13 +46,20 @@
  * guard that quietly reduces its own reach is the same failure with no diff to
  * point at.
  *
- * TWO ASSERTIONS, ONE INSTRUMENT. The first is the registry: who calls the
- * model at all. The second is narrower and is the wave's own criterion: how
- * many modules carry a TOOL-CALLING loop, which is the thing that was
- * triplicated. A grep for `chat.completions.create` cannot answer the second
- * (it counts single-turn calls too) and a grep for `tools` cannot answer it
- * either (it hits every file that mentions the word), so the scanner below
- * parses each call's argument block and asks whether that call passes tools.
+ * THREE ASSERTIONS, ONE INSTRUMENT. The first is the registry: who calls the
+ * model at all. The second is narrower and is #345's own criterion: how many
+ * modules carry a TOOL-CALLING loop, which is the thing that was triplicated. A
+ * grep for `chat.completions.create` cannot answer the second (it counts
+ * single-turn calls too) and a grep for `tools` cannot answer it either (it
+ * hits every file that mentions the word), so the scanner below parses each
+ * call's argument block and asks whether that call passes tools.
+ *
+ * The third asks what a call SENDS, and it is here because the first two could
+ * not see the defect it measures. The adversarial-eval pair (#348) was two call
+ * sites, neither of them a loop, sending the same rubric — legal under both
+ * earlier lists for as long as it existed. Every assertion runs in both
+ * directions: an unlisted file fails, and so does a list entry that no longer
+ * describes the tree.
  *
  * WHAT THE SCANNER DOES NOT DO. It reads source text; it does not build a call
  * graph. A call assembled dynamically, or made through a helper that takes the
@@ -84,9 +91,7 @@ const ALLOWED_MODEL_CALLERS: Record<string, string> = {
   'src/lib/openrouter.ts':
     'queryWithoutMcp: the no-tools A-side of the comparison. One turn, no loop, not loop-class.',
   'src/lib/evidence/adversarial-eval.ts':
-    'One rubric call, no loop. Out of this wave by ruling D4; the eval pair is #348.',
-  'src/app/api/evidence/[slug]/evaluate/route.ts':
-    'The second copy of that same rubric call, caller-keyed. Out of this wave by ruling D4 (#348).',
+    'The one rubric call, no loop. Both consumers reach it here since #348 — the publication gate on the platform credential, the interactive route on the caller\'s key.',
   'src/app/api/evidence/generate-summary/route.ts':
     'One summary call, no loop. Out of this wave.',
 };
@@ -108,6 +113,23 @@ const ALLOWED_MODEL_CALLERS: Record<string, string> = {
 const ALLOWED_TOOL_LOOPS: Record<string, string> = {
   'src/lib/model-loop/run-tool-loop.ts': 'The shared core — the one implementation.',
 };
+
+/**
+ * The one module allowed to send the adversarial-evaluation rubric to a model.
+ *
+ * A THIRD LIST, because the rubric is the thing that was duplicated and neither
+ * list above can see it. `ALLOWED_MODEL_CALLERS` counts call sites and
+ * `ALLOWED_TOOL_LOOPS` counts loops; the eval pair (#348) was two call sites,
+ * neither a loop, carrying the same rubric, the same prompt builder and the
+ * same `max_tokens`, and differing only in where the key came from. Both lists
+ * were satisfied by that arrangement for as long as it existed. What separates
+ * a legitimate second call site from a copy is what it sends, so that is what
+ * this measures — an equality, so it fails in both directions like the others.
+ */
+const ALLOWED_RUBRIC_CALLERS = ['src/lib/evidence/adversarial-eval.ts'];
+
+/** The rubric identifier as it appears in a call's argument list. */
+const RUBRIC = 'EVALUATION_RUBRIC';
 
 const MODEL_CALL = 'chat.completions.create';
 
@@ -151,6 +173,21 @@ test('#345: only the named modules carry a tool-calling loop', () => {
   for (const file of Object.keys(ALLOWED_TOOL_LOOPS)) {
     assert.ok(loops.has(file), `${file} is listed as carrying a tool loop but no longer does. Remove the entry.`);
   }
+});
+
+test('#348: exactly one module sends the evaluation rubric to a model', () => {
+  const rubricCallers = [
+    ...new Set(modelCallSites().filter((call) => call.args.includes(RUBRIC)).map((c) => c.file)),
+  ].sort();
+
+  assert.deepEqual(
+    rubricCallers,
+    [...ALLOWED_RUBRIC_CALLERS].sort(),
+    'the set of modules sending EVALUATION_RUBRIC to a model has changed. A second one is the #348 ' +
+      'shape returning: a caller that needs a different key, or different error handling, takes ' +
+      'those as parameters of runAdversarialEval rather than as a reason for another copy. An entry ' +
+      'here that no longer sends the rubric is a false statement about the tree and fails the same way.',
+  );
 });
 
 /** True when this call passes `tools` — `tools,` shorthand or `tools:`. */
