@@ -16,15 +16,35 @@
  * the second list below names exactly one module, and a further entry
  * appearing on it is a regression this test reports by name.
  *
- * WHAT "A FILE" MEANS HERE, because getting this wrong is what #356 was. The
- * scan first rooted at `src/` and accepted only `.ts`/`.tsx`, so a fourth
- * tool-calling loop in `scripts/eval-models.mjs` was invisible to it and the
- * claim in the paragraph above was false as written, with a live
- * counter-example in the tree. It now covers `src/`, `scripts/` and the
- * configuration files at the repository root — every JavaScript or TypeScript
- * file this repository tracks — in every extension of the family (`.ts`,
- * `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`). A guard whose header
- * overstates its reach is worse than no guard, because it is trusted.
+ * WHAT "A FILE" MEANS HERE, because getting this wrong is what #356 was — and
+ * then nearly was again. The scan first rooted at `src/` and accepted only
+ * `.ts`/`.tsx`, so a fourth tool-calling loop in `scripts/eval-models.mjs` was
+ * invisible to it. Widening it to a two-directory list plus a one-level read of
+ * the repository root fixed that instance and left the shape intact: a
+ * hardcoded universe under a header that claimed the repository. That claim was
+ * true only because every file of the JavaScript/TypeScript family this
+ * repository tracks happened to sit in `src`, `scripts` or the root — true by
+ * coincidence of layout, which is a thing one new directory falsifies with
+ * nothing to notice it.
+ *
+ * The universe is now derived rather than listed. `git ls-files` supplies it:
+ * every path this repository tracks, in whatever working tree the suite runs
+ * in, of which the scan reads those whose name matches /\.(c|m)?[jt]sx?$/ and
+ * does not match /\.test\.(c|m)?[jt]sx?$/. There is no directory list and no
+ * depth limit. `node_modules`, `.next` and the build output are absent because
+ * git does not track them, not because this file names them, and a file under a
+ * top-level directory that does not exist yet is covered on the day it is
+ * created.
+ *
+ * Two consequences, stated so no reader has to infer them. A file that exists
+ * but has not been `git add`ed is not tracked and is not scanned — the guard
+ * sees it the moment it is staged, which is before any commit, PR or merge can
+ * carry it. And a tracked file deleted from the working tree is skipped,
+ * because there is nothing to read. If git cannot answer at all, the scan
+ * throws rather than falling back to something narrower: a guard whose header
+ * overstates its reach is worse than no guard, because it is trusted, and a
+ * guard that quietly reduces its own reach is the same failure with no diff to
+ * point at.
  *
  * TWO ASSERTIONS, ONE INSTRUMENT. The first is the registry: who calls the
  * model at all. The second is narrower and is the wave's own criterion: how
@@ -44,18 +64,12 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
-
-/**
- * Where the scan looks. `src` and `scripts` are walked; the repository root is
- * read one level deep, which is where the four configuration modules live and
- * is what keeps `node_modules`, `.next` and the build output out of the walk.
- */
-const SCAN_DIRECTORIES = ['src', 'scripts'];
 
 /**
  * Every file permitted to call `chat.completions.create`, with the reason it
@@ -145,9 +159,8 @@ function passesTools(call: ModelCall): boolean {
 }
 
 function modelCallSites(): ModelCall[] {
-  return scannedFiles().flatMap((path) => {
-    const source = readFileSync(path, 'utf8');
-    const file = relative(REPO_ROOT, path).split(sep).join('/');
+  return trackedSourceFiles().flatMap((file) => {
+    const source = readFileSync(join(REPO_ROOT, file), 'utf8');
     const calls: ModelCall[] = [];
     let from = 0;
     for (;;) {
@@ -208,33 +221,39 @@ function endOfString(source: string, start: number): number {
   return source.length;
 }
 
-/** Every JavaScript/TypeScript source file in the scanned scope. */
-function scannedFiles(): string[] {
-  return [
-    ...rootLevelFiles(),
-    ...SCAN_DIRECTORIES.flatMap((dir) => sourceFiles(join(REPO_ROOT, dir))),
-  ];
-}
-
-/** The configuration modules at the repository root — read, never walked. */
-function rootLevelFiles(): string[] {
-  return readdirSync(REPO_ROOT, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && isSource(entry.name))
-    .map((entry) => join(REPO_ROOT, entry.name));
-}
-
-function sourceFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) return sourceFiles(full);
-    return isSource(entry.name) ? [full] : [];
+/**
+ * Every source file this repository tracks, as repository-relative paths — the
+ * same form the two registries are keyed by, so no normalisation stands between
+ * what is scanned and what is listed.
+ *
+ * `--full-name` makes the paths repository-relative however the suite is
+ * invoked, and `-z` keeps a name containing a newline from splitting into two.
+ * A failure to run git at all propagates: the scan has no narrower fallback on
+ * purpose, because falling back is how a guard loses reach without a diff.
+ */
+function trackedSourceFiles(): string[] {
+  const listing = execFileSync('git', ['ls-files', '-z', '--full-name'], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
   });
+  const tracked = listing.split('\0').filter((name) => name !== '' && isSource(name));
+  assert.ok(
+    tracked.length > 0,
+    'git ls-files reported no source files at all. The scan has stopped measuring, which looks ' +
+      'exactly like a tree with nothing to find — see the header.',
+  );
+  // The one exclusion: a tracked file deleted from the working tree has nothing
+  // to read. Nothing a model call could hide in is removed by it.
+  return tracked.filter((name) => existsSync(join(REPO_ROOT, name)));
 }
 
 /**
- * A source file of the JavaScript/TypeScript family, tests excluded. Written
- * as one predicate over the whole family rather than as `.tsx?`, because the
- * gap #356 found was an extension the filter had never been asked about.
+ * A source file of the JavaScript/TypeScript family, tests excluded — matched
+ * against a repository-relative path, which the suffix test handles as readily
+ * as a bare name. Written as one predicate over the whole family rather than as
+ * `.tsx?`, because the gap #356 found was an extension the filter had never
+ * been asked about.
  */
 function isSource(name: string): boolean {
   return /\.(c|m)?[jt]sx?$/.test(name) && !/\.test\.(c|m)?[jt]sx?$/.test(name);
