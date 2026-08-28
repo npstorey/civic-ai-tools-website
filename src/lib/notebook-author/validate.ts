@@ -9,6 +9,11 @@
  * exist, mandatory fields are present, and types are roughly right. It
  * does NOT do deep canonical-JSON validation — that lives in the
  * `civic-ai-tools-website/src/lib/evidence/packager.ts` Phase 3 work.
+ *
+ * One check reads the CELLS rather than the metadata (#341): whether any step
+ * re-runs a data fetch. A notebook whose every fetch failed has perfectly
+ * well-formed extensions, so a validator that only ever looked at shape
+ * reported it as valid while it told its reader the analysis was reproducible.
  */
 import type { Notebook } from './cells.ts';
 import { EXECUTION_EXTENSION_KEY, NOTEBOOK_EXTENSION_KEY } from './prompt.ts';

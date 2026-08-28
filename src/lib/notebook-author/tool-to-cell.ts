@@ -90,11 +90,19 @@ function pyRepr(value: unknown, indent = ''): string {
  *
  * `handledKeys` lists args the caller has already accounted for elsewhere in
  * the generated cell — rendered by hand as explicit kwargs (e.g.
- * `portal=...`), or consumed only as call-routing metadata that never
- * appears in the rendered Python at all (e.g. `type`, which selects which
- * renderer runs and is not itself a `fetch_*` parameter). Either way,
- * `pyKwargs` must not append them a second time — the caller, not a
- * hard-coded list here, owns which keys those are.
+ * `portal=...`), consumed only as call-routing metadata that never appears in
+ * the rendered Python at all (e.g. `type`, which selects which renderer runs
+ * and is not itself a `fetch_*` parameter), or explained by a generated
+ * comment (the clauses a full SoQL `query` supersedes, #340). Either way,
+ * `pyKwargs` must not emit them — the caller, not a hard-coded list here, owns
+ * which keys those are.
+ *
+ * `supportedKeys`, when given, is the target helper's parameter list and
+ * bounds the unenumerated append: "emitted instead of silently dropped" holds
+ * only for a key the helper can actually receive. Emitting any other key makes
+ * the cell raise `TypeError` and tells the reader live data could not be
+ * fetched — which is #340, and is a worse outcome than not writing it. The
+ * caller discloses those keys instead; see `unsupportedArgKeys`.
  */
 function pyKwargs(
   args: Record<string, unknown>,
