@@ -83,6 +83,67 @@ Examples:
       },
     },
   },
+  // #323: `search` and `fetch` are the Socrata MCP server's other two tools.
+  // `registry.ts` has routed all three names since it was written
+  // (`SOCRATA_TOOLS = ['get_data', 'search', 'fetch']`) and the skill text has
+  // always described them — only the schemas were missing, so the model was
+  // told about two capabilities it had no way to invoke. Measured in the
+  // server's source and against the deployed endpoint: `tools/list` returns
+  // exactly `get_data, search, fetch`.
+  //
+  // The two schemas below MIRROR the server's, which are deliberately narrow —
+  // one required property each and `additionalProperties: false`. That is not
+  // an omission to be helpfully filled in: neither tool accepts a portal or
+  // domain, so anything else sent here is rejected upstream. The narrowness is
+  // also why the loop core's portal injection stays scoped to `get_data`
+  // (`run-tool-loop.ts`) — an injected portal would be stripped by the server
+  // and would still corrupt the arguments recorded in the signed package.
+  {
+    type: 'function',
+    function: {
+      name: 'search',
+      description: `Search the Socrata portal this instance's MCP server is configured for, returning matching datasets with identifiers that "fetch" accepts.
+
+Returns, per hit: an "id" of the form dataset:<portal>:<dataset_id>, the title, the portal URL, a description snippet, and — where the dataset allows it — its column list and a few preview rows.
+
+WHICH TOOL TO USE:
+- This tool searches ONE portal: the one the server is configured with. It takes no portal argument.
+- To search any OTHER portal, use get_data with { "type": "catalog", "portal": "...", "query": "..." }, which does take a portal.`,
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Full-text search phrase, e.g. "311 noise complaints"',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'fetch',
+      description: `Retrieve a dataset's full metadata, or a single record, by the identifier "search" returned.
+
+The identifier is normally taken verbatim from a search hit: dataset:<portal>:<dataset_id> for a dataset, record:<portal>:<dataset_id>:<row_id> for one row. A bare 4x4 dataset ID or a Socrata dataset URL is also accepted, and resolves against the server's configured portal.
+
+WHICH TOOL TO USE: this returns metadata and columns, not query results. To read or aggregate rows, use get_data with type=query.`,
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Identifier returned by the search tool, e.g. "dataset:data.cityofnewyork.us:erm2-nwe9"',
+          },
+        },
+        required: ['id'],
+      },
+    },
+  },
 ];
 
 // --- Google Data Commons MCP (US demographic + federal statistical data) ---

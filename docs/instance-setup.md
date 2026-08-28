@@ -365,12 +365,41 @@ What the failures mean:
 | `502` with `code: "model_rate_limited"` | The **endpoint** is rate-limiting this server. Not the app's own per-day limiter, which answers `429` with `Rate limit exceeded`. Under deployment routing, quota is per-model and per-region, so this points at one deployment's pool rather than at the whole resource. |
 | A `404`-ish or "deployment not found" error from the endpoint | `endpointModel` does not name a deployment on that resource. This is the failure mode nobody here has seen — see §5.5. |
 
-Watch the server log as well as the response. A line reading
+**A tool call that hangs now fails at 45 seconds.** `/api/compare` had no
+per-tool-call bound until 2026-08: a source that accepted the connection and
+then stopped responding held your request open until the platform killed the
+invocation, and you got a platform error page naming no tool. The bound is
+`COMPARE_MCP_TOOL_TIMEOUT_MS` in `src/lib/model-loop/compare-loop.ts`, the same
+45 seconds the streaming routes and replay use. Past it the call fails on its
+own account — `MCP tool "get_data" timed out after 45s` in the log, recorded as
+a failed tool call — and the comparison still answers from whatever did come
+back. The counterweight is worth knowing before you tune it: this is the
+*blocking* route, so the bound is a hard ceiling with nothing already streamed,
+and a legitimately slow query that would once have eventually succeeded now
+fails instead.
+
+**Where to watch for a model-identity mismatch: not here.** A line reading
 `endpoint reported a different model than this instance declares` means your
 `model` field and what the endpoint answered with disagree. That is **often
 benign** — an endpoint answering a dated build for an undated request — and it
-never blocks a publish. It is worth reading once, because it is also exactly
-what a mislabelled deployment looks like.
+never blocks a publish. It is worth seeing once, because it is also exactly what
+a mislabelled deployment looks like.
+
+But it cannot appear on the check above. The warning is emitted while the loop
+records a span (`responseModelAttributes` in
+`src/lib/model-loop/run-tool-loop.ts`, called only from inside the
+span-recording branches), and `/api/compare` builds no trace at all —
+`grep -c trace src/app/api/compare/route.ts` returns `0`. Use the streaming
+route instead, which takes the same body and builds a trace:
+
+```bash
+# Same fields as step 3; SSE rather than one JSON body. Watch the server log.
+curl -N -X POST http://127.0.0.1:3000/api/compare-stream \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"test","model":"<an id from step 2>"}'
+```
+
+`/api/query-notebook` traces too, and shows the same line for the same reason.
 
 ### 5.4 What to check in a published record's bytes
 

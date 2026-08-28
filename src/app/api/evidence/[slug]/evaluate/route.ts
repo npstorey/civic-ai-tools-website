@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createModelClient, classifyModelError } from '@/lib/model-client';
+import { classifyModelError } from '@/lib/model-client';
 import {
   CALLER_MODEL_KEY_REJECTED_MESSAGE,
   callerModelKeyFailure,
@@ -14,13 +14,10 @@ import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import { canReadRecord } from '@/lib/evidence/sealed-access';
 import type { EvidencePackage } from '@/lib/evidence/packager';
-// Rubric, prompt builder, and response parsing are shared with the
-// publication gate (civic-ai-tools#72 Phase 3) via the adversarial-eval lib.
-import {
-  EVALUATION_RUBRIC,
-  buildEvaluationPrompt,
-  parseEvaluationResponse,
-} from '@/lib/evidence/adversarial-eval';
+// The rubric call itself is shared with the publication gate
+// (civic-ai-tools#72 Phase 3) — this route reaches it through
+// `runAdversarialEval` rather than assembling its own copy (#348).
+import { runAdversarialEval } from '@/lib/evidence/adversarial-eval';
 
 /**
  * POST /api/evidence/[slug]/evaluate
@@ -101,25 +98,28 @@ export async function POST(
     );
   }
 
-  const openrouter = createModelClient({ apiKey: callerKey.apiKey });
-
   try {
-    const evaluationContent = buildEvaluationPrompt(pkg);
-
-    const response = await openrouter.chat.completions.create({
-      // The wire gets the endpoint string; the response below reports the
-      // declared identity, which is what a reader would compare a record to.
-      model: evaluator.endpointModel,
-      messages: [
-        { role: 'system', content: EVALUATION_RUBRIC },
-        { role: 'user', content: evaluationContent },
-      ],
-      max_tokens: 2000,
+    // #348: this route used to carry its own copy of the rubric call — same
+    // rubric, same prompt builder, same max_tokens as
+    // `runAdversarialEval`, differing only in where the key came from and how
+    // errors were handled. Neither of those is a reason for a second call
+    // site: the key is a parameter of the one function (`opts.apiKey`, already
+    // optional so the publication gate can let `createModelClient` resolve the
+    // platform credential itself), and the error handling is this route's
+    // catch block, which is where it always was. So the copy is gone and the
+    // model-call registry is one entry shorter.
+    //
+    // The wire gets the endpoint string; the response below reports the
+    // declared identity, which is what a reader would compare a record to.
+    const parsed = await runAdversarialEval(pkg, {
+      apiKey: callerKey.apiKey,
+      evaluatorModel: evaluator,
     });
 
-    const raw = response.choices[0]?.message?.content || '';
-
-    const parsed = parseEvaluationResponse(raw);
+    // The structural check that makes the bare `content || ''` extraction
+    // inside `runAdversarialEval` safe. A narration that is not a well-formed
+    // rubric response fails the parse and is refused here — it is never
+    // rendered as an evaluation and never reaches a published record.
     if (!parsed.ok) {
       return NextResponse.json({ error: parsed.error, raw: parsed.raw }, { status: 502 });
     }

@@ -463,6 +463,25 @@ KV_REST_API_READ_ONLY_TOKEN=
 
 ### OpenRouter Tool Calling
 
+> **Superseded — this is the pre-launch sketch, not the shape the code has.**
+> The two `chat.completions.create` calls below stand for what the app was
+> going to do, and the second one — a single request whose tool calls a caller
+> then handles inline — is the shape that later turned into four separate
+> tool-calling loops, three of them carrying the same defects. There is now
+> exactly one: `src/lib/model-loop/run-tool-loop.ts`. Callers supply options
+> through a factory beside it (`compare-loop.ts`, `replay-loop.ts`) and never
+> carry a loop of their own, and
+> `src/lib/model-loop/model-call-registry.test.ts` fails the suite if a second
+> one appears. The endpoint is not hardcoded to one vendor either: it is
+> whatever `MODEL_API_BASE_URL` names, resolved through
+> `src/lib/model-client.ts` — see [`deploy.md`](deploy.md).
+>
+> The `opengovMcpTools` sketch in the next section is stale in the same way.
+> The real schemas are `mcpTools` in `src/lib/mcp/tools.ts`, spanning three MCP
+> sources rather than one. No tool is named `search_datasets` or `get_dataset`;
+> the Socrata server offers `get_data`, `search` and `fetch`, which the section
+> after this one already lists correctly.
+
 OpenRouter supports function/tool calling with an OpenAI-compatible API:
 
 ```typescript
