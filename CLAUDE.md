@@ -29,7 +29,7 @@ remote) — don't design an owner-run leg around the assumption that it doesn't.
 
 | Command | Healthy output |
 |---|---|
-| `npm test` | `# pass 1162` / `# fail 0` (`node --test` TAP summary) |
+| `npm test` | `# pass 1176` / `# fail 0` (`node --test` TAP summary) |
 | `npm run build` | `✓ Compiled successfully`, then the Route (app) table |
 | `npm run typecheck` | no output, exit 0 — **run after `npm run build`** (tsconfig includes `.next/types`, which the build emits) |
 | `npm run lint` | `✖ 3 problems (0 errors, 3 warnings)` — warnings are the baseline; **zero errors** is the gate |
