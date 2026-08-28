@@ -1073,6 +1073,47 @@ export function buildNarrativeSummary(
   return `${prefix}${parts.join(', ')}, then ${last}.`;
 }
 
+/** The minimum shape every rows-counting reader needs off a recorded call. */
+type CountableToolCall = {
+  args: Record<string, unknown>;
+  resultSummary?: { rows: number; columns: number };
+  operationType?: string;
+};
+
+/**
+ * Did this tool call return DATA ROWS, as opposed to catalog hits or metadata?
+ *
+ * Socrata's unified `get_data` carries the operation in `args.type`; every
+ * other server's operation type is derived from the tool name and arrives as
+ * `operationType` (see `@/lib/mcp/operation-types`). `operationType` wins when
+ * present because it is the resolved value; `args.type` is the fallback for a
+ * recorded call that predates the field or that is read back off a published
+ * package.
+ *
+ * This is the ONE predicate for "this call returned records" (#339). The
+ * `records analyzed` count, the query count and the provenance line all read
+ * it, so the three can never disagree about the same run.
+ */
+export function isQueryCall(t: CountableToolCall): boolean {
+  return (t.operationType || t.args.type) === 'query';
+}
+
+/**
+ * Rows this run actually pulled from datasets.
+ *
+ * Counts QUERY calls only. A catalog search that returned 40 dataset
+ * descriptions analyzed no records — reporting it as 40 tells a reader (and,
+ * once published, every later reader of a signed record) that forty rows of
+ * civic data backed a claim that rested on twelve. Both reader-facing lines
+ * sum through here so neither can drift from the other (#339).
+ */
+function sumQueryRows(tools: CountableToolCall[]): number {
+  return tools.reduce(
+    (sum, t) => (isQueryCall(t) ? sum + (t.resultSummary?.rows || 0) : sum),
+    0,
+  );
+}
+
 // Build a stats summary line leading with data volume
 export function buildStatsSummary(
   toolsCalled: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string }[],
@@ -1080,12 +1121,12 @@ export function buildStatsSummary(
 ): string {
   const statParts: string[] = [];
 
-  const totalRows = toolsCalled.reduce((sum, t) => sum + (t.resultSummary?.rows || 0), 0);
+  const totalRows = sumQueryRows(toolsCalled);
   if (totalRows > 0) {
     statParts.push(`${totalRows.toLocaleString()} records analyzed`);
   }
 
-  const queryCount = toolsCalled.filter(t => (t.operationType || t.args.type) === 'query').length;
+  const queryCount = toolsCalled.filter(isQueryCall).length;
   if (queryCount > 0) {
     statParts.push(`${queryCount} ${queryCount === 1 ? 'query' : 'queries'}`);
   } else {
@@ -1109,7 +1150,11 @@ export function datasetUrl(portal: string | undefined, datasetId: string | undef
 export function buildProvenanceLine(
   tools: { args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; operationType?: string }[]
 ): string | null {
-  const queryTools = tools.filter(t => t.operationType === 'query');
+  // Same predicate as `buildStatsSummary` (#339). Before this, provenance read
+  // `operationType` alone while the stats line read `operationType || args.type`,
+  // so a recorded call carrying only `args.type` produced a "records analyzed"
+  // count with no "Source:" line under it.
+  const queryTools = tools.filter(isQueryCall);
   if (queryTools.length === 0) return null;
 
   const parts: string[] = [];
@@ -1147,7 +1192,9 @@ export function buildProvenanceLine(
     }
   }
 
-  const totalRows = queryTools.reduce((sum, t) => sum + (t.resultSummary?.rows || 0), 0);
+  // Through the same helper `buildStatsSummary` uses, so "N records analyzed"
+  // and "N rows returned" describe the same N for the same run (#339).
+  const totalRows = sumQueryRows(tools);
   if (totalRows > 0) {
     parts.push(`${totalRows.toLocaleString()} rows returned`);
   }

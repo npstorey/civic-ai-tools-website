@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { evidenceRecords, attestationPackages, users } from '@/lib/db/schema';
 import { eq, desc, asc, ilike, or, and, gte, isNull, isNotNull, sql } from 'drizzle-orm';
 import { visibilityMatches } from '@/lib/evidence/visibility-sql';
+import { buildRecordListItems, sortByAttestationCount } from '@/lib/evidence/record-list';
 
 const PAGE_SIZE = 20;
 
@@ -122,9 +123,24 @@ export async function GET(request: NextRequest) {
     : [];
   const creatorMap = new Map(creators.map(c => [c.id, c]));
 
-  // Fetch attestation counts if sorting by 'attested'
-  let attestationCountMap = new Map<string, number>();
-  if (sort === 'attested' && records.length > 0) {
+  // Fetch attestation counts — on EVERY listing, not only `sort=attested`
+  // (#307).
+  //
+  // The query used to be gated on the sort, while the projection below emitted
+  // `attestationCount` unconditionally. Under every other sort the map was
+  // empty and the field fell through to `0`, so the public index told every
+  // reader that no one had reviewed any record — measured against production,
+  // where the database held nine attestation rows across seven records.
+  //
+  // The count is a review signal on a page whose whole job is scrutiny, so a
+  // false zero is worse than a slower page. It is one grouped count over at
+  // most `PAGE_SIZE` ids, on a page that already runs three queries.
+  //
+  // `null` (rather than an empty map) is what the projection reads as "not
+  // computed" and omits the field for; it is never `0`. See
+  // `@/lib/evidence/record-list`.
+  let attestationCountMap: Map<string, number> | null = null;
+  if (records.length > 0) {
     const counts = await db
       .select({
         evidenceRecordId: attestationPackages.evidenceRecordId,
@@ -141,23 +157,18 @@ export async function GET(request: NextRequest) {
     attestationCountMap = new Map(counts.map(c => [c.evidenceRecordId, c.count]));
   }
 
-  const results = records.map(r => ({
-    id: r.id,
-    slug: r.slug,
-    title: r.title,
-    summary: r.summary.slice(0, 200) + (r.summary.length > 200 ? '...' : ''),
-    model: r.model,
-    verificationStatus: r.verificationStatus,
-    withdrawnAt: r.withdrawnAt?.toISOString() || null,
-    reinstatedAt: r.reinstatedAt?.toISOString() || null,
-    createdAt: r.createdAt.toISOString(),
-    creatorName: creatorMap.get(r.creatorId)?.displayName || 'Unknown',
-    attestationCount: attestationCountMap.get(r.id) || 0,
-  }));
+  // The row -> response projection lives in `@/lib/evidence/record-list` so it
+  // is reachable by the test runner, which cannot load this module (it imports
+  // `db` at module scope). Same reason `[slug]`'s read-back projection lives in
+  // `@/lib/evidence/readback`.
+  const results = buildRecordListItems(records, {
+    creators: creatorMap,
+    attestationCounts: attestationCountMap,
+  });
 
   // Re-sort by attestation count if needed
   if (sort === 'attested') {
-    results.sort((a, b) => b.attestationCount - a.attestationCount);
+    sortByAttestationCount(results);
   }
 
   return NextResponse.json({ records: results, total, page, totalPages });
