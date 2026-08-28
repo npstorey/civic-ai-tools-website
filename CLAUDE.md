@@ -29,10 +29,10 @@ remote) — don't design an owner-run leg around the assumption that it doesn't.
 
 | Command | Healthy output |
 |---|---|
-| `npm test` | `# pass 1092` / `# fail 0` (`node --test` TAP summary) |
+| `npm test` | `# pass 1162` / `# fail 0` (`node --test` TAP summary) |
 | `npm run build` | `✓ Compiled successfully`, then the Route (app) table |
 | `npm run typecheck` | no output, exit 0 — **run after `npm run build`** (tsconfig includes `.next/types`, which the build emits) |
-| `npm run lint` | `✖ 4 problems (0 errors, 4 warnings)` — warnings are the baseline; **zero errors** is the gate |
+| `npm run lint` | `✖ 3 problems (0 errors, 3 warnings)` — warnings are the baseline; **zero errors** is the gate |
 | `npm run check:compose-env` | `RESULT: PASS — every variable this profile reads can reach the container.` |
 | `npm run check:standalone` | `[standalone-assets] OK — 3 runtime-read asset(s) present and byte-identical` — needs a standalone build first; `npm run build:standalone` does both |
 | `npm run dev` | dev server on localhost:3000 |
@@ -126,11 +126,13 @@ Each cost a real mistake; the incident sits in an HTML comment beside it. Path-s
 - **The model-calling loop is one implementation, and a test keeps it that way.** Every
   tool-calling loop lives in `src/lib/model-loop/run-tool-loop.ts`; a caller supplies options
   through a factory beside it (`replay-loop.ts`, `compare-loop.ts`) and never carries its own
-  loop. `src/lib/model-loop/model-call-registry.test.ts` is the guard, and it is bidirectional:
-  it fails when a call site is not on its allowlist **and** when an allowlist entry no longer
-  names a real call site. Run the suite, not a grep — the scan covers `src/`, `scripts/` and the
-  root config modules, and a grep scoped to `src` is exactly what hid the fourth loop. Single-turn
-  calls that pass no `tools` are a separate, allow-listed class and are not loop-class.
+  loop. `src/lib/model-loop/model-call-registry.test.ts` is the guard, and every one of its three
+  assertions is bidirectional: each fails when a file is not on its allowlist **and** when an
+  allowlist entry no longer describes the tree. Run the suite, not a grep — the scan is derived
+  from `git ls-files`, so it covers every file of the JavaScript/TypeScript family this repository
+  tracks (tests excluded), wherever it sits, including under a directory that does not exist yet.
+  Single-turn calls that pass no `tools` are a separate, allow-listed class and are not loop-class;
+  the third assertion is narrower still and asks what a call *sends* (#348).
   <!-- Wave #325: three phases each fixed one instance of a defect that lived in a class, each
        honoring its blast zone exactly. #319 was fixed in openrouter-streaming.ts while
        openrouter.ts:120 kept the literal pre-fix condition and replay/route.ts kept it twice while
@@ -140,4 +142,19 @@ Each cost a real mistake; the incident sits in an HTML comment beside it. Path-s
        test. Its cold read then found a FOURTH loop, scripts/eval-models.mjs, carrying the whole
        class — invisible to both the census and the first version of that test, because both were
        scoped to `src/` and to `.ts` (#356). A check scoped to a directory cannot see a defect
-       scoped to a behaviour; that is the same lesson one level up. -->
+       scoped to a behaviour; that is the same lesson one level up. Wave #363 derived the universe
+       from `git ls-files` and rewrote this sentence, which had inherited the two-directory claim.
+       It also added the third assertion: the adversarial-eval pair (#348) was two call sites,
+       neither of them a loop, sending the same rubric — legal under both earlier lists for as long
+       as it existed, because both counted call sites and neither asked what a call sends. -->
+
+- **A guard names the property, not the constant the issue named.** The prompt-reaching text is a
+  class: `CROSS_SOURCE_PREAMBLE`, `SOCRATA_SKILL_FALLBACK`, `getSkillForPortal` and the per-source
+  skill constants all reach the model through `composeSkillPrompt`.
+  `src/lib/mcp/prompt-advertised-tools.test.ts` asserts over all of them that no surface names a
+  tool `mcpTools` cannot call, and states its own anchors and blind spots in its header.
+  <!-- #323 was closed against the preamble and reopened: the fallback advertised `search` and
+       `fetch` at ten sites the guard could not read, and `getSkillForPortal` named one on the path
+       where the skill fetch SUCCEEDS — the healthy path, unguarded through two waves. The fix was
+       also the opposite of the assumed one: the server implements both tools, so the schemas were
+       added rather than the text stripped. Measure the other side before deleting a capability. -->
