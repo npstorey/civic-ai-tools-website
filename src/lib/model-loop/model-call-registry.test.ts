@@ -10,10 +10,11 @@
  *
  * This test says it out loud. Adding a `chat.completions.create` call to a
  * file that is not on the list below fails the suite, and the list carries one
- * line of justification per entry. The wave closed with every tool-calling
- * loop in the application consolidated: the second list below names the shared
- * core and one script, and a further entry appearing on it is a regression
- * this test reports by name.
+ * line of justification per entry. Wave #345 consolidated every tool-calling
+ * loop in the application onto one core; #356 then found a fourth loop outside
+ * `src/`, in `scripts/eval-models.mjs`, and it has since been migrated too. So
+ * the second list below names exactly one module, and a further entry
+ * appearing on it is a regression this test reports by name.
  *
  * WHAT "A FILE" MEANS HERE, because getting this wrong is what #356 was. The
  * scan first rooted at `src/` and accepted only `.ts`/`.tsx`, so a fourth
@@ -74,27 +75,24 @@ const ALLOWED_MODEL_CALLERS: Record<string, string> = {
     'The second copy of that same rubric call, caller-keyed. Out of this wave by ruling D4 (#348).',
   'src/app/api/evidence/generate-summary/route.ts':
     'One summary call, no loop. Out of this wave.',
-  'scripts/eval-models.mjs':
-    'The model-selection harness: a fourth tool-calling loop that carries the full class. Migration is the next wave’s (#356).',
 };
 
 /**
  * Modules carrying a tool-calling loop — a `chat.completions.create` that
- * passes `tools`. Three in `src/` when this wave opened
+ * passes `tools`. Three in `src/` when wave #345 opened
  * (`openrouter-streaming.ts`, `evidence/[slug]/replay/route.ts`,
- * `openrouter.ts`); one now. That count is the wave's own first acceptance
- * criterion, and this is where it is measured.
+ * `openrouter.ts`), and a fourth its census could not see because the census
+ * was scoped to `src/` and to `.ts`: `scripts/eval-models.mjs` (#356). One now.
+ * That count is the criterion both waves were written around, and this is where
+ * it is measured.
  *
- * The second entry is the debt #356 found, listed rather than fixed: the point
- * of naming it here is that it stops being invisible to the suite. It is not a
- * fourth application loop — nothing it writes is served, signed or
- * user-facing — but it is the same shape, and it chooses which models this
- * instance offers.
+ * A second entry appearing here is a regression, reported by name. The
+ * assertions below run in both directions, so this list also cannot outlive
+ * what it describes: an entry that stops being a real tool-calling loop fails
+ * the suite exactly as an unlisted one does.
  */
 const ALLOWED_TOOL_LOOPS: Record<string, string> = {
-  'src/lib/model-loop/run-tool-loop.ts': 'The shared core.',
-  'scripts/eval-models.mjs':
-    'The model-selection harness: carries the full class; migration is the next wave’s (#356).',
+  'src/lib/model-loop/run-tool-loop.ts': 'The shared core — the one implementation.',
 };
 
 const MODEL_CALL = 'chat.completions.create';

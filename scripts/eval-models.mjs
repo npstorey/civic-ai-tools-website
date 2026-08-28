@@ -3,25 +3,54 @@
 /**
  * Model evaluation harness for civic data queries.
  *
- * Runs a set of test queries against multiple LLMs via OpenRouter,
- * using the Socrata MCP server for tool calls. Captures raw responses,
- * token usage, latency, and tools called for manual scoring.
+ * Runs a set of test queries against multiple LLMs via OpenRouter, using the
+ * Socrata MCP server for tool calls. Captures raw responses, token usage,
+ * latency, and tools called for manual scoring.
+ *
+ * IT DRIVES THE SHARED TOOL-CALLING LOOP (#356). Until this file was migrated
+ * it carried a fourth copy of that loop: its own iteration bound, its own
+ * unguarded `JSON.parse` of the arguments the model chose, its own portal
+ * injection with no `get_data` guard, and a raw `error.message` handed back to
+ * the model. Wave #345 consolidated the application's three loops onto
+ * `src/lib/model-loop/run-tool-loop.ts` and not one of those fixes reached
+ * here, because the census that found the class and the guard that measured it
+ * were both scoped to `src/` and to `.ts`. What remains in this file is what is
+ * genuinely its own: the models it compares, the queries it runs them against,
+ * its MCP transport, its tool schema, and how it writes results up for scoring.
  *
  * THIS HARNESS IS PINNED TO OPENROUTER, AND THE APP IS NOT. Since
  * civic-ai-tools-website#30 the app reaches a configurable endpoint through
  * `src/lib/model-client.ts`, reading `MODEL_API_KEY` (with `OPENROUTER_API_KEY`
  * as its prior-era name) and `MODEL_API_BASE_URL` / `MODEL_API_KIND`. This
- * script reads none of that: it is `.mjs` run as bare `node`, so it cannot
- * import that TypeScript module, and it hardcodes OpenRouter's base URL and
- * requires `OPENROUTER_API_KEY` specifically. That is why the variable name
- * below differs from the one an operator now sets — the statement is accurate
- * about this script, not stale about the app. Repointing the harness at the
- * endpoint layer is tracked in civic-ai-tools#155 and is deliberately not a
+ * script reads none of that: it hardcodes OpenRouter's base URL and requires
+ * `OPENROUTER_API_KEY` specifically. That is why the variable name below
+ * differs from the one an operator now sets — the statement is accurate about
+ * this script, not stale about the app. Repointing the harness at the endpoint
+ * layer is tracked in civic-ai-tools#155 and is deliberately not a
  * find-and-replace.
  *
- * Usage:
+ * THE REASON RECORDED HERE FOR THAT PINNING WAS FALSE, and it is worth naming
+ * rather than quietly deleting: it said this file "is `.mjs` run as bare
+ * `node`, so it cannot import that TypeScript module." Node strips types from
+ * an imported `.ts` module — by default from v22.18, behind
+ * `--experimental-strip-types` before that — and the `runToolLoop` import below
+ * is the standing counter-example. Nothing about the extension prevented the
+ * import. The OpenRouter pinning is unfinished work (civic-ai-tools#155), not a
+ * constraint of the runtime.
+ *
+ * Usage, on Node >= 22.18 where type stripping is on by default:
  *   OPENROUTER_API_KEY=<your-key> SOCRATA_MCP_URL=https://your-mcp-host \
  *     node scripts/eval-models.mjs
+ *
+ * On Node 22.0 – 22.17 the same run needs the flag, because of that import:
+ *   OPENROUTER_API_KEY=<your-key> SOCRATA_MCP_URL=https://your-mcp-host \
+ *     node --experimental-strip-types scripts/eval-models.mjs
+ *
+ * package.json's `engines.node` is ">=22", which admits those versions, so the
+ * floor is load-bearing for the flagless form rather than incidental.
+ * `scripts/eval-models.test.mjs` runs a flagless `node` against that import and
+ * fails by name on a Node that cannot strip, so the gap is reported by the
+ * suite rather than met by an operator.
  *
  * Required env vars:
  *   SOCRATA_MCP_URL  — MCP server URL. No fallback (civic-ai-tools#155 P1
@@ -42,6 +71,8 @@ import { writeFileSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import OpenAI from 'openai';
+
+import { runToolLoop } from '../src/lib/model-loop/run-tool-loop.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -385,206 +416,58 @@ Examples:
 const QUERY_TIMEOUT_MS = 120_000; // 120 seconds per query
 const QUERY_TOKEN_CAP = 50_000;   // 50K tokens per query
 
-class TokenBudgetExceeded extends Error {
-  constructor(tokens) {
-    super(`Token budget exceeded: ${tokens} tokens used (cap: ${QUERY_TOKEN_CAP})`);
-    this.name = 'TokenBudgetExceeded';
-    this.tokens = tokens;
-  }
-}
+/**
+ * WHAT THE BUDGET GUARDRAIL IS NOW, AND WHAT IT WAS (#356).
+ *
+ * This file used to implement three tiers itself: a soft cap that broke its
+ * own loop and forced a summary turn, a hard cap at twice the soft one that
+ * returned a synthetic `[HARD ABORT]` string with no summary turn at all, and a
+ * per-round estimate that broke *before* a call whose input looked likely to
+ * cross either line.
+ *
+ * The shared loop carries one bound — `maxCumulativeTokens`, checked after each
+ * round — which stops the loop and takes one final answering turn. So the soft
+ * tier survives exactly, and `budgetExceeded` on each result still reports it.
+ * The hard tier does not survive: `hardAbort` is removed from the result rather
+ * than written out as a field that can no longer be true, and a run that would
+ * once have returned a synthetic string now pays for one answering turn and
+ * returns a real answer. Against that cost, the loop truncates every tool
+ * result before it re-enters the transcript (`maxToolResultChars`) — a bound
+ * this harness never had, on exactly the transcript growth the hard tier
+ * existed to catch.
+ *
+ * `QUERY_TIMEOUT_MS` above is unchanged and still bounds a whole query rather
+ * than a tool call. The loop takes an optional per-tool-call bound and this
+ * harness deliberately passes none: it has never had one, and giving it one is
+ * a behaviour change rather than a migration.
+ */
 
 // --- Query execution ---
 
-// Estimate tokens from message content to predict next API call cost.
-// ~4 chars per token is a rough but safe heuristic.
-function estimateMessageTokens(messages) {
-  let chars = 0;
-  for (const msg of messages) {
-    if (typeof msg.content === 'string') chars += msg.content.length;
-    // tool_calls in assistant messages also contribute
-    if (msg.tool_calls) chars += JSON.stringify(msg.tool_calls).length;
-  }
-  return Math.ceil(chars / 4);
-}
-
 async function runQuery(query, model, systemPrompt) {
-  const startTime = Date.now();
-  const toolsCalled = [];
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
-  let budgetExceeded = false;
-  let hardAbort = false;
-
-  // Check budget after every token-producing event.
-  // Returns 'ok' | 'soft' (exceeded cap, summarize) | 'hard' (exceeded 2x cap, abort now)
-  function checkBudget() {
-    const total = totalInputTokens + totalOutputTokens;
-    if (total >= QUERY_TOKEN_CAP * 2) return 'hard';
-    if (total >= QUERY_TOKEN_CAP) return 'soft';
-    return 'ok';
-  }
-
-  const messages = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: query.query },
-  ];
-
-  let response = await openrouter.chat.completions.create({
-    model: model.id,
-    messages,
+  const result = await runToolLoop({
+    client: openrouter,
+    endpointModel: model.id,
+    prompt: query.query,
+    systemPrompt,
+    // This harness's own one-tool array, above — not the app's tool set.
+    // Widening it would change what the evaluation measures, which is a
+    // separate decision from where the loop lives.
     tools,
-    tool_choice: 'auto',
-    max_tokens: 2000,
+    executeToolCall: callMcpTool,
+    // Default portal for a `get_data` call whose arguments omit one. The copy
+    // this file used to carry injected into EVERY tool call, guarded only on
+    // `!args.portal`; with the one-tool array above that was the same
+    // behaviour, and the loop's `get_data` guard keeps it the same behaviour if
+    // that array ever grows. The loop injects above the tool-call record and
+    // above the trace span, so what is written out below is what was sent.
+    portal: query.portal,
+    maxIterations: 10,
+    maxTokens: 2000,
+    maxCumulativeTokens: QUERY_TOKEN_CAP,
+    // No `toolTimeoutMs` — see the guardrail note above.
+    logContext: `eval-models ${model.id}`,
   });
-
-  totalInputTokens += response.usage?.prompt_tokens || 0;
-  totalOutputTokens += response.usage?.completion_tokens || 0;
-
-  // Check after initial call
-  let status = checkBudget();
-  if (status === 'hard') {
-    hardAbort = true;
-    budgetExceeded = true;
-  } else if (status === 'soft') {
-    budgetExceeded = true;
-  }
-
-  let iterations = 0;
-  const maxIterations = 10;
-
-  while (
-    !hardAbort &&
-    !budgetExceeded &&
-    response.choices[0]?.message?.tool_calls &&
-    iterations < maxIterations
-  ) {
-    const assistantMessage = response.choices[0].message;
-    messages.push(assistantMessage);
-
-    for (const toolCall of assistantMessage.tool_calls || []) {
-      if (toolCall.type === 'function') {
-        const args = JSON.parse(toolCall.function.arguments);
-
-        // Inject default portal
-        if (!args.portal) args.portal = query.portal;
-
-        toolsCalled.push({ name: toolCall.function.name, args });
-
-        try {
-          const result = await callMcpTool(toolCall.function.name, args);
-          messages.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: result,
-          });
-        } catch (error) {
-          messages.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: `Error: ${error.message}`,
-          });
-        }
-      }
-    }
-
-    // Before making the next API call, estimate whether the accumulated
-    // messages would blow past the cap. Each API call charges for the
-    // full conversation, so estimate the next call's input tokens.
-    const estimatedNextInput = estimateMessageTokens(messages);
-    const projectedTotal = totalInputTokens + totalOutputTokens + estimatedNextInput;
-    if (projectedTotal >= QUERY_TOKEN_CAP * 2) {
-      hardAbort = true;
-      budgetExceeded = true;
-      break;
-    }
-    if (projectedTotal >= QUERY_TOKEN_CAP) {
-      budgetExceeded = true;
-      break;
-    }
-
-    response = await openrouter.chat.completions.create({
-      model: model.id,
-      messages,
-      tools,
-      tool_choice: 'auto',
-      max_tokens: 2000,
-    });
-
-    totalInputTokens += response.usage?.prompt_tokens || 0;
-    totalOutputTokens += response.usage?.completion_tokens || 0;
-    iterations++;
-
-    // Check after every API call
-    status = checkBudget();
-    if (status === 'hard') {
-      hardAbort = true;
-      budgetExceeded = true;
-      break;
-    } else if (status === 'soft') {
-      budgetExceeded = true;
-      break;
-    }
-  }
-
-  // Hard abort — don't even attempt a summary, just return what we have
-  if (hardAbort) {
-    const durationMs = Date.now() - startTime;
-    const total = totalInputTokens + totalOutputTokens;
-    return {
-      queryId: query.id,
-      modelId: model.id,
-      modelName: model.name,
-      query: query.query,
-      portal: query.portal,
-      category: query.category,
-      expectedDataset: query.expectedDataset,
-      response: `[HARD ABORT] Token budget exceeded: ${total.toLocaleString()} tokens (2x cap: ${(QUERY_TOKEN_CAP * 2).toLocaleString()})`,
-      toolsCalled,
-      toolCallCount: toolsCalled.length,
-      iterations,
-      inputTokens: totalInputTokens,
-      outputTokens: totalOutputTokens,
-      totalTokens: total,
-      durationMs,
-      budgetExceeded: true,
-      hardAbort: true,
-      timestamp: new Date().toISOString(),
-    };
-  }
-
-  // Soft cap or iteration limit — force a text summary
-  const lastMessage = response.choices[0]?.message;
-  if (!lastMessage?.content && (iterations >= maxIterations || lastMessage?.tool_calls || budgetExceeded)) {
-    if (lastMessage?.tool_calls) {
-      messages.push(lastMessage);
-      const reason = budgetExceeded
-        ? `Token budget exceeded (${(totalInputTokens + totalOutputTokens).toLocaleString()} tokens). Summarize based on data already collected.`
-        : 'Tool call limit reached. Summarize based on data already collected.';
-      for (const tc of lastMessage.tool_calls) {
-        messages.push({
-          role: 'tool',
-          tool_call_id: tc.id,
-          content: reason,
-        });
-      }
-    }
-    response = await openrouter.chat.completions.create({
-      model: model.id,
-      messages: [
-        ...messages,
-        {
-          role: 'user',
-          content: 'Based on the data collected, provide a comprehensive answer.',
-        },
-      ],
-      max_tokens: 2000,
-    });
-    totalInputTokens += response.usage?.prompt_tokens || 0;
-    totalOutputTokens += response.usage?.completion_tokens || 0;
-  }
-
-  const durationMs = Date.now() - startTime;
-  const content = response.choices[0]?.message?.content || '';
 
   return {
     queryId: query.id,
@@ -594,16 +477,19 @@ async function runQuery(query, model, systemPrompt) {
     portal: query.portal,
     category: query.category,
     expectedDataset: query.expectedDataset,
-    response: content,
-    toolsCalled,
-    toolCallCount: toolsCalled.length,
-    iterations,
-    inputTokens: totalInputTokens,
-    outputTokens: totalOutputTokens,
-    totalTokens: totalInputTokens + totalOutputTokens,
-    durationMs,
-    budgetExceeded,
-    hardAbort: false,
+    response: result.content,
+    // The loop's records carry more than the `{ name, args }` pairs this file
+    // used to write: the operation type, the reason line, result row and column
+    // counts, per-call duration, and whether a call failed and how (#321). All
+    // of that is useful for scoring and none of it was available before.
+    toolsCalled: result.toolCalls,
+    toolCallCount: result.toolCalls.length,
+    iterations: result.iterations,
+    inputTokens: result.usage.promptTokens,
+    outputTokens: result.usage.completionTokens,
+    totalTokens: result.usage.totalTokens,
+    durationMs: result.durationMs,
+    budgetExceeded: result.tokenLimitExceeded,
     timestamp: new Date().toISOString(),
   };
 }
@@ -630,7 +516,6 @@ function buildOutput(models, results, errors, skillGuidanceLength) {
       totalErrors: errors.length,
       totalTimeouts: errors.filter((e) => e.isTimeout).length,
       totalBudgetExceeded: results.filter((r) => r.budgetExceeded).length,
-      totalHardAborts: results.filter((r) => r.hardAbort).length,
       skillGuidanceLength,
     },
     results,
@@ -649,7 +534,6 @@ function buildOutput(models, results, errors, skillGuidanceLength) {
         modelName: model.name,
         queriesRun: modelResults.length,
         budgetExceeded: modelResults.filter((r) => r.budgetExceeded).length,
-        hardAborts: modelResults.filter((r) => r.hardAbort).length,
         totalTokens,
         avgTokensPerQuery: modelResults.length > 0 ? Math.round(totalTokens / modelResults.length) : 0,
         totalDurationMs: totalDuration,
@@ -747,11 +631,7 @@ When you get results, summarize clearly and cite the dataset ID used.`;
         );
         results.push(result);
 
-        const flags = result.hardAbort
-          ? ' [HARD ABORT]'
-          : result.budgetExceeded
-            ? ' [BUDGET EXCEEDED]'
-            : '';
+        const flags = result.budgetExceeded ? ' [BUDGET EXCEEDED]' : '';
         console.log(
           `  → ${result.toolCallCount} tool calls, ${result.totalTokens.toLocaleString()} tokens, ${(result.durationMs / 1000).toFixed(1)}s${flags}`
         );
