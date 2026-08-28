@@ -581,7 +581,9 @@ in the disable-when-absent table above, not here; see
 rate-limit and token-budget tuning knobs
 (`ANONYMOUS_RATE_LIMIT`, `AUTHENTICATED_RATE_LIMIT`,
 `APP_TIER_RATE_LIMIT`, `TOKEN_LIMIT_PER_REQUEST`,
-`MAX_TOOL_RESULT_CHARS`),
+`MAX_TOOL_RESULT_CHARS` — read on the streaming query path only; the
+replay and `/api/compare` callers pass a fixed 50,000, so setting this
+variable does not change what they feed the model (website#358)),
 `S3_REGION` / `S3_FORCE_PATH_STYLE` / `S3_PUBLIC_BASE_URL` (coded
 defaults described in the storage section), and analytics
 (`NEXT_PUBLIC_GA_MEASUREMENT_ID`).
