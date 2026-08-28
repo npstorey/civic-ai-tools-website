@@ -4,10 +4,12 @@
 // is a Next route handler: `node --test` cannot invoke one. So the loop
 // configuration was moved OUT of the route into `replayLoopOptions`, and these
 // tests drive the real `runToolLoop` with the real options factory against a
-// local scripted model server. The only thing substituted is the tool
-// transport — one level BELOW the loop — so no case here restates a cap, a
-// budget, a tool set or the portal injection. Change replay's configuration
-// and these tests change with it; that is the point of the seam.
+// local scripted model server. What a case may substitute is the tool
+// transport — one level BELOW the loop — and, in exactly one case, the
+// per-call timeout, so that a transport which genuinely never settles does not
+// cost 45 real seconds (#357). Neither substitution restates a cap, a budget,
+// a tool set or the portal injection. Change replay's configuration and these
+// tests change with it; that is the point of the seam.
 //
 // A source-drift guard at the bottom closes the remaining gap: it asserts the
 // route actually obtains its options from this factory and supplies no
@@ -38,6 +40,7 @@ import {
   REPLAY_MAX_TOKENS,
   REPLAY_MAX_CUMULATIVE_TOKENS,
   REPLAY_MAX_TOOL_RESULT_CHARS,
+  REPLAY_MCP_TOOL_TIMEOUT_MS,
   type ReplayToolTransport,
 } from './replay-loop.ts';
 import { startScriptedModelServer, type ScriptedReply } from './test-harness.ts';
@@ -96,13 +99,15 @@ interface Wire {
 }
 
 /**
- * Run one replay against a scripted endpoint. `callTool` is the ONLY thing a
- * case supplies beyond the fixtures the route reads off a record — no cap, no
- * budget, no tool list, no portal handling.
+ * Run one replay against a scripted endpoint. `callTool` — and, for the one
+ * case that needs it, `toolTimeoutMs` — are all a case supplies beyond the
+ * fixtures the route reads off a record: no cap, no budget, no tool list, no
+ * portal handling.
  */
 async function runReplay(
   replies: ScriptedReply[],
   callTool: ReplayToolTransport,
+  overrides: { toolTimeoutMs?: number } = {},
 ): Promise<{ payload: ReplayPayload; requests: Record<string, unknown>[] }> {
   const { server, url, requests } = await startScriptedModelServer(replies);
   try {
@@ -115,6 +120,7 @@ async function runReplay(
         systemPrompt: SYSTEM,
         portal: PORTAL,
         callTool,
+        ...overrides,
       }),
     );
     return {
@@ -348,6 +354,11 @@ test('replayLoopOptions carries replay’s own caps and the shared tool set', ()
   assert.equal(options.maxTokens, REPLAY_MAX_TOKENS);
   assert.equal(options.maxCumulativeTokens, REPLAY_MAX_CUMULATIVE_TOKENS);
   assert.equal(options.maxToolResultChars, REPLAY_MAX_TOOL_RESULT_CHARS);
+  assert.equal(
+    REPLAY_MCP_TOOL_TIMEOUT_MS,
+    45_000,
+    'production’s per-tool-call bound: the test seam below overrides it, this is what it overrides',
+  );
   assert.equal(options.finalTurn, 'blocking', 'a route caller has no stream to write into');
   assert.ok(options.tools.length > 0, 'the replay runs against the instance’s MCP tool set');
   assert.equal(options.systemPrompt, SYSTEM);
@@ -355,18 +366,50 @@ test('replayLoopOptions carries replay’s own caps and the shared tool set', ()
 });
 
 test('a tool call that never settles fails on replay’s own timeout, and the run survives', async () => {
-  // Proves the race moved with the configuration rather than being lost with
-  // the loop. Driven by rejecting with the timeout's own wording instead of
-  // waiting 45 real seconds — the assertion is that a timeout is classified
-  // and described, not that `setTimeout` counts.
-  const { payload, requests } = await runReplay([FETCH_CALL, { content: REAL_ANSWER }], async (name) => {
-    throw new Error(`MCP tool "${name}" timed out after 45s`);
+  // #357. A transport that GENUINELY never settles: the only thing that can
+  // end this call is the `Promise.race` in `replayLoopOptions`. Delete that
+  // block and the guard below fires and this case fails.
+  //
+  // The version this replaces threw an error whose TEXT read `timed out after
+  // 45s`, so what it measured was `classifyStreamError`'s text-to-kind
+  // mapping. It stayed green with the whole race deleted — a test named for a
+  // behaviour, reporting on something else, while the race is the only thing
+  // standing between a hung source and a replay run that never returns.
+  //
+  // `toolTimeoutMs` is why this costs 50 ms instead of 45 seconds. Production
+  // passes no override: the constant is asserted in the case above and the
+  // route is guarded in the case below.
+  let release = () => {};
+  const neverSettles: ReplayToolTransport = () =>
+    new Promise<string>((resolve) => {
+      release = () => resolve(ONE_ROW);
+    });
+
+  const run = runReplay([FETCH_CALL, { content: REAL_ANSWER }], neverSettles, { toolTimeoutMs: 50 });
+
+  // The case's own bound, so a lost race fails here in two seconds rather than
+  // hanging the suite — and so the transport can be released afterwards and
+  // the scripted server closed.
+  const guard = new Promise<'hung'>((resolve) => {
+    setTimeout(() => resolve('hung'), 2_000).unref();
   });
 
-  assert.equal(payload.toolCalls[0].failed, true);
-  assert.equal(payload.toolCalls[0].failureKind, 'timeout');
-  assert.ok(!JSON.stringify(requests).includes('timed out after 45s'), 'raw timeout text stays off the wire');
-  assert.equal(payload.output, REAL_ANSWER);
+  try {
+    assert.equal(
+      await Promise.race([run.then(() => 'settled' as const), guard]),
+      'settled',
+      'the run never returned: nothing ended a tool call that never settles',
+    );
+
+    const { payload, requests } = await run;
+    assert.equal(payload.toolCalls[0].failed, true);
+    assert.equal(payload.toolCalls[0].failureKind, 'timeout');
+    assert.ok(!JSON.stringify(requests).includes('timed out after'), 'raw timeout text stays off the wire');
+    assert.equal(payload.output, REAL_ANSWER, 'one timed-out call is not a failed replay');
+  } finally {
+    release();
+    await run.catch(() => {});
+  }
 });
 
 // --- The route runs this, and holds no configuration of its own ------------
@@ -379,10 +422,12 @@ test('#345: the replay route obtains its loop options from this factory', () => 
 
   assert.match(route, /replayLoopOptions\(/, 'the route must build its options here, not inline');
   assert.match(route, /runToolLoop\(/, 'the route must drive the shared core');
-  assert.ok(
-    !route.includes('callTool'),
-    'the route must not supply a tool transport — the seam exists for tests, not for production',
-  );
+  for (const seam of ['callTool', 'toolTimeoutMs']) {
+    assert.ok(
+      !route.includes(seam),
+      `the route must not supply ${seam}: these seams exist for tests, not for production`,
+    );
+  }
   for (const configuration of ['maxIterations', 'max_tokens', 'maxCumulativeTokens', 'truncateToolResult']) {
     assert.ok(
       !route.includes(configuration),

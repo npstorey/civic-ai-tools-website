@@ -65,11 +65,24 @@ export interface ReplayLoopInputs {
   /** The record's portal, injected into Socrata calls that omit one. */
   portal: string;
   /**
-   * The tool transport, for tests. Defaults to the live MCP client — the
-   * ONLY seam this factory exposes, and deliberately one level below the
-   * loop: substituting it restates no loop configuration at all.
+   * The tool transport, for tests. Defaults to the live MCP client —
+   * deliberately one level below the loop: substituting it restates no loop
+   * configuration at all.
    */
   callTool?: ReplayToolTransport;
+  /**
+   * The per-tool-call timeout, in milliseconds. Overridable for ONE reason
+   * (#357): a case that drives a transport which genuinely never settles
+   * cannot wait 45 real seconds, and a case that fakes the timeout by throwing
+   * its wording measures `classifyStreamError`'s text mapping instead of the
+   * race — which is why the test named for this behaviour stayed green with
+   * the whole race deleted.
+   *
+   * Production passes nothing and gets `REPLAY_MCP_TOOL_TIMEOUT_MS`. The
+   * source-drift guard in this file's tests asserts the route supplies neither
+   * this nor `callTool`: both seams exist for tests, not for production.
+   */
+  toolTimeoutMs?: number;
 }
 
 /**
@@ -78,7 +91,15 @@ export interface ReplayLoopInputs {
  * supplies only what it read off the record.
  */
 export function replayLoopOptions(inputs: ReplayLoopInputs): ToolLoopOptions {
-  const { client, endpointModel, prompt, systemPrompt, portal, callTool = callMcpTool } = inputs;
+  const {
+    client,
+    endpointModel,
+    prompt,
+    systemPrompt,
+    portal,
+    callTool = callMcpTool,
+    toolTimeoutMs = REPLAY_MCP_TOOL_TIMEOUT_MS,
+  } = inputs;
 
   return {
     client,
@@ -109,8 +130,8 @@ export function replayLoopOptions(inputs: ReplayLoopInputs): ToolLoopOptions {
           callTool(name, args),
           new Promise<never>((_, reject) => {
             timer = setTimeout(
-              () => reject(new Error(`MCP tool "${name}" timed out after ${REPLAY_MCP_TOOL_TIMEOUT_MS / 1000}s`)),
-              REPLAY_MCP_TOOL_TIMEOUT_MS,
+              () => reject(new Error(`MCP tool "${name}" timed out after ${toolTimeoutMs / 1000}s`)),
+              toolTimeoutMs,
             );
           }),
         ]);
