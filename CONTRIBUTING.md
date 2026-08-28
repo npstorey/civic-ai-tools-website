@@ -24,6 +24,36 @@ Thank you for your interest in contributing! This is the demo website for the ci
 4. Create a branch for your changes
 5. Submit a pull request
 
+## How a fix arrives
+
+"Getting started" above covers cloning and branching for any contribution. For a bug fix
+specifically, here's the fuller path from issue to production:
+
+1. **Open an issue, and bring a measurement.** State what you ran, what happened, and the commit
+   SHA it reproduces at — for example, "`npm test` at `a1b2c3d` fails with `expected 1092, got
+   1091`." A measurement is what makes a report arguable on its own merits; a description of a
+   suspicion is not.
+
+2. **Lead with what a reader would wrongly believe.** This app's job is to publish signed analyses
+   of public data as true, so a defect that makes it publish something untrue is more serious than
+   one that makes it fail outright — a failure is visible (an error, a blank page, a build that
+   won't pass), while a false record looks exactly like a correct one. When you report a bug here,
+   lead with what a reader of the affected output would wrongly come to believe, not just with the
+   stack trace or the broken screen.
+
+3. **Branch off current `main`.** A fix that already works somewhere else — a downstream fork, a
+   different branch, a patch someone hands you — is a reference implementation, not something to
+   cherry-pick. Re-derive it against current `main`: the tree it was written against has moved on,
+   and a cherry-picked commit carries context (history, adjacent changes) that doesn't belong in
+   this repo's history.
+
+4. **Open a pull request — that's the only way in.** `main` is a protected branch: there are no
+   direct pushes, from anyone. Every change, including this one, lands through a PR that passes
+   four required checks: the [CI workflow](.github/workflows/ci.yml) (build, test, lint,
+   typecheck), the container image build, the DCO sign-off check, and the preview deploy. Merging
+   to `main` deploys straight to production — there's no separate release step, so treat a merged
+   PR as a release.
+
 ## If you use Claude Code
 
 Cloning this repo installs its checked-in Claude Code configuration: `.claude/settings.json` (a network allowlist, a sandbox block, and a `PreToolUse` hook at `.claude/hooks/drizzle-migrate-guard.sh` that pauses schema-applying `drizzle-kit` runs so you verify them with a read-back), plus the agent definitions in `.claude/agents/` and the path-scoped rules in `.claude/rules/`.
