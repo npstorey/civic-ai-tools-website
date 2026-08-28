@@ -6,6 +6,44 @@ Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ---
 
+## 2026-08-28 — Wave N7 (#345): the model-calling loop as a class — one core, three callers (six gated phases)
+
+**Scope:** Not six defects; one defect *shape*. N6's cold read found that three of its phases had each fixed one instance of a defect living in several places, honouring their blast zones exactly while doing so. The largest family was the model-calling loop: three independent implementations, one fixed. This wave was chartered against the family rather than its members — the fix-shape under test was **one loop core, three callers**, not three patches.
+
+**Phases:** P1 design (no source files) · P2 `a9681ab` (the core, #331 #343 #349) · P3 `08858a9` (replay, #338 #347 #331) · P4 `45aa6c0` (`/api/compare`, #344 #349) · P5 cold read · P6 `859abae` (#355 #357, #356's instrument half). Eight `rollback/pre-345-*` tags — P1 and P5 changed no source and needed none. Tests 1044 → 1092, **no test name removed at any step**, compared by name rather than by count at every gate. `main` auto-deploys, so all four merges were production deploys; all four green.
+
+### What the wave was for, measured
+
+At `1ddd61a`, three modules passed `tools` to `chat.completions.create`. At `859abae`, one does. The measurement is now a bidirectional test rather than a grep: `model-call-registry.test.ts` fails both when a call site is unlisted and when a listed entry stops being real, so P3's and P4's deletions were self-enforcing — migrate and leave the entry, red; remove the entry without migrating, red.
+
+### Four things the phases got right that were not asked for
+
+**P1 corrected the design it was given.** The contract assumed replay's 45-second MCP race and portal injection had to live inside the loop. Measured: both were *already* caller-side in the two streaming callers, through the `executeToolCall` closure. The seam existed; the contract had not noticed.
+
+**P2 overrode the design and was right.** The design ruled the pass-through chunker caller-side. At base, the `synthesis` span opened before it and closed after it, so moving the chunker out would have shifted a span's recorded `endTimeUnixNano` **inside a signed trace**, where no test that does not compare traces would ever see it.
+
+**P3 refused a self-contradicting instruction.** The contract said to construct the model client inside the route's `try` "so a throw is classified exactly as today". It is outside the `try` today, so such a throw is *not* classified; following the sentence would have changed behaviour under a rationale of preserving it.
+
+**P6 recorded absence as absence.** Asked to demonstrate a CI red on a pushed branch, it found no run had been dispatched and said so — six polls, `total_count: 0` — rather than inferring a pass from a missing failure.
+
+### The cold read, again worth the phase
+
+Fourth consecutive cold read to find what the implementing context missed, and this time **the wave itself had introduced the defect**. Closing #331 replaced a bounded-but-malformed truncation with a parseable-but-unbounded one: the kept-row count was sized from `rows[0]` alone, so an ordinary Socrata response with a sparse first row fed the model **871,116 characters against a 50,000 bound**. Both shipped assertions checked the bound honestly — against homogeneous fixtures, the one shape where the arithmetic happens to be right. It also found a test that passes with the thing it names deleted, and a **fourth** loop in `scripts/eval-models.mjs` carrying the entire class.
+
+### The lesson, one level up from N6's
+
+N6: *a zone scoped by file cannot see a defect scoped to a class.* N7: **the instrument we built to fix that was scoped to a directory, and could not see the fourth loop.** The census used `git grep -- 'src/**'`; the registry test rooted at `src/` and accepted only `.ts`/`.tsx`. Both inherited the same blind spot, and the guard's own header claimed a reach it did not have. P6 widened the scan and registered the fourth loop rather than migrating it — the debt is now visible in the suite instead of invisible to it.
+
+### What this wave did not do
+
+The fourth loop's migration (#356), the four surviving copies of portal injection, the span/args divergence inside the signed trace (#359), the trace-gated warning that cannot appear on two callers (#354), and the uncleared MCP timers in the two streaming callers (#352). Those are the next wave's census, not this one's tail — named here so the next census does not rediscover them as findings.
+
+### Three ORCH-layer premise failures, recorded
+
+The contracts carried three errors the phases caught: a fix-shape assumption (P1), a self-contradicting instruction (P3), and a CI procedure that could not dispatch a run because `ci.yml` triggers only on `pull_request` and pushes to `main` (P6). The premise-check rider is written to point at the anchor; all three times it pointed at the orchestrator instead, which is the direction that matters when the orchestrator is the one writing the contracts.
+
+---
+
 ## 2026-08-27 — Wave N6 (#325): the answer path, and the diagnostics that should have caught it (six gated phases)
 
 **Scope:** Six defects in the code an operator deploys, gathered into one wave so merges into `main` serialized through a single lane. Five found by running the app against a live Socrata portal; one a container-build break that had been on `main` since 2026-08-20. Run as a gated ORCH sprint against anchor #325, with a coordinating planning seat and the owner holding a second key at every merge.

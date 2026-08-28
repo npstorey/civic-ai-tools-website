@@ -29,7 +29,7 @@ remote) — don't design an owner-run leg around the assumption that it doesn't.
 
 | Command | Healthy output |
 |---|---|
-| `npm test` | `# pass 1044` / `# fail 0` (`node --test` TAP summary) |
+| `npm test` | `# pass 1092` / `# fail 0` (`node --test` TAP summary) |
 | `npm run build` | `✓ Compiled successfully`, then the Route (app) table |
 | `npm run typecheck` | no output, exit 0 — **run after `npm run build`** (tsconfig includes `.next/types`, which the build emits) |
 | `npm run lint` | `✖ 4 problems (0 errors, 4 warnings)` — warnings are the baseline; **zero errors** is the gate |
@@ -123,14 +123,21 @@ Each cost a real mistake; the incident sits in an HTML comment beside it. Path-s
   Ask the owner to run env edits in their own terminal.
   <!-- Repeated subagent stalls traced to .env* reads in agent sessions; the owner-run appends that
        replaced them had to be newline-defensive and verified structurally afterward. -->
-- **The model-calling loop has several implementations — fixing one is not fixing it.** Besides
-  `src/lib/openrouter-streaming.ts`, the model is called from `openrouter.ts`, `evidence/[slug]/replay`,
-  `evidence/[slug]/evaluate`, `evidence/generate-summary`, and `evidence/adversarial-eval.ts`. Some
-  carry their own loop-exit condition, their own result truncation, and their own error handling.
-  Before fixing anything in the answer path, `grep -rl "chat.completions.create" src` and say in the
-  PR which copies you did and did not change.
+- **The model-calling loop is one implementation, and a test keeps it that way.** Every
+  tool-calling loop lives in `src/lib/model-loop/run-tool-loop.ts`; a caller supplies options
+  through a factory beside it (`replay-loop.ts`, `compare-loop.ts`) and never carries its own
+  loop. `src/lib/model-loop/model-call-registry.test.ts` is the guard, and it is bidirectional:
+  it fails when a call site is not on its allowlist **and** when an allowlist entry no longer
+  names a real call site. Run the suite, not a grep — the scan covers `src/`, `scripts/` and the
+  root config modules, and a grep scoped to `src` is exactly what hid the fourth loop. Single-turn
+  calls that pass no `tools` are a separate, allow-listed class and are not loop-class.
   <!-- Wave #325: three phases each fixed one instance of a defect that lived in a class, each
        honoring its blast zone exactly. #319 was fixed in openrouter-streaming.ts while
        openrouter.ts:120 kept the literal pre-fix condition and replay/route.ts kept it twice while
        feeding a signed attestation (#338). A zone scoped by file cannot see a defect scoped to a
-       class. The same shape hit the preamble (#323 reopened) and the notebook path (notebook.ts:123). -->
+       class. The same shape hit the preamble (#323 reopened) and the notebook path (notebook.ts:123).
+       Wave #345 consolidated the three loops onto one core and replaced the grep with the registry
+       test. Its cold read then found a FOURTH loop, scripts/eval-models.mjs, carrying the whole
+       class — invisible to both the census and the first version of that test, because both were
+       scoped to `src/` and to `.ts` (#356). A check scoped to a directory cannot see a defect
+       scoped to a behaviour; that is the same lesson one level up. -->
