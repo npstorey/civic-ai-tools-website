@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { queryWithoutMcp, queryWithMcp } from '@/lib/openrouter';
-import { mcpTools } from '@/lib/mcp/tools';
-import { callMcpTool } from '@/lib/mcp/client';
+import { queryWithoutMcp } from '@/lib/openrouter';
+import { runToolLoop } from '@/lib/model-loop/run-tool-loop';
+import { compareLoopOptions, compareCompletionResult } from '@/lib/model-loop/compare-loop';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
-import { getMissingModelCredentialError, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
+import { getMissingModelCredentialError, getModelClient, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
 import { streamErrorPayload } from '@/lib/streaming';
@@ -121,27 +121,33 @@ When answering questions about civic data, government statistics, or local infor
 do your best to provide helpful information based on your training data.
 Be honest if you don't have access to current or real-time data.`;
 
-    // Run both queries in parallel
+    // Run both queries in parallel. The MCP side runs on the shared
+    // tool-calling loop (#345 P4): this route carried its own copy — the
+    // original one, with the pre-#334 exit condition, raw error text fed to
+    // the model, no truncation and `{name, args}`-only records (#344, #349) —
+    // until the loop became one implementation. Everything the loop is GIVEN,
+    // this caller's own caps included, lives in `compareLoopOptions`; nothing
+    // about how it runs is decided here.
     const [withoutMcpResult, withMcpResult] = await Promise.all([
       queryWithoutMcp(query, model, systemPromptWithoutMcp),
-      queryWithMcp(
-        query,
-        model,
-        mcpTools,
-        async (name, args) => {
-          // Socrata tools expect a portal; Data Commons tools don't — only inject the default for Socrata's `get_data`.
-          if (name === 'get_data' && !args.portal) {
-            args.portal = portal;
-          }
-          return callMcpTool(name, args);
-        },
-        systemPromptWithMcp
-      ),
+      runToolLoop(compareLoopOptions({
+        client: getModelClient(),
+        endpointModel: model.endpointModel,
+        prompt: query,
+        systemPrompt: systemPromptWithMcp,
+        portal,
+      })),
     ]);
 
+    // Same four fields, same order, as before the migration. `tools_called[]`
+    // entries now additionally carry `operationType`, `reason`,
+    // `resultSummary`, `duration_ms` and — for a call that failed —
+    // `failed`/`failureKind`, and `tokens_used` is the run's cumulative total
+    // rather than its last call's. Both are documented in
+    // `docs/project-plan.md`.
     return NextResponse.json({
       withoutMcp: withoutMcpResult,
-      withMcp: withMcpResult,
+      withMcp: compareCompletionResult(withMcpResult),
     });
   } catch (error) {
     console.error('Compare API error:', error);
