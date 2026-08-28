@@ -67,6 +67,12 @@ export function buildCell0Source(args: {
    * back to displaying the original answer, so its figures would otherwise
    * read as a conclusion with nothing behind them.
    *
+   * The alternative text says what is true of the DOCUMENT — that no step
+   * re-runs a fetch — rather than asserting that every request failed. Zero
+   * also covers an analysis that only ever ran discovery calls, and telling
+   * that reader their catalog searches "returned no data" would be the same
+   * false precision one step to the left.
+   *
    * Optional so the parameter can be added without a silent behaviour change
    * at call sites that do not know the count; the production caller
    * (`synthesize.ts`) always passes it, and a test pins that it does.
@@ -99,11 +105,11 @@ export function buildCell0Source(args: {
     '',
     ...(nothingReproduced
       ? [
-        'No data was fetched when this notebook ran: every request to a live data',
-        'source returned no data, so no step below reproduces one. The steps record',
-        'what was attempted. Any figures in the "Synthesis" cell come from the',
-        'original analysis text, not from data this notebook fetched — re-running',
-        'the cells will not reproduce them.',
+        'This notebook reproduces no data fetch: no step below re-runs a request',
+        'against a live data source. The steps record what the original analysis',
+        'attempted, and why each step produced nothing to re-run. Any figures in',
+        'the "Synthesis" cell come from that analysis text, not from data this',
+        'notebook fetched — re-running the cells will not reproduce them.',
       ]
       : [
         'This notebook contains a complete, reproducible analysis of the query above.',

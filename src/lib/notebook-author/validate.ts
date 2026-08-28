@@ -162,9 +162,9 @@ export function validateReproducedFetches(notebook: Notebook): ValidationResult 
     issues.push({
       path: 'cells',
       message:
-        'no step re-runs a data fetch — every fetching tool call in the original ' +
-        'analysis returned no data, so nothing in this notebook is reproducible ' +
-        'against a live source',
+        'no step re-runs a data fetch, so nothing in this notebook is reproducible ' +
+        'against a live source — whatever it concludes rests on no request this ' +
+        'document can repeat',
     });
   }
   return { ok: issues.length === 0, issues };

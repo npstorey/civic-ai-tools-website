@@ -69,6 +69,13 @@ const FAILED_CALL = {
   failureKind: 'timeout' as const,
 };
 
+const SUCCESSFUL_DISCOVERY = {
+  name: 'get_data',
+  operationType: 'catalog',
+  args: { type: 'catalog', portal: 'data.cityofnewyork.us', query: 'noise complaints' },
+  resultSummary: { rows: 40, columns: 4 },
+};
+
 const FAILED_DISCOVERY = {
   name: 'get_data',
   operationType: 'catalog',
@@ -106,15 +113,33 @@ test('#341: a notebook whose every fetch failed does not claim a reproducible an
   const cover = coverText(notebook);
 
   assert.doesNotMatch(cover, new RegExp(CLAIM));
-  assert.match(cover, /No data was fetched when this notebook ran/);
+  assert.match(cover, /This notebook reproduces no data fetch/);
+  assert.match(cover, /why each step produced nothing to re-run/);
   // And it names the specific trap: the synthesis cell falls back to the
   // original answer text, so its figures are not this notebook's output.
-  assert.match(cover, /come from the\noriginal analysis text, not from data this notebook fetched/);
+  assert.match(cover, /come from that analysis text, not from data this\nnotebook fetched/);
   assert.equal(
     notebook.cells.filter(c => c.cell_type === 'code' && c.source.join('').includes('= fetch_')).length,
     0,
     'the fixture must really contain no fetch — otherwise this test proves nothing',
   );
+});
+
+test('#341: a notebook that never fetched is not told its requests failed', () => {
+  // The false-precision trap on the other side of the same conditional. An
+  // analysis can answer from discovery alone — catalog searches that all
+  // SUCCEEDED — and still render no fetch step. The cover text for zero
+  // reproduced fetches is therefore written about the DOCUMENT ("no step
+  // re-runs a request"), never about the requests: telling this reader that
+  // every request "returned no data" would be a new false claim in the cell
+  // that exists to stop one.
+  const cover = coverText(
+    synthesizeNotebook({ ...BASE_INPUTS, toolCalls: [SUCCESSFUL_DISCOVERY] }).notebook,
+  );
+  assert.doesNotMatch(cover, new RegExp(CLAIM));
+  assert.match(cover, /reproduces no data fetch/);
+  assert.doesNotMatch(cover, /returned no data/, 'the discovery call did return data');
+  assert.doesNotMatch(cover, /every request/);
 });
 
 test('#341: a notebook with one surviving fetch keeps the claim', () => {
