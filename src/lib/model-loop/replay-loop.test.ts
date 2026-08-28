@@ -45,6 +45,17 @@ import {
 } from './replay-loop.ts';
 import { startScriptedModelServer, type ScriptedReply } from './test-harness.ts';
 import { createModelClient } from '../model-client.ts';
+// THE function `AttestationDialog` calls, not a copy of it. This file used to
+// carry a verbatim copy under a comment arguing that a copy going stale would
+// be "the loud failure" and that a shared helper "would quietly agree with
+// itself". The copy was never the guard it was described as: it agreed with
+// itself for two model-callable tools whose arguments the key did not read,
+// and for a `where` clause the key had never read. The canonicalisation now
+// lives in a `.ts` module both this file and the component import, and its own
+// properties are asserted in `src/lib/evidence/tool-call-identity.test.ts`.
+// What this file still measures is the END-TO-END fact only it can: that the
+// portal the loop core injects into the recorded args reaches those keys.
+import { canonicalizeToolCall } from '../evidence/tool-call-identity.ts';
 
 const FIXTURE_KEY = 'not-a-real-key-p3-replay-fixture';
 const PORTAL = 'data.cityofnewyork.us';
@@ -139,24 +150,6 @@ async function runReplay(
 
 const messagesOf = (requests: Record<string, unknown>[]): Wire[] =>
   requests.flatMap((r) => (r.messages as Wire[] | undefined) ?? []);
-
-/**
- * `AttestationDialog.canonicalizeToolCall`, copied verbatim from
- * `src/components/evidence/AttestationDialog.tsx:55-63`. Copied rather than
- * imported on purpose: the component is a client module behind the `@/` alias
- * that `node --test` cannot resolve, and the point of this test is that the
- * KEYS a signed attestation is built from do not move. If the component's
- * function ever changes, this copy going stale is the loud failure — a shared
- * helper would quietly agree with itself.
- */
-function canonicalizeToolCall(tc: { name: string; args: Record<string, unknown> }): string {
-  return [
-    tc.name,
-    (tc.args.type as string) || '',
-    (tc.args.dataset_id as string) || '',
-    (tc.args.portal as string) || '',
-  ].join(':');
-}
 
 // --- #338: an announcement is not an answer --------------------------------
 //
@@ -278,16 +271,24 @@ test('#331: an oversized envelope reaches the model as valid JSON with a row mar
   assert.ok(body.length <= REPLAY_MAX_TOOL_RESULT_CHARS, 'the bound is still enforced on the body');
 });
 
-// --- The attestation payload changes only additively -----------------------
+// --- The injected portal reaches the attestation identity keys -------------
 //
-// `AttestationDialog` keys a replay run on
-// `name:args.type:args.dataset_id:args.portal` and derives a consistency score
-// from the keys of N runs. The portal in that key is injected by this caller
-// INTO THE OBJECT THE CORE ALREADY RECORDED. If the loop ever clones or
-// freezes `args`, the injection stops reaching the record, every key changes,
-// and nothing in the diff points at the cause. These are the keys, spelled out.
+// `AttestationDialog` keys a replay run on the tool name plus a canonical
+// serialisation of the call's whole argument object
+// (`lib/evidence/tool-call-identity.ts`), and derives a consistency score from
+// the keys of N runs. The portal in those keys is injected by this caller INTO
+// THE OBJECT THE CORE ALREADY RECORDED. If the loop ever clones or freezes
+// `args`, the injection stops reaching the record, every key changes, and
+// nothing in the diff points at the cause. These are the keys, spelled out.
+//
+// The FORMAT below is new. N7's criterion 8 pinned the four-field key
+// `name:type:dataset_id:portal` byte-identical; N8 P8's ruling supersedes that
+// format, because a four-field key could not tell two different searches — or
+// two different `where` clauses — apart, and those keys are signed. What the
+// pin still holds, and the only thing it was ever protecting, is that the
+// injected portal survives into the keys.
 
-test('the attestation identity keys are unchanged, injected portal included', async () => {
+test('the attestation identity keys carry the injected portal', async () => {
   const { payload } = await runReplay(
     [
       {
@@ -308,13 +309,17 @@ test('the attestation identity keys are unchanged, injected portal included', as
   );
 
   assert.deepEqual(payload.toolCalls.map(canonicalizeToolCall), [
-    // portal injected by this caller — absent from what the endpoint sent
-    'get_data:catalog::data.cityofnewyork.us',
-    'get_data:query:erm2-nwe9:data.cityofnewyork.us',
+    // portal injected by this caller — absent from what the endpoint sent.
+    // `query` is in the key now; under the four-field format this call and any
+    // other catalog search on this portal were the same key.
+    'get_data:{"portal":"data.cityofnewyork.us","query":"noise complaints","type":"catalog"}',
+    'get_data:{"dataset_id":"erm2-nwe9","portal":"data.cityofnewyork.us","type":"query"}',
     // an explicit portal is never overwritten
-    'get_data:metrics:erm2-nwe9:data.sfgov.org',
-    // a non-Socrata tool gets no portal at all
-    'get_variables:::',
+    'get_data:{"dataset_id":"erm2-nwe9","portal":"data.sfgov.org","type":"metrics"}',
+    // a non-Socrata tool gets no portal at all — and its own argument is what
+    // now distinguishes it, rather than the three empty fields it used to
+    // collapse into
+    'get_variables:{"place":"geoId/36061"}',
   ]);
 });
 
