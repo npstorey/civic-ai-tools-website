@@ -412,6 +412,66 @@ export function responseModelAttributes(
 }
 
 /**
+ * The token counts an endpoint actually reported, as span attributes — and
+ * NOTHING when it reported none (#312).
+ *
+ * The trace goes INSIDE the signed record package, so `prompt_tokens: 0` on a
+ * call the endpoint said nothing about is a false statement under a signature:
+ * it asserts that zero tokens were consumed — a measurement — when the truth
+ * is that no measurement was taken. Wave N4 P3 fixed exactly this one layer up
+ * for `cost.promptTokens` (`packager.ts`: "Zero is not a measurement… Absent
+ * usage is now absent"), which left a package able to carry `cost` with the
+ * counts correctly absent while the span beside it claimed zero. This is that
+ * same rule, on the span.
+ *
+ * OMISSION MEANS THE KEY IS NEVER BUILT — not that its value is `undefined`.
+ * `TraceBuilder` turns an attribute record into an ARRAY of `{key, value}`
+ * pairs via `Object.entries`, so a key whose value is `undefined` does not
+ * disappear the way an object property would: it survives as
+ * `{"key":"gen_ai.response.prompt_tokens","value":{}}`, measured, and the JCS
+ * canonicalizer keeps it, because the only thing it drops is the `undefined`
+ * INSIDE the value object. A valueless attribute under the signature is worse
+ * than the zero it replaced. Hence the conditional spread: the key exists only
+ * when there is a number to put in it.
+ *
+ * A GENUINE ZERO IS STILL A MEASUREMENT, so the test is presence, not truth.
+ * A falsy check here would erase an endpoint that really did report
+ * `prompt_tokens: 0` — the same defect pointing the other way.
+ * `Number.isFinite` is the outer bound: a count arriving as a string, a `NaN`
+ * or an `Infinity` is not a measurement either, and `"NaN"` asserted in a
+ * signed trace is the failure this function exists to prevent.
+ *
+ * The two counts are independent. An endpoint reporting one and not the other
+ * gets one attribute — not two, and not none.
+ *
+ * Deliberately not exported. The loop is the only thing that builds these
+ * spans, and the acceptance suite asserts the property over the trace the real
+ * loop finalizes rather than over this function's return value: a helper that
+ * is right in isolation and called at two of three sites is exactly the shape
+ * #312 was in.
+ */
+function responseTokenAttributes(
+  usage: { prompt_tokens?: number; completion_tokens?: number } | null | undefined,
+): Record<string, number> {
+  const promptTokens = reportedCount(usage?.prompt_tokens);
+  const completionTokens = reportedCount(usage?.completion_tokens);
+  return {
+    ...(promptTokens !== undefined ? { 'gen_ai.response.prompt_tokens': promptTokens } : {}),
+    ...(completionTokens !== undefined ? { 'gen_ai.response.completion_tokens': completionTokens } : {}),
+  };
+}
+
+/**
+ * One token count as the endpoint reported it, or `undefined` if it reported
+ * none. The single place this module decides what counts as "reported" — see
+ * `responseTokenAttributes` above for why the bound is `Number.isFinite` and
+ * not truthiness.
+ */
+function reportedCount(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/**
  * Bound one tool result before it is fed back as context, keeping what is fed
  * back READABLE (#331) and keeping it INSIDE THE BUDGET (#355).
  *
@@ -634,8 +694,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
   });
   if (llmSpanId) {
     trace!.builder.endSpan(llmSpanId, {
-      'gen_ai.response.prompt_tokens': response.usage?.prompt_tokens || 0,
-      'gen_ai.response.completion_tokens': response.usage?.completion_tokens || 0,
+      ...responseTokenAttributes(response.usage),
       ...responseModelAttributes(declaredModel, response.model, logContext),
     });
   }
@@ -839,8 +898,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
     lastMessageAlreadyInTranscript = false;
     if (llmSpanId) {
       trace!.builder.endSpan(llmSpanId, {
-        'gen_ai.response.prompt_tokens': response.usage?.prompt_tokens || 0,
-        'gen_ai.response.completion_tokens': response.usage?.completion_tokens || 0,
+        ...responseTokenAttributes(response.usage),
         ...responseModelAttributes(declaredModel, response.model, logContext),
       });
     }
@@ -913,8 +971,22 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
 
     let content = '';
     let finalCallTokens = 0;
-    let finalPromptTokens = 0;
-    let finalCompletionTokens = 0;
+    /**
+     * `undefined` until an endpoint says otherwise — the whole of #312's
+     * second mechanism (this phase's C1). These were `0`-initialised numbers,
+     * and `0` arriving from "never set" is indistinguishable from `0` arriving
+     * from "the endpoint reported zero". The synthesis span is the answering
+     * turn — the one that produces the PUBLISHED answer — so that is the span
+     * where the difference matters most, and a grep for the `|| 0` shape at
+     * the other two sites could not see it.
+     *
+     * `finalCallTokens` stays a `0`-initialised number on purpose: it is
+     * summed into `cumulativeTokens`, and "absent contributes nothing to a
+     * sum" is the correct semantic for a total. Only the two counts that
+     * become span ATTRIBUTES need to distinguish absent from zero.
+     */
+    let finalPromptTokens: number | undefined;
+    let finalCompletionTokens: number | undefined;
     let finalReportedModel: string | undefined;
 
     if (finalTurn === 'stream') {
@@ -935,10 +1007,17 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         // Every chunk repeats the model the endpoint answered with; the last
         // one wins, so the recorded report is the one that finished the answer.
         if (chunk.model) finalReportedModel = chunk.model;
+        // Last REPORTED value wins, on each count independently — the same
+        // rule as `chunk.model` above. The truthy guards this replaces made a
+        // genuine `prompt_tokens: 0` indistinguishable from a chunk that
+        // carried no count at all, which is #312 in the direction that erases
+        // a real measurement rather than inventing one. `reportedCount` keeps
+        // the old guard's one useful effect — a `NaN` never lands — while
+        // admitting the zero.
         if (chunk.usage) {
-          if (chunk.usage.total_tokens) finalCallTokens = chunk.usage.total_tokens;
-          if (chunk.usage.prompt_tokens) finalPromptTokens = chunk.usage.prompt_tokens;
-          if (chunk.usage.completion_tokens) finalCompletionTokens = chunk.usage.completion_tokens;
+          finalCallTokens = reportedCount(chunk.usage.total_tokens) ?? finalCallTokens;
+          finalPromptTokens = reportedCount(chunk.usage.prompt_tokens) ?? finalPromptTokens;
+          finalCompletionTokens = reportedCount(chunk.usage.completion_tokens) ?? finalCompletionTokens;
         }
       }
     } else {
@@ -949,21 +1028,23 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       });
       content = finalResponse.choices[0]?.message?.content || '';
       finalReportedModel = finalResponse.model;
-      finalCallTokens = finalResponse.usage?.total_tokens || 0;
-      finalPromptTokens = finalResponse.usage?.prompt_tokens || 0;
-      finalCompletionTokens = finalResponse.usage?.completion_tokens || 0;
+      finalCallTokens = reportedCount(finalResponse.usage?.total_tokens) ?? 0;
+      finalPromptTokens = reportedCount(finalResponse.usage?.prompt_tokens);
+      finalCompletionTokens = reportedCount(finalResponse.usage?.completion_tokens);
     }
 
     cumulativeTokens += finalCallTokens;
-    cumulativePromptTokens += finalPromptTokens;
-    cumulativeCompletionTokens += finalCompletionTokens;
+    cumulativePromptTokens += finalPromptTokens ?? 0;
+    cumulativeCompletionTokens += finalCompletionTokens ?? 0;
 
     if (synthesisSpanId) {
       trace!.builder.endSpan(synthesisSpanId, {
         'output.hash': traceHash(content),
         'output.length': content.length,
-        'gen_ai.response.prompt_tokens': finalPromptTokens,
-        'gen_ai.response.completion_tokens': finalCompletionTokens,
+        ...responseTokenAttributes({
+          prompt_tokens: finalPromptTokens,
+          completion_tokens: finalCompletionTokens,
+        }),
         ...responseModelAttributes(declaredModel, finalReportedModel, logContext),
       });
     }
