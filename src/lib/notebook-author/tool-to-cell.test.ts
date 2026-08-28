@@ -21,6 +21,9 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import type { NotebookCell } from './cells.ts';
 import {
+  SOQL_QUERY_SNIFF,
+  countReproducedFetchCells,
+  isFullSoqlQuery,
   renderDiscoverySummaryCell,
   renderFetchToolCell,
   TOOL_FAILURE_KINDS,
@@ -487,4 +490,346 @@ test('#321: a failed call with no failureKind still renders, reading as `unknown
   assert.equal(out!.cells.filter(c => c.cell_type === 'code').length, 0);
   assert.match(md, /could not be completed/);
   assert.doesNotMatch(md, /undefined/);
+});
+
+// --- #340: the `query` argument -------------------------------------------
+//
+// Wave N8 P5. `get_data` advertises `query`, the data-access service honours
+// it, and the generated cell forwarded it to a helper that had no such
+// parameter: Python raised `TypeError` and the reader was told live data could
+// not be fetched. The fix is the helper parameter PLUS the service's own
+// precedence, made visible — a cell must never carry a `select=` or `where=`
+// that had no effect on the numbers above it.
+//
+// THE COUPLING THIS SECTION PINS, AND WHAT TO DO WHEN IT MOVES.
+// The sniff below is a copy of a regular expression that lives in ANOTHER
+// repository:
+//
+//     socrata-mcp-server/src/tools/socrata-tools.ts:546
+//     at commit 116f46ce1e84e3608014599f9b63ea01acfd913a
+//
+//         if (queryField && /^\s*select/i.test(queryField)) { … }
+//
+//   matching  → `$query` alone; select/where/order/group/having/q are set
+//               aside (:547-553) and the request carries neither $limit nor
+//               $offset (:283-293);
+//   otherwise → `$q`, with every other clause preserved (:555-557).
+//
+// IF THE SERVICE CHANGES ITS SNIFF, THE FIX IS AN ISSUE ON THIS REPOSITORY —
+// so this copy, `helpers/fetch_socrata.py`'s `_is_full_soql_query` and the
+// service move together. A change made on one side alone is a silent
+// divergence that surfaces only in a published notebook, where a reader is
+// told a `limit=` applied that never did.
+
+/** The service's regex, transcribed literally from the line cited above. */
+const SERVICE_SOQL_SNIFF = /^\s*select/i;
+
+/**
+ * A fixture lifted from the service's own suite —
+ * `socrata-mcp-server/src/__tests__/search.test.ts:165`,
+ * `test('handles full SoQL query')`: it drives
+ * `soqlQuery: 'SELECT * WHERE category = "test" LIMIT 42'`, asserts the
+ * request carries `{ $query: <that string> }` and nothing else, and gets 42
+ * rows back from a single call. 42 because the statement's own LIMIT says so —
+ * which is exactly the row bound our generated comment must name once `limit=`
+ * is gone.
+ */
+const SERVICE_SUITE_SOQL = 'SELECT * WHERE category = "test" LIMIT 42';
+
+const SOQL_QUERY_CALL: PhaseAToolCall = {
+  name: 'get_data',
+  operationType: 'query',
+  args: {
+    type: 'query',
+    portal: 'data.cityofnewyork.us',
+    dataset_id: 'erm2-nwe9',
+    query: SERVICE_SUITE_SOQL,
+    // Carried by the same call and superseded by the statement above. Before
+    // the fix these rendered beside it as arguments with no effect.
+    select: 'complaint_type, count(*) as count',
+    where: 'complaint_type IS NOT NULL',
+    limit: 5,
+  },
+  reason: 'to aggregate by complaint_type',
+  resultSummary: { rows: 42, columns: 2 },
+};
+
+const PHRASE_QUERY_CALL: PhaseAToolCall = {
+  name: 'get_data',
+  operationType: 'query',
+  args: {
+    type: 'query',
+    portal: 'data.cityofnewyork.us',
+    dataset_id: 'erm2-nwe9',
+    query: 'noise complaints',
+    where: "borough = 'BROOKLYN'",
+    limit: 5,
+  },
+  resultSummary: { rows: 5, columns: 3 },
+};
+
+test("#340: our sniff IS the service's sniff, character for character", () => {
+  // RED: any re-spelling of the predicate — `startsWith('SELECT')`,
+  // `/^select/i` without `\s*`, a `.trim()` first — passes a behavioural test
+  // on well-formed input and diverges on the inputs that differ. So compare
+  // the patterns themselves, then the behaviour, then the service's fixture.
+  assert.equal(SOQL_QUERY_SNIFF.source, SERVICE_SOQL_SNIFF.source);
+  assert.equal(SOQL_QUERY_SNIFF.flags, SERVICE_SOQL_SNIFF.flags);
+
+  const cases = [
+    SERVICE_SUITE_SOQL,
+    'select * from x',
+    '   SELECT count(*) AS n',
+    '\n\tSELECT complaint_type',
+    'SeLeCt 1',
+    'noise complaints',
+    'selected noise complaints',
+    '',
+    'WHERE complaint_type = "Noise"',
+    ' 311 selected complaints',
+  ];
+  for (const value of cases) {
+    assert.equal(
+      isFullSoqlQuery(value),
+      SERVICE_SOQL_SNIFF.test(value),
+      `divergence from the service's sniff on ${JSON.stringify(value)}`,
+    );
+  }
+  // The service's own fixture takes the SoQL branch, as its suite asserts.
+  assert.equal(isFullSoqlQuery(SERVICE_SUITE_SOQL), true);
+});
+
+test('#340: a SoQL query renders `query=` and no superseded kwarg', () => {
+  // RED at the base: `query` was absent from SOCRATA_QUERY_KWARGS, so pyKwargs
+  // appended it as an unenumerated key AND emitted select/where/limit beside
+  // it — a helper TypeError on execution, and a cell showing three arguments
+  // that had no effect on the rows the analysis actually got.
+  const [cell] = codeCells(SOQL_QUERY_CALL);
+  const source = cell.source.join('');
+  assertParsesAsPython(cell, 'socrata SoQL query');
+  assertFetchIsGuarded(cell, 'socrata SoQL query');
+
+  assert.match(source, /query="SELECT \\?\* WHERE category = \\"test\\" LIMIT 42"/);
+  for (const superseded of ['select=', 'where=', 'group=', 'order=', 'limit=', 'offset=']) {
+    assert.doesNotMatch(
+      source,
+      new RegExp(superseded),
+      `${superseded} had no effect on this call and must not appear in the cell:\n${source}`,
+    );
+  }
+  assert.equal(source.split('query=').length - 1, 1, 'query= renders exactly once');
+});
+
+test('#340: the SoQL comment names the supersession AND the row bound', () => {
+  // RED: a comment that says only "the portal applies the full SoQL instead of
+  // the individual clauses". The reader can see that `limit=5` is gone; what
+  // they cannot see is what bounds the rows in its place, and a notebook that
+  // drops a bound without naming its replacement invites the reader to assume
+  // the one they wrote still applied.
+  const [cell] = codeCells(SOQL_QUERY_CALL);
+  const comment = cell.source.join('').split('try:')[0];
+
+  assert.match(comment, /full SoQL statement/);
+  assert.match(comment, /are not\n# sent alongside it/);
+  assert.match(comment, /Superseded on this call, for that reason: select, where, limit\./);
+  // The row bound — the half a supersession-only comment leaves out.
+  assert.match(comment, /bounded by the statement's own LIMIT/);
+  assert.match(comment, /portal's default page size/);
+  // Reader-facing language (design-principles.md Principle 9), no repo paths.
+  assert.doesNotMatch(comment, /MCP/i);
+  assert.doesNotMatch(comment, /socrata-mcp-server|socrata-tools\.ts/);
+});
+
+test('#340 (rider c): the comment discloses that dataset_id is never inferred', () => {
+  // The service has a third behaviour (socrata-tools.ts:531): a NON-SoQL query
+  // with no dataset_id BECOMES the dataset id. This notebook is deliberately
+  // stricter, and a divergence a reader discovers is worse than one they are
+  // told about — so it is stated in the same comment block.
+  for (const call of [SOQL_QUERY_CALL, PHRASE_QUERY_CALL]) {
+    const comment = codeCells(call)[0].source.join('').split('try:')[0];
+    assert.match(comment, /always requires\n# an explicit dataset_id and never derives one from `query`/);
+  }
+});
+
+test('#340: a phrase query renders `query=` alongside the clauses it does not supersede', () => {
+  // The other branch of the same split: `$q` is a full-text search and the
+  // service preserves every other clause, so the cell must keep them. A helper
+  // that mapped `query` to `$query` unconditionally would reproduce this
+  // analysis differently than it ran.
+  const [cell] = codeCells(PHRASE_QUERY_CALL);
+  const source = cell.source.join('');
+  assertParsesAsPython(cell, 'socrata phrase query');
+  assert.match(source, /query="noise complaints"/);
+  assert.match(source, /where="borough = 'BROOKLYN'"/);
+  assert.match(source, /limit=5/);
+  assert.match(source, /full-text search/);
+  assert.doesNotMatch(source, /Superseded on this call/);
+});
+
+test('#340: a call with no `query` renders exactly as it did before', () => {
+  // The no-query path is the common one and must not gain a comment block it
+  // has no reason to carry. The byte-exact assertion for it is above; this
+  // pins the absence of the new material.
+  const source = codeCells(SOCRATA_CALL)[0].source.join('');
+  assert.ok(source.startsWith('try:'), `no comment block without a query arg:\n${source}`);
+  assert.doesNotMatch(source, /query=/);
+});
+
+test('#340: an arg the helper has no parameter for is disclosed, never emitted', () => {
+  // The general form of the same defect. `pyKwargs` forwarded every
+  // unenumerated key, so ANY arg outside the helper's signature — not only
+  // `query` — became a TypeError at execution and a "live data could not be
+  // fetched" line in a published notebook. RED: restore the unfiltered append.
+  const withHaving: PhaseAToolCall = {
+    ...PHRASE_QUERY_CALL,
+    args: { ...PHRASE_QUERY_CALL.args, having: 'count > 3' },
+  };
+  const [cell] = codeCells(withHaving);
+  const source = cell.source.join('');
+  assertParsesAsPython(cell, 'socrata query with an unsupported arg');
+  assert.doesNotMatch(source, /having=/, 'an unsupported kwarg must not be emitted');
+  assert.match(source, /The original call also passed having, which this helper has/);
+  assert.match(source, /no parameter for; disclosed here rather than passed and silently ignored\./);
+});
+
+test('#340 (rider c): a query call that named no dataset is not reproduced, and says why', () => {
+  // RED at the base: `dataset_id` fell back to the literal string 'unknown',
+  // so the cell fetched `https://…/resource/unknown.json` — a dataset id that
+  // never existed, written into a file the reader downloads and cited in the
+  // footer as the source of the step.
+  const unnamed: PhaseAToolCall = {
+    name: 'get_data',
+    operationType: 'query',
+    args: { type: 'query', portal: 'data.cityofnewyork.us', query: 'noise complaints' },
+    resultSummary: { rows: 12, columns: 3 },
+  };
+  const out = renderFetchToolCell(unnamed, CTX);
+  assert.ok(out, 'it must not return null — that would sweep it into the discovery summary');
+  assert.equal(out!.cells.filter(c => c.cell_type === 'code').length, 0);
+  assert.equal(out!.producedDataFrame, false);
+  assert.equal(out!.citation, null, 'nothing may be cited: we cannot say which dataset was read');
+
+  const md = out!.cells[0].source.join('');
+  assert.doesNotMatch(md, /unknown/, 'no placeholder standing where a dataset id would be');
+  assert.match(md, /did not name/);
+  assert.match(md, /does not derive dataset ids/);
+});
+
+// --- #342: the failed-call note describes what was attempted ---------------
+
+test('#342: a failed catalog search is described as a search, not as a dataset query', () => {
+  // RED: `tool-to-cell.ts:336` at the base dispatched on `call.name` alone, so
+  // EVERY failed get_data call read "tried to query the `unknown` dataset on
+  // …" — the wrong operation, against a dataset that was never named, with a
+  // placeholder rendered as if it were one. Three false claims in one
+  // sentence, in a document a reader downloads to scrutinise.
+  const failedCatalog: PhaseAToolCall = {
+    name: 'get_data',
+    operationType: 'catalog',
+    args: { type: 'catalog', portal: 'data.cityofnewyork.us', query: 'noise complaints' },
+    failed: true,
+    failureKind: 'unavailable',
+  };
+  const md = renderFetchToolCell(failedCatalog, CTX)!.cells[0].source.join('');
+
+  assert.match(md, /search the `data\.cityofnewyork\.us` data catalog for `noise complaints`/);
+  assert.doesNotMatch(md, /unknown/, 'no dataset named `unknown`');
+  assert.doesNotMatch(md, /query the/, 'a catalog search is not a dataset query');
+});
+
+test('#342: each get_data operation type is described as itself', () => {
+  const base = { name: 'get_data', failed: true, failureKind: 'timeout' } as const;
+  const expectations: Array<[Record<string, unknown>, RegExp]> = [
+    [{ type: 'catalog', portal: 'data.sfgov.org' }, /search the `data\.sfgov\.org` data catalog/],
+    [
+      { type: 'metadata', portal: 'data.sfgov.org', dataset_id: 'abcd-1234' },
+      /look up the description of the `abcd-1234` dataset/,
+    ],
+    // The service reads the id from `query` when dataset_id is absent, for
+    // metadata and metrics (socrata-tools.ts:509, :574) — so the note does too.
+    [{ type: 'metadata', portal: 'data.sfgov.org', query: 'abcd-1234' }, /the `abcd-1234` dataset/],
+    [
+      { type: 'metrics', portal: 'data.sfgov.org', dataset_id: 'abcd-1234' },
+      /check row counts and update times for the `abcd-1234` dataset/,
+    ],
+    [
+      { type: 'query', portal: 'data.sfgov.org', dataset_id: 'abcd-1234' },
+      /query the `abcd-1234` dataset/,
+    ],
+    // No dataset id, and none derivable: say less rather than invent one.
+    [{ type: 'query', portal: 'data.sfgov.org' }, /query a dataset on `data\.sfgov\.org`/],
+    // No type at all — the args carry only the portal, so that is all it says.
+    [{ portal: 'data.sfgov.org' }, /request data from `data\.sfgov\.org`/],
+  ];
+  for (const [args, expected] of expectations) {
+    const md = renderFetchToolCell({ ...base, args }, CTX)!.cells[0].source.join('');
+    assert.match(md, expected, `args ${JSON.stringify(args)} produced:\n${md}`);
+    assert.doesNotMatch(md, /`unknown`/, `args ${JSON.stringify(args)} produced a placeholder:\n${md}`);
+  }
+});
+
+test('#342: the other tools drop their `unknown` placeholders too', () => {
+  const cases: Array<[PhaseAToolCall, RegExp]> = [
+    [
+      { name: 'get_observations', args: {}, failed: true },
+      /fetch an indicator from Google Data Commons/,
+    ],
+    [
+      { name: 'get_observations', args: { variable_dcid: 'Count_Person' }, failed: true },
+      /fetch `Count_Person` from Google Data Commons/,
+    ],
+    [
+      { name: 'ckan__query_data', args: {}, failed: true },
+      /fetch records from the Boston open-data store/,
+    ],
+  ];
+  for (const [call, expected] of cases) {
+    const md = renderFetchToolCell(call, CTX)!.cells[0].source.join('');
+    assert.match(md, expected, `produced:\n${md}`);
+    assert.doesNotMatch(md, /`unknown`/, `produced a placeholder:\n${md}`);
+  }
+});
+
+// --- #341's detector: which cells re-run a fetch ---------------------------
+
+test('#341: a rendered fetch cell is recognised as one; nothing else is', () => {
+  // The detector `validate.ts` uses to decide whether a notebook reproduces
+  // anything at all. It lives beside the renderers that emit the shape it
+  // looks for, so a change to the emitted assignment is made next to its only
+  // detector. RED: have `guardedFetch` emit `dfN=fetch_x(` without spaces —
+  // this fails here, in the file that made the change, instead of silently
+  // reporting every notebook as reproducing nothing.
+  for (const [label, call] of ALL_FIXTURES) {
+    assert.equal(
+      countReproducedFetchCells(codeCells(call)),
+      1,
+      `${label}: its code cell must count as a reproduced fetch`,
+    );
+  }
+  // A failed call's note is markdown, and markdown never counts.
+  const failed = renderFetchToolCell(FAILED_SOCRATA_CALL, CTX)!;
+  assert.equal(countReproducedFetchCells(failed.cells), 0);
+});
+
+test('#341: the detector is not fooled by the helper-definitions cell', () => {
+  // A meta-test on the check itself. Cell 3 of every notebook carries the full
+  // text of `fetch_socrata`, including the characters `fetch_socrata(` in its
+  // own `def` line. A detector that searched for the helper NAME would count
+  // that cell and report every all-failed notebook as reproducing a fetch: the
+  // check would pass on exactly the document it exists to reject.
+  const decoy: NotebookCell = {
+    cell_type: 'code',
+    id: 'decoy',
+    metadata: {},
+    source: [
+      'def fetch_socrata(\n',
+      '    portal: str,\n',
+      '    dataset_id: str | None = None,\n',
+      ') -> pd.DataFrame:\n',
+      '    """A helper definition is not a fetch."""\n',
+      '    return pd.DataFrame()\n',
+    ],
+  };
+  assert.ok(decoy.source.join('').includes('fetch_socrata('), 'the decoy does contain the name');
+  assert.equal(countReproducedFetchCells([decoy]), 0);
 });
