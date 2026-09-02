@@ -6,6 +6,52 @@ Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ---
 
+## 2026-08-28 — Wave N8 (#363): what the loop leaves around it — and the defect the wave itself made (nine gated phases)
+
+**Scope:** N7 collapsed three model-calling loops into one core and its close record said where consolidation stopped: *"the things around the loop stayed duplicated."* This wave was chartered against those things as **families**, not issues — portal injection (five copies), the MCP timeout (three behaviours), what a signed record asserts, the notebook renderer, and the parallel-implementation leftovers. Two lanes, fourteen acceptance criteria each stating what makes it RED, and every census grep run with **no pathspec** so the scope is the repository rather than a directory.
+
+**Phases:** P1 design (no source) · P2 `7abb357` (#359 #352) · P4a `cecc959` (#339 #307) · P3 `ffaffb7` (#356) · P5 `f117665` (#340 #341 #342 #324) · P4b `103de52` (#312) · P6 `de4bd60` (#323 #348 #354) · P7 cold read · P8 `64ecdf8` (the cold read's two findings). Fourteen `rollback/pre-n8-*` tags. Tests **1092 → 1205**, `# fail 0` at every merged head, **every merge's second parent equal to the SHA its GO named**.
+
+### What the wave was for, measured
+
+At `96c4f76`, `git grep -n -P '(args|toolArgs)\.portal\s*=[^=]'` over all tracked files returned five non-test sites; at `64ecdf8` it returns one, in the core. The MCP timeout had three behaviours across four callers — cleared, uncleared, and absent — and now has one, raced and cleared in a `finally` inside `runToolLoop`. The fourth tool loop is gone, and the registry guard that watches for a fifth derives its universe from `git ls-files` rather than a hardcoded directory list.
+
+### The measurement that reversed two rulings
+
+Two decisions were written as **conditional** rulings — take branch A or B depending on what the data-source server actually does — and both selected the branch the issue did not assume. `get_data` *does* honour a `query` argument, so "stop advertising it" would have deleted a working capability and #340's fix belonged in the notebook helper. The server *does* implement `search` and `fetch`, and this repo's router already routed them, so #323 closed by **adding two schemas** rather than stripping ten lines of prose. Measure the other side before deleting a capability.
+
+### The cold read, fifth in a row to find what the implementing context missed
+
+And for the second consecutive wave, **the wave had introduced the defect**. Making `search` and `fetch` callable handed four consumers arguments they were never written to read. The sharpest: `canonicalizeToolCall` keys a tool call on `name:type:dataset_id:portal`, and neither new tool carries any of those four fields — so every search collapsed to `search:::`, two replay runs that searched for entirely different things scored a Jaccard overlap of **1**, and a **signed** consistency attestation reported them `highly_reproducible` at "Tool overlap: 100%".
+
+The second half is the part worth keeping: two `get_data` calls on the **same dataset with different `WHERE` clauses** collapsed to one key as well. The hand-picked field list had been wrong since before `search` existed. A fix that added the two new tools' fields would have closed the visible half and left the rest — which is why P8's ruling was property-shaped (*any* argument difference produces a different key) and why its second RED mattered more than its first.
+
+### The lesson, one level up from N7's
+
+N6: *a zone scoped by file cannot see a defect scoped to a class.* N7: *the instrument built to fix that was scoped to a directory.* N8: **a blast zone derived from the call graph of the change cannot see a defect in a consumer of the record the change produces.**
+
+Every zone this wave drew was correct by the prescribed method — from the call graph, at the phase base, itemised file by file when it grew (P2 gained `openrouter-streaming.ts`, P5 gained `synthesize.ts`, P3 lost a `package.json` item it never needed). And the attestation dialog was in none of them, because it does not call the changed code — it reads what the changed code *produces*.
+
+### Two instrument findings that outlive the wave
+
+**A `pull_request` run builds the merge commit.** The runner log says `HEAD is now at <sha> Merge <branch> into <main>`, so the merged-head test count is observable **before** merging. The wave's predict-then-verify ritual — state a falsifiable count, merge, then read the runner — was weaker than the instrument sitting in front of it. All six predictions held, but a failing one would have failed *after* the merge rather than before it.
+
+**`git grep -E` silently matches nothing for `\b`.** `git grep -cE '\bsearch\b'` over all tracked files returns 0 files; `-P` returns hundreds. A grep returning zero because its engine does not speak the pattern is indistinguishable from a clean tree — the same species as a check that cannot fail.
+
+### Phases that corrected the contract they were given
+
+**P1 refuted an in-tree claim by execution.** `scripts/eval-models.mjs` said in a comment that a `.mjs` file "cannot import that TypeScript module"; three probes — flagged, bare `node`, and `spawnSync` with no flags — all executed the core, so no `package.json` change was needed and the comment was corrected instead. **P2 found that moving injection above the record needed `!argumentsMalformed`**, or a call whose arguments never parsed would be recorded, spanned and **signed** carrying a portal it never had — an exposure the move itself created. **P4b found #312's own stated fix-shape wrong**: the issue says an `undefined` property is dropped by the canonicalizer, which holds for a plain object and is the opposite for a span, whose attributes are an array of `{key, value}` — an `undefined` there survives as a valueless key, worse than the zero it replaced. **P6 corrected both a number and its epistemics**, finding the merge-ref instrument above rather than writing the arithmetic it was told to write. **P8 declined to type `fetch`'s operation** and recorded the refusal in the file, because the server decides it from the shape of an identifier at call time and a guess would have been written into a signed package.
+
+### Five ORCH-layer premise failures, recorded
+
+The contracts carried five errors, all caught downstream: a sibling-repo path that pointed at the wrong checkout; a relayed citation naming the *catalog* branch of a handler when the *query* branch was meant (a contract written off it would have specified a helper implementing half the ruling); a criterion written in a form the same contract's own ruling had already made unsatisfiable; an instruction to write an unmeasured number into `CLAUDE.md` when the merged head was in fact observable; and two rollback tags cut after their phases had been spawned. N7 recorded three; the premise-check rider points at whoever writes the contract, and both waves it pointed at the orchestrator.
+
+### What this wave did not do
+
+#333, #336, #337. It re-emitted, migrated and backfilled nothing — P8 traced every read-back path to show stored bytes are rendered, never recomputed. Ten filings are left open deliberately, including two the wave created and chose not to fix inside a closing phase: three surviving references to the superseded key format (#380), and this file's own test-count row, which went stale again within one phase and is structurally fragile rather than merely wrong (#381).
+
+---
+
 ## 2026-08-28 — Wave N7 (#345): the model-calling loop as a class — one core, three callers (six gated phases)
 
 **Scope:** Not six defects; one defect *shape*. N6's cold read found that three of its phases had each fixed one instance of a defect living in several places, honouring their blast zones exactly while doing so. The largest family was the model-calling loop: three independent implementations, one fixed. This wave was chartered against the family rather than its members — the fix-shape under test was **one loop core, three callers**, not three patches.
