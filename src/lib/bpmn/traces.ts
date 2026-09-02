@@ -8,6 +8,14 @@ export interface TraceEvent {
   args?: Record<string, unknown>;
   duration_ms?: number;
   resultSummary?: { rows: number; columns: number };
+  /**
+   * As on the progress event the trace was captured from (`ProgressEvent`,
+   * #384): the tool the loop named and the operation type it derived, on
+   * every tool-phase event. A fixture that omits `toolName` replays as an
+   * unnamed call — never as `get_data`.
+   */
+  toolName?: string;
+  operationType?: string;
 }
 
 export interface PreRecordedTrace {
@@ -45,6 +53,8 @@ const simple311: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Searching NYC data catalog: "311 complaints"',
       iteration: 1,
+      toolName: 'get_data',
+      operationType: 'catalog',
       args: { type: 'catalog', query: '311 complaints', portal: 'data.cityofnewyork.us' },
     },
     {
@@ -52,6 +62,8 @@ const simple311: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Searching NYC data catalog: "311 complaints"',
       iteration: 1,
+      toolName: 'get_data',
+      operationType: 'catalog',
       duration_ms: 1584,
     },
     {
@@ -59,6 +71,8 @@ const simple311: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Found 5 datasets matching the search',
       iteration: 1,
+      toolName: 'get_data',
+      operationType: 'catalog',
       resultSummary: { rows: 5, columns: 8 },
     },
     {
@@ -66,6 +80,8 @@ const simple311: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Top complaint types',
       iteration: 2,
+      toolName: 'get_data',
+      operationType: 'query',
       args: {
         type: 'query',
         dataset_id: 'erm2-nwe9',
@@ -81,6 +97,8 @@ const simple311: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Top complaint types',
       iteration: 2,
+      toolName: 'get_data',
+      operationType: 'query',
       duration_ms: 2227,
     },
     {
@@ -88,6 +106,8 @@ const simple311: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Retrieved 10 records from 311 Service Requests',
       iteration: 2,
+      toolName: 'get_data',
+      operationType: 'query',
       resultSummary: { rows: 10, columns: 2 },
     },
     {
@@ -126,6 +146,8 @@ const multiStepRestaurant: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Searching NYC data catalog: "restaurant inspections"',
       iteration: 1,
+      toolName: 'get_data',
+      operationType: 'catalog',
       args: { type: 'catalog', query: 'restaurant inspections', portal: 'data.cityofnewyork.us' },
     },
     {
@@ -133,6 +155,8 @@ const multiStepRestaurant: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Searching NYC data catalog: "restaurant inspections"',
       iteration: 1,
+      toolName: 'get_data',
+      operationType: 'catalog',
       duration_ms: 1583,
     },
     {
@@ -140,6 +164,8 @@ const multiStepRestaurant: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Found 3 datasets matching the search',
       iteration: 1,
+      toolName: 'get_data',
+      operationType: 'catalog',
       resultSummary: { rows: 3, columns: 8 },
     },
     {
@@ -147,6 +173,8 @@ const multiStepRestaurant: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Getting metadata for Restaurant Inspections',
       iteration: 2,
+      toolName: 'get_data',
+      operationType: 'metadata',
       args: { type: 'metadata', query: '43nn-pn8j', dataset_id: '43nn-pn8j', portal: 'data.cityofnewyork.us' },
     },
     {
@@ -154,6 +182,8 @@ const multiStepRestaurant: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Getting metadata for Restaurant Inspections',
       iteration: 2,
+      toolName: 'get_data',
+      operationType: 'metadata',
       duration_ms: 1232,
     },
     {
@@ -161,6 +191,8 @@ const multiStepRestaurant: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Loaded metadata for Restaurant Inspections',
       iteration: 2,
+      toolName: 'get_data',
+      operationType: 'metadata',
     },
     {
       relativeMs: 4940,
@@ -173,6 +205,8 @@ const multiStepRestaurant: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Counting by borough and grade',
       iteration: 3,
+      toolName: 'get_data',
+      operationType: 'query',
       args: {
         type: 'query',
         dataset_id: '43nn-pn8j',
@@ -189,6 +223,8 @@ const multiStepRestaurant: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Counting by borough and grade',
       iteration: 3,
+      toolName: 'get_data',
+      operationType: 'query',
       duration_ms: 2623,
     },
     {
@@ -196,6 +232,8 @@ const multiStepRestaurant: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Retrieved 15 records from Restaurant Inspections',
       iteration: 3,
+      toolName: 'get_data',
+      operationType: 'query',
       resultSummary: { rows: 15, columns: 3 },
     },
     {
@@ -209,6 +247,8 @@ const multiStepRestaurant: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Counting by borough for critical only',
       iteration: 4,
+      toolName: 'get_data',
+      operationType: 'query',
       args: {
         type: 'query',
         dataset_id: '43nn-pn8j',
@@ -225,6 +265,8 @@ const multiStepRestaurant: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Counting by borough for critical only',
       iteration: 4,
+      toolName: 'get_data',
+      operationType: 'query',
       duration_ms: 2667,
     },
     {
@@ -232,6 +274,8 @@ const multiStepRestaurant: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Retrieved 5 records from Restaurant Inspections',
       iteration: 4,
+      toolName: 'get_data',
+      operationType: 'query',
       resultSummary: { rows: 5, columns: 2 },
     },
     {
@@ -245,6 +289,8 @@ const multiStepRestaurant: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Refining: adding for 2024',
       iteration: 5,
+      toolName: 'get_data',
+      operationType: 'query',
       args: {
         type: 'query',
         dataset_id: '43nn-pn8j',
@@ -261,6 +307,8 @@ const multiStepRestaurant: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Refining: adding for 2024',
       iteration: 5,
+      toolName: 'get_data',
+      operationType: 'query',
       duration_ms: 2623,
     },
     {
@@ -268,6 +316,8 @@ const multiStepRestaurant: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Retrieved 15 records from Restaurant Inspections',
       iteration: 5,
+      toolName: 'get_data',
+      operationType: 'query',
       resultSummary: { rows: 15, columns: 3 },
     },
     {
@@ -306,6 +356,8 @@ const filteredNoise: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Searching NYC data catalog: "311 noise complaints"',
       iteration: 1,
+      toolName: 'get_data',
+      operationType: 'catalog',
       args: { type: 'catalog', query: '311 noise complaints', portal: 'data.cityofnewyork.us' },
     },
     {
@@ -313,6 +365,8 @@ const filteredNoise: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Searching NYC data catalog: "311 noise complaints"',
       iteration: 1,
+      toolName: 'get_data',
+      operationType: 'catalog',
       duration_ms: 1583,
     },
     {
@@ -320,6 +374,8 @@ const filteredNoise: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Found 4 datasets matching the search',
       iteration: 1,
+      toolName: 'get_data',
+      operationType: 'catalog',
       resultSummary: { rows: 4, columns: 8 },
     },
     {
@@ -327,6 +383,8 @@ const filteredNoise: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Top complaint types in BROOKLYN, for 2024',
       iteration: 2,
+      toolName: 'get_data',
+      operationType: 'query',
       args: {
         type: 'query',
         dataset_id: 'erm2-nwe9',
@@ -343,6 +401,8 @@ const filteredNoise: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Top complaint types in BROOKLYN, for 2024',
       iteration: 2,
+      toolName: 'get_data',
+      operationType: 'query',
       duration_ms: 2743,
     },
     {
@@ -350,6 +410,8 @@ const filteredNoise: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Retrieved 8 records from 311 Service Requests',
       iteration: 2,
+      toolName: 'get_data',
+      operationType: 'query',
       resultSummary: { rows: 8, columns: 2 },
     },
     {
@@ -363,6 +425,8 @@ const filteredNoise: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Counting by report date in BROOKLYN, for 2024, matching "noise"',
       iteration: 3,
+      toolName: 'get_data',
+      operationType: 'query',
       args: {
         type: 'query',
         dataset_id: 'erm2-nwe9',
@@ -379,6 +443,8 @@ const filteredNoise: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Counting by report date in BROOKLYN, for 2024, matching "noise"',
       iteration: 3,
+      toolName: 'get_data',
+      operationType: 'query',
       duration_ms: 1897,
     },
     {
@@ -386,6 +452,8 @@ const filteredNoise: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Retrieved 12 records from 311 Service Requests',
       iteration: 3,
+      toolName: 'get_data',
+      operationType: 'query',
       resultSummary: { rows: 12, columns: 2 },
     },
     {
@@ -424,6 +492,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Searching NYC data catalog: "housing violations"',
       iteration: 1,
+      toolName: 'get_data',
+      operationType: 'catalog',
       args: { type: 'catalog', query: 'housing violations', portal: 'data.cityofnewyork.us' },
     },
     {
@@ -431,6 +501,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Searching NYC data catalog: "housing violations"',
       iteration: 1,
+      toolName: 'get_data',
+      operationType: 'catalog',
       duration_ms: 1537,
     },
     {
@@ -438,6 +510,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Found 6 datasets matching the search',
       iteration: 1,
+      toolName: 'get_data',
+      operationType: 'catalog',
       resultSummary: { rows: 6, columns: 8 },
     },
     {
@@ -445,6 +519,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Getting metadata for Housing Violations',
       iteration: 2,
+      toolName: 'get_data',
+      operationType: 'metadata',
       args: { type: 'metadata', query: 'wvxf-dwi5', dataset_id: 'wvxf-dwi5', portal: 'data.cityofnewyork.us' },
     },
     {
@@ -452,6 +528,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Getting metadata for Housing Violations',
       iteration: 2,
+      toolName: 'get_data',
+      operationType: 'metadata',
       duration_ms: 1232,
     },
     {
@@ -459,6 +537,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Loaded metadata for Housing Violations',
       iteration: 2,
+      toolName: 'get_data',
+      operationType: 'metadata',
     },
     {
       relativeMs: 5180,
@@ -471,6 +551,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Counting by borough in BROOKLYN',
       iteration: 3,
+      toolName: 'get_data',
+      operationType: 'query',
       args: {
         type: 'query',
         dataset_id: 'wvxf-dwi5',
@@ -485,6 +567,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Counting by borough in BROOKLYN',
       iteration: 3,
+      toolName: 'get_data',
+      operationType: 'query',
       duration_ms: 2423,
     },
     {
@@ -492,6 +576,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Retrieved 1 record from Housing Violations',
       iteration: 3,
+      toolName: 'get_data',
+      operationType: 'query',
       resultSummary: { rows: 1, columns: 1 },
     },
     {
@@ -505,6 +591,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Counting records in MANHATTAN',
       iteration: 4,
+      toolName: 'get_data',
+      operationType: 'query',
       args: {
         type: 'query',
         dataset_id: 'wvxf-dwi5',
@@ -519,6 +607,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Counting records in MANHATTAN',
       iteration: 4,
+      toolName: 'get_data',
+      operationType: 'query',
       duration_ms: 2423,
     },
     {
@@ -526,6 +616,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Retrieved 1 record from Housing Violations',
       iteration: 4,
+      toolName: 'get_data',
+      operationType: 'query',
       resultSummary: { rows: 1, columns: 1 },
     },
     {
@@ -539,6 +631,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Top violation IDs in BROOKLYN',
       iteration: 5,
+      toolName: 'get_data',
+      operationType: 'query',
       args: {
         type: 'query',
         dataset_id: 'wvxf-dwi5',
@@ -555,6 +649,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Top violation IDs in BROOKLYN',
       iteration: 5,
+      toolName: 'get_data',
+      operationType: 'query',
       duration_ms: 2623,
     },
     {
@@ -562,6 +658,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Retrieved 4 records from Housing Violations',
       iteration: 5,
+      toolName: 'get_data',
+      operationType: 'query',
       resultSummary: { rows: 4, columns: 2 },
     },
     {
@@ -575,6 +673,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Top statuses in MANHATTAN',
       iteration: 6,
+      toolName: 'get_data',
+      operationType: 'query',
       args: {
         type: 'query',
         dataset_id: 'wvxf-dwi5',
@@ -591,6 +691,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Top statuses in MANHATTAN',
       iteration: 6,
+      toolName: 'get_data',
+      operationType: 'query',
       duration_ms: 2623,
     },
     {
@@ -598,6 +700,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Retrieved 4 records from Housing Violations',
       iteration: 6,
+      toolName: 'get_data',
+      operationType: 'query',
       resultSummary: { rows: 4, columns: 2 },
     },
     {
@@ -611,6 +715,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_start',
       message: 'Counting by borough and report date for 2024',
       iteration: 7,
+      toolName: 'get_data',
+      operationType: 'query',
       args: {
         type: 'query',
         dataset_id: 'wvxf-dwi5',
@@ -627,6 +733,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_complete',
       message: 'Counting by borough and report date for 2024',
       iteration: 7,
+      toolName: 'get_data',
+      operationType: 'query',
       duration_ms: 2623,
     },
     {
@@ -634,6 +742,8 @@ const retryIteration: PreRecordedTrace = {
       phase: 'tool_result',
       message: 'Retrieved 24 records from Housing Violations',
       iteration: 7,
+      toolName: 'get_data',
+      operationType: 'query',
       resultSummary: { rows: 24, columns: 3 },
     },
     {

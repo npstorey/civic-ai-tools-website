@@ -3,12 +3,11 @@
 import { useState, useCallback, useSyncExternalStore } from 'react';
 import ResponsePanel from './ResponsePanel';
 
-import type { ProgressLogEntry, ProgressGroup, EvidenceTrace } from '@/hooks/useStreamingComparison';
-
-interface ToolCall {
-  name: string;
-  args: Record<string, unknown>;
-}
+// `ToolCall` is the hook's own type rather than a private copy of it (#384):
+// a hand-typed duplicate is what let a `tokens_used` declaration disagree
+// with its source of truth in #374, and the same shape here kept `name`
+// required after the record admitted its absence.
+import type { ProgressLogEntry, ProgressGroup, EvidenceTrace, ToolCall } from '@/hooks/useStreamingComparison';
 
 interface ResponseData {
   content: string;

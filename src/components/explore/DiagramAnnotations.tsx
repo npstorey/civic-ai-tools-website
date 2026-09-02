@@ -9,8 +9,11 @@ interface DiagramAnnotationsProps {
 
 function getOperationType(replayState: ReplayState): string | undefined {
   const event = replayState.currentEvent;
-  if (!event?.args) return undefined;
-  return event.args.type as string | undefined;
+  if (!event) return undefined;
+  // The operation type the trace recorded (#384); `args.type` only for an
+  // event that carries none — a search event has no `args.type`, and read
+  // that way alone it had no annotation.
+  return event.operationType ?? (event.args?.type as string | undefined);
 }
 
 function getCrossReference(replayState: ReplayState): { text: string; href: string } | null {

@@ -145,9 +145,12 @@ type QueryStep =
  * Principle 2's persistent source marking). What it must not do is name a
  * source it did not read — so it says what ran and stops there.
  */
-function notReproducedNote(toolName: string): string {
+function notReproducedNote(toolName: string | undefined): string {
+  // A record that carries no tool name (#384) is described as exactly that;
+  // a name is never supplied for it.
+  const step = toolName === undefined ? 'This step, whose tool name the record does not carry,' : `This step called \`${toolName}\`,`;
   return (
-    `*Not reproduced below.* This step called \`${toolName}\`, and the cells in this ` +
+    `*Not reproduced below.* ${step} and the cells in this ` +
     'notebook fetch Socrata datasets by URL. This call named no Socrata portal and ' +
     'dataset, so no URL is written for it — one written here would name a source the ' +
     'step did not read. The original result is described above.'

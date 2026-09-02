@@ -20,6 +20,8 @@ export function createTraceCapture(query: string, model: string, portal: string)
       args?: Record<string, unknown>;
       duration_ms?: number;
       resultSummary?: { rows: number; columns: number };
+      toolName?: string;
+      operationType?: string;
     }) {
       if (!event.phase) return;
       events.push({
@@ -30,6 +32,10 @@ export function createTraceCapture(query: string, model: string, portal: string)
         args: event.args,
         duration_ms: event.duration_ms,
         resultSummary: event.resultSummary,
+        // What the wire carried (#384): a captured trace records the tool the
+        // loop named, so its replay never has to guess one.
+        ...(event.toolName !== undefined ? { toolName: event.toolName } : {}),
+        ...(event.operationType !== undefined ? { operationType: event.operationType } : {}),
       });
     },
 

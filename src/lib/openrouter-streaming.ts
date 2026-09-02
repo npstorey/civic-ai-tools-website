@@ -23,6 +23,10 @@ export interface ProgressOpts {
   phase?: ProgressPhase;
   iteration?: number;
   args?: Record<string, unknown>;
+  /** See `ProgressEvent` in ./streaming.ts (#384): the recorded tool name and
+   *  the operation type the loop derived, on every tool-phase event. */
+  toolName?: string;
+  operationType?: string;
 }
 
 export interface StreamCallbacks {
@@ -114,6 +118,22 @@ const MAX_TOKENS_PER_RESPONSE = 4000;
 const PASS_THROUGH_DELIVERY = { chunkChars: 20, delayMs: 10 };
 
 /**
+ * The recorded identity of a tool call, as every tool-phase progress event
+ * carries it (#384). Before this, `reportLoopEvent` had `event.call.name` in
+ * hand and passed only `{ phase, iteration, args }`, so every reader of the
+ * stream had to infer the tool from `args.type` — which only `get_data`
+ * carries. `operationType` is omitted, not set to `undefined`, when the loop
+ * derived none (`fetch`, by design): in-process consumers see the object as-is,
+ * and an absent key and an undefined one should read the same way.
+ */
+function toolIdentity(call: ToolCallRecord): Pick<ProgressOpts, 'toolName' | 'operationType'> {
+  return {
+    toolName: call.name,
+    ...(call.operationType !== undefined ? { operationType: call.operationType } : {}),
+  };
+}
+
+/**
  * Render one loop event as the SSE progress this panel's reader sees. The loop
  * reports structurally and knows nothing about panels; the copy and the
  * formatters live here, on the side that has a reader.
@@ -124,23 +144,24 @@ function reportLoopEvent(panel: PanelType, event: LoopEvent, callbacks: StreamCa
       callbacks.onProgress(
         panel,
         formatToolProgress(event.call.name, event.call.args, event.priorCalls),
-        { phase: 'tool_start', iteration: event.iteration, args: event.call.args },
+        { phase: 'tool_start', iteration: event.iteration, args: event.call.args, ...toolIdentity(event.call) },
       );
       return;
     case 'tool_complete':
       callbacks.onProgress(
         panel,
         formatToolProgress(event.call.name, event.call.args, event.priorCalls),
-        { phase: 'tool_complete', iteration: event.iteration, duration_ms: event.durationMs },
+        { phase: 'tool_complete', iteration: event.iteration, duration_ms: event.durationMs, ...toolIdentity(event.call) },
       );
       return;
     case 'tool_result': {
-      const resultMessage = formatToolResult(event.call.args, event.call.resultSummary);
+      const resultMessage = formatToolResult(event.call.args, event.call.resultSummary, event.call.name);
       if (resultMessage) {
         callbacks.onProgress(panel, resultMessage, {
           phase: 'tool_result',
           iteration: event.iteration,
           args: event.call.args,
+          ...toolIdentity(event.call),
         });
       }
       return;

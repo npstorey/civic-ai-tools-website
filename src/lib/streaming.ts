@@ -1,4 +1,5 @@
 // Types for streaming events
+import { deriveOperationType } from './mcp/operation-types.ts';
 export type StreamEventType = 'progress' | 'token' | 'complete' | 'error' | 'trace';
 export type PanelType = 'withMcp' | 'withoutMcp';
 
@@ -17,6 +18,18 @@ export interface ProgressEvent extends StreamEvent {
   phase?: ProgressPhase;
   iteration?: number;
   args?: Record<string, unknown>;
+  /**
+   * The tool the loop recorded for a `tool_start` / `tool_complete` /
+   * `tool_result` event (`ToolCallRecord.name`), and the operation type it
+   * derived once (`ToolCallRecord.operationType`; absent when the loop derived
+   * none — `fetch`, by design). Before #384 the stream carried neither, so
+   * every reader downstream inferred the tool from `args.type`, which only
+   * `get_data` carries, and the replay wrote `get_data` for every call. No
+   * reader derives these a second time; a reader that has neither says so
+   * rather than guessing.
+   */
+  toolName?: string;
+  operationType?: string;
 }
 
 export interface TokenEvent extends StreamEvent {
@@ -355,16 +368,46 @@ export function describeToolFailureForLlm(_toolName: string, input: unknown): st
   }
 }
 
+/**
+ * The operation type a reader-facing formatter switches on: the one the loop
+ * recorded when the record carries it, else the loop's own derivation from
+ * the recorded name and arguments (`deriveOperationType` — the single
+ * derivation, not a second one), else nothing. A call with no name and no
+ * `args.type` has no operation type; the formatters say so.
+ */
+function resolveOperationType(tool: { name?: string; args: Record<string, unknown>; operationType?: string }): string | undefined {
+  if (tool.operationType) return tool.operationType;
+  if (tool.name) return deriveOperationType(tool.name, tool.args);
+  return undefined;
+}
+
+/**
+ * What a search-typed tool searches for, in user language. Three registry
+ * tools derive to `search`: Socrata's `search` and CKAN's search look for
+ * datasets; Data Commons' `search_indicators` looks for statistical
+ * indicators (variables and topics, not datasets). The noun follows the
+ * recorded name so a Data Commons run is not narrated as a dataset search.
+ */
+export function searchSubject(toolName?: string): { singular: string; plural: string } {
+  return toolName === 'search_indicators'
+    ? { singular: 'statistical indicator', plural: 'statistical indicators' }
+    : { singular: 'dataset', plural: 'datasets' };
+}
+
+/** Reader-facing copy for a call whose tool name the record does not carry. */
+export const UNNAMED_STEP_LABEL = 'Unnamed step';
+
 // Format tool call arguments into human-readable progress messages
 export function formatToolProgress(
   name: string,
   args: Record<string, unknown>,
   previousCalls?: { args: Record<string, unknown> }[],
 ): string {
-  const type = args.type as string;
+  const type = resolveOperationType({ name, args });
   const portal = args.portal as string;
   const datasetId = args.dataset_id as string;
   const query = args.query as string;
+  const id = args.id as string | undefined;
 
   // Get city name from portal
   const cityName = getPortalCity(portal);
@@ -373,6 +416,10 @@ export function formatToolProgress(
   switch (type) {
     case 'catalog':
       return `Searching ${cityName} data catalog${query ? `: "${query}"` : ''}`;
+    case 'search':
+      return query
+        ? `Searching the catalog for ${searchSubject(name).plural} about "${query}"`
+        : `Searching the catalog for ${searchSubject(name).plural}`;
     case 'metadata':
       return `Getting metadata for ${query || datasetName}`;
     case 'query': {
@@ -382,6 +429,11 @@ export function formatToolProgress(
     case 'metrics':
       return `Fetching metrics for ${datasetName}`;
     default:
+      // `fetch` derives to no operation type by design (see
+      // mcp/operation-types.ts): the identifier's shape decides, server-side,
+      // whether it returns a dataset's details or one record. The line names
+      // what was asked for and asserts nothing about what came back.
+      if (name === 'fetch') return id ? `Looking up ${id}` : 'Looking up one item';
       return `Calling ${name}...`;
   }
 }
@@ -708,20 +760,30 @@ export function generateQueryIntentLabel(
   return { label, refinedFromIndex };
 }
 
-// Format a human-readable message describing tool results
+// Format a human-readable message describing tool results. `name` is the
+// recorded tool name; without it only `args.type` can say what the call was,
+// and only `get_data` carries that (#384).
 export function formatToolResult(
   args: Record<string, unknown>,
-  resultSummary?: { rows: number; columns: number }
+  resultSummary?: { rows: number; columns: number },
+  name?: string,
 ): string | null {
-  const type = args.type as string;
+  const type = resolveOperationType({ name, args }) ?? (args.type as string | undefined);
   const datasetId = args.dataset_id as string | undefined;
   const datasetName = getDatasetName(datasetId);
+  const id = args.id as string | undefined;
 
   switch (type) {
     case 'catalog':
       return resultSummary
         ? `Found ${resultSummary.rows} dataset${resultSummary.rows !== 1 ? 's' : ''} matching the search`
         : 'Catalog search complete';
+    case 'search': {
+      const subject = searchSubject(name);
+      return resultSummary
+        ? `Found ${resultSummary.rows} ${resultSummary.rows !== 1 ? subject.plural : subject.singular} matching the search`
+        : 'Search complete';
+    }
     case 'query':
       return resultSummary
         ? `Retrieved ${resultSummary.rows} record${resultSummary.rows !== 1 ? 's' : ''} from ${datasetName}`
@@ -731,23 +793,43 @@ export function formatToolResult(
     case 'metrics':
       return `Loaded metrics for ${datasetName}`;
     default:
+      // `fetch`: a `record:` identifier answers with data rows, which the
+      // loop's `summarizeToolResult` counts; a `dataset:` identifier answers
+      // with a description and columns, which it does not. So a row count is
+      // stated only when one was measured; otherwise the line says only that
+      // the lookup completed — never which of the two the server chose.
+      if (name === 'fetch') {
+        const what = id ?? 'one item';
+        return resultSummary
+          ? `Retrieved ${resultSummary.rows} record${resultSummary.rows !== 1 ? 's' : ''} for ${what}`
+          : `Looked up ${what}`;
+      }
       return null;
   }
 }
 
-// Generate a brief "why" reason from tool args for display in progress log and tool cards
-export function generateToolReason(args: Record<string, unknown>): string {
-  const type = args.type as string;
+// Generate a brief "why" reason from tool args for display in progress log and
+// tool cards. The loop writes it onto `record.reason`, which both notebook
+// generators read, so every `get_data` output here is byte-for-byte what it
+// was before `name` arrived (#384): `get_data` is not in the name-keyed table,
+// so its operation type is still `args.type`.
+export function generateToolReason(args: Record<string, unknown>, name?: string): string {
+  const type = resolveOperationType({ name, args }) ?? (args.type as string | undefined);
   const datasetId = args.dataset_id as string | undefined;
   const query = args.query as string | undefined;
   const datasetName = getDatasetName(datasetId);
   const group = args.group as string | undefined;
   const where = args.where as string | undefined;
   const select = args.select as string | undefined;
+  const id = args.id as string | undefined;
 
   switch (type) {
     case 'catalog':
       return query ? `to find datasets about "${query}"` : 'to search for relevant datasets';
+    case 'search': {
+      const subject = searchSubject(name);
+      return query ? `to find ${subject.plural} about "${query}"` : `to search for relevant ${subject.plural}`;
+    }
     case 'metadata':
       return `to understand ${datasetName} structure`;
     case 'query':
@@ -758,6 +840,12 @@ export function generateToolReason(args: Record<string, unknown>): string {
     case 'metrics':
       return `to check ${datasetName} statistics`;
     default:
+      if (name === 'fetch') return id ? `to look up ${id}` : 'to look up one item';
+      // A tool whose operation neither its name nor its arguments state: the
+      // reason repeats the recorded name. `get_data`'s name in user language
+      // is "gather data" — the one string P4 reads off a `get_data` record
+      // whose arguments named no operation, unchanged.
+      if (name && name !== 'get_data') return `to call ${name}`;
       return 'to gather data';
   }
 }
@@ -846,6 +934,8 @@ export function getEducationalAnnotation(phase: string, operationType?: string, 
     switch (operationType) {
       case 'catalog':
         return 'The AI is searching an open data portal — a public catalog where governments publish datasets for anyone to use.';
+      case 'search':
+        return 'The AI is searching a catalog of available data — asking what exists about this topic before reading any of it.';
       case 'metadata':
         return 'Reading the data dictionary — the list of columns and what each one contains.';
       case 'query': {
@@ -868,15 +958,17 @@ export function getEducationalAnnotation(phase: string, operationType?: string, 
 
 // Build a short chip/breadcrumb label for a single tool call (~30 chars, action-verb led)
 export function buildBreadcrumbLabel(
-  tool: { name: string; args: Record<string, unknown>; operationType?: string },
-  allTools?: { name: string; args: Record<string, unknown>; operationType?: string }[],
+  tool: { name?: string; args: Record<string, unknown>; operationType?: string },
+  allTools?: { name?: string; args: Record<string, unknown>; operationType?: string }[],
   index?: number,
 ): string {
-  const opType = tool.operationType || (tool.args.type as string) || 'call';
+  const opType = resolveOperationType(tool) ?? (tool.args.type as string | undefined);
   const query = tool.args.query as string | undefined;
 
   switch (opType) {
     case 'catalog':
+      return query ? `Search "${truncate(query, 15)}"` : 'Search catalog';
+    case 'search':
       return query ? `Search "${truncate(query, 15)}"` : 'Search catalog';
     case 'metadata':
       return 'Check schema';
@@ -922,23 +1014,34 @@ export function buildBreadcrumbLabel(
     }
     case 'metrics':
       return 'Get stats';
-    default:
-      return tool.name;
+    default: {
+      if (tool.name === 'fetch') {
+        const id = tool.args.id as string | undefined;
+        return id ? `Look up ${truncate(id, 20)}` : 'Look up one item';
+      }
+      // The recorded name, or a stated absence — never a stand-in that reads
+      // like a name.
+      return tool.name ?? UNNAMED_STEP_LABEL;
+    }
   }
 }
 
 // Describe a tool call in past-tense narrative form
 function describeToolNarrative(
-  tool: { name: string; args: Record<string, unknown>; operationType?: string },
+  tool: { name?: string; args: Record<string, unknown>; operationType?: string },
   index: number,
-  allTools: { name: string; args: Record<string, unknown>; operationType?: string }[],
+  allTools: { name?: string; args: Record<string, unknown>; operationType?: string }[],
 ): string {
-  const opType = tool.operationType || (tool.args.type as string) || 'call';
+  const opType = resolveOperationType(tool) ?? (tool.args.type as string | undefined);
   const query = tool.args.query as string | undefined;
 
   switch (opType) {
     case 'catalog':
       return query ? `searched for datasets about "${query}"` : 'searched the data catalog';
+    case 'search': {
+      const subject = searchSubject(tool.name);
+      return query ? `searched for ${subject.plural} about "${query}"` : `searched for ${subject.plural}`;
+    }
     case 'metadata':
       return 'examined the dataset structure';
     case 'query': {
@@ -987,14 +1090,19 @@ function describeToolNarrative(
     }
     case 'metrics':
       return 'checked dataset statistics';
-    default:
-      return `called ${tool.name}`;
+    default: {
+      if (tool.name === 'fetch') {
+        const id = tool.args.id as string | undefined;
+        return id ? `looked up ${id}` : 'looked up one item';
+      }
+      return tool.name ? `called ${tool.name}` : 'ran a step the record does not name';
+    }
   }
 }
 
 // Build a narrative summary telling the analytical story of what the AI did
 export function buildNarrativeSummary(
-  toolsCalled: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string }[],
+  toolsCalled: { name?: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string }[],
 ): string {
   if (toolsCalled.length === 0) return '';
 
@@ -1117,7 +1225,7 @@ function sumQueryRows(tools: CountableToolCall[]): number {
 
 // Build a stats summary line leading with data volume
 export function buildStatsSummary(
-  toolsCalled: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string }[],
+  toolsCalled: { name?: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string }[],
   totalDuration_ms?: number,
 ): string {
   const statParts: string[] = [];

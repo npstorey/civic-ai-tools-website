@@ -55,7 +55,7 @@ interface QueryNotebookRequest {
 
 type NotebookEvent =
   | { type: 'phase'; name: 'A' | 'B' | 'C' | 'D' | 'complete'; message: string }
-  | { type: 'phase_a_progress'; message: string; phase?: string; iteration?: number }
+  | { type: 'phase_a_progress'; message: string; phase?: string; iteration?: number; toolName?: string; operationType?: string }
   | { type: 'phase_a_tool_call'; name: string; operationType?: string; reason?: string; resultSummary?: { rows: number; columns: number }; args?: Record<string, unknown>; duration_ms?: number }
   | { type: 'phase_a_answer'; content: string }
   // `signingKeyId` is null when this instance has declared no PUBLISHER_KEY_ID:
@@ -387,11 +387,16 @@ async function runPhaseA(args: {
       onProgress: (panel, message, opts) => {
         if (panel !== 'withMcp') return;
         if (opts?.phase === 'tool_start') {
+          // Hand-picked fields, so what the loop recorded has to be carried
+          // here by name (#384): the tool and its operation type travel with
+          // the line, absent when the loop derived none.
           void emit({
             type: 'phase_a_progress',
             message,
             phase: opts.phase,
             iteration: opts.iteration,
+            ...(opts.toolName !== undefined ? { toolName: opts.toolName } : {}),
+            ...(opts.operationType !== undefined ? { operationType: opts.operationType } : {}),
           });
         }
       },

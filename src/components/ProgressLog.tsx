@@ -237,10 +237,12 @@ function GroupCard({
         >
           {visibleEntries.map((entry, idx) => {
             const phaseStyle = getPhaseStyle(entry.phase);
-            // Show annotation only for first tool_start entry of each operation type, only while active
-            const opType = entry.args?.type as string | undefined;
+            // Show annotation only for first tool_start entry of each operation type, only while active.
+            // The recorded operation type first (#384); `args.type` only for an entry that carries none.
+            const entryOpType = (e: ProgressLogEntry) => e.operationType ?? (e.args?.type as string | undefined);
+            const opType = entryOpType(entry);
             const isFirstOfType = entry.phase === 'tool_start' && opType &&
-              visibleEntries.findIndex(e => e.phase === 'tool_start' && (e.args?.type as string) === opType) === idx;
+              visibleEntries.findIndex(e => e.phase === 'tool_start' && entryOpType(e) === opType) === idx;
             const annotation = isFirstOfType && isLast
               ? getEducationalAnnotation(entry.phase!, opType)
               : null;

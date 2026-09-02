@@ -9,7 +9,11 @@
 
 import type { TraceEvent } from './traces';
 import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
-import { generateGroupLabel } from '@/hooks/useStreamingComparison';
+// Value imports are relative and extension-carrying so the test runner, which
+// has no `@/` mapping, can drive this module (#384). The type-only import
+// above is erased and may keep the alias.
+import { generateGroupLabel } from '../../hooks/useStreamingComparison.ts';
+import { deriveOperationType } from '../mcp/operation-types.ts';
 
 export interface TraceProgressData {
   progressLog: ProgressLogEntry[];
@@ -49,6 +53,8 @@ export function traceEventsToProgressData(
       phase: event.phase,
       iteration: event.iteration,
       args: event.args,
+      toolName: event.toolName,
+      operationType: event.operationType,
     };
 
     const { phase, iteration } = event;
@@ -125,11 +131,20 @@ export function traceEventsToProgressData(
   for (const group of progressGroups) {
     for (const entry of group.entries) {
       if (entry.phase === 'tool_start' && entry.args) {
+        // Read, never invent (#376, #384). The name is the one the trace
+        // recorded; the operation type is the recorded one, else the loop's own
+        // single derivation from that name and the arguments. An event that
+        // carries no name yields a call that has none and no operation type —
+        // not `get_data`, which is what this literal used to say for every
+        // call, and not a guess from the arguments' shape.
+        const name = entry.toolName;
+        const operationType =
+          entry.operationType ?? (name !== undefined ? deriveOperationType(name, entry.args) : undefined);
         const toolCall: ToolCall = {
-          name: 'get_data',
+          ...(name !== undefined ? { name } : {}),
           args: entry.args,
           duration_ms: entry.duration_ms,
-          operationType: entry.args.type as string | undefined,
+          ...(operationType !== undefined ? { operationType } : {}),
         };
         // Find matching result in group for resultSummary
         const resultEntry = group.entries.find(

@@ -37,6 +37,11 @@ export interface NotebookStreamState {
   phase: NotebookPhase | null;
   /** Detail line shown beneath the active row (Phase A tool call / progress). */
   detail: string | null;
+  /** The tool the `phase_a_progress` line is about, as the loop recorded it
+   *  (#384): its name and, when the loop derived one, its operation type.
+   *  Carried with the line rather than dropped at this reader; null when the
+   *  line is not about a tool call. */
+  detailTool: { toolName: string; operationType?: string } | null;
   /** Accumulated tool calls captured during Phase A. Drives section D. */
   toolCalls: CapturedToolCall[];
   phaseStartedAt: number | null;
@@ -67,6 +72,7 @@ export interface NotebookStreamState {
 const INITIAL_STATE: NotebookStreamState = {
   phase: null,
   detail: null,
+  detailTool: null,
   toolCalls: [],
   phaseStartedAt: null,
   startedAt: null,
@@ -120,6 +126,7 @@ export function useNotebookStream() {
               ...prev,
               phase: 'complete',
               detail: null,
+              detailTool: null,
               completedAt: Date.now(),
             }));
           } else {
@@ -128,13 +135,24 @@ export function useNotebookStream() {
               phase: name,
               phaseStartedAt: Date.now(),
               detail: null,
+              detailTool: null,
             }));
           }
           break;
         }
         case 'phase_a_progress': {
           const message = raw.message as string | undefined;
-          if (message) setState((prev) => ({ ...prev, detail: message }));
+          const toolName = raw.toolName as string | undefined;
+          const operationType = raw.operationType as string | undefined;
+          if (message) {
+            setState((prev) => ({
+              ...prev,
+              detail: message,
+              detailTool: toolName
+                ? { toolName, ...(operationType !== undefined ? { operationType } : {}) }
+                : null,
+            }));
+          }
           break;
         }
         case 'phase_a_tool_call': {

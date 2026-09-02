@@ -1,117 +1,56 @@
-// Wave N9 P2 (#384), family F1 — the red instrument, stage 1, replay half.
+// Wave N9 P2 (#384), family F1 — the instrument, replay half.
 //
 // Property ruled by D2: NO CONSUMER OF THE RECORD INVENTS WHAT THE LOOP DID
 // NOT WRITE. This file covers the consumers downstream of the SSE progress
 // stream: the pre-recorded trace (`./traces.ts`, `./capture-trace.ts`), the
 // replay that builds the flow diagram's tool calls (`./trace-progress.ts`),
-// the comparison hook's group label (`@/hooks/useStreamingComparison`) and the
-// card (`@/components/ToolCallCard`). The wire and the `streaming.ts` labels
-// are in `src/lib/progress-tool-name.test.ts`, which also states the field
-// names this file relies on: `toolName` and `operationType` on a trace event,
-// exactly as on the progress event it was captured from.
+// the comparison hook's group label (`useStreamingComparison`) and the card's
+// badge table (`components/tool-badges.ts`). The wire and the `streaming.ts`
+// labels are in `src/lib/progress-tool-name.test.ts`, which also states the
+// field names this file relies on: `toolName` and `operationType` on a trace
+// event, exactly as on the progress event it was captured from.
 //
-// RED at 500e954: `trace-progress.ts:129` writes `name: 'get_data'` — the
-// only value the function could invent, because `TraceEvent` has no name
-// field; `generateGroupLabel` falls to 'Running query' for a search group;
-// `ToolCallCard` has no `search` badge entry and renders
-// `data-tooltip={undefined}`.
+// RED at 500e954 (stage 1, run 33676287604): `trace-progress.ts:129` wrote
+// `name: 'get_data'` — the only value the function could invent, because
+// `TraceEvent` had no name field; `generateGroupLabel` fell to 'Running
+// query' for a search group; `ToolCallCard` had no `search` badge entry and
+// rendered `data-tooltip={undefined}`.
 //
-// "Unnamed", the shape proposed for stage 2: a trace event with no `toolName`
-// yields a tool call whose `name` is ABSENT (`undefined`) — never 'get_data',
-// never a placeholder that reads like a name — and every label built from it
-// says so in words. That needs `ToolCall.name` (`useStreamingComparison.ts`)
-// and the `tool.name` parameters in `streaming.ts` to admit `undefined`; the
-// assertions below are written against that shape.
+// "Unnamed": a trace event with no `toolName` yields a tool call whose `name`
+// is ABSENT (`undefined`) — never 'get_data', never a placeholder that reads
+// like a name — and every label built from it says so in words. `ToolCall.name`
+// (`useStreamingComparison.ts`) and the `tool.name` parameters in
+// `streaming.ts` admit `undefined` for exactly this.
 //
 // Universe: the four modules named above, driven in-process. The flow
 // diagram's DOM (`McpFlowDiagram.tsx` -> `ProgressLog.tsx`) is not rendered;
-// the instrument asserts the `toolsCalled` array it renders from, and renders
-// the one leaf component whose defect is in its own markup (the card).
-//
-// --- Why this file registers module hooks ----------------------------------
-// The runner is `node --test --experimental-strip-types`, which has no
-// tsconfig path mapping and no JSX. Three of the four targets are unreachable
-// under it at base: `trace-progress.ts` and `useStreamingComparison.ts`
-// import through the `@/` alias, and `ToolCallCard.tsx` is JSX. The hooks
-// below (registered from a `data:` URL so this instrument is one test file
-// and nothing else) map `@/` onto `src/`, resolve extensionless relative
-// imports inside `src/`, and transpile `.tsx` through the repository's own
-// `typescript`. They apply to this test's process only — `node --test` runs
-// each file in its own process — and they are a test-runner accommodation,
-// not a precedent for production code. Modules that need them are imported
-// dynamically, after `register()`; the static imports above it do not.
+// the instrument asserts the `toolsCalled` array it renders from. The card's
+// badge is asserted through the table the component reads by key at its
+// `data-tooltip` site — the stage-1 file rendered the component through a
+// module-hook loader; stage 2 made every target importable under the plain
+// runner (relative, extension-carrying value imports; the badge table in a
+// `.ts` sibling), so the loader is gone and (e) reads the table instead.
 //
 // Run with: npm test   (or: node --test --experimental-strip-types src/lib/bpmn/trace-progress-tool-name.test.ts)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { register } from 'node:module';
-import { pathToFileURL } from 'node:url';
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { TRACES, type TraceEvent } from './traces.ts';
 import { createTraceCapture } from './capture-trace.ts';
+import { traceEventsToProgressData } from './trace-progress.ts';
+import { generateGroupLabel, type ProgressLogEntry } from '../../hooks/useStreamingComparison.ts';
 import { buildBreadcrumbLabel, buildNarrativeSummary } from '../streaming.ts';
-import type { ProgressLogEntry } from '../../hooks/useStreamingComparison.ts';
-
-const ROOT = pathToFileURL(process.cwd() + '/').href;
-
-const HOOKS = `
-import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-let root; let ts;
-export function initialize(data) { root = data.root; ts = createRequire(root)('typescript'); }
-const EXTS = ['.ts', '.tsx', '/index.ts', '/index.tsx'];
-function withExtension(fileUrl) {
-  const p = fileURLToPath(fileUrl);
-  if (/\\.[cm]?[jt]sx?$/.test(p) && existsSync(p)) return fileUrl;
-  for (const ext of EXTS) if (existsSync(p + ext)) return fileUrl + ext;
-  return null;
-}
-export async function resolve(specifier, context, nextResolve) {
-  if (specifier.startsWith('@/')) {
-    const c = withExtension(root + 'src/' + specifier.slice(2));
-    if (c) return { url: c, shortCircuit: true };
-  }
-  if ((specifier.startsWith('./') || specifier.startsWith('../')) && context.parentURL?.startsWith(root + 'src/')) {
-    const c = withExtension(new URL(specifier, context.parentURL).href);
-    if (c) return { url: c, shortCircuit: true };
-  }
-  return nextResolve(specifier, context);
-}
-export async function load(url, context, nextLoad) {
-  if (url.endsWith('.tsx')) {
-    const source = await readFile(fileURLToPath(url), 'utf8');
-    const out = ts.transpileModule(source, { fileName: fileURLToPath(url), compilerOptions: {
-      module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, verbatimModuleSyntax: true } });
-    return { format: 'module', source: out.outputText, shortCircuit: true };
-  }
-  return nextLoad(url, context);
-}
-`;
-
-register('data:text/javascript,' + encodeURIComponent(HOOKS), { parentURL: ROOT, data: { root: ROOT } });
-
-const { traceEventsToProgressData } = await import('./trace-progress.ts');
-const { generateGroupLabel } = await import('../../hooks/useStreamingComparison.ts');
-const { default: ToolCallCard } = await import('../../components/ToolCallCard.tsx');
+import { OP_BADGE_COLORS, OP_BADGE_TOOLTIPS } from '../../components/tool-badges.ts';
 
 // ---------------------------------------------------------------------------
-// Fixtures. `TraceEvent` has no `toolName` / `operationType` at base, so the
-// events are built loosely and cast — the red must be the assertion, not a
-// type error. Stage 2 removes the cast by adding the fields to the type.
+// Fixtures
 // ---------------------------------------------------------------------------
-
-type LooseEvent = Record<string, unknown>;
-const asTrace = (events: LooseEvent[]): TraceEvent[] => events as unknown as TraceEvent[];
 
 const SEARCH_QUERY = 'noise complaints';
 const FETCH_ID = 'dataset:data.example.gov:abcd-1234';
 
 /** A search, then a fetch — the two tools the registry can emit that `get_data` is not. */
-const SEARCH_THEN_FETCH = asTrace([
+const SEARCH_THEN_FETCH: TraceEvent[] = [
   { relativeMs: 0, phase: 'analyze', message: 'Reading question and planning approach' },
   { relativeMs: 900, phase: 'tool_start', message: `Searching for datasets about "${SEARCH_QUERY}"`, iteration: 1, toolName: 'search', operationType: 'search', args: { query: SEARCH_QUERY } },
   { relativeMs: 2100, phase: 'tool_complete', message: `Searching for datasets about "${SEARCH_QUERY}"`, iteration: 1, toolName: 'search', operationType: 'search', duration_ms: 1200 },
@@ -122,13 +61,13 @@ const SEARCH_THEN_FETCH = asTrace([
   { relativeMs: 4100, phase: 'tool_complete', message: `Looking up ${FETCH_ID}`, iteration: 2, toolName: 'fetch', duration_ms: 1100 },
   { relativeMs: 4300, phase: 'thinking', message: 'Evaluating results', iteration: 2 },
   { relativeMs: 4800, phase: 'synthesize', message: 'Writing response based on collected data' },
-]);
+];
 
 /** One tool call whose event carries no tool name at all — a fixture from before the field existed. */
-const UNNAMED = asTrace([
+const UNNAMED: TraceEvent[] = [
   { relativeMs: 0, phase: 'tool_start', message: 'Step 1', iteration: 1, args: { query: 'noise' } },
   { relativeMs: 800, phase: 'tool_complete', message: 'Step 1', iteration: 1, duration_ms: 800 },
-]);
+];
 
 const replay = (events: TraceEvent[]) => traceEventsToProgressData(events, events.length - 1, true);
 
@@ -191,7 +130,7 @@ test('every checked-in trace fixture names the tool on each tool_start event', (
     for (const ev of trace.events) {
       if (ev.phase !== 'tool_start') continue;
       assert.equal(
-        typeof (ev as unknown as LooseEvent).toolName,
+        typeof ev.toolName,
         'string',
         `${trace.id} @${ev.relativeMs}ms: a tool_start event carries the tool name it was recorded from`,
       );
@@ -201,7 +140,6 @@ test('every checked-in trace fixture names the tool on each tool_start event', (
 
 test('capture-trace: the capture records the toolName and operationType the wire carried', () => {
   const capture = createTraceCapture('question', 'fake/model', 'data.example.gov');
-  type RecordEventInput = Parameters<typeof capture.recordEvent>[0];
   capture.recordEvent({
     phase: 'tool_start',
     message: 'Calling search...',
@@ -209,9 +147,9 @@ test('capture-trace: the capture records the toolName and operationType the wire
     args: { query: SEARCH_QUERY },
     toolName: 'search',
     operationType: 'search',
-  } as unknown as RecordEventInput);
+  });
 
-  const [recorded] = capture.exportTrace().events as unknown as LooseEvent[];
+  const [recorded] = capture.exportTrace().events;
   assert.equal(recorded.toolName, 'search', 'the captured event keeps the tool name');
   assert.equal(recorded.operationType, 'search', 'the captured event keeps the operation type');
 });
@@ -220,8 +158,8 @@ test('capture-trace: the capture records the toolName and operationType the wire
 // (d) The group label — the seventh switch, in the comparison hook
 // ---------------------------------------------------------------------------
 
-const entry = (fields: LooseEvent): ProgressLogEntry =>
-  ({ timestamp: 0, phase: 'tool_start', iteration: 1, ...fields }) as unknown as ProgressLogEntry;
+const entry = (fields: Partial<ProgressLogEntry> & { message: string }): ProgressLogEntry =>
+  ({ timestamp: 0, phase: 'tool_start', iteration: 1, ...fields });
 
 test('generateGroupLabel: a search group says it is a search, never "Running query"', () => {
   const label = generateGroupLabel(
@@ -250,34 +188,19 @@ test('generateGroupLabel: a group with no name and no args.type does not claim a
 });
 
 // ---------------------------------------------------------------------------
-// (e) The card
+// (e) The card — the badge table `ToolCallCard` reads by operation type
 // ---------------------------------------------------------------------------
 
-/** The operation-type badge: the uppercase span whose text is the operation type. */
-function renderBadge(opType: string): { tooltip: string | undefined; style: string } {
-  const html = renderToStaticMarkup(
-    createElement(ToolCallCard, { stepNumber: 1, name: 'search', args: { query: SEARCH_QUERY }, operationType: opType }),
-  );
-  const badge = html.match(new RegExp(`<span([^>]*text-transform:uppercase[^>]*)>${opType}</span>`));
-  assert.ok(badge, `the badge span for "${opType}" renders`);
-  const attrs = badge![1];
-  return {
-    tooltip: attrs.match(/data-tooltip="([^"]*)"/)?.[1],
-    style: attrs.match(/style="([^"]*)"/)?.[1] ?? '',
-  };
-}
-
 test('ToolCallCard: a search badge has a tooltip', () => {
-  const { tooltip } = renderBadge('search');
+  const tooltip = OP_BADGE_TOOLTIPS.search;
   assert.ok(tooltip && tooltip.length > 0, 'data-tooltip is defined for a search step');
 });
 
 test('ToolCallCard: a search badge has an entry of its own, painted in tokens', () => {
-  const search = renderBadge('search');
-  const unknown = renderBadge('zz_unknown_operation');
-  assert.notEqual(search.style, unknown.style, 'search is not painted with the no-entry fallback');
-  assert.doesNotMatch(search.style, /#[0-9a-f]{3,8}\b/i, `design tokens by name, never hex: ${search.style}`);
+  const search = OP_BADGE_COLORS.search;
+  assert.ok(search, 'search is not painted with the no-entry fallback');
+  assert.doesNotMatch(`${search.bg} ${search.text}`, /#[0-9a-f]{3,8}\b/i, `design tokens by name, never hex: ${search.bg} ${search.text}`);
   // Green at base, pinned: an operation the card does not know gets no
   // tooltip — absence, not a borrowed sentence.
-  assert.equal(unknown.tooltip, undefined);
+  assert.equal(OP_BADGE_TOOLTIPS.zz_unknown_operation, undefined);
 });
