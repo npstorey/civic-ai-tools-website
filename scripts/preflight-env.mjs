@@ -589,6 +589,67 @@ export const ENV_GROUPS = [
   },
 ];
 
+/**
+ * Query-surface reachability (website#337). Bring-up can PASS every check
+ * above and a reader still has no reachable way to run a query: `/explore`
+ * is withheld by routing, `/ask` (and the executed-notebook path behind it)
+ * by a session, and every query by a model credential — three independent
+ * gates, each individually documented, nowhere named together. This says so.
+ *
+ * Each description below is quoted VERBATIM (backticks aside — Markdown
+ * formatting, not wording) in docs/deploy.md's "Usable, not just built"
+ * table, and `scripts/preflight-env.test.mjs` reads that file and asserts
+ * the two cannot drift apart.
+ *
+ * Informational tier: `evaluateEnv` never lets this block affect `ok`. A
+ * locally-usable instance is a stronger claim than a runnable one, and this
+ * script's PASS/FAIL has always answered the weaker question.
+ */
+export const QUERY_SURFACE_DESCRIPTIONS = {
+  explore: '/explore — reachable on an unnamed host only if SERVE_MARKETING is set (unset: 404)',
+  root: '/ — reachable on an unnamed host only if SERVE_MARKETING is set (unset: redirects to /ask)',
+  ask: '/ask and the executed-notebook path — reachable only with a sign-in provider configured (none: the sign-in panel with no provider)',
+  query: 'any query — reachable only with MODEL_API_KEY set (unset: the no-key error)',
+};
+
+/**
+ * Same parse `src/lib/host-routing.ts`'s `parseBooleanFlag` uses. Duplicated
+ * rather than imported for the same reason every two-name rule in this file
+ * is duplicated: this script is `.mjs` and cannot import TypeScript. Presence
+ * alone is the wrong test here — `SERVE_MARKETING=0` is present but false,
+ * and a presence-only check would call `/explore` reachable when it is not.
+ */
+function parseBooleanFlag(raw) {
+  if (typeof raw !== 'string') return false;
+  const v = raw.trim().toLowerCase();
+  return v === '1' || v === 'true';
+}
+
+/**
+ * Resolve the three gates against the same rows `evaluateEnv` already
+ * computed, plus the one variable (`SERVE_MARKETING`) whose VALUE, not just
+ * presence, decides the outcome. `rows` is keyed by `canonicalName` so this
+ * reads correctly however the operator spelled `MODEL_API_KEY` (see
+ * `resolveEnvName`).
+ *
+ * @param {Record<string, string | undefined>} env
+ * @param {ReturnType<typeof evaluateEnv>['rows']} rows
+ */
+export function evaluateQuerySurfaces(env, rows) {
+  const present = (name) => rows.find((r) => r.canonicalName === name)?.present === true;
+  const serveMarketing = parseBooleanFlag(env.SERVE_MARKETING);
+  const signInProvider =
+    (present('GITHUB_CLIENT_ID') && present('GITHUB_CLIENT_SECRET')) ||
+    (present('OIDC_ISSUER') && present('OIDC_CLIENT_ID') && present('OIDC_CLIENT_SECRET'));
+  const modelKey = present('MODEL_API_KEY');
+  return [
+    { key: 'explore', reachable: serveMarketing, description: QUERY_SURFACE_DESCRIPTIONS.explore },
+    { key: 'root', reachable: serveMarketing, description: QUERY_SURFACE_DESCRIPTIONS.root },
+    { key: 'ask', reachable: signInProvider, description: QUERY_SURFACE_DESCRIPTIONS.ask },
+    { key: 'query', reachable: modelKey, description: QUERY_SURFACE_DESCRIPTIONS.query },
+  ];
+}
+
 const TIER_ORDER = ['required', 'recommended', 'optional'];
 
 /**
@@ -839,6 +900,10 @@ export function evaluateEnv(env, spec = ENV_SPEC) {
   // both spellings work, and the expand half of the settlement exists exactly
   // so that an instance mid-rename is a working instance.
   const deprecatedNames = rows.filter((r) => r.viaPriorEra);
+  // website#337: informational only, like partialGroups above — never read
+  // by `ok` below, because "locally usable" is a stronger claim than
+  // "runnable" and this script's PASS/FAIL has only ever answered the latter.
+  const querySurfaces = evaluateQuerySurfaces(env, rows);
 
   return {
     rows,
@@ -849,6 +914,7 @@ export function evaluateEnv(env, spec = ENV_SPEC) {
     // a partial group never flips `ok` — each member's own tier already
     // governs pass/fail, and the group adds the set semantics on top.
     partialGroups,
+    querySurfaces,
     deprecatedNames,
     // Profile context. `notApplicable` is deliberately NOT rendered as rows:
     // an instance must not be told about variables its profile never reads.
@@ -970,6 +1036,17 @@ export function renderReport(result) {
   if (result.missingRecommended.length > 0) {
     lines.push(`  NOTE: ${result.missingRecommended.length} recommended variable(s) absent (feature(s) will degrade):`);
     for (const r of result.missingRecommended) lines.push(`            - ${r.name}`);
+  }
+  // website#337: printed unconditionally, PASS or FAIL — a passing run is
+  // "runnable", not "a person can reach a query surface", and this is the
+  // only place that says which of the two an instance currently is.
+  if (result.querySurfaces && result.querySurfaces.length > 0) {
+    lines.push('');
+    lines.push('  QUERY SURFACES (informational — never affects PASS/FAIL above)');
+    for (const s of result.querySurfaces) {
+      const tag = s.reachable ? 'reachable' : 'blocked  ';
+      lines.push(`    [${tag}] ${s.description}`);
+    }
   }
   lines.push('');
   return lines.join('\n');

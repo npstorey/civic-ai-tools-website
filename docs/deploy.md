@@ -304,6 +304,38 @@ territory: an HTTP runner that owns the runtime and exposes only
 that exists, the mount is the mechanism and this notice is the
 mitigation.
 
+## Usable, not just built
+
+The instance above came up correctly and can still leave you with no
+reachable way to run a query. Three gates sit between "the containers are
+healthy" and "a person can ask it something," each documented on its own,
+nowhere named together — and they gate differently, so ruling one out tells
+you nothing about the other two.
+
+| Surface | What gates it | Variable | What you see when it's missing |
+| --- | --- | --- | --- |
+| `/explore` | An unnamed host takes the `app` role, and that role withholds the marketing route group (`resolveHostRole`, `src/lib/host-routing.ts:394`; withheld by `decidePathAction`, `:503`) | `SERVE_MARKETING` | `404` |
+| `/` | Same host-role gate; the `app` role redirects root to `/ask` instead of serving the marketing home page (`decidePathAction`, `src/lib/host-routing.ts:501`, returning `APP_ROOT_ACTION`, defined at `:200`) | `SERVE_MARKETING` | `307` redirect to `/ask` |
+| `/ask` and the executed-notebook path behind it | No session, and no OAuth provider configured to start one (`src/app/(app)/ask/AskSignInPanel.tsx:112-116`) | An auth provider — the GitHub pair or the OIDC triple (see [Sign-in configuration](#sign-in-configuration)) | *"This instance has no sign-in provider configured, so there is no way to sign in here yet."* |
+| Any query | No model credential (`src/lib/streaming.ts:244`) | `MODEL_API_KEY` | *"This server has no AI model API key configured, so queries can't run…"* |
+
+The two query surfaces are gated by different mechanisms — `/explore` by
+routing, `/ask` by a session — which is the fact worth internalizing: an
+instance with no sign-in provider still has a working, anonymous query
+surface at `/explore` once `SERVE_MARKETING` is set, and an instance serving
+the full marketing site still shows `/ask` a sign-in prompt with no button
+until a provider is configured.
+
+[`scripts/preflight-env.mjs`](../scripts/preflight-env.mjs) reports this
+same mapping, in the same words, under a **Query surfaces** block on every
+run (informational — it never fails the run, the way the rest of the report
+does not fail on an absent optional variable):
+
+- `/explore` — reachable on an unnamed host only if `SERVE_MARKETING` is set (unset: 404)
+- `/` — reachable on an unnamed host only if `SERVE_MARKETING` is set (unset: redirects to `/ask`)
+- `/ask` and the executed-notebook path — reachable only with a sign-in provider configured (none: the sign-in panel with no provider)
+- any query — reachable only with `MODEL_API_KEY` set (unset: the no-key error)
+
 ## The three driver decisions
 
 An instance is not one fixed deployment shape. Three selector variables
@@ -566,10 +598,10 @@ theming](#branding-and-theming-chrome-only) below), `OIDC_PROVIDER_NAME`
 (button label), `SIGN_IN_ALLOWLIST` (unset or empty = open sign-in,
 exactly the pre-allowlist behavior; see the sign-in section),
 the host-topology set (`APP_HOST`, `MARKETING_HOST`, `SERVE_MARKETING`,
-`APP_ONLY` — with none set, the instance serves the app surface only:
-the marketing pages 404 and `/` redirects to `/ask`. `SERVE_MARKETING`
-is the one variable whose unset state is the correct state for an
-instance; see [Host topology](#host-topology-optional)),
+`APP_ONLY` — `SERVE_MARKETING` is the one variable whose unset state is
+the correct state for an instance; see [Usable, not just
+built](#usable-not-just-built) for what an unset topology gates and
+[Host topology](#host-topology-optional) for the full variable set),
 `SITE_NOINDEX` (unset/empty = indexable, the standard web default; see
 [Indexing](#indexing-optional)),
 the remaining content-source overrides (`DIRECTORY_DATA_URL`,
