@@ -144,7 +144,14 @@ export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
 export interface CompareCompletionResult {
   content: string;
   duration_ms: number;
-  tokens_used: number;
+  // #374: optional so this declaration agrees with its siblings
+  // (openrouter-streaming.ts's CompletionResult, streaming.ts's CompleteEvent).
+  // The value below is unaffected: `result.usage.totalTokens` is a SUM over
+  // the loop's turns and stays a definite `number` (absence contributes
+  // nothing to a sum) per Wave N8 P4b's ruling in absent-usage.test.ts — this
+  // caller never actually produces `undefined` here, this is a type-shape
+  // consistency change only.
+  tokens_used?: number;
   tools_called?: ToolCallRecord[];
 }
 

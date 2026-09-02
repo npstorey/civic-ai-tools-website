@@ -29,7 +29,8 @@ export interface CompleteEvent extends StreamEvent {
   data: {
     content: string;
     duration_ms: number;
-    tokens_used: number;
+    // #374: absent, not `0`, when the endpoint reported no usage total.
+    tokens_used?: number;
     prompt_tokens?: number;
     completion_tokens?: number;
     token_limit_exceeded?: boolean;

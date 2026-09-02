@@ -89,7 +89,8 @@ function reportStreamFailure(panel: PanelType, error: unknown, callbacks: Stream
 export interface CompletionResult {
   content: string;
   duration_ms: number;
-  tokens_used: number;
+  // #374: absent, not `0`, when the endpoint's stream carried no usage total.
+  tokens_used?: number;
   prompt_tokens?: number;
   completion_tokens?: number;
   token_limit_exceeded?: boolean;
@@ -198,7 +199,9 @@ export async function queryWithoutMcpStreaming(
     });
 
     let content = '';
-    let tokensUsed = 0;
+    // #374: undefined means "the endpoint never reported a total" — distinct
+    // from a reported 0, which is a real answer and must survive as 0.
+    let tokensUsed: number | undefined;
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta?.content;
@@ -206,8 +209,10 @@ export async function queryWithoutMcpStreaming(
         content += delta;
         callbacks.onToken(panel, delta);
       }
-      // Track usage from final chunk
-      if (chunk.usage?.total_tokens) {
+      // Track usage from final chunk. Keyed on the endpoint having REPORTED a
+      // total (typeof ... === 'number'), not on the total being truthy — a
+      // reported 0 must not be treated the same as "never reported".
+      if (typeof chunk.usage?.total_tokens === 'number') {
         tokensUsed = chunk.usage.total_tokens;
       }
     }
@@ -217,7 +222,12 @@ export async function queryWithoutMcpStreaming(
     callbacks.onComplete(panel, {
       content,
       duration_ms,
-      tokens_used: tokensUsed,
+      // Omit the key entirely when never reported, rather than sending
+      // `tokens_used: undefined` — in-process consumers (tests, the SSE
+      // route that JSON.stringifies this) see the object as-is, before any
+      // serialization step that would drop an undefined-valued key on its
+      // own.
+      ...(tokensUsed !== undefined ? { tokens_used: tokensUsed } : {}),
     });
   } catch (error) {
     reportStreamFailure(panel, error, callbacks);

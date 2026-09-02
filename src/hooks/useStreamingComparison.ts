@@ -4,7 +4,7 @@ import { useState, useCallback, useRef } from 'react';
 import { createTraceCapture } from '@/lib/bpmn/capture-trace';
 import { connectSSE } from '@/lib/sse-client';
 import { isComparisonRunComplete } from '@/lib/query-presentation';
-import { friendlyStreamError, type ProgressPhase } from '@/lib/streaming';
+import { friendlyStreamError, type ProgressPhase, type CompleteEvent } from '@/lib/streaming';
 
 export interface ToolCall {
   name: string;
@@ -437,15 +437,11 @@ function handleEvent(
       break;
 
     case 'complete':
-      const data = event.data as {
-        content: string;
-        duration_ms: number;
-        tokens_used: number;
-        prompt_tokens?: number;
-        completion_tokens?: number;
-        token_limit_exceeded?: boolean;
-        tools_called?: ToolCall[];
-      };
+      // #374: cast to the wire type itself rather than a hand-typed copy of
+      // it — a private duplicate is what let this site's `tokens_used`
+      // disagree (as a required `number`) with the source of truth in
+      // src/lib/streaming.ts.
+      const data = event.data as CompleteEvent['data'];
       setState(prev => {
         // Mark all log entries as complete
         const newLog = prev[panel].progressLog.map(entry => ({ ...entry, isComplete: true }));

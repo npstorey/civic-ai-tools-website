@@ -13,7 +13,10 @@ interface ToolCall {
 interface ResponseData {
   content: string;
   duration_ms: number;
-  tokens_used: number;
+  // #374: optional for consistency with the other declarations of this wire
+  // shape. This prop is only ever fed `null` at its one call site today
+  // (QuerySurface.tsx), so no live value flows through it either way.
+  tokens_used?: number;
   tools_called?: ToolCall[];
 }
 
