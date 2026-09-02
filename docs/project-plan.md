@@ -223,7 +223,9 @@ same implementation `/api/compare-stream` and a record replay use, since #345.
 Reading the body:
 
 - `tokens_used` on the MCP half is the run's **cumulative** total across every
-  model call the loop made, not the last call's.
+  model call the loop made, not the last call's. On the `withoutMcp` half,
+  `tokens_used` is **omitted** rather than sent as `0` when the endpoint
+  reported no usage total for that call.
 - `tools_called` is **omitted** rather than empty when no tool ran. Each entry
   carries `name` and `args` — the arguments actually sent, the portal this route
   injects into Socrata calls included — plus `operationType`, `reason`,
