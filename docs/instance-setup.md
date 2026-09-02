@@ -337,7 +337,12 @@ Field notes, all of them things the validator will tell you about anyway:
 
 ### 5.3 The first-query check
 
-Bring the instance up and work outward from the cheapest check.
+Bring the instance up and work outward from the cheapest check. This
+walks the API path directly (`curl`, not a browser); if you are checking
+from a browser instead, `/ask` and `/explore` are gated by different
+mechanisms — see ["Usable, not just
+built"](deploy.md#usable-not-just-built) in the deploy guide before
+concluding either one is broken.
 
 ```bash
 # 1. Presence — and one comparison. No value is ever printed; MODEL_API_BASE_URL

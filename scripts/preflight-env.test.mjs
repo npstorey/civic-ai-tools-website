@@ -12,6 +12,7 @@ import {
   BUILT_IN_MODEL_BASE_URL,
   evaluateEnv,
   evaluateGroups,
+  evaluateQuerySurfaces,
   renderReport,
   resolveDrivers,
   resolveEnvName,
@@ -20,6 +21,7 @@ import {
   ENV_GROUPS,
   DRIVER_SEAMS,
   OIDC_PROVIDER_SET,
+  QUERY_SURFACE_DESCRIPTIONS,
 } from './preflight-env.mjs';
 
 const REQUIRED = ENV_SPEC.filter((s) => s.tier === 'required').map((s) => s.name);
@@ -1192,4 +1194,123 @@ test('evaluateGroups is pure and driver-aware when called directly', () => {
   const { drivers: defaults } = resolveDrivers({});
   const partialDefault = evaluateGroups({ VERCEL_TOKEN: 'present' }, defaults);
   assert.ok(partialDefault.some((g) => g.name === 'Vercel Sandbox off-platform auth'));
+});
+
+// --- website#337: query-surface reachability -------------------------------
+//
+// An instance can PASS every check above and still have no reachable way to
+// run a query: `/explore` is withheld by routing, `/ask` by a session, every
+// query by a model credential. These pin the report side of that fix; the
+// doc-agreement test at the bottom pins the other.
+
+test('#337: with none of the three gates satisfied, the report names all three as blocked', () => {
+  const env = envWithAllRequired();
+  // envWithAllRequired sets GITHUB_CLIENT_ID/SECRET and MODEL_API_KEY
+  // (all `required`) — unset them to reach the RED state this fix closes.
+  delete env.GITHUB_CLIENT_ID;
+  delete env.GITHUB_CLIENT_SECRET;
+  delete env.MODEL_API_KEY;
+  // SERVE_MARKETING is optional and already absent from envWithAllRequired.
+  const result = evaluateEnv(env);
+  assert.deepEqual(
+    result.querySurfaces.map((s) => s.reachable),
+    [false, false, false, false],
+  );
+  const report = renderReport(result);
+  assert.match(report, /QUERY SURFACES/);
+  for (const description of Object.values(QUERY_SURFACE_DESCRIPTIONS)) {
+    assert.ok(report.includes(description), `report should print: ${description}`);
+  }
+  assert.equal((report.match(/\[blocked\s*\]/g) ?? []).length, 4);
+});
+
+test('#337: with all three gates satisfied, the report names all four surfaces reachable', () => {
+  const env = envWithAllRequired(); // GITHUB pair + MODEL_API_KEY already present
+  env.SERVE_MARKETING = '1';
+  const result = evaluateEnv(env);
+  assert.deepEqual(
+    result.querySurfaces.map((s) => s.reachable),
+    [true, true, true, true],
+  );
+  const report = renderReport(result);
+  assert.equal((report.match(/\[reachable\]/g) ?? []).length, 4);
+  assert.equal((report.match(/\[blocked\s*\]/g) ?? []).length, 0);
+});
+
+test('#337: the OIDC triple satisfies the sign-in gate exactly like the GitHub pair', () => {
+  const env = envWithAllRequired();
+  delete env.GITHUB_CLIENT_ID;
+  delete env.GITHUB_CLIENT_SECRET;
+  for (const name of OIDC_PROVIDER_SET) env[name] = 'present';
+  const result = evaluateEnv(env);
+  const ask = result.querySurfaces.find((s) => s.key === 'ask');
+  assert.equal(ask.reachable, true);
+});
+
+test('#337: SERVE_MARKETING is read for its VALUE, not merely its presence', () => {
+  // Mirrors src/lib/host-routing.ts's parseBooleanFlag: '0' is present but
+  // false, and a presence-only check would call /explore reachable when the
+  // routing layer still 404s it.
+  const env = envWithAllRequired();
+  env.SERVE_MARKETING = '0';
+  const result = evaluateEnv(env);
+  assert.equal(result.querySurfaces.find((s) => s.key === 'explore').reachable, false);
+  env.SERVE_MARKETING = 'true';
+  const trueResult = evaluateEnv(env);
+  assert.equal(trueResult.querySurfaces.find((s) => s.key === 'explore').reachable, true);
+});
+
+test('#337: the query-surfaces block never affects ok / PASS-FAIL', () => {
+  const passing = envWithAllRequired();
+  passing.SERVE_MARKETING = '1';
+  assert.equal(evaluateEnv(passing).ok, true);
+
+  const failingSurfaces = envWithAllRequired();
+  delete failingSurfaces.GITHUB_CLIENT_ID;
+  delete failingSurfaces.GITHUB_CLIENT_SECRET;
+  delete failingSurfaces.MODEL_API_KEY;
+  const result = evaluateEnv(failingSurfaces);
+  // GITHUB_CLIENT_ID/SECRET and MODEL_API_KEY are `required` in ENV_SPEC —
+  // deleting them fails `ok` on its own tier, same as before this fix
+  // existed. The point pinned here is that adding the surfaces block did
+  // not change WHY it fails or introduce a new way for it to fail.
+  assert.equal(result.ok, false);
+  assert.deepEqual(
+    result.missingRequired.map((r) => r.name).sort(),
+    ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'MODEL_API_KEY'],
+  );
+});
+
+test('#337: evaluateQuerySurfaces is pure and callable directly', () => {
+  const rows = [
+    { canonicalName: 'GITHUB_CLIENT_ID', present: true },
+    { canonicalName: 'GITHUB_CLIENT_SECRET', present: true },
+    { canonicalName: 'MODEL_API_KEY', present: false },
+  ];
+  const surfaces = evaluateQuerySurfaces({ SERVE_MARKETING: '1' }, rows);
+  assert.deepEqual(
+    surfaces.map((s) => [s.key, s.reachable]),
+    [
+      ['explore', true],
+      ['root', true],
+      ['ask', true],
+      ['query', false],
+    ],
+  );
+});
+
+test('#337: the deploy.md table quotes the report\'s query-surface wording verbatim', () => {
+  // The report and the doc are two artifacts describing the same three
+  // gates; a shared constant is the only way they cannot drift apart. This
+  // reads the doc rather than trusting a PR description to keep the two in
+  // step — Markdown formatting (backticks) is stripped before comparing,
+  // since that is presentation, not wording.
+  const deployDoc = readFileSync(new URL('../docs/deploy.md', import.meta.url), 'utf8');
+  const withoutBackticks = deployDoc.replace(/`/g, '');
+  for (const description of Object.values(QUERY_SURFACE_DESCRIPTIONS)) {
+    assert.ok(
+      withoutBackticks.includes(description),
+      `docs/deploy.md should quote verbatim: ${description}`,
+    );
+  }
 });
