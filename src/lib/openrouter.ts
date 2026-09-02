@@ -31,7 +31,8 @@ import type { ModelIdentity } from './model-catalog.ts';
 export interface CompletionResult {
   content: string;
   duration_ms: number;
-  tokens_used: number;
+  // #374: absent, not `0`, when the endpoint reported no usage total.
+  tokens_used?: number;
 }
 
 export async function queryWithoutMcp(
@@ -56,11 +57,14 @@ export async function queryWithoutMcp(
 
   const duration_ms = Date.now() - startTime;
   const content = response.choices[0]?.message?.content || '';
-  const tokens_used = response.usage?.total_tokens || 0;
+  // #374: keyed on the endpoint having REPORTED a total, not on the total
+  // being truthy — a reported 0 must survive as 0, and an unreported total
+  // must be absent from the result rather than sent as 0.
+  const reported = response.usage?.total_tokens;
 
   return {
     content,
     duration_ms,
-    tokens_used,
+    ...(typeof reported === 'number' ? { tokens_used: reported } : {}),
   };
 }
