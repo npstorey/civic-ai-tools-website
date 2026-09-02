@@ -1,13 +1,23 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { createTraceCapture } from '@/lib/bpmn/capture-trace';
-import { connectSSE } from '@/lib/sse-client';
-import { isComparisonRunComplete } from '@/lib/query-presentation';
-import { friendlyStreamError, type ProgressPhase, type CompleteEvent } from '@/lib/streaming';
+// Relative, extension-carrying imports (the convention of src/lib since #345)
+// rather than the `@/` alias: the test runner has no path mapping, and the
+// label functions this module exports are under test (#384).
+import { createTraceCapture } from '../lib/bpmn/capture-trace.ts';
+import { connectSSE } from '../lib/sse-client.ts';
+import { isComparisonRunComplete } from '../lib/query-presentation.ts';
+import { friendlyStreamError, type ProgressPhase, type CompleteEvent } from '../lib/streaming.ts';
+import { deriveOperationType } from '../lib/mcp/operation-types.ts';
 
 export interface ToolCall {
-  name: string;
+  /**
+   * Absent — never a stand-in — when the record the call was built from did
+   * not carry a tool name (#384: a trace event from before the wire carried
+   * one). The loop always records a name, so a live call has one; the readers
+   * that can meet a replayed call say "unnamed" in words.
+   */
+  name?: string;
   args: Record<string, unknown>;
   resultSummary?: { rows: number; columns: number };
   duration_ms?: number;
@@ -28,6 +38,9 @@ export interface ProgressLogEntry {
   phase?: string;
   iteration?: number;
   args?: Record<string, unknown>;
+  /** As on the progress event (see `ProgressEvent`, #384). */
+  toolName?: string;
+  operationType?: string;
 }
 
 export interface ProgressGroup {
@@ -145,6 +158,8 @@ export function useStreamingComparison() {
                 iteration: eventData.iteration as number | undefined,
                 args: eventData.args as Record<string, unknown> | undefined,
                 duration_ms: eventData.duration_ms as number | undefined,
+                toolName: eventData.toolName as string | undefined,
+                operationType: eventData.operationType as string | undefined,
               });
             } else if (eventData.type === 'complete') {
               const trace = traceCaptureRef.current.exportTrace();
@@ -214,7 +229,7 @@ export function mapGroupsToToolCalls(groups: ProgressGroup[], toolsCalled: ToolC
   return result;
 }
 
-import { generateQueryIntentLabel, getDatasetName as getDatasetNameFromStreaming } from '@/lib/streaming';
+import { generateQueryIntentLabel, getDatasetName as getDatasetNameFromStreaming, searchSubject } from '../lib/streaming.ts';
 
 // Known dataset names for rich labels
 const DATASET_NAMES: Record<string, string> = {
@@ -225,19 +240,39 @@ const DATASET_NAMES: Record<string, string> = {
   'vw6y-z8j6': '311 Cases',
 };
 
-// Generate a rich label from structured args when available
+/**
+ * The operation type an entry carries: the one the loop recorded, else the
+ * loop's own derivation from the recorded name (`deriveOperationType` — the
+ * single derivation, never a second one, and never from the message text);
+ * nothing for an entry that carries neither (#384).
+ */
+function entryOperationType(entry: ProgressLogEntry): string | undefined {
+  if (entry.operationType) return entry.operationType;
+  if (entry.toolName) return deriveOperationType(entry.toolName, entry.args ?? {});
+  return undefined;
+}
+
+// Generate a rich label from what the entries recorded — the tool name and
+// operation type first, then the arguments — when available
 function generateRichLabel(entries: ProgressLogEntry[], previousEntries?: ProgressLogEntry[]): string | null {
   const toolStarts = entries.filter(e => e.phase === 'tool_start' && e.args);
   if (toolStarts.length === 0) return null;
 
-  const firstArgs = toolStarts[0].args!;
-  const opType = firstArgs.type as string | undefined;
+  const first = toolStarts[0];
+  const firstArgs = first.args!;
+  const opType = entryOperationType(first);
   const datasetId = firstArgs.dataset_id as string | undefined;
   const datasetName = datasetId ? (DATASET_NAMES[datasetId] || getDatasetNameFromStreaming(datasetId)) : null;
 
   if (opType === 'catalog') {
     const query = firstArgs.query as string | undefined;
     return query ? `Searching for datasets about "${query}"` : 'Searching the data catalog';
+  }
+
+  if (opType === 'search') {
+    const query = firstArgs.query as string | undefined;
+    const subject = searchSubject(first.toolName).plural;
+    return query ? `Searching for ${subject} about "${query}"` : `Searching for ${subject}`;
   }
 
   if (opType === 'metadata' && datasetName) {
@@ -259,6 +294,13 @@ function generateRichLabel(entries: ProgressLogEntry[], previousEntries?: Progre
     return `Checking ${datasetName} statistics`;
   }
 
+  // `fetch` derives to no operation type by design (mcp/operation-types.ts);
+  // the label names what was asked for and asserts nothing about the answer.
+  if (first.toolName === 'fetch') {
+    const id = firstArgs.id as string | undefined;
+    return id ? `Looking up ${id}` : 'Looking up one item';
+  }
+
   return null;
 }
 
@@ -270,7 +312,16 @@ export function generateGroupLabel(entries: ProgressLogEntry[], previousEntries?
   const toolStarts = entries.filter(e => e.phase === 'tool_start');
   if (toolStarts.length === 0) return 'Processing';
 
-  // Fallback: extract operation types from messages
+  // An entry that names its tool but has no rich label above is a call whose
+  // operation these labels do not describe. Its label repeats what the record
+  // says; the keyword matching below is for entries that recorded nothing —
+  // it must never overrule a name (#384).
+  // (`get_data`'s name in user language is "gather data", as in `generateToolReason`.)
+  const named = toolStarts.find(e => e.toolName || e.operationType);
+  if (named) return named.toolName && named.toolName !== 'get_data' ? `Calling ${named.toolName}` : 'Gathering data';
+
+  // Fallback for entries that carry neither a tool name nor an operation type:
+  // extract operation types from messages
   const messages = toolStarts.map(e => e.message.toLowerCase());
   const hasCatalog = messages.some(m => m.includes('searching') && m.includes('catalog'));
   const hasMetadata = messages.some(m => m.includes('metadata'));
@@ -283,7 +334,11 @@ export function generateGroupLabel(entries: ProgressLogEntry[], previousEntries?
   if (hasQuery) return 'Querying data';
   if (hasMetrics) return 'Checking dataset statistics';
 
-  return 'Running query';
+  // Nothing recorded says what these calls were, so the label claims nothing:
+  // the same provisional label the group carried while it was open. This
+  // branch used to announce a query — a positively wrong label for any group
+  // that was not one (#377).
+  return 'Gathering data';
 }
 
 function handleEvent(
@@ -300,9 +355,11 @@ function handleEvent(
         const phase = event.phase as string | undefined;
         const iteration = event.iteration as number | undefined;
         const args = event.args as Record<string, unknown> | undefined;
+        const toolName = event.toolName as string | undefined;
+        const operationType = event.operationType as string | undefined;
         const newLog = [...prev[panel].progressLog];
         const newGroups = prev[panel].progressGroups.map(g => ({ ...g, entries: [...g.entries] }));
-        const entry: ProgressLogEntry = { message, timestamp: Date.now(), duration_ms, phase, iteration, args };
+        const entry: ProgressLogEntry = { message, timestamp: Date.now(), duration_ms, phase, iteration, args, toolName, operationType };
 
         if (phase === 'tool_complete' && iteration !== undefined) {
           // Update the matching tool_start entry in-place within its group

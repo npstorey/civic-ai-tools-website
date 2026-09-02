@@ -3,30 +3,18 @@
 import { useState } from 'react';
 import SoqlDisplay from './SoqlDisplay';
 import { generatePlainEnglishQuery } from '@/lib/streaming';
+import { OP_BADGE_COLORS, OP_BADGE_TOOLTIPS } from './tool-badges';
 
 interface ToolCallCardProps {
   stepNumber: number;
-  name: string;
+  /** Absent when the record carried no tool name (see `ToolCall.name`, #384). */
+  name?: string;
   args: Record<string, unknown>;
   resultSummary?: { rows: number; columns: number };
   duration_ms?: number;
   operationType?: string;
   reason?: string;
 }
-
-const OP_BADGE_COLORS: Record<string, { bg: string; text: string }> = {
-  catalog: { bg: '#EEF2FF', text: '#4338CA' },
-  query: { bg: '#ECFEFF', text: '#0E7490' },
-  metadata: { bg: '#FFFBEB', text: '#B45309' },
-  metrics: { bg: '#F5F3FF', text: '#7C3AED' },
-};
-
-const OP_BADGE_TOOLTIPS: Record<string, string> = {
-  catalog: "Searching the portal's directory of available datasets",
-  query: 'Running a structured query against the dataset — filtering and aggregating records',
-  metadata: 'Reading the data dictionary — the list of columns and what each one contains',
-  metrics: 'Fetching summary statistics about the dataset (row count, update frequency, etc.)',
-};
 
 function buildSocrataUrl(args: Record<string, unknown>): { json: string; csv: string } | null {
   const type = args.type as string;
@@ -88,8 +76,15 @@ export default function ToolCallCard({
   reason,
 }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const opType = operationType || (args.type as string) || 'call';
-  const badgeColors = OP_BADGE_COLORS[opType] || { bg: 'var(--card-background)', text: 'var(--text-secondary)' };
+  // The recorded operation type, else `args.type` (only `get_data` carries
+  // it); nothing for a call the record does not type (`fetch`, by design).
+  const opType = operationType || (args.type as string | undefined) || undefined;
+  // The badge says what the record says: the operation type, else the tool's
+  // recorded name, else that the name is missing — never a stand-in such as
+  // "call" that reads like a type (#384).
+  const badgeLabel = opType ?? name ?? 'unnamed';
+  const badgeTooltip = opType ? OP_BADGE_TOOLTIPS[opType] : undefined;
+  const badgeColors = (opType && OP_BADGE_COLORS[opType]) || { bg: 'var(--card-background)', text: 'var(--text-secondary)' };
   const urls = buildSocrataUrl(args);
   const datasetId = args.dataset_id as string | undefined;
   const plainEnglish = opType === 'query' ? generatePlainEnglishQuery(args) : null;
@@ -140,7 +135,7 @@ export default function ToolCallCard({
 
         {/* Operation type badge */}
         <span
-          data-tooltip={OP_BADGE_TOOLTIPS[opType]}
+          data-tooltip={badgeTooltip}
           style={{
             padding: '1px 6px',
             borderRadius: '3px',
@@ -150,11 +145,11 @@ export default function ToolCallCard({
             backgroundColor: badgeColors.bg,
             color: badgeColors.text,
             flexShrink: 0,
-            cursor: OP_BADGE_TOOLTIPS[opType] ? 'help' : undefined,
+            cursor: badgeTooltip ? 'help' : undefined,
             position: 'relative',
           }}
         >
-          {opType}
+          {badgeLabel}
         </span>
 
         {/* Reason */}
@@ -227,7 +222,7 @@ export default function ToolCallCard({
                 fontWeight: 600,
               }}
             >
-              {name}
+              {name ?? '(not recorded)'}
             </code>
           </div>
 

@@ -123,6 +123,8 @@ export function useLiveTrace(): UseLiveTraceReturn {
     iteration: number | undefined,
     args: Record<string, unknown> | undefined,
     duration_ms: number | undefined,
+    toolName: string | undefined,
+    operationType: string | undefined,
   ) => {
     const entry: ProgressLogEntry = {
       message,
@@ -131,6 +133,8 @@ export function useLiveTrace(): UseLiveTraceReturn {
       phase,
       iteration,
       args,
+      toolName,
+      operationType,
     };
 
     if (phase === 'tool_complete' && iteration !== undefined) {
@@ -336,12 +340,14 @@ export function useLiveTrace(): UseLiveTraceReturn {
           const args = eventData.args as Record<string, unknown> | undefined;
           const duration_ms = eventData.duration_ms as number | undefined;
           const resultSummary = eventData.resultSummary as { rows: number; columns: number } | undefined;
+          const toolName = eventData.toolName as string | undefined;
+          const operationType = eventData.operationType as string | undefined;
 
           // Record for trace capture
-          traceCaptureRef.current?.recordEvent({ phase, message, iteration, args, duration_ms, resultSummary });
+          traceCaptureRef.current?.recordEvent({ phase, message, iteration, args, duration_ms, resultSummary, toolName, operationType });
 
           // Build progress log entries (same as home page)
-          handleProgressEvent(phase, message, iteration, args, duration_ms);
+          handleProgressEvent(phase, message, iteration, args, duration_ms, toolName, operationType);
 
           if (iteration !== undefined) {
             setCurrentIteration(iteration);
@@ -356,6 +362,8 @@ export function useLiveTrace(): UseLiveTraceReturn {
             args,
             duration_ms,
             resultSummary,
+            toolName,
+            operationType,
           };
 
           const steps = mapEventToNodes(traceEvent);

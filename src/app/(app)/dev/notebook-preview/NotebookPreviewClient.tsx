@@ -59,6 +59,7 @@ function buildState(
       return {
         phase: stateParam,
         detail: PHASE_DETAILS[stateParam] ?? null,
+        detailTool: null,
         toolCalls: FIXTURE_TOOL_CALLS.slice(0, stateParam === 'A' ? 2 : 3),
         phaseStartedAt: Date.now() - 18_000,
         startedAt: baseStarted,
@@ -81,6 +82,7 @@ function buildState(
       return {
         phase: 'C',
         detail: null,
+        detailTool: null,
         toolCalls: FIXTURE_TOOL_CALLS,
         phaseStartedAt: Date.now() - 32_000,
         startedAt: baseStarted,
@@ -103,6 +105,7 @@ function buildState(
       return {
         phase: 'complete',
         detail: null,
+        detailTool: null,
         toolCalls: FIXTURE_TOOL_CALLS,
         phaseStartedAt: null,
         startedAt: baseStarted,

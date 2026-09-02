@@ -799,7 +799,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       if (portal && !argumentsMalformed && name === 'get_data' && !args.portal) args.portal = portal;
 
       const operationType = deriveOperationType(name, args);
-      const reason = generateToolReason(args);
+      const reason = generateToolReason(args, name);
       // `args` goes onto the record BY REFERENCE and is handed to
       // `executeToolCall` unchanged — see this file's header.
       const toolEntry: ToolCallRecord = { name, args, operationType, reason };
