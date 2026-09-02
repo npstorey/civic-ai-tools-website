@@ -29,7 +29,7 @@ remote) — don't design an owner-run leg around the assumption that it doesn't.
 
 | Command | Healthy output |
 |---|---|
-| `npm test` | `# pass 1176` / `# fail 0` (`node --test` TAP summary) |
+| `npm test` | `# pass 1205` / `# fail 0` (`node --test` TAP summary) — the total rises as tests are added; `# fail 0` is the gate (#381) |
 | `npm run build` | `✓ Compiled successfully`, then the Route (app) table |
 | `npm run typecheck` | no output, exit 0 — **run after `npm run build`** (tsconfig includes `.next/types`, which the build emits) |
 | `npm run lint` | `✖ 3 problems (0 errors, 3 warnings)` — warnings are the baseline; **zero errors** is the gate |
@@ -158,3 +158,18 @@ Each cost a real mistake; the incident sits in an HTML comment beside it. Path-s
        where the skill fetch SUCCEEDS — the healthy path, unguarded through two waves. The fix was
        also the opposite of the assumed one: the server implements both tools, so the schemas were
        added rather than the text stripped. Measure the other side before deleting a capability. -->
+
+- **A blast zone follows the record, not only the call graph.** Before scoping a change, ask what
+  *reads what this change produces* — the signed package, the trace, the attestation keys, the
+  notebook — not only what calls the code being edited. Those consumers are a different graph, and a
+  zone derived correctly from the first one cannot see a defect in the second.
+  <!-- Wave #363 made `search` and `fetch` model-callable, correctly, after measuring that the server
+       implements both. Neither carries `type`, `dataset_id` or `portal` — the four fields
+       `canonicalizeToolCall` keys on — so every search collapsed to `search:::`, two replay runs that
+       searched for different things scored a Jaccard overlap of 1, and a SIGNED consistency
+       attestation called them `highly_reproducible` at "Tool overlap: 100%". Every zone in that wave
+       was drawn correctly from the call graph of the change; `AttestationDialog.tsx` calls none of the
+       changed code, it reads the record the change produces. The same probe then showed the key had
+       been wrong since before those tools existed: two `get_data` calls on one dataset with different
+       `WHERE` clauses also collapsed to one key. A hand-picked field list is the defect; the key is
+       now the tool name plus canonical JSON of every argument. -->
