@@ -220,11 +220,13 @@ function TimingFooter({
         </div>
       </div>
 
-      {/* Token line */}
-      {tokens_used && (
+      {/* Token line — guarded on presence, never on the truthiness of a
+          number (#384 P8, F4): a reported 0 is preserved on the wire (#374)
+          and React renders `0 && <x/>` as the text "0". */}
+      {tokens_used !== undefined && (
         <div style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
           Tokens:{' '}
-          {prompt_tokens && completion_tokens ? (
+          {prompt_tokens !== undefined && completion_tokens !== undefined ? (
             <>{prompt_tokens.toLocaleString()} in{' \u00b7 '}{completion_tokens.toLocaleString()} out{' \u00b7 '}{tokens_used.toLocaleString()} total</>
           ) : (
             <>{tokens_used.toLocaleString()} total</>
@@ -445,6 +447,12 @@ export default function McpResponseDisplay({
 
   // Process content: add dataset links for known IDs from tool calls
   const processedContent = linkDatasetIds(content, toolsCalled);
+
+  // The footer's two layouts, decided on PRESENCE (#384 P8, F4): the timing
+  // bar needs tools and a measured duration; the plain summary line takes
+  // over otherwise. A duration or token count of 0 is a measurement, not an
+  // absence, and never decides whether a child renders.
+  const timingFooterShown = toolsCalled.length > 0 && duration_ms !== undefined;
 
   // Build provenance line
   const provenance = (content && toolsCalled.length > 0)
@@ -679,7 +687,7 @@ export default function McpResponseDisplay({
       )}
 
       {/* Footer */}
-      {showFooter && !!(duration_ms || tokens_used) && (
+      {showFooter && (duration_ms !== undefined || tokens_used !== undefined) && (
         <div
           style={{
             flexShrink: 0,
@@ -688,7 +696,7 @@ export default function McpResponseDisplay({
             backgroundColor: 'rgba(0, 183, 3, 0.05)',
           }}
         >
-          {toolsCalled.length > 0 && duration_ms && (
+          {toolsCalled.length > 0 && duration_ms !== undefined && (
             <TimingFooter
               tools={toolsCalled}
               totalDuration={duration_ms}
@@ -710,12 +718,12 @@ export default function McpResponseDisplay({
               color: 'var(--text-muted)',
             }}
           >
-            {!(toolsCalled.length > 0 && duration_ms) && duration_ms && (
+            {!timingFooterShown && duration_ms !== undefined && (
               <span>
                 <strong>Time:</strong> {(duration_ms / 1000).toFixed(2)}s
               </span>
             )}
-            {!(toolsCalled.length > 0 && duration_ms) && tokens_used && (
+            {!timingFooterShown && tokens_used !== undefined && (
               <span>
                 <strong>Tokens:</strong> {tokens_used.toLocaleString()}
                 {token_limit_exceeded && (
