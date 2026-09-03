@@ -55,11 +55,23 @@ export function traceEventsToProgressData(
       args: event.args,
       toolName: event.toolName,
       operationType: event.operationType,
+      // The rejection the event carried, if any (#384 P8, F2); absent stays absent.
+      ...(event.failed !== undefined ? { failed: event.failed } : {}),
+      ...(event.failureKind !== undefined ? { failureKind: event.failureKind } : {}),
     };
 
     const { phase, iteration } = event;
 
     if (phase === 'tool_complete' && iteration !== undefined) {
+      // The end event's outcome travels onto the start entry it pairs to —
+      // the same pairing the live hooks use — so the call built from that
+      // entry below can say it was rejected.
+      const outcome = {
+        isComplete: true,
+        duration_ms: event.duration_ms,
+        ...(event.failed !== undefined ? { failed: event.failed } : {}),
+        ...(event.failureKind !== undefined ? { failureKind: event.failureKind } : {}),
+      };
       // Update matching tool_start entry within its group
       const group = progressGroups.find(g => g.iteration === iteration);
       if (group) {
@@ -67,7 +79,7 @@ export function traceEventsToProgressData(
           e => e.phase === 'tool_start' && e.message === event.message && !e.isComplete
         );
         if (startIdx !== -1) {
-          group.entries[startIdx] = { ...group.entries[startIdx], isComplete: true, duration_ms: event.duration_ms };
+          group.entries[startIdx] = { ...group.entries[startIdx], ...outcome };
         }
       }
       // Also update in flat log
@@ -75,7 +87,7 @@ export function traceEventsToProgressData(
         e => e.phase === 'tool_start' && e.message === event.message && !e.isComplete
       );
       if (flatIdx !== -1) {
-        progressLog[flatIdx] = { ...progressLog[flatIdx], isComplete: true, duration_ms: event.duration_ms };
+        progressLog[flatIdx] = { ...progressLog[flatIdx], ...outcome };
       }
       continue;
     }
@@ -145,6 +157,10 @@ export function traceEventsToProgressData(
           args: entry.args,
           duration_ms: entry.duration_ms,
           ...(operationType !== undefined ? { operationType } : {}),
+          // Read off the end event's outcome, paired above (#384 P8, F2) —
+          // never inferred from a missing result.
+          ...(entry.failed !== undefined ? { failed: entry.failed } : {}),
+          ...(entry.failureKind !== undefined ? { failureKind: entry.failureKind } : {}),
         };
         // Find matching result in group for resultSummary
         const resultEntry = group.entries.find(

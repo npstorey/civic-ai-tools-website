@@ -55,7 +55,7 @@ interface QueryNotebookRequest {
 
 type NotebookEvent =
   | { type: 'phase'; name: 'A' | 'B' | 'C' | 'D' | 'complete'; message: string }
-  | { type: 'phase_a_progress'; message: string; phase?: string; iteration?: number; toolName?: string; operationType?: string }
+  | { type: 'phase_a_progress'; message: string; phase?: string; iteration?: number; toolName?: string; operationType?: string; failed?: boolean; failureKind?: PhaseAToolCall['failureKind'] }
   | { type: 'phase_a_tool_call'; name: string; operationType?: string; reason?: string; resultSummary?: { rows: number; columns: number }; args?: Record<string, unknown>; duration_ms?: number; failed?: boolean; failureKind?: PhaseAToolCall['failureKind'] }
   | { type: 'phase_a_answer'; content: string }
   // `signingKeyId` is null when this instance has declared no PUBLISHER_KEY_ID:
@@ -386,10 +386,14 @@ async function runPhaseA(args: {
     const callbacks: StreamCallbacks = {
       onProgress: (panel, message, opts) => {
         if (panel !== 'withMcp') return;
-        if (opts?.phase === 'tool_start') {
-          // Hand-picked fields, so what the loop recorded has to be carried
-          // here by name (#384): the tool and its operation type travel with
-          // the line, absent when the loop derived none.
+        // Every tool-phase line the loop reports, not only the start (#384
+        // P8, F2): this used to forward `tool_start` alone, so a call's end
+        // — and a rejection, which only an end event can carry — never
+        // reached the notebook page. Hand-picked fields, so what the loop
+        // recorded has to be carried here by name: the tool and its
+        // operation type, absent when the loop derived none, and the
+        // rejection, absent when the call was answered.
+        if (opts?.phase === 'tool_start' || opts?.phase === 'tool_complete' || opts?.phase === 'tool_result') {
           void emit({
             type: 'phase_a_progress',
             message,
@@ -397,6 +401,8 @@ async function runPhaseA(args: {
             iteration: opts.iteration,
             ...(opts.toolName !== undefined ? { toolName: opts.toolName } : {}),
             ...(opts.operationType !== undefined ? { operationType: opts.operationType } : {}),
+            ...(opts.failed !== undefined ? { failed: opts.failed } : {}),
+            ...(opts.failureKind !== undefined ? { failureKind: opts.failureKind } : {}),
           });
         }
       },

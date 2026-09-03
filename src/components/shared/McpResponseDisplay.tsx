@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ProgressLog from '@/components/ProgressLog';
 import SkillPromptDisclosure from '@/components/SkillPromptDisclosure';
-import { buildProvenanceLine, buildNarrativeSummary, buildStatsSummary, getPortalCity } from '@/lib/streaming';
+import { buildProvenanceLine, buildNarrativeSummary, buildStatsSummary, getPortalCity, isQueryCall } from '@/lib/streaming';
 import { generateNotebook, downloadNotebook } from '@/lib/notebook';
 import type { ProgressLogEntry, ProgressGroup, ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
 import { useSession, signIn } from 'next-auth/react';
@@ -263,10 +263,13 @@ function TimingFooter({
 function linkDatasetIds(markdown: string, toolsCalled?: ToolCall[]): string {
   if (!toolsCalled || toolsCalled.length === 0 || !markdown) return markdown;
 
+  // A rejected call touched no dataset (#384 P8, F2): only the calls that
+  // were answered can mint a link, and only their portals can be borrowed.
+  const answered = toolsCalled.filter(t => !t.failed);
   const idToUrl = new Map<string, string>();
-  const firstPortal = toolsCalled.find(t => t.args.portal)?.args.portal as string | undefined;
+  const firstPortal = answered.find(t => t.args.portal)?.args.portal as string | undefined;
 
-  for (const tool of toolsCalled) {
+  for (const tool of answered) {
     const id = tool.args.dataset_id as string | undefined;
     const portal = (tool.args.portal as string | undefined) || firstPortal;
     if (id && portal && !idToUrl.has(id)) {
@@ -730,8 +733,10 @@ export default function McpResponseDisplay({
                   const parts: string[] = [];
                   // Header: query and portal(s)
                   if (queryText) parts.push(`**Query:** ${queryText}`);
+                  // The portals data came from — not one a rejected call
+                  // was made to (#384 P8, F2).
                   const copyPortals = [...new Set(
-                    toolsCalled.map(t => t.args.portal as string).filter(Boolean)
+                    toolsCalled.filter(t => !t.failed).map(t => t.args.portal as string).filter(Boolean)
                   )];
                   if (copyPortals.length === 1) {
                     parts.push(`**Portal:** ${getPortalCity(copyPortals[0])}`);
@@ -791,7 +796,7 @@ export default function McpResponseDisplay({
             )}
 
             {/* Download notebook button */}
-            {content && toolsCalled.some(t => t.operationType === 'query') && (
+            {content && toolsCalled.some(isQueryCall) && (
               <button
                 onClick={() => {
                   const p = (toolsCalled.find(t => t.args.portal)?.args.portal as string) || portal || 'data.cityofnewyork.us';

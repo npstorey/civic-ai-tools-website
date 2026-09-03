@@ -31,6 +31,15 @@ export interface ProgressEvent extends StreamEvent {
    */
   toolName?: string;
   operationType?: string;
+  /**
+   * The loop recorded the call as rejected (#384 P8, F2). Carried on the
+   * call's end event (phase `tool_complete`, the one every consumer pairs to
+   * its `tool_start`) and on the outcome event that follows it (phase
+   * `tool_result`, whose message is the outcome formatter's sentence). Absent
+   * on every event of a call that was answered — absent is absent.
+   */
+  failed?: boolean;
+  failureKind?: ToolFailureKind;
 }
 
 export interface TokenEvent extends StreamEvent {
@@ -1117,15 +1126,29 @@ function describeToolNarrative(
   }
 }
 
+/**
+ * A rejected call, narrated as what it tried and that it did not complete —
+ * never in the past tense of an action that happened (#384 P8, F2). `reason`
+ * is the loop's own "to …" phrase for the attempt (`generateToolReason`);
+ * a record that carries none is stated as a request, not guessed at.
+ */
+function describeRejectedAttempt(reason: string | undefined): string {
+  return reason ? `tried ${reason}, but the request did not complete` : 'made a request that did not complete';
+}
+
 // Build a narrative summary telling the analytical story of what the AI did
 export function buildNarrativeSummary(
-  toolsCalled: { name?: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string }[],
+  toolsCalled: { name?: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string; failed?: boolean }[],
 ): string {
   if (toolsCalled.length === 0) return '';
 
+  // A rejected call touched no dataset and no portal (#384 P8, F2): the
+  // "Using …" clause below is written from the calls that were answered.
+  const answered = toolsCalled.filter((tool) => !tool.failed);
+
   // Collect unique portals
   const portalSet = new Set<string>();
-  for (const tool of toolsCalled) {
+  for (const tool of answered) {
     const p = tool.args.portal as string | undefined;
     if (p) portalSet.add(p);
   }
@@ -1138,7 +1161,7 @@ export function buildNarrativeSummary(
   // another call's portal here minted a link, and a city, the record never
   // asserted.
   const datasets = new Map<string, { name: string; portal?: string }>();
-  for (const tool of toolsCalled) {
+  for (const tool of answered) {
     const id = tool.args.dataset_id as string | undefined;
     const p = tool.args.portal as string | undefined;
     if (id && !datasets.has(id)) {
@@ -1149,7 +1172,8 @@ export function buildNarrativeSummary(
   // Build action phrases using intent-aware narrative descriptions
   const actions: string[] = [];
   for (let i = 0; i < toolsCalled.length; i++) {
-    actions.push(describeToolNarrative(toolsCalled[i], i, toolsCalled));
+    const tool = toolsCalled[i];
+    actions.push(tool.failed ? describeRejectedAttempt(tool.reason) : describeToolNarrative(tool, i, toolsCalled));
   }
 
   // Deduplicate consecutive identical actions
@@ -1216,6 +1240,8 @@ type CountableToolCall = {
   args: Record<string, unknown>;
   resultSummary?: { rows: number; columns: number };
   operationType?: string;
+  /** Set when the loop recorded the call as rejected (`ToolCallRecord.failed`). */
+  failed?: boolean;
 };
 
 /**
@@ -1233,6 +1259,12 @@ type CountableToolCall = {
  * it, so the three can never disagree about the same run.
  */
 export function isQueryCall(t: CountableToolCall): boolean {
+  // A call the source rejected returned no records, whatever it asked for
+  // (#384 P8, F2): it is not a query that ran. Routed through this one
+  // predicate so its three readers — the rows sum (unchanged in effect: a
+  // rejected call has no `resultSummary`), the query count and the
+  // provenance line's source list — cannot disagree about the same call.
+  if (t.failed) return false;
   return (t.operationType || t.args.type) === 'query';
 }
 
@@ -1254,7 +1286,7 @@ function sumQueryRows(tools: CountableToolCall[]): number {
 
 // Build a stats summary line leading with data volume
 export function buildStatsSummary(
-  toolsCalled: { name?: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string }[],
+  toolsCalled: { name?: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; failed?: boolean }[],
   totalDuration_ms?: number,
 ): string {
   const statParts: string[] = [];
@@ -1269,6 +1301,13 @@ export function buildStatsSummary(
     statParts.push(`${queryCount} ${queryCount === 1 ? 'query' : 'queries'}`);
   } else {
     statParts.push(`${toolsCalled.length} tool call${toolsCalled.length !== 1 ? 's' : ''}`);
+  }
+
+  // A rejected request is counted as what it is (#384 P8, F2): not among the
+  // queries above, and not left out of the line either.
+  const rejectedCount = toolsCalled.filter((t) => t.failed).length;
+  if (rejectedCount > 0) {
+    statParts.push(`${rejectedCount} request${rejectedCount === 1 ? '' : 's'} did not complete`);
   }
 
   if (totalDuration_ms) {
@@ -1286,20 +1325,23 @@ export function datasetUrl(portal: string | undefined, datasetId: string | undef
 
 // Build source provenance line with markdown links for dataset references
 export function buildProvenanceLine(
-  tools: { args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; operationType?: string }[]
+  tools: { args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; operationType?: string; failed?: boolean }[]
 ): string | null {
   // Same predicate as `buildStatsSummary` (#339). Before this, provenance read
   // `operationType` alone while the stats line read `operationType || args.type`,
   // so a recorded call carrying only `args.type` produced a "records analyzed"
-  // count with no "Source:" line under it.
+  // count with no "Source:" line under it. The predicate also excludes a
+  // rejected call (#384 P8, F2): a request that returned nothing is not a
+  // source, and neither is the portal it was made to.
   const queryTools = tools.filter(isQueryCall);
   if (queryTools.length === 0) return null;
 
   const parts: string[] = [];
 
-  // Collect unique portals from all tool calls
+  // Collect unique portals from the tool calls that were answered
   const portalSet = new Set<string>();
   for (const tool of tools) {
+    if (tool.failed) continue;
     const p = tool.args.portal as string | undefined;
     if (p) portalSet.add(p);
   }

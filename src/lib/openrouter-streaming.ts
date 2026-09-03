@@ -3,6 +3,8 @@ import { getModelClient, classifyModelError, includeStreamUsage, getModelApiKind
 import type { ModelIdentity } from './model-catalog.ts';
 import { formatToolProgress, formatToolResult, classifyStreamError, streamErrorPayload, type PanelType, type ProgressPhase, type StreamErrorCode, type StreamErrorKind } from './streaming.ts';
 import { runToolLoop, type LoopEvent, type ToolCallRecord, type TraceContext } from './model-loop/run-tool-loop.ts';
+import { describeQueryOutcome } from './evidence/query-step.ts';
+import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 
 /**
  * The tool-calling loop itself lives in `model-loop/run-tool-loop.ts` (#345):
@@ -27,6 +29,13 @@ export interface ProgressOpts {
    *  the operation type the loop derived, on every tool-phase event. */
   toolName?: string;
   operationType?: string;
+  /**
+   * The loop recorded the call as rejected (#384 P8, F2): on the end event
+   * of that call and on the outcome event that follows it, never on an
+   * event of a call that was answered — absent is absent.
+   */
+  failed?: boolean;
+  failureKind?: ToolFailureKind;
 }
 
 export interface StreamCallbacks {
@@ -154,6 +163,26 @@ function reportLoopEvent(panel: PanelType, event: LoopEvent, callbacks: StreamCa
         { phase: 'tool_complete', iteration: event.iteration, duration_ms: event.durationMs, ...toolIdentity(event.call) },
       );
       return;
+    case 'tool_failed': {
+      // The END event keeps the phase every consumer pairs to the start by
+      // (`tool_complete`, message) — the hooks and the replay read the
+      // failure off the entry they already build, and no pairing changes —
+      // and the OUTCOME event that follows says it in the reader's words.
+      // Those words are the one formatter's (`describeQueryOutcome`, the
+      // record page's and the card's): one sentence for one fact.
+      const failure = { failed: true as const, failureKind: event.failureKind };
+      callbacks.onProgress(
+        panel,
+        formatToolProgress(event.call.name, event.call.args, event.priorCalls),
+        { phase: 'tool_complete', iteration: event.iteration, duration_ms: event.durationMs, ...toolIdentity(event.call), ...failure },
+      );
+      callbacks.onProgress(
+        panel,
+        describeQueryOutcome({ failed: true, failureKind: event.failureKind }).text,
+        { phase: 'tool_result', iteration: event.iteration, args: event.call.args, ...toolIdentity(event.call), ...failure },
+      );
+      return;
+    }
     case 'tool_result': {
       const resultMessage = formatToolResult(event.call.args, event.call.resultSummary, event.call.name);
       if (resultMessage) {

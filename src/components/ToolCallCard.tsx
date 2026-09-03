@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import SoqlDisplay from './SoqlDisplay';
 import { generatePlainEnglishQuery } from '@/lib/streaming';
+import { describeQueryOutcome } from '@/lib/evidence/query-step';
+import type { ToolFailureKind } from '@/lib/notebook-author/tool-to-cell';
 import { OP_BADGE_COLORS, OP_BADGE_TOOLTIPS } from './tool-badges';
 
 interface ToolCallCardProps {
@@ -14,6 +16,14 @@ interface ToolCallCardProps {
   duration_ms?: number;
   operationType?: string;
   reason?: string;
+  /**
+   * The loop recorded the call as rejected (#384 P8, F2). The card then
+   * states the outcome through `describeQueryOutcome` — the record page's
+   * formatter, one sentence for one fact — and mints no data links for a
+   * request that returned nothing. Absent means not recorded as failed.
+   */
+  failed?: boolean;
+  failureKind?: ToolFailureKind;
 }
 
 function buildSocrataUrl(args: Record<string, unknown>): { json: string; csv: string } | null {
@@ -74,8 +84,18 @@ export default function ToolCallCard({
   duration_ms,
   operationType,
   reason,
+  failed,
+  failureKind,
 }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(false);
+  // What the call returned, in the one outcome formatter's words: a
+  // rejection, a row count, or nothing recorded (#384 P8, F2).
+  const outcome = describeQueryOutcome({
+    failed,
+    failureKind,
+    resultRows: resultSummary?.rows,
+    resultColumns: resultSummary?.columns,
+  });
   // The recorded operation type, else `args.type` (only `get_data` carries
   // it); nothing for a call the record does not type (`fetch`, by design).
   const opType = operationType || (args.type as string | undefined) || undefined;
@@ -85,7 +105,9 @@ export default function ToolCallCard({
   const badgeLabel = opType ?? name ?? 'unnamed';
   const badgeTooltip = opType ? OP_BADGE_TOOLTIPS[opType] : undefined;
   const badgeColors = (opType && OP_BADGE_COLORS[opType]) || { bg: 'var(--card-background)', text: 'var(--text-secondary)' };
-  const urls = buildSocrataUrl(args);
+  // No "View JSON / CSV" for a request that returned nothing: a link here
+  // would offer a reader the result the source never gave (#384 P8, F2).
+  const urls = failed ? null : buildSocrataUrl(args);
   const datasetId = args.dataset_id as string | undefined;
   const plainEnglish = opType === 'query' ? generatePlainEnglishQuery(args) : null;
 
@@ -120,7 +142,7 @@ export default function ToolCallCard({
             width: '20px',
             height: '20px',
             borderRadius: '50%',
-            backgroundColor: 'var(--success)',
+            backgroundColor: failed ? 'var(--error)' : 'var(--success)',
             color: 'white',
             display: 'flex',
             alignItems: 'center',
@@ -169,12 +191,14 @@ export default function ToolCallCard({
           </span>
         )}
 
-        {/* Result count */}
-        {resultSummary && (
+        {/* Result count — or the rejection, at a glance (#384 P8, F2) */}
+        {failed ? (
+          <span style={{ fontSize: '12px', color: 'var(--error)', flexShrink: 0 }}>Did not complete</span>
+        ) : resultSummary ? (
           <span style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>
             {resultSummary.rows} row{resultSummary.rows !== 1 ? 's' : ''}
           </span>
-        )}
+        ) : null}
 
         {/* Spacer */}
         <span style={{ flex: 1 }} />
@@ -279,10 +303,16 @@ export default function ToolCallCard({
             </div>
           )}
 
-          {/* Result summary */}
-          {resultSummary && (
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>
-              Returned {resultSummary.rows} rows x {resultSummary.columns} columns
+          {/* Outcome, in the one formatter's words (#384 P8, F2) */}
+          {outcome.kind !== 'unrecorded' && (
+            <div
+              style={{
+                fontSize: '12px',
+                color: outcome.kind === 'failed' ? 'var(--error)' : 'var(--text-muted)',
+                marginBottom: '6px',
+              }}
+            >
+              {outcome.text}
             </div>
           )}
 

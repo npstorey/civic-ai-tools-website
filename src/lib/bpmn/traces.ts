@@ -1,4 +1,5 @@
 import type { ProgressPhase } from '@/lib/streaming';
+import type { ToolFailureKind } from '@/lib/notebook-author/tool-to-cell';
 
 export interface TraceEvent {
   relativeMs: number;
@@ -16,6 +17,15 @@ export interface TraceEvent {
    */
   toolName?: string;
   operationType?: string;
+  /**
+   * As on the progress event (#384 P8, F2): the loop recorded the call as
+   * rejected. On the call's end event and its outcome event; absent on every
+   * event of a call that was answered. A replay reads it off the end event
+   * onto the call it pairs to — it never infers a failure from a missing
+   * result. No checked-in fixture records one.
+   */
+  failed?: boolean;
+  failureKind?: ToolFailureKind;
 }
 
 export interface PreRecordedTrace {

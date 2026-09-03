@@ -27,6 +27,10 @@ export function mapEventToNodes(event: TraceEvent): AnimationStep[] {
       ];
 
     case 'tool_complete':
+      // A rejected call's end returns no results (#384 P8, F2): the span
+      // ends, nothing travels back, and the "results return" node is not
+      // lit for it. The annotation beside the diagram states the rejection.
+      if (event.failed) return [];
       return [
         { nodeId: 'task_results_return', delay: 0, edgeId: 'flow_socrata_to_return' },
       ];

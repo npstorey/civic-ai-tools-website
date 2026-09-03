@@ -1,5 +1,6 @@
 import type { TraceEvent, PreRecordedTrace } from './traces';
 import type { ProgressPhase } from '@/lib/streaming';
+import type { ToolFailureKind } from '@/lib/notebook-author/tool-to-cell';
 
 /**
  * Dev-only utility to capture a live trace from the SSE event stream.
@@ -22,6 +23,8 @@ export function createTraceCapture(query: string, model: string, portal: string)
       resultSummary?: { rows: number; columns: number };
       toolName?: string;
       operationType?: string;
+      failed?: boolean;
+      failureKind?: ToolFailureKind;
     }) {
       if (!event.phase) return;
       events.push({
@@ -36,6 +39,9 @@ export function createTraceCapture(query: string, model: string, portal: string)
         // loop named, so its replay never has to guess one.
         ...(event.toolName !== undefined ? { toolName: event.toolName } : {}),
         ...(event.operationType !== undefined ? { operationType: event.operationType } : {}),
+        // And the rejection, when the wire carried one (#384 P8, F2).
+        ...(event.failed !== undefined ? { failed: event.failed } : {}),
+        ...(event.failureKind !== undefined ? { failureKind: event.failureKind } : {}),
       });
     },
 

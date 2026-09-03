@@ -97,6 +97,16 @@ export interface ToolCallRecord {
 export type LoopEvent =
   | { type: 'tool_start'; iteration: number; call: ToolCallRecord; priorCalls: ToolCallRecord[] }
   | { type: 'tool_complete'; iteration: number; call: ToolCallRecord; priorCalls: ToolCallRecord[]; durationMs: number }
+  /**
+   * The source rejected the call (#384 P8, F2). `call` already carries
+   * `failed`/`failureKind` — set at the catch site before this is emitted —
+   * and `durationMs` is the time until the rejection. A distinct variant, not
+   * `tool_complete` with a flag: "complete" is a claim, and a renderer's
+   * exhaustive switch cannot compile until it says what a rejection looks
+   * like. Until this existed the catch site recorded the failure and emitted
+   * nothing, so no reader of these events could know the call had ended.
+   */
+  | { type: 'tool_failed'; iteration: number; call: ToolCallRecord; priorCalls: ToolCallRecord[]; durationMs: number; failureKind: ToolFailureKind }
   | { type: 'tool_result'; iteration: number; call: ToolCallRecord }
   | { type: 'thinking'; iteration: number }
   | { type: 'token_budget_exhausted'; cumulativeTokens: number }
@@ -821,10 +831,12 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         ...(args.portal ? { 'tool.portal_domain': String(args.portal) } : {}),
       });
 
+      // Started outside the `try`, so the time until a rejection is measured
+      // the same way as the time until a result (#384 P8).
+      const toolStartTime = Date.now();
       try {
         if (argumentsMalformed) throw malformedToolArgumentsError();
 
-        const toolStartTime = Date.now();
         const result = await boundToolCall(executeToolCall(name, args), name, toolTimeoutMs);
         const toolDuration = Date.now() - toolStartTime;
         toolEntry.duration_ms = toolDuration;
@@ -855,14 +867,28 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         // including the notebook synthesizer, which was rendering this call as
         // an executable fetch cell that then threw on execution. Nothing
         // downstream can recover this fact.
+        const failureKind = toolFailureKindOf(error);
         toolEntry.failed = true;
-        toolEntry.failureKind = toolFailureKindOf(error);
+        toolEntry.failureKind = failureKind;
         if (toolTraceSpanId) {
           trace!.builder.endSpan(toolTraceSpanId, {
             'error': true,
             'error.message': error instanceof Error ? error.message : 'Unknown error',
           });
         }
+        // #384 P8 (F2): the rejection is REPORTED, not only recorded. The two
+        // fields above reach every reader of the record; this event reaches
+        // every reader of the stream — the progress wire, the trace capture,
+        // the replay, the cards — which until now saw the call start and
+        // never end.
+        emit({
+          type: 'tool_failed',
+          iteration: currentIteration,
+          call: toolEntry,
+          priorCalls,
+          durationMs: Date.now() - toolStartTime,
+          failureKind,
+        });
         // Feed the model neutral guidance instead of the raw error string:
         // keep it honest (no invented data) without letting raw infra text
         // (timeouts, status codes, server names) reach the final answer.
