@@ -132,7 +132,16 @@ export default function PublishEvidenceDialog({
       body: JSON.stringify({
         prompt: queryText,
         output,
-        toolCalls: toolCalls.map(tc => ({ name: tc.name, args: tc.args })),
+        // The record's rejection travels with the call (#384 P8, F1): this
+        // projection used to keep only the name and the arguments, so the
+        // summarizer was told a rejected call's dataset had been used.
+        // Written only when the record carried them — absent stays absent.
+        toolCalls: toolCalls.map(tc => ({
+          name: tc.name,
+          args: tc.args,
+          ...(tc.failed !== undefined ? { failed: tc.failed } : {}),
+          ...(tc.failureKind !== undefined ? { failureKind: tc.failureKind } : {}),
+        })),
       }),
     })
       .then(async (res) => {

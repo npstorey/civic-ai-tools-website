@@ -4,6 +4,11 @@ import { getSummarizerModel } from '@/lib/model-resolver';
 import { modelIdentity, type ModelIdentity } from '@/lib/model-catalog';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import {
+  rejectedRequestCount,
+  summaryDataSourcesLine,
+  type SummarySourceInput,
+} from '@/lib/evidence/summary-sources';
 
 const SYSTEM_PROMPT = `You are writing a one-paragraph summary of an AI-assisted civic data analysis for a non-technical reader (journalist, community board member, city staff).
 
@@ -13,10 +18,13 @@ CONTENT: Cover what question was examined, what the data showed, what sources we
 
 TONE: Factual and descriptive, like a dataset abstract or report description. Not promotional. Not narrative.`;
 
-interface ToolCallSummary {
-  name: string;
-  args: Record<string, unknown>;
-}
+/**
+ * What the dialog posts per tool call: the name, the arguments, and — when
+ * the loop recorded the call as rejected — `failed`/`failureKind` (#384 P8,
+ * F1). The type used to admit only `{ name; args }`, so a rejection could not
+ * reach this route even when the caller carried one.
+ */
+type ToolCallSummary = SummarySourceInput;
 
 /**
  * POST /api/evidence/generate-summary
@@ -50,23 +58,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'prompt and output are required' }, { status: 400 });
   }
 
-  // Build a compact tool call summary for the user message
-  const uniqueSources = new Map<string, { portal: string; datasetId: string }>();
-  for (const tc of toolCalls || []) {
-    const datasetId = tc.args?.dataset_id as string | undefined;
-    const portal = tc.args?.portal as string | undefined;
-    if (datasetId && portal && !uniqueSources.has(datasetId)) {
-      uniqueSources.set(datasetId, { portal, datasetId });
-    }
-  }
-  const sourceList = Array.from(uniqueSources.values())
-    .map(s => `${s.portal} / ${s.datasetId}`)
-    .join(', ');
+  // The source list is built by the one function a test can read
+  // (`summary-sources.ts`, #384 P8 F1): a call the loop recorded as rejected
+  // used no data and names no source. A rejection is stated as a count — a
+  // limitation the summary is asked to cover — in one neutral clause.
+  const calls = toolCalls || [];
+  const sourceList = summaryDataSourcesLine(calls);
+  const rejected = rejectedRequestCount(calls);
+  const rejectedLine = rejected > 0
+    ? `\nRequests that did not complete: ${rejected} — a data source did not answer ${rejected === 1 ? 'it' : 'them'}, so no figures came from ${rejected === 1 ? 'it' : 'them'}.\n`
+    : '';
 
   const userMessage = `Original question: ${prompt}
 
-Data sources used: ${sourceList || '(none)'}
-
+Data sources used: ${sourceList}
+${rejectedLine}
 Analysis output:
 ${output.slice(0, 4000)}`;
 

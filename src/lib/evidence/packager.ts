@@ -388,6 +388,19 @@ function instanceProvenanceConfig(): ProvenanceConfig {
  * content with no notebook. The real publish flow always supplies one; the
  * adapter keeps the invariant (pinned in packager-instance-config.test.ts).
  */
+/**
+ * A rejected call as `buildDataSources` receives it: the recorded name at the
+ * recorded position, minus `dataset_id` and `portal` — the two keys an entry
+ * is minted from. See the call site in `buildEvidencePackage` for why the
+ * call is substituted rather than filtered.
+ */
+function rejectedCallStandIn(tc: ToolCallInput): { name: string; args: Record<string, unknown> } {
+  const args = { ...tc.args };
+  delete args.dataset_id;
+  delete args.portal;
+  return { name: tc.name, args };
+}
+
 export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackage; hash: string } {
   const now = new Date().toISOString();
   const packageId = crypto.randomUUID();
@@ -421,7 +434,24 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
   // degrade gracefully.
   const inspectableTrace = traceForInspection(input.trace);
 
-  const dataSources = buildDataSources(input.toolCalls, inspectableTrace, input.portal, now);
+  // A call the loop recorded as rejected touched no dataset, so it earns no
+  // `dataSources` entry (#384 P8, F1) — but it cannot simply be left out of
+  // the list: the harness's `buildDataSources` pairs tool calls to
+  // `mcp_tool_call` spans BY INDEX (`resolveToolSource(tc, toolSpans[i])`),
+  // and its input type carries no `failed` (teaching it one is the hub's,
+  // filed alongside P8). So a rejected call is handed as a positional
+  // stand-in: the same name, the same position, its arguments without the two
+  // keys an entry is minted from. The span at that index still resolves by
+  // name and position; `queries[]` above keeps the full attempt, with
+  // `failed` and `failureKind`. A package that recorded no failure is passed
+  // through unchanged, byte for byte (the pinned envelope hashes in
+  // packager.failed-call.test.ts hold that line).
+  const dataSources = buildDataSources(
+    input.toolCalls.map((tc) => (tc.failed ? rejectedCallStandIn(tc) : tc)),
+    inspectableTrace,
+    input.portal,
+    now,
+  );
 
   const totalTokens = (input.tokenUsage.promptTokens || 0) + (input.tokenUsage.completionTokens || 0);
 
