@@ -6,6 +6,44 @@ Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ---
 
+## 2026-09-03 — Wave N9 (#384): the record's consumers — and the fixture that could not fail (twelve gated phases, three lanes)
+
+**Scope:** N8's cold read found that making two tools callable handed four consumers of the signed record arguments they were never written to read, and its lesson was that a zone drawn from the call graph cannot see the consumers of what the change produces. So this wave's census started from the record — the in-memory tool-call record, the wire, the progress stream, the package, the graph, the trace replay, both notebooks, the record page — and enumerated every reader, then re-measured ten filings against that map and found six defects no filing covered. Eight families, one property: **no consumer of the record invents what the loop did not write** — a tool name, an operation type, a portal, a token count, a reproduced-step count, a failure travel from the loop to every reader or are absent there, stated as absent. Every phase contract stated the property rather than the patch and asked the phase to report what the property found that the patch would have left; every phase found something.
+
+**Phases:** website P1 `500e954` (#374) · P2 `d81eb76` (#376 #377) · P3 `c342fe0` (#378's app side, the failure into the package) · P4 `1a428c5` (#371) · P6 `33032fe` (the harness pin) · P5 `4ec45c0` (#366 #380 #381 #385, #186's mirror) · P7 cold read · P8 `775852f` (the cold read's six findings). Hub P-H1 `ef93331` (the harness; #378 upstream) · P-H2 `8efcfeb` (#186's source; the server embed `c207f55` first) · the 0.3.1 release `fd9afae`. Typedstandards P-T1 `887f125` (produce-core's `queries[]` entry carries a failure) · the 0.4.0 release `fbaa8f1`. Thirteen merges, every second parent the SHA its GO named; twenty-four rollback tags; two publishes verified against the registry. Tests **1212 → 1352**, `# fail 0` at every merged head. Close record: #384, comment 5531428680.
+
+### Every red on a runner before its phase was issued
+
+Ten draft pull requests, each carrying a phase's instrument alone, each red on the required check by run id, each closed unmerged before the phase branch was cut — plus one structural red: the hub's skill-drift check on the source PR, expected red until the server carried the embed, exactly as the hub's own rule says. The instrument came first every time, and twice the phase found its own guard green for the wrong reason before accepting it — one graded an unrelated, already-correct query in a neighbouring file; one's regex could never fire across a wrapped comment. That is the rule from the July audit, *a criterion that cannot fail is not a criterion*, applied by a phase to itself.
+
+### The census was corrected before, during and after
+
+At G1, before any phase: #186 was a **three-surface** change — the hub's required check byte-compares its skill text against the server's embed, so the server PR lands first and the hub PR is red until it does — in a repository the session could not write; ruling D4's premise was wrong in both its branches — `queries[]` is produce-core's shape and its envelope builder drops any key the app adds, so the failure needed a third lane and a publish; C3 was narrower than filed — the signed trace already carried the failure, only the envelope's list did not; F2 had a third asserting default in the harness's `buildDataSources`, and the anchor's app-side item was a pass-through. In flight: the skeleton notebook generator does not handle a `fetch` honestly, it **drops it** at a step filter; the notebook path drops the failure at three field-picking sites the wire never touched; the record page asserted every notebook "reproduces the analysis". And at the end, the reader was told at least one criterion was mis-stated and named two: criterion 6's RED cited a default that was latent for this producer, and criterion 5's RED named six declarations when the bytes reached the packager and died at its hand-copied type.
+
+### The cold read, sixth in a row — and what it drove
+
+P7 read the 7,309-line diff, then **drove a run** through the real loop — `get_data`, `search`, `fetch` on a record id naming another portal, and a second `get_data` rejected on a timeout — and pushed it through every consumer on the map, reading the records last. Two findings in the wave's own class. **In signed bytes:** the same package said `queries[3].failed: true` and `dataSources[1]` accessed that dataset at a timestamp — the harness's data-sources builder never sees the failure. **On the reader surfaces:** the narrative, the stats and the provenance line, which read `tools_called` and had carried `failed` since P3, narrated the rejected call as "then counted records", "2 queries", a dataset link with rows returned. P8 closed both, and four smaller ones, and found seven presence guards where the reader had listed three.
+
+### The lesson, and the second half
+
+**A criterion demonstrated on a fixture shaped so it cannot fail is not demonstrated.** P6's read-back was the anchor's own instrument for criterion 6: a package built from a run with a rejected call, read back, every assertion green — because the fixture's rejected call hit the same dataset as its successful one and the entries de-duplicated. The contract said "one rejected call" and stopped. The property was right and the instrument was right in kind; the fixture was shaped by the hand that wanted it green. It joins the audit's rule as its converse: a red must be demonstrated, and a green must be demonstrated on the shape that could have been red.
+
+The second half sits one level up from N8's: **a consumer map is a list of files; the property is only checked where a run is driven.** N8 learned that a zone drawn from the call graph cannot see the record's consumers. This wave drew every zone from the consumers, and the three run-level formatters were on the map, and they still narrated a rejected call as done — until a fresh reader drove a failure through everything. The map tells you where to look. Only the drive tells you what is there.
+
+### Three instrument findings that outlive the wave
+
+**A re-run is not a fresh merge-ref run.** `gh run rerun` replays the run's original merge commit; after a base move the checkout is stale even though the check reads live state, and the hub's release PR stayed red on re-run after the source it needed had merged. A close-and-reopen dispatches a fresh `pull_request` run at the current merge ref without moving the head. **A source guard cannot see the shape it did not anticipate:** the regex for `{tokens_used && …}` missed `!!(duration_ms || tokens_used)` beside it. **A green typecheck is not evidence about a test file the tsconfig excludes:** nothing type-checks or lints a produce-core test file, so "compiles at base" was unenforceable there.
+
+### Six ORCH-layer failures, recorded
+
+Two rollback tags cut after their phase had been spawned (both repositories of P-H2); a claim that a re-run would clear a stale merge ref; a claim that a sibling phase had declared a field `string` when it had not; a grep criterion over-broad for an accumulator a prior wave had ruled; the P6 contract that let its fixture take the shape that hid the defect; and two tooling outages — a safety-classifier outage that refused every write for ten minutes, and an agent terminated mid-phase by a network error — neither retried blind: the queue was written down, the first write was duplicate-checked, the agent was resumed from its own `git status`.
+
+### What this wave did not do
+
+It re-emitted, migrated or backfilled no published record. It edited no specification text. It did not teach the harness `failed` — the website carries a positional stand-in until civic-ai-tools#192 — and it did not change what the consistency attestation attests (#402). It ran no P9. Thirteen filings are open at the close, three of them questions rather than defects; civic-ai-tools#185 stays open by ruling. The published read-back of criteria 5 and 6 on a local instance is the owner's leg and is recorded on the anchor when it arrives.
+
+---
+
 ## 2026-08-28 — Wave N8 (#363): what the loop leaves around it — and the defect the wave itself made (nine gated phases)
 
 **Scope:** N7 collapsed three model-calling loops into one core and its close record said where consolidation stopped: *"the things around the loop stayed duplicated."* This wave was chartered against those things as **families**, not issues — portal injection (five copies), the MCP timeout (three behaviours), what a signed record asserts, the notebook renderer, and the parallel-implementation leftovers. Two lanes, fourteen acceptance criteria each stating what makes it RED, and every census grep run with **no pathspec** so the scope is the repository rather than a directory.
