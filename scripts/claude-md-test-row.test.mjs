@@ -1,9 +1,12 @@
-// Guard: CLAUDE.md's `npm test` row does not pin a pass count (#381, D6 = A).
+// Guard: CLAUDE.md's `npm test` and `npm run lint` rows do not pin a live
+// count that the runner outgrows (#381, D6 = A; #385).
 //
 // WHY. `CLAUDE.md`'s Commands table read, at `c342fe0`:
 //
 //   | `npm test` | `# pass 1205` / `# fail 0` (`node --test` TAP summary) —
 //   the total rises as tests are added; `# fail 0` is the gate (#381) |
+//   | `npm run lint` | `✖ 3 problems (0 errors, 3 warnings)` — warnings are
+//   the baseline; **zero errors** is the gate |
 //
 // The runner reported `# pass 1274` at this wave's merge-ref — already wrong
 // — and will be wrong again after every phase that adds a test, forever,
@@ -14,16 +17,17 @@
 // the right thing about the count, it just sits next to a number that
 // contradicts it.
 //
-// SCOPE. Only the `npm test` row. The `npm run lint` row two lines below
-// pins `3 warnings` in the same shape (a live count in a literal) — this
-// guard does not touch it; #385/#381 name only the test row, and whether
-// the lint count is the same defect is for the report to flag, not for this
-// phase to resolve unilaterally.
+// SCOPE. Stage 1 of this guard covered only the `npm test` row — #385/#381
+// named only that row, and the `npm run lint` row's pinned `3 warnings` was
+// flagged rather than fixed, pending an ORCH ruling on whether it is the same
+// defect class. The ORCH ruled it is (same phase, stage 2): a documented
+// figure a reader can falsify just by running the command. Both rows are
+// covered here now.
 //
-// BLIND SPOT, STATED. This reads CLAUDE.md as text and finds one row by its
-// leading cell (`| \`npm test\` |`). It cannot see whether `# fail 0` is
-// still true — that is what `npm test`'s own exit code is for — only
-// whether the row still claims a specific pass count.
+// BLIND SPOT, STATED. This reads CLAUDE.md as text and finds two rows by
+// their leading cell. It cannot see whether `# fail 0` or `0 errors` is still
+// true — that is what `npm test`'s and `npm run lint`'s own exit codes are
+// for — only whether the rows still claim a specific pass/warning count.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -57,5 +61,22 @@ test('#381: the npm test row does not pin a `# pass <N>` literal', () => {
   assert.ok(
     !/#\s*pass\s+\d+/.test(row),
     `the npm test row still pins a pass count, which the total outgrows every phase (D6 = A, #381): ${row}`,
+  );
+});
+
+test('#381: the npm run lint row does not pin a `<N> warnings` literal', () => {
+  // Same defect, same ruling, taken in this phase per the ORCH: the warning
+  // count is a small, moving baseline (new warnings, fixed warnings), not a
+  // number worth re-editing this file for every time it changes by one.
+  // Zero errors stays the gate.
+  const row = findRow(CLAUDE_MD, '| `npm run lint`');
+  assert.ok(row, 'no row starting with "| `npm run lint`" found — update this guard if the table moved');
+  assert.ok(
+    !/\d+\s+warnings?/i.test(row),
+    `the npm run lint row still pins a warning count, which drifts independently of this phase: ${row}`,
+  );
+  assert.ok(
+    /0 errors/.test(row),
+    `the npm run lint row must still name "0 errors" as the gate; found: ${row}`,
   );
 });
