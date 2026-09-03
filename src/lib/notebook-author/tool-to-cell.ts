@@ -589,7 +589,7 @@ function renderOpenContextQueryCell(
  * to the notebook surface. "Data source", not "MCP server"
  * (design-principles.md Principle 9).
  */
-const FAILURE_REASON: Record<ToolFailureKind, string> = {
+export const FAILURE_REASON: Record<ToolFailureKind, string> = {
   timeout: 'The data source did not respond in time, so the request returned no data.',
   unavailable: 'The data source could not be reached, so the request returned no data.',
   not_configured: 'No live data source was configured for this request, so it returned no data.',

@@ -148,6 +148,8 @@ Send exactly one auth header — when both are present, the `Authorization` head
 | `resultSummary`  | object   | no       | `{ rows: number, columns: number }`. Populates `queries[].resultRows` and `queries[].resultColumns`.          |
 | `duration_ms`    | number   | no       | Tool call duration in milliseconds.                                                                           |
 | `operationType`  | string   | no       | Explicit operation type (`"catalog"`, `"metadata"`, `"query"`, `"metrics"`, `"search"`). If omitted, derived from `args.type` (Socrata) or the tool name (Data Commons). Unresolved values record as `"unknown"`. |
+| `failed`         | boolean  | no       | `true` when the producer recorded the call as rejected — the source did not answer it. Carried into `queries[].failed`. Omit it (never send `false`) for a call not recorded as failed: absent means "not recorded as failed", and a package with no rejected call is byte-identical to one built before this field existed. |
+| `failureKind`    | string   | no       | Why, when `failed` is `true`: `"timeout"`, `"unavailable"`, `"not_configured"` or `"unknown"`. Carried into `queries[].failureKind`; the record page states it in plain words. Any other value is read as `"unknown"` by the page — a cause that was not measured is not asserted. |
 
 ### Notes on specific fields
 

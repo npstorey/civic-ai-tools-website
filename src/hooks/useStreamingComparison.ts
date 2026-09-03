@@ -9,6 +9,7 @@ import { connectSSE } from '../lib/sse-client.ts';
 import { isComparisonRunComplete } from '../lib/query-presentation.ts';
 import { friendlyStreamError, type ProgressPhase, type CompleteEvent } from '../lib/streaming.ts';
 import { deriveOperationType } from '../lib/mcp/operation-types.ts';
+import type { ToolFailureKind } from '../lib/notebook-author/tool-to-cell.ts';
 
 export interface ToolCall {
   /**
@@ -23,6 +24,13 @@ export interface ToolCall {
   duration_ms?: number;
   operationType?: string;
   reason?: string;
+  /**
+   * Set when the loop recorded the call as rejected (#384, F5). Read off the
+   * `complete` event unchanged and posted to the publish route unchanged, so
+   * the package can say the call failed. Absent means not recorded as failed.
+   */
+  failed?: boolean;
+  failureKind?: ToolFailureKind;
 }
 
 export interface EnrichedGroup {

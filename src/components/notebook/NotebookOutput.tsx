@@ -211,6 +211,9 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
                 duration_ms: tc.duration_ms,
                 operationType: tc.operationType,
                 reason: tc.reason,
+                // #384 F5: a rejected call stays rejected on the publish body.
+                ...(tc.failed !== undefined ? { failed: tc.failed } : {}),
+                ...(tc.failureKind !== undefined ? { failureKind: tc.failureKind } : {}),
               }))}
               evidenceTrace={state.evidenceTrace!}
               model={model}

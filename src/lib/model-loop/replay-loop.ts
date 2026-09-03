@@ -14,8 +14,10 @@
  * WHAT THE ROUTE STILL OWNS. Everything about being a route: the session
  * check, the caller-supplied key, the MCP routing refusal, the record and
  * package reads, the hash-only-visibility refusal, the declared→endpoint model
- * mapping, the portal derivation, the system prompt, and the whole
- * error-classification tail. This module owns only what the LOOP is given.
+ * mapping, the system prompt, and the whole error-classification tail. This
+ * module owns only what the LOOP is given — which since #384 includes the
+ * portal derivation (`replayPortalForPackage`), because what the loop is
+ * given is exactly what a test must be able to read.
  *
  * THE ARGS-IDENTITY CONSTRAINT, restated because this is the caller it bites.
  * The core injects `portal` into the very `args` object it records — the same
@@ -62,8 +64,13 @@ export interface ReplayLoopInputs {
   prompt: string;
   /** Regenerated fresh for the record's portal by the route. */
   systemPrompt: string;
-  /** The record's portal, injected into Socrata calls that omit one. */
-  portal: string;
+  /**
+   * The portal the record's own calls named (`replayPortalForPackage`),
+   * injected into Socrata calls that omit one. Absent when the record named
+   * none: nothing is injected, and the replay runs on whatever the source
+   * defaults to — exactly as the recorded run did (#384, F2).
+   */
+  portal?: string;
   /**
    * The tool transport, for tests. Defaults to the live MCP client —
    * deliberately one level below the loop: substituting it restates no loop
@@ -83,6 +90,31 @@ export interface ReplayLoopInputs {
    * this nor `callTool`: both seams exist for tests, not for production.
    */
   toolTimeoutMs?: number;
+}
+
+/**
+ * The portal a replay runs on, read off the record and nothing else (#384,
+ * F2). The route used to take the first data source's portal and, for a
+ * record with no data-source entry — a `search`/`fetch`-only run has none —
+ * fall back to a literal domain the record never mentioned, which then
+ * reached every `get_data` call the replay injected into and, through
+ * `canonicalizeToolCall`, a signed consistency attestation.
+ *
+ * Order: the first `queries[]` entry that named a portal (the loop's own
+ * record, app-side), else the first `dataSources[]` entry's portal host, else
+ * `undefined` — a record that named no portal replays with none.
+ */
+export function replayPortalForPackage(pkg: {
+  queries: ReadonlyArray<{ portal?: string }>;
+  dataSources: ReadonlyArray<{ portalUrl?: string }>;
+}): string | undefined {
+  const named = pkg.queries.find((q) => typeof q.portal === 'string' && q.portal.length > 0)?.portal;
+  if (named) return named;
+  const sourceUrl = pkg.dataSources.find(
+    (d) => typeof d.portalUrl === 'string' && d.portalUrl.length > 0,
+  )?.portalUrl;
+  if (!sourceUrl) return undefined;
+  return sourceUrl.replace(/^https?:\/\//, '');
 }
 
 /**
