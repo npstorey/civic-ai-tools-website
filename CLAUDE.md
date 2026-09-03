@@ -173,3 +173,21 @@ Each cost a real mistake; the incident sits in an HTML comment beside it. Path-s
        been wrong since before those tools existed: two `get_data` calls on one dataset with different
        `WHERE` clauses also collapsed to one key. A hand-picked field list is the defect; the key is
        now the tool name plus canonical JSON of every argument. -->
+
+- **A criterion demonstrated on a fixture shaped so it cannot fail is not demonstrated.** When a
+  contract says "a run with a rejected call" or "a fixture with a search and a fetch", it also says
+  what shape makes the assertion able to fail — a rejected call on a dataset nothing else touched, a
+  fixture whose entries cannot de-duplicate into the expected count. A green over a fixture that
+  could only ever be green is the converse of a red that was never shown, and it is caught the same
+  way: drive the shape that could have failed, and read the record last.
+  <!-- Wave #384 P6 read back a package built from a run with `get_data`, `search`, `fetch` and one
+       rejected call — the anchor's own instrument for "the signed graph names no portal the span did
+       not carry" — and every assertion was green. The rejected call hit the SAME dataset as the
+       successful one, so `dataSources` de-duplicated to one entry, which is the one shape in which
+       the package could not be seen asserting, in signed bytes, that a rejected call's dataset had
+       been accessed at a timestamp. The cold read's first drive with the rejected call on a
+       different dataset found it. Every zone in that wave was drawn from the record's consumers, as
+       the rule above prescribes, and three run-level formatters on that map still narrated the
+       rejected call as "then counted records" — a consumer map says where to look; only a driven
+       run says what is there. -->
+
