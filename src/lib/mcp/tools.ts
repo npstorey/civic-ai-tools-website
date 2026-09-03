@@ -128,7 +128,7 @@ WHICH TOOL TO USE:
       name: 'fetch',
       description: `Retrieve a dataset's full metadata, or a single record, by the identifier "search" returned.
 
-The identifier is normally taken verbatim from a search hit: dataset:<portal>:<dataset_id> for a dataset, record:<portal>:<dataset_id>:<row_id> for one row. A bare 4x4 dataset ID or a Socrata dataset URL is also accepted, and resolves against the server's configured portal.
+The identifier is normally taken verbatim from a search hit: dataset:<portal>:<dataset_id> for a dataset, record:<portal>:<dataset_id>:<row_id> for one row. A Socrata dataset URL is also accepted and names its own portal (the URL's hostname). A bare 4x4 dataset ID (or 4x4:<row_id> for one row) names no portal and resolves against the server's configured portal.
 
 WHICH TOOL TO USE: this returns metadata and columns, not query results. To read or aggregate rows, use get_data with type=query.`,
       parameters: {
