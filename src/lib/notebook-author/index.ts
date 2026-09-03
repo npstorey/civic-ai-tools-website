@@ -27,8 +27,23 @@ export type { ValidationIssue, ValidationResult } from './validate.ts';
 export {
   validateNotebookProvenance,
   validateExecutionExtension,
+  // The two cell-derived checks are on the public API alongside the aggregate:
+  // both answer a question about what the document CLAIMS, and a caller that
+  // wants one of those answers without the extension-shape checks could not
+  // reach it through `validateExecutedNotebook` alone.
+  validateReproducedFetches,
+  validateCoverClaims,
   validateExecutedNotebook,
 } from './validate.ts';
+export type { ReproductionClaim } from './reproduction-claim.ts';
+export {
+  COVER_SECTION_HEADING,
+  coverSectionBody,
+  reproductionClaimSentence,
+  parseReproductionClaim,
+  readReproductionClaim,
+  claimsCompleteness,
+} from './reproduction-claim.ts';
 export {
   NOTEBOOK_EXTENSION_KEY,
   EXECUTION_EXTENSION_KEY,

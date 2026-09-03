@@ -25,7 +25,9 @@ import assert from 'node:assert/strict';
 import { buildCell0Source } from './prompt.ts';
 import { synthesizeNotebook } from './synthesize.ts';
 import { stampExecutedNotebook } from './phase-d.ts';
-import { validateExecutedNotebook, validateReproducedFetches } from './validate.ts';
+import { validateCoverClaims, validateExecutedNotebook, validateReproducedFetches } from './validate.ts';
+import { parseReproductionClaim, reproductionClaimSentence } from './reproduction-claim.ts';
+import { countAnalysisStepCells, countReproducedFetchCells } from './tool-to-cell.ts';
 import { generateNotebook } from '../notebook.ts';
 import { modelAccessPhrase } from '../model-catalog.ts';
 
@@ -145,8 +147,18 @@ test('#341: a notebook that never fetched is not told its requests failed', () =
 test('#341: a notebook with one surviving fetch keeps the claim', () => {
   // The positive control. A conditional that is always false would satisfy the
   // test above while removing a true statement from every notebook.
+  //
+  // The claim it keeps is no longer "a complete, reproducible analysis" — #371
+  // and ruling D3 removed that: this fixture's other call was REJECTED, and a
+  // notebook where one of two steps ran is not a complete analysis of anything.
+  // What it keeps is the claim's replacement, which carries its own numerator
+  // and denominator and so cannot overstate itself at any threshold.
   const cover = coverText(oneSucceeded().notebook);
-  assert.match(cover, new RegExp(CLAIM));
+  assert.ok(
+    cover.replace(/\s+/g, ' ').includes(reproductionClaimSentence(1, 2)),
+    `the surviving fetch is not claimed at all:\n${cover}`,
+  );
+  assert.doesNotMatch(cover, new RegExp(CLAIM), '#371: never as a bare adjective');
   assert.doesNotMatch(cover, /No data was fetched/);
 });
 
@@ -179,10 +191,31 @@ test('#341: the cover claim and the validator answer the same question', () => {
   // the metadata makes). They must still agree — a notebook that says it
   // reproduces nothing while validating clean, or the reverse, is a document
   // arguing with itself.
+  //
+  // The question is the same one; #371 sharpened what counts as an answer. It
+  // used to be binary on both sides — "does the cover assert the claim" against
+  // "does anything at all get reproduced" — and two notebooks with wildly
+  // different bodies gave the same pair of answers. Now each side states a
+  // ratio, and agreement means the same two numbers.
   for (const [label, synth] of [['all failed', allFailed()], ['one succeeded', oneSucceeded()]] as const) {
-    const claimsReproducible = coverText(synth.notebook).includes(CLAIM);
-    const validates = validateReproducedFetches(synth.notebook).ok;
-    assert.equal(claimsReproducible, validates, `${label}: cover text and validator disagree`);
+    const stated = parseReproductionClaim(coverText(synth.notebook));
+    assert.ok(stated, `${label}: the cover text states no count`);
+    assert.deepEqual(
+      stated,
+      {
+        reRun: countReproducedFetchCells(synth.notebook.cells),
+        steps: countAnalysisStepCells(synth.notebook.cells),
+      },
+      `${label}: cover text and cells disagree`,
+    );
+    // And the validator, which derives its own numbers from the cells, agrees
+    // with both: nothing it reports is about the count these two just matched.
+    assert.deepEqual(validateCoverClaims(synth.notebook).issues, [], `${label}: validator disagrees`);
+    assert.equal(
+      validateReproducedFetches(synth.notebook).ok,
+      stated!.reRun > 0,
+      `${label}: the zero threshold and the count disagree`,
+    );
   }
 });
 

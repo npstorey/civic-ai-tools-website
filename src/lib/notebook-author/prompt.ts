@@ -27,6 +27,11 @@ import {
   getPublicationHost,
   getPlatformTitle,
 } from '../site-config.ts';
+// The cover cell's reproduction claim is written by ONE function, and that
+// function does not live here: two client components read the claim back off a
+// stored notebook, and this module reaches `../site-config.ts`. See the header
+// of ./reproduction-claim.ts for why the detector and its emitter are split.
+import { COVER_SECTION_HEADING, reproductionClaimSentence } from './reproduction-claim.ts';
 
 /** Pinned scientific-stack versions; MUST match `scripts/build-sandbox-snapshot.ts`.
  *  All four pins target releases with prebuilt CPython 3.13 wheels so pip
@@ -78,6 +83,20 @@ export function buildCell0Source(args: {
    * (`synthesize.ts`) always passes it, and a test pins that it does.
    */
   reproducedFetchCount?: number;
+  /**
+   * How many steps this notebook renders (#371, ruling D3) — the denominator of
+   * the claim above. A step is a call that either re-runs a live request or says
+   * it does not; discovery calls are summarised once and are never steps. See
+   * `./reproduction-claim.ts`, which owns the sentence and its parser.
+   *
+   * The two counts travel together: without a denominator the claim was binary,
+   * and a notebook where three of four fetches were rejected carried the same
+   * cover text as one where all four succeeded — it told that reader the
+   * analysis was complete (#371). Optional for the same reason
+   * `reproducedFetchCount` is: a caller that does not know the count states no
+   * ratio rather than an invented one.
+   */
+  analysisStepCount?: number;
 }): string {
   const portalLine = args.portals.length === 0
     ? ''
@@ -93,7 +112,18 @@ export function buildCell0Source(args: {
   // honest about an undeclared identity. An instance that has declared none
   // gets the description without the name, never a borrowed one.
   const platformTitle = getPlatformTitle();
-  const nothingReproduced = args.reproducedFetchCount === 0;
+  const reRun = args.reproducedFetchCount;
+  const steps = args.analysisStepCount;
+  const nothingReproduced = reRun === 0;
+  // The claim carries its own numerator and denominator in every case where the
+  // notebook renders a step at all (#371, ruling D3). A notebook that renders
+  // none — an analysis answered from discovery alone — has no ratio to state,
+  // and "0 of its 0 analysis steps" is a division by nothing rather than a
+  // count; that reader gets the paragraph below and no numbers.
+  const countLine = reRun !== undefined && steps !== undefined && steps > 0
+    ? [reproductionClaimSentence(reRun, steps)]
+    : [];
+  const everyStepReRuns = reRun !== undefined && steps !== undefined && steps > 0 && reRun === steps;
   return [
     platformTitle ? `# ${platformTitle} Data Analysis` : '# Data Analysis',
     '',
@@ -101,8 +131,9 @@ export function buildCell0Source(args: {
     portalLine.trimEnd(),
     `**Generated:** ${args.generatedAt}${viaSuffix}`,
     '',
-    '## How to use this notebook',
+    COVER_SECTION_HEADING,
     '',
+    ...countLine,
     ...(nothingReproduced
       ? [
         'This notebook reproduces no data fetch: no step below re-runs a request',
@@ -111,12 +142,19 @@ export function buildCell0Source(args: {
         'the "Synthesis" cell come from that analysis text, not from data this',
         'notebook fetched — re-running the cells will not reproduce them.',
       ]
-      : [
-        'This notebook contains a complete, reproducible analysis of the query above.',
-        'Every code cell that fetches data uses the helper functions defined below,',
-        'so the same numbers can be reproduced against live data by re-running cells',
-        'top-to-bottom. The final "Synthesis" cell explains what the data shows.',
-      ]),
+      : everyStepReRuns
+        ? [
+          'Every step re-runs its request through the helper functions defined below,',
+          'so the numbers below can be reproduced against live data by re-running the',
+          'cells top-to-bottom. The final "Synthesis" cell explains what the data shows.',
+        ]
+        : [
+          'A step that re-runs its request does so through the helper functions defined',
+          'below, and its numbers can be reproduced against live data by re-running the',
+          'cells above it. A step that does not re-run one says so in its own cell, and',
+          'the figures it contributed to the "Synthesis" cell come from the original',
+          'analysis text rather than from data this notebook fetched.',
+        ]),
     '',
     '## Notebook structure',
     '',
@@ -124,7 +162,8 @@ export function buildCell0Source(args: {
     '- **Imports** — `requests`, `pandas`, `numpy`, `matplotlib`.',
     '- **Helper functions** — `fetch_socrata`, `fetch_data_commons`, `fetch_opencontext`',
     '  (only the helpers this analysis actually uses are included).',
-    '- **Data analysis pipeline** — one step per discovery call.',
+    '- **Data analysis pipeline** — one step per call that read data or tried to;',
+    '  the discovery calls are summarised once above the steps, not numbered among them.',
     '- **Synthesis** — narrative answer derived from the data above.',
     '- **Comparison: original vs. current** — appended at publish time; shows',
     '  whether the numbers have drifted since the notebook was first executed.',

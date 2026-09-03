@@ -1,6 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+// What this section tells a reader about reproduction is read off the notebook
+// in hand, never asserted beside the download button (#371). The parser is a
+// pure string module with one type-only import; see its header for why it is
+// not in `prompt.ts` with the builder.
+import { readReproductionClaim } from '@/lib/notebook-author/reproduction-claim';
 
 interface NotebookCell {
   cell_type: 'code' | 'markdown';
@@ -33,6 +38,20 @@ export default function NotebookSection({ notebook, slug }: NotebookSectionProps
   const codeCells = cells.filter(c => c.cell_type === 'code');
   const totalCells = cells.length;
 
+  // The claim this notebook makes about itself, or nothing. Until #371 this
+  // section told every reader "This notebook reproduces the analysis steps in
+  // Python" — a sentence that was equally true of a notebook where every fetch
+  // was rejected, hardcoded above a download button that could not see the
+  // cells. It can see them; the count is now read from the cover cell that
+  // states it.
+  //
+  // `null` covers three cases and deliberately does not distinguish them: a
+  // notebook published before the cover carried a count (stored package bytes
+  // are never regenerated), one whose cover cell is absent, and one that renders
+  // no analysis step and so has no ratio to state. In all three this section has
+  // no signal, so it shows none — docs/design-principles.md Principle 3.
+  const claim = readReproductionClaim(cells);
+
   const handleDownload = () => {
     const json = JSON.stringify(notebook, null, 2);
     const blob = new Blob([json], { type: 'application/x-ipynb+json' });
@@ -52,7 +71,13 @@ export default function NotebookSection({ notebook, slug }: NotebookSectionProps
       borderRadius: '6px', backgroundColor: 'white',
     }}>
       <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.6 }}>
-        This notebook reproduces the analysis steps in Python. Run it in Jupyter or upload to Google Colab.
+        {claim !== null && (
+          <>
+            This notebook re-runs a live request in {claim.reRun} of its {claim.steps} analysis
+            steps.{' '}
+          </>
+        )}
+        The steps are Python. Run it in Jupyter or upload to Google Colab.
       </p>
 
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: previewOpen ? '16px' : 0, flexWrap: 'wrap' }}>

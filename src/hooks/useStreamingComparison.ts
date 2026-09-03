@@ -9,6 +9,9 @@ import { connectSSE } from '../lib/sse-client.ts';
 import { isComparisonRunComplete } from '../lib/query-presentation.ts';
 import { friendlyStreamError, type ProgressPhase, type CompleteEvent } from '../lib/streaming.ts';
 import { deriveOperationType } from '../lib/mcp/operation-types.ts';
+// Type-only: erased at compile time, so nothing from the notebook author rides
+// into this hook's bundle. The kind vocabulary is declared once, beside the
+// table that turns it into reader-facing copy.
 import type { ToolFailureKind } from '../lib/notebook-author/tool-to-cell.ts';
 
 export interface ToolCall {
@@ -25,11 +28,24 @@ export interface ToolCall {
   operationType?: string;
   reason?: string;
   /**
-   * Set when the loop recorded the call as rejected (#384, F5). Read off the
-   * `complete` event unchanged and posted to the publish route unchanged, so
-   * the package can say the call failed. Absent means not recorded as failed.
+   * True when the loop recorded the call as rejected. Two readers, one field.
+   *
+   * F5 (#384 P3): read off the `complete` event unchanged and posted to the
+   * publish route unchanged, so the signed package can say the call failed.
+   *
+   * F3 (#384 P4): the skeleton notebook generator STATES a rejection instead of
+   * writing a live fetch cell for a request that returned nothing —
+   * `notebook.ts`'s `planQueryStep` reads it, and the executed-notebook path has
+   * read the same signal since #321.
+   *
+   * Absent is absent: it means the call was not recorded as failed, never that
+   * it succeeded. Since P3 the chat-flow path does carry it (`streaming.ts`'s
+   * `CompleteEvent.tools_called[]`), so a rejection now reaches both readers;
+   * a record built from a source that never carried the field still tells them
+   * nothing, and neither invents an answer for it.
    */
   failed?: boolean;
+  /** Why it failed, when `failed` is true. Absent is read as `unknown`. */
   failureKind?: ToolFailureKind;
 }
 
