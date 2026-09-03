@@ -2,8 +2,9 @@
 //
 // Run with:  node --test scripts/preflight-env.test.mjs
 //
-// (The repo's `npm test` globs src/**/*.test.ts; this scripts/ test is run
-// explicitly — and would be wired into the cross-repo CI bundle, brief #5.)
+// (The repo's `npm test` globs both src/**/*.test.ts and
+// scripts/**/*.test.mjs (package.json), so this file already runs as part
+// of the suite — the line above is for running it on its own.)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

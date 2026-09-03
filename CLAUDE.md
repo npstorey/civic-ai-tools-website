@@ -29,10 +29,10 @@ remote) — don't design an owner-run leg around the assumption that it doesn't.
 
 | Command | Healthy output |
 |---|---|
-| `npm test` | `# pass 1205` / `# fail 0` (`node --test` TAP summary) — the total rises as tests are added; `# fail 0` is the gate (#381) |
+| `npm test` | `# fail 0` (`node --test` TAP summary; the pass total rises as tests are added and is not pinned here — read it from the latest merge-ref run) — `# fail 0` is the gate (#381) |
 | `npm run build` | `✓ Compiled successfully`, then the Route (app) table |
 | `npm run typecheck` | no output, exit 0 — **run after `npm run build`** (tsconfig includes `.next/types`, which the build emits) |
-| `npm run lint` | `✖ 3 problems (0 errors, 3 warnings)` — warnings are the baseline; **zero errors** is the gate |
+| `npm run lint` | `0 errors` — a small, moving baseline of warnings is expected; **zero errors** is the gate |
 | `npm run check:compose-env` | `RESULT: PASS — every variable this profile reads can reach the container.` |
 | `npm run check:standalone` | `[standalone-assets] OK — 3 runtime-read asset(s) present and byte-identical` — needs a standalone build first; `npm run build:standalone` does both |
 | `npm run dev` | dev server on localhost:3000 |

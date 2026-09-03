@@ -38,6 +38,16 @@ import { BOSTON_OPENCONTEXT_SKILL } from './boston-skill.ts';
 // skill-instance-config.test.ts) — NOT via scripts/sync-fallback.mjs, whose
 // verbatim-paste model predates the posture split and the fallback's
 // structural adaptations (see that script's header).
+//
+// WHICH TOOL TAKES A PORTAL. The claims below about get_data/search/fetch
+// tool scope are sourced from civic-ai-tools' docs/skills/base.md (commit
+// fd9afae, lines 181-187 and 342-344) and match the server's own JSON
+// schemas (socrata-mcp-server/src/tools/socrata-tools.ts, commit c207f55):
+// search takes only `query`, fetch takes only `id`, and get_data is the only
+// tool that takes a portal. This mirror restates those CLAIMS in its own
+// generic voice — it is claim-level, not a byte-for-byte copy of the hub's
+// prose — so re-check against the hub after a hub change rather than diffing
+// text (see src/lib/mcp/socrata-skill-mirror.test.ts).
 export const SOCRATA_SKILL_FALLBACK = `
 # Socrata MCP Companion Skill — Base Guidance
 
@@ -148,25 +158,37 @@ ORDER BY year
 
 ## Domain Support
 
-**Any Socrata open data portal can be queried.** There are 500+ Socrata portals across the US and internationally. If the user asks about a city, state, or county, try it — use the search tool to discover datasets on that domain, or use get_data with the domain directly. Do NOT refuse a query just because a city isn't listed below.
+**Any Socrata open data portal can be queried with get_data.** There are 500+ Socrata portals across the US and internationally. If the user asks about a city, state, or county, try it — use get_data with type "catalog" and that portal to discover its datasets, then get_data with type "query" to read them. Do NOT refuse a query just because a city isn't listed below.
 
-To find a portal domain for a city, use common patterns: data.cityofX.us, data.X.gov, data.Xcounty.gov, data.state.X.us. If unsure, use the search tool with the city name.
+To find a portal domain for a city, use common patterns: data.cityofX.us, data.X.gov, data.Xcounty.gov, data.state.X.us. If you aren't sure which domain is right, try a candidate with get_data and type "catalog" — one call either returns that portal's datasets or shows the portal isn't reachable.
+
+### Which Tool Reaches Which Portal
+
+get_data is the only tool that takes a portal. Settle that before choosing a tool:
+
+- **get_data** accepts a portal argument (domain is an accepted spelling of the same thing) and works against any Socrata portal. With type "catalog" it is the cross-portal discovery path; with type "query" it runs SoQL against the portal you name.
+- **search** takes exactly one argument, query, and searches only the portal this server is configured for. It has no portal argument. Reach for it when the portal you want is the configured one; use get_data with type "catalog" for every other portal.
+- **fetch** takes only one argument, id, and the portal travels inside that identifier — a search hit's dataset:portal:dataset_id form (or a full dataset URL) names its portal, but a bare 4x4 ID names none, so it resolves against the portal this server is configured for.
+
+So a dataset ID you learned somewhere else — the tables below, a curated directory, a web search — is reached with get_data and an explicit portal argument, not handed to fetch as a bare ID.
 
 ### Well-Tested Domains
 
-These portals have been extensively tested. Tool compatibility notes:
+get_data has been extensively tested against these portals:
 
-| Domain | get_data | search | fetch | Status |
-|--------|----------|--------|-------|--------|
-| data.cityofnewyork.us | Full | Full | Full | Fully Compatible |
-| data.cityofchicago.org | Full | Full | Full | Fully Compatible |
-| data.sfgov.org | Full | Limited | Unknown | Query-Preferred |
-| data.seattle.gov | Full | Full | Full | Fully Compatible |
-| data.lacity.org | Full | Limited | Fails | Query-Only |
+| Domain | Notes |
+|--------|-------|
+| data.cityofnewyork.us | NYC — see Key Datasets below |
+| data.cityofchicago.org | Chicago — see Key Datasets below |
+| data.sfgov.org | San Francisco — see Key Datasets below |
+| data.seattle.gov | Seattle — see Key Datasets below |
+| data.lacity.org | Los Angeles — see Key Datasets below |
+
+search and fetch aren't in this table: they only ever reach the portal this server is configured for, so "compatibility" isn't something that varies by domain the way it does for get_data.
 
 ### Other Portals
 
-For portals not listed above, start with search to discover available datasets, then use get_data to query them. Most Socrata portals support all three tools. If search or fetch fails on a particular portal, fall back to get_data with a known dataset ID.
+For portals not listed above, use get_data with type "catalog" and that portal to discover available datasets, then get_data with type "query" to read them. search and fetch won't help here — whichever portal this server is configured for, that's the only one they reach.
 
 ### When a Portal Doesn't Work
 
@@ -175,17 +197,11 @@ Not every city uses Socrata — some use ESRI/ArcGIS, CKAN, or proprietary platf
 - This is an actively developing project — support for more portal types is on the roadmap
 - Suggest trying one of the well-tested portals above, or ask if they're interested in data from a different city
 
-### Domain-Specific Workarounds
+### Working With a Portal Other Than the Configured One
 
-**San Francisco (data.sfgov.org):**
-- Search tool sometimes returns NYC data instead of SF
-- Use web search to find SF dataset IDs, then use get_data
+search and fetch only ever reach the portal this server is configured for — that isn't a per-domain quirk to work around, it's what those two tools do. If the user asks about San Francisco, Los Angeles, or anywhere else that isn't the configured portal, reach it with get_data and an explicit portal argument plus dataset ID — from the tables below, a web search, or get_data with type "catalog" on that portal.
 
-**Los Angeles (data.lacity.org):**
-- Only get_data works; search and fetch tools fail
-- Use web search to find LA dataset IDs, then use get_data exclusively
-
-**Known LA Dataset IDs:**
+**Known LA Dataset IDs** (once you're pointed at data.lacity.org with get_data):
 - MyLA311 2025: h73f-gn57
 - MyLA311 2022: i5ke-k6by
 - MyLA311 2020: rq3b-xjk8
@@ -213,7 +229,7 @@ Not every city uses Socrata — some use ESRI/ArcGIS, CKAN, or proprietary platf
 
 ## Key Datasets by Portal
 
-Below are the most-used datasets per portal for quick reference. Use the MCP search tool for datasets not listed here.
+Below are the most-used datasets per portal for quick reference. For a dataset not listed here, use get_data with type "catalog" and the portal to discover it — search only covers the portal this server is configured for.
 
 ### NYC (data.cityofnewyork.us)
 
@@ -265,7 +281,7 @@ Below are the most-used datasets per portal for quick reference. Use the MCP sea
 
 ### Los Angeles (data.lacity.org)
 
-Note: Only get_data works for LA — search and fetch tools fail.
+Note: reach LA with get_data and portal "data.lacity.org" unless that happens to be the configured portal — search and fetch only cover the configured portal.
 
 | Dataset | ID | Key Fields |
 |---------|----|------------|
@@ -301,11 +317,11 @@ Note: Only get_data works for LA — search and fetch tools fail.
 
 ## Socrata MCP Server Tools
 
-| Tool | Purpose | Returns |
-|------|---------|---------|
-| **search** | Find datasets or search within a dataset | Encoded IDs |
-| **fetch** | Retrieve full metadata or records | Complete data with metadata |
-| **get_data** | Execute SoQL queries (recommended) | Raw query results |
+| Tool | Arguments | Purpose | Returns |
+|------|-----------|---------|---------|
+| **search** | query only — no portal argument | Find datasets on the portal this server is configured for | Encoded IDs, e.g. dataset:portal:dataset_id |
+| **fetch** | id only — the portal travels in the identifier; a bare 4x4 resolves against the configured portal | Retrieve full metadata or one record | Complete data with metadata |
+| **get_data** | type, portal (any portal), plus SoQL parameters | Catalog discovery and SoQL queries — the only tool that reaches a portal other than the configured one | Raw query results |
 
 ## Output Format Guidelines
 
@@ -409,7 +425,7 @@ Use these NYC dataset IDs directly:
 Use these Chicago dataset IDs directly:
 - 311 requests: v6vf-nfxy (fields: sr_type, created_date, community_area)`,
     'data.sfgov.org': `
-Note: SF search sometimes returns incorrect results. Use dataset IDs directly:
+Note: search only covers the portal this server is configured for — if that isn't data.sfgov.org, reach SF with get_data and portal: "data.sfgov.org" instead. Use dataset IDs directly:
 - 311 cases: vw6y-z8j6 (fields: service_name, opened, neighborhood)`,
   };
 

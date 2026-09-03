@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { evidenceRecords, attestationPackages, users } from '@/lib/db/schema';
-import { eq, desc, asc, ilike, or, and, gte, isNull, isNotNull, sql } from 'drizzle-orm';
+import { eq, desc, asc, ilike, or, and, gte, isNull, isNotNull, sql, inArray } from 'drizzle-orm';
 import { visibilityMatches } from '@/lib/evidence/visibility-sql';
 import { buildRecordListItems, sortByAttestationCount } from '@/lib/evidence/record-list';
 
@@ -116,10 +116,17 @@ export async function GET(request: NextRequest) {
     .limit(PAGE_SIZE)
     .offset((page - 1) * PAGE_SIZE);
 
-  // Batch-fetch creators
+  // Batch-fetch creators — projected to the two columns the response actually
+  // needs (`record-list.ts`'s RecordListCreator reads only `displayName`) and
+  // filtered to this page's ids. `creatorIds.length > 0` still short-circuits
+  // the query entirely: drizzle's `inArray` over an empty array is a caller
+  // error, not an empty result (#366).
   const creatorIds = [...new Set(records.map(r => r.creatorId))];
   const creators = creatorIds.length > 0
-    ? await db.select().from(users)
+    ? await db
+        .select({ id: users.id, displayName: users.displayName })
+        .from(users)
+        .where(inArray(users.id, creatorIds))
     : [];
   const creatorMap = new Map(creators.map(c => [c.id, c]));
 
