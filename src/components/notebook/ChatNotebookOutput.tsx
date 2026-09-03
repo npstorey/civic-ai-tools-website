@@ -306,10 +306,21 @@ export default function ChatNotebookOutput({
 
       {/* E · Answer notebook */}
       <Section title="E · Answer notebook">
+        {/*
+          The reproduction claim is CONDITIONAL, and the condition is in the
+          notebook rather than here (#371). This line asserted flatly that
+          re-executing the notebook reproduces section F, which is true only of
+          the steps that re-run a live request — a notebook where three of four
+          fetches were rejected got the same sentence. What that fraction is, the
+          notebook itself states; `NotebookSection` below reads it off the cells
+          rather than repeating a claim from up here.
+        */}
         <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--text-secondary)' }}>
           Re-executing this notebook against the documented runtime + stable
-          upstream data reproduces section F (Typed Standards §8.7.3). The notebook
-          metadata records the sandbox runtime versions used at execution.
+          upstream data reproduces section F (Typed Standards §8.7.3) to the extent
+          that its steps re-run live requests — the notebook states how many of
+          them do. The notebook metadata records the sandbox runtime versions used
+          at execution.
         </div>
         <NotebookSection notebook={view.notebook} slug={placeholderSlug} />
       </Section>
