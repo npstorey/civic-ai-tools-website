@@ -43,6 +43,34 @@ import type { NotebookCell } from './cells.ts';
  */
 export const COVER_SECTION_HEADING = '## How to use this notebook';
 
+/**
+ * The cover cell's own prose — the body of the section above, from its heading
+ * to the next `## ` heading — and NOTHING ELSE IN THE CELL.
+ *
+ * This scope is the whole point, and it is not a tidiness measure. The cover
+ * cell opens with the instance title, then `**Query:** <the reader's own
+ * question>`, then the portal and the generation time. A check that scans the
+ * whole cell reads all four as the notebook's own words: a reader who asks "How
+ * complete is the 311 data for 2024?" made `validateCoverClaims` report that the
+ * notebook calls its analysis complete — a false issue about a claim the
+ * document never made, raised by the very check added to stop false claims. A
+ * question that happened to contain the claim's own wording did the same to the
+ * parser, one function over.
+ *
+ * One definition, exported, so the validator and the reader-facing components
+ * cannot scope this differently: what the notebook SAYS is what it says in its
+ * own prose.
+ */
+export function coverSectionBody(coverText: string): string {
+  const start = coverText.indexOf(COVER_SECTION_HEADING);
+  if (start === -1) return '';
+  const body = coverText.slice(start + COVER_SECTION_HEADING.length);
+  // The next section heading, at the start of a line. `## ` with the space is
+  // deliberate: `### Discovery` is a deeper heading, not the end of this one.
+  const next = body.search(/(^|\n)## /);
+  return next === -1 ? body : body.slice(0, next);
+}
+
 /** The one form of the claim. Every emitter calls this; nothing restates it. */
 export function reproductionClaimSentence(reRun: number, steps: number): string {
   return `This notebook re-runs a live request in ${reRun} of its ${steps} analysis steps.`;
@@ -88,16 +116,27 @@ export function findCoverCell<T extends { source: string[] | string }>(
   return null;
 }
 
-/** The claim a cover text states, or null when it states none. */
+/**
+ * The claim a cover text states, or null when it states none.
+ *
+ * Scoped to the cover's own prose by `coverSectionBody`: the reader's question
+ * sits five lines above the section that states the claim, so an unscoped parse
+ * would take the first match in the cell — which can be the reader's numbers
+ * rather than the document's.
+ */
 export function parseReproductionClaim(coverText: string): ReproductionClaim | null {
-  const match = CLAIM_PATTERN.exec(coverText);
+  const match = CLAIM_PATTERN.exec(coverSectionBody(coverText));
   if (!match) return null;
   return { reRun: Number(match[1]), steps: Number(match[2]) };
 }
 
-/** True when a cover text calls the analysis complete. */
+/**
+ * True when a cover text calls the analysis complete — in its own prose. Scoped
+ * by the same definition, and for the sharper reason: a single word carries this
+ * one, so any occurrence anywhere in the cell would have tripped it.
+ */
 export function claimsCompleteness(coverText: string): boolean {
-  return BARE_COMPLETENESS_PATTERN.test(coverText);
+  return BARE_COMPLETENESS_PATTERN.test(coverSectionBody(coverText));
 }
 
 /**

@@ -38,6 +38,7 @@ export {
 export type { ReproductionClaim } from './reproduction-claim.ts';
 export {
   COVER_SECTION_HEADING,
+  coverSectionBody,
   reproductionClaimSentence,
   parseReproductionClaim,
   readReproductionClaim,

@@ -118,7 +118,12 @@ import assert from 'node:assert/strict';
 import type { Notebook } from './cells.ts';
 import { synthesizeNotebook } from './synthesize.ts';
 import { stampExecutedNotebook } from './phase-d.ts';
-import { validateExecutedNotebook } from './validate.ts';
+import { validateCoverClaims, validateExecutedNotebook } from './validate.ts';
+import {
+  coverSectionBody,
+  parseReproductionClaim,
+  readReproductionClaim,
+} from './reproduction-claim.ts';
 import {
   countReproducedFetchCells,
   describeToolFailure,
@@ -389,6 +394,94 @@ test('#371: the validator reports a cover that claims completeness over a step t
     /complete, reproducible/,
     'the issue must quote the claim it is refusing, not only report a missing count',
   );
+});
+
+test('#371: the reader\'s own question is not read as a claim the notebook made', () => {
+  // The cover cell carries `**Query:** <the user's question>` five lines above
+  // the section that states the claim, along with the portal, the generation
+  // time and the instance title. A check that scans the whole cell reads all of
+  // them as the notebook's own words.
+  //
+  // RED before the fix: `claimsCompleteness` ran `/\bcomplete\b/i` over the
+  // whole cover, so asking "How complete is the 311 data for 2024?" made the
+  // validator this phase added report that the notebook calls its analysis
+  // complete — a false issue about a claim the notebook never made, on a
+  // partially-failed notebook that was telling the truth.
+  const notebook = stamped(PARTIAL_FAILURE.map(c => c));
+  const asked = synthesizeNotebook({
+    ...BASE_INPUTS,
+    query: 'How complete is the 311 data for 2024?',
+    toolCalls: PARTIAL_FAILURE,
+  });
+  stampExecutedNotebook(
+    asked.notebook,
+    { executedAt: '2026-05-21T14:23:45.000Z', executionDuration_ms: 12340 },
+    asked.dataFrameVariables,
+  );
+  const cover = coverText(asked.notebook);
+  assert.match(cover, /How complete is the 311 data for 2024\?/, 'fixture: the question is in the cell');
+
+  assert.deepEqual(
+    validateCoverClaims(asked.notebook).issues,
+    [],
+    'a word in the reader\'s question is not a claim by the document',
+  );
+  assert.deepEqual(parseReproductionClaim(cover), { reRun: 1, steps: 4 });
+  // And the untouched fixture still validates clean, so this is about scope and
+  // not about the check having been turned off.
+  assert.deepEqual(validateCoverClaims(notebook).issues, []);
+});
+
+test('#371: a count in the reader\'s question is not the count the notebook states', () => {
+  // The same exposure on the other function. A question that happens to contain
+  // the claim's own wording sits ABOVE the section that states it, so an
+  // unscoped parse takes the first match in the cell — the reader's numbers, not
+  // the document's.
+  //
+  // RED before the fix: the claim parses as 9 of 9, the cells show 1 of 4, and
+  // the validator reports a mismatch the notebook is not responsible for.
+  const asked = synthesizeNotebook({
+    ...BASE_INPUTS,
+    query: 'Why does it say it re-runs a live request in 9 of its 9 analysis steps?',
+    toolCalls: PARTIAL_FAILURE,
+  });
+  stampExecutedNotebook(
+    asked.notebook,
+    { executedAt: '2026-05-21T14:23:45.000Z', executionDuration_ms: 12340 },
+    asked.dataFrameVariables,
+  );
+  const cover = coverText(asked.notebook);
+  assert.match(cover, /9 of its 9 analysis steps/, 'fixture: the decoy is in the cell');
+
+  assert.deepEqual(
+    parseReproductionClaim(cover),
+    { reRun: 1, steps: 4 },
+    'the claim is the one the section states, never the one the question contains',
+  );
+  assert.deepEqual(validateCoverClaims(asked.notebook).issues, []);
+  // The reader-facing path is scoped by the same definition: `NotebookSection`
+  // renders whatever this returns.
+  assert.deepEqual(readReproductionClaim(asked.notebook.cells), { reRun: 1, steps: 4 });
+});
+
+test('#371: the cover section is the notebook\'s prose, and stops at the next heading', () => {
+  // The scope itself, pinned once so the two functions above rest on a stated
+  // boundary rather than on two regexes that happen to agree today. GREEN by
+  // construction — a unit pin on the extractor, not evidence about the base.
+  const cover = coverText(synthesizeNotebook({
+    ...BASE_INPUTS,
+    query: 'How complete is the 311 data for 2024?',
+    toolCalls: PARTIAL_FAILURE,
+  }).notebook);
+  const body = coverSectionBody(cover);
+
+  assert.ok(body.includes(countSentence(1, 4)), 'the section carries the claim');
+  assert.ok(!body.includes('**Query:**'), 'and not the reader\'s question');
+  assert.ok(!body.includes('**Portal:**'), 'nor the portal line');
+  assert.ok(!body.includes('**Generated:**'), 'nor the generation time');
+  assert.ok(!body.includes('Data Analysis'), 'nor the instance title');
+  assert.ok(!body.includes('## Notebook structure'), 'and it stops at the next heading');
+  assert.equal(coverSectionBody('# A cell with no such section'), '', 'absent is empty, not everything');
 });
 
 test('#371: a notebook whose cover count matches its cells validates clean', () => {
