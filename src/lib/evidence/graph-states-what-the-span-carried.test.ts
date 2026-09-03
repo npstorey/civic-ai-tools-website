@@ -65,13 +65,25 @@
 //         (`run-tool-loop.ts:816` always writes the name), so this pins the
 //         honest shape rather than showing the defect; it goes red the day a
 //         producer stops writing one.
-//   CONTROL — `dataSources` and `queries` (P3's `failed` / `failureKind`),
-//         both already honest at base.
+//   CONTROL — `queries` (P3's `failed` / `failureKind`), honest at base.
 //   CONTROL — verification passes over the round-tripped package. The wave's
 //         own note: `src/lib/evidence/verify.ts` reads no tool-call field, so
 //         every defect in this family verifies GREEN. Verification is not a
 //         backstop for any of this, and this assertion exists to say so out
 //         loud, before and after.
+//
+// AMENDED BY P8 (the cold read's F1, measured at `4ec45c0`). As first
+// written, the rejected call (iv) hit the SAME dataset as the successful (i),
+// "so `dataSources` still de-duplicates to one entry" — the one configuration
+// in which `dataSources` cannot be seen asserting a rejected call's dataset,
+// because the answered call had already minted the entry. `packager.ts:424`
+// hands every tool call, `failed: true` included, to the harness's
+// `buildDataSources`, whose input type is `{ name; args }` and which reads
+// `args.dataset_id` and `args.portal` alone. The rejected call now names a
+// DIFFERENT dataset, and (e) — unchanged in what it asserts, "exactly one
+// dataset-keyed entry, the get_data's" — is RED at `4ec45c0`: the read-back
+// package says `queries[3]` failed and that `queries[3]`'s dataset was
+// accessed. Every other assertion in this file keeps its verdict.
 //
 // Run with: npm test
 
@@ -101,6 +113,9 @@ const RUN_PORTAL = 'data.cityofnewyork.us';
  *  graph must adopt it no more than it adopts the run's. */
 const OTHER_PORTAL = 'data.other-portal.example';
 const DATASET_ID = 'erm2-nwe9';
+/** The dataset the REJECTED call named. No data came from it, so no entry may
+ *  be minted for it — a request the source did not answer accessed nothing. */
+const REJECTED_DATASET_ID = 'efgh-5678';
 
 type GraphNode = { '@id': string; [k: string]: unknown };
 
@@ -120,10 +135,10 @@ interface SpanFixture {
 // (ii) a `search`: one argument, `query`; no portal, no dataset id.
 // (iii) a `fetch`: one argument, `id`, whose `record:` grammar embeds
 //      ANOTHER portal; no portal attribute, no dataset id.
-// (iv) a second `get_data` on the SAME dataset with a different aggregation,
-//      rejected on a timeout. Same dataset id, so `dataSources` still
-//      de-duplicates to one entry; different arguments, so its query entity
-//      is a distinct node.
+// (iv) a second `get_data` on a DIFFERENT dataset, rejected on a timeout
+//      (amended by P8 — see the header). A dataset id the answered call did
+//      not name, so the only way it reaches `dataSources` is through the
+//      rejected call itself; its query entity is a distinct node.
 function runFixtures(): SpanFixture[] {
   return [
     {
@@ -152,7 +167,7 @@ function runFixtures(): SpanFixture[] {
         args: {
           type: 'query',
           portal: RUN_PORTAL,
-          dataset_id: DATASET_ID,
+          dataset_id: REJECTED_DATASET_ID,
           select: 'complaint_type, count(*)',
           group: 'complaint_type',
         },
@@ -414,12 +429,19 @@ test('read-back (d) CONTROL: each of the four query entities carries its own spa
   assert.notEqual(fetchQuery!['civic:toolName'], 'get_data', 'a fetch is not a get_data');
 });
 
-// --- (e) CONTROL: dataSources mints an entry only from what a call carried ---
+// --- (e) RED at 4ec45c0 (P8, F1): dataSources mints an entry only from what a call that was ANSWERED carried ---
 
-test('read-back (e) CONTROL: dataSources holds exactly one dataset-keyed entry — the get_data’s — and none for the search or the fetch', () => {
+test('read-back (e) RED: dataSources holds exactly one dataset-keyed entry — the answered get_data’s — and none for the search, the fetch, or the rejected get_data', () => {
   const entries = READ_BACK.dataSources as Array<Record<string, unknown>>;
   assert.ok(Array.isArray(entries), 'the read-back package carries no dataSources array');
   const datasetKeyed = entries.filter((e) => typeof e.datasetId === 'string');
+  const rejected = datasetKeyed.find((e) => e.datasetId === REJECTED_DATASET_ID);
+  assert.equal(
+    rejected,
+    undefined,
+    `the package says queries[3] failed and that its dataset was accessed: ${JSON.stringify(rejected)} — ` +
+      'packager.ts:424 hands the rejected call to buildDataSources, which reads args.dataset_id/args.portal and never failed',
+  );
   assert.equal(
     datasetKeyed.length,
     1,
@@ -455,6 +477,7 @@ test('read-back (f) CONTROL: queries holds four entries and the rejected one car
 
   assert.equal(queries[3].failed, true, 'the rejected call must be marked failed in the package');
   assert.equal(queries[3].failureKind, 'timeout');
+  assert.equal(queries[3].datasetId, REJECTED_DATASET_ID, 'the rejected attempt still names the dataset it was made against');
   for (const i of [0, 1, 2]) {
     assert.equal(
       Object.prototype.hasOwnProperty.call(queries[i], 'failed'),
