@@ -234,10 +234,25 @@ const SOQL_SUPERSEDED_KWARGS = [
  */
 const REPRODUCED_FETCH_ASSIGNMENT = /^[ \t]*df\d+ = fetch_[a-z_]+\(/m;
 
+/**
+ * The heading every not-reproduced step in this module emits. Same contract as
+ * `REPRODUCED_FETCH_ASSIGNMENT`: three renderers write it (`renderFailedToolCell`,
+ * `renderUnnamedDatasetCell`, `renderNotRerunnableStepCell`) and the detector
+ * below is the only thing that reads it, so both move together. `validate.ts`
+ * counts the notebook's steps through it and never through a stamped number.
+ */
+const NOT_REPRODUCED_HEADING = '#### Not reproduced:';
+
 /** True when this cell re-runs a data fetch — see `REPRODUCED_FETCH_ASSIGNMENT`. */
 export function isReproducedFetchCell(cell: NotebookCell): boolean {
   if (cell.cell_type !== 'code') return false;
   return REPRODUCED_FETCH_ASSIGNMENT.test(cell.source.join(''));
+}
+
+/** True when this cell states a step that the notebook does not re-run. */
+export function isNotReproducedStepCell(cell: NotebookCell): boolean {
+  if (cell.cell_type !== 'markdown') return false;
+  return cell.source.join('').includes(NOT_REPRODUCED_HEADING);
 }
 
 /**
@@ -246,6 +261,20 @@ export function isReproducedFetchCell(cell: NotebookCell): boolean {
  */
 export function countReproducedFetchCells(cells: readonly NotebookCell[]): number {
   return cells.filter(isReproducedFetchCell).length;
+}
+
+/**
+ * How many steps the notebook renders — the denominator of the cover text's
+ * claim (#371, ruling D3), read off the cells so it cannot be satisfied by a
+ * number the document stamps on itself.
+ *
+ * A step is a call rendered as its own step in the analysis pipeline: it either
+ * re-runs a live request or says it does not. Discovery calls are not steps;
+ * `renderDiscoverySummaryCell` collapses all of them into one cell and the
+ * notebook never numbers them.
+ */
+export function countAnalysisStepCells(cells: readonly NotebookCell[]): number {
+  return cells.filter(c => isReproducedFetchCell(c) || isNotReproducedStepCell(c)).length;
 }
 
 /**
@@ -258,6 +287,73 @@ export function countReproducibleFetches(calls: readonly PhaseAToolCall[]): numb
     const out = renderFetchToolCell(call, { dataFrameIndex: 1, defaultPortal: '' });
     return out !== null && out.producedDataFrame;
   }).length;
+}
+
+/** How many of this analysis's tool calls will render as steps. See above. */
+export function countAnalysisSteps(calls: readonly PhaseAToolCall[]): number {
+  return calls.filter(isAnalysisStep).length;
+}
+
+/**
+ * The shape both notebook generators can answer `isAnalysisStep` about. The
+ * executed generator passes a `PhaseAToolCall` (whose `name` is required); the
+ * skeleton generator passes its own `ToolCall`, whose name is optional since
+ * #384 P2 because a replayed record may not carry one.
+ */
+export interface StepCandidate {
+  name?: string;
+  args: Record<string, unknown>;
+  failed?: boolean;
+}
+
+/**
+ * Tools whose result this notebook re-fetches with a helper of its own. Each
+ * has a renderer below that emits a `dfN = fetch_*(` cell.
+ */
+const RERUNNABLE_STEP_TOOLS = new Set(['get_observations', 'ckan__query_data', 'ckan__execute_sql']);
+
+/**
+ * Tools that are steps this notebook CANNOT re-run — stated as such, one cell
+ * each, never folded into the discovery summary (#384 C2).
+ *
+ * `fetch` is the case the wave was filed on. It is two operations behind one
+ * name: `mcp/operation-types.ts:25-41` records that a `dataset:` identifier
+ * returns metadata and a `record:` identifier returns one real data row, that
+ * the branch is decided by an identifier grammar living in the MCP server, and
+ * that this repository therefore derives no operation type for it at all.
+ * Summarising it as a discovery call whose result "the data fetches below
+ * already encode" asserts exactly what that comment says cannot be known.
+ *
+ * `ckan__aggregate_data` reaches the same place from the other side: it returns
+ * aggregated rows, and there is no helper here that performs the aggregation.
+ * "No cell can reproduce it" is the definition of a not-reproduced step, not of
+ * a discovery call — and the skeleton generator has always rendered it as a
+ * step (its operation type is `query`), so leaving it in the discovery summary
+ * is the same disagreement between the two generators, one tool over.
+ */
+const NOT_RERUNNABLE_STEP_TOOLS = new Set(['fetch', 'ckan__aggregate_data']);
+
+/**
+ * Whether a tool call is a step in the analysis pipeline — the ONE definition
+ * both notebook generators use (`./synthesize.ts` through `renderFetchToolCell`
+ * below, `../notebook.ts` through its step filter). Two filters that answered
+ * this question separately are how the two documents came to say different
+ * things about the same call.
+ *
+ * A record carrying no tool name is a step: nothing can be re-run for it and
+ * nothing can be said about what it did, which is precisely a step stated as
+ * not reproduced (`../notebook.ts`'s `notReproducedNote` names that case in
+ * words). It can only arise on the skeleton side — a `PhaseAToolCall` always
+ * carries a name — so no renderer below has to answer for it.
+ */
+export function isAnalysisStep(call: StepCandidate): boolean {
+  // Checked first, and before the name dispatch: a discovery call that did not
+  // complete is not a discovery call that did, and the summary must not list it
+  // as one (#321).
+  if (call.failed) return true;
+  if (call.name === undefined) return true;
+  if (call.name === 'get_data') return call.args.type === 'query';
+  return RERUNNABLE_STEP_TOOLS.has(call.name) || NOT_RERUNNABLE_STEP_TOOLS.has(call.name);
 }
 
 export interface ToolCellOutput {
@@ -397,7 +493,7 @@ function renderUnnamedDatasetCell(
   const portal = (call.args.portal as string) || ctx.defaultPortal;
   const reason = call.reason ? ` ${call.reason}` : '';
   const md = [
-    `#### Not reproduced: \`get_data\` on \`${portal}\``,
+    `${NOT_REPRODUCED_HEADING} \`get_data\` on \`${portal}\``,
     '',
     `The original analysis queried a dataset it did not name${reason}. The data source ` +
       'derived one from the search phrase it was given; this notebook does not derive ' +
@@ -597,6 +693,18 @@ export const FAILURE_REASON: Record<ToolFailureKind, string> = {
 };
 
 /**
+ * The failure vocabulary above, for the other notebook generator
+ * (`../notebook.ts`). Exported rather than copied: two surfaces explaining one
+ * behaviour differently is how they drift, and this table is the reason no raw
+ * error text can reach a reader through either of them. An absent kind reads as
+ * `unknown`, which is a real answer and not a placeholder — see the note on
+ * `TOOL_FAILURE_KINDS` above.
+ */
+export function describeToolFailure(kind: ToolFailureKind | undefined): string {
+  return FAILURE_REASON[kind ?? 'unknown'];
+}
+
+/**
  * Plain-language description of what the call was trying to fetch, built from
  * the same args the matching renderer would have used. Falls back to the tool
  * name for a call with no dedicated renderer (a discovery call that failed),
@@ -696,10 +804,10 @@ function renderFailedToolCell(
 ): ToolCellOutput {
   const reason = call.reason ? ` ${call.reason}` : '';
   const md = [
-    `#### Not reproduced: \`${call.name}\``,
+    `${NOT_REPRODUCED_HEADING} \`${call.name}\``,
     '',
     `The original analysis tried to ${describeAttempt(call, ctx)}${reason}. ` +
-      `${FAILURE_REASON[call.failureKind ?? 'unknown']}`,
+      `${describeToolFailure(call.failureKind)}`,
     '',
     'No code cell is generated for it — a request that returned no data cannot be ' +
       'reproduced. The steps below rest only on the requests that did return data.',
@@ -717,13 +825,69 @@ function renderFailedToolCell(
 }
 
 /**
- * Render a Phase A tool call as a notebook cell pair. Returns `null` for
- * discovery-only calls that do not produce a DataFrame (catalog search,
- * metadata, schema lookups); those are summarized once in a single
- * discovery markdown cell instead of one cell per call.
+ * A step this notebook cannot re-run, stated as one (#384 C2).
  *
- * A call that FAILED never returns `null` and never returns a code cell — see
- * `renderFailedToolCell`.
+ * The reason is per tool and says only what this repository can measure. It
+ * never asserts what the call returned: for `fetch` that is unknowable here by
+ * design (see `NOT_RERUNNABLE_STEP_TOOLS`), and the point of the cell is that a
+ * document may not describe an outcome it cannot establish.
+ *
+ * The call's identifier is deliberately NOT rendered. A `record:` id embeds a
+ * portal and a dataset id, and printing it puts a source in front of a reader
+ * under a step the notebook has just said it cannot account for; decomposing it
+ * would mean reimplementing the MCP server's identifier grammar here, where it
+ * would drift. The skeleton generator writes no argument for the same call for
+ * the same reason, which is what lets the two documents agree.
+ */
+function renderNotRerunnableStepCell(call: PhaseAToolCall): ToolCellOutput {
+  const reason = call.reason ? ` ${call.reason}` : '';
+  const why = call.name === 'fetch'
+    ? [
+      `The original analysis called \`fetch\`${reason}. This notebook does not re-run it. ` +
+        '`fetch` answers either with a dataset\'s description or with a single record, and ' +
+        'which of the two it did is decided inside the data source by the shape of the ' +
+        'identifier it was given — not by anything this document can read. So no cell here ' +
+        'repeats the request, and nothing here states what it returned.',
+      '',
+      'No code cell is generated for it, and no dataset is cited: naming one would mean ' +
+        'reading it out of an identifier this notebook does not interpret.',
+    ]
+    : [
+      `The original analysis aggregated data through \`${call.name}\`${reason}. This notebook ` +
+        'has no helper that performs that aggregation, so there is no cell that would ' +
+        'produce the same numbers.',
+      '',
+      'No code cell is generated for it. To reproduce this step, aggregate the rows ' +
+        'yourself from a `fetch_opencontext(...)` call of your own.',
+    ];
+  const md = [`${NOT_REPRODUCED_HEADING} \`${call.name}\``, '', ...why].join('\n');
+  return {
+    // Markdown only, by construction: there is nothing to execute.
+    cells: [markdownCell(md)],
+    producedDataFrame: false,
+    dataFrameVariable: null,
+    // No citation. Nothing in this document read the source, so crediting one
+    // in the footer would credit a fetch this notebook did not make.
+    citation: null,
+  };
+}
+
+/**
+ * Render a Phase A tool call as a notebook cell pair. Returns `null` for
+ * discovery-only calls (catalog search, metadata, schema lookups); those are
+ * summarized once in a single discovery markdown cell instead of one cell per
+ * call.
+ *
+ * `null` means exactly "not a step", and `isAnalysisStep` is what decides that
+ * — one predicate, consulted here and by `../notebook.ts`, rather than a name
+ * list in each generator. The two lists having drifted apart is #384's family
+ * F3: a `fetch` was a step in neither document's eyes, so one filed it under
+ * discovery and the other dropped it.
+ *
+ * A call that is a step never returns `null`: anything the predicate admits and
+ * no renderer below names falls through to `renderNotRerunnableStepCell`, so
+ * adding a tool to the predicate cannot silently put it back in the discovery
+ * summary.
  */
 export function renderFetchToolCell(
   call: PhaseAToolCall,
@@ -733,22 +897,17 @@ export function renderFetchToolCell(
   // too: a discovery step that did not complete is not a discovery step that
   // did, and the summary below must not list it as one.
   if (call.failed) return renderFailedToolCell(call, ctx);
-  // Socrata: get_data with type=query is the only fetching variant.
-  if (call.name === 'get_data') {
-    const type = call.args.type as string | undefined;
-    if (type === 'query') return renderSocrataQueryCell(call, ctx);
-    return null;
-  }
+  if (!isAnalysisStep(call)) return null;
+  // Socrata: get_data with type=query is the only fetching variant, and
+  // `isAnalysisStep` has already established that this is one.
+  if (call.name === 'get_data') return renderSocrataQueryCell(call, ctx);
   // Data Commons.
   if (call.name === 'get_observations') return renderDataCommonsObsCell(call, ctx);
-  if (call.name === 'search_indicators') return null;
   // Boston OpenContext.
   if (call.name === 'ckan__execute_sql') return renderOpenContextSqlCell(call, ctx);
   if (call.name === 'ckan__query_data') return renderOpenContextQueryCell(call, ctx);
-  // ckan__aggregate_data and ckan__get_schema, ckan__search_datasets,
-  // ckan__get_dataset are discovery-only for v1 (no helper-side equivalent
-  // for aggregate-data; included in the discovery summary instead).
-  return null;
+  // `fetch` and `ckan__aggregate_data`: steps with no cell that could re-run them.
+  return renderNotRerunnableStepCell(call);
 }
 
 /**
@@ -769,11 +928,20 @@ export function renderDiscoverySummaryCell(
 ): NotebookCell | null {
   const discoveryCalls = calls.filter(c => renderFetchToolCell(c, { dataFrameIndex: 0, defaultPortal: '' }) === null);
   if (discoveryCalls.length === 0) return null;
+  // The second sentence is a claim about the cells BELOW this one, so it is
+  // conditional on there being any. Until #384 P4 it was unconditional, and a
+  // notebook whose every fetch was rejected — or one whose only data-reading
+  // call was a `fetch` this document cannot re-run — told its reader that
+  // fetches encoded the discoveries when no fetch survived to encode anything.
+  const reproduced = countReproducibleFetches(calls);
   const lines = [
     '### Discovery',
     '',
     'The original analysis ran the following discovery calls before fetching data.',
-    'They are not re-executed here — the data fetches below already encode the discoveries.',
+    reproduced > 0
+      ? 'They are not re-executed here — the data fetches below already encode the discoveries.'
+      : 'They are not re-executed here, and no step below re-runs a request, so nothing in ' +
+        'this notebook rests on what they found.',
     '',
   ];
   for (const call of discoveryCalls) {

@@ -19,7 +19,18 @@ import type { InstanceAttribution } from './site-config.ts';
 // this module ships in client bundles: `tool-to-cell.ts` reaches only
 // `cells.ts`, both pure string builders with no env read and no Node API, so
 // nothing server-only rides in behind it.
-import { isFullSoqlQuery } from './notebook-author/tool-to-cell.ts';
+// Three more values from the same module, for the same reason. `isAnalysisStep`
+// is THE definition of what becomes a step, shared with the executed-notebook
+// generator: two filters answering that question separately is how the two
+// documents came to say different things about the same call (#384 F3).
+// `describeToolFailure` is the executed path's failure vocabulary, shared rather
+// than restated — it is also what keeps raw error text off this surface.
+import {
+  describeToolFailure,
+  isAnalysisStep,
+  isFullSoqlQuery,
+  type ToolFailureKind,
+} from './notebook-author/tool-to-cell.ts';
 
 export type { InstanceAttribution };
 
@@ -130,11 +141,12 @@ type QueryStep =
 /**
  * Why a step gets no URL, in the reader's language.
  *
- * The step filter is `operationType === 'query'`, and since `operation-types.ts`
- * that admits `get_observations`, `ckan__query_data`, `ckan__execute_sql` and
- * `ckan__aggregate_data` as well as Socrata's `get_data`. None of those carry a
- * portal or a dataset id, and this builder addresses one thing: a Socrata
- * dataset over HTTP. Interpolating them anyway produced
+ * The step filter is `isAnalysisStep` (#384 P4; it was `operationType === 'query'`
+ * until the two generators were put on one definition), and it admits
+ * `get_observations`, `ckan__query_data`, `ckan__execute_sql`,
+ * `ckan__aggregate_data` and `fetch` as well as Socrata's `get_data`. None of
+ * those carry a portal and a dataset id, and this builder addresses one thing: a
+ * Socrata dataset over HTTP. Interpolating them anyway produced
  * `https://undefined/resource/undefined.json` under the original step's row
  * count — a cell that runs clean and reads nothing, in a notebook that goes
  * into a signed record package.
@@ -154,6 +166,27 @@ function notReproducedNote(toolName: string | undefined): string {
     'notebook fetch Socrata datasets by URL. This call named no Socrata portal and ' +
     'dataset, so no URL is written for it — one written here would name a source the ' +
     'step did not read. The original result is described above.'
+  );
+}
+
+/**
+ * Why a step that was REJECTED gets no URL, in the reader's language.
+ *
+ * The same statement the executed notebook makes about the same record
+ * (`notebook-author/tool-to-cell.ts`, `renderFailedToolCell`), down to the
+ * failure sentence itself — `describeToolFailure` is imported rather than
+ * restated, so the two documents cannot describe one rejection two ways, and so
+ * no raw error text, status code or host name can reach a reader through either
+ * of them.
+ */
+function rejectedNote(toolName: string | undefined, kind: ToolFailureKind | undefined): string {
+  const step = toolName === undefined
+    ? 'This step, whose tool name the record does not carry,'
+    : `This step called \`${toolName}\`,`;
+  return (
+    `*Not reproduced below.* ${step} and it was rejected. ` +
+    `${describeToolFailure(kind)} No URL is written for it: a cell that re-ran the ` +
+    'request would put a result in this notebook that the original step never produced.'
   );
 }
 
@@ -205,6 +238,16 @@ function queryPrecedenceComment(soql: boolean, superseded: readonly string[]): s
  */
 function planQueryStep(tool: ToolCall): QueryStep {
   const args = tool.args;
+  // Checked FIRST, before the URL is planned — the same order
+  // `renderFetchToolCell` uses, and for the same reason. A rejected call that
+  // happened to carry a portal and a dataset id used to become a live fetch
+  // cell here, under the step's own heading, while the executed notebook stated
+  // the failure: the two generators describing one call two ways (#384 F3).
+  // A cell that re-runs a request the analysis never got an answer from does
+  // not reproduce that step; it replaces it.
+  if (tool.failed) {
+    return { kind: 'not-reproduced', note: rejectedNote(tool.name, tool.failureKind) };
+  }
   const portal = nonEmptyString(args.portal);
   const datasetId = nonEmptyString(args.dataset_id);
   if (tool.name !== 'get_data' || !portal || !datasetId) {
@@ -322,9 +365,15 @@ export function generateNotebook(
     'import pandas as pd',
   ]));
 
-  // Filter to query tool calls only. NOTE that this admits every tool whose
-  // operation type is `query`, not only Socrata's — see `planQueryStep`.
-  const queryTools = toolsCalled.filter(t => t.operationType === 'query');
+  // The steps this notebook renders, by the ONE definition both notebook
+  // generators use (`notebook-author/tool-to-cell.ts`). It used to be
+  // `t.operationType === 'query'`, which is a different question with a
+  // different answer: `fetch` derives to NO operation type by design
+  // (`mcp/operation-types.ts:25-41`), so a call that may have read a real data
+  // row was dropped from this document with no step, no note and no mention —
+  // while the executed notebook filed the same call under "discovery". Two
+  // filters, two documents, one call, two stories (#384 F3, C2).
+  const queryTools = toolsCalled.filter(isAnalysisStep);
 
   // Datasets this notebook actually addressed, in the order it addressed them.
   // Built from the planned steps rather than from the raw args, so the "Data

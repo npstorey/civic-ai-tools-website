@@ -121,12 +121,15 @@ import { stampExecutedNotebook } from './phase-d.ts';
 import { validateExecutedNotebook } from './validate.ts';
 import {
   countReproducedFetchCells,
+  describeToolFailure,
+  isAnalysisStep,
   renderDiscoverySummaryCell,
   renderFetchToolCell,
   type PhaseAToolCall,
 } from './tool-to-cell.ts';
 import { generateNotebook } from '../notebook.ts';
 import type { ToolCall } from '../../hooks/useStreamingComparison.ts';
+import { mcpTools } from '../mcp/tools.ts';
 import { modelAccessPhrase } from '../model-catalog.ts';
 
 const CTX = { dataFrameIndex: 1, defaultPortal: 'data.cityofnewyork.us' };
@@ -510,4 +513,155 @@ test('criterion 7: both notebook generators state the same `fetch` as a step tha
     !skeleton.cells[skeleton.cells.length - 1].source.join('').includes('erm2-nwe9'),
     'and nothing is cited in "Data sources" that no cell fetched',
   );
+});
+
+test('criterion 7: both notebook generators state the same REJECTED call as a step that returned no data', () => {
+  // The same disagreement, one call over, found by P3's read of `notebook.ts`
+  // and ruled into this phase. `planQueryStep` read no `failed`, so a rejected
+  // `get_data` that happened to carry a portal and a dataset id became a LIVE
+  // fetch cell in the skeleton — a cell that runs, returns today's rows, and
+  // sits under a step heading for a request the analysis never got an answer
+  // from — while the executed notebook stated the failure. That is worse than
+  // silence: it does not merely omit the step, it replaces it.
+  //
+  // The shared phrase here is the failure sentence itself. `describeToolFailure`
+  // is the one table both generators read, so a reader cannot be given two
+  // accounts of one rejection, and no raw error text can reach either document.
+  const rejected = fetchingCall(2, true);
+  assert.equal(rejected.failed, true, 'fixture: the call must really be rejected');
+  assert.equal(rejected.args.portal, 'data.cityofnewyork.us', 'fixture: and carry a portal');
+  assert.ok(rejected.args.dataset_id, 'fixture: and a dataset id — the shape that used to render a live cell');
+
+  const skeleton = generateNotebook(
+    BASE_INPUTS.query,
+    'data.cityofnewyork.us',
+    [{
+      name: rejected.name,
+      args: rejected.args,
+      operationType: rejected.operationType,
+      reason: rejected.reason,
+      failed: true,
+      failureKind: 'timeout',
+    }],
+    BASE_INPUTS.finalAnswer,
+    { origin: null, host: null, platformTitle: null },
+  );
+  const skeletonText = skeleton.cells.map(c => c.source.join('')).join('\n');
+  assert.ok(
+    skeletonText.includes(SHARED_NOT_REPRODUCED),
+    `the skeleton does not say the step was not reproduced:\n${skeletonText}`,
+  );
+  assert.ok(
+    skeletonText.includes(describeToolFailure('timeout')),
+    'the skeleton must give the failure in the shared vocabulary, not one of its own',
+  );
+  assert.ok(
+    !skeletonText.includes('url = "'),
+    `a rejected call must not render a live fetch cell:\n${skeletonText}`,
+  );
+  assert.ok(
+    !skeleton.cells[skeleton.cells.length - 1].source.join('').includes(String(rejected.args.dataset_id)),
+    'and nothing is cited in "Data sources" for a request that returned nothing',
+  );
+
+  const executed = renderFetchToolCell(rejected, CTX);
+  assert.ok(executed, 'the executed notebook has stated a rejected call since #321');
+  const executedText = executed!.cells.map(c => c.source.join('')).join('\n');
+  assert.ok(executedText.includes(SHARED_NOT_REPRODUCED));
+  assert.ok(
+    executedText.includes(describeToolFailure('timeout')),
+    'both documents give the same reason, from the same table',
+  );
+  assert.equal(executed!.cells.filter(c => c.cell_type === 'code').length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// The anti-drift guard: one definition of a step, over every tool the registry
+// can emit
+// ---------------------------------------------------------------------------
+
+/** Representative arguments per tool — every `get_data` operation, one shape each otherwise. */
+const ARG_SHAPES: Record<string, Array<Record<string, unknown>>> = {
+  get_data: [
+    { type: 'query', portal: 'data.cityofnewyork.us', dataset_id: 'erm2-nwe9', limit: 5 },
+    { type: 'catalog', portal: 'data.cityofnewyork.us', query: 'noise' },
+    { type: 'metadata', portal: 'data.cityofnewyork.us', dataset_id: 'erm2-nwe9' },
+    { type: 'metrics', portal: 'data.cityofnewyork.us', dataset_id: 'erm2-nwe9' },
+  ],
+  search: [{ query: 'noise complaints' }],
+  fetch: [{ id: 'record:data.cityofnewyork.us:erm2-nwe9:row-8814' }],
+  search_indicators: [{ query: 'median income' }],
+  get_observations: [{ variable_dcid: 'Median_Income_Person', place_dcid: 'geoId/36061' }],
+  ckan__search_datasets: [{ query: 'potholes' }],
+  ckan__get_dataset: [{ dataset_id: 'abc-123' }],
+  ckan__get_schema: [{ resource_id: 'abc-123' }],
+  ckan__query_data: [{ resource_id: 'abc-123', filters: { year: 2025 } }],
+  ckan__execute_sql: [{ sql: 'SELECT 1' }],
+  ckan__aggregate_data: [{ resource_id: 'abc-123', metrics: { count: 'count(*)' } }],
+};
+
+function registryToolNames(): string[] {
+  return mcpTools.map(tool => (tool as { function: { name: string } }).function.name);
+}
+
+test('one definition of a step: the predicate, the executed renderer and the skeleton filter agree, over every tool the registry can emit', () => {
+  // The universe is DERIVED from `mcp/tools.ts`, not typed out here: a check
+  // scoped to a hand-written list cannot see a tool added to the registry, and
+  // that is the shape of defect this whole wave is about. A tool with no entry
+  // in ARG_SHAPES fails the test rather than being skipped.
+  const names = registryToolNames();
+  assert.ok(names.length >= 11, `the registry lists ${names.length} tools; expected at least 11`);
+
+  for (const name of names) {
+    const shapes = ARG_SHAPES[name];
+    assert.ok(shapes, `${name} is in the registry and has no fixture here — add one`);
+    for (const args of shapes) {
+      for (const failed of [false, true]) {
+        const call: PhaseAToolCall = {
+          name,
+          args,
+          ...(failed ? { failed: true, failureKind: 'timeout' as const } : {}),
+        };
+        const label = `${name} ${JSON.stringify(args)}${failed ? ' (rejected)' : ''}`;
+
+        // (a) The executed notebook: `null` means "not a step" and nothing else.
+        assert.equal(
+          renderFetchToolCell(call, CTX) !== null,
+          isAnalysisStep(call),
+          `${label}: the executed renderer and the predicate disagree`,
+        );
+
+        // (b) The skeleton notebook: a step gets a numbered heading, and a
+        //     discovery call gets none.
+        const skeleton = generateNotebook(
+          'q',
+          'data.cityofnewyork.us',
+          [{ name, args, failed: failed || undefined, failureKind: failed ? 'timeout' : undefined }],
+          '',
+          { origin: null, host: null, platformTitle: null },
+        );
+        const rendersStep = skeleton.cells.some(c => c.source.join('').includes('## Step 1:'));
+        assert.equal(
+          rendersStep,
+          isAnalysisStep(call),
+          `${label}: the skeleton filter and the predicate disagree`,
+        );
+      }
+    }
+  }
+});
+
+test('one definition of a step: a rejected call is a step whatever it was, and a discovery call is not', () => {
+  // The two ends of the predicate, stated so a change that collapses it to a
+  // constant fails here rather than passing everything above.
+  assert.equal(isAnalysisStep(SEARCH_CALL), false, 'a search is discovery');
+  assert.equal(isAnalysisStep(CATALOG_CALL), false, 'a catalog search is discovery');
+  assert.equal(isAnalysisStep({ ...SEARCH_CALL, failed: true }), true, 'a rejected search is a step');
+  assert.equal(isAnalysisStep(FETCH_RECORD), true, 'a fetch is a step');
+  assert.equal(isAnalysisStep(fetchingCall(1, false)), true, 'a query is a step');
+  // A record that carries no tool name can only reach the skeleton generator
+  // (a PhaseAToolCall always has one). Nothing can be re-run for it and nothing
+  // can be said about what it did, which is a step stated as not reproduced —
+  // never a call silently dropped from the document.
+  assert.equal(isAnalysisStep({ args: {} }), true, 'an unnamed record is a step');
 });

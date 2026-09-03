@@ -17,7 +17,12 @@
  */
 import type { Notebook } from './cells.ts';
 import { EXECUTION_EXTENSION_KEY, NOTEBOOK_EXTENSION_KEY } from './prompt.ts';
-import { countReproducedFetchCells } from './tool-to-cell.ts';
+import {
+  claimsCompleteness,
+  findCoverCell,
+  parseReproductionClaim,
+} from './reproduction-claim.ts';
+import { countAnalysisStepCells, countReproducedFetchCells } from './tool-to-cell.ts';
 
 export interface ValidationIssue {
   path: string;
@@ -170,11 +175,81 @@ export function validateReproducedFetches(notebook: Notebook): ValidationResult 
   return { ok: issues.length === 0, issues };
 }
 
+/**
+ * Report a cover text whose claim about the document is not what the document
+ * shows (#371, ruling D3).
+ *
+ * `validateReproducedFetches` above answers one question — is anything
+ * reproduced at all — and reported only at zero, so a notebook where three of
+ * four fetches were rejected passed while telling its reader the analysis was
+ * complete. This asks the harder question: does the cover cell's stated count
+ * match the cells under it, and does it assert completeness at all.
+ *
+ * Both numbers are derived FROM THE CELLS, by the same detectors the renderers
+ * own, so a notebook cannot satisfy this by stamping a number on itself. The
+ * cover cell is found BY CONTENT, not at index 0: `/api/evidence/[slug]/bundle`
+ * prepends a commitment cell before a reader downloads the file.
+ *
+ * A notebook with no cover cell is reported rather than skipped. Skipping it
+ * would make this check pass for exactly the document it cannot read, which is
+ * the one shape a validator may not treat as clean.
+ */
+export function validateCoverClaims(notebook: Notebook): ValidationResult {
+  const issues: ValidationIssue[] = [];
+  const cover = findCoverCell(notebook.cells);
+  if (!cover) {
+    issues.push({
+      path: 'cells',
+      message:
+        'no cover cell: this notebook states nothing about how much of itself re-runs a ' +
+        'live request, so a reader has no claim to check against the steps below',
+    });
+    return { ok: false, issues };
+  }
+
+  const coverText = cover.source.join('');
+  const reRun = countReproducedFetchCells(notebook.cells);
+  const steps = countAnalysisStepCells(notebook.cells);
+  const stated = parseReproductionClaim(coverText);
+
+  if (stated === null) {
+    if (steps > 0) {
+      issues.push({
+        path: 'cells',
+        message:
+          `the cover text states no count, and the cells show ${reRun} of ${steps} steps ` +
+          're-running a live request — a reader is left to infer from the body how much of ' +
+          'this notebook rests on data it fetched',
+      });
+    }
+  } else if (stated.reRun !== reRun || stated.steps !== steps) {
+    issues.push({
+      path: 'cells',
+      message:
+        `the cover text claims ${stated.reRun} of ${stated.steps} steps re-run a live ` +
+        `request; the cells show ${reRun} of ${steps}`,
+    });
+  }
+
+  if (claimsCompleteness(coverText)) {
+    issues.push({
+      path: 'cells',
+      message:
+        'the cover text calls the analysis complete. "a complete, reproducible analysis" is ' +
+        'not a claim this document can make as a bare adjective: it re-runs a live request ' +
+        `in ${reRun} of its ${steps} analysis steps, and the count is what it must say`,
+    });
+  }
+
+  return { ok: issues.length === 0, issues };
+}
+
 /** Run every validator and merge their issues. */
 export function validateExecutedNotebook(notebook: Notebook): ValidationResult {
   const provenance = validateNotebookProvenance(notebook);
   const execution = validateExecutionExtension(notebook);
   const fetches = validateReproducedFetches(notebook);
-  const issues = [...provenance.issues, ...execution.issues, ...fetches.issues];
+  const cover = validateCoverClaims(notebook);
+  const issues = [...provenance.issues, ...execution.issues, ...fetches.issues, ...cover.issues];
   return { ok: issues.length === 0, issues };
 }
