@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { putPackage, putCommittedPackage } from '@/lib/storage';
-import { buildEvidencePackage, type PackageInput, type CaptureMethod, type ContentProfile, DEFAULT_CONTENT_TYPE } from '@/lib/evidence/packager';
+import { buildEvidencePackage, type PackageInput, type CaptureMethod, type ContentProfile, type ToolCallInput, DEFAULT_CONTENT_TYPE } from '@/lib/evidence/packager';
 import { modelIdentityForValue } from '@/lib/model-resolver';
 import { hash } from '@/lib/evidence/trace';
 import { signPackage, getRfc3161Timestamp, publishToRekor, getActiveSigner, type SignerIdentity } from '@/lib/evidence/signing';
@@ -71,13 +71,11 @@ interface PublishRequest {
   prompt: string;
   /** Assistant output text OR a BlobRef to the same. */
   output: string | BlobRef;
-  toolCalls: Array<{
-    name: string;
-    args: Record<string, unknown>;
-    resultSummary?: { rows: number; columns: number };
-    duration_ms?: number;
-    operationType?: string;
-  }>;
+  /** One entry per tool call — the packager's own input shape, including
+   *  `failed`/`failureKind` for a call the source rejected (#384, F5), so a
+   *  rejected call posted here is a rejected call in `queries[]`. Handed to
+   *  the packager as posted. See `docs/api/records-publish.md`. */
+  toolCalls: ToolCallInput[];
   model: string;
   portal: string;
   tokenUsage: { promptTokens?: number; completionTokens?: number };

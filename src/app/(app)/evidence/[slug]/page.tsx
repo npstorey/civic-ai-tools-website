@@ -15,6 +15,7 @@ import { getBrandName } from '@/lib/brand-config';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
+import { describeQueryOutcome } from '@/lib/evidence/query-step';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
 import { sessionUserIsCreator } from '@/lib/evidence/sealed-access';
 import { fromDbValue } from '@/lib/evidence/visibility';
@@ -573,7 +574,14 @@ export default async function EvidencePage({ params }: PageProps) {
                   Show {renderPkg.queries.length} tool {renderPkg.queries.length === 1 ? 'call' : 'calls'}
                 </summary>
                 <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {renderPkg.queries.map((q, i) => (
+                  {renderPkg.queries.map((q, i) => {
+                    // #384 F5: what the call returned is stated through the
+                    // one formatter both renderers share — a rejected call is
+                    // said to have failed, an empty result to have returned
+                    // nothing, and an entry with neither is stated as
+                    // unrecorded, never as either.
+                    const outcome = describeQueryOutcome(q);
+                    return (
                     <div key={i} style={{
                       padding: '10px 14px', border: '1px solid var(--border-color)',
                       borderRadius: '4px', fontSize: '13px',
@@ -587,14 +595,12 @@ export default async function EvidencePage({ params }: PageProps) {
                       }}>
                         {JSON.stringify(q.arguments, null, 2)}
                       </pre>
-                      {q.resultRows !== undefined && (
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                          Result: {q.resultRows} rows × {q.resultColumns ?? '—'} cols
-                          {q.duration_ms !== undefined && ` · ${q.duration_ms}ms`}
-                        </div>
-                      )}
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        {outcome.text}
+                      </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </details>
             </Section>

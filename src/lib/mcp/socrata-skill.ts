@@ -599,9 +599,12 @@ export async function composeSkillPrompt(
  * Thin wrapper kept for backward compatibility with the existing route
  * handlers. Delegates to `composeSkillPrompt` with the default active source
  * list (`['socrata', 'data-commons', 'boston-opencontext']`) and the
- * cross-source preamble.
+ * cross-source preamble. `portal` is optional (#384, F2): without one the
+ * Socrata block is composed with no portal-specific section and names no
+ * default portal — `composeSkillPrompt` already did that for an absent
+ * `SkillContext.portal`; only this signature said otherwise.
  */
-export const buildSystemPrompt = async (portal: string): Promise<string> => {
+export const buildSystemPrompt = async (portal?: string): Promise<string> => {
   return composeSkillPrompt(['socrata', 'data-commons', 'boston-opencontext'], {
     portal,
     today: new Date().toISOString().split('T')[0],

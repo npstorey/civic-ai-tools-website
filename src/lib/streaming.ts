@@ -1,5 +1,6 @@
 // Types for streaming events
 import { deriveOperationType } from './mcp/operation-types.ts';
+import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 export type StreamEventType = 'progress' | 'token' | 'complete' | 'error' | 'trace';
 export type PanelType = 'withMcp' | 'withoutMcp';
 
@@ -47,7 +48,23 @@ export interface CompleteEvent extends StreamEvent {
     prompt_tokens?: number;
     completion_tokens?: number;
     token_limit_exceeded?: boolean;
-    tools_called?: { name: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string }[];
+    /**
+     * The loop's tool-call records, verbatim (`ToolCallRecord`): a call the
+     * source rejected carries `failed`/`failureKind` here exactly as the loop
+     * recorded them (#384, F5). This list is what the publish dialog posts,
+     * so what this type names is what a consumer can read and the package
+     * can carry; absent means the call was not recorded as failed.
+     */
+    tools_called?: {
+      name: string;
+      args: Record<string, unknown>;
+      resultSummary?: { rows: number; columns: number };
+      duration_ms?: number;
+      operationType?: string;
+      reason?: string;
+      failed?: boolean;
+      failureKind?: ToolFailureKind;
+    }[];
   };
 }
 
@@ -1115,12 +1132,17 @@ export function buildNarrativeSummary(
   const portals = [...portalSet];
   const isMultiPortal = portals.length > 1;
 
-  const datasets = new Map<string, { name: string; portal: string }>();
+  // A dataset keeps the portal its OWN call named, or none (#384, F2). A call
+  // whose arguments carried no portal was answered by whatever portal the
+  // source defaulted to — which the record does not say — so borrowing
+  // another call's portal here minted a link, and a city, the record never
+  // asserted.
+  const datasets = new Map<string, { name: string; portal?: string }>();
   for (const tool of toolsCalled) {
     const id = tool.args.dataset_id as string | undefined;
     const p = tool.args.portal as string | undefined;
     if (id && !datasets.has(id)) {
-      datasets.set(id, { name: getDatasetName(id), portal: p || portals[0] || '' });
+      datasets.set(id, { name: getDatasetName(id), portal: p });
     }
   }
 
@@ -1142,30 +1164,37 @@ export function buildNarrativeSummary(
   }
   const parts = deduped.map(a => a.count > 1 ? `${a.text} (${a.count} times)` : a.text);
 
-  // Build prefix with dataset context (includes markdown links when portal is known)
+  // Build prefix with dataset context. A link and a city are written only from
+  // the portal the dataset's own call named: a dataset whose call named none
+  // is listed by name, unlinked, and counted under no city.
   let prefix = '';
   if (datasets.size === 1) {
     const [id, { name, portal }] = [...datasets.entries()][0];
-    const cityName = getPortalCity(portal);
     const url = datasetUrl(portal, id);
     const datasetRef = url ? `[${name} (${id})](${url})` : `${name} (${id})`;
-    prefix = `Using ${cityName}'s ${datasetRef}, the AI `;
+    prefix = portal
+      ? `Using ${getPortalCity(portal)}'s ${datasetRef}, the AI `
+      : `Using ${datasetRef}, the AI `;
   } else if (datasets.size > 1) {
     const entries = [...datasets.entries()];
     if (isMultiPortal) {
       const linkedNames = entries.map(([id, { name, portal }]) => {
-        const cityName = getPortalCity(portal);
         const url = datasetUrl(portal, id);
-        return url ? `${cityName}'s [${name} (${id})](${url})` : `${cityName}'s ${name} (${id})`;
+        const ref = url ? `[${name} (${id})](${url})` : `${name} (${id})`;
+        return portal ? `${getPortalCity(portal)}'s ${ref}` : ref;
       });
       prefix = `Using ${linkedNames.join(' and ')}, the AI `;
     } else {
-      const cityName = getPortalCity(portals[0]);
       const linkedNames = entries.map(([id, { name, portal }]) => {
         const url = datasetUrl(portal, id);
         return url ? `[${name} (${id})](${url})` : `${name} (${id})`;
       });
-      prefix = `Using ${linkedNames.length} ${cityName} datasets (${linkedNames.join(', ')}), the AI `;
+      // "N <city> datasets" only when every dataset's own call named that one
+      // portal; when any named none, "N datasets", and no city is asserted
+      // for any of them.
+      const everyDatasetNamedItsPortal = entries.every(([, { portal }]) => Boolean(portal));
+      const cityPhrase = everyDatasetNamedItsPortal ? `${getPortalCity(portals[0])} ` : '';
+      prefix = `Using ${linkedNames.length} ${cityPhrase}datasets (${linkedNames.join(', ')}), the AI `;
     }
   } else {
     prefix = 'The AI ';
@@ -1288,7 +1317,11 @@ export function buildProvenanceLine(
   const seen = new Set<string>();
   for (const tool of queryTools) {
     const did = tool.args.dataset_id as string | undefined;
-    const portal = (tool.args.portal as string | undefined) || portals[0];
+    // The link is minted only from the portal THIS call named (#384, F2); a
+    // call that named none is listed by name, unlinked — `datasetUrl` returns
+    // null for an absent portal. The run-level "<city> Open Data" line above
+    // stays: it names only the portals the calls named.
+    const portal = tool.args.portal as string | undefined;
     if (did && !seen.has(did)) {
       seen.add(did);
       const name = getDatasetName(did);

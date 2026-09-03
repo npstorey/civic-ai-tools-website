@@ -7,7 +7,7 @@ import {
 } from '@/lib/caller-model-key';
 import { endpointModelForDeclared } from '@/lib/model-resolver';
 import { runToolLoop } from '@/lib/model-loop/run-tool-loop';
-import { replayLoopOptions } from '@/lib/model-loop/replay-loop';
+import { replayLoopOptions, replayPortalForPackage } from '@/lib/model-loop/replay-loop';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -104,7 +104,13 @@ export async function POST(
   // carried through unchanged when no entry declares it, which is what a record
   // naming a model this instance no longer offers has always done.
   const model = endpointModelForDeclared(pkg.cost.model);
-  const portal = pkg.dataSources[0]?.portalUrl?.replace('https://', '') || 'data.cityofnewyork.us';
+  // The portal the record's own calls named, or none (#384, F2). A record
+  // that named no portal — a search/fetch-only run has no data-source entry —
+  // replays with nothing injected and a system prompt that names no default
+  // portal, rather than on a domain the record never mentioned; absence is
+  // recorded as absence in the replayed calls' arguments, and so in the
+  // identity keys the consistency attestation is computed over.
+  const portal = replayPortalForPackage(pkg);
 
   // Build system prompt (regenerated fresh — may differ slightly if guidance updated)
   const systemPrompt = await buildSystemPrompt(portal);
@@ -132,7 +138,8 @@ export async function POST(
     // `duration_ms` and — for a call that failed — `failed`/`failureKind`
     // (#338). The identity fields the client keys a run on
     // (`name`, `args.type`, `args.dataset_id`, `args.portal`, the last of
-    // which this route injects) are byte-identical to what it read before.
+    // which this route injects when the record named one) are byte-identical
+    // to what it read before.
     return NextResponse.json({
       toolCalls: result.toolCalls,
       output: result.content,

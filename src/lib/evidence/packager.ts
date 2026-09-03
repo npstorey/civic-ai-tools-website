@@ -31,6 +31,7 @@ import {
   buildEnvelope,
   sha256Hex,
   DEFAULT_CONTENT_TYPE,
+  type EnvelopeQuery,
 } from '@typedstandards/produce-core';
 import {
   deriveDatHereEnvelopeFields,
@@ -105,6 +106,21 @@ export interface ToolCallInput {
   resultSummary?: { rows: number; columns: number };
   duration_ms?: number;
   operationType?: string;
+  /**
+   * Set when the loop recorded the call as rejected (`ToolCallRecord.failed`,
+   * run-tool-loop.ts): the source did not answer it. Carried into the
+   * envelope's `queries[]` as `failed`/`failureKind`, so a reader of the
+   * package can tell a rejected call from one that returned nothing (#384,
+   * family F5). Absent means the call was not recorded as failed — never
+   * `false` — and the packager writes neither key when neither was recorded.
+   */
+  failed?: boolean;
+  /**
+   * Why, when `failed` is true: the loop's closed set (`timeout`,
+   * `unavailable`, `not_configured`, `unknown`). A string here, not that
+   * union, because the publish body is an API any producer can post to.
+   */
+  failureKind?: string;
 }
 
 export interface PackageInput {
@@ -263,16 +279,12 @@ export interface EvidencePackage {
     visibility: 'full_text' | 'hash_only';
     text?: string;
   };
-  queries: Array<{
-    tool: string;
-    operationType: string;
-    arguments: Record<string, unknown>;
-    datasetId?: string;
-    portal?: string;
-    duration_ms?: number;
-    resultRows?: number;
-    resultColumns?: number;
-  }>;
+  /** One entry per tool call: produce-core's `EnvelopeQuery`, imported rather
+   *  than mirrored. The hand-copied type this replaced could type-check while
+   *  the mapping below dropped a key the core re-emits — which is how a
+   *  rejected call reached the package looking like one that returned nothing
+   *  (#384, F5). */
+  queries: EnvelopeQuery[];
   dataSources: DataSourceEntry[];
   cost: {
     promptTokens?: number;
@@ -384,7 +396,7 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
   // Extract queries (only tool calls with operation type). The
   // `deriveOperationType` fallback is app-side knowledge — the MCP tool
   // registry lives in `../mcp/`, and produce-core carries no derivation table.
-  const queries = input.toolCalls.map(tc => ({
+  const queries: EnvelopeQuery[] = input.toolCalls.map(tc => ({
     tool: tc.name,
     operationType: tc.operationType || deriveOperationType(tc.name, tc.args) || 'unknown',
     arguments: tc.args,
@@ -393,6 +405,14 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
     duration_ms: tc.duration_ms,
     resultRows: tc.resultSummary?.rows,
     resultColumns: tc.resultSummary?.columns,
+    // #384 F5: a rejected call is a rejected call in the package. Both keys
+    // are written only when the record carried them — absent stays absent —
+    // which is also what keeps a package that recorded no failure
+    // byte-identical to one built before these keys existed (both
+    // canonicalization chains omit an undefined key; the pinned hashes in
+    // packager.failed-call.test.ts hold that line).
+    ...(tc.failed !== undefined ? { failed: tc.failed } : {}),
+    ...(tc.failureKind !== undefined ? { failureKind: tc.failureKind } : {}),
   }));
 
   // When trace is a BlobRef the packager can't inspect spans for data-source

@@ -56,7 +56,7 @@ interface QueryNotebookRequest {
 type NotebookEvent =
   | { type: 'phase'; name: 'A' | 'B' | 'C' | 'D' | 'complete'; message: string }
   | { type: 'phase_a_progress'; message: string; phase?: string; iteration?: number; toolName?: string; operationType?: string }
-  | { type: 'phase_a_tool_call'; name: string; operationType?: string; reason?: string; resultSummary?: { rows: number; columns: number }; args?: Record<string, unknown>; duration_ms?: number }
+  | { type: 'phase_a_tool_call'; name: string; operationType?: string; reason?: string; resultSummary?: { rows: number; columns: number }; args?: Record<string, unknown>; duration_ms?: number; failed?: boolean; failureKind?: PhaseAToolCall['failureKind'] }
   | { type: 'phase_a_answer'; content: string }
   // `signingKeyId` is null when this instance has declared no PUBLISHER_KEY_ID:
   // the Signers section then shows honest absence rather than some other
@@ -419,6 +419,12 @@ async function runPhaseA(args: {
             // `queries[].arguments`) instead of an empty skeleton.
             args: call.args,
             duration_ms: call.duration_ms,
+            // #384 F5: a call the source rejected says so on this event too —
+            // the notebook page publishes from what this stream carried, and
+            // this emission used to pick every field but these two. Written
+            // only when the record carried them; absent stays absent.
+            ...(call.failed !== undefined ? { failed: call.failed } : {}),
+            ...(call.failureKind !== undefined ? { failureKind: call.failureKind } : {}),
           });
         }
         void emit({ type: 'phase_a_answer', content: result.content });

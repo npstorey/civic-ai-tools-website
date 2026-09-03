@@ -268,7 +268,8 @@ function carriesTheFailure(site: string, block: string): void {
 const DECLARATIONS: { site: string; block: () => string }[] = [
   {
     site: 'streaming.ts CompleteEvent.data.tools_called[] (the SSE complete event)',
-    block: () => extract('CompleteEvent', sourceOf('./streaming.ts'), /interface CompleteEvent[\s\S]*?tools_called\?:([^\n]*)/),
+    // The declaration through its closing `[];` — one line or many.
+    block: () => extract('CompleteEvent', sourceOf('./streaming.ts'), /interface CompleteEvent[\s\S]*?tools_called\?:\s*([\s\S]*?\[\];)/),
   },
   {
     site: 'useStreamingComparison.ts ToolCall (the client’s record, posted to /api/records)',

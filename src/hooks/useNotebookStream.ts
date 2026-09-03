@@ -18,6 +18,7 @@ import { connectSSE } from '@/lib/sse-client';
 import { friendlyStreamError, notebookExecutionErrorMessage } from '@/lib/streaming';
 import type { Notebook } from '@/lib/notebook-author';
 import type { NotebookPhase } from '@/components/notebook/NotebookProgress';
+import type { PhaseAToolCall } from '@/lib/notebook-author';
 
 /** A single tool call captured during Phase A — used to populate the
  *  deliberative-trace section of the chat-output A-G renderer. Shape mirrors
@@ -31,6 +32,11 @@ export interface CapturedToolCall {
    *  populates the package's `queries[].arguments`. */
   args?: Record<string, unknown>;
   duration_ms?: number;
+  /** Set when Phase A recorded the call as rejected (#384, F5): carried off
+   *  the `phase_a_tool_call` event so a publish from this session says so.
+   *  Absent means not recorded as failed. */
+  failed?: boolean;
+  failureKind?: PhaseAToolCall['failureKind'];
 }
 
 export interface NotebookStreamState {
@@ -162,6 +168,8 @@ export function useNotebookStream() {
           const resultSummary = raw.resultSummary as CapturedToolCall['resultSummary'] | undefined;
           const args = raw.args as Record<string, unknown> | undefined;
           const duration_ms = raw.duration_ms as number | undefined;
+          const failed = raw.failed as boolean | undefined;
+          const failureKind = raw.failureKind as PhaseAToolCall['failureKind'] | undefined;
           if (!name) break;
           const label = [op || name, reason ? `(${reason})` : null].filter(Boolean).join(' ');
           setState((prev) => ({
@@ -176,6 +184,10 @@ export function useNotebookStream() {
                 resultSummary,
                 args,
                 duration_ms,
+                // #384 F5: keep the rejection the event carried; absent stays
+                // absent.
+                ...(failed !== undefined ? { failed } : {}),
+                ...(failureKind !== undefined ? { failureKind } : {}),
               },
             ],
           }));
