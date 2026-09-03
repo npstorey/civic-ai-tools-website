@@ -46,6 +46,7 @@ import { queryWithMcpStreaming, type CompletionResult } from '../openrouter-stre
 import { carriedModelIdentity } from '../model-catalog.ts';
 import { _resetDefaultModelClientForTests } from '../model-client.ts';
 import { TraceBuilder, CIVICAITOOLS_TRACE_CONFIG } from '../evidence/trace.ts';
+import { canonicalizeToolCall } from '../evidence/tool-call-identity.ts';
 
 const FIXTURE_KEY = 'not-a-real-key-p2-injection-fixture';
 const PORTAL = 'data.cityofnewyork.us';
@@ -611,13 +612,14 @@ test('replay: the span agrees with the record, and the recorded args still feed 
 
   assertSpanAgreesWithRecord(toolSpans(finish(builder))[0], record, PORTAL);
 
-  // The replay identity key is `name:type:dataset_id:portal` — canonicalized
-  // in `AttestationDialog.tsx` and pinned verbatim in `replay-loop.test.ts`.
-  // It reads the recorded args, so the injected portal must still be there.
-  assert.equal(
-    [record.name, record.args.type, record.args.dataset_id, record.args.portal].join(':'),
-    `get_data:query:abcd-1234:${PORTAL}`,
-  );
+  // The replay identity key is `canonicalizeToolCall(record)`
+  // (`src/lib/evidence/tool-call-identity.ts`) — the tool name plus a
+  // canonical JSON serialisation of the WHOLE `args` object, no key format of
+  // its own here. It reads the recorded args, so the injected portal must
+  // still be there: checked directly on `record.args.portal`, and again by
+  // confirming the portal reaches the computed key itself.
+  assert.equal(record.args.portal, PORTAL);
+  assert.ok(canonicalizeToolCall(record).includes(PORTAL));
 });
 
 test('replay keeps its own 45s bound, now as a value rather than a race it performs', async () => {

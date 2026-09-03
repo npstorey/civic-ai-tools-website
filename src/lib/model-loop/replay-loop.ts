@@ -22,11 +22,13 @@
  * THE ARGS-IDENTITY CONSTRAINT, restated because this is the caller it bites.
  * The core injects `portal` into the very `args` object it records — the same
  * object, by reference (see the header of `run-tool-loop.ts`).
- * `AttestationDialog.canonicalizeToolCall` keys a replay run on
- * `name:args.type:args.dataset_id:args.portal`, and those keys are an input to
- * a signed consistency attestation. Clone or freeze that object anywhere on
- * this path and the injected portal stops reaching the record, every key
- * changes, and nothing in the diff points at the cause.
+ * `canonicalizeToolCall` (`src/lib/evidence/tool-call-identity.ts`) keys a
+ * replay run on the tool name plus a canonical JSON serialisation of the
+ * WHOLE argument object — every field, not a hand-picked few — and those keys
+ * are an input to a signed consistency attestation. Clone or freeze that
+ * object anywhere on this path and the injected portal stops reaching the
+ * record: the serialisation changes, so the key changes, and nothing in the
+ * diff points at the cause.
  */
 
 import type OpenAI from 'openai';

@@ -446,10 +446,12 @@ test('the args on the record is the SAME object handed to executeToolCall', asyn
   // Not deep equality — identity. Callers inject fields into `args` inside the
   // tool closure (a portal, most often), and the recorded arguments must show
   // what was actually sent: they reach a signed package, and the replay
-  // identity key is computed over `name:args.type:args.dataset_id:args.portal`.
-  // A clone or a freeze here changes those keys with nothing in the diff
-  // pointing at the cause, which is why this probe checks BOTH the reference
-  // and a field injected after the record was made.
+  // identity key (`canonicalizeToolCall`, `src/lib/evidence/tool-call-identity.ts`)
+  // is computed over the tool name plus a canonical JSON serialisation of the
+  // WHOLE argument object. A clone or a freeze here changes that
+  // serialisation — and so the key — with nothing in the diff pointing at
+  // the cause, which is why this probe checks BOTH the reference and a field
+  // injected after the record was made.
   let handed: Record<string, unknown> | undefined;
   const { result } = await runCore(
     {
