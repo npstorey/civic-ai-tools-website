@@ -18,6 +18,7 @@
 import type { Notebook } from './cells.ts';
 import { EXECUTION_EXTENSION_KEY, NOTEBOOK_EXTENSION_KEY } from './prompt.ts';
 import {
+  bodyClaim,
   claimsCompleteness,
   findCoverCell,
   parseReproductionClaim,
@@ -244,12 +245,52 @@ export function validateCoverClaims(notebook: Notebook): ValidationResult {
   return { ok: issues.length === 0, issues };
 }
 
+/**
+ * Report a bare completeness claim anywhere in the document, not only in the
+ * cover (#384 P8, F3).
+ *
+ * `validateCoverClaims` reads the cover section, by design: that is where the
+ * count lives and where a reader's own question sits five lines above it. The
+ * step-section header then said "the analysis is fully reproducible" two
+ * cells down, under a cover stating "1 of its 3", and nothing could see it.
+ *
+ * THE SCOPE, and how it is determined. Every markdown cell is a cell the
+ * generator authored — the model's answer is a CODE cell (`display(Markdown
+ * (…))`) and code output is never a cell source — so the universe is
+ * `cell_type === 'markdown'`. The cover cell (found by content) is left to
+ * `validateCoverClaims`, which reads its own section body and never the
+ * `**Query:**` line. Every other markdown cell is read through
+ * `markdownProse`, which strips the channels a data value reaches markdown
+ * through (code spans and fences, link targets, double-quoted strings,
+ * prefixed identifiers — see its header for the measurement), so a search
+ * phrase, a fetch id, a dataset id or a where clause cannot be read as a
+ * claim. The words are the cover check's own.
+ */
+export function validateBodyClaims(notebook: Notebook): ValidationResult {
+  const issues: ValidationIssue[] = [];
+  const cover = findCoverCell(notebook.cells);
+  notebook.cells.forEach((cell, index) => {
+    if (cell.cell_type !== 'markdown' || cell === cover) return;
+    const claim = bodyClaim(Array.isArray(cell.source) ? cell.source.join('') : String(cell.source ?? ''));
+    if (claim === null) return;
+    issues.push({
+      path: `cells[${index}]`,
+      message:
+        `a cell outside the cover calls the analysis complete or fully reproducible: ${JSON.stringify(claim)}. ` +
+        'The cover states how many steps re-run a live request, and that count is the only claim this ' +
+        'document can make about itself',
+    });
+  });
+  return { ok: issues.length === 0, issues };
+}
+
 /** Run every validator and merge their issues. */
 export function validateExecutedNotebook(notebook: Notebook): ValidationResult {
   const provenance = validateNotebookProvenance(notebook);
   const execution = validateExecutionExtension(notebook);
   const fetches = validateReproducedFetches(notebook);
   const cover = validateCoverClaims(notebook);
-  const issues = [...provenance.issues, ...execution.issues, ...fetches.issues, ...cover.issues];
+  const body = validateBodyClaims(notebook);
+  const issues = [...provenance.issues, ...execution.issues, ...fetches.issues, ...cover.issues, ...body.issues];
   return { ok: issues.length === 0, issues };
 }

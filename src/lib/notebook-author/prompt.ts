@@ -200,7 +200,22 @@ export function buildCell2Source(): string {
   ].join('\n');
 }
 
-export const CELL_4_HEADER = '## Data Analysis Pipeline\n\nEach step below corresponds to one discovery call from the original analysis. The same helper functions and arguments are used so the analysis is fully reproducible.';
+/**
+ * The header above the step cells. It says what a step IS, in the words of
+ * the cover's structure line (#384 P8, F3) — and no longer that "the analysis
+ * is fully reproducible", which it said two cells under a cover stating
+ * "1 of its 3". The cover carries the count, and the count is the claim;
+ * `validateBodyClaims` (validate.ts) now reads every generator-written
+ * markdown cell for a bare claim like the one this used to make.
+ */
+export const CELL_4_HEADER = [
+  '## Data Analysis Pipeline',
+  '',
+  'One step per call that read data or tried to, in the order the original analysis made them. ' +
+    'A step that re-runs its request does so through the helper functions defined above, with the ' +
+    'arguments the original call used; a step that does not re-run one says so in its own cell. ' +
+    'The discovery calls are summarised once below this header and are not numbered among the steps.',
+].join('\n');
 
 export function buildFooterCellSource(args: {
   citations: readonly { id: string; label: string; url: string }[];
