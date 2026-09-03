@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { connectSSE } from '@/lib/sse-client';
 import { createTraceCapture } from '@/lib/bpmn/capture-trace';
 import { mapEventToNodes } from '@/lib/bpmn/node-mapping';
+import type { ToolFailureKind } from '@/lib/notebook-author/tool-to-cell';
 import type { TraceEvent, PreRecordedTrace } from '@/lib/bpmn/traces';
 import { friendlyStreamError, type ProgressPhase } from '@/lib/streaming';
 import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
@@ -125,7 +126,14 @@ export function useLiveTrace(): UseLiveTraceReturn {
     duration_ms: number | undefined,
     toolName: string | undefined,
     operationType: string | undefined,
+    failed?: boolean,
+    failureKind?: ToolFailureKind,
   ) => {
+    // The rejection the wire carried, if any (#384 P8, F2); absent stays absent.
+    const failure = {
+      ...(failed !== undefined ? { failed } : {}),
+      ...(failureKind !== undefined ? { failureKind } : {}),
+    };
     const entry: ProgressLogEntry = {
       message,
       timestamp: Date.now(),
@@ -135,9 +143,12 @@ export function useLiveTrace(): UseLiveTraceReturn {
       args,
       toolName,
       operationType,
+      ...failure,
     };
 
     if (phase === 'tool_complete' && iteration !== undefined) {
+      // The end event's outcome travels onto the start entry it pairs to.
+      const outcome = { isComplete: true, duration_ms, ...failure };
       // Update the matching tool_start entry in-place within its group
       setProgressGroups(prev => {
         const newGroups = prev.map(g => ({ ...g, entries: [...g.entries] }));
@@ -147,7 +158,7 @@ export function useLiveTrace(): UseLiveTraceReturn {
             e => e.phase === 'tool_start' && e.message === message && !e.isComplete
           );
           if (startIdx !== -1) {
-            group.entries[startIdx] = { ...group.entries[startIdx], isComplete: true, duration_ms };
+            group.entries[startIdx] = { ...group.entries[startIdx], ...outcome };
           }
         }
         return newGroups;
@@ -159,7 +170,7 @@ export function useLiveTrace(): UseLiveTraceReturn {
           e => e.phase === 'tool_start' && e.message === message && !e.isComplete
         );
         if (flatIdx !== -1) {
-          newLog[flatIdx] = { ...newLog[flatIdx], isComplete: true, duration_ms };
+          newLog[flatIdx] = { ...newLog[flatIdx], ...outcome };
         }
         return newLog;
       });
@@ -342,12 +353,15 @@ export function useLiveTrace(): UseLiveTraceReturn {
           const resultSummary = eventData.resultSummary as { rows: number; columns: number } | undefined;
           const toolName = eventData.toolName as string | undefined;
           const operationType = eventData.operationType as string | undefined;
+          // The rejection the wire carried, if any (#384 P8, F2).
+          const failed = eventData.failed as boolean | undefined;
+          const failureKind = eventData.failureKind as ToolFailureKind | undefined;
 
           // Record for trace capture
-          traceCaptureRef.current?.recordEvent({ phase, message, iteration, args, duration_ms, resultSummary, toolName, operationType });
+          traceCaptureRef.current?.recordEvent({ phase, message, iteration, args, duration_ms, resultSummary, toolName, operationType, failed, failureKind });
 
           // Build progress log entries (same as home page)
-          handleProgressEvent(phase, message, iteration, args, duration_ms, toolName, operationType);
+          handleProgressEvent(phase, message, iteration, args, duration_ms, toolName, operationType, failed, failureKind);
 
           if (iteration !== undefined) {
             setCurrentIteration(iteration);
@@ -364,6 +378,8 @@ export function useLiveTrace(): UseLiveTraceReturn {
             resultSummary,
             toolName,
             operationType,
+            ...(failed !== undefined ? { failed } : {}),
+            ...(failureKind !== undefined ? { failureKind } : {}),
           };
 
           const steps = mapEventToNodes(traceEvent);

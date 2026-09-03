@@ -33,6 +33,7 @@ export {
   // reach it through `validateExecutedNotebook` alone.
   validateReproducedFetches,
   validateCoverClaims,
+  validateBodyClaims,
   validateExecutedNotebook,
 } from './validate.ts';
 export type { ReproductionClaim } from './reproduction-claim.ts';
@@ -43,6 +44,9 @@ export {
   parseReproductionClaim,
   readReproductionClaim,
   claimsCompleteness,
+  markdownProse,
+  bodyClaim,
+  reproductionScopeSentence,
 } from './reproduction-claim.ts';
 export {
   NOTEBOOK_EXTENSION_KEY,

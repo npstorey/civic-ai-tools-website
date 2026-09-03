@@ -162,7 +162,7 @@ export default function ResponsePanel({
           token_limit_exceeded={token_limit_exceeded}
           isComplete={isStreaming ? !!duration_ms : !!content}
           isActive={!!isStreaming && !duration_ms && !error}
-          showFooter={!isLoading && !!(duration_ms || tokens_used)}
+          showFooter={!isLoading && (duration_ms !== undefined || tokens_used !== undefined)}
           portal={portal}
           model={model}
           evidenceTrace={evidenceTrace}
@@ -356,8 +356,11 @@ export default function ResponsePanel({
             )}
           </div>
 
-          {/* Footer with metadata */}
-          {!isLoading && (duration_ms || tokens_used) && (
+          {/* Footer with metadata. Every guard here keys on PRESENCE, never on
+              the truthiness of a number (#384 P8, F4): the wire preserves a
+              reported 0 on purpose (#374), and React renders `0 && <x/>` as
+              the text "0". */}
+          {!isLoading && (duration_ms !== undefined || tokens_used !== undefined) && (
             <div
               style={{
                 borderTop: '1px solid var(--border-color)',
@@ -374,12 +377,12 @@ export default function ResponsePanel({
                   color: 'var(--text-muted)',
                 }}
               >
-                {duration_ms && (
+                {duration_ms !== undefined && (
                   <span>
                     <strong>Time:</strong> {(duration_ms / 1000).toFixed(2)}s
                   </span>
                 )}
-                {tokens_used && (
+                {tokens_used !== undefined && (
                   <span>
                     <strong>Tokens:</strong> {tokens_used}
                   </span>

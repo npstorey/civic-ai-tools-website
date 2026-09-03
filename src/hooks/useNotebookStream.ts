@@ -47,7 +47,13 @@ export interface NotebookStreamState {
    *  (#384): its name and, when the loop derived one, its operation type.
    *  Carried with the line rather than dropped at this reader; null when the
    *  line is not about a tool call. */
-  detailTool: { toolName: string; operationType?: string } | null;
+  detailTool: {
+    toolName: string;
+    operationType?: string;
+    /** The line is the end or outcome of a call the loop recorded as rejected (#384 P8, F2). */
+    failed?: boolean;
+    failureKind?: PhaseAToolCall['failureKind'];
+  } | null;
   /** Accumulated tool calls captured during Phase A. Drives section D. */
   toolCalls: CapturedToolCall[];
   phaseStartedAt: number | null;
@@ -150,12 +156,21 @@ export function useNotebookStream() {
           const message = raw.message as string | undefined;
           const toolName = raw.toolName as string | undefined;
           const operationType = raw.operationType as string | undefined;
+          const failed = raw.failed as boolean | undefined;
+          const failureKind = raw.failureKind as PhaseAToolCall['failureKind'] | undefined;
           if (message) {
             setState((prev) => ({
               ...prev,
               detail: message,
               detailTool: toolName
-                ? { toolName, ...(operationType !== undefined ? { operationType } : {}) }
+                ? {
+                    toolName,
+                    ...(operationType !== undefined ? { operationType } : {}),
+                    // #384 P8 (F2): the route now forwards a call's end and
+                    // outcome lines too; a rejection rides with them.
+                    ...(failed !== undefined ? { failed } : {}),
+                    ...(failureKind !== undefined ? { failureKind } : {}),
+                  }
                 : null,
             }));
           }

@@ -43,6 +43,7 @@ import RenderingCellOutputs from './RenderingCellOutputs';
 import { approximateMcpServers, buildChatEvidenceView } from './buildChatEvidenceView';
 import { useSocrataMcpUrl } from '@/components/McpRoutingProvider';
 import type { Notebook } from '@/lib/notebook-author';
+import { readReproductionClaim, reproductionScopeSentence } from '@/lib/notebook-author/reproduction-claim';
 import type { CapturedToolCall } from '@/hooks/useNotebookStream';
 
 interface ChatNotebookOutputProps {
@@ -311,16 +312,15 @@ export default function ChatNotebookOutput({
           notebook rather than here (#371). This line asserted flatly that
           re-executing the notebook reproduces section F, which is true only of
           the steps that re-run a live request — a notebook where three of four
-          fetches were rejected got the same sentence. What that fraction is, the
-          notebook itself states; `NotebookSection` below reads it off the cells
-          rather than repeating a claim from up here.
+          fetches were rejected got the same sentence. Then it said "the
+          notebook states how many of them do", which a discovery-only notebook
+          does not (#384 P8, F6). The sentence is now written by the one
+          formatter that reads the claim off the cells, so it is true of a
+          notebook that states a count and of one that states none.
         */}
         <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-          Re-executing this notebook against the documented runtime + stable
-          upstream data reproduces section F (Typed Standards §8.7.3) to the extent
-          that its steps re-run live requests — the notebook states how many of
-          them do. The notebook metadata records the sandbox runtime versions used
-          at execution.
+          {reproductionScopeSentence(readReproductionClaim(view.notebook.cells))}{' '}
+          The notebook metadata records the sandbox runtime versions used at execution.
         </div>
         <NotebookSection notebook={view.notebook} slug={placeholderSlug} />
       </Section>

@@ -1,6 +1,7 @@
 'use client';
 
 import { getEducationalAnnotation } from '@/lib/streaming';
+import { describeQueryOutcome } from '@/lib/evidence/query-step';
 import type { ReplayState } from '@/hooks/useTraceReplay';
 
 interface DiagramAnnotationsProps {
@@ -37,6 +38,13 @@ export default function DiagramAnnotations({ replayState }: DiagramAnnotationsPr
 
   if (replayState.isComplete) {
     annotationText = 'The AI has finished its analysis. Each step above shows how data flowed from your question through the AI, MCP server, and data portal before coming back as a grounded answer.';
+  } else if (event?.failed) {
+    // The end and outcome events of a rejected call (#384 P8, F2): the
+    // diagram lights no "results return" step for it (node-mapping.ts), and
+    // this states why in the one outcome formatter's words.
+    annotationText =
+      `${describeQueryOutcome({ failed: true, failureKind: event.failureKind }).text} ` +
+      'The AI is told this request returned no data and not to fill the gap with a guess.';
   } else if (event) {
     const opType = getOperationType(replayState);
     annotationText = getEducationalAnnotation(event.phase, opType);

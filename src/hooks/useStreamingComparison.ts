@@ -65,6 +65,13 @@ export interface ProgressLogEntry {
   /** As on the progress event (see `ProgressEvent`, #384). */
   toolName?: string;
   operationType?: string;
+  /**
+   * The loop recorded the call as rejected (#384 P8, F2): on the end and
+   * outcome events as the wire carries them, and copied onto the paired
+   * `tool_start` entry so the step itself reads as rejected. Absent is absent.
+   */
+  failed?: boolean;
+  failureKind?: ToolFailureKind;
 }
 
 export interface ProgressGroup {
@@ -381,11 +388,18 @@ function handleEvent(
         const args = event.args as Record<string, unknown> | undefined;
         const toolName = event.toolName as string | undefined;
         const operationType = event.operationType as string | undefined;
+        // The rejection the wire carried, if any (#384 P8, F2); absent stays absent.
+        const failure = {
+          ...(event.failed !== undefined ? { failed: event.failed as boolean } : {}),
+          ...(event.failureKind !== undefined ? { failureKind: event.failureKind as ToolFailureKind } : {}),
+        };
         const newLog = [...prev[panel].progressLog];
         const newGroups = prev[panel].progressGroups.map(g => ({ ...g, entries: [...g.entries] }));
-        const entry: ProgressLogEntry = { message, timestamp: Date.now(), duration_ms, phase, iteration, args, toolName, operationType };
+        const entry: ProgressLogEntry = { message, timestamp: Date.now(), duration_ms, phase, iteration, args, toolName, operationType, ...failure };
 
         if (phase === 'tool_complete' && iteration !== undefined) {
+          // The end event's outcome travels onto the start entry it pairs to.
+          const outcome = { isComplete: true, duration_ms, ...failure };
           // Update the matching tool_start entry in-place within its group
           const group = newGroups.find(g => g.iteration === iteration);
           if (group) {
@@ -393,7 +407,7 @@ function handleEvent(
               e => e.phase === 'tool_start' && e.message === message && !e.isComplete
             );
             if (startIdx !== -1) {
-              group.entries[startIdx] = { ...group.entries[startIdx], isComplete: true, duration_ms };
+              group.entries[startIdx] = { ...group.entries[startIdx], ...outcome };
             }
           }
           // Also update in flat log
@@ -401,7 +415,7 @@ function handleEvent(
             e => e.phase === 'tool_start' && e.message === message && !e.isComplete
           );
           if (flatIdx !== -1) {
-            newLog[flatIdx] = { ...newLog[flatIdx], isComplete: true, duration_ms };
+            newLog[flatIdx] = { ...newLog[flatIdx], ...outcome };
           }
           return {
             ...prev,

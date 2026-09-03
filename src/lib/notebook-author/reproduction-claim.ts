@@ -91,6 +91,48 @@ const CLAIM_PATTERN = /re-runs\s+a\s+live\s+request\s+in\s+(\d+)\s+of\s+its\s+(\
  */
 const BARE_COMPLETENESS_PATTERN = /\bcomplete\b/i;
 
+/**
+ * "Fully reproducible" and its adverb siblings — the same claim in the other
+ * word (#384 P8, F3). The step-section header made it two cells under a
+ * cover that stated "1 of its 3", where `claimsCompleteness` could not see
+ * it. "reproducibility" and "reproducible" alone do not match: the footer's
+ * heading and the cover's own "can be reproduced" are not bare claims.
+ */
+const BARE_REPRODUCIBILITY_PATTERN = /\b(?:fully|completely|entirely|wholly)\s+reproducible\b/i;
+
+/**
+ * A markdown cell's PROSE — what the generator wrote about the document —
+ * with every channel a data value reaches markdown through removed (#384 P8,
+ * F3). Measured against both generators: a dataset id, portal or column is
+ * written in backticks by every renderer in `tool-to-cell.ts`; a search
+ * phrase reaches the discovery bullet in double quotes (`generateToolReason`:
+ * `to find datasets about "…"`); a fetch id is a prefixed identifier
+ * (`record:…`, `dataset:…`), as is a URL; a link target is a URL; a where
+ * clause value never reaches prose at all. So the strip is: fenced code,
+ * inline code, link targets, double-quoted strings, prefixed identifiers.
+ * The reader's question is not in a body cell — it is in the cover, which
+ * `coverSectionBody` scopes to the cover's own section.
+ */
+export function markdownProse(markdown: string): string {
+  return markdown
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`\n]*`/g, ' ')
+    .replace(/\]\([^)]*\)/g, ']')
+    .replace(/"[^"\n]*"/g, ' ')
+    .replace(/\b[a-z][a-z0-9+.-]*:[^\s`)]+/gi, ' ');
+}
+
+/**
+ * The bare claim a body cell makes about the analysis, or null. Read over
+ * `markdownProse`, so a data value cannot be one; the same two patterns the
+ * cover check uses, so the document is held to one standard throughout.
+ */
+export function bodyClaim(markdown: string): string | null {
+  const prose = markdownProse(markdown);
+  const line = prose.split('\n').find((l) => BARE_COMPLETENESS_PATTERN.test(l) || BARE_REPRODUCIBILITY_PATTERN.test(l));
+  return line === undefined ? null : line.trim();
+}
+
 export interface ReproductionClaim {
   /** Steps that re-run a live request, as the cover text states it. */
   reRun: number;
@@ -136,7 +178,30 @@ export function parseReproductionClaim(coverText: string): ReproductionClaim | n
  * one, so any occurrence anywhere in the cell would have tripped it.
  */
 export function claimsCompleteness(coverText: string): boolean {
-  return BARE_COMPLETENESS_PATTERN.test(coverSectionBody(coverText));
+  const body = coverSectionBody(coverText);
+  return BARE_COMPLETENESS_PATTERN.test(body) || BARE_REPRODUCIBILITY_PATTERN.test(body);
+}
+
+/**
+ * What a reader is told, above a notebook, about how much of it re-runs a
+ * live request — written from the claim the notebook makes (#384 P8, F6).
+ * One formatter, so the chat output and the record page cannot say
+ * different things about the same document, and so the sentence is true of
+ * a notebook that states no count: `ChatNotebookOutput` used to assert "the
+ * notebook states how many of them do" above every notebook, and a
+ * discovery-only notebook states none.
+ */
+export function reproductionScopeSentence(claim: ReproductionClaim | null): string {
+  const scope =
+    'Re-executing this notebook against the documented runtime and stable upstream data reproduces ' +
+    'section F (Typed Standards §8.7.3) to the extent that its steps re-run live requests';
+  if (claim === null) {
+    return (
+      `${scope}. This notebook states no such count — it renders no step that re-runs a live request, ` +
+      'or it was written before the count was recorded.'
+    );
+  }
+  return `${scope}: this notebook states that it re-runs a live request in ${claim.reRun} of its ${claim.steps} analysis steps.`;
 }
 
 /**

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
 import { mapGroupsToToolCalls } from '@/hooks/useStreamingComparison';
-import { getEducationalAnnotation, buildNarrativeSummary, buildStatsSummary, buildBreadcrumbLabel, generateQueryIntentLabel } from '@/lib/streaming';
+import { getEducationalAnnotation, buildNarrativeSummary, buildStatsSummary, buildBreadcrumbLabel, generateQueryIntentLabel, isQueryCall } from '@/lib/streaming';
 import ToolCallCard from './ToolCallCard';
 import NarrationExplainer from './NarrationExplainer';
 
@@ -39,7 +39,12 @@ function GearIcon({ size = 12 }: { size?: number }) {
   );
 }
 
-function getPhaseStyle(phase?: string): { color: string; fontWeight: number; accentColor: string } {
+function getPhaseStyle(phase?: string, failed?: boolean): { color: string; fontWeight: number; accentColor: string } {
+  // A rejected call's start and outcome lines (#384 P8, F2): the same
+  // weight as an active step, never the "done" green.
+  if (failed) {
+    return { color: 'var(--text-secondary)', fontWeight: 500, accentColor: 'var(--error)' };
+  }
   switch (phase) {
     case 'tool_start':
       return { color: 'var(--text-secondary)', fontWeight: 500, accentColor: 'var(--caution)' };
@@ -65,6 +70,27 @@ function CheckIcon({ size = 14, variant }: { size?: number; variant: 'without-mc
     >
       <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor">
         <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+      </svg>
+    </span>
+  );
+}
+
+/** The marker of a step whose request did not complete (#384 P8, F2) — not a check. */
+function FailedIcon({ size = 12 }: { size?: number }) {
+  return (
+    <span
+      style={{
+        width: `${size + 2}px`,
+        height: `${size + 2}px`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'var(--error)',
+        flexShrink: 0,
+      }}
+    >
+      <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor">
+        <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06z" />
       </svg>
     </span>
   );
@@ -236,7 +262,7 @@ function GroupCard({
           }}
         >
           {visibleEntries.map((entry, idx) => {
-            const phaseStyle = getPhaseStyle(entry.phase);
+            const phaseStyle = getPhaseStyle(entry.phase, entry.failed);
             // Show annotation only for first tool_start entry of each operation type, only while active.
             // The recorded operation type first (#384); `args.type` only for an entry that carries none.
             const entryOpType = (e: ProgressLogEntry) => e.operationType ?? (e.args?.type as string | undefined);
@@ -261,6 +287,8 @@ function GroupCard({
                 >
                   {!entry.isComplete ? (
                     <Spinner variant={variant} />
+                  ) : entry.failed ? (
+                    <FailedIcon size={12} />
                   ) : entry.phase === 'tool_start' ? (
                     <GearIcon size={12} />
                   ) : (
@@ -312,12 +340,13 @@ function CompletedSummary({
   const stats = buildStatsSummary(toolsCalled, totalDuration_ms);
   const enrichedGroups = mapGroupsToToolCalls(groups, toolsCalled);
 
-  // Track query step indices for varied educational annotations
+  // Track query step indices for varied educational annotations. The one
+  // predicate (`isQueryCall`, #339): a rejected call ran no query and takes
+  // no query step number (#384 P8, F2).
   const queryStepIndices = new Map<number, number>();
   let queryCount = 0;
   toolsCalled.forEach((tool, idx) => {
-    const op = tool.operationType || (tool.args.type as string);
-    if (op === 'query') {
+    if (isQueryCall(tool)) {
       queryStepIndices.set(idx, queryCount);
       queryCount++;
     }
@@ -338,6 +367,10 @@ function CompletedSummary({
     index: idx,
     opType: tool.operationType || (tool.args.type as string) || 'call',
     refinedFromIndex: toolIntents[idx].refinedFromIndex,
+    // The chip marks a rejected call as one (#384 P8, F2): the label says
+    // what it asked for, the marker and the accessible name say it did not
+    // complete, and the card behind it states why.
+    failed: tool.failed === true,
   }));
 
   return (
@@ -393,9 +426,12 @@ function CompletedSummary({
         {breadcrumbs.map((crumb) => {
           const isActive = activeIndex === crumb.index;
           const isRefinement = crumb.refinedFromIndex !== undefined;
+          const chipTone = crumb.failed ? 'var(--error)' : 'var(--success)';
           return (
             <button
               key={crumb.index}
+              aria-label={crumb.failed ? `${crumb.label} — this request did not complete` : undefined}
+              title={crumb.failed ? 'This request did not complete' : undefined}
               onClick={() => {
                 setActiveIndex(isActive ? null : crumb.index);
                 setShowAll(false);
@@ -403,9 +439,9 @@ function CompletedSummary({
               style={{
                 padding: '3px 10px',
                 borderRadius: '12px',
-                border: isActive ? '1px solid var(--success)' : '1px solid var(--border-color)',
+                border: isActive || crumb.failed ? `1px solid ${chipTone}` : '1px solid var(--border-color)',
                 backgroundColor: isActive ? 'rgba(0, 183, 3, 0.08)' : 'var(--card-background)',
-                color: isActive ? 'var(--success)' : 'var(--text-muted)',
+                color: isActive || crumb.failed ? chipTone : 'var(--text-muted)',
                 fontSize: '12px',
                 fontWeight: 500,
                 cursor: 'pointer',
@@ -415,6 +451,7 @@ function CompletedSummary({
               }}
             >
               {isRefinement && <span style={{ marginRight: '3px', opacity: 0.6 }}>&#8627;</span>}
+              {crumb.failed && <span aria-hidden="true" style={{ marginRight: '4px' }}>&#10005;</span>}
               {crumb.label}
             </button>
           );
@@ -448,6 +485,8 @@ function CompletedSummary({
             duration_ms={toolsCalled[activeIndex].duration_ms}
             operationType={toolsCalled[activeIndex].operationType}
             reason={toolsCalled[activeIndex].reason}
+            failed={toolsCalled[activeIndex].failed}
+            failureKind={toolsCalled[activeIndex].failureKind}
           />
           {(() => {
             const opType = toolsCalled[activeIndex].operationType || (toolsCalled[activeIndex].args.type as string);
@@ -505,6 +544,8 @@ function CompletedSummary({
                     duration_ms={tool.duration_ms}
                     operationType={tool.operationType}
                     reason={tool.reason}
+                    failed={tool.failed}
+                    failureKind={tool.failureKind}
                   />
                   {annotation && (
                     <div
