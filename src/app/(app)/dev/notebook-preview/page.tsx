@@ -8,6 +8,10 @@
  *   /dev/notebook-preview?state=C    → phase C
  *   /dev/notebook-preview?state=D    → phase D
  *   /dev/notebook-preview?state=error → error state
+ *   /dev/notebook-preview?state=rejected → the completed renderer over a run
+ *                                     whose data fetch was REJECTED, carrying
+ *                                     the verdict the validator actually
+ *                                     returned on it (#400)
  *
  * Server entry — `buildSampleExecutedNotebook` reads helper .py files via
  * `node:fs`, so the fixture is generated server-side and handed to a
@@ -21,7 +25,10 @@
  * below), so absent this check it is a live, reachable production route.
  */
 import { notFound } from 'next/navigation';
-import { buildSampleExecutedNotebook } from '@/components/notebook/__dev__/sampleExecutedNotebook';
+import {
+  buildSampleExecutedNotebook,
+  buildSampleRejectedNotebook,
+} from '@/components/notebook/__dev__/sampleExecutedNotebook';
 import NotebookPreviewClient from './NotebookPreviewClient';
 import { isNotebookPreviewGated } from './gate';
 
@@ -34,6 +41,12 @@ export default function NotebookPreviewPage() {
   if (isNotebookPreviewGated()) {
     notFound();
   }
-  const { notebook, validation } = buildSampleExecutedNotebook();
-  return <NotebookPreviewClient notebook={notebook} validation={validation} />;
+  // Both fixtures, because one of them is the point (#400). The clean notebook's
+  // computed verdict is `{ ok: true, issues: [] }` — indistinguishable from the
+  // literal this file used to hand over — so a preview that only ever renders it
+  // demonstrates nothing about the verdict surface. The rejected one drives the
+  // same path with a verdict that disagrees.
+  const executed = buildSampleExecutedNotebook();
+  const rejected = buildSampleRejectedNotebook();
+  return <NotebookPreviewClient executed={executed} rejected={rejected} />;
 }

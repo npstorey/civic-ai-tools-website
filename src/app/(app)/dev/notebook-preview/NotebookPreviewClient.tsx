@@ -9,11 +9,24 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import NotebookOutput from '@/components/notebook/NotebookOutput';
 import type { NotebookStreamState } from '@/hooks/useNotebookStream';
-import type { Notebook } from '@/lib/notebook-author';
+import type { Notebook, ValidationResult } from '@/lib/notebook-author';
+
+/** One fixture: the notebook, and the verdict the validator returned on it. */
+interface NotebookSample {
+  notebook: Notebook;
+  validation: ValidationResult;
+}
 
 interface NotebookPreviewClientProps {
-  notebook: Notebook;
-  validation: { ok: boolean; issues: { path: string; message: string }[] };
+  /** The clean run. Its computed verdict happens to be `{ ok: true, issues: [] }`. */
+  executed: NotebookSample;
+  /**
+   * The same analysis with its data fetch REJECTED (#400). Reachable at
+   * `?state=rejected`, and the reason this surface is worth previewing at all:
+   * a verdict surface exercised only by a fixture that cannot disagree with the
+   * validator has not been exercised.
+   */
+  rejected: NotebookSample;
 }
 
 const PHASE_DETAILS: Record<string, string | null> = {
@@ -46,10 +59,11 @@ const FIXTURE_TOOL_CALLS = [
 
 function buildState(
   stateParam: string | null,
-  notebook: Notebook,
-  validation: NotebookPreviewClientProps['validation'],
+  executed: NotebookSample,
+  rejected: NotebookSample,
 ): NotebookStreamState {
   const baseStarted = Date.now() - 47_000;
+  const { notebook, validation } = stateParam === 'rejected' ? rejected : executed;
 
   switch (stateParam) {
     case 'A':
@@ -127,11 +141,11 @@ function buildState(
   }
 }
 
-export default function NotebookPreviewClient({ notebook, validation }: NotebookPreviewClientProps) {
+export default function NotebookPreviewClient({ executed, rejected }: NotebookPreviewClientProps) {
   const search = useSearchParams();
   const state = useMemo(
-    () => buildState(search.get('state'), notebook, validation),
-    [search, notebook, validation],
+    () => buildState(search.get('state'), executed, rejected),
+    [search, executed, rejected],
   );
 
   return (
@@ -149,8 +163,10 @@ export default function NotebookPreviewClient({ notebook, validation }: Notebook
       >
         <strong>Dev preview — Phase 2a notebook UI</strong>
         <br />
-        Add <code>?state=A|B|C|D|error</code> to preview other states. No
-        live <code>/api/query-notebook</code> traffic; fixture only.
+        Add <code>?state=A|B|C|D|error|rejected</code> to preview other states.
+        No live <code>/api/query-notebook</code> traffic; fixture only.
+        <code>rejected</code> is the same analysis with its data fetch refused —
+        the notebook carries the verdict the validator actually returned on it.
       </div>
       <NotebookOutput
         state={state}
