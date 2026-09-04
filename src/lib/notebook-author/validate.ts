@@ -47,9 +47,25 @@ function getExtension(notebook: Notebook, key: string): Record<string, unknown> 
 
 /**
  * Validate that `metadata.extensions[org.civicaitools.notebook].provenance`
- * is set and equal to either `"executed"` or `"skeleton"`. Skeleton
- * notebooks are out of scope for this validator (they have their own
- * Phase 3 path), so we only accept `"executed"` here.
+ * is `"executed"`.
+ *
+ * THIS VALIDATOR IS FOR EXECUTED NOTEBOOKS AND IS NEVER RUN ON A SKELETON.
+ * Since #401 the skeleton generator (`src/lib/notebook.ts`) stamps the
+ * vocabulary's other value, `"skeleton"`, so a skeleton put through here
+ * reports `expected "executed", got "skeleton"` — a document doing exactly what
+ * it should, reported as a defect. That is a call-site error, not a reason to
+ * widen the accepted values: this function's whole job is to refuse a notebook
+ * that claims execution it cannot show, and a value it accepted would be a
+ * value that claim could hide behind. A SKELETON IS NOT A VALIDATION FAILURE
+ * AND CARRIES NO VERDICT.
+ *
+ * The one production caller is the executed pipeline, through
+ * `validateExecutedNotebook` at `src/app/api/query-notebook/route.ts`, on a
+ * notebook the sandbox has just run. `validator-not-run-on-a-skeleton.test.ts`
+ * pins that — it fails when a second caller appears, and when the listed one
+ * stops calling — and the guard in
+ * `skeleton-states-that-it-did-not-run.test.ts` fails if the accepted values
+ * are ever widened to admit `"skeleton"` here.
  */
 export function validateNotebookProvenance(notebook: Notebook): ValidationResult {
   const issues: ValidationIssue[] = [];

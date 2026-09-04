@@ -741,11 +741,28 @@ export function summarizeIntegrity(r: IntegrityGlanceInput): TrustSignalDescript
 // Not a verify-library status: `metadata.extensions["org.civicaitools.notebook"]
 // .provenance` distinguishes a notebook executed in a signed sandbox from a
 // skeleton that reproduces the steps without running them (per open-questions
-// Q31). Both readings are honest and calm — neither is a failure. `'executed'`
-// is the only value emitted today; `'skeleton'` is reserved (no code path writes
-// it yet). Canonical list kept here because the value is a notebook-author
-// concept, not a verify.ts type.
-export const NOTEBOOK_PROVENANCE_VALUES = ['executed', 'skeleton'] as const;
+// Q31). Both readings are honest and calm — neither is a failure. Canonical list
+// kept here because the value is a notebook-author concept, not a verify.ts type.
+//
+// BOTH VALUES ARE NOW WRITTEN (#401). `'executed'` is stamped by the executed
+// pipeline (`notebook-author/synthesize.ts`); `'skeleton'` was reserved with no
+// writer for two waves, which is what made a skeleton in a signed package
+// indistinguishable from a package that predates the field — the skeleton
+// generator (`src/lib/notebook.ts`) stamps it now. The two are named constants
+// rather than bare members of the array so a producer writes the vocabulary's
+// own value instead of a literal that can drift away from it.
+//
+// THIS ARRAY IS THE PRODUCER'S ASSERTIONS AND NOTHING ELSE. A package carrying
+// neither key asserts nothing, and "nothing" is a reading, not a third producer
+// value — it therefore does NOT appear here, and the `Record<NotebookProvenance,
+// …>` coverage below stays total by construction. The reading lives in
+// `notebook-author/notebook-provenance-reading.ts`.
+export const NOTEBOOK_PROVENANCE_EXECUTED = 'executed';
+export const NOTEBOOK_PROVENANCE_SKELETON = 'skeleton';
+export const NOTEBOOK_PROVENANCE_VALUES = [
+  NOTEBOOK_PROVENANCE_EXECUTED,
+  NOTEBOOK_PROVENANCE_SKELETON,
+] as const;
 export type NotebookProvenance = (typeof NOTEBOOK_PROVENANCE_VALUES)[number];
 
 export const NOTEBOOK_PROVENANCE_SIGNALS: Record<NotebookProvenance, TrustSignalDescriptor> = {

@@ -31,6 +31,13 @@ import {
   isFullSoqlQuery,
   type ToolFailureKind,
 } from './notebook-author/tool-to-cell.ts';
+// The value this generator stamps comes from the vocabulary that declares it,
+// never a literal here: `'skeleton'` and `'executed'` are two halves of one
+// closed list, and a literal is how the two halves drift apart. Both modules
+// are pure data with type-only imports — nothing server-only rides in behind
+// them, which this file's header explains is the whole constraint.
+import { NOTEBOOK_PROVENANCE_SKELETON } from './evidence/trust-signal.ts';
+import { NOTEBOOK_EXTENSION_KEY } from './notebook-author/notebook-provenance-reading.ts';
 
 export type { InstanceAttribution };
 
@@ -55,6 +62,13 @@ interface Notebook {
       name: string;
       version: string;
     };
+    /** nbformat's open metadata slot, where the reverse-DNS extension keys of
+     *  Typed Standards §8.7.4 live. Typed here because a skeleton has to be
+     *  able to SAY it is a skeleton (#401): before it was widened, `metadata`
+     *  admitted exactly `kernelspec` and `language_info`, so the stamp could
+     *  not be written even in principle. Mirrors
+     *  `notebook-author/cells.ts`'s `Notebook`. */
+    extensions?: Record<string, unknown>;
   };
   cells: NotebookCell[];
 }
@@ -462,6 +476,26 @@ export function generateNotebook(
       language_info: {
         name: 'python',
         version: '3.10.0',
+      },
+      // This notebook states that it did not run (#401). Nothing here was
+      // executed — that is what the skeleton path IS — and until this stamp
+      // existed the document said nothing at all, which on every surface read
+      // as "executed", because that was the only value the vocabulary had ever
+      // carried. A reader turns it back into words through
+      // `notebook-author/notebook-provenance-reading.ts`.
+      //
+      // THE STAMP IS NOT A VALIDATION FAILURE. `notebook-author/validate.ts`'s
+      // `validateNotebookProvenance` accepts `'executed'` and nothing else, by
+      // design: it is the EXECUTED notebook's validator, reached only from the
+      // executed pipeline (`api/query-notebook/route.ts`), and it is never run
+      // on this document. Running it here would report `expected "executed",
+      // got "skeleton"` — an honest stamp reported as a defect. The rule is
+      // pinned in `validator-not-run-on-a-skeleton.test.ts`; the fix for a
+      // failure there is the call site, never the validator's accepted values.
+      extensions: {
+        [NOTEBOOK_EXTENSION_KEY]: {
+          provenance: NOTEBOOK_PROVENANCE_SKELETON,
+        },
       },
     },
     cells,
