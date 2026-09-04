@@ -870,10 +870,28 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         const failureKind = toolFailureKindOf(error);
         toolEntry.failed = true;
         toolEntry.failureKind = failureKind;
+        // #404: the span states the CLASSIFIED kind, never the cause. A
+        // rejection's raw text is authored by the source, not by this app —
+        // it can name a host, a port, a query fragment or a stack frame — and
+        // the trace goes INLINE into the package (`packager.ts` assigns
+        // `trace: input.trace`), so anything written here is inside the bytes
+        // this instance signs, forever, in a record whose whole purpose is
+        // that a reader can trust what it asserts. This is CLAUDE.md's rule
+        // ("never render a raw `err.message` in a streaming path") one layer
+        // down: reader-facing text goes through `friendlyStreamError`,
+        // model-facing text through `describeToolFailureForLlm`, and the
+        // record — the only one of the three that is permanent — carries
+        // `failureKind`, the same value written onto `toolEntry` two lines
+        // above. `error.kind` is the attribute name agreed across this
+        // repository and the harness (Wave N10 D5): the PROV-O builder reads
+        // `error` and `error.kind` to mark the activity for a rejected call.
+        // Do not add a second name, and do not reintroduce the raw text —
+        // if a consumer needs more than the four `ToolFailureKind` values,
+        // the vocabulary widens rather than the span carrying prose.
         if (toolTraceSpanId) {
           trace!.builder.endSpan(toolTraceSpanId, {
             'error': true,
-            'error.message': error instanceof Error ? error.message : 'Unknown error',
+            'error.kind': failureKind,
           });
         }
         // #384 P8 (F2): the rejection is REPORTED, not only recorded. The two
