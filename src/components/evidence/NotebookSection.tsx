@@ -6,6 +6,12 @@ import { useState } from 'react';
 // pure string module with one type-only import; see its header for why it is
 // not in `prompt.ts` with the builder.
 import { readReproductionClaim } from '@/lib/notebook-author/reproduction-claim';
+// Whether the notebook RAN is read off the notebook too, and is the first thing
+// this section says (#401). Same client-safety constraint as the parser above —
+// see the reader's header. The three readings and their words are decided
+// there; this component renders what it is handed.
+import { readNotebookProvenanceOfNotebook } from '@/lib/notebook-author/notebook-provenance-reading';
+import TrustSignal from './TrustSignal';
 
 interface NotebookCell {
   cell_type: 'code' | 'markdown';
@@ -52,6 +58,14 @@ export default function NotebookSection({ notebook, slug }: NotebookSectionProps
   // no signal, so it shows none — docs/design-principles.md Principle 3.
   const claim = readReproductionClaim(cells);
 
+  // What this notebook says about whether it ran — executed, skeleton, or
+  // neither. Always rendered, because the reading has three values and one of
+  // them is "nothing was stated": showing the row only when a stamp is present
+  // would put a package that predates the field back where #401 found it, silent
+  // and therefore read as executed. All three are the calm tier; none is a
+  // failure (docs/design-principles.md P1, P3).
+  const ran = readNotebookProvenanceOfNotebook(notebook);
+
   const handleDownload = () => {
     const json = JSON.stringify(notebook, null, 2);
     const blob = new Blob([json], { type: 'application/x-ipynb+json' });
@@ -70,6 +84,10 @@ export default function NotebookSection({ notebook, slug }: NotebookSectionProps
       padding: '16px 20px', border: '1px solid var(--border-color)',
       borderRadius: '6px', backgroundColor: 'white',
     }}>
+      <div style={{ marginBottom: '10px' }}>
+        <TrustSignal tier={ran.tier} label={ran.label} detail={ran.detail} />
+      </div>
+
       <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.6 }}>
         {claim !== null && (
           <>

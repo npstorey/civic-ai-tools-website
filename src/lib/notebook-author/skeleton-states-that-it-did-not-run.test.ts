@@ -59,6 +59,8 @@ import assert from 'node:assert/strict';
 import { generateNotebook } from '../notebook.ts';
 import type { ToolCall } from '../../hooks/useStreamingComparison.ts';
 import { validateNotebookProvenance } from './validate.ts';
+// The executed producer, driven rather than described — see the last test.
+import { synthesizeNotebook } from './synthesize.ts';
 import {
   NOTEBOOK_PROVENANCE_VALUES,
   NOTEBOOK_PROVENANCE_SIGNALS,
@@ -202,5 +204,43 @@ test('the two stamps cannot drift: both producers write a value the canonical vo
     `the skeleton's stamp (${JSON.stringify(stamped)}) is not a member of NOTEBOOK_PROVENANCE_VALUES — ` +
       'the executed path writes "executed" at synthesize.ts:189 and the skeleton must write the reserved ' +
       'sibling from the same declaration, not a bare literal of its own',
+  );
+
+  // ADDED BY THE FIX (P2 IMPL), and the reason: as written above, this test is
+  // titled for two producers and reads ONE. It restates the executed path's
+  // value in prose ("the executed path writes \"executed\" at synthesize.ts:189")
+  // rather than driving that producer, so the executed stamp could change to
+  // anything at all and nothing here would notice — which is the drift the
+  // criterion asks to be made impossible. Both producers are pure synchronous
+  // functions, so both are driven, and the pair is asserted against the
+  // canonical vocabulary AS A SET. That fails in both directions: a producer
+  // writing a value outside the list, and two producers writing the same value.
+  const executedStamp = (
+    synthesizeNotebook({
+      query: QUESTION,
+      defaultPortal: PORTAL,
+      modelName: 'anthropic/claude-sonnet-4-6',
+      modelAccess: 'through an OpenAI-compatible API',
+      generatedAt: '2026-09-04T00:00:00.000Z',
+      finalAnswer: ANSWER,
+      toolCalls: [
+        {
+          name: 'get_data',
+          operationType: 'query',
+          args: { type: 'query', portal: PORTAL, dataset_id: ANSWERED, select: 'count(*)' },
+          reason: 'to count the records',
+          resultSummary: { rows: 1, columns: 1 },
+        },
+      ],
+    }).notebook.metadata.extensions as Record<string, Record<string, unknown>>
+  )[NOTEBOOK_EXTENSION_KEY]?.provenance;
+
+  assert.deepEqual(
+    [stamped, executedStamp].sort(),
+    [...NOTEBOOK_PROVENANCE_VALUES].sort(),
+    `the skeleton stamps ${JSON.stringify(stamped)} and the executed path stamps ` +
+      `${JSON.stringify(executedStamp)}; together they must be exactly ` +
+      `${JSON.stringify([...NOTEBOOK_PROVENANCE_VALUES])} — the vocabulary is a closed list of two ` +
+      'producer assertions, and each producer writes one of them',
   );
 });
