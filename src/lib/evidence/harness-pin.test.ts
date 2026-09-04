@@ -1,9 +1,34 @@
 // The harness pin — @typedstandards/civic-typed-harness must be a version
-// that carries the P-H1 signed-surface fixes (Wave N9 #384, family F2, C4).
+// that carries the signed-surface fixes named below (Wave N9 #384, family F2,
+// C4; Wave N10 #409, criterion 6).
 //
-// WHAT THE PIN PROTECTS. Two asserting defaults inside the PROV-O graph
-// builder, both of which put a value the producer never wrote into bytes this
-// instance SIGNS:
+// WHAT THE PIN PROTECTS, PART TWO — 0.4.0, and why the range moved to it.
+// `buildDataSources` could not see that a call had been REJECTED: its input
+// type was `{ name; args }`, so a rejected call's dataset was minted as an
+// accessed data source, and an aggregate source was marked accessed by any
+// call that resolved to it, answered or not — inside bytes this instance
+// signs, each entry carrying an `accessTimestamp` (civic-ai-tools#192).
+//
+// 0.4.0 gives `ToolCallSummary` an optional `failed` (and `failureKind`) and
+// skips a failed call before it resolves a source, so BOTH branches see the
+// rejection; the walk keeps the call's index rather than filtering the list,
+// because a call is paired to `toolSpans[i]` by position. Absence is absence:
+// a producer that records no outcome passes neither key and gets exactly the
+// entries it got before they existed. The fixed source reads, at hub `a6d6f77`,
+// `packages/civic-typed-harness/src/capture/data-sources.ts:30-49` (the two
+// fields) and `:153-159` (`if (tc.failed) continue;` above both branches).
+//
+// This repository compensated between 0.3.1 and 0.4.0 with a positional
+// stand-in in `packager.ts` that stripped `dataset_id` and `portal` from a
+// rejected call. That patch was shaped like the dataset-keyed branch — the
+// only one that reads those keys — so a rejected AGGREGATE call still asserted
+// an access. The stand-in is gone; the pin is what replaces it, and
+// `a-rejected-aggregate-call-asserts-no-access.test.ts` drives the shape it
+// could not reach.
+//
+// WHAT THE PIN PROTECTS, PART ONE — 0.3.1. Two asserting defaults inside the
+// PROV-O graph builder, both of which put a value the producer never wrote
+// into bytes this instance SIGNS:
 //
 //   1. `tool.name` defaulted to `get_data`. Hub source before the fix:
 //      `packages/civic-typed-harness/src/capture/provenance.ts:316` at
@@ -37,13 +62,34 @@
 //     `data-sources.ts` at `fd9afae` (`fallbackPortal` "accepted and NOT
 //     consulted since 0.3.1").
 //
+// AND THE COMMITS THAT CARRY 0.4.0:
+//   - hub PR #196, merged `24fb69e`: `buildDataSources` reads `failed` on both
+//     branches (P-H1, hub#192) — the fix this range moved for.
+//   - hub PR #198, merged `85c5613`: the PROV-O activity for a span ended with
+//     `error: true` carries `civic:failed` / `civic:failureKind`, conditionally
+//     spread so a span without them leaves the bytes unchanged (P-H2, #193).
+//   - hub PR #200, merged `5819d78`: a second registry field carries the
+//     reader-facing source name; the agent node's `dcterms:title` is unchanged
+//     (P-H3, #194).
+//   - hub PR #202, merged `a6d6f77`: `release: civic-typed-harness 0.4.0`.
+//     Published 2026-09-04, `dist.shasum
+//     fbf52995ab70a7efdda2aeea8b2a803ec0bf0c90`, 28 files.
+//   Two of those four change bytes this instance signs, and both are
+//   conditional on something the record carries: a rejected call, or a span
+//   ended with `error: true`. A package with neither is byte-identical across
+//   the bump, which is what the pinned envelope hashes in
+//   `packager.failed-call.test.ts` measure rather than assume.
+//
 // SCOPE. This file pins the DEPENDENCY — the version installed, the range
 // declared, and the resulting node_modules topology. It deliberately asserts
-// nothing about graph bytes: the behaviour is driven end-to-end through this
-// repository's own packager in
-// `graph-states-what-the-span-carried.test.ts`, so a version bump that did not
-// change behaviour, and a behaviour change that did not bump the version, each
-// fail in the file that can see it.
+// nothing about graph or package bytes: the behaviour is driven end-to-end
+// through this repository's own packager in
+// `graph-states-what-the-span-carried.test.ts` (the graph, and a rejected call
+// on a dataset nothing else touched) and
+// `a-rejected-aggregate-call-asserts-no-access.test.ts` (a rejected call to an
+// aggregate source), so a version bump that did not change behaviour, and a
+// behaviour change that did not bump the version, each fail in the file that
+// can see it.
 //
 // Run with: npm test
 
@@ -57,16 +103,23 @@ const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 
 const HARNESS = '@typedstandards/civic-typed-harness';
 const HARNESS_DIR = path.join(REPO_ROOT, 'node_modules', ...HARNESS.split('/'));
 
-/** The lowest version carrying the P-H1 fixes. */
-const FLOOR = '0.3.1';
+/** The lowest version carrying BOTH sets of fixes this file names: the 0.3.1
+ *  graph-builder fixes above, and the 0.4.0 data-source fix below. */
+const FLOOR = '0.4.0';
 /** Exclusive ceiling: under semver a 0.x MINOR bump is a breaking change, so
- *  the pin admits later 0.3.x PATCHES (a fix that is still this behaviour)
- *  and refuses 0.4.0, which would be a different contract this test has not
- *  read. The assertion is therefore a RANGE (`>=0.3.1 <0.4.0`) rather than
- *  equality to `0.3.1`: pinning the exact string would turn red on a patch
- *  release that changed nothing this file cares about, which is a criterion
- *  that fails for the wrong reason. */
-const CEILING = '0.4.0';
+ *  the pin admits later 0.4.x PATCHES (a fix that is still this behaviour) and
+ *  refuses 0.5.0, which would be a contract this test has not read. The
+ *  assertion is therefore a RANGE (`>=0.4.0 <0.5.0`) rather than equality to
+ *  `0.4.0`: pinning the exact string would turn red on a patch release that
+ *  changed nothing this file cares about, which is a criterion that fails for
+ *  the wrong reason.
+ *
+ *  MOVED DELIBERATELY, NOT DRIFTED. The pair was `>=0.3.1 <0.4.0` until Wave
+ *  N10 P4. That ceiling did its job: it held 0.4.0 out until someone read the
+ *  new contract and said what changed. Both numbers move together, in one
+ *  commit, with the paragraph above rewritten — a floor raised without its
+ *  ceiling would silently readmit the next unread minor. */
+const CEILING = '0.5.0';
 
 type Semver = [number, number, number];
 
@@ -101,7 +154,7 @@ function readJson(file: string): Record<string, unknown> {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
 }
 
-test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.3.1 <0.4.0 (it carries the P-H1 signed-surface fixes)', () => {
+test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.4.0 <0.5.0 (it carries both sets of signed-surface fixes)', () => {
   const pkgJson = path.join(HARNESS_DIR, 'package.json');
   assert.ok(fs.existsSync(pkgJson), `${HARNESS} is not installed at ${pkgJson} — run npm ci`);
 
@@ -111,14 +164,16 @@ test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.3.1 <0.4.0 (i
   const installed = parseSemver(version as string, `installed ${HARNESS}`);
   assert.ok(
     compareSemver(installed, parseSemver(FLOOR, 'floor')) >= 0,
-    `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release whose graph builder ` +
-      "states what the span carried (hub provenance.ts:339/:343 at fd9afae). Below it, dist/capture/provenance.js:177 " +
-      "defaults tool.name to 'get_data' and :180 defaults the portal to the run's — inside bytes this instance signs.",
+    `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release whose buildDataSources ` +
+      'reads `failed` (hub data-sources.ts:153-159 at a6d6f77). Below it, a rejected call mints its dataset as ' +
+      'an accessed source and marks its aggregate source accessed — inside bytes this instance signs. 0.3.1 is ' +
+      'the floor for the graph half (hub provenance.ts:339/:343 at fd9afae); below THAT, ' +
+      "dist/capture/provenance.js:177 defaults tool.name to 'get_data' and :180 defaults the portal to the run's.",
   );
   assert.ok(
     compareSemver(installed, parseSemver(CEILING, 'ceiling')) < 0,
     `installed ${HARNESS} is ${version as string}, at or above ${CEILING}; a 0.x minor bump is a breaking change ` +
-      'under semver, so re-read the harness contract and move this pin deliberately.',
+      'under semver, so re-read the harness contract and move this pin deliberately — both numbers, in one commit.',
   );
 });
 
@@ -152,11 +207,18 @@ test('harness pin: exactly one produce-core copy — the harness carries no nest
   // PROV-O node helpers whose insertion order is the signed byte contract, so
   // "which copy assembled these bytes" is a question a record system should
   // never have to ask.
+  //
+  // RE-READ AT 0.4.0 (Wave N10 P4). The harness's own dependency range is
+  // still `^0.3.0 || ^0.4.0` — the lockfile entry for the harness moved only
+  // its version, resolved URL and integrity, and no `node_modules/@typed
+  // standards/civic-typed-harness/node_modules` appeared. One copy still
+  // serves both, and the assertion below still measures that rather than
+  // trusting the range.
   const nested = path.join(HARNESS_DIR, 'node_modules', '@typedstandards', 'produce-core');
   assert.equal(
     fs.existsSync(nested),
     false,
     `a second produce-core is nested at ${nested}; the harness's dependency range must admit the ` +
-      "root copy (0.3.1 widened it to '^0.3.0 || ^0.4.0'), so npm install resolves one.",
+      "root copy (0.3.1 widened it to '^0.3.0 || ^0.4.0', and 0.4.0 kept it), so npm install resolves one.",
   );
 });

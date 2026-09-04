@@ -83,27 +83,39 @@
 // written, the rejected call (iv) hit the SAME dataset as the successful (i),
 // "so `dataSources` still de-duplicates to one entry" — the one configuration
 // in which `dataSources` cannot be seen asserting a rejected call's dataset,
-// because the answered call had already minted the entry. `packager.ts:424`
-// hands every tool call, `failed: true` included, to the harness's
-// `buildDataSources`, whose input type is `{ name; args }` and which reads
-// `args.dataset_id` and `args.portal` alone. The rejected call now names a
-// DIFFERENT dataset, and (e) — unchanged in what it asserts, "exactly one
-// dataset-keyed entry, the get_data's" — is RED at `4ec45c0`: the read-back
-// package says `queries[3]` failed and that `queries[3]`'s dataset was
-// accessed. Every other assertion in this file keeps its verdict.
+// because the answered call had already minted the entry. The rejected call
+// now names a DIFFERENT dataset, and (e) — unchanged in what it asserts,
+// "exactly one dataset-keyed entry, the get_data's" — was RED at `4ec45c0`:
+// the read-back package said `queries[3]` failed and that `queries[3]`'s
+// dataset had been accessed, at a timestamp. Every other assertion in this
+// file kept its verdict.
 //
-// AMENDED BY WAVE N10 P1 (#404), and what P1 deliberately did NOT touch. P1
-// changed one thing here: the rejected span now ends with `error.kind`, the
-// classified `ToolFailureKind`, where it used to end with `error.message` and
-// the source's raw text. It re-pointed every `run-tool-loop.ts` citation
-// above, having re-read each site in the tree. It left the two
-// `packager.ts:424` citations — this paragraph and the failure message on
-// (e) — alone: that line is `:449-450` today and no longer hands the rejected
-// call through unchanged (P8 added the `rejectedCallStandIn` at `:397-402`
-// that intervenes), so the sentence needs rewriting, not renumbering, and the
-// rewrite belongs to P4, which deletes the stand-in and takes the harness pin
-// that makes it unnecessary. Both citations are stale as they stand; they are
-// flagged here rather than half-fixed.
+// AMENDED BY WAVE N10 P1 (#404). P1 changed one thing here: the rejected span
+// now ends with `error.kind`, the classified `ToolFailureKind`, where it used
+// to end with `error.message` and the source's raw text. It re-pointed every
+// `run-tool-loop.ts` citation above, having re-read each site in the tree.
+//
+// AMENDED BY WAVE N10 P4 (#192, criterion 6) — WHERE THE ANSWER LIVES NOW.
+// Two citations in this file named `packager.ts:424` as the place that hands
+// a rejected call to `buildDataSources`. Neither is true any more, and neither
+// was fixable by renumbering:
+//   - P8 (#384) put a positional STAND-IN at that call site — a copy of the
+//     rejected call with `dataset_id` and `portal` deleted — so the packager
+//     stopped handing the call through unchanged.
+//   - P4 deleted the stand-in. The harness's `ToolCallSummary` carries
+//     `failed` as of 0.4.0 and `buildDataSources` skips a failed call before
+//     it resolves a source, so the packager hands the record through WHOLE
+//     and the rejection is read where the walk happens: hub
+//     `capture/data-sources.ts:153-159` at `a6d6f77`.
+// So (e) is green here for a different reason than it was: not because this
+// module stripped two keys off a rejected call, but because the harness reads
+// the failure. That distinction is the whole of #192 — the stand-in was shaped
+// like the dataset-keyed branch, which is the only branch that reads those two
+// keys, and a rejected call to an AGGREGATE source kept asserting an access
+// under it. This file cannot see that half: every call in its run resolves to
+// `socrata`, a dataset-keyed source. The aggregate half is driven in
+// `a-rejected-aggregate-call-asserts-no-access.test.ts`, and the two files
+// together are the read-back for both shapes.
 //
 // Run with: npm test
 
@@ -468,7 +480,9 @@ test('read-back (e) RED: dataSources holds exactly one dataset-keyed entry — t
     rejected,
     undefined,
     `the package says queries[3] failed and that its dataset was accessed: ${JSON.stringify(rejected)} — ` +
-      'packager.ts:424 hands the rejected call to buildDataSources, which reads args.dataset_id/args.portal and never failed',
+      'the packager hands every tool call to buildDataSources whole, and the harness (>=0.4.0, ' +
+      'capture/data-sources.ts:153-159) is what skips a call carrying failed: true before it resolves a ' +
+      'source. Check the installed harness version and that ToolCallInput.failed survived the hand-off',
   );
   assert.equal(
     datasetKeyed.length,
