@@ -43,6 +43,7 @@ import {
   synthesizeNotebook,
   validateExecutedNotebook,
 } from '@/lib/notebook-author';
+import { buildNotebookExtension } from '@/lib/notebook-author/notebook-extension';
 import { executeNotebook, NotebookExecutionError } from '@/lib/sandbox';
 
 const DEFAULT_PORTAL = 'data.cityofnewyork.us';
@@ -274,12 +275,29 @@ export async function POST(request: NextRequest) {
         synthesis.dataFrameVariables,
       );
 
+      // #400: the verdict travels WITH the notebook, attached here, where it is
+      // computed. Until this line it was emitted beside the notebook and dropped
+      // by the first consumer that did not carry it forward — so a notebook the
+      // validator had rejected reached a signed package asserting a reproduction
+      // the one component that checked had found it could not make. Attaching it
+      // at the source means every hop after this one (stream state, the publish
+      // POST, the package, storage, the record page) carries it without knowing
+      // it is there. It sits beside the notebook's own provenance stamp; see
+      // `notebook-extension.ts` for why not at the notebook's top level.
+      //
+      // D1 was ruled A: there is NO publish gate here. `publish_inputs` below is
+      // still emitted unconditionally and no user is refused. Disclosure, not
+      // validation.
       const validation = validateExecutedNotebook(stamped.notebook);
       await emit({
         type: 'notebook',
-        notebook: stamped.notebook,
+        notebook: buildNotebookExtension(stamped.notebook, validation),
         sandboxId: execution.sandboxId,
         executionDuration_ms: Date.now() - execStart,
+        // Still on the wire beside the notebook: it is the event's declared
+        // contract and `useNotebookStream` exposes it as `state.validation`.
+        // The notebook is now the SOURCE OF TRUTH — this field is a convenience
+        // for a consumer holding the event rather than the document.
         validation,
       });
       await emit({ type: 'phase', name: 'complete', message: 'Done.' });

@@ -11,6 +11,11 @@ import { readReproductionClaim } from '@/lib/notebook-author/reproduction-claim'
 // see the reader's header. The three readings and their words are decided
 // there; this component renders what it is handed.
 import { readNotebookProvenanceOfNotebook } from '@/lib/notebook-author/notebook-provenance-reading';
+// What the validator found before the notebook was signed is read off the
+// notebook too (#400). Same client-safety constraint and the same shape as the
+// reader above; the four outcomes, their tiers and their words are decided
+// there, and this component renders what it is handed.
+import { readNotebookValidationOfNotebook } from '@/lib/notebook-author/notebook-validation-reading';
 import TrustSignal from './TrustSignal';
 
 interface NotebookCell {
@@ -66,6 +71,22 @@ export default function NotebookSection({ notebook, slug }: NotebookSectionProps
   // failure (docs/design-principles.md P1, P3).
   const ran = readNotebookProvenanceOfNotebook(notebook);
 
+  // What the check run before signing found, or nothing. Until #400 the verdict
+  // was computed, put on the wire and dropped, so a notebook the validator had
+  // rejected reached a signed package with no trace of the rejection and this
+  // section offered it for download under a sentence about reproduction.
+  //
+  // `null` means there is nothing to disclose and no row is shown — a skeleton
+  // is never validated, so it has no verdict to lack. It is NOT the reading for
+  // an executed notebook whose package records no verdict; that one is named,
+  // for the reason the reader's header gives.
+  //
+  // Neither reading is a verdict on the ANSWER (docs/design-principles.md
+  // Principle 1). The flagged tier is `attention`, never `alarm`: this is
+  // disclosure of what a check found, not a failure banner, and no publish or
+  // download is refused on it.
+  const checked = readNotebookValidationOfNotebook(notebook);
+
   const handleDownload = () => {
     const json = JSON.stringify(notebook, null, 2);
     const blob = new Blob([json], { type: 'application/x-ipynb+json' });
@@ -86,6 +107,33 @@ export default function NotebookSection({ notebook, slug }: NotebookSectionProps
     }}>
       <div style={{ marginBottom: '10px' }}>
         <TrustSignal tier={ran.tier} label={ran.label} detail={ran.detail} />
+        {checked && (
+          <>
+            <TrustSignal tier={checked.tier} label={checked.label} detail={checked.detail} />
+            {checked.issues.length > 0 && (
+              /* Principle 8 — collapse in the skim, expose on demand. The
+                 messages are this application's own reviewed sentences from
+                 `notebook-author/validate.ts`; nothing a source returned reaches
+                 here. The path beside each is implementation language and is
+                 deliberately on the expanded tier only. */
+              <details style={{ marginLeft: '24px', marginBottom: '6px' }}>
+                <summary style={{ fontSize: '12px', color: 'var(--accent)', cursor: 'pointer' }}>
+                  What was flagged
+                </summary>
+                <ul style={{ margin: '8px 0 0', paddingLeft: '18px' }}>
+                  {checked.issues.map((issue, i) => (
+                    <li key={i} style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '6px', lineHeight: 1.5 }}>
+                      {issue.message}
+                      <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono, monospace)' }}>
+                        {issue.path}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </>
+        )}
       </div>
 
       <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.6 }}>

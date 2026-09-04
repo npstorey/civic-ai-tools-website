@@ -10,13 +10,41 @@
  * The dev preview page renders this as a server component, then passes the
  * fixture JSON to a client wrapper. No production runtime cost; route is
  * scoped to /dev/*.
+ *
+ * THE VERDICT IS COMPUTED, NOT WRITTEN DOWN (#400). Until this file was
+ * changed it returned a hand-written verdict of `{ ok: true, issues: [] }`
+ * beside a notebook it never ran the validator over — the only fixture feeding
+ * the only surface that could show a verdict, shaped so it could never disagree
+ * with the validator. A fixture that cannot disagree is not evidence that the
+ * surface works. Both builders below run the real `validateExecutedNotebook`
+ * over the notebook they just built and carry whatever it returns.
+ *
+ * AND ONE OF THEM IS REJECTED. The clean fixture's computed verdict happens to
+ * be `{ ok: true, issues: [] }` — the same value the literal asserted — so
+ * computing it proves nothing on its own. `buildSampleRejectedNotebook` drives
+ * the other half through the identical rendering path: the same query with its
+ * one data fetch REJECTED, which is a document nothing in it reproduces, and
+ * the validator says so.
+ *
+ * IMPORTS ARE RELATIVE, DELIBERATELY. This file used the `@/lib` path alias,
+ * which `node --test --experimental-strip-types` cannot resolve, so no test
+ * could import it and the literal above was unreachable by any assertion. The
+ * alias is what kept the fixture out of the suite; relative specifiers are what
+ * let the suite hold it to the validator.
  */
-import type { Notebook, NotebookCell } from '@/lib/notebook-author';
+import type {
+  Notebook,
+  NotebookCell,
+  SynthesisOutputs,
+  ValidationResult,
+} from '../../../lib/notebook-author/index.ts';
 import {
   stampExecutedNotebook,
   synthesizeNotebook,
-} from '@/lib/notebook-author';
-import { modelAccessPhrase } from '@/lib/model-catalog';
+  validateExecutedNotebook,
+} from '../../../lib/notebook-author/index.ts';
+import { buildNotebookExtension } from '../../../lib/notebook-author/notebook-extension.ts';
+import { modelAccessPhrase } from '../../../lib/model-catalog.ts';
 
 // 1×1 transparent PNG (base64); placeholder chart for matplotlib visualization.
 const PLACEHOLDER_CHART_PNG_BASE64 =
@@ -157,17 +185,17 @@ function attachAnalysisOutputs(notebook: Notebook): void {
 }
 
 /**
- * Build a realistic executed-notebook fixture matching the Phase 1 backend
- * pipeline's output shape, with cell outputs inlined so the renderer
- * exercises every CellOutputs code path.
+ * The one place a fixture becomes a notebook-plus-verdict.
+ *
+ * The verdict is what `validateExecutedNotebook` returns over the notebook this
+ * function just built — never a value written beside it — and it is attached
+ * through the same `buildNotebookExtension` the executed pipeline uses, so the
+ * preview renders exactly the object a signed package would carry.
  */
-export function buildSampleExecutedNotebook(): {
+function finish(synth: SynthesisOutputs): {
   notebook: Notebook;
-  validation: { ok: boolean; issues: { path: string; message: string }[] };
+  validation: ValidationResult;
 } {
-  const synth = synthesizeNotebook({ ...SYNTH_INPUTS });
-  attachMetricCaptureOutput(synth.notebook);
-  attachAnalysisOutputs(synth.notebook);
   stampExecutedNotebook(
     synth.notebook,
     {
@@ -177,8 +205,49 @@ export function buildSampleExecutedNotebook(): {
     },
     synth.dataFrameVariables,
   );
-  return {
-    notebook: synth.notebook,
-    validation: { ok: true, issues: [] },
-  };
+  const validation = validateExecutedNotebook(synth.notebook);
+  return { notebook: buildNotebookExtension(synth.notebook, validation), validation };
+}
+
+/**
+ * Build a realistic executed-notebook fixture matching the Phase 1 backend
+ * pipeline's output shape, with cell outputs inlined so the renderer
+ * exercises every CellOutputs code path.
+ */
+export function buildSampleExecutedNotebook(): {
+  notebook: Notebook;
+  validation: ValidationResult;
+} {
+  const synth = synthesizeNotebook({ ...SYNTH_INPUTS });
+  attachMetricCaptureOutput(synth.notebook);
+  attachAnalysisOutputs(synth.notebook);
+  return finish(synth);
+}
+
+/**
+ * The same analysis with its one data fetch REJECTED — the fixture the verdict
+ * surface exists for.
+ *
+ * Wave N10's own subject: a call the source refused. Nothing in the resulting
+ * notebook re-runs a live request, so `validateReproducedFetches` reports it and
+ * the verdict is a rejection with the validator's own sentence attached. Nothing
+ * about the document is hand-authored to fail — the pipeline builds it from a
+ * run that went that way, and the validator is asked what it thinks.
+ */
+export function buildSampleRejectedNotebook(): {
+  notebook: Notebook;
+  validation: ValidationResult;
+} {
+  const synth = synthesizeNotebook({
+    ...SYNTH_INPUTS,
+    toolCalls: SYNTH_INPUTS.toolCalls.map((call) => ({
+      name: call.name,
+      operationType: call.operationType,
+      args: call.args,
+      reason: call.reason,
+      failed: true,
+      failureKind: 'timeout' as const,
+    })),
+  });
+  return finish(synth);
 }

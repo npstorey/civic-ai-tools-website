@@ -59,6 +59,8 @@ const DEFINING_MODULE = 'src/lib/notebook-author/validate.ts';
 const ALLOWED_VALIDATOR_CALLERS: Record<string, string> = {
   'src/app/api/query-notebook/route.ts':
     'The executed pipeline, validating the notebook the sandbox has just run. The only document in this repository that has been executed is the only one this validator sees.',
+  'src/components/notebook/__dev__/sampleExecutedNotebook.ts':
+    'The dev preview fixtures, which build EXECUTED notebooks (both are stamped by `stampExecutedNotebook`) and must carry the verdict the validator actually returns on them rather than a literal beside them (#400). Neither builder produces a skeleton.',
 };
 
 /**

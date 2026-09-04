@@ -1,4 +1,4 @@
-// P3 red instrument, Wave N10 (#409, #400) — criterion 5, in D1's shape (A).
+// P3 instrument, Wave N10 (#409, #400) — criterion 5, in D1's shape (A).
 //
 // THE PROPERTY: an executed notebook the validator REJECTED cannot reach a
 // signed package without the verdict travelling with it. The validator runs,
@@ -41,7 +41,48 @@
 // into. The first test drives a rejection and asserts it is real BEFORE the
 // property tests below rely on rejections existing.
 //
-// EXPECTED AT 7f52a6b: the two guards pass; the two property tests fail.
+// ---------------------------------------------------------------------------
+// WHAT THE PHASE CHANGED IN THIS FILE, AND THE MEASUREMENTS THAT FORCED IT.
+// Two things, both address-and-mechanism, neither a weakening: every assertion
+// that was here is still here, at the address the implementation actually uses,
+// and each has gained a stronger sibling.
+//
+//   (a) THE VERDICT IS NOT A TOP-LEVEL KEY ON THE NOTEBOOK. This file proposed
+//       `build(notebook, verdict).validation` — a `validation` key beside
+//       `cells`. Measured against nbformat 5.10.4, that shape is invalid: the
+//       nbformat v4 root schema is CLOSED (`additionalProperties: false`), and
+//       `nbformat.validate` on a notebook carrying a top-level `validation`
+//       fails with "Additional properties are not allowed ('validation' was
+//       unexpected)"; the same notebook carrying it under `metadata` validates
+//       (`metadata` is `additionalProperties: true`). And this extension IS a
+//       downloaded `.ipynb`: `NotebookSection`'s button serialises it verbatim,
+//       `/api/records/[slug]/bundle` serves it as `application/x-ipynb+json`.
+//       The top-level shape would have bought the verdict at the cost of the
+//       artifact it is a verdict about. The verdict therefore sits at
+//       `metadata.extensions["org.civicaitools.notebook"].validation`, beside
+//       the provenance stamp #401 put there — one address for what a notebook
+//       says about itself. The assertion below is the same deep-equality at
+//       that address, PLUS a new one that the nbformat root gains no key at
+//       all, which is the check that would have caught the shape this file
+//       first proposed.
+//
+//   (b) THE VERDICT IS ATTACHED AT THE SOURCE, NOT AT PUBLISH TIME. This file
+//       asserted that `PublishEvidenceDialog.tsx` mentions the verdict. The
+//       dialog is three hops from where the verdict is known, and #400 is a
+//       defect of TRANSPORT — the fact was computed and dropped by an
+//       intermediate. Attaching it in the route, where the validator returns,
+//       means no intermediate has to remember to forward it: the dialog posts
+//       the executed notebook verbatim and the verdict arrives in the package
+//       without the dialog knowing verdicts exist. Asserting the dialog names
+//       the verdict would, under this mechanism, be satisfiable by a comment —
+//       a fake pass. It is replaced by two assertions that bite: the route
+//       attaches it, and the dialog still carries the notebook verbatim (the
+//       one thing the dialog can do to break the chain).
+//
+// AND THE CRITERION THAT COULD NOT FAIL. The preview fixture's computed verdict
+// IS `{ ok: true, issues: [] }` — identical to the literal it replaces — so
+// "computed, not literal" proves nothing by itself. The last two tests drive a
+// fixture whose verdict DISAGREES through the same rendering path.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -50,6 +91,11 @@ import { fileURLToPath } from 'node:url';
 import { generateNotebook } from '../notebook.ts';
 import type { ToolCall } from '../../hooks/useStreamingComparison.ts';
 import { validateExecutedNotebook } from './validate.ts';
+import {
+  buildSampleExecutedNotebook,
+  buildSampleRejectedNotebook,
+} from '../../components/notebook/__dev__/sampleExecutedNotebook.ts';
+import { readNotebookValidationOfNotebook } from './notebook-validation-reading.ts';
 
 const NOTEBOOK_EXTENSION_KEY = 'org.civicaitools.notebook';
 
@@ -61,6 +107,14 @@ const NO_ATTRIBUTION = { origin: null, host: null, platformTitle: null };
 
 function sourceOf(relative: string): string {
   return readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8');
+}
+
+/** The verdict's home inside the notebook, read the way a consumer reads it. */
+function carriedVerdict(notebook: unknown): unknown {
+  const metadata = (notebook as { metadata?: Record<string, unknown> }).metadata ?? {};
+  const extensions = (metadata.extensions ?? {}) as Record<string, unknown>;
+  const ext = (extensions[NOTEBOOK_EXTENSION_KEY] ?? {}) as Record<string, unknown>;
+  return ext.validation;
 }
 
 // --- Guards: green at base, and they are what make the rest meaningful ------
@@ -98,20 +152,27 @@ test('guard: P2 holds — a skeleton stamps its provenance and carries no verdic
     'a skeleton carries NO verdict — absent is absent. The validator is for executed notebooks ' +
       'and is never run on a skeleton (P2), so there is no verdict to carry and none must be invented',
   );
+  assert.equal(
+    readNotebookValidationOfNotebook(nb),
+    null,
+    'and the reader says nothing about it either: a skeleton has no verdict to lack, so no row is ' +
+      'rendered. Reporting an absent check on a document no check was ever going to run is noise, ' +
+      'not disclosure',
+  );
 });
 
 // --- Red at 7f52a6b ---------------------------------------------------------
 
 /**
- * The seam this phase must add, named as a specifier typed `string` so the
+ * The seam this phase adds, named as a specifier typed `string` so the
  * compiler does not resolve it — the module is what the phase creates, and
  * this file must compile at the base. The pattern
  * `rejected-call-every-surface.test.ts` uses for the same purpose.
  *
- * Proposed: `buildNotebookExtension(notebook, validation?)` → the value that
- * goes under `extensions['org.civicaitools.notebook']`. One pure function, so
- * the assembly the publish dialog does inline today becomes something a test
- * can drive. A skeleton passes no verdict and the key is absent.
+ * `buildNotebookExtension(notebook, validation?)` → the value that goes under
+ * `extensions['org.civicaitools.notebook']`. One pure function, so the assembly
+ * that was inline becomes something a test can drive. A skeleton passes no
+ * verdict and the key is absent.
  */
 const EXTENSION_MODULE: string = './notebook-extension.ts';
 
@@ -135,33 +196,114 @@ test('the verdict travels with the notebook into the package', async () => {
   const rejected = validateExecutedNotebook({ nbformat: 4, nbformat_minor: 5, metadata: {}, cells: [] } as never);
   assert.equal(rejected.ok, false, 'fixture premise: this verdict is a rejection');
 
-  const withVerdict = build({ nbformat: 4, cells: [] }, rejected);
+  const input = { nbformat: 4, nbformat_minor: 5, metadata: {}, cells: [] };
+  const withVerdict = build(input, rejected);
   assert.deepEqual(
-    withVerdict.validation,
+    carriedVerdict(withVerdict),
     rejected,
     'the package carries the verdict the validator actually returned, issues and all — ' +
       'not a boolean, and not a recomputation a reader would have to trust',
   );
 
-  // A skeleton passes no verdict, and absent stays absent (P2's rule, D1's "a
-  // skeleton carries no verdict").
-  const skeleton = build({ nbformat: 4, cells: [] });
+  // (a) in the header. The value under the extension key is a NOTEBOOK, and a
+  // reader downloads it: nbformat v4's root schema is closed, so a key added
+  // there makes the file this feature exists for fail validation in Jupyter.
+  assert.deepEqual(
+    Object.keys(withVerdict).sort(),
+    Object.keys(input).sort(),
+    'carrying the verdict must not add a key to the nbformat root — measured against nbformat ' +
+      '5.10.4, the v4 root schema is additionalProperties:false while `metadata` is not, and this ' +
+      'object is served as application/x-ipynb+json by /api/records/[slug]/bundle',
+  );
+
+  // The executed notebook lives in React state on the client and in the
+  // stream's closure on the server; building the extension must not reach into
+  // either.
+  assert.deepEqual(
+    input,
+    { nbformat: 4, nbformat_minor: 5, metadata: {}, cells: [] },
+    'the input notebook is not mutated',
+  );
+
+  // The verdict describes the document, so attaching it must not change what a
+  // re-run of the validator would say about that document. Driven on the shape
+  // the route actually produces — a STAMPED notebook, which every notebook the
+  // route attaches to is — and on the rejected fixture, so the assertion is
+  // over a document the validator really does refuse.
+  const stampedRejection = buildSampleRejectedNotebook();
+  assert.equal(stampedRejection.validation.ok, false, 'fixture premise: this document is refused');
+  assert.deepEqual(
+    validateExecutedNotebook(stampedRejection.notebook),
+    stampedRejection.validation,
+    'carrying a verdict does not change the verdict: a reader who re-validates the published ' +
+      'notebook gets what the package says they will',
+  );
+
+  // MEASURED NARROWING, stated rather than hidden. On a notebook carrying NO
+  // notebook extension at all, attaching the verdict necessarily creates the
+  // extension object to put it in, and `validateNotebookProvenance` then reports
+  // `expected "executed", got undefined` where it had reported `extension
+  // missing`. Same rejection, same issue count, one different sentence. It is
+  // unreachable on the real path — the route attaches only to a stamped
+  // notebook, and nothing in this repository attaches a verdict to a document it
+  // did not produce — and it is asserted here so a later reader does not have to
+  // rediscover it.
+  const reValidated = validateExecutedNotebook(withVerdict as never);
+  assert.equal(reValidated.ok, rejected.ok);
+  assert.equal(reValidated.issues.length, rejected.issues.length);
+
+  // A skeleton passes no verdict, and absent stays absent (P2's rule, and D1's
+  // "a skeleton carries no verdict").
+  const skeleton = build({ nbformat: 4, nbformat_minor: 5, metadata: {}, cells: [] });
   assert.equal(
-    'validation' in skeleton,
-    false,
+    carriedVerdict(skeleton),
+    undefined,
     'no verdict was computed for a skeleton, so the key is absent — never `ok: true`, which would ' +
       'assert a check that never ran',
   );
 });
 
 test('the publish path hands the verdict to the package, and the dev fixture does not fake one', () => {
+  // (b) in the header: the attach site is the route, where the verdict is known.
+  const route = sourceOf('../../app/api/query-notebook/route.ts');
+  assert.match(
+    route,
+    /notebook: buildNotebookExtension\(stamped\.notebook, validation\)/,
+    'the route must emit a notebook that carries its own verdict. Until #400 it emitted ' +
+      '`stamped.notebook` with the verdict beside it on the event, and the first consumer that did ' +
+      'not carry the second value forward dropped it for good',
+  );
+
+  // D1 = A, pinned: there is no publish gate, and no user meets a refusal.
+  assert.doesNotMatch(
+    route,
+    /if\s*\(\s*!?\s*validation(\.ok)?\s*[)&|]/,
+    'D1 was ruled A. Nothing in the route may branch on the verdict: `publish_inputs` is emitted ' +
+      'for a rejected notebook exactly as for a clean one. Disclosure, not validation',
+  );
+
+  // The two intermediates between the route and the package, and the one thing
+  // each can do to break the chain: rebuild the notebook instead of carrying it.
+  // Neither does, and that is why the verdict survives the hops.
+  const hook = sourceOf('../../hooks/useNotebookStream.ts');
+  assert.match(
+    hook,
+    /const notebook = raw\.notebook as Notebook;/,
+    'the stream hook stores the notebook the route sent, whole. A projection here would drop the ' +
+      'verdict between the wire and the publish dialog',
+  );
+
   const dialog = sourceOf('../../components/PublishEvidenceDialog.tsx');
   assert.match(
     dialog,
-    /buildNotebookExtension|validation/,
-    'PublishEvidenceDialog.tsx assembles `extensions: { "org.civicaitools.notebook": notebook }` ' +
-      'with no verdict beside it — the stream carries `validation` on the notebook event and the ' +
-      'dialog drops it before POSTing',
+    /const notebook = executedNotebook \?\?[\s\S]{0,200}generateNotebook\(/,
+    'the executed notebook reaches the dialog whole',
+  );
+  assert.match(
+    dialog,
+    /'org\.civicaitools\.notebook': notebook,/,
+    'and is posted verbatim as the package extension — a projection here would strip the verdict ' +
+      'the route attached, which is exactly the shape #400 is',
   );
 
   const fixture = sourceOf('../../components/notebook/__dev__/sampleExecutedNotebook.ts');
@@ -171,5 +313,112 @@ test('the publish path hands the verdict to the package, and the dev fixture doe
     'the only renderer of a verdict anywhere is the dev preview route, and it is fed a hardcoded ' +
       '`{ ok: true, issues: [] }` (sampleExecutedNotebook.ts:182) — a fixture that can never ' +
       'disagree with the validator is not evidence that the surface works. It must be computed.',
+  );
+  assert.match(
+    fixture,
+    /validateExecutedNotebook\(/,
+    'and computed means the validator is actually run over the notebook the fixture just built',
+  );
+});
+
+// --- The criterion that could not fail, and the shape that can --------------
+//
+// `buildSampleExecutedNotebook`'s computed verdict is `{ ok: true, issues: [] }`
+// — the same value as the literal it replaces. Nothing about the rendering path
+// is demonstrated by a fixture whose verdict agrees with the old constant by
+// coincidence. These two tests drive the other shape.
+
+test('the dev fixtures are computed, and one of them disagrees with a clean verdict', () => {
+  const clean = buildSampleExecutedNotebook();
+  assert.deepEqual(
+    clean.validation,
+    validateExecutedNotebook(clean.notebook),
+    'the clean fixture reports what the validator says about the notebook it hands over',
+  );
+  assert.equal(clean.validation.ok, true);
+  assert.deepEqual(
+    carriedVerdict(clean.notebook),
+    clean.validation,
+    'and the notebook it hands over carries that verdict, exactly as a package would',
+  );
+
+  const rejected = buildSampleRejectedNotebook();
+  assert.equal(
+    rejected.validation.ok,
+    false,
+    'THE FIXTURE THAT MAKES THIS CRITERION ABLE TO FAIL. The clean run validates clean, so a ' +
+      '"computed" verdict equal to `{ ok: true, issues: [] }` demonstrates nothing on its own. ' +
+      'This one is the same analysis with its data fetch refused — nothing in the notebook re-runs ' +
+      'a live request — and the validator says so.',
+  );
+  assert.ok(rejected.validation.issues.length > 0);
+  assert.deepEqual(
+    rejected.validation,
+    validateExecutedNotebook(rejected.notebook),
+    'the rejected fixture is not hand-authored either: its verdict is the validator run over it',
+  );
+  assert.deepEqual(carriedVerdict(rejected.notebook), rejected.validation);
+});
+
+test('a reader of a rejected notebook is told what was found, calmly, from the notebook itself', () => {
+  const rejected = buildSampleRejectedNotebook();
+  const read = readNotebookValidationOfNotebook(rejected.notebook);
+  assert.ok(read, 'a rejected notebook reads as something');
+  assert.equal(read!.state, 'issues_found');
+  assert.equal(
+    read!.tier,
+    'attention',
+    'never `alarm`: that tier is a cryptographic integrity failure. This is disclosure of what a ' +
+      'check found, not a failure banner (docs/design-principles.md Principle 1)',
+  );
+  assert.deepEqual(
+    read!.issues,
+    rejected.validation.issues,
+    "the reader is handed the validator's own issues, not a count it would have to take on trust",
+  );
+  assert.ok(read!.label.includes(String(rejected.validation.issues.length)), 'the label states how many');
+  assert.ok(read!.detail && read!.detail.length > 0, 'and a sentence saying what the check was');
+  assert.doesNotMatch(
+    `${read!.label} ${read!.detail}`,
+    /invalid|failure|error|wrong|incorrect/i,
+    'the words are about the document, not a verdict on the analysis and not an alarm',
+  );
+
+  const clean = readNotebookValidationOfNotebook(buildSampleExecutedNotebook().notebook);
+  assert.equal(clean!.state, 'checked_clean');
+  assert.equal(clean!.tier, 'normal', 'a clean verdict is calm and carries no chrome beyond one line');
+  assert.deepEqual(clean!.issues, []);
+
+  // An EXECUTED notebook in a package published before the verdict travelled is
+  // a third thing, and it is named rather than collapsed into the clean
+  // reading — #401's lesson one level up: silence that can only be read one way
+  // is not silence.
+  const preVerdict = {
+    metadata: { extensions: { [NOTEBOOK_EXTENSION_KEY]: { provenance: 'executed' } } },
+    cells: [],
+  };
+  const older = readNotebookValidationOfNotebook(preVerdict);
+  assert.equal(older!.state, 'not_recorded');
+  assert.equal(older!.tier, 'normal');
+
+  // And the surface renders it. A text scan cannot render React: this says the
+  // reading reaches the notebook section and is handed to the shared signal
+  // row, not that a reader saw it.
+  const section = sourceOf('../../components/evidence/NotebookSection.tsx');
+  assert.match(
+    section,
+    /readNotebookValidationOfNotebook/,
+    'NotebookSection must read the verdict off the notebook it was handed, the same way it reads ' +
+      'the provenance stamp — the defect was a verdict that reached no page at all',
+  );
+  assert.match(
+    section,
+    /<TrustSignal[\s\S]{0,200}checked\.label/,
+    'rendered through the shared trust-signal row, not restated inline',
+  );
+  assert.match(
+    section,
+    /checked\.issues\.map/,
+    'and the issues themselves are reachable — a count with nothing behind it is not disclosure',
   );
 });
