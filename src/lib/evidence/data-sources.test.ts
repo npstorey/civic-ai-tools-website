@@ -6,6 +6,15 @@
 //   - Unknown/missing sources on spans fall back via the tool-name map so the
 //     provenance chain stays intact.
 //
+// The calls below pass three arguments, not four: Wave N10 P4 (#192) dropped
+// the shim's `fallbackPortal` parameter. The harness stopped consulting it at
+// 0.3.1 — an entry states the portal the CALL carried, never the run's — so
+// every expectation in this file was already independent of it, and none of
+// them moved when it went. What a rejected call does and does not mint is
+// driven end-to-end instead, through the packager, in
+// `a-rejected-aggregate-call-asserts-no-access.test.ts` and
+// `graph-states-what-the-span-carried.test.ts`.
+//
 // Run with: npm test
 
 import { test } from 'node:test';
@@ -68,7 +77,7 @@ test('Socrata-only: one entry per unique dataset_id, tagged sourceId=socrata', (
     toolSpan('socrata', { 'tool.dataset_id': '43nn-pn8j', 'tool.portal_domain': 'data.cityofnewyork.us' }),
   ]);
 
-  const entries = buildDataSources(toolCalls, trace, 'data.cityofnewyork.us', NOW);
+  const entries = buildDataSources(toolCalls, trace, NOW);
 
   assert.equal(entries.length, 2);
   const first = entries[0];
@@ -93,7 +102,7 @@ test('Data Commons only: emits a single aggregate entry tagged sourceId=data-com
   ];
   const trace = traceWithToolSpans([toolSpan('data-commons'), toolSpan('data-commons')]);
 
-  const entries = buildDataSources(toolCalls, trace, 'data.cityofnewyork.us', NOW);
+  const entries = buildDataSources(toolCalls, trace, NOW);
 
   assert.equal(entries.length, 1);
   const entry = entries[0];
@@ -123,7 +132,7 @@ test('Multi-source: Socrata + Data Commons in one analysis produce distinct entr
     toolSpan('socrata', { 'tool.dataset_id': 'erm2-nwe9', 'tool.portal_domain': 'data.cityofnewyork.us' }),
   ]);
 
-  const entries = buildDataSources(toolCalls, trace, 'data.cityofnewyork.us', NOW);
+  const entries = buildDataSources(toolCalls, trace, NOW);
 
   assert.equal(entries.length, 2);
   const socrataEntry = entries.find((s) => s.sourceId === 'socrata');
@@ -146,7 +155,7 @@ test('Empty trace falls back to tool-name source mapping (Socrata)', () => {
   ];
   const trace = { resourceSpans: [] };
 
-  const entries = buildDataSources(toolCalls, trace, 'data.cityofnewyork.us', NOW);
+  const entries = buildDataSources(toolCalls, trace, NOW);
 
   assert.equal(entries.length, 1);
   assert.equal(entries[0].sourceId, 'socrata');
@@ -162,7 +171,7 @@ test('Empty trace falls back to tool-name mapping (Data Commons)', () => {
   ];
   const trace = { resourceSpans: [] };
 
-  const entries = buildDataSources(toolCalls, trace, 'data.cityofnewyork.us', NOW);
+  const entries = buildDataSources(toolCalls, trace, NOW);
 
   assert.equal(entries.length, 1);
   assert.equal(entries[0].sourceId, 'data-commons');
@@ -185,7 +194,7 @@ test('Boston OpenContext only: emits a single aggregate entry tagged sourceId=bo
     toolSpan('boston-opencontext'),
   ]);
 
-  const entries = buildDataSources(toolCalls, trace, 'data.cityofnewyork.us', NOW);
+  const entries = buildDataSources(toolCalls, trace, NOW);
 
   assert.equal(entries.length, 1);
   const entry = entries[0];
@@ -222,7 +231,7 @@ test('Three-source: Socrata + Data Commons + Boston OpenContext produce three di
     toolSpan('boston-opencontext'),
   ]);
 
-  const entries = buildDataSources(toolCalls, trace, 'data.cityofnewyork.us', NOW);
+  const entries = buildDataSources(toolCalls, trace, NOW);
 
   assert.equal(entries.length, 3);
   const socrata = entries.find((s) => s.sourceId === 'socrata');
@@ -243,7 +252,7 @@ test('Empty trace falls back to tool-name mapping (Boston OpenContext)', () => {
   ];
   const trace = { resourceSpans: [] };
 
-  const entries = buildDataSources(toolCalls, trace, 'data.cityofnewyork.us', NOW);
+  const entries = buildDataSources(toolCalls, trace, NOW);
 
   assert.equal(entries.length, 1);
   assert.equal(entries[0].sourceId, 'boston-opencontext');
@@ -263,7 +272,7 @@ test('Regression: Socrata-only entry shape is backward-compatible (new sourceId 
     toolSpan('socrata', { 'tool.dataset_id': 'erm2-nwe9', 'tool.portal_domain': 'data.cityofnewyork.us' }),
   ]);
 
-  const entries = buildDataSources(toolCalls, trace, 'data.cityofnewyork.us', NOW);
+  const entries = buildDataSources(toolCalls, trace, NOW);
 
   assert.equal(entries.length, 1);
   const entry = entries[0];

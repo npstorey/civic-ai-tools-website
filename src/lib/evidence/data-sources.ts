@@ -83,14 +83,27 @@ export function resolveToolSource(
  * emission order as before the re-point (dataset-keyed Socrata entries in
  * first-seen order, then aggregate sources in registry order); the app's
  * tool-name map is injected as the span-attribute fallback resolver.
+ *
+ * A call whose summary carries `failed: true` mints no entry on either branch
+ * — no dataset-keyed entry, and no aggregate source marked accessed (#192).
+ * The harness reads that itself as of 0.4.0, so callers hand their records
+ * through whole; this shim strips nothing.
+ *
+ * NO FALLBACK PORTAL. The harness's third positional parameter has been inert
+ * since 0.3.1 — an entry states the portal the CALL carried, never the run's —
+ * and 0.4.0 widened it to accept `undefined`, which is what a caller that has
+ * stopped consulting it should pass. This wrapper therefore no longer takes
+ * one, and passes `undefined` explicitly rather than letting a value travel to
+ * a parameter nothing reads. The harness cannot drop the parameter before a
+ * major (it is third of five positionals), which is why `undefined` is passed
+ * here rather than the argument being omitted.
  */
 export function buildDataSources(
   toolCalls: ToolCallSummary[],
   trace: Record<string, unknown>,
-  fallbackPortal: string,
   now: string,
 ): DataSourceEntry[] {
-  return harnessBuildDataSources(toolCalls, trace, fallbackPortal, now, {
+  return harnessBuildDataSources(toolCalls, trace, undefined, now, {
     resolver: appToolSourceResolver,
   });
 }

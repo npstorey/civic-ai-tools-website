@@ -113,6 +113,11 @@ export interface ToolCallInput {
    * package can tell a rejected call from one that returned nothing (#384,
    * family F5). Absent means the call was not recorded as failed — never
    * `false` — and the packager writes neither key when neither was recorded.
+   *
+   * It also decides whether the call asserts an ACCESS: the harness reads it
+   * (`ToolCallSummary.failed`, 0.4.0) and a call recorded as failed mints no
+   * `dataSources` entry on either branch — no dataset-keyed entry, and no
+   * aggregate source marked accessed (#192).
    */
   failed?: boolean;
   /**
@@ -154,6 +159,24 @@ export interface PackageInput {
    * module's interface rather than of every call site's discipline.
    */
   model: string;
+  /**
+   * The portal the RUN selected.
+   *
+   * ACCEPTED AND NOT CONSULTED, as of #192's website half. Nothing in this
+   * module reads it any more: `dataSources` states the portal each CALL
+   * carried (the harness's `fallbackPortal` has been inert since 0.3.1 and is
+   * no longer passed), the PROV-O graph states the portal each SPAN carried
+   * (`ProvenanceInput.portal`, likewise), and `queries[]` reads
+   * `tc.args.portal` per call. A run-level portal is not a claim any of those
+   * three surfaces can honestly make: a call that addressed a different portal,
+   * or none, would be attributed to this one.
+   *
+   * The field stays in the type because every caller passes it as an object
+   * literal, where an unknown property is a compile error — removing it is a
+   * change to every publish path and belongs to a phase scoped for it, not to
+   * this one. Filed as such; until then, what a caller passes here reaches no
+   * byte of the package.
+   */
   portal: string;
   tokenUsage: { promptTokens?: number; completionTokens?: number };
   duration_ms?: number;
@@ -388,19 +411,6 @@ function instanceProvenanceConfig(): ProvenanceConfig {
  * content with no notebook. The real publish flow always supplies one; the
  * adapter keeps the invariant (pinned in packager-instance-config.test.ts).
  */
-/**
- * A rejected call as `buildDataSources` receives it: the recorded name at the
- * recorded position, minus `dataset_id` and `portal` — the two keys an entry
- * is minted from. See the call site in `buildEvidencePackage` for why the
- * call is substituted rather than filtered.
- */
-function rejectedCallStandIn(tc: ToolCallInput): { name: string; args: Record<string, unknown> } {
-  const args = { ...tc.args };
-  delete args.dataset_id;
-  delete args.portal;
-  return { name: tc.name, args };
-}
-
 export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackage; hash: string } {
   const now = new Date().toISOString();
   const packageId = crypto.randomUUID();
@@ -434,24 +444,37 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
   // degrade gracefully.
   const inspectableTrace = traceForInspection(input.trace);
 
-  // A call the loop recorded as rejected touched no dataset, so it earns no
-  // `dataSources` entry (#384 P8, F1) — but it cannot simply be left out of
-  // the list: the harness's `buildDataSources` pairs tool calls to
-  // `mcp_tool_call` spans BY INDEX (`resolveToolSource(tc, toolSpans[i])`),
-  // and its input type carries no `failed` (teaching it one is the hub's,
-  // filed alongside P8). So a rejected call is handed as a positional
-  // stand-in: the same name, the same position, its arguments without the two
-  // keys an entry is minted from. The span at that index still resolves by
-  // name and position; `queries[]` above keeps the full attempt, with
-  // `failed` and `failureKind`. A package that recorded no failure is passed
-  // through unchanged, byte for byte (the pinned envelope hashes in
+  // A call the loop recorded as rejected touched no data, so it earns no
+  // `dataSources` entry on EITHER branch — not the dataset-keyed one and not
+  // the aggregate one (#192, both halves). The record is handed to the harness
+  // whole: `ToolCallSummary` carries `failed` as of harness 0.4.0, and
+  // `buildDataSources` skips a failed call before it resolves a source, so
+  // both branches see the rejection.
+  //
+  // Until 0.4.0 this call site substituted a positional STAND-IN for a
+  // rejected call — the same name and position, its arguments stripped of
+  // `dataset_id` and `portal` — because the harness's input type was
+  // `{ name; args }` and could not be told. That patch was shaped like the
+  // dataset-keyed branch, which is the only one that reads those two keys; the
+  // aggregate branch fires on the resolved SOURCE whatever the arguments say,
+  // so a rejected call to an aggregate source still marked it accessed, in
+  // signed bytes (the residual Wave N9 filed as #192). Passing the record
+  // through is also strictly more honest than the stand-in was: the harness
+  // now reads the failure rather than inferring it from an absence this
+  // module manufactured.
+  //
+  // Neither list is filtered here. `buildDataSources` pairs a call to
+  // `toolSpans[i]` by index, so dropping an entry would shift every later call
+  // onto the wrong span — the harness keeps the index and skips the body.
+  // `queries[]` above keeps the full attempt either way, with `failed` and
+  // `failureKind`. A package that recorded no failure is passed through
+  // unchanged, byte for byte (the pinned envelope hashes in
   // packager.failed-call.test.ts hold that line).
-  const dataSources = buildDataSources(
-    input.toolCalls.map((tc) => (tc.failed ? rejectedCallStandIn(tc) : tc)),
-    inspectableTrace,
-    input.portal,
-    now,
-  );
+  //
+  // `fallbackPortal` is not passed: it has been inert since harness 0.3.1 (an
+  // entry states the portal the CALL carried, never the run's), and the
+  // wrapper in `./data-sources.ts` no longer takes one.
+  const dataSources = buildDataSources(input.toolCalls, inspectableTrace, now);
 
   const totalTokens = (input.tokenUsage.promptTokens || 0) + (input.tokenUsage.completionTokens || 0);
 
@@ -480,7 +503,13 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       outputText: outputIsBlob ? undefined : (input.output as string),
       outputHash: outputIsBlob ? parseBlobRef((input.output as BlobRef).ref).hash : undefined,
       model: input.model,
-      portal: input.portal,
+      // `ProvenanceInput.portal` is NOT passed. The harness stopped consulting
+      // it at 0.3.1 — the graph states the portal a tool span carried
+      // (`tool.portal_domain`) and states absence as absence — and 0.4.0 made
+      // the field optional so a caller that has stopped consulting it can stop
+      // passing it (#192). Passing a value nothing reads makes the call site
+      // look like the run's portal reaches the graph, which is exactly the
+      // claim 0.3.1 removed.
     },
     instanceProvenanceConfig(),
   );

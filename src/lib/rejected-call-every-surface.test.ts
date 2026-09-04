@@ -90,6 +90,25 @@
 // No live endpoint, no credential, no MCP server, no database, no signing
 // key; every key value is a placeholder string and every address is loopback.
 //
+// AMENDED BY WAVE N10 P4 (#192, criterion 6). The F1 paragraph above is dated
+// — it says what was measured at `4ec45c0`, and `packager.ts:424` was that
+// call site then. It is left as written, because a record of a measurement is
+// not a pointer to be renumbered. What is true now: P8 put a positional
+// stand-in at that site (a copy of the rejected call minus `dataset_id` and
+// `portal`), and P4 deleted it and took harness 0.4.0, whose
+// `ToolCallSummary` carries `failed` and whose `buildDataSources` skips a
+// failed call before it resolves a source (hub `capture/data-sources.ts:
+// 153-159` at `a6d6f77`). The packager now hands its records through whole,
+// and (F1 a) below is green because the harness reads the failure — not
+// because this repository stripped two keys off the call. The live diagnostic
+// on (F1 a) says so; only the historical paragraph still names the old line.
+//
+// What this file's run still cannot see: every call in it resolves to
+// `socrata`, a dataset-keyed source, so the aggregate branch — where the
+// stand-in could never reach, and where a rejected call kept asserting an
+// access until 0.4.0 — is driven in
+// `evidence/a-rejected-aggregate-call-asserts-no-access.test.ts` instead.
+//
 // Run with: npm test
 //   (or: node --test --experimental-strip-types src/lib/rejected-call-every-surface.test.ts)
 
@@ -492,7 +511,9 @@ test('F1 (a) the package: dataSources holds no entry for the rejected call’s d
     asserted,
     undefined,
     `the same package that says queries[3] failed says its dataset was accessed: ${JSON.stringify(asserted)} — ` +
-      'packager.ts:424 hands every call to buildDataSources, which reads args.dataset_id/args.portal and never failed',
+      'the packager hands every tool call to buildDataSources whole, and the harness (>=0.4.0, ' +
+      'capture/data-sources.ts:153-159) is what skips a call carrying failed: true. Check the installed ' +
+      'harness version and that the posted record still carries failed through the wire',
   );
   assert.equal(datasetKeyed.length, 1, `expected one dataset-keyed entry, got ${JSON.stringify(datasetKeyed)}`);
   assert.equal(datasetKeyed[0].datasetId, ANSWERED);

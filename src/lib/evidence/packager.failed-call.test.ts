@@ -141,13 +141,50 @@ test('packager: a call recorded without a failure carries neither key — absent
   }
 });
 
-// --- GREEN at d81eb76, and must stay green through the pin bump -------------
+// --- GREEN at d81eb76, and must stay green through the pin bumps ------------
 //
 // Pinned at d81eb76 with @typedstandards/produce-core 0.3.0 and
 // @typedstandards/civic-typed-harness 0.3.0 installed. An entry that carries
 // no `failed`/`failureKind` is re-emitted byte-identically by produce-core
 // 0.4.0, so these hashes are the bump's byte-identity proof for every package
 // that recorded no failure.
+//
+// RE-DERIVED AT THE HARNESS 0.4.0 BUMP (Wave N10 P4, #192). BOTH HASHES ARE
+// UNCHANGED — `beb0b3d6…` and `ce177902…`, the same two strings pinned at
+// d81eb76. That is the expected answer, and it is worth saying why it is
+// evidence rather than a tautology.
+//
+// WHAT MOVED IN 0.4.0: `buildDataSources` skips a call carrying
+// `failed: true` before it resolves a source, on both branches. WHY THAT
+// LEAVES THESE BYTES ALONE: the fixture these hashes are taken over is
+// `[RETURNED_ONE_ROW]` — one Socrata `get_data` that answered, and no rejected
+// call anywhere in the run. `tc.failed` is `undefined` for it, so 0.3.1 and
+// 0.4.0 walk the identical path and mint the identical entry, and the
+// packager's own change (the `rejectedCallStandIn` deleted, the record handed
+// through whole) is likewise a no-op on a run with nothing to stand in for.
+//
+// WHY THE FIXTURE CAN SPEAK TO THE QUESTION AT ALL — the check that keeps
+// "unchanged" from being vacuous. The package these hashes cover DOES carry a
+// `dataSources` entry minted by the walk that changed:
+//   [{"sourceId":"socrata","catalogType":"socrata",
+//     "portalUrl":"https://data.cityofnewyork.us","datasetId":"erm2-nwe9",
+//     "datasetUrl":"https://data.cityofnewyork.us/d/erm2-nwe9",
+//     "accessTimestamp":"2026-09-02T12:00:00.000Z"}]
+// so the changed code path is inside the hashed bytes, not beside them. And
+// the hash is measurably sensitive to it: building the SAME fixture with that
+// one call marked `failed: true` empties `dataSources` and moves the legacy
+// hash to `7f95685c864b4b8368ef7ddb9f2e3a76ee40f05b87a3aca3c64cfbd93627ede5`
+// (measured 2026-09-04 on this branch). A package with a rejected call is not
+// byte-identical across this bump, and is not meant to be — #192 is the
+// statement that it should not have been byte-identical before.
+//
+// WHAT THESE TWO HASHES DO NOT COVER. The fixture's trace is
+// `{ resourceSpans: [] }`, so no `mcp_tool_call` span reaches the PROV-O graph
+// builder and no tool-call activity is emitted. 0.4.0's other signed-byte
+// change — `civic:failed` / `civic:failureKind` on the activity for a span
+// ended with `error: true` (hub P-H2, #193), conditionally spread — is
+// therefore invisible here, in both directions. It is driven instead in
+// `graph-states-what-the-span-carried.test.ts`, over four real spans.
 
 const FIXED_PACKAGE_ID = '00000000-0000-4000-8000-000000000384';
 const FIXED_NOW = '2026-09-02T12:00:00.000Z';
