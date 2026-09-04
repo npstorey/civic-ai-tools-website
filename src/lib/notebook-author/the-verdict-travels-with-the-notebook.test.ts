@@ -401,6 +401,30 @@ test('a reader of a rejected notebook is told what was found, calmly, from the n
   assert.equal(older!.state, 'not_recorded');
   assert.equal(older!.tier, 'normal');
 
+  // A verdict this reader cannot read is not a verdict it may report. It lands
+  // on the same reading as no verdict at all, and the reader's header names the
+  // imprecision that leaves. Unreachable from this repository's own producer —
+  // the shape is written in one place — but the record page renders other
+  // adopters' extensions.
+  for (const unreadable of [{ ok: 'no' }, { ok: false }, { ok: false, issues: [{ path: 1 }] }, 'yes']) {
+    const ext = { provenance: 'executed', validation: unreadable };
+    assert.equal(
+      readNotebookValidationOfNotebook({ metadata: { extensions: { [NOTEBOOK_EXTENSION_KEY]: ext } }, cells: [] })!.state,
+      'not_recorded',
+      `an unreadable verdict (${JSON.stringify(unreadable)}) is never coerced into a reported result`,
+    );
+  }
+
+  // And a reading is never invented for a document the validator was never
+  // going to see: the same unreadable value on a SKELETON reads as nothing.
+  assert.equal(
+    readNotebookValidationOfNotebook({
+      metadata: { extensions: { [NOTEBOOK_EXTENSION_KEY]: { provenance: 'skeleton', validation: { ok: 'no' } } } },
+      cells: [],
+    }),
+    null,
+  );
+
   // And the surface renders it. A text scan cannot render React: this says the
   // reading reaches the notebook section and is handed to the shared signal
   // row, not that a reader saw it.

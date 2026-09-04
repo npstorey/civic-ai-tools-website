@@ -65,6 +65,16 @@
  * not `{ ok: boolean, issues: [{path, message}] }` — is read as no verdict at
  * all rather than coerced, because a shape we cannot read is not a check we can
  * report the result of.
+ *
+ * AND THE IMPRECISION THAT LEAVES, stated rather than left to be found. An
+ * EXECUTED notebook carrying an unreadable `validation` therefore reads
+ * `not_recorded`, whose label says the result "is not stated" when in fact
+ * something IS stated and this reader cannot read it. No producer in this
+ * repository emits such a value — the shape is written in one place — but the
+ * record page renders other adopters' extensions, so it is reachable in
+ * principle. `./notebook-provenance-reading.ts` makes the same trade for the
+ * same reason and says so in the same place; a separate state for "stated,
+ * unreadable" is a ruling, not a silent choice.
  */
 
 import type { TrustSignalDescriptor } from '../evidence/trust-signal.ts';
