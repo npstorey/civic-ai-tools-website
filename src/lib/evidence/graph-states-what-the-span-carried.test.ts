@@ -13,18 +13,25 @@
 // the published read-back on a running instance, which is an owner-run leg.
 //
 // THE SPAN SHAPE IS THE PRODUCER'S, NOT THIS FILE'S. Every attribute below is
-// written the way `src/lib/model-loop/run-tool-loop.ts` writes it:
-//   - `:815-821` opens the span with `tool.name`, `tool.operation_type`,
-//     `tool.arguments`, `mcp.source`, `tool.dataset_id` only when the
-//     arguments carry one, and `tool.portal_domain` only when they carry a
-//     portal;
-//   - `:799` injects the run's portal into `get_data` arguments and NO other
+// written the way `src/lib/model-loop/run-tool-loop.ts` writes it. The line
+// numbers were re-read in the tree by Wave N10 P1, which moved one of these
+// sites; every one of them was stale before that (the file had carried the
+// numbers `:799`, `:815-821`, `:816`, `:821`, `:834-841`, `:858-859` and
+// `:861-864` since before Wave N9 P8 shifted the whole block down):
+//   - `:825-832` opens the span with `tool.name` (`:826`),
+//     `tool.operation_type`, `tool.arguments`, `mcp.source`,
+//     `tool.dataset_id` only when the arguments carry one, and
+//     `tool.portal_domain` (`:831`) only when they carry a portal;
+//   - `:809` injects the run's portal into `get_data` arguments and NO other
 //     tool's, which is why a `search` or `fetch` span carries no portal at
 //     all;
-//   - `:834-841` ends a successful span with `tool.response_hash`,
+//   - `:847-852` ends a successful span with `tool.response_hash`,
 //     `tool.response_size_bytes`, `tool.duration_ms` and `tool.response_rows`;
-//   - `:861-864` ends a rejected one with `error: true` and no response hash,
-//     while `:858-859` sets `failed` / `failureKind` on the tool-call record.
+//   - `:892-895` ends a rejected one with `error: true` and `error.kind` — the
+//     classified `ToolFailureKind`, never the source's raw message (#404) —
+//     and no response hash, while `:871-872` sets `failed` / `failureKind` on
+//     the tool-call record. The span and the record therefore state the same
+//     classified value and nothing else about the cause.
 // The operation types come from `deriveOperationType` and the sources from
 // `sourceIdForToolName`, so `fetch`'s honest `'unknown'` is derived here, not
 // asserted by hand.
@@ -62,7 +69,7 @@
 //         parses them.
 //   CONTROL — every query entity carries its own span's `tool.name`. The
 //         `|| 'get_data'` default at `:177` is latent for this producer
-//         (`run-tool-loop.ts:816` always writes the name), so this pins the
+//         (`run-tool-loop.ts:826` always writes the name), so this pins the
 //         honest shape rather than showing the defect; it goes red the day a
 //         producer stops writing one.
 //   CONTROL — `queries` (P3's `failed` / `failureKind`), honest at base.
@@ -84,6 +91,19 @@
 // dataset-keyed entry, the get_data's" — is RED at `4ec45c0`: the read-back
 // package says `queries[3]` failed and that `queries[3]`'s dataset was
 // accessed. Every other assertion in this file keeps its verdict.
+//
+// AMENDED BY WAVE N10 P1 (#404), and what P1 deliberately did NOT touch. P1
+// changed one thing here: the rejected span now ends with `error.kind`, the
+// classified `ToolFailureKind`, where it used to end with `error.message` and
+// the source's raw text. It re-pointed every `run-tool-loop.ts` citation
+// above, having re-read each site in the tree. It left the two
+// `packager.ts:424` citations — this paragraph and the failure message on
+// (e) — alone: that line is `:449-450` today and no longer hands the rejected
+// call through unchanged (P8 added the `rejectedCallStandIn` at `:397-402`
+// that intervenes), so the sentence needs rewriting, not renumbering, and the
+// rewrite belongs to P4, which deletes the stand-in and takes the harness pin
+// that makes it unnecessary. Both citations are stale as they stand; they are
+// flagged here rather than half-fixed.
 //
 // Run with: npm test
 
@@ -107,7 +127,7 @@ for (const [name, value] of Object.entries(REFERENCE_IDENTITY_ENV)) {
 }
 
 /** The portal the RUN selected — the value `PackageInput.portal` carries and
- *  the one `run-tool-loop.ts:799` injects into `get_data` arguments. */
+ *  the one `run-tool-loop.ts:809` injects into `get_data` arguments. */
 const RUN_PORTAL = 'data.cityofnewyork.us';
 /** A portal that appears only inside a `fetch` id's server-side grammar. The
  *  graph must adopt it no more than it adopts the run's. */
@@ -197,7 +217,7 @@ function buildTrace(fixtures: SpanFixture[]): Record<string, unknown> {
     const operationType = deriveOperationType(name, args);
     const toolSource = sourceIdForToolName(name) ?? 'unknown';
 
-    // run-tool-loop.ts:815-821, attribute for attribute.
+    // run-tool-loop.ts:825-832, attribute for attribute.
     const spanId = builder.startSpan('mcp_tool_call', undefined, {
       'tool.name': name,
       'tool.operation_type': operationType || 'unknown',
@@ -209,7 +229,7 @@ function buildTrace(fixtures: SpanFixture[]): Record<string, unknown> {
     fixture.spanId = spanId;
 
     if (fixture.result !== undefined) {
-      // run-tool-loop.ts:834-841.
+      // run-tool-loop.ts:847-852.
       builder.endSpan(spanId, {
         'tool.response_hash': traceHash(fixture.result),
         'tool.response_size_bytes': fixture.result.length,
@@ -217,10 +237,18 @@ function buildTrace(fixtures: SpanFixture[]): Record<string, unknown> {
         ...(fixture.call.resultSummary ? { 'tool.response_rows': fixture.call.resultSummary.rows } : {}),
       });
     } else {
-      // run-tool-loop.ts:861-864 — a rejection ends with no response hash.
+      // run-tool-loop.ts:892-895 — a rejection ends with no response hash,
+      // and with the CLASSIFIED kind rather than the source's raw text
+      // (#404, Wave N10 P1). `error.kind` carries the same `ToolFailureKind`
+      // value the catch site writes onto the record at `:871-872`, so it is
+      // read off the fixture's own call rather than restated: a fixture that
+      // could state one kind on the span and another on the record is not the
+      // producer's shape.
+      const failureKind = fixture.call.failureKind;
+      assert.ok(failureKind, 'a rejected fixture states the kind the loop classified');
       builder.endSpan(spanId, {
         error: true,
-        'error.message': 'MCP tool call timed out',
+        'error.kind': failureKind,
       });
     }
   }
@@ -341,8 +369,8 @@ test('read-back (a) RED: the search span carried no portal, so no node derived f
   assertNoPortalClaim(
     derived,
     RUN_PORTAL,
-    "the span carried no tool.portal_domain (run-tool-loop.ts:821 writes one only when the arguments do, " +
-      "and :799 injects a portal for get_data alone), so the run's portal is not what this call addressed",
+    "the span carried no tool.portal_domain (run-tool-loop.ts:831 writes one only when the arguments do, " +
+      "and :809 injects a portal for get_data alone), so the run's portal is not what this call addressed",
   );
 });
 
