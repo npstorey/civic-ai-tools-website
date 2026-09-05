@@ -116,10 +116,22 @@ interface Exception {
 
 /**
  * The classified universe, measured at `77e51bd`: 102 hits across 24 files, of
- * which #407 routed 6 files to zero through the resolver in `site-config.ts`
- * (the two compare routes, the notebook route, `QuerySurface`, `McpFlowDiagram`
- * and `McpResponseDisplay`) and classified the 18 below. An entry here is a
- * claim that the hostnames at that path are not a default any run can inherit.
+ * which #407 took 7 files to zero and classified the 17 below. An entry here is
+ * a claim that the hostnames at that path are not a default any run can inherit.
+ *
+ * Six of the seven were routed through the resolver in `site-config.ts` — the
+ * two compare routes, the notebook route, `QuerySurface`, `McpFlowDiagram` and
+ * `McpResponseDisplay`. The seventh, `lib/notebook-author/helpers/fetch_socrata.py`,
+ * had no run input to route: its single hit was a docstring example, and it was
+ * neutralized to the `<portal>` placeholder the same docstring already used.
+ * That distinction is worth the extra line, because the helper embeds verbatim
+ * into a signed notebook cell, so the fix there is about shipped text rather
+ * than about where a run is sent.
+ *
+ * 7 + 17 = 24. `QueryForm.tsx` is in the 17 and not the 7: it carried a
+ * run-input default and a reference table twelve lines apart, and went 6 hits
+ * to 5 rather than to zero — which is why exceptions are counted, not merely
+ * listed by path.
  */
 const EXCEPTIONS: readonly Exception[] = [
   {
