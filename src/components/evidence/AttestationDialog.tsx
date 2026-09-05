@@ -6,7 +6,21 @@ import { parseModelsResponse, type Model } from '@/lib/model-list';
 // here with a verbatim copy in `replay-loop.test.ts`, because no `.test.ts` in
 // this tree can import a `.tsx` — so the shipped function had no test and the
 // copy could only ever agree with itself. Both now import this module.
-import { canonicalizeToolCall } from '@/lib/evidence/tool-call-identity';
+//
+// `TOOL_CALL_KEY_POLICY` comes from the same module because it is a sentence
+// ABOUT that key: how a call the source refused is counted (#402). It is
+// rendered beside the score and submitted inside the signed package, from one
+// string, so what a reader is told and what the package records cannot drift.
+import { canonicalizeToolCall, TOOL_CALL_KEY_POLICY } from '@/lib/evidence/tool-call-identity';
+// The score itself moved out for the reason the key did, and it is the same
+// reason: no `.test.ts` here can import a `.tsx`, so the function that decides
+// whether a run is signed `highly_reproducible` could not be driven where it
+// stood. The arithmetic is unchanged; see the module header.
+import {
+  computeConsistencyMetrics,
+  type ConsistencyMetrics,
+  type ReplayResult,
+} from '@/lib/evidence/consistency-metrics';
 
 // --- Types ---
 
@@ -35,86 +49,11 @@ interface EvaluationResult {
   evaluatorModel: string;
 }
 
-interface ReplayResult {
-  toolCalls: { name: string; args: Record<string, unknown> }[];
-  output: string;
-  tokenUsage: { promptTokens: number; completionTokens: number; totalTokens: number };
-  durationMs: number;
-}
-
-interface ConsistencyMetrics {
-  toolCallOverlap: number;
-  outputSimilarity: number;
-  consistencyClassification: 'highly_reproducible' | 'moderately_stable' | 'inconsistent';
-}
-
 interface AttestationDialogProps {
   slug: string;
   analysisModel: string;
   promptVisibility: string;
   onAttestationCreated: () => void;
-}
-
-// --- Metric computation ---
-
-function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
-  const intersection = new Set([...a].filter(x => b.has(x)));
-  const union = new Set([...a, ...b]);
-  return union.size === 0 ? 1 : intersection.size / union.size;
-}
-
-function extractNumbers(text: string): number[] {
-  const matches = text.match(/\b\d[\d,]*\.?\d*\b/g) || [];
-  return matches
-    .map(m => parseFloat(m.replace(/,/g, '')))
-    .filter(n => !isNaN(n) && n > 0);
-}
-
-function computeConsistencyMetrics(runs: ReplayResult[]): ConsistencyMetrics {
-  if (runs.length < 2) {
-    return { toolCallOverlap: 1, outputSimilarity: 1, consistencyClassification: 'highly_reproducible' };
-  }
-
-  // Tool call overlap: average pairwise Jaccard similarity
-  const toolCallSets = runs.map(r =>
-    new Set(r.toolCalls.map(canonicalizeToolCall))
-  );
-  let totalJaccard = 0;
-  let pairCount = 0;
-  for (let i = 0; i < toolCallSets.length; i++) {
-    for (let j = i + 1; j < toolCallSets.length; j++) {
-      totalJaccard += jaccardSimilarity(toolCallSets[i], toolCallSets[j]);
-      pairCount++;
-    }
-  }
-  const toolCallOverlap = pairCount > 0 ? totalJaccard / pairCount : 1;
-
-  // Output similarity: compare numeric claims across runs
-  const numberSets = runs.map(r => extractNumbers(r.output));
-  const referenceSet = new Set(numberSets[0].map(n => n.toString()));
-  let totalMatch = 0;
-  for (let i = 1; i < numberSets.length; i++) {
-    if (referenceSet.size === 0) {
-      totalMatch += 1; // No numbers to compare — treat as matching
-    } else {
-      const matches = numberSets[i].filter(n => referenceSet.has(n.toString()));
-      totalMatch += matches.length / referenceSet.size;
-    }
-  }
-  const outputSimilarity = runs.length > 1 ? totalMatch / (runs.length - 1) : 1;
-
-  // Combined score for classification
-  const combined = (toolCallOverlap + Math.min(outputSimilarity, 1)) / 2;
-  let consistencyClassification: ConsistencyMetrics['consistencyClassification'];
-  if (combined >= 0.9) consistencyClassification = 'highly_reproducible';
-  else if (combined >= 0.7) consistencyClassification = 'moderately_stable';
-  else consistencyClassification = 'inconsistent';
-
-  return {
-    toolCallOverlap: Math.round(toolCallOverlap * 100) / 100,
-    outputSimilarity: Math.round(Math.min(outputSimilarity, 1) * 100) / 100,
-    consistencyClassification,
-  };
 }
 
 // --- Component ---
@@ -301,6 +240,12 @@ export default function AttestationDialog({
               durationMs: r.durationMs,
             })),
             metrics: consistencyMetrics,
+            // How this attestation counted a call the source refused (#402).
+            // Inside the signed bytes, not only on the screen: the same two
+            // runs score differently under the old rule and the new one, and a
+            // reader comparing two attestations cannot tell which produced a
+            // number unless the package says so.
+            toolCallKeyPolicy: TOOL_CALL_KEY_POLICY,
           },
         };
       } else if (tab === 'evaluation' && evalResult) {
@@ -738,6 +683,14 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
               }
             />
           </div>
+
+          {/* How a refused request was counted (#402). Beside the score, not
+              in a footnote: the number above is a claim about reproducibility
+              and this is the rule that produced it. Disclosure, not
+              validation — docs/design-principles.md Principle 1. */}
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>
+            {TOOL_CALL_KEY_POLICY}
+          </p>
 
           {/* Per-run summary */}
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>

@@ -51,6 +51,7 @@ import {
 // Added with the convergence assertions below, not part of the inherited red.
 import { generateNotebook } from './notebook.ts';
 import { mcpTools } from './mcp/tools.ts';
+import { readFileSync } from 'node:fs';
 
 const ARGS = {
   type: 'query',
@@ -339,4 +340,230 @@ test('#406: no advertised tool can put an identifier into a document through its
   // is what was asked, not a source that was reached, and it is quoted.
   const searchy = generateToolReason({ type: 'catalog', query: 'https://example.gov outage' }, 'get_data');
   assert.equal(reasonWithoutIdentifier(searchy), searchy, 'a quoted search phrase is not an identifier');
+});
+
+// ---------------------------------------------------------------------------
+// #402 — the metric, and the bytes of a package that was already signed
+// ---------------------------------------------------------------------------
+//
+// The key assertion at the top of this file leaves the METRIC unmeasured, and
+// the metric is what is signed and shown. `computeConsistencyMetrics` could not
+// be driven at all when the red was written: it lived inside
+// `AttestationDialog.tsx`, and no `.test.ts` in this tree can import a `.tsx`.
+// The phase lifted it into `evidence/consistency-metrics.ts` unchanged; this is
+// the drive that lift exists for.
+
+import {
+  computeConsistencyMetrics,
+  type ReplayResult,
+} from './evidence/consistency-metrics.ts';
+import { REJECTED_CALL_KEY_SUFFIX, TOOL_CALL_KEY_POLICY } from './evidence/tool-call-identity.ts';
+import { execFileSync } from 'node:child_process';
+
+/** A run of two calls, one of which may have been refused. */
+function run(refusedSecond: boolean): ReplayResult {
+  return {
+    toolCalls: [
+      { name: 'get_data', args: { ...ARGS, dataset_id: ANSWERED_DATASET } },
+      refusedSecond
+        ? { name: 'get_data', args: { ...ARGS }, failed: true, failureKind: 'unavailable' }
+        : { name: 'get_data', args: { ...ARGS } },
+    ],
+    output: 'Noise led with 4,812 reports.',
+    tokenUsage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+    durationMs: 1000,
+  };
+}
+
+test('#402: two runs differing ONLY in a refusal are not scored as identical', () => {
+  const answered = run(false);
+  const refused = run(true);
+
+  // The fixture is the shape that can fail: the two runs differ in `failed` and
+  // in nothing else. Same tool, same arguments, same output text — so the output
+  // half of the score is 1 in both directions and the tool half is the only
+  // thing under test. A pair differing in arguments would prove nothing, because
+  // the key has separated those since #363.
+  assert.deepEqual(
+    answered.toolCalls.map((c) => c.args),
+    refused.toolCalls.map((c) => c.args),
+    'fixture: the two runs must be argument-identical',
+  );
+  assert.equal(answered.output, refused.output, 'fixture: and output-identical');
+
+  const mixed = computeConsistencyMetrics([answered, refused]);
+  assert.notEqual(
+    mixed.toolCallOverlap,
+    1,
+    'a run that read a source and a run that was refused it score a Jaccard overlap ' +
+      `of 1: ${JSON.stringify(mixed)}`,
+  );
+  assert.notEqual(
+    mixed.consistencyClassification,
+    'highly_reproducible',
+    'and a signed attestation calls that pair highly reproducible: ' +
+      JSON.stringify(mixed),
+  );
+
+  // The other direction, so the change cannot be a filter that just lowers every
+  // score: two runs that BOTH answered still score 1 and are still classified
+  // highly reproducible.
+  const both = computeConsistencyMetrics([run(false), run(false)]);
+  assert.equal(both.toolCallOverlap, 1, `two identical answered runs must still score 1: ${JSON.stringify(both)}`);
+  assert.equal(both.consistencyClassification, 'highly_reproducible', JSON.stringify(both));
+  // …and so do two runs that were BOTH refused the same request: a reproducible
+  // refusal is reproducible.
+  const neither = computeConsistencyMetrics([run(true), run(true)]);
+  assert.equal(neither.toolCallOverlap, 1, `two identically refused runs are reproducible: ${JSON.stringify(neither)}`);
+});
+
+test('#402: an answered call keeps a byte-identical key, and cannot collide with a rejected one', () => {
+  // The suffix is what keeps a past attestation's stored keys comparable with a
+  // new one for the calls that succeeded. If the format changed for every call,
+  // this pin — which predates the phase, in `evidence/tool-call-identity.test.ts`
+  // — would have had to be rewritten, and that rewrite is the kind of change
+  // that hides a real one.
+  assert.equal(
+    canonicalizeToolCall({
+      name: 'get_data',
+      args: { type: 'query', dataset_id: 'erm2-nwe9', portal: 'data.cityofnewyork.us' },
+    }),
+    'get_data:{"dataset_id":"erm2-nwe9","portal":"data.cityofnewyork.us","type":"query"}',
+    'an answered call\'s key must not have moved',
+  );
+  const rejected = canonicalizeToolCall({
+    name: 'get_data',
+    args: { type: 'query', dataset_id: 'erm2-nwe9', portal: 'data.cityofnewyork.us' },
+    failed: true,
+  });
+  assert.ok(rejected.endsWith(REJECTED_CALL_KEY_SUFFIX), rejected);
+  // No answered call's key can end in the suffix: `jcs()` of an object always
+  // ends in `}`. Driven over a call whose ARGUMENT VALUE is the suffix itself,
+  // which is the only way a serialisation could be made to contain it.
+  const adversarial = canonicalizeToolCall({
+    name: 'get_data',
+    args: { where: REJECTED_CALL_KEY_SUFFIX },
+  });
+  assert.ok(
+    !adversarial.endsWith(REJECTED_CALL_KEY_SUFFIX),
+    `an answered call was made to look rejected: ${adversarial}`,
+  );
+});
+
+/**
+ * Every non-test file allowed to compute a tool-call identity key, with why.
+ *
+ * A LIST, because the question "does an already-signed package's bytes move?"
+ * has only one mechanical answer: a stored key is a string inside stored bytes,
+ * and it moves only if something RECOMPUTES it. A hash pinned over a literal
+ * package cannot see that — `sha256(JSON.stringify(x))` is a constant of the
+ * fixture, not of this repository — so what is measured here is the thing that
+ * would actually change the answer: who calls the function at all.
+ *
+ * Both directions, like `model-loop/model-call-registry.test.ts`: a caller that
+ * is not listed fails, and a listed file that no longer calls it fails too.
+ */
+const ALLOWED_KEY_CALLERS: Record<string, string> = {
+  'src/lib/evidence/consistency-metrics.ts':
+    'Submission time, from a live replay. The one place a key is computed for a score.',
+  'src/components/evidence/AttestationDialog.tsx':
+    'Submission time. Writes the computed keys into the package that is then hashed and signed.',
+};
+
+test('#402: nothing recomputes a key off a stored package, so signed bytes cannot move', () => {
+  // Driven against production on 2026-09-05, and reported with the phase: a
+  // stored attestation package fetched from blob storage re-hashes to its own
+  // stored `packageHash` byte for byte — the hash is over stored bytes — and of
+  // 34 published records ZERO carry a consistency attestation, so no signed
+  // package in production contains a `toolCallKeys` array at all. Neither of
+  // those facts is stable: a consistency attestation can be published tomorrow.
+  // The mechanism is what makes the answer stable, and this is the mechanism.
+  const tracked = execFileSync('git', ['ls-files', '-z', '--full-name'], {
+    cwd: new URL('../..', import.meta.url).pathname,
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024,
+  })
+    .split('\0')
+    .filter((f) => /\.(c|m)?[jt]sx?$/.test(f) && !/\.test\.(c|m)?[jt]sx?$/.test(f));
+  assert.ok(tracked.length > 50, 'the scan found almost no source files — it has stopped measuring');
+
+  const repoRoot = new URL('../..', import.meta.url).pathname;
+  const callers = tracked.filter((file) => {
+    let source: string;
+    try {
+      source = readFileSync(repoRoot + file, 'utf8');
+    } catch {
+      return false; // tracked but deleted from the working tree
+    }
+    // The IMPORT, and two earlier probes are why. `canonicalizeToolCall(` misses
+    // `consistency-metrics.ts`, which passes it point-free as
+    // `.map(canonicalizeToolCall)` — a probe that cannot see the one real caller
+    // would have passed this whole test while measuring nothing. A bare
+    // word-boundary match then caught `model-loop/replay-loop.ts`, which only
+    // DISCUSSES the key in its header. What separates having the function from
+    // mentioning it is importing it, so that is what is matched.
+    return /import[\s\S]{0,200}?\bcanonicalizeToolCall\b[\s\S]{0,200}?from/.test(source);
+  });
+
+  for (const file of callers) {
+    assert.ok(
+      file in ALLOWED_KEY_CALLERS,
+      `${file} computes a tool-call identity key and is not on the list in ` +
+        'rejected-call-is-not-an-answer.test.ts. If it recomputes one off a STORED package, ' +
+        'the keys inside signed bytes are no longer the keys they were signed over.',
+    );
+  }
+  for (const file of Object.keys(ALLOWED_KEY_CALLERS)) {
+    assert.ok(
+      callers.includes(file),
+      `${file} is listed as computing a key but no longer does — a stale list is a false ` +
+        'statement about the tree, and this one is load-bearing.',
+    );
+  }
+
+  // The import probe cannot see a SECOND COPY of the function, which is the
+  // shape #345 found three times. So the definition is counted separately: one
+  // module declares it, and a re-declaration anywhere fails here rather than
+  // quietly keying half the application differently.
+  const definers = tracked.filter((file) => {
+    try {
+      return /function\s+canonicalizeToolCall\b/.test(readFileSync(repoRoot + file, 'utf8'));
+    } catch {
+      return false;
+    }
+  });
+  assert.deepEqual(
+    definers,
+    ['src/lib/evidence/tool-call-identity.ts'],
+    'the tool-call identity key is declared in more than one place, or has moved',
+  );
+});
+
+test('#402: the attestation states in its own text how it treats a rejected call', () => {
+  // The second half of D2 = B, and not garnish: the same two runs score
+  // differently under the old rule and the new one, so a number with no rule
+  // beside it is not a claim a reader can check. One string, rendered beside the
+  // score AND submitted inside the signed package.
+  assert.match(TOOL_CALL_KEY_POLICY, /refused/, TOOL_CALL_KEY_POLICY);
+  assert.match(TOOL_CALL_KEY_POLICY, /different tool call/, TOOL_CALL_KEY_POLICY);
+
+  const dialog = readFileSync(
+    new URL('../components/evidence/AttestationDialog.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    dialog,
+    /TOOL_CALL_KEY_POLICY/,
+    'the dialog neither shows the rule nor records it',
+  );
+  assert.match(
+    dialog,
+    /toolCallKeyPolicy: TOOL_CALL_KEY_POLICY/,
+    'the rule is shown to a reader but not written into the signed package',
+  );
+  // …and it is the shared constant, not a second copy of the sentence.
+  assert.ok(
+    !dialog.includes('counts as a different tool call'),
+    'the sentence is restated in the dialog rather than imported — two copies drift',
+  );
 });
