@@ -12,6 +12,7 @@ import { getMissingModelCredentialError, ModelConfigurationError } from '@/lib/m
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
 import { getMissingMcpRoutingError, readMcpEnvFromProcess, skillRoutingTraceAttributes } from '@/lib/mcp/registry';
+import { getDefaultPortal } from '@/lib/site-config';
 import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG } from '@/lib/evidence/trace';
 
 const SSE_HEADERS = {
@@ -30,8 +31,14 @@ interface CompareRequest {
 export async function POST(request: NextRequest) {
   try {
     const body: CompareRequest = await request.json();
-    const { query, model: modelId, portal: rawPortal = 'data.cityofnewyork.us', mcpOnly = false } = body;
-    const portal = rawPortal || 'data.cityofnewyork.us';
+    const { query, model: modelId, portal: rawPortal, mcpOnly = false } = body;
+    // The caller's portal, else this instance's configured default, else NONE
+    // (#407). It used to be a literal at both halves of this line, so a caller
+    // that named no portal ran against one deployment's city and `analysis.portal`
+    // below recorded that city in a trace a publish carries into a signed
+    // package. An empty string on the wire means "no portal" — it is what the
+    // form's "All portals" entry sends — so it collapses to undefined here.
+    const portal = rawPortal || getDefaultPortal() || undefined;
 
     if (!query || !modelId) {
       return new Response(
@@ -149,7 +156,12 @@ export async function POST(request: NextRequest) {
     trace.startRoot('analysis', {
       'analysis.prompt_hash': hash(query),
       'analysis.model': model.declared,
-      'analysis.portal': portal,
+      // Only when the run HAS one (#407, the `skillRoutingTraceAttributes`
+      // disposition at #258 A9): a root span that names a portal is a claim
+      // about where this analysis went, and this trace is carried into a
+      // signed package. With no portal configured and none supplied, the key
+      // is absent rather than filled with a default the instance never set.
+      ...(portal ? { 'analysis.portal': portal } : {}),
     });
 
     // Fetch skill guidance (with trace span). The composed prompt spans both

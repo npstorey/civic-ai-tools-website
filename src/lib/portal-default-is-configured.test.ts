@@ -30,12 +30,40 @@
  *
  * EVERY EXCEPTION CARRIES ITS CLASSIFICATION. A hostname may stay in the tree
  * only as a fixture, as marketing copy, as a reference table of portals the
- * project has tested, or as documentation — never as a run-input default. The
- * second test below holds that line. While `EXCEPTIONS` is empty that test is
- * vacuous, and it is said here rather than left to be discovered: it becomes
- * load-bearing the moment the first exception is written, and it is the only
- * assertion that can fail when someone tries to keep a run-input default by
- * excepting it.
+ * project has tested, as the fixed domain of a named data-source server, or as
+ * documentation — never as a run-input default. The second test below holds
+ * that line. `EXCEPTIONS` is populated as of #407, so that test is no longer
+ * vacuous: it is the only assertion that can fail when someone tries to keep a
+ * run-input default by excepting it.
+ *
+ * THE TEST OF A RUN-INPUT DEFAULT, since the list is now a set of claims about
+ * which hostnames are not one. A hostname is a run-input default when a run
+ * that named no portal INHERITS it — when it becomes the `portal` argument of a
+ * call, a span attribute on the trace, or a line in a document derived from the
+ * record. It is not one when it is data captured from a past run, prose about a
+ * deployment, a menu of portals offered as choices, the fixed home of a server
+ * this codebase routes to by name, or a comment. Each entry below states which,
+ * and a wrong classification is a claim standing in the tree.
+ *
+ * TWO EXTENSIONS #407 MADE, AND WHY EACH WAS NEEDED.
+ *
+ *   - `server-endpoint` joined the classifications. `api.datacommons.org` and
+ *     `data.boston.gov` are not one instance's city and cannot be configured
+ *     away: they are where a NAMED server this codebase routes to lives, or
+ *     where the data that server fronts actually is. Sweeping them in with the
+ *     city defaults would have said something false about them, and excepting
+ *     them as "documentation" would have said nothing at all.
+ *   - EVERY EXCEPTION DECLARES ITS HIT COUNT, and the first test checks it.
+ *     Exceptions are matched by PATH, so without this a file on the list is
+ *     unguarded for as long as it stays on it — and the list's own first
+ *     customer, `components/QueryForm.tsx`, is a file that carried a run-input
+ *     default AND a reference table in the same 12 lines. A count is stable
+ *     under every edit that does not add a hostname, and fails on the one that
+ *     does: a sixth portal added to a five-portal menu, or a run-input default
+ *     written into a file whose other hostnames are legitimately excepted. It
+ *     is bidirectional for the same reason the model-call registry's
+ *     assertions are — it fails when the tree grows past the claim AND when the
+ *     claim outlives the tree.
  */
 
 import { test } from 'node:test';
@@ -55,6 +83,14 @@ type Classification =
   | 'marketing-copy'
   /** A table of portals the project has tested, offered as choices, not defaults. */
   | 'reference-table'
+  /**
+   * The fixed domain of a NAMED data-source server this codebase routes to —
+   * its own host, or the host the data it fronts actually lives on. Not one
+   * instance's city and not configurable per instance: an operator who points
+   * at a different server names a different server, they do not re-home this
+   * one.
+   */
+  | 'server-endpoint'
   /** Developer documentation, not shipped text. */
   | 'documentation'
   /**
@@ -68,16 +104,133 @@ interface Exception {
   /** Path relative to `src/`. */
   readonly path: string;
   readonly classification: Classification;
+  /**
+   * How many hostname occurrences this classification covers. Checked, so the
+   * exception guards the file rather than exempting it: adding a hostname to an
+   * excepted file fails until someone states what the new one is.
+   */
+  readonly hits: number;
   /** Why this hostname is not a run-input default, in one sentence. */
   readonly why: string;
 }
 
 /**
- * The classified universe. #407's phase populates this from a measured census
- * of every hit and removes the rest; an entry here is a claim that the hostname
- * at that path is not a default any run can inherit.
+ * The classified universe, measured at `77e51bd`: 102 hits across 24 files, of
+ * which #407 routed 6 files to zero through the resolver in `site-config.ts`
+ * (the two compare routes, the notebook route, `QuerySurface`, `McpFlowDiagram`
+ * and `McpResponseDisplay`) and classified the 18 below. An entry here is a
+ * claim that the hostnames at that path are not a default any run can inherit.
  */
-const EXCEPTIONS: readonly Exception[] = [];
+const EXCEPTIONS: readonly Exception[] = [
+  {
+    path: 'lib/bpmn/traces.ts',
+    classification: 'fixture',
+    hits: 21,
+    why: 'Captured tool-call arguments from past runs, replayed on /explore as a recording of what those runs did; nothing here starts a run.',
+  },
+  {
+    path: 'lib/mcp/socrata-skill.ts',
+    classification: 'reference-table',
+    hits: 21,
+    why: 'The Well-Tested Domains table, the per-portal Key Datasets lookup and the `data.<org>.<tld>` naming-convention templates the model is told to derive an unknown portal from — portals offered to the model as choices, while the one default this text states is interpolated from the resolved run portal and is absent when the run has none.',
+  },
+  {
+    path: 'lib/mcp/tools.ts',
+    classification: 'reference-table',
+    hits: 11,
+    why: "Worked examples of the `portal` argument's shape in the tool descriptions, plus the Boston server's own domain; a portal the model copies from one becomes a portal that call actually addressed, never a value substituted into a call that omitted it.",
+  },
+  {
+    path: 'app/(marketing)/learn/page.tsx',
+    classification: 'marketing-copy',
+    hits: 6,
+    why: 'Teaching copy on /learn quoting real skill text and a real tool call so a reader can see what one looks like; the page starts no run.',
+  },
+  {
+    path: 'components/QueryForm.tsx',
+    classification: 'reference-table',
+    hits: 5,
+    why: 'The `PORTALS` menu — the portals a reader may pick, beside an "All portals" entry; a selection made here is the reader\'s choice, and the form\'s own default now comes from `SITE_DEFAULT_PORTAL` through `DefaultPortalProvider`.',
+  },
+  {
+    path: 'lib/streaming.ts',
+    classification: 'reference-table',
+    hits: 5,
+    why: "`getPortalCity`'s portal-to-city display map, which translates a portal a run already named into a reader's word for it and supplies none when it does not recognise one.",
+  },
+  {
+    path: 'lib/notebook-author/tool-to-cell.ts',
+    classification: 'server-endpoint',
+    hits: 4,
+    why: 'Citation labels and dataset URLs for the Boston OpenContext server, which is CKAN-native and fronts exactly this domain — a resource id from that server is on that host, so the citation states where the fetched data actually lives.',
+  },
+  {
+    path: 'components/SkillPromptDisclosure.tsx',
+    classification: 'reference-table',
+    hits: 3,
+    why: 'Curated excerpts of the skill text, shown to a reader so they can see the dataset knowledge the model was given; a disclosure surface, not an input.',
+  },
+  {
+    path: 'lib/mcp/boston-skill.ts',
+    classification: 'server-endpoint',
+    hits: 3,
+    why: 'The domain the Boston OpenContext server fronts, named in the guidance that tells the model what that server covers and how to cite it.',
+  },
+  {
+    path: 'lib/notebook-author/helpers/fetch_opencontext.py',
+    classification: 'server-endpoint',
+    hits: 3,
+    why: "The CKAN DataStore API base URL of the Boston server this helper exists to call; it is that server's address, not a portal a run chooses.",
+  },
+  {
+    path: 'components/notebook/__dev__/sampleExecutedNotebook.ts',
+    classification: 'fixture',
+    hits: 2,
+    why: 'A hand-built executed-notebook sample for the dev preview route, never reachable from a run.',
+  },
+  {
+    path: 'lib/mcp/registry.ts',
+    classification: 'server-endpoint',
+    hits: 2,
+    why: "Google Data Commons' hosted MCP endpoint, already overridable through `DATA_COMMONS_MCP_URL` — a third-party public service every instance reaches at the same address, not one deployment's city, and the trace records it as real configured routing for exactly that reason (#258 A9).",
+  },
+  {
+    path: 'lib/notebook-author/helpers/fetch_data_commons.py',
+    classification: 'server-endpoint',
+    hits: 2,
+    why: "The Data Commons observation API this helper calls; the same third-party service address as the registry entry above.",
+  },
+  {
+    path: 'app/(app)/dev/notebook-preview/NotebookPreviewClient.tsx',
+    classification: 'fixture',
+    hits: 1,
+    why: 'The portal prop of the dev-only /dev/notebook-preview page, which states on its face that it drives no live traffic and renders the fixture above.',
+  },
+  {
+    path: 'components/notebook/NotebookOutput.tsx',
+    classification: 'documentation',
+    hits: 1,
+    why: 'A worked example inside the JSDoc of the `portal` prop, describing the shape of a value the caller supplies.',
+  },
+  {
+    path: 'lib/mcp/client.ts',
+    classification: 'documentation',
+    hits: 1,
+    why: "A code comment recording where the Data Commons hosted endpoint lives, beside the routing that reaches it.",
+  },
+  {
+    path: 'lib/notebook-author/fixtures/README.md',
+    classification: 'documentation',
+    hits: 1,
+    why: 'The recorded argument list that produced the checked-in pre-stamp package, written down so the fixture can be regenerated and audited.',
+  },
+  {
+    path: 'lib/notebook-author/helpers/fetch_socrata.py',
+    classification: 'documentation',
+    hits: 1,
+    why: "A worked example in the helper's docstring, describing the shape of the `portal` parameter its caller passes.",
+  },
+];
 
 /**
  * The shapes an open-data portal hostname is published under, plus the named
@@ -129,6 +282,7 @@ test('no source file under src/ spells a portal hostname unless the exception li
 
   const report = offenders.map((hit) => `${hit.path}:${hit.line}  ${hit.hostname}`);
 
+
   assert.deepEqual(
     report,
     [],
@@ -139,6 +293,35 @@ test('no source file under src/ spells a portal hostname unless the exception li
       `the hostname as a fixture, marketing copy, a reference table or ` +
       `documentation — and note that 'run-input-default' is not an exception ` +
       `the list will accept.\n\n${report.join('\n')}`,
+  );
+});
+
+test('every exception still describes the tree, hostname for hostname', () => {
+  const counted = new Map<string, number>();
+  for (const hit of portalHits()) {
+    counted.set(hit.path, (counted.get(hit.path) ?? 0) + 1);
+  }
+
+  // Bidirectional, and both directions are the point. An excepted file that
+  // GREW a hostname is the run-input default someone parked behind a
+  // classification that does not cover it; an excepted file that SHRANK is a
+  // claim outliving the tree it describes. Both read as a mismatched pair.
+  const drifted = EXCEPTIONS.flatMap((entry) => {
+    const actual = counted.get(entry.path) ?? 0;
+    return actual === entry.hits
+      ? []
+      : [`${entry.path} — classified ${entry.hits} as ${entry.classification}, found ${actual}`];
+  });
+
+  assert.deepEqual(
+    drifted,
+    [],
+    `An exception states how many hostnames its classification covers, because ` +
+      `exceptions are matched by PATH and would otherwise exempt a whole file ` +
+      `(#407). A file that grew one: say what the new hostname is — if a run ` +
+      `that named no portal can inherit it, it is a run-input default and ` +
+      `belongs in the resolver, not on this list. A file that lost one, or that ` +
+      `no longer exists: drop or correct the entry.\n\n${drifted.join('\n')}`,
   );
 });
 

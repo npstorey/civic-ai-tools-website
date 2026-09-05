@@ -185,6 +185,62 @@ export function getRoadmapSource(): RoadmapSource | null {
   };
 }
 
+// --- The instance's default portal (#407) -----------------------------------
+
+/**
+ * The open-data portal a run uses when its caller named none, or `null` when
+ * this instance has declared no default. Env: `SITE_DEFAULT_PORTAL`, a bare
+ * portal hostname with no scheme and no trailing path, read at CALL time like
+ * everything else in this file.
+ *
+ * WHY THIS IS CONFIG AND NOT A CONSTANT. It was one deployment's own portal,
+ * written as a literal at nine sites — two query routes, the notebook route,
+ * the query surface, the live-trace diagram, the example-query list, and the
+ * notebook download button. Every instance built from this repository
+ * therefore answered an unqualified question against one deployment's city,
+ * and said so in places that outlive the run: `analysis.portal` on the root
+ * span of a trace that a publish carries into a SIGNED package, and the
+ * `**Portal:**` line of a notebook a reader downloads. A portal a run did not
+ * touch, asserted in bytes that claim to record what it did, is the defect
+ * this seam closes — the same shape as a hex colour written past a design
+ * token (#217): invisible on the reference instance, wrong on every other one.
+ *
+ * WHY NULLABLE, AND WHY THAT NEVER REFUSES. `null` is a first-class state,
+ * not a misconfiguration — the `getInstanceAttribution` disposition, not the
+ * `INSTANCE_IDENTITY_REQUIRED_VARS` one. A missing portal must never fail
+ * instance bring-up, and it does not: the run simply carries no default, and
+ * every surface that would have named a portal omits it instead. That path
+ * was already built and already honest before this variable existed —
+ * `buildSystemPrompt(portal?)` composes with no portal-specific section and
+ * names no default (#384 F2); `runToolLoop` injects a portal only when it has
+ * one (`run-tool-loop.ts`), so `tool.portal_domain` is absent on exactly the
+ * calls that were given none; `uniquePortals` adds a falsy fallback to
+ * nothing. The model then names its own portal on each call, and what the
+ * record reports is what the call actually carried.
+ *
+ * WHY `SITE_*` AND PLAIN `process.env`. Two env families live in this tree
+ * and they are not interchangeable. `PUBLISHER_*` variables are read through
+ * `readPublisherEnv`, carry a prior-era `EVIDENCE_*` alias, and name this
+ * deployment INSIDE signed output. A default portal is neither: it is a
+ * configuration seam like `SITE_SPONSOR_NAME` above, so it is read the way
+ * `getSponsor` reads its own — one name, plain `process.env`. Registering a
+ * suffix in `PUBLISHER_ENV_SUFFIXES` would mint an `EVIDENCE_DEFAULT_PORTAL`
+ * alias that never existed and that nothing should honour.
+ *
+ * Client components cannot read this getter. The root layout resolves it and
+ * threads it through `components/DefaultPortalProvider` — the
+ * `McpRoutingProvider` precedent, and for the same reason: one configured
+ * value reaches server and client, so the two can never disagree about where
+ * a query goes. It must never become `NEXT_PUBLIC_*`; build-time client
+ * inlining is what breaks runtime container configuration.
+ */
+export function getDefaultPortal(): string | null {
+  const raw = process.env.SITE_DEFAULT_PORTAL;
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 // --- Publisher instance identity (ADR-0020: config, not code; #258:
 //     required for signing, never defaulted) --------------------------------
 //

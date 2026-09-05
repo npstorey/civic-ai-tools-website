@@ -37,6 +37,7 @@ import {
 import { isStreamErrorKind, notebookExecutionErrorMessage, type StreamErrorCode } from '@/lib/streaming';
 import { TraceBuilder, hash as traceHash, CIVICAITOOLS_TRACE_CONFIG } from '@/lib/evidence/trace';
 import { getConfiguredKeyId } from '@/lib/evidence/signing';
+import { getDefaultPortal } from '@/lib/site-config';
 import {
   type PhaseAToolCall,
   stampExecutedNotebook,
@@ -45,8 +46,6 @@ import {
 } from '@/lib/notebook-author';
 import { buildNotebookExtension } from '@/lib/notebook-author/notebook-extension';
 import { executeNotebook, NotebookExecutionError } from '@/lib/sandbox';
-
-const DEFAULT_PORTAL = 'data.cityofnewyork.us';
 
 interface QueryNotebookRequest {
   query: string;
@@ -104,7 +103,13 @@ export async function POST(request: NextRequest) {
       { status: 400, headers: { 'Content-Type': 'application/json' } },
     );
   }
-  const portal = body.portal || DEFAULT_PORTAL;
+  // The caller's portal, else this instance's configured default, else NONE
+  // (#407). It used to fall back to a module literal naming one deployment's
+  // city, which then reached `analysis.portal` below — inside a trace this
+  // route emits as a publish input — and `defaultPortal` on the synthesized
+  // notebook. An empty string on the wire means "no portal", so it collapses
+  // to undefined rather than to a city the run never chose.
+  const portal = body.portal || getDefaultPortal() || undefined;
 
   // Fail fast when the environment cannot describe a usable model endpoint
   // (#178, and website#30 P6 F3). This is the guard /api/compare,
@@ -218,7 +223,11 @@ export async function POST(request: NextRequest) {
   trace.startRoot('executed_notebook', {
     'analysis.prompt_hash': traceHash(body.query),
     'analysis.model': model.declared,
-    'analysis.portal': portal,
+    // Only when the run HAS one (#407) — same disposition as the compare
+    // route's root span and as `skillRoutingTraceAttributes` (#258 A9). This
+    // trace leaves here as a publish input, so an absent portal is recorded
+    // as absent rather than as a default the instance never set.
+    ...(portal ? { 'analysis.portal': portal } : {}),
   });
 
   const runPipeline = async () => {
@@ -251,7 +260,10 @@ export async function POST(request: NextRequest) {
       const toolCalls = (phaseAResult.tools_called ?? []) as PhaseAToolCall[];
       const synthesis = synthesizeNotebook({
         query: body.query,
-        defaultPortal: portal,
+        // '' is `uniquePortals`' "no fallback" (synthesize.ts): with no
+        // portal configured and none supplied, the notebook's cover states
+        // only the portals its tool calls actually named.
+        defaultPortal: portal ?? '',
         modelName: model.declared,
         modelAccess: modelAccessPhrase(getModelApiKind()),
         finalAnswer: phaseAResult.content,
@@ -386,7 +398,10 @@ export async function POST(request: NextRequest) {
  */
 async function runPhaseA(args: {
   query: string;
-  portal: string;
+  /** The run's default portal, or absent when this instance declared none
+   *  and the caller supplied none (#407). `runToolLoop` injects it only when
+   *  it has one, so an absent portal leaves each call naming its own. */
+  portal?: string;
   model: ModelIdentity;
   emit: (event: NotebookEvent) => Promise<void>;
   trace: TraceBuilder;

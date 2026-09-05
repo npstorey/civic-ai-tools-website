@@ -17,6 +17,7 @@
 
 import { useState, useRef } from 'react';
 import QueryForm from '@/components/QueryForm';
+import { useDefaultPortalArg } from '@/components/DefaultPortalProvider';
 import ComparisonDisplay from '@/components/ComparisonDisplay';
 import NotebookOutput from '@/components/notebook/NotebookOutput';
 import { useStreamingComparison } from '@/hooks/useStreamingComparison';
@@ -86,6 +87,9 @@ export default function QuerySurface({
 
   const streaming = useStreamingComparison();
   const notebook = useNotebookStream();
+  // This instance's configured default portal as a wire value, or '' when it
+  // declared none (#407) — server-resolved, threaded through the root layout.
+  const defaultPortal = useDefaultPortalArg();
 
   // Answer-first configuration (s6 P2, #229). The restore choice is
   // session-sticky through the same mechanism as the response mode; it only
@@ -114,7 +118,12 @@ export default function QuerySurface({
   };
 
   const handleSubmit = async (query: string, model: string, portal: string, mode: QueryMode) => {
-    const effectivePortal = portal || 'data.cityofnewyork.us';
+    // The form's selection, else this instance's configured default, else
+    // NONE (#407). '' is the wire's "no portal" — the id of the form's "All
+    // portals" entry — and it is what the routes read as absent. It used to
+    // be a literal here, so choosing "All portals" silently ran against one
+    // deployment's city and every surface downstream said so.
+    const effectivePortal = portal || defaultPortal;
     setUsedModel(model);
     setLastQuery(query);
     setLastPortal(effectivePortal);

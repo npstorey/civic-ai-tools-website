@@ -14,6 +14,7 @@ import SponsorLine from '@/components/SponsorLine';
 import { BrandProvider } from '@/components/BrandProvider';
 import { EvidenceOriginProvider } from '@/components/EvidenceOriginProvider';
 import { McpRoutingProvider } from '@/components/McpRoutingProvider';
+import { DefaultPortalProvider } from '@/components/DefaultPortalProvider';
 import { SignInOptionsProvider } from '@/components/SignInOptionsProvider';
 import { readMcpEnvFromProcess } from '@/lib/mcp/registry';
 import { buildProviders } from '@/lib/auth-providers';
@@ -28,6 +29,7 @@ import {
 import {
   COMMUNITY_DIRECTORY_SUBMIT_URL,
   getDirectorySource,
+  getDefaultPortal,
   getInstanceAttribution,
   getRoadmapSource,
 } from '@/lib/site-config';
@@ -257,6 +259,12 @@ export default function RootLayout({
               the host mention. Routing, not identity or chrome, so its own
               provider. */}
           <McpRoutingProvider value={readMcpEnvFromProcess().socrataUrl ?? null}>
+          {/* The portal an unqualified question goes to (#407) — one
+              configured value for the form, the live diagram, the routes and
+              the downloaded notebook. Null means this instance declared no
+              default: the run carries none and every surface omits rather
+              than naming one deployment's city. */}
+          <DefaultPortalProvider value={getDefaultPortal()}>
           {/* Sign-in choices for the affordances inside client trees (#229
               P1) — QueryForm, RateLimitBanner, McpResponseDisplay and
               NotebookOutput all render under the apex page, a client
@@ -359,6 +367,7 @@ export default function RootLayout({
             </footer>
           </div>
           </SignInOptionsProvider>
+          </DefaultPortalProvider>
           </McpRoutingProvider>
           </EvidenceOriginProvider>
           </BrandProvider>
