@@ -27,6 +27,14 @@ import AttestationSection from '@/components/evidence/AttestationSection';
 import DashboardLink from '@/components/evidence/DashboardLink';
 import ProvenanceGraphSection from '@/components/evidence/ProvenanceGraphSection';
 import NotebookSection from '@/components/evidence/NotebookSection';
+// What this page is entitled to CLAIM about re-executing the notebook, read off
+// the notebook in hand rather than asserted beside the download button (#416).
+// The claim used to be rendered unconditionally, directly above a
+// `<NotebookSection>` that may state on the very next line that the notebook
+// never ran or that whether it ran is not stated. It is a pure function so that
+// there can be a test over it at all: no `.test.ts` in this tree can import a
+// `.tsx`, and this repository has no component-render tests.
+import { reproductionAssertionFor } from '@/lib/notebook-author/reproduction-assertion';
 import SkillSection from '@/components/evidence/SkillSection';
 // Machine-readable metadata shapes (JSON-LD + Highwire citation tags). Pure
 // builders in lib so the SHAPE is unit-testable — including what it omits
@@ -239,6 +247,14 @@ export default async function EvidencePage({ params }: PageProps) {
   // (the vast majority of historical records), `resolution.pkg === pkg`
   // modulo the shallow clone.
   const renderPkg = resolution?.pkg ?? pkg;
+  // `null` for a notebook whose package says it was a skeleton, and for one that
+  // says nothing — 24 of the 25 live records with a notebook, measured
+  // 2026-09-05. No sentence, rather than a hedged one: `NotebookSection` states
+  // the reading directly below in the vocabulary that owns it, and an absence
+  // read as an assertion is what this removes.
+  const reproductionAssertion = reproductionAssertionFor(
+    renderPkg?.extensions?.[NOTEBOOK_EXTENSION_KEY],
+  );
   // Byline date. Deliberately LEFT as `created_at` by #256, and deliberately
   // left UNLABELLED: it names no field, so unlike `datePublished`,
   // `citation_date`, and the former "Published on" row it asserts nothing a
@@ -609,7 +625,11 @@ export default async function EvidencePage({ params }: PageProps) {
             {renderPkg.extensions?.[NOTEBOOK_EXTENSION_KEY] !== undefined ? (
               <Section title="E · Answer notebook">
                 <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  Re-executing this notebook against the documented runtime + stable upstream data reproduces section F (Typed Standards §8.7.3).{' '}
+                  {reproductionAssertion !== null && (
+                    <>
+                      {reproductionAssertion}{' '}
+                    </>
+                  )}
                   <a href={`/api/records/${slug}/bundle`} style={{ color: 'var(--accent)' }}>
                     Download notebook (.ipynb)
                   </a>
