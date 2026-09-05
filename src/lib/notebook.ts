@@ -326,7 +326,16 @@ function planQueryStep(tool: ToolCall): QueryStep {
 
 export function generateNotebook(
   query: string,
-  portal: string,
+  /**
+   * The portal the RUN was started with, or `null` when it carried none
+   * (#407). Only a last resort: a portal a tool call actually named always
+   * wins below. `null` is a supported state, not a missing argument — the
+   * cover then states the portals this document's calls named, and nothing
+   * else. It used to be a required string that every caller closed with a
+   * literal, so a notebook a reader downloads asserted one deployment's city
+   * for a run that may never have touched it.
+   */
+  portal: string | null,
   toolsCalled: ToolCall[],
   responseContent: string,
   /** The instance's attribution identity, threaded from the server (#258
@@ -345,9 +354,12 @@ export function generateNotebook(
     if (p) portalSet.add(p);
   }
   const uniquePortals = [...portalSet];
+  // The portals this notebook can honestly name: the ones its own tool calls
+  // carried, else the run's own portal, else NONE. `null` and '' both mean
+  // none — the cover omits the line rather than printing an empty label.
   const displayPortal = uniquePortals.length > 1
     ? uniquePortals.join(', ')
-    : uniquePortals[0] || portal;
+    : uniquePortals[0] || portal || null;
 
   // Title cell. Attribution ("via [host](origin)") renders only when the
   // instance has declared an identity — honest omission otherwise (#258 A2).
@@ -366,7 +378,15 @@ export function generateNotebook(
     title,
     '',
     `**Query:** ${query}  `,
-    `**Portal${uniquePortals.length > 1 ? 's' : ''}:** ${displayPortal}  `,
+    // Omitted when no portal is known, matching the executed generator's cover
+    // line for the same field (`notebook-author/prompt.ts`, `portalLine`) and
+    // the `#258` attribution disposition two lines up: honest omission, never
+    // a substituted host. The two generators write one field of one document
+    // for one run; a third behaviour here would be the two-documents-two-
+    // stories defect this file's own comments name (#384 F3, C2).
+    ...(displayPortal === null
+      ? []
+      : [`**Portal${uniquePortals.length > 1 ? 's' : ''}:** ${displayPortal}  `]),
     `**Generated:** ${now}${viaSuffix}`,
   ]));
 

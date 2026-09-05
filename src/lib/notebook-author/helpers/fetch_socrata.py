@@ -69,7 +69,8 @@ def fetch_socrata(
     """Run a SoQL query against `https://<portal>/resource/<dataset_id>.json`.
 
     Args:
-        portal: Hostname of the Socrata portal (e.g. `data.cityofnewyork.us`).
+        portal: Bare hostname of the Socrata portal — the `<portal>` of the
+            URL above, with no scheme and no trailing path.
         dataset_id: Dataset identifier (the 4x4 slug, e.g. `erm2-nwe9`).
             Required: never inferred from `query`.
         query: Either a full SoQL statement (starting with SELECT), which is

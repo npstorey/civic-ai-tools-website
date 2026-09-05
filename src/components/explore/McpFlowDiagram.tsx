@@ -12,10 +12,11 @@ import { useLiveTrace } from '@/hooks/useLiveTrace';
 import type { ReplayState } from '@/lib/bpmn/animation';
 import { traceEventsToProgressData } from '@/lib/bpmn/trace-progress';
 import { createOfferedModelResolver, type OfferedModelResolver } from '@/lib/offered-model';
-
-const DEFAULT_PORTAL = 'data.cityofnewyork.us';
+import { useDefaultPortalArg } from '@/components/DefaultPortalProvider';
 
 export default function McpFlowDiagram() {
+  // Server-resolved default portal for live runs, '' when none is configured.
+  const defaultPortal = useDefaultPortalArg();
   const [mode, setMode] = useState<DiagramMode>('examples');
   const [selectedTraceId, setSelectedTraceId] = useState(TRACES[0].id);
   const [viewerReady, setViewerReady] = useState(false);
@@ -237,11 +238,15 @@ export default function McpFlowDiagram() {
         }
         return;
       }
-      const begin = () => liveTrace.start(query, model, DEFAULT_PORTAL);
+      // The instance's configured default, or '' — the wire's "no portal"
+      // (#407). It used to be a module literal, so every live run on /explore
+      // was recorded against one deployment's city no matter whose instance
+      // was serving the page.
+      const begin = () => liveTrace.start(query, model, defaultPortal);
       if (enteringFullscreen) setTimeout(begin, 400);
       else begin();
     });
-  }, [reset, liveTrace, isFullscreen, offeredModel]);
+  }, [reset, liveTrace, isFullscreen, offeredModel, defaultPortal]);
 
   const handleLiveCancel = useCallback(() => {
     liveTrace.cancel();

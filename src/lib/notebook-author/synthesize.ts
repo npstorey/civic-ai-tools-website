@@ -114,7 +114,11 @@ export function synthesizeNotebook(inputs: PhaseAOutputs): SynthesisOutputs {
     query: inputs.query,
     generatedAt,
     portals,
-    reproducedFetchCount: countReproducibleFetches(inputs.toolCalls),
+    // The SAME default portal the steps below are rendered with (#407): the
+    // cover's claim is derived from the calls before any cell exists, so the
+    // two derivations must be given one value or the claim can outrun the
+    // document.
+    reproducedFetchCount: countReproducibleFetches(inputs.toolCalls, inputs.defaultPortal),
     analysisStepCount: countAnalysisSteps(inputs.toolCalls),
   })));
   // Cell 1 — environment setup
@@ -127,7 +131,7 @@ export function synthesizeNotebook(inputs: PhaseAOutputs): SynthesisOutputs {
   notebook.cells.push(markdownCell(CELL_4_HEADER));
 
   // Optional discovery summary (catalog/metadata/schema calls collapsed)
-  const discoveryCell = renderDiscoverySummaryCell(inputs.toolCalls);
+  const discoveryCell = renderDiscoverySummaryCell(inputs.toolCalls, inputs.defaultPortal);
   if (discoveryCell) notebook.cells.push(discoveryCell);
 
   // Steps 5..N — one (markdown + code) pair per fetching tool call

@@ -88,8 +88,13 @@ export interface CompareLoopInputs {
   prompt: string;
   /** Built by the route for the requested portal. */
   systemPrompt: string;
-  /** The requested portal, injected into Socrata calls that omit one. */
-  portal: string;
+  /**
+   * The requested portal, injected into Socrata calls that omit one — absent
+   * when the caller named none and this instance configured no default (#407).
+   * `runToolLoop` injects only when it has a value, so an absent portal leaves
+   * each call naming its own and the span recording exactly that.
+   */
+  portal?: string;
   /**
    * The tool transport, for tests. Defaults to the live MCP client — the ONLY
    * seam this factory exposes, and deliberately one level below the loop:

@@ -807,7 +807,16 @@ export default function McpResponseDisplay({
             {content && toolsCalled.some(isQueryCall) && (
               <button
                 onClick={() => {
-                  const p = (toolsCalled.find(t => t.args.portal)?.args.portal as string) || portal || 'data.cityofnewyork.us';
+                  // What this RUN touched, in narrowing order: a portal a tool call
+            // actually named, else the portal the run was started with, else
+            // NOTHING (#407). The literal that used to close this chain made a
+            // downloaded notebook assert a portal the run never reached — a
+            // record-derived document naming an access the record does not
+            // carry. There is no honest substitute at the end of it: the
+            // instance's configured default is not what this run touched
+            // either, so the chain ends in null and the notebook states no
+            // portal rather than an unearned one.
+            const p = (toolsCalled.find(t => t.args.portal)?.args.portal as string) || portal || null;
                   const notebook = generateNotebook(queryText || '', p, toolsCalled, content, instanceAttribution);
                   downloadNotebook(notebook);
                 }}

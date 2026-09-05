@@ -281,10 +281,22 @@ export function countAnalysisStepCells(cells: readonly NotebookCell[]): number {
  * How many of this analysis's tool calls will render as a re-runnable fetch —
  * computed from the calls rather than from the cells, so a caller can ask
  * before any cell exists (`synthesize.ts` builds the cover cell first).
+ *
+ * `defaultPortal` MUST be the one the document will be rendered with (#407).
+ * It was hardcoded to '' here, harmlessly, for as long as the portal could not
+ * change whether a call produced a data frame. Since a call that names no
+ * portal on a run with no default now renders as a not-reproduced step, it
+ * can: counted under '' and rendered under a configured portal, the cover
+ * would claim fewer re-runnable fetches than the document contains — the
+ * claim-versus-document disagreement #341 and #371 exist to prevent, pointing
+ * the other way. One value, both derivations.
  */
-export function countReproducibleFetches(calls: readonly PhaseAToolCall[]): number {
+export function countReproducibleFetches(
+  calls: readonly PhaseAToolCall[],
+  defaultPortal: string = '',
+): number {
   return calls.filter(call => {
-    const out = renderFetchToolCell(call, { dataFrameIndex: 1, defaultPortal: '' });
+    const out = renderFetchToolCell(call, { dataFrameIndex: 1, defaultPortal });
     return out !== null && out.producedDataFrame;
   }).length;
 }
@@ -493,7 +505,13 @@ function renderUnnamedDatasetCell(
   const portal = (call.args.portal as string) || ctx.defaultPortal;
   const reason = call.reason ? ` ${call.reason}` : '';
   const md = [
-    `${NOT_REPRODUCED_HEADING} \`get_data\` on \`${portal}\``,
+    // `on <portal>` only when one is known (#407). With no portal on the call
+    // and none configured, this used to render an empty pair of backticks —
+    // and before the default became configuration it rendered whichever city
+    // was compiled in, naming a host the call may never have addressed.
+    portal
+      ? `${NOT_REPRODUCED_HEADING} \`get_data\` on \`${portal}\``
+      : `${NOT_REPRODUCED_HEADING} \`get_data\``,
     '',
     `The original analysis queried a dataset it did not name${reason}. The data source ` +
       'derived one from the search phrase it was given; this notebook does not derive ' +
@@ -511,6 +529,47 @@ function renderUnnamedDatasetCell(
   };
 }
 
+/**
+ * A `get_data` call that named no portal, on a run with no default (#407).
+ *
+ * The sibling of `renderUnnamedDatasetCell` one field over: there the dataset
+ * was unnamed, here the host is. Both write the step and neither writes a
+ * request, for the reason that function records — a step that reads a source it
+ * cannot name is not a reproduction of anything, and a cell that always raises
+ * is a broken step in a document whose cover says its steps run.
+ *
+ * The dataset IS named, so it is stated: a reader who knows which portal the
+ * original analysis was pointed at has everything needed to finish the call.
+ * The citation is null for the same reason `datasetUrl` returns null without a
+ * portal — a Socrata dataset URL is `https://<portal>/d/<id>`, and there is no
+ * URL to cite without the host half.
+ */
+function renderUnnamedPortalCell(
+  call: PhaseAToolCall,
+  datasetId: string,
+): ToolCellOutput {
+  const reason = call.reason ? ` ${call.reason}` : '';
+  const md = [
+    `${NOT_REPRODUCED_HEADING} \`get_data\` on \`${datasetId}\``,
+    '',
+    `The original analysis queried the \`${datasetId}\` dataset${reason}, but the ` +
+      'record does not name the portal it was queried on, and this run carried no ' +
+      'default portal for it to inherit.',
+    '',
+    'No code cell is generated for it: a Socrata dataset is addressed by host, ' +
+      'and a host written here would name a source this step is not known to ' +
+      'have read. To reproduce it, add the portal to a `fetch_socrata(...)` ' +
+      'call of your own.',
+  ].join('\n');
+  return {
+    cells: [markdownCell(md)],
+    producedDataFrame: false,
+    dataFrameVariable: null,
+    // No portal, no dataset URL — the same bound `datasetUrl` keeps.
+    citation: null,
+  };
+}
+
 function renderSocrataQueryCell(
   call: PhaseAToolCall,
   ctx: ToolCellContext,
@@ -520,6 +579,15 @@ function renderSocrataQueryCell(
     ? call.args.dataset_id
     : null;
   if (!datasetId) return renderUnnamedDatasetCell(call, ctx);
+  // A call that named no portal, on a run that carried no default (#407).
+  // `fetch_socrata` addresses a dataset BY HOST, so there is no request to
+  // write: `portal=""` is a cell that always raises, in a document whose cover
+  // tells the reader its steps run — the same objection `renderFailedToolCell`
+  // and `renderUnnamedDatasetCell` already answer. Substituting a host would
+  // be worse than not writing one: it would name a source this step is not
+  // known to have read. This branch became reachable when the compiled-in
+  // default became configuration, and the honest step is to say what ran.
+  if (!portal) return renderUnnamedPortalCell(call, datasetId);
 
   const rawQuery = typeof call.args.query === 'string' && call.args.query.length > 0
     ? call.args.query
@@ -925,15 +993,16 @@ export function renderFetchToolCell(
  */
 export function renderDiscoverySummaryCell(
   calls: readonly PhaseAToolCall[],
+  defaultPortal: string = '',
 ): NotebookCell | null {
-  const discoveryCalls = calls.filter(c => renderFetchToolCell(c, { dataFrameIndex: 0, defaultPortal: '' }) === null);
+  const discoveryCalls = calls.filter(c => renderFetchToolCell(c, { dataFrameIndex: 0, defaultPortal }) === null);
   if (discoveryCalls.length === 0) return null;
   // The second sentence is a claim about the cells BELOW this one, so it is
   // conditional on there being any. Until #384 P4 it was unconditional, and a
   // notebook whose every fetch was rejected — or one whose only data-reading
   // call was a `fetch` this document cannot re-run — told its reader that
   // fetches encoded the discoveries when no fetch survived to encode anything.
-  const reproduced = countReproducibleFetches(calls);
+  const reproduced = countReproducibleFetches(calls, defaultPortal);
   const lines = [
     '### Discovery',
     '',

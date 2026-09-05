@@ -293,6 +293,16 @@ export const ENV_SPEC = [
   // queries through infrastructure it does not operate. Absent, every data
   // query refuses with a typed error naming this variable.
   { name: 'SOCRATA_MCP_URL', tier: 'required', purpose: 'Socrata MCP endpoint (the primary data source) — every data query refuses without it (no fallback)' },
+  // The portal an unqualified question goes to (#407). No coded fallback, for
+  // the reason SOCRATA_MCP_URL has none: the literal it replaced named one
+  // deployment's city at nine sites, so every instance answered an unqualified
+  // question against that city and recorded it — on the root span of a trace a
+  // publish carries into a signed package, and on the cover of a notebook a
+  // reader downloads. Absent, a run simply carries no default: the model names
+  // its own portal per call and every surface reports what the call carried.
+  // Read at both times because the root layout resolves it, and prerendered
+  // pages bake what the layout resolved.
+  { name: 'SITE_DEFAULT_PORTAL', readBy: 'build-and-runtime', tier: 'recommended', purpose: 'Portal a query defaults to when the reader picks none, e.g. the open-data host this instance is built around — absent, runs carry no default portal and every surface omits rather than naming one', hasFallback: true },
 
   // --- Record publish + verify (the demo centerpiece: publish → badge) ---
   { name: 'DATABASE_URL', tier: 'required', purpose: 'Record DB — publish + dashboard + detail page' },

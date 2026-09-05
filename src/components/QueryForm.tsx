@@ -16,6 +16,7 @@ import {
 import { parseModelsResponse, type Model } from '@/lib/model-list';
 import { MODELS_LOAD_ERROR } from '@/lib/streaming';
 import RateLimitBanner from './RateLimitBanner';
+import { useDefaultPortalArg } from '@/components/DefaultPortalProvider';
 
 // Re-exported for existing importers; the type itself lives in
 // src/lib/query-presentation.ts alongside the derivations that use it.
@@ -61,10 +62,19 @@ interface QueryFormProps {
   };
 }
 
-const EXAMPLE_QUERIES = [
-  { text: 'Noise trends in NYC', portal: 'data.cityofnewyork.us' },
-  { text: 'Top 311 complaints: NYC vs SF', portal: '' },
-  { text: 'Median household income: NYC vs SF', portal: '' },
+/**
+ * The suggested questions under the box. One of them demonstrates the
+ * portal-scoped path, so it needs a portal to select — and that portal is the
+ * instance's, not a literal (#407): `usesDefaultPortal` resolves at render to
+ * `SITE_DEFAULT_PORTAL`, or to '' ("All portals") when this instance declared
+ * none. An example that carries no portal is a working suggestion — two of the
+ * three already are — so an unconfigured instance keeps all three rather than
+ * losing one.
+ */
+const EXAMPLE_QUERIES: readonly { text: string; usesDefaultPortal?: boolean }[] = [
+  { text: 'Noise trends in NYC', usesDefaultPortal: true },
+  { text: 'Top 311 complaints: NYC vs SF' },
+  { text: 'Median household income: NYC vs SF' },
 ];
 
 const PORTALS = [
@@ -83,6 +93,9 @@ export default function QueryForm({
   defaultMode = 'standard',
   comparisonControl,
 }: QueryFormProps) {
+  // This instance's configured default portal as a wire value, '' when none
+  // (#407) — server-resolved, threaded through the root layout.
+  const defaultPortal = useDefaultPortalArg();
   const [query, setQuery] = useState('');
   // Empty until `/api/models` answers, then the first model THIS instance
   // offers (website#30 P4). It used to initialize to a hardcoded `openai/gpt-4o`
@@ -188,9 +201,11 @@ export default function QueryForm({
     }
   };
 
-  const handleExampleClick = (example: { text: string; portal: string }) => {
+  const handleExampleClick = (example: { text: string; usesDefaultPortal?: boolean }) => {
     setQuery(example.text);
-    setPortal(example.portal);
+    // '' when this instance configured no default — the "All portals" entry,
+    // which is a working selection, not an empty one (#407).
+    setPortal(example.usesDefaultPortal ? defaultPortal : '');
   };
 
   const selectedModel = models.find((m) => m.id === model);

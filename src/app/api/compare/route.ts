@@ -11,6 +11,7 @@ import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver
 import type { ModelIdentity } from '@/lib/model-catalog';
 import { streamErrorPayload } from '@/lib/streaming';
 import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
+import { getDefaultPortal } from '@/lib/site-config';
 import { headers } from 'next/headers';
 
 interface CompareRequest {
@@ -22,8 +23,12 @@ interface CompareRequest {
 export async function POST(request: NextRequest) {
   try {
     const body: CompareRequest = await request.json();
-    const { query, model: modelId, portal: rawPortal = 'data.cityofnewyork.us' } = body;
-    const portal = rawPortal || 'data.cityofnewyork.us';
+    const { query, model: modelId, portal: rawPortal } = body;
+    // The caller's portal, else this instance's configured default, else NONE
+    // (#407) — the same resolution as the streaming route beside it. An empty
+    // string on the wire means "no portal" (the form's "All portals" entry),
+    // so it collapses to undefined rather than to one deployment's city.
+    const portal = rawPortal || getDefaultPortal() || undefined;
 
     if (!query || !modelId) {
       return NextResponse.json(
