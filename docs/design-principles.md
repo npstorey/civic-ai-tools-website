@@ -50,6 +50,14 @@ A red border on its own is not a partial signal. It is the signal delivered to s
 
 The rule runs in the other direction too: don't mark a field invalid to report a failure that isn't the field's. A source list that failed to load is not a bad selection, and painting the control red claims the reader chose wrong when the network did. That is Principle 3's false precision wearing a different coat.
 
+### Corollary: a step a document cannot account for discloses at one level, in both documents
+
+Two generators write the analysis notebook — the executed one (`src/lib/notebook-author/`) and the skeleton (`src/lib/notebook.ts`) — and both must describe a tool call the data source rejected. The level they disclose at is the same in both, and it is fixed: **the tool, the portal, the dataset id, the query text — each stated once — and never a row identifier, never raw error text.** A field the call did not carry is left out of the sentence rather than filled with an empty token or a word that looks like a value.
+
+The row identifier is the part that is easy to get wrong, because it arrives by accident rather than by decision. The loop stores a "why" phrase on every recorded call, and for a `fetch` that phrase is `to look up <id>`. Interpolating it into a cell is one character of code and reads as helpful; what it renders is a `record:` identifier, which embeds a portal, a dataset id and a row id — a source put in front of a reader under a heading that has just told them this step cannot be accounted for, and, when the call was rejected, a portal the request never reached. Decomposing the identifier to keep only the safe part is worse: it means reimplementing the data source's identifier grammar in the renderer, where it drifts from the server that owns it.
+
+The incident is #406, and its shape is why this is written down rather than left to review. The rule already existed — in a docstring, thirty lines below the site that broke it. The executed generator's rejected-call cell printed the identifier; the site that *stated the rule* printed it too, on the healthy path, where a call had succeeded and nothing was watching; the same phrase reached the reader through the skeleton's step heading and through the page's own narrative summary; and the docstring closed by asserting that the two documents agreed about such a call, which was false in all three directions at once. A prose claim that two surfaces agree is not a guard. One shared description function is (`describeAttempt`, read by both generators), and one assertion that renders a single rejected call through both documents and compares them (`src/lib/rejected-call-is-not-an-answer.test.ts`).
+
 ---
 
 ## Family 2 — Hierarchy and restraint
