@@ -306,7 +306,22 @@ test('#321: a failed call renders as markdown and never as a code cell', () => {
   assert.match(md, /get_data/);
   assert.match(md, /erm2-nwe9/);
   assert.match(md, /data\.cityofnewyork\.us/);
-  assert.match(md, /to aggregate by complaint_type/);
+  // …once each, which is what replaced the assertion that used to stand here
+  // (#406). That assertion required the record's stored `reason` to be appended
+  // to this sentence, and it was driven over a HAND-WRITTEN fixture reason —
+  // `to aggregate by complaint_type`, which names no dataset. The phrase
+  // `generateToolReason` actually writes for these args does: "to aggregate 311
+  // Service Requests by complaint_type", beside `describeAttempt`'s own "the
+  // `erm2-nwe9` dataset". So the sentence named the dataset twice on every real
+  // record and this test could not see it — the fixture was the one shape in
+  // which the duplication could not appear. `renderFailedToolCell` no longer
+  // appends the reason; `describeAttempt` is the disclosure level and states
+  // each field once.
+  assert.equal(
+    (md.match(/erm2-nwe9/g) ?? []).length,
+    1,
+    `the dataset is named once, not once per phrase:\n${md}`,
+  );
   // …and WHY it produced nothing.
   assert.match(md, /did not respond in time/);
   assert.match(md, /returned no data/);

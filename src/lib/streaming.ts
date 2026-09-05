@@ -876,6 +876,54 @@ export function generateToolReason(args: Record<string, unknown>, name?: string)
   }
 }
 
+/**
+ * A bare identifier inside a reason phrase — `record:…`, `dataset:…`, a URL —
+ * matched as a scheme and a non-space, at a word boundary the phrase itself
+ * created.
+ *
+ * Quoted spans are removed before the test rather than excluded by the pattern.
+ * Every reason phrase that carries free text carries it in double quotes
+ * (`to find datasets about "…"`), and a reader's search phrase is text the
+ * document is entitled to show — it is what was asked, not a source that was
+ * reached. `../notebook-author/reproduction-claim.ts`'s `markdownProse` strips
+ * the same two channels for the same reason and says so in the same place.
+ *
+ * The colon must be followed by a non-space, so an English colon inside a
+ * dataset name ("Requests: 2010-Present") is not an identifier. `getDatasetName`
+ * carries none today; the pattern does not depend on that staying true.
+ */
+const BARE_IDENTIFIER = /(?:^|\s)[a-z][a-z0-9+.-]*:\S/i;
+
+/**
+ * A recorded call's `reason` phrase, or NOTHING when the phrase names an
+ * identifier (#406).
+ *
+ * WHY A PHRASE IS DROPPED WHOLE rather than edited. `generateToolReason` writes
+ * `to look up ${id}` for a `fetch`, and the loop stores that string on the
+ * record. A `record:` identifier embeds a portal, a dataset id and a row id, so
+ * printing it under a heading that has just said a step cannot be accounted for
+ * puts a source in front of a reader that the document cannot say was read —
+ * and, for a call the source REJECTED, a portal the call never reached.
+ * Decomposing the identifier to keep the safe part would mean reimplementing the
+ * data source's identifier grammar here, where it would drift;
+ * `notebook-author/tool-to-cell.ts` states that ruling for the surface it owns
+ * and this is the same ruling, in the one place both surfaces can read it.
+ *
+ * WHY IT NAMES THE PROPERTY AND NOT `fetch`. `fetch` is the only branch above
+ * that interpolates an identifier TODAY. A guard written against that name would
+ * be a hand-picked list of exactly the kind CLAUDE.md records failing twice, and
+ * it would pass silently on the day a new tool's branch writes one. The test is
+ * on the string, so a phrase this repository has never seen is held to it.
+ *
+ * `undefined` in, `undefined` out: a record that carries no reason is stated as
+ * carrying none, never given one.
+ */
+export function reasonWithoutIdentifier(reason: string | undefined): string | undefined {
+  if (!reason) return undefined;
+  const unquoted = reason.replace(/"[^"\n]*"/g, ' ');
+  return BARE_IDENTIFIER.test(unquoted) ? undefined : reason;
+}
+
 // Generate a plain-English translation of a SoQL query from structured args
 export function generatePlainEnglishQuery(args: Record<string, unknown>): string | null {
   const type = args.type as string;
@@ -1131,9 +1179,19 @@ function describeToolNarrative(
  * never in the past tense of an action that happened (#384 P8, F2). `reason`
  * is the loop's own "to …" phrase for the attempt (`generateToolReason`);
  * a record that carries none is stated as a request, not guessed at.
+ *
+ * The phrase goes through `reasonWithoutIdentifier` HERE rather than at the one
+ * call site, so no future caller can narrate a rejection and forget it (#406).
+ * A rejected `fetch` read "The AI tried to look up
+ * record:<portal>/<dataset>/<row>, but the request did not complete" — a portal
+ * the call never reached, named on the page in the same sentence that says the
+ * request never completed. A record whose phrase is dropped for that reason
+ * lands on the same "made a request that did not complete" a record carrying no
+ * phrase gets: less is said, and nothing false.
  */
 function describeRejectedAttempt(reason: string | undefined): string {
-  return reason ? `tried ${reason}, but the request did not complete` : 'made a request that did not complete';
+  const safe = reasonWithoutIdentifier(reason);
+  return safe ? `tried ${safe}, but the request did not complete` : 'made a request that did not complete';
 }
 
 // Build a narrative summary telling the analytical story of what the AI did
