@@ -180,7 +180,7 @@ const EXCEPTIONS: readonly Exception[] = [
     path: 'lib/notebook-author/helpers/fetch_opencontext.py',
     classification: 'server-endpoint',
     hits: 3,
-    why: "The CKAN DataStore API base URL of the Boston server this helper exists to call; it is that server's address, not a portal a run chooses.",
+    why: "The CKAN DataStore API base URL of the Boston server this helper exists to call — that server's address, not a portal a run chooses, and the URL the embedded cell genuinely requests.",
   },
   {
     path: 'components/notebook/__dev__/sampleExecutedNotebook.ts',
@@ -198,7 +198,7 @@ const EXCEPTIONS: readonly Exception[] = [
     path: 'lib/notebook-author/helpers/fetch_data_commons.py',
     classification: 'server-endpoint',
     hits: 2,
-    why: "The Data Commons observation API this helper calls; the same third-party service address as the registry entry above.",
+    why: "The Data Commons observation API this helper calls; the same third-party service address as the registry entry above, and likewise the URL the embedded cell genuinely requests.",
   },
   {
     path: 'app/(app)/dev/notebook-preview/NotebookPreviewClient.tsx',
@@ -224,12 +224,6 @@ const EXCEPTIONS: readonly Exception[] = [
     hits: 1,
     why: 'The recorded argument list that produced the checked-in pre-stamp package, written down so the fixture can be regenerated and audited.',
   },
-  {
-    path: 'lib/notebook-author/helpers/fetch_socrata.py',
-    classification: 'documentation',
-    hits: 1,
-    why: "A worked example in the helper's docstring, describing the shape of the `portal` parameter its caller passes.",
-  },
 ];
 
 /**
@@ -243,6 +237,20 @@ const PORTAL_HOSTNAME =
 const SCANNED_EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|py|md)$/;
 const OUT_OF_SCOPE = /\.test\.tsx?$/;
 
+/**
+ * ONE CAVEAT ON `documentation`, found by driving a notebook rather than by
+ * reading the tree (#407). The three Python helpers under
+ * `lib/notebook-author/helpers/` are embedded VERBATIM into cell 3 of every
+ * executed notebook, and an executed notebook is an extension of a signed
+ * record package. Text in them is therefore shipped, not developer-facing, and
+ * `documentation` — "not shipped text" — is the wrong classification for it.
+ * `fetch_socrata.py` had one worked example naming a city in its `portal`
+ * docstring; it rode into every instance's signed notebooks and this phase
+ * replaced it with the `<portal>` placeholder the same docstring already used
+ * one line above. The other two helpers keep their hostnames as
+ * `server-endpoint`: those are the URLs the embedded cell actually requests,
+ * so the notebook stating them is the notebook stating what it does.
+ */
 interface Hit {
   readonly path: string;
   readonly line: number;
@@ -290,9 +298,10 @@ test('no source file under src/ spells a portal hostname unless the exception li
       `default portal comes from one nullable resolver in src/lib/site-config.ts; ` +
       `absent means the run inputs carry no default and say so. Either route this ` +
       `site through that resolver, or add an EXCEPTIONS entry above classifying ` +
-      `the hostname as a fixture, marketing copy, a reference table or ` +
-      `documentation — and note that 'run-input-default' is not an exception ` +
-      `the list will accept.\n\n${report.join('\n')}`,
+      `the hostname as a fixture, marketing copy, a reference table, a named ` +
+      `server's own endpoint or documentation — and note that ` +
+      `'run-input-default' is not an exception the list will accept.` +
+      `\n\n${report.join('\n')}`,
   );
 });
 
