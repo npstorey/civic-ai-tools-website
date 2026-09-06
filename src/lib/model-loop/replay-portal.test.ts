@@ -26,6 +26,21 @@
 //
 // Red at the base by the export's absence, and by the literal in the route.
 //
+// AMENDED BY WAVE N10 P8 (#409, cold-read F1) — THIS FILE'S OWN BLIND SPOT.
+// As first written, the two data-source cases below drove `dataSources: []`
+// and one entry whose `portalUrl` was a Socrata host and which stated no
+// `catalogType` at all. Both are shapes on which the fallback was CORRECT, so
+// this file was green over exactly the cases where the code worked and had no
+// case at all for the one that made it wrong: an entry from a source
+// `get_data` cannot address, whose endpoint was then handed to a replay as a
+// Socrata portal (measured live on 5 of 34 published records). The missing
+// shape is driven in `replay-portal-is-addressable.test.ts`; what changes HERE
+// is that the third case now STATES the catalogue type it always meant —
+// `socrata`, the entry a `get_data` call can address — instead of leaving it
+// unsaid and passing for a reason it did not intend, and a fourth case pins
+// what an entry that states no type does. That is not a weakened assertion: it
+// is the same claim, made about a fixture that says which shape it is.
+//
 // Run with: npm test
 //   (or: node --test --experimental-strip-types src/lib/model-loop/replay-portal.test.ts)
 
@@ -36,7 +51,7 @@ import { fileURLToPath } from 'node:url';
 import * as replayLoop from './replay-loop.ts';
 
 type ReplayPortalForPackage = (pkg: {
-  dataSources: { portalUrl?: string }[];
+  dataSources: { catalogType?: string; portalUrl?: string }[];
   queries: { portal?: string; [key: string]: unknown }[];
 }) => string | undefined;
 
@@ -76,10 +91,30 @@ test('replay: the portal a record’s own query named is the portal its replay r
 
 test('replay: a record with a data-source entry and no query portal replays on that source’s portal', () => {
   const portal = replayPortalForPackage()({
-    dataSources: [{ portalUrl: 'https://data.sfgov.org' }],
+    dataSources: [{ catalogType: 'socrata', portalUrl: 'https://data.sfgov.org' }],
     queries: [{}],
   });
   assert.equal(portal, 'data.sfgov.org');
+});
+
+test('replay: a data-source entry that states no catalogue type supplies no portal', () => {
+  const portal = replayPortalForPackage()({
+    dataSources: [{ portalUrl: 'https://data.sfgov.org' }],
+    queries: [{}],
+  });
+  assert.equal(
+    portal,
+    undefined,
+    'An entry that states no catalogType states nothing about whether a `get_data` call could ' +
+      'address its portalUrl, and is read exactly like one stating a type this repository does not ' +
+      'know: not known to be addressable, so no portal. Coercing absence to `socrata` — the way ' +
+      '`displayNameForSource` coerces a missing sourceId for pre-M9.3 packages — would be the same ' +
+      'admission-by-silence the aggregate endpoint got in through, bought for a shape that does not ' +
+      'exist: all 39 dataSources entries across the 34 records published at the reference ' +
+      'deployment on 2026-09-06 carry a catalogType, and `DataSourceEntry` requires one. The cost ' +
+      'of being wrong here is a replay with no portal injected — which is what a record that named ' +
+      'no portal already gets — against a signed attestation naming a host nothing addressed.',
+  );
 });
 
 // --- The route, which node --test cannot invoke -----------------------------

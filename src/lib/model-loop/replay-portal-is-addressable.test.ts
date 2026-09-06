@@ -42,7 +42,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { replayPortalForPackage } from './replay-loop.ts';
+import {
+  getDataAddressableCatalogTypes,
+  isGetDataAddressableSource,
+  replayPortalForPackage,
+} from './replay-loop.ts';
 
 type Pkg = Parameters<typeof replayPortalForPackage>[0];
 
@@ -111,5 +115,49 @@ test('an unrecognised catalogue type supplies no portal', () => {
     'A catalogue type this repository does not know is not known to be addressable ' +
       'by `get_data`. Defaulting to "usable" is how the aggregate endpoint got in; ' +
       'a new type must be admitted deliberately, not inherited by silence.',
+  );
+});
+
+// --- Added by the fix: the derivation itself, so it cannot go quiet ---------
+//
+// The predicate the four cases above exercise reads a set DERIVED from two
+// registries rather than a literal list: `sourceIdForToolName('get_data')`
+// (the app's MCP layer, which knows the source that hosts the tool) indexed
+// into `CIVIC_SOURCE_REGISTRY` (which knows that source's `catalogType`). That
+// shape is what makes an unrecognised type inadmissible by construction —
+// nothing has to remember to add it to a blocklist.
+//
+// It also has a failure mode the five cases above cannot see. If either
+// registry stops answering — the tool renamed, the source id changed, the
+// registry re-keyed — the set is EMPTY, and every assertion above still
+// passes: four of them expect `undefined`, and the fifth reads a portal off
+// `queries[]` without consulting the set at all. The only case that would turn
+// red is 'a Socrata record still replays on its own portal', which is exactly
+// why the contract called that one load-bearing. This case states the
+// derivation's result directly so the diagnosis is one line rather than an
+// inference from a portal that went missing.
+
+test('the addressable set is derived, non-empty, and is exactly the catalogue type get_data addresses', () => {
+  const derived = getDataAddressableCatalogTypes();
+  assert.deepEqual(
+    [...derived].sort(),
+    ['socrata'],
+    'The set a replay portal must belong to is empty or has grown. Empty means one of the two ' +
+      'registries stopped answering (`sourceIdForToolName(\'get_data\')`, or that source id in ' +
+      'CIVIC_SOURCE_REGISTRY) and every replay has silently stopped injecting a portal. Grown means ' +
+      'a second catalogue type is now reachable by `get_data` — which may well be right, and is a ' +
+      'line of this test to change deliberately, which is the whole point.',
+  );
+});
+
+test('the predicate reads the entry’s own catalogType and admits nothing else', () => {
+  assert.equal(isGetDataAddressableSource({ catalogType: 'socrata' }), true);
+  assert.equal(isGetDataAddressableSource({ catalogType: 'data-commons' }), false);
+  assert.equal(isGetDataAddressableSource({ catalogType: 'ckan' }), false);
+  assert.equal(isGetDataAddressableSource({ catalogType: 'some-future-catalogue' }), false);
+  assert.equal(
+    isGetDataAddressableSource({}),
+    false,
+    'an entry that states no catalogue type states nothing about addressability',
   );
 });
