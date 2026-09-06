@@ -379,7 +379,7 @@ export interface ToolCellOutput {
   citation: { id: string; label: string; url: string } | null;
 }
 
-interface ToolCellContext {
+export interface ToolCellContext {
   /** Sequential index used to name DataFrames (`df1`, `df2`, …). */
   dataFrameIndex: number;
   /** Default Socrata portal when a tool call omits it. */
@@ -790,10 +790,25 @@ export function describeToolFailure(kind: ToolFailureKind | undefined): string {
  * that looks like a value (docs/design-principles.md Principle 3). The
  * `metadata` and `metrics` branches read the id from `query` when
  * `dataset_id` is absent because that is what the data source does with it.
+ *
+ * THE PORTAL IS A FIELD LIKE ANY OTHER, and it took a second incident to make
+ * that true. Every branch below used to interpolate `portal` unconditionally,
+ * so a call that named none on a run that had none — `defaultPortal: ''`, which
+ * `api/query-notebook/route.ts` passes for a run started without one — rendered
+ * "tried to query the `efgh-5678` dataset on ``": an empty source-shaped token,
+ * in the same position a real portal occupies, under a heading that has just
+ * said the step was not reproduced. That is the `unknown` defect one field over
+ * and the same principle refuses it. No portal, no clause.
+ *
+ * EXPORTED because it is the disclosure level BOTH notebook generators are held
+ * to (#406, D3 = A). `../notebook.ts` describes the same rejected call with this
+ * function rather than a sentence of its own, which is what makes the two
+ * documents agree by construction instead of by review.
  */
-function describeAttempt(call: PhaseAToolCall, ctx: ToolCellContext): string {
+export function describeAttempt(call: PhaseAToolCall, ctx: ToolCellContext): string {
   if (call.name === 'get_data') {
     const portal = (call.args.portal as string) || ctx.defaultPortal;
+    const onPortal = portal ? ` on \`${portal}\`` : '';
     const datasetId = typeof call.args.dataset_id === 'string' && call.args.dataset_id
       ? call.args.dataset_id
       : null;
@@ -803,27 +818,29 @@ function describeAttempt(call: PhaseAToolCall, ctx: ToolCellContext): string {
     const type = typeof call.args.type === 'string' ? call.args.type : undefined;
     const namedDataset = datasetId ?? queryArg;
     if (type === 'catalog') {
-      return queryArg
-        ? `search the \`${portal}\` data catalog for \`${queryArg}\``
-        : `search the \`${portal}\` data catalog`;
+      // The catalog belongs to the portal, so the portal is the possessive here
+      // rather than a trailing clause; with none, it is "a data catalog".
+      const catalog = portal ? `the \`${portal}\` data catalog` : 'a data catalog';
+      return queryArg ? `search ${catalog} for \`${queryArg}\`` : `search ${catalog}`;
     }
     if (type === 'metadata') {
       return namedDataset
-        ? `look up the description of the \`${namedDataset}\` dataset on \`${portal}\``
-        : `look up a dataset description on \`${portal}\``;
+        ? `look up the description of the \`${namedDataset}\` dataset${onPortal}`
+        : `look up a dataset description${onPortal}`;
     }
     if (type === 'metrics') {
       return namedDataset
-        ? `check row counts and update times for the \`${namedDataset}\` dataset on \`${portal}\``
-        : `check row counts and update times for a dataset on \`${portal}\``;
+        ? `check row counts and update times for the \`${namedDataset}\` dataset${onPortal}`
+        : `check row counts and update times for a dataset${onPortal}`;
     }
     if (type === 'query') {
       return datasetId
-        ? `query the \`${datasetId}\` dataset on \`${portal}\``
-        : `query a dataset on \`${portal}\``;
+        ? `query the \`${datasetId}\` dataset${onPortal}`
+        : `query a dataset${onPortal}`;
     }
-    // No `type` at all: say what we know — the portal — and nothing else.
-    return `request data from \`${portal}\``;
+    // No `type` at all: say what we know — the portal, when there is one — and
+    // nothing else.
+    return portal ? `request data from \`${portal}\`` : 'request data';
   }
   if (call.name === 'get_observations') {
     const variable = typeof call.args.variable_dcid === 'string' ? call.args.variable_dcid : null;
@@ -865,16 +882,29 @@ function describeAttempt(call: PhaseAToolCall, ctx: ToolCellContext): string {
  * completed discovery step — a worse claim than the bug being fixed, and one
  * that would still pass a test asserting only "no code cell was emitted."
  * That exclusion is pinned by a test in tool-to-cell.test.ts.
+ *
+ * THE RECORD'S STORED `reason` IS NOT APPENDED (#406, D3 = A). It used to be,
+ * and it broke the same rule twice in one sentence. For a `fetch` it is
+ * `to look up ${id}` (`generateToolReason`), so the full `record:` identifier —
+ * a portal the rejected call never reached, a dataset id and a row id — was
+ * rendered under a heading that had just said this step cannot be accounted
+ * for; the rule against exactly that was already written thirty lines below, in
+ * `renderNotRerunnableStepCell`. For a `get_data` it names the dataset a second
+ * time, independently of `describeAttempt`: "tried to query the `efgh-5678`
+ * dataset on `<the portal>` to aggregate dataset efgh-5678 by complaint_type."
+ *
+ * `describeAttempt` IS the disclosure level — tool, portal, dataset id, query
+ * text — and it states each of them once. A second phrase built from the same
+ * record can only repeat it or exceed it.
  */
 function renderFailedToolCell(
   call: PhaseAToolCall,
   ctx: ToolCellContext,
 ): ToolCellOutput {
-  const reason = call.reason ? ` ${call.reason}` : '';
   const md = [
     `${NOT_REPRODUCED_HEADING} \`${call.name}\``,
     '',
-    `The original analysis tried to ${describeAttempt(call, ctx)}${reason}. ` +
+    `The original analysis tried to ${describeAttempt(call, ctx)}. ` +
       `${describeToolFailure(call.failureKind)}`,
     '',
     'No code cell is generated for it — a request that returned no data cannot be ' +
@@ -904,14 +934,33 @@ function renderFailedToolCell(
  * portal and a dataset id, and printing it puts a source in front of a reader
  * under a step the notebook has just said it cannot account for; decomposing it
  * would mean reimplementing the MCP server's identifier grammar here, where it
- * would drift. The skeleton generator writes no argument for the same call for
- * the same reason, which is what lets the two documents agree.
+ * would drift.
+ *
+ * THAT RULE WAS STATED HERE AND BROKEN HERE (#406). The paragraph above has
+ * been in this file since #384 C2, and the line under it appended `call.reason`
+ * — which for a `fetch` is `to look up ${id}`. So the identifier this docstring
+ * says is deliberately not rendered was rendered, in the very cell the docstring
+ * describes, on the HEALTHY path: this branch is reached only by a call that
+ * SUCCEEDED (`renderFetchToolCell` sends a failed one to `renderFailedToolCell`
+ * first), which is the path nothing was watching. It is the shape of #323 —
+ * a rule enforced at one site and unguarded at the site where it fires.
+ *
+ * The sentence that used to close this paragraph — "The skeleton generator
+ * writes no argument for the same call for the same reason, which is what lets
+ * the two documents agree" — was false in a way worth recording, because it is
+ * why nobody looked. The skeleton wrote no URL, which is what "no argument"
+ * meant; it also titled the step `## Step N: ${tool.reason}`, so it printed the
+ * same identifier in a heading. Both documents leaked, through one field, and a
+ * docstring asserting they agreed sat over it. `../notebook.ts` now describes a
+ * rejected call with `describeAttempt` — this file's function, not a second
+ * sentence — and `rejected-call-is-not-an-answer.test.ts` renders ONE call
+ * through both generators and asserts the two outputs against each other, so the
+ * claim is measured rather than stated.
  */
 function renderNotRerunnableStepCell(call: PhaseAToolCall): ToolCellOutput {
-  const reason = call.reason ? ` ${call.reason}` : '';
   const why = call.name === 'fetch'
     ? [
-      `The original analysis called \`fetch\`${reason}. This notebook does not re-run it. ` +
+      'The original analysis called `fetch`. This notebook does not re-run it. ' +
         '`fetch` answers either with a dataset\'s description or with a single record, and ' +
         'which of the two it did is decided inside the data source by the shape of the ' +
         'identifier it was given — not by anything this document can read. So no cell here ' +
@@ -921,7 +970,7 @@ function renderNotRerunnableStepCell(call: PhaseAToolCall): ToolCellOutput {
         'reading it out of an identifier this notebook does not interpret.',
     ]
     : [
-      `The original analysis aggregated data through \`${call.name}\`${reason}. This notebook ` +
+      `The original analysis aggregated data through \`${call.name}\`. This notebook ` +
         'has no helper that performs that aggregation, so there is no cell that would ' +
         'produce the same numbers.',
       '',

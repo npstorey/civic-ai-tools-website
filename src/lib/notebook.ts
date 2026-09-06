@@ -25,12 +25,28 @@ import type { InstanceAttribution } from './site-config.ts';
 // documents came to say different things about the same call (#384 F3).
 // `describeToolFailure` is the executed path's failure vocabulary, shared rather
 // than restated — it is also what keeps raw error text off this surface.
+// `describeAttempt` is the fourth, and it is the one that makes the two
+// documents agree about a REJECTED call rather than merely be reviewed as
+// agreeing (#406, D3 = A). This module used to write its own sentence for one —
+// naming the tool and, through `tool.reason`, the dataset, but never the portal,
+// while the executed generator named the portal and the dataset twice. One
+// function, one disclosure level: tool, portal, dataset id, query text, each
+// said once.
 import {
+  describeAttempt,
   describeToolFailure,
   isAnalysisStep,
   isFullSoqlQuery,
-  type ToolFailureKind,
 } from './notebook-author/tool-to-cell.ts';
+// The one decision about what a stored `reason` phrase may say in a document
+// (#406). `generateToolReason` writes `to look up ${id}` for a `fetch`, and this
+// generator titled the step with it — printing a `record:` identifier, which
+// embeds a portal, a dataset id and a row id, in a heading. `streaming.ts` is
+// where cross-cutting formatters live (CLAUDE.md) and it is pure: one value
+// import from `mcp/operation-types.ts` and one type import, so nothing
+// server-only rides into the client bundle behind it, which this file's header
+// explains is the whole constraint.
+import { reasonWithoutIdentifier } from './streaming.ts';
 // The value this generator stamps comes from the vocabulary that declares it,
 // never a literal here: `'skeleton'` and `'executed'` are two halves of one
 // closed list, and a literal is how the two halves drift apart. Both modules
@@ -192,14 +208,36 @@ function notReproducedNote(toolName: string | undefined): string {
  * restated, so the two documents cannot describe one rejection two ways, and so
  * no raw error text, status code or host name can reach a reader through either
  * of them.
+ *
+ * SINCE #406 THE ATTEMPT IS SHARED TOO, not only the failure. This note used to
+ * write its own half-sentence — "This step called `get_data`, and it was
+ * rejected" — which named the tool and nothing else, while the executed
+ * generator named the portal and the dataset. Two documents about one rejected
+ * call, disclosing different amounts, under a docstring in the other file
+ * asserting they agreed. `describeAttempt` is now the one description both read,
+ * so the disclosure level (tool, portal, dataset id, query text) is decided
+ * once and cannot drift by a wording edit on either side.
+ *
+ * `defaultPortal` is the run's own portal, which is what the executed generator
+ * is given (`api/query-notebook/route.ts`) — the portal the request was
+ * resolved against when the call named none. A call that named one still wins,
+ * inside `describeAttempt`; when neither exists the clause is omitted rather
+ * than emptied.
+ *
+ * A record carrying no tool name keeps its own branch: `describeAttempt`
+ * requires a name, and supplying one would be the stand-in this repository has
+ * refused twice.
  */
-function rejectedNote(toolName: string | undefined, kind: ToolFailureKind | undefined): string {
-  const step = toolName === undefined
-    ? 'This step, whose tool name the record does not carry,'
-    : `This step called \`${toolName}\`,`;
+function rejectedNote(tool: ToolCall, defaultPortal: string): string {
+  const attempt = tool.name === undefined
+    ? 'This step, whose tool name the record does not carry, was rejected.'
+    : `The original analysis tried to ${describeAttempt(
+      { name: tool.name, args: tool.args, failed: true, failureKind: tool.failureKind },
+      { dataFrameIndex: 0, defaultPortal },
+    )}, and it was rejected.`;
   return (
-    `*Not reproduced below.* ${step} and it was rejected. ` +
-    `${describeToolFailure(kind)} No URL is written for it: a cell that re-ran the ` +
+    `*Not reproduced below.* ${attempt} ` +
+    `${describeToolFailure(tool.failureKind)} No URL is written for it: a cell that re-ran the ` +
     'request would put a result in this notebook that the original step never produced.'
   );
 }
@@ -250,7 +288,7 @@ function queryPrecedenceComment(soql: boolean, superseded: readonly string[]): s
  * what makes the URL meaningful. Anything else degrades to a note, which is
  * false about nothing.
  */
-function planQueryStep(tool: ToolCall): QueryStep {
+function planQueryStep(tool: ToolCall, defaultPortal: string): QueryStep {
   const args = tool.args;
   // Checked FIRST, before the URL is planned — the same order
   // `renderFetchToolCell` uses, and for the same reason. A rejected call that
@@ -260,7 +298,7 @@ function planQueryStep(tool: ToolCall): QueryStep {
   // A cell that re-runs a request the analysis never got an answer from does
   // not reproduce that step; it replaces it.
   if (tool.failed) {
-    return { kind: 'not-reproduced', note: rejectedNote(tool.name, tool.failureKind) };
+    return { kind: 'not-reproduced', note: rejectedNote(tool, defaultPortal) };
   }
   const portal = nonEmptyString(args.portal);
   const datasetId = nonEmptyString(args.dataset_id);
@@ -419,8 +457,15 @@ export function generateNotebook(
 
   for (let i = 0; i < queryTools.length; i++) {
     const tool = queryTools[i];
-    const reason = tool.reason || `Query ${i + 1}`;
-    const step = planQueryStep(tool);
+    // The step's title is the record's own "to …" phrase, unless that phrase
+    // names an identifier (#406). For a `fetch` it was `to look up
+    // record:<portal>/<dataset>/<row>`, so this heading printed a portal, a
+    // dataset and a row id — above a note saying the step is not reproduced,
+    // and inside a notebook that goes into a signed package. `reasonWithoutIdentifier`
+    // decides that for both generators; here the fallback is the step's own
+    // number, which asserts nothing.
+    const reason = reasonWithoutIdentifier(tool.reason) || `Query ${i + 1}`;
+    const step = planQueryStep(tool, portal ?? '');
 
     // Description cell
     const descLines = [`## Step ${i + 1}: ${reason}`];
