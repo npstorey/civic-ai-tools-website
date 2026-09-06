@@ -529,6 +529,80 @@ test('read-back (f) CONTROL: queries holds four entries and the rejected one car
   }
 });
 
+// --- (g) The PROV-O failure marker, added by Wave N10 P8 (#409, cold-read F6) ---
+//
+// WHY THIS CASE IS NEW AND THE POINTER WAS NOT. `harness-pin.test.ts` said the
+// four behaviours 0.4.0 carries are "driven end-to-end … in
+// `graph-states-what-the-span-carried.test.ts`". For three of them that was
+// true. For hub PR #198 — `civic:failed` / `civic:failureKind` on the activity
+// derived from a span ended with `error: true` — it was not: this file asserted
+// portals, tool names, `dataSources` and `queries`, and nothing anywhere in
+// `src/` named `civic:failed` outside two comments. The marker IS emitted, so
+// the system met the criterion; what was missing was any assertion of it here,
+// which is the half a pin cannot supply. Correcting the pointer alone would
+// have been the cheaper half and not the point, so the pointer and this case
+// land together.
+//
+// IT DISTINGUISHES PRESENCE FROM ABSENCE, not "a key exists". The run already
+// has both shapes: span (iv) ends with `error: true` + `error.kind`, and spans
+// (i)-(iii) end with a response hash and no error at all. Both halves are
+// asserted, because the marker's whole contract is that `false` is never
+// emitted — "recorded as not-failed" and "nothing recorded" must read the same,
+// which is what makes a marker that IS present mean something. An emitter that
+// stopped writing it fails the first half; one that wrote it unconditionally,
+// or wrote a literal `false`, fails the second.
+//
+// The kind is read off the FIXTURE's own call rather than restated, the same
+// way `buildTrace` reads it: a case that could state one kind on the span and
+// another in the assertion is measuring its own literal.
+
+/** The tool-call activity itself — `nodesDerivedFromToolSpan` returns it first
+ *  and asserts it is present. */
+function activityForToolSpan(spanId: string): GraphNode {
+  return nodesDerivedFromToolSpan(spanId)[0];
+}
+
+test('read-back (g): the activity for the rejected span carries civic:failed and the classified civic:failureKind', () => {
+  const activity = activityForToolSpan(spanIdFor(3));
+  assert.equal(
+    activity['civic:failed'],
+    true,
+    'the signed graph states nothing about a call the source refused: the span ended with ' +
+      'error: true (run-tool-loop.ts:892-895) and the activity derived from it carries no ' +
+      'civic:failed, so a refused call and one that answered are the same node',
+  );
+  assert.equal(
+    activity['civic:failureKind'],
+    FIXTURES[3].call.failureKind,
+    'the graph states a different cause than the loop classified — the kind is the only cause ' +
+      'this graph will ever state, and it must be the record\'s own',
+  );
+  // The kind is a LABEL on the assertion, never the assertion. A node carrying
+  // a kind and no failure would not be a rejection.
+  assert.ok(
+    Object.prototype.hasOwnProperty.call(activity, 'civic:failed'),
+    'civic:failureKind may not appear without civic:failed',
+  );
+});
+
+test('read-back (g) CONTROL: the three answered spans carry neither marker — absence stays absence, never false', () => {
+  for (const i of [0, 1, 2]) {
+    const activity = activityForToolSpan(spanIdFor(i));
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(activity, 'civic:failed'),
+      false,
+      `span ${i} answered and its span ended with no error, yet its activity carries ` +
+        `civic:failed=${JSON.stringify(activity['civic:failed'])}. A literal false asserts an ` +
+        'outcome, and every package minted before 0.4.0 recorded none — the two must read the same',
+    );
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(activity, 'civic:failureKind'),
+      false,
+      `span ${i} answered, so there is no cause to label`,
+    );
+  }
+});
+
 // --- The verification control ---
 
 test('read-back CONTROL: verification passes over the round-tripped package — and is not a backstop for any of the above', () => {
