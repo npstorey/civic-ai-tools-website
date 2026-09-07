@@ -6,6 +6,65 @@ Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ---
 
+## 2026-09-06 — Wave N10 (#409): the rejected call on every surface — and the probe that reported a defect fixed (thirteen gated phases, three lanes)
+
+**Scope:** N9 made the record *carry* a rejected call, and its cold read found that the surfaces derived from the record still described one as if it had answered. This wave is that second half, for the surfaces that summarise, derive and sign. One property: **a call the source rejected is stated as rejected on every surface the record reaches — in signed bytes and on the page — and nothing derived from it asserts an access, a result or a cause the record does not carry.** N9's property (no consumer invents what the loop did not write) stands underneath it.
+
+**Phases:** website P1 `7f52a6b` (#404, no raw error text in signed bytes) · P2 `7ce236f` (#401, the skeleton stamps its provenance and a reader shows it) · P3 `91acaad` (#400, the validator's verdict travels with the notebook) · P4 `77e51bd` (#192's website half; the pin bump and the stand-in retired) · P5 `1104cbc` (#407, the instance's default portal is configuration) · P6 `255b58d` (#406, #402, #416's assertion half) · P7 cold read, on a different model, changing nothing · P8 `5d25707` (the cold read's F1, F6, F5). Hub P-H1 `24fb69e` · P-H2 `85c5613` · P-H3 `5819d78` (measured, not changed; #194 deferred to N11 by ruling) · P-H4 `938c334` (the specification note, v0.1.8) · the 0.4.0 release `a6d6f77`, published and verified against the registry with the website lockfile's `integrity` byte-equal to `npm view … dist.integrity`. Server P-S1 `c3c2f88`. Every merge a merge commit whose second parent is the SHA its GO named; fourteen website rollback tags, each cut before its branch. Tests **1352 → 1419**, `# fail 0` at every merged head.
+
+### The lesson: a probe is not an assertion, and a probe run where the defect cannot fire will report it fixed
+
+P4 drove `replayPortalForPackage` either side of its change and observed it stop handing an aggregate endpoint to a replay as a Socrata portal — `api.datacommons.org/mcp` → `undefined`. It was recorded honestly, as a **probe with nothing pinning it**, and the hand-off warned that a regression would be silent.
+
+**There was never a fix to regress from.** That probe ran on a package whose aggregate call had been *rejected*, and a rejected call mints no `dataSources` entry, so the list was empty and the function returned `undefined` for that reason and no other. P4 did fix the literal city fallback its docstring describes; the aggregate case is a different defect the same probe appeared to cover. The cold read found it live on **5 of 34 published records**, reaching the model's system prompt, then `get_data`'s portal injection, then recorded arguments, then a signed consistency attestation.
+
+This is N9's lesson one turn further on. N9: *a criterion demonstrated on a fixture shaped so it cannot fail is not demonstrated.* N10 adds: **a probe run on the one shape in which the defect cannot fire will license the claim that it is fixed** — and a caveat that says "nothing pins this" protects against the wrong failure, because it distrusts the future rather than the measurement.
+
+### Eleven checks green over a shape that could not fail
+
+The wave's own count, corrected upward twice as it ran; it stood at five at the P4 hand-off.
+
+1. A byte-stability check named against a golden fixture with **no spans at all** — `spanId` 0, `scopeSpans` 0 (hub #199). 2. A "two stamps cannot drift" instrument that drove one producer and restated the other in prose. 3. A dialog assertion satisfiable by a **comment**. 4. A "computed, not literal" verdict whose computed value equalled the literal. 5. A vocabulary-boundary guard listing **no term names** (hub #199). 6. A census probe reading a value at the wrong nesting, returning a confident absence for every record — **a wrong lookup and a true absence are indistinguishable**. 7. An instrument built to keep hostname counts honest carrying a **wrong count in its own header**. 8. A `sha256` pin over a literal fixture — a constant of the fixture, not of the repository. 9. A repointed fixture naming no dataset, the one shape in which the duplication it guarded could not appear. 10. A test driving only the shapes on which the fallback was **correct** — the one above. 11. A drift guard whose **message names a property and whose assertion names one constant**: a reintroduced aggregate-endpoint fallback passes it (#432).
+
+They are three kinds, not one: a check that could only pass (1–5, 7–9), a probe that could only return absence (6), and a probe run where the defect could not fire (10). The third is the dangerous one, because it does not merely fail to find a defect — it reports the defect fixed.
+
+**The hand-off's own finding was that every one had been caught by a phase and none by the cold read.** At corrected size that is no longer true: the seat found #7 at a GO, the cold read found #10, and four were found by the ORCHs re-measuring their own instruments. The claim was true when written and did not survive the wave that produced it.
+
+### Premises that did not survive being re-read against the code
+
+The contract rider says re-read every inherited description before issuing a phase. Doing so, and then **driving rather than reading**:
+
+- **"Both notebook generators interpolate `call.reason` without a connective"** — recorded as already found, with a quoted example. False: every branch of `generateToolReason` returns a phrase beginning `to `, and the fix had landed in N9 P8, before this wave began. A phase would have opened by hunting a defect that did not exist.
+- **What was actually wrong was larger.** The rejected-`fetch` cell rendered the full `record:` identifier — a portal the call never reached, a dataset id, a row id — into a signed notebook cell, under a heading saying the step could not be accounted for. The rule it broke was written **thirty lines below the site that broke it**, in a docstring that also claimed the two documents agreed. They did not: the skeleton titled the step with the same identifier. **Both documents leaked, through one field, under prose asserting they agreed.** A docstring is not a guard.
+- **#407's universe** was filed as three sites, measured as nine, re-measured as seventeen by a grep for the five known hostnames — and found to be **24 files / 102 hits** by a guard that named the *convention* portals are published under. `data.boston.gov` was already in the tree being the sixth city. The ORCH then published 101, off by one from reading a zero-indexed last line as a count, and the seat's GO caught the guard's own header repeating it.
+- **"4 of 34 records"** in the P8 contract, while that contract's own example block named the fifth. The phase measured 5 and said so.
+
+### The cold read, seventh in a row
+
+Fresh context, no phase diff, told at least one criterion was mis-stated and not which. It changed nothing, drove both shapes — a rejected call on a dataset nothing else touched, and a rejected aggregate call — through every consumer with the real loop, and read the published records last. Beyond F1 it found the adversarial evaluator rendering every rejected call as `→ ? rows` under a rubric telling it to cross-check figures against returned data, with the result signed (hub #203); a signed attestation's key policy never rendered on the page; and two live records whose spans carry `error: true` while the page says no result was recorded (#430).
+
+**Criterion 6 was the mis-stated one.** It required the pin to be demonstrated "with the harness's own fixture" — a thing that does not exist here: the published tarball ships `dist/`, README, CHANGELOG and LICENSE only, the golden lives in the harness repository, and no website file references either. The criterion asked for evidence this repository cannot reach. Two lesser scope errors were recorded with it: criterion 1's byte-identity claim describes the *harness's* goldens, and the website has no golden package at all; criterion 5 says the verdict renders "from the stream" when it renders from the notebook.
+
+### A guard that enumerates its sites cannot fail on one it never listed
+
+The property's own guard lists the surfaces it checks. A chat surface was never on the list, so two waves of work on this exact property passed over it while it rendered a rejected call indistinguishably from an answered one, identifier and all (#426). The adversarial evaluator was on no list either (hub #203). The same shape appeared a third time from the other direction: **`isError` is read nowhere in this tree** (#429). The MCP client decides success by the JSON-RPC envelope alone, so a server signalling a tool failure the specification's way — `result.isError: true` — has that call recorded as **answered**, upstream of every fix this wave made, since all of them fire on `failed`. It is latent only because the one server in use rethrows; `/directory` exists to connect others.
+
+### What the census settled
+
+Before the owner-run read-back, a census of all 34 published records rather than the 2-record sample the hand-off carried: **25 carry a notebook extension**, not none. Of those, 1 states `executed`, 24 state nothing, **0 state `skeleton`**. The worry inherited — that "not stated" might describe a population of zero — was backwards. The real caveat is that the *skeleton* branch is unreachable from live data, so a reader driving published records will never exercise it and could reasonably call it broken.
+
+### Left for the owner, and left for N11
+
+The local-instance read-back is the owner's and is **not costed here**. Its path was measured instead: both shapes are producible with no code change, no test hook and no second server — a dataset id the portal does not have alongside a good one, and an unreachable aggregate endpoint. The cost is not setup but model cooperation, so it is stated as **two records, one per shape**, rather than one run repeated until a model makes all three calls. N9's Gate 5 was costed at thirty minutes and took four rounds; a duration should come from the owner's first attempt, not from an estimate of it.
+
+Open for N11: #194 (deferred by ruling), #411, #413, #416's copy half, #421, #426, #427, #429, #430, #432; hub #194, #197, #199, #203. The server's `FALLBACK_PORTAL_URL` is the same defect one repository over and is now the operative default for a portal-less call — its phase wants sequencing sooner rather than later.
+
+### ORCH-layer failures, recorded
+
+A hand-off state block asserting both shared checkouts were on `main` when the server's was on a phase branch and its local `main` had diverged by an unpushed owner commit. A criterion written unsatisfiable (`git grep` for an identifier the instrument itself must contain). Four instruments the ORCHs wrote that could not fail, caught by the phases they were given to. A hostname count published one low, then repeated inside the guard's header and caught at a GO. A record count of four where the ORCH's own example named five. And a premise inherited as "already found" that a five-minute drive showed to be false — which is the rider working, and the reason it exists.
+
+---
+
 ## 2026-09-03 — Wave N9 (#384): the record's consumers — and the fixture that could not fail (twelve gated phases, three lanes)
 
 **Scope:** N8's cold read found that making two tools callable handed four consumers of the signed record arguments they were never written to read, and its lesson was that a zone drawn from the call graph cannot see the consumers of what the change produces. So this wave's census started from the record — the in-memory tool-call record, the wire, the progress stream, the package, the graph, the trace replay, both notebooks, the record page — and enumerated every reader, then re-measured ten filings against that map and found six defects no filing covered. Eight families, one property: **no consumer of the record invents what the loop did not write** — a tool name, an operation type, a portal, a token count, a reproduced-step count, a failure travel from the loop to every reader or are absent there, stated as absent. Every phase contract stated the property rather than the patch and asked the phase to report what the property found that the patch would have left; every phase found something.
