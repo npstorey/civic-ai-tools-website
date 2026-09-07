@@ -82,14 +82,38 @@
 //
 // SCOPE. This file pins the DEPENDENCY — the version installed, the range
 // declared, and the resulting node_modules topology. It deliberately asserts
-// nothing about graph or package bytes: the behaviour is driven end-to-end
-// through this repository's own packager in
-// `graph-states-what-the-span-carried.test.ts` (the graph, and a rejected call
-// on a dataset nothing else touched) and
-// `a-rejected-aggregate-call-asserts-no-access.test.ts` (a rejected call to an
-// aggregate source), so a version bump that did not change behaviour, and a
-// behaviour change that did not bump the version, each fail in the file that
-// can see it.
+// nothing about graph or package bytes. Each behaviour it names is driven
+// end-to-end through this repository's own packager somewhere else, so a
+// version bump that did not change behaviour, and a behaviour change that did
+// not bump the version, each fail in the file that can see it. NAMED ONE BY
+// ONE, because the blanket version of this sentence was false for a year of
+// waves and nothing could tell:
+//
+//   - the 0.3.1 graph-builder fixes (tool name, portal domain, dataset keys) —
+//     `graph-states-what-the-span-carried.test.ts`, cases (a)-(d);
+//   - 0.4.0 / hub #196, a rejected call minting no dataset-keyed entry —
+//     same file, case (e), on a dataset nothing else in the run touched;
+//   - 0.4.0 / hub #196, the aggregate half of the same property —
+//     `a-rejected-aggregate-call-asserts-no-access.test.ts`;
+//   - 0.4.0 / hub #198, `civic:failed` / `civic:failureKind` on the activity
+//     for a span ended with `error: true` —
+//     `graph-states-what-the-span-carried.test.ts`, case (g).
+//
+// WHY THAT LIST IS SPELLED OUT (Wave N10 P8, #409, cold-read F6). Until P8 this
+// paragraph asserted, in one breath, that all of it was "driven end-to-end" in
+// the two files above. For the first three that was true. For hub #198 it was
+// not: that file asserted portals, tool names, `dataSources` and `queries`, and
+// `civic:failed` appeared nowhere in `src/` outside two comments — one of them
+// this one. The marker IS emitted, so the system met the criterion and no
+// package was ever wrong; what was missing was any assertion of it in this
+// repository, which is exactly the gap a pin is not allowed to leave, because a
+// pin's whole claim is that someone else is watching the behaviour. Case (g)
+// was added in the same commit as this correction: a corrected pointer over a
+// still-absent assertion is the cheaper half and not the point.
+//
+// A pointer in a header is a claim, and this one had been read as true by two
+// waves. Adding a behaviour to the list above without adding the case it names
+// puts this file back where it was.
 //
 // Run with: npm test
 

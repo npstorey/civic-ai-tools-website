@@ -34,6 +34,8 @@
 import type OpenAI from 'openai';
 import { mcpTools } from '../mcp/tools.ts';
 import { callMcpTool } from '../mcp/client.ts';
+import { sourceIdForToolName } from '../mcp/operation-types.ts';
+import { CIVIC_SOURCE_REGISTRY } from '../evidence/data-sources.ts';
 import type { ToolLoopOptions } from './run-tool-loop.ts';
 
 /** Tool-calling rounds before the loop stops and asks for an answer. */
@@ -95,6 +97,65 @@ export interface ReplayLoopInputs {
 }
 
 /**
+ * The catalogue types whose `dataSources[].portalUrl` is a portal a `get_data`
+ * call could address — DERIVED, not listed (#409 P8, cold-read F1).
+ *
+ * WHY THIS IS NOT A LITERAL. The rule the replay portal has to satisfy is not
+ * "is not one of the two endpoints we have seen go wrong"; it is "is a portal
+ * `get_data` can be pointed at". Those differ in exactly one direction, and it
+ * is the direction that matters: a fourth catalogue type added next year is
+ * not addressable by `get_data` until something says it is, and a blocklist
+ * admits it by silence on the day it appears. So the set is computed from the
+ * two registries that already answer the question:
+ *
+ *   - `sourceIdForToolName('get_data')` — the app's MCP layer, which knows
+ *     which SOURCE hosts `get_data` (`socrata`);
+ *   - `CIVIC_SOURCE_REGISTRY[sourceId].catalogType` — the harness's source
+ *     registry, which knows what `catalogType` that source's `dataSources`
+ *     entries carry.
+ *
+ * Every other catalogue type is reached by a tool that takes no Socrata
+ * portal: `data-commons` by `get_observations`, `ckan` by `ckan__execute_sql`.
+ * An entry from one of those states the endpoint its own source was called at,
+ * which is not a value any `get_data` argument may be set to.
+ *
+ * FAIL-CLOSED, AND GUARDED. If either registry stops answering, this set is
+ * empty and a replay simply injects no portal — a degradation, never a false
+ * claim. `replay-portal-is-addressable.test.ts` asserts the derived set is
+ * exactly `socrata` today, so an empty set is a red suite rather than a
+ * production path that has quietly gone quiet.
+ */
+const GET_DATA_ADDRESSABLE_CATALOG_TYPES: ReadonlySet<string> = (() => {
+  const sourceId = sourceIdForToolName('get_data');
+  const catalogType = sourceId ? CIVIC_SOURCE_REGISTRY[sourceId]?.catalogType : undefined;
+  return new Set(catalogType ? [catalogType] : []);
+})();
+
+/**
+ * Is this `dataSources[]` entry's `portalUrl` a portal a `get_data` call could
+ * be addressed to?
+ *
+ * `catalogType` is the discriminator a published package actually carries on
+ * every entry (required by `DataSourceEntry`; measured present on all 39
+ * entries across the 34 records published at the reference deployment on
+ * 2026-09-06, with values `socrata`, `data-commons` and `ckan`). An entry that
+ * states no catalogue type states nothing about addressability, and is read the
+ * same way as one that states an unrecognised type: not known to be
+ * addressable, so it supplies no portal.
+ */
+export function isGetDataAddressableSource(entry: { catalogType?: string }): boolean {
+  return (
+    typeof entry.catalogType === 'string'
+    && GET_DATA_ADDRESSABLE_CATALOG_TYPES.has(entry.catalogType)
+  );
+}
+
+/** The derived set, for the guard that keeps the derivation honest. */
+export function getDataAddressableCatalogTypes(): ReadonlySet<string> {
+  return GET_DATA_ADDRESSABLE_CATALOG_TYPES;
+}
+
+/**
  * The portal a replay runs on, read off the record and nothing else (#384,
  * F2). The route used to take the first data source's portal and, for a
  * record with no data-source entry — a `search`/`fetch`-only run has none —
@@ -103,17 +164,38 @@ export interface ReplayLoopInputs {
  * `canonicalizeToolCall`, a signed consistency attestation.
  *
  * Order: the first `queries[]` entry that named a portal (the loop's own
- * record, app-side), else the first `dataSources[]` entry's portal host, else
- * `undefined` — a record that named no portal replays with none.
+ * record, app-side), else the first `dataSources[]` entry that is BOTH
+ * addressable by `get_data` and carries a portal host, else `undefined` — a
+ * record that named no portal a `get_data` could use replays with none.
+ *
+ * THE SECOND CLAUSE'S FILTER (#409 P8, cold-read F1). Until this phase the
+ * fallback took the first entry with any `portalUrl` and inspected nothing
+ * else, so a record whose only source was aggregate or CKAN replayed with that
+ * server's own endpoint standing in for a Socrata portal — measured live on 5
+ * of the 34 published records (4 Data Commons, 1 CKAN). The value was not
+ * inert: the route hands it to `buildSystemPrompt`, which writes it into the
+ * model's instructions as "Default portal: …", and to this module as `portal`,
+ * which the core injects into any `get_data` that omits one — reaching the
+ * recorded arguments, the span's `tool.portal_domain`, and through
+ * `canonicalizeToolCall` a SIGNED consistency attestation. A host no Socrata
+ * call could ever have addressed was being named as the one the replay ran on.
+ *
+ * A mixed run keeps its Socrata portal: the filter selects the first entry
+ * that IS addressable rather than rejecting the whole list when entry zero is
+ * not, so an analysis that queried both an aggregate source and a portal still
+ * replays on the portal it queried.
  */
 export function replayPortalForPackage(pkg: {
   queries: ReadonlyArray<{ portal?: string }>;
-  dataSources: ReadonlyArray<{ portalUrl?: string }>;
+  dataSources: ReadonlyArray<{ catalogType?: string; portalUrl?: string }>;
 }): string | undefined {
   const named = pkg.queries.find((q) => typeof q.portal === 'string' && q.portal.length > 0)?.portal;
   if (named) return named;
   const sourceUrl = pkg.dataSources.find(
-    (d) => typeof d.portalUrl === 'string' && d.portalUrl.length > 0,
+    (d) =>
+      isGetDataAddressableSource(d)
+      && typeof d.portalUrl === 'string'
+      && d.portalUrl.length > 0,
   )?.portalUrl;
   if (!sourceUrl) return undefined;
   return sourceUrl.replace(/^https?:\/\//, '');
