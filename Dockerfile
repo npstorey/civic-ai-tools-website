@@ -36,9 +36,18 @@ ENV NEXT_TELEMETRY_DISABLED=1
 #
 #   NEXT_PUBLIC_*    inlined into the emitted bundles by Next.js. A run-time
 #                    value cannot change them; there is nothing left to read.
-#   branding /       read on the server, but ALSO baked into statically
-#   content sources  prerendered pages. docker-compose.yml passes these in
-#                    both places so prerendered and dynamic pages agree.
+#   read at both     read on the server, but ALSO baked into statically
+#   times            prerendered pages: the branding set and the footer's
+#                    repo and sponsor lines, the default portal, the content
+#                    sources, and the indexing posture. docker-compose.yml
+#                    passes these in both places so prerendered and dynamic
+#                    pages agree.
+#
+# Docker hands a build argument only to a stage that declares it, and says
+# nothing when none does: a name in docker-compose.yml's `build.args` with no
+# ARG below never reaches `next build`. scripts/check-compose-env.mjs fails on
+# exactly that, and on a build-time variable in its inventory with no ARG
+# here (#434: six had none).
 #
 # An ARG left unpassed stays unset, so an operator who configures none of
 # them builds exactly the image this file built before they existed. Nothing
@@ -49,9 +58,15 @@ ARG SITE_BRAND_NAME
 ARG SITE_BRAND_ACCENT
 ARG SITE_BRAND_TAGLINE
 ARG SITE_BRAND_ATTRIBUTION
+ARG SITE_BRAND_REPO_URL
+ARG SITE_SPONSOR_NAME
+ARG SITE_SPONSOR_URL
+ARG SITE_SPONSOR_PREFIX
+ARG SITE_DEFAULT_PORTAL
 ARG DIRECTORY_DATA_URL
 ARG ROADMAP_RAW_URL
 ARG ROADMAP_GITHUB_URL
+ARG SITE_NOINDEX
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

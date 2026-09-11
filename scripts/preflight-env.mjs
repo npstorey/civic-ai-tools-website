@@ -449,14 +449,32 @@ export const ENV_SPEC = [
   { name: 'PUBLISHER_PLATFORM_AGENT_URL', priorEraName: 'EVIDENCE_PLATFORM_AGENT_URL', tier: 'optional', purpose: 'PROV platform-agent URL (defaults to PUBLISHER_SITE_ORIGIN)', hasFallback: true },
 
   // --- Instance branding (#217: chrome-only theming seam; src/lib/brand-config.ts).
-  //     All optional with coded defaults: unset, the demo chrome renders
-  //     byte-identically. Chrome only — nothing here is emitted inside signed
-  //     output (that is the PUBLISHER_* identity set above), so these can
-  //     never invalidate a package or a registry cross-check. ---
-  { name: 'SITE_BRAND_NAME', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Instance display name — header wordmark, page titles, citation labels (default "Civic AI Tools")', hasFallback: true },
+  //     All optional. Unset names nobody (#259): the name, tagline and
+  //     attribution each render nothing rather than the reference
+  //     deployment's, so none of them has a coded fallback — each getter
+  //     returns null when unset. Only the accent keeps one, the stylesheet
+  //     default: a palette is not an identity claim. Chrome only — nothing
+  //     here is emitted inside signed output (that is the PUBLISHER_* identity
+  //     set above), so these can never invalidate a package or a registry
+  //     cross-check. ---
+  { name: 'SITE_BRAND_NAME', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Instance display name — header wordmark, page titles, citation labels (unset: no name — titles drop their brand suffix, citations name no publisher, the wordmark reads "Home")' },
   { name: 'SITE_BRAND_ACCENT', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Accent color (#rgb/#rrggbb) — overrides the accent tokens site-wide; unset or invalid = stylesheet default', hasFallback: true },
-  { name: 'SITE_BRAND_TAGLINE', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Footer tagline line (default: the demo tagline)', hasFallback: true },
-  { name: 'SITE_BRAND_ATTRIBUTION', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Footer attribution line, plain text (unset: the demo authored attribution markup)', hasFallback: true },
+  { name: 'SITE_BRAND_TAGLINE', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Footer tagline line and the default page description (unset: neither renders)' },
+  { name: 'SITE_BRAND_ATTRIBUTION', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Footer attribution line, plain text — who runs this deployment (unset: no attribution line)' },
+  // Where this deployment's source lives, and who funds it (#259 P4). Each is a
+  // factual claim about THIS deployment, so none has a coded default: unset,
+  // the footer's repo link and the sponsor line render nothing. The prefix is
+  // the one exception — generic wording with a coded default
+  // (DEFAULT_SPONSOR_PREFIX), and it renders only beside a configured name.
+  // Read at both times, like the rest of this set: the root layout's footer
+  // renders all four (and /about renders the sponsor line), and those pages
+  // prerender — measured #434 P1: a build with a marker value in each of the
+  // four baked all four markers into the HTML of eight static routes.
+  // src/lib/brand-config.ts (repo URL) and src/lib/site-config.ts (sponsor).
+  { name: 'SITE_BRAND_REPO_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Footer "GitHub" link — this instance\'s own source repository (unset: no repo link)' },
+  { name: 'SITE_SPONSOR_NAME', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Sponsor acknowledgment in the footer and on /about, "{prefix} {name}." (unset: no sponsor line)' },
+  { name: 'SITE_SPONSOR_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Where the sponsor\'s name links (unset: the name renders unlinked; inert without SITE_SPONSOR_NAME)' },
+  { name: 'SITE_SPONSOR_PREFIX', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Wording in front of the sponsor\'s name (default "Fiscally sponsored by"; inert without SITE_SPONSOR_NAME)', hasFallback: true },
 
   // --- Instance content sources (#241: src/lib/site-config.ts). All
   //     optional, and unset means one thing: this instance has no content

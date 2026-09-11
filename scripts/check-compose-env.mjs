@@ -52,9 +52,27 @@
  *      that ENV_SPEC does not declare under EITHER of its accepted names.
  *      Either the app stopped reading it, or the inventory is stale; both are
  *      worth knowing.
+ *   4. THE IMAGE BUILD (#434). A build argument reaches `next build` only if
+ *      the Dockerfile stage that runs the build declares a matching `ARG`:
+ *      Docker hands a build arg to no stage that does not, and says nothing.
+ *      So every name in the app service's `build.args`, and every ENV_SPEC
+ *      variable read at build time, must have an `ARG` in that stage, above
+ *      the `RUN` that builds. The stage is DERIVED, never named: from the
+ *      service's `build.target` (Docker's default, the last stage, when it
+ *      names none), follow `FROM <stage>`, `COPY --from=<stage>` and
+ *      `RUN --mount=…from=<stage>` to every stage the target needs, and take
+ *      each `RUN` among them whose command reaches `next build` — directly,
+ *      or through `npm run` scripts resolved in the build context's
+ *      `package.json`. Finding no such `RUN` is a failure, not a pass: a check
+ *      that cannot find the build cannot say that anything reaches it. When
+ *      this was added, six build args had no `ARG` — the four footer
+ *      variables, SITE_DEFAULT_PORTAL and SITE_NOINDEX — so every
+ *      compose-built image prerendered its pages with them unset.
  *
- * It reads NO values from the environment and prints none: it compares two
- * checked-in files. Exit 0 clean, 1 on any failure.
+ * It reads NO values from the environment and prints none: it compares
+ * checked-in files — the compose file, the Dockerfile and `package.json` in
+ * the app service's build context, and ENV_SPEC. Exit 0 clean, 1 on any
+ * failure.
  *
  *   node scripts/check-compose-env.mjs        # or: npm run check:compose-env
  *
@@ -64,11 +82,15 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { dirname, posix, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ENV_SPEC, resolveDrivers, resolveSpec } from './preflight-env.mjs';
 
 /** The service the app runs in. */
 export const APP_SERVICE = 'app';
+
+/** A scalar as written, without one pair of surrounding quotes. */
+const unquote = (value) => value.trim().replace(/^(["'])(.*)\1$/, '$2');
 
 /**
  * Minimal reader for the one compose shape this repo uses: a top-level
@@ -82,7 +104,10 @@ export const APP_SERVICE = 'app';
  *
  * @param {string} text
  * @param {string} service
- * @returns {{ environment: Map<string, string|null>, buildArgs: Map<string, string|null>, envFiles: string[] }}
+ * `build` is the service's `build:` section's scalars — `context`,
+ * `dockerfile`, `target` — or null when the service builds no image.
+ *
+ * @returns {{ environment: Map<string, string|null>, buildArgs: Map<string, string|null>, envFiles: string[], build: { context?: string, dockerfile?: string, target?: string } | null }}
  */
 export function parseComposeService(text, service = APP_SERVICE) {
   if (/^\t| \t/m.test(text)) throw new Error('compose file contains tab indentation; this reader assumes spaces');
@@ -91,6 +116,7 @@ export function parseComposeService(text, service = APP_SERVICE) {
   const environment = new Map();
   const buildArgs = new Map();
   const envFiles = [];
+  let build = null;
 
   /** Indentation of a line, or null for blank/comment lines (which are skipped). */
   const indentOf = (line) => {
@@ -134,6 +160,10 @@ export function parseComposeService(text, service = APP_SERVICE) {
     if (indent === 4) {
       block = null;
       inBuild = body === 'build:';
+      if (inBuild) build = {};
+      // The short form, `build: <context>`, names only a context.
+      const shortForm = /^build:\s+(\S.*)$/.exec(body);
+      if (shortForm) build = { context: unquote(shortForm[1]) };
       if (body === 'environment:') {
         block = 'environment';
         blockIndent = 6;
@@ -144,13 +174,16 @@ export function parseComposeService(text, service = APP_SERVICE) {
       continue;
     }
 
-    // Inside `build:` — find its `args:` sub-mapping.
+    // Inside `build:` — its `args:` sub-mapping, and the scalars that say
+    // which Dockerfile, and which stage of it, the image is built from.
     if (inBuild && indent === 6) {
       if (body === 'args:') {
         block = 'args';
         blockIndent = 8;
-      } else if (block === 'args') {
+      } else {
         block = null;
+        const scalar = /^(context|dockerfile|target):\s*(\S.*)$/.exec(body);
+        if (scalar) build[scalar[1]] = unquote(scalar[2]);
       }
       continue;
     }
@@ -181,7 +214,7 @@ export function parseComposeService(text, service = APP_SERVICE) {
   }
 
   if (!seenService) throw new Error(`compose file declares no \`${service}\` service`);
-  return { environment, buildArgs, envFiles };
+  return { environment, buildArgs, envFiles, build };
 }
 
 /**
@@ -196,12 +229,19 @@ const EMPTY_DEFAULT_FORM = /^\$\{[A-Za-z_][A-Za-z0-9_]*(:-)?\}$/;
  * Compare the compose file against the app's own environment inventory.
  * Pure: takes text and a spec, returns findings. Reads no environment.
  *
+ * `image`, when given, turns on check 4 (the image build): `readFile` reads a
+ * path relative to the compose file — the Dockerfile and `package.json` in
+ * the service's build context. Without it the image build is not checked and
+ * the result says so (`imageBuild.checked === false`); the CLI and the gate
+ * test always pass it, through `checkRepository`.
+ *
  * @param {string} composeText
  * @param {typeof ENV_SPEC} [spec]
  * @param {string} [service]
+ * @param {{ readFile: (path: string) => string }} [image]
  */
-export function checkComposeEnvCoverage(composeText, spec = ENV_SPEC, service = APP_SERVICE) {
-  const { environment, buildArgs, envFiles } = parseComposeService(composeText, service);
+export function checkComposeEnvCoverage(composeText, spec = ENV_SPEC, service = APP_SERVICE, image = undefined) {
+  const { environment, buildArgs, envFiles, build } = parseComposeService(composeText, service);
 
   // The compose file pins its own profile. Resolve the spec against THOSE
   // drivers so the check demands exactly what this deployment shape reads:
@@ -269,12 +309,15 @@ export function checkComposeEnvCoverage(composeText, spec = ENV_SPEC, service = 
   // keeping a lane open), but worth naming — it is dead configuration.
   const inapplicablePresent = [...environment.keys()].filter((n) => notApplicableNames.has(n));
 
+  const imageBuild = image ? checkImageBuild(build, buildArgs, applicable, image.readFile) : { checked: false };
+
   const ok =
     missingRuntime.length === 0 &&
     missingBuildArg.length === 0 &&
     emptyDefaultForm.length === 0 &&
     runtimeInert.length === 0 &&
-    undeclared.length === 0;
+    undeclared.length === 0 &&
+    (!imageBuild.checked || (imageBuild.error === null && imageBuild.missingArg.length === 0));
 
   return {
     ok,
@@ -288,8 +331,222 @@ export function checkComposeEnvCoverage(composeText, spec = ENV_SPEC, service = 
     priorEraNamesInUse,
     undeclared,
     inapplicablePresent,
+    imageBuild,
     counts: { environment: environment.size, buildArgs: buildArgs.size, applicable: applicable.length },
   };
+}
+
+// --- the image build (check 4) ------------------------------------------------
+
+/**
+ * Minimal Dockerfile reader: its stages, the ARGs each declares (and the
+ * global ones ahead of the first FROM, which no RUN sees), each RUN's command,
+ * each CMD / ENTRYPOINT command, and the stages each stage needs (`FROM
+ * <stage>`, `COPY --from=`, `RUN --mount=…from=`). Continuation lines are
+ * joined and comment lines dropped, as Docker does.
+ *
+ * Deliberately NOT general, like the compose reader above: a heredoc, an
+ * escape directive, or an instruction other than ARG ahead of the first FROM
+ * throws rather than being read into a passing result.
+ *
+ * @param {string} text
+ */
+export function parseDockerfile(text) {
+  if (/^#\s*escape\s*=/im.test(text)) {
+    throw new Error('Dockerfile sets an escape directive; this reader assumes the default backslash');
+  }
+  const logical = [];
+  let current = null;
+  let startLine = 0;
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (trimmed === '' || trimmed.startsWith('#')) continue;
+    const continues = trimmed.endsWith('\\');
+    const piece = continues ? trimmed.slice(0, -1).trimEnd() : trimmed;
+    if (current === null) {
+      current = piece;
+      startLine = i + 1;
+    } else {
+      current += ` ${piece}`;
+    }
+    if (!continues) {
+      logical.push({ line: startLine, text: current });
+      current = null;
+    }
+  }
+  if (current !== null) logical.push({ line: startLine, text: current });
+
+  const globalArgs = [];
+  const stages = [];
+  for (const { line, text: instruction } of logical) {
+    const m = /^([A-Za-z]+)(?:\s+([\s\S]*))?$/.exec(instruction);
+    if (!m) throw new Error(`unparsable Dockerfile instruction at line ${line}: ${instruction}`);
+    const op = m[1].toUpperCase();
+    const rest = (m[2] ?? '').trim();
+    if ((op === 'RUN' || op === 'COPY') && /<<-?\s*["']?[A-Za-z_]/.test(rest)) {
+      throw new Error(`Dockerfile line ${line}: a heredoc is not supported by this reader`);
+    }
+    if (op === 'FROM') {
+      const tokens = rest.split(/\s+/).filter((t) => !t.startsWith('--'));
+      const asAt = tokens.findIndex((t) => t.toUpperCase() === 'AS');
+      stages.push({
+        index: stages.length,
+        name: asAt >= 0 && tokens[asAt + 1] ? tokens[asAt + 1].toLowerCase() : null,
+        from: tokens[0],
+        line,
+        args: [],
+        runs: [],
+        commands: [],
+        needs: [],
+      });
+      continue;
+    }
+    const stage = stages.at(-1);
+    if (op === 'ARG') {
+      for (const a of rest.matchAll(/(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)(?==|\s|$)/g)) {
+        (stage ? stage.args : globalArgs).push({ name: a[1], line });
+      }
+      continue;
+    }
+    if (!stage) throw new Error(`Dockerfile line ${line}: ${op} ahead of the first FROM (only ARG may precede it)`);
+    if (op === 'RUN') {
+      for (const f of rest.matchAll(/(?:^|\s)--mount=\S*?\bfrom=([^\s,]+)/g)) stage.needs.push(f[1].toLowerCase());
+      stage.runs.push({ line, command: commandText(rest.replace(/^(?:--\S+\s+)+/, '')) });
+    } else if (op === 'COPY' || op === 'ADD') {
+      const from = /(?:^|\s)--from=(\S+)/.exec(rest);
+      if (from) stage.needs.push(from[1].toLowerCase());
+    } else if (op === 'CMD' || op === 'ENTRYPOINT') {
+      stage.commands.push({ line, op, command: commandText(rest) });
+    }
+  }
+  if (stages.length === 0) throw new Error('Dockerfile declares no FROM');
+  return { globalArgs, stages };
+}
+
+/** A RUN / CMD / ENTRYPOINT command as text: exec form joined, shell form as written. */
+function commandText(rest) {
+  if (rest.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(rest);
+      if (Array.isArray(parsed)) return parsed.join(' ');
+    } catch {
+      // Not valid JSON, so Docker reads it as shell form too.
+    }
+  }
+  return rest;
+}
+
+/**
+ * Every stage the build target needs: the target itself (the last stage when
+ * compose names none — Docker's default), then, transitively, each stage it is
+ * built FROM or copies or mounts from. A reference that names no stage is an
+ * image, and ends that branch.
+ */
+export function stagesTheTargetNeeds(dockerfile, target) {
+  const byName = new Map(dockerfile.stages.filter((s) => s.name).map((s) => [s.name, s]));
+  const stageFor = (ref) =>
+    byName.get(String(ref).toLowerCase()) ?? (/^\d+$/.test(ref) ? dockerfile.stages[Number(ref)] : undefined);
+  const start = target ? byName.get(target.toLowerCase()) : dockerfile.stages.at(-1);
+  if (!start) throw new Error(`compose builds target "${target}", which the Dockerfile does not declare`);
+  const needed = [];
+  const queue = [start];
+  while (queue.length > 0) {
+    const stage = queue.shift();
+    if (needed.includes(stage)) continue;
+    needed.push(stage);
+    for (const ref of [stage.from, ...stage.needs]) {
+      const dependency = stageFor(ref);
+      if (dependency) queue.push(dependency);
+    }
+  }
+  return needed;
+}
+
+/**
+ * Whether a command builds the app: it runs `next build` itself, or reaches it
+ * through `npm run` — each script resolved in `package.json`, npm's `pre` hook
+ * for it included, followed transitively.
+ */
+export function commandBuildsTheApp(command, scripts = {}) {
+  const visited = new Set();
+  const reaches = (text) => {
+    if (/(?:^|[\s;&|(/])next\s+build\b/.test(text)) return true;
+    for (const m of text.matchAll(/\bnpm\s+run(?:-script)?\s+([\w:.-]+)/g)) {
+      for (const name of [`pre${m[1]}`, m[1]]) {
+        if (visited.has(name) || typeof scripts[name] !== 'string') continue;
+        visited.add(name);
+        if (reaches(scripts[name])) return true;
+      }
+    }
+    return false;
+  };
+  return reaches(command);
+}
+
+/**
+ * Check 4 (see the header): every name in `build.args`, and every applicable
+ * ENV_SPEC variable read at build time, has an `ARG` above each RUN that
+ * builds, in that RUN's own stage — ARGs are not inherited by a later stage,
+ * and a global ARG ahead of the first FROM is visible to no RUN.
+ */
+export function checkImageBuild(build, buildArgs, applicable, readFile) {
+  if (!build) return { checked: false };
+  const context = build.context ?? '.';
+  const dockerfilePath = posix.join(context, build.dockerfile ?? 'Dockerfile');
+  const target = build.target ?? null;
+  const base = { checked: true, dockerfile: dockerfilePath, target, buildRuns: [], missingArg: [], error: null };
+  const dockerfile = parseDockerfile(readFile(dockerfilePath));
+  let needed;
+  try {
+    needed = stagesTheTargetNeeds(dockerfile, target);
+  } catch (error) {
+    return { ...base, error: error.message };
+  }
+  const scripts = JSON.parse(readFile(posix.join(context, 'package.json'))).scripts ?? {};
+  const runs = [];
+  for (const stage of needed) {
+    for (const run of stage.runs) if (commandBuildsTheApp(run.command, scripts)) runs.push({ stage, run });
+  }
+  if (runs.length === 0) {
+    return {
+      ...base,
+      error: `no RUN in the stages target "${target ?? '(the last stage)'}" needs reaches \`next build\``,
+    };
+  }
+  const sources = new Map();
+  const want = (name, source) => {
+    if (!sources.has(name)) sources.set(name, []);
+    sources.get(name).push(source);
+  };
+  for (const name of buildArgs.keys()) want(name, 'compose build.args');
+  for (const entry of applicable) {
+    if (entry.readBy === 'build' || entry.readBy === 'build-and-runtime') want(entry.name, `ENV_SPEC readBy: ${entry.readBy}`);
+  }
+  const missingArg = [];
+  for (const [name, from] of sources) {
+    const unseen = runs.filter(({ stage, run }) => !stage.args.some((a) => a.name === name && a.line < run.line));
+    if (unseen.length > 0) missingArg.push({ name, sources: from });
+  }
+  const buildRuns = runs.map(({ stage, run }) => ({ stage: stage.name ?? `#${stage.index}`, line: run.line }));
+  return { ...base, buildRuns, missingArg };
+}
+
+/**
+ * The check as the CLI and the gate test run it: the repository's compose
+ * file, and the Dockerfile and `package.json` in its app service's build
+ * context, each resolved relative to the compose file.
+ */
+export function checkRepository(composePath = fileURLToPath(new URL('../docker-compose.yml', import.meta.url))) {
+  const dir = dirname(composePath);
+  return checkComposeEnvCoverage(readFileSync(composePath, 'utf8'), ENV_SPEC, APP_SERVICE, {
+    readFile: (path) => readFileSync(resolvePath(dir, path), 'utf8'),
+  });
+}
+
+/** Where the build runs, for the report: `stage "builder" (Dockerfile:63)`. */
+function describeBuildRuns(imageBuild) {
+  return imageBuild.buildRuns.map((r) => `stage "${r.stage}" (${imageBuild.dockerfile}:${r.line})`).join(', ');
 }
 
 /** Render findings as text. Pure; names only, never values. */
@@ -304,6 +561,11 @@ export function renderComposeReport(result, service = APP_SERVICE) {
     `  ${result.counts.environment} environment entr${result.counts.environment === 1 ? 'y' : 'ies'}, ` +
       `${result.counts.buildArgs} build arg(s), ${result.counts.applicable} applicable spec entr(ies)`,
   );
+  if (result.imageBuild?.checked && result.imageBuild.error === null) {
+    lines.push(
+      `  IMAGE: target "${result.imageBuild.target ?? '(the last stage)'}" — next build runs in ${describeBuildRuns(result.imageBuild)}`,
+    );
+  }
   lines.push('');
 
   if (!result.coverageProvable) {
@@ -323,7 +585,21 @@ export function renderComposeReport(result, service = APP_SERVICE) {
     lines.push(`  FAIL: ${result.missingBuildArg.length} variable(s) are read at BUILD time and absent from build.args:`);
     for (const e of result.missingBuildArg) lines.push(`          - ${e.name} (readBy: ${e.readBy}) — ${e.purpose}`);
     lines.push('        Fix: add each under the service\'s `build.args`, and declare a');
-    lines.push('        matching `ARG` in the Dockerfile builder stage.');
+    lines.push('        matching `ARG` in the Dockerfile stage that runs the build.');
+    lines.push('');
+  }
+  if (result.imageBuild?.checked && result.imageBuild.error !== null) {
+    lines.push(`  FAIL: the image build cannot be checked — ${result.imageBuild.error} (${result.imageBuild.dockerfile}).`);
+    lines.push('        A build argument reaches `next build` only through an ARG in the stage that');
+    lines.push('        runs it; with no such stage found, nothing can be said to arrive.');
+    lines.push('');
+  }
+  if (result.imageBuild?.checked && result.imageBuild.missingArg.length > 0) {
+    lines.push(`  FAIL: ${result.imageBuild.missingArg.length} build-time variable(s) have no ARG in the stage that runs the build`);
+    lines.push(`        (${describeBuildRuns(result.imageBuild)}), so the image build never sees them —`);
+    lines.push('        Docker hands a build argument only to a stage that declares it, and says nothing:');
+    for (const m of result.imageBuild.missingArg) lines.push(`          - ${m.name} (${m.sources.join('; ')})`);
+    lines.push('        Fix: add `ARG NAME` to that stage, above the RUN that builds.');
     lines.push('');
   }
   if (result.runtimeInert.length > 0) {
@@ -376,8 +652,7 @@ export function renderComposeReport(result, service = APP_SERVICE) {
 
 /** Entry point when run directly. */
 function main() {
-  const path = fileURLToPath(new URL('../docker-compose.yml', import.meta.url));
-  const result = checkComposeEnvCoverage(readFileSync(path, 'utf8'));
+  const result = checkRepository();
   process.stdout.write(renderComposeReport(result));
   process.exitCode = result.ok ? 0 : 1;
 }

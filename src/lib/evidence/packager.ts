@@ -162,6 +162,12 @@ export interface PackageInput {
   /**
    * The portal the RUN selected.
    *
+   * @deprecated 2026-09-11 (#421, ruled D5 in #434) — optional, and read by
+   * nothing. It is removed at the next major version of the publish contract
+   * (`docs/api/records-publish.md`), not before, because external publishers
+   * send it on the wire and the publish route accepts it. Put a portal on the
+   * call that addressed it (`ToolCallInput.args.portal`) instead.
+   *
    * ACCEPTED AND NOT CONSULTED, as of #192's website half. Nothing in this
    * module reads it any more: `dataSources` states the portal each CALL
    * carried (the harness's `fallbackPortal` has been inert since 0.3.1 and is
@@ -171,13 +177,15 @@ export interface PackageInput {
    * three surfaces can honestly make: a call that addressed a different portal,
    * or none, would be attributed to this one.
    *
-   * The field stays in the type because every caller passes it as an object
-   * literal, where an unknown property is a compile error — removing it is a
-   * change to every publish path and belongs to a phase scoped for it, not to
-   * this one. Filed as such; until then, what a caller passes here reaches no
-   * byte of the package.
+   * Optional rather than deleted: an unknown property in an object literal is
+   * a compile error, so deleting it would break every caller that still passes
+   * it. The publish route no longer passes it, and a package built with either
+   * of two values here or with none has one hash —
+   * `run-level-portal-reaches-no-byte.test.ts` drives that on a fixture whose
+   * calls name a different portal, and none, on datasets that reach
+   * `dataSources`.
    */
-  portal: string;
+  portal?: string;
   tokenUsage: { promptTokens?: number; completionTokens?: number };
   duration_ms?: number;
   promptVisibility: 'full_text' | 'hash_only';

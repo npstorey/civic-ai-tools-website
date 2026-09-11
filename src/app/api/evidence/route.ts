@@ -77,7 +77,16 @@ interface PublishRequest {
    *  the packager as posted. See `docs/api/records-publish.md`. */
   toolCalls: ToolCallInput[];
   model: string;
-  portal: string;
+  /**
+   * @deprecated 2026-09-11 (#421, ruled D5 in #434) — accepted and ignored.
+   * A run-level portal reaches no byte of the package (every portal claim a
+   * record makes is read from the call that made it, `toolCalls[].args.portal`),
+   * so this route does not pass it to the packager. Optional, so a body
+   * without it is well-formed; still declared, because external publishers
+   * send it. Removed at the next major version of the publish contract
+   * (`docs/api/records-publish.md`).
+   */
+  portal?: string;
   tokenUsage: { promptTokens?: number; completionTokens?: number };
   duration_ms?: number;
   promptVisibility: 'full_text' | 'hash_only';
@@ -282,7 +291,8 @@ export async function POST(request: NextRequest) {
       output: body.output,
       toolCalls: body.toolCalls,
       model: declaredModel,
-      portal: body.portal,
+      // `body.portal` is deliberately not passed: deprecated (#421), accepted
+      // on the wire and ignored — it reached no byte of the package either way.
       tokenUsage: body.tokenUsage,
       duration_ms: body.duration_ms,
       promptVisibility: body.promptVisibility,

@@ -46,7 +46,7 @@ This contract spans three repositories. If you're integrating, here's how they r
 
 Every ADR, `§`-reference, issue, and Q-number below is hyperlinked to its source — follow the link rather than guessing which repo it's in.
 
-_Last updated: 2026-08-05 — see the [change log](#change-log) for dated changes._
+_Last updated: 2026-09-11 — see the [change log](#change-log) for dated changes._
 
 **Status:** Schema version `0.1.0`. Fields may be added in a backwards-compatible way; breaking changes will bump the `schemaVersion` inside the package and be noted in the change log at the bottom of this document. The 2026-05-19 amendment introduces the `contentProfile` field per [ADR-0004](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0004-dathere-captureMethod-variant.md) and reverts the brief 2026-05-18 `datHere` captureMethod variant; both changes are additive — pre-ADR-0004 packages hash byte-identical with the new code.
 
@@ -127,7 +127,7 @@ Send exactly one auth header — when both are present, the `Authorization` head
 | `output`                | string \| BlobRef  | yes      | The assistant's final response text (markdown is accepted and preserved), OR a [blob reference](#blob-references-phase-b6).                             |
 | `toolCalls`             | array              | yes      | Array of tool calls made during the analysis. May be empty. See [`toolCalls[]`](#toolcalls-entries) below.                                              |
 | `model`                 | string             | yes      | The model identifier used for the analysis (e.g., `"openai/gpt-4o"`, `"anthropic/claude-opus-4-7"`).                                                    |
-| `portal`                | string             | yes      | The portal the RUN selected (e.g., `"data.cityofnewyork.us"`). **Accepted and not consulted** — no byte of the package is derived from it. Every portal claim a record makes is read from the CALL that made it: `queries[].arguments.portal`, `dataSources[].portalUrl` (the portal that call carried), and the PROV-O graph's `civic:portalDomain` (the portal that span carried). Still part of the declared request shape, so keep sending it; send the portal the run actually used rather than a placeholder, and send a call's own portal in that call's `args`. See the note below. |
+| `portal`                | string             | no       | **Deprecated (2026-09-11).** The portal the RUN selected. Accepted and ignored: a body may omit it, and a body that sends it is accepted without the value being passed on — no byte of the package is derived from it. Every portal claim a record makes is read from the CALL that made it: `queries[].arguments.portal`, `dataSources[].portalUrl` (the portal that call carried), and the PROV-O graph's `civic:portalDomain` (the portal that span carried), so send a call's own portal in that call's `args`. Removed from the request shape at the next major version of this contract, not before. See the note below. |
 | `tokenUsage`            | object             | yes      | `{ promptTokens?: number, completionTokens?: number }`. Both inner fields are optional.                                                                 |
 | `promptVisibility`      | string             | yes      | `"full_text"` to include the prompt text in the package and database record, or `"hash_only"` to include only the SHA-256 hash.                         |
 | `title`                 | string             | yes      | Display title for the record. Used to derive the URL slug.                                                                                     |
@@ -154,7 +154,7 @@ Send exactly one auth header — when both are present, the `Authorization` head
 ### Notes on specific fields
 
 - **`trace`** — The trace is embedded verbatim in the package and used to extract PROV-O provenance at publish time. External clients that don't run OpenTelemetry internally can ship an empty trace (`{ "resourceSpans": [] }`); per-tool provenance will use the static tool-name → source map. Including a trace with `mcp_tool_call` spans and `mcp.source` attributes produces richer attribution.
-- **`portal`** — **Nothing reads this field.** It was once the fallback portal for a Socrata `dataSources[]` entry whose tool call omitted `args.portal`; that fallback has been inert in the packaging harness since `@typedstandards/civic-typed-harness@0.3.1`, and as of civic-ai-tools#192's website half the packager no longer passes it anywhere — the run-level portal reaches neither `dataSources`, nor the PROV-O graph, nor `queries[]`. The reason is a correctness one and it is worth stating, because it tells a producer where to put the value instead: a run-level portal is not a claim any of those three surfaces can honestly make. A call that addressed a different portal, or none at all, would be attributed to this one — and these are bytes the instance signs. So each surface states what its own call or span carried, and a portal a producer wants in the record must travel on the call: `toolCalls[].args.portal`. The field stays in the request shape because every caller passes it; removing it is a schema change, not a documentation one. See [known chat-flow assumptions](#known-chat-flow-assumptions).
+- **`portal`** — **Deprecated as of 2026-09-11, and nothing reads it.** Since that date the field is optional: a body without it is accepted, and a body with it is accepted and the value ignored — the route does not pass it on. External publishers send it, so it stays accepted on the wire until the next major version of this contract removes it from the request shape ([civic-ai-tools-website#421](https://github.com/npstorey/civic-ai-tools-website/issues/421)); until then, sending it is harmless and changes no byte. It was once the fallback portal for a Socrata `dataSources[]` entry whose tool call omitted `args.portal`; that fallback has been inert in the packaging harness since `@typedstandards/civic-typed-harness@0.3.1`, and as of civic-ai-tools#192's website half the packager no longer passes it anywhere — the run-level portal reaches neither `dataSources`, nor the PROV-O graph, nor `queries[]`. The reason is a correctness one and it is worth stating, because it tells a producer where to put the value instead: a run-level portal is not a claim any of those three surfaces can honestly make. A call that addressed a different portal, or none at all, would be attributed to this one — and these are bytes the instance signs. So each surface states what its own call or span carried, and a portal a producer wants in the record must travel on the call: `toolCalls[].args.portal`. See [known chat-flow assumptions](#known-chat-flow-assumptions).
 - **`extensions`** — The `"org.civicaitools.notebook"` extension (a Jupyter-style notebook object) is emitted by the website's publish flows as a content-format marker. Under `contentProfile: "datHere"` the notebook extension is normatively required (OES §9.1.1 requirement 4); for other content profiles it stays informative. Two notebook provenances exist (Q31, carried INSIDE the notebook's own `metadata.extensions["org.civicaitools.notebook"].provenance`): `"skeleton"` — generated client-side from the chat transcript (data fetch reproducible; answer synthesis not), and `"executed"` — the signed-sandbox session's executed artifact carried **verbatim**, including its `org.civicaitools.execution` extension (sandbox id, runtime versions, execution timestamp). Publishing an executed session never regenerates a skeleton (civic-ai-tools-website#112). Clients may pass other reverse-DNS-keyed extensions for their own artifacts.
 - **`captureMethod`** — Required since 2026-04-29 per [ADR-0003](https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0003-evidence-capture-method.md). Three vocabulary values describing *how the content was captured*:
     - `chat-flow-stream` — website server captured bytes streaming to the browser; verbatim by construction at the wire layer.
@@ -343,7 +343,6 @@ await fetch('https://civicaitools.org/api/records', {
     output: outputRef,            // ← BlobRef instead of inline string
     toolCalls,
     model,
-    portal: 'data.cityofnewyork.us',
     tokenUsage,
     duration_ms,
     promptVisibility: 'full_text',
@@ -685,7 +684,6 @@ curl -sS -X POST https://civicaitools.org/api/records \
       }
     ],
     "model": "openai/gpt-4o",
-    "portal": "data.cityofnewyork.us",
     "tokenUsage": { "promptTokens": 1400, "completionTokens": 180 },
     "duration_ms": 4200,
     "promptVisibility": "full_text",
@@ -781,7 +779,6 @@ const res = await fetch('https://civicaitools.org/api/records', {
     output,
     toolCalls,
     model,
-    portal,
     tokenUsage: { promptTokens, completionTokens },
     duration_ms,
     promptVisibility: 'full_text',
@@ -806,7 +803,7 @@ const { slug, url, packageHash } = await res.json();
 These are implementation details that may surprise an external client. None of them currently block external publishing; each is called out so a client author can make an informed choice.
 
 1. ~~Session-cookie-only authentication.~~ **Resolved.** The endpoint now accepts OAuth 2.0 device-flow bearer tokens — see [Authentication](#authentication). Session cookies remain supported for backwards compatibility and one-off curls but carry an `X-Auth-Deprecated: cookie` response header. Issue [civic-ai-tools-website#73](https://github.com/npstorey/civic-ai-tools-website/issues/73) is closed.
-2. **`portal` is required and is read by nothing.** It is part of the declared request shape and every publish path sends it, but no packaging code consults it — see the [`portal` note](#notes-on-specific-fields) for where a portal claim actually comes from and where a producer should put one. This was true for Socrata analyses too, which is why the old wording ("only meaningful for Socrata") was misleading rather than merely incomplete: the field is not the source of a Socrata record's portal either. Removing it from the request shape requires a schema change and is not in scope for the publish-schema documentation work.
+2. **`portal` is deprecated and read by nothing.** Optional since 2026-09-11, and ignored when sent: no packaging code consults it — see the [`portal` note](#notes-on-specific-fields) for where a portal claim actually comes from and where a producer should put one. This was true for Socrata analyses too, which is why the old wording ("only meaningful for Socrata") was misleading rather than merely incomplete: the field is not the source of a Socrata record's portal either. It leaves the request shape at the next major version of this contract, because external publishers still send it.
 3. **`trace` format is OpenTelemetry JSON.** External clients that do not run OpenTelemetry internally can send `{ "resourceSpans": [] }`; per-source provenance will fall back to the static tool-name → source map (`get_data`/`search`/`fetch` → Socrata, `search_indicators`/`get_observations` → Data Commons). New tools added to the registry will need either the static map updated or a real trace.
 4. **Slug derivation is content-addressable, not user-provided.** The endpoint derives the URL slug from the title and the package hash. Clients cannot request a specific slug. A title change produces a different package hash only if the title is stored inside the package JSON — which it is not today (title and summary live on the database row, not in the canonical JSON), so re-publishing with a different title creates a different `evidence_records` row but an identical blob.
 5. **Extensions use reverse-DNS keys.** External clients adding new extensions should pick their own reverse-DNS prefix to avoid collisions with `org.civicaitools.*`.
@@ -814,6 +811,8 @@ These are implementation details that may surprise an external client. None of t
 ---
 
 ## Change log
+
+- **2026-09-11** — **`portal` deprecated: optional, accepted and ignored** (civic-ai-tools-website#421, ruled in civic-ai-tools-website#434). The request field is no longer required. A body without it is accepted; a body with it is accepted and the value ignored — the route stops passing it to the packager, where it had reached no byte since civic-ai-tools#192's website half. No package byte moves: one input built with either of two run-level portals, or with none, has one package hash (`src/lib/evidence/run-level-portal-reaches-no-byte.test.ts`). The request examples in this document no longer send it. It leaves the request shape at the next major version of this contract, not before, because external publishers send the field; until then, sending it is harmless. A portal claim travels on the call that made it (`toolCalls[].args.portal`).
 
 - **2026-09-06** — **`portal` documented as accepted-and-not-consulted** (civic-ai-tools-website#409, cold-read F5). No behaviour change: this corrects three places in this document that still described the run-level `portal` as the fallback for a Socrata `dataSources[]` entry whose call omitted `args.portal`. That fallback has been inert in the packaging harness since `@typedstandards/civic-typed-harness@0.3.1`, and the packager stopped passing a run-level portal to any surface as part of civic-ai-tools#192's website half. Producers reading the old wording could reasonably have concluded that setting `portal` was how a record came to name a portal; it is not, and never is for any source. A portal claim travels on the call that made it (`toolCalls[].args.portal`). The field remains in the request shape and every publish path still sends it.
 
