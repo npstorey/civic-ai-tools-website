@@ -144,6 +144,12 @@ async function main(): Promise<void> {
   const { buildCommitmentView } = await import('../src/lib/evidence/commitment.ts');
   const { generateNotebook } = await import('../src/lib/notebook.ts');
   const { getInstanceAttribution } = await import('../src/lib/site-config.ts');
+  // The key the notebook rides under, from the declaration the app's own
+  // writers and readers use (#403): the rehearsal writes it and reads it back
+  // the way the publish path does, not under a copy of the string.
+  const { NOTEBOOK_EXTENSION_KEY } = await import(
+    '../src/lib/notebook-author/notebook-provenance-reading.ts'
+  );
 
   // --- 4. Produce: build + sign a package under the alternate identity ----
   const notebook = generateNotebook(
@@ -186,7 +192,7 @@ async function main(): Promise<void> {
     contentProfile: 'datHere',
     type: DEFAULT_CONTENT_TYPE,
     signer: getActiveSigner(),
-    extensions: { 'org.civicaitools.notebook': notebook },
+    extensions: { [NOTEBOOK_EXTENSION_KEY]: notebook },
   });
 
   const signResult = signPackage(packageHash);
@@ -334,7 +340,7 @@ async function main(): Promise<void> {
   assert.equal(agent!['dcterms:title'], REHEARSAL_SIGNER.displayName);
   assert.equal(agent!['civic:url'], REHEARSAL_ORIGIN);
 
-  const notebookJson = JSON.stringify(pkg.extensions?.['org.civicaitools.notebook']);
+  const notebookJson = JSON.stringify(pkg.extensions?.[NOTEBOOK_EXTENSION_KEY]);
   assert.ok(
     notebookJson.includes(`via [${REHEARSAL_HOST}](${REHEARSAL_ORIGIN})`),
     'notebook attribution must carry the alternate host',

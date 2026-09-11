@@ -65,8 +65,10 @@ import {
   NOTEBOOK_PROVENANCE_VALUES,
   NOTEBOOK_PROVENANCE_SIGNALS,
 } from '../evidence/trust-signal.ts';
-
-const NOTEBOOK_EXTENSION_KEY = 'org.civicaitools.notebook';
+// Imported from the declaration the skeleton generator writes under, not
+// restated (#403). `notebook-extension-key.test.ts` pins that declaration to
+// the protocol string, so reading through it loses no byte-level check.
+import { NOTEBOOK_EXTENSION_KEY } from './notebook-provenance-reading.ts';
 
 const PORTAL = 'data.cityofnewyork.us';
 const ANSWERED = 'erm2-nwe9';

@@ -4,6 +4,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
 import { generateNotebook } from '@/lib/notebook';
+// The key the notebook is posted under (#403), from its client-safe
+// declaration. `@/lib/notebook` above already brings that module into this
+// bundle, so the import adds nothing to it — and the dialog writes under the
+// binding every reader looks under, not under a copy of the string.
+import { NOTEBOOK_EXTENSION_KEY } from '@/lib/notebook-author/notebook-provenance-reading';
 import { useInstanceAttribution } from '@/components/EvidenceOriginProvider';
 import type { Notebook } from '@/lib/notebook-author/cells';
 import { normalizeVisibility, type Visibility } from '@/lib/evidence/visibility';
@@ -212,7 +217,7 @@ export default function PublishEvidenceDialog({
           contentProfile,
           visibility,
           extensions: {
-            'org.civicaitools.notebook': notebook,
+            [NOTEBOOK_EXTENSION_KEY]: notebook,
           },
         }),
       });
