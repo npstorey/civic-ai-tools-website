@@ -6,6 +6,7 @@ import {
   type McpRegistry,
   type McpServerConfig,
 } from './registry.ts';
+import { McpErrorEnvelope, throwIfErrorResult } from './tool-call-failure.ts';
 
 const MCP_TIMEOUT_MS = 45_000; // 45-second timeout for MCP server requests
 
@@ -334,10 +335,14 @@ async function makeToolCall(
     try {
       const parsed = JSON.parse(text);
       if (parsed.result) {
+        // #429: a result carrying `isError: true` is the source refusing the
+        // call, not an answer. Thrown here and recorded by the loop's catch
+        // site as a rejected call, by its structure (`tool-call-failure.ts`).
+        throwIfErrorResult(parsed.result);
         return formatMcpResult(parsed.result);
       }
       if (parsed.error) {
-        throw new Error(parsed.error.message || 'MCP tool error');
+        throw new McpErrorEnvelope(parsed.error.message || 'MCP tool error');
       }
       throw new Error('Unexpected MCP response format');
     } catch (e) {
@@ -348,19 +353,36 @@ async function makeToolCall(
     }
   }
 
+  const parsed = parseSsePayload(jsonData);
+  if (parsed.result) {
+    throwIfErrorResult(parsed.result);
+    return formatMcpResult(parsed.result);
+  }
+  if (parsed.error) {
+    throw new McpErrorEnvelope(parsed.error.message || 'MCP tool error');
+  }
+  return JSON.stringify(parsed);
+}
+
+/**
+ * The payload of an SSE `data:` line — or the parse failure, and only for a
+ * body that does not parse (Wave N11 ruling R2).
+ *
+ * The SSE branch used to hold the parse AND the reading of the payload in one
+ * `try`, with a `catch` that replaced every error whose message contained
+ * "parse" by the parse failure. So a source that refused a call in words
+ * containing "parse" was recorded as a response this client could not read,
+ * and the refusal it had thrown one line earlier was lost. It never did the one
+ * thing it was for, either: V8's `JSON.parse` messages ("Unexpected token …",
+ * "Unexpected end of JSON input") do not contain the word, so a body that
+ * really did not parse came through as the raw `SyntaxError`. The errors the
+ * branch throws — the source's refusal, in either shape — are now outside the
+ * `try`, and pass through as they were thrown.
+ */
+function parseSsePayload(jsonData: string) {
   try {
-    const parsed = JSON.parse(jsonData);
-    if (parsed.result) {
-      return formatMcpResult(parsed.result);
-    }
-    if (parsed.error) {
-      throw new Error(parsed.error.message || 'MCP tool error');
-    }
-    return JSON.stringify(parsed);
-  } catch (e) {
-    if (e instanceof Error && !e.message.includes('parse')) {
-      throw e;
-    }
+    return JSON.parse(jsonData);
+  } catch {
     throw new Error('Failed to parse MCP response JSON');
   }
 }
