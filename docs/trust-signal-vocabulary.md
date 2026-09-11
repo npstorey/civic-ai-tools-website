@@ -181,9 +181,9 @@ Whether lifecycle is surfaced **in the verify panel at all** is left open for #1
 | Value | Tier | Copy |
 |---|---|---|
 | `executed` | Normal | Executed in a signed sandbox |
-| `skeleton` | Normal | Skeleton notebook (not executed) |
+| `skeleton` | Normal | Analysis notebook (not executed) |
 
-Both readings are honest and calm (per [open-questions Q31](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-questions.md)). `executed` is the only value emitted today; `skeleton` is reserved (no code path writes it yet).
+Both readings are honest and calm (per [open-questions Q31](https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/open-questions.md)). Both values are emitted: the executed pipeline stamps `executed`, and the skeleton generator has stamped `skeleton` since #401. A notebook carrying neither — every package published before the stamp existed — asserts nothing, and the page reads it as not stated: a reading in `notebook-provenance-reading.ts`, not a third value. The skeleton's copy names what the reader holds, an analysis notebook, rather than the code path that wrote it (#416).
 
 ---
 
