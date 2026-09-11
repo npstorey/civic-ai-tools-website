@@ -96,8 +96,11 @@ import {
   buildSampleRejectedNotebook,
 } from '../../components/notebook/__dev__/sampleExecutedNotebook.ts';
 import { readNotebookValidationOfNotebook } from './notebook-validation-reading.ts';
-
-const NOTEBOOK_EXTENSION_KEY = 'org.civicaitools.notebook';
+// Imported from the declaration `notebook-extension.ts` writes the verdict
+// under, not restated (#403). `notebook-extension-key.test.ts` pins that
+// declaration to the protocol string, so reading through it loses no
+// byte-level check.
+import { NOTEBOOK_EXTENSION_KEY } from './notebook-provenance-reading.ts';
 
 const PORTAL = 'data.cityofnewyork.us';
 const ANSWERED = 'erm2-nwe9';
@@ -301,8 +304,8 @@ test('the publish path hands the verdict to the package, and the dev fixture doe
   );
   assert.match(
     dialog,
-    /'org\.civicaitools\.notebook': notebook,/,
-    'and is posted verbatim as the package extension — a projection here would strip the verdict ' +
+    /\[NOTEBOOK_EXTENSION_KEY\]: notebook,/,
+    'and is posted verbatim as the package extension, under the shared key binding (#403) — a projection here would strip the verdict ' +
       'the route attached, which is exactly the shape #400 is',
   );
 

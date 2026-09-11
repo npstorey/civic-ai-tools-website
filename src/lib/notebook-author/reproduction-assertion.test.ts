@@ -25,10 +25,11 @@
  * rendered in JSX has no runnable assertion over it — not a skipped one, none
  * at all. The choice is now a pure function and this file drives it.
  *
- * WHAT IS OUT OF SCOPE HERE, stated so no reader infers otherwise: the
- * "Skeleton notebook (not executed)" copy `NotebookSection` shows is a separate
- * ruling and is not touched by this phase. This file asserts only what the PAGE
- * is entitled to claim above the download button.
+ * WHAT IS OUT OF SCOPE HERE, stated so no reader infers otherwise: the words
+ * `NotebookSection` shows for a skeleton (`NOTEBOOK_PROVENANCE_SIGNALS.skeleton`,
+ * worded by their own ruling, #416 and #434 D7) are not asserted here; see
+ * `../evidence/notebook-provenance-copy.test.ts`. This file asserts only what
+ * the PAGE is entitled to claim above the download button.
  *
  * FIXTURES. All three readings, built from the vocabulary that owns them rather
  * than from literals, and the third — a notebook with no `provenance` key at all

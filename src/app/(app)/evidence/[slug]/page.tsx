@@ -43,8 +43,12 @@ import { buildEvidenceJsonLd, buildEvidenceCitationTags } from '@/lib/evidence/p
 import { formatModelName, estimateCostUsd } from '@/lib/models';
 import { formatDataSourcesSummary } from '@/lib/evidence/data-sources';
 import { isBlobRef, fetchBlobRefText, type BlobRef } from '@/lib/evidence/blob-ref';
-
-const NOTEBOOK_EXTENSION_KEY = 'org.civicaitools.notebook';
+// The key the notebook sits under in a package (#403), imported from its
+// client-safe declaration rather than restated here: every producer writes
+// under that binding, and a local copy of the string is a reader that can look
+// under a key no producer wrote. `notebook-extension-key.test.ts` holds the
+// tree to that.
+import { NOTEBOOK_EXTENSION_KEY } from '@/lib/notebook-author/notebook-provenance-reading';
 
 interface PageProps {
   params: Promise<{ slug: string }>;

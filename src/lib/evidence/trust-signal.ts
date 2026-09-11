@@ -772,9 +772,16 @@ export const NOTEBOOK_PROVENANCE_SIGNALS: Record<NotebookProvenance, TrustSignal
     detail:
       'The notebook was run end-to-end in a signed sandbox; its outputs are the executed results.',
   },
+  // The label is in the reader's words, not the code path's (#416; #434, D7 = B).
+  // "Skeleton" names the generator that writes this notebook without running
+  // it, and a reader has no reason to know that word (design-principles
+  // Principle 9). "Executed" stays: it is the word the other reading and the
+  // rest of the page use for running. The VALUE `skeleton` is what a package
+  // carries and is unchanged; the label reaches no signed byte.
+  // `notebook-provenance-copy.test.ts` pins the words.
   skeleton: {
     tier: 'normal',
-    label: 'Skeleton notebook (not executed)',
+    label: 'Analysis notebook (not executed)',
     detail:
       'The notebook reproduces the steps but was not executed; its outputs were not regenerated.',
   },

@@ -21,6 +21,10 @@ import {
   getPublicationHost,
   getSidecarTrustRegistryUrls,
 } from '@/lib/site-config';
+// The key the notebook sits under in a package (#403), from its client-safe
+// declaration — the binding every producer writes under — rather than a local
+// copy of the string. `notebook-extension-key.test.ts` holds the tree to that.
+import { NOTEBOOK_EXTENSION_KEY } from '@/lib/notebook-author/notebook-provenance-reading';
 
 /**
  * GET /api/evidence/[slug]/bundle
@@ -51,8 +55,6 @@ import {
  *   reframe in ADR-0004); a chat-flow-stream capture with the datHere
  *   content profile is fully supported.
  */
-
-const NOTEBOOK_EXTENSION_KEY = 'org.civicaitools.notebook';
 
 type EvidenceRecord = typeof evidenceRecords.$inferSelect;
 type UserRecord = typeof users.$inferSelect;
