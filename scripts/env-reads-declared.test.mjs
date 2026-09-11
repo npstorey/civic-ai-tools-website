@@ -34,6 +34,15 @@
  *     universe. At this commit that is `scripts/check-standalone-assets.mjs`,
  *     which the image build runs through `build:standalone`.
  *
+ * BUILD_AND_RUN IS THE ONE HAND LIST HERE, AND IT IS CROSS-CHECKED. Every
+ * `npm run <x>` in a RUN, CMD or ENTRYPOINT of the Dockerfile that the compose
+ * app service builds must be on it (the fifth assertion), so a new image entry
+ * point cannot fall outside the universe without failing. What stays by hand,
+ * and why: the hosted platform's build (`build`, which its Next.js preset runs;
+ * `vercel.json` declares no build command), local `dev` and `start`, and
+ * `db:migrate` (the image's migrate target runs `drizzle-kit migrate` itself,
+ * and its config sits at the root, in the universe anyway).
+ *
  * Git answers or the scan throws: there is no narrower fallback, because a
  * guard that quietly shrinks its own reach is trusted for reach it no longer
  * has. A new file that is not yet staged is not tracked and not scanned; it is
@@ -96,7 +105,7 @@
  * the scan can check, so each fails the third assertion, by file and line,
  * until it is resolved or listed.
  *
- * FOUR ASSERTIONS; EVERY LIST IS CHECKED IN BOTH DIRECTIONS.
+ * FIVE ASSERTIONS; EVERY LIST IS CHECKED IN BOTH DIRECTIONS.
  *   - The scan measures: the universe is derived as stated, every read form
  *     the tree carries is seen at a named site, and a fixture source that
  *     exercises all seven forms — plus a comment, a string, a write and a
@@ -113,6 +122,7 @@
  *     rather than skipped. The tree has no such read at this commit, so
  *     NOT_ENV — the list of objects that legitimately carry such fields — is
  *     empty.
+ *   - BUILD_AND_RUN names every npm script the app image runs (above).
  *
  * BLIND SPOTS, stated so nobody has to infer them:
  *   - Reads inside dependencies. `node_modules` is not tracked: the sign-in
@@ -132,9 +142,11 @@
  *   - Whether a read is reachable. A read in dead code, or in a module only a
  *     test imports, still counts: over-reporting is the safe direction for an
  *     inventory.
- *   - Delivery. A declared name can still fail to reach the process — compose
- *     is `check-compose-env.mjs`'s job, and the image build's `ARG` lines are
- *     compared by nothing at this commit.
+ *   - Delivery. A declared name can still fail to reach the process. That is
+ *     `scripts/check-compose-env.mjs`'s job: it checks the compose file
+ *     against ENV_SPEC and, since #434, the `ARG` lines of the Dockerfile
+ *     stage that runs the build against both. A hosting platform's own
+ *     configuration is checked by nothing in this repository.
  */
 
 import { test } from 'node:test';
@@ -145,6 +157,7 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ENV_SPEC } from './preflight-env.mjs';
+import { parseComposeService, parseDockerfile } from './check-compose-env.mjs';
 
 const ts = createRequire(import.meta.url)('typescript');
 
@@ -785,4 +798,25 @@ test('the sweep: every UPPER_SNAKE property read sits on a recognised env record
     assert.ok(reason.length > 0, `NOT_ENV.${object} states no reason`);
     assert.ok(sweep.some((s) => s.object === object), `NOT_ENV lists ${object}, which no longer carries such a read — drop it`);
   }
+});
+
+test('BUILD_AND_RUN names every npm script the app image runs', () => {
+  const build = parseComposeService(readFileSync(join(REPO_ROOT, 'docker-compose.yml'), 'utf8')).build;
+  assert.ok(build, 'the compose app service builds no image — this cross-check has nothing to read; restate it');
+  const dockerfilePath = join(REPO_ROOT, build.context ?? '.', build.dockerfile ?? 'Dockerfile');
+  const dockerfile = parseDockerfile(readFileSync(dockerfilePath, 'utf8'));
+  const invoked = new Set();
+  for (const stage of dockerfile.stages) {
+    for (const { command } of [...stage.runs, ...stage.commands]) {
+      for (const m of command.matchAll(/\bnpm\s+run(?:-script)?\s+([\w:.-]+)/g)) invoked.add(m[1]);
+    }
+  }
+  assert.ok(invoked.size > 0, 'the app Dockerfile runs no npm script at all — the cross-check has stopped measuring');
+  const missing = [...invoked].filter((name) => !BUILD_AND_RUN.includes(name));
+  assert.deepEqual(
+    missing,
+    [],
+    `the app image runs npm script(s) BUILD_AND_RUN does not list, so the scripts/ files they run fall outside ` +
+      `the universe: ${missing.join(', ')}`,
+  );
 });
