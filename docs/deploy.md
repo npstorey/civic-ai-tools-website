@@ -226,8 +226,13 @@ category once — the branding set, the content sources, host topology and
 the tuning knobs were all documented here and none of them were listed
 there. `scripts/check-compose-env.mjs` now compares the compose file
 against the app's own variable inventory (`scripts/preflight-env.mjs`) on
-every CI run, so a variable that reaches this guide without reaching the
-container fails the build.
+every CI run, so a variable the inventory declares but the compose file
+does not deliver fails the build. The inventory is checked in turn against
+the code: `scripts/env-reads-declared.test.mjs` derives every variable the
+app reads and fails on one the inventory does not declare. Before that
+second check existed, a variable missing from both files passed the first
+— the footer's repo link and the three sponsor variables sat in that gap
+until civic-ai-tools-website#434.
 
 **Build time versus run time.** Most variables are read by the running
 server and arrive through the container's environment. A few are read at

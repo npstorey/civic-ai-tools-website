@@ -457,6 +457,20 @@ export const ENV_SPEC = [
   { name: 'SITE_BRAND_ACCENT', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Accent color (#rgb/#rrggbb) — overrides the accent tokens site-wide; unset or invalid = stylesheet default', hasFallback: true },
   { name: 'SITE_BRAND_TAGLINE', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Footer tagline line (default: the demo tagline)', hasFallback: true },
   { name: 'SITE_BRAND_ATTRIBUTION', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Footer attribution line, plain text (unset: the demo authored attribution markup)', hasFallback: true },
+  // Where this deployment's source lives, and who funds it (#259 P4). Each is a
+  // factual claim about THIS deployment, so none has a coded default: unset,
+  // the footer's repo link and the sponsor line render nothing. The prefix is
+  // the one exception — generic wording with a coded default
+  // (DEFAULT_SPONSOR_PREFIX), and it renders only beside a configured name.
+  // Read at both times, like the rest of this set: the root layout's footer
+  // renders all four (and /about renders the sponsor line), and those pages
+  // prerender — measured #434 P1: a build with a marker value in each of the
+  // four baked all four markers into the HTML of eight static routes.
+  // src/lib/brand-config.ts (repo URL) and src/lib/site-config.ts (sponsor).
+  { name: 'SITE_BRAND_REPO_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Footer "GitHub" link — this instance\'s own source repository (unset: no repo link)' },
+  { name: 'SITE_SPONSOR_NAME', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Sponsor acknowledgment in the footer and on /about, "{prefix} {name}." (unset: no sponsor line)' },
+  { name: 'SITE_SPONSOR_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Where the sponsor\'s name links (unset: the name renders unlinked; inert without SITE_SPONSOR_NAME)' },
+  { name: 'SITE_SPONSOR_PREFIX', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Wording in front of the sponsor\'s name (default "Fiscally sponsored by"; inert without SITE_SPONSOR_NAME)', hasFallback: true },
 
   // --- Instance content sources (#241: src/lib/site-config.ts). All
   //     optional, and unset means one thing: this instance has no content
