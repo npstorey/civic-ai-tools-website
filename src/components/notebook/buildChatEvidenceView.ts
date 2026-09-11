@@ -33,6 +33,11 @@ import type { Notebook, NotebookCell } from '../../lib/notebook-author/cells.ts'
 // synthesize.ts → helpers/index.ts → node:fs and pulls server-only
 // modules into client bundles.
 import { SUMMARY_EXTENSION_KEY, SYNTHESIS_CELL_ROLE } from '../../lib/notebook-author/prompt.ts';
+// #426: section D's words are the two formatters every other reader of a
+// recorded call uses, imported by relative path like the line above so the
+// suite can drive this module under Node.
+import { reasonWithoutIdentifier } from '../../lib/streaming.ts';
+import { describeQueryOutcome } from '../../lib/evidence/query-step.ts';
 import type { CapturedToolCall } from '@/hooks/useNotebookStream';
 
 const EXECUTION_EXTENSION_KEY = 'org.civicaitools.execution';
@@ -253,5 +258,47 @@ export function buildChatEvidenceView(input: BuildChatEvidenceViewInput): ChatEv
     composedSystemPrompt: input.composedSystemPrompt ?? null,
     composedSystemPromptHash: input.composedSystemPromptHash ?? null,
     signingKeyId: input.signingKeyId ?? null,
+  };
+}
+
+/** Section D's words for one recorded call (#426). */
+export interface DeliberativeTraceLine {
+  /** The call as recorded: its tool name, and its operation type when the loop derived one. */
+  label: string;
+  /**
+   * The record's "why" phrase once `reasonWithoutIdentifier` has passed it, on
+   * every call, answered or rejected (the owner's ruling R5) — else the call's
+   * number, as the skeleton generator titles a step (`notebook.ts:467`).
+   */
+  heading: string;
+  /**
+   * What the call returned, in `describeQueryOutcome`'s words — the record
+   * page's formatter, so a rejected call reads as rejected here too. `null`
+   * when nothing was recorded, which is stated as nothing, as the live card does.
+   */
+  outcome: string | null;
+}
+
+/**
+ * Section D's line for one call. `position` is the call's number in section
+ * D's own list, which holds every call the run made. The skeleton generator
+ * numbers analysis steps only, so the two numbers can differ for one call; this
+ * is the number of the list the reader is looking at, as the live card numbers
+ * its steps (`ProgressLog.tsx`).
+ */
+export function deliberativeTraceLine(
+  call: Pick<CapturedToolCall, 'name' | 'operationType' | 'reason' | 'resultSummary' | 'failed' | 'failureKind'>,
+  position: number,
+): DeliberativeTraceLine {
+  const outcome = describeQueryOutcome({
+    failed: call.failed,
+    failureKind: call.failureKind,
+    resultRows: call.resultSummary?.rows,
+    resultColumns: call.resultSummary?.columns,
+  });
+  return {
+    label: `${call.name}${call.operationType ? ` (${call.operationType})` : ''}`,
+    heading: reasonWithoutIdentifier(call.reason) || `Query ${position}`,
+    outcome: outcome.kind === 'unrecorded' ? null : outcome.text,
   };
 }

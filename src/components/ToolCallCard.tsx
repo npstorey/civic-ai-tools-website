@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import SoqlDisplay from './SoqlDisplay';
-import { generatePlainEnglishQuery } from '@/lib/streaming';
+import { generatePlainEnglishQuery, reasonWithoutIdentifier } from '@/lib/streaming';
 import { describeQueryOutcome } from '@/lib/evidence/query-step';
 import type { ToolFailureKind } from '@/lib/notebook-author/tool-to-cell';
 import { OP_BADGE_COLORS, OP_BADGE_TOOLTIPS } from './tool-badges';
@@ -110,6 +110,13 @@ export default function ToolCallCard({
   const urls = failed ? null : buildSocrataUrl(args);
   const datasetId = args.dataset_id as string | undefined;
   const plainEnglish = opType === 'query' ? generatePlainEnglishQuery(args) : null;
+  // The record's "why" phrase, on EVERY call (#426, the owner's R5). The card
+  // paints at the call, before its outcome is known, so a rule for rejected
+  // calls only would print a `fetch`'s `to look up record:<portal>/…` while the
+  // call runs and retract it after. The shared sanitiser drops a phrase that
+  // names an identifier whole, and the slot stays empty: the badge, the source
+  // link and the row count already say what a reader needs.
+  const shownReason = reasonWithoutIdentifier(reason);
 
   return (
     <div
@@ -174,8 +181,9 @@ export default function ToolCallCard({
           {badgeLabel}
         </span>
 
-        {/* Reason */}
-        {reason && (
+        {/* Reason — the recorded phrase through the shared sanitiser, on every
+            call (#426, R5). A phrase that names an identifier leaves the slot empty. */}
+        {shownReason && (
           <span
             style={{
               fontSize: '12px',
@@ -187,7 +195,7 @@ export default function ToolCallCard({
               minWidth: 0,
             }}
           >
-            {reason}
+            {shownReason}
           </span>
         )}
 
