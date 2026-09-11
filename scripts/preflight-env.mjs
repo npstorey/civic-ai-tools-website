@@ -449,14 +449,18 @@ export const ENV_SPEC = [
   { name: 'PUBLISHER_PLATFORM_AGENT_URL', priorEraName: 'EVIDENCE_PLATFORM_AGENT_URL', tier: 'optional', purpose: 'PROV platform-agent URL (defaults to PUBLISHER_SITE_ORIGIN)', hasFallback: true },
 
   // --- Instance branding (#217: chrome-only theming seam; src/lib/brand-config.ts).
-  //     All optional with coded defaults: unset, the demo chrome renders
-  //     byte-identically. Chrome only — nothing here is emitted inside signed
-  //     output (that is the PUBLISHER_* identity set above), so these can
-  //     never invalidate a package or a registry cross-check. ---
-  { name: 'SITE_BRAND_NAME', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Instance display name — header wordmark, page titles, citation labels (default "Civic AI Tools")', hasFallback: true },
+  //     All optional. Unset names nobody (#259): the name, tagline and
+  //     attribution each render nothing rather than the reference
+  //     deployment's, so none of them has a coded fallback — each getter
+  //     returns null when unset. Only the accent keeps one, the stylesheet
+  //     default: a palette is not an identity claim. Chrome only — nothing
+  //     here is emitted inside signed output (that is the PUBLISHER_* identity
+  //     set above), so these can never invalidate a package or a registry
+  //     cross-check. ---
+  { name: 'SITE_BRAND_NAME', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Instance display name — header wordmark, page titles, citation labels (unset: no name — titles drop their brand suffix, citations name no publisher, the wordmark reads "Home")' },
   { name: 'SITE_BRAND_ACCENT', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Accent color (#rgb/#rrggbb) — overrides the accent tokens site-wide; unset or invalid = stylesheet default', hasFallback: true },
-  { name: 'SITE_BRAND_TAGLINE', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Footer tagline line (default: the demo tagline)', hasFallback: true },
-  { name: 'SITE_BRAND_ATTRIBUTION', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Footer attribution line, plain text (unset: the demo authored attribution markup)', hasFallback: true },
+  { name: 'SITE_BRAND_TAGLINE', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Footer tagline line and the default page description (unset: neither renders)' },
+  { name: 'SITE_BRAND_ATTRIBUTION', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Footer attribution line, plain text — who runs this deployment (unset: no attribution line)' },
   // Where this deployment's source lives, and who funds it (#259 P4). Each is a
   // factual claim about THIS deployment, so none has a coded default: unset,
   // the footer's repo link and the sponsor line render nothing. The prefix is
