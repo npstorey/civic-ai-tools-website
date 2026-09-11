@@ -176,7 +176,8 @@ async function main(): Promise<void> {
       },
     ],
     model: 'test/model',
-    portal: 'data.example.gov',
+    // No run-level `portal`: deprecated (#421) and read by nothing. The call
+    // above carries the portal it addressed, which is where the record reads it.
     tokenUsage: { promptTokens: 10, completionTokens: 5 },
     promptVisibility: 'full_text',
     title: 'Rehearsal analysis',
