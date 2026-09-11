@@ -5,8 +5,10 @@
  * returned, and a page must never conflate them:
  *
  *   - `failed` (with `failureKind`): the loop recorded the call as rejected
- *     at its catch site — the source did not answer it. Stated as a failure,
- *     with the recorded kind said in the reader's words.
+ *     at its catch site — the source did not answer it, or answered it with a
+ *     failure (a JSON-RPC `error`, or a result carrying `isError: true`,
+ *     #429). Stated as a failure, with the recorded kind said in the reader's
+ *     words.
  *   - `resultRows` (with `resultColumns`): a row count was recorded. Zero
  *     rows is a returned result — "no matching records" — not a failure.
  *   - neither: no result summary was recorded. This is the ordinary shape of

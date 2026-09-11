@@ -108,11 +108,13 @@ export interface ToolCallInput {
   operationType?: string;
   /**
    * Set when the loop recorded the call as rejected (`ToolCallRecord.failed`,
-   * run-tool-loop.ts): the source did not answer it. Carried into the
-   * envelope's `queries[]` as `failed`/`failureKind`, so a reader of the
-   * package can tell a rejected call from one that returned nothing (#384,
-   * family F5). Absent means the call was not recorded as failed — never
-   * `false` — and the packager writes neither key when neither was recorded.
+   * run-tool-loop.ts): the source did not answer it, or answered it with a
+   * failure — a JSON-RPC `error`, or a result carrying `isError: true` (#429).
+   * Carried into the envelope's `queries[]` as `failed`/`failureKind`, so a
+   * reader of the package can tell a rejected call from one that returned
+   * nothing (#384, family F5). Absent means the call was not recorded as
+   * failed — never `false` — and the packager writes neither key when neither
+   * was recorded.
    *
    * It also decides whether the call asserts an ACCESS: the harness reads it
    * (`ToolCallSummary.failed`, 0.4.0) and a call recorded as failed mints no
