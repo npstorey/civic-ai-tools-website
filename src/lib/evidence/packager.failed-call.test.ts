@@ -74,9 +74,19 @@ const RETURNED_ONE_ROW: ToolCallRecord = {
 };
 
 /**
- * A call the source did not answer in time, exactly as the loop records it:
- * `failed`/`failureKind` set at the catch site, no `resultSummary`, no
- * `duration_ms` (the call never completed, so nothing measured one).
+ * A call the source did not answer in time: `failed`/`failureKind` set at the
+ * catch site, and no `resultSummary` — a rejected call summarises nothing.
+ *
+ * IT CARRIES NO `duration_ms`, AND THAT IS NOW A DATED SHAPE, NOT THE CURRENT
+ * PRODUCER'S. The clause here used to read "the call never completed, so
+ * nothing measured one". That was never quite true and is now false: the loop
+ * starts one clock outside its `try` (#384 P8) and, since #413 (Wave N11 P4),
+ * records the elapsed on a rejection exactly as it does on a result. This
+ * fixture is deliberately left as it was — it is the shape of a record
+ * published BEFORE that change, which is what the two pinned envelope hashes
+ * below are taken over and what every stored package predating P4 looks like.
+ * A rejected call with an elapsed is driven, end to end through the real
+ * loop, in `../model-loop/a-rejected-call-carries-its-elapsed.test.ts`.
  */
 const REJECTED_TIMEOUT: ToolCallRecord = {
   name: 'get_data',
@@ -177,6 +187,16 @@ test('packager: a call recorded without a failure carries neither key — absent
 // (measured 2026-09-04 on this branch). A package with a rejected call is not
 // byte-identical across this bump, and is not meant to be — #192 is the
 // statement that it should not have been byte-identical before.
+//
+// RE-DERIVED AT WAVE N11 P4 (#413 + #411). BOTH HASHES ARE UNCHANGED, and
+// the reason is structural rather than lucky. #413 changes what the LOOP
+// records on a rejected call; these hashes are taken over `[RETURNED_ONE_ROW]`,
+// a hand-written record that never went through the loop and carries a
+// rejection nowhere, so no input to the packager moved. #411 removes a
+// `skill_fetch` span attribute; this fixture's trace is `{ resourceSpans: [] }`,
+// so `extractSkillMetadata` returned `{}` before the change and returns `{}`
+// after it. Neither hash could have moved, and neither did — measured, not
+// assumed.
 //
 // WHAT THESE TWO HASHES DO NOT COVER. The fixture's trace is
 // `{ resourceSpans: [] }`, so no `mcp_tool_call` span reaches the PROV-O graph

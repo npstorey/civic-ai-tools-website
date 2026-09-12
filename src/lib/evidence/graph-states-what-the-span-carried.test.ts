@@ -14,24 +14,32 @@
 //
 // THE SPAN SHAPE IS THE PRODUCER'S, NOT THIS FILE'S. Every attribute below is
 // written the way `src/lib/model-loop/run-tool-loop.ts` writes it. The line
-// numbers were re-read in the tree by Wave N10 P1, which moved one of these
-// sites; every one of them was stale before that (the file had carried the
+// numbers were re-read in the tree by Wave N11 P4, which moved two of these
+// sites and shifted the rest; they were re-read by Wave N10 P1 before that,
+// and every one of them was stale before THAT (the file had carried the
 // numbers `:799`, `:815-821`, `:816`, `:821`, `:834-841`, `:858-859` and
-// `:861-864` since before Wave N9 P8 shifted the whole block down):
-//   - `:825-832` opens the span with `tool.name` (`:826`),
+// `:861-864` since before Wave N9 P8 shifted the whole block down). Read at
+// `689e509` plus P4's diff:
+//   - `:832-839` opens the span with `tool.name` (`:833`),
 //     `tool.operation_type`, `tool.arguments`, `mcp.source`,
 //     `tool.dataset_id` only when the arguments carry one, and
-//     `tool.portal_domain` (`:831`) only when they carry a portal;
-//   - `:809` injects the run's portal into `get_data` arguments and NO other
+//     `tool.portal_domain` (`:838`) only when they carry a portal;
+//   - `:816` injects the run's portal into `get_data` arguments and NO other
 //     tool's, which is why a `search` or `fetch` span carries no portal at
 //     all;
-//   - `:847-852` ends a successful span with `tool.response_hash`,
+//   - `:854-859` ends a successful span with `tool.response_hash`,
 //     `tool.response_size_bytes`, `tool.duration_ms` and `tool.response_rows`;
-//   - `:892-895` ends a rejected one with `error: true` and `error.kind` — the
+//   - `:917-921` ends a rejected one with `error: true`, `error.kind` — the
 //     classified `ToolFailureKind`, never the source's raw message (#404) —
-//     and no response hash, while `:871-872` sets `failed` / `failureKind` on
-//     the tool-call record. The span and the record therefore state the same
-//     classified value and nothing else about the cause.
+//     and `tool.duration_ms`, and no response hash, while `:889-891` sets
+//     `failed` / `failureKind` / `duration_ms` on the tool-call record. The
+//     span and the record therefore state the same classified value, the same
+//     elapsed, and nothing else about the cause.
+//   - The elapsed on a rejected span is P4's change (#413) and is the one
+//     claim in this list that moved rather than shifted. Both paths read the
+//     SAME clock, started at `:842` outside the `try`, and each reads it
+//     once: the success path at `:848`, the catch path at `:887`. What the
+//     graph does with it is asserted in read-back (g) below.
 // The operation types come from `deriveOperationType` and the sources from
 // `sourceIdForToolName`, so `fetch`'s honest `'unknown'` is derived here, not
 // asserted by hand.
@@ -69,7 +77,7 @@
 //         parses them.
 //   CONTROL — every query entity carries its own span's `tool.name`. The
 //         `|| 'get_data'` default at `:177` is latent for this producer
-//         (`run-tool-loop.ts:826` always writes the name), so this pins the
+//         (`run-tool-loop.ts:833` always writes the name), so this pins the
 //         honest shape rather than showing the defect; it goes red the day a
 //         producer stops writing one.
 //   CONTROL — `queries` (P3's `failed` / `failureKind`), honest at base.
@@ -89,6 +97,17 @@
 // the read-back package said `queries[3]` failed and that `queries[3]`'s
 // dataset had been accessed, at a timestamp. Every other assertion in this
 // file kept its verdict.
+//
+// AMENDED BY WAVE N11 P4 (#413). The rejected span (iv) now also ends with
+// `tool.duration_ms`, because the producer's catch site now records the
+// elapsed it always measured — on the record, on the span, and through the
+// harness onto the activity as `civic:durationMs`. Two things follow here:
+// `buildTrace` refuses a rejected fixture that states no elapsed (a fixture
+// without one is no longer the producer's shape), and read-back (g) gained a
+// case asserting the duration BESIDE `civic:failed`. Nothing else in this
+// file changed verdict; the package these assertions read is rebuilt from the
+// amended trace, and its own hash is recomputed by the verification control
+// rather than pinned to a literal.
 //
 // AMENDED BY WAVE N10 P1 (#404). P1 changed one thing here: the rejected span
 // now ends with `error.kind`, the classified `ToolFailureKind`, where it used
@@ -139,7 +158,7 @@ for (const [name, value] of Object.entries(REFERENCE_IDENTITY_ENV)) {
 }
 
 /** The portal the RUN selected — the value `PackageInput.portal` carries and
- *  the one `run-tool-loop.ts:809` injects into `get_data` arguments. */
+ *  the one `run-tool-loop.ts:816` injects into `get_data` arguments. */
 const RUN_PORTAL = 'data.cityofnewyork.us';
 /** A portal that appears only inside a `fetch` id's server-side grammar. The
  *  graph must adopt it no more than it adopts the run's. */
@@ -205,6 +224,11 @@ function runFixtures(): SpanFixture[] {
         },
         failed: true,
         failureKind: 'timeout',
+        // #413 (Wave N11 P4): the catch site records the elapsed too, off the
+        // same clock the success path reads. A rejected fixture with no
+        // duration is no longer the producer's shape, and `buildTrace`
+        // refuses one.
+        duration_ms: 47,
       },
     },
   ];
@@ -229,7 +253,7 @@ function buildTrace(fixtures: SpanFixture[]): Record<string, unknown> {
     const operationType = deriveOperationType(name, args);
     const toolSource = sourceIdForToolName(name) ?? 'unknown';
 
-    // run-tool-loop.ts:825-832, attribute for attribute.
+    // run-tool-loop.ts:832-839, attribute for attribute.
     const spanId = builder.startSpan('mcp_tool_call', undefined, {
       'tool.name': name,
       'tool.operation_type': operationType || 'unknown',
@@ -241,7 +265,7 @@ function buildTrace(fixtures: SpanFixture[]): Record<string, unknown> {
     fixture.spanId = spanId;
 
     if (fixture.result !== undefined) {
-      // run-tool-loop.ts:847-852.
+      // run-tool-loop.ts:854-859.
       builder.endSpan(spanId, {
         'tool.response_hash': traceHash(fixture.result),
         'tool.response_size_bytes': fixture.result.length,
@@ -249,18 +273,26 @@ function buildTrace(fixtures: SpanFixture[]): Record<string, unknown> {
         ...(fixture.call.resultSummary ? { 'tool.response_rows': fixture.call.resultSummary.rows } : {}),
       });
     } else {
-      // run-tool-loop.ts:892-895 — a rejection ends with no response hash,
-      // and with the CLASSIFIED kind rather than the source's raw text
-      // (#404, Wave N10 P1). `error.kind` carries the same `ToolFailureKind`
-      // value the catch site writes onto the record at `:871-872`, so it is
-      // read off the fixture's own call rather than restated: a fixture that
-      // could state one kind on the span and another on the record is not the
-      // producer's shape.
+      // run-tool-loop.ts:917-921 — a rejection ends with no response hash,
+      // with the CLASSIFIED kind rather than the source's raw text (#404,
+      // Wave N10 P1), and with the elapsed the loop measured (#413, Wave N11
+      // P4). `error.kind` and `tool.duration_ms` carry the same values the
+      // catch site writes onto the record at `:889-891`, so both are read off
+      // the fixture's own call rather than restated: a fixture that could
+      // state one kind, or one elapsed, on the span and another on the record
+      // is not the producer's shape.
       const failureKind = fixture.call.failureKind;
       assert.ok(failureKind, 'a rejected fixture states the kind the loop classified');
+      const rejectedDuration = fixture.call.duration_ms;
+      assert.ok(
+        typeof rejectedDuration === 'number' && rejectedDuration > 0,
+        'a rejected fixture states the elapsed the loop measured (#413) — before P4 the catch ' +
+          'site recorded none, and a fixture that still omits it is not the producer\'s shape',
+      );
       builder.endSpan(spanId, {
         error: true,
         'error.kind': failureKind,
+        'tool.duration_ms': rejectedDuration,
       });
     }
   }
@@ -381,7 +413,7 @@ test('read-back (a) RED: the search span carried no portal, so no node derived f
   assertNoPortalClaim(
     derived,
     RUN_PORTAL,
-    "the span carried no tool.portal_domain (run-tool-loop.ts:831 writes one only when the arguments do, " +
+    "the span carried no tool.portal_domain (run-tool-loop.ts:838 writes one only when the arguments do, " +
       "and :809 injects a portal for get_data alone), so the run's portal is not what this call addressed",
   );
 });
@@ -568,7 +600,7 @@ test('read-back (g): the activity for the rejected span carries civic:failed and
     activity['civic:failed'],
     true,
     'the signed graph states nothing about a call the source refused: the span ended with ' +
-      'error: true (run-tool-loop.ts:892-895) and the activity derived from it carries no ' +
+      'error: true (run-tool-loop.ts:917-921) and the activity derived from it carries no ' +
       'civic:failed, so a refused call and one that answered are the same node',
   );
   assert.equal(
@@ -582,6 +614,23 @@ test('read-back (g): the activity for the rejected span carries civic:failed and
   assert.ok(
     Object.prototype.hasOwnProperty.call(activity, 'civic:failed'),
     'civic:failureKind may not appear without civic:failed',
+  );
+});
+
+test('read-back (g): the rejected activity states how long the attempt took, BESIDE how it ended (#413)', () => {
+  // The combination is the point, and it is one the graph had never emitted:
+  // the harness spreads `civic:durationMs` from `tool.duration_ms` and
+  // `civic:failed` from `error`, and until P4 the reference producer wrote
+  // the second on a rejected span and never the first — its own comment cited
+  // civic-ai-tools-website#413 by number as the reason. Both halves are
+  // asserted together, because either alone is a shape that already existed.
+  const activity = activityForToolSpan(spanIdFor(3));
+  assert.equal(activity['civic:failed'], true, 'PREMISE: the activity states the rejection');
+  assert.equal(
+    activity['civic:durationMs'],
+    FIXTURES[3].call.duration_ms,
+    'the signed graph says a call was rejected and does not say how long the source took to ' +
+      'reject it, though the loop measured it on the same clock it measures a result on',
   );
 });
 

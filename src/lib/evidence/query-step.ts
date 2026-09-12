@@ -54,7 +54,19 @@ export function describeQueryOutcome(entry: QueryOutcomeInput): QueryOutcome {
     // producer — reads as `unknown`: a cause that was not measured is not
     // asserted (design principle 3).
     const kind: ToolFailureKind = isToolFailureKind(entry.failureKind) ? entry.failureKind : 'unknown';
-    return { kind: 'failed', text: `This request did not complete. ${FAILURE_REASON[kind]}` };
+    // #413: a rejected entry may now carry the elapsed the loop measured, and
+    // it is stated HERE, in words, rather than left to each renderer's bare
+    // number. `ProvenanceChain` used to print "· 1.2s" before this sentence
+    // for every entry carrying one; beside "did not complete" that number
+    // reads as how long the call took to succeed, which is the one thing it
+    // is not. It is the elapsed until the source rejected the call — a real
+    // measurement (design principle 3, "tool-call durations are measured"),
+    // so it is disclosed, in its own sentence, after the cause. An entry that
+    // carries none says nothing: absence stays absence and is never a zero.
+    const elapsed = entry.duration_ms !== undefined
+      ? ` The attempt took ${entry.duration_ms.toLocaleString()}ms.`
+      : '';
+    return { kind: 'failed', text: `This request did not complete. ${FAILURE_REASON[kind]}${elapsed}` };
   }
   if (entry.resultRows !== undefined) {
     const rows = `${entry.resultRows.toLocaleString()} ${entry.resultRows === 1 ? 'row' : 'rows'}`;
