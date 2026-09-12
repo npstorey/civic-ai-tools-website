@@ -54,7 +54,11 @@
 //     out of scope here and the `inline` control is the shape it produces.
 //   - No React component is rendered; the page's decision is asserted through
 //     the exported function both of its sites call, plus a derived source
-//     read that they call it.
+//     read that they call it. That read is TEXTUAL and windowed: it looks for
+//     `carriesSkillText(` in the eight lines above each `<SkillSection`. A
+//     site that computed the decision further away, or under an alias, would
+//     read as unguarded here (a false red, which is the safe direction), and
+//     one that called the function and then ignored its answer would not.
 //
 // Run with: npm test
 //   (or: node --test --experimental-strip-types \
@@ -244,19 +248,32 @@ test('#411 CONTROL: a record published BEFORE this change still renders its sect
   assert.equal(describeSkillDisclosure({ skillText: '' }).kind, 'none', 'an empty string is not a prompt');
 });
 
-test('#411: every site that renders SkillSection asks that one decision — derived, not a named file', () => {
-  const renderers = tracked()
-    .filter((f) => !f.includes('.test.'))
-    .filter((f) => f !== 'src/components/evidence/SkillSection.tsx')
-    .filter((f) => sourceOf(f).includes('<SkillSection'));
-  assert.ok(renderers.length > 0, 'no file renders SkillSection — the scan found nothing to hold');
-  for (const f of renderers) {
-    assert.ok(
-      sourceOf(f).includes('carriesSkillText'),
-      `${f} renders SkillSection behind its own condition. Both of the record page's sites asked ` +
-        '`skillMetadata?.skillText || resolution?.skillTextIsBlob` longhand before P4; a condition ' +
-        'written out in a page cannot be driven by a test, and "the section quietly disappeared" is ' +
-        'what #411 changed for every record published after it',
-    );
+test('#411: every SITE that renders SkillSection asks that one decision — derived, and counted per site', () => {
+  // Per RENDER SITE, not per file. A file-level "does this source mention
+  // `carriesSkillText`" check passes while one of two sites still carries its
+  // own longhand condition — measured: that exact mutation left the earlier
+  // version of this case green. The window is the eight lines above each
+  // `<SkillSection`, which is where the enclosing JSX conditional sits in
+  // both of the record page's layouts.
+  const WINDOW = 8;
+  const sites: string[] = [];
+  const unguarded: string[] = [];
+  for (const f of tracked().filter((x) => !x.includes('.test.') && x !== 'src/components/evidence/SkillSection.tsx')) {
+    const lines = sourceOf(f).split('\n');
+    lines.forEach((line, i) => {
+      if (!line.includes('<SkillSection')) return;
+      sites.push(`${f}:${i + 1}`);
+      const before = lines.slice(Math.max(0, i - WINDOW), i).join('\n');
+      if (!before.includes('carriesSkillText(')) unguarded.push(`${f}:${i + 1}`);
+    });
   }
+  assert.ok(sites.length > 0, 'no file renders SkillSection — the scan found nothing to hold, which is not a pass');
+  assert.deepEqual(
+    unguarded,
+    [],
+    'a site renders SkillSection behind a condition of its own. Both of the record page\'s sites ' +
+      'asked `skillMetadata?.skillText || resolution?.skillTextIsBlob` longhand before P4; a ' +
+      'condition written out in a page cannot be driven by a test, and "the section quietly ' +
+      'disappeared" is what #411 changed for every record published after it',
+  );
 });
