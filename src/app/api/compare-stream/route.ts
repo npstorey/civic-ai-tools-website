@@ -172,9 +172,19 @@ export async function POST(request: NextRequest) {
     const skillFetchSpanId = trace.startSpan('skill_fetch');
     const systemPromptWithMcp = await buildSystemPrompt(portal);
     const systemPromptHash = hash(systemPromptWithMcp);
+    // #411, ruling D3: the HASH, not the text. This span goes inline into the
+    // bytes an instance signs, and `skill.text` put the whole composed prompt
+    // there — every source's skill file, every instruction, on every package
+    // — which is not something a record needs to assert to be scrutinised.
+    // The hash identifies the prompt exactly: a reader who has the composed
+    // prompt can prove it is the one this run used, and a reader who does not
+    // learns that one was recorded and what it hashes to, which is the whole
+    // of what the record was ever able to establish. `skill.text_hash` stays,
+    // the routing attributes stay (they name the servers, not the prose), and
+    // nothing else here carries the text. Records published before this keep
+    // theirs: their bytes are signed and this changes no byte of them.
     trace.endSpan(skillFetchSpanId, {
       'skill.text_hash': systemPromptHash,
-      'skill.text': systemPromptWithMcp,
       ...skillRoutingTraceAttributes(readMcpEnvFromProcess()),
     });
 

@@ -43,6 +43,10 @@ import { buildEvidenceJsonLd, buildEvidenceCitationTags } from '@/lib/evidence/p
 import { formatModelName, estimateCostUsd } from '@/lib/models';
 import { formatDataSourcesSummary } from '@/lib/evidence/data-sources';
 import { isBlobRef, fetchBlobRefText, type BlobRef } from '@/lib/evidence/blob-ref';
+// What the record can disclose about the composed skill prompt (#411, D3) —
+// one decision, read by both `SkillSection` sites below, and drivable from a
+// test in a way an inline condition in this file is not.
+import { describeSkillDisclosure, carriesSkillText } from '@/lib/evidence/skill-disclosure';
 // The key the notebook sits under in a package (#403), imported from its
 // client-safe declaration rather than restated here: every producer writes
 // under that binding, and a local copy of the string is a reader that can look
@@ -251,6 +255,13 @@ export default async function EvidencePage({ params }: PageProps) {
   // (the vast majority of historical records), `resolution.pkg === pkg`
   // modulo the shallow clone.
   const renderPkg = resolution?.pkg ?? pkg;
+  // What this record can disclose about the composed skill prompt (#411, D3),
+  // asked ONCE for the page's two `SkillSection` sites. It reads the
+  // UNRESOLVED package, because `resolvePackageForRender` blanks a BlobRef
+  // `skillText` so children can treat the field as a string — the reference
+  // itself survives on `resolution.skillTextBlobRef`, and the disclosure has
+  // to see it to answer `blob` rather than `hash-only`.
+  const skillDisclosure = describeSkillDisclosure(pkg?.skillMetadata);
   // `null` for a notebook whose package says it was a skeleton, and for one that
   // says nothing — 24 of the 25 live records with a notebook, measured
   // 2026-09-05. No sentence, rather than a hedged one: `NotebookSection` states
@@ -516,7 +527,7 @@ export default async function EvidencePage({ params }: PageProps) {
             </Section>
 
             {/* B · System prompts */}
-            {(renderPkg.skillMetadata?.skillText || resolution?.skillTextIsBlob) ? (
+            {carriesSkillText(skillDisclosure) ? (
               <Section title="B · System prompts">
                 <SkillSection
                   skillText={typeof renderPkg.skillMetadata?.skillText === 'string'
@@ -784,7 +795,7 @@ export default async function EvidencePage({ params }: PageProps) {
         )}
 
         {/* Skill guidance — legacy layout only (datHere subsumes into B). */}
-        {!isDatHere && (renderPkg?.skillMetadata?.skillText || resolution?.skillTextIsBlob) && (
+        {!isDatHere && carriesSkillText(skillDisclosure) && (
           <Section title="Skill Guidance">
             <SkillSection
               skillText={typeof renderPkg?.skillMetadata?.skillText === 'string'
