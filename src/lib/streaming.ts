@@ -1,5 +1,6 @@
 // Types for streaming events
 import { deriveOperationType } from './mcp/operation-types.ts';
+import { isSourceRefusal } from './mcp/tool-call-failure.ts';
 import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 export type StreamEventType = 'progress' | 'token' | 'complete' | 'error' | 'trace';
 export type PanelType = 'withMcp' | 'withoutMcp';
@@ -362,18 +363,51 @@ export function notebookExecutionErrorMessage(
 }
 
 /**
+ * The anti-fabrication guard every model-facing tool-failure string opens with
+ * (#154): the model must not invent values to fill the gap.
+ */
+const TOOL_FAILURE_PREAMBLE =
+  'This data request returned no data. Do not estimate, guess, or fabricate any values to fill the gap.';
+
+/**
+ * What the model is told when a data source REFUSED a call (Wave N11 ruling
+ * R6, the owner's, 2026-09-11): the source answered with the failure — a
+ * JSON-RPC `error`, or a result carrying `isError: true` — and it classifies
+ * as nothing more specific. One fixed string, joined from constants once at
+ * load: no word of the source's message, no tool name, nothing from the call.
+ *
+ * It replaces "The request could not be completed. Suggest trying again." for
+ * exactly the case where that was false: a request the source refused as made
+ * is refused again. Forwarding the source's own words instead was ruled out —
+ * the model echoes into an answer that gets signed, and a refusal that names
+ * missing configuration would set it naming portals itself.
+ * `src/lib/mcp/refused-call-copy.test.ts` drives both shapes through the real
+ * client and loop and holds this string to the ruling's riders.
+ */
+export const SOURCE_REFUSAL_FOR_LLM =
+  TOOL_FAILURE_PREAMBLE +
+  ' The data source received this request and refused it as it was made. Do not send the same request again unchanged.' +
+  ' If a differently formed request could answer the question, make that request instead; if none could, tell the user' +
+  ' in plain language that the live data could not be retrieved, and do not include any raw error text, status codes,' +
+  ' server names, or system details.';
+
+/**
  * Server-side: the neutral text fed back to the model when an MCP tool call
  * fails, in place of the raw `Error executing tool: <message>` string. It (1)
  * preserves the anti-hallucination guard (the model must not invent values to
  * fill the gap), and (2) instructs the model to tell the user plainly that the
  * live data couldn't be retrieved, without echoing raw error text, status
  * codes, or server names into the answer.
+ *
+ * A failure the data source answered with that classifies as nothing more
+ * specific gets `SOURCE_REFUSAL_FOR_LLM` (R6); whether the source answered is
+ * read off the error's structure (`isSourceRefusal`), never its words. A
+ * failure that happened on this side — arguments that never parsed, a body that
+ * never parsed, a thrown error — was refused by no one, and keeps the copy it had.
  */
 export function describeToolFailureForLlm(_toolName: string, input: unknown): string {
-  const preamble =
-    'This data request returned no data. Do not estimate, guess, or fabricate any values to fill the gap.';
   const tellUser = (detail: string) =>
-    `${preamble} ${detail} In your answer, briefly tell the user in plain language that the live data could not be retrieved, and do not include any raw error text, status codes, server names, or system details.`;
+    `${TOOL_FAILURE_PREAMBLE} ${detail} In your answer, briefly tell the user in plain language that the live data could not be retrieved, and do not include any raw error text, status codes, server names, or system details.`;
 
   switch (classifyStreamError(input)) {
     case 'mcp_timeout':
@@ -390,7 +424,9 @@ export function describeToolFailureForLlm(_toolName: string, input: unknown): st
         'This server has no live data source configured, so no data can be retrieved. Suggest contacting whoever operates this instance.',
       );
     default:
-      return tellUser('The request could not be completed. Suggest trying again.');
+      return isSourceRefusal(input)
+        ? SOURCE_REFUSAL_FOR_LLM
+        : tellUser('The request could not be completed. Suggest trying again.');
   }
 }
 

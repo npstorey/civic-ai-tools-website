@@ -15,7 +15,7 @@
  */
 import { useCallback, useRef, useState } from 'react';
 import { connectSSE } from '@/lib/sse-client';
-import { friendlyStreamError, notebookExecutionErrorMessage } from '@/lib/streaming';
+import { friendlyStreamError, notebookExecutionErrorMessage, reasonWithoutIdentifier } from '@/lib/streaming';
 import type { Notebook } from '@/lib/notebook-author';
 import type { NotebookPhase } from '@/components/notebook/NotebookProgress';
 import type { PhaseAToolCall } from '@/lib/notebook-author';
@@ -186,7 +186,13 @@ export function useNotebookStream() {
           const failed = raw.failed as boolean | undefined;
           const failureKind = raw.failureKind as PhaseAToolCall['failureKind'] | undefined;
           if (!name) break;
-          const label = [op || name, reason ? `(${reason})` : null].filter(Boolean).join(' ');
+          // The live progress line paints at the call, before its outcome is
+          // known, so its phrase goes through the shared sanitiser on every
+          // call (#426, the owner's R5): a `fetch`'s `to look up record:…`
+          // named a portal here while the call ran. A dropped phrase leaves
+          // the line at the call's name.
+          const shownReason = reasonWithoutIdentifier(reason);
+          const label = [op || name, shownReason ? `(${shownReason})` : null].filter(Boolean).join(' ');
           setState((prev) => ({
             ...prev,
             detail: label || prev.detail,

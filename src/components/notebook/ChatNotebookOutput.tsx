@@ -40,7 +40,7 @@ import NotebookSection from '@/components/evidence/NotebookSection';
 import ChatSignersSection from './ChatSignersSection';
 import ChatCitationPreview from './ChatCitationPreview';
 import RenderingCellOutputs from './RenderingCellOutputs';
-import { approximateMcpServers, buildChatEvidenceView } from './buildChatEvidenceView';
+import { approximateMcpServers, buildChatEvidenceView, deliberativeTraceLine } from './buildChatEvidenceView';
 import { useSocrataMcpUrl } from '@/components/McpRoutingProvider';
 import type { Notebook } from '@/lib/notebook-author';
 import { readReproductionClaim, reproductionScopeSentence } from '@/lib/notebook-author/reproduction-claim';
@@ -280,26 +280,33 @@ export default function ChatNotebookOutput({
               Show {view.toolCalls.length} tool {view.toolCalls.length === 1 ? 'call' : 'calls'}
             </summary>
             <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {view.toolCalls.map((q, i) => (
-                <div key={i} style={{
-                  padding: '10px 14px', border: '1px solid var(--border-color)',
-                  borderRadius: '4px', fontSize: '13px',
-                }}>
-                  <div style={{ fontFamily: 'monospace', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                    {q.name}{q.operationType ? ` (${q.operationType})` : ''}
-                  </div>
-                  {q.reason && (
+              {view.toolCalls.map((q, i) => {
+                // Each call's words come from `deliberativeTraceLine`
+                // (buildChatEvidenceView.ts), where a test reads them (#426):
+                // the recorded phrase through the shared sanitiser on every
+                // call — the call's number when it drops (R5) — and the
+                // outcome in `describeQueryOutcome`'s words, so a rejected
+                // call reads as rejected here as it does on the record page.
+                const line = deliberativeTraceLine(q, i + 1);
+                return (
+                  <div key={i} style={{
+                    padding: '10px 14px', border: '1px solid var(--border-color)',
+                    borderRadius: '4px', fontSize: '13px',
+                  }}>
+                    <div style={{ fontFamily: 'monospace', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                      {line.label}
+                    </div>
                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                      {q.reason}
+                      {line.heading}
                     </div>
-                  )}
-                  {q.resultSummary !== undefined && (
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      Result: {q.resultSummary.rows} rows × {q.resultSummary.columns} cols
-                    </div>
-                  )}
-                </div>
-              ))}
+                    {line.outcome !== null && (
+                      <div style={{ fontSize: '11px', color: q.failed ? 'var(--error)' : 'var(--text-muted)' }}>
+                        {line.outcome}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </details>
         )}

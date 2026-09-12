@@ -73,6 +73,7 @@ import { fileURLToPath } from 'url';
 import OpenAI from 'openai';
 
 import { runToolLoop } from '../src/lib/model-loop/run-tool-loop.ts';
+import { McpErrorEnvelope, throwIfErrorResult } from '../src/lib/mcp/tool-call-failure.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -278,13 +279,20 @@ async function callMcpTool(name, args) {
   }
 
   const parsed = JSON.parse(jsonData || text);
+  // #429: a result carrying `isError: true` is the source refusing the call,
+  // not data to score. It goes through the one reading of the flag the app's
+  // own client uses, so the shared loop records it as a rejected call — kind
+  // `unknown`, by its structure — and a JSON-RPC error is marked as the
+  // source's refusal too, so the model here is told what the app's model is
+  // told (Wave N11 R3 and R6). The error's words are unchanged.
+  if (parsed.result) throwIfErrorResult(parsed.result);
   if (parsed.result?.content) {
     return parsed.result.content
       .filter((c) => c.type === 'text' && c.text)
       .map((c) => c.text)
       .join('\n');
   }
-  if (parsed.error) throw new Error(parsed.error.message);
+  if (parsed.error) throw new McpErrorEnvelope(parsed.error.message);
   return JSON.stringify(parsed);
 }
 
