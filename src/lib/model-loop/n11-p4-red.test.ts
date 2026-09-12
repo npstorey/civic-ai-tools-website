@@ -26,6 +26,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import type { CompletionResult, ProgressOpts } from '../openrouter-streaming.ts';
+import type { EvidencePackage, PackageInput, ToolCallInput } from '../evidence/packager.ts';
 
 // The reference deployment's declared identity, as every byte-parity test
 // injects it — the packager refuses to emit a signed graph without one.
@@ -53,7 +55,7 @@ const REJECTED = 'bbbb-2222';
 const QUESTION = 'How many 311 noise complaints were filed last year?';
 const ANSWER = 'About 412,000.';
 
-interface Recorded { message: string; opts?: Record<string, unknown> }
+interface Recorded { message: string; opts?: ProgressOpts & { failed?: boolean; failureKind?: string } }
 
 // --- A: drive the real loop, one answered call and one rejected -------------
 
@@ -73,13 +75,13 @@ _resetDefaultModelClientForTests();
 const builder = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);
 builder.startRoot('analysis', { 'analysis.portal': PORTAL });
 const progress: Recorded[] = [];
-let completion: { tools_called?: Record<string, unknown>[] } | undefined;
+let completion: CompletionResult | undefined;
 
 await queryWithMcpStreaming(
   QUESTION,
   carriedModelIdentity('fake/model'),
   [],
-  async (_name: string, args: Record<string, unknown>) => {
+  async (_name, args) => {
     if (args.dataset_id === REJECTED) {
       // A rejection the loop classifies. Deliberately slow enough that a
       // discarded elapsed and a recorded zero cannot be confused.
@@ -91,10 +93,10 @@ await queryWithMcpStreaming(
   },
   'You are a fixture system prompt.',
   {
-    onProgress: (_p: string, message: string, opts?: Record<string, unknown>) => progress.push({ message, opts }),
+    onProgress: (_panel, message, opts) => { progress.push({ message, opts }); },
     onToken: () => {},
-    onComplete: (_p: string, result: { tools_called?: Record<string, unknown>[] }) => { completion = result; },
-    onError: (_p: string, message: string) => assert.fail(`unexpected onError: ${message}`),
+    onComplete: (_panel, result) => { completion = result; },
+    onError: (_panel, message) => assert.fail(`unexpected onError: ${message}`),
   },
   { builder, parentSpanId: builder.rootSpanId, resolveToolSource: sourceIdForToolName },
   { toolTimeoutMs: 10_000 },
@@ -105,13 +107,13 @@ _resetDefaultModelClientForTests();
 
 assert.ok(completion, 'onComplete must fire');
 const TRACE = builder.finalize() as unknown as Record<string, unknown>;
-const CALLS = (completion!.tools_called ?? []) as Record<string, unknown>[];
+const CALLS = (completion!.tools_called ?? []) as unknown as ToolCallInput[];
 
-const PKG = buildEvidencePackage({
-  trace: TRACE as never,
+const P4_INPUT: PackageInput = {
+  trace: TRACE as unknown as PackageInput['trace'],
   prompt: QUESTION,
   output: ANSWER,
-  toolCalls: CALLS as never,
+  toolCalls: CALLS,
   model: 'fake/model',
   portal: PORTAL,
   tokenUsage: { promptTokens: 10, completionTokens: 5 },
@@ -119,30 +121,33 @@ const PKG = buildEvidencePackage({
   title: 'N11 P4 red',
   summary: 'N11 P4 red.',
   type: 'content/analysis/v1',
-} as never).pkg;
+};
+const PKG: EvidencePackage = buildEvidencePackage(P4_INPUT).pkg;
 /** The package as storage hands it back — the stored bytes, not the return value. */
 const STORED = JSON.parse(JSON.stringify(PKG)) as Record<string, unknown>;
 
-function callFor(dataset: string): Record<string, unknown> {
-  const c = CALLS.find((x) => (x.args as Record<string, unknown>)?.dataset_id === dataset);
+type Recordish = ToolCallInput & { duration_ms?: number; failed?: boolean; failureKind?: string };
+function callFor(dataset: string): Recordish {
+  const c = (CALLS as Recordish[]).find((x) => x.args?.dataset_id === dataset);
   assert.ok(c, `no recorded call for ${dataset}`);
   return c!;
 }
-function spanFor(dataset: string): Record<string, unknown> {
-  const spans = ((TRACE.resourceSpans as never[])[0] as Record<string, never>).scopeSpans[0].spans as Record<string, unknown>[];
+interface SpanShape { spanId?: string; attributes?: { key: string; value?: Record<string, unknown> }[] }
+function spanFor(dataset: string): SpanShape {
+  const rs = TRACE.resourceSpans as { scopeSpans: { spans: SpanShape[] }[] }[];
+  const spans = rs[0].scopeSpans[0].spans;
   const s = spans.find((sp) => {
-    const attrs = (sp.attributes ?? []) as { key: string; value?: { stringValue?: string } }[];
-    const a = attrs.find((x) => x.key === 'tool.arguments');
-    return a?.value?.stringValue?.includes(dataset);
+    const a = (sp.attributes ?? []).find((x) => x.key === 'tool.arguments');
+    return String((a?.value as { stringValue?: string } | undefined)?.stringValue ?? '').includes(dataset);
   });
   assert.ok(s, `no span for ${dataset}`);
   return s!;
 }
-function attrOf(span: Record<string, unknown>, key: string): unknown {
-  const attrs = (span.attributes ?? []) as { key: string; value?: Record<string, unknown> }[];
-  const a = attrs.find((x) => x.key === key);
+function attrOf(span: SpanShape, key: string): unknown {
+  const a = (span.attributes ?? []).find((x) => x.key === key);
   if (!a) return undefined;
-  return a.value?.stringValue ?? a.value?.intValue ?? a.value?.doubleValue ?? a.value?.boolValue;
+  const v = a.value ?? {};
+  return v.stringValue ?? v.intValue ?? v.doubleValue ?? v.boolValue;
 }
 function storedEntry(dataset: string): Record<string, unknown> {
   const qs = STORED.queries as Record<string, unknown>[];
@@ -230,11 +235,11 @@ function packageWithSkillSpan(): Record<string, unknown> {
   const skillSpan = b.startSpan('skill_fetch', b.rootSpanId);
   b.endSpan(skillSpan, { 'skill.text_hash': hash(SKILL_TEXT), 'skill.text': SKILL_TEXT });
   b.endRoot();
-  const built = buildEvidencePackage({
-    trace: b.finalize() as never,
+  const input: PackageInput = {
+    trace: b.finalize() as unknown as PackageInput['trace'],
     prompt: QUESTION,
     output: ANSWER,
-    toolCalls: [] as never,
+    toolCalls: [],
     model: 'fake/model',
     portal: PORTAL,
     tokenUsage: { promptTokens: 10, completionTokens: 5 },
@@ -242,7 +247,8 @@ function packageWithSkillSpan(): Record<string, unknown> {
     title: 'N11 P4 red B',
     summary: 'N11 P4 red B.',
     type: 'content/analysis/v1',
-  } as never).pkg;
+  };
+  const built = buildEvidencePackage(input).pkg;
   return JSON.parse(JSON.stringify(built)) as Record<string, unknown>;
 }
 
