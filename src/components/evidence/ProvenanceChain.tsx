@@ -134,12 +134,20 @@ export default function ProvenanceChain({ pkg }: ProvenanceChainProps) {
         const opLabel = formatOperationType(q.operationType);
         const datasetLabel = q.datasetId ? ` \u00b7 ${q.datasetId}` : '';
         const portalLabel = q.portal ? ` on ${q.portal}` : '';
-        const durationLabel = q.duration_ms ? ` \u00b7 ${(q.duration_ms / 1000).toFixed(1)}s` : '';
         // #384 F5: the outcome comes from the formatter both renderers share.
         // A returned result keeps this line's compact "\u2192 N rows"; a rejected
         // call is stated in words; an entry that recorded neither shows
         // neither here, rather than either.
         const outcome = describeQueryOutcome(q);
+        // #413: a rejected entry now carries an elapsed too, and this line's
+        // bare "\u00b7 1.2s" would sit immediately before "did not complete" and
+        // read as the time the call took to return. The shared formatter
+        // states it in words for that case instead, so the number appears
+        // once and says what it measures. A returned entry keeps the compact
+        // label unchanged.
+        const durationLabel = q.duration_ms && outcome.kind !== 'failed'
+          ? ` \u00b7 ${(q.duration_ms / 1000).toFixed(1)}s`
+          : '';
         const resultLabel = outcome.kind === 'returned'
           ? ` \u2192 ${q.resultRows} rows`
           : outcome.kind === 'failed'

@@ -78,6 +78,13 @@ export interface ToolCallRecord {
   name: string;
   args: Record<string, unknown>;
   resultSummary?: { rows: number; columns: number };
+  /**
+   * How long the attempt took, in milliseconds — the elapsed from the one
+   * clock this loop starts before the `try` (#384 P8), so a rejection's
+   * elapsed is measured the same way as a result's and BOTH are recorded
+   * (#413). Absent only on a record built before #413, or by a producer that
+   * measured nothing; absence stays absence and is never a zero.
+   */
   duration_ms?: number;
   operationType?: string;
   reason?: string;
@@ -867,9 +874,21 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         // including the notebook synthesizer, which was rendering this call as
         // an executable fetch cell that then threw on execution. Nothing
         // downstream can recover this fact.
+        // #413: the elapsed is READ ONCE, here, off the same clock the
+        // success path reads — `toolStartTime`, started outside the `try`
+        // precisely so "the time until a rejection is measured the same way
+        // as the time until a result" (#384 P8). Before this it was read
+        // only to fill the progress event below and then discarded: the
+        // record kept nothing, the span kept nothing, and the signed package
+        // could say a call was rejected but not how long the source took to
+        // reject it. There is no second clock and no second reading — one
+        // `const`, used by the record, the span and the event, so the three
+        // can never state different numbers for one attempt.
+        const toolDuration = Date.now() - toolStartTime;
         const failureKind = toolFailureKindOf(error);
         toolEntry.failed = true;
         toolEntry.failureKind = failureKind;
+        toolEntry.duration_ms = toolDuration;
         // #404: the span states the CLASSIFIED kind, never the cause. A
         // rejection's raw text is authored by the source, not by this app —
         // it can name a host, a port, a query fragment or a stack frame — and
@@ -888,10 +907,17 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         // Do not add a second name, and do not reintroduce the raw text —
         // if a consumer needs more than the four `ToolFailureKind` values,
         // the vocabulary widens rather than the span carrying prose.
+        // `tool.duration_ms` is the SAME attribute name the success path
+        // ends with at `:857` — one name for one measurement, so the PROV-O
+        // builder needs no second reader (it emits `civic:durationMs` from
+        // that attribute alone, and now does so beside `civic:failed`). It
+        // states how long the attempt took and nothing about the cause; the
+        // paragraph above still holds for everything else on this span.
         if (toolTraceSpanId) {
           trace!.builder.endSpan(toolTraceSpanId, {
             'error': true,
             'error.kind': failureKind,
+            'tool.duration_ms': toolDuration,
           });
         }
         // #384 P8 (F2): the rejection is REPORTED, not only recorded. The two
@@ -904,7 +930,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
           iteration: currentIteration,
           call: toolEntry,
           priorCalls,
-          durationMs: Date.now() - toolStartTime,
+          durationMs: toolDuration,
           failureKind,
         });
         // Feed the model neutral guidance instead of the raw error string:
