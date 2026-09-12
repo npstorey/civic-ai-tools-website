@@ -207,17 +207,45 @@ test('a rejected aggregate call marks no source accessed', () => {
   );
 });
 
-test('the pin names the version that carries the fix, and the ceiling moves with the floor', () => {
+/** Compare two dotted numeric versions. Pre-release tags are not in play for
+ *  this package and are deliberately not handled — a version carrying one
+ *  fails the parse assertion below rather than comparing wrongly. */
+function cmpVersion(a: string, b: string): number {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
+  return 0;
+}
+
+// The FLOOR is the property; the installed version is not.
+//
+// This assertion used to read `assert.equal(installed.version, '0.4.0')`. That
+// is a guard naming a constant rather than the property it cares about (#434
+// D10), and it fails in the one direction that is not a defect: every patch
+// release of the harness reddens it, and the only fix the red suggests is
+// editing the literal — which teaches the next reader nothing and would have
+// been done by hand at #434 R-H, silently, if the wave were not looking for
+// exactly this shape. What the test cares about is that the harness in use
+// READS `failed` on both branches of `buildDataSources`, which 0.4.0 is the
+// first version to do. That is a floor. A version above it satisfies the
+// property; a version below it does not; and the behavioural tests above are
+// what actually pin the behaviour, on the installed package, whatever its
+// number.
+const HARNESS_FLOOR = '0.4.0';
+
+test('the harness in use is at or above the version that carries the fix, floor and installed alike', () => {
   const pkgJson = JSON.parse(
     readFileSync(fileURLToPath(new URL('../../../package.json', import.meta.url)), 'utf8'),
   ) as { dependencies: Record<string, string> };
   const pin = pkgJson.dependencies['@typedstandards/civic-typed-harness'];
 
-  assert.match(
-    pin,
-    /0\.4\.0/,
-    `the pin is ${pin}; 0.4.0 is published (dist.shasum fbf52995ab70a7efdda2aeea8b2a803ec0bf0c90) ` +
-      'and is the version whose buildDataSources reads `failed` on both branches',
+  const floor = pin.replace(/^[\^~>=\s]*/, '');
+  assert.match(floor, /^\d+\.\d+\.\d+$/, `the pin is ${pin}; its floor did not parse`);
+  assert.ok(
+    cmpVersion(floor, HARNESS_FLOOR) >= 0,
+    `the pin is ${pin}, whose floor ${floor} is below ${HARNESS_FLOOR} — the version ` +
+      '(dist.shasum fbf52995ab70a7efdda2aeea8b2a803ec0bf0c90) whose buildDataSources reads ' +
+      '`failed` on both branches',
   );
 
   const installed = JSON.parse(
@@ -226,7 +254,17 @@ test('the pin names the version that carries the fix, and the ceiling moves with
       'utf8',
     ),
   ) as { version: string };
-  assert.equal(installed.version, '0.4.0', `installed harness is ${installed.version}`);
+  assert.match(installed.version, /^\d+\.\d+\.\d+$/, `installed harness is ${installed.version}`);
+  assert.ok(
+    cmpVersion(installed.version, HARNESS_FLOOR) >= 0,
+    `installed harness is ${installed.version}, below the floor ${HARNESS_FLOOR}`,
+  );
+  // The ceiling moves with the floor: what is installed must satisfy the range
+  // the manifest declares, so a lockfile and a manifest cannot drift apart.
+  assert.ok(
+    cmpVersion(installed.version, floor) >= 0,
+    `installed harness ${installed.version} is below the manifest floor ${floor}`,
+  );
 
   // The stand-in is retired, not left dormant: with 0.4.0 the harness reads
   // `failed` itself, and a stand-in that strips arguments would hide from the
