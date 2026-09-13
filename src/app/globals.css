@@ -37,9 +37,40 @@
 
   /* Semantic/Auxiliary Colors */
   --info: #70BAFF;
+  /* --info's channel triplet, so a translucent info wash is written
+     rgba(var(--info-rgb), α) — the same sanctioned form as the accent above —
+     rather than as a literal rgba() that silently stops tracking --info the
+     moment it changes. The pair MUST stay in lockstep. */
+  --info-rgb: 112, 186, 255;
   --success: #008A02;
   --caution: #FFB320;
   --error: #EC131E;
+
+  /* Tool-operation roles (#405).
+     One hue per operation type a record can carry, as `deriveOperationType`
+     yields them, painted on the tool-call badge (src/components/tool-badges.ts).
+     Each carries its channel triplet so the badge's background is written
+     rgba(var(--op-*-rgb), α) and its text var(--op-*) — one value per role,
+     never two that can drift.
+
+     A SEPARATE FAMILY FROM THE STATUS COLORS ABOVE, deliberately. `catalog`,
+     `query`, `metadata` and `metrics` are what a request DID, not how it went;
+     painting one of them --caution or --error would tell a reader something was
+     wrong with a call that succeeded, which is the disclosure-not-validation
+     line (docs/design-principles.md, Principle 1). They are a fixed family, like
+     the neutrals and the status colors — only the accent varies per instance.
+
+     `search` is the fifth role and takes the accent family: it is the badge for
+     "what data exists on this topic", the step the product is about, and it was
+     already painted rgba(var(--accent-rgb), α). */
+  --op-catalog: #4338CA;
+  --op-catalog-rgb: 67, 56, 202;
+  --op-query: #0E7490;
+  --op-query-rgb: 14, 116, 144;
+  --op-metadata: #B45309;
+  --op-metadata-rgb: 180, 83, 9;
+  --op-metrics: #7C3AED;
+  --op-metrics-rgb: 124, 58, 237;
   /* Trust-signal "Attention" tier (civic-ai-tools-website#110). Aliased to the
      existing caution amber rather than introducing a second amber token, so
      the verify panel's amber stays in lockstep with the design-system palette.

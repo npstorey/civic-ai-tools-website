@@ -121,6 +121,48 @@ export const TOOL_CALL_KEY_POLICY =
   'A request the data source refused counts as a different tool call from the same request answered, ' +
   'so two runs that differ only in whether a request was refused do not score as identical.';
 
+/**
+ * What an attestation that records NO key policy discloses about its own score.
+ *
+ * Not a restatement of the rule above, and deliberately so. An attestation
+ * written before the policy was stored (#402) was computed under SOME rule and
+ * the package does not say which — so labelling it with today's sentence would
+ * assert a fact about bytes that carry none, which is exactly the false
+ * precision `docs/design-principles.md` Principle 3 forbids. Absence is stated
+ * as absence, and the consequence a reader actually needs — that the two
+ * figures are not comparable — is stated with it.
+ */
+export const TOOL_CALL_KEY_POLICY_UNRECORDED =
+  'This attestation does not state how it counted a request the data source refused, so its ' +
+  'tool-overlap figure cannot be compared with one from an attestation that does.';
+
+/**
+ * The sentence that belongs beside a consistency attestation's tool-overlap
+ * score, read from the attestation package the page fetched (#430 F3).
+ *
+ * WHY IT IS READ FROM THE PACKAGE AND NOT IMPORTED. `AttestationDialog` shows
+ * the score it has just computed, so the rule that produced it is this build's
+ * constant. `AttestationSection` shows a score computed at some past
+ * submission, possibly by a different build, and the rule that produced THAT
+ * one is only knowable from the stored bytes. The route stores the submitted
+ * `data` at the top level of the attestation package
+ * (`api/evidence/[slug]/attestations/route.ts`, `...typeSpecific`), and the
+ * section fetches that package from its `storageKey`, so the field does reach
+ * the reader's surface — measured before this was written, not assumed.
+ *
+ * The stored value is submitter-supplied text, so it is type-checked and
+ * trimmed here and rendered as text (never markup) at the call site.
+ */
+export function describeToolCallKeyPolicy(pkg: {
+  toolCallKeyPolicy?: unknown;
+}): { recorded: boolean; text: string } {
+  const stored = pkg.toolCallKeyPolicy;
+  if (typeof stored === 'string' && stored.trim().length > 0) {
+    return { recorded: true, text: stored.trim() };
+  }
+  return { recorded: false, text: TOOL_CALL_KEY_POLICY_UNRECORDED };
+}
+
 export function canonicalizeToolCall(tc: {
   name: string;
   args?: Record<string, unknown>;

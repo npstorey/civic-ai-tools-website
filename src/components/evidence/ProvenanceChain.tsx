@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { EvidencePackage } from '@/lib/evidence/packager';
-import { describeQueryOutcome } from '@/lib/evidence/query-step';
+import { describeQueryOutcome, describeUnrecordedOutcomes } from '@/lib/evidence/query-step';
 import { formatModelName } from '@/lib/models';
 
 interface ProvenanceChainProps {
@@ -93,9 +93,23 @@ function buildSoqlSummary(args: Record<string, unknown>): string {
 export default function ProvenanceChain({ pkg }: ProvenanceChainProps) {
   const totalSteps = 3 + pkg.queries.length; // prompt + model + queries + output
   let stepIndex = 0;
+  // #430 F4 (ruling D8). This is the legacy layout's renderer of `queries[]`,
+  // and the records that state no outcome at all are legacy records — so the
+  // record-level line has to reach here, not only the A-G page. Same
+  // formatter as the page's, so the two cannot say different things about the
+  // same package. Null when the record does state outcomes.
+  const unrecordedOutcomes = describeUnrecordedOutcomes(pkg);
 
   return (
     <div>
+      {unrecordedOutcomes !== null && (
+        <p style={{
+          margin: '0 0 12px', fontSize: '12px', lineHeight: 1.5,
+          color: 'var(--text-secondary)',
+        }}>
+          {unrecordedOutcomes}
+        </p>
+      )}
       {/* Prompt */}
       <StepContainer>
         {pkg.prompt.visibility === 'full_text' && pkg.prompt.text ? (
