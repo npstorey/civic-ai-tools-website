@@ -143,12 +143,14 @@ test('every referenced design token is defined', () => {
 /** A quoted CSS colour: `'#RGB'` through `'#RRGGBBAA'`, or an `rgb()`/`rgba()`
  *  whose first channel is a NUMBER. `rgba(var(--accent-rgb), 0.1)` is the
  *  sanctioned tint form and is deliberately not matched — it names a token. */
-const COLOR_LITERAL = /['"`]#[0-9A-Fa-f]{3,8}['"`]|rgba?\(\s*[0-9]/g;
+const COLOR_LITERAL = /['"`]#[0-9A-Fa-f]{3,8}['"`]|rgba?\(\s*[0-9][^)]*\)/g;
 
-/** Comments stripped, so a `#258` inside a docstring is not a colour and a
- *  commented-out literal is not a live one. */
+/** Comments blanked, so a `#258` inside a docstring is not a colour and a
+ *  commented-out literal is not a live one. Newlines are preserved rather than
+ *  removed so the reported line number is the file's own. */
 function withoutComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const blank = (match: string) => match.replace(/[^\n]/g, ' ');
+  return source.replace(/\/\*[\s\S]*?\*\//g, blank).replace(/^\s*\/\/.*$/gm, blank);
 }
 
 test('no colour literal in a .ts colour table — colours are named', () => {
