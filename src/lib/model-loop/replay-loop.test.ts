@@ -479,11 +479,11 @@ function executableSource(src: string): string {
 const ROUTE_SUPPLIES = ['client', 'endpointModel', 'prompt'];
 
 /**
- * Two names that are not option keys but are the shapes the route once carried
- * on this path: the tool transport (which the factory renames to
- * `executeToolCall`) and the truncation helper. Kept because they name real
- * past regressions, and stated separately so the derived list above is not
- * confused with a hand list.
+ * Three names that are not option keys but are the shapes the route once
+ * carried on this path: the tool transport (which the factory renames to
+ * `executeToolCall`), the truncation helper, and the wire spelling of the token
+ * cap. Kept because each names a real past regression, and stated separately —
+ * with its own name — so the DERIVED list above is not read as a hand list.
  */
 const FORMER_ROUTE_SHAPES = ['callTool', 'truncateToolResult', 'max_tokens'];
 
