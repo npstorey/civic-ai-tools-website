@@ -8,6 +8,7 @@ import { useSignInOptions } from '@/components/SignInOptionsProvider';
 import { resolveSignInProse } from '@/lib/auth-provider-options';
 import type { ReviewSignatureStatus } from '@/lib/evidence/trust-signal';
 import type { TrustTier } from '@/lib/evidence/trust-signal';
+import { describeToolCallKeyPolicy } from '@/lib/evidence/tool-call-identity';
 import TrustSignal from './TrustSignal';
 import AttestationDialog from './AttestationDialog';
 
@@ -56,6 +57,13 @@ interface AttestationPackageData {
     consistencyClassification: string;
   };
   config?: { numRuns: number };
+  /**
+   * How this attestation counted a request the source refused (#402), as the
+   * submitting client stored it. Optional because an attestation written
+   * before the field existed carries none — and that absence is stated to the
+   * reader rather than papered over with this build's rule (#430 F3).
+   */
+  toolCallKeyPolicy?: string;
   evaluatorModel?: string;
   rubric?: Record<string, { score: number; comment: string }>;
   overallScore?: number;
@@ -354,6 +362,7 @@ function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
 
       {/* Summary metrics inline */}
       {attestation.type === 'consistency' && isExpanded && expanded && expanded.metrics && (
+        <>
         <div style={{ marginTop: '10px', display: 'flex', gap: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
           <span>
             {expanded.config?.numRuns || '?'} runs
@@ -376,6 +385,17 @@ function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
             {expanded.metrics.consistencyClassification.replace(/_/g, ' ')}
           </span>
         </div>
+        {/* The key the score was computed under, beside the score (#430 F3).
+            A percentage means nothing without it: #363's collapsing key made
+            two runs that read different data score 100% inside a SIGNED
+            attestation. Read from the stored package, so an attestation that
+            records no rule says that instead of borrowing this build's —
+            disclosure, not validation (docs/design-principles.md Principle 1,
+            and Principle 3 on absence). */}
+        <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '8px 0 0', lineHeight: 1.5 }}>
+          {describeToolCallKeyPolicy(expanded).text}
+        </p>
+        </>
       )}
 
       {attestation.type === 'evaluation' && isExpanded && expanded && expanded.rubric && (

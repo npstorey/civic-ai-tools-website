@@ -52,6 +52,47 @@ export function formatDataSourcesSummary(
   return harnessFormatDataSourcesSummary(entries, registry);
 }
 
+/**
+ * Rewrite every registry AGENT TITLE in a string to that source's reader-facing
+ * DISPLAY NAME (hub #194, ruling D4 = B).
+ *
+ * WHAT THE PROBLEM IS. The signed PROV-O graph names each data source by its
+ * agent title — "Socrata MCP Server", "Google Data Commons MCP Server" — and
+ * builds descriptions from it: a data response the builder could not describe
+ * by a portal is written "Data response from Socrata MCP Server", and the
+ * graph's Agent nodes carry the title as their `dcterms:title`. "MCP Server" is
+ * implementation language on a reader-facing surface
+ * (`docs/design-principles.md`, Principle 9), and the same source is already
+ * called "Socrata" three rows further up the page.
+ *
+ * WHY AT RENDER TIME AND NOT IN THE GRAPH. The graph is inside the signed
+ * bytes. Changing what the builder writes would change every future package's
+ * hash, and would not touch the records already published — which are the ones
+ * a reader is looking at. Option A (a second registry field) was measured dead
+ * in Wave N10: the prefix sits inside frozen golden bytes. So the map is
+ * applied where the text is displayed, and NO SIGNED BYTE MOVES: the graph's
+ * JSON-LD tab, the PROV-O download and the package itself are untouched, which
+ * is also the right split under Principle 6 — the power user's escape hatch
+ * shows exactly what was signed, the summary reads in the reader's language.
+ *
+ * The registry is passed explicitly, like every other helper in this shim, and
+ * longer titles are rewritten first so one title that contains another cannot
+ * be half-replaced.
+ */
+export function readerFacingSourceNames(
+  text: string,
+  registry: CivicSourceRegistry = CIVIC_SOURCE_REGISTRY,
+): string {
+  const byLongestTitle = Object.values(registry)
+    .filter((entry) => entry.agentTitle && entry.displayName)
+    .sort((a, b) => b.agentTitle.length - a.agentTitle.length);
+  let mapped = text;
+  for (const entry of byLongestTitle) {
+    mapped = mapped.split(entry.agentTitle).join(entry.displayName);
+  }
+  return mapped;
+}
+
 /** The app's static tool-name → source-id map (`../mcp/operation-types.ts`)
  *  as a harness resolver — the fallback when a trace span carries no
  *  `mcp.source` attribute. */

@@ -22,6 +22,32 @@
  * The two allowlists below are deliberately written as explicit names and paths
  * rather than patterns. A pattern silently absorbs future additions; a named
  * entry means widening the carve-out is a reviewed act with a reason attached.
+ *
+ * ---
+ *
+ * SECOND GUARD, added by #405 (Wave N11, ruling D2): no colour LITERAL in a
+ * `.ts` colour table. The first guard reads references and asks whether each
+ * resolves; it cannot see the opposite failure, a colour that never asks for a
+ * token at all. `src/components/tool-badges.ts` painted four operation types
+ * with quoted hex for two waves, and `src/styles/page-styles.ts` carried
+ * `rgba(112, 186, 255, …)` — which IS `--info`'s channel triplet, copied — and
+ * neither was visible to the one test whose job is refusing colours that
+ * resolve to nothing.
+ *
+ * ITS UNIVERSE IS DERIVED (ruling D10): every `.ts` file under `src/` that is
+ * not a test, found by walking the tree, never a list of the files that
+ * offend today. A colour table added tomorrow is in scope the moment it is
+ * written.
+ *
+ * ITS BLIND SPOT, stated rather than left to be discovered: it does not read
+ * `.tsx`. Measured at the time of writing, 30 non-test `.tsx` files carry 135
+ * colour literals inline in JSX `style` props. That is a real backlog of the
+ * same defect and this guard does not cover it — but it is a backlog, not a
+ * carve-out, and no allowlist here hides it. The boundary is `.ts` rather than
+ * a directory or a file list because a colour table is extracted into a `.ts`
+ * sibling precisely so a test can read it without rendering
+ * (`tool-badges.ts`'s own docstring says so): the `.ts` colour surface is the
+ * one that is meant to be machine-checkable, and it is now checked whole.
  */
 
 import { test } from 'node:test';
@@ -111,6 +137,43 @@ test('every referenced design token is defined', () => {
       'src/app/globals.css, or — if it is genuinely a one-off with no place in ' +
       'the palette — use the literal value directly. If it is defined outside ' +
       'globals.css, add it to DEFINED_ELSEWHERE in this file with a reason.',
+  );
+});
+
+/** A quoted CSS colour: `'#RGB'` through `'#RRGGBBAA'`, or an `rgb()`/`rgba()`
+ *  whose first channel is a NUMBER. `rgba(var(--accent-rgb), 0.1)` is the
+ *  sanctioned tint form and is deliberately not matched — it names a token. */
+const COLOR_LITERAL = /['"`]#[0-9A-Fa-f]{3,8}['"`]|rgba?\(\s*[0-9][^)]*\)/g;
+
+/** Comments blanked, so a `#258` inside a docstring is not a colour and a
+ *  commented-out literal is not a live one. Newlines are preserved rather than
+ *  removed so the reported line number is the file's own. */
+function withoutComments(source: string): string {
+  const blank = (match: string) => match.replace(/[^\n]/g, ' ');
+  return source.replace(/\/\*[\s\S]*?\*\//g, blank).replace(/^\s*\/\/.*$/gm, blank);
+}
+
+test('no colour literal in a .ts colour table — colours are named', () => {
+  const offenders: string[] = [];
+
+  for (const file of sourceFiles(SRC_ROOT)) {
+    if (!file.endsWith('.ts') || file.endsWith('.test.ts')) continue;
+    const rel = path.relative(SRC_ROOT, file);
+    const contents = withoutComments(fs.readFileSync(file, 'utf8'));
+    for (const match of contents.matchAll(COLOR_LITERAL)) {
+      const line = contents.slice(0, match.index).split('\n').length;
+      offenders.push(`${rel}:${line}  ${match[0]}`);
+    }
+  }
+
+  assert.deepEqual(
+    offenders.sort(),
+    [],
+    'These are colours spelled out rather than named. A literal opts the element out of the ' +
+      "palette: invisible on this instance, wrong on every other one, and it stops tracking the " +
+      'token it was copied from the moment that token moves. Name a token from ' +
+      'src/app/globals.css — `var(--token)` for a solid, `rgba(var(--token-rgb), α)` for a tint — ' +
+      'and add the token there if the role has none.',
   );
 });
 

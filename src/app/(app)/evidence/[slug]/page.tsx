@@ -15,7 +15,7 @@ import { getBrandName } from '@/lib/brand-config';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
-import { describeQueryOutcome } from '@/lib/evidence/query-step';
+import { describeQueryOutcome, describeUnrecordedOutcomes } from '@/lib/evidence/query-step';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
 import { sessionUserIsCreator } from '@/lib/evidence/sealed-access';
 import { fromDbValue } from '@/lib/evidence/visibility';
@@ -597,6 +597,22 @@ export default async function EvidencePage({ params }: PageProps) {
 
             {/* D · Deliberative trace — collapsed by default */}
             <Section title="D · Deliberative trace">
+              {/* #430 F4 (ruling D8): when the record states no outcome for
+                  any request, it says so once, dated, OUTSIDE the collapse —
+                  the sources list above is visible without expanding and
+                  asserts access, so the caveat has to be too. Null when the
+                  record does state outcomes; absence stays absence. */}
+              {(() => {
+                const unrecorded = describeUnrecordedOutcomes(renderPkg);
+                return unrecorded === null ? null : (
+                  <p style={{
+                    margin: '0 0 8px', fontSize: '13px', lineHeight: 1.5,
+                    color: 'var(--text-secondary)',
+                  }}>
+                    {unrecorded}
+                  </p>
+                );
+              })()}
               <details>
                 <summary style={{
                   cursor: 'pointer', fontSize: '13px',

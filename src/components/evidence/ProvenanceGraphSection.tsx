@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { readerFacingSourceNames } from '@/lib/evidence/data-sources';
 
 interface ProvNode {
   '@id': string;
@@ -24,8 +25,21 @@ function getType(node: ProvNode): string {
   return (t as string).replace('prov:', '');
 }
 
+/**
+ * The node's own words, with each data source called what the rest of the page
+ * calls it (hub #194, ruling D4 = B).
+ *
+ * The signed graph names a source by its agent title — so an Agent node reads
+ * "Socrata MCP Server" and a data response the builder could not describe by a
+ * portal reads "Data response from Socrata MCP Server". This is the Summary
+ * tab, a reader-facing surface, and "MCP Server" is implementation language
+ * there (docs/design-principles.md, Principle 9). The JSON-LD tab below and
+ * the PROV-O download are deliberately NOT mapped: they are the escape hatch
+ * and must show exactly what was signed (Principle 6). No signed byte moves.
+ */
 function getDescription(node: ProvNode): string {
-  return (node['dcterms:description'] as string) || (node['dcterms:title'] as string) || '';
+  const stated = (node['dcterms:description'] as string) || (node['dcterms:title'] as string) || '';
+  return readerFacingSourceNames(stated);
 }
 
 function shortId(id: string): string {

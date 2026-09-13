@@ -22,6 +22,12 @@
  * drift apart about the same call. The failure vocabulary is the notebook
  * path's `FAILURE_REASON`, imported rather than restated: one set of words
  * for one fact (docs/design-principles.md, principles 3 and 9).
+ *
+ * `describeUnrecordedOutcomes` at the foot of this file is the RECORD-level
+ * companion (#430 F4, ruling D8): when no entry states an outcome at all, the
+ * record says so once, dated, rather than leaving a reader to infer it from N
+ * identical per-entry sentences sitting under a sources list that still
+ * asserts access. Both renderers read that one too.
  */
 import {
   FAILURE_REASON,
@@ -77,4 +83,76 @@ export function describeQueryOutcome(entry: QueryOutcomeInput): QueryOutcome {
     return { kind: 'returned', text: `Returned ${rows}${columns}${duration}` };
   }
   return { kind: 'unrecorded', text: 'No result summary was recorded for this request.' };
+}
+
+/** Month names, spelled here rather than through `toLocaleDateString`, so the
+ *  sentence below reads the same on a runtime built without full ICU as it
+ *  does in CI. */
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/** The package's own creation date, in UTC, or null when the package carries
+ *  nothing readable. Never a date from anywhere else: a record states the date
+ *  it carries or states none (#430 F4). */
+function statedDate(iso: string | undefined): string | null {
+  if (!iso) return null;
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return null;
+  return `${MONTHS[at.getUTCMonth()]} ${at.getUTCDate()}, ${at.getUTCFullYear()}`;
+}
+
+/** The fields of a stored record this reads. Any richer package fits. */
+export interface RecordOutcomeInput {
+  metadata?: { createdAt?: string };
+  queries?: QueryOutcomeInput[];
+}
+
+/**
+ * The RECORD-level statement that a package states no outcome for any of its
+ * requests (#430 F4, Wave N11 ruling D8: state the absence, dated).
+ *
+ * WHY IT IS NOT THE PER-ENTRY SENTENCE ABOVE. `describeQueryOutcome({})`
+ * already says "No result summary was recorded for this request", once per
+ * entry, and it is correctly undated: it is a fact about one request, and the
+ * date belongs to the record. What a reader of a pre-outcome-marking package
+ * is missing is the whole-record fact — that NOTHING in it says how any
+ * request ended, while its `dataSources` list goes on asserting that those
+ * datasets were accessed at those timestamps. Those two together are what
+ * mislead; the record-level line is what separates them.
+ *
+ * WHAT IT DOES NOT CLAIM. Not "this record predates outcome marking" — this
+ * function cannot know when a producer stopped omitting the fields, and a
+ * package written today by a producer that omits them is the same shape. It
+ * states what the bytes carry and dates it with the date the bytes carry
+ * (`docs/design-principles.md` Principle 3: no false precision). A package
+ * with no readable `createdAt` gets NO statement rather than an undated or an
+ * invented one.
+ *
+ * ABSENCE MUST STAY ABSENCE IN BOTH DIRECTIONS. One entry carrying `failed` or
+ * `resultRows` means the record DOES state outcomes, and it gains no such
+ * line — the per-entry formatter says what is missing for the entries that are
+ * missing it. A record with no requests at all gains none either: there is no
+ * unstated outcome to disclose.
+ *
+ * Returns null when there is nothing to state, so a caller renders nothing.
+ */
+export function describeUnrecordedOutcomes(pkg: RecordOutcomeInput): string | null {
+  const queries = pkg.queries ?? [];
+  if (queries.length === 0) return null;
+  const anyOutcome = queries.some((q) => q.failed !== undefined || q.resultRows !== undefined);
+  if (anyOutcome) return null;
+  const date = statedDate(pkg.metadata?.createdAt);
+  if (date === null) return null;
+  // "any of its 1 request" is not English; the singular gets its own clause
+  // rather than a pluralised count.
+  const subject = queries.length === 1
+    ? 'for its one request: whether it'
+    : `for any of its ${queries.length} requests: whether each`;
+  return (
+    `This record was created on ${date} and states no outcome ${subject} returned data, ` +
+    'returned none, or was refused is not recorded. Its data sources state which datasets were ' +
+    'reached, not what any request returned.'
+  );
 }

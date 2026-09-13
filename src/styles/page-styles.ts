@@ -16,9 +16,13 @@ export const prose: CSSProperties = {
   marginBottom: '16px',
 };
 
+// The wash and its border are --info, named rather than spelled: the literal
+// rgba(112, 186, 255, …) that used to sit here IS --info's channel triplet,
+// copied, and a copy stops tracking the token the moment the token moves
+// (#405, found by the derived colour-literal scan in design-tokens.test.ts).
 export const calloutBox: CSSProperties = {
-  backgroundColor: 'rgba(112, 186, 255, 0.12)',
-  border: '1px solid rgba(112, 186, 255, 0.3)',
+  backgroundColor: 'rgba(var(--info-rgb), 0.12)',
+  border: '1px solid rgba(var(--info-rgb), 0.3)',
   borderRadius: '4px',
   padding: '12px 16px',
   fontSize: '14px',
