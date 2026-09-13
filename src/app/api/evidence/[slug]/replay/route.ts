@@ -7,7 +7,7 @@ import {
 } from '@/lib/caller-model-key';
 import { endpointModelForDeclared } from '@/lib/model-resolver';
 import { runToolLoop } from '@/lib/model-loop/run-tool-loop';
-import { replayLoopOptions, replayPortalForPackage } from '@/lib/model-loop/replay-loop';
+import { replayLoopOptionsForPackage } from '@/lib/model-loop/replay-loop';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -16,7 +16,6 @@ import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import { canReadRecord } from '@/lib/evidence/sealed-access';
 import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
-import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 
 /**
@@ -104,16 +103,6 @@ export async function POST(
   // carried through unchanged when no entry declares it, which is what a record
   // naming a model this instance no longer offers has always done.
   const model = endpointModelForDeclared(pkg.cost.model);
-  // The portal the record's own calls named, or none (#384, F2). A record
-  // that named no portal — a search/fetch-only run has no data-source entry —
-  // replays with nothing injected and a system prompt that names no default
-  // portal, rather than on a domain the record never mentioned; absence is
-  // recorded as absence in the replayed calls' arguments, and so in the
-  // identity keys the consistency attestation is computed over.
-  const portal = replayPortalForPackage(pkg);
-
-  // Build system prompt (regenerated fresh — may differ slightly if guidance updated)
-  const systemPrompt = await buildSystemPrompt(portal);
 
   // Create a model client with the user's API key
   const openrouter = createModelClient({ apiKey: callerKey.apiKey });
@@ -123,23 +112,34 @@ export async function POST(
     // P3: the same loop, with its own exit condition, its own truncation and
     // its own error-to-model path — and each of those was a filed defect
     // (#338, #347, #331) that had already been fixed on the other copy.
-    // Everything the loop is GIVEN lives in `replayLoopOptions`; nothing about
+    // Everything the loop is GIVEN lives in `replay-loop.ts`; nothing about
     // how it runs is decided here.
-    const result = await runToolLoop(replayLoopOptions({
+    //
+    // Nor, since #432, is anything about WHAT it runs against.
+    // `replayLoopOptionsForPackage` reads the record's package and returns the
+    // options: the portal the replayed calls address — `replayPortalForPackage`
+    // off the record, or none — and the system prompt composed for it. This
+    // handler supplies only the three things a route knows and the package does
+    // not (the client built from the caller's key, the endpoint model, the
+    // prompt text) and passes the result on untouched. There is deliberately no
+    // portal parameter to pass: the derivation used to be called from here and
+    // its result coalesced against a literal, which is how a replay came to run
+    // against a domain its record never mentioned, inside the arguments a
+    // signed consistency attestation is computed over. Naming a portal in this
+    // file's CODE — as opposed to this comment — fails
+    // `replay-loop.test.ts`'s delegation guard.
+    const result = await runToolLoop(await replayLoopOptionsForPackage({
+      pkg,
       client: openrouter,
       endpointModel: model,
       prompt,
-      systemPrompt,
-      portal,
     }));
 
     // The consistency-test payload, unchanged in shape. `toolCalls` entries
     // now additionally carry `operationType`, `reason`, `resultSummary`,
     // `duration_ms` and — for a call that failed — `failed`/`failureKind`
-    // (#338). The identity fields the client keys a run on
-    // (`name`, `args.type`, `args.dataset_id`, `args.portal`, the last of
-    // which this route injects when the record named one) are byte-identical
-    // to what it read before.
+    // (#338). The arguments the client keys a run on are byte-identical to
+    // what it read before; what decides them is stated in `replay-loop.ts`.
     return NextResponse.json({
       toolCalls: result.toolCalls,
       output: result.content,
