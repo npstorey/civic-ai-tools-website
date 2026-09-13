@@ -110,7 +110,10 @@ export async function POST(
   // portal, rather than on a domain the record never mentioned; absence is
   // recorded as absence in the replayed calls' arguments, and so in the
   // identity keys the consistency attestation is computed over.
-  const portal = replayPortalForPackage(pkg);
+  // THROWAWAY DEFECT (#432): the route still CALLS the derivation — so the
+  // text-based drift guard is satisfied — and then ignores what it returned.
+  const derived = replayPortalForPackage(pkg);
+  const portal = derived ?? pkg.dataSources[0]?.portalUrl?.replace(/^https?:\/\//, '');
 
   // Build system prompt (regenerated fresh — may differ slightly if guidance updated)
   const systemPrompt = await buildSystemPrompt(portal);
