@@ -181,7 +181,8 @@ test('a record stating no outcome for any request says so, dated, at record leve
 test('one request, stated in the singular', () => {
   const stated = describeUnrecordedOutcomes(ONE_UNRECORDED as never);
   assert.ok(stated);
-  assert.match(stated, /1 request:/);
+  assert.match(stated, /for its one request: whether it returned data/);
+  assert.doesNotMatch(stated, /any of its 1 request/, '"any of its 1 request" is not English');
 });
 
 test('a record that DOES state an outcome gains no such line', () => {

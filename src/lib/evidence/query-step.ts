@@ -145,10 +145,14 @@ export function describeUnrecordedOutcomes(pkg: RecordOutcomeInput): string | nu
   if (anyOutcome) return null;
   const date = statedDate(pkg.metadata?.createdAt);
   if (date === null) return null;
-  const count = `${queries.length} ${queries.length === 1 ? 'request' : 'requests'}`;
+  // "any of its 1 request" is not English; the singular gets its own clause
+  // rather than a pluralised count.
+  const subject = queries.length === 1
+    ? 'for its one request: whether it'
+    : `for any of its ${queries.length} requests: whether each`;
   return (
-    `This record was created on ${date} and states no outcome for any of its ${count}: ` +
-    'whether each returned data, returned none, or was refused is not recorded. Its data sources ' +
-    'state which datasets were reached, not what any request returned.'
+    `This record was created on ${date} and states no outcome ${subject} returned data, ` +
+    'returned none, or was refused is not recorded. Its data sources state which datasets were ' +
+    'reached, not what any request returned.'
   );
 }
