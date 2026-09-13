@@ -26,6 +26,28 @@
 //
 // Red at the base by the export's absence, and by the literal in the route.
 //
+// AMENDED BY WAVE N11 P6 (#432) — THE ROUTE SECTION IS GONE FROM THIS FILE.
+// Until P6 this file ended with two assertions over the ROUTE's text: that no
+// literal `data.cityofnewyork.us` appears in it, and that the substring
+// `replayPortalForPackage(` does. Both were satisfied by a route that called
+// the derivation and then coalesced a fallback around the result — measured on
+// a runner with that exact route live, CI green over 1554 tests, an aggregate
+// endpoint reaching a signed consistency attestation. A character-level
+// assertion enumerates hostnames; the defect is a shape.
+//
+// The route no longer decides anything about the portal: it hands the package
+// to `replayLoopOptionsForPackage` and passes the result to the loop. So the
+// property those two lines were reaching for is now held in two places that
+// can actually see it —
+//   - `derived-replay-portal-reaches-the-record.test.ts` DRIVES that decision
+//     for an aggregate-only and a Socrata package, and reads back the portal on
+//     the options, the portal the system prompt was composed for, the recorded
+//     arguments, the span and the identity key;
+//   - `replay-loop.test.ts` holds the one thing no driven case can, because
+//     `node --test` cannot invoke a Next handler: that the handler in
+//     production is that decision's caller and restates none of it.
+// What remains below is this file's own subject, the derivation.
+//
 // AMENDED BY WAVE N10 P8 (#409, cold-read F1) — THIS FILE'S OWN BLIND SPOT.
 // As first written, the two data-source cases below drove `dataSources: []`
 // and one entry whose `portalUrl` was a Socrata host and which stated no
@@ -46,8 +68,6 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import * as replayLoop from './replay-loop.ts';
 
 type ReplayPortalForPackage = (pkg: {
@@ -115,18 +135,4 @@ test('replay: a data-source entry that states no catalogue type supplies no port
       'of being wrong here is a replay with no portal injected — which is what a record that named ' +
       'no portal already gets — against a signed attestation naming a host nothing addressed.',
   );
-});
-
-// --- The route, which node --test cannot invoke -----------------------------
-
-test('replay: the route consults replayPortalForPackage and carries no portal literal of its own', () => {
-  const source = readFileSync(
-    fileURLToPath(new URL('../../app/api/evidence/[slug]/replay/route.ts', import.meta.url)),
-    'utf8',
-  );
-  assert.ok(
-    !/['"]data\.cityofnewyork\.us['"]/.test(source),
-    'replay/route.ts still names a literal portal domain as the fallback for a record that named none',
-  );
-  assert.ok(source.includes('replayPortalForPackage('), 'replay/route.ts derives the portal through replayPortalForPackage');
 });

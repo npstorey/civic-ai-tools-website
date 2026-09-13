@@ -2,11 +2,24 @@
  * The portal a replay DERIVES is the portal its recorded calls carry — driven
  * end to end, package to identity key (Wave N10 P8, #409, cold-read F1).
  *
+ * AMENDED BY WAVE N11 P6 (#432): IT IS NOW THE ROUTE'S DECISION THAT IS DRIVEN.
+ * As first written this file derived the portal and composed the loop options
+ * in its own body, "exactly as `replay/route.ts:113` does" — a copy of two
+ * route lines, and therefore green over any route that stopped agreeing with
+ * it. That is not hypothetical: the route could call the derivation, coalesce
+ * a fallback around what came back, and the whole suite stayed green — 1554
+ * tests, measured on a runner, with an aggregate endpoint reaching a signed
+ * consistency attestation. The two lines are now one exported call,
+ * `replayLoopOptionsForPackage`, which is what the route runs and what
+ * `driveReplay` below runs. There is no longer a copy to diverge from, and the
+ * portal handed to the system-prompt composer is read back rather than
+ * reasoned about.
+ *
  * WHY THIS FILE EXISTS SEPARATELY FROM THE UNIT CASES. F1's harm was never
  * "`replayPortalForPackage` returns the wrong string"; a string is not a
- * defect. The harm is where that string goes: the replay route hands it to
- * `buildSystemPrompt`, which writes "Default portal: …" into the model's
- * instructions, and to `replayLoopOptions` as `portal`, which the core injects
+ * defect. The harm is where that string goes: the decision hands it to the
+ * system-prompt composer, which writes "Default portal: …" into the model's
+ * instructions, and onto the loop options as `portal`, which the core injects
  * into any `get_data` the replay makes without one — so it reaches the
  * recorded arguments, the `mcp_tool_call` span's `tool.portal_domain`, and
  * through `canonicalizeToolCall` the identity keys a SIGNED consistency
@@ -52,7 +65,7 @@ import assert from 'node:assert/strict';
 import type OpenAI from 'openai';
 
 import { runToolLoop, type ToolCallRecord } from './run-tool-loop.ts';
-import { replayLoopOptions, replayPortalForPackage } from './replay-loop.ts';
+import { replayLoopOptionsForPackage, replayPortalForPackage } from './replay-loop.ts';
 import { TraceBuilder, CIVICAITOOLS_TRACE_CONFIG } from '../evidence/trace.ts';
 import { canonicalizeToolCall } from '../evidence/tool-call-identity.ts';
 
@@ -157,8 +170,10 @@ function attr(span: Span, key: string): string | undefined {
 }
 
 interface Driven {
-  /** What the derivation handed the route. */
+  /** The portal on the options the ROUTE runs — not a second derivation. */
   derived: string | undefined;
+  /** The portal the system-prompt composer was handed, recorded as it was called. */
+  composedFor: string | undefined;
   record: ToolCallRecord;
   span: Span;
   /** The consistency attestation's key for that call. */
@@ -166,25 +181,46 @@ interface Driven {
 }
 
 /**
- * The whole path in one call: derive the portal off the package exactly as
- * `replay/route.ts:113` does, hand it to `replayLoopOptions` exactly as
- * `:127-133` does, run the real core, and read back the three surfaces the
- * injected value reaches.
+ * The whole path in one call, and it is the route's path: hand the package to
+ * `replayLoopOptionsForPackage` exactly as `replay/route.ts` does, run the real
+ * core on what comes back, and read the four surfaces the decision reaches —
+ * the options the loop is given, the portal the system prompt was composed for,
+ * the recorded arguments, and the identity key.
+ *
+ * The one substitution is the system-prompt composer, and it is a recorder
+ * rather than a stub for a reason: `buildSystemPrompt` reaches three MCP
+ * servers for their skill text, so composing for real would measure the network
+ * alongside the decision and would say nothing extra — what this file is about
+ * is WHICH portal the prompt is composed for, which is exactly what the
+ * recorder captures. The transport is substituted for the same reason it is
+ * everywhere else on this path.
  */
 async function driveReplay(pkg: Pkg): Promise<Driven> {
-  const derived = replayPortalForPackage(pkg);
+  let composedFor: string | undefined;
+  let composerCalls = 0;
 
   const builder = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);
   builder.startRoot('analysis', {});
+  const options = await replayLoopOptionsForPackage({
+    pkg,
+    client: scriptedClient(),
+    endpointModel: 'fake/model',
+    prompt: 'What was median household income in Manhattan?',
+    composeSystemPrompt: async (portal) => {
+      composerCalls += 1;
+      composedFor = portal;
+      return `You are a fixture system prompt. Default portal: ${portal ?? 'none'}`;
+    },
+    callTool: async () => ONE_ROW,
+  });
+  assert.equal(
+    composerCalls,
+    1,
+    'the decision must compose the system prompt exactly once, for the portal it derived',
+  );
+
   const result = await runToolLoop({
-    ...replayLoopOptions({
-      client: scriptedClient(),
-      endpointModel: 'fake/model',
-      prompt: 'What was median household income in Manhattan?',
-      systemPrompt: 'You are a fixture system prompt.',
-      portal: derived,
-      callTool: async () => ONE_ROW,
-    }),
+    ...options,
     trace: { builder, parentSpanId: builder.rootSpanId },
   });
   builder.endRoot();
@@ -198,7 +234,8 @@ async function driveReplay(pkg: Pkg): Promise<Driven> {
   assert.equal(result.toolCalls.length, 1, 'the drive must produce exactly one recorded call');
 
   return {
-    derived,
+    derived: options.portal,
+    composedFor,
     record: result.toolCalls[0],
     span: toolSpans[0],
     identityKey: canonicalizeToolCall(result.toolCalls[0]),
@@ -206,14 +243,24 @@ async function driveReplay(pkg: Pkg): Promise<Driven> {
 }
 
 // --- RED at 255b58d: the aggregate endpoint reached all three surfaces ------
+// --- RED again at de2d55f with a fallback in the route: it reached all four --
 
-test('an aggregate-only record: the Data Commons endpoint reaches no recorded argument, no span and no identity key', async () => {
-  const { derived, record, span, identityKey } = await driveReplay(AGGREGATE_PACKAGE);
+test('an aggregate-only record: the Data Commons endpoint reaches no recorded argument, no span, no system prompt and no identity key', async () => {
+  const { derived, composedFor, record, span, identityKey } = await driveReplay(AGGREGATE_PACKAGE);
 
   assert.equal(
     derived,
     undefined,
-    `the replay derived ${String(derived)} as a Socrata portal from a data-commons data source`,
+    `the replay RUNS ON ${String(derived)} as a Socrata portal, derived from a data-commons data ` +
+      'source. This is the value on the options the route hands the loop, so a fallback anywhere ' +
+      'between the package and the loop lands here',
+  );
+  assert.equal(
+    composedFor,
+    undefined,
+    `the system prompt was composed for ${String(composedFor)} — the model is told "Default ` +
+      'portal: …" naming a host reached by get_observations, which is how a portal reaches calls ' +
+      'the core never had to inject into',
   );
   assert.equal(
     record.args.portal,
@@ -242,10 +289,16 @@ test('an aggregate-only record: the Data Commons endpoint reaches no recorded ar
 
 // --- CONTROL: the fix is not "derive undefined more often" ------------------
 
-test('a Socrata record: the portal it named still reaches the recorded arguments, the span and the identity key', async () => {
-  const { derived, record, span, identityKey } = await driveReplay(SOCRATA_PACKAGE);
+test('a Socrata record: the portal it named still reaches the system prompt, the recorded arguments, the span and the identity key', async () => {
+  const { derived, composedFor, record, span, identityKey } = await driveReplay(SOCRATA_PACKAGE);
 
   assert.equal(derived, SOCRATA_PORTAL, 'a socrata data source still supplies the replay portal');
+  assert.equal(
+    composedFor,
+    SOCRATA_PORTAL,
+    'the system prompt must be composed for the portal the replay runs on, or the model is ' +
+      'instructed against one host and the calls are injected with another',
+  );
   assert.equal(
     record.args.portal,
     SOCRATA_PORTAL,

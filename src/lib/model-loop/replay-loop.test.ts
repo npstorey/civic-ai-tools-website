@@ -31,11 +31,13 @@
 
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runToolLoop, type ToolCallRecord } from './run-tool-loop.ts';
 import {
   replayLoopOptions,
+  replayLoopOptionsForPackage,
   REPLAY_MAX_ITERATIONS,
   REPLAY_MAX_TOKENS,
   REPLAY_MAX_CUMULATIVE_TOKENS,
@@ -417,26 +419,160 @@ test('a tool call that never settles fails on replay’s own timeout, and the ru
   }
 });
 
-// --- The route runs this, and holds no configuration of its own ------------
+// --- The route runs this, and decides none of it ---------------------------
+//
+// THE ONE PROPERTY node --test CANNOT DRIVE, AND WHAT IT IS WORTH (#432).
+// Everything the loop is given is now a value a case above reads, and the
+// portal decision is driven end to end in
+// `derived-replay-portal-reaches-the-record.test.ts`. What no driven case can
+// establish is that the handler in production is the caller of that decision —
+// a Next route handler is not invokable here, and 0 of this tree's test files
+// resolve the `@/` alias it imports through. That gap is what this guard
+// covers, and it is all it covers.
+//
+// It replaces two assertions that read the same file for one hostname and one
+// substring (`replay-portal.test.ts`, deleted there). Those enumerated: the
+// route could call the derivation, coalesce a fallback around the result and
+// satisfy both, which is #432 and was green on a runner over 1554 tests. This
+// one asks the class instead — the route restates NO decision the factory
+// makes — and it takes that list from the factory's own output rather than
+// naming decisions by hand, so an option added to `replayLoopOptions`
+// tomorrow is covered on the day it is added and a decision that stops
+// existing stops being asserted about.
 
-test('#345: the replay route obtains its loop options from this factory', () => {
-  const route = readFileSync(
-    fileURLToPath(new URL('../../app/api/evidence/[slug]/replay/route.ts', import.meta.url)),
-    'utf8',
+/**
+ * Comments blanked in place: line numbers stay true and a decision NAMED in
+ * prose is not read as a decision MADE in code. The route's own comments
+ * explain the portal it no longer holds, which is the point of them.
+ *
+ * A `//` preceded by `:` or `\` is not a comment — it is a URL scheme or an
+ * escaped slash inside a regular expression, and blanking from there swallows
+ * the rest of a real line of code. Found by driving the mutation below: the
+ * naive version reported the fallback's line with everything after
+ * `replace(/^https?:\/\` cut off, which is the half of the line that says what
+ * the fallback does. A `//` inside an ordinary string, and a `/*` inside any
+ * string, are still read as comment openers; stated rather than fixed, because
+ * a correct answer needs a tokenizer and this file is not the place for one.
+ */
+function executableSource(src: string): string {
+  const blank = (m: string) => m.replace(/[^\n]/g, ' ');
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, blank)
+    .replace(/(^|[^\\:])\/\/[^\n]*/gm, (m, keep: string) => keep + blank(m.slice(keep.length)));
+}
+
+/**
+ * The three things the route legitimately supplies, each because it is knowable
+ * only at the request and not from the stored package: the model client built
+ * from the caller-supplied key (and its whole error tail), the endpoint model
+ * this instance reaches the record's declared model with, and the prompt text
+ * the visibility check just cleared. Every OTHER key of the options object is
+ * a decision, and the route may not name it.
+ */
+const ROUTE_SUPPLIES = ['client', 'endpointModel', 'prompt'];
+
+/**
+ * Two names that are not option keys but are the shapes the route once carried
+ * on this path: the tool transport (which the factory renames to
+ * `executeToolCall`) and the truncation helper. Kept because they name real
+ * past regressions, and stated separately so the derived list above is not
+ * confused with a hand list.
+ */
+const FORMER_ROUTE_SHAPES = ['callTool', 'truncateToolResult', 'max_tokens'];
+
+/**
+ * The routes this guard covers, DERIVED (D10): every `route.ts` under
+ * `src/app/api` that runs a tool loop against a package it read out of storage.
+ * That intersection is what "a replay" is — `runToolLoop(` plus `getPackage(` —
+ * and it is one file today. It is derived rather than named because the
+ * property is not "this path behaves"; it is that a run replaying a STORED
+ * record takes its portal from that record. A second such route written next
+ * year is covered on the day it is written, which a filename in this file
+ * would not be. Routes that run a loop against a portal the CALLER named
+ * (`compare/route.ts`) are not replays and are correctly outside it.
+ */
+function replayRouteFiles(): string[] {
+  const apiDir = fileURLToPath(new URL('../../app/api', import.meta.url));
+  return readdirSync(apiDir, { withFileTypes: true, recursive: true })
+    .filter((e) => e.isFile() && e.name === 'route.ts')
+    .map((e) => join(e.parentPath, e.name))
+    .filter((file) => {
+      const code = executableSource(readFileSync(file, 'utf8'));
+      return code.includes('runToolLoop(') && code.includes('getPackage(');
+    })
+    .sort();
+}
+
+test('#345/#432: every route that replays a stored record obtains its options from this factory and restates no decision of its own', async () => {
+  const routes = replayRouteFiles();
+  assert.ok(
+    routes.length >= 1,
+    'PREMISE: the walker found no route under src/app/api that runs a tool loop against a stored '
+      + 'package. Either the replay route moved, or `runToolLoop(`/`getPackage(` were renamed — '
+      + 'and this guard would pass over an empty universe, which is the shape it exists to refuse.',
   );
 
-  assert.match(route, /replayLoopOptions\(/, 'the route must build its options here, not inline');
-  assert.match(route, /runToolLoop\(/, 'the route must drive the shared core');
-  for (const seam of ['callTool', 'toolTimeoutMs']) {
-    assert.ok(
-      !route.includes(seam),
-      `the route must not supply ${seam}: these seams exist for tests, not for production`,
+  // DERIVED, not listed: every key the factory actually puts on the options,
+  // read off a real call rather than transcribed from its source.
+  const options = await replayLoopOptionsForPackage({
+    pkg: { queries: [{}], dataSources: [] },
+    client: {} as unknown as Parameters<typeof replayLoopOptions>[0]['client'],
+    endpointModel: 'fake/model',
+    prompt: 'a fixture prompt',
+    composeSystemPrompt: async () => 'a fixture system prompt',
+  });
+  const decisions = Object.keys(options).filter((k) => !ROUTE_SUPPLIES.includes(k));
+  assert.ok(
+    decisions.includes('portal') && decisions.includes('systemPrompt'),
+    'PREMISE: the derived list must contain the two decisions #432 is about; if `portal` or '
+      + `\`systemPrompt\` has left the options object this guard is measuring nothing. Got: ${decisions.join(', ')}`,
+  );
+
+  // Every site, not the first: a route that reintroduced a decision typically
+  // names it three or four times (the import, the binding, the fallback, the
+  // hand-on), and a message naming only the import sends the reader to the
+  // wrong line.
+  const found: string[] = [];
+  for (const routePath of routes) {
+    const rel = routePath.slice(routePath.indexOf('src/app/api'));
+    const route = executableSource(readFileSync(routePath, 'utf8'));
+    const lines = route.split('\n');
+
+    assert.match(
+      route,
+      /replayLoopOptionsForPackage\s*\(/,
+      `${rel} must obtain its options from replayLoopOptionsForPackage: the portal decision, the `
+        + 'system prompt composed for it and the loop configuration are one call, and a route that '
+        + 'assembles any of them itself is assembling a copy no test can read',
     );
+
+    const lowered = route.toLowerCase();
+    for (const decision of [...decisions, ...FORMER_ROUTE_SHAPES]) {
+      // Case-insensitive: `replayPortalForPackage` is how the route named the
+      // portal decision when it made it, and it differs from `portal` only in
+      // a capital letter.
+      const needle = decision.toLowerCase();
+      for (let at = lowered.indexOf(needle); at !== -1; at = lowered.indexOf(needle, at + 1)) {
+        const line = route.slice(0, at).split('\n').length;
+        found.push(`  ${rel}:${line}  ${lines[line - 1].trim()}   <- ${decision}`);
+      }
+    }
   }
-  for (const configuration of ['maxIterations', 'max_tokens', 'maxCumulativeTokens', 'truncateToolResult']) {
-    assert.ok(
-      !route.includes(configuration),
-      `the route must not restate ${configuration}: loop configuration lives in replay-loop.ts`,
-    );
-  }
+  assert.deepEqual(
+    found,
+    [],
+    'A route replaying a stored record names a decision it does not make:\n'
+      + `${found.join('\n')}\n`
+      + `Such a route may name only ${ROUTE_SUPPLIES.join(', ')} — everything else about a replay is `
+      + 'decided in replay-loop.ts, where a test can read the value production uses rather than '
+      + 'the characters one caller happens to be written in. The last time this route decided '
+      + 'something itself it derived a portal, fell back around the result, and handed a replay a '
+      + 'host its record never mentioned — inside the arguments a signed consistency attestation '
+      + 'is computed over.\n'
+      + 'BLIND SPOT, stated: this reads source text. A decision reintroduced through a value '
+      + 'assembled at runtime — a key read out of a parsed object, a spread of something built '
+      + 'elsewhere — is invisible to it, the same limitation every source scan in this tree '
+      + 'accepts. It is a drift guard against the shape that actually recurs here (someone writes '
+      + 'the decision back into the handler), not a proof.',
+  );
 });

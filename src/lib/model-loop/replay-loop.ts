@@ -14,10 +14,30 @@
  * WHAT THE ROUTE STILL OWNS. Everything about being a route: the session
  * check, the caller-supplied key, the MCP routing refusal, the record and
  * package reads, the hash-only-visibility refusal, the declared→endpoint model
- * mapping, the system prompt, and the whole error-classification tail. This
- * module owns only what the LOOP is given — which since #384 includes the
- * portal derivation (`replayPortalForPackage`), because what the loop is
- * given is exactly what a test must be able to read.
+ * mapping, and the whole error-classification tail. This module owns only what
+ * the LOOP is given — which since #384 includes the portal derivation
+ * (`replayPortalForPackage`), because what the loop is given is exactly what a
+ * test must be able to read.
+ *
+ * AND SINCE #432, THE ROUTE'S PORTAL DECISION ITSELF. Deriving the portal was
+ * moved here in #384; USING it stayed in the route, three lines that read
+ * `replayPortalForPackage(pkg)`, composed a system prompt for whatever came
+ * back, and handed both to `replayLoopOptions`. Those three lines were covered
+ * by two assertions over the route's TEXT — that one named hostname does not
+ * appear in it, and that the string `replayPortalForPackage(` does — and a
+ * route that called the derivation and then coalesced a fallback around the
+ * result satisfied both. Demonstrated on a runner rather than argued: with
+ * `const portal = replayPortalForPackage(pkg) ?? pkg.dataSources[0]?.portalUrl…`
+ * live in the route — the N10 defect exactly, an aggregate endpoint handed to a
+ * replay as a Socrata portal and folded into a SIGNED consistency attestation —
+ * CI was green over 1554 tests.
+ *
+ * So the decision is `replayLoopOptionsForPackage` below: one call, taking the
+ * stored package and returning the options `runToolLoop` runs. The route holds
+ * no portal, composes no system prompt and names neither, so there is no route
+ * expression left for a fallback to sit in; and the value production actually
+ * uses is now a value the suite can read, which is what
+ * `derived-replay-portal-reaches-the-record.test.ts` reads.
  *
  * THE ARGS-IDENTITY CONSTRAINT, restated because this is the caller it bites.
  * The core injects `portal` into the very `args` object it records — the same
@@ -34,6 +54,7 @@
 import type OpenAI from 'openai';
 import { mcpTools } from '../mcp/tools.ts';
 import { callMcpTool } from '../mcp/client.ts';
+import { buildSystemPrompt } from '../mcp/socrata-skill.ts';
 import { sourceIdForToolName } from '../mcp/operation-types.ts';
 import { CIVIC_SOURCE_REGISTRY } from '../evidence/data-sources.ts';
 import type { ToolLoopOptions } from './run-tool-loop.ts';
@@ -251,4 +272,84 @@ export function replayLoopOptions(inputs: ReplayLoopInputs): ToolLoopOptions {
     toolTimeoutMs,
     executeToolCall: callTool,
   };
+}
+
+/** The two fields of a stored package the replay portal is derived from. */
+export type ReplayPortalSource = Parameters<typeof replayPortalForPackage>[0];
+
+/**
+ * Composes the system prompt a replay runs under. Defaults to
+ * `buildSystemPrompt`; substitutable for the same reason `callTool` is, and
+ * for one more: `buildSystemPrompt` reaches three MCP servers for their skill
+ * text, so a case that drove it would be measuring the network as well as the
+ * decision. A test injects a recorder and reads back the portal the composer
+ * was given, which is the half of the journey the loop options cannot show.
+ */
+export type ReplaySystemPromptComposer = (portal?: string) => Promise<string>;
+
+export interface ReplayForPackageInputs {
+  /** The stored package, read from storage by the route. */
+  pkg: ReplayPortalSource;
+  /** Built by the route from the caller-supplied key, in the route's own error handling. */
+  client: OpenAI;
+  /** The wire string this instance reaches the record's model with. */
+  endpointModel: string;
+  /** The record's prompt text, verbatim. */
+  prompt: string;
+  /** For tests only; production passes nothing. See the type's own note. */
+  composeSystemPrompt?: ReplaySystemPromptComposer;
+  /** For tests only; production passes nothing. */
+  callTool?: ReplayToolTransport;
+  /** For tests only; production passes nothing. */
+  toolTimeoutMs?: number;
+}
+
+/**
+ * The replay route's portal decision, end to end and in one place (#432).
+ *
+ * Everything between "here is the record's package" and "here are the options
+ * the loop runs": the portal derived off the package and nothing else, the
+ * system prompt composed for that portal, and both placed into the loop
+ * options. The route supplies the three things only a route can know — the
+ * client built from the caller's key, the endpoint model, the prompt text —
+ * and takes the result.
+ *
+ * WHY THIS IS A FUNCTION AND NOT THREE LINES IN THE ROUTE. Same reason the
+ * configuration is, one paragraph up in this file's header, and now with a
+ * measured cost attached: a Next route handler cannot be invoked by
+ * `node --test`, so any assertion about lines living there can only read them
+ * as characters. A character-level assertion enumerates; it caught one
+ * hostname and passed on every other way of writing the same defect, including
+ * the one that had just been fixed. Moved here, the decision is a value a
+ * driven case reads — the same value production hands to `runToolLoop`, not a
+ * copy of it composed in a test body.
+ *
+ * The portal is deliberately not a parameter. A caller cannot pass one in, so
+ * a replay cannot run on a portal that was not derived from the record it is
+ * replaying — which is the property, stated in the type rather than asserted
+ * about the text of one caller.
+ */
+export async function replayLoopOptionsForPackage(
+  inputs: ReplayForPackageInputs,
+): Promise<ToolLoopOptions> {
+  const {
+    pkg,
+    composeSystemPrompt = buildSystemPrompt,
+    ...loopInputs
+  } = inputs;
+
+  // The portal the record's own calls named, or none (#384, F2). A record that
+  // named no portal — a search/fetch-only run has no data-source entry, and an
+  // aggregate or CKAN source states an endpoint no `get_data` could address —
+  // replays with nothing injected and a system prompt that names no default
+  // portal, rather than on a domain the record never mentioned. Absence is
+  // recorded as absence in the replayed calls' arguments, and so in the
+  // identity keys the consistency attestation is computed over.
+  const portal = replayPortalForPackage(pkg);
+
+  // Regenerated fresh — the guidance may have moved since the record was
+  // published — but for THIS portal, or for none.
+  const systemPrompt = await composeSystemPrompt(portal);
+
+  return replayLoopOptions({ ...loopInputs, systemPrompt, portal });
 }
