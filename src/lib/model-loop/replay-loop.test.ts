@@ -11,11 +11,18 @@
 // a tool set or the portal injection. Change replay's configuration and these
 // tests change with it; that is the point of the seam.
 //
-// A source-drift guard at the bottom closes the remaining gap: it asserts the
-// route actually obtains its options from this factory and supplies no
-// transport of its own. Between that and `model-call-registry.test.ts` (which
-// fails if the route calls the model at all), "the route runs this" is
-// measured rather than assumed.
+// A source-drift guard at the bottom closes the remaining gap, and #432
+// widened what "the gap" means. The decision the route once made in its own
+// body — which portal a replay runs on, and the system prompt composed for it
+// — is now `replayLoopOptionsForPackage`, driven end to end in
+// `derived-replay-portal-reaches-the-record.test.ts`. What stays here is the
+// one property no driven case can reach: that the handler in production is
+// that call's caller and restates nothing it decides. The guard derives the
+// routes it covers rather than naming one, reads the list of decisions off the
+// options object rather than transcribing it, and states its own blind spot.
+// Between that and `model-call-registry.test.ts` (which fails if the route
+// calls the model at all), "the route runs this" is measured rather than
+// assumed.
 //
 // Every claim about what the model was SENT is asserted against the request
 // bodies the mock server received, because that is where the claims live: a
