@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { EvidencePackage } from '@/lib/evidence/packager';
-import { describeQueryOutcome, describeUnrecordedOutcomes } from '@/lib/evidence/query-step';
+import { describeQueryOutcome, describeUnrecordedOutcomes, readRefusalsFromTrace } from '@/lib/evidence/query-step';
 import { formatModelName } from '@/lib/models';
 
 interface ProvenanceChainProps {
@@ -99,6 +99,10 @@ export default function ProvenanceChain({ pkg }: ProvenanceChainProps) {
   // formatter as the page's, so the two cannot say different things about the
   // same package. Null when the record does state outcomes.
   const unrecordedOutcomes = describeUnrecordedOutcomes(pkg);
+  // Ruling D1: the records whose refusals live only in their trace are legacy
+  // records too, so this renderer reads the trace through the same reader the
+  // A-G page does. A declined reading leaves every entry as its fields say.
+  const fromTrace = readRefusalsFromTrace(pkg);
 
   return (
     <div>
@@ -152,7 +156,7 @@ export default function ProvenanceChain({ pkg }: ProvenanceChainProps) {
         // A returned result keeps this line's compact "\u2192 N rows"; a rejected
         // call is stated in words; an entry that recorded neither shows
         // neither here, rather than either.
-        const outcome = describeQueryOutcome(q);
+        const outcome = describeQueryOutcome(q, { refusedInTrace: fromTrace.refused.has(i) });
         // #413: a rejected entry now carries an elapsed too, and this line's
         // bare "\u00b7 1.2s" would sit immediately before "did not complete" and
         // read as the time the call took to return. The shared formatter

@@ -237,6 +237,28 @@ test('every surface that reads a stored record\'s queries[] states the record-le
   const silent = recordSurfaces.filter(
     (f) => !/describeUnrecordedOutcomes\s*\(/.test(readFileSync(f, 'utf8')),
   );
+  // Ruling D1 (Wave N11 F-W): the same surfaces also read the record's trace
+  // for refusals its request list does not mark, and hand that reading to
+  // EVERY per-entry outcome they render. A surface that states the dated
+  // record-level line ("2 of its 9 requests are marked there as refused, and
+  // stated so below") but renders its entries without the reading would say
+  // "below" over entries that read "No result summary was recorded".
+  const traceBlind = recordSurfaces.filter((f) => {
+    const source = readFileSync(f, 'utf8');
+    const perEntry = source.match(/describeQueryOutcome\s*\([^)]*\)/g) ?? [];
+    return (
+      !/readRefusalsFromTrace\s*\(/.test(source) ||
+      perEntry.length === 0 ||
+      perEntry.some((call) => !/refusedInTrace\s*:/.test(call))
+    );
+  });
+  assert.deepEqual(
+    traceBlind,
+    [],
+    'These render a stored record\'s queries[] without reading its trace for refusals, or render ' +
+      'some entry without that reading — so a record whose refusals live only in its trace reads ' +
+      'there as requests that happen to be missing a summary (ruling D1).',
+  );
   assert.deepEqual(
     silent,
     [],

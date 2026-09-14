@@ -21,6 +21,7 @@
 import type { Notebook } from './cells.ts';
 import { codeCell, emptyNotebook, markdownCell } from './cells.ts';
 import { getPublicationHost } from '../site-config.ts';
+import { coverPortals } from './cover-portals.ts';
 import { getHelperSource, helpersForToolNames, type HelperId } from './helpers/index.ts';
 import { buildMetricCaptureCell } from './phase-d.ts';
 import {
@@ -86,19 +87,11 @@ function buildHelperCellSource(helperIds: readonly HelperId[]): string {
   ].join('\n\n');
 }
 
-function uniquePortals(toolCalls: readonly PhaseAToolCall[], fallback: string): string[] {
-  const set = new Set<string>();
-  for (const call of toolCalls) {
-    const p = call.args.portal as string | undefined;
-    if (p) set.add(p);
-  }
-  if (set.size === 0 && fallback) set.add(fallback);
-  return [...set];
-}
-
 export function synthesizeNotebook(inputs: PhaseAOutputs): SynthesisOutputs {
   const generatedAt = inputs.generatedAt ?? new Date().toISOString();
-  const portals = uniquePortals(inputs.toolCalls, inputs.defaultPortal);
+  // #434 D3: reached portals apart from refused-only ones; the default only
+  // when no call named a portal. The same split the chat notebook's cover reads.
+  const portals = coverPortals(inputs.toolCalls, inputs.defaultPortal);
   const toolNames = inputs.toolCalls.map(c => c.name);
   const helperIds = helpersForToolNames(toolNames);
 
@@ -113,7 +106,8 @@ export function synthesizeNotebook(inputs: PhaseAOutputs): SynthesisOutputs {
   notebook.cells.push(markdownCell(buildCell0Source({
     query: inputs.query,
     generatedAt,
-    portals,
+    portals: portals.reached,
+    refusedOnlyPortals: portals.refusedOnly,
     // The SAME default portal the steps below are rendered with (#407): the
     // cover's claim is derived from the calls before any cell exists, so the
     // two derivations must be given one value or the claim can outrun the

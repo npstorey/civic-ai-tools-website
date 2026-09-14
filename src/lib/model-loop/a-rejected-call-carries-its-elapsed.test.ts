@@ -48,6 +48,40 @@
 //     fails this file even though every individual number would look
 //     plausible.
 //
+// A1'S BOUND, AND WHY IT IS NOT A TIMER'S (#461). A1 used to sleep with
+// `setTimeout(25)` and assert the loop's `Date.now()` delta was `>= 25`. That
+// failed once on a CI runner (run 34761060708, attempt 1) and passed on a
+// re-run of the same merge commit. Nothing guarantees it:
+//   - Node documents no bound: "Node.js makes no guarantees about the exact
+//     timing of when callbacks will fire" (doc/api/timers.md, v22).
+//   - A timer's start and its expiry check are read off libuv's loop clock
+//     (`binding.getLibuvNow()` in lib/internal/timers.js `insert` and
+//     `listOnTimeout`; `Environment::GetNowUint64` in src/env.cc), which is
+//     MONOTONIC, whole milliseconds, and on Linux `CLOCK_MONOTONIC_COARSE`
+//     whenever that clock's resolution is 1ms or finer (libuv
+//     src/unix/linux.c `uv__hrtime`). The loop measures with `Date.now()`,
+//     the WALL clock. Two different clocks, each truncated to the
+//     millisecond, one of them coarse: a timer that has waited 25 of its
+//     ticks can span 24 or fewer of the other's.
+// So A1 no longer relies on any timer. Its bound is a RELATIONSHIP on the one
+// clock the loop reads, from two facts that hold for any non-decreasing
+// millisecond clock: an interval that contains another has a delta at least as
+// large, and one contained in another has a delta no larger.
+//   - Inner: the executor waits until `Date.now()` itself says SLEEP_MS has
+//     passed since it was entered, and records both readings. The loop's
+//     clock starts before the executor is entered and stops after it throws,
+//     so the recorded elapsed is at least that inner delta, and so at least
+//     SLEEP_MS — now guaranteed rather than hoped.
+//   - Outer: the progress callbacks are synchronous. The rejected call's
+//     `tool_start` fires before the loop reads its clock, and its failed
+//     `tool_complete` after, so the recorded elapsed is at most the delta the
+//     test reads between those two callbacks. That upper edge is what makes a
+//     recorded CONSTANT fail: a hard-coded number has to land inside this
+//     run's window, about a millisecond wide.
+// What is still assumed: that the wall clock is not stepped backwards during
+// the ~25ms of the attempt (the loop's own choice of clock, not the test's),
+// and that a constant does not happen to equal this run's elapsed.
+//
 // THE READER'S HALF. The record page and `ProvenanceChain` both render a
 // `queries[]` entry through `describeQueryOutcome`, and the entry now carries
 // a duration where it did not before. The last two cases hold that line: the
@@ -108,7 +142,9 @@ const ANSWER = 'About 412,000.';
 /** Long enough that a recorded zero and a real measurement cannot be confused. */
 const SLEEP_MS = 25;
 
-interface Recorded { message: string; opts?: ProgressOpts & { failed?: boolean; failureKind?: string } }
+interface Recorded { message: string; opts?: ProgressOpts & { failed?: boolean; failureKind?: string }; at: number }
+/** Each executor call's own window, read on the loop's clock (see A1's bound above). */
+const executorWindow = new Map<string, { enteredAt: number; leftAt: number }>();
 
 // --- Drive the real loop: one answered call and one rejected ----------------
 
@@ -135,13 +171,19 @@ await queryWithMcpStreaming(
   carriedModelIdentity('fake/model'),
   [],
   async (_name, args) => {
-    await new Promise((r) => setTimeout(r, SLEEP_MS));
+    // Wait on the loop's clock, not on a timer's (#461): re-arm until
+    // `Date.now()` agrees SLEEP_MS has passed.
+    const enteredAt = Date.now();
+    do {
+      await new Promise((r) => setTimeout(r, SLEEP_MS));
+    } while (Date.now() - enteredAt < SLEEP_MS);
+    executorWindow.set(String(args.dataset_id), { enteredAt, leftAt: Date.now() });
     if (args.dataset_id === REJECTED) throw new Error('the source did not answer');
     return '[{"count":"412093"}]';
   },
   'You are a fixture system prompt.',
   {
-    onProgress: (_panel, message, opts) => { progress.push({ message, opts }); },
+    onProgress: (_panel, message, opts) => { progress.push({ message, opts, at: Date.now() }); },
     onToken: () => {},
     onComplete: (_panel, result) => { completion = result; },
     onError: (_panel, message) => assert.fail(`unexpected onError: ${message}`),
@@ -241,10 +283,33 @@ test('A1: the rejected call carries the elapsed on the loop’s own record', () 
     (callFor(REJECTED).duration_ms as number) > 0,
     'the catch site sets failed/failureKind and no duration_ms, though the elapsed is in hand',
   );
+  // The bound, as a relationship on the loop's own clock (#461; the header's
+  // "A1's bound"). Inner: the executor's window, which the loop's contains.
+  const recorded = callFor(REJECTED).duration_ms as number;
+  const inner = executorWindow.get(REJECTED);
+  assert.ok(inner, 'PREMISE: the rejecting executor recorded its window');
+  assert.ok(inner!.leftAt - inner!.enteredAt >= SLEEP_MS, 'PREMISE: the executor waited SLEEP_MS on the loop’s clock');
   assert.ok(
-    (callFor(REJECTED).duration_ms as number) >= SLEEP_MS,
+    recorded >= inner!.leftAt - inner!.enteredAt,
+    `the recorded elapsed (${recorded}ms) is smaller than the executor's own window ` +
+      `(${inner!.leftAt - inner!.enteredAt}ms), which the attempt contains — it is not the clock the attempt started on`,
+  );
+  assert.ok(
+    recorded >= SLEEP_MS,
     'the recorded elapsed is smaller than the time the executor actually took before rejecting — ' +
       'it is not the clock the attempt started on',
+  );
+  // Outer: the callbacks either side of the attempt, which contain the loop's
+  // window. This is the edge a recorded constant cannot straddle.
+  const started = progress.find(
+    (p) => p.opts?.phase === 'tool_start' && (p.opts?.args as Record<string, unknown> | undefined)?.dataset_id === REJECTED,
+  );
+  const ended = progress.find((p) => p.opts?.failed === true && p.opts?.phase === 'tool_complete');
+  assert.ok(started && ended, 'PREMISE: the rejected call’s start and end both reached the progress wire');
+  assert.ok(
+    recorded <= ended!.at - started!.at,
+    `the recorded elapsed (${recorded}ms) is larger than the window between the call's start and its ` +
+      `rejection on the progress wire (${ended!.at - started!.at}ms) — it was not measured across this attempt`,
   );
 });
 

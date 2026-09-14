@@ -54,6 +54,8 @@ import { reasonWithoutIdentifier } from './streaming.ts';
 // them, which this file's header explains is the whole constraint.
 import { NOTEBOOK_PROVENANCE_SKELETON } from './evidence/trust-signal.ts';
 import { NOTEBOOK_EXTENSION_KEY } from './notebook-author/notebook-provenance-reading.ts';
+// Pure, no imports — safe in the client bundle this file ships in.
+import { coverPortalLines, coverPortals } from './notebook-author/cover-portals.ts';
 
 export type { InstanceAttribution };
 
@@ -385,19 +387,14 @@ export function generateNotebook(
   const cells: NotebookCell[] = [];
   const now = new Date().toISOString().split('T')[0];
 
-  // Collect unique portals from tool calls
-  const portalSet = new Set<string>();
-  for (const tool of toolsCalled) {
-    const p = tool.args.portal as string | undefined;
-    if (p) portalSet.add(p);
-  }
-  const uniquePortals = [...portalSet];
-  // The portals this notebook can honestly name: the ones its own tool calls
-  // carried, else the run's own portal, else NONE. `null` and '' both mean
-  // none — the cover omits the line rather than printing an empty label.
-  const displayPortal = uniquePortals.length > 1
-    ? uniquePortals.join(', ')
-    : uniquePortals[0] || portal || null;
+  // The portals this notebook can honestly name (#434 D3): the ones an
+  // ANSWERED call carried, listed apart from the ones only refused calls
+  // carried, else — only when no call named a portal at all — the run's own
+  // portal, else NONE. `null` and '' both mean none, and the cover omits the
+  // line rather than printing an empty label. One function for both
+  // generators (`notebook-author/cover-portals.ts`), so the two covers cannot
+  // disagree about one run.
+  const portalLines = coverPortalLines(coverPortals(toolsCalled, portal));
 
   // Title cell. Attribution ("via [host](origin)") renders only when the
   // instance has declared an identity — honest omission otherwise (#258 A2).
@@ -422,9 +419,7 @@ export function generateNotebook(
     // a substituted host. The two generators write one field of one document
     // for one run; a third behaviour here would be the two-documents-two-
     // stories defect this file's own comments name (#384 F3, C2).
-    ...(displayPortal === null
-      ? []
-      : [`**Portal${uniquePortals.length > 1 ? 's' : ''}:** ${displayPortal}  `]),
+    ...portalLines,
     `**Generated:** ${now}${viaSuffix}`,
   ]));
 
