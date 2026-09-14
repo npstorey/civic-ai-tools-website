@@ -32,6 +32,7 @@ import {
 // stored notebook, and this module reaches `../site-config.ts`. See the header
 // of ./reproduction-claim.ts for why the detector and its emitter are split.
 import { COVER_SECTION_HEADING, reproductionClaimSentence } from './reproduction-claim.ts';
+import { coverPortalLines } from './cover-portals.ts';
 
 /** Pinned scientific-stack versions; MUST match `scripts/build-sandbox-snapshot.ts`.
  *  All four pins target releases with prebuilt CPython 3.13 wheels so pip
@@ -64,7 +65,13 @@ export function pinnedLibrariesPipList(): string {
 export function buildCell0Source(args: {
   query: string;
   generatedAt: string;
+  /** Portals an answered call named, or the default when no call named one. */
   portals: readonly string[];
+  /**
+   * Portals only refused calls named (#434 D3), listed on their own line as
+   * refused. Optional: a caller that does not split states none.
+   */
+  refusedOnlyPortals?: readonly string[];
   /**
    * How many steps in this notebook re-run a data fetch (#341). Zero switches
    * the cover text to the honest version below: a notebook whose every fetch
@@ -98,9 +105,11 @@ export function buildCell0Source(args: {
    */
   analysisStepCount?: number;
 }): string {
-  const portalLine = args.portals.length === 0
-    ? ''
-    : `**Portal${args.portals.length > 1 ? 's' : ''}:** ${args.portals.join(', ')}  \n`;
+  // The same lines the chat notebook's cover writes (`cover-portals.ts`).
+  const portalLine = coverPortalLines({
+    reached: [...args.portals],
+    refusedOnly: [...(args.refusedOnlyPortals ?? [])],
+  }).map((line) => `${line}\n`).join('');
   // #258: attribution only when this instance has declared an identity —
   // honest omission, never a substituted host.
   const host = getPublicationHost();
