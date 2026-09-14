@@ -154,7 +154,9 @@ async function main(): Promise<void> {
   // --- 4. Produce: build + sign a package under the alternate identity ----
   const notebook = generateNotebook(
     'How many permits were filed last year?',
-    'data.example.gov',
+    // No run-level portal (#407, #434 F-W): the call below names the portal it
+    // addressed, and the notebook's cover reads it from there.
+    null,
     [
       {
         name: 'get_data',
