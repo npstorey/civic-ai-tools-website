@@ -15,7 +15,7 @@ import { getBrandName } from '@/lib/brand-config';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
-import { describeQueryOutcome, describeUnrecordedOutcomes } from '@/lib/evidence/query-step';
+import { describeQueryOutcome, describeUnrecordedOutcomes, readRefusalsFromTrace } from '@/lib/evidence/query-step';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
 import { sessionUserIsCreator } from '@/lib/evidence/sealed-access';
 import { fromDbValue } from '@/lib/evidence/visibility';
@@ -621,13 +621,18 @@ export default async function EvidencePage({ params }: PageProps) {
                   Show {renderPkg.queries.length} tool {renderPkg.queries.length === 1 ? 'call' : 'calls'}
                 </summary>
                 <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {renderPkg.queries.map((q, i) => {
+                  {(() => {
+                  // Ruling D1: a record whose request list marks no refusal is
+                  // read against its trace once, here; a declined reading
+                  // leaves every entry as its own fields say.
+                  const fromTrace = readRefusalsFromTrace(renderPkg);
+                  return renderPkg.queries.map((q, i) => {
                     // #384 F5: what the call returned is stated through the
                     // one formatter both renderers share — a rejected call is
                     // said to have failed, an empty result to have returned
                     // nothing, and an entry with neither is stated as
                     // unrecorded, never as either.
-                    const outcome = describeQueryOutcome(q);
+                    const outcome = describeQueryOutcome(q, { refusedInTrace: fromTrace.refused.has(i) });
                     return (
                     <div key={i} style={{
                       padding: '10px 14px', border: '1px solid var(--border-color)',
@@ -647,7 +652,8 @@ export default async function EvidencePage({ params }: PageProps) {
                       </div>
                     </div>
                     );
-                  })}
+                  });
+                  })()}
                 </div>
               </details>
             </Section>
