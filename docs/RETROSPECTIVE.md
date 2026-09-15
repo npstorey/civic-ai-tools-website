@@ -6,6 +6,128 @@ Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ---
 
+## 2026-09-14 — Wave N11 (#434): the surfaces around the record — and a statement never driven on the records it was written for (sixteen gated phases, four lanes)
+
+**Scope:** N10 left fourteen filings about the surfaces that read a record: its readers, its guards, and the deploy path around it. One property: **no surface of the reference app, the hosted server or the harness carries a default or a site list that names one deployment or one reader.** A guard's universe is derived from what reads the surface, never a hand list (ruling D10). A default is configuration, and absent means absent, stated as such.
+
+**Phases:**
+
+- **Website:**
+  - P1 `567e2f2`: #421, the deploy path and a derived env guard;
+  - P2 `f32b679`: #403, #416;
+  - P3 `fa20fd7`: #429 (`isError` as a rejected call) and #426;
+  - P-bump `689e509`;
+  - P4 `ec7f173`: #413, #411;
+  - P5 `de2d55f`: #430, #405, and hub #194 at render time;
+  - P6 `b42acdf`: #432;
+  - P7, the cold read;
+  - F-W `3d832b7`: the cold read's F1 and F4, #461, and #407's universe.
+- **Hub:** P-H1 `3c5ff12` (#203); R-H `232f60e` (harness 0.4.1, published); P-H2 `20aa3a1` (#197, #199); F-H `3d09d99` (F2).
+- **Server:** P-S1 `c07978a` (the default portal is configuration).
+- **typedstandards:** P-T1 `7b4fe19` (#68); F-T `6b34aa3`.
+
+**Merges and tags:** fifteen merges, each a merge commit whose second parent is the head the seat's GO comment on that PR names, and thirty `rollback/pre-n11-*` tags across the phases, each `pre-` tag cut before its branch.
+
+**Test totals:** website **1419 → 1591**, `# fail 0` at every merged head.
+
+### The lesson: a statement a ruling names its records for is demonstrated on those records
+
+Ruling D8 said the two May records whose calls were refused before outcome marking "will say their calls' outcomes are not stated". P5 built that statement and pinned it with honest tests over synthetic fixtures. In one fixture no entry records an outcome, and the line appears. A contrast fixture carries one row count and asserts that no line appears.
+
+**Nobody drove the two named records.** The cold read did, at the end of the wave. Both carry a row count on one entry beside an unmarked refusal, so the shipped predicate returned `null` on exactly the records the ruling was written for. The contrast fixture had encoded their shape as the "no line" case.
+
+This is N9's and N10's lesson one step further on.
+
+- **N9:** a fixture shaped so it cannot fail is not a demonstration.
+- **N10:** a probe run where the defect cannot fire reports it fixed.
+- **N11:** a fixture that *can* fail still says nothing about instances it does not resemble. When a ruling names its instances, read them live and drive the criterion on them.
+
+The fix could not be a predicate. At entry level, a pre-outcome-marking refusal is byte-for-byte the shape of an answered metadata call written today. **The trace tells them apart:** spans pair one-to-one with entries, and the refused call's span carries `error: true`. F-W reads that flag and nothing else on the span; the source's raw `error.message`, still present on those old spans, is never read.
+
+Driven over all 20 published records, the reader changes exactly the two records D8 named, and no others.
+
+### The second: removing a fallback activates everything it masked
+
+P-S1 made the server's default portal configuration (ruling D6): `DATA_PORTAL_URL`, or no default and a per-call refusal. The phase was drawn correctly from the code that reads the variable.
+
+**The files that set it live in another repository.** The hub's six MCP templates set `DEFAULT_DOMAIN`, `CACHE_ENABLED` and `LOG_LEVEL`, and the server has never read any of the three. The literal city fallback P-S1 deleted had made that invisible. From the merge on, every fresh hub setup got a server that refused every `search`. The hub clones the server unpinned (hub #214), so nothing in the hub's CI moved when it broke.
+
+The cold read found it by starting the built server with the template's environment. F-H made the templates set `DATA_PORTAL_URL` and added a guard. The guard derives the names the server reads from the server's own source at `main`, over a shallow clone, not the rate-limited REST API. A failed clone fails the check.
+
+**A blast zone follows the configuration as well as the record:** ask what sets the value a change reads, not only what reads it.
+
+### Checks weaker than they read
+
+- **P-bump as chartered could not fail.** Nothing in the website's 1507 tests told harness `0.4.0` from `0.4.1`. Moving the pin also exposed a guard that named a version constant and would have reddened on every patch release. It now asserts a floor.
+- **#461's elapsed instrument asserted `Date.now()` ≥ its own `setTimeout(25)`.** Node's timers run on libuv's monotonic loop clock, while the loop measures on the wall clock, so no lower bound exists to widen to. The fix waits on the same clock it measures and asserts `inner ≤ recorded ≤ outer`.
+- **The #407 portal-default guard walked `src/` while the property is tree-wide.** A default portal in `scripts/` passed on a runner with every check green. Its universe is now `git ls-files`.
+- **typedstandards kept a second hand-maintained gate list** in `.claude/agents/impl.md`. It went stale inside the phase that guarded its twin in `CLAUDE.md`. The gate-list guard now finds every gate list by content: any heading section naming three or more CI gate steps.
+
+### The instruments, and the records they corrected
+
+**The ORCHs wrote thirteen instrument defects across two sessions,** every one caught before it was cited as evidence:
+
+- a normalisation that left the distinguishing token in;
+- a `sed` range that hashed two empty strings as "identical";
+- a mutation that silently did not apply;
+- a "clean" run against a still-committed mutation;
+- a block-split that matched two different spans;
+- a replaced ternary *condition* that changed no output;
+- a grep for a token the compiler's diagnostic does not print;
+- an invalid `--types ''` flag read as a result;
+- a template universe that parsed a markdown doc as JSON;
+- a drive timeout printed as `TIMEOUT` and nearly read as a refusal;
+- **a red no fix could turn green**, the converse of a criterion that cannot fail;
+- BSD `sed -E` with `\s`, which stripped nothing;
+- `set -- $pair` in zsh, which does not word-split.
+
+**Three gate-record errors were caught by IMPLs re-deriving instead of inheriting:**
+
+- a distribution of assertions across files;
+- a count of harness test files (nine, actually twelve);
+- per-file command counts taken with a different instrument than the guard's.
+
+**Two more were the ORCH's own:**
+
+- a cold-read figure relayed without re-measurement: "17 of 20 records carry a row count", actually **4 of 20**;
+- a single slow network sample written down as a property.
+
+**IMPLs found gaps in their own guards twice** in the fix phases, both by mutation before pushing.
+
+### The cold read, eighth in a row
+
+Fable 5.1, fresh context, no phase diff, told a criterion was mis-stated and not which. It re-ran after its first attempt died on a usage-credit 429 with zero tool calls, and took **32 min 34 s, 102 tool calls and about 437K tokens**.
+
+It drove a rejected call through every reader it derived, on four shapes including the real server with no default portal. It found:
+
+- **F1:** criterion 8 unmet on its own named records;
+- **F2:** a live setup regression one repository over;
+- **F4:** a notebook cover listing a refused-only portal beside the one reached;
+- **criteria 1 and 12 mis-stated.** Criterion 1 names a directory where the property is a behaviour. Criterion 12 asks for an outcome, not a property.
+
+**It found no hand list in any guard this wave wrote.** The one directory-scoped guard it named predated the wave.
+
+### ORCH-layer failures, recorded
+
+- **A successor booted while its predecessor's session was still live.** The seat check caught it before any write.
+- **A signing agent locked at the first tag.** It was diagnosed as a vault lock by running the operation alone, and resolved by the owner.
+- **Two of three fix-phase IMPLs ended their turns "waiting on CI"** despite a contract rider saying not to, and one earlier IMPL stalled after publishing. Each was resumed by message once CI finished, and its report was verified from the run, not taken from the stall.
+- **The harness refused the cold read's report file** ("subagents return findings as text"), so its report is its final message, recorded on the anchor.
+
+### Left for N12
+
+- **Filed:**
+  - website #333, #447, #448, #455, #458, #464;
+  - hub #207, #214, #217;
+  - server #64, #68;
+  - typedstandards #71 (the notebook-key export, a release candidate) and #75.
+- **Owed at the hub's next release:** a CHANGELOG entry for P-H2's fourteen new `CIVIC_TERM_*` exports, and a note that the 0.4.0 entry's "the suite type-checks nothing" is no longer true.
+- **The deploy-fit items** (website #443, #444, #445, #449, #450; hub #205) wait on external answers.
+
+Close record: #434, comment 5678952570.
+
+---
+
 ## 2026-09-06 — Wave N10 (#409): the rejected call on every surface — and the probe that reported a defect fixed (thirteen gated phases, three lanes)
 
 **Scope:** N9 made the record *carry* a rejected call, and its cold read found that the surfaces derived from the record still described one as if it had answered. This wave is that second half, for the surfaces that summarise, derive and sign. One property: **a call the source rejected is stated as rejected on every surface the record reaches — in signed bytes and on the page — and nothing derived from it asserts an access, a result or a cause the record does not carry.** N9's property (no consumer invents what the loop did not write) stands underneath it.
