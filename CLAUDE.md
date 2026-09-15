@@ -173,6 +173,15 @@ Each cost a real mistake; the incident sits in an HTML comment beside it. Path-s
        been wrong since before those tools existed: two `get_data` calls on one dataset with different
        `WHERE` clauses also collapsed to one key. A hand-picked field list is the defect; the key is
        now the tool name plus canonical JSON of every argument. -->
+  The zone follows the configuration too. Before removing a default or a fallback, ask what *sets*
+  the value the change now reads — templates, examples, setup scripts, other repositories — because a
+  fallback hides every setter nothing ever read, and removing it activates all of them at once.
+  <!-- Wave #434 P-S1 removed the server's literal default portal, drawn correctly from the code that
+       reads the setting. The hub's MCP templates had set `DEFAULT_DOMAIN`, `CACHE_ENABLED` and
+       `LOG_LEVEL` for months; the server read none of the three, and the fallback had hidden it. From
+       that merge on, every fresh hub setup refused every `search`, and because the hub clones the
+       server unpinned, no CI in either repository moved. The cold read found it by starting the built
+       server with a template's environment (#434 F2; fixed by civic-ai-tools#216). -->
 
 - **A criterion demonstrated on a fixture shaped so it cannot fail is not demonstrated.** When a
   contract says "a run with a rejected call" or "a fixture with a search and a fetch", it also says
@@ -190,4 +199,12 @@ Each cost a real mistake; the incident sits in an HTML comment beside it. Path-s
        the rule above prescribes, and three run-level formatters on that map still narrated the
        rejected call as "then counted records" — a consumer map says where to look; only a driven
        run says what is there. -->
+  When a ruling names the records a criterion is for, the criterion is driven on those records,
+  read live — a fixture that *can* fail still says nothing about an instance it does not resemble.
+  <!-- Wave #434 ruling D8 named the two May records whose calls were refused before outcome marking.
+       P5 built their dated line and pinned it over synthetic fixtures that could fail, and its
+       contrast fixture encoded those records' exact shape — one row count beside an unmarked
+       refusal — as the "no line" case. The shipped predicate returned null on exactly the records the
+       ruling was written for, and nobody drove them until the cold read (#434 F1; fixed in #463 by
+       reading the trace, then checked by rendering all 20 published records before and after). -->
 
