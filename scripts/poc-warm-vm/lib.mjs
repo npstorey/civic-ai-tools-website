@@ -68,3 +68,27 @@ export async function importAppClientBoundTo(url, token, bindCounter) {
   process.env.NYC_CHARTER_MCP_TOKEN = token;
   return import(`../../src/lib/mcp/client.ts?bind=${bindCounter}`);
 }
+
+/**
+ * Silence the app client's own operator logging for the duration of a
+ * measurement run.
+ *
+ * `src/lib/mcp/client.ts` console.logs every call, the RAW response body and
+ * the formatted output — useful in a server log, unreadable in a transcript
+ * meant to be pasted. Only calls whose FIRST argument is a string beginning
+ * "[MCP" are dropped, so nothing this suite prints is ever suppressed. The
+ * client is not modified; this is a filter on the way out.
+ */
+export function silenceAppClientLogs() {
+  const real = console.log;
+  console.log = (...args) => {
+    if (typeof args[0] === 'string' && args[0].startsWith('[MCP')) return;
+    real(...args);
+  };
+  return () => { console.log = real; };
+}
+
+/** Print one "LABEL: value" line for the pasteable tail block. */
+export function keyLine(label, value) {
+  console.log(`  ${label.padEnd(34)} ${value}`);
+}

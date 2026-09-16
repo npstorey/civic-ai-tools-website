@@ -175,11 +175,45 @@ test('the anchor: the module the senders route through declares throwIfErrorResu
 
 // --- The class ---------------------------------------------------------------------------
 
+/**
+ * POC MCP-WARM-VM: forwarding transports, which are not consumers.
+ *
+ * The property this file guards is "no sender RECORDS a result carrying
+ * isError: true AS AN ANSWER". A hop that forwards the response bytes to a
+ * caller and records nothing is a third thing the property did not previously
+ * have to distinguish, because every sender in the tree was also a consumer.
+ *
+ * `scripts/poc-warm-vm/bridge.mjs` is one: it hands the child's JSON-RPC
+ * response back over HTTP verbatim, and the app's own client — which DOES
+ * route through throwIfErrorResult — is what consumes it. Making the bridge
+ * throw would be the opposite of this guard's intent: a throw there becomes an
+ * HTTP 502 and DESTROYS the typed isError payload before the real guard can
+ * read it. The exemption is the narrow one, and it is checked in both
+ * directions below so it cannot outlive the file it names.
+ */
+const FORWARDING_TRANSPORTS: Record<string, string> = {
+  'scripts/poc-warm-vm/bridge.mjs':
+    'forwards the response to the app client verbatim and records nothing; throwing here would turn a typed isError result into an HTTP 502',
+};
+
 test('every tracked file that sends tools/call routes the result through throwIfErrorResult', () => {
   const senders = trackedSourceFiles().filter((file) => isSender(parse(file, readFileSync(posix.join(REPO_ROOT, file), 'utf8'))));
   console.log(`# senders the scan derived: ${senders.length}\n${senders.map((s) => `#   ${s}`).join('\n')}`);
   assert.ok(senders.length > 0, 'the scan found no sender at all — it has stopped measuring');
-  const unrouted = senders.filter((file) => !routes(file, parse(file, readFileSync(posix.join(REPO_ROOT, file), 'utf8'))));
+
+  // A named transport that is no longer a sender is a stale exemption, and a
+  // stale exemption is a false statement about the tree — the same
+  // bidirectionality UNTYPED_BY_MEASUREMENT carries in operation-types.test.ts.
+  for (const [file, why] of Object.entries(FORWARDING_TRANSPORTS)) {
+    assert.ok(
+      senders.includes(file),
+      `"${file}" is exempted as a forwarding transport (${why}) but the scan no longer counts it as a sender. Remove the exemption.`,
+    );
+  }
+
+  const unrouted = senders
+    .filter((file) => !routes(file, parse(file, readFileSync(posix.join(REPO_ROOT, file), 'utf8'))))
+    .filter((file) => !(file in FORWARDING_TRANSPORTS));
   assert.deepEqual(
     unrouted,
     [],

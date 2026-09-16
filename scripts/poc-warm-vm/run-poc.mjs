@@ -20,7 +20,7 @@ import { randomUUID } from 'node:crypto';
 import { Sandbox } from '@vercel/sandbox';
 import {
   openResults, record, writeSummary, section, readout, elapsed, log,
-  importAppClientBoundTo,
+  importAppClientBoundTo, silenceAppClientLogs, keyLine,
 } from './lib.mjs';
 import {
   createFresh, createFromSnapshot, installCharter, writeBridge, startBridge,
@@ -38,10 +38,36 @@ const RATE_PER_CREATION = 0.60 / 1_000_000;
 const RUN_ID = new Date().toISOString().replace(/[:.]/g, '-');
 const REPEATS = Number(process.env.POC_REPEATS || 2);
 const WARM_CALLS = Number(process.env.POC_WARM_CALLS || 5);
-const CPU_CALLS = Number(process.env.POC_CPU_CALLS || 50);
+/**
+ * 500, not 50. Active CPU is only reported once a VM stops, so per-call CPU is
+ * a DIFFERENCE between two boots — and boot CPU itself varies by a few hundred
+ * ms. At 50 calls that variance swamped the signal: two readings of the same
+ * quantity came back 1.28 ms and 24.88 ms per call. 500 calls put roughly a
+ * second of call CPU against the same boot noise.
+ */
+const CPU_CALLS = Number(process.env.POC_CPU_CALLS || 500);
 
 let bindCounter = 0;
 const live = [];                       // sandboxes to tear down on exit
+/** Updated as the suite advances, so a failure can say WHERE it stopped. */
+let phase = 'startup';
+/**
+ * Fault injection, for demonstrating the failure path rather than asserting it.
+ * `POC_FAULT_PHASE=<phase name>` throws on entering that phase, with VMs alive,
+ * so the teardown + live stray check can be watched doing their job. A criterion
+ * demonstrated only on a run that cannot fail is not demonstrated.
+ */
+const FAULT_PHASE = process.env.POC_FAULT_PHASE || '';
+function enterPhase(name) {
+  phase = name;
+  if (FAULT_PHASE && name === FAULT_PHASE) {
+    throw new Error(`injected fault at phase "${name}" (POC_FAULT_PHASE)`);
+  }
+}
+/** Hoisted out of the try block so the finally can delete it. */
+let snapshotRef = null;
+let failure = null;
+silenceAppClientLogs();
 const summary = {
   runId: RUN_ID, package: CHARTER_PACKAGE, vcpus: SANDBOX_VCPUS,
   memoryMb: SANDBOX_MEMORY_MB, m1: {}, m2: {}, m3: {}, m4: {}, questions: [],
@@ -49,7 +75,12 @@ const summary = {
 
 async function teardown() {
   for (const s of [...live]) {
-    try { await s.stop(); live.splice(live.indexOf(s), 1); } catch { /* reported by the caller */ }
+    // BLOCKING, deliberately: a bare stop() returns when the stop is
+    // ACKNOWLEDGED, not when the VM has stopped. The final stray check reads
+    // live state, so a non-blocking teardown races it and reports a sandbox
+    // still in `stopping` as a stray. Measured: the first full rehearsal ended
+    // "STRAYS: 1" on a run that had leaked nothing.
+    try { await s.stop({ blocking: true }); live.splice(live.indexOf(s), 1); } catch { /* reported by the caller */ }
   }
 }
 process.on('SIGINT', async () => { await teardown(); process.exit(130); });
@@ -134,6 +165,7 @@ async function provisionFromSnapshot(snapshotId) {
 }
 
 // --------------------------------------------------------------- M1 (a) ---
+enterPhase('M1(a) fresh creation');
 section(`M1(a) — FRESH CREATION to a returned tool result  (x${REPEATS})`);
 summary.m1.fresh = [];
 let keep = null;
@@ -153,19 +185,28 @@ for (let i = 1; i <= REPEATS; i++) {
     command: `${CREATE_FRESH_COMMAND} + ${INSTALL_COMMAND} + ${START_BRIDGE_COMMAND}`, ...p.t,
   });
   summary.m1.fresh.push(p.t);
-  if (i < REPEATS) { await p.sandbox.stop(); live.splice(live.indexOf(p.sandbox), 1); }
+  if (i < REPEATS) { await p.sandbox.stop({ blocking: true }); live.splice(live.indexOf(p.sandbox), 1); }
   else keep = p;
 }
 
 // ------------------------------------------------- snapshot, then M1 (b) ---
+enterPhase('snapshot build');
 section('SNAPSHOT — freeze a provisioned VM so "resume" has something to resume');
 log('  NOTE: @vercel/sandbox@1.10.2 exposes NO resume() for a stopped sandbox.');
 log('  stop() + snapshot() + create-from-snapshot IS the resume path at this SDK');
 log('  version, and it is what M1(b) measures. Said plainly because the plan doc');
 log('  quotes Vercel docs saying sandboxes "resume from an automatic snapshot" —');
 log('  that is not a method this SDK version offers.');
+// `expiration: 0` (never expire) is the ONLY value measured to work here:
+// `{ expiration: 7200000 }` — two hours, intended as a self-healing backstop —
+// was rejected with "Status code 400 is not ok" on a real run. So the finally
+// block's explicit delete is the whole cleanup story, and it is demonstrated:
+// two rehearsals ended with the snapshot reading status=deleted. A run killed
+// between snapshot() and delete() leaves a 314 MB snapshot that never expires
+// — `node scripts/poc-warm-vm/stop-strays.mjs --snapshots` lists them.
 const snapped = await elapsed(() => keep.sandbox.snapshot({ expiration: 0 }));
 const snapshotId = snapped.value.snapshotId;
+snapshotRef = snapped.value;
 live.splice(live.indexOf(keep.sandbox), 1);   // snapshot() stops the sandbox
 readout('snapshot', `${(snapped.ms / 1000).toFixed(1)} s, id=${snapshotId}, ${(snapped.value.sizeBytes / 1e6).toFixed(0)} MB`,
   'sandbox.snapshot({ expiration: 0 })');
@@ -175,6 +216,7 @@ record({
 });
 summary.m1.snapshot = { elapsedMs: snapped.ms, snapshotId, sizeBytes: snapped.value.sizeBytes };
 
+enterPhase('M1(b) resume from snapshot');
 section(`M1(b) — RESUME FROM STOPPED (create-from-snapshot) to a tool result  (x${REPEATS})`);
 summary.m1.resume = [];
 let livePoc = null;
@@ -192,11 +234,12 @@ for (let i = 1; i <= REPEATS; i++) {
     command: CREATE_FROM_SNAPSHOT_COMMAND, snapshotId, ...p.t,
   });
   summary.m1.resume.push(p.t);
-  if (i < REPEATS) { await p.sandbox.stop(); live.splice(live.indexOf(p.sandbox), 1); }
+  if (i < REPEATS) { await p.sandbox.stop({ blocking: true }); live.splice(live.indexOf(p.sandbox), 1); }
   else livePoc = p;
 }
 
 // --------------------------------------------------------------- M1 (c) ---
+enterPhase('M1(c) warm calls');
 section(`M1(c) — WARM CALL on the live session  (x${WARM_CALLS}, ${REPEATS} rounds)`);
 const mcp = await importAppClientBoundTo(livePoc.url, livePoc.token, bindCounter++);
 summary.m1.warm = [];
@@ -217,6 +260,7 @@ for (let round = 1; round <= REPEATS; round++) {
 }
 
 // ------------------------------------------------------------------- M2 ---
+enterPhase('M2 compatibility');
 section("M2 — COMPATIBILITY: does the app's own client complete the MCP lifecycle?");
 const endpoint = mcpEndpoint(livePoc.url);
 const initCmd = `curl -sS -i -X POST ${endpoint} -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -H 'Authorization: Bearer <token>' -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05",...}}'`;
@@ -279,6 +323,7 @@ summary.m2 = {
 record({ measurement: 'M2', step: 'lifecycle', command: initCmd, ...summary.m2 });
 
 // ------------------------------------------------------------------- M3 ---
+enterPhase('M3 guarding');
 section('M3 — GUARDING: the token, and the outbound block');
 summary.m3.tokenRefusals = [];
 const refusalCases = [
@@ -376,6 +421,7 @@ if (!inboundSurvivedBlock) {
 }
 
 // ------------------------------------------------------------------- M4 ---
+enterPhase('M4 memory and CPU');
 section('M4 — MEMORY and COST');
 const PS_COMMAND = "ps -o rss=,comm= -e | grep -i node    (RSS in kB, per node process)";
 summary.m4.memory = [];
@@ -437,6 +483,7 @@ for (let i = 1; i <= REPEATS; i++) {
 }
 
 // ------------------------------------------------ three Charter questions ---
+enterPhase('three Charter questions');
 section("THREE REAL CHARTER QUESTIONS — through the app's normal tool loop");
 const QUESTIONS = [
   'Under the New York City Charter, what must a city agency do before it can adopt a new rule? Cite the section.',
@@ -491,6 +538,7 @@ try {
 }
 
 // ------------------------------------------------------------ arithmetic ---
+enterPhase('cost arithmetic');
 section("M4 — COST ARITHMETIC at Vercel's published rates");
 const cpuPerCallMs = summary.m4.cpu.reduce((a, c) => a + c.perCallMs, 0) / summary.m4.cpu.length;
 const bootCpuMs = summary.m4.cpu.reduce((a, c) => a + c.idleCpuMs, 0) / summary.m4.cpu.length;
@@ -535,12 +583,113 @@ summary.m4.cost = {
   keptWarmMonthUsd: keptWarmMonth,
 };
 
-// ------------------------------------------------------------------ done ---
-const sp = writeSummary(RUN_ID, summary);
-section('DONE');
-log(`  observations: ${jsonl}`);
-log(`  summary:      ${sp}`);
+phase = 'complete';
+} catch (err) {
+  failure = err;
 } finally {
+  // ---------------------------------------------------------- teardown ---
   await teardown();
-  log(`\n  teardown: ${live.length === 0 ? 'every sandbox created by this run has been stopped.' : live.length + ' sandbox(es) could not be stopped — run scripts/poc-warm-vm/stop-strays.mjs'}`);
+  // The snapshot is a billed artifact (per-GB-month) and nothing outside this
+  // run refers to it, so it goes with the VMs that used it.
+  if (snapshotRef) {
+    try { await snapshotRef.delete(); summary.m1.snapshotDeleted = true; }
+    catch (e) { summary.m1.snapshotDeleted = `FAILED: ${e?.message}`; }
+  }
+
+  const sp = writeSummary(RUN_ID, summary);
+
+  // ------------------------------------------------- pasteable tail block ---
+  section(failure ? 'KEY NUMBERS (run did NOT complete — see STOPPED AT below)' : 'KEY NUMBERS');
+  const ms = (x) => (x == null ? 'n/a' : `${Math.round(x)} ms`);
+  const secs = (x) => (x == null ? 'n/a' : `${(x / 1000).toFixed(1)} s`);
+
+  log('  M1 — wake-up to a returned tool result');
+  (summary.m1.fresh || []).forEach((t, i) =>
+    keyLine(`  fresh creation [${i + 1}]`, `${secs(t.totalToToolResultMs)}  (install ${ms(t.installMs)}, first call ${ms(t.firstToolResultMs)})`));
+  (summary.m1.resume || []).forEach((t, i) =>
+    keyLine(`  resume from stopped [${i + 1}]`, `${secs(t.totalToToolResultMs)}  (create ${ms(t.createMs)}, ready ${ms(t.readyMs)})`));
+  (summary.m1.warm || []).forEach((series, i) =>
+    keyLine(`  warm call [${i + 1}]`, `median ${[...series].sort((a, b) => a - b)[Math.floor(series.length / 2)]} ms of ${series.length}: ${series.join(', ')} ms`));
+  if (summary.m1.snapshot) keyLine('  snapshot built', `${secs(summary.m1.snapshot.elapsedMs)}, ${(summary.m1.snapshot.sizeBytes / 1e6).toFixed(0)} MB (deleted: ${summary.m1.snapshotDeleted})`);
+
+  log('\n  M2 — compatibility with the app\u2019s own client');
+  keyLine('  negotiated protocolVersion', summary.m2.negotiatedProtocolVersion ?? 'n/a');
+  keyLine('  mcp-session-id issued', summary.m2.sessionIdIssued === undefined ? 'n/a' : (summary.m2.sessionIdIssued ? 'YES' : 'no'));
+  keyLine('  initialize / content-type', `HTTP ${summary.m2.initializeStatus ?? 'n/a'} / ${summary.m2.contentType ?? 'n/a'}`);
+  keyLine('  tools advertised', (summary.m2.toolsAdvertised || []).join(', ') || 'n/a');
+  keyLine('  get_section §1043', `${summary.m2.getSectionChars ?? 'n/a'} chars — ${summary.m2.getSectionFirstLine ?? ''}`);
+
+  log('\n  M3 — guarding, as observed');
+  for (const r of summary.m3.tokenRefusals || []) keyLine(`  ${r.label} [${r.reading}]`, `HTTP ${r.httpStatus} — ${r.body}`);
+  for (const r of summary.m3.beforeBlock || []) keyLine(`  outbound BEFORE block [${r.reading}]`, r.output);
+  for (const r of summary.m3.afterBlock || []) keyLine(`  outbound AFTER block [${r.reading}]`, `${r.probeOutput}${r.charterChars ? `  |  Charter answered ${r.charterChars} chars` : `  |  Charter FAILED: ${r.error}`}`);
+  keyLine('  inbound route under deny-all', summary.m3.inboundSurvivedBlock === undefined ? 'n/a' : (summary.m3.inboundSurvivedBlock ? 'SURVIVED' : 'SEVERED — deny-all cannot be the steady state'));
+
+  log('\n  M4 — memory and cost');
+  for (const m of summary.m4.memory || [])
+    keyLine(`  resident memory [${m.reading}]`, `bridge ${(m.bridgeRssKb / 1024).toFixed(0)} MB + Charter ${m.childRssKb ? (m.childRssKb / 1024).toFixed(0) + ' MB' : 'n/a'}  |  ${m.free}  |  ps: ${m.ps.split('\n').join(' ')}`);
+  for (const c of summary.m4.cpu || [])
+    keyLine(`  active CPU per call [${c.reading}]`, `${c.perCallMs} ms   (boot+${CPU_CALLS} ${c.busyCpuMs} ms − boot ${c.idleCpuMs} ms)`);
+  if (summary.m4.cost) {
+    const k = summary.m4.cost;
+    keyLine('  per wake (boot + 1 creation)', `$${k.perWakeUsd.toFixed(6)}`);
+    keyLine('  per tool call (CPU)', `$${k.perCallUsd.toFixed(6)}`);
+    keyLine('  idle-stop, 1k q/mo @60s wake', `$${k.idleStopMonthlyUsd[1000].toFixed(4)} / month`);
+    keyLine('  idle-stop, 10k q/mo @60s wake', `$${k.idleStopMonthlyUsd[10000].toFixed(4)} / month`);
+    keyLine('  kept warm (memory alone)', `$${k.keptWarmMonthUsd.toFixed(2)} / month for ${k.gb} GB`);
+  }
+
+  log('\n  Q — three Charter questions through runToolLoop');
+  if (Array.isArray(summary.questions)) {
+    summary.questions.forEach((q, i) => keyLine(`  Q${i + 1} tools called`, q.toolCalls.join('; ') || '(none)'));
+    if (!summary.questions.length) keyLine('  (none ran)', '—');
+  } else {
+    keyLine('  SKIPPED', summary.questions.skipped);
+  }
+
+  log(`\n  observations: ${jsonl}`);
+  log(`  summary:      ${sp}`);
+
+  // ------------------------------------------------------- stray check ---
+  // Asserted against a LIVE read of the sandbox API, not against this
+  // process's own bookkeeping — bookkeeping cannot see a VM created before a
+  // throw. Three distinct outcomes; no two of them print the same line.
+  let strayLine;
+  const ALIVE_STATES = ['running', 'pending', 'stopping', 'snapshotting'];
+  const readAlive = async () => {
+    const listed = await Sandbox.list({ ...auth });
+    const rows = listed?.json?.sandboxes;
+    if (!Array.isArray(rows)) throw new Error(`no sandboxes array (keys: ${listed && Object.keys(listed)})`);
+    return rows.filter((r) => ALIVE_STATES.includes(r.status));
+  };
+  try {
+    // What was STILL ALIVE when the run ended, reported BEFORE the backstop
+    // touches anything, so the line names the condition and not the outcome of
+    // cleaning it up. A check that stops strays first and then counts prints
+    // "STRAYS: 0" on a run that leaked — the one reading it must never give.
+    const found = await readAlive();
+    if (!found.length) {
+      strayLine = 'STRAYS: 0';
+    } else {
+      const ids = found.map((r) => r.id).join(' ');
+      for (const a of found) {
+        try { const sb = await Sandbox.get({ sandboxId: a.id }); await sb.stop({ blocking: true }); } catch { /* counted below */ }
+      }
+      const remaining = await readAlive();
+      strayLine = remaining.length
+        ? `STRAYS: ${found.length} ${ids} (backstop FAILED; ${remaining.length} still alive: ${remaining.map((r) => r.id).join(' ')})`
+        : `STRAYS: ${found.length} ${ids} (backstop stopped all ${found.length}; 0 still alive)`;
+    }
+  } catch (e) {
+    strayLine = `STRAYS: UNKNOWN — could not read the sandbox list (${e?.name}: ${e?.message}); run scripts/poc-warm-vm/stop-strays.mjs --stop`;
+  }
+
+  section(failure ? 'INCOMPLETE' : 'DONE');
+  if (failure) {
+    log(`  STOPPED AT: ${phase}`);
+    log(`  REASON:     ${failure?.name}: ${failure?.message}`);
+    log('  Every VM this run created was still torn down, and the stray check below is live.');
+  }
+  log(`  ${strayLine}`);
+  if (failure || strayLine !== 'STRAYS: 0') process.exitCode = 1;
 }
