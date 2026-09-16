@@ -1,0 +1,546 @@
+#!/usr/bin/env node
+/**
+ * POC MCP-WARM-VM — the whole measurement suite in ONE run.
+ *
+ * ONE command, deliberately: an owner-run leg that needs three rounds costs
+ * more owner time than the measurement is worth, so step 0 is a cheap auth
+ * check that fails in seconds when the sandbox API cannot authenticate, and
+ * everything after it runs unattended.
+ *
+ * SECRET HYGIENE. The bridge bearer token is generated here with
+ * `randomUUID()`, passed to the sandbox as an env var and held in memory for
+ * the duration. It is never printed, logged, or written to the results file.
+ * No environment file is opened; the Vercel auth triple is read by NAME only
+ * and handed straight to the SDK.
+ *
+ * Writes: temp/mcp-warm-vm-poc/observations-<runId>.jsonl  (git-ignored)
+ *         temp/mcp-warm-vm-poc/summary-<runId>.json
+ */
+import { randomUUID } from 'node:crypto';
+import { Sandbox } from '@vercel/sandbox';
+import {
+  openResults, record, writeSummary, section, readout, elapsed, log,
+  importAppClientBoundTo,
+} from './lib.mjs';
+import {
+  createFresh, createFromSnapshot, installCharter, writeBridge, startBridge,
+  waitForReady, resolveAuth, mcpEndpoint,
+  CREATE_FRESH_COMMAND, CREATE_FROM_SNAPSHOT_COMMAND, INSTALL_COMMAND,
+  START_BRIDGE_COMMAND, READY_COMMAND, BRIDGE_PORT, SANDBOX_VCPUS,
+  SANDBOX_MEMORY_MB, CHARTER_PACKAGE,
+} from './sandbox-ops.mjs';
+
+// Vercel's published rates, read 2026-09-15 (mcp-source-hosting-plan.md §1).
+const RATE_ACTIVE_CPU_HR = 0.128;
+const RATE_GB_HR = 0.0212;
+const RATE_PER_CREATION = 0.60 / 1_000_000;
+
+const RUN_ID = new Date().toISOString().replace(/[:.]/g, '-');
+const REPEATS = Number(process.env.POC_REPEATS || 2);
+const WARM_CALLS = Number(process.env.POC_WARM_CALLS || 5);
+const CPU_CALLS = Number(process.env.POC_CPU_CALLS || 50);
+
+let bindCounter = 0;
+const live = [];                       // sandboxes to tear down on exit
+const summary = {
+  runId: RUN_ID, package: CHARTER_PACKAGE, vcpus: SANDBOX_VCPUS,
+  memoryMb: SANDBOX_MEMORY_MB, m1: {}, m2: {}, m3: {}, m4: {}, questions: [],
+};
+
+async function teardown() {
+  for (const s of [...live]) {
+    try { await s.stop(); live.splice(live.indexOf(s), 1); } catch { /* reported by the caller */ }
+  }
+}
+process.on('SIGINT', async () => { await teardown(); process.exit(130); });
+
+// ---------------------------------------------------------------- step 0 ---
+section('STEP 0 — auth (fails in seconds if the sandbox API cannot authenticate)');
+for (const n of ['VERCEL_OIDC_TOKEN', 'VERCEL_TOKEN', 'VERCEL_TEAM_ID', 'VERCEL_PROJECT_ID']) {
+  log(`  ${n}: ${process.env[n]?.trim() ? 'present' : 'absent'}   (name only — never the value)`);
+}
+const auth = resolveAuth();
+const mechanism = Object.keys(auth).length ? 'VERCEL_TOKEN triple' : 'VERCEL_OIDC_TOKEN';
+try {
+  // `Sandbox.list()` returns a Parsed WRAPPER — { json, response, text } — so the
+  // array is at `.json.sandboxes`. Reading `.sandboxes` directly yields undefined
+  // and, with a `?? 0`, prints a confident "0 sandboxes" whether or not the call
+  // authenticated. That is exactly how this script leaked a running sandbox on its
+  // first dry run: a probe that cannot fail passed, and creation proceeded.
+  const listed = await Sandbox.list({ ...auth });
+  const rows = listed?.json?.sandboxes;
+  if (!Array.isArray(rows)) {
+    log(`\n  WARNING — Sandbox.list() returned no sandboxes array (keys: ${listed && Object.keys(listed)}).`);
+    log('  Treating auth as UNPROVEN and stopping rather than creating anything.');
+    process.exit(1);
+  }
+  readout('Sandbox.list()', `OK via ${mechanism} — ${rows.length} sandbox(es) visible, ` +
+    `${rows.filter((r) => r.status === 'running').length} running`, 'Sandbox.list({ ...auth }) -> .json.sandboxes');
+} catch (e) {
+  log(`\n  FAIL — the sandbox API did not authenticate: ${e?.name}: ${e?.message}`);
+  log('  Nothing was created and nothing was billed. Supply the auth triple');
+  log('  (VERCEL_TOKEN + VERCEL_TEAM_ID + VERCEL_PROJECT_ID) or VERCEL_OIDC_TOKEN, and re-run.');
+  process.exit(1);
+}
+
+const jsonl = openResults(RUN_ID);
+log(`\n  results -> ${jsonl}`);
+
+// Everything below runs inside try/finally: a throw anywhere in the suite must
+// still stop every VM this run created. The first dry run threw after M1(a) had
+// booted one, and it stayed running until it was found by hand.
+try {
+
+// ------------------------------------------------------------- utilities ---
+/** Boot one sandbox from scratch, timing each leg. */
+async function provisionFresh() {
+  const token = randomUUID();
+  const t = {};
+  const created = await elapsed(() => createFresh(token));
+  const sandbox = created.value; live.push(sandbox);
+  t.createMs = created.ms;
+  const url = sandbox.domain(BRIDGE_PORT);
+  t.writeBridgeMs = (await elapsed(() => writeBridge(sandbox))).ms;
+  t.installMs = (await elapsed(() => installCharter(sandbox))).ms;
+  t.startMs = (await elapsed(() => startBridge(sandbox))).ms;
+  t.readyMs = (await elapsed(() => waitForReady(url, token))).ms;
+  const firstCall = await elapsed(async () => {
+    const m = await importAppClientBoundTo(url, token, bindCounter++);
+    return m.callMcpTool('nyc_charter__get_version', {});
+  });
+  t.firstToolResultMs = firstCall.ms;
+  t.totalToToolResultMs = t.createMs + t.writeBridgeMs + t.installMs + t.startMs + t.readyMs + t.firstToolResultMs;
+  t.resultChars = firstCall.value.length;
+  return { sandbox, url, token, t };
+}
+
+async function provisionFromSnapshot(snapshotId) {
+  const token = randomUUID();
+  const t = {};
+  const created = await elapsed(() => createFromSnapshot(snapshotId, token));
+  const sandbox = created.value; live.push(sandbox);
+  t.createMs = created.ms;
+  const url = sandbox.domain(BRIDGE_PORT);
+  t.startMs = (await elapsed(() => startBridge(sandbox))).ms;
+  t.readyMs = (await elapsed(() => waitForReady(url, token))).ms;
+  const firstCall = await elapsed(async () => {
+    const m = await importAppClientBoundTo(url, token, bindCounter++);
+    return m.callMcpTool('nyc_charter__get_version', {});
+  });
+  t.firstToolResultMs = firstCall.ms;
+  t.totalToToolResultMs = t.createMs + t.startMs + t.readyMs + t.firstToolResultMs;
+  t.resultChars = firstCall.value.length;
+  return { sandbox, url, token, t };
+}
+
+// --------------------------------------------------------------- M1 (a) ---
+section(`M1(a) — FRESH CREATION to a returned tool result  (x${REPEATS})`);
+summary.m1.fresh = [];
+let keep = null;
+for (let i = 1; i <= REPEATS; i++) {
+  const p = await provisionFresh();
+  log(`\n  reading ${i}:`);
+  readout('create', `${p.t.createMs.toFixed(0)} ms`, CREATE_FRESH_COMMAND);
+  readout('write bridge.mjs', `${p.t.writeBridgeMs.toFixed(0)} ms`, 'sandbox.writeFiles([{path:"/vercel/sandbox/bridge.mjs", ...}])');
+  readout('install package', `${p.t.installMs.toFixed(0)} ms`, INSTALL_COMMAND);
+  readout('start bridge', `${p.t.startMs.toFixed(0)} ms`, START_BRIDGE_COMMAND);
+  readout('bridge ready', `${p.t.readyMs.toFixed(0)} ms`, READY_COMMAND(p.url));
+  readout('first tool result', `${p.t.firstToolResultMs.toFixed(0)} ms (${p.t.resultChars} chars)`,
+    "callMcpTool('nyc_charter__get_version', {})  [app's own client]");
+  readout('TOTAL to tool result', `${(p.t.totalToToolResultMs / 1000).toFixed(1)} s`, 'sum of the six legs above');
+  record({
+    measurement: 'M1', step: 'fresh-creation', reading: i, sandboxId: p.sandbox.sandboxId,
+    command: `${CREATE_FRESH_COMMAND} + ${INSTALL_COMMAND} + ${START_BRIDGE_COMMAND}`, ...p.t,
+  });
+  summary.m1.fresh.push(p.t);
+  if (i < REPEATS) { await p.sandbox.stop(); live.splice(live.indexOf(p.sandbox), 1); }
+  else keep = p;
+}
+
+// ------------------------------------------------- snapshot, then M1 (b) ---
+section('SNAPSHOT — freeze a provisioned VM so "resume" has something to resume');
+log('  NOTE: @vercel/sandbox@1.10.2 exposes NO resume() for a stopped sandbox.');
+log('  stop() + snapshot() + create-from-snapshot IS the resume path at this SDK');
+log('  version, and it is what M1(b) measures. Said plainly because the plan doc');
+log('  quotes Vercel docs saying sandboxes "resume from an automatic snapshot" —');
+log('  that is not a method this SDK version offers.');
+const snapped = await elapsed(() => keep.sandbox.snapshot({ expiration: 0 }));
+const snapshotId = snapped.value.snapshotId;
+live.splice(live.indexOf(keep.sandbox), 1);   // snapshot() stops the sandbox
+readout('snapshot', `${(snapped.ms / 1000).toFixed(1)} s, id=${snapshotId}, ${(snapped.value.sizeBytes / 1e6).toFixed(0)} MB`,
+  'sandbox.snapshot({ expiration: 0 })');
+record({
+  measurement: 'M1', step: 'snapshot-build', command: 'sandbox.snapshot({ expiration: 0 })',
+  elapsedMs: snapped.ms, snapshotId, sizeBytes: snapped.value.sizeBytes,
+});
+summary.m1.snapshot = { elapsedMs: snapped.ms, snapshotId, sizeBytes: snapped.value.sizeBytes };
+
+section(`M1(b) — RESUME FROM STOPPED (create-from-snapshot) to a tool result  (x${REPEATS})`);
+summary.m1.resume = [];
+let livePoc = null;
+for (let i = 1; i <= REPEATS; i++) {
+  const p = await provisionFromSnapshot(snapshotId);
+  log(`\n  reading ${i}:`);
+  readout('create from snapshot', `${p.t.createMs.toFixed(0)} ms`, CREATE_FROM_SNAPSHOT_COMMAND);
+  readout('start bridge', `${p.t.startMs.toFixed(0)} ms`, START_BRIDGE_COMMAND);
+  readout('bridge ready', `${p.t.readyMs.toFixed(0)} ms`, READY_COMMAND(p.url));
+  readout('first tool result', `${p.t.firstToolResultMs.toFixed(0)} ms (${p.t.resultChars} chars)`,
+    "callMcpTool('nyc_charter__get_version', {})  [app's own client]");
+  readout('TOTAL to tool result', `${(p.t.totalToToolResultMs / 1000).toFixed(1)} s`, 'sum of the four legs above');
+  record({
+    measurement: 'M1', step: 'resume-from-snapshot', reading: i, sandboxId: p.sandbox.sandboxId,
+    command: CREATE_FROM_SNAPSHOT_COMMAND, snapshotId, ...p.t,
+  });
+  summary.m1.resume.push(p.t);
+  if (i < REPEATS) { await p.sandbox.stop(); live.splice(live.indexOf(p.sandbox), 1); }
+  else livePoc = p;
+}
+
+// --------------------------------------------------------------- M1 (c) ---
+section(`M1(c) — WARM CALL on the live session  (x${WARM_CALLS}, ${REPEATS} rounds)`);
+const mcp = await importAppClientBoundTo(livePoc.url, livePoc.token, bindCounter++);
+summary.m1.warm = [];
+for (let round = 1; round <= REPEATS; round++) {
+  const series = [];
+  for (let i = 0; i < WARM_CALLS; i++) {
+    const r = await elapsed(() => mcp.callMcpTool('nyc_charter__get_version', {}));
+    series.push(Number(r.ms.toFixed(1)));
+  }
+  const median = [...series].sort((a, b) => a - b)[Math.floor(series.length / 2)];
+  readout(`warm round ${round}`, `${series.join(', ')} ms  (median ${median} ms)`,
+    `${WARM_CALLS}x callMcpTool('nyc_charter__get_version', {})  [app's own client, live session]`);
+  record({
+    measurement: 'M1', step: 'warm-call', reading: round,
+    command: `${WARM_CALLS}x callMcpTool('nyc_charter__get_version', {})`, seriesMs: series, medianMs: median,
+  });
+  summary.m1.warm.push(series);
+}
+
+// ------------------------------------------------------------------- M2 ---
+section("M2 — COMPATIBILITY: does the app's own client complete the MCP lifecycle?");
+const endpoint = mcpEndpoint(livePoc.url);
+const initCmd = `curl -sS -i -X POST ${endpoint} -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -H 'Authorization: Bearer <token>' -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05",...}}'`;
+const initRes = await fetch(endpoint, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Accept: 'application/json, text/event-stream',
+    Authorization: `Bearer ${livePoc.token}`,
+  },
+  body: JSON.stringify({
+    jsonrpc: '2.0', id: 1, method: 'initialize',
+    params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'civic-ai-tools-website', version: '1.0.0' } },
+  }),
+});
+const initText = await initRes.text();
+const initSession = initRes.headers.get('mcp-session-id');
+const initPayload = JSON.parse((initText.split('\n').find((l) => l.startsWith('data:')) || initText).replace(/^data:/, '').trim());
+readout('initialize', `HTTP ${initRes.status}, content-type ${initRes.headers.get('content-type')}`, initCmd);
+readout('negotiated protocolVersion', String(initPayload?.result?.protocolVersion), initCmd);
+readout('serverInfo', JSON.stringify(initPayload?.result?.serverInfo), initCmd);
+readout('mcp-session-id issued', initSession ? 'YES' : 'no', initCmd);
+
+const listRes = await fetch(endpoint, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Accept: 'application/json, text/event-stream',
+    Authorization: `Bearer ${livePoc.token}`,
+    'mcp-session-id': initSession,
+  },
+  body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }),
+});
+const listText = await listRes.text();
+const listPayload = JSON.parse((listText.split('\n').find((l) => l.startsWith('data:')) || listText).replace(/^data:/, '').trim());
+const advertised = (listPayload?.result?.tools || []).map((t) => t.name);
+readout('tools/list', `HTTP ${listRes.status} — ${advertised.length} tools: ${advertised.join(', ')}`,
+  initCmd.replace('"method":"initialize"', '"method":"tools/list"'));
+
+const routed = mcp.routeTool('nyc_charter__get_section');
+readout('app registry routing',
+  `nyc_charter__get_section -> sourceId=${routed.sourceId}, auth header ${routed.headers?.Authorization ? 'attached' : 'MISSING'}`,
+  "routeTool('nyc_charter__get_section')  [src/lib/mcp/registry.ts]");
+
+const sectionOut = await elapsed(() => mcp.callMcpTool('nyc_charter__get_section', { citation: '§ 1043', corpus: 'charter' }));
+readout('tools/call get_section §1043', `${sectionOut.ms.toFixed(0)} ms, ${sectionOut.value.length} chars`,
+  "callMcpTool('nyc_charter__get_section', { citation: '§ 1043', corpus: 'charter' })  [app's own client]");
+log("\n  ---- ACCEPTANCE (1): first 400 chars returned through the app's own client ----");
+log('  ' + sectionOut.value.slice(0, 400).split('\n').join('\n  '));
+log('  -----------------------------------------------------------------------------');
+
+summary.m2 = {
+  initializeStatus: initRes.status, contentType: initRes.headers.get('content-type'),
+  negotiatedProtocolVersion: initPayload?.result?.protocolVersion,
+  serverInfo: initPayload?.result?.serverInfo, sessionIdIssued: Boolean(initSession),
+  toolsAdvertised: advertised, getSectionChars: sectionOut.value.length,
+  getSectionFirstLine: sectionOut.value.split('\n')[0],
+  getSectionExcerpt: sectionOut.value.slice(0, 400),
+};
+record({ measurement: 'M2', step: 'lifecycle', command: initCmd, ...summary.m2 });
+
+// ------------------------------------------------------------------- M3 ---
+section('M3 — GUARDING: the token, and the outbound block');
+summary.m3.tokenRefusals = [];
+const refusalCases = [
+  ['no Authorization header', { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }],
+  ['wrong bearer token', { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Authorization: 'Bearer not-the-token' }],
+];
+for (const [label, headers] of refusalCases) {
+  for (let i = 1; i <= REPEATS; i++) {
+    const r = await fetch(endpoint, {
+      method: 'POST', headers,
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+    });
+    const body = (await r.text()).slice(0, 200);
+    const cmd = `curl -sS -i -X POST ${endpoint} ${headers.Authorization ? "-H 'Authorization: Bearer not-the-token'" : '(no Authorization header)'} -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`;
+    readout(`${label} [reading ${i}]`, `HTTP ${r.status} ${r.statusText} — ${body}`, cmd);
+    record({ measurement: 'M3', step: 'token-refused', label, reading: i, command: cmd, httpStatus: r.status, body });
+    summary.m3.tokenRefusals.push({ label, reading: i, httpStatus: r.status, body });
+  }
+}
+
+// The outbound probe runs BEFORE the block too, so the instrument is shown
+// able to report success. A "blocked" reading from a probe that never worked
+// proves nothing — it is the same shape as a green over a fixture that could
+// only ever be green.
+const OUTBOUND_PROBE = `node -e "fetch('https://registry.npmjs.org/-/ping').then(r=>console.log('OUTBOUND_REACHED status='+r.status)).catch(e=>console.log('OUTBOUND_BLOCKED '+(e.cause?.code||e.message)))"`;
+async function outboundProbe() {
+  const r = await livePoc.sandbox.runCommand({ cmd: 'sh', args: ['-c', OUTBOUND_PROBE] });
+  return ((await r.stdout()) + (await r.stderr())).trim().slice(0, 300);
+}
+log('\n  --- the instrument, shown able to report success: probe BEFORE the block ---');
+summary.m3.beforeBlock = [];
+for (let i = 1; i <= REPEATS; i++) {
+  const before = await outboundProbe();
+  readout(`outbound BEFORE deny-all [reading ${i}]`, before, `sandbox.runCommand: ${OUTBOUND_PROBE}`);
+  record({ measurement: 'M3', step: 'outbound-before-block', reading: i, command: OUTBOUND_PROBE, output: before });
+  summary.m3.beforeBlock.push({ reading: i, output: before });
+}
+
+await livePoc.sandbox.updateNetworkPolicy('deny-all');
+readout('apply outbound block', 'applied', "sandbox.updateNetworkPolicy('deny-all')");
+
+log('\n  --- the same probe AFTER the block, and Charter still answering ---');
+summary.m3.afterBlock = [];
+let inboundSurvivedBlock = true;
+for (let i = 1; i <= REPEATS; i++) {
+  const after = await outboundProbe();
+  readout(`outbound AFTER deny-all [reading ${i}]`, after, `sandbox.runCommand: ${OUTBOUND_PROBE}`);
+  // The inbound public route is a SEPARATE question from egress, and
+  // "deny-all" is not documented either way. If the block also severs the
+  // route the app reaches, that is a finding about the guarding design, not a
+  // script failure — so it is caught, recorded, and the policy restored so the
+  // remaining measurements still happen.
+  try {
+    const still = await elapsed(() => mcp.callMcpTool('nyc_charter__get_section', { citation: '§ 1043', corpus: 'charter' }));
+    readout(`Charter still answers [reading ${i}]`,
+      `${still.ms.toFixed(0)} ms, ${still.value.length} chars, first line: ${still.value.split('\n')[0].slice(0, 60)}`,
+      "callMcpTool('nyc_charter__get_section', { citation: '§ 1043', corpus: 'charter' })  [outbound denied]");
+    record({
+      measurement: 'M3', step: 'outbound-blocked-charter-answers', reading: i, command: OUTBOUND_PROBE,
+      probeOutput: after, charterChars: still.value.length, charterMs: Number(still.ms.toFixed(1)),
+    });
+    summary.m3.afterBlock.push({ reading: i, probeOutput: after, charterChars: still.value.length });
+  } catch (e) {
+    inboundSurvivedBlock = false;
+    readout(`Charter FAILED under deny-all [reading ${i}]`, `${e?.name}: ${e?.message}`,
+      "callMcpTool('nyc_charter__get_section', ...)  [outbound denied]");
+    record({
+      measurement: 'M3', step: 'outbound-block-severed-inbound', reading: i, command: OUTBOUND_PROBE,
+      probeOutput: after, error: `${e?.name}: ${e?.message}`,
+    });
+    summary.m3.afterBlock.push({ reading: i, probeOutput: after, error: `${e?.name}: ${e?.message}` });
+  }
+}
+summary.m3.inboundSurvivedBlock = inboundSurvivedBlock;
+if (!inboundSurvivedBlock) {
+  log('\n  FINDING: "deny-all" also severed the INBOUND public route, so it cannot be the');
+  log('  steady-state policy for a source the app must reach. Restoring a custom policy');
+  log('  (empty allowlist) so the remaining measurements run, and recording the distinction.');
+  await livePoc.sandbox.updateNetworkPolicy({ allow: [] });
+  try {
+    const retry = await mcp.callMcpTool('nyc_charter__get_section', { citation: '§ 1043', corpus: 'charter' });
+    readout('Charter under { allow: [] }', `${retry.length} chars — inbound route intact, egress still denied`,
+      "sandbox.updateNetworkPolicy({ allow: [] }) then callMcpTool('nyc_charter__get_section', ...)");
+    record({
+      measurement: 'M3', step: 'empty-allowlist-works', command: "sandbox.updateNetworkPolicy({ allow: [] })",
+      charterChars: retry.length,
+    });
+    summary.m3.emptyAllowlistChars = retry.length;
+  } catch (e2) {
+    readout('Charter under { allow: [] }', `STILL FAILING: ${e2?.name}: ${e2?.message}`,
+      "sandbox.updateNetworkPolicy({ allow: [] })");
+    summary.m3.emptyAllowlistError = `${e2?.name}: ${e2?.message}`;
+    await livePoc.sandbox.updateNetworkPolicy('allow-all');
+  }
+}
+
+// ------------------------------------------------------------------- M4 ---
+section('M4 — MEMORY and COST');
+const PS_COMMAND = "ps -o rss=,comm= -e | grep -i node    (RSS in kB, per node process)";
+summary.m4.memory = [];
+for (let i = 1; i <= REPEATS; i++) {
+  const metricsRes = await fetch(`${livePoc.url.replace(/\/$/, '')}/metrics`, {
+    headers: { Authorization: `Bearer ${livePoc.token}` },
+  });
+  const metrics = await metricsRes.json();
+  const psRes = await livePoc.sandbox.runCommand({ cmd: 'sh', args: ['-c', 'ps -o rss=,comm= -e | grep -i node || true'] });
+  const psOut = (await psRes.stdout()).trim();
+  const freeRes = await livePoc.sandbox.runCommand({ cmd: 'sh', args: ['-c', "free -m | awk '/Mem:/{print \"total=\"$2\"MB used=\"$3\"MB\"}'"] });
+  const freeOut = (await freeRes.stdout()).trim();
+  readout(`bridge RSS [reading ${i}]`, `${(metrics.bridgeRssKb / 1024).toFixed(0)} MB`,
+    `GET ${livePoc.url}/metrics  (process.memoryUsage().rss)`);
+  readout(`Charter child RSS [reading ${i}]`, metrics.childRssKb ? `${(metrics.childRssKb / 1024).toFixed(0)} MB` : 'n/a',
+    `GET ${livePoc.url}/metrics  (/proc/<childpid>/status VmRSS)`);
+  readout(`independent ps [reading ${i}]`, psOut.split('\n').join(' | '), PS_COMMAND);
+  readout(`VM memory [reading ${i}]`, freeOut, 'free -m');
+  record({
+    measurement: 'M4', step: 'memory', reading: i,
+    command: `GET /metrics + ${PS_COMMAND} + free -m`,
+    bridgeRssKb: metrics.bridgeRssKb, childRssKb: metrics.childRssKb, ps: psOut, free: freeOut, counters: metrics.counters,
+  });
+  summary.m4.memory.push({ reading: i, bridgeRssKb: metrics.bridgeRssKb, childRssKb: metrics.childRssKb, ps: psOut, free: freeOut });
+}
+
+// Active CPU is reported only once a sandbox is stopped, so per-call CPU comes
+// from a DIFFERENCE between two otherwise identical boots — one serving
+// CPU_CALLS calls, one serving none. Repeated, so the difference has two
+// readings and not one.
+log(`\n  --- active-CPU per call, by difference (boot+0 calls vs boot+${CPU_CALLS} calls) ---`);
+summary.m4.cpu = [];
+for (let i = 1; i <= REPEATS; i++) {
+  const idle = await provisionFromSnapshot(snapshotId);
+  await idle.sandbox.stop({ blocking: true });
+  live.splice(live.indexOf(idle.sandbox), 1);
+  const idleCpu = idle.sandbox.activeCpuUsageMs;
+
+  const busy = await provisionFromSnapshot(snapshotId);
+  const bm = await importAppClientBoundTo(busy.url, busy.token, bindCounter++);
+  for (let k = 0; k < CPU_CALLS; k++) await bm.callMcpTool('nyc_charter__get_version', {});
+  await busy.sandbox.stop({ blocking: true });
+  live.splice(live.indexOf(busy.sandbox), 1);
+  const busyCpu = busy.sandbox.activeCpuUsageMs;
+
+  const perCallMs = (busyCpu - idleCpu) / CPU_CALLS;
+  readout(`boot + 0 calls [reading ${i}]`, `${idleCpu} ms active CPU`,
+    'sandbox.stop({blocking:true}) then sandbox.activeCpuUsageMs');
+  readout(`boot + ${CPU_CALLS} calls [reading ${i}]`, `${busyCpu} ms active CPU`,
+    'sandbox.stop({blocking:true}) then sandbox.activeCpuUsageMs');
+  readout(`per-call active CPU [reading ${i}]`, `${perCallMs.toFixed(2)} ms`,
+    `(${busyCpu} - ${idleCpu}) / ${CPU_CALLS}`);
+  record({
+    measurement: 'M4', step: 'active-cpu', reading: i,
+    command: `2x create-from-snapshot; one serves ${CPU_CALLS} calls; sandbox.stop({blocking:true}); sandbox.activeCpuUsageMs`,
+    idleCpuMs: idleCpu, busyCpuMs: busyCpu, perCallMs: Number(perCallMs.toFixed(2)), calls: CPU_CALLS,
+  });
+  summary.m4.cpu.push({ reading: i, idleCpuMs: idleCpu, busyCpuMs: busyCpu, perCallMs: Number(perCallMs.toFixed(2)) });
+}
+
+// ------------------------------------------------ three Charter questions ---
+section("THREE REAL CHARTER QUESTIONS — through the app's normal tool loop");
+const QUESTIONS = [
+  'Under the New York City Charter, what must a city agency do before it can adopt a new rule? Cite the section.',
+  'What does the NYC Charter say about who may serve on a community board, and what restriction applies to employees of council members?',
+  'How current is the Charter text you are working from, and what does the Charter say about the powers of the Public Advocate?',
+];
+// REBIND BEFORE THE IMPORT, and this order is load-bearing. `compare-loop.ts`
+// imports `callMcpTool` from the UNSUFFIXED `../mcp/client.ts`, a different
+// module instance from every `?bind=N` one above, and that instance reads
+// NYC_CHARTER_MCP_URL once at ITS first load — which is the line below. The
+// M4 CPU section last pointed the environment at a sandbox that has since been
+// stopped, so without this the questions would be asked of a dead address.
+process.env.NYC_CHARTER_MCP_URL = livePoc.url;
+process.env.NYC_CHARTER_MCP_TOKEN = livePoc.token;
+try {
+  const { getModelClient } = await import('../../src/lib/model-client.ts');
+  const { getDefaultModel } = await import('../../src/lib/model-resolver.ts');
+  const { runToolLoop } = await import('../../src/lib/model-loop/run-tool-loop.ts');
+  const { compareLoopOptions } = await import('../../src/lib/model-loop/compare-loop.ts');
+  const client = getModelClient();
+  // The app's own default, from the app's own catalog — not a model id typed here.
+  const endpointModel = process.env.POC_MODEL || getDefaultModel().endpointModel || getDefaultModel().id;
+  log(`  model: ${endpointModel}   (src/lib/model-resolver.ts getDefaultModel())`);
+  log('  loop:  runToolLoop(compareLoopOptions(...)) — the shipped loop and the shipped');
+  log('         factory. No tool-calling loop is written in this script (CLAUDE.md).');
+  const systemPrompt =
+    'You answer questions about New York City law using the nyc_charter__* tools, which serve the ' +
+    'NYC Charter, Administrative Code and Rules of the City of New York from a pinned package. ' +
+    'ALWAYS call nyc_charter__get_version first and state how current the text is. Cite every ' +
+    'section you rely on. Never state a legal conclusion the retrieved text does not support.';
+  for (const [qi, prompt] of QUESTIONS.entries()) {
+    const cmd = `runToolLoop(compareLoopOptions({ client, endpointModel: '${endpointModel}', prompt: <question ${qi + 1}>, systemPrompt }))`;
+    const r = await elapsed(() => runToolLoop(compareLoopOptions({ client, endpointModel, prompt, systemPrompt })));
+    const calls = r.value.toolCalls.map((c) => `${c.name}(${JSON.stringify(c.args).slice(0, 90)})`);
+    log(`\n  Q${qi + 1}: ${prompt}`);
+    readout('tools called', calls.length ? calls.join('; ') : '(none)', cmd);
+    readout('elapsed / iterations / tokens',
+      `${(r.ms / 1000).toFixed(1)} s / ${r.value.iterations} / ${r.value.usage.totalTokens}`, cmd);
+    log('  ANSWER:');
+    log('  ' + r.value.content.split('\n').join('\n  '));
+    record({
+      measurement: 'Q', step: 'tool-loop', question: qi + 1, command: cmd, prompt,
+      toolCalls: r.value.toolCalls.map((c) => ({ name: c.name, args: c.args, operationType: c.operationType, failed: c.failed })),
+      iterations: r.value.iterations, usage: r.value.usage, elapsedMs: Number(r.ms.toFixed(0)), answer: r.value.content,
+    });
+    summary.questions.push({ question: prompt, toolCalls: calls, answer: r.value.content, usage: r.value.usage });
+  }
+} catch (e) {
+  log(`  SKIPPED — the model half did not run: ${e?.name}: ${e?.message}`);
+  log('  (M1-M4 above are unaffected; none of them calls a model.)');
+  summary.questions = { skipped: `${e?.name}: ${e?.message}` };
+}
+
+// ------------------------------------------------------------ arithmetic ---
+section("M4 — COST ARITHMETIC at Vercel's published rates");
+const cpuPerCallMs = summary.m4.cpu.reduce((a, c) => a + c.perCallMs, 0) / summary.m4.cpu.length;
+const bootCpuMs = summary.m4.cpu.reduce((a, c) => a + c.idleCpuMs, 0) / summary.m4.cpu.length;
+const gb = SANDBOX_MEMORY_MB / 1024;
+const money = (x) => (x < 0.01 ? `$${x.toFixed(6)}` : `$${x.toFixed(4)}`);
+
+log(`  rates: $${RATE_ACTIVE_CPU_HR}/active-CPU-hour · $${RATE_GB_HR}/GB-hour · $0.60/million creations`);
+log(`  shape: ${SANDBOX_VCPUS} vCPU, ${SANDBOX_MEMORY_MB} MB (${gb} GB)`);
+log(`  measured: ${cpuPerCallMs.toFixed(2)} ms active CPU per call; ${(bootCpuMs / 1000).toFixed(1)} s active CPU per boot`);
+
+const perCallCpuCost = (cpuPerCallMs / 3_600_000) * RATE_ACTIVE_CPU_HR;
+const perBootCost = (bootCpuMs / 3_600_000) * RATE_ACTIVE_CPU_HR + RATE_PER_CREATION;
+const wakeWindowCost = gb * RATE_GB_HR * (60 / 3600);
+const keptWarmMonth = gb * RATE_GB_HR * 24 * 30;
+
+log('\n  IDLE-STOP (one wake per question, stops after):');
+log(`    per wake  = boot CPU ${(bootCpuMs / 1000).toFixed(1)}s x $${RATE_ACTIVE_CPU_HR}/h + one creation = ${money(perBootCost)}`);
+log(`    per call  = ${cpuPerCallMs.toFixed(2)}ms x $${RATE_ACTIVE_CPU_HR}/h = ${money(perCallCpuCost)}`);
+log(`    memory is billed only while running; a 60s wake window = ${money(wakeWindowCost)}`);
+const idleStopMonthly = {};
+for (const q of [100, 1000, 10000]) {
+  const c = q * (perBootCost + perCallCpuCost + wakeWindowCost);
+  idleStopMonthly[q] = c;
+  log(`    ${String(q).padStart(5)} questions/month, one 60s wake each = ${money(c)}`);
+}
+
+log('\n  KEPT WARM (left running):');
+log(`    memory    = ${gb} GB x $${RATE_GB_HR}/GB-h x 24 x 30 = ${money(keptWarmMonth)} / month`);
+log(`    creations = 1/month = ${money(RATE_PER_CREATION)}  (negligible)`);
+log(`    CPU       = ${cpuPerCallMs.toFixed(2)}ms/call; 10,000 calls = ${money(10000 * perCallCpuCost)}`);
+log(`    TOTAL at 10,000 calls/month = ${money(keptWarmMonth + 10000 * perCallCpuCost + RATE_PER_CREATION)} / month`);
+log("\n  NOTE: Vercel's 24-hour maximum session (Pro) means \"kept warm\" is in fact a");
+log('  VM re-created every 24h, not a permanent service — 30 creations a month, and a');
+log('  gap at each roll. The product docs say sandboxes are "not designed to run');
+log('  continuously" and point permanent services at VMs or Functions.');
+
+summary.m4.cost = {
+  rates: { activeCpuHour: RATE_ACTIVE_CPU_HR, gbHour: RATE_GB_HR, perCreation: RATE_PER_CREATION },
+  cpuPerCallMs, bootCpuMs, gb,
+  perWakeUsd: perBootCost, perCallUsd: perCallCpuCost,
+  wakeWindow60sUsd: wakeWindowCost, idleStopMonthlyUsd: idleStopMonthly,
+  keptWarmMonthUsd: keptWarmMonth,
+};
+
+// ------------------------------------------------------------------ done ---
+const sp = writeSummary(RUN_ID, summary);
+section('DONE');
+log(`  observations: ${jsonl}`);
+log(`  summary:      ${sp}`);
+} finally {
+  await teardown();
+  log(`\n  teardown: ${live.length === 0 ? 'every sandbox created by this run has been stopped.' : live.length + ' sandbox(es) could not be stopped — run scripts/poc-warm-vm/stop-strays.mjs'}`);
+}

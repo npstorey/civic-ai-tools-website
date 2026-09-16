@@ -297,6 +297,14 @@ services:
       DATA_COMMONS_MCP_URL:
       DATA_COMMONS_API_KEY:
       BOSTON_OPENCONTEXT_MCP_URL:
+      # POC MCP-WARM-VM (spike branch only — NEVER merged, never pushed).
+      # Present because scripts/check-compose-env.mjs is a gate: any variable
+      # ENV_SPEC declares and the app reads must be able to reach the
+      # container. That closed loop — a new source's env read forces an
+      # ENV_SPEC entry, which forces these two lines — is itself one of the
+      # spike's measurements of what a fourth source costs to wire.
+      NYC_CHARTER_MCP_URL:
+      NYC_CHARTER_MCP_TOKEN:
       DC_API_KEY:
       CRON_SECRET:
       KV_REST_API_URL:

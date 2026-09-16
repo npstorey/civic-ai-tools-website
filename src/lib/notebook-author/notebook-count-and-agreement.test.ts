@@ -691,6 +691,15 @@ const ARG_SHAPES: Record<string, Array<Record<string, unknown>>> = {
   ckan__query_data: [{ resource_id: 'abc-123', filters: { year: 2025 } }],
   ckan__execute_sql: [{ sql: 'SELECT 1' }],
   ckan__aggregate_data: [{ resource_id: 'abc-123', metrics: { count: 'count(*)' } }],
+  // POC MCP-WARM-VM: the fourth source. `get_section` is the interesting one —
+  // it derives NO operation type (operation-types.ts: this vocabulary has no
+  // term for primary-text retrieval), so it exercises the undefined-operation
+  // path through the same three renderers.
+  nyc_charter__search: [{ query: 'community board', corpus: 'charter' }],
+  nyc_charter__get_section: [{ citation: '§ 1043', corpus: 'charter' }],
+  nyc_charter__list_titles: [{ corpus: 'charter' }],
+  nyc_charter__get_title: [{ corpus: 'charter', title: 'Chapter 45' }],
+  nyc_charter__get_version: [{}],
 };
 
 function registryToolNames(): string[] {

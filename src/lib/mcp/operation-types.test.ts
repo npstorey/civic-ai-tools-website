@@ -140,6 +140,12 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
   // A tenth tool added to `mcpTools` without a decision here fails this.
   const UNTYPED_BY_MEASUREMENT: Record<string, string> = {
     fetch: 'returns metadata or one row depending on the id shape — see operation-types.ts',
+    // POC MCP-WARM-VM. Untyped for a different reason than `fetch`: the
+    // operation IS knowable (retrieve one section's full text), but this
+    // vocabulary has no term for primary-text retrieval, and 'query' would
+    // put sections of law into `records analyzed` in a signed package.
+    nyc_charter__get_section:
+      'retrieves primary legal text; catalog/metadata/query/metrics/search has no term for it — see operation-types.ts',
   };
 
   for (const tool of mcpTools) {

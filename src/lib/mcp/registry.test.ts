@@ -154,8 +154,17 @@ test('#258 C4: with no socrataUrl the registry omits the Socrata server and name
   // The other sources are unaffected.
   assert.equal(resolveServerForTool(registry, 'search_indicators')!.sourceId, 'data-commons');
   assert.equal(resolveServerForTool(registry, 'ckan__query_data')!.sourceId, 'boston-opencontext');
-  // A configured registry has nothing unconfigured.
-  assert.deepEqual(buildMcpRegistry(TEST_ENV).unconfiguredTools, {});
+  // POC MCP-WARM-VM: the fourth source follows the SAME shape — this env names
+  // no nycCharterUrl either, so its five tools name their own variable.
+  for (const toolName of ['nyc_charter__search', 'nyc_charter__get_section']) {
+    assert.equal(resolveServerForTool(registry, toolName), undefined, `${toolName} resolves to no server`);
+    assert.equal(registry.unconfiguredTools[toolName], 'NYC_CHARTER_MCP_URL', `${toolName} names its missing variable`);
+  }
+  // A fully configured registry has nothing unconfigured.
+  assert.deepEqual(
+    buildMcpRegistry({ ...TEST_ENV, nycCharterUrl: 'https://bridge.example.run' }).unconfiguredTools,
+    {},
+  );
 });
 
 test('#258 C4: getMissingMcpRoutingError refuses on unset/empty and passes on a configured value', () => {

@@ -445,11 +445,111 @@ Example:
   },
 ];
 
+// --- NYC Charter / Administrative Code / Rules (BetaNYC, warm sandbox) ---
+// POC MCP-WARM-VM (spike, not chartered). Schemas transcribed from the live
+// `tools/list` of `@betanyc/nyc-charter-laws-rules@0.2.0` driven over stdio,
+// not from its README. The `nyc_charter__` prefix is applied by the bridge in
+// scripts/poc-warm-vm/bridge.mjs, which strips it again before the call
+// reaches the upstream server; it is load-bearing because the upstream
+// `search` would otherwise displace Socrata's `search` in the registry's
+// bare-name `toolIndex`.
+const nycCharterMcpTools: ChatCompletionTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'nyc_charter__get_version',
+      description: `Return the currency date for each document — how current the NYC Charter, Administrative Code, and Rules are. Each corpus updates on its own schedule. ALWAYS call this first when answering a question about NYC law, so the answer can state which version of the law it is grounded in. The text is bundled with the server, so this date — not today's date — is the freshness of every answer from this source. For informational purposes only. Not legal advice.`,
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'nyc_charter__search',
+      description: `Search the NYC Charter, Administrative Code, and Rules of the City of New York by keyword or phrase. Relevance-ranked: heading matches rank above citation matches, which rank above body-text matches; whole-word matches rank above substring matches. Use this when you do not already know the citation; use nyc_charter__get_section when you do. For informational purposes only. Not legal advice. Verify against codelibrary.amlegal.com before relying on any result.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search term or phrase' },
+          corpus: {
+            type: 'string',
+            enum: ['charter', 'admin_code', 'rules', 'all'],
+            description: 'Which document to search (default: all)',
+          },
+          limit: { type: 'number', description: 'Max results to return (default 10, max 50)' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'nyc_charter__get_section',
+      description: `Retrieve one section in full by its citation (e.g. '§ 259', 'Section 259', '11-602.1', 'Chapter 11'). Input is normalized, with or without '§' and in any case. Pass 'corpus' to disambiguate when the same citation exists in more than one document; if several sections still match, a disambiguation list comes back instead of a section. For informational purposes only. Not legal advice. Verify against codelibrary.amlegal.com before relying on any result.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          citation: { type: 'string', description: 'Section citation or heading' },
+          corpus: {
+            type: 'string',
+            enum: ['charter', 'admin_code', 'rules'],
+            description: 'Which document to look in (default: all three)',
+          },
+        },
+        required: ['citation'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'nyc_charter__list_titles',
+      description: `List the top-level chapters or titles of one document. Use to orient before searching. For informational purposes only. Not legal advice.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          corpus: {
+            type: 'string',
+            enum: ['charter', 'admin_code', 'rules'],
+            description: 'Which document to list',
+          },
+        },
+        required: ['corpus'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'nyc_charter__get_title',
+      description: `Retrieve chapter/title records matching an identifier (whole-token match: 'Chapter 1' does not match 'Chapter 10'). NOTE: the upstream index is flat — sections are not nested within titles — so this returns matching chapter/title-level records, NOT the full contents of a title. To read a title's sections, search or fetch them by citation. For informational purposes only. Not legal advice.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          corpus: {
+            type: 'string',
+            enum: ['charter', 'admin_code', 'rules'],
+            description: 'Which document',
+          },
+          title: { type: 'string', description: "Chapter or title identifier (e.g. 'Chapter 11')" },
+        },
+        required: ['corpus', 'title'],
+      },
+    },
+  },
+];
+
 /** Unified tool schema sent to whichever chat-completions endpoint this instance is configured to call (see src/lib/model-client.ts). The client in ./client.ts routes each call to the correct MCP server by tool name. */
 export const mcpTools: ChatCompletionTool[] = [
   ...socrataMcpTools,
   ...dataCommonsMcpTools,
   ...bostonOpencontextMcpTools,
+  // POC MCP-WARM-VM (spike): advertised unconditionally, exactly as Socrata's
+  // three are while unconfigured. With NYC_CHARTER_MCP_URL unset the registry
+  // routes these five to `unconfiguredTools`, so a call refuses by naming the
+  // variable instead of dying as an unknown tool.
+  ...nycCharterMcpTools,
 ];
 
 // Model definitions moved to src/lib/model-catalog.ts (civic-ai-tools-website#30

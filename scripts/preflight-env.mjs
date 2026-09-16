@@ -347,6 +347,13 @@ export const ENV_SPEC = [
   { name: 'VERCEL_TOKEN', tier: 'optional', purpose: 'Vercel Sandbox auth for off-platform runs (on-deploy auth is OIDC-automatic)', onlyWhen: { executor: 'vercel-sandbox' } },
   { name: 'VERCEL_TEAM_ID', tier: 'optional', purpose: 'Vercel Sandbox auth for off-platform runs (with VERCEL_TOKEN + VERCEL_PROJECT_ID)', onlyWhen: { executor: 'vercel-sandbox' } },
   { name: 'VERCEL_PROJECT_ID', tier: 'optional', purpose: 'Vercel Sandbox auth for off-platform runs (with VERCEL_TOKEN + VERCEL_TEAM_ID)', onlyWhen: { executor: 'vercel-sandbox' } },
+  // POC MCP-WARM-VM (spike branch only — never merged). Declared here because
+  // `scripts/env-reads-declared.test.mjs` derives its universe from
+  // `git ls-files` and would otherwise fail on the two reads added to
+  // src/lib/mcp/registry.ts. Both are optional with no fallback: unset, the
+  // fourth source is simply not registered and its five tools refuse by name.
+  { name: 'NYC_CHARTER_MCP_URL', tier: 'optional', purpose: 'Address of the warm-sandbox bridge fronting @betanyc/nyc-charter-laws-rules — unset, the nyc_charter source is not registered' },
+  { name: 'NYC_CHARTER_MCP_TOKEN', tier: 'optional', purpose: 'Bearer token the nyc_charter bridge requires on every path' },
 
   // The signing pair. NEITHER has a coded fallback: signing.ts has no default
   // key id, because a substituted kid would label this instance's signature

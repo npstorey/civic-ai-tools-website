@@ -41,6 +41,16 @@ export interface McpRegistryEnv {
   dataCommonsUrl: string;
   dataCommonsApiKey?: string;
   bostonOpencontextUrl: string;
+  /**
+   * POC MCP-WARM-VM: address of the warm-sandbox bridge fronting
+   * `@betanyc/nyc-charter-laws-rules`. Absent = the source is simply not
+   * registered (the Socrata shape, #258 C4), never a coded default — a
+   * sandbox address is per-run and instance-private, so there is nothing
+   * sane to fall back to.
+   */
+  nycCharterUrl?: string;
+  /** Bearer token the bridge requires on every path. */
+  nycCharterToken?: string;
 }
 
 const SOCRATA_TOOLS = ['get_data', 'search', 'fetch'];
@@ -52,6 +62,29 @@ const BOSTON_OPENCONTEXT_TOOLS = [
   'ckan__get_schema',
   'ckan__execute_sql',
   'ckan__aggregate_data',
+];
+/**
+ * POC MCP-WARM-VM (spike, not chartered): `@betanyc/nyc-charter-laws-rules`
+ * behind a stdio-to-HTTP bridge on a warm Vercel Sandbox.
+ *
+ * The `nyc_charter__` prefix is LOAD-BEARING, not cosmetic. Charter's own
+ * tool list is `search`, `get_section`, `list_titles`, `get_title`,
+ * `get_version` — and `toolIndex` below is keyed by bare tool name, so an
+ * unprefixed `search` would silently displace Socrata's `search` with no
+ * error. Same reason Boston carries `ckan__`.
+ *
+ * The alias boundary sits in the BRIDGE, not here and not in the client:
+ * the bridge is the per-source adapter, so it adds `nyc_charter__` to what
+ * `tools/list` returns and strips it from what `tools/call` sends upstream.
+ * The app therefore speaks only prefixed names end to end, and `client.ts`
+ * needs no change at all.
+ */
+const NYC_CHARTER_TOOLS = [
+  'nyc_charter__search',
+  'nyc_charter__get_section',
+  'nyc_charter__list_titles',
+  'nyc_charter__get_title',
+  'nyc_charter__get_version',
 ];
 
 /**
@@ -99,6 +132,20 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
       endpointUrl: normalizeMcpEndpoint(env.bostonOpencontextUrl),
       tools: BOSTON_OPENCONTEXT_TOOLS,
     },
+    // POC MCP-WARM-VM: present only when an address is configured.
+    ...(env.nycCharterUrl
+      ? {
+          'nyc-charter': {
+            sourceId: 'nyc-charter',
+            label: 'NYC Charter, Administrative Code and Rules (BetaNYC, warm sandbox)',
+            endpointUrl: normalizeMcpEndpoint(env.nycCharterUrl),
+            headers: env.nycCharterToken
+              ? { Authorization: `Bearer ${env.nycCharterToken}` }
+              : undefined,
+            tools: NYC_CHARTER_TOOLS,
+          },
+        }
+      : {}),
   };
 
   const toolIndex: Record<string, string> = {};
@@ -112,6 +159,16 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
   if (!env.socrataUrl) {
     for (const tool of SOCRATA_TOOLS) {
       unconfiguredTools[tool] = 'SOCRATA_MCP_URL';
+    }
+  }
+  // POC MCP-WARM-VM: same shape as Socrata's. `mcpTools` advertises the five
+  // Charter tools unconditionally (the shipped idiom — Socrata's three are
+  // advertised while unconfigured too), so an unconfigured call must refuse
+  // by NAMING the variable rather than falling through to the generic
+  // "No MCP server registered for tool" path.
+  if (!env.nycCharterUrl) {
+    for (const tool of NYC_CHARTER_TOOLS) {
+      unconfiguredTools[tool] = 'NYC_CHARTER_MCP_URL';
     }
   }
 
@@ -150,6 +207,8 @@ export function readMcpEnvFromProcess(): McpRegistryEnv {
     dataCommonsApiKey: process.env.DATA_COMMONS_API_KEY || undefined,
     bostonOpencontextUrl:
       process.env.BOSTON_OPENCONTEXT_MCP_URL || 'https://data-mcp.boston.gov/mcp',
+    nycCharterUrl: presentOrUndefined(process.env.NYC_CHARTER_MCP_URL),
+    nycCharterToken: presentOrUndefined(process.env.NYC_CHARTER_MCP_TOKEN),
   };
 }
 
