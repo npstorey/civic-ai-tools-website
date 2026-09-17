@@ -199,6 +199,29 @@ Each cost a real mistake; the incident sits in an HTML comment beside it. Path-s
        the rule above prescribes, and three run-level formatters on that map still narrated the
        rejected call as "then counted records" — a consumer map says where to look; only a driven
        run says what is there. -->
+
+- **Sandbox cleanup claims what it created; it never stops by status.** This project's sandbox scope is
+  shared with production: the notebook executor creates a sandbox for every visitor's run in the same
+  scope an agent's experiments use. Stop only sandboxes whose ids the run recorded at creation, ids an
+  operator passed explicitly, or ones matching a signature the run's own creations carry (runtime,
+  exposed port, created at or after the run's start on the API's own clock). Report everything else by
+  id and leave it running. Report what was found alive *before* the cleanup acts, so a leak can never
+  print as zero.
+  <!-- 2026-09-17, the warm-VM hosting spike (branch `archive/poc-mcp-warm-vm`): its first cleanup
+       stopped every live sandbox in the scope, and a production `python3.13` sandbox appeared in that
+       scope while the spike was running — an owner-run command could have stopped a visitor's notebook
+       mid-execution. The same check stopped strays before counting them, so a run that leaked would
+       still have printed "STRAYS: 0". Both were fixed before any measurement was taken. -->
+
+- **`Sandbox.list()` returns a wrapper, and one page is not the count.** The rows sit at
+  `.json.sandboxes`, and a bare call returns 20 of them — measured against a scope holding 37. A reader
+  that reaches for `.sandboxes`, or that stops after the first page, gets a confident zero instead of an
+  error. Chain `pagination.next` until it is absent, and check any derived count against a single
+  large-limit read.
+  <!-- Same spike, two instances of one shape. An auth probe read the wrong field of that listing and
+       reported success whether or not it had authenticated, so a dry run created a sandbox that billed
+       for four minutes with nothing configured; the first cleanup check then read only page one. An
+       instrument that cannot fail is not an instrument — the fixture rule above, one level down. -->
   When a ruling names the records a criterion is for, the criterion is driven on those records,
   read live — a fixture that *can* fail still says nothing about an instance it does not resemble.
   <!-- Wave #434 ruling D8 named the two May records whose calls were refused before outcome marking.
