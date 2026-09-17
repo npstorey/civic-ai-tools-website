@@ -64,12 +64,38 @@ const {
 } = OPS;
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * FAULT INJECTION, for demonstrating the void path rather than asserting it.
+ *
+ * `POC_FAULT=void` makes the credential probe pass without calling anything,
+ * skips the boot entirely, and makes every reading return the credential
+ * failure that voided the first run. Nothing is created and nothing is billed,
+ * and the run must end VOID with a non-zero exit — which is the behaviour the
+ * first run did not have. A criterion demonstrated only on a run that cannot
+ * fail is not demonstrated, and this is the cheapest shape that can fail.
+ *
+ * Inert unless set. Never set it on a record run.
+ */
+const FAULT = process.env.POC_FAULT || '';
 const PHASE_ARG = process.argv.find((a) => a.startsWith('--phase='))?.split('=')[1] ?? null;
 
 /** The project's own hosted Socrata MCP endpoint (docs/project-plan.md, .env.example). */
 const SOCRATA_URL = process.env.POC_SOCRATA_MCP_URL || 'https://socrata-mcp.civicaitools.org';
-/** The portal an NYC instance would carry, injected into Socrata calls that omit one. */
-const PORTAL = process.env.POC_PORTAL || 'data.cityofnewyork.us';
+/**
+ * The portal injected into Socrata calls that omit one.
+ *
+ * NO CODED FALLBACK, per #407 and the guard that enforces it: a portal
+ * hostname is configuration, and a default written here would be a run-input
+ * default — a value a run that named no portal would inherit, reaching the
+ * `portal` argument of a call. It comes from the instance's own resolver, and
+ * `POC_PORTAL` overrides it for a run that wants to state one explicitly.
+ * Absent, it is `undefined`, and `runToolLoop` injects nothing — which is the
+ * shipped behaviour for an instance that configured no default, and the honest
+ * thing to measure this source's overlap with Socrata against.
+ */
+const { getDefaultPortal } = await import('../../src/lib/site-config.ts');
+const PORTAL = process.env.POC_PORTAL || getDefaultPortal() || undefined;
 
 const QUESTIONS = [
   {
@@ -105,7 +131,7 @@ if (PHASE_ARG) {
   if (PHASE_ARG === 'cross') process.env.SOCRATA_MCP_URL = SOCRATA_URL;
   else delete process.env.SOCRATA_MCP_URL;
 
-  const { getModelClient } = await import('../../src/lib/model-client.ts');
+  const { getModelClient, classifyModelError } = await import('../../src/lib/model-client.ts');
   const { runToolLoop } = await import('../../src/lib/model-loop/run-tool-loop.ts');
   const { compareLoopOptions } = await import('../../src/lib/model-loop/compare-loop.ts');
   const { mcpTools } = await import('../../src/lib/mcp/tools.ts');
@@ -128,9 +154,26 @@ if (PHASE_ARG) {
     return searchTool.function.description;
   }
 
+  /**
+   * A credential-class failure is fatal to the WHOLE run, not to one reading.
+   *
+   * The first questions run recorded ten loops that each returned "401 Missing
+   * Authentication header", reported zero tool calls, and were then summarised
+   * as though they had run. Nine of those ten were known-useless the moment the
+   * first one failed. `classifyModelError` already separates the credential
+   * kinds from everything else, so the first one stops the phase and the reason
+   * travels back to the parent, which refuses to call the run complete.
+   */
+  const FATAL_KINDS = new Set(['model_not_configured', 'model_auth_rejected']);
+  let fatal = null;
+
   async function ask({ label, prompt, endpointModel, variant, portal }) {
     const description = applyVariant(variant);
     const t0 = Date.now();
+    if (FAULT === 'void') {
+      fatal = { kind: 'model_auth_rejected', message: 'Error: 401 Missing Authentication header (POC_FAULT=void)' };
+      return { label, prompt, endpointModel, variant, ok: false, elapsedMs: Date.now() - t0, error: fatal.message, modelErrorKind: fatal.kind, fatal: true, toolCalls: [], scopeSentencePresent: description.includes('covers ONLY City Record notices') };
+    }
     try {
       const r = await runToolLoop(compareLoopOptions({ client, endpointModel, prompt, systemPrompt: SYSTEM_PROMPT, portal }));
       return {
@@ -145,7 +188,9 @@ if (PHASE_ARG) {
         answer: r.content,
       };
     } catch (e) {
-      return { label, prompt, endpointModel, variant, ok: false, elapsedMs: Date.now() - t0, error: `${e?.name}: ${e?.message}`, toolCalls: [] };
+      const kind = classifyModelError(e);
+      if (FATAL_KINDS.has(kind)) fatal = { kind, message: `${e?.name}: ${e?.message}` };
+      return { label, prompt, endpointModel, variant, ok: false, elapsedMs: Date.now() - t0, error: `${e?.name}: ${e?.message}`, modelErrorKind: kind, fatal: FATAL_KINDS.has(kind), toolCalls: [] };
     }
   }
 
@@ -154,20 +199,22 @@ if (PHASE_ARG) {
     const readings = Number(process.env.POC_REPEATS || 2);
     for (let i = 1; i <= readings; i++) {
       out.push({ phase: 'blocked', reading: i, ...(await ask({ label: `L5b[${i}]`, prompt: L5_QUESTION, endpointModel, variant: 'scoped' })) });
+      if (fatal) break;
     }
   } else {
     const models = (process.env.POC_MODELS || '').split(',').filter(Boolean);
     const variants = (process.env.POC_VARIANTS || 'scoped,bare').split(',').filter(Boolean);
-    for (const endpointModel of models) {
+    outer: for (const endpointModel of models) {
       for (const variant of variants) {
         for (const q of QUESTIONS) {
           out.push({ phase: 'cross', question: q.id, lane: q.lane, ...(await ask({ label: `${q.id}/${endpointModel}/${variant}`, prompt: q.prompt, endpointModel, variant, portal: PORTAL })) });
+          if (fatal) break outer;
         }
       }
     }
   }
-  process.stdout.write(`\n__PHASE_JSON__${JSON.stringify(out)}__END__\n`);
-  process.exit(0);
+  process.stdout.write(`\n__PHASE_JSON__${JSON.stringify({ readings: out, fatal, expected: Number(process.env.POC_EXPECTED || out.length) })}__END__\n`);
+  process.exit(fatal ? 3 : 0);
 }
 
 // ===========================================================================
@@ -184,6 +231,13 @@ let jsonl = null;
 let phase = 'startup';
 let failure = null;
 let finalizing = null;
+/**
+ * Set when the run produced no usable measurement. A void run must not print as
+ * a completed one: the first questions run reported ten loops in its KEY NUMBERS
+ * block as though they had run, when every one of them had been refused by the
+ * model endpoint.
+ */
+let voidReason = null;
 const summary = { runId: RUN_ID, kind: 'live-source-questions', package: RECORD_PACKAGE, upstreamHost: UPSTREAM_HOST, bridgePort: BRIDGE_PORT, socrataUrl: SOCRATA_URL, portal: PORTAL, boot: {}, models: [], l5b: [], cross: [] };
 
 async function teardown() {
@@ -240,6 +294,10 @@ if (modelProblem) {
   process.exit(1);
 }
 readout('model endpoint', 'configured (endpoint settings resolve and a key is present)', 'getMissingModelCredentialError()  [src/lib/model-client.ts — no network call]');
+log('  NOTE: that check is local. It answers "is a key present", not "does it work" —');
+log('  and a present-but-unusable key is exactly what voided the first questions run:');
+log('  the value was an op:// reference, non-empty and not a credential. The probe');
+log('  below is the one that can fail.');
 
 let models;
 try {
@@ -255,6 +313,59 @@ try {
   process.exit(1);
 }
 summary.models = models;
+
+/**
+ * THE CREDENTIAL PROBE — one real model call per model, before anything is
+ * created or billed.
+ *
+ * WHY IT EXISTS. The first questions run booted a sandbox and drove ten loops
+ * that every one of them answered "401 Missing Authentication header", because
+ * step 0 had only asked whether a key was PRESENT. A non-empty string passes
+ * that test whatever it is, and the value was an `op://` reference — a pointer
+ * to a credential, not one. This is the warm-VM spike's own rule, which it
+ * wrote down and this run did not follow: prove that credentials are present
+ * with a call whose failure you can see.
+ *
+ * One turn, `max_tokens: 1`, no `tools` — the allow-listed non-loop class in
+ * `src/lib/model-loop/model-call-registry.test.ts`, which carries an entry
+ * naming this file for exactly this call.
+ *
+ * Every model is probed, not just the first: a key that works for the server
+ * default and not for the picker default would otherwise be found eight loops
+ * and one sandbox later.
+ */
+const { getModelClient, classifyModelError } = await import('../../src/lib/model-client.ts');
+try {
+  if (FAULT === 'void') {
+    readout('model credential', 'SKIPPED — POC_FAULT=void (nothing is called, created or billed)', 'POC_FAULT=void');
+  } else {
+  const probeClient = getModelClient();
+  for (const m of models) {
+    const t0 = Date.now();
+    const r = await probeClient.chat.completions.create({
+      model: m,
+      messages: [{ role: 'user', content: 'ping' }],
+      max_tokens: 1,
+    });
+    readout(`model credential · ${m}`, `USABLE — answered in ${Date.now() - t0} ms (${r?.usage?.total_tokens ?? '?'} tokens)`,
+      `client.chat.completions.create({ model: '${m}', max_tokens: 1 })  — one turn, no tools`);
+  }
+  }
+} catch (e) {
+  const kind = classifyModelError(e);
+  log(`\n  FAIL — the model credential does not work: ${e?.name}: ${e?.message}`);
+  log(`  classified: ${kind ?? 'unclassified'}`);
+  if (kind === 'model_auth_rejected' || kind === 'model_not_configured') {
+    log('  The endpoint rejected the credential this process received. If the value in');
+    log('  the env file is an op:// reference, resolve it before this process starts:');
+    log('    op run --env-file=<env file> -- sh scripts/poc-live-source/owner-run-questions.sh');
+    log('  The script prefers an already-resolved MODEL_API_KEY from the parent');
+    log('  environment and only falls back to reading the file for a literal.');
+  }
+  log('  Nothing was created and nothing was billed.');
+  log('\n  STRAYS: none possible — nothing was created');
+  process.exit(1);
+}
 
 /**
  * Rehearsal switch. Everything above this line is the real step 0 — the key
@@ -292,19 +403,28 @@ try {
   phase = 'boot';
   section('BOOT — one sandbox on port 3100');
   const token = randomUUID();
-  const created = await elapsed(() => createFresh(token));
-  const sandbox = created.value;
-  live.push(sandbox); recordedIds.add(sandbox.sandboxId);
-  const url = sandbox.domain(BRIDGE_PORT);
-  readout('create', `${created.ms.toFixed(0)} ms — ${sandbox.sandboxId}`, CREATE_FRESH_COMMAND);
-  await writeBridge(sandbox); await writeProbe(sandbox);
+  // POC_FAULT=void: no sandbox at all. The phases below run against a
+  // placeholder address and never reach it, because every reading is
+  // short-circuited into the credential failure being demonstrated.
+  const sandbox = FAULT === 'void' ? null : (await elapsed(() => createFresh(token))).value;
+  if (!sandbox) {
+    log('  POC_FAULT=void — no sandbox created. Demonstrating the void path only.');
+  }
+  const url = sandbox ? sandbox.domain(BRIDGE_PORT) : 'https://fault-injection.invalid';
+  if (sandbox) {
+    live.push(sandbox); recordedIds.add(sandbox.sandboxId);
+    readout('create', `${sandbox.sandboxId}`, CREATE_FRESH_COMMAND);
+    await writeBridge(sandbox); await writeProbe(sandbox);
+  }
+  if (sandbox) {
   const installed = await elapsed(() => installRecordServer(sandbox));
   readout('install package', `${installed.ms.toFixed(0)} ms`, INSTALL_COMMAND);
   await startBridge(sandbox);
   const ready = await elapsed(() => waitForReady(url, token));
   readout('bridge ready', `${ready.ms.toFixed(0)} ms`, READY_COMMAND(url));
-  summary.boot = { sandboxId: sandbox.sandboxId, url, createMs: created.ms, installMs: installed.ms, readyMs: ready.ms };
+  summary.boot = { sandboxId: sandbox.sandboxId, url, installMs: installed.ms, readyMs: ready.ms };
   record({ measurement: 'Q', step: 'boot', command: `${CREATE_FRESH_COMMAND} + ${INSTALL_COMMAND} + ${START_BRIDGE_COMMAND}`, ...summary.boot });
+  }
 
   // ------------------------------------------------------------ L5(b) ---
   // The upstream server has not made a single request yet: the bridge started
@@ -312,16 +432,24 @@ try {
   // bite — see this file's header, and L1's finding about a warm source.
   phase = 'L5(b) blocked upstream';
   section('L5(b) — ONE QUESTION AT A SOURCE WHOSE UPSTREAM IS BLOCKED');
-  await sandbox.updateNetworkPolicy(DENY_ALL_POLICY);
-  await sleep(3000);
-  const blockedProbe = await probe(sandbox, 'outbound', UPSTREAM_HOST);
-  readout('upstream after deny-all', blockedProbe.text, probeCommand('outbound', UPSTREAM_HOST));
+  if (sandbox) {
+    await sandbox.updateNetworkPolicy(DENY_ALL_POLICY);
+    await sleep(3000);
+    const blockedProbe = await probe(sandbox, 'outbound', UPSTREAM_HOST);
+    readout('upstream after deny-all', blockedProbe.text, probeCommand('outbound', UPSTREAM_HOST));
+  }
   log(`  the upstream server has made no request yet, so it holds no pooled connection`);
-  const l5b = await runPhase('blocked', {
+  const l5bPhase = await runPhase('blocked', {
     POC_BRIDGE_URL: url, POC_BRIDGE_TOKEN: token,
     POC_MODEL: models[0], POC_REPEATS: String(process.env.POC_REPEATS || 2),
+    POC_FAULT: FAULT,
   });
+  const l5b = l5bPhase.readings;
   summary.l5b = l5b;
+  if (l5bPhase.fatal) {
+    voidReason = `L5(b) stopped on a ${l5bPhase.fatal.kind} failure: ${l5bPhase.fatal.message}`;
+    throw new Error(voidReason);
+  }
   for (const r of l5b) {
     log(`\n  L5b reading ${r.reading} — model ${r.endpointModel}`);
     readout('tool calls', r.toolCalls.length ? r.toolCalls.map((c) => `${c.name}(${JSON.stringify(c.args).slice(0, 60)})${c.failed ? ` FAILED:${c.failureKind}` : ''}`).join('; ') : '(none)',
@@ -335,20 +463,30 @@ try {
   // ------------------------------------------------- the two questions ---
   phase = 'the two questions';
   section('THE TWO QUESTIONS — both sources advertised, both live');
-  await sandbox.updateNetworkPolicy(UPSTREAM_ONLY_POLICY);
-  await sleep(3000);
-  const openProbe = await probe(sandbox, 'outbound', UPSTREAM_HOST);
-  readout('upstream restored', openProbe.text, probeCommand('outbound', UPSTREAM_HOST));
+  if (sandbox) {
+    await sandbox.updateNetworkPolicy(UPSTREAM_ONLY_POLICY);
+    await sleep(3000);
+    const openProbe = await probe(sandbox, 'outbound', UPSTREAM_HOST);
+    readout('upstream restored', openProbe.text, probeCommand('outbound', UPSTREAM_HOST));
+  }
   log(`  nyc_record → the sandbox bridge at ${url} (policy: only ${UPSTREAM_HOST})`);
-  log(`  socrata    → ${SOCRATA_URL}, called directly by this process, portal ${PORTAL}`);
+  log(`  socrata    → ${SOCRATA_URL}, called directly by this process, portal ${PORTAL ?? '(none — this instance configured no default, so each call names its own)'}`);
   const variants = (process.env.POC_VARIANTS || 'scoped,bare').split(',').filter(Boolean);
   log(`  models: ${models.join(', ')}   variants: ${variants.join(', ')}   questions: ${QUESTIONS.map((q) => q.id).join(', ')}`);
   for (const q of QUESTIONS) log(`    ${q.id} (${q.lane}): ${q.why}`);
-  const cross = await runPhase('cross', {
+  const expectedCross = models.length * variants.length * QUESTIONS.length;
+  const crossPhase = await runPhase('cross', {
     POC_BRIDGE_URL: url, POC_BRIDGE_TOKEN: token,
     POC_MODELS: models.join(','), POC_VARIANTS: variants.join(','),
+    POC_EXPECTED: String(expectedCross), POC_FAULT: FAULT,
   });
+  const cross = crossPhase.readings;
   summary.cross = cross;
+  summary.expectedCross = expectedCross;
+  if (crossPhase.fatal) {
+    voidReason = `the questions stopped on a ${crossPhase.fatal.kind} failure after ${cross.length} of ${expectedCross} readings: ${crossPhase.fatal.message}`;
+    throw new Error(voidReason);
+  }
   for (const r of cross) {
     const recordCalls = r.toolCalls.filter((c) => c.name.startsWith('nyc_record__'));
     const socrataCalls = r.toolCalls.filter((c) => ['get_data', 'search', 'fetch'].includes(c.name));
@@ -357,7 +495,7 @@ try {
       || (r.lane === 'socrata' && recordCalls.length > 0);
     log(`\n  ${r.label}`);
     readout('tool calls', r.toolCalls.length ? r.toolCalls.map((c) => `${c.name}(${JSON.stringify(c.args).slice(0, 70)})${c.failed ? ` FAILED:${c.failureKind}` : ''}`).join('; ') : '(none)',
-      `runToolLoop(compareLoopOptions({ endpointModel: '${r.endpointModel}', prompt: <${r.question}>, portal: '${PORTAL}' }))`);
+      `runToolLoop(compareLoopOptions({ endpointModel: '${r.endpointModel}', prompt: <${r.question}>, portal: ${PORTAL ? `'${PORTAL}'` : 'undefined'} }))`);
     readout('source split', `nyc_record ${recordCalls.length} · socrata ${socrataCalls.length} · other ${otherCalls.length} · failed ${r.toolCalls.filter((c) => c.failed).length}`, 'the same call');
     readout('scope sentence in the description', String(r.scopeSentencePresent), `variant "${r.variant}"`);
     readout('CROSSED?', crossed ? `YES — a ${r.lane} question answered from the other source` : 'no', `lane ${r.lane}`);
@@ -385,7 +523,27 @@ async function finalizeOnce() {
   summary.recordedIds = [...recordedIds];
   const sp = jsonl ? writeSummary(RUN_ID, summary) : '(not written)';
 
+  // A reading that recorded no tool calls AND returned no answer measured
+  // nothing, whatever the reason. Counting them is what turns "ten loops ran"
+  // into "0 of 8 answered".
+  const answered = [...summary.l5b, ...summary.cross].filter((r) => r.ok).length;
+  const attempted = summary.l5b.length + summary.cross.length;
+  const expected = (Number(process.env.POC_REPEATS || 2)) + (summary.expectedCross ?? 0);
+  if (!voidReason && attempted > 0 && answered === 0) {
+    voidReason = `0 of ${attempted} readings returned an answer — nothing was measured`;
+  }
+  if (!voidReason && expected > 0 && attempted < expected) {
+    voidReason = `only ${attempted} of ${expected} readings ran`;
+  }
+
+  if (voidReason) {
+    section('VOID — THIS RUN MEASURED NOTHING');
+    log(`  ${voidReason}`);
+    log('  The numbers below are recorded so the failure can be read, NOT as results.');
+  }
   section(failure ? 'KEY NUMBERS (run did NOT complete — see STOPPED AT below)' : 'KEY NUMBERS');
+  keyLine('  VOID', voidReason ? `YES — ${voidReason}` : 'no');
+  keyLine('  readings answered', `${answered} of ${attempted} attempted (${expected} expected)`);
   keyLine('  models', summary.models.join(', '));
   keyLine('  boot (create / install / ready)', summary.boot.createMs == null ? 'n/a'
     : `${Math.round(summary.boot.createMs)} / ${Math.round(summary.boot.installMs)} / ${Math.round(summary.boot.readyMs)} ms`);
@@ -413,5 +571,10 @@ async function finalizeOnce() {
   log(`  signature used for the claim: runtime ${OUR_SIGNATURE.runtime} + route on port ${OUR_SIGNATURE.port}`);
   log(`  ${notOursLine}`);
   log(`  ${strayLine}`);
-  if (failure || strayLine !== 'STRAYS: 0') process.exitCode = 1;
+  summary.void = voidReason;
+  summary.answered = answered;
+  summary.attempted = attempted;
+  if (jsonl) writeSummary(RUN_ID, summary);
+  if (voidReason) log(`\n  VOID: ${voidReason}`);
+  if (failure || voidReason || strayLine !== 'STRAYS: 0') process.exitCode = 1;
 }

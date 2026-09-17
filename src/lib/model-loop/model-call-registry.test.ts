@@ -94,6 +94,15 @@ const ALLOWED_MODEL_CALLERS: Record<string, string> = {
     'The one rubric call, no loop. Both consumers reach it here since #348 — the publication gate on the platform credential, the interactive route on the caller\'s key.',
   'src/app/api/evidence/generate-summary/route.ts':
     'One summary call, no loop. Out of this wave.',
+  // POC MCP-LIVE-SOURCE (spike branch only — never merged). One turn,
+  // `max_tokens: 1`, no `tools`: the credential probe that runs before the
+  // spike creates a sandbox. It exists because a run that checked only whether
+  // a key was PRESENT booted a VM and drove ten loops the endpoint answered
+  // with 401 — the key was an `op://` reference, non-empty and not a
+  // credential. A probe whose failure you can see is the point, so it is a real
+  // call and not a local check.
+  'scripts/poc-live-source/run-questions.mjs':
+    'The pre-flight credential probe: one turn, max_tokens 1, no tools. Not loop-class.',
 };
 
 /**

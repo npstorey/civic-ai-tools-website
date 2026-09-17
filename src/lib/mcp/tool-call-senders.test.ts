@@ -196,6 +196,31 @@ const FORWARDING_TRANSPORTS: Record<string, string> = {
     'forwards the response to the app client verbatim and records nothing; throwing here would turn a typed isError result into an HTTP 502',
 };
 
+/**
+ * POC MCP-LIVE-SOURCE: wire probes, which are not consumers either.
+ *
+ * A SECOND exemption class, and deliberately not folded into the first. A
+ * forwarding transport hands the bytes on and reads nothing. These files do the
+ * opposite: they POST a `tools/call` and read `isError` OFF THE WIRE THEMSELVES,
+ * because what the flag looks like before any client touches it is the thing
+ * being measured — the spike's L5 asks what the tool returns, what the client
+ * then throws, and what the reader is finally shown, and it cannot answer the
+ * first of those through a helper that converts the flag into an exception.
+ *
+ * Routing these through `throwIfErrorResult` would delete the measurement. So
+ * the exemption is paid for with a stronger check than the first one: each
+ * named file must still be a sender AND must still literally read `isError`.
+ * A file that stops doing either has a stale exemption, which is a false
+ * statement about the tree, and fails the suite exactly as an unlisted sender
+ * does.
+ */
+const WIRE_PROBES: Record<string, string> = {
+  'scripts/poc-live-source/run-live-source.mjs':
+    'L5(a): reads isError off the raw tools/call response, because what the flag looks like before the client sees it is the measurement',
+  'scripts/poc-live-source/rehearse-loopback.mjs':
+    'the loopback rehearsal: asserts the upstream sets isError on a refused argument, then separately asserts the app client turns that into McpErrorResult',
+};
+
 test('every tracked file that sends tools/call routes the result through throwIfErrorResult', () => {
   const senders = trackedSourceFiles().filter((file) => isSender(parse(file, readFileSync(posix.join(REPO_ROOT, file), 'utf8'))));
   console.log(`# senders the scan derived: ${senders.length}\n${senders.map((s) => `#   ${s}`).join('\n')}`);
@@ -211,9 +236,22 @@ test('every tracked file that sends tools/call routes the result through throwIf
     );
   }
 
+  for (const [file, why] of Object.entries(WIRE_PROBES)) {
+    assert.ok(
+      senders.includes(file),
+      `"${file}" is exempted as a wire probe (${why}) but the scan no longer counts it as a sender. Remove the exemption.`,
+    );
+    assert.match(
+      readFileSync(posix.join(REPO_ROOT, file), 'utf8'),
+      /isError/,
+      `"${file}" is exempted as a wire probe because it reads isError itself, and it no longer mentions isError. Remove the exemption or restore the read.`,
+    );
+  }
+
   const unrouted = senders
     .filter((file) => !routes(file, parse(file, readFileSync(posix.join(REPO_ROOT, file), 'utf8'))))
-    .filter((file) => !(file in FORWARDING_TRANSPORTS));
+    .filter((file) => !(file in FORWARDING_TRANSPORTS))
+    .filter((file) => !(file in WIRE_PROBES));
   assert.deepEqual(
     unrouted,
     [],

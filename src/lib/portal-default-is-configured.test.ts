@@ -228,6 +228,18 @@ const EXCEPTIONS: readonly Exception[] = [
     why: "Google Data Commons' hosted MCP endpoint, already overridable through `DATA_COMMONS_MCP_URL` — a third-party public service every instance reaches at the same address, not one deployment's city, and the trace records it as real configured routing for exactly that reason (#258 A9).",
   },
   {
+    path: 'scripts/poc-live-source/sandbox-ops.mjs',
+    classification: 'server-endpoint',
+    hits: 1,
+    why: 'POC MCP-LIVE-SOURCE: UPSTREAM_HOST, the fixed home of the one dataset @betanyc/nyc-record-mcp queries. It is the value of the sandbox network allowlist, not a call argument — an operator who points at another portal is running another server.',
+  },
+  {
+    path: 'scripts/poc-live-source/run-live-source.mjs',
+    classification: 'server-endpoint',
+    hits: 1,
+    why: "POC MCP-LIVE-SOURCE: Data Commons' own server host, used as a NEGATIVE probe — the allowlist measurement checks that this host is refused. It is never a call argument.",
+  },
+  {
     path: 'src/lib/mcp/operation-types.ts',
     classification: 'server-endpoint',
     hits: 2,
