@@ -158,6 +158,42 @@ The `psql` commands in this guide use the placeholder `civic` user and
 database; substitute your own values wherever you override
 `POSTGRES_USER` / `POSTGRES_DB`.
 
+### Health probe
+
+A deployment platform that watches a fixed path for liveness should be
+pointed at:
+
+- **Probe path:** `/api/health`
+- **Probe port:** `3000`
+- **Alternate path:** `/health`
+
+Both paths are the same handler, so they answer identically; use the
+alternate where a platform fixes its probe at the root and offers no
+setting to move it. Either returns `200` with `{"status":"ok"}`.
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/api/health
+# → 200
+```
+
+Two properties to rely on:
+
+- **The port is the container's**, not the published one. The image
+  listens on `3000` (`EXPOSE 3000` in the `Dockerfile`); `APP_PORT`
+  changes only which host port compose maps onto it, and a platform that
+  probes the container directly never sees `APP_PORT`. The healthcheck in
+  `docker-compose.yml` probes this same path, and a test fails if the
+  path named here and the one in that file disagree.
+- **It is liveness, not readiness.** The route reads no database, no
+  object store, no model endpoint, no data-source server, and no
+  environment variable — it answers `200` on an instance with nothing
+  configured at all. So a failure means this process is not serving, and
+  never that a dependency is slow. That is deliberate: a liveness probe
+  wired to a dependency gets the container killed and restarted for
+  someone else's outage. There is no dependency-readiness route; if you
+  need one, the tier and driver reporting in the sections below is what
+  it would be built from.
+
 ### Supplying your environment
 
 Put your values in one file of `KEY=value` lines and hand it to compose;
