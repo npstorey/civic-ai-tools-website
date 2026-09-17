@@ -47,7 +47,7 @@ const {
   START_BRIDGE_COMMAND, READY_COMMAND,
   BRIDGE_PORT, RECORD_PACKAGE, UPSTREAM_HOST, UPSTREAM_DATASET,
   SANDBOX_VCPUS, SANDBOX_MEMORY_MB, OUR_SIGNATURE,
-  INSTALL_POLICY, UPSTREAM_ONLY_POLICY, DENY_ALL_POLICY, ALLOW_ALL_POLICY,
+  UPSTREAM_ONLY_POLICY, DENY_ALL_POLICY, ALLOW_ALL_POLICY,
 } = OPS;
 
 // Vercel's published rates, read 2026-09-15 (mcp-source-hosting-plan.md §1).
@@ -224,6 +224,11 @@ try {
 }
 jsonl = openResults(RUN_ID);
 log(`  observations -> ${jsonl}`);
+// A canary in EVERY output file, not only the log. A scan whose canary is in
+// one file proves it can read THAT file; the other two files' "0 token hits"
+// would still be unbacked. One per file makes each file's zero mean something.
+summary.canary = CANARY;
+record({ measurement: 'run', step: 'canary', command: 'written so the leak scan below can be seen finding something', canary: CANARY });
 
 /** One fresh boot, timed leg by leg. */
 async function provisionFresh(opts = {}) {
@@ -647,7 +652,14 @@ function leakScan(paths) {
   for (const p of paths) {
     let text;
     try { text = fs.readFileSync(p, 'utf8'); }
-    catch (e) { results.push({ file: p, readable: false, why: e.message, tokenHits: null, canaryHits: null }); continue; }
+    catch (e) {
+      // Distinguish "never written" from "there and unreadable". The first is a
+      // file with nothing in it to leak; the second is a hole in the scan, and a
+      // hole reported as 0 is exactly the shape this canary exists to refuse.
+      const missing = e.code === 'ENOENT';
+      results.push({ file: path.basename(p), readable: false, missing, why: e.message, tokenHits: null, canaryHits: null });
+      continue;
+    }
     const count = (needle) => (needle ? text.split(needle).length - 1 : 0);
     results.push({ file: path.basename(p), readable: true, bytes: text.length, tokenHits: count(APP_TOKEN), canaryHits: count(CANARY) });
   }
@@ -721,11 +733,20 @@ async function finalizeOnce() {
   }
   const tokenTotal = scan.reduce((a, s) => a + (s.tokenHits ?? 0), 0);
   const canaryTotal = scan.reduce((a, s) => a + (s.canaryHits ?? 0), 0);
-  const scanValid = canaryTotal > 0;
-  log(`  RESULT: token occurrences ${tokenTotal}; canary occurrences ${canaryTotal} — ` +
-    (!scanValid ? 'SCAN INVALID: the canary was not found, so a zero token count proves nothing.'
-      : tokenTotal === 0 ? 'the secret is in none of this run’s output files, and the scan can see what is in them.'
-        : 'LEAK: the secret appears in this run’s output.'));
+  // Every file that EXISTS must carry the canary, so its own zero is backed by
+  // a read that was seen to work. A file that was never written holds nothing.
+  const blind = scan.filter((s) => !s.readable && !s.missing).map((s) => s.file);
+  const unbacked = scan.filter((s) => s.readable && s.canaryHits === 0).map((s) => s.file);
+  const scanValid = canaryTotal > 0 && blind.length === 0 && unbacked.length === 0;
+  summary.leakScanValid = scanValid;
+  log(`  RESULT: token occurrences ${tokenTotal}; canary occurrences ${canaryTotal}` +
+    (blind.length ? `; UNREADABLE: ${blind.join(', ')}` : '') +
+    (unbacked.length ? `; NO CANARY IN: ${unbacked.join(', ')}` : ''));
+  log('  ' + (!scanValid
+    ? 'SCAN INVALID — a zero token count from a file the scan cannot be seen reading proves nothing.'
+    : tokenTotal === 0
+      ? 'The secret is in none of this run’s output files, and each of those files was seen being read.'
+      : 'LEAK — the secret appears in this run’s output.'));
   // Re-write the summary so the scan result is in it too (the scan itself
   // carries no literal, so this cannot introduce what it just looked for).
   if (jsonl) writeSummary(RUN_ID, summary);

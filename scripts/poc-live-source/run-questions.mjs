@@ -1,0 +1,417 @@
+#!/usr/bin/env node
+/**
+ * POC MCP-LIVE-SOURCE — the half that needs a model key. OWNER-RUN.
+ *
+ * Two things, on ONE sandbox:
+ *
+ *   L5(b) — the failure, through the shipped loop. A question is driven at a
+ *     source whose upstream is blocked, and what the loop records, what the
+ *     model was told and what the model then said are all kept.
+ *
+ *     THE BLOCK IS APPLIED TO A COLD SOURCE, DELIBERATELY. The L1 readings
+ *     found that `deny-all` on a RUNNING VM does not stop a source that has
+ *     already talked to its upstream — the block removes name resolution, and a
+ *     process holding a pooled connection keeps using it. So this phase blocks
+ *     the VM before the upstream server has ever made a request, which is the
+ *     only shape in which the refusal path can be seen at all. That the other
+ *     shape exists is L1's finding, not a defect in this one.
+ *
+ *   THE TWO QUESTIONS — the cross-source measurement. Both this source and
+ *     Socrata are advertised and BOTH ARE LIVE, and both answer questions about
+ *     New York City open data. One question sits in this source's lane (City
+ *     Record notices) and one sits outside it (311 service requests, which this
+ *     source has no data for and Socrata does). Crossing is legible in either
+ *     direction: a City Record question answered through Socrata's `search`, or
+ *     a 311 question sent to `nyc_record__search_notices`.
+ *
+ *     TWO DESCRIPTION VARIANTS, because a bare yes/no would not say what the
+ *     source picker has to do. `scoped` is the shipped text, whose first tool
+ *     carries one sentence naming what the source does and does not cover;
+ *     `bare` is the same schema with that sentence removed. The difference
+ *     between them is the measurement: whether one sentence of scope in a tool
+ *     description is what keeps two overlapping sources apart.
+ *
+ * TWO CHILD PROCESSES, ONE COMMAND. `src/lib/mcp/client.ts` builds its registry
+ * once, at module load, so one process cannot hold two registry configurations.
+ * L5(b) needs Socrata ABSENT (so the only live source is the blocked one) and
+ * the questions need it PRESENT. This file is therefore its own child: the
+ * parent boots the VM, sets each phase's network policy, re-executes itself
+ * with `--phase`, and owns teardown and the stray check. The owner runs one
+ * command.
+ *
+ * SECRET HYGIENE. The model key is read from this process's environment by
+ * `src/lib/model-client.ts`, exactly as the server reads it, and is never
+ * printed, logged or written to a results file. The bridge token is a per-run
+ * `randomUUID()`. Variables are reported by NAME with the word present/absent.
+ */
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+process.env.POC_RESULTS_DIR ||= path.join(process.cwd(), 'temp', 'mcp-live-source-poc');
+const {
+  openResults, record, writeSummary, section, readout, elapsed, log,
+  silenceAppClientLogs, keyLine, teeOutputTo, RESULTS_DIR, sleep,
+} = await import('../poc-warm-vm/lib.mjs');
+const OPS = await import('./sandbox-ops.mjs');
+const {
+  createFresh, installRecordServer, writeBridge, writeProbe, startBridge, waitForReady,
+  resolveAuth, probe, probeCommand, policyCommand, listAllSandboxes, ownershipStrayCheck,
+  CREATE_FRESH_COMMAND, INSTALL_COMMAND, START_BRIDGE_COMMAND, READY_COMMAND,
+  BRIDGE_PORT, RECORD_PACKAGE, UPSTREAM_HOST, OUR_SIGNATURE,
+  UPSTREAM_ONLY_POLICY, DENY_ALL_POLICY,
+} = OPS;
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const PHASE_ARG = process.argv.find((a) => a.startsWith('--phase='))?.split('=')[1] ?? null;
+
+/** The project's own hosted Socrata MCP endpoint (docs/project-plan.md, .env.example). */
+const SOCRATA_URL = process.env.POC_SOCRATA_MCP_URL || 'https://socrata-mcp.civicaitools.org';
+/** The portal an NYC instance would carry, injected into Socrata calls that omit one. */
+const PORTAL = process.env.POC_PORTAL || 'data.cityofnewyork.us';
+
+const QUESTIONS = [
+  {
+    id: 'Q1-in-lane',
+    lane: 'nyc-record',
+    prompt: 'Which New York City agencies have recently posted procurement solicitations that are still open, and when are they due? Name the agencies and the dates.',
+    why: "City Record notices — this source's own subject. Socrata could also be asked for a dataset, so answering it through Socrata is crossing.",
+  },
+  {
+    id: 'Q2-out-of-lane',
+    lane: 'socrata',
+    prompt: 'How many 311 noise complaints did New York City receive in the last full week, and which borough had the most?',
+    why: 'Not City Record data at all. nyc_record has no 311 notices, so any nyc_record call here is the model reaching for the wrong source.',
+  },
+];
+
+const SYSTEM_PROMPT =
+  'You answer questions about New York City using the live data tools available to you. ' +
+  'Choose the tool best suited to the question, call it, and answer only from what comes back. ' +
+  'Never state a figure the retrieved data does not support. If the data cannot be retrieved, say so plainly.';
+
+const L5_QUESTION =
+  'Which New York City agencies have recently posted procurement solicitations that are still open? Use the City Record notices.';
+
+// ===========================================================================
+// CHILD: one phase, in its own process, with its own registry configuration.
+// ===========================================================================
+if (PHASE_ARG) {
+  const url = process.env.POC_BRIDGE_URL;
+  const token = process.env.POC_BRIDGE_TOKEN;
+  process.env.NYC_RECORD_MCP_URL = url;
+  process.env.NYC_RECORD_MCP_TOKEN = token;
+  if (PHASE_ARG === 'cross') process.env.SOCRATA_MCP_URL = SOCRATA_URL;
+  else delete process.env.SOCRATA_MCP_URL;
+
+  const { getModelClient } = await import('../../src/lib/model-client.ts');
+  const { runToolLoop } = await import('../../src/lib/model-loop/run-tool-loop.ts');
+  const { compareLoopOptions } = await import('../../src/lib/model-loop/compare-loop.ts');
+  const { mcpTools } = await import('../../src/lib/mcp/tools.ts');
+  const client = getModelClient();
+  const out = [];
+
+  /**
+   * `scoped` is the shipped description; `bare` removes the one sentence that
+   * names what the source covers. Mutating the advertised text is the whole
+   * point of the variant — nothing about the LOOP's configuration is restated,
+   * and the exact description used is recorded with every reading.
+   */
+  const SCOPE_SENTENCE = ' This source covers ONLY City Record notices; for any other New York City dataset use the Socrata tools instead.';
+  const searchTool = mcpTools.find((t) => t.function.name === 'nyc_record__search_notices');
+  const SHIPPED_DESCRIPTION = searchTool.function.description;
+  function applyVariant(variant) {
+    searchTool.function.description = variant === 'bare'
+      ? SHIPPED_DESCRIPTION.replace(SCOPE_SENTENCE, '')
+      : SHIPPED_DESCRIPTION;
+    return searchTool.function.description;
+  }
+
+  async function ask({ label, prompt, endpointModel, variant, portal }) {
+    const description = applyVariant(variant);
+    const t0 = Date.now();
+    try {
+      const r = await runToolLoop(compareLoopOptions({ client, endpointModel, prompt, systemPrompt: SYSTEM_PROMPT, portal }));
+      return {
+        label, prompt, endpointModel, variant, ok: r.content.trim().length > 0,
+        elapsedMs: Date.now() - t0, iterations: r.iterations, usage: r.usage,
+        scopeSentencePresent: description.includes('covers ONLY City Record notices'),
+        toolCalls: r.toolCalls.map((c) => ({
+          name: c.name, args: c.args, operationType: c.operationType ?? null,
+          failed: Boolean(c.failed), failureKind: c.failureKind ?? null,
+          rows: c.resultSummary?.rows ?? null, durationMs: c.duration_ms ?? null,
+        })),
+        answer: r.content,
+      };
+    } catch (e) {
+      return { label, prompt, endpointModel, variant, ok: false, elapsedMs: Date.now() - t0, error: `${e?.name}: ${e?.message}`, toolCalls: [] };
+    }
+  }
+
+  if (PHASE_ARG === 'blocked') {
+    const endpointModel = process.env.POC_MODEL;
+    const readings = Number(process.env.POC_REPEATS || 2);
+    for (let i = 1; i <= readings; i++) {
+      out.push({ phase: 'blocked', reading: i, ...(await ask({ label: `L5b[${i}]`, prompt: L5_QUESTION, endpointModel, variant: 'scoped' })) });
+    }
+  } else {
+    const models = (process.env.POC_MODELS || '').split(',').filter(Boolean);
+    const variants = (process.env.POC_VARIANTS || 'scoped,bare').split(',').filter(Boolean);
+    for (const endpointModel of models) {
+      for (const variant of variants) {
+        for (const q of QUESTIONS) {
+          out.push({ phase: 'cross', question: q.id, lane: q.lane, ...(await ask({ label: `${q.id}/${endpointModel}/${variant}`, prompt: q.prompt, endpointModel, variant, portal: PORTAL })) });
+        }
+      }
+    }
+  }
+  process.stdout.write(`\n__PHASE_JSON__${JSON.stringify(out)}__END__\n`);
+  process.exit(0);
+}
+
+// ===========================================================================
+// PARENT: boot, policy, both phases, teardown, stray check.
+// ===========================================================================
+const RUN_ID = new Date().toISOString().replace(/[:.]/g, '-');
+const LOG_PATH = teeOutputTo(path.join(RESULTS_DIR, `questions-run-${RUN_ID}.log`));
+silenceAppClientLogs();
+
+const live = [];
+const recordedIds = new Set();
+let runStartMs = null;
+let jsonl = null;
+let phase = 'startup';
+let failure = null;
+let finalizing = null;
+const summary = { runId: RUN_ID, kind: 'live-source-questions', package: RECORD_PACKAGE, upstreamHost: UPSTREAM_HOST, bridgePort: BRIDGE_PORT, socrataUrl: SOCRATA_URL, portal: PORTAL, boot: {}, models: [], l5b: [], cross: [] };
+
+async function teardown() {
+  for (const s of [...live]) {
+    try { await s.stop({ blocking: true }); live.splice(live.indexOf(s), 1); } catch { /* the stray check reports it */ }
+  }
+}
+
+let sigints = 0;
+process.on('SIGINT', async () => {
+  sigints += 1;
+  if (sigints > 1) {
+    console.log(`\n  SIGINT again — exiting WITHOUT cleanup. Find anything left behind with:\n    node scripts/poc-warm-vm/stop-strays.mjs --port ${BRIDGE_PORT} --since ${runStartMs ? new Date(runStartMs).toISOString() : '<run start>'}`);
+    process.exit(130);
+  }
+  if (!failure) failure = new Error(`interrupted by SIGINT during phase "${phase}"`);
+  console.log('\n  SIGINT — stopping this run’s VM, then checking for strays. Ctrl-C again exits without cleanup.');
+  await finalize();
+  process.exit(130);
+});
+
+/** Run one phase in a child process and parse its JSON tail. */
+function runPhase(name, env) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['--no-warnings', path.join(HERE, 'run-questions.mjs'), `--phase=${name}`], {
+      env: { ...process.env, ...env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => { stdout += d; });
+    child.stderr.on('data', (d) => { stderr += d; });
+    child.on('exit', (code) => {
+      const m = stdout.match(/__PHASE_JSON__([\s\S]*?)__END__/);
+      if (!m) return reject(new Error(`phase "${name}" produced no result (exit ${code}): ${(stderr || stdout).slice(-1200)}`));
+      try { resolve(JSON.parse(m[1])); } catch (e) { reject(new Error(`phase "${name}" produced unparseable output: ${e.message}`)); }
+    });
+    child.on('error', reject);
+  });
+}
+
+// ---------------------------------------------------------------- step 0 ---
+section('STEP 0 — model endpoint, then sandbox auth (nothing is created until both pass)');
+log(`  log: ${LOG_PATH}`);
+for (const n of ['MODEL_API_KEY', 'OPENROUTER_API_KEY', 'MODEL_API_KIND', 'MODEL_API_BASE_URL', 'SOCRATA_APP_TOKEN', 'VERCEL_OIDC_TOKEN', 'VERCEL_TOKEN']) {
+  log(`  ${n}: ${process.env[n]?.trim() ? 'present' : 'absent'}   (name only — never the value)`);
+}
+const { getMissingModelCredentialError } = await import('../../src/lib/model-client.ts');
+const modelProblem = getMissingModelCredentialError();
+if (modelProblem) {
+  log(`\n  FAIL — the model endpoint is not usable: ${modelProblem.name}: ${modelProblem.message}`);
+  log('  Nothing was created. Supply the model key to this process and re-run.');
+  log('\n  STRAYS: none possible — nothing was created');
+  process.exit(1);
+}
+readout('model endpoint', 'configured (endpoint settings resolve and a key is present)', 'getMissingModelCredentialError()  [src/lib/model-client.ts — no network call]');
+
+let models;
+try {
+  const { getDefaultModel } = await import('../../src/lib/model-resolver.ts');
+  const { BUILT_IN_CATALOG, selectableModels } = await import('../../src/lib/model-catalog.ts');
+  const serverDefault = getDefaultModel().endpointModel || getDefaultModel().id;
+  const pickerDefault = selectableModels(BUILT_IN_CATALOG)[0]?.id;
+  models = (process.env.POC_MODELS || [serverDefault, pickerDefault].filter(Boolean).join(',')).split(',').filter(Boolean);
+  readout('models', models.join(', '), 'getDefaultModel() [server default] + selectableModels(BUILT_IN_CATALOG)[0] [the picker default a visitor to /ask gets]');
+} catch (e) {
+  log(`\n  FAIL — the models could not be resolved: ${e?.name}: ${e?.message}\n  Nothing was created.`);
+  log('\n  STRAYS: none possible — nothing was created');
+  process.exit(1);
+}
+summary.models = models;
+
+/**
+ * Rehearsal switch. Everything above this line is the real step 0 — the key
+ * reaching the process, the endpoint resolving, the models resolving. Set
+ * POC_STEP0_ONLY=1 to stop here, so the owner-run command's whole path can be
+ * driven once before it is allowed to create or bill anything. An owner-run leg
+ * that needs three rounds costs more owner time than the measurement is worth.
+ */
+const auth = resolveAuth();
+try {
+  const listing = await listAllSandboxes(auth);
+  if (listing.serverNowMs == null) throw new Error('the sandbox API sent no Date header, so no run start could be fixed');
+  runStartMs = listing.serverNowMs;
+  readout('sandbox API', `OK — ${listing.rows.length} sandbox(es) in scope, ${listing.rows.filter((r) => r.status === 'running').length} running`, 'listAllSandboxes(auth)  [every page]');
+  readout('run start (API clock)', new Date(runStartMs).toISOString(), 'HTTP Date header of that listing');
+} catch (e) {
+  log(`\n  FAIL — the sandbox API did not authenticate: ${e?.name}: ${e?.message}\n  Nothing was created.`);
+  log('\n  STRAYS: none possible — nothing was created');
+  process.exit(1);
+}
+if (process.env.POC_STEP0_ONLY) {
+  log('\n  POC_STEP0_ONLY — stopping here. The model key reached this process, the');
+  log('  endpoint and both models resolved, and the sandbox API authenticated.');
+  log('  Nothing was created and nothing was billed.');
+  log(`  Variable names this process received: ${Object.keys(process.env).sort().join(', ')}`);
+  log('\n  STRAYS: none possible — nothing was created');
+  process.exit(0);
+}
+
+jsonl = openResults(RUN_ID);
+log(`  observations -> ${jsonl}`);
+
+try {
+  // ------------------------------------------------------------- boot ---
+  phase = 'boot';
+  section('BOOT — one sandbox on port 3100');
+  const token = randomUUID();
+  const created = await elapsed(() => createFresh(token));
+  const sandbox = created.value;
+  live.push(sandbox); recordedIds.add(sandbox.sandboxId);
+  const url = sandbox.domain(BRIDGE_PORT);
+  readout('create', `${created.ms.toFixed(0)} ms — ${sandbox.sandboxId}`, CREATE_FRESH_COMMAND);
+  await writeBridge(sandbox); await writeProbe(sandbox);
+  const installed = await elapsed(() => installRecordServer(sandbox));
+  readout('install package', `${installed.ms.toFixed(0)} ms`, INSTALL_COMMAND);
+  await startBridge(sandbox);
+  const ready = await elapsed(() => waitForReady(url, token));
+  readout('bridge ready', `${ready.ms.toFixed(0)} ms`, READY_COMMAND(url));
+  summary.boot = { sandboxId: sandbox.sandboxId, url, createMs: created.ms, installMs: installed.ms, readyMs: ready.ms };
+  record({ measurement: 'Q', step: 'boot', command: `${CREATE_FRESH_COMMAND} + ${INSTALL_COMMAND} + ${START_BRIDGE_COMMAND}`, ...summary.boot });
+
+  // ------------------------------------------------------------ L5(b) ---
+  // The upstream server has not made a single request yet: the bridge started
+  // it, and nothing has called a tool. Blocking NOW is what makes the block
+  // bite — see this file's header, and L1's finding about a warm source.
+  phase = 'L5(b) blocked upstream';
+  section('L5(b) — ONE QUESTION AT A SOURCE WHOSE UPSTREAM IS BLOCKED');
+  await sandbox.updateNetworkPolicy(DENY_ALL_POLICY);
+  await sleep(3000);
+  const blockedProbe = await probe(sandbox, 'outbound', UPSTREAM_HOST);
+  readout('upstream after deny-all', blockedProbe.text, probeCommand('outbound', UPSTREAM_HOST));
+  log(`  the upstream server has made no request yet, so it holds no pooled connection`);
+  const l5b = await runPhase('blocked', {
+    POC_BRIDGE_URL: url, POC_BRIDGE_TOKEN: token,
+    POC_MODEL: models[0], POC_REPEATS: String(process.env.POC_REPEATS || 2),
+  });
+  summary.l5b = l5b;
+  for (const r of l5b) {
+    log(`\n  L5b reading ${r.reading} — model ${r.endpointModel}`);
+    readout('tool calls', r.toolCalls.length ? r.toolCalls.map((c) => `${c.name}(${JSON.stringify(c.args).slice(0, 60)})${c.failed ? ` FAILED:${c.failureKind}` : ''}`).join('; ') : '(none)',
+      `runToolLoop(compareLoopOptions({ ... prompt: <L5 question> }))  with ${policyCommand(DENY_ALL_POLICY)} on the VM`);
+    readout('iterations / tokens', `${r.iterations} / ${r.usage?.totalTokens}`, 'the same call');
+    log('  WHAT THE READER WOULD SEE (the model’s answer):');
+    log('  ' + String(r.answer ?? r.error).split('\n').join('\n  '));
+    record({ measurement: 'L5b', step: 'blocked-question', command: 'runToolLoop(compareLoopOptions(...)) under deny-all', ...r });
+  }
+
+  // ------------------------------------------------- the two questions ---
+  phase = 'the two questions';
+  section('THE TWO QUESTIONS — both sources advertised, both live');
+  await sandbox.updateNetworkPolicy(UPSTREAM_ONLY_POLICY);
+  await sleep(3000);
+  const openProbe = await probe(sandbox, 'outbound', UPSTREAM_HOST);
+  readout('upstream restored', openProbe.text, probeCommand('outbound', UPSTREAM_HOST));
+  log(`  nyc_record → the sandbox bridge at ${url} (policy: only ${UPSTREAM_HOST})`);
+  log(`  socrata    → ${SOCRATA_URL}, called directly by this process, portal ${PORTAL}`);
+  const variants = (process.env.POC_VARIANTS || 'scoped,bare').split(',').filter(Boolean);
+  log(`  models: ${models.join(', ')}   variants: ${variants.join(', ')}   questions: ${QUESTIONS.map((q) => q.id).join(', ')}`);
+  for (const q of QUESTIONS) log(`    ${q.id} (${q.lane}): ${q.why}`);
+  const cross = await runPhase('cross', {
+    POC_BRIDGE_URL: url, POC_BRIDGE_TOKEN: token,
+    POC_MODELS: models.join(','), POC_VARIANTS: variants.join(','),
+  });
+  summary.cross = cross;
+  for (const r of cross) {
+    const recordCalls = r.toolCalls.filter((c) => c.name.startsWith('nyc_record__'));
+    const socrataCalls = r.toolCalls.filter((c) => ['get_data', 'search', 'fetch'].includes(c.name));
+    const otherCalls = r.toolCalls.filter((c) => !c.name.startsWith('nyc_record__') && !['get_data', 'search', 'fetch'].includes(c.name));
+    const crossed = (r.lane === 'nyc-record' && recordCalls.length === 0 && socrataCalls.length > 0)
+      || (r.lane === 'socrata' && recordCalls.length > 0);
+    log(`\n  ${r.label}`);
+    readout('tool calls', r.toolCalls.length ? r.toolCalls.map((c) => `${c.name}(${JSON.stringify(c.args).slice(0, 70)})${c.failed ? ` FAILED:${c.failureKind}` : ''}`).join('; ') : '(none)',
+      `runToolLoop(compareLoopOptions({ endpointModel: '${r.endpointModel}', prompt: <${r.question}>, portal: '${PORTAL}' }))`);
+    readout('source split', `nyc_record ${recordCalls.length} · socrata ${socrataCalls.length} · other ${otherCalls.length} · failed ${r.toolCalls.filter((c) => c.failed).length}`, 'the same call');
+    readout('scope sentence in the description', String(r.scopeSentencePresent), `variant "${r.variant}"`);
+    readout('CROSSED?', crossed ? `YES — a ${r.lane} question answered from the other source` : 'no', `lane ${r.lane}`);
+    readout('iterations / tokens', `${r.iterations} / ${r.usage?.totalTokens}`, 'the same call');
+    log('  ANSWER:');
+    log('  ' + String(r.answer ?? r.error).slice(0, 2000).split('\n').join('\n  '));
+    r.recordCalls = recordCalls.length; r.socrataCalls = socrataCalls.length; r.otherCalls = otherCalls.length; r.crossed = crossed;
+    record({ measurement: 'Q', step: 'cross-source', command: 'runToolLoop(compareLoopOptions(...)) with both sources live', ...r });
+  }
+  phase = 'complete';
+} catch (err) {
+  failure = err;
+} finally {
+  await finalize();
+}
+
+function finalize() {
+  if (!finalizing) finalizing = finalizeOnce();
+  return finalizing;
+}
+
+async function finalizeOnce() {
+  await teardown();
+  summary.runStartMs = runStartMs;
+  summary.recordedIds = [...recordedIds];
+  const sp = jsonl ? writeSummary(RUN_ID, summary) : '(not written)';
+
+  section(failure ? 'KEY NUMBERS (run did NOT complete — see STOPPED AT below)' : 'KEY NUMBERS');
+  keyLine('  models', summary.models.join(', '));
+  keyLine('  boot (create / install / ready)', summary.boot.createMs == null ? 'n/a'
+    : `${Math.round(summary.boot.createMs)} / ${Math.round(summary.boot.installMs)} / ${Math.round(summary.boot.readyMs)} ms`);
+  for (const r of summary.l5b) {
+    keyLine(`  L5b[${r.reading}] tool calls`, r.toolCalls.map((c) => `${c.name}${c.failed ? `(FAILED:${c.failureKind})` : ''}`).join(', ') || '(none)');
+    keyLine(`  L5b[${r.reading}] answer`, String(r.answer ?? r.error).replace(/\s+/g, ' ').slice(0, 220));
+  }
+  for (const r of summary.cross) {
+    keyLine(`  ${r.label}`, `nyc_record ${r.recordCalls} · socrata ${r.socrataCalls} · other ${r.otherCalls} · CROSSED ${r.crossed ? 'YES' : 'no'} · ${r.iterations} iters · ${r.usage?.totalTokens} tokens`);
+    keyLine(`    tools`, r.toolCalls.map((c) => c.name).join(', ') || '(none)');
+  }
+  log(`\n  log:          ${LOG_PATH}`);
+  log(`  observations: ${jsonl}`);
+  log(`  summary:      ${sp}`);
+
+  const { notOursLine, strayLine, sinceIso } = await ownershipStrayCheck({
+    auth: resolveAuth(), recordedIds, runStartMs, signature: OUR_SIGNATURE,
+  });
+  section(failure ? 'INCOMPLETE' : 'DONE');
+  if (failure) {
+    log(`  STOPPED AT: ${phase}`);
+    log(`  REASON:     ${failure?.name}: ${failure?.message}`);
+  }
+  log(`  run start (API clock): ${sinceIso}   recorded ids: ${recordedIds.size}`);
+  log(`  signature used for the claim: runtime ${OUR_SIGNATURE.runtime} + route on port ${OUR_SIGNATURE.port}`);
+  log(`  ${notOursLine}`);
+  log(`  ${strayLine}`);
+  if (failure || strayLine !== 'STRAYS: 0') process.exitCode = 1;
+}
