@@ -194,7 +194,19 @@ export async function listAllSandboxes(auth = {}) {
  * Split the scope's ALIVE sandboxes into ours and not-ours.
  * Returns { ours: [{row, by}], notOurs: [{row, why}], namedNotAlive: [{id, status}] }.
  */
-export async function classifyAlive({ auth = {}, recordedIds = new Set(), explicitIds = new Set(), runStartMs = null }) {
+export async function classifyAlive({
+  auth = {}, recordedIds = new Set(), explicitIds = new Set(), runStartMs = null,
+  /**
+   * POC MCP-LIVE-SOURCE: the signature is a PARAMETER, defaulting to this
+   * spike's own. A second spike running in the same shared scope must not be
+   * able to claim the first one's VMs, and the only thing that separates them
+   * is the exposed port — so the port travels with the run that opened it
+   * rather than sitting as a module constant two runs share. Passing
+   * `{ runtime:'node22', port:3100 }` here is what makes a port-3000 sandbox
+   * read "NOT OURS" to the live-source spike, and vice versa.
+   */
+  signature = OUR_SIGNATURE,
+}) {
   const { rows } = await listAllSandboxes(auth);
   const alive = rows.filter((r) => ALIVE_STATES.includes(r.status));
   const ours = [];
@@ -206,7 +218,7 @@ export async function classifyAlive({ auth = {}, recordedIds = new Set(), explic
     if (runStartMs == null) {
       why.push('no start time, so no signature match is possible');
     } else {
-      if (row.runtime !== OUR_SIGNATURE.runtime) why.push(`runtime ${row.runtime}, not ${OUR_SIGNATURE.runtime}`);
+      if (row.runtime !== signature.runtime) why.push(`runtime ${row.runtime}, not ${signature.runtime}`);
       if (row.createdAt < runStartMs - CLOCK_CUSHION_MS) {
         why.push(`created ${new Date(row.createdAt).toISOString()}, before start ${new Date(runStartMs).toISOString()}`);
       }
@@ -215,8 +227,8 @@ export async function classifyAlive({ auth = {}, recordedIds = new Set(), explic
       if (!why.length) {
         try {
           const sb = await Sandbox.get({ sandboxId: row.id, ...auth });
-          if (!(sb.routes || []).some((rt) => rt.port === OUR_SIGNATURE.port)) {
-            why.push(`no route on port ${OUR_SIGNATURE.port}`);
+          if (!(sb.routes || []).some((rt) => rt.port === signature.port)) {
+            why.push(`no route on port ${signature.port}`);
           }
         } catch (e) {
           why.push(`routes unreadable (${e?.message}) — not provably ours`);
@@ -262,10 +274,10 @@ export function describeNotOurs(n) {
  * The STRAYS line names what was alive and claimed BEFORE the backstop acted,
  * so a leak can never read "STRAYS: 0". NOT OURS never changes it.
  */
-export async function ownershipStrayCheck({ auth = {}, recordedIds = new Set(), runStartMs = null }) {
+export async function ownershipStrayCheck({ auth = {}, recordedIds = new Set(), runStartMs = null, signature = OUR_SIGNATURE }) {
   const sinceIso = runStartMs ? new Date(runStartMs).toISOString() : '<run start>';
   try {
-    const { ours, notOurs } = await classifyAlive({ auth, recordedIds, runStartMs });
+    const { ours, notOurs } = await classifyAlive({ auth, recordedIds, runStartMs, signature });
     const notOursLine = notOurs.length
       ? `NOT OURS — left running: ${notOurs.length}  ${notOurs.map(describeNotOurs).join('  ')}`
       : 'NOT OURS — left running: 0';
@@ -279,7 +291,7 @@ export async function ownershipStrayCheck({ auth = {}, recordedIds = new Set(), 
   } catch (e) {
     return {
       notOursLine: 'NOT OURS — left running: UNKNOWN (the listing could not be read)',
-      strayLine: `STRAYS: UNKNOWN — could not read the sandbox list (${e?.name}: ${e?.message}); run: node scripts/poc-warm-vm/stop-strays.mjs --since ${sinceIso}`,
+      strayLine: `STRAYS: UNKNOWN — could not read the sandbox list (${e?.name}: ${e?.message}); run: node scripts/poc-warm-vm/stop-strays.mjs --port ${signature.port} --since ${sinceIso}`,
       sinceIso,
     };
   }

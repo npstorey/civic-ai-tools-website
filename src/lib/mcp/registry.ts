@@ -51,6 +51,16 @@ export interface McpRegistryEnv {
   nycCharterUrl?: string;
   /** Bearer token the bridge requires on every path. */
   nycCharterToken?: string;
+  /**
+   * POC MCP-LIVE-SOURCE: address of the warm-sandbox bridge fronting
+   * `@betanyc/nyc-record-mcp`. Same shape as `nycCharterUrl` and for the same
+   * reason — a sandbox address is per-run and instance-private — but this
+   * source differs in kind: its answers come from a LIVE city service
+   * (data.cityofnewyork.us), not from data bundled in the package.
+   */
+  nycRecordUrl?: string;
+  /** Bearer token the nyc_record bridge requires on every path. */
+  nycRecordToken?: string;
 }
 
 const SOCRATA_TOOLS = ['get_data', 'search', 'fetch'];
@@ -85,6 +95,29 @@ const NYC_CHARTER_TOOLS = [
   'nyc_charter__list_titles',
   'nyc_charter__get_title',
   'nyc_charter__get_version',
+];
+
+/**
+ * POC MCP-LIVE-SOURCE (spike, not chartered): `@betanyc/nyc-record-mcp`
+ * behind the same stdio-to-HTTP bridge on a warm Vercel Sandbox.
+ *
+ * The `nyc_record__` prefix is load-bearing for the same reason Charter's is
+ * — `toolIndex` is keyed by bare name — but the collision it prevents here is
+ * narrower and the OVERLAP it leaves is the interesting part: this source and
+ * Socrata both answer questions about New York City open data, and
+ * `nyc_record__search_notices` sits beside Socrata's bare `search`. Prefixing
+ * keeps the registry unambiguous; it does not by itself tell the MODEL which
+ * source a question belongs to. That is the source-picker problem, and this
+ * spike measures it rather than assuming it away.
+ */
+const NYC_RECORD_TOOLS = [
+  'nyc_record__search_notices',
+  'nyc_record__get_notices_by_agency',
+  'nyc_record__get_notices_by_type',
+  'nyc_record__get_procurement_notices',
+  'nyc_record__get_public_hearings',
+  'nyc_record__get_open_solicitations',
+  'nyc_record__get_notices_by_date_range',
 ];
 
 /**
@@ -146,6 +179,20 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
           },
         }
       : {}),
+    // POC MCP-LIVE-SOURCE: present only when an address is configured.
+    ...(env.nycRecordUrl
+      ? {
+          'nyc-record': {
+            sourceId: 'nyc-record',
+            label: 'NYC City Record notices (BetaNYC, warm sandbox over a live city service)',
+            endpointUrl: normalizeMcpEndpoint(env.nycRecordUrl),
+            headers: env.nycRecordToken
+              ? { Authorization: `Bearer ${env.nycRecordToken}` }
+              : undefined,
+            tools: NYC_RECORD_TOOLS,
+          },
+        }
+      : {}),
   };
 
   const toolIndex: Record<string, string> = {};
@@ -169,6 +216,12 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
   if (!env.nycCharterUrl) {
     for (const tool of NYC_CHARTER_TOOLS) {
       unconfiguredTools[tool] = 'NYC_CHARTER_MCP_URL';
+    }
+  }
+  // POC MCP-LIVE-SOURCE: same shape again.
+  if (!env.nycRecordUrl) {
+    for (const tool of NYC_RECORD_TOOLS) {
+      unconfiguredTools[tool] = 'NYC_RECORD_MCP_URL';
     }
   }
 
@@ -209,6 +262,8 @@ export function readMcpEnvFromProcess(): McpRegistryEnv {
       process.env.BOSTON_OPENCONTEXT_MCP_URL || 'https://data-mcp.boston.gov/mcp',
     nycCharterUrl: presentOrUndefined(process.env.NYC_CHARTER_MCP_URL),
     nycCharterToken: presentOrUndefined(process.env.NYC_CHARTER_MCP_TOKEN),
+    nycRecordUrl: presentOrUndefined(process.env.NYC_RECORD_MCP_URL),
+    nycRecordToken: presentOrUndefined(process.env.NYC_RECORD_MCP_TOKEN),
   };
 }
 

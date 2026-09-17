@@ -160,9 +160,18 @@ test('#258 C4: with no socrataUrl the registry omits the Socrata server and name
     assert.equal(resolveServerForTool(registry, toolName), undefined, `${toolName} resolves to no server`);
     assert.equal(registry.unconfiguredTools[toolName], 'NYC_CHARTER_MCP_URL', `${toolName} names its missing variable`);
   }
+  // POC MCP-LIVE-SOURCE: the fifth source, same shape again.
+  for (const toolName of ['nyc_record__search_notices', 'nyc_record__get_open_solicitations']) {
+    assert.equal(resolveServerForTool(registry, toolName), undefined, `${toolName} resolves to no server`);
+    assert.equal(registry.unconfiguredTools[toolName], 'NYC_RECORD_MCP_URL', `${toolName} names its missing variable`);
+  }
   // A fully configured registry has nothing unconfigured.
   assert.deepEqual(
-    buildMcpRegistry({ ...TEST_ENV, nycCharterUrl: 'https://bridge.example.run' }).unconfiguredTools,
+    buildMcpRegistry({
+      ...TEST_ENV,
+      nycCharterUrl: 'https://bridge.example.run',
+      nycRecordUrl: 'https://record-bridge.example.run',
+    }).unconfiguredTools,
     {},
   );
 });

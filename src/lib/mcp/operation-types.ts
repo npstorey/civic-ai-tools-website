@@ -77,6 +77,22 @@ const TOOL_OPERATION_TYPES: Record<string, string> = {
   // asserts nothing false. Closing this properly means adding a term for
   // primary-text retrieval to the operation vocabulary — a charter decision
   // about what a record MEANS for a non-tabular source, not a line here.
+  //
+  // POC MCP-LIVE-SOURCE: the NYC City Record source. All SEVEN tools type, and
+  // the contrast with the five above is the point. Charter serves primary legal
+  // text and this vocabulary has no term for that; `nyc-record` is a thin
+  // wrapper over ONE Socrata dataset (`dg92-zbpx` on data.cityofnewyork.us),
+  // so every tool but the search returns rows of a tabular open-data resource —
+  // exactly the unit `records analyzed` was defined over (#339). 'query' here
+  // is not the tempting wrong answer it was for `get_section`; it is the true
+  // one, and a signed package that counts these rows counts rows.
+  nyc_record__search_notices: 'search',
+  nyc_record__get_notices_by_agency: 'query',
+  nyc_record__get_notices_by_type: 'query',
+  nyc_record__get_procurement_notices: 'query',
+  nyc_record__get_public_hearings: 'query',
+  nyc_record__get_open_solicitations: 'query',
+  nyc_record__get_notices_by_date_range: 'query',
 };
 
 const SOURCE_BY_TOOL_NAME: Record<string, string> = {
@@ -99,6 +115,16 @@ const SOURCE_BY_TOOL_NAME: Record<string, string> = {
   nyc_charter__list_titles: 'nyc-charter',
   nyc_charter__get_title: 'nyc-charter',
   nyc_charter__get_version: 'nyc-charter',
+  // POC MCP-LIVE-SOURCE. The `nyc_record__` prefix carries the source for all
+  // seven, which is what keeps this source distinguishable from Socrata in a
+  // signed graph even though both answer from data.cityofnewyork.us.
+  nyc_record__search_notices: 'nyc-record',
+  nyc_record__get_notices_by_agency: 'nyc-record',
+  nyc_record__get_notices_by_type: 'nyc-record',
+  nyc_record__get_procurement_notices: 'nyc-record',
+  nyc_record__get_public_hearings: 'nyc-record',
+  nyc_record__get_open_solicitations: 'nyc-record',
+  nyc_record__get_notices_by_date_range: 'nyc-record',
 };
 
 /**

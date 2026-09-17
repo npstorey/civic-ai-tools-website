@@ -9,7 +9,8 @@
  * could have stopped a visitor's notebook mid-execution. A sandbox is stopped
  * only when it is claimed by the rule in sandbox-ops.mjs (classifyAlive):
  *   - named explicitly with --id, or
- *   - matching this spike's signature — runtime node22, a route on port 3000,
+ *   - matching a spike's signature — runtime node22, a route on the port that
+ *     spike exposes (3000 by default; --port 3100 for the live-source spike),
  *     created at or after --since.
  * Every other alive sandbox is reported "NOT OURS — left running".
  *
@@ -21,6 +22,7 @@
  *   node scripts/poc-warm-vm/stop-strays.mjs                         report; claims nothing
  *   node scripts/poc-warm-vm/stop-strays.mjs --since <ISO>           report which match the signature
  *   node scripts/poc-warm-vm/stop-strays.mjs --stop --since <ISO>    stop signature matches only
+ *   node scripts/poc-warm-vm/stop-strays.mjs --port 3100 --since <ISO>  the live-source spike's VMs
  *   node scripts/poc-warm-vm/stop-strays.mjs --stop --id sbx_… [--id sbx_…]   stop exactly these
  *   add --snapshots to list snapshots (REPORT ONLY — never deleted here)
  *
@@ -40,11 +42,18 @@ const doStop = argv.includes('--stop');
 const wantSnapshots = argv.includes('--snapshots');
 const explicitIds = new Set();
 let sinceMs = null;
+let port = OUR_SIGNATURE.port;
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--id') {
     const id = argv[i + 1];
     if (!id || !id.startsWith('sbx_')) { console.error(`--id needs a sandbox id (sbx_…), got "${id ?? ''}"`); process.exit(2); }
     explicitIds.add(id); i++;
+  } else if (argv[i] === '--port') {
+    // POC MCP-LIVE-SOURCE: which spike's VMs this invocation may claim. The
+    // default is the warm-VM spike's 3000; the live-source spike exposes 3100.
+    const n = Number(argv[i + 1]);
+    if (!Number.isInteger(n) || n <= 0) { console.error(`--port needs a port number, got "${argv[i + 1] ?? ''}"`); process.exit(2); }
+    port = n; i++;
   } else if (argv[i] === '--since') {
     const raw = argv[i + 1];
     const parsed = raw ? Date.parse(raw) : NaN;
@@ -66,11 +75,13 @@ const auth = resolveAuth();
 const { rows } = await listAllSandboxes(auth);
 const alive = rows.filter((r) => ALIVE_STATES.includes(r.status));
 console.log(`${rows.length} sandbox(es) in scope (all pages); ${alive.length} alive.`);
-console.log(`signature: runtime ${OUR_SIGNATURE.runtime} + route on port ${OUR_SIGNATURE.port} + created at/after ` +
+console.log(`signature: runtime ${OUR_SIGNATURE.runtime} + route on port ${port} + created at/after ` +
   `${sinceMs == null ? '(no --since given)' : new Date(sinceMs).toISOString()}` +
   `${explicitIds.size ? `; named ids: ${[...explicitIds].join(' ')}` : ''}`);
 
-const { ours, notOurs, namedNotAlive } = await classifyAlive({ auth, explicitIds, runStartMs: sinceMs });
+const { ours, notOurs, namedNotAlive } = await classifyAlive({
+  auth, explicitIds, runStartMs: sinceMs, signature: { ...OUR_SIGNATURE, port },
+});
 
 for (const o of ours) {
   console.log(`  CLAIMED [${o.by}]: ${o.row.id}  status=${o.row.status}  runtime=${o.row.runtime}  created=${new Date(o.row.createdAt).toISOString()}`);

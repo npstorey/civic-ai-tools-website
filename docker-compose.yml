@@ -305,6 +305,9 @@ services:
       # spike's measurements of what a fourth source costs to wire.
       NYC_CHARTER_MCP_URL:
       NYC_CHARTER_MCP_TOKEN:
+      # POC MCP-LIVE-SOURCE (spike branch only — NEVER merged, never pushed).
+      NYC_RECORD_MCP_URL:
+      NYC_RECORD_MCP_TOKEN:
       DC_API_KEY:
       CRON_SECRET:
       KV_REST_API_URL:

@@ -540,6 +540,138 @@ const nycCharterMcpTools: ChatCompletionTool[] = [
   },
 ];
 
+// --- NYC City Record notices (BetaNYC, warm sandbox over a LIVE city service) ---
+// POC MCP-LIVE-SOURCE (spike, not chartered). Schemas transcribed from the live
+// `tools/list` of `@betanyc/nyc-record-mcp@1.1.0` driven through the bridge,
+// not from its README; the run that produced this file's numbers re-reads that
+// list and fails if it has drifted.
+//
+// The `nyc_record__` prefix is applied by scripts/poc-warm-vm/bridge.mjs, which
+// strips it again upstream. Unlike Charter, this source answers from a live
+// service — every tool below is one SODA query against dataset `dg92-zbpx` on
+// data.cityofnewyork.us — so its freshness is the city's, not a package's, and
+// a network block turns every one of these into a refusal rather than a
+// slightly stale answer.
+//
+// Every upstream schema is zod `.strict()`: a parameter the tool does not
+// declare is a loud failure, not a silently ignored filter. That matters for
+// the overlap with Socrata, whose tools take `portal` and `dataset_id` —
+// arguments that have no meaning here and cannot be quietly absorbed.
+const nycRecordMcpTools: ChatCompletionTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'nyc_record__search_notices',
+      description: `Full-text search across NYC City Record notices — the city's official daily journal of public hearings, procurement solicitations, contract awards and public comment periods. Answers from the live NYC Open Data service, so results are as current as the city's own publication. Use this when you do not know which agency or notice type you want. This source covers ONLY City Record notices; for any other New York City dataset use the Socrata tools instead.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search term' },
+          limit: { type: 'number', description: 'Max results (default 25, max 100)' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'nyc_record__get_notices_by_agency',
+      description: `Get City Record notices published by a specific city agency (partial name match, e.g. 'DCAS', 'Parks'). Live data from NYC Open Data.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          agency_name: { type: 'string', description: "Agency name or partial name, e.g. 'DCAS', 'Parks'" },
+          limit: { type: 'number', description: 'Max results (default 25, max 100)' },
+        },
+        required: ['agency_name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'nyc_record__get_notices_by_type',
+      description: `Get City Record notices filtered by notice type. Live data from NYC Open Data.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          notice_type: {
+            type: 'string',
+            enum: [
+              'Solicitation',
+              'Award',
+              'Intent to Award',
+              'Intent to Negotiate',
+              'Public Hearings',
+              'Public Comment',
+              'Meeting',
+              'Notice',
+              'Vendor List',
+              'Sale',
+            ],
+            description: 'Notice type',
+          },
+          limit: { type: 'number', description: 'Max results (default 25, max 100)' },
+        },
+        required: ['notice_type'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'nyc_record__get_procurement_notices',
+      description: `Get recent procurement-related City Record notices: solicitations, awards, intent to award, intent to negotiate and vendor lists. Useful for tracking open contracts and recent awards. Live data from NYC Open Data.`,
+      parameters: {
+        type: 'object',
+        properties: { limit: { type: 'number', description: 'Max results (default 25, max 100)' } },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'nyc_record__get_public_hearings',
+      description: `Get recent public hearings, public comment periods and agency meetings from the City Record. Live data from NYC Open Data.`,
+      parameters: {
+        type: 'object',
+        properties: { limit: { type: 'number', description: 'Max results (default 25, max 100)' } },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'nyc_record__get_open_solicitations',
+      description: `Get active solicitations (RFPs, RFQs, IFBs) whose due date has not yet passed, soonest deadline first. Live data from NYC Open Data — "open" is judged against today's New York date at call time.`,
+      parameters: {
+        type: 'object',
+        properties: { limit: { type: 'number', description: 'Max results (default 25, max 100)' } },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'nyc_record__get_notices_by_date_range',
+      description: `Get all City Record notices published within a date range. Live data from NYC Open Data.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          start_date: { type: 'string', description: 'Start date, YYYY-MM-DD' },
+          end_date: { type: 'string', description: 'End date, YYYY-MM-DD' },
+          limit: { type: 'number', description: 'Max results (default 50, max 200)' },
+        },
+        required: ['start_date', 'end_date'],
+      },
+    },
+  },
+];
+
 /** Unified tool schema sent to whichever chat-completions endpoint this instance is configured to call (see src/lib/model-client.ts). The client in ./client.ts routes each call to the correct MCP server by tool name. */
 export const mcpTools: ChatCompletionTool[] = [
   ...socrataMcpTools,
@@ -550,6 +682,10 @@ export const mcpTools: ChatCompletionTool[] = [
   // routes these five to `unconfiguredTools`, so a call refuses by naming the
   // variable instead of dying as an unknown tool.
   ...nycCharterMcpTools,
+  // POC MCP-LIVE-SOURCE (spike): advertised unconditionally, same as the rest.
+  // With NYC_RECORD_MCP_URL unset the registry routes these seven to
+  // `unconfiguredTools`, so a call refuses by naming the variable.
+  ...nycRecordMcpTools,
 ];
 
 // Model definitions moved to src/lib/model-catalog.ts (civic-ai-tools-website#30

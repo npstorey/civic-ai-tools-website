@@ -170,8 +170,8 @@ const EXCEPTIONS: readonly Exception[] = [
   {
     path: 'src/lib/mcp/tools.ts',
     classification: 'reference-table',
-    hits: 11,
-    why: "Worked examples of the `portal` argument's shape in the tool descriptions, plus the Boston server's own domain; a portal the model copies from one becomes a portal that call actually addressed, never a value substituted into a call that omitted it.",
+    hits: 12,
+    why: "Worked examples of the `portal` argument's shape in the tool descriptions, plus the Boston server's own domain; a portal the model copies from one becomes a portal that call actually addressed, never a value substituted into a call that omitted it. The twelfth (POC MCP-LIVE-SOURCE) is a comment naming the fixed upstream of the nyc_record server — a server-endpoint fact rather than a reference-table one, kept here because exceptions are matched by path and carry one classification.",
   },
   {
     path: 'src/app/(marketing)/learn/page.tsx',
@@ -224,8 +224,14 @@ const EXCEPTIONS: readonly Exception[] = [
   {
     path: 'src/lib/mcp/registry.ts',
     classification: 'server-endpoint',
-    hits: 2,
+    hits: 3,
     why: "Google Data Commons' hosted MCP endpoint, already overridable through `DATA_COMMONS_MCP_URL` — a third-party public service every instance reaches at the same address, not one deployment's city, and the trace records it as real configured routing for exactly that reason (#258 A9).",
+  },
+  {
+    path: 'src/lib/mcp/operation-types.ts',
+    classification: 'server-endpoint',
+    hits: 2,
+    why: 'POC MCP-LIVE-SOURCE: two comments naming the fixed home of the one dataset every nyc_record tool queries, which is why those six tools type as `query` and Charter\u2019s `get_section` does not. Not one instance\u2019s city and not configurable: an operator who points at another portal points at another server. Nothing in this file reaches a call argument \u2014 it maps tool names to operation labels.',
   },
   {
     path: 'src/lib/notebook-author/helpers/fetch_data_commons.py',

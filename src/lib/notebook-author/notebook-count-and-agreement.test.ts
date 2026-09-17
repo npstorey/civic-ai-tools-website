@@ -700,6 +700,18 @@ const ARG_SHAPES: Record<string, Array<Record<string, unknown>>> = {
   nyc_charter__list_titles: [{ corpus: 'charter' }],
   nyc_charter__get_title: [{ corpus: 'charter', title: 'Chapter 45' }],
   nyc_charter__get_version: [{}],
+  // POC MCP-LIVE-SOURCE: the fifth source. The contrast with the five above is
+  // that ALL SEVEN derive an operation type — one 'search', six 'query' — so
+  // these exercise the typed path where Charter's `get_section` exercises the
+  // undefined one. Three of the seven take no required argument at all, which
+  // is a shape none of the other sources' tools had.
+  nyc_record__search_notices: [{ query: 'Department of Sanitation', limit: 3 }],
+  nyc_record__get_notices_by_agency: [{ agency_name: 'DCAS', limit: 5 }],
+  nyc_record__get_notices_by_type: [{ notice_type: 'Solicitation', limit: 5 }],
+  nyc_record__get_procurement_notices: [{ limit: 5 }],
+  nyc_record__get_public_hearings: [{ limit: 5 }],
+  nyc_record__get_open_solicitations: [{}],
+  nyc_record__get_notices_by_date_range: [{ start_date: '2026-09-01', end_date: '2026-09-17', limit: 10 }],
 };
 
 function registryToolNames(): string[] {

@@ -354,6 +354,13 @@ export const ENV_SPEC = [
   // fourth source is simply not registered and its five tools refuse by name.
   { name: 'NYC_CHARTER_MCP_URL', tier: 'optional', purpose: 'Address of the warm-sandbox bridge fronting @betanyc/nyc-charter-laws-rules — unset, the nyc_charter source is not registered' },
   { name: 'NYC_CHARTER_MCP_TOKEN', tier: 'optional', purpose: 'Bearer token the nyc_charter bridge requires on every path' },
+  // POC MCP-LIVE-SOURCE (spike branch only — never merged). Same two reads, one
+  // source further on. The point of declaring them is the closed loop itself:
+  // a fifth source's two env reads force an ENV_SPEC entry, which forces two
+  // compose lines, which `npm run check:compose-env` then gates. That cost is
+  // one of the things this spike is measuring.
+  { name: 'NYC_RECORD_MCP_URL', tier: 'optional', purpose: 'Address of the warm-sandbox bridge fronting @betanyc/nyc-record-mcp — unset, the nyc_record source is not registered' },
+  { name: 'NYC_RECORD_MCP_TOKEN', tier: 'optional', purpose: 'Bearer token the nyc_record bridge requires on every path' },
 
   // The signing pair. NEITHER has a coded fallback: signing.ts has no default
   // key id, because a substituted kid would label this instance's signature
