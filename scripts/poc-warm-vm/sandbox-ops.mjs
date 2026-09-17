@@ -252,3 +252,35 @@ export async function stopClaimed(ours, auth = {}) {
 export function describeNotOurs(n) {
   return `${n.row.id} (${n.why})`;
 }
+
+/**
+ * The end-of-run stray check, as two printable lines: `notOursLine`, then
+ * `strayLine` (always printed last). Same rule, same wording as the inline
+ * block in run-poc.mjs, which is deliberately left as it was when it produced
+ * the record run (f12d3fd); scripts written after the record use this.
+ *
+ * The STRAYS line names what was alive and claimed BEFORE the backstop acted,
+ * so a leak can never read "STRAYS: 0". NOT OURS never changes it.
+ */
+export async function ownershipStrayCheck({ auth = {}, recordedIds = new Set(), runStartMs = null }) {
+  const sinceIso = runStartMs ? new Date(runStartMs).toISOString() : '<run start>';
+  try {
+    const { ours, notOurs } = await classifyAlive({ auth, recordedIds, runStartMs });
+    const notOursLine = notOurs.length
+      ? `NOT OURS — left running: ${notOurs.length}  ${notOurs.map(describeNotOurs).join('  ')}`
+      : 'NOT OURS — left running: 0';
+    if (!ours.length) return { notOursLine, strayLine: 'STRAYS: 0', sinceIso };
+    const label = ours.map((o) => `${o.row.id}[${o.by}]`).join(' ');
+    const remaining = await stopClaimed(ours, auth);
+    const strayLine = remaining.length
+      ? `STRAYS: ${ours.length} ${label} (backstop FAILED; ${remaining.length} still alive: ${remaining.map((o) => o.row.id).join(' ')})`
+      : `STRAYS: ${ours.length} ${label} (backstop stopped all ${ours.length}; 0 still alive)`;
+    return { notOursLine, strayLine, sinceIso };
+  } catch (e) {
+    return {
+      notOursLine: 'NOT OURS — left running: UNKNOWN (the listing could not be read)',
+      strayLine: `STRAYS: UNKNOWN — could not read the sandbox list (${e?.name}: ${e?.message}); run: node scripts/poc-warm-vm/stop-strays.mjs --since ${sinceIso}`,
+      sinceIso,
+    };
+  }
+}

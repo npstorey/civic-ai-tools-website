@@ -92,3 +92,21 @@ export function silenceAppClientLogs() {
 export function keyLine(label, value) {
   console.log(`  ${label.padEnd(34)} ${value}`);
 }
+
+/**
+ * Copy everything this process writes to stdout and stderr into `logPath`,
+ * while still writing it to the terminal. Installed before anything prints,
+ * so the file is the whole run. Returns the path.
+ */
+export function teeOutputTo(logPath) {
+  fs.mkdirSync(path.dirname(logPath), { recursive: true });
+  const fd = fs.openSync(logPath, 'a');
+  for (const stream of [process.stdout, process.stderr]) {
+    const write = stream.write.bind(stream);
+    stream.write = (chunk, encoding, cb) => {
+      try { fs.writeSync(fd, typeof chunk === 'string' ? chunk : Buffer.from(chunk)); } catch { /* the terminal copy still goes out */ }
+      return write(chunk, encoding, cb);
+    };
+  }
+  return logPath;
+}
