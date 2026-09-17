@@ -28,6 +28,7 @@ import {
   CREATE_FRESH_COMMAND, CREATE_FROM_SNAPSHOT_COMMAND, INSTALL_COMMAND,
   START_BRIDGE_COMMAND, READY_COMMAND, BRIDGE_PORT, SANDBOX_VCPUS,
   SANDBOX_MEMORY_MB, CHARTER_PACKAGE,
+  listAllSandboxes, classifyAlive, stopClaimed, describeNotOurs,
 } from './sandbox-ops.mjs';
 
 // Vercel's published rates, read 2026-09-15 (mcp-source-hosting-plan.md §1).
@@ -49,6 +50,19 @@ const CPU_CALLS = Number(process.env.POC_CPU_CALLS || 500);
 
 let bindCounter = 0;
 const live = [];                       // sandboxes to tear down on exit
+/**
+ * Every sandbox id this run created, recorded the moment `Sandbox.create`
+ * resolves and NEVER removed — `live` shrinks as VMs are stopped, this does
+ * not. It is the first of the two rules the end-of-run stray check uses to
+ * decide what it may stop (see classifyAlive in sandbox-ops.mjs).
+ */
+const recordedIds = new Set();
+/** Run start on the sandbox API's own clock (step 0's HTTP Date header). */
+let runStartMs = null;
+let jsonl = null;
+let interrupted = false;
+/** The single in-flight cleanup, shared by the finally block and SIGINT. */
+let finalizing = null;
 /** Updated as the suite advances, so a failure can say WHERE it stopped. */
 let phase = 'startup';
 /**
@@ -59,6 +73,7 @@ let phase = 'startup';
  */
 const FAULT_PHASE = process.env.POC_FAULT_PHASE || '';
 function enterPhase(name) {
+  if (interrupted) throw new Error(`interrupted by SIGINT before phase "${name}"`);
   phase = name;
   if (FAULT_PHASE && name === FAULT_PHASE) {
     throw new Error(`injected fault at phase "${name}" (POC_FAULT_PHASE)`);
@@ -83,7 +98,25 @@ async function teardown() {
     try { await s.stop({ blocking: true }); live.splice(live.indexOf(s), 1); } catch { /* reported by the caller */ }
   }
 }
-process.on('SIGINT', async () => { await teardown(); process.exit(130); });
+// SIGINT runs the SAME finalize as the finally block — stop this run's VMs,
+// delete its snapshot, write the summary, run the ownership-aware stray check
+// — then exits 130. A second Ctrl-C exits at once without cleanup and prints
+// the command that finds anything left behind.
+let sigints = 0;
+process.on('SIGINT', async () => {
+  sigints += 1;
+  if (sigints > 1) {
+    const since = runStartMs ? new Date(runStartMs).toISOString() : '<run start>';
+    console.log(`\n  SIGINT again — exiting WITHOUT cleanup. Find anything left behind with:`);
+    console.log(`    node scripts/poc-warm-vm/stop-strays.mjs --since ${since} --snapshots`);
+    process.exit(130);
+  }
+  interrupted = true;
+  if (!failure) failure = new Error(`interrupted by SIGINT during phase "${phase}"`);
+  console.log('\n  SIGINT — stopping this run\u2019s VMs, deleting its snapshot, checking for strays. Ctrl-C again exits without cleanup.');
+  await finalize();
+  process.exit(130);
+});
 
 // ---------------------------------------------------------------- step 0 ---
 section('STEP 0 — auth (fails in seconds if the sandbox API cannot authenticate)');
@@ -98,15 +131,20 @@ try {
   // and, with a `?? 0`, prints a confident "0 sandboxes" whether or not the call
   // authenticated. That is exactly how this script leaked a running sandbox on its
   // first dry run: a probe that cannot fail passed, and creation proceeded.
-  const listed = await Sandbox.list({ ...auth });
-  const rows = listed?.json?.sandboxes;
-  if (!Array.isArray(rows)) {
-    log(`\n  WARNING — Sandbox.list() returned no sandboxes array (keys: ${listed && Object.keys(listed)}).`);
-    log('  Treating auth as UNPROVEN and stopping rather than creating anything.');
+  // Every page (a bare list returns 20 rows), and the API's own clock: the
+  // `Date` header of this call is the run start the stray check compares
+  // `createdAt` against. It is read before anything is created.
+  const listing = await listAllSandboxes(auth);
+  if (listing.serverNowMs == null) {
+    log('\n  WARNING — the sandbox API sent no Date header, so this run could not claim a');
+    log('  sandbox by signature. Stopping rather than creating anything.');
     process.exit(1);
   }
-  readout('Sandbox.list()', `OK via ${mechanism} — ${rows.length} sandbox(es) visible, ` +
-    `${rows.filter((r) => r.status === 'running').length} running`, 'Sandbox.list({ ...auth }) -> .json.sandboxes');
+  runStartMs = listing.serverNowMs;
+  const rows = listing.rows;
+  readout('Sandbox.list(), all pages', `OK via ${mechanism} — ${rows.length} sandbox(es) in scope, ` +
+    `${rows.filter((r) => r.status === 'running').length} running`, 'listAllSandboxes(auth)  [Sandbox.list chained on pagination.next]');
+  readout('run start (API clock)', new Date(runStartMs).toISOString(), "HTTP Date header of that listing");
 } catch (e) {
   log(`\n  FAIL — the sandbox API did not authenticate: ${e?.name}: ${e?.message}`);
   log('  Nothing was created and nothing was billed. Supply the auth triple');
@@ -114,7 +152,7 @@ try {
   process.exit(1);
 }
 
-const jsonl = openResults(RUN_ID);
+jsonl = openResults(RUN_ID);
 log(`\n  results -> ${jsonl}`);
 
 // Everything below runs inside try/finally: a throw anywhere in the suite must
@@ -122,13 +160,33 @@ log(`\n  results -> ${jsonl}`);
 // booted one, and it stayed running until it was found by hand.
 try {
 
+// ----------------------------------------------- rehearsal-only switches ---
+// POC_SIMULATE drives the two shapes the stray check must tell apart. Inert
+// unless set; never set it on a record run.
+//   unrecorded — create a VM through the SAME createFresh a real run uses,
+//                and deliberately do NOT record its id: a create whose
+//                bookkeeping never happened. Must be claimed by signature.
+//   foreign    — create two VMs that are NOT this spike's shape, each
+//                differing by one criterion: python3.13 (production-shaped),
+//                and node22 with no port 3000. Must be left running and
+//                reported. Both carry a 10-minute timeout, so they expire.
+if (process.env.POC_SIMULATE === 'unrecorded') {
+  const leaked = await createFresh(randomUUID());
+  log(`\n  SIMULATION: created ${leaked.sandboxId} via createFresh and did NOT record its id`);
+} else if (process.env.POC_SIMULATE === 'foreign') {
+  const py = await Sandbox.create({ runtime: 'python3.13', timeout: 600_000, resources: { vcpus: 1 }, ...auth });
+  const noPort = await Sandbox.create({ runtime: 'node22', timeout: 600_000, resources: { vcpus: 1 }, ...auth });
+  log(`\n  SIMULATION: created ${py.sandboxId} (python3.13, no ports) and ${noPort.sandboxId} (node22, no ports); neither recorded`);
+}
+
 // ------------------------------------------------------------- utilities ---
 /** Boot one sandbox from scratch, timing each leg. */
 async function provisionFresh() {
   const token = randomUUID();
   const t = {};
+  if (interrupted) throw new Error('interrupted by SIGINT before a fresh creation');
   const created = await elapsed(() => createFresh(token));
-  const sandbox = created.value; live.push(sandbox);
+  const sandbox = created.value; live.push(sandbox); recordedIds.add(sandbox.sandboxId);
   t.createMs = created.ms;
   const url = sandbox.domain(BRIDGE_PORT);
   t.writeBridgeMs = (await elapsed(() => writeBridge(sandbox))).ms;
@@ -148,8 +206,9 @@ async function provisionFresh() {
 async function provisionFromSnapshot(snapshotId) {
   const token = randomUUID();
   const t = {};
+  if (interrupted) throw new Error('interrupted by SIGINT before a create-from-snapshot');
   const created = await elapsed(() => createFromSnapshot(snapshotId, token));
-  const sandbox = created.value; live.push(sandbox);
+  const sandbox = created.value; live.push(sandbox); recordedIds.add(sandbox.sandboxId);
   t.createMs = created.ms;
   const url = sandbox.domain(BRIDGE_PORT);
   t.startMs = (await elapsed(() => startBridge(sandbox))).ms;
@@ -587,17 +646,33 @@ phase = 'complete';
 } catch (err) {
   failure = err;
 } finally {
+  await finalize();
+}
+
+// ---------------------------------------------------------------- finalize ---
+// One cleanup for every exit path — normal completion, a throw, and SIGINT.
+// Single-flight: a SIGINT that lands while the finally block is already
+// finalizing waits on the same promise instead of starting a second cleanup.
+// (`finalizing` is declared with the other state at the top: a `let` down here
+// would be in its temporal dead zone when the finally block above calls this.)
+function finalize() {
+  if (!finalizing) finalizing = finalizeOnce();
+  return finalizing;
+}
+
+async function finalizeOnce() {
   // ---------------------------------------------------------- teardown ---
   await teardown();
   // The snapshot is a billed artifact (per-GB-month) and nothing outside this
-  // run refers to it, so it goes with the VMs that used it.
+  // run refers to it, so it goes with the VMs that used it — on SIGINT too.
   if (snapshotRef) {
     try { await snapshotRef.delete(); summary.m1.snapshotDeleted = true; }
     catch (e) { summary.m1.snapshotDeleted = `FAILED: ${e?.message}`; }
   }
+  summary.runStartMs = runStartMs;
+  summary.recordedIds = [...recordedIds];
 
-  const sp = writeSummary(RUN_ID, summary);
-
+  const sp = jsonl ? writeSummary(RUN_ID, summary) : '(not written — the run stopped before step 0 finished)';
   // ------------------------------------------------- pasteable tail block ---
   section(failure ? 'KEY NUMBERS (run did NOT complete — see STOPPED AT below)' : 'KEY NUMBERS');
   const ms = (x) => (x == null ? 'n/a' : `${Math.round(x)} ms`);
@@ -651,45 +726,43 @@ phase = 'complete';
   log(`  summary:      ${sp}`);
 
   // ------------------------------------------------------- stray check ---
-  // Asserted against a LIVE read of the sandbox API, not against this
-  // process's own bookkeeping — bookkeeping cannot see a VM created before a
-  // throw. Three distinct outcomes; no two of them print the same line.
+  // A LIVE read of every page of the sandbox API, not this process's own
+  // bookkeeping. It claims only what this run can prove it created (recorded
+  // id, or the node22 + port 3000 + created-after-start signature) and stops
+  // only those. Anything else alive — production's notebook executor runs in
+  // this scope — is reported NOT OURS and left running, and does not turn
+  // "STRAYS: 0" into a leak line. The STRAYS line names what was found alive
+  // BEFORE the backstop acted, so a leak can never print as "STRAYS: 0".
   let strayLine;
-  const ALIVE_STATES = ['running', 'pending', 'stopping', 'snapshotting'];
-  const readAlive = async () => {
-    const listed = await Sandbox.list({ ...auth });
-    const rows = listed?.json?.sandboxes;
-    if (!Array.isArray(rows)) throw new Error(`no sandboxes array (keys: ${listed && Object.keys(listed)})`);
-    return rows.filter((r) => ALIVE_STATES.includes(r.status));
-  };
+  let notOursLine;
+  const sinceIso = runStartMs ? new Date(runStartMs).toISOString() : '<run start>';
   try {
-    // What was STILL ALIVE when the run ended, reported BEFORE the backstop
-    // touches anything, so the line names the condition and not the outcome of
-    // cleaning it up. A check that stops strays first and then counts prints
-    // "STRAYS: 0" on a run that leaked — the one reading it must never give.
-    const found = await readAlive();
-    if (!found.length) {
+    const { ours, notOurs } = await classifyAlive({ auth, recordedIds, runStartMs });
+    notOursLine = notOurs.length
+      ? `NOT OURS — left running: ${notOurs.length}  ${notOurs.map(describeNotOurs).join('  ')}`
+      : 'NOT OURS — left running: 0';
+    if (!ours.length) {
       strayLine = 'STRAYS: 0';
     } else {
-      const ids = found.map((r) => r.id).join(' ');
-      for (const a of found) {
-        try { const sb = await Sandbox.get({ sandboxId: a.id }); await sb.stop({ blocking: true }); } catch { /* counted below */ }
-      }
-      const remaining = await readAlive();
+      const label = ours.map((o) => `${o.row.id}[${o.by}]`).join(' ');
+      const remaining = await stopClaimed(ours, auth);
       strayLine = remaining.length
-        ? `STRAYS: ${found.length} ${ids} (backstop FAILED; ${remaining.length} still alive: ${remaining.map((r) => r.id).join(' ')})`
-        : `STRAYS: ${found.length} ${ids} (backstop stopped all ${found.length}; 0 still alive)`;
+        ? `STRAYS: ${ours.length} ${label} (backstop FAILED; ${remaining.length} still alive: ${remaining.map((o) => o.row.id).join(' ')})`
+        : `STRAYS: ${ours.length} ${label} (backstop stopped all ${ours.length}; 0 still alive)`;
     }
   } catch (e) {
-    strayLine = `STRAYS: UNKNOWN — could not read the sandbox list (${e?.name}: ${e?.message}); run scripts/poc-warm-vm/stop-strays.mjs --stop`;
+    notOursLine = 'NOT OURS — left running: UNKNOWN (the listing could not be read)';
+    strayLine = `STRAYS: UNKNOWN — could not read the sandbox list (${e?.name}: ${e?.message}); run: node scripts/poc-warm-vm/stop-strays.mjs --since ${sinceIso}`;
   }
 
   section(failure ? 'INCOMPLETE' : 'DONE');
   if (failure) {
     log(`  STOPPED AT: ${phase}`);
     log(`  REASON:     ${failure?.name}: ${failure?.message}`);
-    log('  Every VM this run created was still torn down, and the stray check below is live.');
+    log('  This run\u2019s VMs were still torn down, and the stray check below is live.');
   }
+  log(`  run start (API clock): ${sinceIso}   recorded ids: ${recordedIds.size}`);
+  log(`  ${notOursLine}`);
   log(`  ${strayLine}`);
   if (failure || strayLine !== 'STRAYS: 0') process.exitCode = 1;
 }

@@ -128,3 +128,127 @@ export async function waitForReady(baseUrl, token, timeoutMs = 90_000) {
 }
 
 export { mcpEndpoint };
+
+// ------------------------------------------------------------------------
+// WHICH ALIVE SANDBOXES ARE OURS — one definition, used by run-poc.mjs's
+// end-of-run stray check and by stop-strays.mjs.
+//
+// This project scope is SHARED with production: the reference site's notebook
+// executor creates python3.13 sandboxes here for visitors' runs (one was
+// observed alive-then-stopped in the scope during this spike). A cleanup that
+// stops "every alive sandbox" can stop a visitor's notebook mid-execution. So
+// nothing is stopped by status alone. A sandbox is claimed only when it is
+//   - `recorded`:  its id was recorded by this run at creation, or
+//   - `named`:     an operator passed its id explicitly, or
+//   - `signature`: runtime node22 AND a route on port 3000 AND created at or
+//                  after the run's start (server clock) — the shape of a VM
+//                  this spike creates whose id bookkeeping never saw, e.g. a
+//                  create whose response was lost to a throw.
+// Everything else alive is reported as NOT OURS and left running.
+// ------------------------------------------------------------------------
+
+export const OUR_SIGNATURE = { runtime: 'node22', port: BRIDGE_PORT };
+export const ALIVE_STATES = ['running', 'pending', 'stopping', 'snapshotting'];
+
+/**
+ * The run start is read from the sandbox API's own HTTP `Date` header, so it
+ * is compared against `createdAt` on the SAME side of the wire. That header
+ * has one-second resolution; the cushion absorbs it plus any drift between
+ * the API edge and the control plane that stamps `createdAt`. Widening the
+ * window backwards by 2 s can only admit a sandbox that ALSO matches the rest
+ * of the signature — i.e. another run of this spike.
+ */
+const CLOCK_CUSHION_MS = 2000;
+
+/**
+ * Every sandbox in the scope, across ALL pages.
+ *
+ * Measured 2026-09-17: a bare `Sandbox.list()` returns 20 rows while the scope
+ * held 37. A stray check that reads one page cannot see an alive sandbox on
+ * page two and prints "STRAYS: 0" over it. Pages chain by passing
+ * `pagination.next` back as `until`; checked against a single limit-100 read
+ * (37 rows, 0 missing, 0 extra).
+ */
+export async function listAllSandboxes(auth = {}) {
+  const byId = new Map();
+  let until;
+  let serverNowMs = null;
+  for (let page = 0; ; page++) {
+    if (page >= 200) throw new Error('sandbox listing did not terminate within 200 pages — refusing to report a partial list');
+    const r = await Sandbox.list({ ...auth, limit: 100, ...(until != null ? { until } : {}) });
+    if (serverNowMs == null) {
+      const date = r?.response?.headers?.get('date');
+      serverNowMs = date ? Date.parse(date) : null;
+    }
+    const rows = r?.json?.sandboxes;
+    if (!Array.isArray(rows)) throw new Error(`no sandboxes array in the listing (keys: ${r && Object.keys(r)})`);
+    for (const row of rows) byId.set(row.id, row);
+    const next = r?.json?.pagination?.next;
+    if (next == null || rows.length === 0) break;
+    until = next;
+  }
+  return { rows: [...byId.values()], serverNowMs };
+}
+
+/**
+ * Split the scope's ALIVE sandboxes into ours and not-ours.
+ * Returns { ours: [{row, by}], notOurs: [{row, why}], namedNotAlive: [{id, status}] }.
+ */
+export async function classifyAlive({ auth = {}, recordedIds = new Set(), explicitIds = new Set(), runStartMs = null }) {
+  const { rows } = await listAllSandboxes(auth);
+  const alive = rows.filter((r) => ALIVE_STATES.includes(r.status));
+  const ours = [];
+  const notOurs = [];
+  for (const row of alive) {
+    if (recordedIds.has(row.id)) { ours.push({ row, by: 'recorded' }); continue; }
+    if (explicitIds.has(row.id)) { ours.push({ row, by: 'named' }); continue; }
+    const why = [];
+    if (runStartMs == null) {
+      why.push('no start time, so no signature match is possible');
+    } else {
+      if (row.runtime !== OUR_SIGNATURE.runtime) why.push(`runtime ${row.runtime}, not ${OUR_SIGNATURE.runtime}`);
+      if (row.createdAt < runStartMs - CLOCK_CUSHION_MS) {
+        why.push(`created ${new Date(row.createdAt).toISOString()}, before start ${new Date(runStartMs).toISOString()}`);
+      }
+      // Routes are one extra read per sandbox, so they are fetched only when
+      // the two cheap criteria already match.
+      if (!why.length) {
+        try {
+          const sb = await Sandbox.get({ sandboxId: row.id, ...auth });
+          if (!(sb.routes || []).some((rt) => rt.port === OUR_SIGNATURE.port)) {
+            why.push(`no route on port ${OUR_SIGNATURE.port}`);
+          }
+        } catch (e) {
+          why.push(`routes unreadable (${e?.message}) — not provably ours`);
+        }
+      }
+    }
+    if (why.length) notOurs.push({ row, why: why.join('; ') });
+    else ours.push({ row, by: 'signature' });
+  }
+  const aliveIds = new Set(alive.map((r) => r.id));
+  const statusById = new Map(rows.map((r) => [r.id, r.status]));
+  const namedNotAlive = [...explicitIds].filter((id) => !aliveIds.has(id))
+    .map((id) => ({ id, status: statusById.get(id) ?? 'not found in this scope' }));
+  return { ours, notOurs, namedNotAlive };
+}
+
+/** Stop the claimed sandboxes (blocking), then re-read. Returns the claimed ones still alive. */
+export async function stopClaimed(ours, auth = {}) {
+  for (const o of ours) {
+    try {
+      const sb = await Sandbox.get({ sandboxId: o.row.id, ...auth });
+      await sb.stop({ blocking: true });
+    } catch (e) {
+      o.stopError = e?.message;
+    }
+  }
+  const { rows } = await listAllSandboxes(auth);
+  const stillAlive = new Set(rows.filter((r) => ALIVE_STATES.includes(r.status)).map((r) => r.id));
+  return ours.filter((o) => stillAlive.has(o.row.id));
+}
+
+/** One-line description of a not-ours sandbox. */
+export function describeNotOurs(n) {
+  return `${n.row.id} (${n.why})`;
+}

@@ -1,65 +1,112 @@
 #!/usr/bin/env node
 /**
- * POC MCP-WARM-VM — backstop: stop every sandbox that is still alive.
+ * POC MCP-WARM-VM — backstop: find, and optionally stop, sandboxes THIS SPIKE
+ * left alive.
  *
- * Exists because this spike leaked one. A sandbox left running bills memory
- * per GB-hour until its timeout expires, and the SDK's own listing is easy to
- * misread: `Sandbox.list()` returns a Parsed WRAPPER, so the rows are at
- * `.json.sandboxes` and a reader that reaches for `.sandboxes` gets undefined
- * and reports "0 running" forever.
+ * THIS PROJECT SCOPE IS SHARED WITH PRODUCTION. The reference site's notebook
+ * executor creates python3.13 sandboxes here for visitors' runs, so this
+ * script never stops anything by status alone — an earlier version did, and
+ * could have stopped a visitor's notebook mid-execution. A sandbox is stopped
+ * only when it is claimed by the rule in sandbox-ops.mjs (classifyAlive):
+ *   - named explicitly with --id, or
+ *   - matching this spike's signature — runtime node22, a route on port 3000,
+ *     created at or after --since.
+ * Every other alive sandbox is reported "NOT OURS — left running".
  *
- * Read-only unless something is actually alive. Run:
- *   node scripts/poc-warm-vm/stop-strays.mjs             # report only
- *   node scripts/poc-warm-vm/stop-strays.mjs --stop      # report, then stop
- *   node scripts/poc-warm-vm/stop-strays.mjs --snapshots # also list snapshots
+ * The listing is read across ALL pages: a bare `Sandbox.list()` returns 20
+ * rows, and a check that reads one page cannot see an alive sandbox on page
+ * two.
  *
- * Snapshots are REPORTED, never deleted. This scope holds a long-lived
- * notebook-executor snapshot (`SANDBOX_SNAPSHOT_ID`, created 2026-05-22), and
- * a cleanup script that deletes "old" snapshots by age or size would take
- * production with it. Deleting one is a decision made by reading the id.
+ * Usage:
+ *   node scripts/poc-warm-vm/stop-strays.mjs                         report; claims nothing
+ *   node scripts/poc-warm-vm/stop-strays.mjs --since <ISO>           report which match the signature
+ *   node scripts/poc-warm-vm/stop-strays.mjs --stop --since <ISO>    stop signature matches only
+ *   node scripts/poc-warm-vm/stop-strays.mjs --stop --id sbx_… [--id sbx_…]   stop exactly these
+ *   add --snapshots to list snapshots (REPORT ONLY — never deleted here)
+ *
+ * `--stop` with neither --id nor --since is refused.
+ * run-poc.mjs prints its run start as "run start (API clock): <ISO>" — that
+ * value is the --since for a run.
  */
-import { Sandbox, Snapshot } from '@vercel/sandbox';
+import { Snapshot } from '@vercel/sandbox';
+import {
+  resolveAuth, listAllSandboxes, classifyAlive, stopClaimed, describeNotOurs,
+  ALIVE_STATES, OUR_SIGNATURE,
+} from './sandbox-ops.mjs';
 
-const ALIVE = ['running', 'pending', 'stopping', 'snapshotting'];
-const doStop = process.argv.includes('--stop');
-
-async function reportSnapshots() {
-  if (!process.argv.includes('--snapshots')) return;
-  const snaps = await Snapshot.list({});
-  const rows = snaps?.json?.snapshots;
-  if (!Array.isArray(rows)) { console.error('\ncould not read a snapshots array.'); return; }
-  const liveSnaps = rows.filter((r) => r.status === 'created');
-  console.log(`\n${liveSnaps.length} snapshot(s) not deleted (REPORT ONLY — delete by id, deliberately):`);
-  for (const r of liveSnaps) {
-    console.log(`  ${r.id}  ${(r.sizeBytes / 1e6).toFixed(0)}MB  created=${new Date(r.createdAt).toISOString()}  src=${r.sourceSandboxId}`);
+// ------------------------------------------------------------------ args ---
+const argv = process.argv.slice(2);
+const doStop = argv.includes('--stop');
+const wantSnapshots = argv.includes('--snapshots');
+const explicitIds = new Set();
+let sinceMs = null;
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i] === '--id') {
+    const id = argv[i + 1];
+    if (!id || !id.startsWith('sbx_')) { console.error(`--id needs a sandbox id (sbx_…), got "${id ?? ''}"`); process.exit(2); }
+    explicitIds.add(id); i++;
+  } else if (argv[i] === '--since') {
+    const raw = argv[i + 1];
+    const parsed = raw ? Date.parse(raw) : NaN;
+    if (Number.isNaN(parsed)) { console.error(`--since needs an ISO timestamp, got "${raw ?? ''}"`); process.exit(2); }
+    sinceMs = parsed; i++;
   }
-  console.log('  NOTE: one of these is the notebook executor\u2019s SANDBOX_SNAPSHOT_ID. Do not delete it.');
 }
 
-const listed = await Sandbox.list({});
-const rows = listed?.json?.sandboxes;
-if (!Array.isArray(rows)) {
-  console.error(`could not read a sandboxes array (top-level keys: ${listed && Object.keys(listed)})`);
-  process.exit(1);
+if (doStop && explicitIds.size === 0 && sinceMs == null) {
+  console.log('REFUSED: --stop needs --id <sbx_…> or --since <ISO>.');
+  console.log('This project scope also runs production’s notebook executor, so nothing is');
+  console.log('stopped by status alone. Nothing was stopped.');
+  process.exit(2);
 }
 
-console.log(`${rows.length} sandbox(es) known to this scope:`);
-for (const s of rows) {
-  console.log(`  ${s.id}  status=${s.status}  runtime=${s.runtime}  ${s.vcpus}vCPU/${s.memory}MB  created=${new Date(s.createdAt).toISOString()}`);
-}
+const auth = resolveAuth();
 
-const alive = rows.filter((s) => ALIVE.includes(s.status));
-console.log(`\n${alive.length} still alive.`);
-if (!alive.length) { await reportSnapshots(); process.exit(0); }
+// --------------------------------------------------------------- report ---
+const { rows } = await listAllSandboxes(auth);
+const alive = rows.filter((r) => ALIVE_STATES.includes(r.status));
+console.log(`${rows.length} sandbox(es) in scope (all pages); ${alive.length} alive.`);
+console.log(`signature: runtime ${OUR_SIGNATURE.runtime} + route on port ${OUR_SIGNATURE.port} + created at/after ` +
+  `${sinceMs == null ? '(no --since given)' : new Date(sinceMs).toISOString()}` +
+  `${explicitIds.size ? `; named ids: ${[...explicitIds].join(' ')}` : ''}`);
+
+const { ours, notOurs, namedNotAlive } = await classifyAlive({ auth, explicitIds, runStartMs: sinceMs });
+
+for (const o of ours) {
+  console.log(`  CLAIMED [${o.by}]: ${o.row.id}  status=${o.row.status}  runtime=${o.row.runtime}  created=${new Date(o.row.createdAt).toISOString()}`);
+}
+for (const n of notOurs) console.log(`  NOT OURS — left running: ${describeNotOurs(n)}`);
+for (const n of namedNotAlive) console.log(`  named but not alive: ${n.id} (${n.status})`);
+
+// ----------------------------------------------------------------- stop ---
 if (!doStop) {
-  console.log('Re-run with --stop to stop them.');
-  await reportSnapshots();
-  process.exit(0);
-}
-for (const s of alive) {
-  const sb = await Sandbox.get({ sandboxId: s.id });
-  await sb.stop({ blocking: true });
-  console.log(`  STOPPED ${s.id}  activeCpuUsageMs=${sb.activeCpuUsageMs}  networkTransfer=${JSON.stringify(sb.networkTransfer)}`);
+  console.log(`\n${ours.length} claimed, ${notOurs.length} not ours. Report only${ours.length ? ' — add --stop to stop the claimed ones' : ''}.`);
+} else if (!ours.length) {
+  console.log(`\nSTOPPED: 0 (nothing claimed). NOT OURS left running: ${notOurs.length}.`);
+} else {
+  const remaining = await stopClaimed(ours, auth);
+  const stopped = ours.filter((o) => !remaining.includes(o));
+  console.log(`\nSTOPPED: ${stopped.length} ${stopped.map((o) => o.row.id).join(' ')}`.trimEnd());
+  if (remaining.length) {
+    console.log(`STOP FAILED: ${remaining.length} ${remaining.map((o) => `${o.row.id}${o.stopError ? ` (${o.stopError})` : ''}`).join(' ')}`);
+    process.exitCode = 1;
+  }
+  console.log(`NOT OURS left running: ${notOurs.length}.`);
 }
 
-await reportSnapshots();
+// ------------------------------------------------------------ snapshots ---
+if (wantSnapshots) {
+  const snaps = await Snapshot.list({ ...auth, limit: 100 });
+  const snapRows = snaps?.json?.snapshots;
+  if (!Array.isArray(snapRows)) {
+    console.error('\ncould not read a snapshots array.');
+  } else {
+    const kept = snapRows.filter((r) => r.status === 'created');
+    console.log(`\n${kept.length} snapshot(s) not deleted (REPORT ONLY — delete by id, deliberately):`);
+    for (const r of kept) {
+      console.log(`  ${r.id}  ${(r.sizeBytes / 1e6).toFixed(0)}MB  created=${new Date(r.createdAt).toISOString()}  src=${r.sourceSandboxId}`);
+    }
+    console.log('  NOTE: the notebook executor’s SANDBOX_SNAPSHOT_ID lives in this scope. Do not delete it.');
+    if (snaps?.json?.pagination?.next != null) console.log('  (more snapshots exist beyond the first 100 — not listed)');
+  }
+}
