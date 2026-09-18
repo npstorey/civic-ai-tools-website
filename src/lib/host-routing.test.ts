@@ -37,8 +37,10 @@ import {
   APP_PRIVATE_PATHS,
   APP_ROOT_ACTION,
   CANONICALIZATION_EXEMPT_PREFIXES,
+  CANONICALIZATION_EXEMPT_PATHS,
   MARKETING_PATHS,
 } from './host-routing.ts';
+import { readFileSync } from 'node:fs';
 
 // --- Fixtures ----------------------------------------------------------------
 
@@ -883,13 +885,64 @@ test('canonicalize: the CORS-sensitive families are exempt on every host spellin
 test('the exemption list mirrors the proxy matcher exclusions', () => {
   // If this drifts, #263 can come back through the other file. The matcher
   // in src/proxy.ts excludes exactly: api/, _next/, .well-known/,
-  // favicon.ico, robots.txt.
+  // favicon.ico, robots.txt, health$.
+  //
+  // BOTH constants are asserted whole. Before #443 only the prefix list
+  // was, which meant a path could be added to the exact list without any
+  // test noticing — and #443 adds one.
   assert.deepEqual([...CANONICALIZATION_EXEMPT_PREFIXES], ['/api', '/_next', '/.well-known']);
-  for (const p of ['/api', '/api/x', '/_next/x', '/.well-known/x', '/favicon.ico', '/robots.txt']) {
+  assert.deepEqual(
+    [...CANONICALIZATION_EXEMPT_PATHS],
+    ['/favicon.ico', '/robots.txt', '/health'],
+    '/health is the root-level liveness probe (#443). It belongs in the EXACT list, not ' +
+      'under a prefix: the matcher excludes it as `health$`, and a prefix here would exempt ' +
+      '/health/x from canonicalization while the matcher still sent it through the proxy.',
+  );
+  for (const p of [
+    '/api',
+    '/api/x',
+    '/api/health',
+    '/_next/x',
+    '/.well-known/x',
+    '/favicon.ico',
+    '/robots.txt',
+    '/health',
+  ]) {
     assert.equal(isCanonicalizationExempt(p), true, p);
   }
   // Prefix-collision guards: these are pages, not exempt families.
-  for (const p of ['/apiary', '/about', '/', '/robots.txt.bak', '/_nextish']) {
+  for (const p of [
+    '/apiary',
+    '/about',
+    '/',
+    '/robots.txt.bak',
+    '/_nextish',
+    '/healthcare',
+    '/health/x',
+  ]) {
+    assert.equal(isCanonicalizationExempt(p), false, p);
+  }
+});
+
+test('the health exemption is anchored the same way in both files', () => {
+  // The duplication between this module and src/proxy.ts is only worth
+  // what the two halves AGREEING is worth, and #443's entry is the first
+  // one whose two halves could disagree about their extent. So this reads
+  // the matcher rather than restating it: /health is excluded, and the
+  // paths that merely start with those letters are not.
+  const proxySource = readFileSync(new URL('../proxy.ts', import.meta.url), 'utf8');
+  const matcher = proxySource.match(/matcher:\s*\['([^']+)'\]/);
+  assert.notEqual(matcher, null, 'src/proxy.ts declares no single-entry matcher this test can read');
+  const reaches = (p: string) => new RegExp(`^${matcher![1]}$`).test(p);
+
+  assert.equal(reaches('/health'), false, '/health must not reach the proxy');
+  for (const p of ['/healthcare', '/health/x']) {
+    assert.equal(
+      reaches(p),
+      true,
+      `${p} must still reach the proxy — the matcher's health exclusion is anchored, and ` +
+        'this module states the same exemption as an exact path so that the two agree',
+    );
     assert.equal(isCanonicalizationExempt(p), false, p);
   }
 });

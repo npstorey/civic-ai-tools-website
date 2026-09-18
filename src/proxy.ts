@@ -101,6 +101,7 @@ export const config = {
    * - /_next/*         — build assets, image optimizer, RSC payloads
    * - /.well-known/*   — the trust registry must resolve on every host
    * - favicon.ico, robots.txt
+   * - /health          — the root-level liveness probe (#443)
    *
    * Public-folder files that still match (e.g. /bpmn/*, /talks/*, root
    * SVGs) fall through decideRoute unclassified and are served unchanged —
@@ -117,6 +118,15 @@ export const config = {
    * Note the exclusions are prefix-with-slash: bare `/api` and bare
    * `/.well-known` DO reach the proxy. Neither names a route; both
    * classify as unclassified and serve, so the behavior is unchanged.
+   *
+   * `health$` is ANCHORED, unlike every other entry: `/health` is one
+   * address with no children, so the exclusion is the exact path and
+   * `/healthcare` or `/health/x` would still reach the proxy. That is
+   * what lets `host-routing.ts` state the same exemption as an EXACT
+   * path (`CANONICALIZATION_EXEMPT_PATHS`) rather than a prefix — the
+   * two halves of the duplication describe the same set, which is the
+   * only way the duplication is worth having. Its twin `/api/health`
+   * needs no entry; `api/` already covers it.
    */
-  matcher: ['/((?!api/|_next/|\\.well-known/|favicon\\.ico|robots\\.txt).*)'],
+  matcher: ['/((?!api/|_next/|\\.well-known/|favicon\\.ico|robots\\.txt|health$).*)'],
 };

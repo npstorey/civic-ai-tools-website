@@ -413,6 +413,15 @@ export function resolveHostRole(
  * documented authority for what happens to a request. Encoding the
  * exemption in both places means a future edit to the matcher cannot
  * silently reintroduce the defect.
+ *
+ * `/health` (#443) joins the EXACT list below rather than this one, and
+ * the matcher's exclusion for it is anchored (`health$`) to match. The
+ * duplication above is only worth what its two halves agreeing is worth:
+ * a `/health` PREFIX here would exempt `/health/anything` from
+ * canonicalization while the anchored matcher still sent it through the
+ * proxy, which is the drift this pair exists to prevent. There is one
+ * health address at the root, it has no children, and both files say so
+ * the same way.
  */
 export const CANONICALIZATION_EXEMPT_PREFIXES = [
   '/api',
@@ -420,8 +429,21 @@ export const CANONICALIZATION_EXEMPT_PREFIXES = [
   '/.well-known',
 ] as const;
 
-/** Exact paths that are never canonicalized (see the prefixes above). */
-export const CANONICALIZATION_EXEMPT_PATHS = ['/favicon.ico', '/robots.txt'] as const;
+/**
+ * Exact paths that are never canonicalized (see the prefixes above).
+ *
+ * `/health` is the root-level liveness probe address (#443). It is here,
+ * and not under a prefix, because a deployment platform probes one fixed
+ * path: a probe follows no redirect, so on a non-canonical host spelling
+ * an unexempted `/health` would answer 307 and the platform would read a
+ * healthy instance as down. Its twin at `/api/health` needs no entry — it
+ * inherits the `/api` prefix above.
+ */
+export const CANONICALIZATION_EXEMPT_PATHS = [
+  '/favicon.ico',
+  '/robots.txt',
+  '/health',
+] as const;
 
 /** True when `pathname` must serve on the host it was addressed on. Pure. */
 export function isCanonicalizationExempt(pathname: string): boolean {
