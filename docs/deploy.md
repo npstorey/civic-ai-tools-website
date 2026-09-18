@@ -395,6 +395,44 @@ territory: an HTTP runner that owns the runtime and exposes only
 that exists, the mount is the mechanism and this notice is the
 mitigation.
 
+### What the executor image pins, and who it runs as
+
+The executor image (`docker/executor/Dockerfile`, tag
+`civic-notebook-executor:0.2.0`) pins every package it installs, and the
+pins are single-sourced in the repository rather than written in the
+Dockerfile:
+
+| Table | Source | Contents |
+| --- | --- | --- |
+| Scientific stack | `src/lib/notebook-author/prompt.ts` (`PINNED_LIBRARIES`) | `pandas`, `requests`, `numpy`, `matplotlib` |
+| Notebook tooling | `src/lib/sandbox/driver.ts` (`EXECUTOR_TOOLING_PACKAGES`) | `jupyter`, `ipykernel`, `nbformat`, `nbconvert` |
+| Python runtime | `src/lib/notebook-author/prompt.ts` (`PYTHON_RUNTIME_VERSION`) | the `FROM python:` line |
+
+Both tables feed the container image, the managed-sandbox snapshot
+(`scripts/build-sandbox-snapshot.ts`) and the fresh-sandbox pip fallback,
+so the two executors install the same versions.
+`src/lib/sandbox/executor-pins.test.ts` asserts version equality against
+the Dockerfile — a name-only check would pass against no version at all.
+The tooling pins matter because an executed notebook's bytes come out of
+`nbformat` and `nbconvert` and go into a signed package: unpinned, two
+builds on different days can sign different bytes for the same inputs.
+Transitive dependencies (`jupyter-core`, `jupyter-client`, `nbclient`,
+`traitlets`) are resolved by pip at build time and are **not** pinned —
+byte-for-byte reproducibility across distant build dates needs a fully
+resolved lock, which this image does not yet carry.
+
+The image runs notebooks as the unprivileged user `notebook` (uid 10001)
+with `HOME=/home/notebook` and `WORKDIR=/tmp`; the driver stages the
+notebook under `/tmp`, which that user can write. matplotlib's font cache
+is warmed at build time **after** the `USER` switch, so the first run in a
+fresh container does not rebuild it — a cache built under root's home is
+not read by `notebook`, and the rebuild writes a font-manager log line
+into cell output, which is part of the signed bytes.
+
+This is the executor container. The `app` service still runs as root with
+the socket mount described above; that is a separate posture and the
+section above is its notice.
+
 ### Building the image without the docker CLI
 
 The runtime image carries a static `docker` binary at
@@ -504,7 +542,7 @@ use (and fails the preflight). What the defaults hide:
   prebuilt `civic-notebook-executor` image on the host's container
   runtime — which is what requires the socket mount discussed above.
   `EXECUTOR_CONTAINER_IMAGE` overrides the image tag (default
-  `civic-notebook-executor:0.1.0`).
+  `civic-notebook-executor:0.2.0`).
 
 ### The model seam
 

@@ -8,7 +8,8 @@
  *
  * Mechanics:
  *   1. Boot a fresh python3.13 sandbox.
- *   2. `pip install` pinned pandas/requests/numpy/matplotlib + jupyter.
+ *   2. `pip install` pinned pandas/requests/numpy/matplotlib + the pinned
+ *      notebook tooling (EXECUTOR_TOOLING_PACKAGES).
  *   3. `sandbox.snapshot()` — freezes the VM state; returns a snapshotId.
  *   4. Print the snapshotId so the operator can `vercel env add` it as
  *      `SANDBOX_SNAPSHOT_ID` (preview + production scopes).
@@ -31,7 +32,7 @@ import { Sandbox } from '@vercel/sandbox';
 // all derive from PINNED_LIBRARIES. Versions are chosen there so every pin
 // has a prebuilt CPython 3.13 wheel — no compiler needed in the sandbox image.
 import { PINNED_LIBRARIES } from '../src/lib/notebook-author/prompt.ts';
-import { EXECUTOR_TOOLING_PACKAGES } from '../src/lib/sandbox/driver.ts';
+import { executorToolingPipSpecs } from '../src/lib/sandbox/driver.ts';
 
 const SNAPSHOT_BUILD_TIMEOUT_MS = 600_000; // 10 minutes — pip install + freeze
 const SNAPSHOT_EXPIRATION_MS = 0;          // 0 = never expire (operator controls cadence)
@@ -48,7 +49,8 @@ async function main(): Promise<void> {
     const pipArgs = [
       'install', '--no-input',
       ...Object.entries(PINNED_LIBRARIES).map(([n, v]) => `${n}==${v}`),
-      ...EXECUTOR_TOOLING_PACKAGES,
+      // Pinned tooling (#450) — the same table the container image installs.
+      ...executorToolingPipSpecs(),
     ];
     // The python3.13 sandbox image expects the CA bundle at the Debian
     // path `/etc/ssl/certs/ca-certificates.crt`, but Amazon Linux 2023

@@ -332,7 +332,7 @@ export const ENV_SPEC = [
   // Relevant under the container driver, inert under the sandbox driver, and
   // fallback-backed under both (container.ts:47 → DEFAULT_CONTAINER_IMAGE), so
   // it carries no condition: it is never a miss and never a nag either way.
-  { name: 'EXECUTOR_CONTAINER_IMAGE', tier: 'optional', purpose: 'Executor image tag (EXECUTOR_DRIVER=container only; default civic-notebook-executor:0.1.0)', hasFallback: true },
+  { name: 'EXECUTOR_CONTAINER_IMAGE', tier: 'optional', purpose: 'Executor image tag (EXECUTOR_DRIVER=container only; default civic-notebook-executor:0.2.0)', hasFallback: true },
   // Passed into every executed notebook's env by buildNotebookEnv
   // (src/lib/sandbox/execute.ts), under BOTH executor drivers — read by the
   // generated notebook's own helper functions (fetch_socrata.py,

@@ -20,7 +20,7 @@
  */
 import type { Notebook } from '../notebook-author/cells.ts';
 import { PINNED_LIBRARIES, PYTHON_RUNTIME_VERSION } from '../notebook-author/prompt.ts';
-import { EXECUTOR_TOOLING_PACKAGES, NotebookExecutionError } from './driver.ts';
+import { executorToolingPipSpecs, NotebookExecutionError } from './driver.ts';
 import type { ExecutorSession, NotebookExecutorDriver } from './driver.ts';
 
 export { NotebookExecutionError } from './driver.ts';
@@ -121,7 +121,10 @@ async function ensureScientificStack(session: ExecutorSession): Promise<void> {
   const pipArgs = [
     'install', '--quiet', '--no-input',
     ...Object.entries(PINNED_LIBRARIES).map(([name, version]) => `${name}==${version}`),
-    ...EXECUTOR_TOOLING_PACKAGES,
+    // Tooling carries its versions too (#450): nbformat/nbconvert write the
+    // notebook bytes that go into a signed package, so a fresh sandbox must
+    // install the same versions the snapshot and the container image hold.
+    ...executorToolingPipSpecs(),
   ];
   const result = await session.runCommand({ cmd: 'pip', args: pipArgs, env: {} });
   if (result.exitCode !== 0) {

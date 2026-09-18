@@ -9,7 +9,7 @@
  *
  * Build the image once (and after any pinned-version change):
  *
- *   docker build -t civic-notebook-executor:0.1.0 docker/executor
+ *   docker build -t civic-notebook-executor:0.2.0 docker/executor
  *
  * `src/lib/sandbox/container.test.ts` asserts the Dockerfile's pins against
  * the single source (`src/lib/notebook-author/prompt.ts:PINNED_LIBRARIES`),
@@ -36,7 +36,7 @@ import type {
 } from './driver.ts';
 
 /** Default tag produced by `docker build -t … docker/executor`. */
-export const DEFAULT_CONTAINER_IMAGE = 'civic-notebook-executor:0.1.0';
+export const DEFAULT_CONTAINER_IMAGE = 'civic-notebook-executor:0.2.0';
 
 const ENV_CONTAINER_IMAGE = 'EXECUTOR_CONTAINER_IMAGE';
 
