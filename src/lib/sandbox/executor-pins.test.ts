@@ -81,8 +81,9 @@ test('the font cache is warmed AFTER the USER switch, as the user that runs', ()
     userLine < warmLine,
     'the font cache is warmed BEFORE the USER switch, so it is built under root\'s home and the ' +
       'running user rebuilds it on the first notebook. Measured against a decoy image in that ' +
-      'order, the rebuild wrote "INFO:matplotlib.font_manager:generated new fontManager" into the ' +
-      'executed notebook\'s cell stderr — signed bytes',
+      'order at matplotlib 3.9.2, the rebuild logs "generated new fontManager" at INFO: at default ' +
+      'log levels that reaches nothing, and in a notebook that raises the log level (as the probe ' +
+      'cell did) it lands in cell stderr, which is part of the signed executed-notebook bytes',
   );
 });
 
