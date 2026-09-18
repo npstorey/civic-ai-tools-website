@@ -348,6 +348,19 @@ services:
       # (civic-ai-tools#155 P1b) — fed a dead on-disk-read/HTTP-fetch fallback
       # in loadTrustRegistry that P1 measured as unreachable on every real
       # call path; the owner ruled to retire rather than repair.
+      # The two external services the signing leg contacts (#445): an RFC 3161
+      # timestamp authority and a transparency log. Bare pass-throughs, and
+      # UNSET IS THE REFERENCE CONFIGURATION — each one absent means the
+      # request goes to exactly the address it went to before these variables
+      # existed (freetsa.org and rekor.sigstore.dev; src/lib/evidence/signing.ts
+      # holds the defaults and signing-addresses.test.ts pins them byte for
+      # byte). Set them when this deployment's egress allowlist cannot reach
+      # those two hosts, or when it runs its own services. Neither is secret;
+      # neither is in the PUBLISHER_* identity family, so neither has a
+      # prior-era twin to list beside it. docs/deploy.md lists every outbound
+      # destination signing needs, for an allowlist request.
+      TIMESTAMP_AUTHORITY_URL:
+      TRANSPARENCY_LOG_URL:
       # Chrome branding and content sources. Also passed as build args above:
       # prerendered pages bake them, dynamic pages read them here.
       SITE_BRAND_NAME:

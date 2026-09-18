@@ -448,6 +448,29 @@ export const ENV_SPEC = [
   { name: 'PUBLISHER_PLATFORM_AGENT_ID', priorEraName: 'EVIDENCE_PLATFORM_AGENT_ID', tier: 'optional', purpose: 'PROV platform-agent id inside the signed provenance graph (derives from the publication host)', hasFallback: true },
   { name: 'PUBLISHER_PLATFORM_AGENT_URL', priorEraName: 'EVIDENCE_PLATFORM_AGENT_URL', tier: 'optional', purpose: 'PROV platform-agent URL (defaults to PUBLISHER_SITE_ORIGIN)', hasFallback: true },
 
+  // --- Signing-service addresses (#445). The two external services the
+  //     signing leg contacts: an RFC 3161 timestamp authority and a
+  //     transparency log. Optional with a coded fallback, and the fallback is
+  //     the whole point — unset, each request goes to exactly the address it
+  //     went to before these variables existed (src/lib/evidence/signing.ts,
+  //     guarded byte-for-byte by signing-addresses.test.ts). Set them when an
+  //     egress allowlist cannot reach the defaults, or when this deployment
+  //     runs its own. Neither is secret, and neither reaches signed bytes:
+  //     both services are handed a hash that is already computed and their
+  //     answers are stored beside the package.
+  //
+  //     NO `priorEraName`. These names are new in #445, so there is nothing to
+  //     accept a prior-era spelling FOR, and they are deliberately outside the
+  //     `PUBLISHER_*` family: that prefix is the Appendix J identity census of
+  //     thirteen, pinned name-for-name against this list in both directions by
+  //     src/lib/publisher-env.test.ts. A fourteenth `PUBLISHER_*` row here
+  //     fails that pin (measured), and passing it would mean inventing an
+  //     `EVIDENCE_*` twin. An external service endpoint is not this
+  //     publisher's identity; these follow SOCRATA_MCP_URL and
+  //     MODEL_API_BASE_URL instead. ---
+  { name: 'TIMESTAMP_AUTHORITY_URL', tier: 'optional', purpose: 'RFC 3161 timestamp authority endpoint for signed records (default: https://freetsa.org/tsr; a failed or unreachable authority degrades to an untimestamped record, never a failed publish)', hasFallback: true },
+  { name: 'TRANSPARENCY_LOG_URL', tier: 'optional', purpose: 'Transparency-log entries endpoint for signed records (default: https://rekor.sigstore.dev/api/v1/log/entries; a failed or unreachable log degrades to a record with no log entry, never a failed publish)', hasFallback: true },
+
   // --- Instance branding (#217: chrome-only theming seam; src/lib/brand-config.ts).
   //     All optional. Unset names nobody (#259): the name, tagline and
   //     attribution each render nothing rather than the reference
