@@ -36,6 +36,12 @@ import {
   type RekorInclusionProof,
   type RekorInclusionResult,
 } from '@typedstandards/verify-core';
+// The log address is this instance's configuration, not a literal (#445): the
+// single seam is `src/lib/evidence/signing.ts`, which the app publishes
+// through, so a deployment that runs its own transparency log backfills from
+// the same log it published to. Unset, this composes to exactly the address
+// this script used before.
+import { transparencyLogEntryUrl } from '../src/lib/evidence/signing';
 
 const APPLY = process.argv.includes('--apply');
 
@@ -59,7 +65,7 @@ function isRealProof(proof: unknown): proof is RekorInclusionProof {
 }
 
 async function fetchRekorEntry(entryId: string): Promise<RekorEntry | null> {
-  const res = await fetch(`https://rekor.sigstore.dev/api/v1/log/entries/${entryId}`, {
+  const res = await fetch(transparencyLogEntryUrl(entryId), {
     signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) return null;

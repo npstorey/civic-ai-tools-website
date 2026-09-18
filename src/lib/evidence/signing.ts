@@ -34,7 +34,12 @@ import { getEvidenceSignerIdentity } from '../site-config.ts';
 // settlement: `PUBLISHER_SIGNING_KEY` / `PUBLISHER_KEY_ID` canonically, with
 // the prior-era `EVIDENCE_*` spellings still honored (Appendix J; see
 // `src/lib/publisher-env.ts` for the precedence rule and the warning).
-import { canonicalEnvName, priorEraEnvName, readPublisherEnv } from '../publisher-env.ts';
+import {
+  canonicalEnvName,
+  priorEraEnvName,
+  readPublisherEnv,
+  type EnvRecord,
+} from '../publisher-env.ts';
 import { isSigningKeyIdConfigured } from './unsigned-tier.ts';
 
 export { rekorHashForPackage };
@@ -152,8 +157,110 @@ export function signPackage(packageHash: string): SignResult | null {
   return signEnvelopeHash(packageHash, privKeyB64, getActiveKeyId());
 }
 
+// --- THE TWO SIGNING-SERVICE ADDRESSES (#445) --------------------------------
+//
+// Both are configuration with a default, not literals. An instance behind an
+// egress allowlist — or one running its own RFC 3161 authority, or its own
+// transparency log — points these at services it operates. An instance that
+// sets neither reaches exactly the two addresses this file reached before
+// #445, byte for byte. `signing-addresses.test.ts` asserts both halves: the
+// configured address is the one requested (over a real loopback stub, counted
+// at the stub), and the unconfigured pair equals the prior literals.
+//
+// NOT IN THE `PUBLISHER_*` FAMILY, deliberately. That prefix is not decoration:
+// it is the Appendix J census of thirteen publishing-IDENTITY variables, each
+// with an `EVIDENCE_*` prior-era twin that `readPublisherEnv` still honours,
+// and `src/lib/publisher-env.test.ts` pins that census against `ENV_SPEC` in
+// both directions — a fourteenth `PUBLISHER_*` row in `ENV_SPEC` fails it
+// ("the scripts-side census matches this one, name for name"), and passing it
+// would mean inventing an `EVIDENCE_*` spelling for a name that has no prior
+// era. These two name a SERVICE ENDPOINT rather than this publisher, so they
+// follow the file's other external-address variables — `SOCRATA_MCP_URL`,
+// `MODEL_API_BASE_URL` — and carry no family prefix.
+//
+// READ AT CALL TIME, not captured at module load: a resolver that froze the
+// value on first import would answer differently depending on when something
+// first imported this module, and nothing else here reads configuration that
+// way (`signPackage` reads its key per call for the same reason).
+//
+// EMPTY MEANS UNSET HERE, and that is the opposite of
+// `PUBLISHER_TRUST_REGISTRY_LEGACY_URL`, where the empty string is the
+// documented instruction to OMIT a signed field. There is no analogous meaning
+// for an address: an empty endpoint cannot be requested, so an empty or
+// whitespace-only value is treated as absent and the default answers — the
+// `isPresent` convention this repository already uses for endpoint-shaped
+// variables.
+//
+// A CONFIGURED ADDRESS IS USED VERBATIM AND NEVER SECOND-GUESSED. It is not
+// URL-validated, and a value that fetch cannot use takes the degrade-to-null
+// path documented on each function below. Falling back to the public default
+// on a value that looks wrong would be the one behaviour an egress-restricted
+// instance must never get: traffic to a host its operator deliberately did not
+// configure.
+
+/** Environment variable naming the RFC 3161 timestamp authority endpoint. */
+export const TIMESTAMP_AUTHORITY_ENV_NAME = 'TIMESTAMP_AUTHORITY_URL';
+
+/** Environment variable naming the transparency log's entries endpoint. */
+export const TRANSPARENCY_LOG_ENV_NAME = 'TRANSPARENCY_LOG_URL';
+
+/** The timestamp authority requested when `TIMESTAMP_AUTHORITY_URL` is unset. */
+export const DEFAULT_TIMESTAMP_AUTHORITY_URL = 'https://freetsa.org/tsr';
+
+/** The transparency log requested when `TRANSPARENCY_LOG_URL` is unset. */
+export const DEFAULT_TRANSPARENCY_LOG_URL = 'https://rekor.sigstore.dev/api/v1/log/entries';
+
+/** One address: the configured value when present, the default otherwise. */
+function configuredServiceUrl(name: string, fallback: string, env: EnvRecord): string {
+  const raw = env[name];
+  if (typeof raw !== 'string') return fallback;
+  const trimmed = raw.trim();
+  return trimmed === '' ? fallback : trimmed;
+}
+
 /**
- * Request an RFC 3161 timestamp from freetsa.org.
+ * The RFC 3161 timestamp authority this instance submits package hashes to.
+ * The full endpoint URL, POSTed to as `application/timestamp-query`.
+ */
+export function timestampAuthorityUrl(env: EnvRecord = process.env): string {
+  return configuredServiceUrl(
+    TIMESTAMP_AUTHORITY_ENV_NAME,
+    DEFAULT_TIMESTAMP_AUTHORITY_URL,
+    env,
+  );
+}
+
+/**
+ * The transparency log's ENTRIES endpoint — the collection this instance POSTs
+ * a proposed entry to, and the one an entry id is appended to when a single
+ * entry is read back (`scripts/backfill-rekor-entry-body.ts`). The whole URL,
+ * not a base: the Rekor default's `/api/v1/log/entries` path is part of the
+ * address a substitute has to answer, and a substitute may sit under any path.
+ */
+export function transparencyLogUrl(env: EnvRecord = process.env): string {
+  return configuredServiceUrl(TRANSPARENCY_LOG_ENV_NAME, DEFAULT_TRANSPARENCY_LOG_URL, env);
+}
+
+/**
+ * One entry of the configured transparency log, by id — the entries endpoint
+ * with the id appended, which is the address Rekor's API serves a single entry
+ * at and the only read this repository makes of the log
+ * (`scripts/backfill-rekor-entry-body.ts`).
+ *
+ * The id is interpolated raw, not percent-encoded, so that the default
+ * composition is byte-for-byte the literal that script used before #445; Rekor
+ * entry ids are hex. That operator tool is in this seam rather than beside it
+ * because it reaches the SAME service: an instance that runs its own log would
+ * otherwise have its backfill read entries from a log that never held them,
+ * and the default address would live in two places instead of one.
+ */
+export function transparencyLogEntryUrl(entryId: string, env: EnvRecord = process.env): string {
+  return `${transparencyLogUrl(env)}/${entryId}`;
+}
+
+/**
+ * Request an RFC 3161 timestamp from the configured timestamp authority
+ * (freetsa.org when `TIMESTAMP_AUTHORITY_URL` is unset).
  * Returns the base64-encoded timestamp token, or null on failure.
  * The ASN.1 DER `TimeStampReq` codec is produce-core's; the network
  * submission (and its best-effort degradation) stays app-side.
@@ -162,7 +269,7 @@ export async function getRfc3161Timestamp(packageHash: string): Promise<string |
   try {
     const tsReq = buildTimestampRequest(packageHash);
 
-    const response = await fetch('https://freetsa.org/tsr', {
+    const response = await fetch(timestampAuthorityUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/timestamp-query' },
       // Re-wrap so TS sees a Uint8Array backed by a plain ArrayBuffer (the
@@ -185,7 +292,8 @@ export async function getRfc3161Timestamp(packageHash: string): Promise<string |
 }
 
 /**
- * Publish package hash + signature to Sigstore Rekor transparency log.
+ * Publish package hash + signature to the configured transparency log
+ * (Sigstore Rekor when `TRANSPARENCY_LOG_URL` is unset).
  * Returns entry metadata, or null on failure.
  *
  * The `hashedrekord` v0.0.1 proposal body and the response parsing are
@@ -202,7 +310,7 @@ export async function publishToRekor(
   try {
     const body = buildRekorProposal(packageHash, signature, publicKeyDerB64);
 
-    const response = await fetch('https://rekor.sigstore.dev/api/v1/log/entries', {
+    const response = await fetch(transparencyLogUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

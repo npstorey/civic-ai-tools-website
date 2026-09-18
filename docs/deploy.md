@@ -751,7 +751,13 @@ rate-limit and token-budget tuning knobs
 replay and `/api/compare` callers pass a fixed 50,000, so setting this
 variable does not change what they feed the model (website#358)),
 `S3_REGION` / `S3_FORCE_PATH_STYLE` / `S3_PUBLIC_BASE_URL` (coded
-defaults described in the storage section), and analytics
+defaults described in the storage section),
+the two signing-service addresses (`TIMESTAMP_AUTHORITY_URL`,
+`TRANSPARENCY_LOG_URL` — unset, each request goes to the public service
+it has always gone to; see [Outbound destinations the signing leg
+needs](#outbound-destinations-the-signing-leg-needs) for both defaults,
+what they are for, and what substituting one does not buy you),
+and analytics
 (`NEXT_PUBLIC_GA_MEASUREMENT_ID`).
 
 **Retired:** `PUBLISHER_TRUST_REGISTRY_URL` (prior era:
@@ -1199,6 +1205,60 @@ Two facts worth restating from the deploy side:
 - `PUBLISHER_SIGNING_KEY` is the most sensitive value your instance
   holds. Keep it in your secret manager; never commit it, paste it into
   an agent session, or bake it into an image.
+
+### Outbound destinations the signing leg needs
+
+Everything in this table is what an operator hands to whoever runs their
+egress allowlist. Three destinations, two hosts, all HTTPS on 443. Each
+row names the variable that moves it, so an instance that cannot reach a
+default — or runs its own service — changes the address rather than
+opening a hole.
+
+| Destination (default) | Method | What reaches it | When | Variable |
+| --- | --- | --- | --- | --- |
+| `https://freetsa.org/tsr` | POST | An RFC 3161 `TimeStampReq` over the package hash — a hash, never package content | Every seal, publish, withdrawal, reinstatement, adversarial-eval attestation and attestation backfill | `TIMESTAMP_AUTHORITY_URL` |
+| `https://rekor.sigstore.dev/api/v1/log/entries` | POST | A `hashedrekord` proposal: the package hash, the signature over it, and the instance's **public** key | The same operations, when a signing key is configured | `TRANSPARENCY_LOG_URL` |
+| `https://rekor.sigstore.dev/api/v1/log/entries/{entryId}` | GET | An entry id, to read back an entry this instance already published | Only when an operator runs `scripts/backfill-rekor-entry-body.ts` by hand; never on a request path | `TRANSPARENCY_LOG_URL` (the id is appended to it) |
+
+**Blocking a destination degrades; it does not break.** Both calls are
+best-effort by construction and each catches everything and returns
+null: a blocked or slow timestamp authority yields a record published
+without a timestamp token, a blocked log yields a record published with
+no log entry. The publish itself still succeeds, and the failure is a
+server-side `console.warn`. Nothing here is a credential: what leaves
+the instance is a hash, a signature and a public key.
+
+**Unset is the reference configuration.** With both variables absent,
+each request goes to the address in the table, character for character —
+that is what [`src/lib/evidence/signing.ts`](../src/lib/evidence/signing.ts)
+holds as its defaults and what `signing-addresses.test.ts` pins. Setting
+one is a deliberate act; an empty value is read as unset.
+
+**Verification needs no allowlist entry of its own.** Reading a record
+back verifies stored bytes — the package, the signature, the timestamp
+token, the log entry body and its inclusion proof are all held by this
+instance — so the verify route contacts neither service. The one
+network call verification can make is to *your own* object store, to
+resolve a package stored by reference.
+
+**What pointing these at your own services does and does not do.** The
+app submits to whatever address you configure — that part is entirely
+under your control. Verification is not: the verifier in this codebase
+and in the browser client pins its trust anchors, the FreeTSA root and
+the Rekor log keys, as defaults that nothing overrides
+(`verifyRfc3161Timestamp(token, hash, anchors = FREETSA_ROOT_ANCHORS)`
+and `verifyRekorInclusion(body, proof, anchors = REKOR_LOG_ANCHORS)` in
+`@typedstandards/verify-core`; this app's verify route passes neither).
+So a token from a substitute authority is reported against the pinned
+root as `untrusted_root`, and a checkpoint from a substitute log as
+`checkpoint_unknown_anchor`. Both are **reported, not thrown** — the
+publish succeeds and the record is served — but the timestamp and
+inclusion signals read as unverified-against-the-pinned-anchors, not as
+verified. Configurable trust anchors are a specification question and
+are not implemented here. Today, substituting either service is for an
+instance that cannot reach the defaults, not a way to have a record
+verify against a service of your own.
+
 
 ## Object storage: configuration and rehearsal
 
