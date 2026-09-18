@@ -40,10 +40,15 @@
 // `postgres`, `minio` and `app` by service name, and those names belong in the
 // operator's own `NO_PROXY` (docs/deploy.md says so).
 //
-// WHAT IT DOES NOT REACH. A global fetch dispatcher governs `fetch`. It does
-// not govern `node:http(s)`, which is the transport `@aws-sdk/client-s3` uses,
-// so `BLOB_DRIVER=s3` needs its own arrangement — see
-// `proxyAwareRequestHandler` in `src/lib/storage/s3.ts`, which routes that
+// WHAT IT DOES NOT REACH. A global fetch dispatcher governs a `fetch` call
+// that names no dispatcher of its own. It does not govern a call that does:
+// `@vercel/sandbox` passes its own undici `Agent` on every API request, so the
+// vercel-sandbox executor's calls to the sandbox API are outside this module
+// (docs/deploy.md states it; scripts/outbound-proxy.test.mjs pins it). Nor
+// does it govern `node:http(s)`, which is the transport of the sign-in
+// library's provider calls (`openid-client`, also stated and pinned) and of
+// `@aws-sdk/client-s3`, so `BLOB_DRIVER=s3` needs its own arrangement — see
+// `proxyAwareTransport` in `src/lib/storage/s3.ts`, which routes that
 // driver through `fetch` (and therefore through this dispatcher) exactly when
 // a proxy is configured. `pg` (DB_DRIVER=node-postgres) opens a raw TCP socket
 // and is outside any HTTP proxy by nature; a Postgres reached through a proxy

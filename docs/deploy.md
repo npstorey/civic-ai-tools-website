@@ -802,7 +802,7 @@ the three egress-proxy variables (`HTTP_PROXY`, `HTTPS_PROXY`,
 `NO_PROXY` — unset, no dispatcher is installed and every request leaves
 by the path it always did; see [Outbound traffic through an egress
 proxy](#outbound-traffic-through-an-egress-proxy) for which outbound
-kinds honour them, which two cannot, and why loopback is always exempt),
+kinds honour them, which do not, and why loopback is always exempt),
 and analytics
 (`NEXT_PUBLIC_GA_MEASUREMENT_ID`).
 
@@ -1226,8 +1226,11 @@ grand total unchanged).
 ## Outbound traffic through an egress proxy
 
 On a network where outbound traffic must leave through a proxy, set the
-conventional three and the app honours them for every outbound call it
-makes. **Unset is the reference configuration:** with none of them set,
+conventional three. The app honours them for the outbound kinds the
+table below marks **yes**; the kinds it marks **no** leave by a
+transport these variables do not reach, and the paragraphs under the
+table say what each one needs instead. **Unset is the reference
+configuration:** with none of them set,
 no dispatcher is installed at all and every request leaves by the path
 and to the host it did before this existed.
 
@@ -1248,8 +1251,13 @@ set and `NO_PROXY` unset, a request goes straight to the origin —
 nothing, because that flag arrives in a later Node than this image
 carries. [`src/lib/outbound-proxy.ts`](../src/lib/outbound-proxy.ts)
 installs one `undici` dispatcher at server start, and
-`scripts/outbound-proxy.test.mjs` drives a request of each kind below
-through a loopback proxy and reads it back there.
+`scripts/outbound-proxy.test.mjs` drives a request through a loopback
+proxy and reads it back there for the signing services, the model
+endpoint, the MCP servers, the S3 object store, verification's blob read
+and the rate-limit counter. The other "yes" rows call the same global
+`fetch` and are not driven separately. Of the "no" rows, the sign-in and
+managed-sandbox ones are pinned by transport, as the paragraphs under the
+table say.
 
 ### Loopback is always exempt
 
@@ -1263,7 +1271,9 @@ to remember it.
 compose stack the app reaches its object store at `http://minio:9000`
 and its database at `postgres:5432`. Those names belong in your
 `NO_PROXY`, or the object store's traffic is sent to the egress proxy.
-The database is unaffected either way (see the table's last row).
+The same holds for a rate-limit KV store reached by an in-network name
+(`KV_REST_API_URL`). The database is unaffected either way (see the
+table's `DB_DRIVER=node-postgres` row).
 
 ### What the proxy carries, and what it cannot
 
@@ -1276,12 +1286,14 @@ The database is unaffected either way (see the table's last row).
 | Signing services | `fetch` (`src/lib/evidence/signing.ts`) | yes |
 | Verification's read of a blob-referenced field | `fetch`, in `@typedstandards/verify-core` | yes |
 | Directory and roadmap content sources | `fetch` | yes |
+| Rate-limit counter, `KV_REST_API_URL` set | `fetch`, in `@vercel/kv`'s client `@upstash/redis` (`src/lib/rate-limit.ts`) | yes |
 | Sign-in provider (GitHub / OIDC) discovery, token and userinfo calls | `node:http(s)`, in the sign-in library's `openid-client` | **no** |
 | Database, `DB_DRIVER=neon-http` | `fetch` | yes |
 | Database, `DB_DRIVER=node-postgres` | a raw TCP socket (`pg`) | **no** |
+| Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox` | `fetch` with the SDK's own dispatcher, in `@vercel/sandbox`, to `https://vercel.com/api` (`src/lib/sandbox/vercel-sandbox.ts`) | **no** — see below |
 | Notebook execution, `EXECUTOR_DRIVER=container` | the container-runtime socket on the host | **no** — it is not network traffic |
 
-**The database and executor "no" rows are not gaps to close.** An HTTP
+**The database and container-executor "no" rows are not gaps to close.** An HTTP
 proxy variable governs HTTP; a Postgres connection is a TCP stream that
 no `HTTP_PROXY` describes, and the container executor talks to a socket
 on the host rather than to the network at all. Reaching a database
@@ -1299,6 +1311,27 @@ an egress proxy needs its provider's hosts on the network's allowlist
 (or a transparent proxy). `scripts/outbound-proxy.test.mjs` pins the
 measurement, so this paragraph goes red rather than stale if the
 library changes transport.
+
+**The managed-sandbox executor row is a real limitation too.** Under
+`EXECUTOR_DRIVER=vercel-sandbox`, the default, every call that creates,
+drives, reads from or stops a sandbox goes to `https://vercel.com/api`
+through `@vercel/sandbox`. That SDK calls `fetch` but passes its own
+`undici` agent as the request's dispatcher (built with no body timeout,
+which long command-output streams rely on), and an explicit dispatcher
+overrides the global one. So **on a proxied network, notebook execution
+under this driver will not reach the sandbox API through these
+variables.** An instance behind an egress proxy that executes notebooks
+on this driver needs `vercel.com` on the network's allowlist (or a
+transparent proxy). Separately, refreshing an expired OIDC token from a
+local Vercel CLI login (a development path) calls `https://api.vercel.com`
+and, when the login itself has expired, `https://vercel.com`, both
+through the global `fetch`, which does honour the variables. The
+notebook's own code runs inside the sandbox, on the provider's network,
+and its requests are not this instance's traffic. An instance that
+executes no notebooks makes none of these calls.
+`scripts/outbound-proxy.test.mjs` drives the installed SDK through its
+`fetch` seam, offline, and fails if a request stops carrying its own
+dispatcher or goes to a host this row does not name.
 
 **The S3 driver changes transport when a proxy is set.** The AWS SDK's
 default Node transport speaks `node:http(s)`, which a `fetch`

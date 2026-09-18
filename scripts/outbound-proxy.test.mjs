@@ -249,6 +249,17 @@ async function driveBlobRefRead(base) {
   );
 }
 
+/**
+ * Rate-limit counter: `checkRateLimit` reads the KV store when
+ * `KV_REST_API_URL` and `KV_REST_API_TOKEN` are both set. A failed read falls
+ * back to memory, so the call returns either way; only the proxy's count says
+ * where the request went.
+ */
+async function driveKv() {
+  const { checkRateLimit } = await fresh('src/lib/rate-limit.ts');
+  await swallow(() => checkRateLimit('proxy-probe', false));
+}
+
 const proxyEnv = (port) => ({
   HTTP_PROXY: `http://127.0.0.1:${port}`,
   http_proxy: `http://127.0.0.1:${port}`,
@@ -337,6 +348,16 @@ const KINDS = [
     name: "verification's read of a blob-referenced field",
     env: () => ({}),
     run: (target) => driveBlobRefRead(target.replace(/\/[^/]*$/, '')),
+  },
+  {
+    // Cold read F1 (c), #470: the rate-limit counter's store is reached
+    // through `@vercel/kv`, whose client (`@upstash/redis`) calls the global
+    // `fetch` with no dispatcher of its own, so it is a "yes" row and an
+    // in-network store needs its name in NO_PROXY. Measured here rather than
+    // read off the library. The token is a placeholder the proxy never checks.
+    name: 'a rate-limit counter read on the KV store',
+    env: (target) => ({ KV_REST_API_URL: target.replace(/\/[^/]*$/, ''), KV_REST_API_TOKEN: 'probe-not-a-real-token' }),
+    run: () => driveKv(),
   },
 ];
 
@@ -630,6 +651,99 @@ test("the sign-in library's provider leg leaves through node:http(s), as docs/de
   );
 });
 
+test("the sandbox executor's API client passes its own dispatcher, as docs/deploy.md says", async () => {
+  // NOT A GAP THIS PHASE CLOSED — a measurement written down (cold read F1,
+  // #470). Under EXECUTOR_DRIVER=vercel-sandbox every API call leaves through
+  // `@vercel/sandbox`'s `BaseClient.request`, which hands `fetch` an explicit
+  // `dispatcher` (its own undici `Agent`, built with `bodyTimeout: 0` for long
+  // command streams). An explicit dispatcher overrides the global one, so the
+  // proxy variables do not reach these calls. docs/deploy.md states that as a
+  // "no" row; this pin makes the row go RED rather than stale if the SDK stops
+  // passing its own dispatcher.
+  //
+  // DRIVEN AT THE INSTALLED SDK, OFFLINE. `Sandbox.list` is called with the
+  // SDK's own `fetch` seam, which records each request's URL and init and
+  // answers 400 itself, so nothing leaves the process and no sandbox exists
+  // before, during or after. `list` goes through the same `request` method as
+  // every other call the driver makes, including creation; it is used here
+  // because it forms no creation request at all. The credential triple is a
+  // placeholder the seam never forwards. `globalThis.fetch` is replaced with a
+  // thrower for the drive, so an SDK that stopped honouring the seam fails
+  // here instead of reaching the network. The app's dispatcher is installed
+  // under a loopback proxy first, so "not the global one" is compared against
+  // the dispatcher a proxied instance would actually have.
+  const { Sandbox } = await import('@vercel/sandbox');
+  const recorded = [];
+  const recorder = async (url, init = {}) => {
+    recorded.push({ url: String(url), init });
+    return new Response(JSON.stringify({ error: { code: 'probe', message: 'recorded, not sent' } }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  const savedDispatcher = getGlobalDispatcher();
+  const realFetch = globalThis.fetch;
+  const proxy = await loopbackProxy();
+  let proxiedDispatcher;
+  try {
+    await withEnv(proxyEnv(proxy.port), async () => {
+      await installUnderCurrentEnv();
+      proxiedDispatcher = getGlobalDispatcher();
+      globalThis.fetch = () => {
+        throw new Error('the sandbox SDK bypassed its fetch seam and called the global fetch');
+      };
+      await swallow(() =>
+        Sandbox.list({
+          token: 'probe-not-a-real-token',
+          teamId: 'team_probe',
+          projectId: 'prj_probe',
+          fetch: recorder,
+        }),
+      );
+    });
+  } finally {
+    globalThis.fetch = realFetch;
+    setGlobalDispatcher(savedDispatcher);
+    proxy.close();
+  }
+
+  assert.notEqual(
+    proxiedDispatcher,
+    savedDispatcher,
+    'the app installed no dispatcher under a proxy configuration, so "not the global one" below ' +
+      'would compare against nothing a proxied instance has',
+  );
+  assert.ok(
+    recorded.length >= 1,
+    'the SDK made no request through its fetch seam, so this probe measured nothing — the "no" row ' +
+      'in docs/deploy.md is unpinned until it does',
+  );
+  assert.equal(proxy.seen.length, 0, 'a request reached the loopback proxy although the seam answers every call');
+  const row = /^\| Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox` \|.*$/m.exec(egressProxySection());
+  assert.ok(row, 'docs/deploy.md has no EXECUTOR_DRIVER=vercel-sandbox row for this pin to hold');
+  for (const { url, init } of recorded) {
+    const { hostname } = new URL(url);
+    assert.ok(
+      row[0].includes(hostname),
+      `the SDK called ${hostname}, which the EXECUTOR_DRIVER=vercel-sandbox row in docs/deploy.md ` +
+        'does not name; an operator allowlisting the documented host would miss this one',
+    );
+    assert.ok(
+      init.dispatcher != null,
+      `the SDK's request to ${url} carries no explicit dispatcher, so the global one — and with it the ` +
+        'proxy variables — now governs it: the "no" row in docs/deploy.md (EXECUTOR_DRIVER=vercel-sandbox) ' +
+        'is wrong and the paragraph beside it has to go',
+    );
+    assert.notEqual(
+      init.dispatcher,
+      proxiedDispatcher,
+      `the SDK's request to ${url} carries the global dispatcher, so it honours the proxy variables and ` +
+        'the "no" row in docs/deploy.md (EXECUTOR_DRIVER=vercel-sandbox) is wrong',
+    );
+  }
+});
+
 test('docs/deploy.md names exactly the loopback hosts the dispatcher exempts', async () => {
   const [installer] = dispatcherInstaller();
   const { DEFAULT_NO_PROXY_HOSTS } = await import(`../${installer}?doc=${Date.now()}`);
@@ -647,5 +761,52 @@ test('docs/deploy.md names exactly the loopback hosts the dispatcher exempts', a
     /added\*\* to that set, not substituted/.test(section),
     'the section does not say that NO_PROXY is ADDED to the default set rather than replacing it — ' +
       'which is the property that keeps a local stub working when a proxy is turned on',
+  );
+});
+
+// Cold read F1 (#470): notebook execution under the default driver leaves
+// through the sandbox SDK's API client, which passes its own undici `Agent` as
+// every request's `dispatcher`, so a global dispatcher cannot govern it. The
+// table below the section's opening had a row for `container` only, and the
+// opening said the app honours the proxy variables for every outbound call.
+// The driver set is derived from `ExecutorDriverName`, not typed here.
+const EXECUTOR_DRIVERS = (() => {
+  const execute = readFileSync(new URL('../src/lib/sandbox/execute.ts', import.meta.url), 'utf8');
+  const union = /export type ExecutorDriverName =([^;]+);/.exec(execute);
+  return union ? [...union[1].matchAll(/'([^']+)'/g)].map((m) => m[1]) : [];
+})();
+
+function egressProxySection() {
+  const doc = readFileSync(new URL('../docs/deploy.md', import.meta.url), 'utf8');
+  const start = doc.indexOf('## Outbound traffic through an egress proxy');
+  assert.notEqual(start, -1, 'docs/deploy.md has no egress-proxy section to read');
+  const end = doc.indexOf('\n## ', start + 1);
+  return doc.slice(start, end === -1 ? undefined : end);
+}
+
+test('the executor driver set is derived from execute.ts, not empty', () => {
+  assert.ok(
+    EXECUTOR_DRIVERS.length >= 2,
+    `derived ${EXECUTOR_DRIVERS.length} executor driver(s) from ExecutorDriverName; the rows below would check nothing`,
+  );
+});
+
+for (const driver of EXECUTOR_DRIVERS) {
+  test(`docs/deploy.md's proxy table has a row for EXECUTOR_DRIVER=${driver}`, () => {
+    assert.match(
+      egressProxySection(),
+      new RegExp(`^\\| Notebook execution, \`EXECUTOR_DRIVER=${driver}\` \\|`, 'm'),
+      `the proxy table has no row for EXECUTOR_DRIVER=${driver}, so an operator on a proxied ` +
+        'network cannot tell whether notebook execution reaches its destination',
+    );
+  });
+}
+
+test('docs/deploy.md does not say the proxy variables govern every outbound call', () => {
+  assert.doesNotMatch(
+    egressProxySection().replace(/\s+/g, ' '),
+    /honours them for every outbound call/,
+    'the section still says the app honours the proxy variables for every outbound call, which ' +
+      'its own "no" rows contradict',
   );
 });
