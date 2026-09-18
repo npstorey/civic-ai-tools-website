@@ -182,6 +182,8 @@ const ALLOW = {
     'set by the Node.js / Next.js runtime (and by the Dockerfile runner stage), never by an operator',
   BUILD_STANDALONE:
     'set inline by `npm run build:standalone` itself (package.json) to select standalone output; an operator never sets it',
+  NEXT_RUNTIME:
+    'set by Next.js per compiled runtime (substituted at build time), never by an operator; src/instrumentation.ts reads it to keep the Node-only proxy dispatcher out of the edge (proxy) bundle',
 };
 
 /** Computed read sites, each with the export that enumerates its names. */

@@ -471,6 +471,29 @@ export const ENV_SPEC = [
   { name: 'TIMESTAMP_AUTHORITY_URL', tier: 'optional', purpose: 'RFC 3161 timestamp authority endpoint for signed records (default: https://freetsa.org/tsr; a failed or unreachable authority degrades to an untimestamped record, never a failed publish)', hasFallback: true },
   { name: 'TRANSPARENCY_LOG_URL', tier: 'optional', purpose: 'Transparency-log entries endpoint for signed records (default: https://rekor.sigstore.dev/api/v1/log/entries; a failed or unreachable log degrades to a record with no log entry, never a failed publish)', hasFallback: true },
 
+  // --- Egress proxy (#468). The conventional three, read once at server
+  //     start by src/lib/outbound-proxy.ts, which installs the one global
+  //     fetch dispatcher. ALL THREE UNSET IS THE REFERENCE CONFIGURATION: no
+  //     dispatcher is installed at all and every request leaves by the path
+  //     and to the host it did before these variables existed.
+  //
+  //     LOWER-CASE SPELLINGS ARE READ TOO and are deliberately not listed.
+  //     `http_proxy`/`https_proxy`/`no_proxy` win over the upper-case names
+  //     when both are set, mirroring undici and curl, but the upper-case name
+  //     is the one an operator writes and the one a deployment delivers, so
+  //     listing both would double this file's report for one setting. A
+  //     lower-case name is not UPPER_SNAKE, so the derived env guard does not
+  //     see it either.
+  //
+  //     NO_PROXY IS ADDITIVE, NOT A REPLACEMENT: loopback (localhost,
+  //     127.0.0.1, [::1]) is always exempt, so a signing stub or an MCP server
+  //     running beside the app stays direct whatever an operator sets. An
+  //     in-network service reached by NAME (`minio`, `postgres`) is not
+  //     loopback and belongs in this variable — see docs/deploy.md. ---
+  { name: 'HTTP_PROXY', tier: 'optional', purpose: 'Egress proxy for http:// destinations (unset: direct, exactly as before #468; loopback is always exempt)', hasFallback: true },
+  { name: 'HTTPS_PROXY', tier: 'optional', purpose: 'Egress proxy for https:// destinations (unset: falls back to HTTP_PROXY, then direct)', hasFallback: true },
+  { name: 'NO_PROXY', tier: 'optional', purpose: 'Comma-separated destinations that bypass the proxy — added to the always-exempt loopback set, not a replacement for it; name in-network services here (e.g. minio, postgres)', hasFallback: true },
+
   // --- Instance branding (#217: chrome-only theming seam; src/lib/brand-config.ts).
   //     All optional. Unset names nobody (#259): the name, tagline and
   //     attribution each render nothing rather than the reference

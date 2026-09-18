@@ -361,6 +361,25 @@ services:
       # destination signing needs, for an allowlist request.
       TIMESTAMP_AUTHORITY_URL:
       TRANSPARENCY_LOG_URL:
+      # Egress proxy (#468). Bare pass-throughs, and ALL THREE UNSET IS THE
+      # REFERENCE CONFIGURATION — with none of them set no dispatcher is
+      # installed and every outbound request leaves by the path and to the host
+      # it did before these variables existed. Set them on a network where
+      # outbound traffic must pass through a proxy; the app then honours them
+      # for the model endpoint, the MCP servers, the object store, the signing
+      # services and the object-store read verification makes.
+      #
+      # NO_PROXY IS ADDITIVE. Loopback (localhost, 127.0.0.1, [::1]) is exempt
+      # whatever you set, so a service on the host stays direct. THE SERVICES
+      # IN THIS FILE ARE NOT LOOPBACK: the app reaches them by name over the
+      # compose network, so a deployment that sets a proxy must also set
+      # NO_PROXY=minio,postgres (plus any other in-network name) or the object
+      # store's traffic is sent to the egress proxy. Postgres is unaffected
+      # either way — `pg` opens a TCP socket, which no HTTP proxy variable
+      # governs. docs/deploy.md has the table.
+      HTTP_PROXY:
+      HTTPS_PROXY:
+      NO_PROXY:
       # Chrome branding and content sources. Also passed as build args above:
       # prerendered pages bake them, dynamic pages read them here.
       SITE_BRAND_NAME:
