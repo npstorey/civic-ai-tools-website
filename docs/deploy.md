@@ -194,6 +194,56 @@ Two properties to rely on:
   need one, the tier and driver reporting in the sections below is what
   it would be built from.
 
+### Read-only root filesystem
+
+A platform that mounts every application container's root filesystem
+read-only and supplies writable paths as mounts needs exactly one path
+from this image:
+
+- **Writable path:** `/app/.next/cache`
+
+Everything else may be read-only. The application writes nothing to its
+own container filesystem — notebook files are written into the executor
+session, never here — so that one path is the framework's, not the
+app's: Next.js keeps its optimised-image cache under
+`/app/.next/cache/images` and its incremental-regeneration cache
+alongside it. The `Dockerfile` creates the directory and hands it to the
+runtime user for exactly this reason.
+
+**The mount must be writable by the runtime user.** The image runs as
+`node`, uid 1000 (`USER node`), and a `tmpfs` mount arrives `root`-owned
+at mode `0755` by default — writable by nobody else. Give it a mode the
+runtime user can write, or the mount is present and useless:
+
+```bash
+docker run --read-only --tmpfs /app/.next/cache:rw,mode=1777 civic-app:dev
+```
+
+`docker-compose.yml` demonstrates the same shape on the `app` service —
+`read_only: true` plus one `tmpfs` mount at that path — and
+`scripts/image-variant-and-readonly-root.test.mjs` reads this path back
+out of this document and compares it with the compose mount, so the two
+cannot drift apart.
+
+**What withholding the mount costs, measured on the built image.** It
+degrades; it does not break. With the root read-only and no mount at
+all, the container starts, `/api/health` answers `200`, and every page
+renders. An optimised-image request (`/_next/image`) also still answers
+`200`: the optimiser encodes the image and serves it, and only then
+fails to store it. What you get instead is one
+`Failed to write image to cache … mkdir '/app/.next/cache/images'` and
+one unhandled rejection in the container log **per image request**, and
+every request re-encodes from scratch — a permanent cache miss on the
+serving path. With the mount, the same requests log nothing and the
+cache fills. CI runs the built image both ways on every pull request, so
+the paragraph above is a measurement rather than a claim.
+
+Nothing else in the image was observed writing: with that one mount in
+place, a read-only container serving the health route, the marketing
+pages and image requests logs no filesystem write failure at all. If
+your deployment finds a second path, it is a finding worth filing — this
+document names one because one is what the measurement found.
+
 ### Supplying your environment
 
 Put your values in one file of `KEY=value` lines and hand it to compose;
@@ -344,6 +394,48 @@ territory: an HTTP runner that owns the runtime and exposes only
 "execute this notebook", leaving the app with no socket at all). Until
 that exists, the mount is the mechanism and this notice is the
 mitigation.
+
+### Building the image without the docker CLI
+
+The runtime image carries a static `docker` binary at
+`/usr/local/bin/docker`. Exactly one thing reads it:
+`EXECUTOR_DRIVER=container`, which executes notebooks by shelling out to
+it (`src/lib/sandbox/container.ts`). Every other executor setting leaves
+it untouched:
+
+| `EXECUTOR_DRIVER` | Needs `/usr/local/bin/docker` |
+| --- | --- |
+| `container` | Yes — and a container-runtime socket to talk to |
+| `vercel-sandbox` (the default) | No |
+| unset | No (the default is `vercel-sandbox`) |
+
+On a platform that offers no socket to hand over, the binary can never
+be used: it is dead weight in the runtime image and one more component
+for an image scanner to flag. Build it out with one build argument:
+
+```bash
+docker build --build-arg RUNTIME_BASE=runtime-without-docker-cli -t civic-app:dev .
+```
+
+`RUNTIME_BASE` is a global `ARG` in the `Dockerfile` naming the stage the
+runtime stage is built from. It takes two values:
+
+| Value | Result |
+| --- | --- |
+| `runtime-with-docker-cli` (default) | The reference image, unchanged |
+| `runtime-without-docker-cli` | No `docker` binary in any layer; the `docker-cli` stage stays outside the build graph, so `DOCKER_CLI_IMAGE` is never pulled |
+
+It is a build argument, not an environment variable: it selects a stage
+and is read at build time only, so it does not appear in the environment
+reference below and is not passed through `docker-compose.yml`'s
+`build.args`. Changing it takes effect on the next build.
+
+Set it to `runtime-without-docker-cli` and your instance can no longer
+run `EXECUTOR_DRIVER=container` — the driver reports the CLI as
+unavailable at first use, which is the honest failure for an image that
+does not carry it. CI builds both variants on every pull request and
+checks that the off variant starts and serves the health route, so the
+variant cannot rot.
 
 ## Usable, not just built
 

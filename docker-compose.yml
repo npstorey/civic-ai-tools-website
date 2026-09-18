@@ -183,8 +183,28 @@ services:
     # exist for EXECUTOR_DRIVER=container and are removable together on a
     # deployment that does not execute notebooks.
     user: "root"
+    # READ-ONLY ROOT, AND THE ONE PATH THAT IS NOT (#469). The application
+    # writes nothing to its own filesystem — notebook files go into the
+    # executor session, not here — so everything below `/` may be read-only
+    # except the framework's cache, which Next.js uses for the optimised-image
+    # cache and incremental regeneration. docs/deploy.md names that path and
+    # scripts/image-variant-and-readonly-root.test.mjs reads it back out of
+    # the document and compares it with the mount below, so the two cannot
+    # drift apart. Withholding the mount degrades rather than breaks: requests
+    # still answer, and every optimised image is re-encoded and its write
+    # fails. The deploy doc has the measurement.
+    #
+    # `mode: 01777` because the image runs as `node` (uid 1000) and a tmpfs
+    # arrives root-owned at 0755. It is redundant while `user: "root"` is set
+    # above, and it is what keeps this mount working for a deployment that
+    # removes that line with the socket.
+    read_only: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - type: tmpfs
+        target: /app/.next/cache
+        tmpfs:
+          mode: 01777
     ports:
       # Loopback by default, deliberately: the socket mount above makes this
       # container's reachability a host-security decision. Publish it wider

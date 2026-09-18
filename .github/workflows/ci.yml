@@ -124,9 +124,18 @@ jobs:
   # workflow rather than the paths-filtered standalone.yml for the same reason:
   # here, always-run is the file's existing property rather than a promise.
   #
-  # Credential-free like the rest of this workflow: no `secrets.`, no `env:`,
-  # and no `--build-arg`. The image building with nothing passed in is part of
-  # the same tested invariant — an operator's first build supplies no config.
+  # Credential-free like the rest of this workflow: no `secrets.` and no `env:`.
+  # The reference build passes NO `--build-arg` either, and that is part of the
+  # same tested invariant — an operator's first build supplies no config.
+  #
+  # ONE EXCEPTION, and it is not configuration (#444). A second build passes
+  # `--build-arg RUNTIME_BASE=runtime-without-docker-cli`, which selects which
+  # runtime base stage the image is built from and nothing else. It carries no
+  # value into the application, secret or otherwise; it exists so the variant
+  # an operator without a container socket builds cannot rot untested. The
+  # reference build above it still passes nothing, and
+  # scripts/image-variant-and-readonly-root.test.mjs fails if either of those
+  # two facts stops being true of this file.
   #
   # If anonymous Docker Hub pulls ever rate-limit this job, the seam is the
   # Dockerfile's NODE_IMAGE / DOCKER_CLI_IMAGE args, not a registry credential.
@@ -145,3 +154,170 @@ jobs:
       # is not a runner measurement; budget for the base-image pulls too.
       - name: Build the application image (dockerignore-filtered context)
         run: docker build --progress=plain -t civic-app:ci .
+
+      # THE OFF VARIANT (#444) — the image an operator builds on a platform
+      # with no container socket to hand over. The one `--build-arg` this job
+      # passes, and the exception this job's header names.
+      - name: Build the image without the docker CLI
+        run: |
+          # pipefail, or `tee` would swallow a failed build and the readings
+          # below would run against a stale or absent image.
+          set -eo pipefail
+          docker build --progress=plain --build-arg RUNTIME_BASE=runtime-without-docker-cli -t civic-app:ci-no-docker-cli . 2>&1 | tee /tmp/off-variant-build.log
+
+      # Three readings, because each can be true while another is false. The
+      # stage graph is the one that matters — a variant that deleted the binary
+      # in a later layer would still ship it in a lower one, and a `test ! -e`
+      # inside the finished image cannot tell those apart.
+      - name: The off variant builds no docker-cli stage and ships no docker binary
+        run: |
+          set -uo pipefail
+          status=0
+
+          # 1. THE STAGE GRAPH. BuildKit builds only the stages the target
+          #    needs; a step line for the docker-cli stage in this log means
+          #    the stage was in the graph after all.
+          if grep -qE '\[docker-cli ' /tmp/off-variant-build.log; then
+            echo "::error::the docker-cli stage was built for the off variant"
+            grep -E '\[docker-cli ' /tmp/off-variant-build.log | head -5
+            status=1
+          else
+            echo "OK — no docker-cli stage step in the off-variant build log"
+          fi
+
+          # 2. NO PULL of the CLI image, by the same log.
+          if grep -qE 'load metadata for docker\.io/library/docker:|FROM docker\.io/library/docker:' /tmp/off-variant-build.log; then
+            echo "::error::the off-variant build resolved or pulled the docker CLI image"
+            grep -E 'docker\.io/library/docker:' /tmp/off-variant-build.log | head -5
+            status=1
+          else
+            echo "OK — the off-variant build never resolved the docker CLI image"
+          fi
+
+          # 3. CORROBORATION, every layer of the finished image — not just the
+          #    filesystem the last layer presents.
+          rm -rf /tmp/off-image && mkdir -p /tmp/off-image
+          docker save civic-app:ci-no-docker-cli -o /tmp/off-image.tar
+          tar -xf /tmp/off-image.tar -C /tmp/off-image
+          hits=0
+          while IFS= read -r blob; do
+            if tar -tf "$blob" 2>/dev/null | grep -qE '^usr/local/bin/docker$'; then
+              echo "::error::/usr/local/bin/docker is present in layer $blob"
+              hits=$((hits + 1))
+            fi
+          done < <(find /tmp/off-image -type f)
+          if [ "$hits" -ne 0 ]; then status=1; else echo "OK — no layer of the off variant contains usr/local/bin/docker"; fi
+
+          # And the plain filesystem reading, for completeness.
+          if docker run --rm civic-app:ci-no-docker-cli sh -c 'test ! -e /usr/local/bin/docker'; then
+            echo "OK — /usr/local/bin/docker does not exist in the off variant"
+          else
+            echo "::error::/usr/local/bin/docker exists in the off variant"
+            status=1
+          fi
+
+          # The reference image is the control: the same three readings must
+          # come out the other way, or the readings prove nothing.
+          if docker run --rm civic-app:ci sh -c 'test -x /usr/local/bin/docker'; then
+            echo "OK — the reference image still carries /usr/local/bin/docker"
+          else
+            echo "::error::the reference image lost /usr/local/bin/docker; the default is not unchanged"
+            status=1
+          fi
+          exit $status
+
+      - name: The off variant starts and serves the health route
+        run: |
+          set -uo pipefail
+          docker run -d --name off-variant -p 3101:3000 civic-app:ci-no-docker-cli
+          code=000
+          for _ in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3101/api/health || true)
+            if [ "$code" = "200" ]; then break; fi
+            sleep 1
+          done
+          echo "off variant /api/health -> $code"
+          if [ "$code" != "200" ]; then docker logs off-variant; docker rm -f off-variant; exit 1; fi
+          docker rm -f off-variant
+
+      # THE READ-ONLY ROOT (#469), driven on the built image on this runner and
+      # driven BOTH ways. A demonstration that only ever supplies the mount is
+      # a criterion shaped so it cannot fail: the run WITHOUT the mount is what
+      # shows the documented path is the one that matters.
+      #
+      # WHAT THE WITHOUT-MOUNT RUN ACTUALLY DOES, measured rather than assumed:
+      # it degrades, it does not break. The container starts, the health route
+      # answers 200 and an optimised-image request STILL answers 200 — the
+      # optimiser encodes and serves the image, then fails to store it. So the
+      # falsifiable difference is the write, not the status code, and that is
+      # what the two assertions below read. docs/deploy.md says the same thing
+      # in the same words.
+      - name: The runtime image under a read-only root filesystem
+        run: |
+          set -uo pipefail
+          status=0
+          WRITABLE=/app/.next/cache
+          ASSET=$(docker run --rm civic-app:ci sh -c "find /app/public -name '*.png' | sort | head -1")
+          IMGPATH=${ASSET#/app/public}
+          echo "optimising $IMGPATH"
+
+          # Both containers are started by a LITERAL docker run line, not from
+          # a helper's "$@": scripts/image-variant-and-readonly-root.test.mjs
+          # reads these two lines to check that the mount and the no-mount run
+          # both exist, and it can only read what is written here.
+          probe() {
+            name=$1
+            port=$2
+            code=000
+            for _ in $(seq 1 60); do
+              code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/api/health" || true)
+              if [ "$code" = "200" ]; then break; fi
+              sleep 1
+            done
+            echo "$name /api/health -> $code"
+            if [ "$code" != "200" ]; then docker logs "$name"; return 1; fi
+            img=$(curl -s -o /dev/null -w '%{http_code}' -G --data-urlencode "url=$IMGPATH" --data-urlencode "w=64" --data-urlencode "q=75" "http://127.0.0.1:$port/_next/image" || true)
+            echo "$name /_next/image -> $img"
+            if [ "$img" != "200" ]; then docker logs "$name"; return 1; fi
+            return 0
+          }
+
+          # --- with the one documented mount ---
+          docker run -d --name ro-with --read-only --tmpfs /app/.next/cache:rw,mode=1777 -p 3102:3000 civic-app:ci >/dev/null
+          if ! probe ro-with 3102; then
+            echo "::error::the read-only run WITH the documented mount did not serve"
+            status=1
+          fi
+          cached=$(docker exec ro-with sh -c "find $WRITABLE -type f | wc -l" 2>/dev/null | tr -d '[:space:]')
+          cached=${cached:-0}
+          echo "with the mount: $cached file(s) under $WRITABLE"
+          if [ "$cached" -lt 1 ]; then
+            echo "::error::nothing was written under $WRITABLE, so the mount is present and useless"
+            status=1
+          fi
+          # No write failure ANYWHERE. This is the assertion that would find a
+          # SECOND writable path: one mount, and the log stays clean.
+          if docker logs ro-with 2>&1 | grep -qiE "EROFS|read-only file system|Failed to write|unhandledRejection"; then
+            echo "::error::a read-only container with the documented mount still failed a write — there is another writable path, and docs/deploy.md names only one"
+            docker logs ro-with 2>&1 | grep -iE "EROFS|read-only file system|Failed to write|unhandledRejection" | head -10
+            status=1
+          else
+            echo "OK — with $WRITABLE mounted, nothing else failed a write"
+          fi
+
+          # --- without it: the falsification ---
+          docker run -d --name ro-without --read-only -p 3103:3000 civic-app:ci >/dev/null
+          if ! probe ro-without 3103; then
+            echo "note: without the mount the container did not serve; that is a stronger failure than the measured one"
+          fi
+          if docker logs ro-without 2>&1 | grep -q "$WRITABLE"; then
+            echo "OK — without the mount, the container fails a write naming $WRITABLE:"
+            docker logs ro-without 2>&1 | grep "$WRITABLE" | head -3
+          else
+            echo "::error::without the mount NOTHING failed a write at $WRITABLE — the documented path is not the one that matters; find the one that is"
+            docker logs ro-without 2>&1 | tail -30
+            status=1
+          fi
+
+          docker rm -f ro-with ro-without >/dev/null 2>&1 || true
+          exit $status

@@ -18,6 +18,28 @@
 ARG NODE_IMAGE=node:22-bookworm-slim
 # Static docker CLI, copied into the runtime layer for EXECUTOR_DRIVER=container.
 ARG DOCKER_CLI_IMAGE=docker:29-cli
+# WHICH RUNTIME BASE `runner` IS BUILT FROM, and with it whether this image
+# carries the docker CLI at all (#444). Two values, both stages declared below:
+#
+#   runtime-with-docker-cli     (default) the reference image, unchanged
+#   runtime-without-docker-cli  no docker binary in any layer, and the
+#                               docker-cli stage stays outside the build
+#                               graph — nothing pulls DOCKER_CLI_IMAGE
+#
+#   docker build --build-arg RUNTIME_BASE=runtime-without-docker-cli .
+#
+# The binary has exactly one reader, EXECUTOR_DRIVER=container
+# (src/lib/sandbox/container.ts), which needs a daemon socket the deployment
+# has to hand over. On a platform that offers no socket the binary is dead
+# weight and one more thing an image scanner flags, so the off value is the
+# one to build there. docs/deploy.md says which executor settings need it.
+#
+# This is a global ARG on purpose: it is consumed by a FROM, and only an ARG
+# ahead of the first FROM is in scope there. It is NOT a compose `build.args`
+# entry — nothing the app reads is configured by it, and the coverage guard in
+# scripts/check-compose-env.mjs would then require a matching ARG inside the
+# stage that runs `next build`, which is not where a FROM reads it.
+ARG RUNTIME_BASE=runtime-with-docker-cli
 
 # --- dependencies ----------------------------------------------------------
 # package.json engines require Node >=22; the base image pins the major.
@@ -86,20 +108,35 @@ FROM builder AS migrate
 CMD ["npx", "drizzle-kit", "migrate"]
 
 # --- runtime ---------------------------------------------------------------
-FROM ${DOCKER_CLI_IMAGE} AS docker-cli
-
-FROM ${NODE_IMAGE} AS runner
+# TWO RUNTIME BASES, and RUNTIME_BASE above picks which one `runner` is built
+# FROM. They differ by one instruction — the docker CLI — and everything the
+# two share lives in the first, so that AT THE DEFAULT the instruction
+# sequence `runner` inherits is exactly the sequence this file produced before
+# the switch existed: WORKDIR, ENV, then the CLI. Same instructions in the
+# same order means the same layers in the same order.
+FROM ${NODE_IMAGE} AS runtime-without-docker-cli
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 
+FROM ${DOCKER_CLI_IMAGE} AS docker-cli
+
 # EXECUTOR_DRIVER=container shells out to `docker` (src/lib/sandbox/
 # container.ts). The CLI is inert on its own — it needs a daemon socket,
 # which the deployment decides to hand over or withhold. See the header of
 # docker-compose.yml for what handing it over costs.
+FROM runtime-without-docker-cli AS runtime-with-docker-cli
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
+
+# The runtime stage proper. Its base is the variable; everything below it is
+# not. `COPY --from=builder` here is load-bearing beyond the copy itself:
+# scripts/check-compose-env.mjs walks the stages the compose target needs and
+# fails if none of them runs `next build`. `FROM ${RUNTIME_BASE}` resolves to
+# no declared stage for that walk, so this COPY is the edge that keeps the
+# builder stage — and the build-argument coverage check over it — reachable.
+FROM ${RUNTIME_BASE} AS runner
 
 # Standalone output carries its own traced node_modules and server.js.
 # `public/` and `.next/static` are copied explicitly per the Next.js
