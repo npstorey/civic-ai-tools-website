@@ -123,7 +123,8 @@ async function ensureScientificStack(session: ExecutorSession): Promise<void> {
     ...Object.entries(PINNED_LIBRARIES).map(([name, version]) => `${name}==${version}`),
     // Tooling carries its versions too (#450): nbformat/nbconvert write the
     // notebook bytes that go into a signed package, so a fresh sandbox must
-    // install the same versions the snapshot and the container image hold.
+    // install the versions the tooling table names, which the snapshot and
+    // the container image also pin; pip resolves their dependencies here.
     ...executorToolingPipSpecs(),
   ];
   const result = await session.runCommand({ cmd: 'pip', args: pipArgs, env: {} });

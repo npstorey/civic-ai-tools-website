@@ -398,9 +398,10 @@ mitigation.
 ### What the executor image pins, and who it runs as
 
 The executor image (`docker/executor/Dockerfile`, tag
-`civic-notebook-executor:0.2.0`) pins every package it installs, and the
-pins are single-sourced in the repository rather than written in the
-Dockerfile:
+`civic-notebook-executor:0.2.0`) pins the packages the tables below
+name, and those pins are single-sourced in the repository rather than
+written in the Dockerfile; everything else it installs resolves at build
+time:
 
 | Table | Source | Contents |
 | --- | --- | --- |
