@@ -757,6 +757,11 @@ the two signing-service addresses (`TIMESTAMP_AUTHORITY_URL`,
 it has always gone to; see [Outbound destinations the signing leg
 needs](#outbound-destinations-the-signing-leg-needs) for both defaults,
 what they are for, and what substituting one does not buy you),
+the three egress-proxy variables (`HTTP_PROXY`, `HTTPS_PROXY`,
+`NO_PROXY` — unset, no dispatcher is installed and every request leaves
+by the path it always did; see [Outbound traffic through an egress
+proxy](#outbound-traffic-through-an-egress-proxy) for which outbound
+kinds honour them, which two cannot, and why loopback is always exempt),
 and analytics
 (`NEXT_PUBLIC_GA_MEASUREMENT_ID`).
 
@@ -1176,6 +1181,99 @@ A database with pre-rename rows should additionally run the
 count-preservation check in the header comment of `0015` (visibility
 label counts before vs. after: no rows remain on the legacy labels, the
 grand total unchanged).
+
+## Outbound traffic through an egress proxy
+
+On a network where outbound traffic must leave through a proxy, set the
+conventional three and the app honours them for every outbound call it
+makes. **Unset is the reference configuration:** with none of them set,
+no dispatcher is installed at all and every request leaves by the path
+and to the host it did before this existed.
+
+```bash
+HTTP_PROXY=http://proxy.internal:3128
+HTTPS_PROXY=http://proxy.internal:3128
+NO_PROXY=minio,postgres,.internal.example
+```
+
+The lower-case spellings (`http_proxy`, `https_proxy`, `no_proxy`) are
+read too and win when both are set, matching curl and the rest of the
+convention. Set one spelling, not both.
+
+**Why this needs code at all.** Node's built-in `fetch` does not read
+these variables. Measured on the image's Node (22): with `HTTP_PROXY`
+set and `NO_PROXY` unset, a request goes straight to the origin —
+`origin hits: 1, proxy hits: 0` — and `NODE_USE_ENV_PROXY=1` changes
+nothing, because that flag arrives in a later Node than this image
+carries. [`src/lib/outbound-proxy.ts`](../src/lib/outbound-proxy.ts)
+installs one `undici` dispatcher at server start, and
+`scripts/outbound-proxy.test.mjs` drives a request of each kind below
+through a loopback proxy and reads it back there.
+
+### Loopback is always exempt
+
+`localhost`, `127.0.0.1` and `[::1]` never go through the proxy,
+whatever you set. `NO_PROXY` is **added** to that set, not substituted
+for it — so a signing stub, a local MCP server or a sidecar on the same
+host keeps working the moment you turn a proxy on, and you do not have
+to remember it.
+
+**An in-network service reached by NAME is not loopback.** In the
+compose stack the app reaches its object store at `http://minio:9000`
+and its database at `postgres:5432`. Those names belong in your
+`NO_PROXY`, or the object store's traffic is sent to the egress proxy.
+The database is unaffected either way (see the table's last row).
+
+### What the proxy carries, and what it cannot
+
+| Outbound kind | Leaves through | Honours the proxy variables |
+| --- | --- | --- |
+| Model endpoint | the `openai` SDK (`src/lib/model-client.ts`) | yes |
+| MCP servers | `fetch` (`src/lib/mcp/client.ts`) | yes |
+| Object store, `BLOB_DRIVER=vercel-blob` | `fetch` (`src/lib/storage/vercel-blob.ts`) | yes |
+| Object store, `BLOB_DRIVER=s3` | the AWS SDK (`src/lib/storage/s3.ts`) | yes — see below |
+| Signing services | `fetch` (`src/lib/evidence/signing.ts`) | yes |
+| Verification's read of a blob-referenced field | `fetch`, in `@typedstandards/verify-core` | yes |
+| Directory and roadmap content sources | `fetch` | yes |
+| Sign-in provider (GitHub / OIDC) discovery, token and userinfo calls | `node:http(s)`, in the sign-in library's `openid-client` | **no** |
+| Database, `DB_DRIVER=neon-http` | `fetch` | yes |
+| Database, `DB_DRIVER=node-postgres` | a raw TCP socket (`pg`) | **no** |
+| Notebook execution, `EXECUTOR_DRIVER=container` | the container-runtime socket on the host | **no** — it is not network traffic |
+
+**The database and executor "no" rows are not gaps to close.** An HTTP
+proxy variable governs HTTP; a Postgres connection is a TCP stream that
+no `HTTP_PROXY` describes, and the container executor talks to a socket
+on the host rather than to the network at all. Reaching a database
+through a proxy is a network-level arrangement (a tunnel, a sidecar, a
+route), not an application setting.
+
+**The sign-in row is a real limitation, stated rather than hidden.**
+next-auth's provider leg runs through `openid-client`, which calls
+`node:https` directly: driven against a loopback server with both
+counted, discovery came out `{fetch: 0, nodeHttp: 1}`. A global `fetch`
+dispatcher cannot govern it, so on a proxied network **sign-in
+configured against an external provider will not reach that provider
+through these variables.** Until that is addressed, an instance behind
+an egress proxy needs its provider's hosts on the network's allowlist
+(or a transparent proxy). `scripts/outbound-proxy.test.mjs` pins the
+measurement, so this paragraph goes red rather than stale if the
+library changes transport.
+
+**The S3 driver changes transport when a proxy is set.** The AWS SDK's
+default Node transport speaks `node:http(s)`, which a `fetch`
+dispatcher cannot govern — so with a proxy configured, and only then,
+the S3 client is given the SDK's own `fetch` transport instead. Same
+requests, same bucket, same signatures; a different socket underneath.
+With the variables unset the driver keeps the SDK default, unchanged.
+
+**Nothing signed moves.** A proxy changes how a request travels, not
+what is recorded: no field of a signed package, and no envelope hash,
+is a function of the route a request took.
+
+**A proxy URL can carry a credential** (`http://user:pass@proxy`). The
+app never prints these values — it logs only the variable NAMES it
+honoured — and you should keep them in your secret manager like any
+other credential.
 
 ## Instance identity and signing (go to production)
 

@@ -35,6 +35,13 @@ import {
   ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+// The SDK's own fetch transport, pinned to the version `@aws-sdk/client-s3`
+// resolves so both sides use one copy. See `proxyAwareTransport` below for why
+// this driver needs it at all.
+import { FetchHttpHandler } from '@smithy/fetch-http-handler';
+// Importing this installs the outbound dispatcher if one is called for; the
+// predicate is what decides this driver's transport.
+import { isOutboundProxyConfigured } from '../outbound-proxy.ts';
 import type { ClientUploadGrantContext, StorageDriver } from './driver';
 
 export interface S3DriverConfig {
@@ -105,12 +112,46 @@ interface GrantRequestBody {
   };
 }
 
+/**
+ * The transport this driver's SDK client uses — and the one place in the
+ * application where a proxy needs more than the global dispatcher (#468).
+ *
+ * THE MEASUREMENT. A global `undici` dispatcher governs `fetch`. The AWS SDK's
+ * default Node transport is `@smithy/node-http-handler`, which speaks
+ * `node:http(s)` directly: driven against a loopback server with all three
+ * counted, this driver's writes came out `{fetch:0, nodeHttp:1}` while
+ * `getText`'s fallback below (`fetch(url)`, for a URL not under this
+ * instance's public base) came out `{fetch:1, nodeHttp:0}`. Under one global
+ * dispatcher, half of this driver would be proxied and half would not — the
+ * worst of the three outcomes, because it looks like it works.
+ *
+ * THE FIX SHAPE. With a proxy configured, hand the client the SDK's own fetch
+ * transport. Every request the SDK makes then goes through `fetch`, which the
+ * one dispatcher governs, and `NO_PROXY` still decides per destination whether
+ * a given request is tunnelled or direct. Nothing here re-implements proxy
+ * selection.
+ *
+ * WITH NO PROXY CONFIGURED THIS RETURNS NOTHING and the client keeps the SDK's
+ * default Node transport — the same transport, the same sockets, the same
+ * requests this driver has always made.
+ *
+ * WHAT AN OPERATOR MUST KNOW: a compose or Kubernetes deployment reaches its
+ * object store by service name (`http://minio:9000`), and a service name is not
+ * loopback. Setting a proxy without naming it in `NO_PROXY` sends the object
+ * store's traffic to the egress proxy. docs/deploy.md says so beside the
+ * variables.
+ */
+export function proxyAwareTransport(): { requestHandler?: FetchHttpHandler } {
+  return isOutboundProxyConfigured() ? { requestHandler: new FetchHttpHandler() } : {};
+}
+
 export function createS3Driver(config?: S3DriverConfig): StorageDriver {
   const cfg = config ?? resolveS3ConfigFromEnv();
   const client = new S3Client({
     region: cfg.region,
     ...(cfg.endpoint ? { endpoint: cfg.endpoint } : {}),
     forcePathStyle: cfg.forcePathStyle,
+    ...proxyAwareTransport(),
     credentials: {
       accessKeyId: cfg.accessKeyId,
       secretAccessKey: cfg.secretAccessKey,
