@@ -456,6 +456,31 @@ test('NO_PROXY exempts a named host, and its absence does not', async () => {
   );
 });
 
+test('NO_PROXY=* still means never proxy, even with the loopback defaults prepended', async () => {
+  // THE HAZARD THIS PINS. undici short-circuits on `noProxy === '*'`, and this
+  // module PREPENDS the loopback defaults, so the composed string is never
+  // exactly '*' and that short-circuit never fires. The wildcard survives only
+  // because undici's per-entry branch treats a leading `*` as a suffix match
+  // against the empty string. That is a property of how the list is composed,
+  // so composing it differently could silently turn an operator's "never
+  // proxy" into "always proxy" — measured here rather than reasoned about.
+  const proxy = await loopbackProxy();
+  try {
+    await drive(
+      { ...proxyEnv(proxy.port), NO_PROXY: '*', no_proxy: '*', TIMESTAMP_AUTHORITY_URL: TARGET },
+      () => driveSigning(),
+    );
+  } finally {
+    proxy.close();
+  }
+  assert.equal(
+    proxy.seen.length,
+    0,
+    `with NO_PROXY='*' the proxy saw ${proxy.seen.length} request(s); the wildcard means "never ` +
+      'proxy", and prepending the loopback defaults must not cost an operator that',
+  );
+});
+
 test('loopback is exempt by default, so a local stub or MCP server stays direct', async () => {
   // THE BASELINE IS INSIDE THIS TEST ON PURPOSE. "The proxy saw nothing" is
   // also true when no dispatcher is installed at all, so the exemption half
