@@ -195,18 +195,40 @@ jobs:
           fi
 
           # 3. CORROBORATION, every layer of the finished image — not just the
-          #    filesystem the last layer presents.
-          rm -rf /tmp/off-image && mkdir -p /tmp/off-image
-          docker save civic-app:ci-no-docker-cli -o /tmp/off-image.tar
-          tar -xf /tmp/off-image.tar -C /tmp/off-image
-          hits=0
-          while IFS= read -r blob; do
-            if tar -tf "$blob" 2>/dev/null | grep -qE '^usr/local/bin/docker$'; then
-              echo "::error::/usr/local/bin/docker is present in layer $blob"
-              hits=$((hits + 1))
-            fi
-          done < <(find /tmp/off-image -type f)
-          if [ "$hits" -ne 0 ]; then status=1; else echo "OK — no layer of the off variant contains usr/local/bin/docker"; fi
+          #    filesystem the last layer presents. The same scan runs on the
+          #    reference image first, as its positive control: that image
+          #    ships the binary, so the scan must find it there. A zero on the
+          #    off variant counts only when the scan found it in the
+          #    reference, because a changed `docker save` layout would read
+          #    zero on both.
+          docker_layer_hits() {
+            local image="$1" dir="$2" hits=0
+            rm -rf "$dir" && mkdir -p "$dir"
+            docker save "$image" -o "$dir.tar"
+            tar -xf "$dir.tar" -C "$dir"
+            while IFS= read -r blob; do
+              if tar -tf "$blob" 2>/dev/null | grep -qE '^usr/local/bin/docker$'; then
+                echo "  $image: usr/local/bin/docker in ${blob#"$dir"/}" >&2
+                hits=$((hits + 1))
+              fi
+            done < <(find "$dir" -type f)
+            echo "$hits"
+          }
+          ref_hits=$(docker_layer_hits civic-app:ci /tmp/ref-image)
+          off_hits=$(docker_layer_hits civic-app:ci-no-docker-cli /tmp/off-image)
+          echo "layers containing usr/local/bin/docker — reference (civic-app:ci): $ref_hits; off variant (civic-app:ci-no-docker-cli): $off_hits"
+          if [ "$ref_hits" -ge 1 ]; then
+            echo "OK — the scan finds usr/local/bin/docker in the reference image's layers"
+          else
+            echo "::error::the layer scan found no usr/local/bin/docker in the reference image, which ships it; the scan cannot see the binary, so its zero on the off variant proves nothing"
+            status=1
+          fi
+          if [ "$off_hits" -ne 0 ]; then
+            echo "::error::/usr/local/bin/docker is present in $off_hits layer(s) of the off variant"
+            status=1
+          else
+            echo "OK — no layer of the off variant contains usr/local/bin/docker"
+          fi
 
           # And the plain filesystem reading, for completeness.
           if docker run --rm civic-app:ci-no-docker-cli sh -c 'test ! -e /usr/local/bin/docker'; then
@@ -216,8 +238,8 @@ jobs:
             status=1
           fi
 
-          # The reference image is the control: the same three readings must
-          # come out the other way, or the readings prove nothing.
+          # The reference image is the control for this filesystem reading
+          # too (the layer scan's control is above): the binary must be there.
           if docker run --rm civic-app:ci sh -c 'test -x /usr/local/bin/docker'; then
             echo "OK — the reference image still carries /usr/local/bin/docker"
           else
