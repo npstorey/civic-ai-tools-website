@@ -142,7 +142,8 @@ export const MCP_SOURCE_ADDRESS_FIELD = {
 /** A source's configured address as configured, or `undefined` when the
  *  source has no mapping or the instance configured no address for it. An
  *  empty string is `undefined` too: absence is stated by absence, never by
- *  `''`. Any other value is returned untouched — it is what routing uses. */
+ *  `''`. Any other value is returned untouched — the value routing builds its
+ *  endpoint from, before `normalizeMcpEndpoint`. */
 export function configuredAddressForSource(
   configured: McpRegistryEnv,
   sourceId: string,

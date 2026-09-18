@@ -223,3 +223,39 @@ test('the Data Commons API key never reaches the record, though it sits beside t
     else process.env.DATA_COMMONS_API_KEY = saved;
   }
 });
+
+test('the addresses are read when the record is packaged, not when the run happened', () => {
+  // The run's trace says nothing about Boston, and a notebook-shaped trace
+  // nothing about any server, so the packager reads the process configuration
+  // at publish time. A record published after a configuration change names
+  // the new value — stated in docs/deploy.md, and measured here so the
+  // sentence cannot outlive the behaviour.
+  const runTrace = trace(undefined);
+  const saved = process.env.BOSTON_OPENCONTEXT_MCP_URL;
+  process.env.BOSTON_OPENCONTEXT_MCP_URL = 'http://boston-after-restart.invalid/mcp';
+  try {
+    const pkg = JSON.parse(
+      JSON.stringify(
+        buildEvidencePackage({
+          trace: runTrace,
+          prompt: 'p',
+          output: 'o',
+          toolCalls: CALLS,
+          model: 'openai/gpt-4o',
+          tokenUsage: {},
+          promptVisibility: 'full_text',
+          title: 't',
+          summary: 's',
+          captureMethod: 'chat-flow-stream',
+          contentProfile: 'datHere',
+          extensions: { 'org.civicaitools.notebook': { nbformat: 4, nbformat_minor: 5, cells: [], metadata: {} } },
+        }).pkg,
+      ),
+    ) as Record<string, unknown>;
+    const boston = (mcpServers(pkg) as Array<{ url: string; name: string }>).find((s) => s.name === 'boston-opencontext');
+    assert.equal(boston?.url, 'http://boston-after-restart.invalid/mcp');
+  } finally {
+    if (saved === undefined) delete process.env.BOSTON_OPENCONTEXT_MCP_URL;
+    else process.env.BOSTON_OPENCONTEXT_MCP_URL = saved;
+  }
+});

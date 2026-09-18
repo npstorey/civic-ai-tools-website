@@ -382,8 +382,9 @@ export interface EvidencePackage {
  *     address, so no source agent gets one from here (the trace's skill-fetch
  *     URL still names the skill source, which is the capture's own record),
  *     and the environment extension keeps the skill-fetch URL alone.
- *   - `'reference'` — the harness's reference constants, the pre-W5 behaviour
- *     for every capture. No capture reaches it today. It is ruling A's named
+ *   - `'reference'` — the harness's reference constants and the skill-fetch
+ *     URL alone: the registry and server list every capture got before W5. No
+ *     capture reaches it today. It is ruling A's named
  *     alternative (C): switching the non-`chat-flow-stream` branch below from
  *     `'unknown'` to `'reference'` is the whole of that change.
  *
@@ -467,8 +468,10 @@ function instanceProvenanceConfig(policy: ServerAddressPolicy): ProvenanceConfig
     // TWO FIELDS OF THE REFERENCE CONFIG ARE ENDPOINT FACTS, NOT VOCABULARY,
     // and each is replaced by what this instance is configured with — the same
     // spread-a-reference-constant shape #258 and #294 removed from the platform
-    // agent below. What stays spread is vocabulary: the skill and fallback
-    // source ids.
+    // agent below. At harness 0.5.0 the reference config carries exactly these
+    // three fields (`platformAgent`, `sourceRegistry`, `modelAgentDescription`),
+    // so every one is replaced here; the spread only keeps a field a later
+    // harness adds, which a pin move has to read before it is admitted.
     //
     // E4 (website#30 P3): "Large language model via OpenRouter" was true of
     // civicaitools.org and false of any instance pointed somewhere else. It is
