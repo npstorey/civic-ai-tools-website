@@ -649,3 +649,50 @@ test('docs/deploy.md names exactly the loopback hosts the dispatcher exempts', a
       'which is the property that keeps a local stub working when a proxy is turned on',
   );
 });
+
+// Cold read F1 (#470): notebook execution under the default driver leaves
+// through the sandbox SDK's API client, which passes its own undici `Agent` as
+// every request's `dispatcher`, so a global dispatcher cannot govern it. The
+// table below the section's opening had a row for `container` only, and the
+// opening said the app honours the proxy variables for every outbound call.
+// The driver set is derived from `ExecutorDriverName`, not typed here.
+const EXECUTOR_DRIVERS = (() => {
+  const execute = readFileSync(new URL('../src/lib/sandbox/execute.ts', import.meta.url), 'utf8');
+  const union = /export type ExecutorDriverName =([^;]+);/.exec(execute);
+  return union ? [...union[1].matchAll(/'([^']+)'/g)].map((m) => m[1]) : [];
+})();
+
+function egressProxySection() {
+  const doc = readFileSync(new URL('../docs/deploy.md', import.meta.url), 'utf8');
+  const start = doc.indexOf('## Outbound traffic through an egress proxy');
+  assert.notEqual(start, -1, 'docs/deploy.md has no egress-proxy section to read');
+  const end = doc.indexOf('\n## ', start + 1);
+  return doc.slice(start, end === -1 ? undefined : end);
+}
+
+test('the executor driver set is derived from execute.ts, not empty', () => {
+  assert.ok(
+    EXECUTOR_DRIVERS.length >= 2,
+    `derived ${EXECUTOR_DRIVERS.length} executor driver(s) from ExecutorDriverName; the rows below would check nothing`,
+  );
+});
+
+for (const driver of EXECUTOR_DRIVERS) {
+  test(`docs/deploy.md's proxy table has a row for EXECUTOR_DRIVER=${driver}`, () => {
+    assert.match(
+      egressProxySection(),
+      new RegExp(`^\\| Notebook execution, \`EXECUTOR_DRIVER=${driver}\` \\|`, 'm'),
+      `the proxy table has no row for EXECUTOR_DRIVER=${driver}, so an operator on a proxied ` +
+        'network cannot tell whether notebook execution reaches its destination',
+    );
+  });
+}
+
+test('docs/deploy.md does not say the proxy variables govern every outbound call', () => {
+  assert.doesNotMatch(
+    egressProxySection().replace(/\s+/g, ' '),
+    /honours them for every outbound call/,
+    'the section still says the app honours the proxy variables for every outbound call, which ' +
+      'its own "no" rows contradict',
+  );
+});
