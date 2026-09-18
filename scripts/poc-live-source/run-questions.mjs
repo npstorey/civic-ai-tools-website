@@ -406,14 +406,19 @@ try {
   // POC_FAULT=void: no sandbox at all. The phases below run against a
   // placeholder address and never reach it, because every reading is
   // short-circuited into the credential failure being demonstrated.
-  const sandbox = FAULT === 'void' ? null : (await elapsed(() => createFresh(token))).value;
+  // The create leg is TIMED, not just awaited. Dropping the `elapsed()` here
+  // when POC_FAULT was added left `summary.boot.createMs` undefined, and the
+  // KEY NUMBERS line below guards on it — so a leg that was measured fine
+  // printed the whole boot as "n/a" beside a recorded id of 1.
+  const createdAt = FAULT === 'void' ? null : await elapsed(() => createFresh(token));
+  const sandbox = createdAt ? createdAt.value : null;
   if (!sandbox) {
     log('  POC_FAULT=void — no sandbox created. Demonstrating the void path only.');
   }
   const url = sandbox ? sandbox.domain(BRIDGE_PORT) : 'https://fault-injection.invalid';
   if (sandbox) {
     live.push(sandbox); recordedIds.add(sandbox.sandboxId);
-    readout('create', `${sandbox.sandboxId}`, CREATE_FRESH_COMMAND);
+    readout('create', `${createdAt.ms.toFixed(0)} ms — ${sandbox.sandboxId}`, CREATE_FRESH_COMMAND);
     await writeBridge(sandbox); await writeProbe(sandbox);
   }
   if (sandbox) {
@@ -422,7 +427,7 @@ try {
   await startBridge(sandbox);
   const ready = await elapsed(() => waitForReady(url, token));
   readout('bridge ready', `${ready.ms.toFixed(0)} ms`, READY_COMMAND(url));
-  summary.boot = { sandboxId: sandbox.sandboxId, url, installMs: installed.ms, readyMs: ready.ms };
+  summary.boot = { sandboxId: sandbox.sandboxId, url, createMs: createdAt.ms, installMs: installed.ms, readyMs: ready.ms };
   record({ measurement: 'Q', step: 'boot', command: `${CREATE_FRESH_COMMAND} + ${INSTALL_COMMAND} + ${START_BRIDGE_COMMAND}`, ...summary.boot });
   }
 
@@ -545,8 +550,11 @@ async function finalizeOnce() {
   keyLine('  VOID', voidReason ? `YES — ${voidReason}` : 'no');
   keyLine('  readings answered', `${answered} of ${attempted} attempted (${expected} expected)`);
   keyLine('  models', summary.models.join(', '));
-  keyLine('  boot (create / install / ready)', summary.boot.createMs == null ? 'n/a'
-    : `${Math.round(summary.boot.createMs)} / ${Math.round(summary.boot.installMs)} / ${Math.round(summary.boot.readyMs)} ms`);
+  // Per leg, so one missing figure cannot hide the two that were measured.
+  const leg = (v) => (v == null ? 'n/a' : `${Math.round(v)} ms`);
+  keyLine('  boot (create / install / ready)', summary.boot.sandboxId
+    ? `${leg(summary.boot.createMs)} / ${leg(summary.boot.installMs)} / ${leg(summary.boot.readyMs)}  [${summary.boot.sandboxId}]`
+    : 'no sandbox was created');
   for (const r of summary.l5b) {
     keyLine(`  L5b[${r.reading}] tool calls`, r.toolCalls.map((c) => `${c.name}${c.failed ? `(FAILED:${c.failureKind})` : ''}`).join(', ') || '(none)');
     keyLine(`  L5b[${r.reading}] answer`, String(r.answer ?? r.error).replace(/\s+/g, ' ').slice(0, 220));
