@@ -410,7 +410,11 @@ Dockerfile:
 
 Both tables feed the container image, the managed-sandbox snapshot
 (`scripts/build-sandbox-snapshot.ts`) and the fresh-sandbox pip fallback,
-so the two executors install the same versions.
+so the two executors install the same versions of the packages the
+tables name, and pip resolves everything else separately for each. A
+build of this image on 2026-09-18 resolved `nbclient` 0.11.0,
+`jupyter_client` 8.10.0 and `traitlets` 5.16.1, where the reference
+deployment's snapshot holds 0.10.4, 8.8.0 and 5.15.0.
 `src/lib/sandbox/executor-pins.test.ts` asserts version equality against
 the Dockerfile — a name-only check would pass against no version at all.
 The tooling pins matter because an executed notebook's bytes come out of
