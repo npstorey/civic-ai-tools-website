@@ -17,9 +17,10 @@
 //     (`randomUUID` / clock / active kid — ADR-0021 §D: the core takes them
 //     as arguments), the `deriveOperationType` fallback (the MCP registry is
 //     app knowledge), the data-source population via the app's resolver
-//     (./data-sources.ts), and the instance-identity config (ADR-0020:
-//     publication host + PROV platform agent from `src/lib/site-config.ts`;
-//     demo defaults = byte-identical emission with no config set).
+//     (./data-sources.ts), the instance-identity config (ADR-0020:
+//     publication host + PROV platform agent from `src/lib/site-config.ts`),
+//     and the MCP server addresses a record names (`serverAddressPolicy`
+//     below: this instance's configured servers, for a run it made).
 
 import crypto from 'crypto';
 import { buildProvenanceGraph, type ProvGraph } from './provenance.ts';
@@ -38,8 +39,15 @@ import {
   extractSkillMetadata,
   traceForInspection,
   CIVICAITOOLS_PROVENANCE_CONFIG,
+  type CivicSourceRegistry,
+  type DatHereMcpServer,
   type ProvenanceConfig,
 } from '@typedstandards/civic-typed-harness';
+import {
+  configuredAddressForSource,
+  configuredMcpServers,
+  readMcpEnvFromProcess,
+} from '../mcp/registry.ts';
 import {
   requirePublicationHost,
   getPlatformAgentOverrides,
@@ -355,6 +363,75 @@ export interface EvidencePackage {
 }
 
 /**
+ * WHICH ADDRESSES A RECORD MAY STATE FOR THE MCP SERVERS OF ITS RUN — the one
+ * decision point (Wave N12 W5, ruling A of the ORCH's G13 on #470).
+ *
+ * The packager reads THIS process's MCP configuration, but it also packages
+ * runs this process did not make: `POST /api/evidence` accepts every
+ * `captureMethod`, and only `chat-flow-stream` is defined as a capture this
+ * instance made ("website server captured bytes as the model streamed to the
+ * browser" — `CaptureMethod` above; `docs/api/records-publish.md`,
+ * `captureMethod`). A `claude-code-*` capture ran in someone's Claude Code
+ * session against servers that session was configured with, so this
+ * instance's configuration says nothing about it.
+ *
+ *   - `'configured'` — a run this instance made: every source's address is the
+ *     one this instance is configured with, and the environment extension
+ *     lists every server in the routing registry.
+ *   - `'unknown'` — any other capture, or none: no registry entry carries an
+ *     address, so no source agent gets one from here (the trace's skill-fetch
+ *     URL still names the skill source, which is the capture's own record),
+ *     and the environment extension keeps the skill-fetch URL alone.
+ *   - `'reference'` — the harness's reference constants, the pre-W5 behaviour
+ *     for every capture. No capture reaches it today. It is ruling A's named
+ *     alternative (C): switching the non-`chat-flow-stream` branch below from
+ *     `'unknown'` to `'reference'` is the whole of that change.
+ *
+ * The label is the caller's: the publish route validates it against the
+ * profile's vocabulary and signs it, and does not otherwise establish where
+ * the run happened.
+ */
+export type ServerAddressPolicy = 'configured' | 'unknown' | 'reference';
+
+export function serverAddressPolicy(captureMethod: CaptureMethod | undefined): ServerAddressPolicy {
+  return captureMethod === 'chat-flow-stream' ? 'configured' : 'unknown';
+}
+
+/**
+ * The provenance source registry under a policy, KEYED BY SOURCE ID (anchor
+ * #470 rider C1). Each entry keeps the harness vocabulary — `displayName`,
+ * `agentTitle`, `catalogType`, `aggregatePortalUrl` stay
+ * `CIVIC_SOURCE_REGISTRY`'s — and its `serverUrl` is either this instance's
+ * configured address, as configured, or absent. The key is omitted, never set
+ * to `''`, because this is a typed value other code reads; the harness would
+ * omit `civic:serverUrl` for `''` as well, so the signed bytes cannot tell the
+ * two apart.
+ */
+export function sourceRegistryForPolicy(policy: ServerAddressPolicy): CivicSourceRegistry {
+  const reference = CIVICAITOOLS_PROVENANCE_CONFIG.sourceRegistry;
+  if (policy === 'reference') return reference;
+  const configured = policy === 'configured' ? readMcpEnvFromProcess() : undefined;
+  const registry: CivicSourceRegistry = {};
+  for (const [sourceId, info] of Object.entries(reference)) {
+    const { serverUrl: _referenceAddress, ...vocabulary } = info;
+    void _referenceAddress;
+    const address = configured ? configuredAddressForSource(configured, sourceId) : undefined;
+    registry[sourceId] = address ? { ...vocabulary, serverUrl: address } : vocabulary;
+  }
+  return registry;
+}
+
+/**
+ * The servers the environment extension lists under a policy, or `undefined`
+ * to leave the harness on the skill-fetch URL it has always used. Under
+ * `'configured'`: every server in `buildMcpRegistry(readMcpEnvFromProcess())`,
+ * in that insertion order, `{ url: <address as configured>, name: <source id> }`.
+ */
+export function mcpServersForPolicy(policy: ServerAddressPolicy): DatHereMcpServer[] | undefined {
+  return policy === 'configured' ? configuredMcpServers(readMcpEnvFromProcess()) : undefined;
+}
+
+/**
  * PROV-O graph config for this instance: the harness's config with the
  * platform agent resolved from instance identity (ADR-0020 — the agent names
  * WHO published inside the signed graph). As of #258 the agent NEVER falls
@@ -368,7 +445,7 @@ export interface EvidencePackage {
  * deployment's own configured values (instance-config.test.ts), not a
  * runtime fallback.
  */
-function instanceProvenanceConfig(): ProvenanceConfig {
+function instanceProvenanceConfig(policy: ServerAddressPolicy): ProvenanceConfig {
   const overrides = getPlatformAgentOverrides();
   const missing: string[] = [];
   // Report the CANONICAL names (civic-ai-tools#160 P5). The presence LOGIC is
@@ -387,16 +464,25 @@ function instanceProvenanceConfig(): ProvenanceConfig {
   }
   return {
     ...CIVICAITOOLS_PROVENANCE_CONFIG,
-    // E4 (website#30 P3). The one field the reference config carries that is
-    // an ENDPOINT fact rather than a vocabulary fact: "Large language model via
-    // OpenRouter", true of civicaitools.org and false of any instance pointed
-    // somewhere else — and the same spread-a-reference-constant shape #258 and
-    // #294 removed from the platform agent below. It is now derived from this
-    // instance's `MODEL_API_KIND`, which is the only thing about the endpoint a
-    // record may safely say: not the resource host, not the deployment name.
-    // `sourceRegistry` stays spread — that one is shared vocabulary, not
-    // deployment identity.
+    // TWO FIELDS OF THE REFERENCE CONFIG ARE ENDPOINT FACTS, NOT VOCABULARY,
+    // and each is replaced by what this instance is configured with — the same
+    // spread-a-reference-constant shape #258 and #294 removed from the platform
+    // agent below. What stays spread is vocabulary: the skill and fallback
+    // source ids.
+    //
+    // E4 (website#30 P3): "Large language model via OpenRouter" was true of
+    // civicaitools.org and false of any instance pointed somewhere else. It is
+    // derived from this instance's `MODEL_API_KIND`, which is the only thing
+    // about the endpoint a record may safely say: not the resource host, not
+    // the deployment name.
     modelAgentDescription: modelAgentDescription(getModelApiKind()),
+    // W5 (website #449, civic-ai-tools#205): each source's `serverUrl` — the
+    // source agent's `civic:serverUrl` in the signed graph — was the reference
+    // deployment's address whatever this instance routed to. The entries keep
+    // the harness vocabulary and carry the address this instance is
+    // configured with, for a run this instance made, or no address at all
+    // (`serverAddressPolicy` above decides which).
+    sourceRegistry: sourceRegistryForPolicy(policy),
     platformAgent: {
       id: overrides.id ?? requirePublicationHost(),
       title: overrides.title as string,
@@ -504,6 +590,9 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
   // content hash by construction, so this preserves the identity chain
   // between the evidence record and the referenced blob.
   const outputIsBlob = isBlobRef(input.output);
+  // One decision for both surfaces below that name MCP servers: the graph's
+  // source agents and the datHere environment extension.
+  const addressPolicy = serverAddressPolicy(input.captureMethod);
   const provenance = buildProvenanceGraph(
     inspectableTrace,
     {
@@ -521,7 +610,7 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       // look like the run's portal reaches the graph, which is exactly the
       // claim 0.3.1 removed.
     },
-    instanceProvenanceConfig(),
+    instanceProvenanceConfig(addressPolicy),
   );
 
   // datHere policy (ADR-0004/0006, spec §8.7.1): producerProfile auto-derive,
@@ -539,6 +628,10 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       producerProfile: input.producerProfile,
       summary: input.summary,
       skillMcpServerUrl: skillMeta.mcpServerUrl,
+      // Under the 'configured' policy the list replaces the skill-fetch URL as
+      // the source of `mcpServers` (harness 0.5.0); otherwise it is undefined
+      // and the harness falls back to `skillMcpServerUrl`, as before.
+      mcpServers: mcpServersForPolicy(addressPolicy),
       extensions: input.extensions,
     },
     { host: requirePublicationHost() },

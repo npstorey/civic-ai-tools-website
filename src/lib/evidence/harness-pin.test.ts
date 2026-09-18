@@ -1,8 +1,29 @@
 // The harness pin — @typedstandards/civic-typed-harness must be a version
 // that carries the signed-surface fixes named below (Wave N9 #384, family F2,
-// C4; Wave N10 #409, criterion 6).
+// C4; Wave N10 #409, criterion 6; Wave N12 #470, criteria 7-9).
 //
-// WHAT THE PIN PROTECTS, PART TWO — 0.4.0, and why the range moved to it.
+// WHAT THE PIN PROTECTS, PART THREE — 0.5.0, and why the range moved to it.
+// Two things this instance's packager now relies on, both in bytes it signs
+// (civic-ai-tools#205 and this repository's #449, the harness halves):
+//
+//   1. A source agent's `civic:serverUrl` is the address the caller's registry
+//      carries, or no key at all. `CivicSourceInfo.serverUrl` became optional,
+//      the graph builder omits the key when an entry has no address, and the
+//      0.4.x fallback — an agent for a source outside the registry carried its
+//      own source id as `civic:serverUrl`, a string that was never an address —
+//      is gone. Below 0.5.0 that fallback is emitted whatever the packager
+//      passes, so a record names a server that does not exist.
+//   2. `deriveDatHereEnvelopeFields` accepts `mcpServers`, a list of
+//      `{ url, name? }` emitted in the caller's order, in place of the one
+//      skill-fetch URL. Below 0.5.0 the input is not read and the environment
+//      extension lists one server (or none) whatever the run had.
+//
+// The packager passes a registry built from this instance's configuration and
+// the full server list only for a capture this instance made
+// (`serverAddressPolicy` in `packager.ts`); the harness is what makes either
+// reach the bytes.
+//
+// WHAT THE PIN PROTECTS, PART TWO — 0.4.0.
 // `buildDataSources` could not see that a call had been REJECTED: its input
 // type was `{ name; args }`, so a rejected call's dataset was minted as an
 // accessed data source, and an aggregate source was marked accessed by any
@@ -97,7 +118,24 @@
 //     `a-rejected-aggregate-call-asserts-no-access.test.ts`;
 //   - 0.4.0 / hub #198, `civic:failed` / `civic:failureKind` on the activity
 //     for a span ended with `error: true` —
-//     `graph-states-what-the-span-carried.test.ts`, case (g).
+//     `graph-states-what-the-span-carried.test.ts`, case (g);
+//   - 0.5.0 / hub #205, no source-id fallback: an agent for a source the
+//     registry does not know carries no `civic:serverUrl` —
+//     `a-record-names-the-configured-servers.test.ts`, the second (7b) case;
+//   - 0.5.0 / #449, `mcpServers` as a list, in the caller's order, with names —
+//     same file, (8), and the notebook-shaped run in
+//     `server-address-policy.test.ts`.
+//
+//   Measured with 0.4.1 installed under this repository's 0.5.0-era packager:
+//   those three cases go red, as does that file's API-key case through its
+//   list-length check, and every other case in both files stays green. A
+//   configured address reaching an agent (7a), and an entry with no address
+//   yielding an agent
+//   with no key (the first (7b) case, and the captures made elsewhere), are
+//   the WEBSITE's registry at work: the registry was caller-supplied before
+//   0.5.0, and 0.4.1's `civic:serverUrl: undefined` is dropped by
+//   `JSON.stringify`. What 0.5.0 adds there is the type — at 0.4.1 an entry
+//   without `serverUrl`, and the `mcpServers` input, do not type-check.
 //
 // WHY THAT LIST IS SPELLED OUT (Wave N10 P8, #409, cold-read F6). Until P8 this
 // paragraph asserted, in one breath, that all of it was "driven end-to-end" in
@@ -127,23 +165,25 @@ const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 
 const HARNESS = '@typedstandards/civic-typed-harness';
 const HARNESS_DIR = path.join(REPO_ROOT, 'node_modules', ...HARNESS.split('/'));
 
-/** The lowest version carrying BOTH sets of fixes this file names: the 0.3.1
- *  graph-builder fixes above, and the 0.4.0 data-source fix below. */
-const FLOOR = '0.4.0';
+/** The lowest version carrying ALL THREE sets of fixes this file names: the
+ *  0.3.1 graph-builder fixes, the 0.4.0 data-source fix, and the 0.5.0
+ *  configured-server fixes above. */
+const FLOOR = '0.5.0';
 /** Exclusive ceiling: under semver a 0.x MINOR bump is a breaking change, so
- *  the pin admits later 0.4.x PATCHES (a fix that is still this behaviour) and
- *  refuses 0.5.0, which would be a contract this test has not read. The
- *  assertion is therefore a RANGE (`>=0.4.0 <0.5.0`) rather than equality to
- *  `0.4.0`: pinning the exact string would turn red on a patch release that
+ *  the pin admits later 0.5.x PATCHES (a fix that is still this behaviour) and
+ *  refuses 0.6.0, which would be a contract this test has not read. The
+ *  assertion is therefore a RANGE (`>=0.5.0 <0.6.0`) rather than equality to
+ *  `0.5.0`: pinning the exact string would turn red on a patch release that
  *  changed nothing this file cares about, which is a criterion that fails for
  *  the wrong reason.
  *
  *  MOVED DELIBERATELY, NOT DRIFTED. The pair was `>=0.3.1 <0.4.0` until Wave
- *  N10 P4. That ceiling did its job: it held 0.4.0 out until someone read the
- *  new contract and said what changed. Both numbers move together, in one
- *  commit, with the paragraph above rewritten — a floor raised without its
- *  ceiling would silently readmit the next unread minor. */
-const CEILING = '0.5.0';
+ *  N10 P4 and `>=0.4.0 <0.5.0` until Wave N12 W5. Each ceiling did its job: it
+ *  held the next minor out until someone read the new contract and said what
+ *  changed. Both numbers move together, in one commit, with the paragraph
+ *  above rewritten — a floor raised without its ceiling would silently readmit
+ *  the next unread minor. */
+const CEILING = '0.6.0';
 
 type Semver = [number, number, number];
 
@@ -178,7 +218,7 @@ function readJson(file: string): Record<string, unknown> {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
 }
 
-test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.4.0 <0.5.0 (it carries both sets of signed-surface fixes)', () => {
+test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.5.0 <0.6.0 (it carries all three sets of signed-surface fixes)', () => {
   const pkgJson = path.join(HARNESS_DIR, 'package.json');
   assert.ok(fs.existsSync(pkgJson), `${HARNESS} is not installed at ${pkgJson} — run npm ci`);
 
@@ -188,11 +228,12 @@ test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.4.0 <0.5.0 (i
   const installed = parseSemver(version as string, `installed ${HARNESS}`);
   assert.ok(
     compareSemver(installed, parseSemver(FLOOR, 'floor')) >= 0,
-    `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release whose buildDataSources ` +
-      'reads `failed` (hub data-sources.ts:153-159 at a6d6f77). Below it, a rejected call mints its dataset as ' +
-      'an accessed source and marks its aggregate source accessed — inside bytes this instance signs. 0.3.1 is ' +
-      'the floor for the graph half (hub provenance.ts:339/:343 at fd9afae); below THAT, ' +
-      "dist/capture/provenance.js:177 defaults tool.name to 'get_data' and :180 defaults the portal to the run's.",
+    `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release whose source agents omit ` +
+      '`civic:serverUrl` rather than assert a source id as an address, and whose datHere environment reads a ' +
+      'list of servers (civic-ai-tools#205, #449). Below it, a record names a server that does not exist and ' +
+      'lists one server whatever the run had. 0.4.0 is the floor for `failed` in buildDataSources (hub ' +
+      'data-sources.ts:153-159 at a6d6f77); 0.3.1 the floor for the graph half (hub provenance.ts:339/:343 at ' +
+      "fd9afae), below which dist/capture/provenance.js:177 defaults tool.name to 'get_data'.",
   );
   assert.ok(
     compareSemver(installed, parseSemver(CEILING, 'ceiling')) < 0,
@@ -232,17 +273,17 @@ test('harness pin: exactly one produce-core copy — the harness carries no nest
   // "which copy assembled these bytes" is a question a record system should
   // never have to ask.
   //
-  // RE-READ AT 0.4.0 (Wave N10 P4). The harness's own dependency range is
-  // still `^0.3.0 || ^0.4.0` — the lockfile entry for the harness moved only
-  // its version, resolved URL and integrity, and no `node_modules/@typed
-  // standards/civic-typed-harness/node_modules` appeared. One copy still
-  // serves both, and the assertion below still measures that rather than
-  // trusting the range.
+  // RE-READ AT 0.4.0 (Wave N10 P4) AND AT 0.5.0 (Wave N12 W5). The harness's
+  // own dependency range is still `^0.3.0 || ^0.4.0` — at each move the
+  // lockfile entry for the harness changed only its version, resolved URL and
+  // integrity, and no `node_modules/@typedstandards/civic-typed-harness/
+  // node_modules` appeared. One copy still serves both, and the assertion
+  // below still measures that rather than trusting the range.
   const nested = path.join(HARNESS_DIR, 'node_modules', '@typedstandards', 'produce-core');
   assert.equal(
     fs.existsSync(nested),
     false,
     `a second produce-core is nested at ${nested}; the harness's dependency range must admit the ` +
-      "root copy (0.3.1 widened it to '^0.3.0 || ^0.4.0', and 0.4.0 kept it), so npm install resolves one.",
+      "root copy (0.3.1 widened it to '^0.3.0 || ^0.4.0', and 0.4.0 and 0.5.0 kept it), so npm install resolves one.",
   );
 });
