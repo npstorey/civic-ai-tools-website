@@ -101,8 +101,8 @@ const ALLOWED_MODEL_CALLERS: Record<string, string> = {
   // with 401 — the key was an `op://` reference, non-empty and not a
   // credential. A probe whose failure you can see is the point, so it is a real
   // call and not a local check.
-  'scripts/poc-live-source/run-questions.mjs':
-    'The pre-flight credential probe: one turn, max_tokens 1, no tools. Not loop-class.',
+  'scripts/poc-live-source/credential-probe.mjs':
+    'The pre-flight credential probe, shared by every runner in that spike: one turn, max_tokens 1, no tools. Not loop-class.',
 };
 
 /**

@@ -335,21 +335,14 @@ summary.models = models;
  * and one sandbox later.
  */
 const { getModelClient, classifyModelError } = await import('../../src/lib/model-client.ts');
+const { probeCredential, PROBE_COMMAND } = await import('./credential-probe.mjs');
 try {
   if (FAULT === 'void') {
     readout('model credential', 'SKIPPED — POC_FAULT=void (nothing is called, created or billed)', 'POC_FAULT=void');
   } else {
-  const probeClient = getModelClient();
-  for (const m of models) {
-    const t0 = Date.now();
-    const r = await probeClient.chat.completions.create({
-      model: m,
-      messages: [{ role: 'user', content: 'ping' }],
-      max_tokens: 1,
-    });
-    readout(`model credential · ${m}`, `USABLE — answered in ${Date.now() - t0} ms (${r?.usage?.total_tokens ?? '?'} tokens)`,
-      `client.chat.completions.create({ model: '${m}', max_tokens: 1 })  — one turn, no tools`);
-  }
+    for (const r of await probeCredential(getModelClient(), models)) {
+      readout(`model credential · ${r.model}`, `USABLE — answered in ${r.ms} ms (${r.totalTokens ?? '?'} tokens)`, PROBE_COMMAND(r.model));
+    }
   }
 } catch (e) {
   const kind = classifyModelError(e);
