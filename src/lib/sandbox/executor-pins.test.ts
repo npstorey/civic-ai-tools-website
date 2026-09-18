@@ -18,20 +18,20 @@ import { createRequire } from 'node:module';
 
 import { EXECUTOR_TOOLING_PACKAGES } from './driver.ts';
 
-const repoFile = (p) => readFileSync(new URL(`../../../${p}`, import.meta.url), 'utf8');
+const repoFile = (p: string) => readFileSync(new URL(`../../../${p}`, import.meta.url), 'utf8');
 const executorDockerfile = repoFile('docker/executor/Dockerfile');
 
 /** The four tooling package names, whatever shape the table is in. */
 function toolingNames(): string[] {
   return Array.isArray(EXECUTOR_TOOLING_PACKAGES)
     ? [...EXECUTOR_TOOLING_PACKAGES]
-    : Object.keys(EXECUTOR_TOOLING_PACKAGES as Record<string, string>);
+    : Object.keys(EXECUTOR_TOOLING_PACKAGES as unknown as Record<string, string>);
 }
 
 /** The version the shared table declares for a package, or null if it declares none. */
 function declaredVersion(name: string): string | null {
   if (Array.isArray(EXECUTOR_TOOLING_PACKAGES)) return null;
-  const v = (EXECUTOR_TOOLING_PACKAGES as Record<string, string>)[name];
+  const v = (EXECUTOR_TOOLING_PACKAGES as unknown as Record<string, string>)[name];
   return typeof v === 'string' && v.length > 0 ? v : null;
 }
 
