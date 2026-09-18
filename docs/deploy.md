@@ -426,8 +426,11 @@ with `HOME=/home/notebook` and `WORKDIR=/tmp`; the driver stages the
 notebook under `/tmp`, which that user can write. matplotlib's font cache
 is warmed at build time **after** the `USER` switch, so the first run in a
 fresh container does not rebuild it — a cache built under root's home is
-not read by `notebook`, and the rebuild writes a font-manager log line
-into cell output, which is part of the signed bytes.
+not read by `notebook`. At matplotlib 3.9.2 a rebuild logs `generated new
+fontManager` at INFO, which at default log levels reaches nothing; a
+notebook that configures logging puts that line on cell stderr, and cell
+stderr is part of the executed-notebook bytes, which are signed. The warm
+removes the rebuild either way.
 
 This is the executor container. The `app` service still runs as root with
 the socket mount described above; that is a separate posture and the

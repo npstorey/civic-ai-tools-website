@@ -43,10 +43,12 @@ ENV HOME=/home/notebook \
 WORKDIR /tmp
 USER notebook
 
-# Warm matplotlib's font cache at build time so the first notebook run in a
-# fresh container does not emit the "building the font cache" notice into
-# cell stderr output (which would land in the executed-notebook bytes).
-# Warmed AS THE USER THAT RUNS: a cache built under root's home is not read
-# by `notebook`, which would rebuild it on the first run and put the notice
-# back into the signed bytes.
+# Warm matplotlib's font cache at build time, AS THE USER THAT RUNS: a cache
+# built under root's home is not read by `notebook`, so the first notebook
+# run in a fresh container would rebuild it. Measured at the pinned
+# matplotlib 3.9.2, a rebuild logs `generated new fontManager` at INFO, which
+# at default log levels reaches nothing; a notebook that configures logging
+# puts that line on cell stderr, and cell stderr is part of the
+# executed-notebook bytes, which are signed. The warm removes the rebuild
+# either way.
 RUN python -c "import matplotlib.pyplot"
