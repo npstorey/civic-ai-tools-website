@@ -231,3 +231,25 @@ Each cost a real mistake; the incident sits in an HTML comment beside it. Path-s
        ruling was written for, and nobody drove them until the cold read (#434 F1; fixed in #463 by
        reading the trace, then checked by rendering all 20 published records before and after). -->
 
+- **A sandbox network policy filters what starts, not what is already running.** An outbound
+  allowlist refuses every host but the named ones for any process that begins after it is applied,
+  and does nothing to a connection already open. Treat it as a property applied when a sandbox is
+  created, not as a way to revoke reach: cutting off a source that is already talking means
+  restarting it.
+  <!-- 2026-09-17, the live-source hosting spike (branch `archive/poc-mcp-live-source`): under a
+       deny-everything policy a warm MCP source answered 56 and 55 live calls over two minutes,
+       twice, while a process spawned beside it in the same machine could not resolve the same host.
+       It failed only when restarted (455 ms) or after its connection pool had gone idle 20 s
+       (86 ms). The containment boundary is the source's own open connection, not the platform
+       firewall. -->
+
+- **A credential that is present is not a credential that works.** Before spending anything on the
+  strength of one — a sandbox, a model loop, a paid API call — check it with one real call that can
+  fail. A presence check answers "is a value set", which is a different question.
+  <!-- Same spike: an env file holds `op://` references, so reading it directly handed the process a
+       non-empty string that is not a credential. Every presence check passed and all ten model calls
+       returned 401, after a sandbox had been created; the run measured nothing. The fix was a
+       one-turn `max_tokens: 1` probe before anything is created, plus reading an already-resolved
+       value from the environment (`op run …`) rather than the file. -->
+
+
