@@ -118,6 +118,68 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
   return { servers, toolIndex, unconfiguredTools };
 }
 
+/**
+ * Which `McpRegistryEnv` field carries each source's configured address —
+ * keyed by SOURCE ID, the same key `buildMcpRegistry` gives its servers and
+ * the harness's `CIVIC_SOURCE_REGISTRY` gives its entries (Wave N12 W5,
+ * website #449 and civic-ai-tools#205; keyed by id so that a later
+ * per-instance alias scheme is not pre-empted).
+ *
+ * The value a record states for a server is this field's value AS CONFIGURED
+ * — what `readMcpEnvFromProcess()` returns, which is also what the skill-fetch
+ * span records through `skillRoutingTraceAttributes` — never
+ * `normalizeMcpEndpoint`'s routing form. `mcp-source-addresses.test.ts` fails
+ * in both directions: a server `buildMcpRegistry` emits with no entry here,
+ * and an entry here naming no server; it also requires each entry to name the
+ * field that server's `endpointUrl` is built from.
+ */
+export const MCP_SOURCE_ADDRESS_FIELD = {
+  socrata: 'socrataUrl',
+  'data-commons': 'dataCommonsUrl',
+  'boston-opencontext': 'bostonOpencontextUrl',
+} as const satisfies Record<string, keyof McpRegistryEnv>;
+
+/** A source's configured address as configured, or `undefined` when the
+ *  source has no mapping or the instance configured no address for it. An
+ *  empty string is `undefined` too: absence is stated by absence, never by
+ *  `''`. Any other value is returned untouched — the value routing builds its
+ *  endpoint from, before `normalizeMcpEndpoint`. */
+export function configuredAddressForSource(
+  configured: McpRegistryEnv,
+  sourceId: string,
+): string | undefined {
+  if (!Object.hasOwn(MCP_SOURCE_ADDRESS_FIELD, sourceId)) return undefined;
+  const field = MCP_SOURCE_ADDRESS_FIELD[sourceId as keyof typeof MCP_SOURCE_ADDRESS_FIELD];
+  const value = configured[field];
+  return value ? value : undefined;
+}
+
+/** One server this instance routes to, as a record names it. */
+export interface ConfiguredMcpServer {
+  /** The configured address, as configured. */
+  url: string;
+  /** The source id. */
+  name: string;
+}
+
+/**
+ * Every server in `buildMcpRegistry(env).servers`, in that insertion order,
+ * each with its configured address and its source id. A server with no
+ * address mapping throws rather than being dropped: a list that silently lost
+ * a server would state, in signed bytes, that the run did not have it.
+ */
+export function configuredMcpServers(configured: McpRegistryEnv): ConfiguredMcpServer[] {
+  return Object.keys(buildMcpRegistry(configured).servers).map((sourceId) => {
+    const url = configuredAddressForSource(configured, sourceId);
+    if (url === undefined) {
+      throw new Error(
+        `MCP registry server "${sourceId}" has no configured address — add it to MCP_SOURCE_ADDRESS_FIELD`,
+      );
+    }
+    return { url, name: sourceId };
+  });
+}
+
 /** Look up the server that hosts a given tool name. Returns `undefined` for unknown tools. */
 export function resolveServerForTool(
   registry: McpRegistry,
