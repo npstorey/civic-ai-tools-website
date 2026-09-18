@@ -245,7 +245,7 @@ services:
       S3_REGION:
       S3_FORCE_PATH_STYLE:
       EXECUTOR_DRIVER: container
-      EXECUTOR_CONTAINER_IMAGE: ${EXECUTOR_CONTAINER_IMAGE:-civic-notebook-executor:0.1.0}
+      EXECUTOR_CONTAINER_IMAGE: ${EXECUTOR_CONTAINER_IMAGE:-civic-notebook-executor:0.2.0}
       # --- instance identity (ADR-0020; neutral local values) ---
       # Each reads your canonical name, then your prior-era one, then the
       # neutral local default — so renaming your env file is optional and a
@@ -435,7 +435,7 @@ services:
   #   docker compose --profile build-only build executor-image
   executor-image:
     profiles: ["build-only"]
-    image: ${EXECUTOR_CONTAINER_IMAGE:-civic-notebook-executor:0.1.0}
+    image: ${EXECUTOR_CONTAINER_IMAGE:-civic-notebook-executor:0.2.0}
     build:
       context: docker/executor
 

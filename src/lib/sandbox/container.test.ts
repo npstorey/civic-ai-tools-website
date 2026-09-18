@@ -1,9 +1,11 @@
 // Unit tests for the notebook-executor driver seam (S3b P4):
 //   1. Anti-drift: docker/executor/Dockerfile mirrors the single-sourced
 //      pinned-library table (src/lib/notebook-author/prompt.ts) and the
-//      notebook-tooling package set (src/lib/sandbox/driver.ts) — the
-//      container image cannot silently diverge from what the sandbox
-//      snapshot and the notebook's own pip-install cell pin.
+//      notebook-tooling table (src/lib/sandbox/driver.ts) — the container
+//      image cannot silently diverge from what the sandbox snapshot and the
+//      notebook's own pip-install cell pin. Since #450 the tooling table
+//      carries versions too, and `./executor-pins.test.ts` is where the
+//      version equality, the non-root user and the image tag are asserted.
 //   2. Pure helpers of the container driver (image resolution, docker exec
 //      env flags, shell quoting).
 //   3. Driver selection (EXECUTOR_DRIVER), matching the DB_DRIVER /
@@ -34,16 +36,18 @@ const DOCKERFILE_PATH = fileURLToPath(
 );
 const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
 
-test('Dockerfile pins exactly the single-sourced PINNED_LIBRARIES table', () => {
+test('Dockerfile pins exactly the two single-sourced tables and nothing else', () => {
   const pinPattern = /([a-zA-Z0-9_-]+)==([0-9][0-9a-zA-Z.]*)/g;
   const dockerfilePins: Record<string, string> = {};
   for (const match of dockerfile.matchAll(pinPattern)) {
     dockerfilePins[match[1]] = match[2];
   }
   // Exact equality both directions: no missing pins, no extra pins, no
-  // version drift. PINNED_LIBRARIES is the single source; the Dockerfile is
-  // a test-enforced mirror (Dockerfiles cannot import TypeScript).
-  assert.deepEqual(dockerfilePins, { ...PINNED_LIBRARIES });
+  // version drift. PINNED_LIBRARIES (scientific stack) and
+  // EXECUTOR_TOOLING_PACKAGES (notebook tooling, pinned since #450) are the
+  // single sources; the Dockerfile is a test-enforced mirror of their union
+  // (Dockerfiles cannot import TypeScript).
+  assert.deepEqual(dockerfilePins, { ...PINNED_LIBRARIES, ...EXECUTOR_TOOLING_PACKAGES });
 });
 
 test('Dockerfile FROM line matches PYTHON_RUNTIME_VERSION', () => {
@@ -58,12 +62,16 @@ test('Dockerfile FROM line matches PYTHON_RUNTIME_VERSION', () => {
   );
 });
 
-test('Dockerfile installs every notebook-tooling package', () => {
-  for (const pkg of EXECUTOR_TOOLING_PACKAGES) {
+test('Dockerfile installs every notebook-tooling package, with a version', () => {
+  // Since #450 the boundary is `==`, not whitespace: this exact assertion
+  // passed against four unversioned names, which is the state #450 was filed
+  // about. `./executor-pins.test.ts` asserts the versions AGREE with the
+  // table; this one asserts each name is present and pinned at all.
+  for (const pkg of Object.keys(EXECUTOR_TOOLING_PACKAGES)) {
     assert.match(
       dockerfile,
-      new RegExp(`(^|[\\s\\\\])${pkg}([\\s\\\\]|$)`, 'm'),
-      `Dockerfile must install "${pkg}" (EXECUTOR_TOOLING_PACKAGES)`,
+      new RegExp(`(^|[\\s\\\\])${pkg}==\\d`, 'm'),
+      `Dockerfile must install "${pkg}" with a version (EXECUTOR_TOOLING_PACKAGES)`,
     );
   }
 });
