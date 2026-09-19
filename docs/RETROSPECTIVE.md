@@ -6,6 +6,110 @@ Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ---
 
+## 2026-09-19 — Wave N12 (#470): deploy-fit — and the claims no command settles (nine gated phases, two lanes)
+
+**Scope:** eight filings, each true on any instance, from comparing the reference image against a deployment target's requirements. One property: **everything an instance runs, contacts or names in a record comes from that instance's configuration or is stated as absent.** It covers seven things:
+
+- a dependency-free health probe;
+- a runtime image without tooling it does not use;
+- pinned, unprivileged notebook execution;
+- configurable signing-service addresses;
+- outbound calls that honour the proxy variables;
+- a stated writable path under a read-only root;
+- records that name the servers their run had.
+
+The reference image stays unchanged at its defaults.
+
+**Phases:**
+
+- **Website:**
+  - W1 `d9187cf`: #443, the health route;
+  - W2 `2b10908`: #444 and #469, the image without the docker CLI and the read-only root;
+  - W4 `d34d2fd`: #445, the signing addresses;
+  - W6 `7653ad6`: #468, one proxy dispatcher;
+  - W3 `b3ec208`: #450, executor pins and a non-root user;
+  - W5 `f0da9d3`: #449 and hub #205's website half, plus the harness 0.5.0 pin;
+  - the cold read, on Fable 5.1;
+  - WF `ea6fcea`: the cold read's findings.
+- **Hub:** H1 `98498b0` (#205's and #449's harness halves); R-H `1e4fd68` (harness 0.5.0, published and read back from the registry) and its date fix `6531815`.
+
+**Merges and tags:** ten merges. Each is a merge commit whose second parent is the head named in the seat's GO comment on that PR. Every phase has an annotated rollback tag cut before its branch and another after its merge. The one exception is the hub date fix: it has only its `-merged` tag, and R-H's `-merged` tag marks the state before it.
+
+**Test totals:** website `# fail 0` at every merged head, 1668 tests at `ea6fcea`; hub 186.
+
+**Owner legs:** two.
+- Gate 2 read the reference snapshot's tooling versions.
+- W5's live drive ran a local instance under `op run` with a throwaway signing key and loopback signing stubs. A session never handled a credential.
+
+### The lesson: the claims most worth checking are the ones no command settles
+
+Every mechanical claim in this wave was verified against the runner and the tree: SHAs, run attempts, checks by name, diff scopes, pin tables. **The claims that went wrong were prose, and they kept going wrong in the same shape.**
+
+- **W3 "rewrote the standing comment".** It had not. The inherited sentence stood, and a new unconditional sentence beside it contradicted the phase's own measurement. The ORCH repeated the claim in a gate record without opening the file, and the seat caught it at the merge gate.
+- **The correction record (G12) itself counted the tag sites wrong:** "seven occurrences across five files", where the tree has eight. The cold read found it.
+- **W5 wrote a false comment about the harness's reference config.** The phase caught it by reading its own prose at the SHA.
+- **WF corrected one sentence about pinned versions** and left the sentence directly above it saying the image "pins every package it installs". Same shape: a correction beside an old claim. It was fixed on top before the GO.
+- **"Exactly one `Signed-off-by`" on five merged commits was true of the message text and false of git's trailer parser.** A blank line split the trailer block. The DCO check passed, because the line is in the message. From W5 on, the check is `%(trailers:key=Signed-off-by)`, the parser, and the seat checks it that way at every GO.
+- **A handoff carried a constraint forward unmeasured:** "omit `serverUrl`, never `''`, or the harness's omission never fires". The harness spreads on truthiness, so `''` is omitted too. The next ORCH measured it before issuing and a mutation confirmed it.
+
+**How to apply it:** when a report says it *rewrote*, *corrected* or *removed* prose, read the passage at the SHA. Watch for a correction added beside the thing it corrects, and ask for the block rewritten whole. A count or a claim in a record is prose too.
+
+### The second: a fix shape that reads this process's configuration must ask whether this process made the run
+
+The charter ruled that records name "the configured address", read from the packaging process's environment. **The packager has one call site, and it also packages runs made elsewhere.**
+
+- 6 of the 34 published records are Claude Code captures. Their traces name local stdio servers.
+- Their provenance agents asserted the reference deployment's addresses.
+- Applied to every capture, the ruled shape would have replaced one asserted default with another: this instance's addresses, in the records of runs that never touched them.
+
+**Ruling A** scopes the configured registry to `chat-flow-stream`, a capture this instance made. Every other capture states no address. The seat concurred: the alternative would keep signing a known asserted default.
+
+This is N11's configuration lesson one step further on: ask what sets the value a change reads, **and whose run that value describes.**
+
+### Criteria written before measurement
+
+- **Criterion 3 said the image request "fails" without the writable mount.** It answers 200 and logs a failed write.
+- **Criterion 4 said a notebook is "byte-identical" before and after.** nbclient stamps timestamps on every run, so identity holds only after the five documented masks.
+
+Both were known to the gate records by mid-wave. **Neither correction reached the anchor body, and the cold read found both from the body.** A criterion correction recorded only in a gate record does not reach the next reader of the contract. The close record carries the corrected wording.
+
+### Instruments that could not fail, or could not turn green
+
+- **W6's first red could never have gone green.** A proxy built from `http.createServer` records nothing, because undici tunnels with `CONNECT` even for an `http://` target. An instrument that asserts on a protocol has to be driven against a real implementation of it first.
+- **W3's first red failed on its own type errors.** `npm test` strips types; CI's build step checks them. A red has to pass the typecheck while its assertions fail.
+- **The cold read found three more:**
+  - a non-root `USER` check satisfied by an earlier line of a file that ends in `USER root`;
+  - a layer scan with no positive control, which would read zero on both images if `docker save`'s layout changed;
+  - an executor-tag site list typed by hand and guarded in one direction.
+
+  WF made the first read the last `USER`, gave the second a reference image that must show at least one hit, and derived the third from `git ls-files`.
+- **Every website phase's red ran on a draft PR that was then closed unmerged**, with its run id recorded before its phase was issued. The fix phase's red required a row and forbade an overclaim, without saying what the row should read, so the red did not prescribe the fix shape.
+
+### Also earned
+
+- **A local checkout is not the remote.** A handoff named a hub `main` one merge behind. Name a main only after a fetch.
+- **In a shared checkout, read the current branch before merging.** An IMPL leaves the checkout on its branch.
+- **A phase label in a commit message is not an identifier.** Two waves both had a "P-H2".
+- **An ORCH learns of a subagent's permission denial only when the agent reports.** Surface it; never re-run a denied call on a subagent's request.
+- **A required check can report late.** WF's `Vercel` status sat pending on GitHub while the deployment was ready. Nothing was re-run; the GO waited for the status.
+
+### Owed after the wave
+
+- **Filed:** #489–#497, plus the umbrella #498.
+  - the executor's transitive lock;
+  - CI building the executor image;
+  - the sandbox SDK upgrade;
+  - the sandbox API's proxy transport, beside #483;
+  - driving verification against a substitute authority;
+  - the container driver's proxy variables;
+  - the packaging-time address read;
+  - the caller-asserted capture method;
+  - the pre-publish server list.
+- **Carried open:** #483.
+- **Resolved without an issue:** no reader rebuilds a stored package, and no published record carries the source-id fallback 0.5.0 dropped. The reproduction asymmetry the 0.5.0 CHANGELOG names therefore touches no published record.
+
+---
+
 ## 2026-09-14 — Wave N11 (#434): the surfaces around the record — and a statement never driven on the records it was written for (sixteen gated phases, four lanes)
 
 **Scope:** N10 left fourteen filings about the surfaces that read a record: its readers, its guards, and the deploy path around it. One property: **no surface of the reference app, the hosted server or the harness carries a default or a site list that names one deployment or one reader.** A guard's universe is derived from what reads the surface, never a hand list (ruling D10). A default is configuration, and absent means absent, stated as such.
