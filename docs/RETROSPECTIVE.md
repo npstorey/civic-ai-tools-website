@@ -35,10 +35,11 @@ The reference image stays unchanged at its defaults.
 
 **Merges and tags:** ten merges. Each is a merge commit whose second parent is the head named in the seat's GO comment on that PR. Every phase has an annotated rollback tag cut before its branch and another after its merge. The one exception is the hub date fix: it has only its `-merged` tag, and R-H's `-merged` tag marks the state before it.
 
-**Test totals:** website `# fail 0` at every merged head, 1668 tests at `ea6fcea`; hub 186.
+**Test totals:** website `# fail 0` at every merged head, 1668 tests at `ea6fcea`; hub 186 at `5a2dadd`.
 
-**Owner legs:** two.
+**Owner legs:** three.
 - Gate 2 read the reference snapshot's tooling versions.
+- R-H's publish of harness 0.5.0 ran from the owner's terminal after `npm login`, and was then read back from the registry.
 - W5's live drive ran a local instance under `op run` with a throwaway signing key and loopback signing stubs. A session never handled a credential.
 
 ### The lesson: the claims most worth checking are the ones no command settles
@@ -91,7 +92,7 @@ Both were known to the gate records by mid-wave. **Neither correction reached th
 - **In a shared checkout, read the current branch before merging.** An IMPL leaves the checkout on its branch.
 - **A phase label in a commit message is not an identifier.** Two waves both had a "P-H2".
 - **An ORCH learns of a subagent's permission denial only when the agent reports.** Surface it; never re-run a denied call on a subagent's request.
-- **A required check can report late.** WF's `Vercel` status sat pending on GitHub for more than 20 minutes after the push, and read success the next day. When the deployment became ready was never measured. The inspection that showed it ready ran about 16 hours later, and a gate record first said otherwise (G17, corrected in G18). Nothing was re-run; the GO waited for the status.
+- **A required check can report late.** WF's `Vercel` status went pending on GitHub at 20:45:01Z and success at 21:52:47Z, 68 minutes later on the same day, by GitHub's status history for that head. The ORCH looked the next morning. Two records misdated it: G17 put the deployment's readiness in the pending window, and this entry's first correction put the success on the next day. Nothing was re-run; the GO waited for the status.
 
 ### Owed after the wave
 
