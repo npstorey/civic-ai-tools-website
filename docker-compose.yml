@@ -365,9 +365,13 @@ services:
       # REFERENCE CONFIGURATION — with none of them set no dispatcher is
       # installed and every outbound request leaves by the path and to the host
       # it did before these variables existed. Set them on a network where
-      # outbound traffic must pass through a proxy; the app then honours them
-      # for the model endpoint, the MCP servers, the object store, the signing
-      # services and the object-store read verification makes.
+      # outbound traffic must pass through a proxy. They reach the calls that
+      # leave through the global fetch dispatcher: the model endpoint, the MCP
+      # servers, the object store, the signing services, the object-store read
+      # verification makes and the rate-limit KV store. They do NOT reach the
+      # sign-in provider's calls or the default notebook executor's sandbox API
+      # calls (EXECUTOR_DRIVER=vercel-sandbox, to vercel.com), which leave by
+      # transports of their own. docs/deploy.md has the table, kind by kind.
       #
       # NO_PROXY IS ADDITIVE. Loopback (localhost, 127.0.0.1, [::1]) is exempt
       # whatever you set, so a service on the host stays direct. THE SERVICES
