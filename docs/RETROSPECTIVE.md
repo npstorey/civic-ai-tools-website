@@ -91,7 +91,7 @@ Both were known to the gate records by mid-wave. **Neither correction reached th
 - **In a shared checkout, read the current branch before merging.** An IMPL leaves the checkout on its branch.
 - **A phase label in a commit message is not an identifier.** Two waves both had a "P-H2".
 - **An ORCH learns of a subagent's permission denial only when the agent reports.** Surface it; never re-run a denied call on a subagent's request.
-- **A required check can report late.** WF's `Vercel` status sat pending on GitHub while the deployment was ready. Nothing was re-run; the GO waited for the status.
+- **A required check can report late.** WF's `Vercel` status sat pending on GitHub for more than 20 minutes after the push, and read success the next day. When the deployment became ready was never measured. The inspection that showed it ready ran about 16 hours later, and a gate record first said otherwise (G17, corrected in G18). Nothing was re-run; the GO waited for the status.
 
 ### Owed after the wave
 
