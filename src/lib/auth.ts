@@ -1,4 +1,8 @@
 import type { NextAuthOptions } from 'next-auth';
+// Side-effect import: puts the sign-in provider leg's proxy transport in place
+// before any provider call, without depending on the instrumentation hook
+// having evaluated first (#483). With no proxy configured it does nothing.
+import './signin-proxy.ts';
 import { buildProviders, normalizeIssuer, providerAccountKey, OIDC_PROVIDER_ID } from './auth-providers';
 import { isSignInAllowed } from './auth-allowlist';
 import { db } from '@/lib/db';

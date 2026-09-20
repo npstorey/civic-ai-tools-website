@@ -93,6 +93,7 @@ function signInTransportInstaller() {
  */
 async function loopbackProxy() {
   const seen = [];
+  const headers = [];
   const origin = http.createServer((_q, s) => {
     s.writeHead(200, { 'content-type': 'application/json', 'content-length': '2' });
     s.end('{}');
@@ -107,6 +108,9 @@ async function loopbackProxy() {
   });
   server.on('connect', (req, clientSocket, head) => {
     seen.push(req.url);
+    // Recorded beside the authority, so a test can ask what the tunnel
+    // request carried and not only where it was pointed.
+    headers.push(req.headers);
     const upstream = net.connect(originPort, '127.0.0.1', () => {
       clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
       if (head?.length) upstream.write(head);
@@ -119,6 +123,7 @@ async function loopbackProxy() {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   return {
     seen,
+    headers,
     port: server.address().port,
     close: () => { server.close(); origin.close(); },
   };
@@ -785,6 +790,72 @@ test("next-auth's provider leg still goes through openid-client's Issuer and cli
     'next-auth no longer builds its client from the discovered issuer, so the token leg is reached ' +
       'through a receiver the hook may not cover',
   );
+});
+
+// Criterion 1, the protocol the table does not otherwise reach. An `https://`
+// destination is the case the shape of this fix turns on: `openid-client`
+// passes a full URL, which names no port, so Node fills the port in from the
+// AGENT's `defaultPort` — and it reads that before it knows the protocol.
+// A single agent serving both transports therefore dials 80 for an `https://`
+// destination, measured. Nothing else in this suite drives an `https://`
+// sign-in destination, so without this the whole hazard is unmeasured.
+test('an https sign-in destination is tunnelled to 443, not to the http default', async () => {
+  const proxy = await loopbackProxy();
+  try {
+    await drive(proxyEnv(proxy.port), () => driveSignIn(`https://${UNRESOLVABLE}`));
+  } finally {
+    proxy.close();
+  }
+
+  assert.ok(
+    proxy.seen.length >= 1,
+    `the proxy saw ${proxy.seen.length} request(s); an https sign-in destination must reach it too, ` +
+      'and the table above drives only http ones',
+  );
+  assert.ok(
+    proxy.seen.includes(`${UNRESOLVABLE}:443`),
+    `the proxy was told ${JSON.stringify(proxy.seen)}; an https destination that names no port is ` +
+      'on 443, and a request tunnelled to 80 instead would reach the wrong service on every real ' +
+      "provider — the symptom of one agent serving both transports, since Node resolves an agent's " +
+      'defaultPort before it knows the protocol',
+  );
+});
+
+// A proxy address may carry a user and password, which docs/deploy.md tells an
+// operator they may use. The sign-in path builds its own tunnel request rather
+// than handing the address to a library, so the one thing that turns that
+// sentence from true into false is whether the request carries the header —
+// driven here rather than read off the implementation. The values below are
+// literal placeholders this loopback proxy never checks.
+test('a proxy address carrying a user and password reaches the tunnel as Proxy-Authorization', async () => {
+  const proxy = await loopbackProxy();
+  const address = `http://probe-user:probe-pass@127.0.0.1:${proxy.port}`;
+  try {
+    await drive(
+      { HTTP_PROXY: address, http_proxy: address, NO_PROXY: null, no_proxy: null },
+      () => driveSignIn(`http://${UNRESOLVABLE}`),
+    );
+  } finally {
+    proxy.close();
+  }
+
+  assert.ok(proxy.seen.length >= 1, 'nothing reached the proxy, so the header below is unmeasured');
+  assert.ok(
+    proxy.headers.length >= 1,
+    'the request reached the proxy but not as a CONNECT, so no tunnel request line was recorded and ' +
+      'the loop below would assert over nothing',
+  );
+  const expected = `Basic ${Buffer.from('probe-user:probe-pass').toString('base64')}`;
+  for (const headers of proxy.headers) {
+    assert.equal(
+      headers['proxy-authorization'],
+      expected,
+      "the tunnel request carried " +
+        `${headers['proxy-authorization'] ? 'a different Proxy-Authorization' : 'no Proxy-Authorization'}; ` +
+        'a proxy that asks for one would refuse every sign-in call on an instance whose address names ' +
+        'a user, which the deploy guide says is supported',
+    );
+  }
 });
 
 // Criterion 2: the exempt set is the SAME set, asserted as agreement between
