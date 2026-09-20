@@ -252,4 +252,25 @@ Each cost a real mistake; the incident sits in an HTML comment beside it. Path-s
        one-turn `max_tokens: 1` probe before anything is created, plus reading an already-resolved
        value from the environment (`op run …`) rather than the file. -->
 
+- **A port of a library's internals is pinned to that library's version, and its agreement test is
+  RE-READ on a bump, not merely re-run.** `shouldProxyDestination` (`src/lib/outbound-proxy.ts`) is
+  a deliberate port of undici's `EnvHttpProxyAgent#shouldProxy` and `#parseNoProxy`: undici does not
+  export the routing decision it makes, and the sign-in leg leaves through `node:http(s)`, which no
+  global `fetch` dispatcher reaches, so that path has to make the SAME decision rather than a second
+  one. `scripts/outbound-proxy.test.mjs` drives the same destination down both paths under the same
+  `NO_PROXY` and fails when they part — **but only over the cases its table carries.** A bump that
+  changes a branch the table does not exercise leaves the agreement green while the two paths have
+  already parted, and the failure would surface as one instance's sign-in reaching a proxy its
+  operator exempted. So on every `undici` bump the table is read against the new `#shouldProxy`
+  before it is run, and `PORTED_FROM_UNDICI` in that suite is what makes the bump announce itself.
+  <!-- #483 (merged at c895ab0, 2026-09-20): the port was verified line for line against undici
+       6.28.0 as installed, `node_modules/undici/lib/dispatcher/env-http-proxy-agent.js` — the
+       host taken with its port stripped and lower-cased and an IPv6 literal keeping its brackets;
+       an empty list proxying everything; a leading `.` or `*` meaning a suffix match and anything
+       else an exact one; an entry's `:port` applying only on that port; and `*` alone surviving
+       NOT by the bare-string short-circuit, which prepending DEFAULT_NO_PROXY_HOSTS means the
+       composed list never hits, but by the per-entry suffix branch matching the empty string.
+       That last one is the shape of the hazard: a property that holds for a reason other than the
+       one it appears to hold for is the property a bump silently takes away. -->
+
 
