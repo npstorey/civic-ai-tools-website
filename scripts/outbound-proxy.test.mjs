@@ -36,6 +36,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import https from 'node:https';
 import net from 'node:net';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -66,6 +67,21 @@ function dispatcherInstaller() {
 }
 
 /**
+ * The module that governs the SIGN-IN library's transport, discovered rather
+ * than prescribed on the same terms: a global `fetch` dispatcher cannot reach
+ * `node:http(s)`, so this path is governed at `openid-client`'s own seam
+ * instead, and the file that reaches for that library is the one that does it.
+ * No tracked source named `openid-client` before #483.
+ */
+function signInTransportInstaller() {
+  return trackedSources().filter((p) => {
+    let text;
+    try { text = readFileSync(p, 'utf8'); } catch { return false; }
+    return text.includes('openid-client');
+  });
+}
+
+/**
  * A loopback forward proxy that observes a request in either form: an
  * absolute-form HTTP request, or a `CONNECT` tunnel. Tunnels terminate at a
  * local origin so the call completes rather than hanging.
@@ -77,6 +93,7 @@ function dispatcherInstaller() {
  */
 async function loopbackProxy() {
   const seen = [];
+  const headers = [];
   const origin = http.createServer((_q, s) => {
     s.writeHead(200, { 'content-type': 'application/json', 'content-length': '2' });
     s.end('{}');
@@ -91,6 +108,9 @@ async function loopbackProxy() {
   });
   server.on('connect', (req, clientSocket, head) => {
     seen.push(req.url);
+    // Recorded beside the authority, so a test can ask what the tunnel
+    // request carried and not only where it was pointed.
+    headers.push(req.headers);
     const upstream = net.connect(originPort, '127.0.0.1', () => {
       clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
       if (head?.length) upstream.write(head);
@@ -103,6 +123,7 @@ async function loopbackProxy() {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   return {
     seen,
+    headers,
     port: server.address().port,
     close: () => { server.close(); origin.close(); },
   };
@@ -153,6 +174,14 @@ async function installUnderCurrentEnv() {
       'fetch ignores them, measured at node v22',
   );
   for (const p of installers) await import(`../${p}?probe=${Date.now()}-${Math.random()}`);
+
+  // The sign-in transport installer is re-evaluated on exactly the same terms
+  // and for the same reason. Deliberately NOT asserted to exist: criterion 1
+  // of #483 has to go red at the PROXY'S OWN COUNT, which is the measurement,
+  // rather than at a precondition that would fail before anything was driven.
+  for (const p of signInTransportInstaller()) {
+    await import(`../${p}?probe=${Date.now()}-${Math.random()}`);
+  }
 }
 
 /**
@@ -258,6 +287,68 @@ async function driveBlobRefRead(base) {
 async function driveKv() {
   const { checkRateLimit } = await fresh('src/lib/rate-limit.ts');
   await swallow(() => checkRateLimit('proxy-probe', false));
+}
+
+/**
+ * The sign-in provider leg (#483) — the kind that leaves through
+ * `node:http(s)` and that no global `fetch` dispatcher can govern.
+ *
+ * TWO LEGS, ON PURPOSE. next-auth v4 builds its OAuth/OIDC client in
+ * `next-auth/core/lib/oauth/client.js`, which for a `wellKnown` provider calls
+ * `Issuer.discover(provider.wellKnown)` and then `new issuer.Client(...)`
+ * (read as text and pinned by the test below, because that path is not
+ * importable by specifier — next-auth's export map does not publish it). The
+ * FIRST leg is discovery, reached through the Issuer class. The SECOND is the
+ * token exchange, reached only through the client instance. They are separate
+ * receivers in `openid-client`, so a fix that governed discovery alone would
+ * pass on the first and fail on the second — which is the point of driving
+ * both.
+ *
+ * THE PROVIDER CONFIG IS THIS REPOSITORY'S OWN. `buildProviders` supplies the
+ * issuer, the discovery path and the client id, so the drive carries the URL
+ * the app would really form rather than one hand-written here. The client
+ * secret is a literal placeholder and authenticates against nothing.
+ */
+async function driveSignIn(base) {
+  const { buildProviders } = await fresh('src/lib/auth-providers.ts');
+  const [provider] = buildProviders({
+    OIDC_ISSUER: base,
+    OIDC_CLIENT_ID: 'probe',
+    OIDC_CLIENT_SECRET: 'probe-not-a-real-secret',
+  });
+  const { Issuer } = await import('openid-client');
+
+  // Leg 1 — discovery, exactly the call next-auth makes for this provider.
+  await swallow(() => Issuer.discover(provider.wellKnown));
+
+  // Leg 2 — the token exchange. Built without waiting for discovery to
+  // succeed: the destination is unreachable in the proxied drives by design,
+  // so a client that could only exist after a successful discovery could
+  // never be driven there at all.
+  const issuer = new Issuer({
+    issuer: provider.issuer,
+    token_endpoint: `${provider.issuer}/token`,
+    userinfo_endpoint: `${provider.issuer}/userinfo`,
+  });
+  const client = new issuer.Client({
+    client_id: provider.clientId,
+    client_secret: provider.clientSecret,
+    redirect_uris: ['http://localhost:3000/api/auth/callback/oidc'],
+  });
+  await swallow(() => client.grant({ grant_type: 'authorization_code', code: 'probe' }));
+}
+
+/** Whether `openid-client` carries a transport hook right now, at each of the
+ *  three receivers its own `request` helper reads one from. */
+async function signInTransportHooks() {
+  const { Issuer, custom } = await import('openid-client');
+  const clientClass = new Issuer({ issuer: 'https://hook-probe.invalid' }).Client;
+  const baseClient = Object.getPrototypeOf(clientClass);
+  return [
+    ['the Issuer class (discovery)', Issuer[custom.http_options]],
+    ['an Issuer instance (jwks)', Issuer.prototype[custom.http_options]],
+    ['the client class (token, userinfo)', baseClient.prototype[custom.http_options]],
+  ];
 }
 
 const proxyEnv = (port) => ({
@@ -609,45 +700,326 @@ test('with the three variables unset every kind reaches its destination directly
   }
 });
 
-// --- 7. the documented limitation, pinned ------------------------------------
+// --- 7. the sign-in provider leg (#483) --------------------------------------
+//
+// WAS A DOCUMENTED LIMITATION, IS NOW A KIND. W6 (#468) measured this leg
+// leaving through `node:http(s)` — `{fetch: 0, nodeHttp: 1}` — and wrote the
+// "no" row that #483 was filed against. A global `fetch` dispatcher cannot
+// govern that transport, so this path is governed at `openid-client`'s own
+// documented seam instead (`custom.http_options`, the per-URL hook its
+// `request` helper reads off the receiver). The four tests below are #483's
+// four acceptance criteria, in order.
 
-test("the sign-in library's provider leg leaves through node:http(s), as docs/deploy.md says", async () => {
-  // NOT A GAP THIS PHASE CLOSED — a measurement this phase made and wrote down.
-  // next-auth's OAuth/OIDC leg runs through `openid-client`, which calls
-  // `node:https` directly, so no global FETCH dispatcher can govern it. That is
-  // stated in docs/deploy.md as a limitation an operator must plan around.
-  // Pinned here so the statement goes RED rather than stale if the library ever
-  // switches transport: at that point the row becomes "yes" and the paragraph
-  // beside it has to go. Driven at the library, not through a full sign-in
-  // cycle, because the transport is the library's and a request is all it takes
-  // to read it.
-  const { Issuer } = await import('openid-client');
-  const counts = { fetch: 0, nodeHttp: 0 };
-  const realFetch = globalThis.fetch;
+// Criterion 1: observed AT THE PROXY, driven the way W6 drives its six kinds.
+test('a sign-in provider request is observed at the proxy and never resolves the destination', async () => {
+  const proxy = await loopbackProxy();
+  const counts = { nodeHttp: 0 };
   const realRequest = http.request;
-  globalThis.fetch = (...a) => { counts.fetch += 1; return realFetch(...a); };
+  const realSecureRequest = https.request;
   http.request = function (...a) { counts.nodeHttp += 1; return realRequest.apply(this, a); };
+  https.request = function (...a) { counts.nodeHttp += 1; return realSecureRequest.apply(this, a); };
 
-  const origin = await loopbackOrigin();
+  let fetchCalls;
   try {
-    await swallow(() => Issuer.discover(origin.base));
+    ({ fetchCalls } = await drive(proxyEnv(proxy.port), () => driveSignIn(`http://${UNRESOLVABLE}`)));
   } finally {
-    globalThis.fetch = realFetch;
     http.request = realRequest;
+    https.request = realSecureRequest;
+    proxy.close();
+  }
+
+  assert.ok(
+    proxy.seen.length >= 2,
+    `the proxy saw ${proxy.seen.length} request(s); with HTTP_PROXY set, BOTH the sign-in provider's ` +
+      'discovery leg and its token leg must arrive there. The destination is a reserved .invalid ' +
+      'name, so a request that did NOT go through the proxy died in DNS and went nowhere — there is ' +
+      'no direct path it could have taken instead. Two, not one: discovery is reached through the ' +
+      'Issuer class and the token exchange only through the client class, and they are separate ' +
+      "receivers of `openid-client`'s transport hook",
+  );
+  for (const observed of proxy.seen) {
+    assert.ok(
+      observed.includes(UNRESOLVABLE),
+      `the proxy received "${observed}", which does not name the destination — whether it arrives as ` +
+        'an absolute-form URL or as a CONNECT authority, the destination is what the proxy is told',
+    );
+  }
+
+  // The transport measurement W6 made, kept rather than deleted: this leg is
+  // proxied BECAUSE the node:http(s) seam is governed, not because the global
+  // fetch dispatcher reached it. If the library ever switches to `fetch` the
+  // dispatcher governs it and the module doing this can go.
+  assert.ok(
+    counts.nodeHttp >= 1,
+    'the sign-in library made no node:http(s) request; if it now uses `fetch`, the global dispatcher ' +
+      'reaches it on its own and the sign-in transport module is dead weight',
+  );
+  assert.equal(
+    fetchCalls,
+    0,
+    `the sign-in library made ${fetchCalls} fetch call(s); the same conclusion as above, from the ` +
+      'other side',
+  );
+});
+
+// Criterion 1, the app's own path: next-auth reaches this library, and reaches
+// it at the receivers the hook is installed on. Read as TEXT because
+// next-auth's export map does not publish `core/lib/oauth/client.js`, so it
+// cannot be imported by specifier and a deep file-path import would pin this
+// suite to a layout the package never promised.
+test("next-auth's provider leg still goes through openid-client's Issuer and client", () => {
+  const src = readFileSync(
+    new URL('../node_modules/next-auth/core/lib/oauth/client.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    src,
+    /require\("openid-client"\)|from ['"]openid-client['"]/,
+    "next-auth no longer reaches for `openid-client`; the sign-in transport module governs a library " +
+      'this application does not use any more',
+  );
+  assert.match(
+    src,
+    /Issuer\.discover/,
+    "next-auth no longer calls `Issuer.discover` for a wellKnown provider, so the discovery leg the " +
+      'drive above imitates is no longer the one it makes',
+  );
+  assert.match(
+    src,
+    /new issuer\.Client/,
+    'next-auth no longer builds its client from the discovered issuer, so the token leg is reached ' +
+      'through a receiver the hook may not cover',
+  );
+});
+
+// Criterion 1, the protocol the table does not otherwise reach. An `https://`
+// destination is the case the shape of this fix turns on: `openid-client`
+// passes a full URL, which names no port, so Node fills the port in from the
+// AGENT's `defaultPort` — and it reads that before it knows the protocol.
+// A single agent serving both transports therefore dials 80 for an `https://`
+// destination, measured. Nothing else in this suite drives an `https://`
+// sign-in destination, so without this the whole hazard is unmeasured.
+test('an https sign-in destination is tunnelled to 443, not to the http default', async () => {
+  const proxy = await loopbackProxy();
+  try {
+    await drive(proxyEnv(proxy.port), () => driveSignIn(`https://${UNRESOLVABLE}`));
+  } finally {
+    proxy.close();
+  }
+
+  assert.ok(
+    proxy.seen.length >= 1,
+    `the proxy saw ${proxy.seen.length} request(s); an https sign-in destination must reach it too, ` +
+      'and the table above drives only http ones',
+  );
+  assert.ok(
+    proxy.seen.includes(`${UNRESOLVABLE}:443`),
+    `the proxy was told ${JSON.stringify(proxy.seen)}; an https destination that names no port is ` +
+      'on 443, and a request tunnelled to 80 instead would reach the wrong service on every real ' +
+      "provider — the symptom of one agent serving both transports, since Node resolves an agent's " +
+      'defaultPort before it knows the protocol',
+  );
+});
+
+// A proxy address may carry a user and password, which docs/deploy.md tells an
+// operator they may use. The sign-in path builds its own tunnel request rather
+// than handing the address to a library, so the one thing that turns that
+// sentence from true into false is whether the request carries the header —
+// driven here rather than read off the implementation. The values below are
+// literal placeholders this loopback proxy never checks.
+test('a proxy address carrying a user and password reaches the tunnel as Proxy-Authorization', async () => {
+  const proxy = await loopbackProxy();
+  const address = `http://probe-user:probe-pass@127.0.0.1:${proxy.port}`;
+  try {
+    await drive(
+      { HTTP_PROXY: address, http_proxy: address, NO_PROXY: null, no_proxy: null },
+      () => driveSignIn(`http://${UNRESOLVABLE}`),
+    );
+  } finally {
+    proxy.close();
+  }
+
+  assert.ok(proxy.seen.length >= 1, 'nothing reached the proxy, so the header below is unmeasured');
+  assert.ok(
+    proxy.headers.length >= 1,
+    'the request reached the proxy but not as a CONNECT, so no tunnel request line was recorded and ' +
+      'the loop below would assert over nothing',
+  );
+  const expected = `Basic ${Buffer.from('probe-user:probe-pass').toString('base64')}`;
+  for (const headers of proxy.headers) {
+    assert.equal(
+      headers['proxy-authorization'],
+      expected,
+      "the tunnel request carried " +
+        `${headers['proxy-authorization'] ? 'a different Proxy-Authorization' : 'no Proxy-Authorization'}; ` +
+        'a proxy that asks for one would refuse every sign-in call on an instance whose address names ' +
+        'a user, which the deploy guide says is supported',
+    );
+  }
+});
+
+// Criterion 2: the exempt set is the SAME set, asserted as agreement between
+// the two paths rather than separately on each. Two tests that pass on their
+// own terms is how the paths drift.
+const NO_PROXY_AGREEMENT_CASES = [
+  { name: 'no NO_PROXY at all', noProxy: null, host: 'agree-a.invalid' },
+  { name: 'an exact host match', noProxy: 'agree-b.invalid', host: 'agree-b.invalid' },
+  { name: 'a host the list does not name', noProxy: 'elsewhere.invalid', host: 'agree-c.invalid' },
+  { name: 'the wildcard', noProxy: '*', host: 'agree-d.invalid' },
+  { name: 'a leading-dot suffix', noProxy: '.invalid', host: 'agree-e.invalid' },
+  { name: 'a leading-star suffix', noProxy: '*.invalid', host: 'agree-f.invalid' },
+  { name: 'a suffix that does not match', noProxy: '.example', host: 'agree-g.invalid' },
+  { name: 'an entry whose port matches', noProxy: 'agree-h.invalid:80', host: 'agree-h.invalid' },
+  { name: 'an entry whose port does not match', noProxy: 'agree-i.invalid:8443', host: 'agree-i.invalid' },
+  { name: 'an upper-case entry against a lower-case host', noProxy: 'AGREE-J.INVALID', host: 'agree-j.invalid' },
+  { name: 'several entries, one of which matches', noProxy: 'a.invalid,agree-k.invalid,b.invalid', host: 'agree-k.invalid' },
+  { name: 'a loopback default while an operator list is set', noProxy: 'elsewhere.invalid', loopback: true },
+];
+
+/**
+ * Did the FETCH path proxy this destination? Driven through the signing leg,
+ * which is the kind W6 uses for every NO_PROXY question it asks. The proxy is
+ * created HERE and its port is what the drive's environment names, so the
+ * server whose count is read is the server the request was pointed at.
+ */
+async function fetchPathProxied(noProxy, base) {
+  const proxy = await loopbackProxy();
+  try {
+    await drive(
+      { ...proxyEnv(proxy.port), NO_PROXY: noProxy, no_proxy: noProxy, TIMESTAMP_AUTHORITY_URL: `${base}/tsr` },
+      () => driveSigning(),
+    );
+  } finally {
+    proxy.close();
+  }
+  return proxy.seen.length > 0;
+}
+
+/** Did the SIGN-IN path proxy the same destination, under the same NO_PROXY? */
+async function signInPathProxied(noProxy, base) {
+  const proxy = await loopbackProxy();
+  try {
+    await drive(
+      { ...proxyEnv(proxy.port), NO_PROXY: noProxy, no_proxy: noProxy },
+      () => driveSignIn(base),
+    );
+  } finally {
+    proxy.close();
+  }
+  return proxy.seen.length > 0;
+}
+
+test('the sign-in path and the fetch path exempt exactly the same destinations', async () => {
+  const agreed = [];
+  for (const kase of NO_PROXY_AGREEMENT_CASES) {
+    // A loopback case needs a destination that really is loopback, so it gets
+    // a live origin; every other case names a reserved `.invalid` host, which
+    // resolves nowhere whichever way the decision goes.
+    const origin = kase.loopback ? await loopbackOrigin() : null;
+    const base = origin ? origin.base : `http://${kase.host}`;
+    try {
+      const onFetch = await fetchPathProxied(kase.noProxy, base);
+      const onSignIn = await signInPathProxied(kase.noProxy, base);
+      assert.equal(
+        onSignIn,
+        onFetch,
+        `NO_PROXY=${JSON.stringify(kase.noProxy)} against ${base} (${kase.name}): the fetch path ` +
+          `${onFetch ? 'proxied' : 'exempted'} it and the sign-in path ${onSignIn ? 'proxied' : 'exempted'} ` +
+          'it. #483 criterion 2 is that the two paths apply the SAME exempt set — DEFAULT_NO_PROXY_HOSTS ' +
+          "plus the operator's entries, prepended the same way — so an operator configures one thing, " +
+          'not two that agree by accident until an edge case parts them',
+      );
+      agreed.push({ name: kase.name, proxied: onFetch });
+    } finally {
+      origin?.close();
+    }
+  }
+
+  // THE INSTRUMENT MUST BE ABLE TO FAIL BOTH WAYS. "The two paths agree" is
+  // also true when neither path ever reaches a proxy (nothing installed) and
+  // when neither is ever exempt (no NO_PROXY read at all). The table is only
+  // an agreement test if it contains both outcomes.
+  assert.ok(
+    agreed.some((r) => r.proxied),
+    'no case in the table proxied on either path, so "they agree" says only that both are dead',
+  );
+  assert.ok(
+    agreed.some((r) => !r.proxied),
+    'every case in the table proxied on both paths, so no exemption was exercised and "they agree" ' +
+      'says nothing about the exempt set',
+  );
+});
+
+// Criterion 3: unset changes nothing — same transport, same host, same path,
+// and the library is left exactly as it was found.
+test('with the three variables unset the sign-in leg is untouched', async () => {
+  const proxy = await loopbackProxy();
+  const origin = await loopbackOrigin();
+  let fetchCalls;
+  try {
+    ({ fetchCalls } = await drive(noProxyEnv, () => driveSignIn(origin.base)));
+  } finally {
+    proxy.close();
     origin.close();
   }
 
-  assert.equal(origin.seen.length, 1, 'the probe never reached the origin, so it measured nothing');
-  assert.equal(
-    counts.fetch,
-    0,
-    `the sign-in library made ${counts.fetch} fetch call(s); if it now uses fetch, the global ` +
-      'dispatcher DOES reach it and the "no" row in docs/deploy.md (sign-in provider) is wrong',
-  );
   assert.ok(
-    counts.nodeHttp >= 1,
-    'the sign-in library made no node:http(s) request either, so neither half of the documented ' +
-      'row is measured any more',
+    origin.seen.length >= 1,
+    'nothing arrived at the origin with the proxy variables unset, so the default sign-in path is ' +
+      'broken rather than unchanged',
+  );
+  assert.equal(origin.seen[0].method, 'GET', 'the discovery request method changed');
+  assert.equal(
+    origin.seen[0].url,
+    '/.well-known/openid-configuration',
+    'the discovery request path changed',
+  );
+  assert.equal(
+    origin.seen[0].host,
+    `127.0.0.1:${origin.port}`,
+    'the host the discovery request names changed',
+  );
+  assert.equal(fetchCalls, 0, 'the sign-in leg changed transport with no proxy configured');
+  assert.equal(proxy.seen.length, 0, 'a sign-in request reached a proxy that nothing configured');
+
+  for (const [where, hook] of await signInTransportHooks()) {
+    assert.equal(
+      hook,
+      undefined,
+      `${where} carries a transport hook with every proxy variable unset; defaults-off means the ` +
+        'sign-in library is left exactly as the runtime gave it, not merely routed to the same place',
+    );
+  }
+});
+
+// Criterion 4: the row and the paragraph move together with the measurement.
+test("docs/deploy.md's sign-in row says the proxy variables are honoured", () => {
+  const section = egressProxySection();
+  const row = /^\| Sign-in provider[^|]*\|[^|]*\|([^|]*)\|/m.exec(section);
+  assert.ok(row, 'docs/deploy.md has no sign-in provider row in the proxy table');
+  assert.doesNotMatch(
+    row[1],
+    /\bno\b/,
+    `the sign-in provider row still reads "${row[1].trim()}"; #483 made that leg honour the three ` +
+      'variables, so the row is a "yes" and an operator reading the table would otherwise still be ' +
+      "told to put the provider's hosts on the network allowlist instead",
+  );
+  assert.match(row[1], /\byes\b/, `the sign-in provider row reads "${row[1].trim()}", not "yes"`);
+});
+
+test("docs/deploy.md no longer states the sign-in limitation it stated before #483", () => {
+  const section = egressProxySection();
+  assert.doesNotMatch(
+    section.replace(/\s+/g, ' '),
+    /The sign-in row is a real limitation/,
+    'the paragraph calling the sign-in row a real limitation is still in the deploy guide, beside a ' +
+      'row that now says the opposite',
+  );
+  assert.doesNotMatch(
+    section.replace(/\s+/g, ' '),
+    /sign-in configured against an external provider will not reach that provider/,
+    'the deploy guide still tells an operator that sign-in cannot reach an external provider through ' +
+      'these variables, which #483 made untrue',
   );
 });
 

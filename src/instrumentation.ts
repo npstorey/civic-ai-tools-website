@@ -19,4 +19,8 @@ export async function register(): Promise<void> {
   // Installing is a side effect of the import; with none of the proxy
   // variables set it does nothing at all.
   await import('./lib/outbound-proxy.ts');
+  // The same, for the one outbound kind a global fetch dispatcher cannot
+  // reach: the sign-in provider leg leaves through node:http(s) and is routed
+  // at that library's own seam instead (#483).
+  await import('./lib/signin-proxy.ts');
 }

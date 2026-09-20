@@ -45,9 +45,13 @@
 // `@vercel/sandbox` passes its own undici `Agent` on every API request, so the
 // vercel-sandbox executor's calls to the sandbox API are outside this module
 // (docs/deploy.md states it; scripts/outbound-proxy.test.mjs pins it). Nor
-// does it govern `node:http(s)`, which is the transport of the sign-in
-// library's provider calls (`openid-client`, also stated and pinned) and of
-// `@aws-sdk/client-s3`, so `BLOB_DRIVER=s3` needs its own arrangement — see
+// does it govern `node:http(s)`, and TWO outbound kinds take that transport,
+// each with its own arrangement rather than a second dispatcher. The sign-in
+// library's provider calls (`openid-client`) are routed at that library's own
+// per-URL transport seam — see `src/lib/signin-proxy.ts` (#483), which
+// tunnels through the proxy with `CONNECT` and asks `shouldProxyDestination`
+// below, so the exempt set is this module's and not a second opinion.
+// `@aws-sdk/client-s3` is the other, so `BLOB_DRIVER=s3` needs its own — see
 // `proxyAwareTransport` in `src/lib/storage/s3.ts`, which routes that
 // driver through `fetch` (and therefore through this dispatcher) exactly when
 // a proxy is configured. `pg` (DB_DRIVER=node-postgres) opens a raw TCP socket
@@ -136,6 +140,70 @@ export function resolveProxySettings(env: EnvRecord = process.env): ProxySetting
  */
 export function isOutboundProxyConfigured(env: EnvRecord = process.env): boolean {
   return resolveProxySettings(env).enabled;
+}
+
+/** Ports a destination is understood to be on when its URL names none. */
+const DEFAULT_PORTS: Record<string, number> = { 'http:': 80, 'https:': 443 };
+
+/**
+ * Does this destination go through the proxy, given the exemption list
+ * `resolveProxySettings` composed?
+ *
+ * WHY THIS EXISTS AT ALL, GIVEN UNDICI ALREADY DECIDES. The dispatcher above
+ * governs `fetch`. It cannot govern `node:http(s)`, which is the transport of
+ * the sign-in library's provider calls, so that path is routed at the
+ * library's own seam (`src/lib/signin-proxy.ts`) and something has to make the
+ * same decision there. undici does not export the one it makes, so this is a
+ * deliberate port of it — `EnvHttpProxyAgent#shouldProxy` and `#parseNoProxy`
+ * at undici 6.28.0, the version this repository pins — and every property it
+ * carries is one of undici's, not one chosen here:
+ *
+ *   - the host is taken with its port stripped and lower-cased, and an IPv6
+ *     literal keeps its brackets, which is why `DEFAULT_NO_PROXY_HOSTS` spells
+ *     `[::1]` that way;
+ *   - an empty list proxies everything;
+ *   - an entry beginning `.` or `*` is a SUFFIX match, anything else is exact;
+ *   - an entry carrying `:port` applies only on that port;
+ *   - `*` alone exempts everything — and it survives here for the same reason
+ *     it survives in undici: not by the bare-string short-circuit, which
+ *     prepending the loopback defaults means this list never hits, but by the
+ *     per-entry suffix branch treating a leading `*` as a match on the empty
+ *     string.
+ *
+ * A PORT IS NOT A PROOF. Agreement between the two paths is not asserted from
+ * this comment: `scripts/outbound-proxy.test.mjs` drives the same destination
+ * down BOTH paths under the same `NO_PROXY` and fails when they part, which is
+ * what #483 criterion 2 asks for. Two implementations that each look right on
+ * their own terms is how they drift.
+ */
+export function shouldProxyDestination(url: URL, noProxy: string): boolean {
+  const hostname = url.host.replace(/:\d*$/, '').toLowerCase();
+  const port = Number.parseInt(url.port, 10) || DEFAULT_PORTS[url.protocol] || 0;
+
+  const entries = noProxy
+    .split(/[,\s]/)
+    .filter((entry) => entry.length > 0)
+    .map((entry) => {
+      const parsed = /^(.+):(\d+)$/.exec(entry);
+      return {
+        hostname: (parsed ? parsed[1] : entry).toLowerCase(),
+        port: parsed ? Number.parseInt(parsed[2], 10) : 0,
+      };
+    });
+
+  if (entries.length === 0) return true;
+  if (noProxy === '*') return false;
+
+  for (const entry of entries) {
+    if (entry.port && entry.port !== port) continue;
+    if (!/^[.*]/.test(entry.hostname)) {
+      if (hostname === entry.hostname) return false;
+    } else if (hostname.endsWith(entry.hostname.replace(/^\*/, ''))) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export interface InstallResult {

@@ -1256,13 +1256,14 @@ set and `NO_PROXY` unset, a request goes straight to the origin —
 nothing, because that flag arrives in a later Node than this image
 carries. [`src/lib/outbound-proxy.ts`](../src/lib/outbound-proxy.ts)
 installs one `undici` dispatcher at server start, and
-`scripts/outbound-proxy.test.mjs` drives a request through a loopback
-proxy and reads it back there for the signing services, the model
-endpoint, the MCP servers, the S3 object store, verification's blob read
-and the rate-limit counter. The other "yes" rows call the same global
-`fetch` and are not driven separately. Of the "no" rows, the sign-in and
-managed-sandbox ones are pinned by transport, as the paragraphs under the
-table say.
+[`src/lib/signin-proxy.ts`](../src/lib/signin-proxy.ts) routes the one
+kind that dispatcher cannot reach. `scripts/outbound-proxy.test.mjs`
+drives a request through a loopback proxy and reads it back there for
+the signing services, the model endpoint, the MCP servers, the S3 object
+store, verification's blob read, the rate-limit counter and the sign-in
+provider leg. The other "yes" rows call the same global `fetch` and are
+not driven separately. Of the "no" rows, the managed-sandbox one is
+pinned by transport, as the paragraph under the table says.
 
 ### Loopback is always exempt
 
@@ -1292,7 +1293,7 @@ table's `DB_DRIVER=node-postgres` row).
 | Verification's read of a blob-referenced field | `fetch`, in `@typedstandards/verify-core` | yes |
 | Directory and roadmap content sources | `fetch` | yes |
 | Rate-limit counter, `KV_REST_API_URL` set | `fetch`, in `@vercel/kv`'s client `@upstash/redis` (`src/lib/rate-limit.ts`) | yes |
-| Sign-in provider (GitHub / OIDC) discovery, token and userinfo calls | `node:http(s)`, in the sign-in library's `openid-client` | **no** |
+| Sign-in provider (GitHub / OIDC) discovery, token and userinfo calls | `node:http(s)`, in the sign-in library's `openid-client` | yes — see below |
 | Database, `DB_DRIVER=neon-http` | `fetch` | yes |
 | Database, `DB_DRIVER=node-postgres` | a raw TCP socket (`pg`) | **no** |
 | Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox` | `fetch` with the SDK's own dispatcher, in `@vercel/sandbox`, to `https://vercel.com/api` (`src/lib/sandbox/vercel-sandbox.ts`) | **no** — see below |
@@ -1305,17 +1306,21 @@ on the host rather than to the network at all. Reaching a database
 through a proxy is a network-level arrangement (a tunnel, a sidecar, a
 route), not an application setting.
 
-**The sign-in row is a real limitation, stated rather than hidden.**
-next-auth's provider leg runs through `openid-client`, which calls
-`node:https` directly: driven against a loopback server with both
-counted, discovery came out `{fetch: 0, nodeHttp: 1}`. A global `fetch`
-dispatcher cannot govern it, so on a proxied network **sign-in
-configured against an external provider will not reach that provider
-through these variables.** Until that is addressed, an instance behind
-an egress proxy needs its provider's hosts on the network's allowlist
-(or a transparent proxy). `scripts/outbound-proxy.test.mjs` pins the
-measurement, so this paragraph goes red rather than stale if the
-library changes transport.
+**The sign-in row is a "yes", reached a different way.** next-auth's
+provider leg runs through `openid-client`, which calls `node:http(s)`
+directly: driven against a loopback server with both counted, discovery
+came out `{fetch: 0, nodeHttp: 1}`. No global `fetch` dispatcher can
+govern that transport, so this leg is routed at the library's own
+per-URL transport seam instead, which tunnels to the destination through
+your proxy with `CONNECT`. **You configure nothing extra for it:** the
+same three variables, the same exempt set. `NO_PROXY` exempts a provider
+host on this path exactly as it does on every other, and with the three
+variables unset the leg goes where it went before, by the transport it
+used before. `scripts/outbound-proxy.test.mjs` drives both of its legs —
+discovery and the token exchange, which reach the library at different
+places — through a loopback proxy, and asserts that this path and the
+`fetch` path exempt the same destinations rather than checking each on
+its own terms.
 
 **The managed-sandbox executor row is a real limitation too.** Under
 `EXECUTOR_DRIVER=vercel-sandbox`, the default, every call that creates,
