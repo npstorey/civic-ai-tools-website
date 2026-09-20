@@ -1169,7 +1169,7 @@ resolved from your `--env-file`, so `docker compose --env-file … up -d
 ## Database and migrations
 
 Schema migrations are ordinary [Drizzle](https://orm.drizzle.team)
-numbered SQL under [`drizzle/`](../drizzle/). Two application paths,
+numbered SQL under [`drizzle/`](../drizzle/). Three application paths,
 same files:
 
 - **Compose path (automatic).** Every `docker compose up` runs the
@@ -1190,6 +1190,69 @@ same files:
 
   Run it before first app boot, and again after pulling a version that
   adds migrations.
+
+- **Its own container (managed platforms).** The image already carries
+  the target: `docker build --target migrate .` produces a one-shot
+  container whose command is `npx drizzle-kit migrate`
+  ([`Dockerfile`](../Dockerfile), the `migrate` stage). It is the build
+  stage with a different command, so it needs no separate image, no
+  separate build and no separate version — the migrator and the service
+  are the same artefact.
+
+  Run it as an ordinary container with one variable set:
+
+  ```bash
+  docker run --rm -e DATABASE_URL=postgres://… ghcr.io/you/civic-app-migrate:TAG
+  ```
+
+  **`DATABASE_URL` is the only variable it reads.** No signing key, no
+  object store, no model endpoint: this container does one thing.
+
+### Migrations as their own container
+
+The third path above is what a managed platform wants, and it is worth
+stating what such a platform has to express, because the property the
+pattern depends on is not "the migrator ran" but "the migrator
+*finished*, successfully, first."
+
+- **An additional container in the same unit of deployment**, built from
+  this repository's `migrate` target, carrying the same image tag as the
+  service container.
+- **Ordered before the service container**, with the service gated on
+  the migrator's **successful completion** — not merely on its having
+  started. Platforms spell this differently (a container that must run
+  to completion first, or a dependency condition on the other container
+  in the same unit); the deployment has to express whichever of those it
+  offers. Compose expresses the same thing with
+  `depends_on: { migrate: { condition: service_completed_successfully } }`,
+  which is [`docker-compose.yml`](../docker-compose.yml)'s `app` service
+  today.
+- **Nothing else.** No shared volume, no ordering with the database
+  beyond the database being reachable, no second image.
+
+**Gating on successful completion is meaningful, measured.** Driven on
+2026-09-20 against the image's `migrate` target, run as one bare
+container against a throwaway PostgreSQL 17 — no compose file, no
+`depends_on`, no other service:
+
+| What was given | Container exit |
+| --- | --- |
+| A reachable database | `0`, and 17 rows in `drizzle.__drizzle_migrations` read back from the database |
+| A wrong password | `1` |
+| An unreachable host | `1` |
+| `DATABASE_URL` unset | `1`, naming the missing parameter |
+
+A second run against the already-migrated database also exited `0` and
+left the journal at 17 rows, which is the property a platform that
+re-runs the migrator on **every** deploy depends on.
+
+**The read-back rule still applies, and it is not a formality.** The
+run above selected drizzle-kit's `pg` driver, on which the failures
+above are loud. A database reached through a serverless driver is the
+case where a clean exit is *not* proof that anything was applied —
+[`docs/db-migrations.md`](db-migrations.md) carries that trapdoor and
+the query that surfaces it. Read the schema back from the database after
+a migrating deploy, whichever path applied it.
 
 ### The visibility-rename pair: `0014` + `0015`
 
