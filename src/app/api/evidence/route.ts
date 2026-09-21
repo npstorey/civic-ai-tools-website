@@ -421,9 +421,10 @@ export async function POST(request: NextRequest) {
       // Nudge toward programmatic device-flow tokens for non-browser
       // clients. See docs/api/evidence-publish.md#authentication.
       response.headers.set('X-Auth-Deprecated', 'cookie');
-      console.log('[api/evidence] cookie-auth publish (deprecated path)', {
-        userId,
-      });
+      // #503: the header above already tells this caller which path it took.
+      // The account id was the only thing this line added, and it is the one
+      // thing it must not write to the platform's log store.
+      console.log('[api/evidence] cookie-auth publish (deprecated path)');
     }
     return response;
   } catch (error) {

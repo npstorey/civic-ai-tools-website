@@ -87,6 +87,50 @@ function encodeNotebookEvent(event: NotebookEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
 }
 
+/**
+ * The class of a thrown value: stable in the shipped artifact, and not
+ * widenable by whatever threw (#503).
+ *
+ * MEASURED, not assumed. This read `err.constructor.name` until the server
+ * build was inspected. Turbopack emits this app's error classes as ANONYMOUS
+ * class expressions in a position where no name is inferred — the built server
+ * bundle carries `["NotebookExecutionError",0,class extends Error{…}]`, and
+ * dozens of `class a extends Error` beside it — so `constructor.name` is the
+ * EMPTY STRING in production, and `?? 'Error'` never fires because `''` is not
+ * nullish. `constructor.name` is unforgeable and, here, unusable.
+ *
+ * `err.name` is the exact inverse. It is a string LITERAL assigned in the
+ * constructor, so it survives bundling untouched; and it is an ordinary
+ * writable property, so a throw site can put a reader's question in it. Only
+ * one of the two is stable, and only the other is safe, so the name is read
+ * and then ADMITTED BY SHAPE: one alphanumeric token, at most 63 characters,
+ * that names the concept it reports. Anything else collapses to `Error`.
+ *
+ * That is a pattern, not a list of the classes this codebase happens to
+ * declare — a hand-picked list is the defect shape, not the fix (#363). All
+ * nine error classes declared in `src/` assign such a literal, so all nine
+ * survive the bundler and reach the log; a third-party error that assigns none
+ * reports `Error`, which is what `Error.prototype.name` says and is true.
+ *
+ * WHAT IS STILL ADMITTED, stated rather than implied: a throw site that
+ * deliberately encodes content as a single alphanumeric token containing
+ * `Error` can put up to 63 such characters here. A question cannot take that
+ * shape — it has spaces — and nothing in this codebase writes `name` from
+ * data. That residual is the price of reading the only field the bundler
+ * preserves.
+ */
+const CLASS_NAME_SHAPE = /^[A-Za-z][A-Za-z0-9]{0,62}$/;
+
+function errorClassOf(err: unknown): string {
+  // Not an Error at all: `typeof` is the class-shaped fact, and its vocabulary
+  // is closed by the language.
+  if (!(err instanceof Error)) return err === null ? 'null' : typeof err;
+  const name: unknown = err.name;
+  return typeof name === 'string' && CLASS_NAME_SHAPE.test(name) && name.includes('Error')
+    ? name
+    : 'Error';
+}
+
 export async function POST(request: NextRequest) {
   let body: QueryNotebookRequest;
   try {
@@ -335,19 +379,25 @@ export async function POST(request: NextRequest) {
         // #271 disclosure ruling: the stderr tail is not for the reader. It
         // used to be flattened into the wire `message` and then discarded at
         // render (friendlyStreamError never showed it) — exposed on the wire
-        // while unavailable to the reader it was collected for. Now it stays
-        // server-side only, logged here in FULL (not just a tail — the log
-        // has no wire-size constraint, so this only ever captures at least as
-        // much as the old `stderrTail` bound did), tagged with a correlation
-        // id the reader *does* see, so a reported failure is traceable back
-        // to this exact log line. Prefix + shape are stable for grepping:
+        // while unavailable to the reader it was collected for. #271 then kept
+        // it server-side and logged it here in full, tagged with a correlation
+        // id the reader *does* see.
+        //
+        // #503 narrows that: a failing cell's stderr is a traceback over the
+        // reader's own query and the source's own rows, so logging it puts
+        // exactly what this sprint is removing into the platform's log store.
+        // The line keeps everything that is about the RUN rather than about
+        // its content — the correlation id, the exit code, the error class —
+        // so a reader who reports a failure is still traceable to this line,
+        // which is what #271 was for. What is lost is the stderr itself: this
+        // was its only copy, the wire never carried it, and after this commit
+        // nothing does. Prefix + shape are stable for grepping:
         // `[query-notebook] NotebookExecutionError` with a `correlationId`.
         const correlationId = `nb-${randomUUID().slice(0, 8)}`;
         console.error('[query-notebook] NotebookExecutionError', {
           correlationId,
           exitCode: err.exitCode,
-          message: err.message,
-          stderr: err.stderr,
+          errorClass: errorClassOf(err),
         });
         await emit({
           type: 'error',
@@ -357,11 +407,6 @@ export async function POST(request: NextRequest) {
           exitCode: err.exitCode,
         });
       } else {
-        if (err instanceof Error) {
-          console.error('[query-notebook] error', { message: err.message, stack: err.stack });
-        } else {
-          console.error('[query-notebook] unknown error', err);
-        }
         const message = err instanceof Error ? err.message : 'Unknown error';
         // Phase A attaches the classified kind to its rejection (#154). Guarded
         // rather than forwarded blind: plenty of unrelated errors carry a `code`
@@ -371,6 +416,29 @@ export async function POST(request: NextRequest) {
           ? (err as { code?: unknown }).code
           : undefined;
         const code = isStreamErrorKind(rejectionCode) ? rejectionCode : undefined;
+        // #503: BOUND THE SHAPE HERE, do not audit the throw sites. These two
+        // lines used to be two — `{ message, stack }` for an Error and the
+        // thrown value WHOLESALE for anything else — and the second had no
+        // bound at all. A model endpoint's refusal echoes the prompt back; a
+        // source's error carries the rows; an arbitrary object carries
+        // whatever it was built from. What arrives here cannot be enumerated
+        // in advance, and every future throw would widen the line again, so
+        // the record below is fixed and nothing derived from the thrown value
+        // can extend it. The distinction the two prefixes used to carry — an
+        // Error or not — is now the `errorClass` field, which says `object`
+        // or `string` for a throw that is not an Error.
+        //
+        // Read this with the NotebookExecutionError branch above: ONE
+        // decision, that this `catch` logs the run's shape and never its
+        // content. The fields differ only because that branch HAS two more
+        // run facts — the executor supplies an exit code, and the reader is
+        // handed a correlation id. Nothing on this path puts a reference in
+        // front of the reader, so minting a correlation id here would be a
+        // handle that nothing else holds.
+        console.error('[query-notebook] error', {
+          errorClass: errorClassOf(err),
+          ...(code ? { code } : {}),
+        });
         await emit({ type: 'error', message, ...(code ? { code } : {}) });
       }
     } finally {
