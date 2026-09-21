@@ -335,19 +335,25 @@ export async function POST(request: NextRequest) {
         // #271 disclosure ruling: the stderr tail is not for the reader. It
         // used to be flattened into the wire `message` and then discarded at
         // render (friendlyStreamError never showed it) — exposed on the wire
-        // while unavailable to the reader it was collected for. Now it stays
-        // server-side only, logged here in FULL (not just a tail — the log
-        // has no wire-size constraint, so this only ever captures at least as
-        // much as the old `stderrTail` bound did), tagged with a correlation
-        // id the reader *does* see, so a reported failure is traceable back
-        // to this exact log line. Prefix + shape are stable for grepping:
+        // while unavailable to the reader it was collected for. #271 then kept
+        // it server-side and logged it here in full, tagged with a correlation
+        // id the reader *does* see.
+        //
+        // #503 narrows that: a failing cell's stderr is a traceback over the
+        // reader's own query and the source's own rows, so logging it puts
+        // exactly what this sprint is removing into the platform's log store.
+        // The line keeps everything that is about the RUN rather than about
+        // its content — the correlation id, the exit code, the error class —
+        // so a reader who reports a failure is still traceable to this line,
+        // which is what #271 was for. What is lost is the stderr itself: this
+        // was its only copy, the wire never carried it, and after this commit
+        // nothing does. Prefix + shape are stable for grepping:
         // `[query-notebook] NotebookExecutionError` with a `correlationId`.
         const correlationId = `nb-${randomUUID().slice(0, 8)}`;
         console.error('[query-notebook] NotebookExecutionError', {
           correlationId,
           exitCode: err.exitCode,
-          message: err.message,
-          stderr: err.stderr,
+          errorClass: err.name,
         });
         await emit({
           type: 'error',
