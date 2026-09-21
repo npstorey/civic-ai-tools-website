@@ -6,6 +6,178 @@ Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ---
 
+## 2026-09-21 — Wave N13 (#503): a reader's words out of the logs — and the instrument that never reached the artifact (three gated phases, one lane)
+
+**Scope:** the first, self-contained part of the MCP sources design (rulings D6 and D10). One property:
+**no server-side log carries a reader's content.** The anchor listed nine sites from a design inventory;
+the wave ended having derived forty. A rider made it safe to run beside another sprint: no reserved path
+touched, no environment variable added or newly read. When the owner ruled that the rate-limit key must
+be a named environment variable, that phase could not hold the rider, so **P2 moved to the follow-on
+rather than the rider gaining an exemption** — a rider with one phase exempted stops being checkable.
+
+**Phases:**
+
+- P3 `99b2deb`: a duplicate MCP tool name refuses at startup instead of silently overwriting (#505);
+- P1 `0b8079c`: reader content out of the seven listed log sites, extended by ruling to the notebook
+  route's `else` branch (#504);
+- the cold read, on Fable 5.1;
+- WF `caddf17`: the cold read's finding, scoped by property — forty sites under one bound in
+  `src/lib/streaming.ts` — closing #506 (#507).
+
+**Merges and tags:** three merges, each a merge commit whose second parent is the head the seat's GO
+named. The six rollback tags were cut **at close, not at each merge** — see *Also earned*.
+
+**Test totals:** `# fail 0` at every merged head; 1748 at `caddf17`.
+
+**Owner legs:** none run from a terminal. The owner's acts were rulings and three merges.
+
+### The lesson: a test that runs the source cannot check a claim about the artifact
+
+P1's first extension bounded a log field with `err.constructor?.name ?? 'Error'`. The canary test
+passed, both required checks passed, and the phase reported the notebook line "byte-identical" to the
+one it replaced. **In production that field was empty on every line.**
+
+- Turbopack emits this repo's error classes as anonymous class expressions —
+  `e.s(["NotebookExecutionError",0,class extends Error{…}])` — so `constructor.name` is `""`.
+- `""` is not nullish, so the `?? 'Error'` fallback never ran.
+- `node --test` runs unbundled TypeScript, where the name is real. No assertion in the suite could reach
+  the shape the defect lived in.
+
+It was found by building and reading `.next/server`, not by any test. The fix reads `err.name` — a
+string literal the bundler preserves — admitted only when it is one alphanumeric token containing
+`Error`, because `name` is writable and a throw site could otherwise put a reader's words in it. The
+fixture now constructs every error the way the bundler emits one, so the red fires under `node --test`
+too. **From then on, every claim about the bound was verified by extracting its emitted bytes from the
+built chunk and running them.**
+
+This sits beside CLAUDE.md's fixture rule. That rule says drive the shape that could have failed; this
+one says **make sure the instrument can reach the environment the claim is about.** A green suite and two
+green required checks were compatible with a field that was empty in every production log line.
+
+**How to apply it:** when a criterion is about what the deployed artifact emits, drive it against the
+artifact, and name in the gate record what the instrument reaches and what it cannot.
+
+### The second: name the property, not the list — and the search pattern was itself the list
+
+P1's scope read: *"The seven log sites in the table's first seven rows."* The notebook route's `else`
+branch logged a thrown value whole, four lines below a listed site, in the same `catch`, in a file
+already in the zone. The phase saw it and could not touch it, because a list has no room for another
+row. It took an owner ruling to extend the phase.
+
+The cold read then found the same class at five more sites the table could not see. WF was scoped by the
+property instead, and derived forty server-side sites against the seat's sixteen. **The seat's census had
+a list inside it:** its grep matched only variables named `err`, `error` or `e`, so `lastError` at the
+device-code route — the one site that logged a credential, #506 — was invisible to it. Scoping by
+property does not help if the pattern that derives the set is itself a list of names.
+
+**The wording a charter can copy** (in full in G3 on #503):
+
+> **Scope — the property, not the list.** Every site in `<files>` with the property
+> **`<the property>`**. The table's rows are the sites the anchor **measured**: a **floor, not the
+> scope**. The phase re-derives the list itself inside those files, including branches a happy path
+> never takes, and states the derived list beside the measured one at its gate. A site with the
+> property inside its files is in scope and is fixed without asking. The acceptance criterion is
+> written against the property, not the sites. Where a site is a catch-all, the criterion bounds the
+> **shape** — the record's field names — not only this run's canary. A conditional that logs is as
+> many sites as it has branches.
+
+**How to apply it:** name the property, hand the phase the derivation rule, and declare the measured
+table a floor rather than a ceiling. Derive against every shape a value can take — positional, inside an
+object, by property, through `cause` — and prove each search pattern finds a known site before trusting
+its zero.
+
+### The third: no server-side log carries a reader's content
+
+This is the log-side sibling of CLAUDE.md's rule that a reader-facing error never renders a raw
+`err.message`. It needs saying on its own, because **an error's message is where a reader's content
+travels**, and this wave measured two carriers:
+
+- **The model SDK** puts an endpoint's refusal body in the error's `message`, and a refusal routinely
+  echoes the prompt back.
+- **The ORM.** In `drizzle-orm` 0.45.2, both supported drivers wrap **any** failed query — a dropped
+  connection, a timeout, a constraint — as `DrizzleQueryError`, whose message is
+  `Failed query: <sql>\nparams: <every bound param>`. A database failure while publishing logged the
+  whole record's parameters, the reader's question included.
+
+The cold read found the first and missed the second; the ORCH measured it while recording dispositions.
+
+**The rule:** log `errorLogFacts(err)` from `src/lib/streaming.ts` — `{ errorClass, status? }`, nothing
+derived from the error's content — never `err`, `err.message`, `String(err)` or `${err}`.
+`src/lib/errors-out-of-logs.test.ts` guards it over every server-side console call it derives from
+`git ls-files`, with a **bidirectional** list of 14 exemptions: typed configuration errors whose
+messages are built from constants and closed sets and never read the request. A site leaving that list,
+or a new one arriving, fails the guard.
+
+The wording was corrected at WF. The contract first said no log line carries *an error's message*,
+which forbade those 14 as well. The property is about **a reader's content**, and the exemptions are
+measured, not waived.
+
+**What it does not cover, measured:** Next.js's own logger, which logs a route's rethrown error with
+its message. Seven handlers rethrow; all seven were read, and none is reachable by a reader's question.
+
+**Its costs, stated once:** a name of up to 63 alphanumeric characters containing `Error` can still
+reach the line; SDK and ORM failures now report `Error`, because neither sets a `name`; and a dropped
+connection can no longer be told apart from a constraint. A bounded SQLSTATE code is carried to the
+follow-on.
+
+### Instruments that could not fail, or read the wrong thing
+
+- **A console capture through `JSON.stringify` would have been a false green.** An `Error` stringifies
+  to `{}`, and the stream leg's canary lived inside one. P1 captured through `util.format`, the function
+  `console` itself uses.
+- **A per-line reader split a multi-line object.** `util.format` renders an object across lines; P1's
+  first capture split on `\n` and could not see `correlationId` when it was present. Caught before push;
+  the capture became per-call.
+- **An extractor that matched nothing.** The ORCH's regex for the emitted bound found no function and
+  printed nothing; it was redone by brace-matching the raw chunk. An empty read is a broken instrument
+  until shown otherwise.
+- **A zsh read that failed plausibly.** `git show "$B:src/…"`, inside double quotes, parsed `:s` as a
+  modifier and printed the branch's head **diff**, which `sed` sliced into lines that looked like the
+  target file. Seven reads were discarded. A wrong read is worse than an empty one.
+- **A premise the seat wrote and WF measured false:** the six `.message` sites the contract said carried
+  the refusal body all sit inside `instanceof ModelConfigurationError`, where it cannot reach.
+- **A counting command in a contract undercounts.** `git ls-files 'scripts/**/*.test.mjs'` misses every
+  top-level test, because the `**` needs an intervening directory: 140 against 151 at base. Every gate
+  used deltas, which it does not disturb; a total measured that way is wrong.
+
+### Also earned
+
+- **A cold read reaches what its prompt names, not the mechanism beside it.** A static sweep cost about
+  7½ minutes and found the SDK carrier; the ORM carrier sat in the same log lines. **A cold read that
+  finds the wave's own class open is fixed by the wave** (the owner's ruling on F1): filing it forward
+  only moves the admission into the close record.
+- **A CI failure is ruled out before it is called a flake — especially when the diff removes the very
+  text the failing step greps for.** WF's `container image build` failed once. The log showed the
+  expected line arriving 11 ms after the grep, emitted by Next.js itself. That became #508.
+- **`baseRefOid` lags.** On #504 it read two base moves stale. Freshness is the first parent of
+  `refs/pull/N/merge`, fetched and read.
+- **A `git archive` preview tree needs `git init`,** or every guard that reads `git ls-files` fails with
+  *not a git repository* and the base run looks catastrophically red.
+- **A test fixture needs a non-empty value, not a credential-shaped one.** The pre-push guard fired on a
+  placeholder for the third time in the program. The guard that fixture satisfies is presence-only, so
+  an inert-prefix convention fixes it without loosening the detector. WF's fixtures used the literal
+  `'fixture'` and tripped nothing.
+- **Rollback tags lapsed for the whole wave.** No `-merged` tag was cut at any of the three merges, though
+  the rule — cut it as the first act on a merge — was already written down. All six were cut at close,
+  signed, onto the exact commits.
+
+### Owed after the wave
+
+- **#508 — the priority carry-forward.** The read-only-root step greps the container log once, racing an
+  asynchronous write. At `ci.yml:335` that is a flake. **At `:322` it is a false-green risk on a
+  required check:** that grep asserts write failures are *absent*, so if it runs before a real failure is
+  written, it passes.
+- **The follow-on sprint:** P2, the rate-limit key as a named, rotatable secret derived with the date
+  (with G0's three carried notes); a bounded SQLSTATE code on database-failure logs;
+  `src/lib/evidence/signing.ts:322`, which logs 200 characters of a Rekor response; routes still sending
+  `err.message` to the caller on the wire (#154).
+- **The config round:** promoting this entry's three lessons into CLAUDE.md, with `errorLogFacts` and
+  `errorClassOf` added to the cross-cutting formatters.
+- **The fork sync:** `src/app/api/query-notebook/route.ts` is a both-sides file. The seat's `merge-tree`
+  predicts no conflict in it, and the sync re-reads it.
+
+---
+
 ## 2026-09-19 — Wave N12 (#470): deploy-fit — and the claims no command settles (nine gated phases, two lanes)
 
 **Scope:** eight filings, each true on any instance, from comparing the reference image against a deployment target's requirements. One property: **everything an instance runs, contacts or names in a record comes from that instance's configuration or is stated as absent.** It covers seven things:
