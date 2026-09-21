@@ -334,8 +334,9 @@ export const MODELS_LOAD_ERROR =
  * Server-side: the sanitized `error`-event payload for an already-classified
  * failure. The message is the reader-facing copy and the code is the kind, so
  * the raw error text never leaves the server (#154) while the render side
- * receives the kind as data instead of re-deriving it from prose. The raw
- * error still goes to the server log, which is where an operator reads it.
+ * receives the kind as data instead of re-deriving it from prose. The server
+ * log gets the classified kind and `errorLogFacts` below — never the raw
+ * error, whose message can carry the reader's own question (#503).
  */
 export function streamErrorPayload(kind: StreamErrorKind): { message: string; code: StreamErrorCode } {
   return { message: FRIENDLY_STREAM_COPY[kind], code: kind };
@@ -344,8 +345,9 @@ export function streamErrorPayload(kind: StreamErrorKind): { message: string; co
 /**
  * Reader-facing copy for a notebook execution failure (#271). The disclosure
  * ruling: the sandbox's stderr is a debugging surface, not a reader surface —
- * it is logged server-side in full (see `route.ts`'s catch block) but never
- * put on the wire. What the reader gets instead is the exit code (already
+ * it is never put on the wire, and since #503 it is not logged either (a
+ * traceback is written over the reader's query and the source's rows; see
+ * `route.ts`'s catch block). What the reader gets instead is the exit code (already
  * plain, non-sensitive) and a correlation id that ties their report back to
  * that server log line.
  *
@@ -360,6 +362,104 @@ export function notebookExecutionErrorMessage(
 ): string {
   const exit = typeof exitCode === 'number' ? exitCode : 'n/a';
   return `Notebook execution failed (exit ${exit}). Reference: ${correlationId}. Try again, or include this reference if you report the problem.`;
+}
+
+// --- WHAT A SERVER LOG LINE MAY SAY ABOUT A FAILURE (#503) --------------------
+
+/**
+ * The class of a thrown value: stable in the shipped artifact, and not
+ * widenable by whatever threw (#503).
+ *
+ * ONE IMPLEMENTATION. This bound was written twice during #503 P1 — as
+ * `errorClassOf` in `src/app/api/query-notebook/route.ts` and inside
+ * `failureFacts` in `src/lib/openrouter-streaming.ts` — and phase WF moved it
+ * here, per this file's rule for cross-cutting formatters, so every server log
+ * line that reports a failure uses the same bound. `errorLogFacts` below is
+ * the record built from it; `src/lib/errors-out-of-logs.test.ts` holds every
+ * server-side `console` call to it.
+ *
+ * MEASURED, not assumed. This read `err.constructor.name` until the server
+ * build was inspected. Turbopack emits this app's error classes as ANONYMOUS
+ * class expressions in a position where no name is inferred — the built server
+ * bundle carries `["NotebookExecutionError",0,class extends Error{…}]`, and
+ * dozens of `class a extends Error` beside it — so `constructor.name` is the
+ * EMPTY STRING in production, and `?? 'Error'` never fires because `''` is not
+ * nullish. `constructor.name` is unforgeable and, here, unusable.
+ *
+ * `err.name` is the exact inverse. It is a string LITERAL assigned in the
+ * constructor, so it survives bundling untouched; and it is an ordinary
+ * writable property, so a throw site can put a reader's question in it. Only
+ * one of the two is stable, and only the other is safe, so the name is read
+ * and then ADMITTED BY SHAPE: one alphanumeric token, at most 63 characters,
+ * that names the concept it reports. Anything else collapses to `Error`.
+ *
+ * That is a pattern, not a list of the classes this codebase happens to
+ * declare — a hand-picked list is the defect shape, not the fix (#363). All
+ * nine error classes declared in `src/` assign such a literal, so all nine
+ * survive the bundler and reach the log; a third-party error that assigns none
+ * reports `Error`, which is what `Error.prototype.name` says and is true.
+ *
+ * WHAT IS STILL ADMITTED, stated rather than implied: a throw site that
+ * deliberately encodes content as a single alphanumeric token containing
+ * `Error` can put up to 63 such characters here. A question cannot take that
+ * shape — it has spaces — and nothing in this codebase writes `name` from
+ * data. That residual is the price of reading the only field the bundler
+ * preserves. THE COST, likewise: the model SDK and the ORM set no `name` on
+ * their error classes, so a refused model call and a failed query both report
+ * `Error` here, not `BadRequestError` or `DrizzleQueryError`.
+ */
+const CLASS_NAME_SHAPE = /^[A-Za-z][A-Za-z0-9]{0,62}$/;
+
+export function errorClassOf(err: unknown): string {
+  // Not an Error at all: `typeof` is the class-shaped fact, and its vocabulary
+  // is closed by the language.
+  if (!(err instanceof Error)) return err === null ? 'null' : typeof err;
+  const name: unknown = err.name;
+  return typeof name === 'string' && CLASS_NAME_SHAPE.test(name) && name.includes('Error')
+    ? name
+    : 'Error';
+}
+
+/** What a server log line may carry about a failure: nothing a remote party or a reader wrote. */
+export interface ErrorLogFacts {
+  /** `errorClassOf` — a bounded class token, or the `typeof` of a non-Error throw. */
+  errorClass: string;
+  /** An HTTP status the error carries as a NUMBER (the model SDK's `APIError` does). */
+  status?: number;
+}
+
+/**
+ * The operator facts of a failure, and nothing else (#503).
+ *
+ * NO SERVER LOG LINE CARRIES AN ERROR'S MESSAGE OR A WHOLE ERROR OBJECT. Both
+ * carry text the app did not write. Measured against the installed libraries:
+ *
+ *   - the model SDK puts an endpoint's refusal body in the error's `message`,
+ *     and a refusal routinely echoes the prompt back;
+ *   - the ORM (`drizzle-orm`, both drivers, through `queryWithCache`) wraps
+ *     ANY query failure as `Failed query: <sql>\nparams: <every bound param>`,
+ *     so a failed insert logs the whole row — a reader's question, a record's
+ *     title, a device authorization's codes;
+ *   - `JSON.parse` quotes the text it could not parse, so a malformed request
+ *     body or a source's malformed answer is quoted back in the `message`.
+ *
+ * A whole error object is worse than its `message`: `console` renders the
+ * message, the stack (which opens with the message) and every `cause` below
+ * it. So a site logs this record instead — the error's bounded class and, when
+ * the error carries one as a number, its HTTP status. A number and a bounded
+ * class token cannot carry a sentence.
+ *
+ * `status` is read only as a `number`; a string there is dropped rather than
+ * shaped, so no text a remote party chose can arrive through it.
+ */
+export function errorLogFacts(err: unknown): ErrorLogFacts {
+  const status = err !== null && typeof err === 'object'
+    ? (err as { status?: unknown }).status
+    : undefined;
+  return {
+    errorClass: errorClassOf(err),
+    ...(typeof status === 'number' ? { status } : {}),
+  };
 }
 
 /**

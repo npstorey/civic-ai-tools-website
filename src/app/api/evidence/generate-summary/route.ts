@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { errorLogFacts } from '@/lib/streaming';
 import { createModelClient, ModelConfigurationError } from '@/lib/model-client';
 import { getSummarizerModel } from '@/lib/model-resolver';
 import { modelIdentity, type ModelIdentity } from '@/lib/model-catalog';
@@ -111,7 +112,7 @@ ${output.slice(0, 4000)}`;
 
     return NextResponse.json({ summary });
   } catch (error) {
-    console.error('[generate-summary] Error:', error);
+    console.error('[generate-summary] Error:', errorLogFacts(error));
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Summary generation failed' },
       { status: 500 },

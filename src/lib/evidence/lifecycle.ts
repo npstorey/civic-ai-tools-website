@@ -18,6 +18,7 @@ import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import { type SignerIdentity } from './signing.ts';
 import { getConfiguredSignerIdentity } from '../site-config.ts';
+import { errorLogFacts } from '../streaming.ts';
 import {
   verifyAttestationNode,
   resolveLifecycleFromChain,
@@ -68,7 +69,7 @@ export async function resolveLifecycle(
     } catch (err) {
       console.warn(
         '[lifecycle] attestation_nodes query failed; falling back to legacy columns:',
-        err instanceof Error ? err.message : err,
+        errorLogFacts(err),
       );
       rows = [];
     }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { errorLogFacts } from '@/lib/streaming';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -17,7 +18,7 @@ export async function GET() {
 
     return NextResponse.json(rateLimitInfo);
   } catch (error) {
-    console.error('Rate limit API error:', error);
+    console.error('Rate limit API error:', errorLogFacts(error));
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

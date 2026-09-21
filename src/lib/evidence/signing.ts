@@ -41,6 +41,7 @@ import {
   type EnvRecord,
 } from '../publisher-env.ts';
 import { isSigningKeyIdConfigured } from './unsigned-tier.ts';
+import { errorLogFacts } from '../streaming.ts';
 
 export { rekorHashForPackage };
 
@@ -286,7 +287,7 @@ export async function getRfc3161Timestamp(packageHash: string): Promise<string |
     const tsrBytes = Buffer.from(await response.arrayBuffer());
     return tsrBytes.toString('base64');
   } catch (err) {
-    console.warn('[signing] RFC 3161 timestamp failed:', err instanceof Error ? err.message : err);
+    console.warn('[signing] RFC 3161 timestamp failed:', errorLogFacts(err));
     return null;
   }
 }
@@ -325,7 +326,7 @@ export async function publishToRekor(
 
     return parseRekorResponse(await response.json());
   } catch (err) {
-    console.warn('[signing] Rekor publish failed:', err instanceof Error ? err.message : err);
+    console.warn('[signing] Rekor publish failed:', errorLogFacts(err));
     return null;
   }
 }

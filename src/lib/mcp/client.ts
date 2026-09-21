@@ -7,6 +7,7 @@ import {
   type McpServerConfig,
 } from './registry.ts';
 import { McpErrorEnvelope, throwIfErrorResult } from './tool-call-failure.ts';
+import { errorLogFacts } from '../streaming.ts';
 
 const MCP_TIMEOUT_MS = 45_000; // 45-second timeout for MCP server requests
 
@@ -188,7 +189,7 @@ async function initializeSession(server: McpServerConfig): Promise<InitializeRes
   } catch (error) {
     console.warn(
       `[MCP:${server.sourceId}] Could not parse initialize response body for instructions:`,
-      error instanceof Error ? error.message : error,
+      errorLogFacts(error),
     );
   }
 
@@ -228,7 +229,7 @@ export async function getServerInstructions(sourceId: string): Promise<string | 
   } catch (error) {
     console.warn(
       `[MCP:${sourceId}] Could not initialize for instructions fetch:`,
-      error instanceof Error ? error.message : error,
+      errorLogFacts(error),
     );
     return null;
   }
@@ -320,7 +321,9 @@ async function makeToolCall(
   }
 
   if (!response.ok) {
-    console.error(`[MCP:${server.sourceId}] Server error:`, response.status, response.statusText);
+    // The status, not the reason phrase: `statusText` is text the source
+    // chose (#503 WF).
+    console.error(`[MCP:${server.sourceId}] Server error:`, response.status);
     throw new Error(`MCP server "${server.sourceId}" error: ${response.status} ${response.statusText}`);
   }
 

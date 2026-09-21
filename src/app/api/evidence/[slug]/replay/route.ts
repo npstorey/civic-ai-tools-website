@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { errorLogFacts } from '@/lib/streaming';
 import { createModelClient, classifyModelError } from '@/lib/model-client';
 import {
   CALLER_MODEL_KEY_REJECTED_MESSAGE,
@@ -147,7 +148,7 @@ export async function POST(
       durationMs: result.durationMs,
     });
   } catch (error) {
-    console.error('[replay] Error:', error);
+    console.error('[replay] Error:', errorLogFacts(error));
     // Structural first (website#30 P4): an SDK `APIError` carries a status, so
     // an upstream refusal is classified by shape rather than guessed from
     // wording — which also separates the model service's 429 from this app's
