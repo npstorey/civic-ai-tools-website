@@ -175,6 +175,12 @@ const DEFAULT_PORTS: Record<string, number> = { 'http:': 80, 'https:': 443 };
  * down BOTH paths under the same `NO_PROXY` and fails when they part, which is
  * what #483 criterion 2 asks for. Two implementations that each look right on
  * their own terms is how they drift.
+ *
+ * A UNDICI BUMP IS A RE-READ, NOT A RE-RUN. A green re-run says the twelve
+ * cases still agree; it cannot say they still COVER what undici now does — a
+ * new entry form or a changed default would be matched on neither path, agree
+ * perfectly, and be wrong the same way on both. `.claude/rules/outbound-proxy.md`
+ * carries that constraint with the measurement it rests on.
  */
 export function shouldProxyDestination(url: URL, noProxy: string): boolean {
   const hostname = url.host.replace(/:\d*$/, '').toLowerCase();
