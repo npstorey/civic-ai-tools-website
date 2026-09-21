@@ -6,6 +6,7 @@
 
 import fallbackData from './directory-fallback.json';
 import { getDirectorySource } from '@/lib/site-config';
+import { errorLogFacts } from '@/lib/streaming';
 import type { ContentProvenance } from '@/lib/content-source';
 
 // Types — compatible subset of civic-ai-tools/data/mcp-server-schema.ts
@@ -81,12 +82,13 @@ export async function getDirectoryData(): Promise<DirectoryData> {
     const res = await fetch(url, {
       next: { revalidate: 3600 }, // ISR: 1 hour
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // The status rides on the error as a number, so the log line below keeps it.
+    if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
     return { servers: (await res.json()) as McpServerEntry[], provenance, sourceUrl: url };
   } catch (error) {
     console.warn(
       '[Directory] Failed to fetch the configured source, using bundled snapshot:',
-      error instanceof Error ? error.message : error
+      errorLogFacts(error)
     );
     // The snapshot is this codebase's own checked-in copy of the community
     // index — upstream content whichever source was configured, so it is

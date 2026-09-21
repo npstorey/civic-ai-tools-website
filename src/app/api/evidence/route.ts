@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { errorLogFacts } from '@/lib/streaming';
 import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -386,7 +387,7 @@ export async function POST(request: NextRequest) {
           creatorId: userId,
         });
       } catch (err) {
-        console.warn('[api/evidence] publication-pair emission failed (non-fatal):', err instanceof Error ? err.message : err);
+        console.warn('[api/evidence] publication-pair emission failed (non-fatal):', errorLogFacts(err));
       }
     }
 
@@ -428,7 +429,9 @@ export async function POST(request: NextRequest) {
     }
     return response;
   } catch (error) {
-    console.error('Evidence publish error:', error);
+    // #503 WF: a database failure here is the ORM's error, whose message
+    // lists every bound parameter — the record's title, prompt and output.
+    console.error('Evidence publish error:', errorLogFacts(error));
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to publish the record' },
       { status: 500 },

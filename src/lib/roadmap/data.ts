@@ -1,3 +1,5 @@
+import { errorLogFacts } from '../streaming.ts';
+
 // Roadmap content fetching
 // Fetches the instance's roadmap markdown at build time with 1-hour ISR. Mirrors the pattern in
 // `src/lib/mcp/directory-data.ts` — the source repo is source of truth, drift window is small
@@ -16,12 +18,15 @@ export async function getRoadmapMarkdown(rawUrl: string): Promise<RoadmapFetchRe
     const res = await fetch(rawUrl, {
       next: { revalidate: 3600 }, // ISR: 1 hour
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // The status rides on the error as a number, so the log line below keeps it.
+    if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
     const markdown = await res.text();
     return { ok: true, markdown };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn('[Roadmap] Failed to fetch the configured source:', message);
+    // `message` still goes back to the page, unchanged; the log line gets the
+    // bounded facts, not the message (#503 WF).
+    console.warn('[Roadmap] Failed to fetch the configured source:', errorLogFacts(error));
     return { ok: false, markdown: null, error: message };
   }
 }

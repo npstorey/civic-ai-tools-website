@@ -15,6 +15,7 @@ import {
   isAcceptedMintScope,
   resolveMintScope,
 } from '@/lib/publish-scope';
+import { errorLogFacts } from '@/lib/streaming';
 
 /**
  * Device authorization grant start (RFC 8628 §3.1).
@@ -99,7 +100,10 @@ export async function POST(request: NextRequest) {
     }
   }
   if (lastError) {
-    console.error('[api/auth/device/code] insert failed after retries', lastError);
+    // #506: the ORM puts every bound parameter of a failed query in its
+    // message — here both generated codes — so the line carries the bounded
+    // facts, never the error (#503 WF).
+    console.error('[api/auth/device/code] insert failed after retries', errorLogFacts(lastError));
     return NextResponse.json(
       { error: 'server_error', error_description: 'Could not allocate device code' },
       { status: 500 },

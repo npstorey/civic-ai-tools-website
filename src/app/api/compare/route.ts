@@ -9,7 +9,7 @@ import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-li
 import { getMissingModelCredentialError, getModelClient, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
-import { streamErrorPayload } from '@/lib/streaming';
+import { errorLogFacts, streamErrorPayload } from '@/lib/streaming';
 import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
 import { getDefaultPortal } from '@/lib/site-config';
 import { headers } from 'next/headers';
@@ -155,7 +155,7 @@ Be honest if you don't have access to current or real-time data.`;
       withMcp: compareCompletionResult(withMcpResult),
     });
   } catch (error) {
-    console.error('Compare API error:', error);
+    console.error('Compare API error:', errorLogFacts(error));
     // Distinguish an upstream auth rejection (configured but refused key)
     // from other failures so the operator gets a typed, actionable response.
     const code = classifyModelError(error);

@@ -1,5 +1,6 @@
 import type { BlobListPage, ClientUploadGrantContext, StorageDriver } from './driver';
 import crypto from 'crypto';
+import { errorLogFacts } from '../streaming.ts';
 
 const EVIDENCE_PREFIX = 'evidence-packages';
 
@@ -100,7 +101,7 @@ export async function deletePackageBlob(url: string): Promise<void> {
     const driver = await getDriver();
     await driver.delete(url);
   } catch (err) {
-    console.warn('[storage] blob delete failed (non-fatal):', err instanceof Error ? err.message : err);
+    console.warn('[storage] blob delete failed (non-fatal):', errorLogFacts(err));
   }
 }
 

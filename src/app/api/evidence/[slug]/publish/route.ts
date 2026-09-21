@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { errorLogFacts } from '@/lib/streaming';
 import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
@@ -273,7 +274,7 @@ export async function POST(
       });
       evaluationNodeId = emitted.evaluationNodeId;
     } catch (err) {
-      console.error('[api/evidence/publish] evaluation failed:', err);
+      console.error('[api/evidence/publish] evaluation failed:', errorLogFacts(err));
       return NextResponse.json(
         {
           error:
@@ -338,9 +339,9 @@ export async function POST(
     // The publish is retryable; a step-1 evaluation node survives harmlessly.
     if (publicUrl) await deletePackageBlob(publicUrl);
     await revertToSealed().catch((revertErr) =>
-      console.error('[api/evidence/publish] visibility revert failed:', revertErr),
+      console.error('[api/evidence/publish] visibility revert failed:', errorLogFacts(revertErr)),
     );
-    console.error('[api/evidence/publish] pair emission failed:', err);
+    console.error('[api/evidence/publish] pair emission failed:', errorLogFacts(err));
     return NextResponse.json(
       { error: 'Publication failed; the record remains sealed' },
       { status: 500 },

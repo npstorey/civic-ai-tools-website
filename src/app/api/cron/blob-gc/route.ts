@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { getPackage } from '@/lib/storage';
 import { collectRefsFromPackage, sweepOrphans } from '@/lib/evidence/blob-gc';
+import { errorLogFacts } from '@/lib/streaming';
 
 /**
  * Orphan-blob garbage collection (Phase B.6 / website#75).
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
     const stats = await sweepOrphans(referenced);
     return NextResponse.json({ ok: true, ...stats });
   } catch (err) {
-    console.error('[blob-gc] run failed:', err);
+    console.error('[blob-gc] run failed:', errorLogFacts(err));
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : 'unknown' },
       { status: 500 },

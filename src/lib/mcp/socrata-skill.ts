@@ -20,6 +20,7 @@
 import { callMcpPrompt, getServerInstructions } from './client.ts';
 import { DATA_COMMONS_SKILL } from './data-commons-skill.ts';
 import { BOSTON_OPENCONTEXT_SKILL } from './boston-skill.ts';
+import { errorLogFacts } from '../streaming.ts';
 
 // Fallback constant used when the MCP server is unreachable. The runtime
 // fetches fresh guidance from the MCP server's prompt endpoint; this fallback
@@ -451,7 +452,7 @@ async function fetchSkillGuidance(): Promise<string> {
     console.log('[Skill] Fetched skill guidance successfully (%d chars)', guidance.length);
     return guidance;
   } catch (error) {
-    console.warn('[Skill] Failed to fetch skill guidance, using fallback:', error instanceof Error ? error.message : error);
+    console.warn('[Skill] Failed to fetch skill guidance, using fallback:', errorLogFacts(error));
     return SOCRATA_SKILL_FALLBACK;
   }
 }
@@ -593,7 +594,7 @@ export async function composeSkillPrompt(
       } catch (error) {
         console.warn(
           `[composeSkillPrompt] Failed to fetch text for "${sourceId}":`,
-          error instanceof Error ? error.message : error,
+          errorLogFacts(error),
         );
         return '';
       }

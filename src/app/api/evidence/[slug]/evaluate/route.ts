@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { errorLogFacts } from '@/lib/streaming';
 import { classifyModelError } from '@/lib/model-client';
 import {
   CALLER_MODEL_KEY_REJECTED_MESSAGE,
@@ -139,7 +140,7 @@ export async function POST(
       evaluatorModel: evaluator.declared,
     });
   } catch (error) {
-    console.error('[evaluate] Error:', error);
+    console.error('[evaluate] Error:', errorLogFacts(error));
     // Same structural-first handling as the replay route (website#30 P4): the
     // SDK's status classifies an upstream refusal, which is what keeps the
     // model service's 429 apart from this app's own per-day limiter and keeps

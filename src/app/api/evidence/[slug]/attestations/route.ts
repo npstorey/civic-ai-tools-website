@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
+import { errorLogFacts } from '@/lib/streaming';
 import { getServerSession } from 'next-auth';
 import { canReadRecord } from '@/lib/evidence/sealed-access';
 import { authOptions } from '@/lib/auth';
@@ -276,11 +277,13 @@ export async function POST(
   );
 
   if (!signing.ok) {
-    // The cause is logged server-side and never returned: it can carry raw
-    // infrastructure detail, and a reviewer can do nothing with it.
+    // The cause is never returned: it can carry raw infrastructure detail, and
+    // a reviewer can do nothing with it. Nor is its message logged (#503 WF):
+    // a storage or database failure's message carries what was being written.
+    // The line keeps the bounded facts.
     console.error(
       '[attestations] signing failed — review not stored:',
-      signing.cause instanceof Error ? signing.cause.message : signing.cause,
+      errorLogFacts(signing.cause),
     );
     return NextResponse.json(signing.refusal.body, { status: signing.refusal.status });
   }

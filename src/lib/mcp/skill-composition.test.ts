@@ -204,8 +204,14 @@ test('Failing fetchText: error logged, source omitted, composition completes wit
     assert.ok(result.includes('DATA_COMMONS_BLOCK'), 'surviving source still renders');
     assert.ok(!result.includes('SOCRATA_BLOCK'), 'failed source is omitted');
     assert.ok(
-      warnings.some((w) => w.includes('socrata') && w.includes('simulated socrata outage')),
+      warnings.some((w) => w.includes('"socrata"')),
       'a warning was logged about the failed source',
+    );
+    // #503 WF: the warning names the source, never what the failure said — a
+    // thrown message can carry a source's or a reader's words.
+    assert.ok(
+      !warnings.some((w) => w.includes('simulated socrata outage')),
+      'the failure\'s message reached the log line',
     );
   } finally {
     console.warn = originalWarn;
@@ -333,8 +339,14 @@ test('Three-source composition survives one failing source: boston throws, socra
     assert.ok(result.includes('DATA_COMMONS_BLOCK'), 'surviving Data Commons source renders');
     assert.ok(!result.includes('BOSTON_BLOCK'), 'failed Boston source is omitted');
     assert.ok(
-      warnings.some((w) => w.includes('boston-opencontext') && w.includes('simulated boston outage')),
+      warnings.some((w) => w.includes('"boston-opencontext"')),
       'a warning was logged about the failed Boston source',
+    );
+    // #503 WF: the warning names the source, never what the failure said — a
+    // thrown message can carry a source's or a reader's words.
+    assert.ok(
+      !warnings.some((w) => w.includes('simulated boston outage')),
+      'the failure\'s message reached the log line',
     );
   } finally {
     console.warn = originalWarn;

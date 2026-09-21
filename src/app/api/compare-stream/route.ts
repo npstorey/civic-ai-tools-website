@@ -7,7 +7,7 @@ import { callMcpTool, routeTool } from '@/lib/mcp/client';
 import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
-import { encodeSSE, panelsForRun, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
+import { encodeSSE, errorLogFacts, panelsForRun, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
 import { getMissingModelCredentialError, ModelConfigurationError } from '@/lib/model-client';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
@@ -258,7 +258,7 @@ Be honest if you don't have access to current or real-time data.`;
           ]);
         }
       } catch (error) {
-        console.error('Stream error:', error);
+        console.error('Stream error:', errorLogFacts(error));
       } finally {
         // Finalize trace and send as final SSE event
         trace.endRoot();
@@ -274,7 +274,7 @@ Be honest if you don't have access to current or real-time data.`;
     // Return the readable stream as SSE
     return new Response(stream.readable, { headers: SSE_HEADERS });
   } catch (error) {
-    console.error('Compare stream API error:', error);
+    console.error('Compare stream API error:', errorLogFacts(error));
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
