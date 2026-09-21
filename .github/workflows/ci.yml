@@ -274,6 +274,28 @@ jobs:
       # falsifiable difference is the write, not the status code, and that is
       # what the two assertions below read. docs/deploy.md says the same thing
       # in the same words.
+      #
+      # HOW THE LOGS ARE READ (#508), also measured. Next.js awaits the
+      # optimiser's cache write before it sends the image, so a refused write
+      # is logged BEFORE the 200: dockerd stamps the line ahead of the
+      # response. Two things can still hide a line that is there. Piped into
+      # `grep -q` under pipefail, docker logs can die of SIGPIPE and turn a
+      # match into a miss (see logged() below), so a log is read into a
+      # variable instead. And docker's log pipeline can hold a written line
+      # back from `docker logs` for a moment, so a line that must be PRESENT
+      # is polled for: the poll stops the moment it arrives and fails if it
+      # never does. The with-mount log must be CLEAN, and a wait on an
+      # absence can never stop early, so that log is read only after two
+      # things: the no-mount run, started after the with-mount run answered,
+      # has shown its own refused write, so the with-mount run has had at
+      # least that whole start-to-log interval; and a marker written into the
+      # container's own stdout and stderr is readable. docker logs keeps each
+      # stream in write order, so every earlier line is readable too, and a
+      # log that shows no marker cannot see anything, so its silence proves
+      # nothing. A write attempted later than the no-mount run's whole
+      # start-to-log interval is outside what that read covers.
+      # scripts/readonly-root-race/drive.sh drives this step against stubs
+      # whose write lands before the response, after it, or never.
       - name: The runtime image under a read-only root filesystem
         run: |
           set -uo pipefail
@@ -283,6 +305,9 @@ jobs:
           IMGPATH=${ASSET#/app/public}
           echo "optimising $IMGPATH"
 
+          # Wall-clock milliseconds, from bash's own clock.
+          now_ms() { local us=${EPOCHREALTIME/[.,]/}; echo $((us / 1000)); }
+
           # Both containers are started by a LITERAL docker run line, not from
           # a helper's "$@": scripts/image-variant-and-readonly-root.test.mjs
           # reads these two lines to check that the mount and the no-mount run
@@ -291,6 +316,7 @@ jobs:
             name=$1
             port=$2
             code=000
+            answered_ms=
             for _ in $(seq 1 60); do
               code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/api/health" || true)
               if [ "$code" = "200" ]; then break; fi
@@ -299,10 +325,31 @@ jobs:
             echo "$name /api/health -> $code"
             if [ "$code" != "200" ]; then docker logs "$name"; return 1; fi
             img=$(curl -s -o /dev/null -w '%{http_code}' -G --data-urlencode "url=$IMGPATH" --data-urlencode "w=64" --data-urlencode "q=75" "http://127.0.0.1:$port/_next/image" || true)
+            answered_ms=$(now_ms)
             echo "$name /_next/image -> $img"
             if [ "$img" != "200" ]; then docker logs "$name"; return 1; fi
             return 0
           }
+
+          # Re-runs a check every 100 ms until it passes, for at most $1
+          # seconds. For a PRESENCE only.
+          wait_for() {
+            local deadline=$(( $(now_ms) + $1 * 1000 ))
+            shift
+            until "$@"; do
+              if [ "$(now_ms)" -ge "$deadline" ]; then return 1; fi
+              sleep 0.1
+            done
+          }
+          # A log is read whole into $log and tested there, never piped into
+          # `grep -q`: under pipefail that pipeline reads a PRESENT line as
+          # absent whenever grep exits before docker logs has written
+          # everything, because docker logs then dies of SIGPIPE (measured:
+          # 61 of 200 reads of one unchanged log, #508).
+          logged() { log=$(docker logs "$1" 2>&1) && [[ $log == *"$2"* ]]; }
+          marked() { log=$(docker logs "$1" 2>&1) && [ "$(grep -cF -- "$2" <<< "$log")" -ge 2 ]; }
+          cache_files() { docker exec ro-with sh -c "find $WRITABLE -type f | wc -l" 2>/dev/null | tr -d '[:space:]'; }
+          has_cache_file() { [ "$(cache_files)" -ge 1 ] 2>/dev/null; }
 
           # --- with the one documented mount ---
           docker run -d --name ro-with --read-only --tmpfs /app/.next/cache:rw,mode=1777 -p 3102:3000 civic-app:ci >/dev/null
@@ -310,7 +357,33 @@ jobs:
             echo "::error::the read-only run WITH the documented mount did not serve"
             status=1
           fi
-          cached=$(docker exec ro-with sh -c "find $WRITABLE -type f | wc -l" 2>/dev/null | tr -d '[:space:]')
+          with_answered_ms=$answered_ms
+          # Its cache and its log are read below, after the run without it.
+
+          # --- without it: the falsification, and the control for that read ---
+          docker run -d --name ro-without --read-only -p 3103:3000 civic-app:ci >/dev/null
+          if ! probe ro-without 3103; then
+            echo "note: without the mount the container did not serve; that is a stronger failure than the measured one"
+          fi
+          without_answered_ms=$answered_ms
+          if wait_for 10 logged ro-without "$WRITABLE"; then
+            readable_ms=$(now_ms)
+            echo "OK — without the mount, the container fails a write naming $WRITABLE:"
+            grep -m3 -F -- "$WRITABLE" <<< "$log"
+            stamp=$(grep -m1 -F -- "$WRITABLE" <<< "$(docker logs -t ro-without 2>&1)" | cut -d' ' -f1 || true)
+            stamped_ms=$( [ -n "$stamp" ] && date -d "$stamp" +%s%3N 2>/dev/null || true)
+            if [ -n "$without_answered_ms" ] && [ -n "$stamped_ms" ]; then
+              echo "latency, image response -> first line naming $WRITABLE: stamped by dockerd at $((stamped_ms - without_answered_ms)) ms, readable by docker logs at $((readable_ms - without_answered_ms)) ms (polled every 100 ms; negative is before curl had the response)"
+            fi
+          else
+            echo "::error::without the mount NOTHING failed a write at $WRITABLE within 10 s — the documented path is not the one that matters; find the one that is"
+            tail -n 30 <<< "$log"
+            status=1
+          fi
+
+          # --- the with-mount reads, ordered after that control ---
+          wait_for 10 has_cache_file || true
+          cached=$(cache_files || true)
           cached=${cached:-0}
           echo "with the mount: $cached file(s) under $WRITABLE"
           if [ "$cached" -lt 1 ]; then
@@ -318,27 +391,18 @@ jobs:
             status=1
           fi
           # No write failure ANYWHERE. This is the assertion that would find a
-          # SECOND writable path: one mount, and the log stays clean.
-          if docker logs ro-with 2>&1 | grep -qiE "EROFS|read-only file system|Failed to write|unhandledRejection"; then
+          # SECOND writable path: one mount, and the log stays clean. It reads
+          # the log text in which the marker was seen.
+          marker="log-marker-ro-with-$(now_ms)"
+          if ! docker exec ro-with sh -c "echo $marker >/proc/1/fd/1; echo $marker >/proc/1/fd/2" || ! wait_for 10 marked ro-with "$marker"; then
+            echo "::error::a marker written into ro-with's own stdout and stderr never reached docker logs, so a clean log would prove nothing"
+            status=1
+          elif grep -qiE "EROFS|read-only file system|Failed to write|unhandledRejection" <<< "$log"; then
             echo "::error::a read-only container with the documented mount still failed a write — there is another writable path, and docs/deploy.md names only one"
-            docker logs ro-with 2>&1 | grep -iE "EROFS|read-only file system|Failed to write|unhandledRejection" | head -10
+            grep -m10 -iE "EROFS|read-only file system|Failed to write|unhandledRejection" <<< "$log"
             status=1
           else
-            echo "OK — with $WRITABLE mounted, nothing else failed a write"
-          fi
-
-          # --- without it: the falsification ---
-          docker run -d --name ro-without --read-only -p 3103:3000 civic-app:ci >/dev/null
-          if ! probe ro-without 3103; then
-            echo "note: without the mount the container did not serve; that is a stronger failure than the measured one"
-          fi
-          if docker logs ro-without 2>&1 | grep -q "$WRITABLE"; then
-            echo "OK — without the mount, the container fails a write naming $WRITABLE:"
-            docker logs ro-without 2>&1 | grep "$WRITABLE" | head -3
-          else
-            echo "::error::without the mount NOTHING failed a write at $WRITABLE — the documented path is not the one that matters; find the one that is"
-            docker logs ro-without 2>&1 | tail -30
-            status=1
+            echo "OK — with $WRITABLE mounted, nothing else failed a write${with_answered_ms:+ (log read $(( $(now_ms) - with_answered_ms )) ms after its image response)}"
           fi
 
           docker rm -f ro-with ro-without >/dev/null 2>&1 || true
