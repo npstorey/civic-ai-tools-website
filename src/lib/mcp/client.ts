@@ -282,7 +282,15 @@ async function makeToolCall(
   name: string,
   args: Record<string, unknown>,
 ): Promise<string> {
-  console.log(`[MCP:${server.sourceId}] Calling tool:`, name, 'with args:', JSON.stringify(args));
+  // #503: the source and the tool name are operator facts; the ARGUMENTS are
+  // the reader's question in other words — for a search tool they ARE the
+  // question — so they are not written to the log. This line pairs with the
+  // response line below, which reports the status, the byte count and how
+  // long the call took. Between them an operator has which source, which
+  // tool, whether it answered, how much it returned and how slow it was, and
+  // none of what was asked or what came back.
+  console.log(`[MCP:${server.sourceId}] Calling tool: ${name}`);
+  const startedAt = Date.now();
 
   const state = getServerState(server);
   const headers = buildMcpRequestHeaders(server, state.sessionId);
@@ -317,7 +325,9 @@ async function makeToolCall(
   }
 
   const text = await response.text();
-  console.log(`[MCP:${server.sourceId}] Raw response:`, text.substring(0, 500));
+  console.log(
+    `[MCP:${server.sourceId}] Tool ${name}: ${response.status}, ${text.length} bytes in ${Date.now() - startedAt}ms`,
+  );
 
   // Parse SSE response format: "event: message\ndata: {...}\n\n"
   const lines = text.split('\n');
@@ -429,7 +439,10 @@ async function makePromptCall(
   name: string,
   args: Record<string, string>,
 ): Promise<string> {
-  console.log(`[MCP:${server.sourceId}] Getting prompt:`, name, 'with args:', JSON.stringify(args));
+  // #503, as for a tool call above: the prompt name is an operator fact, its
+  // arguments are not logged.
+  console.log(`[MCP:${server.sourceId}] Getting prompt: ${name}`);
+  const startedAt = Date.now();
 
   const state = getServerState(server);
   const headers = buildMcpRequestHeaders(server, state.sessionId);
@@ -451,7 +464,9 @@ async function makePromptCall(
   }
 
   const text = await response.text();
-  console.log(`[MCP:${server.sourceId}] Prompt raw response:`, text.substring(0, 500));
+  console.log(
+    `[MCP:${server.sourceId}] Prompt ${name}: ${response.status}, ${text.length} bytes in ${Date.now() - startedAt}ms`,
+  );
 
   // Parse SSE response format
   const lines = text.split('\n');
@@ -515,14 +530,15 @@ function formatPromptResult(result: McpPromptResult): string {
 }
 
 function formatMcpResult(result: McpToolResult): string {
-  console.log('[MCP] Formatting result:', JSON.stringify(result).substring(0, 500));
+  // #503: the result IS the reader's data. Its size is the operator fact.
+  console.log(`[MCP] Formatting result: ${JSON.stringify(result).length} bytes`);
   if (result.content && Array.isArray(result.content)) {
     const textContent = result.content
       .filter(item => item.type === 'text' && item.text)
       .map(item => item.text)
       .join('\n');
     const formatted = textContent || JSON.stringify(result);
-    console.log('[MCP] Formatted output:', formatted.substring(0, 300));
+    console.log(`[MCP] Formatted output: ${formatted.length} bytes`);
     return formatted;
   }
   return JSON.stringify(result);

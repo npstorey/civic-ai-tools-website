@@ -67,6 +67,25 @@ function dialectNote(kind: StreamErrorKind): string {
 }
 
 /**
+ * The operator facts of a failure, and nothing else (#503).
+ *
+ * This line used to log the raw error object. An endpoint that refuses a
+ * request routinely echoes the prompt back in the refusal body, and the SDK
+ * puts that body in the error's message — so a reader's question reached the
+ * hosting platform's log store on every such failure. The status and the
+ * error's CLASS answer "who refused us and how", which is what the classified
+ * kind above does not say on its own, and neither can carry the question: a
+ * status is a number and a class name is this codebase's or the SDK's, never
+ * text a remote endpoint chose.
+ */
+function failureFacts(error: unknown): string {
+  const status = (error as { status?: unknown } | null)?.status;
+  const statusNote = typeof status === 'number' ? ` [status ${status}]` : '';
+  const className = error instanceof Error ? (error.constructor?.name ?? 'Error') : typeof error;
+  return `${statusNote} [error class: ${className}]`;
+}
+
+/**
  * Shared failure tail for both streaming query functions: classify the error,
  * log it server-side (previously this path was silent — the error only went to
  * the SSE callback), and forward a sanitized payload to the caller.
@@ -94,7 +113,7 @@ function dialectNote(kind: StreamErrorKind): string {
  */
 function reportStreamFailure(panel: PanelType, error: unknown, callbacks: StreamCallbacks): void {
   const kind: StreamErrorKind = classifyModelError(error) ?? classifyStreamError(error);
-  console.error(`[stream:${panel}] query failed (${kind})${dialectNote(kind)}:`, error);
+  console.error(`[stream:${panel}] query failed (${kind})${dialectNote(kind)}${failureFacts(error)}`);
   const { message, code } = streamErrorPayload(kind);
   callbacks.onError(panel, message, code);
 }
