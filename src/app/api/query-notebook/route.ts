@@ -87,6 +87,22 @@ function encodeNotebookEvent(event: NotebookEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
 }
 
+/**
+ * The class of a thrown value, and nothing derived from its content (#503).
+ *
+ * The one bound both log lines in the pipeline's `catch` are built from. It
+ * reads `constructor.name` and NOT `err.name`: `name` is an ordinary writable
+ * property, so a throw site can put arbitrary text in it — including a
+ * reader's question — and a bound a throw site can widen is not a bound. A
+ * constructor's name is this codebase's or the runtime's. For a thrown value
+ * that is not an Error, `typeof` is the class-shaped fact and its vocabulary
+ * is closed.
+ */
+function errorClassOf(err: unknown): string {
+  if (err instanceof Error) return err.constructor?.name ?? 'Error';
+  return err === null ? 'null' : typeof err;
+}
+
 export async function POST(request: NextRequest) {
   let body: QueryNotebookRequest;
   try {
@@ -353,7 +369,7 @@ export async function POST(request: NextRequest) {
         console.error('[query-notebook] NotebookExecutionError', {
           correlationId,
           exitCode: err.exitCode,
-          errorClass: err.name,
+          errorClass: errorClassOf(err),
         });
         await emit({
           type: 'error',
@@ -363,11 +379,6 @@ export async function POST(request: NextRequest) {
           exitCode: err.exitCode,
         });
       } else {
-        if (err instanceof Error) {
-          console.error('[query-notebook] error', { message: err.message, stack: err.stack });
-        } else {
-          console.error('[query-notebook] unknown error', err);
-        }
         const message = err instanceof Error ? err.message : 'Unknown error';
         // Phase A attaches the classified kind to its rejection (#154). Guarded
         // rather than forwarded blind: plenty of unrelated errors carry a `code`
@@ -377,6 +388,29 @@ export async function POST(request: NextRequest) {
           ? (err as { code?: unknown }).code
           : undefined;
         const code = isStreamErrorKind(rejectionCode) ? rejectionCode : undefined;
+        // #503: BOUND THE SHAPE HERE, do not audit the throw sites. These two
+        // lines used to be two — `{ message, stack }` for an Error and the
+        // thrown value WHOLESALE for anything else — and the second had no
+        // bound at all. A model endpoint's refusal echoes the prompt back; a
+        // source's error carries the rows; an arbitrary object carries
+        // whatever it was built from. What arrives here cannot be enumerated
+        // in advance, and every future throw would widen the line again, so
+        // the record below is fixed and nothing derived from the thrown value
+        // can extend it. The distinction the two prefixes used to carry — an
+        // Error or not — is now the `errorClass` field, which says `object`
+        // or `string` for a throw that is not an Error.
+        //
+        // Read this with the NotebookExecutionError branch above: ONE
+        // decision, that this `catch` logs the run's shape and never its
+        // content. The fields differ only because that branch HAS two more
+        // run facts — the executor supplies an exit code, and the reader is
+        // handed a correlation id. Nothing on this path puts a reference in
+        // front of the reader, so minting a correlation id here would be a
+        // handle that nothing else holds.
+        console.error('[query-notebook] error', {
+          errorClass: errorClassOf(err),
+          ...(code ? { code } : {}),
+        });
         await emit({ type: 'error', message, ...(code ? { code } : {}) });
       }
     } finally {
