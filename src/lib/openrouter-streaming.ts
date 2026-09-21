@@ -81,8 +81,49 @@ function dialectNote(kind: StreamErrorKind): string {
 function failureFacts(error: unknown): string {
   const status = (error as { status?: unknown } | null)?.status;
   const statusNote = typeof status === 'number' ? ` [status ${status}]` : '';
-  const className = error instanceof Error ? (error.constructor?.name ?? 'Error') : typeof error;
-  return `${statusNote} [error class: ${className}]`;
+  return `${statusNote} [error class: ${errorClassOf(error)}]`;
+}
+
+/**
+ * The class of a thrown value: stable in the shipped artifact, and not
+ * widenable by whatever threw (#503).
+ *
+ * MEASURED, not assumed. This read `err.constructor.name` until the server
+ * build was inspected. Turbopack emits this app's error classes as ANONYMOUS
+ * class expressions in a position where no name is inferred — the built server
+ * bundle carries `["NotebookExecutionError",0,class extends Error{…}]`, and
+ * dozens of `class a extends Error` beside it — so `constructor.name` is the
+ * EMPTY STRING in production, and `?? 'Error'` never fires because `''` is not
+ * nullish. `constructor.name` is unforgeable and, here, unusable.
+ *
+ * `err.name` is the exact inverse. It is a string LITERAL assigned in the
+ * constructor, so it survives bundling untouched; and it is an ordinary
+ * writable property, so a throw site can put a reader's question in it. Only
+ * one of the two is stable, and only the other is safe, so the name is read
+ * and then ADMITTED BY SHAPE: one alphanumeric token, at most 63 characters,
+ * that names the concept it reports. Anything else collapses to `Error`.
+ *
+ * That is a pattern, not a list of the classes this codebase happens to
+ * declare — a hand-picked list is the defect shape, not the fix (#363). All
+ * nine error classes declared in `src/` assign such a literal, so all nine
+ * survive the bundler and reach the log; a third-party error that assigns none
+ * reports `Error`, which is what `Error.prototype.name` says and is true.
+ *
+ * WHAT IS STILL ADMITTED, stated rather than implied: a throw site that
+ * deliberately encodes content as a single alphanumeric token containing
+ * `Error` can put up to 63 such characters here. A question cannot take that
+ * shape — it has spaces — and nothing in this codebase writes `name` from
+ * data. That residual is the price of reading the only field the bundler
+ * preserves.
+ */
+const CLASS_NAME_SHAPE = /^[A-Za-z][A-Za-z0-9]{0,62}$/;
+
+function errorClassOf(error: unknown): string {
+  if (!(error instanceof Error)) return error === null ? 'null' : typeof error;
+  const name: unknown = error.name;
+  return typeof name === 'string' && CLASS_NAME_SHAPE.test(name) && name.includes('Error')
+    ? name
+    : 'Error';
 }
 
 /**
