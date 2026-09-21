@@ -22,8 +22,16 @@
 //      model endpoint that refuses with 400 and echoes the prompt in the
 //      refusal body, which is how a real endpoint leaks a question into an
 //      error object.
-//   4. `src/app/api/query-notebook/route.ts:346-351` — the REAL route handler,
-//      driven to its `NotebookExecutionError` catch.
+//   4. `src/app/api/query-notebook/route.ts` — the REAL route handler, driven
+//      three times, once into each branch of the pipeline's `catch`: the typed
+//      `NotebookExecutionError` (its stderr and message), an Error of a class
+//      the route has no case for (its message and its stack), and a thrown
+//      value that is not an Error at all (logged wholesale at the base).
+//      The last two are the `else` branch, added when P1 was extended to it:
+//      that branch is the broader defect, because nothing bounds what a future
+//      throw carries, so the assertions below pin the SHAPE of the record —
+//      `message:`, `stack:` and the fixture's own fields must be absent by
+//      NAME, not merely free of this run's canary.
 //
 // The fifth, `src/app/api/evidence/route.ts:424-426`, is read as SOURCE and is
 // the file's stated blind spot: reaching that line means a successful publish,
@@ -124,11 +132,21 @@ const STUB_SOURCE: Record<string, string> = {
   // which another sprint owns.
   '@/lib/auth': `export const authOptions = {};`,
   // The real error class, so the route's `instanceof` holds; a failing
-  // executor that creates nothing.
+  // executor that creates nothing. Three modes, because the route's `catch`
+  // has three branches and each is a different bound on what may be logged:
+  // the typed `NotebookExecutionError`, an Error of some other class, and a
+  // thrown value that is not an Error at all.
   '@/lib/sandbox': `
      import { NotebookExecutionError } from ${JSON.stringify(DRIVER_URL)};
      export { NotebookExecutionError };
+     /** An Error the route has no type for — named so its CLASS is assertable. */
+     class SourceUnavailableError extends Error {
+       constructor(message) { super(message); this.name = 'SourceUnavailableError'; }
+     }
      export async function executeNotebook() {
+       const mode = globalThis.__civicP1ExecutorMode;
+       if (mode === 'other-error') throw new SourceUnavailableError(globalThis.__civicP1OtherErrorMessage);
+       if (mode === 'non-error') throw globalThis.__civicP1NonErrorThrow;
        throw new NotebookExecutionError(globalThis.__civicP1NotebookMessage,
          { exitCode: 1, stderr: globalThis.__civicP1NotebookStderr });
      }`,
@@ -166,6 +184,17 @@ const globals = globalThis as unknown as Record<string, unknown>;
 globals.__civicP1NotebookStderr =
   `Traceback (most recent call last):\n  File "nb.py", line 3\n    df = fetch("${CANARY}")\nKeyError: '${CANARY}'`;
 globals.__civicP1NotebookMessage = `nbconvert exited 1 while running the cell for ${CANARY}`;
+// The `else` branch's two throws. The first is an Error of a class the route
+// has no case for: its `message` AND its `stack` carry the canary, because
+// V8 opens a stack with `Name: message`. The second is not an Error at all —
+// an arbitrary object, which the base logs WHOLESALE, and which is why the
+// fix bounds the shape rather than auditing what may be thrown.
+globals.__civicP1OtherErrorMessage = `the source refused the request for ${CANARY}`;
+globals.__civicP1NonErrorThrow = {
+  code: 'mcp_unavailable',
+  detail: `the source is unreachable; last query was ${CANARY}`,
+  rows: [{ complaint_type: CANARY, count: '12' }],
+};
 
 // --- Console capture ----------------------------------------------------------
 
@@ -324,7 +353,7 @@ const STREAM_FAILURE_LOG = await captureConsole(async () => {
   );
 });
 
-// --- Leg 4: the notebook route, driven to its NotebookExecutionError catch -----
+// --- Leg 4: the notebook route, driven to all three branches of its catch -----
 
 const { startScriptedModelServer } = await import('./model-loop/test-harness.ts');
 const scripted = await startScriptedModelServer([{ content: 'Twelve complaints were recorded.' }]);
@@ -333,14 +362,32 @@ _resetDefaultModelClientForTests();
 
 const { POST } = await import('../app/api/query-notebook/route.ts');
 
-let notebookSse = '';
-const NOTEBOOK_LOG = await captureConsole(async () => {
-  const response = await POST(new Request('http://localhost/api/query-notebook', {
-    method: 'POST',
-    body: JSON.stringify({ query: `How many complaints mention ${CANARY}?`, portal: PORTAL }),
-  }) as never);
-  notebookSse = await response.text();
-});
+interface RouteDrive { log: string[]; sse: string }
+
+/**
+ * One real request through the real handler, with the executor failing in the
+ * named way. Three drives, one per branch of the pipeline's `catch`. The
+ * anonymous daily allowance is 10, so three fit inside one day's quota.
+ */
+async function driveNotebookRoute(mode: 'notebook-execution' | 'other-error' | 'non-error'): Promise<RouteDrive> {
+  globals.__civicP1ExecutorMode = mode;
+  let sse = '';
+  const log = await captureConsole(async () => {
+    const response = await POST(new Request('http://localhost/api/query-notebook', {
+      method: 'POST',
+      body: JSON.stringify({ query: `How many complaints mention ${CANARY}?`, portal: PORTAL }),
+    }) as never);
+    sse = await response.text();
+  });
+  return { log, sse };
+}
+
+const NOTEBOOK_DRIVE = await driveNotebookRoute('notebook-execution');
+const OTHER_ERROR_DRIVE = await driveNotebookRoute('other-error');
+const NON_ERROR_DRIVE = await driveNotebookRoute('non-error');
+const NOTEBOOK_LOG = NOTEBOOK_DRIVE.log;
+const notebookSse = NOTEBOOK_DRIVE.sse;
+
 await new Promise<void>((resolve) => { scripted.server.close(() => resolve()); });
 _resetDefaultModelClientForTests();
 
@@ -367,6 +414,14 @@ test('premise: every leg ran the code it measures, and the canary was really pla
   assert.ok(streamErrorCopy.length > 0, 'the stream failure never reached onError');
   assert.ok(!streamErrorCopy.includes(CANARY), 'reader-facing copy carries the endpoint’s raw words (#154)');
   assert.match(notebookSse, /"code":"notebook_execution"/, `the notebook drive never reached the NotebookExecutionError catch:\n${notebookSse.slice(-600)}`);
+  // The two `else`-branch drives: an Error of an unhandled class, and a thrown
+  // value that is not an Error. Both must have reached the same `catch` and
+  // come out of the OTHER branch — not as a `notebook_execution` failure.
+  for (const [what, drive] of [['other-error', OTHER_ERROR_DRIVE], ['non-error', NON_ERROR_DRIVE]] as const) {
+    assert.match(drive.sse, /"type":"error"/, `the ${what} drive produced no error event:\n${drive.sse.slice(-600)}`);
+    assert.ok(!drive.sse.includes('notebook_execution'), `the ${what} drive took the NotebookExecutionError branch, not the else branch`);
+    assert.ok(drive.log.length > 0, `the ${what} drive logged nothing at all — the capture is not reading this path`);
+  }
   for (const [where, logged] of [
     ['tool call', TOOL_CALL_LOG],
     ['prompt fetch', PROMPT_LOG],
@@ -430,6 +485,61 @@ test('notebook: the operator facts stay — correlation id, exit code, error cla
     notebookSse.includes(`"correlationId":"${correlationId}"`),
     `the reader's reference and the log line's correlation id differ:\n${notebookSse.slice(-400)}`,
   );
+});
+
+// --- The `else` branch of the same catch: bound, not audited -----------------
+
+test('else branch (an Error of an unhandled class): its message and its stack are in no log line', () => {
+  assertNoCanary(OTHER_ERROR_DRIVE.log, 'src/app/api/query-notebook/route.ts — the else branch, Error case');
+});
+
+test('else branch (a thrown value that is not an Error): the value is in no log line', () => {
+  assertNoCanary(NON_ERROR_DRIVE.log, 'src/app/api/query-notebook/route.ts — the else branch, non-Error case');
+});
+
+test('else branch: the operator facts stay — the thrown value’s class, and the classified kind when there is one', () => {
+  const errorLine = OTHER_ERROR_DRIVE.log.find((entry) => entry.includes('[query-notebook] error'));
+  assert.ok(errorLine, `an unhandled Error is no longer logged at all:\n${logText(OTHER_ERROR_DRIVE.log)}`);
+  // The CLASS, as a field. A thrower can write `err.name`, so the bound reads
+  // the constructor; the fixture's class name is what proves the line is not
+  // just echoing its own prefix.
+  assert.match(
+    errorLine!,
+    /errorClass: 'SourceUnavailableError'|"errorClass":"SourceUnavailableError"/,
+    `the log line does not name the class of the Error that was thrown:\n${errorLine}`,
+  );
+
+  const nonErrorLine = NON_ERROR_DRIVE.log.find((entry) => entry.includes('[query-notebook] error'));
+  assert.ok(nonErrorLine, `a non-Error throw is no longer logged at all:\n${logText(NON_ERROR_DRIVE.log)}`);
+  // `typeof` is the class-shaped fact for something that is not an Error, and
+  // it is a closed vocabulary — it cannot be widened by what was thrown.
+  assert.match(
+    nonErrorLine!,
+    /errorClass: 'object'|"errorClass":"object"/,
+    `the log line does not distinguish a non-Error throw from an Error:\n${nonErrorLine}`,
+  );
+  // The classified kind reaches the line, and it is a closed enum.
+  assert.match(
+    nonErrorLine!,
+    /code: 'mcp_unavailable'|"code":"mcp_unavailable"/,
+    `the classified kind did not reach the log line:\n${nonErrorLine}`,
+  );
+});
+
+test('else branch: nothing derived from the thrown value can widen the line — no message, no stack, no spread', () => {
+  // The bound is a fixed record. Read over BOTH drives: the fields a reader's
+  // words could ride on must be absent by NAME, not merely canary-free, so a
+  // future throw carrying different words cannot reopen this.
+  for (const [what, drive] of [['Error', OTHER_ERROR_DRIVE], ['non-Error', NON_ERROR_DRIVE]] as const) {
+    const line = drive.log.find((entry) => entry.includes('[query-notebook] error'));
+    assert.ok(line, `the ${what} case logged no failure line`);
+    for (const field of ['message:', 'stack:', 'detail:', 'rows:']) {
+      assert.ok(
+        !line!.includes(field),
+        `the ${what} case's log line carries a \`${field}\` field, which a throw site controls:\n${line}`,
+      );
+    }
+  }
 });
 
 test('evidence: the deprecated cookie-auth publish log names no account id (read as source — see this file’s header)', () => {
