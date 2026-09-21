@@ -66,6 +66,47 @@ function normalizeMcpEndpoint(url: string): string {
 }
 
 /**
+ * Index every server's tools by bare tool name — the map the router keys on.
+ *
+ * A tool name hosted by two servers REFUSES, naming the tool and both
+ * servers. The bare name is the router's only key, so the alternative is a
+ * second binding overwriting the first: one server's tool silently
+ * unreachable, with nothing in a log or a trace to say so (#503 P3, hub open
+ * question Q60 part b). No renaming and no prefixing here — the refusal is
+ * the whole of it.
+ *
+ * This is a refusal an operator can never trigger: `buildMcpRegistry(env)`
+ * builds its servers from compile-time constants, so a duplicate arrives only
+ * with a code change. That also makes it safe at module-evaluation time,
+ * which is where `src/lib/mcp/client.ts` calls it — unlike
+ * `getMissingMcpRoutingError` below, which stays a check-and-return precisely
+ * because its condition IS an environment `next build` does not have.
+ *
+ * Exported because `buildMcpRegistry`'s signature offers no way to hand it two
+ * servers that share a tool name; this is the seam the guard is driven
+ * through (`registry-duplicate-tool-name.test.ts`).
+ */
+export function buildToolIndex(
+  servers: Record<string, McpServerConfig>,
+): Record<string, string> {
+  const toolIndex: Record<string, string> = {};
+  for (const [sourceId, server] of Object.entries(servers)) {
+    for (const tool of server.tools) {
+      if (Object.prototype.hasOwnProperty.call(toolIndex, tool)) {
+        throw new McpConfigurationError(
+          `Duplicate MCP tool name "${tool}": it is hosted by both "${toolIndex[tool]}" and ` +
+            `"${sourceId}". Tool names are the router's only key, so the second binding would ` +
+            `replace the first and that server's tool would be unreachable. Give one of them a ` +
+            `distinct name.`,
+        );
+      }
+      toolIndex[tool] = sourceId;
+    }
+  }
+  return toolIndex;
+}
+
+/**
  * Build a routing registry from resolved environment values. Callers should
  * pass the env they actually want — the function does not read `process.env`
  * so the same code path is exercised in dev, prod, and tests.
@@ -101,12 +142,7 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
     },
   };
 
-  const toolIndex: Record<string, string> = {};
-  for (const [sourceId, server] of Object.entries(servers)) {
-    for (const tool of server.tools) {
-      toolIndex[tool] = sourceId;
-    }
-  }
+  const toolIndex = buildToolIndex(servers);
 
   const unconfiguredTools: Record<string, string> = {};
   if (!env.socrataUrl) {
