@@ -139,15 +139,43 @@ const STUB_SOURCE: Record<string, string> = {
   '@/lib/sandbox': `
      import { NotebookExecutionError } from ${JSON.stringify(DRIVER_URL)};
      export { NotebookExecutionError };
-     /** An Error the route has no type for — named so its CLASS is assertable. */
-     class SourceUnavailableError extends Error {
+     //
+     // THE BUNDLER'S SHAPE, REPRODUCED HERE ON PURPOSE.
+     //
+     // node --test runs this repository's TypeScript unbundled, where every
+     // error class has a declared name and constructor.name answers it. The
+     // SHIPPED artifact does not: Turbopack emits these classes as ANONYMOUS
+     // class expressions in a non-name-inference position — the server bundle
+     // carries ["NotebookExecutionError",0,class extends Error{…}] — so
+     // constructor.name is the EMPTY STRING in production. A fixture built
+     // from a normally-declared class cannot see that, and a test that cannot
+     // see it is green over the one shape the defect lives in.
+     //
+     // So every Error these modes throw is constructed from a class declared
+     // the way the bundler emits one: an anonymous class expression read out
+     // of an array slot. this.name is a string literal and survives
+     // bundling; constructor.name does not, and is "" here exactly as it is
+     // in the artifact.
+     const AnonSourceUnavailableError = ['slot', 0, class extends Error {
        constructor(message) { super(message); this.name = 'SourceUnavailableError'; }
-     }
+     }][2];
+     // A subclass, so instanceof NotebookExecutionError still holds in the
+     // route while the constructor is anonymous; name is the literal the
+     // real base class assigns.
+     const AnonNotebookExecutionError = ['slot', 0, class extends NotebookExecutionError {}][2];
      export async function executeNotebook() {
        const mode = globalThis.__civicP1ExecutorMode;
-       if (mode === 'other-error') throw new SourceUnavailableError(globalThis.__civicP1OtherErrorMessage);
+       if (mode === 'other-error') throw new AnonSourceUnavailableError(globalThis.__civicP1OtherErrorMessage);
        if (mode === 'non-error') throw globalThis.__civicP1NonErrorThrow;
-       throw new NotebookExecutionError(globalThis.__civicP1NotebookMessage,
+       if (mode === 'name-canary') {
+         // The writable-name hole: a throw site puts a reader's words where
+         // the bound now reads. Nothing in this codebase does this; a future
+         // one, or a dependency, can.
+         const err = new AnonSourceUnavailableError(globalThis.__civicP1NameCanaryMessage);
+         err.name = globalThis.__civicP1NameCanary;
+         throw err;
+       }
+       throw new AnonNotebookExecutionError(globalThis.__civicP1NotebookMessage,
          { exitCode: 1, stderr: globalThis.__civicP1NotebookStderr });
      }`,
 };
@@ -190,6 +218,10 @@ globals.__civicP1NotebookMessage = `nbconvert exited 1 while running the cell fo
 // an arbitrary object, which the base logs WHOLESALE, and which is why the
 // fix bounds the shape rather than auditing what may be thrown.
 globals.__civicP1OtherErrorMessage = `the source refused the request for ${CANARY}`;
+// The writable-`name` drive. The message carries no canary, so only the NAME
+// can put the canary in the log — which is the one thing being measured.
+globals.__civicP1NameCanaryMessage = 'the source refused the request';
+globals.__civicP1NameCanary = `the source refused the request for ${CANARY}`;
 globals.__civicP1NonErrorThrow = {
   code: 'mcp_unavailable',
   detail: `the source is unreachable; last query was ${CANARY}`,
@@ -366,10 +398,11 @@ interface RouteDrive { log: string[]; sse: string }
 
 /**
  * One real request through the real handler, with the executor failing in the
- * named way. Three drives, one per branch of the pipeline's `catch`. The
+ * named way. Four drives: one per branch of the pipeline's `catch`, plus the
+ * adversarial `name` case. The
  * anonymous daily allowance is 10, so three fit inside one day's quota.
  */
-async function driveNotebookRoute(mode: 'notebook-execution' | 'other-error' | 'non-error'): Promise<RouteDrive> {
+async function driveNotebookRoute(mode: 'notebook-execution' | 'other-error' | 'non-error' | 'name-canary'): Promise<RouteDrive> {
   globals.__civicP1ExecutorMode = mode;
   let sse = '';
   const log = await captureConsole(async () => {
@@ -385,6 +418,7 @@ async function driveNotebookRoute(mode: 'notebook-execution' | 'other-error' | '
 const NOTEBOOK_DRIVE = await driveNotebookRoute('notebook-execution');
 const OTHER_ERROR_DRIVE = await driveNotebookRoute('other-error');
 const NON_ERROR_DRIVE = await driveNotebookRoute('non-error');
+const NAME_CANARY_DRIVE = await driveNotebookRoute('name-canary');
 const NOTEBOOK_LOG = NOTEBOOK_DRIVE.log;
 const notebookSse = NOTEBOOK_DRIVE.sse;
 
@@ -417,7 +451,7 @@ test('premise: every leg ran the code it measures, and the canary was really pla
   // The two `else`-branch drives: an Error of an unhandled class, and a thrown
   // value that is not an Error. Both must have reached the same `catch` and
   // come out of the OTHER branch — not as a `notebook_execution` failure.
-  for (const [what, drive] of [['other-error', OTHER_ERROR_DRIVE], ['non-error', NON_ERROR_DRIVE]] as const) {
+  for (const [what, drive] of [['other-error', OTHER_ERROR_DRIVE], ['non-error', NON_ERROR_DRIVE], ['name-canary', NAME_CANARY_DRIVE]] as const) {
     assert.match(drive.sse, /"type":"error"/, `the ${what} drive produced no error event:\n${drive.sse.slice(-600)}`);
     assert.ok(!drive.sse.includes('notebook_execution'), `the ${what} drive took the NotebookExecutionError branch, not the else branch`);
     assert.ok(drive.log.length > 0, `the ${what} drive logged nothing at all — the capture is not reading this path`);
@@ -530,7 +564,7 @@ test('else branch: nothing derived from the thrown value can widen the line — 
   // The bound is a fixed record. Read over BOTH drives: the fields a reader's
   // words could ride on must be absent by NAME, not merely canary-free, so a
   // future throw carrying different words cannot reopen this.
-  for (const [what, drive] of [['Error', OTHER_ERROR_DRIVE], ['non-Error', NON_ERROR_DRIVE]] as const) {
+  for (const [what, drive] of [['Error', OTHER_ERROR_DRIVE], ['non-Error', NON_ERROR_DRIVE], ['adversarial name', NAME_CANARY_DRIVE]] as const) {
     const line = drive.log.find((entry) => entry.includes('[query-notebook] error'));
     assert.ok(line, `the ${what} case logged no failure line`);
     for (const field of ['message:', 'stack:', 'detail:', 'rows:']) {
@@ -540,6 +574,52 @@ test('else branch: nothing derived from the thrown value can widen the line — 
       );
     }
   }
+});
+
+// --- The class field must survive the bundler, and stay bounded --------------
+
+/** One alphanumeric token, at most 63 characters, naming the concept it reports. */
+const CLASS_TOKEN = /^[A-Za-z][A-Za-z0-9]{0,62}$/;
+
+/** The `errorClass` field of a captured failure line, or null if there is none. */
+function errorClassField(log: string[]): string | null {
+  const line = log.find((entry) => entry.includes('[query-notebook]'));
+  if (!line) return null;
+  const m = /errorClass: '([^']*)'|"errorClass":"([^"]*)"/.exec(line);
+  return m ? (m[1] ?? m[2]) : null;
+}
+
+test('every branch: the class field is a real class token — never the empty string the bundler produces', () => {
+  // Turbopack emits this app's error classes as ANONYMOUS class expressions
+  // (`["NotebookExecutionError",0,class extends Error{…}]` is in the shipped
+  // server bundle), so `constructor.name` is "" in production and `?? 'Error'`
+  // never fires, because "" is not nullish. Every Error thrown above is
+  // constructed from a class declared that way, so this assertion reaches the
+  // shape the defect lives in rather than the shape `node --test` would
+  // otherwise hand it.
+  const expected: Array<[string, string[], string]> = [
+    ['NotebookExecutionError branch', NOTEBOOK_LOG, 'NotebookExecutionError'],
+    ['else branch, Error case', OTHER_ERROR_DRIVE.log, 'SourceUnavailableError'],
+    ['else branch, non-Error case', NON_ERROR_DRIVE.log, 'object'],
+    ['else branch, adversarial name', NAME_CANARY_DRIVE.log, 'Error'],
+  ];
+  for (const [where, log, want] of expected) {
+    const actual = errorClassField(log);
+    assert.notEqual(actual, null, `${where}: no failure line carries an errorClass field:\n${logText(log)}`);
+    assert.notEqual(actual, '', `${where}: errorClass is the EMPTY STRING — the constructor name the bundler erased`);
+    assert.match(actual!, CLASS_TOKEN, `${where}: errorClass is not a class token: ${JSON.stringify(actual)}`);
+    assert.equal(actual, want, `${where}: errorClass is ${JSON.stringify(actual)}`);
+  }
+});
+
+test('adversarial: a throw site that writes a reader’s words into err.name cannot put them in the log', () => {
+  // `name` is an ordinary writable property, and it is what the bound now
+  // reads — because it is a string literal that survives bundling where
+  // `constructor.name` does not. That trade is only safe while the name is
+  // admitted by SHAPE. Here a throw site sets it to a sentence carrying the
+  // canary; the line must fall back to `Error` and say nothing else.
+  assertNoCanary(NAME_CANARY_DRIVE.log, 'src/app/api/query-notebook/route.ts — err.name carrying a reader’s words');
+  assert.equal(errorClassField(NAME_CANARY_DRIVE.log), 'Error');
 });
 
 test('evidence: the deprecated cookie-auth publish log names no account id (read as source — see this file’s header)', () => {
