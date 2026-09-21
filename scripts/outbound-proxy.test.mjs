@@ -44,6 +44,13 @@ import { getGlobalDispatcher, setGlobalDispatcher } from 'undici';
 import { FetchHttpHandler } from '@smithy/fetch-http-handler';
 
 const UNRESOLVABLE = 'proxy-probe.invalid';
+
+/**
+ * The undici release `shouldProxyDestination` (`src/lib/outbound-proxy.ts`)
+ * was ported from, line for line. See the test beside the NO_PROXY agreement
+ * table for what changing this costs.
+ */
+const PORTED_FROM_UNDICI = '6.28.0';
 const TARGET = `http://${UNRESOLVABLE}/tsr`;
 const SAMPLE_HASH = 'acdb56712cc0e735589e39d485dcd2c3d34a611b6752ab2f8b703e13008a3004';
 
@@ -856,6 +863,37 @@ test('a proxy address carrying a user and password reaches the tunnel as Proxy-A
         'a user, which the deploy guide says is supported',
     );
   }
+});
+
+// THE AGREEMENT TABLE BELOW IS A SAMPLE, NOT A PROOF, AND THIS IS WHAT SAYS SO.
+//
+// undici does not export the routing decision `EnvHttpProxyAgent` makes, and
+// the sign-in leg leaves through `node:http(s)`, which no global `fetch`
+// dispatcher reaches — so that path has to make the SAME decision, and
+// `shouldProxyDestination` is a deliberate port of `#shouldProxy` and
+// `#parseNoProxy` rather than a second opinion.
+//
+// The table that follows drives one destination down both paths and fails when
+// they part. What it CANNOT do is fail for a branch it does not exercise: bump
+// undici, change a branch the table misses, and the agreement stays green while
+// the two paths have already parted — surfacing, much later, as one instance's
+// sign-in reaching a proxy its operator exempted. So the bump has to announce
+// itself, and re-running the table is not what answers it. Reading it against
+// the new `#shouldProxy` is.
+test('the undici release the NO_PROXY matcher was ported from is the one installed', () => {
+  const installed = JSON.parse(
+    readFileSync(new URL('../node_modules/undici/package.json', import.meta.url), 'utf8'),
+  ).version;
+  assert.equal(
+    installed,
+    PORTED_FROM_UNDICI,
+    `undici is ${installed} and \`shouldProxyDestination\` was ported from ${PORTED_FROM_UNDICI}. ` +
+      'This is not asking for a re-run. Open that version\'s ' +
+      '`lib/dispatcher/env-http-proxy-agent.js`, read `#shouldProxy` and `#parseNoProxy` against ' +
+      '`shouldProxyDestination` in src/lib/outbound-proxy.ts, add a case to the table below for ' +
+      'any branch that moved, and only then update this constant — a green table over a sample ' +
+      'that no longer covers the branch structure is the failure this guard exists to prevent',
+  );
 });
 
 // Criterion 2: the exempt set is the SAME set, asserted as agreement between
