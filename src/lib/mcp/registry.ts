@@ -66,6 +66,26 @@ function normalizeMcpEndpoint(url: string): string {
 }
 
 /**
+ * Index every server's tools by bare tool name — the map the router keys on.
+ *
+ * Extracted from `buildMcpRegistry` and exported so this index's rules can be
+ * driven directly: `buildMcpRegistry(env)` builds its servers from
+ * compile-time constants, so its signature offers no way to hand it two
+ * servers that share a tool name.
+ */
+export function buildToolIndex(
+  servers: Record<string, McpServerConfig>,
+): Record<string, string> {
+  const toolIndex: Record<string, string> = {};
+  for (const [sourceId, server] of Object.entries(servers)) {
+    for (const tool of server.tools) {
+      toolIndex[tool] = sourceId;
+    }
+  }
+  return toolIndex;
+}
+
+/**
  * Build a routing registry from resolved environment values. Callers should
  * pass the env they actually want — the function does not read `process.env`
  * so the same code path is exercised in dev, prod, and tests.
@@ -101,12 +121,7 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
     },
   };
 
-  const toolIndex: Record<string, string> = {};
-  for (const [sourceId, server] of Object.entries(servers)) {
-    for (const tool of server.tools) {
-      toolIndex[tool] = sourceId;
-    }
-  }
+  const toolIndex = buildToolIndex(servers);
 
   const unconfiguredTools: Record<string, string> = {};
   if (!env.socrataUrl) {
