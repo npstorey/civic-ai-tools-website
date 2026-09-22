@@ -18,6 +18,11 @@
 # Matches drizzle-kit migrate/push however it is spelled: directly, via npx, or
 # through the package scripts (npm run db:migrate). `drizzle-kit generate` and
 # `drizzle-kit studio` are deliberately NOT matched — neither applies schema.
+#
+# The command is matched from a here-string, not piped in: under pipefail,
+# `printf | grep -q` reads a match as a miss when grep exits before printf has
+# written the rest, which a matching line followed by more than a pipe buffer
+# of later lines causes, and the guard fails open (#514).
 
 set -uo pipefail
 
@@ -30,12 +35,12 @@ applies_schema=0
 
 # drizzle-kit migrate | drizzle-kit push, with any flags between the two words
 # ruled out: the subcommand is the first bare word after the binary name.
-if printf '%s' "$command" | grep -Eq '(^|[^[:alnum:]_./-])drizzle-kit[[:space:]]+(migrate|push)([[:space:]]|$)'; then
+if grep -Eq '(^|[^[:alnum:]_./-])drizzle-kit[[:space:]]+(migrate|push)([[:space:]]|$)' <<< "$command"; then
   applies_schema=1
 fi
 
 # The package scripts that wrap them (see package.json: db:migrate).
-if printf '%s' "$command" | grep -Eq '(npm|pnpm|yarn)[[:space:]]+(run[[:space:]]+)?db:(migrate|push)([[:space:]]|$)'; then
+if grep -Eq '(npm|pnpm|yarn)[[:space:]]+(run[[:space:]]+)?db:(migrate|push)([[:space:]]|$)' <<< "$command"; then
   applies_schema=1
 fi
 
