@@ -202,12 +202,17 @@ jobs:
           #    reference, because a changed `docker save` layout would read
           #    zero on both.
           docker_layer_hits() {
-            local image="$1" dir="$2" hits=0
+            local image="$1" dir="$2" hits=0 list
             rm -rf "$dir" && mkdir -p "$dir"
             docker save "$image" -o "$dir.tar"
             tar -xf "$dir.tar" -C "$dir"
             while IFS= read -r blob; do
-              if tar -tf "$blob" 2>/dev/null | grep -qE '^usr/local/bin/docker$'; then
+              # The listing is read into a variable, then matched. Piped into
+              # `grep -q` under pipefail, tar dies on its next write once grep
+              # exits at the match, and a layer holding the binary reads as
+              # one without it (#514). A blob that is not a tar fails the
+              # listing and is skipped, as before.
+              if list=$(tar -tf "$blob" 2>/dev/null) && grep -qE '^usr/local/bin/docker$' <<< "$list"; then
                 echo "  $image: usr/local/bin/docker in ${blob#"$dir"/}" >&2
                 hits=$((hits + 1))
               fi

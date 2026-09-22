@@ -273,4 +273,17 @@ Each cost a real mistake; the incident sits in an HTML comment beside it. Path-s
        That last one is the shape of the hazard: a property that holds for a reason other than the
        one it appears to hold for is the property a bump silently takes away. -->
 
-
+- **Nothing is piped into `grep -q` where pipefail is on.** grep exits at its first match, the
+  producer dies of SIGPIPE (or gets EPIPE where SIGPIPE is ignored) on its next write, and pipefail
+  makes the pipeline false — so a line that IS in the output reads as absent, and the reading built
+  on it inverts. Read the output into a variable and match it there:
+  `out=$(producer) && grep -q … <<< "$out"`. `scripts/pipefail-grep-q.test.mjs` scans every tracked
+  file that sets pipefail and states its own blind spots; `scripts/grep-q-pipefail/drive.sh` drives
+  the two reads it was written for.
+  <!-- #508: `docker logs | grep -q` missed a present line 68/200 and called a log holding a write
+       failure clean 53/200 (fixed in #513). Its closeout then found two more on main, both fixed in
+       #514: `tar -tf | grep -qE` missed a layer holding usr/local/bin/docker 200/200 under GNU tar
+       — the reading behind "the off variant ships no docker binary", where a miss is a false PASS —
+       and the migrate guard's `printf | grep -Eq` failed open, no prompt at all, on every
+       multi-line command with more than a pipe buffer of lines after the match. None of the three
+       is a timing flake: the data was written before the read began. -->
