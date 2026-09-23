@@ -40,11 +40,17 @@
 // `postgres`, `minio` and `app` by service name, and those names belong in the
 // operator's own `NO_PROXY` (docs/deploy.md says so).
 //
-// WHAT IT DOES NOT REACH. A global fetch dispatcher governs a `fetch` call
-// that names no dispatcher of its own. It does not govern a call that does:
-// `@vercel/sandbox` passes its own undici `Agent` on every API request, so the
-// vercel-sandbox executor's calls to the sandbox API are outside this module
-// (docs/deploy.md states it; scripts/outbound-proxy.test.mjs pins it). Nor
+// WHAT IT DOES NOT REACH ON ITS OWN. A global fetch dispatcher governs a
+// `fetch` call that names no dispatcher of its own. It does not govern a call
+// that does: `@vercel/sandbox` passes its own undici `Agent` (built with
+// `bodyTimeout: 0`) on every API request, so the vercel-sandbox executor's
+// calls to the sandbox API never consult the global one. That path is routed
+// at the SDK's own `fetch` seam instead — `proxyAwareSandboxFetch` in
+// `src/lib/sandbox/vercel-sandbox.ts` (#492) hands the SDK a `fetch` that
+// replaces the SDK's agent with a dispatcher from `createProxyDispatcher`
+// below, keeping `bodyTimeout: 0`, so the exempt set is this module's
+// composition and not a second one (docs/deploy.md states it;
+// scripts/outbound-proxy.test.mjs drives it). Nor
 // does it govern `node:http(s)`, and TWO outbound kinds take that transport,
 // each with its own arrangement rather than a second dispatcher. The sign-in
 // library's provider calls (`openid-client`) are routed at that library's own
@@ -212,6 +218,45 @@ export function shouldProxyDestination(url: URL, noProxy: string): boolean {
   return true;
 }
 
+/**
+ * Agent options a caller may add to the proxy-aware dispatcher. The routing
+ * fields are left out on purpose: the proxy addresses and the exempt list come
+ * from `resolveProxySettings` and nowhere else, so every dispatcher built here
+ * makes the same `NO_PROXY` decision.
+ */
+export type ProxyDispatcherAgentOptions = Omit<
+  EnvHttpProxyAgent.Options,
+  'httpProxy' | 'httpsProxy' | 'noProxy'
+>;
+
+/**
+ * Build a proxy-aware dispatcher from resolved settings. The one place this
+ * repository constructs one: the global dispatcher `install` below puts in
+ * place, and the dispatcher the vercel-sandbox executor hands its SDK
+ * (`src/lib/sandbox/vercel-sandbox.ts`, #492), which that SDK's own explicit
+ * agent would otherwise keep away from the global one.
+ *
+ * `agentOptions` reach every agent undici builds underneath — the direct one
+ * for exempt destinations and each proxy agent (undici 6.28.0
+ * `EnvHttpProxyAgent` spreads them into both) — which is how the sandbox path
+ * keeps its SDK's `bodyTimeout: 0`.
+ *
+ * The routing fields are passed explicitly so the agent is fully determined by
+ * the record it is given and never re-reads `process.env` behind our back. An
+ * empty string is falsy to undici, which is the same as unset.
+ */
+export function createProxyDispatcher(
+  settings: ProxySettings,
+  agentOptions: ProxyDispatcherAgentOptions = {},
+): EnvHttpProxyAgent {
+  return new EnvHttpProxyAgent({
+    ...agentOptions,
+    httpProxy: settings.httpProxy,
+    httpsProxy: settings.httpsProxy,
+    noProxy: settings.noProxy,
+  });
+}
+
 export interface InstallResult {
   /** Whether a dispatcher was installed on this call. */
   installed: boolean;
@@ -236,16 +281,7 @@ export function installOutboundProxyDispatcher(env: EnvRecord = process.env): In
   const fingerprint = JSON.stringify([settings.httpProxy, settings.httpsProxy, settings.noProxy]);
   if (installedSettings === fingerprint) return { installed: false, honoured: settings.honoured };
 
-  setGlobalDispatcher(
-    new EnvHttpProxyAgent({
-      // Passed explicitly so the agent is fully determined by the record
-      // resolved above and never re-reads `process.env` behind our back. An
-      // empty string is falsy to undici, which is the same as unset.
-      httpProxy: settings.httpProxy,
-      httpsProxy: settings.httpsProxy,
-      noProxy: settings.noProxy,
-    }),
-  );
+  setGlobalDispatcher(createProxyDispatcher(settings));
   installedSettings = fingerprint;
 
   console.info(
