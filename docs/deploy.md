@@ -1318,15 +1318,19 @@ set and `NO_PROXY` unset, a request goes straight to the origin —
 `origin hits: 1, proxy hits: 0` — and `NODE_USE_ENV_PROXY=1` changes
 nothing, because that flag arrives in a later Node than this image
 carries. [`src/lib/outbound-proxy.ts`](../src/lib/outbound-proxy.ts)
-installs one `undici` dispatcher at server start, and
-[`src/lib/signin-proxy.ts`](../src/lib/signin-proxy.ts) routes the one
-kind that dispatcher cannot reach. `scripts/outbound-proxy.test.mjs`
+installs one `undici` dispatcher at server start,
+[`src/lib/signin-proxy.ts`](../src/lib/signin-proxy.ts) routes the
+sign-in leg, which that dispatcher cannot reach, and
+[`src/lib/sandbox/vercel-sandbox.ts`](../src/lib/sandbox/vercel-sandbox.ts)
+routes the sandbox API calls, which pass a dispatcher of their own.
+`scripts/outbound-proxy.test.mjs`
 drives a request through a loopback proxy and reads it back there for
 the signing services, the model endpoint, the MCP servers, the S3 object
-store, verification's blob read, the rate-limit counter and the sign-in
-provider leg. The other "yes" rows call the same global `fetch` and are
-not driven separately. Of the "no" rows, the managed-sandbox one is
-pinned by transport, as the paragraph under the table says.
+store, verification's blob read, the rate-limit counter, the sign-in
+provider leg and the sandbox API. The other "yes" rows call the same
+global `fetch` and are not driven separately. The managed-sandbox row is
+also driven through a whole sandbox session, offline, and the suite
+fails if that row and the measured behaviour disagree.
 
 ### Loopback is always exempt
 
@@ -1359,7 +1363,7 @@ table's `DB_DRIVER=node-postgres` row).
 | Sign-in provider (GitHub / OIDC) discovery, token and userinfo calls | `node:http(s)`, in the sign-in library's `openid-client` | yes — see below |
 | Database, `DB_DRIVER=neon-http` | `fetch` | yes |
 | Database, `DB_DRIVER=node-postgres` | a raw TCP socket (`pg`) | **no** |
-| Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox` | `fetch` with the SDK's own dispatcher, in `@vercel/sandbox`, to `https://vercel.com/api` (`src/lib/sandbox/vercel-sandbox.ts`) | **no** — see below |
+| Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox` | `fetch`, in `@vercel/sandbox`, to `https://vercel.com/api`, through a proxy-aware dispatcher the driver hands the SDK (`src/lib/sandbox/vercel-sandbox.ts`) | yes — see below |
 | Notebook execution, `EXECUTOR_DRIVER=container` | the container-runtime socket on the host | **no** — it is not network traffic |
 
 **The database and container-executor "no" rows are not gaps to close.** An HTTP
@@ -1385,26 +1389,35 @@ places — through a loopback proxy, and asserts that this path and the
 `fetch` path exempt the same destinations rather than checking each on
 its own terms.
 
-**The managed-sandbox executor row is a real limitation too.** Under
-`EXECUTOR_DRIVER=vercel-sandbox`, the default, every call that creates,
-drives, reads from or stops a sandbox goes to `https://vercel.com/api`
-through `@vercel/sandbox`. That SDK calls `fetch` but passes its own
-`undici` agent as the request's dispatcher (built with no body timeout,
-which long command-output streams rely on), and an explicit dispatcher
-overrides the global one. So **on a proxied network, notebook execution
-under this driver will not reach the sandbox API through these
-variables.** An instance behind an egress proxy that executes notebooks
-on this driver needs `vercel.com` on the network's allowlist (or a
-transparent proxy). Separately, refreshing an expired OIDC token from a
-local Vercel CLI login (a development path) calls `https://api.vercel.com`
-and, when the login itself has expired, `https://vercel.com`, both
-through the global `fetch`, which does honour the variables. The
-notebook's own code runs inside the sandbox, on the provider's network,
-and its requests are not this instance's traffic. An instance that
-executes no notebooks makes none of these calls.
-`scripts/outbound-proxy.test.mjs` drives the installed SDK through its
-`fetch` seam, offline, and fails if a request stops carrying its own
-dispatcher or goes to a host this row does not name.
+**The managed-sandbox executor row is a "yes", reached through the
+SDK's own seam.** Under `EXECUTOR_DRIVER=vercel-sandbox`, the default,
+every call that creates, drives, reads from or stops a sandbox goes to
+`https://vercel.com/api` through `@vercel/sandbox`. That SDK calls
+`fetch` but passes its own `undici` agent as each request's dispatcher
+(built with no body timeout, which long command-output streams rely on),
+and an explicit dispatcher overrides the global one. So with a proxy
+configured, the driver hands the SDK a `fetch` that replaces that agent
+with a proxy-aware dispatcher built from the same three variables and the
+same exempt set as every other row, **also with no body timeout**. The
+sandbox API is reached with `CONNECT vercel.com:443` through
+`HTTPS_PROXY` (or `HTTP_PROXY` when only that is set), and `NO_PROXY`
+exempts a host here exactly as it does on every other path. **You
+configure nothing extra for it.** With the three variables unset the SDK
+is called exactly as before, with its own agent, and no dispatcher is
+built. Separately, refreshing an expired OIDC token from a local Vercel
+CLI login (a development path) calls `https://api.vercel.com` and, when
+the login itself has expired, `https://vercel.com`, both through the
+global `fetch`, which also honours the variables. The notebook's own
+code runs inside the sandbox, on the provider's network, and its
+requests are not this instance's traffic. An instance that executes no
+notebooks makes none of these calls. The snapshot build script
+(`scripts/build-sandbox-snapshot.ts`) is an operator tool that calls the
+SDK directly rather than through this driver, and does not take this
+path. `scripts/outbound-proxy.test.mjs` runs a whole sandbox session
+through the real driver against the installed SDK, offline, and fails
+if any request of it carries a dispatcher other than the proxy-aware
+one, if that dispatcher loses the zero body timeout, or if it stops
+reaching a loopback proxy as `CONNECT vercel.com:443`.
 
 **The S3 driver changes transport when a proxy is set.** The AWS SDK's
 default Node transport speaks `node:http(s)`, which a `fetch`
