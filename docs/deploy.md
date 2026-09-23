@@ -1364,14 +1364,53 @@ table's `DB_DRIVER=node-postgres` row).
 | Database, `DB_DRIVER=neon-http` | `fetch` | yes |
 | Database, `DB_DRIVER=node-postgres` | a raw TCP socket (`pg`) | **no** |
 | Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox` | `fetch`, in `@vercel/sandbox`, to `https://vercel.com/api`, through a proxy-aware dispatcher the driver hands the SDK (`src/lib/sandbox/vercel-sandbox.ts`) | yes — see below |
-| Notebook execution, `EXECUTOR_DRIVER=container` | the container-runtime socket on the host | **no** — it is not network traffic |
+| Notebook execution, `EXECUTOR_DRIVER=container` | the app: the container-runtime socket on the host. The notebook's own requests: the executor container, on the runtime's default network (`src/lib/sandbox/container.ts`) | the socket: **no** — it is not network traffic. The notebook's requests: yes — see below |
 
-**The database and container-executor "no" rows are not gaps to close.** An HTTP
-proxy variable governs HTTP; a Postgres connection is a TCP stream that
-no `HTTP_PROXY` describes, and the container executor talks to a socket
-on the host rather than to the network at all. Reaching a database
-through a proxy is a network-level arrangement (a tunnel, a sidecar, a
-route), not an application setting.
+**The database row and the container executor's socket leg are not gaps
+to close.** An HTTP proxy variable governs HTTP; a Postgres connection is
+a TCP stream that no `HTTP_PROXY` describes, and the app drives the
+container executor through a socket on the host rather than over the
+network at all. Reaching a database through a proxy is a network-level
+arrangement (a tunnel, a sidecar, a route), not an application setting.
+
+**The container executor passes the variables into the notebook
+container.** Under `EXECUTOR_DRIVER=container`, with a proxy configured,
+every `docker exec` of a notebook session passes `HTTP_PROXY`,
+`HTTPS_PROXY` and `NO_PROXY`, each under both spellings, so the
+notebook's own requests (to a data portal, say) use your proxy whichever
+spelling a client inside reads: curl reads only `http_proxy`, Python
+reads both. The values are the ones the app resolves for itself: the
+lower-case spelling wins, and when only `HTTP_PROXY` is set, https
+requests use it too, as the app's own do. They are passed by name only
+(`-e HTTP_PROXY`), with each value in the environment of the `docker`
+process, so no proxy value appears on a command line. With the variables
+unset, every `docker` invocation is exactly what it was before this
+existed. The vercel-sandbox driver passes nothing: a managed sandbox runs
+on the provider's network.
+
+- **`NO_PROXY` inside the container** is the same composed list:
+  `localhost`, `127.0.0.1` and `[::1]` first, then yours. Inside the
+  container, loopback is the container's own, not the app's.
+- **The proxy must be reachable from the container runtime's default
+  network.** The executor container is started by the host's runtime,
+  on its default network, not on the compose network. A proxy on the
+  app's loopback (`http://127.0.0.1:3128`) or at a compose service name
+  (`http://proxy:3128`) is not reachable from there: the first names the
+  container itself, the second does not resolve. Use an address the
+  host's containers can reach.
+- **A proxy address carrying a user or password is refused.** Passed
+  into the container, it would sit in the environment of the notebook's
+  own code. So if `HTTP_PROXY` or `HTTPS_PROXY` (either spelling) carries
+  one, the session is refused before any container starts, with a
+  `ContainerProxyUserinfoError` that names the variable and never its
+  value. The reader sees the notebook-failure message with a reference;
+  the server log line carries that reference and the error class. Use a
+  proxy that authorizes this host by network rather than by password.
+- **The `docker` CLI's own connection to the runtime is unchanged.** The
+  default is a unix socket, which the proxy variables do not govern.
+  Measured with a local runtime on its default unix socket, `HTTP_PROXY`
+  pointed at a loopback listener, and a whole session run: the listener
+  received no connection.
 
 **The sign-in row is a "yes", reached a different way.** next-auth's
 provider leg runs through `openid-client`, which calls `node:http(s)`
@@ -1433,7 +1472,8 @@ is a function of the route a request took.
 **A proxy URL can carry a credential** (`http://user:pass@proxy`). The
 app never prints these values — it logs only the variable NAMES it
 honoured — and you should keep them in your secret manager like any
-other credential.
+other credential. Under `EXECUTOR_DRIVER=container` such an address is
+refused (see the container executor above).
 
 ## Instance identity and signing (go to production)
 
