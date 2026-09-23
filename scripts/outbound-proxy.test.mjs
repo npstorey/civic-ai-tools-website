@@ -1061,97 +1061,469 @@ test("docs/deploy.md no longer states the sign-in limitation it stated before #4
   );
 });
 
-test("the sandbox executor's API client passes its own dispatcher, as docs/deploy.md says", async () => {
-  // NOT A GAP THIS PHASE CLOSED — a measurement written down (cold read F1,
-  // #470). Under EXECUTOR_DRIVER=vercel-sandbox every API call leaves through
-  // `@vercel/sandbox`'s `BaseClient.request`, which hands `fetch` an explicit
-  // `dispatcher` (its own undici `Agent`, built with `bodyTimeout: 0` for long
-  // command streams). An explicit dispatcher overrides the global one, so the
-  // proxy variables do not reach these calls. docs/deploy.md states that as a
-  // "no" row; this pin makes the row go RED rather than stale if the SDK stops
-  // passing its own dispatcher.
-  //
-  // DRIVEN AT THE INSTALLED SDK, OFFLINE. `Sandbox.list` is called with the
-  // SDK's own `fetch` seam, which records each request's URL and init and
-  // answers 400 itself, so nothing leaves the process and no sandbox exists
-  // before, during or after. `list` goes through the same `request` method as
-  // every other call the driver makes, including creation; it is used here
-  // because it forms no creation request at all. The credential triple is a
-  // placeholder the seam never forwards. `globalThis.fetch` is replaced with a
-  // thrower for the drive, so an SDK that stopped honouring the seam fails
-  // here instead of reaching the network. The app's dispatcher is installed
-  // under a loopback proxy first, so "not the global one" is compared against
-  // the dispatcher a proxied instance would actually have.
-  const { Sandbox } = await import('@vercel/sandbox');
-  const recorded = [];
-  const recorder = async (url, init = {}) => {
-    recorded.push({ url: String(url), init });
-    return new Response(JSON.stringify({ error: { code: 'probe', message: 'recorded, not sent' } }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    });
-  };
+import { createRequire } from 'node:module';
+import { EnvHttpProxyAgent } from 'undici';
 
-  const savedDispatcher = getGlobalDispatcher();
+// --- 8. the sandbox executor's API calls (#492) ------------------------------
+//
+// WAS A DOCUMENTED LIMITATION, IS NOW A KIND — the same arc as the sign-in leg
+// above. Cold read F1 (#470) measured that `@vercel/sandbox` passes its own
+// undici `Agent` (built with `bodyTimeout: 0`) as the `dispatcher` of every
+// API request, which overrides the global one, and WF (#488) pinned the "no"
+// row here. #492 routes those calls at the SDK's own `fetch` seam: with a
+// proxy configured the driver hands `Sandbox.create` a `fetch` that swaps the
+// SDK's agent for a proxy-aware dispatcher built by `createProxyDispatcher`.
+//
+// EVERY DRIVE BELOW IS OFFLINE. The lifecycle drives run the REAL driver
+// (`createVercelSandboxDriver`) against the INSTALLED SDK with
+// `globalThis.fetch` replaced by a recorder that answers each API route with a
+// canned response the SDK's own validators accept, so each request's init —
+// and with it the dispatcher it would have used — is read at the point it
+// would have left the process. The credential triple is a placeholder no
+// request forwards anywhere. The one drive that issues a real request sends it
+// to a loopback proxy that records the CONNECT and refuses it, so nothing
+// leaves the machine; it is interlocked so it will not run unless the fetch
+// under test has first been shown to carry a proxy-aware dispatcher whose
+// routing sends that host to the proxy.
+
+/** The SDK's own nested undici (7.29.0 at 1.10.2), resolved the way the SDK
+ *  resolves it — so "the SDK's agent" is identified by class, not by name. */
+const SdkUndici = createRequire(new URL('../node_modules/@vercel/sandbox/package.json', import.meta.url))('undici');
+
+const SANDBOX_PLACEHOLDER_AUTH = {
+  VERCEL_TOKEN: 'probe-not-a-real-token',
+  VERCEL_TEAM_ID: 'team_probe',
+  VERCEL_PROJECT_ID: 'prj_probe',
+  VERCEL_OIDC_TOKEN: null,
+};
+const SANDBOX_NO_AUTH = { VERCEL_TOKEN: null, VERCEL_TEAM_ID: null, VERCEL_PROJECT_ID: null, VERCEL_OIDC_TOKEN: null };
+
+const SANDBOX_ID = 'sbx_probe';
+const sandboxJson = (status) => ({
+  id: SANDBOX_ID, memory: 2048, vcpus: 1, region: 'iad1', runtime: 'python3.13', timeout: 60000,
+  status, requestedAt: 0, createdAt: 0, cwd: '/vercel/sandbox', updatedAt: 0,
+});
+const commandJson = (exitCode) => ({
+  id: 'cmd_probe', name: 'python3', args: ['--version'], cwd: '/vercel/sandbox',
+  sandboxId: SANDBOX_ID, exitCode, startedAt: 0,
+});
+const json = (body) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+const ndjson = (lines) =>
+  new Response(lines.map((l) => JSON.stringify(l)).join('\n') + '\n', {
+    status: 200,
+    headers: { 'content-type': 'application/x-ndjson' },
+  });
+
+/** One canned answer per API route the driver's lifecycle reaches. An
+ *  unrouted request is answered 400 and recorded, so a new route shows up in
+ *  the record rather than hanging the drive. */
+function cannedSandboxApi(method, pathname) {
+  const base = `/api/v1/sandboxes`;
+  if (method === 'POST' && pathname === base) return json({ sandbox: sandboxJson('running'), routes: [] });
+  if (method === 'POST' && pathname === `${base}/${SANDBOX_ID}/cmd`) {
+    return ndjson([{ command: commandJson(null) }, { command: commandJson(0) }]);
+  }
+  if (method === 'GET' && pathname === `${base}/${SANDBOX_ID}/cmd/cmd_probe/logs`) {
+    return ndjson([{ stream: 'stdout', data: 'Python 3.13.0\n' }]);
+  }
+  if (method === 'POST' && pathname === `${base}/${SANDBOX_ID}/fs/write`) return json({});
+  if (method === 'POST' && pathname === `${base}/${SANDBOX_ID}/fs/read`) {
+    return new Response('probe-bytes', { status: 200, headers: { 'content-type': 'application/octet-stream' } });
+  }
+  if (method === 'POST' && pathname === `${base}/${SANDBOX_ID}/stop`) return json({ sandbox: sandboxJson('stopped') });
+  return new Response(JSON.stringify({ error: { code: 'probe', message: 'unrouted' } }), {
+    status: 400,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+/** Name the dispatcher a request carried, in the terms the assertions use. */
+function describeDispatcher(dispatcher, proxyAware) {
+  if (dispatcher == null) return 'no dispatcher (the global one)';
+  if (proxyAware && dispatcher === proxyAware) return "the driver's proxy-aware dispatcher";
+  if (dispatcher instanceof SdkUndici.Agent) return "the SDK's own Agent (its nested undici)";
+  if (dispatcher instanceof EnvHttpProxyAgent) return 'an EnvHttpProxyAgent the driver does not report having built';
+  return `an unrecognised ${dispatcher?.constructor?.name}`;
+}
+
+const SANDBOX_STEPS = ['createSession', 'runCommand', 'writeFiles', 'readFileToBuffer', 'stop'];
+
+/**
+ * Drive the real driver through one whole session — create, run a command and
+ * read its output, write a file, read it back, stop — with every API request
+ * recorded at `globalThis.fetch` and answered from `cannedSandboxApi`. Returns
+ * each request tagged with the step that issued it, the params the driver
+ * handed `Sandbox.create`, and the dispatcher the driver reports having built.
+ */
+async function driveSandboxLifecycle(envValues) {
+  const recorded = [];
+  const createParams = [];
+  let step = 'import';
+  const { Sandbox } = await import('@vercel/sandbox');
+  const realCreate = Sandbox.create;
   const realFetch = globalThis.fetch;
-  const proxy = await loopbackProxy();
-  let proxiedDispatcher;
+  const savedDispatcher = getGlobalDispatcher();
   try {
-    await withEnv(proxyEnv(proxy.port), async () => {
-      await installUnderCurrentEnv();
-      proxiedDispatcher = getGlobalDispatcher();
-      globalThis.fetch = () => {
-        throw new Error('the sandbox SDK bypassed its fetch seam and called the global fetch');
+    return await withEnv(envValues, async () => {
+      const mod = await fresh('src/lib/sandbox/vercel-sandbox.ts');
+      Sandbox.create = function (params) {
+        createParams.push(params);
+        return realCreate.call(this, params);
       };
-      await swallow(() =>
-        Sandbox.list({
-          token: 'probe-not-a-real-token',
-          teamId: 'team_probe',
-          projectId: 'prj_probe',
-          fetch: recorder,
-        }),
-      );
+      globalThis.fetch = async (input, init = {}) => {
+        const url = new URL(String(input));
+        recorded.push({ step, method: init.method ?? 'GET', url: url.toString(), dispatcher: init.dispatcher });
+        return cannedSandboxApi(init.method ?? 'GET', url.pathname);
+      };
+
+      const driver = mod.createVercelSandboxDriver();
+      step = 'createSession';
+      const session = await driver.createSession({ snapshotId: 'snap_probe', timeoutMs: 60000, env: {} });
+      step = 'runCommand';
+      const result = await session.runCommand({ cmd: 'python3', args: ['--version'] });
+      const stdout = await result.stdout();
+      step = 'writeFiles';
+      await session.writeFiles([{ path: '/tmp/probe.txt', content: Buffer.from('probe') }]);
+      step = 'readFileToBuffer';
+      const read = await session.readFileToBuffer('/tmp/probe.txt');
+      step = 'stop';
+      await session.stop();
+      step = 'done';
+
+      return {
+        recorded,
+        createParams,
+        stdout,
+        read: read?.toString(),
+        exitCode: result.exitCode,
+        proxyAware: typeof mod.sandboxApiDispatcher === 'function' ? mod.sandboxApiDispatcher() : undefined,
+      };
     });
   } finally {
+    Sandbox.create = realCreate;
+    globalThis.fetch = realFetch;
+    setGlobalDispatcher(savedDispatcher);
+  }
+}
+
+/** The drive must have measured something at every step, or its verdict on
+ *  the dispatcher is a verdict on nothing. */
+function assertEveryStepRecorded(drive) {
+  assert.equal(drive.stdout, 'Python 3.13.0\n', 'the canned command output did not come back through the driver');
+  assert.equal(drive.read, 'probe-bytes', 'the canned file did not come back through the driver');
+  assert.equal(drive.exitCode, 0);
+  for (const s of SANDBOX_STEPS) {
+    const n = drive.recorded.filter((r) => r.step === s).length;
+    assert.ok(
+      n >= 1,
+      `the ${s} step issued ${n} API request(s) through the seam; a step that recorded nothing says ` +
+        'nothing about the dispatcher its requests would carry',
+    );
+  }
+}
+
+const sandboxProxyEnv = (port) => ({
+  ...noProxyEnv,
+  HTTP_PROXY: `http://127.0.0.1:${port}`,
+  http_proxy: `http://127.0.0.1:${port}`,
+  HTTPS_PROXY: `http://127.0.0.1:${port}`,
+  https_proxy: `http://127.0.0.1:${port}`,
+});
+
+// #492 criterion 1: every request of every lifecycle step, through the seam.
+test('with a proxy configured, every request of a sandbox lifecycle carries the proxy-aware dispatcher', async () => {
+  const drive = await driveSandboxLifecycle({ ...sandboxProxyEnv(1), ...SANDBOX_PLACEHOLDER_AUTH });
+  assertEveryStepRecorded(drive);
+
+  for (const r of drive.recorded) {
+    assert.ok(
+      !(r.dispatcher instanceof SdkUndici.Agent),
+      `${r.step}: ${r.method} ${r.url} carried ${describeDispatcher(r.dispatcher, drive.proxyAware)}; with a ` +
+        "proxy configured the SDK's own agent overrides every global dispatcher, so this request would " +
+        'never reach the proxy',
+    );
+    assert.ok(
+      r.dispatcher instanceof EnvHttpProxyAgent,
+      `${r.step}: ${r.method} ${r.url} carried ${describeDispatcher(r.dispatcher, drive.proxyAware)}, not a ` +
+        "proxy-aware dispatcher from this repository's undici",
+    );
+  }
+  assert.ok(drive.proxyAware, 'the driver reports having built no proxy-aware dispatcher under a proxy configuration');
+  for (const r of drive.recorded) {
+    assert.equal(
+      r.dispatcher,
+      drive.proxyAware,
+      `${r.step}: ${r.method} ${r.url} carried a proxy-aware dispatcher other than the one the driver built`,
+    );
+  }
+  assert.equal(drive.createParams.length, 1, 'the lifecycle made more than one Sandbox.create call');
+  assert.equal(typeof drive.createParams[0].fetch, 'function', 'Sandbox.create was handed no fetch');
+});
+
+/** A loopback proxy that records each request it is asked to make — in either
+ *  form — and refuses all of them, so a drive through it never leaves the
+ *  machine. */
+async function refusingProxy() {
+  const seen = [];
+  const server = http.createServer((req, res) => {
+    seen.push(req.url);
+    res.writeHead(403, { 'content-length': '0' });
+    res.end();
+  });
+  server.on('connect', (req, socket) => {
+    seen.push(req.url);
+    socket.end('HTTP/1.1 403 Forbidden\r\ncontent-length: 0\r\n\r\n');
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  return { seen, port: server.address().port, close: () => server.close() };
+}
+
+// #492 criterion 2: that dispatcher reaches the proxy, and NO_PROXY holds.
+test("the sandbox API's fetch reaches the proxy as CONNECT vercel.com:443, and NO_PROXY keeps an exempt host away", async () => {
+  const proxy = await refusingProxy();
+  const env = { ...sandboxProxyEnv(proxy.port), NO_PROXY: UNRESOLVABLE, no_proxy: UNRESOLVABLE, ...SANDBOX_NO_AUTH };
+  const { Sandbox } = await import('@vercel/sandbox');
+  const realCreate = Sandbox.create;
+  const realFetch = globalThis.fetch;
+  const savedDispatcher = getGlobalDispatcher();
+  const handed = [];
+  const outcomes = {};
+  try {
+    await withEnv(env, async () => {
+      const mod = await fresh('src/lib/sandbox/vercel-sandbox.ts');
+      const { resolveProxySettings, shouldProxyDestination } = await import('../src/lib/outbound-proxy.ts');
+      // The fetch under test is the one the DRIVER hands the SDK, taken at
+      // `Sandbox.create` and never passed on: no SDK request is made here.
+      Sandbox.create = async (params) => {
+        handed.push(params);
+        throw new Error('probe: Sandbox.create captured, not called');
+      };
+      await swallow(() =>
+        mod.createVercelSandboxDriver().createSession({ snapshotId: 'snap_probe', timeoutMs: 60000, env: {} }),
+      );
+      assert.equal(handed.length, 1, 'the driver made no Sandbox.create call to take the fetch from');
+      const sandboxFetch = handed[0].fetch;
+      assert.equal(
+        typeof sandboxFetch,
+        'function',
+        'the driver handed Sandbox.create no fetch, so every sandbox API call keeps the SDK\'s own agent ' +
+          'and never reaches the proxy',
+      );
+
+      // INTERLOCK. Before any real request: the fetch must swap in a
+      // proxy-aware dispatcher, and that dispatcher's exempt set must send
+      // vercel.com to the proxy. Otherwise the request below would go direct.
+      const sdkAgent = new SdkUndici.Agent({ bodyTimeout: 0 });
+      let swapped;
+      globalThis.fetch = async (_input, init) => { swapped = init.dispatcher; return new Response('{}'); };
+      await sandboxFetch('https://vercel.com/api/v1/sandboxes', { dispatcher: sdkAgent });
+      globalThis.fetch = realFetch;
+      assert.ok(
+        swapped instanceof EnvHttpProxyAgent && swapped !== sdkAgent,
+        `the sandbox fetch passed on ${describeDispatcher(swapped, null)}; refusing to issue a real request`,
+      );
+      assert.ok(shouldProxyDestination(new URL('https://vercel.com/api'), resolveProxySettings().noProxy));
+
+      // The real requests. Each is refused (or dies in DNS, for the exempt
+      // `.invalid` host), so each rejects; only the proxy's record matters.
+      for (const [label, url] of [
+        ['vercel', 'https://vercel.com/api/v1/sandboxes?teamId=team_probe'],
+        ['exempt', `https://${UNRESOLVABLE}/api/v1/sandboxes`],
+      ]) {
+        try {
+          await sandboxFetch(url, { method: 'GET', dispatcher: sdkAgent });
+          outcomes[label] = 'resolved';
+        } catch (err) {
+          outcomes[label] = `rejected: ${err?.cause?.code ?? err?.cause?.message ?? err?.message}`;
+        }
+      }
+      await sdkAgent.close();
+    });
+  } finally {
+    Sandbox.create = realCreate;
     globalThis.fetch = realFetch;
     setGlobalDispatcher(savedDispatcher);
     proxy.close();
   }
 
-  assert.notEqual(
-    proxiedDispatcher,
-    savedDispatcher,
-    'the app installed no dispatcher under a proxy configuration, so "not the global one" below ' +
-      'would compare against nothing a proxied instance has',
+  assert.deepEqual(
+    proxy.seen,
+    ['vercel.com:443'],
+    `the proxy saw ${JSON.stringify(proxy.seen)} (outcomes ${JSON.stringify(outcomes)}); the sandbox API request ` +
+      `must arrive as CONNECT vercel.com:443, and ${UNRESOLVABLE}, which NO_PROXY names, must not arrive at all`,
   );
+  assert.match(outcomes.vercel, /^rejected/, 'the refused tunnel should have failed the request, not completed it');
+});
+
+/** Every undici dispatcher reachable from `root`: agents, their pools, and the
+ *  clients that hold the connections. The proxy's own CONNECT client is left
+ *  out — it carries only the tunnel request, whose response has no body; the
+ *  tunnelled request's body is read by the client its agent builds, which is
+ *  walked. */
+function undiciDispatcherGraph(root) {
+  const seen = new Set();
+  const out = [];
+  const visit = (v) => {
+    if (!v || typeof v !== 'object' || seen.has(v)) return;
+    seen.add(v);
+    if (v instanceof Map) { for (const x of v.values()) visit(x); return; }
+    if (Array.isArray(v)) { for (const x of v) visit(x); return; }
+    if (typeof v.dispatch !== 'function') return;
+    out.push(v);
+    for (const sym of Object.getOwnPropertySymbols(v)) {
+      if (sym.description === 'proxy client') continue;
+      visit(v[sym]);
+    }
+  };
+  visit(root);
+  return out;
+}
+
+const symbolValue = (obj, description) => {
+  const sym = Object.getOwnPropertySymbols(obj).find((s) => s.description === description);
+  return sym ? obj[sym] : undefined;
+};
+
+// #492 criterion 3: `bodyTimeout: 0` survives the replacement.
+test("the sandbox API's proxy-aware dispatcher keeps the SDK's bodyTimeout: 0 on every connection it opens", async () => {
+  const proxy = await loopbackProxy();
+  const origin = await loopbackOrigin();
+  const realFetch = globalThis.fetch;
+  let dispatcher;
+  let clients = [];
+  let agentOptions = [];
+  try {
+    await withEnv(proxyEnv(proxy.port), async () => {
+      const mod = await fresh('src/lib/sandbox/vercel-sandbox.ts');
+      const { fetch: sandboxFetch } = mod.proxyAwareSandboxFetch();
+      dispatcher = mod.sandboxApiDispatcher();
+      // Both legs, for real, so the connections exist to be read: an exempt
+      // (loopback) destination through the direct agent, and a proxied one
+      // through the tunnel.
+      await swallow(async () => (await sandboxFetch(`${origin.base}/direct`)).text());
+      await swallow(async () => (await sandboxFetch(TARGET)).text());
+      const graph = undiciDispatcherGraph(dispatcher);
+      clients = graph.filter((d) => symbolValue(d, 'body timeout') !== undefined);
+      agentOptions = graph.map((d) => symbolValue(d, 'options')).filter((o) => o && typeof o === 'object');
+    });
+  } finally {
+    globalThis.fetch = realFetch;
+    await dispatcher?.close?.();
+    proxy.close();
+    origin.close();
+  }
+
+  assert.ok(origin.seen.length >= 1 && proxy.seen.length >= 1, 'a leg never ran, so its connection cannot be read');
   assert.ok(
-    recorded.length >= 1,
-    'the SDK made no request through its fetch seam, so this probe measured nothing — the "no" row ' +
-      'in docs/deploy.md is unpinned until it does',
+    clients.length >= 2,
+    `found ${clients.length} connection client(s) under the dispatcher; the direct and the tunnelled leg each ` +
+      'open one, and a count below two means a leg was not measured',
   );
-  assert.equal(proxy.seen.length, 0, 'a request reached the loopback proxy although the seam answers every call');
-  const row = /^\| Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox` \|.*$/m.exec(egressProxySection());
+  for (const c of clients) {
+    assert.equal(
+      symbolValue(c, 'body timeout'),
+      0,
+      `a connection under the sandbox API's dispatcher carries bodyTimeout ${symbolValue(c, 'body timeout')}; the ` +
+        "SDK's own agent carries 0, and a long command-output stream would be cut off after that much silence",
+    );
+  }
+  assert.ok(agentOptions.length >= 2, 'no agent options were found to read');
+  for (const o of agentOptions) {
+    assert.equal(o.bodyTimeout, 0, `an agent under the sandbox API's dispatcher is configured with bodyTimeout ${o.bodyTimeout}`);
+  }
+});
+
+// #492 criterion 4: defaults unchanged, in both auth shapes.
+test('with the three variables unset the sandbox SDK is called exactly as before and no dispatcher is built', async () => {
+  const drive = await driveSandboxLifecycle({ ...noProxyEnv, ...SANDBOX_PLACEHOLDER_AUTH });
+  assertEveryStepRecorded(drive);
+  for (const r of drive.recorded) {
+    assert.ok(
+      r.dispatcher instanceof SdkUndici.Agent,
+      `${r.step}: ${r.method} ${r.url} carried ${describeDispatcher(r.dispatcher, drive.proxyAware)} with no proxy ` +
+        "configured; unset must leave every request on the SDK's own agent",
+    );
+  }
+  assert.equal(drive.proxyAware ?? null, null, 'the driver built a proxy-aware dispatcher with no proxy configured');
+
+  const expectedBase = {
+    timeout: 60000,
+    env: {
+      SSL_CERT_FILE: '/etc/pki/tls/certs/ca-bundle.crt',
+      REQUESTS_CA_BUNDLE: '/etc/pki/tls/certs/ca-bundle.crt',
+      PIP_CERT: '/etc/pki/tls/certs/ca-bundle.crt',
+    },
+    source: { type: 'snapshot', snapshotId: 'snap_probe' },
+  };
+  const withTriple = { ...expectedBase, token: 'probe-not-a-real-token', teamId: 'team_probe', projectId: 'prj_probe' };
+  assert.equal(drive.createParams.length, 1);
+  assert.ok(!('fetch' in drive.createParams[0]), 'Sandbox.create received a fetch key with no proxy configured');
+  assert.equal(JSON.stringify(drive.createParams[0]), JSON.stringify(withTriple), 'the triple-shape call changed');
+
+  // The OIDC shape (no triple). Captured at Sandbox.create and not passed on:
+  // with no triple the SDK would resolve OIDC credentials, which this suite
+  // never reaches for.
+  const { Sandbox } = await import('@vercel/sandbox');
+  const realCreate = Sandbox.create;
+  const handed = [];
+  let proxyAware;
+  try {
+    await withEnv({ ...noProxyEnv, ...SANDBOX_NO_AUTH }, async () => {
+      const mod = await fresh('src/lib/sandbox/vercel-sandbox.ts');
+      Sandbox.create = async (params) => { handed.push(params); throw new Error('probe: captured'); };
+      await swallow(() =>
+        mod.createVercelSandboxDriver().createSession({ snapshotId: 'snap_probe', timeoutMs: 60000, env: {} }),
+      );
+      proxyAware = mod.sandboxApiDispatcher?.() ?? null;
+    });
+  } finally {
+    Sandbox.create = realCreate;
+  }
+  assert.equal(handed.length, 1);
+  assert.ok(!('fetch' in handed[0]), 'Sandbox.create received a fetch key with no proxy configured (OIDC shape)');
+  assert.equal(JSON.stringify(handed[0]), JSON.stringify(expectedBase), 'the OIDC-shape call changed');
+  assert.equal(proxyAware, null, 'the driver built a proxy-aware dispatcher with no proxy configured (OIDC shape)');
+});
+
+// #492 criterion 5: the row and the behaviour move together. Flipped from the
+// WF (#488) pin, which held the "no" row to the SDK passing its own agent.
+test("the sandbox executor's API calls honour the proxy variables exactly when docs/deploy.md's row says so", async () => {
+  const drive = await driveSandboxLifecycle({ ...sandboxProxyEnv(1), ...SANDBOX_PLACEHOLDER_AUTH });
+  assertEveryStepRecorded(drive);
+
+  // The verdict is MEASURED, then compared with the row — so the row going
+  // stale in either direction fails here, not only a regression in one.
+  const honoured = drive.recorded.every((r) => r.dispatcher != null && r.dispatcher === drive.proxyAware);
+  const row = /^\| Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox` \|[^|]*\|([^|]*)\|$/m.exec(egressProxySection());
   assert.ok(row, 'docs/deploy.md has no EXECUTOR_DRIVER=vercel-sandbox row for this pin to hold');
-  for (const { url, init } of recorded) {
+  const rowSaysYes = /\byes\b/.test(row[1]) && !/\bno\b/.test(row[1]);
+  assert.equal(
+    rowSaysYes,
+    honoured,
+    `docs/deploy.md's EXECUTOR_DRIVER=vercel-sandbox row reads "${row[1].trim()}", but a driven lifecycle ` +
+      `${honoured ? 'DOES' : 'does NOT'} carry the proxy-aware dispatcher on every request ` +
+      `(${drive.recorded.map((r) => `${r.step}: ${describeDispatcher(r.dispatcher, drive.proxyAware)}`).join('; ')})`,
+  );
+  for (const { url } of drive.recorded) {
     const { hostname } = new URL(url);
     assert.ok(
       row[0].includes(hostname),
-      `the SDK called ${hostname}, which the EXECUTOR_DRIVER=vercel-sandbox row in docs/deploy.md ` +
-        'does not name; an operator allowlisting the documented host would miss this one',
-    );
-    assert.ok(
-      init.dispatcher != null,
-      `the SDK's request to ${url} carries no explicit dispatcher, so the global one — and with it the ` +
-        'proxy variables — now governs it: the "no" row in docs/deploy.md (EXECUTOR_DRIVER=vercel-sandbox) ' +
-        'is wrong and the paragraph beside it has to go',
-    );
-    assert.notEqual(
-      init.dispatcher,
-      proxiedDispatcher,
-      `the SDK's request to ${url} carries the global dispatcher, so it honours the proxy variables and ` +
-        'the "no" row in docs/deploy.md (EXECUTOR_DRIVER=vercel-sandbox) is wrong',
+      `the SDK called ${hostname}, which the EXECUTOR_DRIVER=vercel-sandbox row in docs/deploy.md does not ` +
+        'name; an operator allowlisting or exempting the documented host would miss this one',
     );
   }
+  const prose = egressProxySection().replace(/\s+/g, ' ');
+  assert.doesNotMatch(
+    prose,
+    /managed-sandbox executor row is a real limitation/,
+    'the deploy guide still calls the managed-sandbox row a real limitation beside a row that now says yes',
+  );
+  assert.doesNotMatch(
+    prose,
+    /will not reach the sandbox API through these variables/,
+    'the deploy guide still tells an operator that notebook execution cannot reach the sandbox API through ' +
+      'these variables, which #492 made untrue',
+  );
 });
 
 test('docs/deploy.md names exactly the loopback hosts the dispatcher exempts', async () => {
