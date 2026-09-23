@@ -26,6 +26,7 @@
  * functions can reach civic-data endpoints, matching sandbox behavior.
  */
 import { spawn } from 'node:child_process';
+import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from 'node:child_process';
 import { NotebookExecutionError } from './driver.ts';
 import type {
   CreateSessionOptions,
@@ -58,6 +59,22 @@ export function shellSingleQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+/**
+ * How the driver starts the `docker` CLI. The real driver uses
+ * `child_process.spawn`; a test passes a recorder so every invocation's argv
+ * and spawn options can be read offline, through the same code path.
+ */
+export type DockerSpawn = (
+  command: string,
+  args: string[],
+  options: SpawnOptionsWithoutStdio & { stdio: ['pipe', 'pipe', 'pipe'] },
+) => ChildProcessWithoutNullStreams;
+
+export interface ContainerDriverDeps {
+  /** Defaults to `child_process.spawn`. */
+  spawn?: DockerSpawn;
+}
+
 interface DockerResult {
   exitCode: number;
   stdout: Buffer;
@@ -70,11 +87,12 @@ interface DockerResult {
  * non-zero exitCode so callers decide what is fatal.
  */
 function runDocker(
+  spawnDocker: DockerSpawn,
   args: string[],
   opts: { stdin?: string; signal?: AbortSignal } = {},
 ): Promise<DockerResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn('docker', args, {
+    const child = spawnDocker('docker', args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       ...(opts.signal ? { signal: opts.signal } : {}),
     });
@@ -101,7 +119,8 @@ function runDocker(
   });
 }
 
-export function createContainerDriver(): NotebookExecutorDriver {
+export function createContainerDriver(deps: ContainerDriverDeps = {}): NotebookExecutorDriver {
+  const spawnDocker: DockerSpawn = deps.spawn ?? spawn;
   return {
     name: 'container',
 
@@ -109,7 +128,7 @@ export function createContainerDriver(): NotebookExecutorDriver {
       const image = resolveContainerImage();
       // `--rm` so a killed/stopped container removes itself; `sleep infinity`
       // keeps it idle between execs (the create/exec/read/teardown shape).
-      const run = await runDocker(['run', '-d', '--rm', image, 'sleep', 'infinity']);
+      const run = await runDocker(spawnDocker, ['run', '-d', '--rm', image, 'sleep', 'infinity']);
       if (run.exitCode !== 0) {
         throw new NotebookExecutionError(
           `docker run failed (exit ${run.exitCode}) — is the container runtime up and the image "${image}" built? (docker build -t ${image} docker/executor)`,
@@ -124,7 +143,7 @@ export function createContainerDriver(): NotebookExecutorDriver {
       let timedOut = false;
       const killTimer = setTimeout(() => {
         timedOut = true;
-        void runDocker(['kill', containerId]).catch(() => {
+        void runDocker(spawnDocker, ['kill', containerId]).catch(() => {
           /* container already gone */
         });
       }, opts.timeoutMs);
@@ -139,6 +158,7 @@ export function createContainerDriver(): NotebookExecutorDriver {
         async runCommand(command: ExecutorCommand): Promise<ExecutorCommandResult> {
           const envFlags = buildDockerEnvFlags(command.env ?? {});
           const result = await runDocker(
+            spawnDocker,
             ['exec', ...envFlags, containerId, command.cmd, ...command.args],
             command.signal ? { signal: command.signal } : {},
           );
@@ -157,6 +177,7 @@ export function createContainerDriver(): NotebookExecutorDriver {
         async writeFiles(files, writeOpts) {
           for (const file of files) {
             const result = await runDocker(
+              spawnDocker,
               ['exec', '-i', containerId, 'sh', '-c', `cat > ${shellSingleQuote(file.path)}`],
               { stdin: file.content, ...(writeOpts?.signal ? { signal: writeOpts.signal } : {}) },
             );
@@ -170,7 +191,7 @@ export function createContainerDriver(): NotebookExecutorDriver {
         },
 
         async readFileToBuffer(path: string): Promise<Buffer | null> {
-          const result = await runDocker(['exec', containerId, 'cat', path]);
+          const result = await runDocker(spawnDocker, ['exec', containerId, 'cat', path]);
           if (result.exitCode !== 0) return null;
           return result.stdout;
         },
@@ -179,7 +200,7 @@ export function createContainerDriver(): NotebookExecutorDriver {
           clearTimeout(killTimer);
           // --rm removes the container once killed; a second kill (after the
           // cap fired) fails harmlessly and is swallowed by the caller.
-          const result = await runDocker(['kill', containerId]);
+          const result = await runDocker(spawnDocker, ['kill', containerId]);
           if (result.exitCode !== 0 && !timedOut) {
             throw new NotebookExecutionError(
               `docker kill failed (exit ${result.exitCode})`,
