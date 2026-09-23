@@ -76,6 +76,22 @@ async function driveSession(deps: ContainerDriverDeps): Promise<void> {
   await session.stop();
 }
 
+/**
+ * The spawn options a session passed before #494: stdio pipes and nothing
+ * else. Compared by KEY, and the stdio value on its own, so a regression that
+ * hands the CLI an environment fails by naming the key, and the failure output
+ * never prints the environment of the machine running the suite.
+ */
+function assertOptionsAsBefore494(call: SpawnCall): void {
+  assert.deepEqual(
+    Object.keys(call.options),
+    ['stdio'],
+    `docker ${call.args[0]} was spawned with option keys ${JSON.stringify(Object.keys(call.options))}; ` +
+      'with no proxy configured it must receive no env option, so the CLI inherits process.env as before',
+  );
+  assert.deepEqual(call.options.stdio, ['pipe', 'pipe', 'pipe']);
+}
+
 /** Every `docker` argv a session made before #494, in order, byte for byte. */
 function argvBefore494(): string[][] {
   return [
@@ -107,14 +123,7 @@ test('with no proxy variables set, every docker invocation is byte-identical to 
     calls.map((call) => call.args),
     argvBefore494(),
   );
-  for (const call of calls) {
-    assert.deepEqual(
-      call.options,
-      { stdio: ['pipe', 'pipe', 'pipe'] },
-      `docker ${call.args[0]} was spawned with options ${JSON.stringify(call.options)}; with no proxy ` +
-        'configured it must receive no env option, so the CLI inherits process.env as it did before',
-    );
-  }
+  for (const call of calls) assertOptionsAsBefore494(call);
 });
 
 // --- Criterion 1 (#494, ruling D3): the notebook container inherits the proxy --
@@ -202,8 +211,8 @@ test('a proxied session passes all six names by name on every exec, values in th
   const expected = argvBefore494();
   assert.deepEqual(calls[0].args, expected[0]);
   assert.deepEqual(calls.at(-1)?.args, expected.at(-1));
-  assert.deepEqual(calls[0].options, { stdio: ['pipe', 'pipe', 'pipe'] });
-  assert.deepEqual(calls.at(-1)?.options, { stdio: ['pipe', 'pipe', 'pipe'] });
+  assertOptionsAsBefore494(calls[0]);
+  assertOptionsAsBefore494(calls[calls.length - 1]);
 });
 
 test('the lower-case spelling wins, and both spellings carry the value that won', async () => {
@@ -255,7 +264,7 @@ test('NO_PROXY alone configures no proxy, and changes nothing', async () => {
   const { calls, spawn } = recordingSpawn();
   await driveSession({ spawn, env: { NO_PROXY: 'data.internal.example' } });
   assert.deepEqual(calls.map((call) => call.args), argvBefore494());
-  for (const call of calls) assert.deepEqual(call.options, { stdio: ['pipe', 'pipe', 'pipe'] });
+  for (const call of calls) assertOptionsAsBefore494(call);
 });
 
 // --- Criterion 3 (#494, ruling D9): a credentialed proxy address is refused ---
