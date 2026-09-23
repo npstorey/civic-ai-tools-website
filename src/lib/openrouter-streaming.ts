@@ -334,6 +334,12 @@ export async function queryWithMcpStreaming(
   callbacks: StreamCallbacks,
   trace?: TraceContext,
   toolCallOptions?: ToolCallOptions,
+  /**
+   * The one portal a locked instance serves (#436), from `resolveRunPortal`;
+   * omitted on an unlocked instance. Handed to the loop core, which refuses a
+   * call naming another portal as a rejected call (`ToolLoopOptions.lockedPortal`).
+   */
+  lockedPortal?: string,
 ): Promise<void> {
   const startTime = Date.now();
   const panel: PanelType = 'withMcp';
@@ -354,6 +360,7 @@ export async function queryWithMcpStreaming(
       // option below, applied before the record and the span exist.
       executeToolCall,
       portal: toolCallOptions?.portal,
+      lockedPortal,
       toolTimeoutMs: toolCallOptions?.toolTimeoutMs,
       maxIterations: MAX_ITERATIONS,
       maxTokens: MAX_TOKENS_PER_RESPONSE,

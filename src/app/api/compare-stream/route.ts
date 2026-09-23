@@ -2,17 +2,18 @@ import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks, type ProgressOpts } from '@/lib/openrouter-streaming';
-import { mcpTools } from '@/lib/mcp/tools';
+import { mcpToolsFor } from '@/lib/mcp/tools';
 import { callMcpTool, routeTool } from '@/lib/mcp/client';
-import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
+import { buildSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
-import { encodeSSE, errorLogFacts, panelsForRun, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
+import { encodeSSE, errorLogFacts, panelsForRun, streamErrorPayload, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
 import { getMissingModelCredentialError, ModelConfigurationError } from '@/lib/model-client';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
 import { getMissingMcpRoutingError, readMcpEnvFromProcess, skillRoutingTraceAttributes } from '@/lib/mcp/registry';
-import { getDefaultPortal } from '@/lib/site-config';
+import { resolveRunPortal } from '@/lib/site-config';
+import { PORTAL_LOCK_NOT_CONFIGURED_MESSAGE } from '@/lib/portal-lock';
 import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG } from '@/lib/evidence/trace';
 
 const SSE_HEADERS = {
@@ -38,7 +39,10 @@ export async function POST(request: NextRequest) {
     // below recorded that city in a trace a publish carries into a signed
     // package. An empty string on the wire means "no portal" — it is what the
     // form's "All portals" entry sends — so it collapses to undefined here.
-    const portal = rawPortal || getDefaultPortal() || undefined;
+    // Under SITE_PORTAL_LOCKED the configured portal is the ONLY one (#436):
+    // the resolver refuses a request naming another, and refuses every request
+    // when none is configured.
+    const portalResolution = resolveRunPortal(rawPortal);
 
     if (!query || !modelId) {
       return new Response(
@@ -46,6 +50,37 @@ export async function POST(request: NextRequest) {
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
+
+    // The one-portal switch (#436), refused before the rate limiter and before
+    // the skill fetch, so a refused request costs the reader nothing. A request
+    // naming another portal is the caller's failure: a 400 whose text names
+    // both portals (ruling D1). A lock with no portal configured is the
+    // operator's: the log names the variable and the reader gets the generic
+    // copy on the channel this route's other configuration refusals use —
+    // there is no reader-copy kind for it, because copy naming a variable the
+    // reader cannot set would send them the wrong way (#30 P6 F3's lesson).
+    if (!portalResolution.ok) {
+      const { refusal: portalRefusal } = portalResolution;
+      if (portalRefusal.reason === 'foreign_portal') {
+        return new Response(
+          JSON.stringify({ error: portalRefusal.message }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      console.error('[compare-stream]', PORTAL_LOCK_NOT_CONFIGURED_MESSAGE);
+      const encoder = new TextEncoder();
+      const body = panelsForRun(mcpOnly)
+        .map((panel) =>
+          encodeSSE({
+            type: 'error',
+            panel,
+            ...streamErrorPayload('generic'),
+          } as StreamEvent & { message: string; code: StreamErrorCode })
+        )
+        .join('');
+      return new Response(encoder.encode(body), { headers: SSE_HEADERS });
+    }
+    const { portal, lockedPortal } = portalResolution;
 
     // Fail fast when the instance has no model credential (#178). Checked
     // before rate limiting (a misconfigured instance must not burn quota) and
@@ -170,7 +205,9 @@ export async function POST(request: NextRequest) {
     // routing this instance explicitly set, and honestly omits the Socrata
     // field when unset (the guard above refused the query in that state).
     const skillFetchSpanId = trace.startSpan('skill_fetch');
-    const systemPromptWithMcp = await buildSystemPrompt(portal);
+    // Under the lock, one section is appended saying the portal-general
+    // guidance does not apply here (#436, D7); unlocked, the prompt is unchanged.
+    const systemPromptWithMcp = withPortalLockGuidance(await buildSystemPrompt(portal), lockedPortal);
     const systemPromptHash = hash(systemPromptWithMcp);
     // #411, ruling D3: the HASH, not the text. This span goes inline into the
     // bytes an instance signs, and `skill.text` put the whole composed prompt
@@ -237,7 +274,9 @@ Be honest if you don't have access to current or real-time data.`;
         const mcpQuery = queryWithMcpStreaming(
           query,
           model,
-          mcpTools,
+          // `mcpTools` itself when unlocked; under the lock the same schemas
+          // with text that stops inviting other portals (#436, D7).
+          mcpToolsFor(lockedPortal),
           // Just the transport. Portal injection moved into the core (#359):
           // done here, it ran after the core had recorded the call and
           // stringified its arguments onto the span, so the span reported no
@@ -247,6 +286,9 @@ Be honest if you don't have access to current or real-time data.`;
           callbacks,
           { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: (name) => routeTool(name).sourceId },
           { portal, toolTimeoutMs: MCP_TOOL_TIMEOUT_MS },
+          // The loop core refuses a call naming another portal as a rejected
+          // call (#436, D7); undefined on an unlocked instance.
+          lockedPortal,
         );
 
         if (mcpOnly) {

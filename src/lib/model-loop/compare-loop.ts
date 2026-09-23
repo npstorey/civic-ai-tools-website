@@ -37,7 +37,7 @@
  */
 
 import type OpenAI from 'openai';
-import { mcpTools } from '../mcp/tools.ts';
+import { mcpToolsFor } from '../mcp/tools.ts';
 import { callMcpTool } from '../mcp/client.ts';
 import type { ToolCallRecord, ToolLoopOptions, ToolLoopResult } from './run-tool-loop.ts';
 
@@ -96,6 +96,12 @@ export interface CompareLoopInputs {
    */
   portal?: string;
   /**
+   * The one portal a locked instance serves (#436), or omitted when the
+   * instance is not locked. Selects the locked tool text and is handed to the
+   * core, which refuses a call naming another portal as a rejected call.
+   */
+  lockedPortal?: string;
+  /**
    * The tool transport, for tests. Defaults to the live MCP client — the ONLY
    * seam this factory exposes, and deliberately one level below the loop:
    * substituting it restates no loop configuration at all.
@@ -109,14 +115,16 @@ export interface CompareLoopInputs {
  * route supplies only what it read off the request.
  */
 export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
-  const { client, endpointModel, prompt, systemPrompt, portal, callTool = callMcpTool } = inputs;
+  const { client, endpointModel, prompt, systemPrompt, portal, lockedPortal, callTool = callMcpTool } = inputs;
 
   return {
     client,
     endpointModel,
     prompt,
     systemPrompt,
-    tools: mcpTools,
+    // The same schemas either way; under the lock their text stops inviting
+    // other portals (#436).
+    tools: mcpToolsFor(lockedPortal),
     maxIterations: COMPARE_MAX_ITERATIONS,
     maxTokens: COMPARE_MAX_TOKENS,
     // No cumulative token budget: this caller has never had one, and the cap
@@ -130,6 +138,7 @@ export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
     // The core injects this into a Socrata `get_data` call that omits a
     // portal, above the record and the span; Data Commons tools are untouched.
     portal,
+    lockedPortal,
     toolTimeoutMs: COMPARE_MCP_TOOL_TIMEOUT_MS,
     executeToolCall: callTool,
   };

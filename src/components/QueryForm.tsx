@@ -9,14 +9,16 @@ import { resolveSignInAffordance } from '@/lib/auth-provider-options';
 import { useSessionChoice } from '@/hooks/useSessionChoice';
 import {
   MODE_STORAGE_KEY,
+  offeredExampleQueries,
   parseStoredMode,
   resolveEffectiveMode,
+  type ExampleQuery,
   type QueryMode,
 } from '@/lib/query-presentation';
 import { parseModelsResponse, type Model } from '@/lib/model-list';
 import { MODELS_LOAD_ERROR } from '@/lib/streaming';
 import RateLimitBanner from './RateLimitBanner';
-import { useDefaultPortalArg } from '@/components/DefaultPortalProvider';
+import { useDefaultPortalArg, usePortalLocked } from '@/components/DefaultPortalProvider';
 
 // Re-exported for existing importers; the type itself lives in
 // src/lib/query-presentation.ts alongside the derivations that use it.
@@ -62,20 +64,15 @@ interface QueryFormProps {
   };
 }
 
-/**
- * The suggested questions under the box. One of them demonstrates the
+/*
+ * The suggested questions under the box live in `src/lib/query-presentation.ts`
+ * (`EXAMPLE_QUERIES`, `offeredExampleQueries`). One of them demonstrates the
  * portal-scoped path, so it needs a portal to select — and that portal is the
  * instance's, not a literal (#407): `usesDefaultPortal` resolves at render to
  * `SITE_DEFAULT_PORTAL`, or to '' ("All portals") when this instance declared
- * none. An example that carries no portal is a working suggestion — two of the
- * three already are — so an unconfigured instance keeps all three rather than
- * losing one.
+ * none. The two that compare portals are not offered on a locked instance
+ * (#436).
  */
-const EXAMPLE_QUERIES: readonly { text: string; usesDefaultPortal?: boolean }[] = [
-  { text: 'Noise trends in NYC', usesDefaultPortal: true },
-  { text: 'Top 311 complaints: NYC vs SF' },
-  { text: 'Median household income: NYC vs SF' },
-];
 
 const PORTALS = [
   { id: '', name: 'All portals' },
@@ -96,6 +93,12 @@ export default function QueryForm({
   // This instance's configured default portal as a wire value, '' when none
   // (#407) — server-resolved, threaded through the root layout.
   const defaultPortal = useDefaultPortalArg();
+  // SITE_PORTAL_LOCKED, server-resolved like the default portal (#436). Locked,
+  // the instance serves its configured portal only: no picker, no
+  // cross-portal examples, and every request goes out with '' or that portal,
+  // both of which the routes resolve to it.
+  const portalLocked = usePortalLocked();
+  const exampleQueries = offeredExampleQueries(portalLocked);
   const [query, setQuery] = useState('');
   // Empty until `/api/models` answers, then the first model THIS instance
   // offers (website#30 P4). It used to initialize to a hardcoded `openai/gpt-4o`
@@ -201,7 +204,7 @@ export default function QueryForm({
     }
   };
 
-  const handleExampleClick = (example: { text: string; usesDefaultPortal?: boolean }) => {
+  const handleExampleClick = (example: ExampleQuery) => {
     setQuery(example.text);
     // '' when this instance configured no default — the "All portals" entry,
     // which is a working selection, not an empty one (#407).
@@ -296,7 +299,7 @@ export default function QueryForm({
 
       {/* Example queries on one row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
-        {EXAMPLE_QUERIES.map((example, idx) => (
+        {exampleQueries.map((example, idx) => (
           <span key={idx} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
             {idx > 0 && <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>·</span>}
             <button
@@ -611,7 +614,9 @@ export default function QueryForm({
                 )}
               </div>
 
-              {/* Portal dropdown */}
+              {/* Portal dropdown — not rendered on a locked instance (#436):
+                  it would offer choices the routes refuse. */}
+              {!portalLocked && (
               <div className="ui-field" ref={portalDropdownRef} style={{ position: 'relative' }}>
                 <label style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 400 }}>Data portal</label>
                 <button
@@ -679,6 +684,7 @@ export default function QueryForm({
                   </ul>
                 )}
               </div>
+              )}
             </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}>

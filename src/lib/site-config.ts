@@ -14,6 +14,15 @@ import {
   readPublisherEnv,
   type PublisherEnvSuffix,
 } from './publisher-env.ts';
+// The one-portal switch (#436): the flag parser the host topology already uses,
+// and the lock's refusals, stated once in a module the loop core shares.
+import { parseBooleanFlag } from './host-routing.ts';
+import {
+  PortalLockError,
+  foreignPortalError,
+  normalizePortal,
+  portalNotConfiguredError,
+} from './portal-lock.ts';
 
 /** The Typed Standards protocol site — spec home and neutral verifier. */
 export const TYPED_STANDARDS_URL = 'https://typedstandards.org';
@@ -239,6 +248,70 @@ export function getDefaultPortal(): string | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+// --- The one-portal switch (#436) -------------------------------------------
+
+/**
+ * Whether this instance serves ONE portal: `SITE_PORTAL_LOCKED`, `1`/`true`
+ * (any case, trimmed) via `parseBooleanFlag`, anything else — unset included —
+ * off. Read at call time, like `getDefaultPortal`, and for the same reason it
+ * is never `NEXT_PUBLIC_*`: the root layout resolves it and threads it to the
+ * form through `DefaultPortalProvider`, so a container's runtime environment
+ * decides it rather than a value baked into client bundles.
+ */
+export function isPortalLocked(): boolean {
+  return parseBooleanFlag(process.env.SITE_PORTAL_LOCKED);
+}
+
+/** What a query route runs on, or why it refuses. */
+export type RunPortalResolution =
+  | {
+      ok: true;
+      /** The run's portal: injected into `get_data` calls that name none, and recorded on the root span. */
+      portal: string | undefined;
+      /** Set only under the lock, to the one portal the loop core lets a call name. */
+      lockedPortal: string | undefined;
+    }
+  | { ok: false; refusal: PortalLockError };
+
+/**
+ * The portal a query route runs on — the one resolver the three query routes
+ * call in place of the line each of them carried (#407's
+ * `rawPortal || getDefaultPortal() || undefined`).
+ *
+ * LOCK OFF: exactly that line. The caller's portal, else this instance's
+ * default, else none; an empty string on the wire (the form's "All portals")
+ * is "no portal". Nothing is refused and `lockedPortal` is unset.
+ *
+ * LOCK ON (#436, ruling D1):
+ *   - no portal configured → the typed `portal_not_configured` refusal, before
+ *     anything else is looked at: an unset value falling through to "no
+ *     portal" would quietly turn a one-portal instance into an any-portal one;
+ *   - an absent portal, `""`, or the configured portal in any case or spacing
+ *     → the configured portal;
+ *   - anything else → the `foreign_portal` refusal naming both portals. A
+ *     request that asked for one city is not answered with another's figures:
+ *     serving it would be substitution even with the answer labelled.
+ *
+ * Takes the request's value as `unknown` because it comes straight off a
+ * parsed JSON body; under the lock a non-string portal is a portal this
+ * instance does not serve.
+ */
+export function resolveRunPortal(requested: unknown): RunPortalResolution {
+  if (!isPortalLocked()) {
+    const portal = (requested as string | undefined) || getDefaultPortal() || undefined;
+    return { ok: true, portal, lockedPortal: undefined };
+  }
+
+  const configured = getDefaultPortal();
+  if (configured === null) return { ok: false, refusal: portalNotConfiguredError() };
+
+  const named = requested === undefined || requested === null ? '' : String(requested);
+  if (named.trim() === '' || normalizePortal(named) === normalizePortal(configured)) {
+    return { ok: true, portal: configured, lockedPortal: configured };
+  }
+  return { ok: false, refusal: foreignPortalError(named, configured) };
 }
 
 // --- Publisher instance identity (ADR-0020: config, not code; #258:

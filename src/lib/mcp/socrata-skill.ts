@@ -613,6 +613,46 @@ export async function composeSkillPrompt(
 }
 
 /**
+ * The section a LOCKED instance appends to the composed prompt (#436, ruling
+ * D7: "under the lock the tool text stops inviting other portals").
+ *
+ * WHY A SUPERSEDING SECTION AND NOT AN EDIT. Measured at `109eecb`, several
+ * sentences that reach the model become false under the lock: the fallback's
+ * "Any Socrata open data portal can be queried with get_data", its portal-
+ * naming patterns for other cities, "Which Tool Reaches Which Portal" (get_data
+ * "works against any Socrata portal"), "Other Portals", "Working With a Portal
+ * Other Than the Configured One", the per-portal dataset tables, and the
+ * preamble's "Covers NYC, Chicago, SF, Seattle, LA, and hundreds of other
+ * portals". They stay true of every unlocked instance, and the live skill text
+ * the Socrata MCP server serves says the same things from outside this
+ * repository, where no edit here can reach. So the lock adds one section, last,
+ * that names what no longer applies and why, instead of forking the text.
+ *
+ * Names only tools the model can call (`prompt-advertised-tools.test.ts`'s
+ * property; `src/lib/portal-lock.test.ts` holds this text to it).
+ */
+export function portalLockGuidance(lockedPortal: string): string {
+  return `## ONE PORTAL ONLY
+
+This instance answers questions against one Socrata portal only: ${lockedPortal}. Anything above that describes querying other Socrata portals (any portal being reachable with get_data, naming patterns for other cities' portals, the tables of other portals and their datasets) does not apply on this instance:
+- get_data reaches ${lockedPortal} only. Leave its portal argument out; a call naming any other portal is refused and returns no data.
+- fetch accepts identifiers and URLs on ${lockedPortal} only; one naming any other portal is refused.
+- search covers the portal the data server is configured for.
+
+If a question asks for Socrata data about a place ${lockedPortal} does not cover, say so plainly instead of answering from another portal. This limit applies to Socrata portals; the other data sources described above are separate and keep their own scope.`;
+}
+
+/**
+ * The composed prompt, with `portalLockGuidance` appended when the run is
+ * locked; the prompt unchanged when it is not. The query routes call this on
+ * `buildSystemPrompt`'s result. Replay never does: its portal comes from the
+ * record it replays, and the lock does not govern it.
+ */
+export function withPortalLockGuidance(systemPrompt: string, lockedPortal?: string): string {
+  return lockedPortal ? `${systemPrompt}\n\n---\n\n${portalLockGuidance(lockedPortal)}` : systemPrompt;
+}
+
+/**
  * Thin wrapper kept for backward compatibility with the existing route
  * handlers. Delegates to `composeSkillPrompt` with the default active source
  * list (`['socrata', 'data-commons', 'boston-opencontext']`) and the

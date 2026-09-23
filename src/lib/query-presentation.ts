@@ -99,3 +99,45 @@ export function isComparisonRunComplete(
 ): boolean {
   return withMcpComplete && (mcpOnly || withoutMcpComplete);
 }
+
+// --- The suggested questions, and the one-portal switch (#436) ---------------
+
+/**
+ * One suggested question under the query box.
+ *
+ * `usesDefaultPortal`: the example demonstrates the portal-scoped path, so
+ * clicking it selects the instance's configured portal (#407) — or '' ("All
+ * portals") when none is configured.
+ *
+ * `crossPortal`: the example asks for a comparison ACROSS portals. A locked
+ * instance serves one portal (`SITE_PORTAL_LOCKED`), so it does not offer
+ * these: clicking one would send the reader a question the instance refuses to
+ * answer from more than one portal.
+ */
+export interface ExampleQuery {
+  text: string;
+  usesDefaultPortal?: boolean;
+  crossPortal?: boolean;
+}
+
+/**
+ * The suggested questions, in display order. Moved here from `QueryForm` so the
+ * lock's effect on them is testable under `node --test`; the text and order are
+ * the form's, unchanged. An example that carries no portal is a working
+ * suggestion on an unconfigured instance, so an unconfigured, unlocked instance
+ * keeps all three.
+ */
+export const EXAMPLE_QUERIES: readonly ExampleQuery[] = [
+  { text: 'Noise trends in NYC', usesDefaultPortal: true },
+  { text: 'Top 311 complaints: NYC vs SF', crossPortal: true },
+  { text: 'Median household income: NYC vs SF', crossPortal: true },
+];
+
+/**
+ * The suggested questions a form offers: all of them unlocked, and none that
+ * compares portals when the instance is locked to one (#436). Unlocked, the
+ * list returned is `EXAMPLE_QUERIES` itself, so the form is unchanged.
+ */
+export function offeredExampleQueries(portalLocked: boolean): readonly ExampleQuery[] {
+  return portalLocked ? EXAMPLE_QUERIES.filter((example) => !example.crossPortal) : EXAMPLE_QUERIES;
+}

@@ -452,6 +452,125 @@ export const mcpTools: ChatCompletionTool[] = [
   ...bostonOpencontextMcpTools,
 ];
 
+// --- The one-portal switch (#436, ruling D7) ---------------------------------
+//
+// Under `SITE_PORTAL_LOCKED` the loop core refuses a `get_data` call naming
+// another portal and a `fetch` whose identifier names one. The text below is
+// the other half: the model is not INVITED to make those calls. The schemas'
+// names and shapes do not change, so the set of callable tools
+// (`prompt-advertised-tools.test.ts`) is the same locked or not; only the
+// three Socrata descriptions and `get_data`'s `portal` property differ.
+//
+// No portal hostname is written here: the locked portal is the instance's own
+// configuration, interpolated at call time, and the unlocked text's worked
+// examples (which name real portals) are the ones the locked text replaces.
+
+type FunctionTool = Extract<ChatCompletionTool, { type: 'function' }>;
+
+function socrataTool(name: string): FunctionTool {
+  const tool = socrataMcpTools.find((t): t is FunctionTool => t.type === 'function' && t.function.name === name);
+  if (!tool) throw new Error(`mcpToolsFor: no Socrata tool named ${name}`);
+  return tool;
+}
+
+function lockedGetData(lockedPortal: string): FunctionTool {
+  const base = socrataTool('get_data');
+  const baseParameters = base.function.parameters as { properties: Record<string, unknown> } & Record<string, unknown>;
+  return {
+    ...base,
+    function: {
+      ...base.function,
+      description: `Unified Socrata open data access tool for ${lockedPortal}, the one portal this instance serves. Supports multiple operation types:
+- catalog: Search ${lockedPortal}'s catalog for datasets matching a query
+- metadata: Get detailed metadata about a specific dataset
+- query: Execute a SoQL query against a dataset to fetch and filter data
+- metrics: Get row count, view count, last-updated timestamps for a dataset
+
+IMPORTANT TIPS:
+1. For type=metadata and type=metrics, pass the dataset ID in "dataset_id"
+2. For type=query, ALWAYS start by fetching a sample with no WHERE clause to see actual column values
+3. Field values are case-sensitive - fetch sample data first to see exact formats
+4. Omit "portal": every call goes to ${lockedPortal}. A call naming any other portal is refused and returns no data.
+
+Examples:
+- Search catalog: { "type": "catalog", "query": "311 complaints" }
+- Get metadata: { "type": "metadata", "dataset_id": "<dataset-id>" }
+- Get metrics: { "type": "metrics", "dataset_id": "<dataset-id>" }
+- Fetch sample data first: { "type": "query", "dataset_id": "<dataset-id>", "limit": 5 }
+- Query with filter: { "type": "query", "dataset_id": "<dataset-id>", "select": "<column>, COUNT(*) as count", "group": "<column>", "order": "count DESC", "limit": 10 }`,
+      parameters: {
+        ...baseParameters,
+        properties: {
+          ...baseParameters.properties,
+          portal: {
+            type: 'string',
+            enum: [lockedPortal],
+            description: `The one portal this instance serves, ${lockedPortal}. Optional: omitted, the call goes there anyway. Any other value is refused.`,
+          },
+        },
+      },
+    },
+  };
+}
+
+function lockedSearch(lockedPortal: string): FunctionTool {
+  const base = socrataTool('search');
+  return {
+    ...base,
+    function: {
+      ...base.function,
+      description: `Search the Socrata portal this instance's MCP server is configured for, returning matching datasets with identifiers that "fetch" accepts.
+
+Returns, per hit: an "id" of the form dataset:<portal>:<dataset_id>, the title, the portal URL, a description snippet, and — where the dataset allows it — its column list and a few preview rows.
+
+WHICH TOOL TO USE:
+- This tool searches ONE portal: the one the server is configured with. It takes no portal argument.
+- This instance serves one portal only, ${lockedPortal}. To search its catalog by name, get_data with { "type": "catalog", "query": "..." } also works. No other portal can be queried here.`,
+    },
+  };
+}
+
+function lockedFetch(lockedPortal: string): FunctionTool {
+  const base = socrataTool('fetch');
+  const baseParameters = base.function.parameters as { properties: Record<string, unknown> } & Record<string, unknown>;
+  return {
+    ...base,
+    function: {
+      ...base.function,
+      description: `${base.function.description}
+
+This instance serves one portal only, ${lockedPortal}: an identifier or URL naming any other portal is refused and returns no data.`,
+      parameters: {
+        ...baseParameters,
+        properties: {
+          ...baseParameters.properties,
+          // The unlocked example names a real portal; this one names the portal served.
+          id: {
+            type: 'string',
+            description: `Identifier returned by the search tool, e.g. "dataset:${lockedPortal}:<dataset-id>"`,
+          },
+        },
+      },
+    },
+  };
+}
+
+/**
+ * The tool schemas for a run: `mcpTools` itself when the instance is not
+ * locked (the same array, so an unlocked run sends byte-for-byte what it sent
+ * before #436), else the same tools with the three Socrata descriptions and
+ * `get_data`'s `portal` property rewritten for the one portal it serves.
+ */
+export function mcpToolsFor(lockedPortal?: string): ChatCompletionTool[] {
+  if (!lockedPortal) return mcpTools;
+  const locked: Record<string, FunctionTool> = {
+    get_data: lockedGetData(lockedPortal),
+    search: lockedSearch(lockedPortal),
+    fetch: lockedFetch(lockedPortal),
+  };
+  return mcpTools.map((tool) => (tool.type === 'function' && locked[tool.function.name]) || tool);
+}
+
 // Model definitions moved to src/lib/model-catalog.ts (civic-ai-tools-website#30
 // P2). `ModelDefinition`, the offered list, its pricing and its display names
 // were four tables in three files describing the same ids; they are now one

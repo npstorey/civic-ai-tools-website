@@ -4,14 +4,15 @@ import { authOptions } from '@/lib/auth';
 import { queryWithoutMcp } from '@/lib/openrouter';
 import { runToolLoop } from '@/lib/model-loop/run-tool-loop';
 import { compareLoopOptions, compareCompletionResult } from '@/lib/model-loop/compare-loop';
-import { buildSystemPrompt } from '@/lib/mcp/socrata-skill';
+import { buildSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { getMissingModelCredentialError, getModelClient, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
 import { errorLogFacts, streamErrorPayload } from '@/lib/streaming';
 import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
-import { getDefaultPortal } from '@/lib/site-config';
+import { resolveRunPortal } from '@/lib/site-config';
+import { PORTAL_LOCK_NOT_CONFIGURED_MESSAGE } from '@/lib/portal-lock';
 import { headers } from 'next/headers';
 
 interface CompareRequest {
@@ -28,7 +29,8 @@ export async function POST(request: NextRequest) {
     // (#407) — the same resolution as the streaming route beside it. An empty
     // string on the wire means "no portal" (the form's "All portals" entry),
     // so it collapses to undefined rather than to one deployment's city.
-    const portal = rawPortal || getDefaultPortal() || undefined;
+    // Under SITE_PORTAL_LOCKED the configured portal is the ONLY one (#436).
+    const portalResolution = resolveRunPortal(rawPortal);
 
     if (!query || !modelId) {
       return NextResponse.json(
@@ -36,6 +38,22 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // The one-portal switch (#436) — same refusals, same place, as the
+    // streaming route: before the rate limiter and the skill fetch. A foreign
+    // portal is the caller's 400, naming both portals (D1); a lock with no
+    // portal configured is the operator's 503, logged by variable name, with
+    // the generic copy in the body.
+    if (!portalResolution.ok) {
+      const { refusal: portalRefusal } = portalResolution;
+      if (portalRefusal.reason === 'foreign_portal') {
+        return NextResponse.json({ error: portalRefusal.message }, { status: 400 });
+      }
+      console.error('[compare]', PORTAL_LOCK_NOT_CONFIGURED_MESSAGE);
+      const { message, code } = streamErrorPayload('generic');
+      return NextResponse.json({ error: message, code }, { status: 503 });
+    }
+    const { portal, lockedPortal } = portalResolution;
 
     // Fail fast when the instance has no model credential (#178) — same shared
     // guard as the streaming route, before rate limiting or any upstream call.
@@ -118,7 +136,8 @@ export async function POST(request: NextRequest) {
     await incrementRateLimit(identifier, isAuthenticated);
 
     // System prompt for the MCP-enabled query - uses skill module
-    const systemPromptWithMcp = await buildSystemPrompt(portal);
+    // Under the lock one section is appended (#436, D7); unlocked, unchanged.
+    const systemPromptWithMcp = withPortalLockGuidance(await buildSystemPrompt(portal), lockedPortal);
 
     // System prompt for the non-MCP query (to make it fair)
     const systemPromptWithoutMcp = `You are a helpful assistant.
@@ -141,6 +160,7 @@ Be honest if you don't have access to current or real-time data.`;
         prompt: query,
         systemPrompt: systemPromptWithMcp,
         portal,
+        lockedPortal,
       })),
     ]);
 
