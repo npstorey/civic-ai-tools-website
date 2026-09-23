@@ -159,7 +159,7 @@ function carriesUserinfo(address: string): boolean {
  */
 export function resolveContainerProxyEnv(
   env: EnvRecord,
-): { flags: string[]; spawnEnv: NodeJS.ProcessEnv } | null {
+): { flags: string[]; spawnEnv: EnvRecord } | null {
   const settings = resolveProxySettings(env);
   if (!settings.enabled) return null;
 
@@ -199,7 +199,7 @@ interface DockerResult {
 function runDocker(
   spawnDocker: DockerSpawn,
   args: string[],
-  opts: { stdin?: string; signal?: AbortSignal; env?: NodeJS.ProcessEnv } = {},
+  opts: { stdin?: string; signal?: AbortSignal; env?: EnvRecord } = {},
 ): Promise<DockerResult> {
   return new Promise((resolve, reject) => {
     const child = spawnDocker('docker', args, {
@@ -207,7 +207,8 @@ function runDocker(
       ...(opts.signal ? { signal: opts.signal } : {}),
       // Only a proxied exec passes one; otherwise the key is absent and the
       // CLI inherits process.env exactly as before #494.
-      ...(opts.env ? { env: opts.env } : {}),
+      // (The cast: the framework's ProcessEnv declares NODE_ENV required.)
+      ...(opts.env ? { env: opts.env as NodeJS.ProcessEnv } : {}),
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
