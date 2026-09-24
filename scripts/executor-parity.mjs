@@ -53,6 +53,14 @@
  *   node --experimental-strip-types scripts/executor-parity.mjs compare \
  *     parity-container.json parity-vercel.json
  *
+ * Lambda leg against the AWS Lambda Runtime Interface Emulator (#530) — the
+ * function's image running under the emulator, reached by the lambda driver
+ * through a client that signs nothing (scripts/lambda-emulator.mjs); see
+ * scripts/lambda-image-check.mjs for starting it:
+ *
+ *   node --experimental-strip-types scripts/executor-parity.mjs run \
+ *     --driver lambda --lambda-endpoint http://127.0.0.1:9000 --out parity-lambda.json
+ *
  * Driver error-path and timeout proofs (container leg):
  *
  *   node --experimental-strip-types scripts/executor-parity.mjs run \
@@ -70,15 +78,16 @@ import { parseArgs } from 'node:util';
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DEFAULT_FIXTURE = 'scripts/fixtures/parity-notebook.ipynb';
 const MASKED = '[masked]';
-const DRIVERS = ['vercel-sandbox', 'container'];
+const DRIVERS = ['vercel-sandbox', 'container', 'lambda'];
 
 function usage(message) {
   if (message) console.error(`error: ${message}\n`);
   console.error(
     [
       'usage:',
-      '  executor-parity.mjs run --driver <vercel-sandbox|container> [--fixture <path>]',
+      '  executor-parity.mjs run --driver <vercel-sandbox|container|lambda> [--fixture <path>]',
       '                          [--out <path>] [--timeout-ms <n>] [--expect <success|error|timeout>]',
+      '                          [--lambda-endpoint <url>]   (lambda: the runtime interface emulator)',
       '  executor-parity.mjs compare <a.json> <b.json>',
       '',
       'vercel-sandbox leg (op run recommended for auth; any env-injection',
@@ -147,6 +156,7 @@ async function commandRun(argv) {
       out: { type: 'string' },
       'timeout-ms': { type: 'string' },
       expect: { type: 'string', default: 'success' },
+      'lambda-endpoint': { type: 'string' },
     },
   });
   const driver = values.driver;
@@ -163,11 +173,21 @@ async function commandRun(argv) {
   const timeoutMs = values['timeout-ms'] ? Number(values['timeout-ms']) : undefined;
   if (values['timeout-ms'] && !Number.isFinite(timeoutMs)) usage('--timeout-ms must be a number');
 
+  if (values['lambda-endpoint'] && driver !== 'lambda') usage('--lambda-endpoint goes with --driver lambda');
+
   // Select the driver BEFORE the seam module loads its lazy singleton.
   process.env.EXECUTOR_DRIVER = driver;
-  const { executeNotebook, NotebookExecutionError, resolveExecutorTimeouts } = await import(
+  const { executeNotebook, executeNotebookWith, NotebookExecutionError, resolveExecutorTimeouts } = await import(
     '../src/lib/sandbox/execute.ts'
   );
+  // The emulator leg hands the seam its own driver: the lambda driver on a
+  // client that signs nothing. Every other run takes the configured driver.
+  let execute = executeNotebook;
+  if (values['lambda-endpoint']) {
+    const { emulatorLambdaDriver } = await import('./lambda-emulator.mjs');
+    const emulated = await emulatorLambdaDriver(values['lambda-endpoint']);
+    execute = (notebook, opts) => executeNotebookWith(emulated, notebook, opts);
+  }
 
   const fixturePath = path.resolve(REPO_ROOT, values.fixture);
   const notebook = JSON.parse(await readFile(fixturePath, 'utf8'));
@@ -176,7 +196,7 @@ async function commandRun(argv) {
   const startedAt = Date.now();
   let result;
   try {
-    result = await executeNotebook(notebook, {
+    result = await execute(notebook, {
       ...(timeoutMs !== undefined ? { timeoutMs } : {}),
     });
   } catch (err) {

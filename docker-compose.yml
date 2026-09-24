@@ -259,6 +259,11 @@ services:
       EXECUTOR_CONTAINER_USER:
       EXECUTOR_CONTAINER_RUNTIME:
       EXECUTOR_CONTAINER_HARDENED:
+      # The lambda driver's two settings: inert here, where EXECUTOR_DRIVER is
+      # pinned to container, and passed so every variable ENV_SPEC declares for
+      # this profile can reach the app (scripts/check-compose-env.mjs).
+      EXECUTOR_LAMBDA_FUNCTION:
+      EXECUTOR_LAMBDA_REGION:
       # --- instance identity (ADR-0020; neutral local values) ---
       # Each reads your canonical name, then your prior-era one, then the
       # neutral local default — so renaming your env file is optional and a
