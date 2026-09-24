@@ -37,13 +37,16 @@ remote) — don't design an owner-run leg around the assumption that it doesn't.
 | `npm run check:standalone` | `[standalone-assets] OK — 3 runtime-read asset(s) present and byte-identical` — needs a standalone build first; `npm run build:standalone` does both |
 | `npm run dev` | dev server on localhost:3000 |
 
-CI (`.github/workflows/ci.yml`) has two jobs. `build / test / lint / typecheck` runs the first five
+CI (`.github/workflows/ci.yml`) has three jobs. `build / test / lint / typecheck` runs the first five
 commands plus a `.well-known` byte-identity check. `container image build` (#295) builds the real
 image from the `.dockerignore`-filtered context — always-run and unfiltered, because the trigger for
 that defect class is "any file the build type-checks changed", which a paths filter cannot enumerate.
-Both are **required checks**; both are **credential-free by construction** — never add a `secrets.`
-reference or a placeholder-credential `env:` block to make a step pass; the keyless build is the
-invariant it protects. `check:standalone` runs inside the container job, and also on a host in the
+`executor image build` (#490) builds the notebook executor image (`docker/executor/Dockerfile`) and
+checks it through `scripts/executor-image-check.mjs`: the pins against `pip freeze`, that the pinned
+set co-installs and imports, a non-root default user, a warm font cache for that user, and the parity
+notebook run through the container driver — also always-run and unfiltered. All three are **required checks**; all three are
+**credential-free by construction** — never add a `secrets.` reference or a placeholder-credential
+`env:` block to make a step pass; the keyless build is the invariant it protects. `check:standalone` runs inside the container job, and also on a host in the
 paths-filtered, deliberately-not-required `standalone.yml`: host and container are different
 environments, and a green run on one is not evidence about the other. A stale `node_modules` fails
 tests in ways that look like code defects — `npm ci` first.
