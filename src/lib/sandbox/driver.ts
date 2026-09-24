@@ -66,6 +66,19 @@ export const EXECUTOR_TOOLING_PACKAGES = {
 export const SANDBOX_SDK_MAJOR = 1;
 
 /**
+ * The AWS Lambda runtime interface client the `lambda` target of
+ * docker/executor/Dockerfile installs (#530, ruling D4), pinned like the rest:
+ * `./container.test.ts` holds the Dockerfile's pins to the union of this table
+ * and the two above, and `./executor-pins.test.ts` holds this one to the
+ * lambda stage alone. It is the function's runtime, not the notebook's: the
+ * notebook runs in a subprocess the handler starts, and the executed bytes
+ * come out of the pinned nbconvert.
+ */
+export const EXECUTOR_LAMBDA_RUNTIME_PACKAGES = {
+  awslambdaric: '4.0.4',
+} as const;
+
+/**
  * `name==version` pip specs for the tooling table, in table order. Every
  * executor install path calls this rather than spelling the versions again.
  */
@@ -138,10 +151,55 @@ export interface CreateSessionOptions {
   snapshotId?: string;
 }
 
-export interface NotebookExecutorDriver {
+/** A driver whose runtime lives across calls: create, exec, read, stop. */
+export interface SessionExecutorDriver {
   readonly name: string;
   createSession(opts: CreateSessionOptions): Promise<ExecutorSession>;
 }
+
+/**
+ * One notebook, as a one-shot driver runs it (#530, ruling D1). Every field is
+ * built by `executeNotebook`, which builds the same values for the session
+ * path, so the argv an executed notebook comes out of is one argv whichever
+ * driver runs it. A one-shot driver stages `files`, runs `command`, reads
+ * `readBack`, runs `versionProbe`, and returns what they produced; it composes
+ * no command of its own.
+ */
+export interface NotebookRun {
+  /** Files to stage before the command, as `ExecutorSession.writeFiles` takes them. */
+  files: ReadonlyArray<{ path: string; content: string }>;
+  /** The nbconvert command, with the notebook's environment. */
+  command: { cmd: string; args: string[]; env: Record<string, string> };
+  /** The file the command writes: the executed notebook. */
+  readBack: string;
+  /** The Python-version probe, run after the command. */
+  versionProbe: { cmd: string; args: string[] };
+  /** Wall-clock cap for the whole run (ms), as `CreateSessionOptions.timeoutMs`. */
+  timeoutMs: number;
+  signal?: AbortSignal;
+}
+
+/** What a one-shot run produced. `executeNotebook` interprets it as it does a session's results. */
+export interface NotebookRunResult {
+  /** The runtime instance id: for the lambda driver, the invocation's request id. */
+  id: string;
+  /** The command's exit code. */
+  exitCode: number;
+  /** The command's stderr; read only when `exitCode` is not 0. */
+  stderr: string;
+  /** The bytes at `readBack`, or null when the command wrote none. */
+  executed: Buffer | null;
+  /** The probe's trimmed stdout, or null when the probe failed. */
+  pythonVersion: string | null;
+}
+
+/** A driver that takes a whole notebook per call: the remote shape, ADR-0023 §D. */
+export interface OneShotExecutorDriver {
+  readonly name: string;
+  runNotebook(run: NotebookRun): Promise<NotebookRunResult>;
+}
+
+export type NotebookExecutorDriver = SessionExecutorDriver | OneShotExecutorDriver;
 
 export class NotebookExecutionError extends Error {
   readonly stderr?: string;

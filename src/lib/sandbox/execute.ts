@@ -12,6 +12,11 @@
  *     (`./vercel-sandbox.ts`).
  *   - 'container': the host container runtime via the docker CLI, using the
  *     prebuilt image from `docker/executor/Dockerfile` (`./container.ts`).
+ *   - 'lambda': an AWS Lambda function built from that Dockerfile's `lambda`
+ *     target (`./lambda.ts`, #530). It takes a whole notebook per call, so it
+ *     is a one-shot driver: `executeNotebook` hands it the same staged file,
+ *     nbconvert argv and version probe it runs through a session, and reads
+ *     what comes back the same way (ruling D1).
  *
  * Selection follows the DB_DRIVER / BLOB_DRIVER pattern (`src/lib/db/
  * index.ts`, `src/lib/storage/index.ts`): EXECUTOR_DRIVER env var, lazy
@@ -21,7 +26,7 @@
 import type { Notebook } from '../notebook-author/cells.ts';
 import { PINNED_LIBRARIES, PYTHON_RUNTIME_VERSION } from '../notebook-author/prompt.ts';
 import { executorToolingPipSpecs, ExecutorSettingError, NotebookExecutionError } from './driver.ts';
-import type { ExecutorSession, NotebookExecutorDriver } from './driver.ts';
+import type { ExecutorSession, NotebookExecutorDriver, SessionExecutorDriver } from './driver.ts';
 
 export { ExecutorSettingError, NotebookExecutionError } from './driver.ts';
 
@@ -105,7 +110,7 @@ export function resolveExecutorTimeouts(
   return { sessionMs: sessionS * 1000, cellS };
 }
 
-export type ExecutorDriverName = 'vercel-sandbox' | 'container';
+export type ExecutorDriverName = 'vercel-sandbox' | 'container' | 'lambda';
 
 /**
  * Resolve the configured driver name. Exported for tests; the unknown-value
@@ -115,9 +120,9 @@ export function resolveExecutorDriverName(
   env: Record<string, string | undefined> = process.env,
 ): ExecutorDriverName {
   const driver = env[ENV_EXECUTOR_DRIVER] || 'vercel-sandbox';
-  if (driver === 'vercel-sandbox' || driver === 'container') return driver;
+  if (driver === 'vercel-sandbox' || driver === 'container' || driver === 'lambda') return driver;
   throw new Error(
-    `Unsupported EXECUTOR_DRIVER "${driver}" (expected "vercel-sandbox" or "container")`,
+    `Unsupported EXECUTOR_DRIVER "${driver}" (expected "vercel-sandbox", "container" or "lambda")`,
   );
 }
 
@@ -129,6 +134,11 @@ async function getDriver(): Promise<NotebookExecutorDriver> {
     if (name === 'container') {
       const { createContainerDriver } = await import('./container.ts');
       _driver = createContainerDriver();
+    } else if (name === 'lambda') {
+      // The only importer of the AWS Lambda SDK: it loads when this driver is
+      // selected and at no other time.
+      const { createLambdaDriver } = await import('./lambda.ts');
+      _driver = createLambdaDriver();
     } else {
       const { createVercelSandboxDriver } = await import('./vercel-sandbox.ts');
       _driver = createVercelSandboxDriver();
@@ -203,6 +213,53 @@ async function ensureScientificStack(session: ExecutorSession): Promise<void> {
   }
 }
 
+/** The one nbconvert command, for every driver: the staged notebook in, the executed one out. */
+function nbconvertCommand(notebookTimeoutS: number): { cmd: string; args: string[] } {
+  return {
+    cmd: 'jupyter',
+    args: [
+      'nbconvert',
+      '--to', 'notebook',
+      '--execute',
+      '--ExecutePreprocessor.timeout', String(notebookTimeoutS),
+      '--ExecutePreprocessor.allow_errors=False',
+      '--output', NOTEBOOK_OUT_PATH,
+      NOTEBOOK_IN_PATH,
+    ],
+  };
+}
+
+/** The one version probe, for every driver. */
+const VERSION_PROBE = {
+  cmd: 'python3',
+  args: [
+    '-c',
+    'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")',
+  ],
+} as const;
+
+/** nbconvert's non-zero exit, as the notebook route receives it from every driver. */
+function nbconvertFailed(exitCode: number, stderr: string): NotebookExecutionError {
+  return new NotebookExecutionError(`jupyter nbconvert failed (exit ${exitCode})`, { exitCode, stderr });
+}
+
+/** The executed notebook, from the bytes a driver read back. */
+function parseExecuted(buffer: Buffer | null): Notebook {
+  if (!buffer) {
+    throw new NotebookExecutionError(`executed notebook not found at ${NOTEBOOK_OUT_PATH}`);
+  }
+  try {
+    return JSON.parse(buffer.toString('utf8')) as Notebook;
+  } catch (parseErr) {
+    throw new NotebookExecutionError('executed notebook JSON parse error', { cause: parseErr });
+  }
+}
+
+/** The probe's reading, or the pinned version when it produced none. */
+function reportedPython(stdout: string | null): string {
+  return stdout === null ? PYTHON_RUNTIME_VERSION : stdout.trim() || PYTHON_RUNTIME_VERSION;
+}
+
 /**
  * Execute a notebook end-to-end via the configured executor driver.
  *
@@ -223,6 +280,19 @@ export async function executeNotebook(
   notebook: Notebook,
   opts: ExecuteNotebookOptions = {},
 ): Promise<ExecutionResult> {
+  return executeNotebookWith(await getDriver(), notebook, opts);
+}
+
+/**
+ * `executeNotebook` on a driver the caller supplies. The route never calls it;
+ * the parity harness does, to run the lambda leg against the runtime interface
+ * emulator through a client that signs nothing (scripts/executor-parity.mjs).
+ */
+export async function executeNotebookWith(
+  driver: NotebookExecutorDriver,
+  notebook: Notebook,
+  opts: ExecuteNotebookOptions = {},
+): Promise<ExecutionResult> {
   const snapshotId = opts.snapshotId ?? process.env[ENV_SNAPSHOT_ID];
   // Resolved on every run, before the driver starts anything: a malformed
   // setting refuses here and leaves no runtime behind.
@@ -230,9 +300,47 @@ export async function executeNotebook(
   const timeoutMs = opts.timeoutMs ?? configured.sessionMs;
   const notebookTimeoutS = opts.notebookTimeoutS ?? configured.cellS;
   const env = buildNotebookEnv(opts.extraEnv);
+  const nbconvert = nbconvertCommand(notebookTimeoutS);
   const startedAt = Date.now();
 
-  const driver = await getDriver();
+  if ('runNotebook' in driver) {
+    // One-shot (#530, ruling D1): the same file, argv and probe as the session
+    // path below, in one call, and the results read the same way.
+    const run = await driver.runNotebook({
+      files: [{ path: NOTEBOOK_IN_PATH, content: JSON.stringify(notebook) }],
+      command: { ...nbconvert, env },
+      readBack: NOTEBOOK_OUT_PATH,
+      versionProbe: { cmd: VERSION_PROBE.cmd, args: [...VERSION_PROBE.args] },
+      timeoutMs,
+      ...(opts.signal ? { signal: opts.signal } : {}),
+    });
+    if (run.exitCode !== 0) throw nbconvertFailed(run.exitCode, run.stderr);
+    return {
+      notebook: parseExecuted(run.executed),
+      sandboxId: run.id,
+      executionDuration_ms: Date.now() - startedAt,
+      pythonVersion: reportedPython(run.pythonVersion),
+      libraries: { ...PINNED_LIBRARIES },
+    };
+  }
+
+  return runInSession(driver, notebook, { snapshotId, timeoutMs, env, nbconvert, startedAt, signal: opts.signal });
+}
+
+async function runInSession(
+  driver: SessionExecutorDriver,
+  notebook: Notebook,
+  run: {
+    snapshotId: string | undefined;
+    timeoutMs: number;
+    env: Record<string, string>;
+    nbconvert: { cmd: string; args: string[] };
+    startedAt: number;
+    signal: AbortSignal | undefined;
+  },
+): Promise<ExecutionResult> {
+  const { snapshotId, timeoutMs, env, nbconvert, startedAt } = run;
+  const opts = { signal: run.signal };
   const session = await driver.createSession({ timeoutMs, env, snapshotId });
   try {
     // Without a preinstalled stack (fresh sandbox), pip-install the pins.
@@ -251,50 +359,21 @@ export async function executeNotebook(
     // every cell, and writes the executed copy to NOTEBOOK_OUT_PATH. Use a
     // generous per-cell timeout via --ExecutePreprocessor.timeout (seconds).
     const convertResult = await session.runCommand({
-      cmd: 'jupyter',
-      args: [
-        'nbconvert',
-        '--to', 'notebook',
-        '--execute',
-        '--ExecutePreprocessor.timeout', String(notebookTimeoutS),
-        '--ExecutePreprocessor.allow_errors=False',
-        '--output', NOTEBOOK_OUT_PATH,
-        NOTEBOOK_IN_PATH,
-      ],
+      cmd: nbconvert.cmd,
+      args: nbconvert.args,
       env,
       signal: opts.signal,
     });
     if (convertResult.exitCode !== 0) {
-      const stderr = await convertResult.stderr();
-      throw new NotebookExecutionError(
-        `jupyter nbconvert failed (exit ${convertResult.exitCode})`,
-        { exitCode: convertResult.exitCode, stderr },
-      );
+      throw nbconvertFailed(convertResult.exitCode, await convertResult.stderr());
     }
 
     // Read the executed notebook back as bytes, parse JSON.
-    const buffer = await session.readFileToBuffer(NOTEBOOK_OUT_PATH);
-    if (!buffer) {
-      throw new NotebookExecutionError(`executed notebook not found at ${NOTEBOOK_OUT_PATH}`);
-    }
-    let executed: Notebook;
-    try {
-      executed = JSON.parse(buffer.toString('utf8')) as Notebook;
-    } catch (parseErr) {
-      throw new NotebookExecutionError('executed notebook JSON parse error', { cause: parseErr });
-    }
+    const executed = parseExecuted(await session.readFileToBuffer(NOTEBOOK_OUT_PATH));
 
     // Capture runtime detail by asking the session what python it has.
-    const versionResult = await session.runCommand({
-      cmd: 'python3',
-      args: [
-        '-c',
-        'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")',
-      ],
-    });
-    const pythonVersion = versionResult.exitCode === 0
-      ? (await versionResult.stdout()).trim() || PYTHON_RUNTIME_VERSION
-      : PYTHON_RUNTIME_VERSION;
+    const versionResult = await session.runCommand({ cmd: VERSION_PROBE.cmd, args: [...VERSION_PROBE.args] });
+    const pythonVersion = reportedPython(versionResult.exitCode === 0 ? await versionResult.stdout() : null);
 
     return {
       notebook: executed,
