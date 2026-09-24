@@ -147,7 +147,7 @@ export interface ToolLoopOptions {
    */
   portal?: string;
   /**
-   * The one portal a locked instance serves (#436, ruling D7), or omitted when
+   * The one Socrata portal a locked instance serves (#436, ruling D7), or omitted when
    * the instance is not locked. When set, a `get_data` call naming another
    * portal (through `portal` or its alias `domain`) and a `fetch` whose
    * identifier names another portal are refused here as rejected calls: the

@@ -632,14 +632,14 @@ export async function composeSkillPrompt(
  * property; `src/lib/portal-lock.test.ts` holds this text to it).
  */
 export function portalLockGuidance(lockedPortal: string): string {
-  return `## ONE PORTAL ONLY
+  return `## ONE SOCRATA PORTAL ONLY
 
 This instance answers questions against one Socrata portal only: ${lockedPortal}. Anything above that describes querying other Socrata portals (any portal being reachable with get_data, naming patterns for other cities' portals, the tables of other portals and their datasets) does not apply on this instance:
 - get_data reaches ${lockedPortal} only. Leave its portal argument out; a call naming any other portal is refused and returns no data.
 - fetch accepts identifiers and URLs on ${lockedPortal} only; one naming any other portal is refused.
 - search covers the portal the data server is configured for.
 
-If a question asks for Socrata data about a place ${lockedPortal} does not cover, say so plainly instead of answering from another portal. This limit applies to Socrata portals; the other data sources described above are separate and keep their own scope.`;
+If a question asks for Socrata data about a place ${lockedPortal} does not cover, say so plainly instead of answering from another Socrata portal. This limit applies to Socrata portals only; the other data sources described above (Data Commons, and Boston OpenContext for Boston) are separate, remain available, and keep their own scope.`;
 }
 
 /**

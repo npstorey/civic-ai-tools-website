@@ -494,7 +494,7 @@ export const SOURCE_REFUSAL_FOR_LLM =
 
 /**
  * What the model is told when the loop core refused a call because it named a
- * portal other than the one a locked instance serves (#436, ruling D7). The
+ * portal other than the one Socrata portal a locked instance serves (#436, ruling D7). The
  * call was never sent. The locked portal is this instance's own configuration,
  * already named in the system prompt, so naming it here tells the model where
  * a request CAN go; the portal the call asked for is not repeated. No retry
@@ -502,9 +502,9 @@ export const SOURCE_REFUSAL_FOR_LLM =
  */
 export function portalLockRefusalForLlm(lockedPortal: string): string {
   return (
-    `${TOOL_FAILURE_PREAMBLE} This instance answers questions against one portal only, ${lockedPortal}, and this request named a different portal, so it was not sent.` +
-    ` Do not request any other portal. If the question can be answered from ${lockedPortal}, make that request instead;` +
-    ` if it cannot, tell the user in plain language that this instance covers ${lockedPortal} only, and do not include any raw error text, status codes, server names, or system details.`
+    `${TOOL_FAILURE_PREAMBLE} This instance queries one Socrata portal only, ${lockedPortal}, and this request named a different portal, so it was not sent.` +
+    ` Do not request any other Socrata portal. If the question can be answered from ${lockedPortal}, or from another data source you have tools for, make that request instead;` +
+    ` if it cannot, tell the user in plain language that this instance's Socrata data covers ${lockedPortal} only, and do not include any raw error text, status codes, server names, or system details.`
   );
 }
 

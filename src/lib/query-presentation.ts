@@ -109,10 +109,12 @@ export function isComparisonRunComplete(
  * clicking it selects the instance's configured portal (#407) — or '' ("All
  * portals") when none is configured.
  *
- * `crossPortal`: the example asks for a comparison ACROSS portals. A locked
- * instance serves one portal (`SITE_PORTAL_LOCKED`), so it does not offer
- * these: clicking one would send the reader a question the instance refuses to
- * answer from more than one portal.
+ * `crossPortal`: the example asks for a comparison across two cities. A locked
+ * instance queries one Socrata portal (`SITE_PORTAL_LOCKED`), so it does not
+ * offer these: a comparison of two cities' Socrata data is one it cannot
+ * answer. (Data Commons stays callable under the lock, so a locked instance
+ * can still answer the income comparison from that source; it is withheld with
+ * the other because it invites the same cross-city reading of the portal.)
  */
 export interface ExampleQuery {
   text: string;
@@ -135,7 +137,7 @@ export const EXAMPLE_QUERIES: readonly ExampleQuery[] = [
 
 /**
  * The suggested questions a form offers: all of them unlocked, and none that
- * compares portals when the instance is locked to one (#436). Unlocked, the
+ * compares two cities when the instance is locked to one Socrata portal (#436). Unlocked, the
  * list returned is `EXAMPLE_QUERIES` itself, so the form is unchanged.
  */
 export function offeredExampleQueries(portalLocked: boolean): readonly ExampleQuery[] {

@@ -253,7 +253,7 @@ export function getDefaultPortal(): string | null {
 // --- The one-portal switch (#436) -------------------------------------------
 
 /**
- * Whether this instance serves ONE portal: `SITE_PORTAL_LOCKED`, `1`/`true`
+ * Whether this instance serves ONE Socrata portal: `SITE_PORTAL_LOCKED`, `1`/`true`
  * (any case, trimmed) via `parseBooleanFlag`, anything else — unset included —
  * off. Read at call time, like `getDefaultPortal`, and for the same reason it
  * is never `NEXT_PUBLIC_*`: the root layout resolves it and threads it to the
@@ -270,7 +270,7 @@ export type RunPortalResolution =
       ok: true;
       /** The run's portal: injected into `get_data` calls that name none, and recorded on the root span. */
       portal: string | undefined;
-      /** Set only under the lock, to the one portal the loop core lets a call name. */
+      /** Set only under the lock, to the one Socrata portal the loop core lets a call name. */
       lockedPortal: string | undefined;
     }
   | { ok: false; refusal: PortalLockError };

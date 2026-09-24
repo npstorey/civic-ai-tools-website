@@ -46,7 +46,7 @@ import type { ScriptedReply } from './model-loop/test-harness.ts';
 const LOCKED = 'records.city-a.example';
 const FOREIGN = 'records.city-b.example';
 const QUESTION = 'How many noise complaints were filed last year?';
-const ANSWER = 'One figure was retrieved from the portal this instance serves.';
+const ANSWER = 'One figure was retrieved from the Socrata portal this instance serves.';
 const ONE_ROW = JSON.stringify({ data: [{ count: '4812' }], total_rows: 1 });
 
 const ENV_KEYS = [
@@ -158,6 +158,7 @@ test('#436 C1 (D1): lock on — a foreign portal is refused with a 400 whose rea
       assert.equal(resolution.refusal.status, 400);
       assert.ok(resolution.refusal.message.includes(LOCKED), resolution.refusal.message);
       assert.ok(resolution.refusal.message.includes(String(requested)), resolution.refusal.message);
+      assert.match(resolution.refusal.message, /one Socrata portal only/, 'the 400 claims more than a Socrata-portal lock');
       // It is the caller's copy: it must not read as a data-source or configuration failure.
       assert.equal(classifyStreamError(resolution.refusal.message), 'generic');
     }
@@ -364,6 +365,10 @@ test('#436 C3: the model is sent describeToolFailureForLlm\'s lock copy for each
   assert.match(expected, /Do not estimate, guess, or fabricate/);
   assert.doesNotMatch(expected, /\btr(y|ying|ies|ied) again\b|\bretry/i);
   assert.ok(!expected.includes(FOREIGN));
+  // Ruling D11: the lock is on Socrata portals; the other sources stay callable,
+  // so the model is not told the instance covers one portal of any kind.
+  assert.match(expected, /one Socrata portal only/);
+  assert.match(expected, /another data source/);
   for (const p of PLAN) {
     const sent = toolMessage(LOCKED_RUN, p.id);
     if (p.refused) assert.equal(sent, expected, `${p.id} was told something else:\n${sent}`);
@@ -452,6 +457,9 @@ test('#436 D7: the locked tool text names no other portal and does not send the 
   assert.match(unlockedText, /any OTHER portal/, 'premise: the unlocked search text sends the model to other portals');
   assert.doesNotMatch(text, /any OTHER portal/);
   assert.ok(text.includes(LOCKED));
+  // Ruling D11: no locked sentence claims the instance serves one portal of any kind.
+  assert.doesNotMatch(text, /serves one portal|the one portal this instance/);
+  assert.match(text, /one Socrata portal/);
 });
 
 test('#436 D7: the prompt gains one section under the lock, naming only callable tools; unlocked it is unchanged', () => {
@@ -460,6 +468,9 @@ test('#436 D7: the prompt gains one section under the lock, naming only callable
   assert.ok(locked.startsWith('PROMPT'));
   assert.ok(locked.endsWith(portalLockGuidance(LOCKED)));
   const section = portalLockGuidance(LOCKED);
+  // Ruling D11: the section limits Socrata portals and says the other sources remain.
+  assert.match(section, /^## ONE SOCRATA PORTAL ONLY/);
+  assert.match(section, /Boston OpenContext for Boston\) are separate, remain available/);
   const routable = Object.keys(buildMcpRegistry({
     socrataUrl: 'https://socrata.invalid',
     dataCommonsUrl: 'https://data-commons.invalid',

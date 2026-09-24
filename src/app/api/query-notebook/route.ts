@@ -454,7 +454,7 @@ async function runPhaseA(args: {
    *  and the caller supplied none (#407). `runToolLoop` injects it only when
    *  it has one, so an absent portal leaves each call naming its own. */
   portal?: string;
-  /** The one portal a locked instance serves (#436), or absent when unlocked. */
+  /** The one Socrata portal a locked instance serves (#436), or absent when unlocked. */
   lockedPortal?: string;
   model: ModelIdentity;
   emit: (event: NotebookEvent) => Promise<void>;

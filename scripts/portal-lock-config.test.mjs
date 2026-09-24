@@ -48,6 +48,9 @@ test('#436 C5: preflight declares the switch, read at build and at run time, off
   assert.equal(lock.tier, 'optional');
   assert.equal(lock.hasFallback, true);
   assert.equal(entry('SITE_DEFAULT_PORTAL').requiredWhenFlagOn, 'SITE_PORTAL_LOCKED');
+  // Ruling D11: the operator is told the lock is a Socrata-portal lock.
+  assert.match(lock.purpose, /only Socrata portal/);
+  assert.doesNotMatch(lock.purpose, /the only portal/);
 });
 
 test('#436 C5: the preflight parses the switch exactly as the app does', () => {
@@ -91,7 +94,9 @@ test('#436 C5: docs/deploy.md states the switch and the boundary it does not cro
   const doc = repo('docs/deploy.md');
   const row = doc.split('\n').find((line) => line.startsWith('| `SITE_PORTAL_LOCKED` |'));
   assert.ok(row, 'docs/deploy.md has no SITE_PORTAL_LOCKED row');
-  for (const needle of ['`search`', 'bare dataset id', 'notebook', 'replay', '400', 'SITE_DEFAULT_PORTAL', '`domain`', 'rejected']) {
+  // Ruling D11: the lock covers the Socrata portal only; the row says so and
+  // names the Boston source that stays callable.
+  for (const needle of ['`search`', 'bare dataset id', 'notebook', 'replay', '400', 'SITE_DEFAULT_PORTAL', '`domain`', 'rejected', 'the only Socrata portal this instance queries', 'Boston OpenContext']) {
     assert.ok(row.includes(needle), `the SITE_PORTAL_LOCKED row does not mention ${needle}`);
   }
 });

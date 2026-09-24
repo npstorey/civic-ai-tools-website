@@ -324,7 +324,7 @@ export const ENV_SPEC = [
   // form (which drops its portal picker and cross-portal examples when on),
   // and prerendered pages bake what the layout resolved. The routes and the
   // loop read it at request time and enforce it whatever a page rendered.
-  { name: 'SITE_PORTAL_LOCKED', readBy: 'build-and-runtime', tier: 'optional', purpose: "Serve ONE portal: '1'/'true' makes SITE_DEFAULT_PORTAL the only portal the query routes and the model's data calls use; a request or call naming another is refused. Off by default", hasFallback: true },
+  { name: 'SITE_PORTAL_LOCKED', readBy: 'build-and-runtime', tier: 'optional', purpose: "Serve ONE Socrata portal: '1'/'true' makes SITE_DEFAULT_PORTAL the only Socrata portal the query routes and the model's get_data/fetch calls use; a request or call naming another is refused. Data Commons and Boston OpenContext stay outside it. Off by default", hasFallback: true },
 
   // --- Record publish + verify (the demo centerpiece: publish → badge) ---
   { name: 'DATABASE_URL', tier: 'required', purpose: 'Record DB — publish + dashboard + detail page' },

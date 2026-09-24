@@ -480,7 +480,7 @@ function lockedGetData(lockedPortal: string): FunctionTool {
     ...base,
     function: {
       ...base.function,
-      description: `Unified Socrata open data access tool for ${lockedPortal}, the one portal this instance serves. Supports multiple operation types:
+      description: `Unified Socrata open data access tool for ${lockedPortal}, the one Socrata portal this instance serves. Supports multiple operation types:
 - catalog: Search ${lockedPortal}'s catalog for datasets matching a query
 - metadata: Get detailed metadata about a specific dataset
 - query: Execute a SoQL query against a dataset to fetch and filter data
@@ -505,7 +505,7 @@ Examples:
           portal: {
             type: 'string',
             enum: [lockedPortal],
-            description: `The one portal this instance serves, ${lockedPortal}. Optional: omitted, the call goes there anyway. Any other value is refused.`,
+            description: `The one Socrata portal this instance serves, ${lockedPortal}. Optional: omitted, the call goes there anyway. Any other value is refused.`,
           },
         },
       },
@@ -525,7 +525,7 @@ Returns, per hit: an "id" of the form dataset:<portal>:<dataset_id>, the title, 
 
 WHICH TOOL TO USE:
 - This tool searches ONE portal: the one the server is configured with. It takes no portal argument.
-- This instance serves one portal only, ${lockedPortal}. To search its catalog by name, get_data with { "type": "catalog", "query": "..." } also works. No other portal can be queried here.`,
+- This instance queries one Socrata portal only, ${lockedPortal}. To search its catalog by name, get_data with { "type": "catalog", "query": "..." } also works. No other Socrata portal can be queried here.`,
     },
   };
 }
@@ -539,7 +539,7 @@ function lockedFetch(lockedPortal: string): FunctionTool {
       ...base.function,
       description: `${base.function.description}
 
-This instance serves one portal only, ${lockedPortal}: an identifier or URL naming any other portal is refused and returns no data.`,
+This instance queries one Socrata portal only, ${lockedPortal}: an identifier or URL naming any other portal is refused and returns no data.`,
       parameters: {
         ...baseParameters,
         properties: {
@@ -559,7 +559,8 @@ This instance serves one portal only, ${lockedPortal}: an identifier or URL nami
  * The tool schemas for a run: `mcpTools` itself when the instance is not
  * locked (the same array, so an unlocked run sends byte-for-byte what it sent
  * before #436), else the same tools with the three Socrata descriptions and
- * `get_data`'s `portal` property rewritten for the one portal it serves.
+ * `get_data`'s `portal` property rewritten for the one Socrata portal it
+ * serves. The Data Commons and Boston OpenContext tools are unchanged.
  */
 export function mcpToolsFor(lockedPortal?: string): ChatCompletionTool[] {
   if (!lockedPortal) return mcpTools;

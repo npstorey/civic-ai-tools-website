@@ -265,7 +265,7 @@ export default function RootLayout({
               the downloaded notebook. Null means this instance declared no
               default: the run carries none and every surface omits rather
               than naming one deployment's city. */}
-          {/* …and whether it is the ONLY portal (SITE_PORTAL_LOCKED, #436):
+          {/* …and whether it is the ONLY Socrata portal (SITE_PORTAL_LOCKED, #436):
               locked, the form offers no portal picker and no cross-portal
               example. The routes enforce the lock either way. */}
           <DefaultPortalProvider value={getDefaultPortal()} locked={isPortalLocked()}>

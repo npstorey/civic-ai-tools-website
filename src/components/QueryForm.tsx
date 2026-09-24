@@ -94,7 +94,7 @@ export default function QueryForm({
   // (#407) — server-resolved, threaded through the root layout.
   const defaultPortal = useDefaultPortalArg();
   // SITE_PORTAL_LOCKED, server-resolved like the default portal (#436). Locked,
-  // the instance serves its configured portal only: no picker, no
+  // the instance serves its configured Socrata portal only: no picker, no
   // cross-portal examples, and every request goes out with '' or that portal,
   // both of which the routes resolve to it.
   const portalLocked = usePortalLocked();

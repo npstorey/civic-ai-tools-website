@@ -3,8 +3,8 @@
  * functions so the routes, the loop core and the tests share one reading.
  *
  * `SITE_PORTAL_LOCKED` (read by `isPortalLocked()` in `site-config.ts`) makes
- * the configured portal (`SITE_DEFAULT_PORTAL`) the only portal an instance
- * queries. The lock is enforced in two places, because a portal reaches a run
+ * the configured portal (`SITE_DEFAULT_PORTAL`) the only Socrata portal an
+ * instance queries. The lock is enforced in two places, because a portal reaches a run
  * in two ways:
  *
  *   1. THE REQUEST. A query route resolves its run portal through
@@ -27,9 +27,10 @@
  *     server the same way;
  *   - code the model writes into an executed notebook;
  *   - record replay, which derives its portal from the record it replays.
- * The other data sources (Data Commons, Boston OpenContext) are separate
- * servers with their own tools; they take no Socrata portal argument and are
- * not governed by this switch either.
+ * The other data sources (Data Commons, and Boston OpenContext, which fronts
+ * the City of Boston's own portal) are separate servers with their own tools;
+ * they take no Socrata portal argument, stay callable under the lock, and are
+ * not governed by this switch (ruling D11).
  *
  * No Next.js imports and relative, extension-bearing imports only: this module
  * is loaded by the loop core under `node --test` and by client components.
@@ -49,8 +50,8 @@ export type PortalLockReason = 'foreign_portal' | 'portal_not_configured';
  * who gets the generic copy instead (#436: no reader-copy kind of its own).
  */
 export const PORTAL_LOCK_NOT_CONFIGURED_MESSAGE =
-  'SITE_PORTAL_LOCKED is on, but SITE_DEFAULT_PORTAL is missing or empty in the server environment, so this instance has no portal to lock to ' +
-  'and refuses every query rather than answer against a portal nobody configured. Set SITE_DEFAULT_PORTAL to the one portal this instance serves ' +
+  'SITE_PORTAL_LOCKED is on, but SITE_DEFAULT_PORTAL is missing or empty in the server environment, so this instance has no Socrata portal to lock to ' +
+  'and refuses every query rather than answer against a portal nobody configured. Set SITE_DEFAULT_PORTAL to the one Socrata portal this instance serves ' +
   '(a bare hostname), or turn SITE_PORTAL_LOCKED off, and restart the server.';
 
 /**
@@ -88,7 +89,7 @@ export function foreignPortalError(requested: string, configured: string): Porta
   const quoted = requested.trim().slice(0, MAX_QUOTED_PORTAL);
   return new PortalLockError(
     'foreign_portal',
-    `This instance answers questions against one portal only, ${configured}, and this request named ${quoted}. ` +
+    `This instance queries one Socrata portal only, ${configured}, and this request named ${quoted}. ` +
       `Send the request with no portal, or with ${configured}.`,
   );
 }
@@ -112,11 +113,11 @@ export function portalNotConfiguredError(): PortalLockError {
  * cause it cannot state in its closed vocabulary.
  */
 export class PortalLockedCallError extends Error {
-  /** The one portal this instance serves — what the model is told to use instead. */
+  /** The one Socrata portal this instance serves — what the model is told to use instead. */
   readonly lockedPortal: string;
 
   constructor(lockedPortal: string) {
-    super('This call names a portal other than the one this instance is locked to, so it was not sent.');
+    super('This call names a Socrata portal other than the one this instance is locked to, so it was not sent.');
     this.name = 'PortalLockedCallError';
     this.lockedPortal = lockedPortal;
   }

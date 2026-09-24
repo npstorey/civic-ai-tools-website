@@ -96,7 +96,7 @@ export interface CompareLoopInputs {
    */
   portal?: string;
   /**
-   * The one portal a locked instance serves (#436), or omitted when the
+   * The one Socrata portal a locked instance serves (#436), or omitted when the
    * instance is not locked. Selects the locked tool text and is handed to the
    * core, which refuses a call naming another portal as a rejected call.
    */

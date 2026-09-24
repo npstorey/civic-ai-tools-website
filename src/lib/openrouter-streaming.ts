@@ -335,7 +335,7 @@ export async function queryWithMcpStreaming(
   trace?: TraceContext,
   toolCallOptions?: ToolCallOptions,
   /**
-   * The one portal a locked instance serves (#436), from `resolveRunPortal`;
+   * The one Socrata portal a locked instance serves (#436), from `resolveRunPortal`;
    * omitted on an unlocked instance. Handed to the loop core, which refuses a
    * call naming another portal as a rejected call (`ToolLoopOptions.lockedPortal`).
    */
