@@ -412,3 +412,65 @@ jobs:
 
           docker rm -f ro-with ro-without >/dev/null 2>&1 || true
           exit $status
+
+  # THE EXECUTOR IMAGE (#490). docker/executor/Dockerfile builds the image the
+  # `container` notebook-executor driver runs model-written code in. Until this
+  # job, nothing built it in CI: src/lib/sandbox/executor-pins.test.ts and
+  # container.test.ts read the Dockerfile's text, and a file can name the right
+  # pins, a USER and a warm step in the right order and still build an image
+  # that carries other versions, runs as root, or leaves the font cache cold.
+  # This job builds the image and reads the image.
+  #
+  # Every step calls scripts/executor-image-check.mjs, which reads the expected
+  # versions from the pin tables themselves (PINNED_LIBRARIES,
+  # PYTHON_RUNTIME_VERSION, EXECUTOR_TOOLING_PACKAGES) and runs the same way
+  # on a developer machine. Its header says what each check can fail on and
+  # what it cannot see. The checks run whenever the build succeeded, each on
+  # its own, so one red does not hide another.
+  #
+  # NO PATHS FILTER, deliberately, for the same reason as the job above: the
+  # image depends on the pin tables in src/ as well as on docker/executor, and
+  # on PyPI, which changes without a commit here.
+  #
+  # Credential-free like the rest of this workflow: no `secrets.`, no `env:`,
+  # no registry login. The build downloads the base image from Docker Hub and
+  # the pinned packages from PyPI anonymously, so an outage of either fails
+  # this job the way an npm registry outage fails `npm ci` above. No `npm ci`
+  # here: the check imports only the two pin tables, which need no dependency.
+  #
+  # ADVISORY until the owner adds it to the ruleset (#518, ruling D4): it
+  # becomes a required check only if its measured runner time is 5 minutes or
+  # less. Its name below is the check's name; do not rename it casually.
+  executor-image:
+    name: executor image build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Build the executor image
+        id: build
+        run: node --experimental-strip-types scripts/executor-image-check.mjs build
+
+      - name: Every pinned version is the one pip freeze reports
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node --experimental-strip-types scripts/executor-image-check.mjs pins
+
+      - name: The pinned set is consistent and every pin imports
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node --experimental-strip-types scripts/executor-image-check.mjs imports
+
+      - name: The default user is not root
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node --experimental-strip-types scripts/executor-image-check.mjs user
+
+      - name: The font cache is warm for that user
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node --experimental-strip-types scripts/executor-image-check.mjs font-cache
+
+      - name: The parity notebook executes through the container driver
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node --experimental-strip-types scripts/executor-image-check.mjs parity
