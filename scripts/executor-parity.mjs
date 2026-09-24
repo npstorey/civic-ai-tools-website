@@ -165,7 +165,7 @@ async function commandRun(argv) {
 
   // Select the driver BEFORE the seam module loads its lazy singleton.
   process.env.EXECUTOR_DRIVER = driver;
-  const { executeNotebook, NotebookExecutionError } = await import(
+  const { executeNotebook, NotebookExecutionError, resolveExecutorTimeouts } = await import(
     '../src/lib/sandbox/execute.ts'
   );
 
@@ -191,7 +191,8 @@ async function commandRun(argv) {
       return;
     }
     if (expect === 'timeout') {
-      const cap = timeoutMs ?? 180_000;
+      // The cap the run was given: --timeout-ms, else EXECUTOR_SESSION_TIMEOUT_S (#530).
+      const cap = timeoutMs ?? resolveExecutorTimeouts().sessionMs;
       const slack = 30_000; // boot + kill latency headroom
       if (elapsed > cap + slack) {
         console.error(

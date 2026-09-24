@@ -247,6 +247,10 @@ services:
       S3_FORCE_PATH_STYLE:
       EXECUTOR_DRIVER: container
       EXECUTOR_CONTAINER_IMAGE: ${EXECUTOR_CONTAINER_IMAGE:-civic-notebook-executor:0.2.0}
+      # Executor settings (#530): bare, so an unset variable stays unset and
+      # the default applies. docs/deploy.md, "Executor settings".
+      EXECUTOR_SESSION_TIMEOUT_S:
+      EXECUTOR_CELL_TIMEOUT_S:
       # --- instance identity (ADR-0020; neutral local values) ---
       # Each reads your canonical name, then your prior-era one, then the
       # neutral local default — so renaming your env file is optional and a

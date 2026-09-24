@@ -552,6 +552,32 @@ use (and fails the preflight). What the defaults hide:
   `EXECUTOR_CONTAINER_IMAGE` overrides the image tag (default
   `civic-notebook-executor:0.2.0`).
 
+### Executor settings
+
+Every setting below is optional, and unset (or blank) means the behaviour the
+executor had before the setting existed. The compose file passes each one
+through bare, so a variable your env file does not set stays unset.
+
+A value is checked before the executor starts anything. A value that is not
+of its setting's shape is refused at the first notebook run, not corrected:
+the run fails with an `ExecutorSettingError` naming the variable, the server
+log names that class, and the reader sees the usual notebook-failure message
+with its reference id.
+
+**Timeouts, for every driver:**
+
+| Variable | Unset | What it sets |
+| --- | --- | --- |
+| `EXECUTOR_SESSION_TIMEOUT_S` | `180` | The session cap: the wall-clock limit on the whole run, including the sandbox or container start, staging, every cell and read-back. A run past it is stopped and fails. Whole seconds, 1 to 86400. |
+| `EXECUTOR_CELL_TIMEOUT_S` | `120` | The per-cell limit, handed to nbconvert as `--ExecutePreprocessor.timeout`. Whole seconds, 1 to 86400. |
+
+The session cap must be greater than the per-cell limit; a cap at or below it
+is refused. The cap also covers the start and the read-back, so a cap at the
+per-cell limit would stop a notebook before its slowest permitted cell could
+finish. Leave a margin for the start: a cold container or sandbox takes
+seconds, not milliseconds. Under `vercel-sandbox` the cap is the sandbox's own
+timeout, and the platform bounds that by your plan's maximum.
+
 ### The model seam
 
 The model endpoint is a seam too, but external by design — a network

@@ -154,3 +154,22 @@ export class NotebookExecutionError extends Error {
     if (opts.cause) (this as { cause?: unknown }).cause = opts.cause;
   }
 }
+
+/**
+ * Refused before the executor starts anything (#530, ruling D7): an executor
+ * setting whose value is not of its shape, or a session cap not above the
+ * per-cell limit. A `NotebookExecutionError`, so the notebook route logs its
+ * class and exit code and shows the reader the correlation-id copy, as it does
+ * for `ContainerProxyUserinfoError`. The message names the variable and the
+ * shape it expects, never the value: a value is corrected, not clamped, and
+ * the operator who set it knows what it was.
+ */
+export class ExecutorSettingError extends NotebookExecutionError {
+  /** The variable whose value was refused. */
+  readonly variable: string;
+  constructor(variable: string, message: string) {
+    super(message);
+    this.name = 'ExecutorSettingError';
+    this.variable = variable;
+  }
+}

@@ -355,6 +355,13 @@ export const ENV_SPEC = [
   // fallback-backed under both (container.ts:47 → DEFAULT_CONTAINER_IMAGE), so
   // it carries no condition: it is never a miss and never a nag either way.
   { name: 'EXECUTOR_CONTAINER_IMAGE', tier: 'optional', purpose: 'Executor image tag (EXECUTOR_DRIVER=container only; default civic-notebook-executor:0.2.0)', hasFallback: true },
+  // The session cap and the per-cell limit (#530, ruling D7), read by
+  // resolveExecutorTimeouts (src/lib/sandbox/execute.ts) under every driver.
+  // Fallback-backed (180 and 120, the constants they replaced), so no tier
+  // promotion and no condition. A malformed value, or a cap not above the
+  // per-cell limit, refuses at the first execution rather than being corrected.
+  { name: 'EXECUTOR_SESSION_TIMEOUT_S', tier: 'optional', purpose: 'Notebook session cap in whole seconds, every executor driver: start, staging, every cell and read-back (default 180; must be greater than EXECUTOR_CELL_TIMEOUT_S; at most 86400)', hasFallback: true },
+  { name: 'EXECUTOR_CELL_TIMEOUT_S', tier: 'optional', purpose: 'Per-cell limit in whole seconds, every executor driver: nbconvert ExecutePreprocessor.timeout (default 120)', hasFallback: true },
   // Passed into every executed notebook's env by buildNotebookEnv
   // (src/lib/sandbox/execute.ts), under BOTH executor drivers — read by the
   // generated notebook's own helper functions (fetch_socrata.py,

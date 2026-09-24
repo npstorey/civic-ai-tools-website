@@ -115,7 +115,7 @@ process.env.PATH = `${dir}${delimiter}${process.env.PATH ?? ''}`;
 process.env.EXECUTOR_DRIVER = 'container';
 
 // Loaded after EXECUTOR_DRIVER is set: the seam picks its driver on first use.
-const { executeNotebook, NotebookExecutionError } = await import('./execute.ts');
+const { executeNotebook, NotebookExecutionError, resolveExecutorTimeouts } = await import('./execute.ts');
 
 before(() => rmSync(LOG, { force: true }));
 after(() => {
@@ -268,6 +268,14 @@ test('a blank setting is the default', async () => {
   assert.equal(error, undefined, `the run failed: ${String(error)}`);
   assert.deepEqual(calls.map((call) => call.bin), calls.map(() => 'docker'));
   assert.deepEqual(calls.map((call) => call.args), argvAt6162e41());
+});
+
+test('unset, the timeouts are the constants main carried: a 180 s cap and a 120 s cell limit', () => {
+  assert.deepEqual(resolveExecutorTimeouts({}), { sessionMs: 180_000, cellS: 120 });
+  assert.deepEqual(resolveExecutorTimeouts({ EXECUTOR_SESSION_TIMEOUT_S: '', EXECUTOR_CELL_TIMEOUT_S: ' ' }), {
+    sessionMs: 180_000,
+    cellS: 120,
+  });
 });
 
 // --- the guards ---------------------------------------------------------------
