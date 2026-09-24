@@ -163,10 +163,22 @@ async function run(vars: Record<string, string> = {}): Promise<{ calls: Call[]; 
 const VERSION_PROBE =
   'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")';
 
-/** Every invocation a run made at 6162e41, in order, byte for byte. */
-function argvAt6162e41(cellTimeout = '120', runFlags: string[] = []): string[][] {
+/** Where the matplotlib cache goes, and is seeded to, under EXECUTOR_CONTAINER_USER. */
+const WRITABLE_MPLCONFIGDIR = '/tmp/matplotlib';
+/** The executor image's own MPLCONFIGDIR, read from its Dockerfile: the warm cache a seed copies. */
+const IMAGE_MPLCONFIGDIR = /MPLCONFIGDIR=(\S+)/.exec(
+  readFileSync(new URL('../../../docker/executor/Dockerfile', import.meta.url), 'utf8'),
+)?.[1];
+
+/**
+ * Every invocation a run made at 6162e41, in order, byte for byte. With `seed`,
+ * the one exec EXECUTOR_CONTAINER_USER adds after `run`: the image's warm
+ * matplotlib cache copied to a path any user can write.
+ */
+function argvAt6162e41(cellTimeout = '120', runFlags: string[] = [], seed = false): string[][] {
   return [
     ['run', '-d', '--rm', ...runFlags, 'civic-notebook-executor:0.2.0', 'sleep', 'infinity'],
+    ...(seed ? [['exec', CONTAINER_ID, 'cp', '-R', String(IMAGE_MPLCONFIGDIR), WRITABLE_MPLCONFIGDIR]] : []),
     ['exec', '-i', CONTAINER_ID, 'sh', '-c', `cat > '/tmp/notebook.ipynb'`],
     [
       'exec', CONTAINER_ID, 'jupyter', 'nbconvert', '--to', 'notebook', '--execute',
@@ -211,13 +223,23 @@ test('EXECUTOR_SESSION_TIMEOUT_S is the wall-clock cap: the session is killed wh
   assert.ok(kills.length >= 1, 'no kill was issued');
 });
 
-/** Each container setting, one value away from its default, and the run flags it must produce. */
-const CONTAINER_CASES: Array<{ vars: Record<string, string>; flags: string[] }> = [
+/**
+ * Each container setting, one value away from its default, and the run flags it
+ * must produce. `seed` marks the one that also adds the cache-seeding exec.
+ */
+const CONTAINER_CASES: Array<{ vars: Record<string, string>; flags: string[]; seed?: boolean }> = [
   { vars: { EXECUTOR_CONTAINER_MEMORY: '2g' }, flags: ['--memory', '2g'] },
   { vars: { EXECUTOR_CONTAINER_CPUS: '1.5' }, flags: ['--cpus', '1.5'] },
   { vars: { EXECUTOR_CONTAINER_PIDS_LIMIT: '256' }, flags: ['--pids-limit', '256'] },
   { vars: { EXECUTOR_CONTAINER_NETWORK: 'notebook-egress' }, flags: ['--network', 'notebook-egress'] },
-  { vars: { EXECUTOR_CONTAINER_USER: '10001:10001' }, flags: ['--user', '10001:10001'] },
+  // Any user but the image's own cannot write the image's matplotlib cache, and
+  // matplotlib then writes a warning into the notebook's output. So a set user
+  // also gets a writable cache, seeded from the image's warm one.
+  {
+    vars: { EXECUTOR_CONTAINER_USER: '10001:10001' },
+    flags: ['--user', '10001:10001', '-e', `MPLCONFIGDIR=${WRITABLE_MPLCONFIGDIR}`],
+    seed: true,
+  },
   { vars: { EXECUTOR_CONTAINER_RUNTIME: 'runsc' }, flags: ['--runtime', 'runsc'] },
   {
     vars: { EXECUTOR_CONTAINER_HARDENED: '1' },
@@ -225,14 +247,22 @@ const CONTAINER_CASES: Array<{ vars: Record<string, string>; flags: string[] }> 
   },
 ];
 
-for (const { vars, flags } of CONTAINER_CASES) {
+for (const { vars, flags, seed } of CONTAINER_CASES) {
   const [name] = Object.keys(vars);
-  test(`${name} adds ${flags.join(' ')} to docker run, and changes nothing else`, async () => {
+  const also = seed ? ', seeds the matplotlib cache' : '';
+  test(`${name} adds ${flags.join(' ')} to docker run${also}, and changes nothing else`, async () => {
     const { calls, error } = await run(vars);
     assert.equal(error, undefined, `the run failed: ${String(error)}`);
-    assert.deepEqual(calls.map((call) => call.args), argvAt6162e41('120', flags));
+    assert.deepEqual(calls.map((call) => call.args), argvAt6162e41('120', flags, seed));
   });
 }
+
+test("the cache seed copies from the MPLCONFIGDIR the executor image sets", () => {
+  // If the Dockerfile moves its cache, the seed must move with it, or a set
+  // user gets a cold cache and a notebook that logs at INFO gains a line.
+  assert.ok(IMAGE_MPLCONFIGDIR, 'docker/executor/Dockerfile sets no MPLCONFIGDIR, so the seed has no source');
+  assert.match(IMAGE_MPLCONFIGDIR, /^\/home\/notebook\//, 'the image cache is not under the image user\'s home');
+});
 
 test('all the run settings together, in their fixed order before the image', async () => {
   const vars = Object.assign({}, ...CONTAINER_CASES.map((c) => c.vars)) as Record<string, string>;
