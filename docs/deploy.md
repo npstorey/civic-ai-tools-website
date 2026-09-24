@@ -578,6 +578,31 @@ finish. Leave a margin for the start: a cold container or sandbox takes
 seconds, not milliseconds. Under `vercel-sandbox` the cap is the sandbox's own
 timeout, and the platform bounds that by your plan's maximum.
 
+**The container executor (`EXECUTOR_DRIVER=container`):**
+
+| Variable | Unset | What it sets |
+| --- | --- | --- |
+| `EXECUTOR_CONTAINER_CLI` | `docker` | The CLI every invocation spawns: a name found on `PATH`, or a path. Any CLI that takes `run -d --rm`, `exec -i`, `exec -e NAME` and `kill` as `docker` does (`podman` does). |
+| `EXECUTOR_CONTAINER_MEMORY` | no limit | `docker run --memory`, for example `2g`. |
+| `EXECUTOR_CONTAINER_CPUS` | no limit | `docker run --cpus`, for example `1.5`. |
+| `EXECUTOR_CONTAINER_PIDS_LIMIT` | the runtime's default | `docker run --pids-limit`: the most processes a notebook can start. |
+| `EXECUTOR_CONTAINER_NETWORK` | the runtime's default network | `docker run --network`: the network each notebook container joins, for example one whose only way out is your egress proxy. A notebook fetches its data live, so a network with no route to the data portal fails every notebook. |
+| `EXECUTOR_CONTAINER_USER` | the image's user, uid `10001` | `docker run --user`. The image's matplotlib cache belongs to uid `10001`. Measured: under any other user, a notebook that imports matplotlib gains a "created a temporary cache directory" warning in its output, and that output is part of the signed record. Set it only to `10001`, or to the user an image of your own prepares. |
+| `EXECUTOR_CONTAINER_RUNTIME` | the runtime's default | `docker run --runtime`, for example `runsc` for gVisor. The runtime must be installed on the host. |
+| `EXECUTOR_CONTAINER_HARDENED` | off | `1` or `true` adds `--cap-drop ALL --security-opt no-new-privileges` to `docker run`. `0` or `false` leaves it off. The notebook needs no Linux capability. |
+
+The flags go between `--rm` and the image, in the order above. No setting
+takes free-form arguments, and a value that starts with `-` or contains
+whitespace is refused, so no setting can add an argument of its own. The CLI
+inherits the app's environment, so its own variables (`DOCKER_HOST`,
+`DOCKER_CONTEXT`, `CONTAINER_HOST` for podman) apply as they would in a
+shell.
+
+There is no read-only-root setting yet. Measured: under a read-only root the
+image's matplotlib cache cannot be written, and a notebook that imports
+matplotlib gains the same warning in its signed output. That needs the cache
+moved to a writable path first.
+
 ### The model seam
 
 The model endpoint is a seam too, but external by design — a network

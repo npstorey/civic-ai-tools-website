@@ -251,6 +251,14 @@ services:
       # the default applies. docs/deploy.md, "Executor settings".
       EXECUTOR_SESSION_TIMEOUT_S:
       EXECUTOR_CELL_TIMEOUT_S:
+      EXECUTOR_CONTAINER_CLI:
+      EXECUTOR_CONTAINER_MEMORY:
+      EXECUTOR_CONTAINER_CPUS:
+      EXECUTOR_CONTAINER_PIDS_LIMIT:
+      EXECUTOR_CONTAINER_NETWORK:
+      EXECUTOR_CONTAINER_USER:
+      EXECUTOR_CONTAINER_RUNTIME:
+      EXECUTOR_CONTAINER_HARDENED:
       # --- instance identity (ADR-0020; neutral local values) ---
       # Each reads your canonical name, then your prior-era one, then the
       # neutral local default — so renaming your env file is optional and a

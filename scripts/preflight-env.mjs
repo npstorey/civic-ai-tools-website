@@ -362,6 +362,20 @@ export const ENV_SPEC = [
   // per-cell limit, refuses at the first execution rather than being corrected.
   { name: 'EXECUTOR_SESSION_TIMEOUT_S', tier: 'optional', purpose: 'Notebook session cap in whole seconds, every executor driver: start, staging, every cell and read-back (default 180; must be greater than EXECUTOR_CELL_TIMEOUT_S; at most 86400)', hasFallback: true },
   { name: 'EXECUTOR_CELL_TIMEOUT_S', tier: 'optional', purpose: 'Per-cell limit in whole seconds, every executor driver: nbconvert ExecutePreprocessor.timeout (default 120)', hasFallback: true },
+  // The container executor's settings (#530, ruling D7), read by
+  // resolveContainerSettings (src/lib/sandbox/container.ts). Like
+  // EXECUTOR_CONTAINER_IMAGE above, each is inert under the other drivers and
+  // fallback-backed under this one (unset leaves the argv as it was), so no
+  // condition: never a miss and never a nag. A value not of its shape refuses
+  // the session before any CLI call.
+  { name: 'EXECUTOR_CONTAINER_CLI', tier: 'optional', purpose: 'Container CLI the executor spawns (EXECUTOR_DRIVER=container only; a name on PATH or a path, e.g. podman; default docker)', hasFallback: true },
+  { name: 'EXECUTOR_CONTAINER_MEMORY', tier: 'optional', purpose: 'Memory limit for each notebook container, as docker run --memory (EXECUTOR_DRIVER=container only; e.g. 2g; unset: no limit)', hasFallback: true },
+  { name: 'EXECUTOR_CONTAINER_CPUS', tier: 'optional', purpose: 'CPU limit for each notebook container, as docker run --cpus (EXECUTOR_DRIVER=container only; e.g. 1.5; unset: no limit)', hasFallback: true },
+  { name: 'EXECUTOR_CONTAINER_PIDS_LIMIT', tier: 'optional', purpose: 'Process limit for each notebook container, as docker run --pids-limit (EXECUTOR_DRIVER=container only; unset: the runtime default)', hasFallback: true },
+  { name: 'EXECUTOR_CONTAINER_NETWORK', tier: 'optional', purpose: 'Network each notebook container joins, as docker run --network (EXECUTOR_DRIVER=container only; unset: the runtime default network)', hasFallback: true },
+  { name: 'EXECUTOR_CONTAINER_USER', tier: 'optional', purpose: 'User each notebook container runs as, as docker run --user (EXECUTOR_DRIVER=container only; unset: the image user, uid 10001)', hasFallback: true },
+  { name: 'EXECUTOR_CONTAINER_RUNTIME', tier: 'optional', purpose: 'OCI runtime for each notebook container, as docker run --runtime (EXECUTOR_DRIVER=container only; e.g. runsc; unset: the runtime default)', hasFallback: true },
+  { name: 'EXECUTOR_CONTAINER_HARDENED', tier: 'optional', purpose: 'Set to 1 or true to start each notebook container with --cap-drop ALL and --security-opt no-new-privileges (EXECUTOR_DRIVER=container only; unset: off)', hasFallback: true },
   // Passed into every executed notebook's env by buildNotebookEnv
   // (src/lib/sandbox/execute.ts), under BOTH executor drivers — read by the
   // generated notebook's own helper functions (fetch_socrata.py,
