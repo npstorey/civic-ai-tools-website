@@ -473,10 +473,14 @@ export const ENV_SPEC = [
 
   // --- Egress proxy (#468). The conventional three, read once at server
   //     start by src/lib/outbound-proxy.ts, which installs the one global
-  //     fetch dispatcher. That dispatcher reaches only calls that do not bring
-  //     their own transport: the sign-in provider's calls (node:https) and the
-  //     vercel-sandbox executor's API calls (fetch with the SDK's own
-  //     dispatcher) are outside it; docs/deploy.md has the table.
+  //     fetch dispatcher. The calls that bring their own transport are routed
+  //     from the same three at their own seams: the sign-in provider's calls
+  //     (node:https, src/lib/signin-proxy.ts, #483), the vercel-sandbox
+  //     executor's API calls (src/lib/sandbox/vercel-sandbox.ts, #492), and,
+  //     under EXECUTOR_DRIVER=container, the notebook's own requests inside
+  //     the executor container (src/lib/sandbox/container.ts, #494). The
+  //     database under DB_DRIVER=node-postgres is outside them; docs/deploy.md
+  //     has the table.
   //     ALL THREE UNSET IS THE REFERENCE CONFIGURATION: no
   //     dispatcher is installed at all and every request leaves by the path
   //     and to the host it did before these variables existed.
@@ -494,8 +498,8 @@ export const ENV_SPEC = [
   //     running beside the app stays direct whatever an operator sets. An
   //     in-network service reached by NAME (`minio`, `postgres`) is not
   //     loopback and belongs in this variable — see docs/deploy.md. ---
-  { name: 'HTTP_PROXY', tier: 'optional', purpose: 'Egress proxy for http:// destinations reached through the global fetch dispatcher — not the sign-in provider or the vercel-sandbox executor API, see docs/deploy.md (unset: direct, exactly as before #468; loopback is always exempt)', hasFallback: true },
-  { name: 'HTTPS_PROXY', tier: 'optional', purpose: 'Egress proxy for https:// destinations reached through the global fetch dispatcher — not the sign-in provider or the vercel-sandbox executor API, see docs/deploy.md (unset: falls back to HTTP_PROXY, then direct)', hasFallback: true },
+  { name: 'HTTP_PROXY', tier: 'optional', purpose: 'Egress proxy for http:// destinations: the app\'s fetch calls, the sign-in provider, the vercel-sandbox executor API, and under EXECUTOR_DRIVER=container the notebook\'s own requests (passed into the executor container; an address with a user or password is refused there); not the node-postgres database — see docs/deploy.md (unset: direct, exactly as before #468; loopback is always exempt)', hasFallback: true },
+  { name: 'HTTPS_PROXY', tier: 'optional', purpose: 'Egress proxy for https:// destinations, on the same paths as HTTP_PROXY, including the notebook\'s own requests under EXECUTOR_DRIVER=container — see docs/deploy.md (unset: falls back to HTTP_PROXY, then direct; the executor container is given the same fallback)', hasFallback: true },
   { name: 'NO_PROXY', tier: 'optional', purpose: 'Comma-separated destinations that bypass the proxy — added to the always-exempt loopback set, not a replacement for it; name in-network services here (e.g. minio, postgres, an in-network KV store)', hasFallback: true },
 
   // --- Instance branding (#217: chrome-only theming seam; src/lib/brand-config.ts).

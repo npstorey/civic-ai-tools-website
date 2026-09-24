@@ -1380,8 +1380,10 @@ every `docker exec` of a notebook session passes `HTTP_PROXY`,
 notebook's own requests (to a data portal, say) use your proxy whichever
 spelling a client inside reads: curl reads only `http_proxy`, Python
 reads both. The values are the ones the app resolves for itself: the
-lower-case spelling wins, and when only `HTTP_PROXY` is set, https
-requests use it too, as the app's own do. They are passed by name only
+lower-case spelling wins, and when only `HTTP_PROXY` is set, the
+container is given it as `HTTPS_PROXY` too, so its https requests use it
+as the app's own do (curl and Python would not fall back on their own).
+They are passed by name only
 (`-e HTTP_PROXY`), with each value in the environment of the `docker`
 process, so no proxy value appears on a command line. With the variables
 unset, every `docker` invocation is exactly what it was before this
