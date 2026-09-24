@@ -31,6 +31,7 @@ import {
   getDirectorySource,
   getDefaultPortal,
   getInstanceAttribution,
+  isPortalLocked,
   getRoadmapSource,
 } from '@/lib/site-config';
 import { resolveRobotsMetadata } from '@/lib/site-indexing';
@@ -264,7 +265,10 @@ export default function RootLayout({
               the downloaded notebook. Null means this instance declared no
               default: the run carries none and every surface omits rather
               than naming one deployment's city. */}
-          <DefaultPortalProvider value={getDefaultPortal()}>
+          {/* …and whether it is the ONLY Socrata portal (SITE_PORTAL_LOCKED, #436):
+              locked, the form offers no portal picker and no cross-portal
+              example. The routes enforce the lock either way. */}
+          <DefaultPortalProvider value={getDefaultPortal()} locked={isPortalLocked()}>
           {/* Sign-in choices for the affordances inside client trees (#229
               P1) — QueryForm, RateLimitBanner, McpResponseDisplay and
               NotebookOutput all render under the apex page, a client

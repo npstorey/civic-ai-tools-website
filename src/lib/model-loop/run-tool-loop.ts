@@ -54,6 +54,7 @@ import type { TraceBuilder } from '../evidence/trace.ts';
 import { hash as traceHash } from '../evidence/trace.ts';
 import { deriveOperationType } from '../mcp/operation-types.ts';
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
+import { PortalLockedCallError, portalOutsideLock } from '../portal-lock.ts';
 
 export interface TraceContext {
   builder: TraceBuilder;
@@ -145,6 +146,19 @@ export interface ToolLoopOptions {
    * Omitted = no injection; the loop passes arguments through untouched.
    */
   portal?: string;
+  /**
+   * The one Socrata portal a locked instance serves (#436, ruling D7), or omitted when
+   * the instance is not locked. When set, a `get_data` call naming another
+   * portal (through `portal` or its alias `domain`) and a `fetch` whose
+   * identifier names another portal are refused here as rejected calls: the
+   * call is recorded and spanned as the model made it, marked failed, never
+   * handed to `executeToolCall`, and the model is sent
+   * `describeToolFailureForLlm`'s copy for a lock refusal. `portalOutsideLock`
+   * (`../portal-lock.ts`) decides which calls. Only the three query routes set
+   * it; replay never does, since a replay's portal comes from its record.
+   * Omitted = no lock; every call runs as before.
+   */
+  lockedPortal?: string;
   /**
    * Per-tool-call timeout in milliseconds. The call is raced against it and
    * the timer is cleared in a `finally`, once, here (#352).
@@ -672,6 +686,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
     tools,
     executeToolCall,
     portal,
+    lockedPortal,
     toolTimeoutMs,
     maxIterations = DEFAULT_MAX_ITERATIONS,
     maxTokens = DEFAULT_MAX_TOKENS,
@@ -812,8 +827,27 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
        * a condition no test could exercise. It becomes live the moment
        * `src/lib/mcp/tools.ts` gains a `domain` property on `get_data`;
        * whoever adds one owes this guard a second look.
+       *
+       * Under the one-portal switch (#436) the divergence cannot reach a
+       * record as a successful call: the lock check below reads `domain` as
+       * well as `portal`, so a `domain` naming another portal is refused, and
+       * a `domain` naming the locked portal agrees with what is injected.
        */
       if (portal && !argumentsMalformed && name === 'get_data' && !args.portal) args.portal = portal;
+
+      /**
+       * The one-portal switch (#436, ruling D7): decided AFTER injection, so
+       * the check reads the arguments exactly as they will be recorded and
+       * sent, and BEFORE the record, so the refusal is recorded like any other
+       * rejected call. The arguments are not changed — the record states the
+       * portal the model asked for, beside `failed`, and the packager mints no
+       * access entry for a failed call. A malformed argument set is already a
+       * failed call and is left to that path.
+       */
+      const lockRefusal =
+        lockedPortal && !argumentsMalformed && portalOutsideLock(name, args, lockedPortal) !== null
+          ? new PortalLockedCallError(lockedPortal)
+          : null;
 
       const operationType = deriveOperationType(name, args);
       const reason = generateToolReason(args, name);
@@ -843,6 +877,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       const toolStartTime = Date.now();
       try {
         if (argumentsMalformed) throw malformedToolArgumentsError();
+        if (lockRefusal) throw lockRefusal;
 
         const result = await boundToolCall(executeToolCall(name, args), name, toolTimeoutMs);
         const toolDuration = Date.now() - toolStartTime;

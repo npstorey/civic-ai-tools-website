@@ -38,6 +38,11 @@
  * condition was added, and an endpoint URL is infrastructure even though it is
  * not a credential.
  *
+ * ONE SWITCH IS READ AS A BOOLEAN: `SITE_PORTAL_LOCKED` (#436), which
+ * `requiredWhenFlagOn` (below) parses exactly as the app does — `1`/`true`, any
+ * case, trimmed, is on. Only that boolean leaves the parse; the value is never
+ * printed, and the row it promotes is reported by NAME.
+ *
  * `op run` is recommended for local use so the op:// references in
  * .env.local resolve into this process's environment:
  *
@@ -203,7 +208,16 @@ export const DRIVER_SEAMS = {
  * Inert for every row that shipped before the model seam: no other entry
  * carries more than one of these fields.
  *
- * CONSTRAINT: all four fields must leave the default profile untouched. With
+ * A field keyed by a SWITCH rather than by a seam or a value (#436):
+ *   - `requiredWhenFlagOn: '<VAR>'` — tier becomes 'required' when <VAR> is
+ *     on, parsed as the app's `parseBooleanFlag` parses it
+ *     (`src/lib/host-routing.ts`): `1`/`true`, any case, trimmed; anything
+ *     else, unset included, is off. `requiredWhenCustomized` cannot express
+ *     this: it promotes on any value other than a coded default, so `0` and
+ *     `false` would promote too. Minted for SITE_DEFAULT_PORTAL, which a
+ *     portal-locked instance cannot run without — every query refuses.
+ *
+ * CONSTRAINT: all five fields must leave the default profile untouched. With
  * no selector set (or every selector set to its default), no customized
  * variable and no alternative set complete, the resolved spec is identical to
  * the declared one, so the report is byte-identical to the
@@ -302,7 +316,15 @@ export const ENV_SPEC = [
   // its own portal per call and every surface reports what the call carried.
   // Read at both times because the root layout resolves it, and prerendered
   // pages bake what the layout resolved.
-  { name: 'SITE_DEFAULT_PORTAL', readBy: 'build-and-runtime', tier: 'recommended', purpose: 'Portal a query defaults to when the reader picks none, e.g. the open-data host this instance is built around — absent, runs carry no default portal and every surface omits rather than naming one', hasFallback: true },
+  // Required when SITE_PORTAL_LOCKED is on (#436): a locked instance with no
+  // portal refuses every query, so its fallback no longer covers it.
+  { name: 'SITE_DEFAULT_PORTAL', readBy: 'build-and-runtime', tier: 'recommended', purpose: 'Portal a query defaults to when the reader picks none, e.g. the open-data host this instance is built around — absent, runs carry no default portal and every surface omits rather than naming one; required when SITE_PORTAL_LOCKED is on', hasFallback: true, requiredWhenFlagOn: 'SITE_PORTAL_LOCKED' },
+  // The one-portal switch (#436). Off by default. Read at both times for the
+  // reason SITE_DEFAULT_PORTAL is: the root layout resolves it for the query
+  // form (which drops its portal picker and cross-portal examples when on),
+  // and prerendered pages bake what the layout resolved. The routes and the
+  // loop read it at request time and enforce it whatever a page rendered.
+  { name: 'SITE_PORTAL_LOCKED', readBy: 'build-and-runtime', tier: 'optional', purpose: "Serve ONE Socrata portal: '1'/'true' makes SITE_DEFAULT_PORTAL the only Socrata portal the query routes and the model's get_data/fetch calls use; a request or call naming another is refused. Data Commons and Boston OpenContext stay outside it. Off by default", hasFallback: true },
 
   // --- Record publish + verify (the demo centerpiece: publish → badge) ---
   { name: 'DATABASE_URL', tier: 'required', purpose: 'Record DB — publish + dashboard + detail page' },
@@ -787,6 +809,19 @@ function customizedFromDefault(condition, env) {
 }
 
 /**
+ * A switch as the app reads it: `parseBooleanFlag` in `src/lib/host-routing.ts`
+ * — `1`/`true`, any case, trimmed, is on; anything else, unset included, is
+ * off. A duplicated rule, as `BUILT_IN_MODEL_BASE_URL` is a duplicated literal
+ * (this script is `.mjs` and cannot import TypeScript), and held to the app's
+ * by `scripts/portal-lock-config.test.mjs`. Only the boolean leaves.
+ */
+export function flagOn(raw) {
+  if (typeof raw !== 'string') return false;
+  const v = raw.trim().toLowerCase();
+  return v === '1' || v === 'true';
+}
+
+/**
  * THE presence test — non-empty after trim. Every check in this script
  * (tiers, alternatives, groups) uses this one boolean; no value is read
  * beyond it.
@@ -909,7 +944,8 @@ export function resolveSpec(drivers, spec = ENV_SPEC, env = {}) {
     }
     const promoted =
       (s.requiredWhen && conditionMet(s.requiredWhen, drivers)) ||
-      (s.requiredWhenCustomized && customizedFromDefault(s.requiredWhenCustomized, env));
+      (s.requiredWhenCustomized && customizedFromDefault(s.requiredWhenCustomized, env)) ||
+      (s.requiredWhenFlagOn && flagOn(env[s.requiredWhenFlagOn]));
     if (promoted) {
       // The promotion also drops any `hasFallback` claim. A driver that makes
       // a variable load-bearing is by definition a driver the coded fallback

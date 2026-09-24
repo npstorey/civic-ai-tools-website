@@ -35,14 +35,38 @@ import { createContext, useContext, type ReactNode } from 'react';
  */
 const DefaultPortalContext = createContext<string | null>(null);
 
+/**
+ * Whether this instance serves ONE Socrata portal (`SITE_PORTAL_LOCKED`, #436),
+ * resolved on the server by `isPortalLocked()` and carried beside the default
+ * portal because it is a statement about the same value: locked, the default
+ * is the only Socrata portal. Its own context rather than a field on the portal one,
+ * so every existing reader of `useDefaultPortal()` is untouched. Outside the
+ * provider it reads `false` — the unlocked form, which is what every instance
+ * had before the switch existed; the routes enforce the lock whatever a form
+ * renders.
+ */
+const PortalLockedContext = createContext<boolean>(false);
+
 export function DefaultPortalProvider({
   value,
+  locked = false,
   children,
 }: {
   value: string | null;
+  /** `SITE_PORTAL_LOCKED` as the server resolved it; omitted = unlocked. */
+  locked?: boolean;
   children: ReactNode;
 }) {
-  return <DefaultPortalContext.Provider value={value}>{children}</DefaultPortalContext.Provider>;
+  return (
+    <DefaultPortalContext.Provider value={value}>
+      <PortalLockedContext.Provider value={locked}>{children}</PortalLockedContext.Provider>
+    </DefaultPortalContext.Provider>
+  );
+}
+
+/** True when this instance is locked to its configured portal (#436). Safe outside the provider (false). */
+export function usePortalLocked(): boolean {
+  return useContext(PortalLockedContext);
 }
 
 /** Read the instance's configured default portal, or null when it has none

@@ -1,6 +1,7 @@
 // Types for streaming events
 import { deriveOperationType } from './mcp/operation-types.ts';
 import { isSourceRefusal } from './mcp/tool-call-failure.ts';
+import { PortalLockedCallError } from './portal-lock.ts';
 import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 export type StreamEventType = 'progress' | 'token' | 'complete' | 'error' | 'trace';
 export type PanelType = 'withMcp' | 'withoutMcp';
@@ -492,6 +493,22 @@ export const SOURCE_REFUSAL_FOR_LLM =
   ' server names, or system details.';
 
 /**
+ * What the model is told when the loop core refused a call because it named a
+ * portal other than the one Socrata portal a locked instance serves (#436, ruling D7). The
+ * call was never sent. The locked portal is this instance's own configuration,
+ * already named in the system prompt, so naming it here tells the model where
+ * a request CAN go; the portal the call asked for is not repeated. No retry
+ * wording: the same request would be refused the same way.
+ */
+export function portalLockRefusalForLlm(lockedPortal: string): string {
+  return (
+    `${TOOL_FAILURE_PREAMBLE} This instance queries one Socrata portal only, ${lockedPortal}, and this request named a different portal, so it was not sent.` +
+    ` Do not request any other Socrata portal. If the question can be answered from ${lockedPortal}, or from another data source you have tools for, make that request instead;` +
+    ` if it cannot, tell the user in plain language that this instance's Socrata data covers ${lockedPortal} only, and do not include any raw error text, status codes, server names, or system details.`
+  );
+}
+
+/**
  * Server-side: the neutral text fed back to the model when an MCP tool call
  * fails, in place of the raw `Error executing tool: <message>` string. It (1)
  * preserves the anti-hallucination guard (the model must not invent values to
@@ -508,6 +525,11 @@ export const SOURCE_REFUSAL_FOR_LLM =
 export function describeToolFailureForLlm(_toolName: string, input: unknown): string {
   const tellUser = (detail: string) =>
     `${TOOL_FAILURE_PREAMBLE} ${detail} In your answer, briefly tell the user in plain language that the live data could not be retrieved, and do not include any raw error text, status codes, server names, or system details.`;
+
+  // Recognised by TYPE, before any classification: the loop core refused this
+  // call itself (#436, ruling D7) and nothing was sent, so no source answered
+  // and "try again" would only repeat it.
+  if (input instanceof PortalLockedCallError) return portalLockRefusalForLlm(input.lockedPortal);
 
   switch (classifyStreamError(input)) {
     case 'mcp_timeout':
