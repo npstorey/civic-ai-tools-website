@@ -40,7 +40,6 @@
  */
 import { spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from 'node:child_process';
-import { resolveProxySettings } from '../outbound-proxy.ts';
 import { NotebookExecutionError } from './driver.ts';
 import type {
   CreateSessionOptions,
@@ -156,10 +155,24 @@ function carriesUserinfo(address: string): boolean {
  *
  * Throws `ContainerProxyUserinfoError` for a proxy address carrying a user or
  * password, naming the variable whose value won.
+ *
+ * `../outbound-proxy.ts` is loaded only when a proxy address is set at all.
+ * It imports `undici`, and this driver also runs where no dependency is
+ * installed: CI's `executor image build` job runs the parity notebook through
+ * it without `npm ci`. The check below only decides whether to load the
+ * resolver; the resolver decides everything else. It cannot skip a
+ * configuration the resolver would call enabled, because that needs one of
+ * these four to be non-empty.
  */
-export function resolveContainerProxyEnv(
+export async function resolveContainerProxyEnv(
   env: EnvRecord,
-): { flags: string[]; spawnEnv: EnvRecord } | null {
+): Promise<{ flags: string[]; spawnEnv: EnvRecord } | null> {
+  const anyAddress = [env.HTTP_PROXY, env.http_proxy, env.HTTPS_PROXY, env.https_proxy].some(
+    (value) => (value ?? '').trim().length > 0,
+  );
+  if (!anyAddress) return null;
+
+  const { resolveProxySettings } = await import('../outbound-proxy.ts');
   const settings = resolveProxySettings(env);
   if (!settings.enabled) return null;
 
@@ -242,7 +255,7 @@ export function createContainerDriver(deps: ContainerDriverDeps = {}): NotebookE
       // Resolved once per session, before any docker call: a proxy address
       // carrying a user or password refuses here (D9), and every exec of the
       // session then carries the same names and values (D3).
-      const proxy = resolveContainerProxyEnv(deps.env ?? process.env);
+      const proxy = await resolveContainerProxyEnv(deps.env ?? process.env);
       const proxyFlags = proxy ? proxy.flags : [];
       const execEnv = proxy ? { env: proxy.spawnEnv } : {};
 
