@@ -373,7 +373,7 @@ export const ENV_SPEC = [
   { name: 'EXECUTOR_CONTAINER_CPUS', tier: 'optional', purpose: 'CPU limit for each notebook container, as docker run --cpus (EXECUTOR_DRIVER=container only; e.g. 1.5; unset: no limit)', hasFallback: true },
   { name: 'EXECUTOR_CONTAINER_PIDS_LIMIT', tier: 'optional', purpose: 'Process limit for each notebook container, as docker run --pids-limit (EXECUTOR_DRIVER=container only; unset: the runtime default)', hasFallback: true },
   { name: 'EXECUTOR_CONTAINER_NETWORK', tier: 'optional', purpose: 'Network each notebook container joins, as docker run --network (EXECUTOR_DRIVER=container only; unset: the runtime default network)', hasFallback: true },
-  { name: 'EXECUTOR_CONTAINER_USER', tier: 'optional', purpose: 'User each notebook container runs as, as docker run --user (EXECUTOR_DRIVER=container only; unset: the image user, uid 10001)', hasFallback: true },
+  { name: 'EXECUTOR_CONTAINER_USER', tier: 'optional', purpose: 'User each notebook container runs as, as docker run --user (EXECUTOR_DRIVER=container only; unset: the image user, uid 10001; set, the matplotlib cache moves to a writable copy under /tmp)', hasFallback: true },
   { name: 'EXECUTOR_CONTAINER_RUNTIME', tier: 'optional', purpose: 'OCI runtime for each notebook container, as docker run --runtime (EXECUTOR_DRIVER=container only; e.g. runsc; unset: the runtime default)', hasFallback: true },
   { name: 'EXECUTOR_CONTAINER_HARDENED', tier: 'optional', purpose: 'Set to 1 or true to start each notebook container with --cap-drop ALL and --security-opt no-new-privileges (EXECUTOR_DRIVER=container only; unset: off)', hasFallback: true },
   // Passed into every executed notebook's env by buildNotebookEnv

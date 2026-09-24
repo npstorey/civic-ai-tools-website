@@ -92,6 +92,19 @@ const ENV_CONTAINER_HARDENED = 'EXECUTOR_CONTAINER_HARDENED';
 /** The flags EXECUTOR_CONTAINER_HARDENED adds: no Linux capabilities, and no privilege gain through setuid. */
 export const HARDENED_RUN_FLAGS = ['--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'] as const;
 
+/**
+ * The executor image's own matplotlib cache, warmed at build time for uid
+ * 10001 (docker/executor/Dockerfile, `MPLCONFIGDIR`), and the path a container
+ * started under EXECUTOR_CONTAINER_USER uses instead. Measured on the 0.2.0
+ * image: any other user cannot write the image's cache, and matplotlib then
+ * writes "created a temporary cache directory" into the output of a cell that
+ * imports it — and a cold cache adds "generated new fontManager" in a notebook
+ * that logs at INFO. That output is signed. A writable copy of the warm cache
+ * adds neither.
+ */
+export const IMAGE_MPLCONFIGDIR = '/home/notebook/.config/matplotlib';
+export const WRITABLE_MPLCONFIGDIR = '/tmp/matplotlib';
+
 /** A network or runtime name as the CLI spells one: no leading `-`, no whitespace, no separators. */
 const RUNTIME_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 
@@ -101,6 +114,8 @@ export interface ContainerSettings {
   cli: string;
   /** Flags `run` carries between `--rm` and the image, in a fixed order. Empty at the defaults. */
   runFlags: string[];
+  /** Whether the session copies the image's matplotlib cache to WRITABLE_MPLCONFIGDIR after `run`. */
+  seedMatplotlibCache: boolean;
 }
 
 /**
@@ -187,10 +202,11 @@ export function resolveContainerSettings(env: EnvRecord = process.env): Containe
   if (cpus !== null) runFlags.push('--cpus', cpus);
   if (pidsLimit !== null) runFlags.push('--pids-limit', pidsLimit);
   if (network !== null) runFlags.push('--network', network);
-  if (user !== null) runFlags.push('--user', user);
+  // A set user gets a matplotlib cache it can write (see IMAGE_MPLCONFIGDIR).
+  if (user !== null) runFlags.push('--user', user, '-e', `MPLCONFIGDIR=${WRITABLE_MPLCONFIGDIR}`);
   if (runtime !== null) runFlags.push('--runtime', runtime);
   if (hardened !== null && /^(1|true)$/i.test(hardened)) runFlags.push(...HARDENED_RUN_FLAGS);
-  return { cli: cli ?? DEFAULT_CONTAINER_CLI, runFlags };
+  return { cli: cli ?? DEFAULT_CONTAINER_CLI, runFlags, seedMatplotlibCache: user !== null };
 }
 
 /** `-e NAME` flags for `docker exec`, one per name, in order: names only, never a value. */
@@ -406,7 +422,7 @@ export function createContainerDriver(deps: ContainerDriverDeps = {}): NotebookE
       // here, and every exec of the session then carries the same names and
       // values (D3).
       const env = deps.env ?? process.env;
-      const { cli, runFlags } = resolveContainerSettings(env);
+      const { cli, runFlags, seedMatplotlibCache } = resolveContainerSettings(env);
       const proxyValues = (await resolveContainerProxyEnv(env)) ?? {};
       // What the execs that carry no variables of their own (the write and the
       // read) pass: the proxy variables, or nothing.
@@ -437,6 +453,14 @@ export function createContainerDriver(deps: ContainerDriverDeps = {}): NotebookE
         });
       }, opts.timeoutMs);
       killTimer.unref();
+
+      // Under EXECUTOR_CONTAINER_USER only: seed the writable cache from the
+      // image's warm one before anything imports matplotlib. Its exit status is
+      // not fatal: an image with no cache at that path leaves the copy empty,
+      // which is writable, so no warning, just a cold cache.
+      if (seedMatplotlibCache) {
+        await runDocker(spawnDocker, cli, ['exec', containerId, 'cp', '-R', IMAGE_MPLCONFIGDIR, WRITABLE_MPLCONFIGDIR]);
+      }
 
       return {
         id: containerId,

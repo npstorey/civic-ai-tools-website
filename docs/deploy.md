@@ -587,7 +587,7 @@ timeout, and the platform bounds that by your plan's maximum.
 | `EXECUTOR_CONTAINER_CPUS` | no limit | `docker run --cpus`, for example `1.5`. |
 | `EXECUTOR_CONTAINER_PIDS_LIMIT` | the runtime's default | `docker run --pids-limit`: the most processes a notebook can start. |
 | `EXECUTOR_CONTAINER_NETWORK` | the runtime's default network | `docker run --network`: the network each notebook container joins, for example one whose only way out is your egress proxy. A notebook fetches its data live, so a network with no route to the data portal fails every notebook. |
-| `EXECUTOR_CONTAINER_USER` | the image's user, uid `10001` | `docker run --user`. The image's matplotlib cache belongs to uid `10001`. Measured: under any other user, a notebook that imports matplotlib gains a "created a temporary cache directory" warning in its output, and that output is part of the signed record. Set it only to `10001`, or to the user an image of your own prepares. |
+| `EXECUTOR_CONTAINER_USER` | the image's user, uid `10001` | `docker run --user`. Any other user cannot write the image's matplotlib cache, and matplotlib then writes a warning into the notebook's output, which is signed. So when this is set, the driver also sets `MPLCONFIGDIR=/tmp/matplotlib` and first copies the image's warm cache there (`/home/notebook/.config/matplotlib`). Measured on the reference image: a notebook's output is then the same under any user. With an image of your own whose cache is elsewhere, the copy finds nothing and the cache starts cold. That produces no warning, but a notebook that logs at INFO shows a "generated new fontManager" line. |
 | `EXECUTOR_CONTAINER_RUNTIME` | the runtime's default | `docker run --runtime`, for example `runsc` for gVisor. The runtime must be installed on the host. |
 | `EXECUTOR_CONTAINER_HARDENED` | off | `1` or `true` adds `--cap-drop ALL --security-opt no-new-privileges` to `docker run`. `0` or `false` leaves it off. The notebook needs no Linux capability. |
 
@@ -605,8 +605,9 @@ environment, so `ps` on the host or in the app container never shows them.
 
 There is no read-only-root setting yet. Measured: under a read-only root the
 image's matplotlib cache cannot be written, and a notebook that imports
-matplotlib gains the same warning in its signed output. That needs the cache
-moved to a writable path first.
+matplotlib gains the same warning in its signed output. A read-only root also
+leaves no writable path to copy the cache to until `/tmp` is mounted
+writable, so it needs its own change.
 
 ### The model seam
 
