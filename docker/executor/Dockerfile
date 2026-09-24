@@ -1,22 +1,31 @@
-# Executor image for the `container` notebook-executor driver (S3b P4;
-# src/lib/sandbox/container.ts). The container-runtime equivalent of the
-# Vercel Sandbox snapshot built by scripts/build-sandbox-snapshot.ts:
-# python3.13 + the pinned scientific stack + pinned jupyter/nbconvert
-# prebuilt, so per-run cost is container start + exec only.
+# Executor images for the notebook-executor drivers (S3b P4;
+# src/lib/sandbox/container.ts, src/lib/sandbox/lambda.ts). The
+# container-runtime equivalent of the Vercel Sandbox snapshot built by
+# scripts/build-sandbox-snapshot.ts: python3.13 + the pinned scientific stack +
+# pinned jupyter/nbconvert prebuilt, so per-run cost is start + exec only.
 #
-# Build (once, and again after any pinned-version change):
+# TWO TARGETS, ONE STACK (#530, ruling D4). The `executor` stage below is
+# everything both images share: the pins, the notebook user, the warm font
+# cache. The default target, the last stage, is the container driver's image:
 #
 #   docker build -t civic-notebook-executor:0.2.0 docker/executor
+#
+# The `lambda` target adds the AWS Lambda runtime interface client and the
+# handler (docker/executor/lambda/handler.py) for EXECUTOR_DRIVER=lambda:
+#
+#   docker build --target lambda -t civic-notebook-executor-lambda:0.2.0 docker/executor
 #
 # PINNED VERSIONS ARE SINGLE-SOURCED. The scientific `name==version` pins
 # below MUST match src/lib/notebook-author/prompt.ts (PINNED_LIBRARIES), the
 # notebook-tooling pins MUST match src/lib/sandbox/driver.ts
-# (EXECUTOR_TOOLING_PACKAGES), and the FROM line's python version MUST match
-# PYTHON_RUNTIME_VERSION. src/lib/sandbox/container.test.ts and
-# src/lib/sandbox/executor-pins.test.ts assert this file against those
-# tables — version equality, not names — so drift here fails `npm test`.
+# (EXECUTOR_TOOLING_PACKAGES), the runtime-client pin MUST match
+# src/lib/sandbox/driver.ts (EXECUTOR_LAMBDA_RUNTIME_PACKAGES), and the FROM
+# line's python version MUST match PYTHON_RUNTIME_VERSION.
+# src/lib/sandbox/container.test.ts and src/lib/sandbox/executor-pins.test.ts
+# assert this file against those tables — version equality, not names — so
+# drift here fails `npm test`.
 # @vercel/sandbox major: 1 (SANDBOX_SDK_MAJOR in src/lib/sandbox/driver.ts).
-FROM python:3.13-slim-bookworm
+FROM python:3.13-slim-bookworm AS executor
 
 # Same package set the sandbox snapshot installs: the pinned scientific
 # stack + the pinned notebook tooling (EXECUTOR_TOOLING_PACKAGES in
@@ -50,5 +59,27 @@ USER notebook
 # at default log levels reaches nothing; a notebook that configures logging
 # puts that line on cell stderr, and cell stderr is part of the
 # executed-notebook bytes, which are signed. The warm removes the rebuild
-# either way.
+# either way. The lambda handler and EXECUTOR_CONTAINER_USER copy this cache
+# to a writable path for any other user (src/lib/sandbox/container.ts,
+# IMAGE_MPLCONFIGDIR).
 RUN python -c "import matplotlib.pyplot"
+
+# --- the AWS Lambda function (EXECUTOR_DRIVER=lambda) ------------------------
+# Lambda runs the image read-only, as a user of its own, with only /tmp
+# writable; the handler puts HOME and MPLCONFIGDIR there and seeds the cache
+# from the warm one above. The runtime interface emulator is not in the image:
+# scripts/lambda-image-check.mjs mounts a pinned, checksummed copy for CI.
+FROM executor AS lambda
+USER root
+RUN pip install --no-cache-dir --no-input \
+    awslambdaric==4.0.4
+COPY lambda/handler.py /var/task/handler.py
+USER notebook
+WORKDIR /var/task
+ENTRYPOINT ["python", "-m", "awslambdaric"]
+CMD ["handler.handler"]
+
+# --- the container driver's image: the default target -------------------------
+FROM executor AS container
+WORKDIR /tmp
+USER notebook

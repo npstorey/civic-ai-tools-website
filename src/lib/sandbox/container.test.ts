@@ -22,7 +22,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { PINNED_LIBRARIES, PYTHON_RUNTIME_VERSION } from '../notebook-author/prompt.ts';
-import { EXECUTOR_TOOLING_PACKAGES } from './driver.ts';
+import { EXECUTOR_LAMBDA_RUNTIME_PACKAGES, EXECUTOR_TOOLING_PACKAGES } from './driver.ts';
 import {
   DEFAULT_CONTAINER_IMAGE,
   dockerEnvNameFlags,
@@ -36,7 +36,7 @@ const DOCKERFILE_PATH = fileURLToPath(
 );
 const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
 
-test('Dockerfile pins exactly the two single-sourced tables and nothing else', () => {
+test('Dockerfile pins exactly the three single-sourced tables and nothing else', () => {
   const pinPattern = /([a-zA-Z0-9_-]+)==([0-9][0-9a-zA-Z.]*)/g;
   const dockerfilePins: Record<string, string> = {};
   for (const match of dockerfile.matchAll(pinPattern)) {
@@ -45,18 +45,28 @@ test('Dockerfile pins exactly the two single-sourced tables and nothing else', (
   // Exact equality both directions: no missing pins, no extra pins, no
   // version drift. PINNED_LIBRARIES (scientific stack) and
   // EXECUTOR_TOOLING_PACKAGES (notebook tooling, pinned since #450) are the
-  // single sources; the Dockerfile is a test-enforced mirror of their union
-  // (Dockerfiles cannot import TypeScript).
-  assert.deepEqual(dockerfilePins, { ...PINNED_LIBRARIES, ...EXECUTOR_TOOLING_PACKAGES });
+  // single sources, with EXECUTOR_LAMBDA_RUNTIME_PACKAGES for the lambda
+  // target (#530); the Dockerfile is a test-enforced mirror of their union
+  // (Dockerfiles cannot import TypeScript). Which stage installs which is
+  // `./executor-pins.test.ts`'s to assert.
+  assert.deepEqual(dockerfilePins, {
+    ...PINNED_LIBRARIES,
+    ...EXECUTOR_TOOLING_PACKAGES,
+    ...EXECUTOR_LAMBDA_RUNTIME_PACKAGES,
+  });
 });
 
 test('Dockerfile FROM line matches PYTHON_RUNTIME_VERSION', () => {
+  // Every stage but the first builds on an earlier one (#530: `executor`, then
+  // `lambda` and the default `container`), so exactly one FROM names an image.
   const fromLines = dockerfile
     .split('\n')
     .filter((line) => line.startsWith('FROM '));
-  assert.equal(fromLines.length, 1);
+  const stageNames = fromLines.map((line) => /\sAS\s+(\S+)/i.exec(line)?.[1]).filter(Boolean);
+  const fromImage = fromLines.filter((line) => !stageNames.includes(line.split(/\s+/)[1]));
+  assert.equal(fromImage.length, 1, `expected one FROM that names an image, found: ${fromImage.join(' | ')}`);
   assert.match(
-    fromLines[0],
+    fromImage[0],
     new RegExp(`^FROM python:${PYTHON_RUNTIME_VERSION.replace('.', '\\.')}-`),
     `executor image python version must match PYTHON_RUNTIME_VERSION (${PYTHON_RUNTIME_VERSION})`,
   );
