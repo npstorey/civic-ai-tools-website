@@ -598,6 +598,11 @@ inherits the app's environment, so its own variables (`DOCKER_HOST`,
 `DOCKER_CONTEXT`, `CONTAINER_HOST` for podman) apply as they would in a
 shell.
 
+No value the notebook receives is put on a command line. The notebook's own
+variables (`SOCRATA_APP_TOKEN`, `DC_API_KEY`) and the proxy variables reach
+the container as `docker exec -e NAME`, with the value in the CLI's
+environment, so `ps` on the host or in the app container never shows them.
+
 There is no read-only-root setting yet. Measured: under a read-only root the
 image's matplotlib cache cannot be written, and a notebook that imports
 matplotlib gains the same warning in its signed output. That needs the cache

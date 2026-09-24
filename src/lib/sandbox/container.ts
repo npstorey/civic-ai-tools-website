@@ -38,6 +38,13 @@
  * `docker run` and `docker kill` never carry the variables: the idle
  * `sleep infinity` makes no requests.
  *
+ * THE NOTEBOOK'S OWN VARIABLES PASS THE SAME WAY (#521, ruling D8). A
+ * command's env — for nbconvert, the two data-portal tokens
+ * `buildNotebookEnv` supplies — reaches the container as `-e NAME`, with the
+ * value in the spawned CLI's environment. Until #521 it went on the command
+ * line as `-e NAME=value`, where `ps` and `/proc/<pid>/cmdline` could read it
+ * for the length of every run. See `passByName`.
+ *
  * SETTINGS (#530, ruling D7). Besides the image, eight named settings shape
  * the invocations, each unset by default and each leaving the argv exactly as
  * it was when unset: the CLI binary (EXECUTOR_CONTAINER_CLI), and seven that
@@ -186,9 +193,9 @@ export function resolveContainerSettings(env: EnvRecord = process.env): Containe
   return { cli: cli ?? DEFAULT_CONTAINER_CLI, runFlags };
 }
 
-/** `-e K=V` flag pairs for `docker exec` from an env record. */
-export function buildDockerEnvFlags(env: Record<string, string>): string[] {
-  return Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]);
+/** `-e NAME` flags for `docker exec`, one per name, in order: names only, never a value. */
+export function dockerEnvNameFlags(names: readonly string[]): string[] {
+  return names.flatMap((name) => ['-e', name]);
 }
 
 /** Single-quote a string for `sh -c` (used for in-container file paths). */
@@ -266,8 +273,8 @@ function carriesUserinfo(address: string): boolean {
 }
 
 /**
- * What a proxied session adds to each `docker exec`: the six `-e NAME` flags,
- * and the environment the CLI is spawned with, which carries their values.
+ * What a proxied session passes into the container on each `docker exec`: the
+ * six names, both spellings, with the values `passByName` hands the CLI.
  * `null` when no proxy is configured, so the driver adds nothing at all.
  *
  * The values are the app's own resolution (`resolveProxySettings`): lower case
@@ -290,7 +297,7 @@ function carriesUserinfo(address: string): boolean {
  */
 export async function resolveContainerProxyEnv(
   env: EnvRecord,
-): Promise<{ flags: string[]; spawnEnv: EnvRecord } | null> {
+): Promise<Record<(typeof CONTAINER_PROXY_ENV_NAMES)[number], string> | null> {
   const anyAddress = [env.HTTP_PROXY, env.http_proxy, env.HTTPS_PROXY, env.https_proxy].some(
     (value) => (value ?? '').trim().length > 0,
   );
@@ -308,18 +315,34 @@ export async function resolveContainerProxyEnv(
   }
 
   const httpsProxy = settings.httpsProxy || settings.httpProxy;
+  // In CONTAINER_PROXY_ENV_NAMES order, which is the order of the flags.
   return {
-    flags: CONTAINER_PROXY_ENV_NAMES.flatMap((name) => ['-e', name]),
-    spawnEnv: {
-      ...env,
-      HTTP_PROXY: settings.httpProxy,
-      http_proxy: settings.httpProxy,
-      HTTPS_PROXY: httpsProxy,
-      https_proxy: httpsProxy,
-      NO_PROXY: settings.noProxy,
-      no_proxy: settings.noProxy,
-    },
+    HTTP_PROXY: settings.httpProxy,
+    http_proxy: settings.httpProxy,
+    HTTPS_PROXY: httpsProxy,
+    https_proxy: httpsProxy,
+    NO_PROXY: settings.noProxy,
+    no_proxy: settings.noProxy,
   };
+}
+
+/**
+ * How one `docker exec` passes `vars` into the container: `-e NAME` for each
+ * name, and the environment the CLI is spawned with, which carries the values.
+ * The CLI resolves a bare `-e NAME` from its own environment, so no value is
+ * ever on a command line (#494 for the proxy variables, #521 for the
+ * notebook's own).
+ *
+ * With nothing to pass, no `env` option at all, so the CLI inherits
+ * `process.env` exactly as it did before either change. Otherwise the CLI gets
+ * the whole environment (`env`, as spawn would pass it with no `env` option)
+ * with `vars` on top: later keys win, so a command's own variable wins over a
+ * proxy variable of the same name, as `ExecutorCommand.env` promises.
+ */
+function passByName(env: EnvRecord, vars: Record<string, string>): { flags: string[]; spawnEnv?: EnvRecord } {
+  const names = Object.keys(vars);
+  if (names.length === 0) return { flags: [] };
+  return { flags: dockerEnvNameFlags(names), spawnEnv: { ...env, ...vars } };
 }
 
 interface DockerResult {
@@ -382,10 +405,13 @@ export function createContainerDriver(deps: ContainerDriverDeps = {}): NotebookE
       // (#530) or a proxy address carrying a user or password (D9) refuses
       // here, and every exec of the session then carries the same names and
       // values (D3).
-      const { cli, runFlags } = resolveContainerSettings(deps.env ?? process.env);
-      const proxy = await resolveContainerProxyEnv(deps.env ?? process.env);
-      const proxyFlags = proxy ? proxy.flags : [];
-      const execEnv = proxy ? { env: proxy.spawnEnv } : {};
+      const env = deps.env ?? process.env;
+      const { cli, runFlags } = resolveContainerSettings(env);
+      const proxyValues = (await resolveContainerProxyEnv(env)) ?? {};
+      // What the execs that carry no variables of their own (the write and the
+      // read) pass: the proxy variables, or nothing.
+      const proxyOnly = passByName(env, proxyValues);
+      const proxyOnlySpawn = proxyOnly.spawnEnv ? { env: proxyOnly.spawnEnv } : {};
 
       const image = resolveContainerImage();
       // `--rm` so a killed/stopped container removes itself; `sleep infinity`
@@ -419,14 +445,17 @@ export function createContainerDriver(deps: ContainerDriverDeps = {}): NotebookE
         stackPreinstalled: true,
 
         async runCommand(command: ExecutorCommand): Promise<ExecutorCommandResult> {
-          const envFlags = buildDockerEnvFlags(command.env ?? {});
+          // Proxy variables first, then the command's own, which win on a
+          // shared name (see `passByName`). All by name (#521).
+          const byName = passByName(env, { ...proxyValues, ...(command.env ?? {}) });
           const result = await runDocker(
             spawnDocker,
             cli,
-            // Proxy names first, so a key in the command's own env wins on
-            // collision, as ExecutorCommand promises.
-            ['exec', ...proxyFlags, ...envFlags, containerId, command.cmd, ...command.args],
-            { ...(command.signal ? { signal: command.signal } : {}), ...execEnv },
+            ['exec', ...byName.flags, containerId, command.cmd, ...command.args],
+            {
+              ...(command.signal ? { signal: command.signal } : {}),
+              ...(byName.spawnEnv ? { env: byName.spawnEnv } : {}),
+            },
           );
           return {
             exitCode: result.exitCode,
@@ -445,11 +474,11 @@ export function createContainerDriver(deps: ContainerDriverDeps = {}): NotebookE
             const result = await runDocker(
               spawnDocker,
               cli,
-              ['exec', '-i', ...proxyFlags, containerId, 'sh', '-c', `cat > ${shellSingleQuote(file.path)}`],
+              ['exec', '-i', ...proxyOnly.flags, containerId, 'sh', '-c', `cat > ${shellSingleQuote(file.path)}`],
               {
                 stdin: file.content,
                 ...(writeOpts?.signal ? { signal: writeOpts.signal } : {}),
-                ...execEnv,
+                ...proxyOnlySpawn,
               },
             );
             if (result.exitCode !== 0) {
@@ -465,8 +494,8 @@ export function createContainerDriver(deps: ContainerDriverDeps = {}): NotebookE
           const result = await runDocker(
             spawnDocker,
             cli,
-            ['exec', ...proxyFlags, containerId, 'cat', path],
-            execEnv,
+            ['exec', ...proxyOnly.flags, containerId, 'cat', path],
+            proxyOnlySpawn,
           );
           if (result.exitCode !== 0) return null;
           return result.stdout;

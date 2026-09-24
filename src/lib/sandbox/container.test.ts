@@ -7,7 +7,7 @@
 //      carries versions too, and `./executor-pins.test.ts` is where the
 //      version equality, the non-root user and the image tag are asserted.
 //   2. Pure helpers of the container driver (image resolution, docker exec
-//      env flags, shell quoting).
+//      by-name env flags, shell quoting).
 //   3. Driver selection (EXECUTOR_DRIVER), matching the DB_DRIVER /
 //      BLOB_DRIVER register: default, explicit values, loud unknown-value
 //      failure.
@@ -25,7 +25,7 @@ import { PINNED_LIBRARIES, PYTHON_RUNTIME_VERSION } from '../notebook-author/pro
 import { EXECUTOR_TOOLING_PACKAGES } from './driver.ts';
 import {
   DEFAULT_CONTAINER_IMAGE,
-  buildDockerEnvFlags,
+  dockerEnvNameFlags,
   resolveContainerImage,
   shellSingleQuote,
 } from './container.ts';
@@ -85,12 +85,9 @@ test('resolveContainerImage: default, override, and blank-value fallback', () =>
   assert.equal(resolveContainerImage({ EXECUTOR_CONTAINER_IMAGE: '   ' }), DEFAULT_CONTAINER_IMAGE);
 });
 
-test('buildDockerEnvFlags produces -e KEY=VALUE pairs in insertion order', () => {
-  assert.deepEqual(buildDockerEnvFlags({}), []);
-  assert.deepEqual(
-    buildDockerEnvFlags({ ALPHA: 'one', BETA: 'two=with=equals' }),
-    ['-e', 'ALPHA=one', '-e', 'BETA=two=with=equals'],
-  );
+test('dockerEnvNameFlags produces -e NAME pairs in order, and never a value (#521)', () => {
+  assert.deepEqual(dockerEnvNameFlags([]), []);
+  assert.deepEqual(dockerEnvNameFlags(['ALPHA', 'BETA']), ['-e', 'ALPHA', '-e', 'BETA']);
 });
 
 test('shellSingleQuote wraps and escapes embedded single quotes', () => {
