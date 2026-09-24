@@ -200,6 +200,24 @@ const COMPUTED = [
   },
 ];
 
+/** Whole-record reads that hand the environment, whole, to a child process,
+ *  keyed by file and kind, with the exact number of such sites in that file.
+ *  Such a site reads no variable by name: it is the inheritance `spawn` gives a
+ *  child when passed no `env` option, spelled out because the child also needs
+ *  values added. A second site in the same file, or none, fails (#494, ruling
+ *  D14). */
+const PASS_THROUGH = [
+  {
+    file: 'src/lib/sandbox/container.ts',
+    kind: 'whole-record read (spread)',
+    sites: 1,
+    reason:
+      'resolveContainerProxyEnv builds the environment the docker CLI is spawned with for a proxied exec: the ' +
+      'whole environment, as spawn passes it with no env option, plus the six resolved proxy values, which the ' +
+      'CLI hands into the notebook container by name (`-e HTTP_PROXY`)',
+  },
+];
+
 /** Objects that legitimately carry UPPER_SNAKE fields and are not env records,
  *  keyed by the object expression's text. Empty at this commit. */
 const NOT_ENV = {};
@@ -762,14 +780,28 @@ test('every environment variable the deployed app reads is declared in ENV_SPEC 
 
 test('every environment read site resolves to the names it reads', async () => {
   const { unresolved, computedSites, exempted } = await scan();
-  const lines = unresolved.map((u) => `${u.at} — ${u.kind}${u.key ? `: [${u.key}]` : ''}`);
+  const passThrough = (u) => PASS_THROUGH.find((p) => p.file === u.file && p.kind === u.kind);
+  const lines = unresolved
+    .filter((u) => !passThrough(u))
+    .map((u) => `${u.at} — ${u.kind}${u.key ? `: [${u.key}]` : ''}`);
   assert.deepEqual(
     lines,
     [],
     'environment read sites the scan cannot name a variable for. Resolve each (a literal or a same-file ' +
-      'constant, an unexported helper), or list a computed site in COMPUTED with the export that enumerates its names:\n  ' +
+      'constant, an unexported helper), or list a computed site in COMPUTED with the export that enumerates its names ' +
+      '(a hand-over of the whole environment to a child process goes in PASS_THROUGH):\n  ' +
       lines.join('\n  '),
   );
+  for (const entry of PASS_THROUGH) {
+    assert.ok(entry.reason.length > 0, `PASS_THROUGH ${entry.file} states no reason`);
+    const found = unresolved.filter((u) => passThrough(u) === entry).map((u) => u.at);
+    assert.equal(
+      found.length,
+      entry.sites,
+      `PASS_THROUGH lists ${entry.sites} ${entry.kind} site(s) in ${entry.file}, but the scan met ` +
+        `${found.length} [${found.join(', ')}] — the entry no longer describes the tree; update or drop it`,
+    );
+  }
   for (const entry of COMPUTED) {
     assert.ok(entry.reason.length > 0, `COMPUTED ${entry.file} states no reason`);
     for (const key of entry.keys) {
