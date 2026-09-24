@@ -438,9 +438,10 @@ jobs:
   # this job the way an npm registry outage fails `npm ci` above. No `npm ci`
   # here: the check imports only the two pin tables, which need no dependency.
   #
-  # ADVISORY until the owner adds it to the ruleset (#518, ruling D4): it
-  # becomes a required check only if its measured runner time is 5 minutes or
-  # less. Its name below is the check's name; do not rename it casually.
+  # REQUIRED: a required status check in ruleset 17585984 (`protect-main`),
+  # added under #518 (ruling D4). The ruleset matches the name below, so a
+  # rename leaves every pull request waiting on a check that never reports;
+  # rename it only together with the ruleset entry.
   executor-image:
     name: executor image build
     runs-on: ubuntu-latest

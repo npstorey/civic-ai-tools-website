@@ -28,6 +28,11 @@
 //   environment: its call naming another portal is SENT, because nothing in the
 //   loop reads the environment and replay never passes a locked portal.
 //
+//   Replay of a failed-first run (N16 P5, the cold read's F1). Added below the
+//   cases above, which are unchanged: runs whose FIRST portal-bearing call
+//   failed, locked and unlocked, packaged from the real run and replayed through
+//   replay's own factory and the real loop.
+//
 // No live endpoint, no credential: the model is a scripted loopback server, the
 // data source is an in-process transport, every key is a placeholder, and both
 // portal hostnames are synthetic (`.example`), outside the shapes
@@ -86,7 +91,8 @@ const { EXAMPLE_QUERIES, offeredExampleQueries } = await import('./query-present
 const { startScriptedModelServer } = await import('./model-loop/test-harness.ts');
 const { runToolLoop } = await import('./model-loop/run-tool-loop.ts');
 const { compareLoopOptions } = await import('./model-loop/compare-loop.ts');
-const { replayLoopOptions, replayLoopOptionsForPackage } = await import('./model-loop/replay-loop.ts');
+const { replayLoopOptions, replayLoopOptionsForPackage, replayPortalForPackage } = await import('./model-loop/replay-loop.ts');
+const { canonicalizeToolCall } = await import('./evidence/tool-call-identity.ts');
 const { queryWithMcpStreaming } = await import('./openrouter-streaming.ts');
 const { createModelClient, _resetDefaultModelClientForTests } = await import('./model-client.ts');
 const { carriedModelIdentity } = await import('./model-catalog.ts');
@@ -532,6 +538,152 @@ test('#436: replay is unaffected — with the switch on in the environment, its 
     delete process.env.MODEL_API_BASE_URL;
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+// --- Replay of a run whose first portal-bearing call failed (N16 P5, F1) ------
+//
+// The plan above puts the answered call FIRST, and the replay case above hands
+// replay a one-query package: both shapes on which "the first queries[] entry
+// naming a portal" is the right portal. The runs below put a failed call on
+// the foreign portal first, on a dataset no other call touches, and build the
+// package from the real run, so `queries[]` carries the failed entry exactly as
+// the packager writes it. What makes the replay assertions able to fail: the
+// only place the foreign portal appears in the package is that failed entry,
+// so a replay that names it read the failed entry (it did at 60a1b75).
+
+interface ScriptedRun extends Run { pkg: EvidencePackage }
+
+async function driveAndPackage(
+  calls: Array<{ id: string; args: Record<string, unknown> }>,
+  lockedPortal: string | undefined,
+  transport: (args: Record<string, unknown>) => Promise<string>,
+): Promise<ScriptedRun> {
+  const { server, url, requests } = await startScriptedModelServer([
+    { toolCalls: calls.map(({ id, args }) => ({ id, name: 'get_data', args: { ...args } })) },
+    { content: ANSWER },
+  ]);
+  try {
+    process.env.OPENROUTER_API_KEY = 'placeholder-model-key-p5-replay-portal';
+    process.env.MODEL_API_BASE_URL = url;
+    _resetDefaultModelClientForTests();
+    const builder = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);
+    builder.startRoot('analysis', { 'analysis.portal': LOCKED });
+    const sent: string[] = [];
+    let completion: CompletionResult | undefined;
+    await queryWithMcpStreaming(
+      QUESTION,
+      carriedModelIdentity('fake/model'),
+      mcpToolsFor(lockedPortal),
+      async (_name, args) => { sent.push(String(args.dataset_id)); return transport(args); },
+      'You are a fixture system prompt.',
+      {
+        onProgress: () => {},
+        onToken: () => {},
+        onComplete: (_panel, result) => { completion = result; },
+        onError: (_panel, message) => assert.fail(`unexpected onError: ${message}`),
+      },
+      { builder, parentSpanId: builder.rootSpanId, resolveToolSource: sourceIdForToolName },
+      { portal: LOCKED, toolTimeoutMs: 10_000 },
+      lockedPortal,
+    );
+    builder.endRoot();
+    assert.ok(completion, 'onComplete must fire');
+    const run: Run = { completion: completion!, trace: builder.finalize() as unknown as Record<string, unknown>, sent, requests };
+    return { ...run, pkg: packageOf(run) };
+  } finally {
+    delete process.env.OPENROUTER_API_KEY;
+    delete process.env.MODEL_API_BASE_URL;
+    _resetDefaultModelClientForTests();
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
+/** Replay `pkg` through replay's own factory and the real loop; the replayed
+ *  model makes one `get_data` naming no portal, the shape the core injects into. */
+async function replayOf(pkg: EvidencePackage) {
+  const { server, url } = await startScriptedModelServer([
+    { toolCalls: [{ id: 'r1', name: 'get_data', args: { type: 'query', dataset_id: 'rrrr-1111', select: 'count(*)' } }] },
+    { content: ANSWER },
+  ]);
+  const composed: Array<string | undefined> = [];
+  const sent: Array<Record<string, unknown>> = [];
+  try {
+    process.env.MODEL_API_BASE_URL = url;
+    const options = await replayLoopOptionsForPackage({
+      pkg,
+      client: createModelClient({ apiKey: 'placeholder-model-key-p5-replay' }),
+      endpointModel: 'fake/model',
+      prompt: QUESTION,
+      composeSystemPrompt: async (portal) => { composed.push(portal); return 'fixture'; },
+      callTool: async (_name, args) => { sent.push({ ...args }); return ONE_ROW; },
+    });
+    const result = await runToolLoop(options);
+    return { composed, options, sent, keys: result.toolCalls.map(canonicalizeToolCall) };
+  } finally {
+    delete process.env.MODEL_API_BASE_URL;
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
+const answerEveryCall = async () => ONE_ROW;
+const FAILED_FIRST = [
+  { id: 'f1', args: { type: 'query', dataset_id: 'jjjj-1010', select: 'count(*)', portal: FOREIGN } },
+  { id: 'f2', args: { type: 'query', dataset_id: 'kkkk-1111', select: 'count(*)' } },
+];
+
+test('N16 P5 (F1): locked — the first call is refused on the foreign portal, the run answers on the locked one, and the replay runs on the locked one', async () => {
+  const run = await driveAndPackage(FAILED_FIRST, LOCKED, answerEveryCall);
+  // Premise: the package has F1's shape, read off the package the real run built.
+  assert.deepEqual(run.sent, ['kkkk-1111'], 'premise: the lock refused the foreign call and sent the other');
+  const queries = run.pkg.queries as Array<EvidencePackage['queries'][number] & { failed?: boolean }>;
+  assert.equal(queries[0].portal, FOREIGN);
+  assert.equal(queries[0].failed, true, 'premise: the first portal-bearing entry is the refused call');
+  assert.equal(queries[1].portal, LOCKED);
+  assert.equal(queries[1].failed, undefined);
+  assert.deepEqual(run.pkg.dataSources.map((d) => d.portalUrl), [`https://${LOCKED}`]);
+
+  const replay = await replayOf(run.pkg);
+  assert.deepEqual(replay.composed, [LOCKED], 'the replay prompt was composed for a portal the run never reached');
+  assert.equal(replay.options.portal, LOCKED);
+  assert.equal(replay.sent.length, 1);
+  assert.equal(replay.sent[0].portal, LOCKED, 'the replayed get_data was sent to a portal the run never reached');
+  assert.ok(replay.keys[0].includes(LOCKED), replay.keys[0]);
+  assert.ok(!replay.keys.join('\n').includes(FOREIGN), `the identity key the attestation signs names the refused portal: ${replay.keys[0]}`);
+  assert.equal(replayPortalForPackage(run.pkg), LOCKED, 'replay derives the portal the lock refused');
+});
+
+test('N16 P5 (F1): unlocked — the first call fails on another portal, the run answers on its own, and the replay runs on its own', async () => {
+  const run = await driveAndPackage(FAILED_FIRST, undefined, async (args) => {
+    if (args.portal === FOREIGN) throw new Error('fixture: the source did not answer');
+    return ONE_ROW;
+  });
+  assert.deepEqual(run.sent, ['jjjj-1010', 'kkkk-1111'], 'premise: unlocked, both calls were sent');
+  const queries = run.pkg.queries as Array<EvidencePackage['queries'][number] & { failed?: boolean }>;
+  assert.equal(queries[0].portal, FOREIGN);
+  assert.equal(queries[0].failed, true, 'premise: the first portal-bearing entry failed');
+  assert.deepEqual(run.pkg.dataSources.map((d) => d.portalUrl), [`https://${LOCKED}`]);
+  const replay = await replayOf(run.pkg);
+  assert.deepEqual(replay.composed, [LOCKED], 'the replay prompt was composed for the portal whose call failed');
+  assert.equal(replay.sent[0].portal, LOCKED);
+  assert.equal(replayPortalForPackage(run.pkg), LOCKED);
+});
+
+test('N16 P5: locked — every portal-bearing call was refused, and the replay names no portal', async () => {
+  const run = await driveAndPackage([FAILED_FIRST[0]], LOCKED, answerEveryCall);
+  assert.deepEqual(run.sent, [], 'premise: the only call was refused');
+  const queries = run.pkg.queries as Array<EvidencePackage['queries'][number] & { failed?: boolean }>;
+  assert.equal(queries.length, 1);
+  assert.equal(queries[0].portal, FOREIGN);
+  assert.equal(queries[0].failed, true);
+  assert.deepEqual(run.pkg.dataSources, [], 'premise: nothing was accessed');
+
+  const replay = await replayOf(run.pkg);
+  assert.deepEqual(replay.composed, [undefined], 'the replay prompt names a default portal the run never reached');
+  assert.equal(replay.options.portal, undefined);
+  assert.equal(replay.sent.length, 1);
+  assert.equal('portal' in replay.sent[0], false, `a portal was injected into the replayed call: ${JSON.stringify(replay.sent[0])}`);
+  assert.ok(!replay.keys.join('\n').includes(FOREIGN), `the identity key names the refused portal: ${replay.keys[0]}`);
+  assert.equal(replayPortalForPackage(run.pkg), undefined, 'replay derives a portal from a call that reached none');
 });
 
 test('teardown', () => restoreEnv());

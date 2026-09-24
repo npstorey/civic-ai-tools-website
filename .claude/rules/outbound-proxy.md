@@ -3,6 +3,7 @@ paths:
   - "src/lib/outbound-proxy.ts"
   - "src/lib/signin-proxy.ts"
   - "src/lib/sandbox/vercel-sandbox.ts"
+  - "src/lib/sandbox/container.ts"
   - "scripts/outbound-proxy.test.mjs"
   - "package.json"
   - "package-lock.json"
@@ -10,15 +11,19 @@ paths:
 
 # The egress-proxy path, and the one thing a dependency bump costs here
 
-Three modules carry this application's egress-proxy behaviour, and they reach three different
+Four modules carry this application's egress-proxy behaviour, and they reach four different
 transports: [`src/lib/outbound-proxy.ts`](../../src/lib/outbound-proxy.ts) installs the one
 `undici` dispatcher that governs `fetch`;
 [`src/lib/signin-proxy.ts`](../../src/lib/signin-proxy.ts) routes the sign-in provider leg, which
-leaves through `node:http(s)` and which no `fetch` dispatcher can reach (#483); and
+leaves through `node:http(s)` and which no `fetch` dispatcher can reach (#483);
 [`src/lib/sandbox/vercel-sandbox.ts`](../../src/lib/sandbox/vercel-sandbox.ts) hands
 `@vercel/sandbox` a `fetch` that replaces the SDK's own per-request agent, which overrides any
 global dispatcher, with one built by `createProxyDispatcher` in `outbound-proxy.ts`, keeping the
-SDK's `bodyTimeout: 0` (#492).
+SDK's `bodyTimeout: 0` (#492); and
+[`src/lib/sandbox/container.ts`](../../src/lib/sandbox/container.ts) hands the values
+`resolveProxySettings` resolves to the clients inside the notebook container: each `docker exec`
+names the proxy variables in both spellings (`-e NAME`, never a value) and the spawned `docker` CLI
+carries their values in its environment (#494).
 [`docs/deploy.md`](../../docs/deploy.md) carries the operator-facing table of which outbound kinds
 honour the variables and which do not.
 

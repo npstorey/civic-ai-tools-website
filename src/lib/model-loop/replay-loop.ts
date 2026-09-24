@@ -90,10 +90,11 @@ export interface ReplayLoopInputs {
   /** Regenerated fresh for the record's portal by the route. */
   systemPrompt: string;
   /**
-   * The portal the record's own calls named (`replayPortalForPackage`),
-   * injected into Socrata calls that omit one. Absent when the record named
-   * none: nothing is injected, and the replay runs on whatever the source
-   * defaults to — exactly as the recorded run did (#384, F2).
+   * The portal the record's own answered calls named
+   * (`replayPortalForPackage`; a failed call names none), injected into
+   * Socrata calls that omit one. Absent when the record named none: nothing
+   * is injected, and the replay runs on whatever the source defaults to —
+   * exactly as the recorded run did (#384, F2).
    */
   portal?: string;
   /**
@@ -184,10 +185,11 @@ export function getDataAddressableCatalogTypes(): ReadonlySet<string> {
  * reached every `get_data` call the replay injected into and, through
  * `canonicalizeToolCall`, a signed consistency attestation.
  *
- * Order: the first `queries[]` entry that named a portal (the loop's own
- * record, app-side), else the first `dataSources[]` entry that is BOTH
- * addressable by `get_data` and carries a portal host, else `undefined` — a
- * record that named no portal a `get_data` could use replays with none.
+ * Order: the first `queries[]` entry that named a portal and is not recorded
+ * as failed (the loop's own record, app-side), else the first `dataSources[]`
+ * entry that is BOTH addressable by `get_data` and carries a portal host, else
+ * `undefined` — a record that named no portal a `get_data` could use replays
+ * with none.
  *
  * THE SECOND CLAUSE'S FILTER (#409 P8, cold-read F1). Until this phase the
  * fallback took the first entry with any `portalUrl` and inspected nothing
@@ -205,12 +207,47 @@ export function getDataAddressableCatalogTypes(): ReadonlySet<string> {
  * that IS addressable rather than rejecting the whole list when entry zero is
  * not, so an analysis that queried both an aggregate source and a portal still
  * replays on the portal it queried.
+ *
+ * THE FIRST CLAUSE SKIPS A FAILED CALL (Wave N16 P5, the cold read's F1 on
+ * #518). The packager writes `portal` onto a `queries[]` entry whether or not
+ * the call was answered, and this clause used to take the first entry naming a
+ * portal without reading `failed`. A run whose first call was refused for
+ * naming portal B, and which then answered on portal A, therefore replayed on
+ * B: the replay's prompt named B, B was injected into every replayed `get_data`
+ * naming none, and a signed consistency attestation compared a run on A with a
+ * replay on B. Under `SITE_PORTAL_LOCKED` that is a replay reaching the portal
+ * the lock refused; unlocked, the same shape arises whenever the first
+ * portal-bearing call failed on a portal the run never reached. A call recorded
+ * as failed reached no portal, so it names none a replay may run on.
+ *
+ * WHEN EVERY PORTAL-BEARING CALL FAILED, the derivation falls through to the
+ * second clause, unchanged, and then to `undefined`. Chosen over the failed
+ * call's portal because `dataSources[]` never lists a failed call (the harness
+ * skips one before it resolves a source), so the fall-through can only name a
+ * portal the run reached, and `undefined` is what a record that reached no
+ * portal already gets: no portal injected, a prompt naming no default portal,
+ * and replayed calls that carry the portal the model chose or none, which is
+ * what the identity keys then record. The failed call's portal would re-run
+ * against a portal the record shows no data from, and under the lock it is the
+ * portal the lock refused. For a package this repository's packager builds,
+ * the fall-through finds nothing in that case and the answer is `undefined`: a
+ * Socrata `dataSources[]` entry exists only for an answered call that carried
+ * a portal, and that call's `queries[]` entry carries the same portal.
+ *
+ * Only `failed === true` disqualifies an entry. A package with no failed entry
+ * derives exactly what it derived before this clause read `failed`; measured
+ * over the earlier suites' fixture shapes
+ * (`replay-portal-skips-failed-calls.test.ts`) and over the 44 records
+ * published at the reference deployment on 2026-09-24, none of which carries
+ * a `failed` key.
  */
 export function replayPortalForPackage(pkg: {
-  queries: ReadonlyArray<{ portal?: string }>;
+  queries: ReadonlyArray<{ portal?: string; failed?: boolean }>;
   dataSources: ReadonlyArray<{ catalogType?: string; portalUrl?: string }>;
 }): string | undefined {
-  const named = pkg.queries.find((q) => typeof q.portal === 'string' && q.portal.length > 0)?.portal;
+  const named = pkg.queries.find(
+    (q) => q.failed !== true && typeof q.portal === 'string' && q.portal.length > 0,
+  )?.portal;
   if (named) return named;
   const sourceUrl = pkg.dataSources.find(
     (d) =>
@@ -338,7 +375,8 @@ export async function replayLoopOptionsForPackage(
     ...loopInputs
   } = inputs;
 
-  // The portal the record's own calls named, or none (#384, F2). A record that
+  // The portal the record's own answered calls named, or none (#384 F2; a
+  // failed call names none, N16 P5). A record that
   // named no portal — a search/fetch-only run has no data-source entry, and an
   // aggregate or CKAN source states an endpoint no `get_data` could address —
   // replays with nothing injected and a system prompt that names no default
