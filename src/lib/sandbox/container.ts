@@ -37,10 +37,25 @@
  * With none configured, every invocation is exactly what it was before.
  * `docker run` and `docker kill` never carry the variables: the idle
  * `sleep infinity` makes no requests.
+ *
+ * THE NOTEBOOK'S OWN VARIABLES PASS THE SAME WAY (#521, ruling D8). A
+ * command's env — for nbconvert, the two data-portal tokens
+ * `buildNotebookEnv` supplies — reaches the container as `-e NAME`, with the
+ * value in the spawned CLI's environment. Until #521 it went on the command
+ * line as `-e NAME=value`, where `ps` and `/proc/<pid>/cmdline` could read it
+ * for the length of every run. See `passByName`.
+ *
+ * SETTINGS (#530, ruling D7). Besides the image, eight named settings shape
+ * the invocations, each unset by default and each leaving the argv exactly as
+ * it was when unset: the CLI binary (EXECUTOR_CONTAINER_CLI), and seven that
+ * add flags to `docker run` — memory, CPUs, a process limit, the network, the
+ * user, the OCI runtime, and a hardening switch. See
+ * `resolveContainerSettings`. There is no free-form argument setting: each
+ * value is checked against its own shape, and none can start with `-`.
  */
 import { spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from 'node:child_process';
-import { NotebookExecutionError } from './driver.ts';
+import { ExecutorSettingError, NotebookExecutionError } from './driver.ts';
 import type {
   CreateSessionOptions,
   ExecutorCommand,
@@ -62,9 +77,141 @@ export function resolveContainerImage(
   return image && image.trim().length > 0 ? image.trim() : DEFAULT_CONTAINER_IMAGE;
 }
 
-/** `-e K=V` flag pairs for `docker exec` from an env record. */
-export function buildDockerEnvFlags(env: Record<string, string>): string[] {
-  return Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]);
+/** The CLI every invocation spawns when EXECUTOR_CONTAINER_CLI is unset. */
+export const DEFAULT_CONTAINER_CLI = 'docker';
+
+const ENV_CONTAINER_CLI = 'EXECUTOR_CONTAINER_CLI';
+const ENV_CONTAINER_MEMORY = 'EXECUTOR_CONTAINER_MEMORY';
+const ENV_CONTAINER_CPUS = 'EXECUTOR_CONTAINER_CPUS';
+const ENV_CONTAINER_PIDS_LIMIT = 'EXECUTOR_CONTAINER_PIDS_LIMIT';
+const ENV_CONTAINER_NETWORK = 'EXECUTOR_CONTAINER_NETWORK';
+const ENV_CONTAINER_USER = 'EXECUTOR_CONTAINER_USER';
+const ENV_CONTAINER_RUNTIME = 'EXECUTOR_CONTAINER_RUNTIME';
+const ENV_CONTAINER_HARDENED = 'EXECUTOR_CONTAINER_HARDENED';
+
+/** The flags EXECUTOR_CONTAINER_HARDENED adds: no Linux capabilities, and no privilege gain through setuid. */
+export const HARDENED_RUN_FLAGS = ['--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'] as const;
+
+/**
+ * The executor image's own matplotlib cache, warmed at build time for uid
+ * 10001 (docker/executor/Dockerfile, `MPLCONFIGDIR`), and the path a container
+ * started under EXECUTOR_CONTAINER_USER uses instead. Measured on the 0.2.0
+ * image: any other user cannot write the image's cache, and matplotlib then
+ * writes "created a temporary cache directory" into the output of a cell that
+ * imports it — and a cold cache adds "generated new fontManager" in a notebook
+ * that logs at INFO. That output is signed. A writable copy of the warm cache
+ * adds neither.
+ */
+export const IMAGE_MPLCONFIGDIR = '/home/notebook/.config/matplotlib';
+export const WRITABLE_MPLCONFIGDIR = '/tmp/matplotlib';
+
+/** A network or runtime name as the CLI spells one: no leading `-`, no whitespace, no separators. */
+const RUNTIME_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+
+/** What `resolveContainerSettings` resolves: the CLI, and the flags `docker run` carries. */
+export interface ContainerSettings {
+  /** The binary every invocation spawns: a name found on PATH, or a path. */
+  cli: string;
+  /** Flags `run` carries between `--rm` and the image, in a fixed order. Empty at the defaults. */
+  runFlags: string[];
+  /** Whether the session copies the image's matplotlib cache to WRITABLE_MPLCONFIGDIR after `run`. */
+  seedMatplotlibCache: boolean;
+}
+
+/**
+ * One setting's value: `null` when blank, the trimmed value when it is of the
+ * setting's shape. Anything else refuses, naming the variable and the shape,
+ * never the value. Every shape excludes a leading `-` and whitespace, so no
+ * value can be read by the CLI as another argument.
+ */
+function settingValue(
+  variable: string,
+  raw: string | undefined,
+  isShaped: (value: string) => boolean,
+  expects: string,
+): string | null {
+  const value = (raw ?? '').trim();
+  if (value === '') return null;
+  if (!isShaped(value)) {
+    throw new ExecutorSettingError(
+      variable,
+      `${variable} must be ${expects} (docs/deploy.md, executor settings).`,
+    );
+  }
+  return value;
+}
+
+/**
+ * Resolve the container settings (#530, ruling D7) from the environment.
+ * Called at session start, before any CLI call, so a refusal leaves no
+ * container behind. At the defaults the CLI is `docker` and `run` carries no
+ * extra flag, so every invocation is what it was before the settings existed.
+ */
+export function resolveContainerSettings(env: EnvRecord = process.env): ContainerSettings {
+  const cli = settingValue(
+    ENV_CONTAINER_CLI,
+    env[ENV_CONTAINER_CLI],
+    (v) => /^[A-Za-z0-9_./][A-Za-z0-9_./-]*$/.test(v),
+    'a command name or a path, such as podman or /usr/local/bin/docker',
+  );
+  const memory = settingValue(
+    ENV_CONTAINER_MEMORY,
+    env[ENV_CONTAINER_MEMORY],
+    (v) => /^\d+(\.\d+)?[bkmg]?$/i.test(v) && Number.parseFloat(v) > 0,
+    'a memory size above zero, such as 2g or 512m',
+  );
+  const cpus = settingValue(
+    ENV_CONTAINER_CPUS,
+    env[ENV_CONTAINER_CPUS],
+    (v) => /^(\d+(\.\d+)?|\.\d+)$/.test(v) && Number(v) > 0,
+    'a number of CPUs above zero, such as 1.5',
+  );
+  const pidsLimit = settingValue(
+    ENV_CONTAINER_PIDS_LIMIT,
+    env[ENV_CONTAINER_PIDS_LIMIT],
+    (v) => /^[1-9]\d*$/.test(v),
+    'a whole number of processes above zero',
+  );
+  const network = settingValue(
+    ENV_CONTAINER_NETWORK,
+    env[ENV_CONTAINER_NETWORK],
+    (v) => RUNTIME_NAME.test(v),
+    'a network name, such as notebook-egress',
+  );
+  const user = settingValue(
+    ENV_CONTAINER_USER,
+    env[ENV_CONTAINER_USER],
+    (v) => /^[A-Za-z0-9_][A-Za-z0-9_.-]*(:[A-Za-z0-9_][A-Za-z0-9_.-]*)?$/.test(v),
+    'a user, or user:group, by name or id, such as 10001:10001',
+  );
+  const runtime = settingValue(
+    ENV_CONTAINER_RUNTIME,
+    env[ENV_CONTAINER_RUNTIME],
+    (v) => RUNTIME_NAME.test(v),
+    'an OCI runtime name the container runtime knows, such as runsc',
+  );
+  const hardened = settingValue(
+    ENV_CONTAINER_HARDENED,
+    env[ENV_CONTAINER_HARDENED],
+    (v) => /^(1|true|0|false)$/i.test(v),
+    '1 or true to switch it on, 0 or false to leave it off',
+  );
+
+  const runFlags: string[] = [];
+  if (memory !== null) runFlags.push('--memory', memory);
+  if (cpus !== null) runFlags.push('--cpus', cpus);
+  if (pidsLimit !== null) runFlags.push('--pids-limit', pidsLimit);
+  if (network !== null) runFlags.push('--network', network);
+  // A set user gets a matplotlib cache it can write (see IMAGE_MPLCONFIGDIR).
+  if (user !== null) runFlags.push('--user', user, '-e', `MPLCONFIGDIR=${WRITABLE_MPLCONFIGDIR}`);
+  if (runtime !== null) runFlags.push('--runtime', runtime);
+  if (hardened !== null && /^(1|true)$/i.test(hardened)) runFlags.push(...HARDENED_RUN_FLAGS);
+  return { cli: cli ?? DEFAULT_CONTAINER_CLI, runFlags, seedMatplotlibCache: user !== null };
+}
+
+/** `-e NAME` flags for `docker exec`, one per name, in order: names only, never a value. */
+export function dockerEnvNameFlags(names: readonly string[]): string[] {
+  return names.flatMap((name) => ['-e', name]);
 }
 
 /** Single-quote a string for `sh -c` (used for in-container file paths). */
@@ -142,8 +289,8 @@ function carriesUserinfo(address: string): boolean {
 }
 
 /**
- * What a proxied session adds to each `docker exec`: the six `-e NAME` flags,
- * and the environment the CLI is spawned with, which carries their values.
+ * What a proxied session passes into the container on each `docker exec`: the
+ * six names, both spellings, with the values `passByName` hands the CLI.
  * `null` when no proxy is configured, so the driver adds nothing at all.
  *
  * The values are the app's own resolution (`resolveProxySettings`): lower case
@@ -166,7 +313,7 @@ function carriesUserinfo(address: string): boolean {
  */
 export async function resolveContainerProxyEnv(
   env: EnvRecord,
-): Promise<{ flags: string[]; spawnEnv: EnvRecord } | null> {
+): Promise<Record<(typeof CONTAINER_PROXY_ENV_NAMES)[number], string> | null> {
   const anyAddress = [env.HTTP_PROXY, env.http_proxy, env.HTTPS_PROXY, env.https_proxy].some(
     (value) => (value ?? '').trim().length > 0,
   );
@@ -184,18 +331,34 @@ export async function resolveContainerProxyEnv(
   }
 
   const httpsProxy = settings.httpsProxy || settings.httpProxy;
+  // In CONTAINER_PROXY_ENV_NAMES order, which is the order of the flags.
   return {
-    flags: CONTAINER_PROXY_ENV_NAMES.flatMap((name) => ['-e', name]),
-    spawnEnv: {
-      ...env,
-      HTTP_PROXY: settings.httpProxy,
-      http_proxy: settings.httpProxy,
-      HTTPS_PROXY: httpsProxy,
-      https_proxy: httpsProxy,
-      NO_PROXY: settings.noProxy,
-      no_proxy: settings.noProxy,
-    },
+    HTTP_PROXY: settings.httpProxy,
+    http_proxy: settings.httpProxy,
+    HTTPS_PROXY: httpsProxy,
+    https_proxy: httpsProxy,
+    NO_PROXY: settings.noProxy,
+    no_proxy: settings.noProxy,
   };
+}
+
+/**
+ * How one `docker exec` passes `vars` into the container: `-e NAME` for each
+ * name, and the environment the CLI is spawned with, which carries the values.
+ * The CLI resolves a bare `-e NAME` from its own environment, so no value is
+ * ever on a command line (#494 for the proxy variables, #521 for the
+ * notebook's own).
+ *
+ * With nothing to pass, no `env` option at all, so the CLI inherits
+ * `process.env` exactly as it did before either change. Otherwise the CLI gets
+ * the whole environment (`env`, as spawn would pass it with no `env` option)
+ * with `vars` on top: later keys win, so a command's own variable wins over a
+ * proxy variable of the same name, as `ExecutorCommand.env` promises.
+ */
+function passByName(env: EnvRecord, vars: Record<string, string>): { flags: string[]; spawnEnv?: EnvRecord } {
+  const names = Object.keys(vars);
+  if (names.length === 0) return { flags: [] };
+  return { flags: dockerEnvNameFlags(names), spawnEnv: { ...env, ...vars } };
 }
 
 interface DockerResult {
@@ -205,17 +368,19 @@ interface DockerResult {
 }
 
 /**
- * Run the docker CLI with array args (no shell interpolation). Rejects only
- * on spawn failure (docker binary missing); CLI failures resolve with a
- * non-zero exitCode so callers decide what is fatal.
+ * Run the container CLI (`docker` unless EXECUTOR_CONTAINER_CLI names another)
+ * with array args (no shell interpolation). Rejects only on spawn failure (the
+ * binary missing); CLI failures resolve with a non-zero exitCode so callers
+ * decide what is fatal.
  */
 function runDocker(
   spawnDocker: DockerSpawn,
+  cli: string,
   args: string[],
   opts: { stdin?: string; signal?: AbortSignal; env?: EnvRecord } = {},
 ): Promise<DockerResult> {
   return new Promise((resolve, reject) => {
-    const child = spawnDocker('docker', args, {
+    const child = spawnDocker(cli, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       ...(opts.signal ? { signal: opts.signal } : {}),
       // Only a proxied exec passes one; otherwise the key is absent and the
@@ -230,7 +395,7 @@ function runDocker(
     child.on('error', (err) => {
       reject(
         new NotebookExecutionError(
-          'docker CLI unavailable — the container executor driver requires a running host container runtime',
+          `${cli} CLI unavailable — the container executor driver requires a running host container runtime`,
           { cause: err },
         ),
       );
@@ -252,20 +417,26 @@ export function createContainerDriver(deps: ContainerDriverDeps = {}): NotebookE
     name: 'container',
 
     async createSession(opts: CreateSessionOptions): Promise<ExecutorSession> {
-      // Resolved once per session, before any docker call: a proxy address
-      // carrying a user or password refuses here (D9), and every exec of the
-      // session then carries the same names and values (D3).
-      const proxy = await resolveContainerProxyEnv(deps.env ?? process.env);
-      const proxyFlags = proxy ? proxy.flags : [];
-      const execEnv = proxy ? { env: proxy.spawnEnv } : {};
+      // Resolved once per session, before any CLI call: a malformed setting
+      // (#530) or a proxy address carrying a user or password (D9) refuses
+      // here, and every exec of the session then carries the same names and
+      // values (D3).
+      const env = deps.env ?? process.env;
+      const { cli, runFlags, seedMatplotlibCache } = resolveContainerSettings(env);
+      const proxyValues = (await resolveContainerProxyEnv(env)) ?? {};
+      // What the execs that carry no variables of their own (the write and the
+      // read) pass: the proxy variables, or nothing.
+      const proxyOnly = passByName(env, proxyValues);
+      const proxyOnlySpawn = proxyOnly.spawnEnv ? { env: proxyOnly.spawnEnv } : {};
 
       const image = resolveContainerImage();
       // `--rm` so a killed/stopped container removes itself; `sleep infinity`
       // keeps it idle between execs (the create/exec/read/teardown shape).
-      const run = await runDocker(spawnDocker, ['run', '-d', '--rm', image, 'sleep', 'infinity']);
+      // The settings' flags sit between `--rm` and the image; none at the defaults.
+      const run = await runDocker(spawnDocker, cli, ['run', '-d', '--rm', ...runFlags, image, 'sleep', 'infinity']);
       if (run.exitCode !== 0) {
         throw new NotebookExecutionError(
-          `docker run failed (exit ${run.exitCode}) — is the container runtime up and the image "${image}" built? (docker build -t ${image} docker/executor)`,
+          `${cli} run failed (exit ${run.exitCode}) — is the container runtime up and the image "${image}" built? (docker build -t ${image} docker/executor)`,
           { exitCode: run.exitCode, stderr: run.stderr.toString('utf8') },
         );
       }
@@ -277,11 +448,19 @@ export function createContainerDriver(deps: ContainerDriverDeps = {}): NotebookE
       let timedOut = false;
       const killTimer = setTimeout(() => {
         timedOut = true;
-        void runDocker(spawnDocker, ['kill', containerId]).catch(() => {
+        void runDocker(spawnDocker, cli, ['kill', containerId]).catch(() => {
           /* container already gone */
         });
       }, opts.timeoutMs);
       killTimer.unref();
+
+      // Under EXECUTOR_CONTAINER_USER only: seed the writable cache from the
+      // image's warm one before anything imports matplotlib. Its exit status is
+      // not fatal: an image with no cache at that path leaves the copy empty,
+      // which is writable, so no warning, just a cold cache.
+      if (seedMatplotlibCache) {
+        await runDocker(spawnDocker, cli, ['exec', containerId, 'cp', '-R', IMAGE_MPLCONFIGDIR, WRITABLE_MPLCONFIGDIR]);
+      }
 
       return {
         id: containerId,
@@ -290,13 +469,17 @@ export function createContainerDriver(deps: ContainerDriverDeps = {}): NotebookE
         stackPreinstalled: true,
 
         async runCommand(command: ExecutorCommand): Promise<ExecutorCommandResult> {
-          const envFlags = buildDockerEnvFlags(command.env ?? {});
+          // Proxy variables first, then the command's own, which win on a
+          // shared name (see `passByName`). All by name (#521).
+          const byName = passByName(env, { ...proxyValues, ...(command.env ?? {}) });
           const result = await runDocker(
             spawnDocker,
-            // Proxy names first, so a key in the command's own env wins on
-            // collision, as ExecutorCommand promises.
-            ['exec', ...proxyFlags, ...envFlags, containerId, command.cmd, ...command.args],
-            { ...(command.signal ? { signal: command.signal } : {}), ...execEnv },
+            cli,
+            ['exec', ...byName.flags, containerId, command.cmd, ...command.args],
+            {
+              ...(command.signal ? { signal: command.signal } : {}),
+              ...(byName.spawnEnv ? { env: byName.spawnEnv } : {}),
+            },
           );
           return {
             exitCode: result.exitCode,
@@ -314,11 +497,12 @@ export function createContainerDriver(deps: ContainerDriverDeps = {}): NotebookE
           for (const file of files) {
             const result = await runDocker(
               spawnDocker,
-              ['exec', '-i', ...proxyFlags, containerId, 'sh', '-c', `cat > ${shellSingleQuote(file.path)}`],
+              cli,
+              ['exec', '-i', ...proxyOnly.flags, containerId, 'sh', '-c', `cat > ${shellSingleQuote(file.path)}`],
               {
                 stdin: file.content,
                 ...(writeOpts?.signal ? { signal: writeOpts.signal } : {}),
-                ...execEnv,
+                ...proxyOnlySpawn,
               },
             );
             if (result.exitCode !== 0) {
@@ -333,8 +517,9 @@ export function createContainerDriver(deps: ContainerDriverDeps = {}): NotebookE
         async readFileToBuffer(path: string): Promise<Buffer | null> {
           const result = await runDocker(
             spawnDocker,
-            ['exec', ...proxyFlags, containerId, 'cat', path],
-            execEnv,
+            cli,
+            ['exec', ...proxyOnly.flags, containerId, 'cat', path],
+            proxyOnlySpawn,
           );
           if (result.exitCode !== 0) return null;
           return result.stdout;
@@ -344,10 +529,10 @@ export function createContainerDriver(deps: ContainerDriverDeps = {}): NotebookE
           clearTimeout(killTimer);
           // --rm removes the container once killed; a second kill (after the
           // cap fired) fails harmlessly and is swallowed by the caller.
-          const result = await runDocker(spawnDocker, ['kill', containerId]);
+          const result = await runDocker(spawnDocker, cli, ['kill', containerId]);
           if (result.exitCode !== 0 && !timedOut) {
             throw new NotebookExecutionError(
-              `docker kill failed (exit ${result.exitCode})`,
+              `${cli} kill failed (exit ${result.exitCode})`,
               { exitCode: result.exitCode, stderr: result.stderr.toString('utf8') },
             );
           }

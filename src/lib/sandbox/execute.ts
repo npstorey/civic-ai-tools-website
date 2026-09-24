@@ -20,18 +20,28 @@
  */
 import type { Notebook } from '../notebook-author/cells.ts';
 import { PINNED_LIBRARIES, PYTHON_RUNTIME_VERSION } from '../notebook-author/prompt.ts';
-import { executorToolingPipSpecs, NotebookExecutionError } from './driver.ts';
+import { executorToolingPipSpecs, ExecutorSettingError, NotebookExecutionError } from './driver.ts';
 import type { ExecutorSession, NotebookExecutorDriver } from './driver.ts';
 
-export { NotebookExecutionError } from './driver.ts';
+export { ExecutorSettingError, NotebookExecutionError } from './driver.ts';
 
 /**
- * Wall-clock timeout for a single execution session. The notebook itself
- * may run for up to NOTEBOOK_TIMEOUT_S; the session timeout adds headroom
- * for boot, writeFiles, and readback. Per ADR-0005 Risks: 90-120s timeout.
+ * The session cap and the per-cell limit, in seconds, when nothing sets them.
+ * The cap is the wall-clock limit on the whole session: boot, staging, every
+ * cell, and read-back. The per-cell limit is nbconvert's
+ * `ExecutePreprocessor.timeout`. They were constants until #530 (ruling D7)
+ * made them EXECUTOR_SESSION_TIMEOUT_S and EXECUTOR_CELL_TIMEOUT_S, for every
+ * driver; these defaults are the values the constants held (ADR-0005 Risks:
+ * 90-120 s per notebook).
  */
-const SANDBOX_TIMEOUT_MS = 180_000;
-const NOTEBOOK_TIMEOUT_S = 120;
+export const DEFAULT_SESSION_TIMEOUT_S = 180;
+export const DEFAULT_CELL_TIMEOUT_S = 120;
+/**
+ * The largest value either setting takes: a day. A Node timer given more than
+ * about 24.8 days fires at once, so an unbounded cap would kill every session
+ * the moment it started.
+ */
+const MAX_TIMEOUT_S = 86_400;
 
 /** Path inside the session where the unexecuted notebook is written. */
 const NOTEBOOK_IN_PATH = '/tmp/notebook.ipynb';
@@ -43,6 +53,57 @@ const ENV_EXECUTOR_DRIVER = 'EXECUTOR_DRIVER';
 const ENV_SNAPSHOT_ID = 'SANDBOX_SNAPSHOT_ID';
 const ENV_SOCRATA_TOKEN = 'SOCRATA_APP_TOKEN';
 const ENV_DC_API_KEY = 'DC_API_KEY';
+const ENV_SESSION_TIMEOUT = 'EXECUTOR_SESSION_TIMEOUT_S';
+const ENV_CELL_TIMEOUT = 'EXECUTOR_CELL_TIMEOUT_S';
+
+export interface ExecutorTimeouts {
+  /** The session cap, in milliseconds, as `CreateSessionOptions.timeoutMs` takes it. */
+  sessionMs: number;
+  /** The per-cell limit, in seconds, as nbconvert takes it. */
+  cellS: number;
+}
+
+/** A timeout setting's value: blank is the default; otherwise 1 to MAX_TIMEOUT_S whole seconds. */
+function wholeSeconds(variable: string, raw: string | undefined, fallback: number): number {
+  const value = (raw ?? '').trim();
+  if (value === '') return fallback;
+  const seconds = /^[1-9]\d*$/.test(value) ? Number(value) : NaN;
+  if (!(seconds <= MAX_TIMEOUT_S)) {
+    throw new ExecutorSettingError(
+      variable,
+      `${variable} must be a whole number of seconds from 1 to ${MAX_TIMEOUT_S} (docs/deploy.md, executor settings).`,
+    );
+  }
+  return seconds;
+}
+
+/**
+ * Resolve the session cap and the per-cell limit (#530, ruling D7). Exported
+ * for tests and the parity harness; `executeNotebook` calls it before it
+ * starts anything, so a refusal leaves no runtime behind.
+ *
+ * THE GUARD: the cap must be greater than the per-cell limit. The cap covers
+ * the container or sandbox start, staging and read-back as well as the cells,
+ * so a cap at or below the per-cell limit ends a notebook before its slowest
+ * permitted cell can finish, and the reader sees a timeout the per-cell limit
+ * said would not happen. Refused, not corrected: an operator who set both
+ * finds out at the first run which one to change.
+ */
+export function resolveExecutorTimeouts(
+  env: Record<string, string | undefined> = process.env,
+): ExecutorTimeouts {
+  const sessionS = wholeSeconds(ENV_SESSION_TIMEOUT, env[ENV_SESSION_TIMEOUT], DEFAULT_SESSION_TIMEOUT_S);
+  const cellS = wholeSeconds(ENV_CELL_TIMEOUT, env[ENV_CELL_TIMEOUT], DEFAULT_CELL_TIMEOUT_S);
+  if (sessionS <= cellS) {
+    throw new ExecutorSettingError(
+      ENV_SESSION_TIMEOUT,
+      `${ENV_SESSION_TIMEOUT} must be greater than ${ENV_CELL_TIMEOUT}: the session cap also covers the start, ` +
+        'staging and read-back, so a cap at or below the per-cell limit ends a notebook before its slowest ' +
+        'permitted cell can finish (docs/deploy.md, executor settings).',
+    );
+  }
+  return { sessionMs: sessionS * 1000, cellS };
+}
 
 export type ExecutorDriverName = 'vercel-sandbox' | 'container';
 
@@ -79,9 +140,14 @@ async function getDriver(): Promise<NotebookExecutorDriver> {
 export interface ExecuteNotebookOptions {
   /** Snapshot to boot from (vercel-sandbox driver only). Defaults to env `SANDBOX_SNAPSHOT_ID`. */
   snapshotId?: string;
-  /** Hard timeout for the whole execution session (ms). */
+  /**
+   * Hard timeout for the whole execution session (ms). Defaults to
+   * EXECUTOR_SESSION_TIMEOUT_S. Given here, it is not held to the guard in
+   * `resolveExecutorTimeouts`: the parity harness's timeout proof sets a cap
+   * below the per-cell limit on purpose.
+   */
   timeoutMs?: number;
-  /** Timeout passed to `jupyter nbconvert --ExecutePreprocessor.timeout`. */
+  /** Timeout passed to `jupyter nbconvert --ExecutePreprocessor.timeout`. Defaults to EXECUTOR_CELL_TIMEOUT_S. */
   notebookTimeoutS?: number;
   /** Extra env vars passed to the session. */
   extraEnv?: Record<string, string>;
@@ -158,8 +224,11 @@ export async function executeNotebook(
   opts: ExecuteNotebookOptions = {},
 ): Promise<ExecutionResult> {
   const snapshotId = opts.snapshotId ?? process.env[ENV_SNAPSHOT_ID];
-  const timeoutMs = opts.timeoutMs ?? SANDBOX_TIMEOUT_MS;
-  const notebookTimeoutS = opts.notebookTimeoutS ?? NOTEBOOK_TIMEOUT_S;
+  // Resolved on every run, before the driver starts anything: a malformed
+  // setting refuses here and leaves no runtime behind.
+  const configured = resolveExecutorTimeouts();
+  const timeoutMs = opts.timeoutMs ?? configured.sessionMs;
+  const notebookTimeoutS = opts.notebookTimeoutS ?? configured.cellS;
   const env = buildNotebookEnv(opts.extraEnv);
   const startedAt = Date.now();
 

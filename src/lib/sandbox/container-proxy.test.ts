@@ -92,24 +92,47 @@ function assertOptionsAsBefore494(call: SpawnCall): void {
   assert.deepEqual(call.options.stdio, ['pipe', 'pipe', 'pipe']);
 }
 
-/** Every `docker` argv a session made before #494, in order, byte for byte. */
-function argvBefore494(): string[][] {
+/**
+ * Every `docker` argv a session with no proxy makes, in order, byte for byte:
+ * what it made before #494, with one change #521 made on purpose. The command's
+ * own variable passes by name (`-e NOTEBOOK_EXTRA`); before #521 its value was
+ * on the command line (`-e NOTEBOOK_EXTRA=one`).
+ */
+function argvWithNoProxy(): string[][] {
   return [
     ['run', '-d', '--rm', resolveContainerImage(), 'sleep', 'infinity'],
     ['exec', '-i', CONTAINER_ID, 'sh', '-c', `cat > '/tmp/notebook.ipynb'`],
-    ['exec', '-e', 'NOTEBOOK_EXTRA=one', CONTAINER_ID, 'jupyter', 'nbconvert', '--execute', '/tmp/notebook.ipynb'],
+    ['exec', '-e', 'NOTEBOOK_EXTRA', CONTAINER_ID, 'jupyter', 'nbconvert', '--execute', '/tmp/notebook.ipynb'],
     ['exec', CONTAINER_ID, 'cat', '/tmp/executed.ipynb'],
     ['exec', CONTAINER_ID, 'python3', '-c', 'print(1)'],
     ['kill', CONTAINER_ID],
   ];
 }
 
+/**
+ * The options of a session with no proxy: every invocation as before #494
+ * (stdio pipes only), except the nbconvert exec, which since #521 hands the CLI
+ * an environment carrying its own variable. With `env: {}` as the session's
+ * environment, that is exactly the variable.
+ */
+function assertOptionsWithNoProxy(calls: SpawnCall[]): void {
+  for (const call of calls) {
+    if (!call.args.includes('jupyter')) {
+      assertOptionsAsBefore494(call);
+      continue;
+    }
+    assert.deepEqual(Object.keys(call.options), ['stdio', 'env'], 'the nbconvert exec must hand the CLI an environment');
+    assert.deepEqual(call.options.env, { NOTEBOOK_EXTRA: 'one' });
+  }
+}
+
 // Criterion 4 (#494): with none of the proxy variables set, the driver's
 // `docker` invocations are what they were before — the same argv, and spawn
 // options that carry no `env` key, so the CLI inherits `process.env` exactly as
 // it did. The fixture's command env is not empty, so an argv builder that
-// dropped or reordered the existing `-e K=V` pairs would fail here too.
-test('with no proxy variables set, every docker invocation is byte-identical to before #494', async () => {
+// dropped or reordered the command's variables would fail here too. The one
+// difference from before #494 is #521's: the command's variable passes by name.
+test('with no proxy variables set, every docker invocation is as before #494, but for #521', async () => {
   const { calls, spawn } = recordingSpawn();
   // An explicit empty environment: the outcome must not depend on whether the
   // machine running the suite happens to have a proxy configured.
@@ -121,9 +144,9 @@ test('with no proxy variables set, every docker invocation is byte-identical to 
   );
   assert.deepEqual(
     calls.map((call) => call.args),
-    argvBefore494(),
+    argvWithNoProxy(),
   );
-  for (const call of calls) assertOptionsAsBefore494(call);
+  assertOptionsWithNoProxy(calls);
 });
 
 // --- Criterion 1 (#494, ruling D3): the notebook container inherits the proxy --
@@ -168,9 +191,10 @@ test('a proxied session passes all six names by name on every exec, values in th
   const execs = calls.filter((call) => call.args[0] === 'exec');
   assert.equal(execs.length, 4, 'the session shape drives four execs; fewer would leave some unasserted');
   for (const exec of execs) {
+    // The nbconvert exec also passes its own variable, by name, after the six (#521).
     assert.deepEqual(
       bareEnvNames(exec.args),
-      SIX_NAMES,
+      exec.args.includes('jupyter') ? [...SIX_NAMES, 'NOTEBOOK_EXTRA'] : SIX_NAMES,
       `docker ${exec.args.slice(0, 3).join(' ')}… did not pass the six proxy names by name`,
     );
     assert.ok(
@@ -190,14 +214,15 @@ test('a proxied session passes all six names by name on every exec, values in th
     assert.equal(spawnEnv.PATH, '/usr/bin:/bin');
   }
 
-  // The notebook's own env still reaches nbconvert, after the proxy names, so a
-  // caller key wins on collision as the ExecutorCommand contract says.
+  // The notebook's own env still reaches nbconvert, by name after the proxy
+  // names, with its value in the CLI's environment (#521).
   const nbconvert = execs.find((call) => call.args.includes('jupyter'));
   assert.ok(nbconvert);
   assert.ok(
-    nbconvert.args.indexOf('NOTEBOOK_EXTRA=one') > nbconvert.args.lastIndexOf('no_proxy'),
+    nbconvert.args.indexOf('NOTEBOOK_EXTRA') > nbconvert.args.lastIndexOf('no_proxy'),
     'the command env must follow the proxy names',
   );
+  assert.equal((nbconvert.options.env as Record<string, string>).NOTEBOOK_EXTRA, 'one');
 
   assertNoValueInAnyArgv(calls, [
     'proxy-http.example',
@@ -208,7 +233,7 @@ test('a proxied session passes all six names by name on every exec, values in th
   ]);
 
   // run and kill need nothing from the proxy and are left exactly as they were.
-  const expected = argvBefore494();
+  const expected = argvWithNoProxy();
   assert.deepEqual(calls[0].args, expected[0]);
   assert.deepEqual(calls.at(-1)?.args, expected.at(-1));
   assertOptionsAsBefore494(calls[0]);
@@ -263,8 +288,31 @@ test('with only HTTP_PROXY set, https destinations in the container use it, as t
 test('NO_PROXY alone configures no proxy, and changes nothing', async () => {
   const { calls, spawn } = recordingSpawn();
   await driveSession({ spawn, env: { NO_PROXY: 'data.internal.example' } });
-  assert.deepEqual(calls.map((call) => call.args), argvBefore494());
-  for (const call of calls) assertOptionsAsBefore494(call);
+  assert.deepEqual(calls.map((call) => call.args), argvWithNoProxy());
+  for (const call of calls) {
+    if (call.args.includes('jupyter')) {
+      // The session's environment is spread under the command's variable (#521).
+      assert.deepEqual(call.options.env, { NO_PROXY: 'data.internal.example', NOTEBOOK_EXTRA: 'one' });
+    } else {
+      assertOptionsAsBefore494(call);
+    }
+  }
+});
+
+test("a command's own variable wins over a proxy variable of the same name, as ExecutorCommand promises", async () => {
+  const { calls, spawn } = recordingSpawn();
+  const driver = createContainerDriver({ spawn, env: { HTTPS_PROXY: 'http://session-proxy.example:3128' } });
+  const session = await driver.createSession({ timeoutMs: 60_000, env: {} });
+  await session.runCommand({ cmd: 'curl', args: ['-sI', 'https://data.example'], env: { HTTPS_PROXY: 'http://caller.example:1' } });
+  await session.stop();
+
+  const exec = calls.find((call) => call.args.includes('curl'));
+  assert.ok(exec, 'the exec was not recorded');
+  const spawnEnv = exec.options.env as Record<string, string>;
+  assert.equal(spawnEnv.HTTPS_PROXY, 'http://caller.example:1', "the command's value must win");
+  assert.equal(spawnEnv.https_proxy, 'http://session-proxy.example:3128', 'the other spelling keeps the proxy value');
+  assert.equal(bareEnvNames(exec.args).filter((name) => name === 'HTTPS_PROXY').length, 1, 'HTTPS_PROXY is passed once');
+  assertNoValueInAnyArgv(calls, ['caller.example', 'session-proxy.example']);
 });
 
 // --- Criterion 3 (#494, ruling D9): a credentialed proxy address is refused ---

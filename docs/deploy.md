@@ -552,6 +552,63 @@ use (and fails the preflight). What the defaults hide:
   `EXECUTOR_CONTAINER_IMAGE` overrides the image tag (default
   `civic-notebook-executor:0.2.0`).
 
+### Executor settings
+
+Every setting below is optional, and unset (or blank) means the behaviour the
+executor had before the setting existed. The compose file passes each one
+through bare, so a variable your env file does not set stays unset.
+
+A value is checked before the executor starts anything. A value that is not
+of its setting's shape is refused at the first notebook run, not corrected:
+the run fails with an `ExecutorSettingError` naming the variable, the server
+log names that class, and the reader sees the usual notebook-failure message
+with its reference id.
+
+**Timeouts, for every driver:**
+
+| Variable | Unset | What it sets |
+| --- | --- | --- |
+| `EXECUTOR_SESSION_TIMEOUT_S` | `180` | The session cap: the wall-clock limit on the whole run, including the sandbox or container start, staging, every cell and read-back. A run past it is stopped and fails. Whole seconds, 1 to 86400. |
+| `EXECUTOR_CELL_TIMEOUT_S` | `120` | The per-cell limit, handed to nbconvert as `--ExecutePreprocessor.timeout`. Whole seconds, 1 to 86400. |
+
+The session cap must be greater than the per-cell limit; a cap at or below it
+is refused. The cap also covers the start and the read-back, so a cap at the
+per-cell limit would stop a notebook before its slowest permitted cell could
+finish. Leave a margin for the start: a cold container or sandbox takes
+seconds, not milliseconds. Under `vercel-sandbox` the cap is the sandbox's own
+timeout, and the platform bounds that by your plan's maximum.
+
+**The container executor (`EXECUTOR_DRIVER=container`):**
+
+| Variable | Unset | What it sets |
+| --- | --- | --- |
+| `EXECUTOR_CONTAINER_CLI` | `docker` | The CLI every invocation spawns: a name found on `PATH`, or a path. Any CLI that takes `run -d --rm`, `exec -i`, `exec -e NAME` and `kill` as `docker` does (`podman` does). |
+| `EXECUTOR_CONTAINER_MEMORY` | no limit | `docker run --memory`, for example `2g`. |
+| `EXECUTOR_CONTAINER_CPUS` | no limit | `docker run --cpus`, for example `1.5`. |
+| `EXECUTOR_CONTAINER_PIDS_LIMIT` | the runtime's default | `docker run --pids-limit`: the most processes a notebook can start. |
+| `EXECUTOR_CONTAINER_NETWORK` | the runtime's default network | `docker run --network`: the network each notebook container joins, for example one whose only way out is your egress proxy. A notebook fetches its data live, so a network with no route to the data portal fails every notebook. |
+| `EXECUTOR_CONTAINER_USER` | the image's user, uid `10001` | `docker run --user`. Any other user cannot write the image's matplotlib cache, and matplotlib then writes a warning into the notebook's output, which is signed. So when this is set, the driver also sets `MPLCONFIGDIR=/tmp/matplotlib` and first copies the image's warm cache there (`/home/notebook/.config/matplotlib`). Measured on the reference image: a notebook's output is then the same under any user. With an image of your own whose cache is elsewhere, the copy finds nothing and the cache starts cold. That produces no warning, but a notebook that logs at INFO shows a "generated new fontManager" line. |
+| `EXECUTOR_CONTAINER_RUNTIME` | the runtime's default | `docker run --runtime`, for example `runsc` for gVisor. The runtime must be installed on the host. |
+| `EXECUTOR_CONTAINER_HARDENED` | off | `1` or `true` adds `--cap-drop ALL --security-opt no-new-privileges` to `docker run`. `0` or `false` leaves it off. The notebook needs no Linux capability. |
+
+The flags go between `--rm` and the image, in the order above. No setting
+takes free-form arguments, and a value that starts with `-` or contains
+whitespace is refused, so no setting can add an argument of its own. The CLI
+inherits the app's environment, so its own variables (`DOCKER_HOST`,
+`DOCKER_CONTEXT`, `CONTAINER_HOST` for podman) apply as they would in a
+shell.
+
+No value the notebook receives is put on a command line. The notebook's own
+variables (`SOCRATA_APP_TOKEN`, `DC_API_KEY`) and the proxy variables reach
+the container as `docker exec -e NAME`, with the value in the CLI's
+environment, so `ps` on the host or in the app container never shows them.
+
+There is no read-only-root setting yet. Measured: under a read-only root the
+image's matplotlib cache cannot be written, and a notebook that imports
+matplotlib gains the same warning in its signed output. A read-only root also
+leaves no writable path to copy the cache to until `/tmp` is mounted
+writable, so it needs its own change.
+
 ### The model seam
 
 The model endpoint is a seam too, but external by design — a network

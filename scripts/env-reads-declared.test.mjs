@@ -63,11 +63,11 @@
  * parameter or variable whose default or initialiser is an env record,
  * including through `??`, `||` or a ternary (`const env = ports.env ??
  * process.env`). A parameter named `env` that provably never holds the
- * environment is listed in NOT_ENV_RECORDS with its reason: one at this
- * commit, `buildDockerEnvFlags` in `sandbox/container.ts`, whose `env` is a
- * notebook's own variables being turned into `docker exec -e` flags, typed
- * `Record<string, string>`, which `process.env` cannot satisfy under strict
- * null checks. A name is counted when it is shaped like a variable
+ * environment is listed in NOT_ENV_RECORDS with its reason. None at this
+ * commit: the one there was, `buildDockerEnvFlags` in `sandbox/container.ts`
+ * (a notebook's own variables turned into `docker exec -e NAME=value` flags),
+ * went when #521 passed those variables by name. A name is counted when it
+ * is shaped like a variable
  * (/^[A-Z][A-Z0-9_]*$/), so an `env` parameter that holds a config object with
  * camelCase fields (`env.socrataUrl`) is not read for them.
  *
@@ -106,8 +106,9 @@
  * until it is resolved or listed. A whole-record read that hands the
  * environment, whole, to a child process is listed in PASS_THROUGH, by file,
  * kind and exact site count, with its reason (#494, ruling D14): one at this
- * commit, `resolveContainerProxyEnv` in `sandbox/container.ts`, which spawns
- * the docker CLI with the environment plus the resolved proxy values.
+ * commit, `passByName` in `sandbox/container.ts`, which spawns the docker CLI
+ * with the environment plus the values it passes into the container by name
+ * (the proxy variables since #494, a command's own variables since #521).
  *
  * FIVE ASSERTIONS; EVERY LIST IS CHECKED IN BOTH DIRECTIONS.
  *   - The scan measures: the universe is derived as stated, every read form
@@ -217,9 +218,10 @@ const PASS_THROUGH = [
     kind: 'whole-record read (spread)',
     sites: 1,
     reason:
-      'resolveContainerProxyEnv builds the environment the docker CLI is spawned with for a proxied exec: the ' +
-      'whole environment, as spawn passes it with no env option, plus the six resolved proxy values, which the ' +
-      'CLI hands into the notebook container by name (`-e HTTP_PROXY`)',
+      'passByName builds the environment the docker CLI is spawned with for an exec that passes variables: the ' +
+      'whole environment, as spawn passes it with no env option, plus the values the CLI hands into the notebook ' +
+      "container by name (`-e NAME`): the six resolved proxy values (#494) and the command's own variables, " +
+      'the two data-portal tokens among them (#521)',
   },
 ];
 
@@ -229,12 +231,9 @@ const NOT_ENV = {};
 
 /** Functions whose parameter named `env` is not the environment, keyed
  *  `<file>#<function>`. Without an entry the naming convention would make it
- *  an env record, and its whole-record use an unresolved read. */
-const NOT_ENV_RECORDS = {
-  'src/lib/sandbox/container.ts#buildDockerEnvFlags':
-    "a notebook's own variables (built by buildNotebookEnv in sandbox/execute.ts from two declared names plus " +
-    'caller extras), turned into `docker exec -e` flags; typed Record<string, string>, which process.env cannot satisfy',
-};
+ *  an env record, and its whole-record use an unresolved read. Empty at this
+ *  commit: #521 removed `container.ts#buildDockerEnvFlags`. */
+const NOT_ENV_RECORDS = {};
 
 // --- the universe ------------------------------------------------------------
 
