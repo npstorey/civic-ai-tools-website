@@ -475,3 +475,81 @@ jobs:
       - name: The parity notebook executes through the container driver
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: node --experimental-strip-types scripts/executor-image-check.mjs parity
+
+  # THE LAMBDA IMAGE (#530 P2). The `lambda` target of docker/executor/Dockerfile
+  # is the function EXECUTOR_DRIVER=lambda invokes. This job builds it, checks
+  # its pins and runs its handler's own tests inside it, then runs it under the
+  # AWS Lambda Runtime Interface Emulator the way Lambda runs it: read-only root,
+  # writable /tmp, a user of its own. Against that it drives the lambda driver:
+  # the parity notebook, compared with the container driver's run (only
+  # executor-parity.mjs's five masked fields may differ); isolation between runs
+  # (ruling D3); the tokens and the function's log (D5); matplotlib under the
+  # read-only root; and the size refusal (D2). scripts/lambda-image-check.mjs
+  # says what each step can fail on, and each observation that could pass by
+  # seeing nothing has a control there.
+  #
+  # NO PATHS FILTER, for the reason the two jobs above give: the image depends
+  # on the pin tables in src/ and on PyPI, and the driver on src/.
+  #
+  # Credential-free like the rest of this workflow: no `secrets.`, no `env:`.
+  # The driver reaches the emulator through a client that signs nothing
+  # (scripts/lambda-emulator.mjs); the emulator binary is a GitHub release,
+  # checked against a pinned SHA-256; the two tokens are decoys generated per
+  # run. Unlike the executor job it runs `npm ci`: the lambda driver imports
+  # the AWS SDK.
+  #
+  # NOT A REQUIRED CHECK YET. Adding it to ruleset 17585984 (`protect-main`) is
+  # the owner's step; the name below is what that entry would match.
+  lambda-image:
+    name: lambda executor image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Install
+        run: npm ci
+
+      - name: Build the lambda and container targets
+        id: build
+        run: node --experimental-strip-types scripts/lambda-image-check.mjs build
+
+      - name: Every pin is the one pip freeze reports in the lambda image
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node --experimental-strip-types scripts/lambda-image-check.mjs pins
+
+      - name: The handler's own tests pass inside the image
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node --experimental-strip-types scripts/lambda-image-check.mjs handler-tests
+
+      - name: Start the runtime interface emulator
+        id: start
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node --experimental-strip-types scripts/lambda-image-check.mjs start
+
+      - name: The parity notebook matches the container driver's
+        if: ${{ !cancelled() && steps.start.outcome == 'success' }}
+        run: node --experimental-strip-types scripts/lambda-image-check.mjs parity
+
+      - name: What one run leaves, the next run cannot see
+        if: ${{ !cancelled() && steps.start.outcome == 'success' }}
+        run: node --experimental-strip-types scripts/lambda-image-check.mjs isolation
+
+      - name: The tokens come from the function, and its log carries none
+        if: ${{ !cancelled() && steps.start.outcome == 'success' }}
+        run: node --experimental-strip-types scripts/lambda-image-check.mjs secrets
+
+      - name: Matplotlib adds nothing to a notebook under the read-only root
+        if: ${{ !cancelled() && steps.start.outcome == 'success' }}
+        run: node --experimental-strip-types scripts/lambda-image-check.mjs matplotlib
+
+      - name: An executed notebook over the limit is refused by name
+        if: ${{ !cancelled() && steps.start.outcome == 'success' }}
+        run: node --experimental-strip-types scripts/lambda-image-check.mjs size
+
+      - name: Stop the emulator
+        if: ${{ always() }}
+        run: node --experimental-strip-types scripts/lambda-image-check.mjs stop
