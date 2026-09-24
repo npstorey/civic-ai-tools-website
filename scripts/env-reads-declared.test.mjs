@@ -103,7 +103,11 @@
  * exported helper, and a whole-record read (`...process.env`,
  * `Object.keys(process.env)`, `for (k in process.env)`) each name no variable
  * the scan can check, so each fails the third assertion, by file and line,
- * until it is resolved or listed.
+ * until it is resolved or listed. A whole-record read that hands the
+ * environment, whole, to a child process is listed in PASS_THROUGH, by file,
+ * kind and exact site count, with its reason (#494, ruling D14): one at this
+ * commit, `resolveContainerProxyEnv` in `sandbox/container.ts`, which spawns
+ * the docker CLI with the environment plus the resolved proxy values.
  *
  * FIVE ASSERTIONS; EVERY LIST IS CHECKED IN BOTH DIRECTIONS.
  *   - The scan measures: the universe is derived as stated, every read form
@@ -114,8 +118,9 @@
  *     or sits on ALLOW with a reason. Every ALLOW entry must still be read and
  *     still be undeclared.
  *   - Every read site is resolved. Every COMPUTED entry must still name a
- *     site, and every NOT_ENV_RECORDS entry must still exempt a parameter the
- *     scan met.
+ *     site, every PASS_THROUGH entry must still match exactly the number of
+ *     sites it lists, and every NOT_ENV_RECORDS entry must still exempt a
+ *     parameter the scan met.
  *   - THE SWEEP. An UPPER_SNAKE property read (/^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$/)
  *     on anything the scan does not recognise as an env record fails, so an
  *     env record held under another name (`cfg.SOME_VARIABLE`) is reported
