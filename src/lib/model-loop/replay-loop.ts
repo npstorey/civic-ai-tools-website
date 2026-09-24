@@ -90,10 +90,11 @@ export interface ReplayLoopInputs {
   /** Regenerated fresh for the record's portal by the route. */
   systemPrompt: string;
   /**
-   * The portal the record's own calls named (`replayPortalForPackage`),
-   * injected into Socrata calls that omit one. Absent when the record named
-   * none: nothing is injected, and the replay runs on whatever the source
-   * defaults to — exactly as the recorded run did (#384, F2).
+   * The portal the record's own answered calls named
+   * (`replayPortalForPackage`; a failed call names none), injected into
+   * Socrata calls that omit one. Absent when the record named none: nothing
+   * is injected, and the replay runs on whatever the source defaults to —
+   * exactly as the recorded run did (#384, F2).
    */
   portal?: string;
   /**
