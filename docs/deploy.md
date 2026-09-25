@@ -638,7 +638,9 @@ comes back in the response.
   your egress proxy when one is configured (see the proxy table's
   `EXECUTOR_DRIVER=lambda` row). To reach it through a VPC interface endpoint
   instead, name the host in `NO_PROXY`. The SDK's own
-  `AWS_ENDPOINT_URL_LAMBDA` points it at another endpoint.
+  `AWS_ENDPOINT_URL_LAMBDA` points it at another endpoint. A synchronous
+  invoke carries no bytes until the function ends, so through a proxy that
+  closes idle tunnels sooner than your longest notebook, use the endpoint.
 - **One attempt:** a failed invoke is not retried, because a retry would run
   the notebook again against live data.
 - **The data-portal tokens:** `SOCRATA_APP_TOKEN` and `DC_API_KEY` are **set
@@ -1453,6 +1455,46 @@ count-preservation check in the header comment of `0015` (visibility
 label counts before vs. after: no rows remain on the legacy labels, the
 grand total unchanged).
 
+## Behind a load balancer
+
+A load balancer closes a connection that carries no bytes for its idle
+timeout; an application load balancer's default is 60 s (AWS's
+documentation). You do not need to know that value, or change it, for the
+streamed answers. Two settings make that hold.
+
+- **Streamed answers carry a keep-alive.** `/api/query-notebook` and
+  `/api/compare-stream` answer with Server-Sent Events, and both can be
+  silent for minutes: a model turn that picks a tool is not streamed, a tool
+  call can take 45 s, and a notebook run takes up to the session cap (plus
+  15 s under the lambda driver, 195 s at the defaults). From the moment the
+  stream opens until it closes, each route writes an SSE comment line
+  (`: keepalive`) every 15 s, so the balancer sees bytes every 15 s. The
+  event-stream format ignores comment lines and the app's client never passes
+  one to the page, so a keep-alive never enters a record.
+  `src/app/api/sse-keepalive.test.ts` drives both routes through a silent
+  model turn and a 195 s notebook run. An intermediary whose idle timeout is
+  under 15 s still cuts these streams.
+- **The server holds idle connections longer than the balancer.** The image
+  sets `KEEP_ALIVE_TIMEOUT=620000` (milliseconds), which the standalone
+  server applies to every connection. Node's own default is 5 s. A balancer
+  that reuses a connection the server has just closed answers 502, which is
+  why AWS says to set the application's idle timeout larger than the
+  balancer's. 620 s is larger than any idle timeout up to 10 minutes. To
+  change it, set the variable in the container's environment, and keep it
+  above the balancer's idle timeout. `scripts/keep-alive-timeout.test.mjs`
+  fails if the image stops setting it or the installed Next stops reading it.
+
+**Requests that answer once.** `/api/records/<slug>/replay`,
+`/api/records/<slug>/evaluate`, `/api/records/generate-summary` and
+`/api/compare` send nothing until they finish, so a keep-alive cannot reach
+them. A replay re-runs a record's analysis, up to 20 model turns, and can take
+longer than 60 s. When one outlasts the balancer's idle timeout, the reader
+gets a gateway error after the model calls have been paid for. If your readers
+use the attestation dialog's checks, set the balancer's idle timeout above
+your longest replay until
+[#533](https://github.com/npstorey/civic-ai-tools-website/issues/533) changes
+these routes.
+
 ## Outbound traffic through an egress proxy
 
 On a network where outbound traffic must leave through a proxy, set the
@@ -1629,6 +1671,15 @@ dispatcher cannot govern — so with a proxy configured, and only then,
 the S3 client is given the SDK's own `fetch` transport instead. Same
 requests, same bucket, same signatures; a different socket underneath.
 With the variables unset the driver keeps the SDK default, unchanged.
+
+**A proxy that closes idle connections.** Two outbound requests carry no
+bytes until their answer is ready. A model turn that picks a tool is one
+request to the model endpoint that stays silent until the model answers. A
+notebook invoke under `EXECUTOR_DRIVER=lambda` stays silent for up to the
+session cap plus 15 s (195 s at the defaults). A proxy that closes a tunnel
+idle for less time than that cuts the request. For the invoke, a VPC
+interface endpoint for Lambda named in `NO_PROXY` takes it off the proxy
+entirely (see [The Lambda executor](#the-lambda-executor)).
 
 **Nothing signed moves.** A proxy changes how a request travels, not
 what is recorded: no field of a signed package, and no envelope hash,
