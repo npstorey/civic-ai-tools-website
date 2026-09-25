@@ -1608,6 +1608,42 @@ export function encodeSSE(event: StreamEvent): string {
 }
 
 /**
+ * The keep-alive: an SSE comment line. The event-stream format ignores a line
+ * that starts with `:` (HTML standard, "Server-sent events"), and
+ * `connectSSE` dispatches only blocks that start with `data: `, so this never
+ * reaches a consumer's `onEvent` and cannot reach a record.
+ */
+export const SSE_KEEPALIVE = ': keepalive\n\n';
+
+/**
+ * How often a streaming route writes the keep-alive: the interval the HTML
+ * standard suggests for intermediaries that drop idle connections. A load
+ * balancer closes a connection that carries no bytes for its idle timeout (an
+ * application load balancer's default is 60 s), and the routes can be silent
+ * far longer: a model turn that picks a tool is not streamed, and a notebook
+ * run under the lambda driver is the session cap plus 15 s.
+ */
+export const SSE_KEEPALIVE_INTERVAL_MS = 15_000;
+
+/**
+ * Writes `SSE_KEEPALIVE` to `writer` every `SSE_KEEPALIVE_INTERVAL_MS` until
+ * the returned function is called — call it before closing the writer. A write
+ * that fails (the reader has gone) stops the timer too.
+ */
+export function startSseKeepAlive(writer: WritableStreamDefaultWriter<Uint8Array>): () => void {
+  const bytes = new TextEncoder().encode(SSE_KEEPALIVE);
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const stop = () => {
+    if (timer !== undefined) clearInterval(timer);
+    timer = undefined;
+  };
+  timer = setInterval(() => {
+    writer.write(bytes).catch(stop);
+  }, SSE_KEEPALIVE_INTERVAL_MS);
+  return stop;
+}
+
+/**
  * The panels (model arms) a comparison run executes. An `mcpOnly` run is
  * the with-data arm alone — one model call; the default is both arms.
  * `/api/compare-stream` uses this both to dispatch work and to address

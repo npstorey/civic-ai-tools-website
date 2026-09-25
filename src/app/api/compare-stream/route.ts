@@ -7,7 +7,7 @@ import { callMcpTool, routeTool } from '@/lib/mcp/client';
 import { buildSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
-import { encodeSSE, errorLogFacts, panelsForRun, streamErrorPayload, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
+import { encodeSSE, errorLogFacts, panelsForRun, startSseKeepAlive, streamErrorPayload, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
 import { getMissingModelCredentialError, ModelConfigurationError } from '@/lib/model-client';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
@@ -239,6 +239,10 @@ Be honest if you don't have access to current or real-time data.`;
     const writeEvent = async (event: StreamEvent) => {
       await writer.write(encoder.encode(encodeSSE(event)));
     };
+    // A model turn that picks a tool is not streamed, and a tool call can run
+    // 45 s; a comment line every interval keeps a load balancer from closing
+    // the connection as idle (see SSE_KEEPALIVE_INTERVAL_MS). Stopped before close.
+    const stopKeepAlive = startSseKeepAlive(writer);
 
     // Create callbacks for streaming
     const callbacks: StreamCallbacks = {
@@ -305,6 +309,7 @@ Be honest if you don't have access to current or real-time data.`;
         // Finalize trace and send as final SSE event
         trace.endRoot();
         const traceJson = trace.finalize();
+        stopKeepAlive();
         await writeEvent({ type: 'trace' as StreamEvent['type'], panel: 'withMcp', data: traceJson });
         await writer.close();
       }

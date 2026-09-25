@@ -332,3 +332,20 @@ test('the client parser drops a comment block and delivers the data block beside
   const received = await throughClientParser(': keepalive\n\ndata: {"type":"phase","name":"A"}\n\n: keepalive\n\n');
   assert.deepEqual(received, [{ type: 'phase', name: 'A' }]);
 });
+
+test('a keep-alive write that fails (the reader has gone) stops the timer', async () => {
+  const { startSseKeepAlive } = await import('../../lib/streaming.ts');
+  mockIntervals();
+  try {
+    const stream = new TransformStream<Uint8Array, Uint8Array>();
+    const writer = stream.writable.getWriter();
+    await stream.readable.cancel();
+    startSseKeepAlive(writer);
+    assert.equal(liveIntervals.size, 1, 'the keep-alive started no timer');
+    mock.timers.tick(INTERVAL_MS);
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(liveIntervals.size, 0, 'a failed write left the timer running');
+  } finally {
+    mock.timers.reset();
+  }
+});
