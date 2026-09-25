@@ -679,17 +679,105 @@ comes back in the response.
   When the function runs in a VPC, set your egress proxy on the function as
   well (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`). The handler passes all of
   these to the notebook, which fetches its data live from the portal: a
-  function with no route to the portal fails every notebook.
-- **Permissions: none.** Give the execution role no permissions. Measured
-  under the runtime emulator: code in a notebook, which the model writes, can
-  read the function's environment, the role's temporary credentials included.
-  Scrubbing the notebook's environment does not prevent that. The only grant
-  to consider is `logs:CreateLogStream` and `logs:PutLogEvents` on the
-  function's own log group, if you want its log lines in CloudWatch, and then
-  notebook code can write log events too. The handler writes nothing to the
-  log: no event, notebook, traceback or token. CI checks this under the
-  emulator by running a failing notebook with decoy tokens set, then reading
-  the whole log for them.
+  function with no route to the portal fails every notebook. It also passes
+  the certificate settings `SSL_CERT_FILE`, `SSL_CERT_DIR`,
+  `REQUESTS_CA_BUNDLE` and `CURL_CA_BUNDLE` when they are set and not
+  empty, whether on the function or in the image (see the next item). Of
+  the rest of the function's environment, only `PATH` and `LANG` reach the
+  notebook.
+- **A proxy that inspects TLS.** Such a proxy answers every HTTPS request
+  with a certificate of its own, signed by its own CA, and a notebook that
+  does not trust that CA fails every fetch. Build the function's image from
+  the one above, adding your proxy's CA certificate (PEM, in a file whose
+  name ends in `.crt`):
+
+  <!-- lambda-image-check: ca recipe -->
+  ```dockerfile
+  FROM <your-registry>/civic-notebook-executor-lambda:0.2.0
+  USER root
+  COPY proxy-ca.crt /usr/local/share/ca-certificates/proxy-ca.crt
+  RUN update-ca-certificates
+  USER notebook
+  ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+      REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+  ```
+
+  `update-ca-certificates` writes one bundle holding the image's public
+  roots and your CA, and both variables name that bundle. The notebook's
+  fetch helpers use `requests`, which reads its own bundle unless
+  `REQUESTS_CA_BUNDLE` names another; `SSL_CERT_FILE` covers Python's `ssl`
+  and `urllib`. Point either variable at a file holding only your CA and
+  every site the proxy does not inspect fails, because the variable
+  replaces the default roots rather than adding to them. CI builds this
+  block as written (`scripts/lambda-image-check.mjs ca`). It generates a
+  throwaway CA and runs a notebook under the emulator that fetches, with
+  `requests` and with `urllib`, from a TLS origin that CA signed. The same
+  notebook on the image without the CA fails both fetches on the
+  certificate. The same recipe with `FROM` the container image serves
+  `EXECUTOR_DRIVER=container` (set `EXECUTOR_CONTAINER_IMAGE` to it):
+  `docker exec` gives the notebook the image's `ENV`, so the app needs no
+  setting of its own. The app's own requests need
+  [`NODE_EXTRA_CA_CERTS`](#a-proxy-that-inspects-tls).
+- **Permissions: none, unless the function runs in a VPC.** Give the
+  execution role no permissions. Measured under the runtime emulator: code
+  in a notebook, which the model writes, can read the function's
+  environment, the role's temporary credentials included. Scrubbing the
+  notebook's environment does not prevent that. The only grant to consider
+  is `logs:CreateLogStream` and `logs:PutLogEvents` on the function's own
+  log group, if you want its log lines in CloudWatch, and then notebook code
+  can write log events too. The handler writes nothing to the log: no event,
+  notebook, traceback or token. CI checks this under the emulator by running
+  a failing notebook with decoy tokens set, then reading the whole log for
+  them.
+- **A function in a VPC.** The following is AWS's documentation, not
+  measured here ([Giving Lambda functions access to resources in an Amazon
+  VPC](https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html),
+  read 2026-09-25). Lambda needs six actions on the execution role, on all
+  resources, to create and delete the network interfaces the function uses:
+  `ec2:CreateNetworkInterface`, `ec2:DescribeNetworkInterfaces`,
+  `ec2:DescribeSubnets`, `ec2:DeleteNetworkInterface`,
+  `ec2:AssignPrivateIpAddresses` and `ec2:UnassignPrivateIpAddresses`. AWS
+  says the function's code is implicitly granted them too, so notebook code
+  could call those EC2 APIs. AWS's recommended remedy is a deny statement
+  on the same role that applies only to calls made by the function's code,
+  not to Lambda's own. List these six actions yourself rather than
+  attaching the managed policy `AWSLambdaVPCAccessExecutionRole`: that
+  policy also grants the three `logs:` actions on every resource, which
+  lets notebook code write to any log group, not just the function's own.
+  The deny statement, as AWS gives it, with your function's ARN:
+
+  ```json
+  {
+    "Effect": "Deny",
+    "Action": [
+      "ec2:CreateNetworkInterface",
+      "ec2:DeleteNetworkInterface",
+      "ec2:DescribeNetworkInterfaces",
+      "ec2:DescribeSubnets",
+      "ec2:DetachNetworkInterface",
+      "ec2:AssignPrivateIpAddresses",
+      "ec2:UnassignPrivateIpAddresses"
+    ],
+    "Resource": ["*"],
+    "Condition": {
+      "ArnEquals": {
+        "lambda:SourceFunctionArn": ["arn:aws:lambda:<region>:<account>:function:<name>"]
+      }
+    }
+  }
+  ```
+
+  Per AWS ([Using source function ARN to control function access
+  behavior](https://docs.aws.amazon.com/lambda/latest/dg/permissions-source-function-arn.html)):
+  Lambda adds the condition key `lambda:SourceFunctionArn` to calls made
+  from inside the execution environment, and not to its own calls that
+  create network interfaces, which is why the deny stops the code and not
+  the service. Use the function's unqualified ARN: AWS
+  says the key does not support versions or aliases. Keep the six actions
+  on the role after the function is created, because AWS says Lambda uses
+  them to delete the network interfaces later. Not measured here: any of
+  the above on a real function, and whether credentials copied out of the
+  function carry the key when used elsewhere.
 - **A proxy address with a user or password** set on the function is
   readable by notebook code, the same as the tokens. Prefer one without.
 
@@ -1639,6 +1727,44 @@ app never prints these values — it logs only the variable NAMES it
 honoured — and you should keep them in your secret manager like any
 other credential. Under `EXECUTOR_DRIVER=container` such an address is
 refused (see the container executor above).
+
+### A proxy that inspects TLS
+
+A proxy that inspects TLS answers every HTTPS request with a certificate
+of its own, signed by its own CA. Until the app trusts that CA, every
+"yes" row in the table above fails certificate validation. Give Node the
+CA with `NODE_EXTRA_CA_CERTS`, a path to a PEM file inside the app's
+container, for example from an image built on the app's:
+
+```dockerfile
+FROM <your-registry>/civic-app:<tag>
+COPY proxy-ca.crt /app/proxy-ca.crt
+ENV NODE_EXTRA_CA_CERTS=/app/proxy-ca.crt
+```
+
+- **It adds to Node's own roots**; it does not replace them, so public
+  hosts the proxy does not inspect still verify.
+- **Node reads the file once, when it starts.** A changed file needs a
+  restart.
+- **A file Node cannot read does not stop it.** Node prints
+  `Warning: Ignoring extra certs from …` and starts without the CA, and
+  every request through the proxy then fails validation. Check the app's
+  first log lines after setting it.
+
+Measured on this repository's Node 22 against a loopback proxy that
+terminates TLS with a throwaway CA: with the variable unset, the global
+`fetch` path, the sign-in tunnel and the AWS SDK's `fetch` transport (the
+Lambda and S3 clients under a proxy) each refused the proxy's certificate
+(`UNABLE_TO_VERIFY_LEAF_SIGNATURE`). With it set, all three were answered
+through the proxy. With it naming a missing file, Node printed the warning
+and all three refused again. The drive is a one-off, not a test in this
+repository.
+
+The notebook's own requests do not run in the app's process. Under
+`EXECUTOR_DRIVER=lambda` and `EXECUTOR_DRIVER=container`, give the
+executor image your CA as [the Lambda executor](#the-lambda-executor)
+describes. Under `vercel-sandbox` the notebook runs on the provider's
+network, not through your proxy.
 
 ## Instance identity and signing (go to production)
 
