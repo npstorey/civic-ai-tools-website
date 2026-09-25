@@ -26,7 +26,7 @@ import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { DEFAULT_CONTAINER_IMAGE } from './container.ts';
-import { EXECUTOR_TOOLING_PACKAGES, SANDBOX_SDK_MAJOR } from './driver.ts';
+import { EXECUTOR_LAMBDA_RUNTIME_PACKAGES, EXECUTOR_TOOLING_PACKAGES, SANDBOX_SDK_MAJOR } from './driver.ts';
 
 const repoFile = (p: string): string =>
   readFileSync(new URL(`../../../${p}`, import.meta.url), 'utf8');
@@ -67,20 +67,59 @@ test('the tooling versions are single-sourced, not written twice', () => {
   }
 });
 
-/**
- * The executor Dockerfile's final build stage: everything from its last
- * `FROM`. A `USER` in an earlier stage does not carry into the image that
- * runs, so both assertions below read this slice, never the whole file.
- */
-function finalStage(): string {
-  const froms = [...executorDockerfile.matchAll(/^FROM\s/gm)];
+/** One build stage of the executor Dockerfile: what it builds FROM, its name, and its text. */
+interface Stage {
+  base: string;
+  name: string | null;
+  start: number;
+  text: string;
+}
+
+function stages(): Stage[] {
+  const froms = [...executorDockerfile.matchAll(/^FROM\s+(\S+)(?:\s+AS\s+(\S+))?/gim)];
   assert.ok(froms.length > 0, 'docker/executor/Dockerfile has no FROM instruction to read a stage from');
-  return executorDockerfile.slice(froms[froms.length - 1].index);
+  return froms.map((m, i) => ({
+    base: m[1],
+    name: m[2] ?? null,
+    start: m.index,
+    text: executorDockerfile.slice(m.index, froms[i + 1]?.index ?? executorDockerfile.length),
+  }));
+}
+
+/**
+ * The instructions an image built from `stage` carries: the stage and every
+ * earlier stage it builds FROM, base first (#530: the default target and the
+ * lambda target both build on `executor`). A stage it does not build on does
+ * not carry into it, so every assertion below reads a chain, never the file.
+ */
+function chainText(stage: Stage): string {
+  const all = stages();
+  const chain = [stage];
+  for (let cur = stage; ; ) {
+    const parent = all.find((s) => s.name !== null && s.name === cur.base && s.start < cur.start);
+    if (!parent) break;
+    chain.unshift(parent);
+    cur = parent;
+  }
+  return chain.map((s) => s.text).join('');
+}
+
+/** The image `docker build docker/executor` produces: the last stage's chain. */
+function finalStage(): string {
+  const all = stages();
+  return chainText(all[all.length - 1]);
+}
+
+/** The lambda target's chain (#530), which `docker build --target lambda` produces. */
+function lambdaStage(): string {
+  const lambda = stages().find((s) => s.name === 'lambda');
+  assert.ok(lambda, 'docker/executor/Dockerfile has no `lambda` stage for EXECUTOR_DRIVER=lambda to build');
+  return chainText(lambda);
 }
 
 /** Every `USER` instruction of the final stage, in order, with its offset. */
-function userInstructions(): { user: string; index: number }[] {
-  return [...finalStage().matchAll(/^USER\s+(\S+)/gm)].map((m) => ({ user: m[1], index: m.index }));
+function userInstructions(text = finalStage()): { user: string; index: number }[] {
+  return [...text.matchAll(/^USER\s+(\S+)/gm)].map((m) => ({ user: m[1], index: m.index }));
 }
 
 test('the executor image runs the notebook as a non-root user', () => {
@@ -103,19 +142,57 @@ test('the executor image runs the notebook as a non-root user', () => {
 });
 
 test('the font cache is warmed AFTER the last USER switch, as the user that runs', () => {
+  // Read over the default image's chain: the warm is in the shared `executor`
+  // stage, and the default stage restates the same USER after it (#530). What
+  // matters is that the warm ran as the user the image runs as, and that no
+  // USER after it names anyone else.
   const users = userInstructions();
   const warmLine = finalStage().search(/^RUN\s+python\s+-c\s+"import matplotlib\.pyplot"/m);
   assert.ok(users.length > 0, 'no USER instruction in the final stage');
   assert.notEqual(warmLine, -1, 'no matplotlib font-cache warm step in the final stage');
-  const lastUser = users[users.length - 1].index;
+  const runsAs = users[users.length - 1].user;
+  const warmedAs = users.filter((u) => u.index < warmLine).at(-1);
+  const switchedAfter = users.filter((u) => u.index > warmLine && u.user !== runsAs);
   assert.ok(
-    lastUser < warmLine,
+    warmedAs !== undefined && warmedAs.user === runsAs && switchedAfter.length === 0,
     'the font cache is warmed BEFORE the last USER switch, so it is built under another user\'s home ' +
       'and the running user rebuilds it on the first notebook. Measured against a decoy image in that ' +
       'order at matplotlib 3.9.2, the rebuild logs "generated new fontManager" at INFO: at default ' +
       'log levels that reaches nothing, and in a notebook that raises the log level (as the probe ' +
       'cell did) it lands in cell stderr, which is part of the signed executed-notebook bytes',
   );
+});
+
+/** Every `name==version` pin a stage's own text installs. */
+function pinsIn(text: string): Record<string, string> {
+  return Object.fromEntries([...text.matchAll(/([a-zA-Z0-9_-]+)==([0-9][0-9a-zA-Z.]*)/g)].map((m) => [m[1], m[2]]));
+}
+
+test('the lambda target pins the runtime client at the table version, and the default image does not carry it', () => {
+  // #530, ruling D4: the function's image is the container image's stack plus
+  // the runtime interface client. The scientific and tooling pins come from
+  // the shared stage, so environment.libraries is true of both images.
+  const lambda = lambdaStage();
+  for (const [name, version] of Object.entries(EXECUTOR_LAMBDA_RUNTIME_PACKAGES)) {
+    assert.equal(pinsIn(lambda)[name], version, `the lambda target does not pin ${name}==${version}`);
+    assert.equal(
+      pinsIn(finalStage())[name],
+      undefined,
+      `the default image installs ${name}; the container driver's image must not carry the Lambda runtime`,
+    );
+  }
+  for (const [name, version] of Object.entries(EXECUTOR_TOOLING_PACKAGES)) {
+    assert.equal(pinsIn(lambda)[name], version, `the lambda target does not carry the tooling pin ${name}==${version}`);
+  }
+});
+
+test('the lambda target runs the handler as the image user, through the runtime interface client', () => {
+  const lambda = lambdaStage();
+  const users = userInstructions(lambda);
+  assert.ok(users.length > 0 && !/^(root|0)(:.*)?$/.test(users[users.length - 1].user), 'the lambda target runs as root');
+  assert.match(lambda, /^COPY\s+lambda\/handler\.py\s+\/var\/task\/handler\.py$/m);
+  assert.match(lambda, /^ENTRYPOINT\s+\["python",\s*"-m",\s*"awslambdaric"\]$/m);
+  assert.match(lambda, /^CMD\s+\["handler\.handler"\]$/m);
 });
 
 test('the sandbox SDK major is named in the pin table and matches what is installed', () => {

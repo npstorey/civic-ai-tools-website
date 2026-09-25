@@ -48,7 +48,7 @@ import type {
   ExecutorCommand,
   ExecutorCommandResult,
   ExecutorSession,
-  NotebookExecutorDriver,
+  SessionExecutorDriver,
 } from './driver.ts';
 
 /**
@@ -207,7 +207,7 @@ function createSandbox(
     : Sandbox.create({ ...params, ...transport });
 }
 
-export function createVercelSandboxDriver(): NotebookExecutorDriver {
+export function createVercelSandboxDriver(): SessionExecutorDriver {
   return {
     name: 'vercel-sandbox',
 

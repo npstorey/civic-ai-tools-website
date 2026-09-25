@@ -267,6 +267,32 @@ async function driveS3(endpoint) {
 }
 
 /**
+ * The notebook executor's Lambda invoke, `EXECUTOR_DRIVER=lambda` (#530) —
+ * like the S3 driver, an AWS SDK client whose default transport is
+ * node:http(s). Driven through `executeNotebook`, so the client is the one the
+ * driver builds; the SDK's own AWS_ENDPOINT_URL_LAMBDA points it at `endpoint`.
+ * The two credential values are placeholders and authenticate against nothing.
+ */
+const LAMBDA_ENV = (endpoint) => ({
+  EXECUTOR_DRIVER: 'lambda',
+  EXECUTOR_LAMBDA_FUNCTION: 'probe-function',
+  EXECUTOR_LAMBDA_REGION: 'us-east-1',
+  AWS_ENDPOINT_URL_LAMBDA: endpoint,
+  AWS_ACCESS_KEY_ID: 'probe',
+  AWS_SECRET_ACCESS_KEY: 'probe',
+  AWS_SESSION_TOKEN: null,
+  AWS_PROFILE: null,
+  AWS_CONFIG_FILE: '/nonexistent/aws-config',
+  AWS_SHARED_CREDENTIALS_FILE: '/nonexistent/aws-credentials',
+  AWS_EC2_METADATA_DISABLED: 'true',
+});
+
+async function driveLambda() {
+  const { executeNotebook } = await fresh('src/lib/sandbox/execute.ts');
+  await swallow(() => executeNotebook({ cells: [], metadata: {}, nbformat: 4, nbformat_minor: 5 }));
+}
+
+/**
  * Verification's own object-store read — the fourth kind, and the one the
  * ORCH's pre-measurement did not carry. A package may store a field BY
  * REFERENCE, and resolving that reference is a network call to this instance's
@@ -443,6 +469,15 @@ const KINDS = [
     expectFetchCalls: true,
   },
   {
+    // #530: the same shape as the S3 row, and the same proof — the SDK's
+    // default transport is node:http(s), so a request that reached the proxy
+    // is proof the driver took the fetch transport.
+    name: 'a notebook invoke on the lambda executor driver',
+    env: (target) => LAMBDA_ENV(target.replace(/\/[^/]*$/, '')),
+    run: () => driveLambda(),
+    expectFetchCalls: true,
+  },
+  {
     name: "verification's read of a blob-referenced field",
     env: () => ({}),
     run: (target) => driveBlobRefRead(target.replace(/\/[^/]*$/, '')),
@@ -536,6 +571,25 @@ test('the S3 driver makes no fetch call at all with the proxy variables unset', 
     // request this driver has always made; pinned here rather than trimmed,
     // because the claim is byte-for-byte sameness and not approximate sameness.
     assert.equal(origin.seen[0].url, '/probe-bucket/probe/object.json?x-id=PutObject');
+    assert.equal(origin.seen[0].host, `127.0.0.1:${origin.port}`);
+  } finally {
+    origin.close();
+  }
+});
+
+test('the lambda executor driver makes no fetch call at all with the proxy variables unset (#530)', async () => {
+  const origin = await loopbackOrigin();
+  try {
+    const { fetchCalls } = await drive({ ...noProxyEnv, ...LAMBDA_ENV(origin.base) }, () => driveLambda());
+    assert.equal(
+      fetchCalls,
+      0,
+      `the lambda driver made ${fetchCalls} fetch call(s) with no proxy configured; unset must leave its ` +
+        "client on the SDK's node:http(s) transport, with no dispatcher built",
+    );
+    assert.equal(origin.seen.length, 1, 'the invoke never reached the origin, so the default path is broken');
+    assert.equal(origin.seen[0].method, 'POST');
+    assert.equal(origin.seen[0].url, '/2015-03-31/functions/probe-function/invocations');
     assert.equal(origin.seen[0].host, `127.0.0.1:${origin.port}`);
   } finally {
     origin.close();

@@ -94,7 +94,7 @@ import { fileURLToPath } from 'node:url';
 export const DRIVER_SEAMS = {
   db: { env: 'DB_DRIVER', default: 'neon-http', values: ['neon-http', 'node-postgres'] },
   blob: { env: 'BLOB_DRIVER', default: 'vercel-blob', values: ['vercel-blob', 's3'] },
-  executor: { env: 'EXECUTOR_DRIVER', default: 'vercel-sandbox', values: ['vercel-sandbox', 'container'] },
+  executor: { env: 'EXECUTOR_DRIVER', default: 'vercel-sandbox', values: ['vercel-sandbox', 'container', 'lambda'] },
   model: { env: 'MODEL_API_KIND', default: 'openai-compatible', values: ['openai-compatible', 'azure-openai'] },
 };
 
@@ -350,7 +350,18 @@ export const ENV_SPEC = [
   { name: 'S3_FORCE_PATH_STYLE', tier: 'optional', purpose: 'Path-style S3 addressing (default: on when S3_ENDPOINT is set — MinIO)', hasFallback: true },
   { name: 'S3_PUBLIC_BASE_URL', tier: 'optional', purpose: 'Public object URL base (default: endpoint/bucket path-style)', hasFallback: true },
   // --- Notebook executor (S3b P4 driver seam; executed-notebook pipeline) ---
-  { name: 'EXECUTOR_DRIVER', tier: 'optional', purpose: "Notebook executor driver — 'vercel-sandbox' (default) or 'container' (host container runtime)", hasFallback: true },
+  { name: 'EXECUTOR_DRIVER', tier: 'optional', purpose: "Notebook executor driver — 'vercel-sandbox' (default), 'container' (host container runtime) or 'lambda' (an AWS Lambda function built from docker/executor/Dockerfile's lambda target)", hasFallback: true },
+  // The lambda driver's two settings (#530 P2, ruling D6), read by
+  // resolveLambdaSettings (src/lib/sandbox/lambda.ts) and by nothing under the
+  // other drivers, whose dynamic import never loads that module. Like the S3_*
+  // rows, no onlyWhen: the default profile suppresses nothing (the suite pins
+  // that), and a non-default driver's variables are promoted by requiredWhen.
+  // The function has no default: an instance that selects the driver and names
+  // no function cannot run a notebook. The region falls back to the AWS SDK's
+  // own chain (AWS_REGION, which ECS sets), read by the SDK and so not a row
+  // here; with neither, the first run refuses and names both.
+  { name: 'EXECUTOR_LAMBDA_FUNCTION', tier: 'optional', purpose: 'The notebook function, by name or ARN, optionally with :qualifier (required when EXECUTOR_DRIVER=lambda)', requiredWhen: { executor: 'lambda' } },
+  { name: 'EXECUTOR_LAMBDA_REGION', tier: 'optional', purpose: "The function's region (EXECUTOR_DRIVER=lambda only; unset: the AWS SDK's own region, AWS_REGION, which ECS sets; with neither, the first notebook run refuses)", hasFallback: true },
   // Relevant under the container driver, inert under the sandbox driver, and
   // fallback-backed under both (container.ts:47 → DEFAULT_CONTAINER_IMAGE), so
   // it carries no condition: it is never a miss and never a nag either way.
@@ -377,13 +388,15 @@ export const ENV_SPEC = [
   { name: 'EXECUTOR_CONTAINER_RUNTIME', tier: 'optional', purpose: 'OCI runtime for each notebook container, as docker run --runtime (EXECUTOR_DRIVER=container only; e.g. runsc; unset: the runtime default)', hasFallback: true },
   { name: 'EXECUTOR_CONTAINER_HARDENED', tier: 'optional', purpose: 'Set to 1 or true to start each notebook container with --cap-drop ALL and --security-opt no-new-privileges (EXECUTOR_DRIVER=container only; unset: off)', hasFallback: true },
   // Passed into every executed notebook's env by buildNotebookEnv
-  // (src/lib/sandbox/execute.ts), under BOTH executor drivers — read by the
-  // generated notebook's own helper functions (fetch_socrata.py,
-  // fetch_data_commons.py), not by the app itself. Both degrade gracefully
-  // (throttled / anonymous access) rather than hard-failing, so no tier
-  // promotion and no onlyWhen condition.
-  { name: 'SOCRATA_APP_TOKEN', tier: 'optional', purpose: 'Socrata app token for executed notebooks (fetch_socrata.py) — raises the anonymous per-IP rate limit; throttled but functional without it', hasFallback: true },
-  { name: 'DC_API_KEY', tier: 'optional', purpose: 'Data Commons API key for executed notebooks (fetch_data_commons.py) — distinct from DATA_COMMONS_API_KEY (the chat-flow MCP key); anonymous access works for moderate volumes without it', hasFallback: true },
+  // (src/lib/sandbox/execute.ts), under the vercel-sandbox and container
+  // drivers — read by the generated notebook's own helper functions
+  // (fetch_socrata.py, fetch_data_commons.py), not by the app itself. Under
+  // EXECUTOR_DRIVER=lambda they are set on the FUNCTION instead and never sent
+  // (#530, ruling D5), so the app's copy is dropped from every invoke. Both
+  // degrade gracefully (throttled / anonymous access) rather than
+  // hard-failing, so no tier promotion and no onlyWhen condition.
+  { name: 'SOCRATA_APP_TOKEN', tier: 'optional', purpose: 'Socrata app token for executed notebooks (fetch_socrata.py) — raises the anonymous per-IP rate limit; throttled but functional without it. Under EXECUTOR_DRIVER=lambda, set it on the function instead: the app never sends it', hasFallback: true },
+  { name: 'DC_API_KEY', tier: 'optional', purpose: 'Data Commons API key for executed notebooks (fetch_data_commons.py) — distinct from DATA_COMMONS_API_KEY (the chat-flow MCP key); anonymous access works for moderate volumes without it. Under EXECUTOR_DRIVER=lambda, set it on the function instead: the app never sends it', hasFallback: true },
   // Sandbox-only: the container driver boots a local image and reads none of
   // these four (vercel-sandbox.ts:89-96 is behind the driver's dynamic import).
   { name: 'SANDBOX_SNAPSHOT_ID', tier: 'recommended', purpose: 'Prebuilt sandbox snapshot — absent, the vercel-sandbox driver falls back to a slow fresh boot + pip install', hasFallback: true, onlyWhen: { executor: 'vercel-sandbox' } },

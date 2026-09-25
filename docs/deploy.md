@@ -527,7 +527,7 @@ self-hosted values for you. Decide these first.
 | --- | --- | --- | --- | --- |
 | Database | `DB_DRIVER` | `neon-http`, `node-postgres` | `neon-http` | `node-postgres` |
 | Blob storage | `BLOB_DRIVER` | `vercel-blob`, `s3` | `vercel-blob` | `s3` |
-| Notebook executor | `EXECUTOR_DRIVER` | `vercel-sandbox`, `container` | `vercel-sandbox` | `container` |
+| Notebook executor | `EXECUTOR_DRIVER` | `vercel-sandbox`, `container`, `lambda` | `vercel-sandbox` | `container` |
 
 A selector set to anything outside its value set fails loudly at first
 use (and fails the preflight). What the defaults hide:
@@ -550,7 +550,10 @@ use (and fails the preflight). What the defaults hide:
   prebuilt `civic-notebook-executor` image on the host's container
   runtime — which is what requires the socket mount discussed above.
   `EXECUTOR_CONTAINER_IMAGE` overrides the image tag (default
-  `civic-notebook-executor:0.2.0`).
+  `civic-notebook-executor:0.2.0`). `lambda` sends each notebook to an
+  AWS Lambda function built from the same Dockerfile, for a platform that
+  offers no container-runtime socket (see [The Lambda
+  executor](#the-lambda-executor)).
 
 ### Executor settings
 
@@ -608,6 +611,107 @@ image's matplotlib cache cannot be written, and a notebook that imports
 matplotlib gains the same warning in its signed output. A read-only root also
 leaves no writable path to copy the cache to until `/tmp` is mounted
 writable, so it needs its own change.
+
+### The Lambda executor
+
+`EXECUTOR_DRIVER=lambda` runs each notebook in one synchronous invoke of an
+AWS Lambda function. The function's image is the `lambda` target of
+`docker/executor/Dockerfile`: the container executor's image, with the same
+pins, plus the AWS runtime interface client (`awslambdaric`) and the handler
+(`docker/executor/lambda/handler.py`). The app sends the notebook, the
+nbconvert command and the Python-version probe exactly as it runs them under
+the other drivers. The handler runs them as given, and the executed notebook
+comes back in the response.
+
+**The app's side:**
+
+| Variable | Unset | What it sets |
+| --- | --- | --- |
+| `EXECUTOR_LAMBDA_FUNCTION` | required under this driver | The function, by name or ARN, optionally with `:qualifier` (an alias or version). |
+| `EXECUTOR_LAMBDA_REGION` | the AWS SDK's own region, `AWS_REGION`, which ECS sets | The function's region. With neither set, the first notebook run refuses and names both. |
+
+- **Credentials:** the AWS SDK's default chain; on ECS, the task role.
+- **Permission:** the task role needs `lambda:InvokeFunction` on the
+  function's ARN, and on the qualified ARN when a qualifier is named.
+  Nothing else.
+- **Endpoint:** the invoke goes to `lambda.<region>.amazonaws.com`, through
+  your egress proxy when one is configured (see the proxy table's
+  `EXECUTOR_DRIVER=lambda` row). To reach it through a VPC interface endpoint
+  instead, name the host in `NO_PROXY`. The SDK's own
+  `AWS_ENDPOINT_URL_LAMBDA` points it at another endpoint.
+- **One attempt:** a failed invoke is not retried, because a retry would run
+  the notebook again against live data.
+- **The data-portal tokens:** `SOCRATA_APP_TOKEN` and `DC_API_KEY` are **set
+  on the function, not the app**. The app never sends them, whatever its own
+  environment carries, and the handler adds them from the function's
+  environment.
+- **The record:** a record's `sandboxId` is the invoke response's request id
+  (the `x-amzn-requestid` header), which the function's code cannot write.
+  That it equals the `RequestId` in the function's `START` line is expected
+  and not yet measured, because the emulator CI runs under sends no such
+  header. Check it on your first deployment.
+
+**The function's side:**
+
+- **The image.** Build it for the architecture you configure the function
+  with, and push it to a registry Lambda reads (Amazon ECR):
+
+  ```bash
+  docker build --platform linux/amd64 --target lambda \
+    -t civic-notebook-executor-lambda:0.2.0 docker/executor
+  ```
+
+  CI builds and checks this target on amd64
+  (`scripts/lambda-image-check.mjs`).
+- **The execution model.** Use standard Lambda. Lambda Managed Instances run
+  several invocations in one environment at once, and each notebook's run
+  assumes it has its environment to itself.
+- **Timeout.** At least `EXECUTOR_SESSION_TIMEOUT_S` plus 15 s (195 s at the
+  defaults), and at most Lambda's 900 s. The handler stops
+  nbconvert at the session cap and answers with a timeout. The app waits the
+  cap plus 15 s for that answer.
+- **Memory.** Not measured here: the other drivers set no memory limit of
+  their own, so there is no figure to carry over. 2048 MB is a starting
+  point; measure your notebooks' `Max Memory Used` in the `REPORT` lines and
+  adjust. `/tmp` holds only the run's notebook and cache, so the default
+  512 MB of ephemeral storage is enough.
+- **Environment.** `SOCRATA_APP_TOKEN` and `DC_API_KEY`, when you use them.
+  When the function runs in a VPC, set your egress proxy on the function as
+  well (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`). The handler passes all of
+  these to the notebook, which fetches its data live from the portal: a
+  function with no route to the portal fails every notebook.
+- **Permissions: none.** Give the execution role no permissions. Measured
+  under the runtime emulator: code in a notebook, which the model writes, can
+  read the function's environment, the role's temporary credentials included.
+  Scrubbing the notebook's environment does not prevent that. The only grant
+  to consider is `logs:CreateLogStream` and `logs:PutLogEvents` on the
+  function's own log group, if you want its log lines in CloudWatch, and then
+  notebook code can write log events too. The handler writes nothing to the
+  log: no event, notebook, traceback or token. CI checks this under the
+  emulator by running a failing notebook with decoy tokens set, then reading
+  the whole log for them.
+- **A proxy address with a user or password** set on the function is
+  readable by notebook code, the same as the tokens. Prefer one without.
+
+**What the handler guarantees between runs.** Lambda reuses an environment
+across invocations, and `/tmp` and any process a run left behind survive into
+the next one. A reset after a crash or timeout does not clear `/tmp` either.
+So before each response goes out, and again at the start of each run, the
+handler kills every process the function's user owns except its own, then
+empties `/tmp`. CI drives this under the emulator: one run leaves a file, a
+detached process, and a process that waits and then calls the Runtime API
+for the next event. The next two runs see none of it, and each gets its own
+response.
+
+What the handler cannot prevent: during its own run, notebook code can reach
+the Runtime API and replace that run's response. That is the control the code
+already has over its own output. A record's `sandboxId` does not come from the
+response.
+
+**Output size.** A synchronous invoke returns at most 6 MB, and the executed
+notebook travels base64-encoded, so about 4.7 MB of notebook fits. The largest
+executed notebook measured on the reference deployment is 23 KB. Over the
+limit, the run fails with a `LambdaResponseTooLargeError` naming the size.
 
 ### The model seam
 
@@ -1423,6 +1527,7 @@ table's `DB_DRIVER=node-postgres` row).
 | Database, `DB_DRIVER=node-postgres` | a raw TCP socket (`pg`) | **no** |
 | Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox` | `fetch`, in `@vercel/sandbox`, to `https://vercel.com/api`, through a proxy-aware dispatcher the driver hands the SDK (`src/lib/sandbox/vercel-sandbox.ts`) | yes — see below |
 | Notebook execution, `EXECUTOR_DRIVER=container` | the app: the container-runtime socket on the host. The notebook's own requests: the executor container, on the runtime's default network (`src/lib/sandbox/container.ts`) | the socket: **no** — it is not network traffic. The notebook's requests: yes — see below |
+| Notebook execution, `EXECUTOR_DRIVER=lambda` | the app: the AWS SDK's Lambda client, to `lambda.<region>.amazonaws.com` (`src/lib/sandbox/lambda.ts`). The notebook's own requests: the function, from wherever it runs | the invoke: yes, as the S3 driver's calls do, with the fetch transport's header timeout raised to the session cap. The notebook's requests: the **function's** proxy variables, set on the function — see [The Lambda executor](#the-lambda-executor) |
 
 **The database row and the container executor's socket leg are not gaps
 to close.** An HTTP proxy variable governs HTTP; a Postgres connection is

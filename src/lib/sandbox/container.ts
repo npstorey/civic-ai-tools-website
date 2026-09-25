@@ -61,7 +61,7 @@ import type {
   ExecutorCommand,
   ExecutorCommandResult,
   ExecutorSession,
-  NotebookExecutorDriver,
+  SessionExecutorDriver,
 } from './driver.ts';
 
 /** Default tag produced by `docker build -t … docker/executor`. */
@@ -411,7 +411,7 @@ function runDocker(
   });
 }
 
-export function createContainerDriver(deps: ContainerDriverDeps = {}): NotebookExecutorDriver {
+export function createContainerDriver(deps: ContainerDriverDeps = {}): SessionExecutorDriver {
   const spawnDocker: DockerSpawn = deps.spawn ?? spawn;
   return {
     name: 'container',
