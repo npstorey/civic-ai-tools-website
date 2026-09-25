@@ -34,7 +34,7 @@ import {
   type CompletionResult,
   type StreamCallbacks,
 } from '@/lib/openrouter-streaming';
-import { errorClassOf, isStreamErrorKind, notebookExecutionErrorMessage, streamErrorPayload, type StreamErrorCode } from '@/lib/streaming';
+import { errorClassOf, isStreamErrorKind, notebookExecutionErrorMessage, startSseKeepAlive, streamErrorPayload, type StreamErrorCode } from '@/lib/streaming';
 import { TraceBuilder, hash as traceHash, CIVICAITOOLS_TRACE_CONFIG } from '@/lib/evidence/trace';
 import { getConfiguredKeyId } from '@/lib/evidence/signing';
 import { resolveRunPortal } from '@/lib/site-config';
@@ -245,6 +245,10 @@ export async function POST(request: NextRequest) {
   const emit = async (event: NotebookEvent): Promise<void> => {
     await writer.write(encoder.encode(encodeNotebookEvent(event)));
   };
+  // Phase A's tool-picking model turns and all of Phase C write nothing; a
+  // comment line every interval keeps a load balancer from closing the
+  // connection as idle (see SSE_KEEPALIVE_INTERVAL_MS). Stopped before close.
+  const stopKeepAlive = startSseKeepAlive(writer);
 
   const trace = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);
   trace.startRoot('executed_notebook', {
@@ -427,6 +431,7 @@ export async function POST(request: NextRequest) {
       }
     } finally {
       trace.endRoot();
+      stopKeepAlive();
       await writer.close();
     }
   };

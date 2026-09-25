@@ -117,10 +117,16 @@ CMD ["npx", "drizzle-kit", "migrate"]
 # same order means the same layers in the same order.
 FROM ${NODE_IMAGE} AS runtime-without-docker-cli
 WORKDIR /app
+# KEEP_ALIVE_TIMEOUT (ms) is read by the standalone server.js. Node's own is
+# 5 s, and a load balancer that reuses a connection the server has just closed
+# answers 502, so the server holds an idle connection longer than any idle
+# timeout up to 10 min (an application load balancer's default is 60 s).
+# Measured on node:22: a connection idle 65 s under this value still answers.
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
-    HOSTNAME=0.0.0.0
+    HOSTNAME=0.0.0.0 \
+    KEEP_ALIVE_TIMEOUT=620000
 
 FROM ${DOCKER_CLI_IMAGE} AS docker-cli
 
