@@ -484,7 +484,9 @@ jobs:
   # the parity notebook, compared with the container driver's run (only
   # executor-parity.mjs's five masked fields may differ); isolation between runs
   # (ruling D3); the tokens and the function's log (D5); matplotlib under the
-  # read-only root; and the size refusal (D2). scripts/lambda-image-check.mjs
+  # read-only root; the size refusal (D2); and a CA the operator supplies,
+  # through the derived-image recipe docs/deploy.md gives, against a TLS origin
+  # that CA signed (its own emulators and network). scripts/lambda-image-check.mjs
   # says what each step can fail on, and each observation that could pass by
   # seeing nothing has a control there.
   #
@@ -549,6 +551,10 @@ jobs:
       - name: An executed notebook over the limit is refused by name
         if: ${{ !cancelled() && steps.start.outcome == 'success' }}
         run: node --experimental-strip-types scripts/lambda-image-check.mjs size
+
+      - name: A notebook on the documented derived image trusts the operator's CA
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node --experimental-strip-types scripts/lambda-image-check.mjs ca
 
       - name: Stop the emulator
         if: ${{ always() }}
