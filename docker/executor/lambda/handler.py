@@ -67,6 +67,14 @@ IMAGE_VARIABLES = ('PATH', 'LANG')
 #: through it (docs/deploy.md, the Lambda executor).
 PROXY_VARIABLES = ('HTTP_PROXY', 'http_proxy', 'HTTPS_PROXY', 'https_proxy', 'NO_PROXY', 'no_proxy')
 
+#: The certificates a notebook trusts, set on the function or by a derived
+#: image's ENV: behind a proxy that inspects TLS, the proxy's CA must be among
+#: them (docs/deploy.md, the Lambda executor). `requests`, which the fetch
+#: helpers use, reads REQUESTS_CA_BUNDLE, then CURL_CA_BUNDLE; Python's `ssl`
+#: reads SSL_CERT_FILE and SSL_CERT_DIR. Paths, not secrets. Passed only when
+#: non-empty: an empty SSL_CERT_FILE leaves OpenSSL with no roots at all.
+CA_VARIABLES = ('SSL_CERT_FILE', 'SSL_CERT_DIR', 'REQUESTS_CA_BUNDLE', 'CURL_CA_BUNDLE')
+
 #: A synchronous invoke returns at most 6 MB (AWS, Lambda quotas). The handler
 #: refuses above 6 MiB, the whole serialized response counted.
 RESPONSE_LIMIT_BYTES = 6 * 1024 * 1024
@@ -177,9 +185,11 @@ def _argv(command):
 
 
 def notebook_env(extra):
-    """The environment the notebook's processes get: the image's own, the notebook
-    paths, the function-held tokens, and the payload's variables."""
+    """The environment the notebook's processes get: the image's own, the proxy and
+    certificate settings, the notebook paths, the function-held tokens, and the
+    payload's variables."""
     env = {name: os.environ[name] for name in IMAGE_VARIABLES + PROXY_VARIABLES if name in os.environ}
+    env.update({name: os.environ[name] for name in CA_VARIABLES if os.environ.get(name)})
     env['HOME'] = NOTEBOOK_HOME
     env['MPLCONFIGDIR'] = NOTEBOOK_MPLCONFIGDIR
     for name in FUNCTION_HELD_VARIABLES:

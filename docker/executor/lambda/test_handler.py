@@ -87,6 +87,32 @@ class NotebookEnvironment(unittest.TestCase):
         self.assertEqual(env['https_proxy'], 'http://egress.example:3128')
         self.assertEqual(env['NO_PROXY'], 'metadata.internal')
 
+    def test_the_function_ca_settings_reach_the_notebook(self):
+        # Set on the function or baked into a derived image with ENV: either way
+        # they are in the handler's environment, and a notebook behind a proxy
+        # that inspects TLS fails every fetch without them. `requests`, which
+        # the fetch helpers use, reads REQUESTS_CA_BUNDLE (then CURL_CA_BUNDLE),
+        # not SSL_CERT_FILE; Python's `ssl` reads SSL_CERT_FILE and SSL_CERT_DIR.
+        settings = {
+            'SSL_CERT_FILE': '/etc/ssl/certs/ca-certificates.crt',
+            'SSL_CERT_DIR': '/etc/ssl/certs',
+            'REQUESTS_CA_BUNDLE': '/etc/ssl/certs/ca-certificates.crt',
+            'CURL_CA_BUNDLE': '/etc/ssl/certs/ca-certificates.crt',
+        }
+        os.environ.update(settings)
+        env = handler.notebook_env({})
+        for name, value in settings.items():
+            self.assertEqual(env.get(name), value, name)
+
+    def test_an_empty_ca_setting_is_not_passed(self):
+        # An empty SSL_CERT_FILE names no file, and OpenSSL then loads no roots
+        # at all rather than its default: every fetch would fail.
+        for name in ('SSL_CERT_FILE', 'SSL_CERT_DIR', 'REQUESTS_CA_BUNDLE', 'CURL_CA_BUNDLE'):
+            os.environ[name] = ''
+        env = handler.notebook_env({})
+        for name in ('SSL_CERT_FILE', 'SSL_CERT_DIR', 'REQUESTS_CA_BUNDLE', 'CURL_CA_BUNDLE'):
+            self.assertNotIn(name, env)
+
     def test_the_runtime_and_its_credentials_are_not_passed(self):
         for name in ('AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_LAMBDA_RUNTIME_API', '_HANDLER'):
             os.environ[name] = 'runtime-value'

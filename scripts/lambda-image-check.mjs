@@ -25,13 +25,19 @@
  *   matplotlib     the read-only root puts no text into a notebook's output
  *   size           ruling D2 end to end: an executed notebook over the limit is
  *                  refused by name, and a large one under it returns
- *   stop           removes the emulator container
+ *   ca             a CA the operator supplies: docs/deploy.md's derived-image
+ *                  recipe, built with a throwaway CA, runs a notebook that
+ *                  fetches from a TLS origin that CA signed, with requests and
+ *                  with urllib. Its own emulators, origin and network, so it
+ *                  needs only `build`
+ *   stop           removes the emulator containers
  *   all            every step, in order, and exit non-zero if any failed
  *
  * Each observation that could pass by seeing nothing has a control that shows
  * it can see the thing it looks for: a planted leftover the probe finds before
  * a run clears it, a decoy the leak check finds in a line that carries it, the
- * matplotlib warning the probe finds under the image's own cache.
+ * matplotlib warning the probe finds under the image's own cache, the base
+ * image failing the CA probe's fetches on the certificate.
  *
  * Credential-free by construction, like every job in ci.yml: the lambda
  * driver reaches the emulator through a client that signs nothing
@@ -42,7 +48,7 @@
 
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -474,9 +480,177 @@ async function stepSize() {
   return ok(`over the limit: ${big.error.message}; about 2 MiB under it returned whole`);
 }
 
+// --- ca: a CA the operator supplies ------------------------------------------
+
+/** The `ca` step's own containers, network and image; `stop` removes them too. */
+const CA_NETWORK = 'lambda-image-check-ca';
+const CA_ORIGIN_CONTAINER = 'lambda-image-check-ca-origin';
+const CA_ORIGIN_HOST = 'origin.ca-check.test';
+const CA_DERIVED_IMAGE = 'lambda-image-check-ca:local';
+const CA_EMULATORS = {
+  derived: { container: 'lambda-image-check-rie-ca', port: 19091 },
+  control: { container: 'lambda-image-check-rie-ca-control', port: 19092 },
+};
+/** Where docs/deploy.md keeps the derived-image recipe this step builds. */
+const CA_RECIPE_MARKER = '<!-- lambda-image-check: ca recipe -->';
+
+/**
+ * The derived-image recipe exactly as docs/deploy.md gives it, with its FROM
+ * line pointed at the image this job built. Building the documented recipe,
+ * not a copy of it, is what keeps the page and this check the same claim.
+ */
+function caRecipe() {
+  const doc = readFileSync(path.join(REPO_ROOT, 'docs/deploy.md'), 'utf8');
+  const at = doc.indexOf(CA_RECIPE_MARKER);
+  if (at < 0) throw new Error(`docs/deploy.md has no ${CA_RECIPE_MARKER} block`);
+  const block = /```dockerfile\n([\s\S]*?)\n[ \t]*```/.exec(doc.slice(at));
+  if (!block) throw new Error(`no dockerfile block follows ${CA_RECIPE_MARKER} in docs/deploy.md`);
+  // The block sits in a list item, so every line carries the item's indent.
+  const indented = block[1].split('\n');
+  const indent = Math.min(...indented.filter((l) => l.trim()).map((l) => /^[ \t]*/.exec(l)[0].length));
+  const lines = indented.map((l) => l.slice(indent));
+  const from = lines.findIndex((l) => /^FROM\s/.test(l));
+  if (from < 0) throw new Error('the documented recipe has no FROM line');
+  lines[from] = `FROM ${LAMBDA_IMAGE}`;
+  return lines.join('\n');
+}
+
+/** A TLS origin that answers every GET with ORIGIN_BODY. */
+const ORIGIN_BODY = 'ca-check-origin-ok';
+const ORIGIN_SERVER = `
+import http.server, ssl
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = ${JSON.stringify(ORIGIN_BODY)}.encode()
+        self.send_response(200)
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+    def log_message(self, *args):
+        pass
+server = http.server.ThreadingHTTPServer(('0.0.0.0', 8443), H)
+context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+context.load_cert_chain('/work/origin.crt', '/work/origin.key')
+server.socket = context.wrap_socket(server.socket, server_side=True)
+server.serve_forever()
+`;
+
+/** Fetches the origin with both libraries a notebook reaches for, and says how each went. */
+const CA_PROBE = `
+import os, urllib.request, requests
+url = 'https://${CA_ORIGIN_HOST}:8443/'
+try:
+    print('requests', requests.get(url, timeout=20).text)
+except Exception as e:
+    print('requests-failed', type(e).__name__, 'CERTIFICATE_VERIFY_FAILED' in str(e))
+try:
+    print('urllib', urllib.request.urlopen(url, timeout=20).read().decode())
+except Exception as e:
+    print('urllib-failed', type(e).__name__, 'CERTIFICATE_VERIFY_FAILED' in str(e))
+`.trim();
+
+/** A throwaway CA, and a certificate for the origin it signs, made with the image's own openssl. */
+async function makeCertificates(dir) {
+  const script = [
+    'set -e',
+    'cd /work',
+    'openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout ca.key -out proxy-ca.crt -subj "/CN=lambda-image-check throwaway CA"'
+      + ' -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign"',
+    `openssl req -newkey rsa:2048 -nodes -keyout origin.key -out origin.csr -subj "/CN=${CA_ORIGIN_HOST}"`,
+    `printf '%s\\n' "subjectAltName=DNS:${CA_ORIGIN_HOST}" "basicConstraints=critical,CA:FALSE" "keyUsage=critical,digitalSignature,keyEncipherment" "extendedKeyUsage=serverAuth" "authorityKeyIdentifier=keyid" "subjectKeyIdentifier=hash" > origin.ext`,
+    'openssl x509 -req -in origin.csr -CA proxy-ca.crt -CAkey ca.key -CAcreateserial -days 1 -extfile origin.ext -out origin.crt',
+    'chmod 644 /work/*',
+  ].join('\n');
+  return run('docker', ['run', '--rm', '--user', '0', '-v', `${dir}:/work`, '--entrypoint', 'sh', LAMBDA_IMAGE, '-c', script]);
+}
+
+async function startCaEmulator({ container, port }, image, binary) {
+  await run('docker', ['rm', '-f', container]);
+  const started = await run('docker', [
+    'run', '-d', '--name', container, '--network', CA_NETWORK,
+    '--read-only', '--tmpfs', '/tmp:exec,mode=1777', '--user', LAMBDA_LIKE_USER,
+    '-p', `127.0.0.1:${port}:8080`,
+    '-v', `${binary}:/aws-lambda-rie:ro`,
+    '-e', 'AWS_LAMBDA_FUNCTION_TIMEOUT=300',
+    '--entrypoint', '/aws-lambda-rie', image, 'python', '-m', 'awslambdaric', 'handler.handler',
+  ]);
+  if (started.code !== 0) throw new Error(`the emulator for ${image} did not start (exit ${started.code}):\n${started.stderr}`);
+  const endpoint = `http://127.0.0.1:${port}`;
+  const { invokeEmulator } = await import('./lambda-emulator.mjs');
+  for (let i = 0; i < 60; i += 1) {
+    try {
+      const { body } = await invokeEmulator(endpoint, { protocol: 0 });
+      if (JSON.parse(body).refused === 'protocol') return endpoint;
+    } catch {
+      /* not up yet */
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error(`the emulator for ${image} never answered at ${endpoint}`);
+}
+
+async function removeCaResources() {
+  await run('docker', ['rm', '-f', CA_EMULATORS.derived.container, CA_EMULATORS.control.container, CA_ORIGIN_CONTAINER]);
+  await run('docker', ['network', 'rm', CA_NETWORK]);
+}
+
+async function stepCa() {
+  const dir = mkdtempSync(path.join(tmpdir(), 'lambda-image-check-ca-'));
+  chmodSync(dir, 0o777);
+  try {
+    await removeCaResources();
+    const made = await makeCertificates(dir);
+    if (made.code !== 0) return fail(`the throwaway CA could not be made (exit ${made.code}):\n${made.stderr}`);
+
+    // The documented recipe, built with the throwaway CA as the operator's.
+    writeFileSync(path.join(dir, 'Dockerfile'), caRecipe());
+    const built = await run('docker', ['build', '-t', CA_DERIVED_IMAGE, dir]);
+    if (built.code !== 0) return fail(`the documented derived image did not build (exit ${built.code}):\n${built.stderr}`);
+
+    const net = await run('docker', ['network', 'create', CA_NETWORK]);
+    if (net.code !== 0) return fail(`the check's network could not be created:\n${net.stderr}`);
+    const origin = await run('docker', [
+      'run', '-d', '--name', CA_ORIGIN_CONTAINER, '--network', CA_NETWORK, '--network-alias', CA_ORIGIN_HOST,
+      '--user', '0', '-v', `${dir}:/work:ro`, '--entrypoint', 'python', LAMBDA_IMAGE, '-c', ORIGIN_SERVER,
+    ]);
+    if (origin.code !== 0) return fail(`the TLS origin did not start:\n${origin.stderr}`);
+
+    const binary = await emulatorBinary();
+    const outcomes = {};
+    for (const [leg, image] of [['derived', CA_DERIVED_IMAGE], ['control', LAMBDA_IMAGE]]) {
+      const endpoint = await startCaEmulator(CA_EMULATORS[leg], image, binary);
+      const { executeNotebookWith } = await import('../src/lib/sandbox/execute.ts');
+      const { emulatorLambdaDriver } = await import('./lambda-emulator.mjs');
+      const executed = await executeNotebookWith(await emulatorLambdaDriver(endpoint), notebookOf(CA_PROBE));
+      outcomes[leg] = streams(executed.notebook, 'stdout').join('');
+    }
+
+    // CONTROL: the base image, on the same network, fails both fetches on the
+    // certificate, so the origin is reachable and the check can see a failure.
+    for (const lib of ['requests', 'urllib']) {
+      if (!new RegExp(`^${lib}-failed \\S+ True$`, 'm').test(outcomes.control)) {
+        return fail(`the control did not fail ${lib}'s fetch on the certificate, so the check proves nothing:\n${outcomes.control}`);
+      }
+    }
+    for (const lib of ['requests', 'urllib']) {
+      if (!new RegExp(`^${lib} ${ORIGIN_BODY}$`, 'm').test(outcomes.derived)) {
+        return fail(`a notebook on the documented derived image could not fetch with ${lib} from an origin its CA signed:\n${outcomes.derived}`);
+      }
+    }
+    return ok('a notebook on the documented derived image trusts the operator\'s CA with requests and urllib; the base image fails both on the certificate');
+  } catch (err) {
+    return fail(`the ca step failed: ${err instanceof Error ? err.message : err}`);
+  } finally {
+    await removeCaResources();
+    await run('docker', ['rmi', '-f', CA_DERIVED_IMAGE]);
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 async function stepStop() {
   await run('docker', ['rm', '-f', EMULATOR_CONTAINER]);
-  return ok('the emulator container is removed');
+  await removeCaResources();
+  return ok('the emulator containers are removed');
 }
 
 const STEPS = {
@@ -489,6 +663,7 @@ const STEPS = {
   secrets: stepSecrets,
   matplotlib: stepMatplotlib,
   size: stepSize,
+  ca: stepCa,
   stop: stepStop,
 };
 
