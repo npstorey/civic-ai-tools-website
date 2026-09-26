@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # Application image. Multi-stage: dependencies → standalone build → runtime.
 #
 # Targets:
@@ -9,6 +7,13 @@
 # Build:
 #   docker build -t civic-app:dev .
 #   docker build -t civic-app-migrate:dev --target migrate .
+#
+# No `syntax` parser directive: the builder's built-in Dockerfile frontend
+# parses this file, so a build pulls no frontend image from Docker Hub, and
+# the only images it pulls are NODE_IMAGE and DOCKER_CLI_IMAGE below. A build
+# behind a registry mirror passes both as build arguments rather than editing
+# this file (docs/deploy.md, "Building behind a registry mirror"); `npm ci`
+# still reaches the npm registry.
 #
 # Configuration is RUN-time wherever it can be: no environment file ever
 # enters the build context (see .dockerignore). The exception is the set of
