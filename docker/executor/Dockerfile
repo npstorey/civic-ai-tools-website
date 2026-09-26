@@ -19,19 +19,35 @@
 # below MUST match src/lib/notebook-author/prompt.ts (PINNED_LIBRARIES), the
 # notebook-tooling pins MUST match src/lib/sandbox/driver.ts
 # (EXECUTOR_TOOLING_PACKAGES), the runtime-client pin MUST match
-# src/lib/sandbox/driver.ts (EXECUTOR_LAMBDA_RUNTIME_PACKAGES), and the FROM
-# line's python version MUST match PYTHON_RUNTIME_VERSION.
+# src/lib/sandbox/driver.ts (EXECUTOR_LAMBDA_RUNTIME_PACKAGES), and
+# PYTHON_IMAGE's default below MUST name python PYTHON_RUNTIME_VERSION.
 # src/lib/sandbox/container.test.ts and src/lib/sandbox/executor-pins.test.ts
 # assert this file against those tables — version equality, not names — so
 # drift here fails `npm test`.
 # @vercel/sandbox major: 1 (SANDBOX_SDK_MAJOR in src/lib/sandbox/driver.ts).
-FROM python:3.13-slim-bookworm AS executor
+#
+# BUILDING BEHIND A REGISTRY MIRROR. The base image and pip's package index
+# are build arguments, so a build host that reaches neither Docker Hub nor
+# PyPI names its mirror without editing this file (docs/deploy.md, "Building
+# behind a registry mirror"):
+#
+#   PYTHON_IMAGE   the base of every target. The default is the reference
+#                  base; a mirror's copy must be the same image.
+#   PIP_INDEX_URL  pip's own variable, read by both `pip install` runs below.
+#                  Declared with no default: unpassed, it stays out of the
+#                  RUN's environment and pip uses PyPI.
+#
+# With neither passed, the build is the reference build. Neither may carry a
+# credential: a build argument is recorded in the image's history.
+ARG PYTHON_IMAGE=python:3.13-slim-bookworm
+FROM ${PYTHON_IMAGE} AS executor
 
 # Same package set the sandbox snapshot installs: the pinned scientific
 # stack + the pinned notebook tooling (EXECUTOR_TOOLING_PACKAGES in
 # src/lib/sandbox/driver.ts). The tooling is pinned because an executed
 # notebook's bytes come out of nbformat and nbconvert and go into a signed
 # package (#450).
+ARG PIP_INDEX_URL
 RUN pip install --no-cache-dir --no-input \
     pandas==2.2.3 \
     requests==2.32.3 \
@@ -71,6 +87,11 @@ RUN python -c "import matplotlib.pyplot"
 # scripts/lambda-image-check.mjs mounts a pinned, checksummed copy for CI.
 FROM executor AS lambda
 USER root
+# Declared again: Docker documents an ARG as out of scope at the end of its
+# stage, and the legacy builder keeps to that, so without this line this
+# install reaches PyPI behind a mirror there (measured). BuildKit, measured
+# at v0.29, carries the `executor` stage's value into this stage anyway.
+ARG PIP_INDEX_URL
 RUN pip install --no-cache-dir --no-input \
     awslambdaric==4.0.4
 COPY lambda/handler.py /var/task/handler.py

@@ -437,6 +437,9 @@ jobs:
   # the pinned packages from PyPI anonymously, so an outage of either fails
   # this job the way an npm registry outage fails `npm ci` above. No `npm ci`
   # here: the check imports only the two pin tables, which need no dependency.
+  # No `--build-arg` either: PYTHON_IMAGE and PIP_INDEX_URL, the registry-mirror
+  # seams (docs/deploy.md), stay at their defaults, so this job and the lambda
+  # job below build the reference image.
   #
   # REQUIRED: a required status check in ruleset 17585984 (`protect-main`),
   # added under #518 (ruling D4). The ruleset matches the name below, so a
