@@ -407,7 +407,7 @@ time:
 | --- | --- | --- |
 | Scientific stack | `src/lib/notebook-author/prompt.ts` (`PINNED_LIBRARIES`) | `pandas`, `requests`, `numpy`, `matplotlib` |
 | Notebook tooling | `src/lib/sandbox/driver.ts` (`EXECUTOR_TOOLING_PACKAGES`) | `jupyter`, `ipykernel`, `nbformat`, `nbconvert` |
-| Python runtime | `src/lib/notebook-author/prompt.ts` (`PYTHON_RUNTIME_VERSION`) | the `FROM python:` line |
+| Python runtime | `src/lib/notebook-author/prompt.ts` (`PYTHON_RUNTIME_VERSION`) | the default of `PYTHON_IMAGE`, the base image |
 
 Both tables feed the container image, the managed-sandbox snapshot
 (`scripts/build-sandbox-snapshot.ts`) and the fresh-sandbox pip fallback,
@@ -482,6 +482,66 @@ unavailable at first use, which is the honest failure for an image that
 does not carry it. CI builds both variants on every pull request and
 checks that the off variant starts and serves the health route, so the
 variant cannot rot.
+
+### Building behind a registry mirror
+
+With no build argument, both images pull their bases from Docker Hub and
+the notebook image installs its pinned packages from PyPI. A build host
+that reaches neither can pull through a mirror instead. Each of those
+downloads is named by a build argument, so neither Dockerfile needs an
+edit:
+
+| Image | Build argument | Default | What it names |
+| --- | --- | --- | --- |
+| Application (`Dockerfile`) | `NODE_IMAGE` | `node:22-bookworm-slim` | The base of the dependency, build and runtime stages |
+| Application | `DOCKER_CLI_IMAGE` | `docker:29-cli` | The image the `docker` binary is copied from; not pulled at `RUNTIME_BASE=runtime-without-docker-cli` |
+| Notebook (`docker/executor/Dockerfile`) | `PYTHON_IMAGE` | `python:3.13-slim-bookworm` | The base of both targets |
+| Notebook | `PIP_INDEX_URL` | Unset: pip uses PyPI | The package index both `pip install` runs read, in the default target and in `lambda` |
+
+```bash
+docker build \
+  --build-arg NODE_IMAGE=registry.example.internal/library/node:22-bookworm-slim \
+  --build-arg DOCKER_CLI_IMAGE=registry.example.internal/library/docker:29-cli \
+  -t civic-app:dev .
+
+docker build \
+  --build-arg PYTHON_IMAGE=registry.example.internal/library/python:3.13-slim-bookworm \
+  --build-arg PIP_INDEX_URL=https://registry.example.internal/pypi/simple/ \
+  -t civic-notebook-executor:0.2.0 docker/executor
+```
+
+Add `--target lambda` to the second command for the Lambda image. CI
+builds both images with no build argument, so the defaults stay the tested
+reference.
+
+- **The same images.** A mirror's copy must be the image the default
+  names. The notebook image's Python version is pinned
+  (`PYTHON_RUNTIME_VERSION`), and `npm test` checks the default, not the
+  value you pass; `node --experimental-strip-types
+  scripts/executor-image-check.mjs pins --image <tag>` checks a built
+  image's Python version and pins.
+- **The index.** `PIP_INDEX_URL` is pip's own setting, so the mirror must
+  serve PyPI's simple API and every version the image installs. Unset, or
+  set to an empty value, pip uses PyPI. With this argument alone pip
+  accepts an HTTPS index whose certificate the base image trusts, or a
+  loopback address. It ignores a plain-HTTP index at any other address,
+  and an index behind a private certificate authority needs that
+  certificate in the build; neither case is covered yet.
+- **No credentials in a build argument.** Build arguments are recorded in
+  the image's history: `docker history --no-trunc` shows the
+  `PIP_INDEX_URL` value on every `RUN` after its declaration. An index that
+  requires authentication is out of scope for now; a build secret is the
+  shape it would take.
+- **No frontend image.** Neither Dockerfile has a `# syntax=` line, so the
+  builder's built-in frontend parses both and nothing else is pulled. On a
+  host that already holds a base tag, that frontend builds from the stored
+  copy rather than asking the registry again (measured on Docker 29.4);
+  `--pull` resolves the tag again.
+- **Not covered:** the application image's `npm ci` downloads from the
+  npm registry, and no build argument redirects it yet.
+
+`scripts/build-behind-mirror.test.mjs` fails when either Dockerfile gains
+an image pull or a `pip install` that no build argument redirects.
 
 ## Usable, not just built
 
