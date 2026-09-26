@@ -56,19 +56,39 @@ test('Dockerfile pins exactly the three single-sourced tables and nothing else',
   });
 });
 
-test('Dockerfile FROM line matches PYTHON_RUNTIME_VERSION', () => {
+test('the executor stage builds FROM a build argument whose default matches PYTHON_RUNTIME_VERSION', () => {
   // Every stage but the first builds on an earlier one (#530: `executor`, then
   // `lambda` and the default `container`), so exactly one FROM names an image.
-  const fromLines = dockerfile
-    .split('\n')
-    .filter((line) => line.startsWith('FROM '));
+  // That image is a build argument, so a build behind a registry mirror names
+  // the mirror's copy without editing the file; its DEFAULT is what a build
+  // with no argument runs, so the version equality is asserted on the default.
+  // A FROM sees only the ARGs declared ahead of the first FROM.
+  const lines = dockerfile.split('\n');
+  const firstFrom = lines.findIndex((line) => line.startsWith('FROM '));
+  const fromLines = lines.filter((line) => line.startsWith('FROM '));
   const stageNames = fromLines.map((line) => /\sAS\s+(\S+)/i.exec(line)?.[1]).filter(Boolean);
   const fromImage = fromLines.filter((line) => !stageNames.includes(line.split(/\s+/)[1]));
   assert.equal(fromImage.length, 1, `expected one FROM that names an image, found: ${fromImage.join(' | ')}`);
+  const arg = /^FROM\s+\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))(?:\s|$)/.exec(fromImage[0]);
+  assert.ok(
+    arg,
+    `the executor stage's FROM names no build argument (${fromImage[0]}), so a build behind a registry ` +
+      'mirror has to edit the file to change its base',
+  );
+  const name = arg[1] ?? arg[2];
+  const defaults = lines
+    .slice(0, firstFrom)
+    .map((line) => new RegExp(`^ARG\\s+${name}=(\\S+)\\s*$`).exec(line)?.[1]?.replace(/^(["'])(.*)\1$/, '$2'))
+    .filter((value) => value !== undefined);
+  assert.equal(
+    defaults.length,
+    1,
+    `expected one ARG ${name} with a default ahead of the first FROM, found ${defaults.length}`,
+  );
   assert.match(
-    fromImage[0],
-    new RegExp(`^FROM python:${PYTHON_RUNTIME_VERSION.replace('.', '\\.')}-`),
-    `executor image python version must match PYTHON_RUNTIME_VERSION (${PYTHON_RUNTIME_VERSION})`,
+    defaults[0],
+    new RegExp(`^python:${PYTHON_RUNTIME_VERSION.replace('.', '\\.')}-`),
+    `the default of ${name} (${defaults[0]}) must name python PYTHON_RUNTIME_VERSION (${PYTHON_RUNTIME_VERSION})`,
   );
 });
 
