@@ -7,8 +7,10 @@
  *   - The JSON-RPC `error` member: the request failed. `McpErrorEnvelope`
  *     carries the server's message exactly as the client always has. The
  *     classifier reads that message (a source that says it "timed out" is
- *     recorded `timeout`), and so does the client's session retry; neither is
- *     changed here (Wave N11 P3's non-goals).
+ *     recorded `timeout`), which is not changed here (Wave N11 P3's
+ *     non-goals). The client's session retry does not read it: since sprint
+ *     238 (ruling D5) the retry is decided by the HTTP status and the JSON-RPC
+ *     code alone, and a JSON-RPC error in a 200 body is never retried.
  *   - A `result` carrying `isError: true`: the MCP specification's tool-level
  *     failure — the tool ran, and reports that it could not do what was asked.
  *     Until Wave N11 P3 nothing in this repository read the flag, so both
@@ -22,12 +24,14 @@
  * as `unavailable`. So it carries `code: 'generic'`, which `classifyStreamError`
  * returns before it reads any message, and the loop records
  * `failureKind: 'unknown'`. Its message is fixed and holds none of the source's
- * text, which keeps three things true by construction rather than by each
- * reader's care: the client's session retry (it fires on "session" or "400" in a
- * message) cannot fire on a refusal; the SSE branch's parse failure cannot take
- * its place; and no word the source chose can reach the model, the trace or the
- * signed package through the error. The source's text stays in the operator's
- * log, where `client.ts` writes every raw response.
+ * text, which keeps two things true by construction rather than by each
+ * reader's care: the SSE branch's parse failure cannot take its place; and no
+ * word the source chose can reach the model, the trace or the signed package
+ * through the error. The client's session retry cannot fire on a refusal
+ * either, for a reason that does not depend on this message: it reads no
+ * message at all, only the HTTP status and the JSON-RPC code (sprint 238,
+ * ruling D5), and a refusal arrives in a 200. The source's text stays in the
+ * operator's log, where `client.ts` writes every raw response.
  *
  * `isSourceRefusal` is how `describeToolFailureForLlm` tells a failure the source
  * ANSWERED with from one that happened on this side (Wave N11 ruling R6). It
@@ -48,8 +52,9 @@ export type SourceRefusalShape = 'error-envelope' | 'error-result';
 
 /**
  * The message every `McpErrorResult` carries. Fixed, and free of every word the
- * session retry, the parse rewrite and the classifier's matchers read
- * (`tool-call-failure.test.ts` holds it to that).
+ * parse rewrite and the classifier's matchers read (`tool-call-failure.test.ts`
+ * holds it to that). The client's session retry reads no message, only the
+ * HTTP status and the JSON-RPC code (sprint 238, ruling D5).
  */
 export const ERROR_RESULT_MESSAGE = 'The data source answered this tool call with a result marked isError: true.';
 
