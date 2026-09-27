@@ -481,7 +481,11 @@ export const ENV_SPEC = [
   // --- Secondary MCP sources (not on the storyboard-3 critical path) ---
   { name: 'DATA_COMMONS_MCP_URL', tier: 'recommended', purpose: 'Data Commons MCP endpoint', hasFallback: true },
   { name: 'DATA_COMMONS_API_KEY', tier: 'recommended', purpose: 'Data Commons auth — DC tool calls fail without it' },
-  { name: 'BOSTON_OPENCONTEXT_MCP_URL', tier: 'recommended', purpose: 'Boston OpenContext MCP endpoint', hasFallback: true },
+  // Opt-in, with no coded default (sprint 238, ruling D2): unset, the source
+  // is absent from every run — no tools, no guidance, no record entry, no
+  // request. Optional rather than recommended: absence is a configuration,
+  // not a degraded feature, so it is not nagged about.
+  { name: 'BOSTON_OPENCONTEXT_MCP_URL', tier: 'optional', purpose: "Boston OpenContext MCP endpoint — opt-in: unset, the source is not offered to a run (no tools, no guidance, no record entry). No default: the public endpoint refuses requests that carry no bearer token, and this app sends none" },
 
   // --- Instance identity (ADR-0020: config-not-code; #258: REQUIRED for
   //     signing, never defaulted; see docs/instance-setup.md and
@@ -1045,7 +1049,8 @@ export function evaluateEnv(env, spec = ENV_SPEC) {
   // substitutes a built-in default, so the feature is not degraded, it is
   // running on the coded value. Without the filter the report named
   // DATA_COMMONS_MCP_URL and BOSTON_OPENCONTEXT_MCP_URL as degraded features
-  // when both have working defaults.
+  // when both had working defaults. (BOSTON_OPENCONTEXT_MCP_URL has since lost
+  // its default and become an optional, opt-in source — sprint 238, D2.)
   const missingRecommended = rows.filter((r) => r.tier === 'recommended' && !r.present && !r.hasFallback);
   const partialGroups = evaluateGroups(env, drivers, ENV_GROUPS, spec);
   // Variables supplied under a prior-era name. Warn-only and never a failure:

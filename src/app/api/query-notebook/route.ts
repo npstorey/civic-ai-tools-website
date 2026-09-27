@@ -22,9 +22,9 @@ import { randomUUID } from 'node:crypto';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
-import { mcpToolsFor } from '@/lib/mcp/tools';
-import { callMcpTool, routeTool } from '@/lib/mcp/client';
-import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
+import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
+import { callMcpTool } from '@/lib/mcp/client';
+import { getMissingMcpRoutingError, routedSourceId } from '@/lib/mcp/registry';
 import { getDefaultModel, resolveModel, ModelNotOfferedError } from '@/lib/model-resolver';
 import { ModelConfigurationError, getMissingModelCredentialError, getModelApiKind } from '@/lib/model-client';
 import { modelAccessPhrase, modelIdentity, type ModelIdentity } from '@/lib/model-catalog';
@@ -541,7 +541,8 @@ async function runPhaseA(args: {
       query,
       model,
       // `mcpTools` itself when unlocked; the locked text otherwise (#436, D7).
-      mcpToolsFor(lockedPortal),
+      // Only the sources this instance configures (sprint 238, D2).
+      offeredMcpTools(mcpToolsFor(lockedPortal)),
       // Just the transport. Portal injection and the timeout race are the loop
       // core's now (#359, #352): performed here they ran after the core had
       // recorded the call and stringified its arguments onto the span, and the
@@ -549,7 +550,9 @@ async function runPhaseA(args: {
       callMcpTool,
       systemPrompt,
       callbacks,
-      { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: (name) => routeTool(name).sourceId },
+      // Non-throwing: a call to a tool no configured server hosts is refused by
+      // the transport as one failed call, not thrown out of the loop here.
+      { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: (name) => routedSourceId(name) },
       { portal, toolTimeoutMs: MCP_TOOL_TIMEOUT_MS },
       // Refused as a rejected call when it names another portal (#436, D7).
       lockedPortal,

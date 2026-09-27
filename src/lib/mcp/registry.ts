@@ -40,7 +40,14 @@ export interface McpRegistryEnv {
   socrataUrl?: string;
   dataCommonsUrl: string;
   dataCommonsApiKey?: string;
-  bostonOpencontextUrl: string;
+  /**
+   * Absent when `BOSTON_OPENCONTEXT_MCP_URL` is unset. Boston's OpenContext
+   * source is OPTIONAL (see `OPTIONAL_SOURCES`): unset, it is not offered to
+   * a run at all. There is deliberately no coded default: the public endpoint
+   * refuses every request that carries no bearer token, and this client sends
+   * none (sprint 238, ruling D2).
+   */
+  bostonOpencontextUrl?: string;
 }
 
 const SOCRATA_TOOLS = ['get_data', 'search', 'fetch'];
@@ -53,6 +60,30 @@ const BOSTON_OPENCONTEXT_TOOLS = [
   'ckan__execute_sql',
   'ckan__aggregate_data',
 ];
+
+/**
+ * Sources a run is offered only when the instance configures them, each with
+ * the variable that does and the tools it hosts (sprint 238, ruling D2).
+ *
+ * Unconfigured, such a source is ABSENT, not failing: no server in the
+ * registry, none of its tools offered to the model (`withheldToolNames`, read
+ * by `offeredMcpTools` in `./tools.ts`), none of its guidance in the composed
+ * prompt (`offeredSkillSources` in `./socrata-skill.ts`), no entry in a
+ * record's configured-servers list (`configuredMcpServers` below), and no
+ * request sent to it. A call to one of its tools anyway — a replayed record, or
+ * a model naming a tool it was not given — resolves to no server and is
+ * refused per call through `unconfiguredTools`, naming the variable.
+ *
+ * This is the rule the Socrata source already follows (#258 C4), stated for
+ * every source that is not required; it is not a per-source feature. Socrata
+ * is not listed because it is required: an instance without it refuses every
+ * query up front (`getMissingMcpRoutingError`), so its tools are never
+ * withheld from a run that proceeds. Data Commons is not listed because it
+ * keeps a coded public default.
+ */
+const OPTIONAL_SOURCES: Record<string, { variable: string; tools: readonly string[] }> = {
+  'boston-opencontext': { variable: 'BOSTON_OPENCONTEXT_MCP_URL', tools: BOSTON_OPENCONTEXT_TOOLS },
+};
 
 /**
  * Normalize a base URL to a POST-able MCP endpoint. The Socrata env var is
@@ -134,12 +165,18 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
       headers: env.dataCommonsApiKey ? { 'X-API-Key': env.dataCommonsApiKey } : undefined,
       tools: DATA_COMMONS_TOOLS,
     },
-    'boston-opencontext': {
-      sourceId: 'boston-opencontext',
-      label: 'Boston OpenContext MCP Server',
-      endpointUrl: normalizeMcpEndpoint(env.bostonOpencontextUrl),
-      tools: BOSTON_OPENCONTEXT_TOOLS,
-    },
+    // Optional: present only when configured (`OPTIONAL_SOURCES`). Unset,
+    // its tools are recorded in `unconfiguredTools` below, as Socrata's are.
+    ...(env.bostonOpencontextUrl
+      ? {
+          'boston-opencontext': {
+            sourceId: 'boston-opencontext',
+            label: 'Boston OpenContext MCP Server',
+            endpointUrl: normalizeMcpEndpoint(env.bostonOpencontextUrl),
+            tools: BOSTON_OPENCONTEXT_TOOLS,
+          },
+        }
+      : {}),
   };
 
   const toolIndex = buildToolIndex(servers);
@@ -148,6 +185,12 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
   if (!env.socrataUrl) {
     for (const tool of SOCRATA_TOOLS) {
       unconfiguredTools[tool] = 'SOCRATA_MCP_URL';
+    }
+  }
+  for (const [sourceId, { variable, tools }] of Object.entries(OPTIONAL_SOURCES)) {
+    if (servers[sourceId]) continue;
+    for (const tool of tools) {
+      unconfiguredTools[tool] = variable;
     }
   }
 
@@ -190,6 +233,28 @@ export function configuredAddressForSource(
   return value ? value : undefined;
 }
 
+/**
+ * Whether a run on an instance configured as `configured` is offered this
+ * source: always, unless it is an optional source (`OPTIONAL_SOURCES`) with no
+ * configured address. The same condition `buildMcpRegistry` builds the
+ * source's server on, so a source is offered exactly when it is routable.
+ */
+export function isSourceOffered(configured: McpRegistryEnv, sourceId: string): boolean {
+  if (!Object.hasOwn(OPTIONAL_SOURCES, sourceId)) return true;
+  return configuredAddressForSource(configured, sourceId) !== undefined;
+}
+
+/**
+ * The tool names the model is NOT offered on an instance configured as
+ * `configured`: every tool of an optional source it did not configure. Empty
+ * when every optional source is configured.
+ */
+export function withheldToolNames(configured: McpRegistryEnv): string[] {
+  return Object.entries(OPTIONAL_SOURCES)
+    .filter(([sourceId]) => !isSourceOffered(configured, sourceId))
+    .flatMap(([, { tools }]) => [...tools]);
+}
+
 /** One server this instance routes to, as a record names it. */
 export interface ConfiguredMcpServer {
   /** The configured address, as configured. */
@@ -226,6 +291,24 @@ export function resolveServerForTool(
   return registry.servers[sourceId];
 }
 
+/**
+ * The source id of the server this instance routes `toolName` to, or
+ * `undefined` when none does: a tool no source hosts, or one whose source is
+ * not configured here. For a trace's `mcp.source` attribution, which the loop
+ * core reads ABOVE its per-call `try`. `routeTool` (`./client.ts`) throws in the
+ * same case, and a throw there ends the whole run instead of recording one
+ * failed call; with this lookup the call itself is what gets refused — by the
+ * transport, per call, recorded as failed — and the span names no source for a
+ * call no server took. For every tool the instance does route, the answer is
+ * `routeTool(name).sourceId`.
+ */
+export function routedSourceId(
+  toolName: string,
+  configured: McpRegistryEnv = readMcpEnvFromProcess(),
+): string | undefined {
+  return resolveServerForTool(buildMcpRegistry(configured), toolName)?.sourceId;
+}
+
 /** THE presence test — non-empty after trim, matching the preflight. */
 function presentOrUndefined(raw: string | undefined): string | undefined {
   return typeof raw === 'string' && raw.trim().length > 0 ? raw : undefined;
@@ -236,18 +319,20 @@ function presentOrUndefined(raw: string | undefined): string | undefined {
  *
  * `SOCRATA_MCP_URL` has NO fallback (#258 C4, owner ruling): unset, the
  * Socrata source is simply unconfigured and every query that would route
- * through it refuses, naming the variable. The Data Commons and Boston
- * OpenContext defaults are third-party PUBLIC endpoints (Google's hosted
- * Data Commons, the City of Boston's OpenContext server), not reference
- * infrastructure, so they keep their coded defaults.
+ * through it refuses, naming the variable. `BOSTON_OPENCONTEXT_MCP_URL` has
+ * none either (sprint 238, ruling D2): unset, Boston's OpenContext source is
+ * not offered to a run (`OPTIONAL_SOURCES`). Its coded default went because
+ * that public endpoint refuses every request without a bearer token, so the
+ * default only ever produced failed calls. The Data Commons default is a
+ * third-party PUBLIC endpoint (Google's hosted Data Commons), not reference
+ * infrastructure, so it keeps its coded default.
  */
 export function readMcpEnvFromProcess(): McpRegistryEnv {
   return {
     socrataUrl: presentOrUndefined(process.env.SOCRATA_MCP_URL),
     dataCommonsUrl: process.env.DATA_COMMONS_MCP_URL || 'https://api.datacommons.org/mcp',
     dataCommonsApiKey: process.env.DATA_COMMONS_API_KEY || undefined,
-    bostonOpencontextUrl:
-      process.env.BOSTON_OPENCONTEXT_MCP_URL || 'https://data-mcp.boston.gov/mcp',
+    bostonOpencontextUrl: presentOrUndefined(process.env.BOSTON_OPENCONTEXT_MCP_URL),
   };
 }
 

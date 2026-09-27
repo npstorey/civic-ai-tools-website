@@ -37,7 +37,7 @@
  */
 
 import type OpenAI from 'openai';
-import { mcpToolsFor } from '../mcp/tools.ts';
+import { mcpToolsFor, offeredMcpTools } from '../mcp/tools.ts';
 import { callMcpTool } from '../mcp/client.ts';
 import type { ToolCallRecord, ToolLoopOptions, ToolLoopResult } from './run-tool-loop.ts';
 
@@ -123,8 +123,9 @@ export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
     prompt,
     systemPrompt,
     // The same schemas either way; under the lock their text stops inviting
-    // other portals (#436).
-    tools: mcpToolsFor(lockedPortal),
+    // other portals (#436). Only the sources this instance configures
+    // (sprint 238, D2).
+    tools: offeredMcpTools(mcpToolsFor(lockedPortal)),
     maxIterations: COMPARE_MAX_ITERATIONS,
     maxTokens: COMPARE_MAX_TOKENS,
     // No cumulative token budget: this caller has never had one, and the cap
