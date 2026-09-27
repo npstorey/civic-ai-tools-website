@@ -476,7 +476,7 @@ test('#436 D7: the prompt gains one section under the lock, naming only callable
   const section = portalLockGuidance(LOCKED);
   // Ruling D11: the section limits Socrata portals and says the other sources remain.
   assert.match(section, /^## ONE SOCRATA PORTAL ONLY/);
-  assert.match(section, /Boston OpenContext for Boston\) are separate, remain available/);
+  assert.match(portalLockGuidance(LOCKED, { dataCommonsUrl: 'https://data-commons.invalid', bostonOpencontextUrl: 'https://boston.invalid' }), /Boston OpenContext for Boston\) are separate, remain available/);
   const routable = Object.keys(buildMcpRegistry({
     socrataUrl: 'https://socrata.invalid',
     dataCommonsUrl: 'https://data-commons.invalid',

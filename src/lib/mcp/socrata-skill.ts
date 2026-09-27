@@ -2,7 +2,8 @@
 //
 // Despite the filename (historical — Socrata was the only source pre-M9.1),
 // `buildSystemPrompt` now composes the full multi-source system prompt
-// spanning Socrata, Google Data Commons, and Boston OpenContext:
+// spanning Socrata, Google Data Commons, and — only on an instance that
+// configures it (`BOSTON_OPENCONTEXT_MCP_URL`) — Boston OpenContext:
 //
 //   1. Cross-source preamble  — "you have access to two data sources..."
 //   2. Socrata skill          — fetched from the Socrata MCP server's
@@ -18,6 +19,7 @@
 // first so the model reads it before diving into source-specific details.
 
 import { callMcpPrompt, getServerInstructions } from './client.ts';
+import { isSourceOffered, readMcpEnvFromProcess, type McpRegistryEnv } from './registry.ts';
 import { DATA_COMMONS_SKILL } from './data-commons-skill.ts';
 import { BOSTON_OPENCONTEXT_SKILL } from './boston-skill.ts';
 import { errorLogFacts } from '../streaming.ts';
@@ -476,6 +478,8 @@ export interface SkillContext {
   today: string;
   /** Cross-source preamble inserted between the intro and the per-source blocks. Optional. */
   preamble?: string;
+  /** The closing block. Optional: absent, the outro citing every source. */
+  outro?: string;
 }
 
 /**
@@ -497,27 +501,93 @@ export interface SkillEntry {
  */
 export type SkillRegistry = Partial<Record<SourceId, SkillEntry>>;
 
-export const CROSS_SOURCE_PREAMBLE = `You have access to THREE MCP data sources through the tools below.
+/**
+ * Every source a prompt can be composed from, in the order the prompt names
+ * them. `offeredSkillSources` narrows it to one instance's configuration.
+ */
+const ALL_SOURCES: readonly SourceId[] = ['socrata', 'data-commons', 'boston-opencontext'];
 
-1. **Socrata open data portals** — city operational data such as 311 requests, building permits, inspections, crime, housing violations, payroll, and licenses. Covers NYC, Chicago, SF, Seattle, LA, and hundreds of other portals — but not Boston. Tools: get_data.
-2. **Google Data Commons** — authoritative federal and international statistical data from the U.S. Census Bureau (ACS, Decennial), BLS, CDC, Department of Education, EPA, and other official agencies. Tools: search_indicators, get_observations.
-3. **Boston OpenContext** — the City of Boston's CKAN-native open-data MCP, fronting data.boston.gov. 311, permits, crime, inspections, property, elections, schools, parcels, and neighborhoods for Boston specifically. Tools: ckan__search_datasets, ckan__get_dataset, ckan__query_data, ckan__get_schema, ckan__execute_sql, ckan__aggregate_data.
+/**
+ * The sources a run's prompt is composed from on an instance configured as
+ * `configured`: each source the instance offers (`isSourceOffered` in
+ * `./registry.ts`). Socrata and Data Commons always; an optional source such as
+ * Boston OpenContext only when its variable is set — unset, its guidance block,
+ * its preamble entry and routing rule, its outro citation and its line in the
+ * lock section are all left out, and its server is never asked for
+ * instructions (sprint 238, ruling D2).
+ */
+export function offeredSkillSources(configured: McpRegistryEnv = readMcpEnvFromProcess()): SourceId[] {
+  return ALL_SOURCES.filter((sourceId) => isSourceOffered(configured, sourceId));
+}
+
+/** Each source's numbered entry in the cross-source preamble. */
+const PREAMBLE_ENTRIES: Record<SourceId, string> = {
+  socrata:
+    '**Socrata open data portals** — city operational data such as 311 requests, building permits, inspections, crime, housing violations, payroll, and licenses. Covers NYC, Chicago, SF, Seattle, LA, and hundreds of other portals — but not Boston. Tools: get_data.',
+  'data-commons':
+    '**Google Data Commons** — authoritative federal and international statistical data from the U.S. Census Bureau (ACS, Decennial), BLS, CDC, Department of Education, EPA, and other official agencies. Tools: search_indicators, get_observations.',
+  'boston-opencontext':
+    "**Boston OpenContext** — the City of Boston's CKAN-native open-data MCP, fronting data.boston.gov. 311, permits, crime, inspections, property, elections, schools, parcels, and neighborhoods for Boston specifically. Tools: ckan__search_datasets, ckan__get_dataset, ckan__query_data, ckan__get_schema, ckan__execute_sql, ckan__aggregate_data.",
+};
+
+/** The preamble's source-selection rules, in order; a rule that routes to a
+ *  source is stated only when that source is offered. */
+const PREAMBLE_RULES: ReadonlyArray<{ routesTo?: SourceId; text: string }> = [
+  { routesTo: 'boston-opencontext', text: '- **Boston civic questions** → Boston OpenContext. Boston is not on Socrata.' },
+  { routesTo: 'socrata', text: '- **Other-city civic questions** (NYC, Chicago, SF, Seattle, LA, ...) → Socrata.' },
+  { routesTo: 'data-commons', text: '- **Demographics, poverty, income, education, health, labor, environment** for any geography → Data Commons.' },
+  { text: '- **Multi-source equity questions** that join operational data against demographic context → plan a multi-step analysis, attribute each figure to its source, and mind geography alignment (Boston neighborhoods and city council districts are not standard census geographies — state the mismatch rather than silently imputing).' },
+];
+
+const SOURCE_COUNT_WORDS = ['NO', 'ONE', 'TWO', 'THREE'];
+
+/**
+ * The cross-source preamble for exactly these sources: one numbered entry per
+ * source, and the selection rules that route to a source listed. Every line it
+ * can produce is a line of `CROSS_SOURCE_PREAMBLE` except the first, which
+ * states the count.
+ */
+export function crossSourcePreamble(sources: readonly SourceId[]): string {
+  const entries = sources.map((sourceId, i) => `${i + 1}. ${PREAMBLE_ENTRIES[sourceId]}`);
+  const rules = PREAMBLE_RULES.filter((rule) => rule.routesTo === undefined || sources.includes(rule.routesTo)).map((rule) => rule.text);
+  return `You have access to ${SOURCE_COUNT_WORDS[sources.length]} MCP data sources through the tools below.
+
+${entries.join('\n')}
 
 Source selection rules:
-- **Boston civic questions** → Boston OpenContext. Boston is not on Socrata.
-- **Other-city civic questions** (NYC, Chicago, SF, Seattle, LA, ...) → Socrata.
-- **Demographics, poverty, income, education, health, labor, environment** for any geography → Data Commons.
-- **Multi-source equity questions** that join operational data against demographic context → plan a multi-step analysis, attribute each figure to its source, and mind geography alignment (Boston neighborhoods and city council districts are not standard census geographies — state the mismatch rather than silently imputing).
+${rules.join('\n')}
 
 See the Cross-source decision logic section in the Data Commons guidance below for the join pattern.`;
+}
+
+/** The preamble with every source this codebase has — what an instance that
+ *  configures every optional source sends. */
+export const CROSS_SOURCE_PREAMBLE = crossSourcePreamble(ALL_SOURCES);
 
 const INTRO_TEMPLATE = (today: string) =>
   `You are a helpful assistant with access to civic and statistical data via MCP tools.
 
 Today's date is ${today}. Always use this as the current date for interpreting relative time expressions like "last year" or "past two months."`;
 
-const OUTRO =
-  'When you get results, summarize clearly and cite the dataset ID (for Socrata), the variable DCID + source dataset (for Data Commons), or the resource UUID + dataset title (for Boston OpenContext).';
+/** What the outro asks the model to cite, per source. */
+const OUTRO_CITATIONS: Record<SourceId, string> = {
+  socrata: 'the dataset ID (for Socrata)',
+  'data-commons': 'the variable DCID + source dataset (for Data Commons)',
+  'boston-opencontext': 'the resource UUID + dataset title (for Boston OpenContext)',
+};
+
+/** The closing instruction, citing exactly these sources. */
+export function outroFor(sources: readonly SourceId[]): string {
+  const citations = sources.map((sourceId) => OUTRO_CITATIONS[sourceId]);
+  const list =
+    citations.length <= 2
+      ? citations.join(' or ')
+      : `${citations.slice(0, -1).join(', ')}, or ${citations[citations.length - 1]}`;
+  return `When you get results, summarize clearly and cite ${list}.`;
+}
+
+/** The outro `composeSkillPrompt` closes with when the context names none. */
+const OUTRO = outroFor(ALL_SOURCES);
 
 /**
  * Default registry. One entry per source the website talks to. Each entry's
@@ -607,7 +677,7 @@ export async function composeSkillPrompt(
       parts.push(text);
     }
   }
-  parts.push(OUTRO);
+  parts.push(context.outro ?? OUTRO);
 
   return parts.join('\n\n---\n\n');
 }
@@ -629,9 +699,17 @@ export async function composeSkillPrompt(
  * that names what no longer applies and why, instead of forking the text.
  *
  * Names only tools the model can call (`prompt-advertised-tools.test.ts`'s
- * property; `src/lib/portal-lock.test.ts` holds this text to it).
+ * property; `src/lib/portal-lock.test.ts` holds this text to it). The closing
+ * sentence names the other sources this instance offers — Data Commons, and
+ * Boston OpenContext only where it is configured (sprint 238, ruling D2).
  */
-export function portalLockGuidance(lockedPortal: string): string {
+export function portalLockGuidance(
+  lockedPortal: string,
+  configured: McpRegistryEnv = readMcpEnvFromProcess(),
+): string {
+  const others = isSourceOffered(configured, 'boston-opencontext')
+    ? 'the other data sources described above (Data Commons, and Boston OpenContext for Boston) are separate, remain available, and keep their own scope'
+    : 'the other data source described above (Data Commons) is separate, remains available, and keeps its own scope';
   return `## ONE SOCRATA PORTAL ONLY
 
 This instance answers questions against one Socrata portal only: ${lockedPortal}. Anything above that describes querying other Socrata portals (any portal being reachable with get_data, naming patterns for other cities' portals, the tables of other portals and their datasets) does not apply on this instance:
@@ -639,7 +717,7 @@ This instance answers questions against one Socrata portal only: ${lockedPortal}
 - fetch accepts identifiers and URLs on ${lockedPortal} only; one naming any other portal is refused.
 - search covers the portal the data server is configured for.
 
-If a question asks for Socrata data about a place ${lockedPortal} does not cover, say so plainly instead of answering from another Socrata portal. This limit applies to Socrata portals only; the other data sources described above (Data Commons, and Boston OpenContext for Boston) are separate, remain available, and keep their own scope.`;
+If a question asks for Socrata data about a place ${lockedPortal} does not cover, say so plainly instead of answering from another Socrata portal. This limit applies to Socrata portals only; ${others}.`;
 }
 
 /**
@@ -648,23 +726,36 @@ If a question asks for Socrata data about a place ${lockedPortal} does not cover
  * `buildSystemPrompt`'s result. Replay never does: its portal comes from the
  * record it replays, and the lock does not govern it.
  */
-export function withPortalLockGuidance(systemPrompt: string, lockedPortal?: string): string {
-  return lockedPortal ? `${systemPrompt}\n\n---\n\n${portalLockGuidance(lockedPortal)}` : systemPrompt;
+export function withPortalLockGuidance(
+  systemPrompt: string,
+  lockedPortal?: string,
+  configured: McpRegistryEnv = readMcpEnvFromProcess(),
+): string {
+  return lockedPortal ? `${systemPrompt}\n\n---\n\n${portalLockGuidance(lockedPortal, configured)}` : systemPrompt;
 }
 
 /**
  * Thin wrapper kept for backward compatibility with the existing route
- * handlers. Delegates to `composeSkillPrompt` with the default active source
- * list (`['socrata', 'data-commons', 'boston-opencontext']`) and the
- * cross-source preamble. `portal` is optional (#384, F2): without one the
+ * handlers. Delegates to `composeSkillPrompt` with the sources this instance
+ * offers (`offeredSkillSources`: `['socrata', 'data-commons']`, plus
+ * `'boston-opencontext'` when `BOSTON_OPENCONTEXT_MCP_URL` is set) and the
+ * cross-source preamble and outro for exactly those sources — so an instance
+ * that configures every source composes the prompt it always did, and one that
+ * does not configure Boston's composes none of its text and never asks its
+ * server for instructions. `portal` is optional (#384, F2): without one the
  * Socrata block is composed with no portal-specific section and names no
  * default portal — `composeSkillPrompt` already did that for an absent
  * `SkillContext.portal`; only this signature said otherwise.
  */
-export const buildSystemPrompt = async (portal?: string): Promise<string> => {
-  return composeSkillPrompt(['socrata', 'data-commons', 'boston-opencontext'], {
+export const buildSystemPrompt = async (
+  portal?: string,
+  configured: McpRegistryEnv = readMcpEnvFromProcess(),
+): Promise<string> => {
+  const sources = offeredSkillSources(configured);
+  return composeSkillPrompt(sources, {
     portal,
     today: new Date().toISOString().split('T')[0],
-    preamble: CROSS_SOURCE_PREAMBLE,
+    preamble: crossSourcePreamble(sources),
+    outro: outroFor(sources),
   });
 };

@@ -106,7 +106,7 @@ test('Missing Data Commons API key omits the auth header entirely', () => {
   assert.equal(registry.servers['data-commons'].headers, undefined);
 });
 
-test('readMcpEnvFromProcess: Socrata has NO fallback; third-party public endpoints keep theirs (#258 C4)', () => {
+test('readMcpEnvFromProcess: Socrata and Boston OpenContext have NO fallback; Data Commons keeps its public default (#258 C4; sprint 238 D2)', () => {
   const originalSocrata = process.env.SOCRATA_MCP_URL;
   const originalDc = process.env.DATA_COMMONS_MCP_URL;
   const originalKey = process.env.DATA_COMMONS_API_KEY;
@@ -119,11 +119,19 @@ test('readMcpEnvFromProcess: Socrata has NO fallback; third-party public endpoin
     const env = readMcpEnvFromProcess();
     // Unset means unconfigured — never a substituted reference host.
     assert.equal(env.socrataUrl, undefined);
-    // Data Commons + Boston OpenContext defaults are third-party PUBLIC
-    // endpoints, not reference infrastructure; they stay.
+    // The Data Commons default is a third-party PUBLIC endpoint, not
+    // reference infrastructure; it stays.
     assert.equal(env.dataCommonsUrl, 'https://api.datacommons.org/mcp');
     assert.equal(env.dataCommonsApiKey, undefined);
-    assert.equal(env.bostonOpencontextUrl, 'https://data-mcp.boston.gov/mcp');
+    // Boston OpenContext is opt-in (sprint 238, D2): unset is unconfigured —
+    // no substituted endpoint — and so are empty and whitespace-only.
+    assert.equal(env.bostonOpencontextUrl, undefined);
+    process.env.BOSTON_OPENCONTEXT_MCP_URL = '';
+    assert.equal(readMcpEnvFromProcess().bostonOpencontextUrl, undefined);
+    process.env.BOSTON_OPENCONTEXT_MCP_URL = '   ';
+    assert.equal(readMcpEnvFromProcess().bostonOpencontextUrl, undefined);
+    process.env.BOSTON_OPENCONTEXT_MCP_URL = 'https://opencontext.example.org/mcp';
+    assert.equal(readMcpEnvFromProcess().bostonOpencontextUrl, 'https://opencontext.example.org/mcp');
 
     // Empty and whitespace-only count as absent, matching the preflight.
     process.env.SOCRATA_MCP_URL = '   ';
@@ -138,6 +146,7 @@ test('readMcpEnvFromProcess: Socrata has NO fallback; third-party public endpoin
     if (originalDc !== undefined) process.env.DATA_COMMONS_MCP_URL = originalDc;
     if (originalKey !== undefined) process.env.DATA_COMMONS_API_KEY = originalKey;
     if (originalBoston !== undefined) process.env.BOSTON_OPENCONTEXT_MCP_URL = originalBoston;
+    else delete process.env.BOSTON_OPENCONTEXT_MCP_URL;
   }
 });
 

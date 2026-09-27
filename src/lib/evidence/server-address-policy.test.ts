@@ -181,7 +181,6 @@ test('this instance\'s notebook-shaped run (no skill span) still lists every ser
   assert.deepEqual(mcpServers(pkg), [
     { url: CONFIGURED_SOCRATA, name: 'socrata' },
     { url: UNREACHABLE_DATA_COMMONS, name: 'data-commons' },
-    { url: 'https://data-mcp.boston.gov/mcp', name: 'boston-opencontext' },
   ]);
   // No skill span to override it: the Socrata agent names the configured
   // address, where before W5 it named the harness constant.
@@ -200,7 +199,14 @@ test('the registries: vocabulary kept on every branch; the reference branch is r
     assert.deepEqual(unknown[id], vocabulary, `${id}: the unknown branch carries no address and every other field`);
     const { serverUrl, ...rest } = configured[id];
     assert.deepEqual(rest, vocabulary, `${id}: the configured branch keeps every vocabulary field`);
-    assert.equal(typeof serverUrl, 'string', `${id}: configured, and so addressed`);
+    // Addressed exactly when configured: `configuredAway` leaves
+    // BOSTON_OPENCONTEXT_MCP_URL unset, and that source has no default
+    // (sprint 238, ruling D2).
+    if (id === 'boston-opencontext') {
+      assert.equal(serverUrl, undefined, `${id}: not configured, and so not addressed`);
+    } else {
+      assert.equal(typeof serverUrl, 'string', `${id}: configured, and so addressed`);
+    }
   }
   assert.equal(configured['data-commons'].serverUrl, UNREACHABLE_DATA_COMMONS);
   assert.equal(sourceRegistryForPolicy('reference'), CIVIC_SOURCE_REGISTRY);
@@ -217,7 +223,7 @@ test('the Data Commons API key never reaches the record, though it sits beside t
     // The instrument can see the configured addresses — so it would see the key.
     assert.equal(json.includes(UNREACHABLE_DATA_COMMONS), true);
     assert.equal(json.includes(DECOY_KEY), false, 'the Data Commons API key is in the signed bytes');
-    assert.equal((mcpServers(pkg) as unknown[]).length, 3);
+    assert.equal((mcpServers(pkg) as unknown[]).length, 2);
   } finally {
     if (saved === undefined) delete process.env.DATA_COMMONS_API_KEY;
     else process.env.DATA_COMMONS_API_KEY = saved;

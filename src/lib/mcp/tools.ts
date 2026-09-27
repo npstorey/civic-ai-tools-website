@@ -1,4 +1,5 @@
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import { readMcpEnvFromProcess, withheldToolNames, type McpRegistryEnv } from './registry.ts';
 
 // Unified OpenAI-style function-calling schema spanning every MCP source the
 // website talks to. The client in `./client.ts` uses the tool name to route
@@ -263,13 +264,14 @@ Examples:
 ];
 
 // --- Boston OpenContext MCP (CKAN-native, data.boston.gov) ---
-// Six-tool surface routed to the production OpenContext endpoint at
-// https://data-mcp.boston.gov/mcp. OpenContext is the City of Boston's
-// open-source MCP framework fronting the CKAN DataStore; full CKAN vs Socrata
-// workflow and Boston-specific geography guidance lives in the skill prompt
-// (see `./boston-skill.ts`). Tool names preserve the `ckan__` prefix used by
-// the upstream server so the registry-layer tool-name → source routing works
-// without a rename layer.
+// Six-tool surface routed to the OpenContext endpoint the instance configures
+// in BOSTON_OPENCONTEXT_MCP_URL, and offered to a run only then (see
+// `offeredMcpTools` below and `OPTIONAL_SOURCES` in ./registry.ts).
+// OpenContext is the City of Boston's open-source MCP framework fronting the
+// CKAN DataStore; full CKAN vs Socrata workflow and Boston-specific geography
+// guidance lives in the skill prompt (see `./boston-skill.ts`). Tool names
+// preserve the `ckan__` prefix used by the upstream server so the
+// registry-layer tool-name → source routing works without a rename layer.
 const bostonOpencontextMcpTools: ChatCompletionTool[] = [
   {
     type: 'function',
@@ -445,7 +447,14 @@ Example:
   },
 ];
 
-/** Unified tool schema sent to whichever chat-completions endpoint this instance is configured to call (see src/lib/model-client.ts). The client in ./client.ts routes each call to the correct MCP server by tool name. */
+/**
+ * Every tool schema this codebase has, for every source — the vocabulary, not
+ * one instance's offer. A query run hands the model `offeredMcpTools(...)` of
+ * this, which drops the tools of an optional source the instance did not
+ * configure; replay of a published record hands the model this list as is.
+ * The client in ./client.ts routes each call to the correct MCP server by tool
+ * name.
+ */
 export const mcpTools: ChatCompletionTool[] = [
   ...socrataMcpTools,
   ...dataCommonsMcpTools,
@@ -560,7 +569,9 @@ This instance queries one Socrata portal only, ${lockedPortal}: an identifier or
  * locked (the same array, so an unlocked run sends byte-for-byte what it sent
  * before #436), else the same tools with the three Socrata descriptions and
  * `get_data`'s `portal` property rewritten for the one Socrata portal it
- * serves. The Data Commons and Boston OpenContext tools are unchanged.
+ * serves. The Data Commons and Boston OpenContext tools are unchanged. Which
+ * sources' tools a run is offered at all is `offeredMcpTools`'s decision,
+ * applied to this function's result.
  */
 export function mcpToolsFor(lockedPortal?: string): ChatCompletionTool[] {
   if (!lockedPortal) return mcpTools;
@@ -570,6 +581,24 @@ export function mcpToolsFor(lockedPortal?: string): ChatCompletionTool[] {
     fetch: lockedFetch(lockedPortal),
   };
   return mcpTools.map((tool) => (tool.type === 'function' && locked[tool.function.name]) || tool);
+}
+
+/**
+ * The tool schemas a query run offers the model: `tools` without the tools of
+ * any optional source the instance did not configure (`withheldToolNames`,
+ * sprint 238 ruling D2) — so a model is never offered a tool no server here can
+ * answer. With every optional source configured, `tools` itself is returned
+ * (the same array), so such an instance sends byte-for-byte what it sent
+ * before. The query routes and the compare factory call this on
+ * `mcpToolsFor(lockedPortal)`; replay does not, and keeps the full vocabulary.
+ */
+export function offeredMcpTools(
+  tools: ChatCompletionTool[],
+  configured: McpRegistryEnv = readMcpEnvFromProcess(),
+): ChatCompletionTool[] {
+  const withheld = new Set(withheldToolNames(configured));
+  if (withheld.size === 0) return tools;
+  return tools.filter((tool) => !(tool.type === 'function' && withheld.has(tool.function.name)));
 }
 
 // Model definitions moved to src/lib/model-catalog.ts (civic-ai-tools-website#30

@@ -2,8 +2,8 @@ import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks, type ProgressOpts } from '@/lib/openrouter-streaming';
-import { mcpToolsFor } from '@/lib/mcp/tools';
-import { callMcpTool, routeTool } from '@/lib/mcp/client';
+import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
+import { callMcpTool } from '@/lib/mcp/client';
 import { buildSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
@@ -11,7 +11,7 @@ import { encodeSSE, errorLogFacts, panelsForRun, startSseKeepAlive, streamErrorP
 import { getMissingModelCredentialError, ModelConfigurationError } from '@/lib/model-client';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
-import { getMissingMcpRoutingError, readMcpEnvFromProcess, skillRoutingTraceAttributes } from '@/lib/mcp/registry';
+import { getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId, skillRoutingTraceAttributes } from '@/lib/mcp/registry';
 import { resolveRunPortal } from '@/lib/site-config';
 import { PORTAL_LOCK_NOT_CONFIGURED_MESSAGE } from '@/lib/portal-lock';
 import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG } from '@/lib/evidence/trace';
@@ -279,8 +279,9 @@ Be honest if you don't have access to current or real-time data.`;
           query,
           model,
           // `mcpTools` itself when unlocked; under the lock the same schemas
-          // with text that stops inviting other portals (#436, D7).
-          mcpToolsFor(lockedPortal),
+          // with text that stops inviting other portals (#436, D7). Only the
+          // sources this instance configures (sprint 238, D2).
+          offeredMcpTools(mcpToolsFor(lockedPortal)),
           // Just the transport. Portal injection moved into the core (#359):
           // done here, it ran after the core had recorded the call and
           // stringified its arguments onto the span, so the span reported no
@@ -288,7 +289,9 @@ Be honest if you don't have access to current or real-time data.`;
           callMcpTool,
           systemPromptWithMcp,
           callbacks,
-          { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: (name) => routeTool(name).sourceId },
+          // Non-throwing: a call to a tool no configured server hosts is refused
+          // by the transport as one failed call, not thrown out of the loop here.
+          { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: (name) => routedSourceId(name) },
           { portal, toolTimeoutMs: MCP_TOOL_TIMEOUT_MS },
           // The loop core refuses a call naming another portal as a rejected
           // call (#436, D7); undefined on an unlocked instance.
