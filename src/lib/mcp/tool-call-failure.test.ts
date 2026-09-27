@@ -40,7 +40,7 @@ test('McpErrorResult is classified by its structure: generic, whatever words it 
   assert.equal(classifyStreamError(error), 'generic');
 });
 
-test('its fixed message carries none of the words the session retry, the parse rewrite or the classifier read', () => {
+test('its fixed message carries none of the words the classifier or the parse rewrite read', () => {
   const lower = ERROR_RESULT_MESSAGE.toLowerCase();
   for (const trigger of ['session', '400', 'parse']) {
     assert.ok(!lower.includes(trigger), `the fixed message carries "${trigger}"`);
@@ -50,7 +50,7 @@ test('its fixed message carries none of the words the session retry, the parse r
   assert.equal(new McpErrorResult().message, ERROR_RESULT_MESSAGE);
 });
 
-test('McpErrorEnvelope keeps the source’s message and carries no code, so the classifier and the retry read it as before', () => {
+test('McpErrorEnvelope keeps the source’s message and carries no code, so the classifier reads it by its words, as before', () => {
   const timedOut = new McpErrorEnvelope('The upstream query timed out before completing.');
   assert.equal(timedOut.message, 'The upstream query timed out before completing.');
   assert.equal('code' in timedOut, false);

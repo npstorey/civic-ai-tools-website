@@ -1,0 +1,350 @@
+{
+  "outcomes": [
+    {
+      "call": "instructions",
+      "value": "Legacy fixture instructions: name the portal on every call."
+    },
+    {
+      "call": "tool ok-sse",
+      "value": "{\"data\":[{\"count\":\"4812\"}],\"total_rows\":1}"
+    },
+    {
+      "call": "tool ok-json",
+      "value": "{\"data\":[{\"count\":\"4812\"}],\"total_rows\":1}"
+    },
+    {
+      "call": "tool is-error",
+      "errorClass": "McpErrorResult",
+      "message": "The data source answered this tool call with a result marked isError: true."
+    },
+    {
+      "call": "tool rpc-error-sse",
+      "errorClass": "McpErrorEnvelope",
+      "message": "Legacy fixture: no column by that name."
+    },
+    {
+      "call": "tool rpc-error-json",
+      "errorClass": "McpErrorEnvelope",
+      "message": "Legacy fixture: no table by that name."
+    },
+    {
+      "call": "tool http-502",
+      "errorClass": "Error",
+      "message": "MCP server \"socrata\" error: 502 Bad Gateway"
+    },
+    {
+      "call": "tool unparseable",
+      "errorClass": "Error",
+      "message": "Failed to parse MCP response JSON"
+    },
+    {
+      "call": "tool not-json",
+      "errorClass": "SyntaxError",
+      "message": "Unexpected token 'o', \"ok\" is not valid JSON"
+    },
+    {
+      "call": "prompt skill-guidance",
+      "value": "Legacy fixture skill guidance."
+    },
+    {
+      "call": "prompt prompt-rpc-error",
+      "errorClass": "Error",
+      "message": "Legacy fixture: no prompt by that name."
+    },
+    {
+      "call": "prompt prompt-500",
+      "errorClass": "Error",
+      "message": "MCP prompt error: 500 Internal Server Error"
+    },
+    {
+      "call": "tool expire-400",
+      "value": "{\"data\":[{\"count\":\"4812\"}],\"total_rows\":1}"
+    },
+    {
+      "call": "tool ok-sse after the new session",
+      "value": "{\"data\":[{\"count\":\"4812\"}],\"total_rows\":1}"
+    }
+  ],
+  "wire": [
+    {
+      "method": "initialize",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"civic-ai-tools-website\",\"version\":\"1.0.0\"}}}"
+    },
+    {
+      "method": "tools/call",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ],
+        [
+          "mcp-session-id",
+          "legacy-session-1"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"tools/call\",\"params\":{\"name\":\"get_data\",\"arguments\":{\"type\":\"query\",\"dataset_id\":\"ok-sse\",\"select\":\"count(*)\",\"portal\":\"data.example.org\"}}}"
+    },
+    {
+      "method": "tools/call",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ],
+        [
+          "mcp-session-id",
+          "legacy-session-1"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"tools/call\",\"params\":{\"name\":\"get_data\",\"arguments\":{\"type\":\"query\",\"dataset_id\":\"ok-json\",\"select\":\"count(*)\",\"portal\":\"data.example.org\"}}}"
+    },
+    {
+      "method": "tools/call",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ],
+        [
+          "mcp-session-id",
+          "legacy-session-1"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"tools/call\",\"params\":{\"name\":\"get_data\",\"arguments\":{\"type\":\"query\",\"dataset_id\":\"is-error\",\"select\":\"count(*)\",\"portal\":\"data.example.org\"}}}"
+    },
+    {
+      "method": "tools/call",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ],
+        [
+          "mcp-session-id",
+          "legacy-session-1"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"tools/call\",\"params\":{\"name\":\"get_data\",\"arguments\":{\"type\":\"query\",\"dataset_id\":\"rpc-error-sse\",\"select\":\"count(*)\",\"portal\":\"data.example.org\"}}}"
+    },
+    {
+      "method": "tools/call",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ],
+        [
+          "mcp-session-id",
+          "legacy-session-1"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"tools/call\",\"params\":{\"name\":\"get_data\",\"arguments\":{\"type\":\"query\",\"dataset_id\":\"rpc-error-json\",\"select\":\"count(*)\",\"portal\":\"data.example.org\"}}}"
+    },
+    {
+      "method": "tools/call",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ],
+        [
+          "mcp-session-id",
+          "legacy-session-1"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"tools/call\",\"params\":{\"name\":\"get_data\",\"arguments\":{\"type\":\"query\",\"dataset_id\":\"http-502\",\"select\":\"count(*)\",\"portal\":\"data.example.org\"}}}"
+    },
+    {
+      "method": "tools/call",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ],
+        [
+          "mcp-session-id",
+          "legacy-session-1"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"tools/call\",\"params\":{\"name\":\"get_data\",\"arguments\":{\"type\":\"query\",\"dataset_id\":\"unparseable\",\"select\":\"count(*)\",\"portal\":\"data.example.org\"}}}"
+    },
+    {
+      "method": "tools/call",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ],
+        [
+          "mcp-session-id",
+          "legacy-session-1"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"tools/call\",\"params\":{\"name\":\"get_data\",\"arguments\":{\"type\":\"query\",\"dataset_id\":\"not-json\",\"select\":\"count(*)\",\"portal\":\"data.example.org\"}}}"
+    },
+    {
+      "method": "prompts/get",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ],
+        [
+          "mcp-session-id",
+          "legacy-session-1"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"prompts/get\",\"params\":{\"name\":\"skill-guidance\",\"arguments\":{\"modality\":\"web\"}}}"
+    },
+    {
+      "method": "prompts/get",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ],
+        [
+          "mcp-session-id",
+          "legacy-session-1"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"prompts/get\",\"params\":{\"name\":\"prompt-rpc-error\",\"arguments\":{\"modality\":\"web\"}}}"
+    },
+    {
+      "method": "prompts/get",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ],
+        [
+          "mcp-session-id",
+          "legacy-session-1"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"prompts/get\",\"params\":{\"name\":\"prompt-500\",\"arguments\":{\"modality\":\"web\"}}}"
+    },
+    {
+      "method": "tools/call",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ],
+        [
+          "mcp-session-id",
+          "legacy-session-1"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"tools/call\",\"params\":{\"name\":\"get_data\",\"arguments\":{\"type\":\"query\",\"dataset_id\":\"expire-400\",\"select\":\"count(*)\",\"portal\":\"data.example.org\"}}}"
+    },
+    {
+      "method": "initialize",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"civic-ai-tools-website\",\"version\":\"1.0.0\"}}}"
+    },
+    {
+      "method": "tools/call",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ],
+        [
+          "mcp-session-id",
+          "legacy-session-2"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"tools/call\",\"params\":{\"name\":\"get_data\",\"arguments\":{\"type\":\"query\",\"dataset_id\":\"expire-400\",\"select\":\"count(*)\",\"portal\":\"data.example.org\"}}}"
+    },
+    {
+      "method": "tools/call",
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "accept",
+          "application/json, text/event-stream"
+        ],
+        [
+          "mcp-session-id",
+          "legacy-session-2"
+        ]
+      ],
+      "body": "{\"jsonrpc\":\"2.0\",\"id\":\"<Date.now()>\",\"method\":\"tools/call\",\"params\":{\"name\":\"get_data\",\"arguments\":{\"type\":\"query\",\"dataset_id\":\"ok-sse\",\"select\":\"count(*)\",\"portal\":\"data.example.org\"}}}"
+    }
+  ]
+}
