@@ -105,7 +105,7 @@ test('the server list keeps registry insertion order and the address as configur
   );
 });
 
-test('N is 3 with Socrata configured and 2 without — the registry never holds fewer than two', () => {
+test('with Data Commons and Boston OpenContext configured, N is 3 with Socrata configured and 2 without', () => {
   const withoutSocrata: McpRegistryEnv = {
     dataCommonsUrl: 'https://api.datacommons.org/mcp',
     bostonOpencontextUrl: 'https://data-mcp.boston.gov/mcp',
