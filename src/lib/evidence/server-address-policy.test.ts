@@ -181,7 +181,6 @@ test('this instance\'s notebook-shaped run (no skill span) still lists every ser
   assert.deepEqual(mcpServers(pkg), [
     { url: CONFIGURED_SOCRATA, name: 'socrata' },
     { url: UNREACHABLE_DATA_COMMONS, name: 'data-commons' },
-    { url: 'https://data-mcp.boston.gov/mcp', name: 'boston-opencontext' },
   ]);
   // No skill span to override it: the Socrata agent names the configured
   // address, where before W5 it named the harness constant.
