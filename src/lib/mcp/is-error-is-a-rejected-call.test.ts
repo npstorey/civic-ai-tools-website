@@ -481,9 +481,9 @@ test('R2: a body that does not parse is the parse failure', async () => {
   assert.equal(error.message, PARSE_FAILURE, `an unparseable frame came back as "${error.message}"`);
 });
 
-test('unchanged (a non-goal): a JSON-RPC error worded with "session" is still retried once, and still classified by its words', async () => {
+test('sprint 238 D5: a JSON-RPC error worded with "session" is sent once — a 200 body is the source answering, never retried — and still classified by its words', async () => {
   const error = await rejectionOf(SESSION_WORDED);
-  assert.equal(sentTo(SESSION_WORDED), 2, 'the session retry for a JSON-RPC error is not this phase’s to change');
+  assert.equal(sentTo(SESSION_WORDED), 1, 'a JSON-RPC error in a 200 body was retried: the retry read the error’s words');
   assert.equal(error.message, SESSION_WORDED_TEXT);
   assert.equal(streaming.classifyStreamError(error), 'generic');
 });
