@@ -33,70 +33,8 @@ const MCP_TIMEOUT_MS = 45_000; // 45-second timeout for MCP server requests
 // whether that initialization produced a session id. Tool-call header
 // construction is factored into `buildMcpRequestHeaders` so it can be unit
 // tested against a stateless server config without network I/O.
-//
-// Sprint 238 (website #537, #467; rulings D3 to D7): the client speaks both
-// protocol eras. The specification's terms (`basic/versioning`, Terminology):
-// a MODERN server (revision 2026-07-28 and later) takes its version, the
-// client's identity and capabilities in every request's `_meta`, with no
-// handshake and no session; a LEGACY server (2025-11-25 and earlier) expects
-// the `initialize` handshake the client has always sent.
-//
-// - Era detection (D4). The first contact with an origin is `server/discover`.
-//   A `DiscoverResult` (an array `supportedVersions` and an object
-//   `capabilities`) means modern, and its `instructions` stand in for the ones
-//   `initialize` gives. A 400 carrying `UnsupportedProtocolVersionError`
-//   (-32022) means modern too: the probe is sent once more with a version from
-//   its `supported` list that this client implements. Anything else means
-//   legacy — another 4xx, a 5xx, a 200 that is not a `DiscoverResult` (a legacy
-//   server may answer an unknown request under legacy semantics, so a 200 alone
-//   says nothing), a body that does not parse. The era is cached per origin for
-//   the life of the process and probed again, once, when a cached assumption
-//   fails.
-// - A 401 is never an era signal (D7): nothing is cached and nothing falls
-//   back, and the error names authentication. It still classifies as the
-//   source being unavailable (`classifyStreamError`), which is the kind a
-//   record carries.
-// - The legacy branch (D5) is today's exchange, plus one
-//   `notifications/initialized` after `initialize` and an
-//   `MCP-Protocol-Version` header with the agreed version on every later
-//   request. It starts a new session once when a request that carried a
-//   session id is answered 400 or 404 (#467), read from the HTTP status and
-//   the JSON-RPC code, never from an error's words.
-// - Nothing new reaches a record (D6). The era is an operator fact and goes to
-//   the log alone.
-//
-// Callers see none of this: `callMcpTool` and `callMcpPrompt` resolve to a
-// string or throw, and `getServerInstructions` returns text or null, whichever
-// era answers (D3). Nothing outside this file reads the era.
 
 const registry: McpRegistry = buildMcpRegistry(readMcpEnvFromProcess());
-
-/** The modern protocol versions this client implements, most preferred first. */
-const MODERN_PROTOCOL_VERSIONS: readonly string[] = ['2026-07-28'];
-/**
- * The latest legacy revision (`basic/versioning`, Terminology: "`2025-11-25`
- * and earlier"). A version at or before it is spoken through `initialize`.
- */
-const LAST_LEGACY_PROTOCOL_VERSION = '2025-11-25';
-/** The version the legacy `initialize` asks for, unchanged (ruling D5). */
-const LEGACY_INITIALIZE_VERSION = '2024-11-05';
-const CLIENT_INFO = { name: 'civic-ai-tools-website', version: '1.0.0' };
-const PROTOCOL_VERSION_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
-
-/**
- * The JSON-RPC codes the specification reserves for itself and defines
- * (`basic/index`, Error Codes): `HeaderMismatch`, `MissingRequiredClientCapability`,
- * `UnsupportedProtocolVersion`. A 400 carrying one of them comes from a modern
- * server (`basic/transports/streamable-http`, Backward Compatibility).
- */
-const MODERN_ERROR_CODES: ReadonlySet<number> = new Set([-32020, -32021, -32022]);
-const UNSUPPORTED_PROTOCOL_VERSION = -32022;
-const METHOD_NOT_FOUND = -32601;
-
-type Era = { kind: 'modern'; version: string } | { kind: 'legacy' };
-
-const eraByOrigin = new Map<string, Era>();
-const probesInFlight = new Map<string, Promise<Era>>();
 
 interface McpToolResult {
   content?: Array<{
@@ -115,47 +53,24 @@ interface ServerState {
    * `result.instructions` field (MCP spec, optional). Data Commons' hosted
    * endpoint returns a "Research Assistant" primer here that seeds the LLM
    * system prompt; Socrata returns nothing useful. Null until initialized or
-   * when the server does not advertise any instructions. For a modern server
-   * it is the `DiscoverResult`'s `instructions`.
+   * when the server does not advertise any instructions.
    */
   instructions: string | null;
-  /** Legacy: the version the server agreed in `initialize`, sent as `MCP-Protocol-Version`. */
-  protocolVersion: string | null;
-  /** Modern: whether this server's own `DiscoverResult` has been read. */
-  discovered: boolean;
 }
 
 const serverState: Record<string, ServerState> = {};
 
-function freshServerState(): ServerState {
-  return { initialized: false, sessionId: null, instructions: null, protocolVersion: null, discovered: false };
-}
-
 function getServerState(server: McpServerConfig): ServerState {
   let state = serverState[server.sourceId];
   if (!state) {
-    state = freshServerState();
+    state = { initialized: false, sessionId: null, instructions: null };
     serverState[server.sourceId] = state;
   }
   return state;
 }
 
 function resetServerState(server: McpServerConfig): void {
-  serverState[server.sourceId] = freshServerState();
-}
-
-function originOf(server: McpServerConfig): string {
-  return new URL(server.endpointUrl).origin;
-}
-
-/** Drop an origin's cached era, and the state of every server that lives there. */
-function forgetEra(server: McpServerConfig): void {
-  const origin = originOf(server);
-  eraByOrigin.delete(origin);
-  for (const other of Object.values(registry.servers)) {
-    if (originOf(other) === origin) resetServerState(other);
-  }
-  resetServerState(server);
+  serverState[server.sourceId] = { initialized: false, sessionId: null, instructions: null };
 }
 
 function createTimeoutSignal(ms: number): { signal: AbortSignal; clear: () => void } {
@@ -185,67 +100,9 @@ export function buildMcpRequestHeaders(
   return headers;
 }
 
-/**
- * A header value as the Streamable HTTP binding requires it (`Value Encoding`):
- * as-is when it is plain visible ASCII with no leading or trailing whitespace,
- * and otherwise — or when it already looks like the sentinel — the Base64 of its
- * UTF-8 bytes inside `=?base64?…?=`.
- */
-function headerSafe(value: string): string {
-  const plain = /^[\x21-\x7E](?:[\x20-\x7E\t]*[\x21-\x7E])?$/.test(value);
-  const looksEncoded = value.startsWith('=?base64?') && value.endsWith('?=');
-  if (plain && !looksEncoded) return value;
-  return `=?base64?${Buffer.from(value, 'utf8').toString('base64')}?=`;
-}
-
-/**
- * One modern request, headers and body built from ONE version value: `_meta`
- * carries it and `MCP-Protocol-Version` repeats it, `Mcp-Method` repeats the
- * method and `Mcp-Name` the name (`basic/index`, `_meta`; `basic/transports/
- * streamable-http`, Request Metadata). No session header: this revision has no
- * sessions.
- */
-function modernRequest(
-  server: McpServerConfig,
-  version: string,
-  method: string,
-  params: Record<string, unknown>,
-  name?: string,
-): { headers: Record<string, string>; body: string } {
-  const headers: Record<string, string> = {
-    ...buildMcpRequestHeaders(server, null),
-    'MCP-Protocol-Version': version,
-    'Mcp-Method': method,
-  };
-  if (name !== undefined) headers['Mcp-Name'] = headerSafe(name);
-  const body = JSON.stringify({
-    jsonrpc: '2.0',
-    id: Date.now(),
-    method,
-    params: {
-      ...params,
-      _meta: {
-        'io.modelcontextprotocol/protocolVersion': version,
-        'io.modelcontextprotocol/clientInfo': CLIENT_INFO,
-        'io.modelcontextprotocol/clientCapabilities': {},
-      },
-    },
-  });
-  return { headers, body };
-}
-
-/** A legacy request after `initialize`: today's headers, plus the agreed version. */
-function legacyHeaders(server: McpServerConfig, state: ServerState): Record<string, string> {
-  return {
-    ...buildMcpRequestHeaders(server, state.sessionId),
-    'MCP-Protocol-Version': state.protocolVersion ?? LEGACY_INITIALIZE_VERSION,
-  };
-}
-
 interface InitializeResult {
   sessionId: string | null;
   instructions: string | null;
-  protocolVersion: string;
 }
 
 /**
@@ -267,201 +124,6 @@ function extractMcpJsonPayload(text: string): string | null {
   return null;
 }
 
-/** The parsed JSON-RPC message in a body, or null when there is none that parses. */
-function parsedMessageOf(text: string): Record<string, unknown> | null {
-  const json = extractMcpJsonPayload(text);
-  if (!json) return null;
-  try {
-    const parsed: unknown = JSON.parse(json);
-    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
-
-/** The JSON-RPC `error` member of a body, or null. */
-function jsonRpcErrorOf(text: string): { code: number | null; data: unknown } | null {
-  const error = parsedMessageOf(text)?.error;
-  if (error === null || typeof error !== 'object') return null;
-  const { code, data } = error as { code?: unknown; data?: unknown };
-  return { code: typeof code === 'number' ? code : null, data };
-}
-
-async function bodyTextOf(response: Response): Promise<string> {
-  try {
-    return await response.text();
-  } catch {
-    return '';
-  }
-}
-
-// --- What an HTTP failure was, read by status and code ------------------------
-//
-// The errors thrown on an HTTP failure keep today's classes and messages (D6).
-// What the retry decisions read — the status, the JSON-RPC code, whether the
-// request carried a session id — is kept beside the error rather than on it,
-// so nothing a caller or a log can see about the error changes.
-
-interface HttpFailure {
-  phase: 'initialize' | 'request';
-  status: number;
-  code: number | null;
-  sessionCarried: boolean;
-}
-
-const httpFailures = new WeakMap<object, HttpFailure>();
-
-function withHttpFailure<E extends Error>(error: E, failure: HttpFailure): E {
-  httpFailures.set(error, failure);
-  return error;
-}
-
-function httpFailureOf(error: unknown): HttpFailure | undefined {
-  return error !== null && typeof error === 'object' ? httpFailures.get(error) : undefined;
-}
-
-/** A body a modern server answers with: one of its own error codes on a 400, or "method not found" on a 404. */
-function isRecognizedModernError(failure: HttpFailure): boolean {
-  if (failure.status === 400) return failure.code !== null && MODERN_ERROR_CODES.has(failure.code);
-  if (failure.status === 404) return failure.code === METHOD_NOT_FOUND;
-  return false;
-}
-
-/** The status codes whose body the client reads before it decides anything. */
-function statusWorthReading(status: number): boolean {
-  return status === 400 || status === 404 || status === 405;
-}
-
-function authenticationError(server: McpServerConfig): Error {
-  return new Error(`MCP server "${server.sourceId}" requires authentication (401); no protocol era was assumed for it.`);
-}
-
-// --- Era detection -------------------------------------------------------------
-
-function isLegacyVersion(version: unknown): boolean {
-  return typeof version === 'string' && PROTOCOL_VERSION_SHAPE.test(version) && version <= LAST_LEGACY_PROTOCOL_VERSION;
-}
-
-/**
- * The era a list of versions the server supports leads to: the first modern
- * version this client implements, else legacy when the list names a legacy
- * revision (the client speaks those through `initialize`), else nothing.
- */
-function eraFromSupported(supported: unknown): Era | null {
-  if (!Array.isArray(supported)) return null;
-  const modern = MODERN_PROTOCOL_VERSIONS.find((v) => supported.includes(v));
-  if (modern) return { kind: 'modern', version: modern };
-  if (supported.some(isLegacyVersion)) return { kind: 'legacy' };
-  return null;
-}
-
-function isDiscoverResult(result: unknown): result is { supportedVersions: unknown[]; capabilities: object; instructions?: unknown } {
-  if (result === null || typeof result !== 'object') return false;
-  const { supportedVersions, capabilities } = result as { supportedVersions?: unknown; capabilities?: unknown };
-  return Array.isArray(supportedVersions) && capabilities !== null && typeof capabilities === 'object' && !Array.isArray(capabilities);
-}
-
-function instructionsOf(result: { instructions?: unknown }): string | null {
-  return typeof result.instructions === 'string' && result.instructions.length > 0 ? result.instructions : null;
-}
-
-/** POST `server/discover` at one version. A timeout reads as `initialize`'s always has. */
-async function postDiscover(server: McpServerConfig, version: string): Promise<{ status: number; ok: boolean; text: string }> {
-  const { headers, body } = modernRequest(server, version, 'server/discover', {});
-  const { signal, clear } = createTimeoutSignal(MCP_TIMEOUT_MS);
-  let response: Response;
-  try {
-    response = await fetch(server.endpointUrl, { method: 'POST', headers, signal, body });
-  } catch (error) {
-    clear();
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error(`MCP server "${server.sourceId}" did not respond within ${MCP_TIMEOUT_MS / 1000}s — the upstream server may be starting up or unresponsive. Please try again.`);
-    }
-    throw error;
-  } finally {
-    clear();
-  }
-  // A 401 is answered before the body matters, and its body is not read.
-  const text = response.status === 401 ? '' : await bodyTextOf(response);
-  return { status: response.status, ok: response.ok, text };
-}
-
-/**
- * Probe one server with `server/discover` and read its era (ruling D4). Throws
- * on a 401 (D7), on a network failure or a timeout (as `initialize` did before
- * the probe existed), and when a modern server supports no version this client
- * implements; in each of those cases nothing is cached.
- */
-async function probeEra(server: McpServerConfig): Promise<{ era: Era; instructions: string | null }> {
-  const legacy = { era: { kind: 'legacy' } as Era, instructions: null };
-  let version = MODERN_PROTOCOL_VERSIONS[0];
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const answer = await postDiscover(server, version);
-    if (answer.status === 401) throw authenticationError(server);
-    if (answer.ok) {
-      const result = parsedMessageOf(answer.text)?.result;
-      if (!isDiscoverResult(result)) return legacy;
-      const era = eraFromSupported(result.supportedVersions);
-      if (!era) throw new Error(`MCP server "${server.sourceId}" supports no protocol version this client implements.`);
-      return { era, instructions: era.kind === 'modern' ? instructionsOf(result) : null };
-    }
-    const error = answer.status === 400 ? jsonRpcErrorOf(answer.text) : null;
-    if (error?.code !== UNSUPPORTED_PROTOCOL_VERSION) return legacy;
-    // A modern server, refusing this version: retry once with one it names.
-    const era = attempt === 0 ? eraFromSupported((error.data as { supported?: unknown } | null)?.supported) : null;
-    if (era?.kind === 'legacy') return legacy;
-    if (!era) break;
-    version = era.version;
-  }
-  throw new Error(`MCP server "${server.sourceId}" supports no protocol version this client implements.`);
-}
-
-/**
- * The era of a server's origin: cached, or probed once (concurrent first
- * contacts share one probe). A modern probe's `instructions` belong to the
- * server it was sent to.
- */
-async function eraFor(server: McpServerConfig): Promise<Era> {
-  const origin = originOf(server);
-  const cached = eraByOrigin.get(origin);
-  if (cached) return cached;
-  let probe = probesInFlight.get(origin);
-  if (!probe) {
-    probe = (async () => {
-      const { era, instructions } = await probeEra(server);
-      eraByOrigin.set(origin, era);
-      if (era.kind === 'modern') {
-        const state = getServerState(server);
-        state.instructions = instructions;
-        state.discovered = true;
-      }
-      console.log(`[MCP:${server.sourceId}] Protocol era: ${era.kind === 'modern' ? `modern (${era.version})` : 'legacy (initialize)'}`);
-      return era;
-    })().finally(() => probesInFlight.delete(origin));
-    probesInFlight.set(origin, probe);
-  }
-  return probe;
-}
-
-/**
- * Modern: read this server's own `DiscoverResult` for its `instructions`, when
- * the era was learned from another server on the same origin.
- */
-async function ensureDiscovered(server: McpServerConfig, version: string): Promise<void> {
-  const state = getServerState(server);
-  if (state.discovered) return;
-  const answer = await postDiscover(server, version);
-  if (answer.status === 401) throw authenticationError(server);
-  const result = answer.ok ? parsedMessageOf(answer.text)?.result : undefined;
-  if (!isDiscoverResult(result)) {
-    throw new Error(`MCP server "${server.sourceId}" error: ${answer.status}`);
-  }
-  state.instructions = instructionsOf(result);
-  state.discovered = true;
-}
-
-// --- The legacy handshake ------------------------------------------------------
-
 /**
  * POST `initialize` to a server and return both the session id it issued
  * (may be null for stateless servers) and any `result.instructions` text the
@@ -481,7 +143,7 @@ async function initializeSession(server: McpServerConfig): Promise<InitializeRes
         id: Date.now(),
         method: 'initialize',
         params: {
-          protocolVersion: LEGACY_INITIALIZE_VERSION,
+          protocolVersion: '2024-11-05',
           capabilities: {},
           clientInfo: {
             name: 'civic-ai-tools-website',
@@ -501,11 +163,7 @@ async function initializeSession(server: McpServerConfig): Promise<InitializeRes
   }
 
   if (!response.ok) {
-    const code = statusWorthReading(response.status) ? jsonRpcErrorOf(await bodyTextOf(response))?.code ?? null : null;
-    throw withHttpFailure(
-      new Error(`MCP initialization failed for "${server.sourceId}": ${response.status}`),
-      { phase: 'initialize', status: response.status, code, sessionCarried: false },
-    );
+    throw new Error(`MCP initialization failed for "${server.sourceId}": ${response.status}`);
   }
 
   // Session id header is optional per the MCP spec — stateless servers omit it.
@@ -514,19 +172,12 @@ async function initializeSession(server: McpServerConfig): Promise<InitializeRes
   // Parse the body for a `result.instructions` field. MCP servers that ship
   // a pre-canned LLM primer advertise it here; others omit it. Parse failures
   // are tolerated silently — initialization itself is still successful.
-  // The same body names the version the server agreed (`result.protocolVersion`);
-  // when it cannot be read, the version asked for stands in for it.
   let instructions: string | null = null;
-  let protocolVersion = LEGACY_INITIALIZE_VERSION;
   try {
     const text = await response.text();
     const jsonData = extractMcpJsonPayload(text);
     if (jsonData) {
       const parsed = JSON.parse(jsonData);
-      const agreed = parsed?.result?.protocolVersion;
-      if (typeof agreed === 'string' && PROTOCOL_VERSION_SHAPE.test(agreed)) {
-        protocolVersion = agreed;
-      }
       const rawInstructions = parsed?.result?.instructions;
       if (typeof rawInstructions === 'string' && rawInstructions.length > 0) {
         instructions = rawInstructions;
@@ -542,40 +193,7 @@ async function initializeSession(server: McpServerConfig): Promise<InitializeRes
     );
   }
 
-  await sendInitializedNotification(server, sessionId, protocolVersion);
-  return { sessionId, instructions, protocolVersion };
-}
-
-/**
- * The legacy lifecycle's `notifications/initialized` (2025-11-25
- * `basic/lifecycle`, Initialization: "the client MUST send an `initialized`
- * notification"). A notification has no `id`, and a server that accepts it
- * answers 202 with no body. One the server does not accept is logged by its
- * status and does not fail the handshake: the next request says whether the
- * session works.
- */
-async function sendInitializedNotification(
-  server: McpServerConfig,
-  sessionId: string | null,
-  protocolVersion: string,
-): Promise<void> {
-  const { signal, clear } = createTimeoutSignal(MCP_TIMEOUT_MS);
-  try {
-    const response = await fetch(server.endpointUrl, {
-      method: 'POST',
-      headers: { ...buildMcpRequestHeaders(server, sessionId), 'MCP-Protocol-Version': protocolVersion },
-      signal,
-      body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
-    });
-    await response.body?.cancel().catch(() => {});
-    if (!response.ok) {
-      console.warn(`[MCP:${server.sourceId}] The initialized notification was not accepted:`, response.status);
-    }
-  } catch (error) {
-    console.warn(`[MCP:${server.sourceId}] Could not send the initialized notification:`, errorLogFacts(error));
-  } finally {
-    clear();
-  }
+  return { sessionId, instructions };
 }
 
 /**
@@ -588,10 +206,9 @@ async function sendInitializedNotification(
 async function ensureInitialized(server: McpServerConfig): Promise<string | null> {
   const state = getServerState(server);
   if (!state.initialized) {
-    const { sessionId, instructions, protocolVersion } = await initializeSession(server);
+    const { sessionId, instructions } = await initializeSession(server);
     state.sessionId = sessionId;
     state.instructions = instructions;
-    state.protocolVersion = protocolVersion;
     state.initialized = true;
   }
   return state.sessionId;
@@ -602,19 +219,13 @@ async function ensureInitialized(server: McpServerConfig): Promise<string | null
  * the server advertised any. Initializes the server lazily if it hasn't been
  * touched yet. Returns null when the server did not advertise instructions
  * or initialization failed — callers should treat an empty result as a
- * soft failure and compose the skill prompt without the server's text. For a
- * modern server the text is its `DiscoverResult`'s `instructions`.
+ * soft failure and compose the skill prompt without the server's text.
  */
 export async function getServerInstructions(sourceId: string): Promise<string | null> {
   const server = registry.servers[sourceId];
   if (!server) return null;
   try {
-    const era = await eraFor(server);
-    if (era.kind === 'legacy') {
-      await ensureInitialized(server);
-    } else {
-      await ensureDiscovered(server, era.version);
-    }
+    await ensureInitialized(server);
   } catch (error) {
     console.warn(
       `[MCP:${sourceId}] Could not initialize for instructions fetch:`,
@@ -646,71 +257,31 @@ export function routeTool(toolName: string): McpServerConfig {
   return server;
 }
 
-/**
- * Run one exchange in the server's era, with the two recoveries the rulings
- * allow and nothing else:
- *
- * - Legacy (#467): a request that carried a session id and was answered 404,
- *   or 400 with no modern error code in its body, means the session is gone
- *   (2025-11-25 `basic/transports`, Session Management: a client that gets a
- *   404 for a request carrying a session id MUST start a new session). The
- *   client starts a new one and sends the request once more. A JSON-RPC error
- *   in a 200 body is the source answering, and is never retried.
- * - Either era: when the cached era stops holding — a modern request answered
- *   400, 404 or 405 without a modern error body, or with
- *   `UnsupportedProtocolVersionError`; a legacy `initialize` or request
- *   answered 400 with a code only a modern server emits — the origin is probed
- *   again, once, and the request sent in whatever era that finds.
- */
-async function inEra<T>(server: McpServerConfig, send: (era: Era) => Promise<T>): Promise<T> {
-  let sessionRestarted = false;
-  let reprobed = false;
-  for (;;) {
-    const era = await eraFor(server);
-    try {
-      if (era.kind === 'legacy') await ensureInitialized(server);
-      return await send(era);
-    } catch (error) {
-      const failure = httpFailureOf(error);
-      if (!failure) throw error;
-      if (
-        era.kind === 'legacy' &&
-        !sessionRestarted &&
-        failure.phase === 'request' &&
-        failure.sessionCarried &&
-        (failure.status === 404 || (failure.status === 400 && !isRecognizedModernError(failure)))
-      ) {
-        sessionRestarted = true;
-        console.log(`[MCP:${server.sourceId}] Session rejected, reinitializing...`);
-        resetServerState(server);
-        continue;
-      }
-      const assumptionFailed = era.kind === 'modern'
-        ? failure.phase === 'request' &&
-          statusWorthReading(failure.status) &&
-          (!isRecognizedModernError(failure) || failure.code === UNSUPPORTED_PROTOCOL_VERSION)
-        : failure.status === 400 && isRecognizedModernError(failure);
-      if (assumptionFailed && !reprobed) {
-        reprobed = true;
-        console.log(`[MCP:${server.sourceId}] The cached protocol era did not hold; probing again`);
-        forgetEra(server);
-        continue;
-      }
-      throw error;
-    }
-  }
-}
-
 export async function callMcpTool(name: string, args: Record<string, unknown>): Promise<string> {
   const server = routeTool(name);
-  return inEra(server, (era) => makeToolCall(server, name, args, era));
+  await ensureInitialized(server);
+
+  try {
+    return await makeToolCall(server, name, args);
+  } catch (error) {
+    // For stateful servers (Socrata), a restart or session timeout can make a
+    // previously-valid session id stop working. Clear state and retry once.
+    // Stateless servers (Data Commons) never hit this branch — their session
+    // id is always null, and no server-side state means no invalidation.
+    if (error instanceof Error && (error.message.includes('session') || error.message.includes('400'))) {
+      console.log(`[MCP:${server.sourceId}] Session rejected, reinitializing...`);
+      resetServerState(server);
+      await ensureInitialized(server);
+      return await makeToolCall(server, name, args);
+    }
+    throw error;
+  }
 }
 
 async function makeToolCall(
   server: McpServerConfig,
   name: string,
   args: Record<string, unknown>,
-  era: Era,
 ): Promise<string> {
   // #503: the source and the tool name are operator facts; the ARGUMENTS are
   // the reader's question in other words — for a search tool they ARE the
@@ -723,27 +294,21 @@ async function makeToolCall(
   const startedAt = Date.now();
 
   const state = getServerState(server);
-  const request = era.kind === 'modern'
-    ? modernRequest(server, era.version, 'tools/call', { name, arguments: args }, name)
-    : {
-        headers: legacyHeaders(server, state),
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: Date.now(),
-          method: 'tools/call',
-          params: { name, arguments: args },
-        }),
-      };
-  const sessionCarried = era.kind === 'legacy' && state.sessionId !== null;
+  const headers = buildMcpRequestHeaders(server, state.sessionId);
 
   const { signal, clear } = createTimeoutSignal(MCP_TIMEOUT_MS);
   let response: Response;
   try {
     response = await fetch(server.endpointUrl, {
       method: 'POST',
-      headers: request.headers,
+      headers,
       signal,
-      body: request.body,
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method: 'tools/call',
+        params: { name, arguments: args },
+      }),
     });
   } catch (error) {
     clear();
@@ -759,12 +324,7 @@ async function makeToolCall(
     // The status, not the reason phrase: `statusText` is text the source
     // chose (#503 WF).
     console.error(`[MCP:${server.sourceId}] Server error:`, response.status);
-    if (era.kind === 'modern' && response.status === 401) throw authenticationError(server);
-    const code = statusWorthReading(response.status) ? jsonRpcErrorOf(await bodyTextOf(response))?.code ?? null : null;
-    throw withHttpFailure(
-      new Error(`MCP server "${server.sourceId}" error: ${response.status} ${response.statusText}`),
-      { phase: 'request', status: response.status, code, sessionCarried },
-    );
+    throw new Error(`MCP server "${server.sourceId}" error: ${response.status} ${response.statusText}`);
   }
 
   const text = await response.text();
@@ -788,7 +348,6 @@ async function makeToolCall(
     try {
       const parsed = JSON.parse(text);
       if (parsed.result) {
-        if (era.kind === 'modern') throwIfNotComplete(parsed.result);
         // #429: a result carrying `isError: true` is the source refusing the
         // call, not an answer. Thrown here and recorded by the loop's catch
         // site as a rejected call, by its structure (`tool-call-failure.ts`).
@@ -809,7 +368,6 @@ async function makeToolCall(
 
   const parsed = parseSsePayload(jsonData);
   if (parsed.result) {
-    if (era.kind === 'modern') throwIfNotComplete(parsed.result);
     throwIfErrorResult(parsed.result);
     return formatMcpResult(parsed.result);
   }
@@ -817,19 +375,6 @@ async function makeToolCall(
     throw new McpErrorEnvelope(parsed.error.message || 'MCP tool error');
   }
   return JSON.stringify(parsed);
-}
-
-/**
- * A modern result is final only when its `resultType` is absent or
- * `"complete"` (`basic/index`, ResultType: an absent `resultType` is
- * `"complete"`, and any value the client does not recognize is invalid). This
- * client implements no multi-round-trip request, so `"input_required"` is one
- * it cannot finish. The message names no value the source chose.
- */
-function throwIfNotComplete(result: unknown): void {
-  if (result === null || typeof result !== 'object' || !('resultType' in result)) return;
-  if ((result as { resultType?: unknown }).resultType === 'complete') return;
-  throw new Error('Unexpected MCP result type');
 }
 
 /**
@@ -877,14 +422,25 @@ export async function callMcpPrompt(name: string, args: Record<string, string>):
       'The Socrata MCP server is not configured: SOCRATA_MCP_URL is missing or empty in the server environment; cannot fetch skill prompt.',
     );
   }
-  return inEra(server, (era) => makePromptCall(server, name, args, era));
+  await ensureInitialized(server);
+
+  try {
+    return await makePromptCall(server, name, args);
+  } catch (error) {
+    if (error instanceof Error && (error.message.includes('session') || error.message.includes('400'))) {
+      console.log(`[MCP:${server.sourceId}] Session rejected, reinitializing...`);
+      resetServerState(server);
+      await ensureInitialized(server);
+      return await makePromptCall(server, name, args);
+    }
+    throw error;
+  }
 }
 
 async function makePromptCall(
   server: McpServerConfig,
   name: string,
   args: Record<string, string>,
-  era: Era,
 ): Promise<string> {
   // #503, as for a tool call above: the prompt name is an operator fact, its
   // arguments are not logged.
@@ -892,33 +448,22 @@ async function makePromptCall(
   const startedAt = Date.now();
 
   const state = getServerState(server);
-  const request = era.kind === 'modern'
-    ? modernRequest(server, era.version, 'prompts/get', { name, arguments: args }, name)
-    : {
-        headers: legacyHeaders(server, state),
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: Date.now(),
-          method: 'prompts/get',
-          params: { name, arguments: args },
-        }),
-      };
-  const sessionCarried = era.kind === 'legacy' && state.sessionId !== null;
+  const headers = buildMcpRequestHeaders(server, state.sessionId);
 
   const response = await fetch(server.endpointUrl, {
     method: 'POST',
-    headers: request.headers,
-    body: request.body,
+    headers,
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: Date.now(),
+      method: 'prompts/get',
+      params: { name, arguments: args },
+    }),
     signal: AbortSignal.timeout(10_000), // 10s timeout for cold starts
   });
 
   if (!response.ok) {
-    if (era.kind === 'modern' && response.status === 401) throw authenticationError(server);
-    const code = statusWorthReading(response.status) ? jsonRpcErrorOf(await bodyTextOf(response))?.code ?? null : null;
-    throw withHttpFailure(
-      new Error(`MCP prompt error: ${response.status} ${response.statusText}`),
-      { phase: 'request', status: response.status, code, sessionCarried },
-    );
+    throw new Error(`MCP prompt error: ${response.status} ${response.statusText}`);
   }
 
   const text = await response.text();
@@ -941,7 +486,6 @@ async function makePromptCall(
     try {
       const parsed = JSON.parse(text);
       if (parsed.result) {
-        if (era.kind === 'modern') throwIfNotComplete(parsed.result);
         return formatPromptResult(parsed.result);
       }
       if (parsed.error) {
@@ -957,7 +501,6 @@ async function makePromptCall(
 
   const parsed = JSON.parse(jsonData);
   if (parsed.result) {
-    if (era.kind === 'modern') throwIfNotComplete(parsed.result);
     return formatPromptResult(parsed.result);
   }
   if (parsed.error) {

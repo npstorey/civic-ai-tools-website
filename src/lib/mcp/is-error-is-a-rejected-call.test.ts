@@ -19,13 +19,11 @@
 //   a dataset nothing else in the run touches, so `dataSources[]` cannot
 //   de-duplicate an access assertion away. Each refusal's words carry a marker
 //   and none of `classifyStreamError`'s matcher substrings, and none of
-//   `session`, `400` or `parse` (the words the client's session retry read
-//   until sprint 238, and the parse rewrite's trigger).
+//   `session`, `400` or `parse` (the client's retry and rewrite triggers).
 //   Run 2 — the decoy (the G5 lesson): the same two framings, refusing in words
 //   that carry "unavailable", "timed out", "session", "400" and "parse". A fix
 //   that read the refusal's words would record it `timeout` and send it twice
-//   (the session retry then fired on "session" and "400"; since sprint 238 it
-//   reads no words at all, ruling D5). That naive variant —
+//   (the session retry fires on "session" and "400"). That naive variant —
 //   throwing the result's text as a plain `Error` — is shown against this
 //   decoy at the phase gate and never committed. Here the decoy must come back
 //   `unknown`, sent once, and the error the loop's catch site receives must be
@@ -34,10 +32,7 @@
 // R2. In the SSE branch, only a body that does not parse becomes the parse
 // failure; a refusal the server worded with "parse" reaches the caller in its
 // own words, and is classified by them as any JSON-RPC error is. The session
-// retry was a non-goal of that wave. Since sprint 238 (ruling D5) it is decided
-// by the HTTP status and the JSON-RPC code, never by an error's words, and this
-// file's last test pins that a JSON-RPC error in a 200 body, worded with
-// "session", is sent once.
+// retry for a JSON-RPC error is unchanged (a non-goal) and is pinned here.
 //
 // RED at f32b679: every isError assertion (the call recorded as answered;
 // `queries[]` stating it answered; `dataSources[]` asserting access to a refused
@@ -50,8 +45,7 @@
 // GREEN at f32b679, and able to go red only on a regression: the premise
 // (the answered call, the send counts), the decoy's single send (nothing was
 // thrown to retry), the refusal words' absence from the package bytes and the
-// progress wire (base never carried them there), and the JSON-RPC retry (then
-// pinned as sent twice; sprint 238 ruling D5 made it sent once).
+// progress wire (base never carried them there), and the JSON-RPC retry.
 //
 // BLIND SPOTS. The readers here are the ones reachable as functions from a
 // test. The React surfaces that render the record are held by
@@ -487,9 +481,9 @@ test('R2: a body that does not parse is the parse failure', async () => {
   assert.equal(error.message, PARSE_FAILURE, `an unparseable frame came back as "${error.message}"`);
 });
 
-test('sprint 238 D5: a JSON-RPC error worded with "session" is sent once — a 200 body is the source answering, never retried — and still classified by its words', async () => {
+test('unchanged (a non-goal): a JSON-RPC error worded with "session" is still retried once, and still classified by its words', async () => {
   const error = await rejectionOf(SESSION_WORDED);
-  assert.equal(sentTo(SESSION_WORDED), 1, 'a JSON-RPC error in a 200 body was retried: the retry read the error’s words');
+  assert.equal(sentTo(SESSION_WORDED), 2, 'the session retry for a JSON-RPC error is not this phase’s to change');
   assert.equal(error.message, SESSION_WORDED_TEXT);
   assert.equal(streaming.classifyStreamError(error), 'generic');
 });
