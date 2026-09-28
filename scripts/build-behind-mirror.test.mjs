@@ -1,9 +1,9 @@
 // A build behind a registry mirror edits no Dockerfile. A deployment whose
-// build hosts reach neither Docker Hub nor PyPI pulls through a mirror
-// instead, and it can redirect only what a build argument names. Over every
-// Dockerfile docker-compose.yml builds (the application image and the
-// notebook image, found from the compose file's `build:` sections rather than
-// listed here), this file asserts three properties:
+// build hosts reach none of Docker Hub, PyPI and the npm registry pulls
+// through a mirror instead, and it can redirect only what a build argument
+// names. Over every Dockerfile docker-compose.yml builds (the application
+// image and the notebook image, found from the compose file's `build:`
+// sections rather than listed here), this file asserts three properties:
 //
 //   1. No `syntax` parser directive. One makes the builder pull a frontend
 //      image from Docker Hub before it reads the file, and no build argument
@@ -12,26 +12,31 @@
 //      `COPY --from=` / `RUN --mount=…from=`, names either an earlier stage or
 //      `${NAME}` for an ARG declared ahead of the first FROM, the only scope a
 //      FROM reads.
-//   3. Every RUN that runs `pip install` follows an `ARG PIP_INDEX_URL` in its
-//      own stage, and no ARG gives it a default. Docker documents an ARG as
-//      out of scope at the end of its stage. BuildKit (measured at v0.29)
-//      carries the value into a stage built FROM the declaring one anyway,
-//      but the legacy builder does not, and there a stage without its own
-//      declaration reaches PyPI behind a mirror (measured on the notebook
+//   3. Every RUN that installs packages follows its installer's own variable,
+//      declared in its own stage, and no ARG gives that variable a default:
+//      `pip install` follows `ARG PIP_INDEX_URL`, and `npm ci` or
+//      `npm install` follows `ARG NPM_CONFIG_REGISTRY`. Docker documents an
+//      ARG as out of scope at the end of its stage. BuildKit (measured at
+//      v0.29) carries the value into a stage built FROM the declaring one
+//      anyway, but the legacy builder does not, and there a stage without its
+//      own declaration reaches PyPI behind a mirror (measured on the notebook
 //      image's `lambda` stage). A default would put an index into the
-//      reference build, which uses pip's own.
+//      reference build, which uses the installer's own.
 //
-// CI reaches Docker Hub and PyPI directly, so a build that ignores a mirror
-// is green there. These assertions are where it goes red.
+// CI reaches Docker Hub, PyPI and the npm registry directly, so a build that
+// ignores a mirror is green there. These assertions are where it goes red.
 //
 // BLIND SPOTS, stated. This file reads text and builds nothing. It sees a pull
-// only through FROM and `from=`: a RUN that downloads by other means (curl,
-// apt-get, npm) is invisible to it, and the application image's `npm ci`
-// reaches the npm registry, which no build argument covers yet. It cannot see
-// whether an ARG's default is the right image (src/lib/sandbox/container.test.ts
-// pins the notebook image's Python version) or whether a mirror serves the same
-// image. It recognises pip as `pip install`, `pip3 install` or `python -m pip
-// install` in a RUN; an installer spelled any other way is not read.
+// only through FROM and `from=`, and an install only through the two
+// installers below: a RUN that downloads by other means (curl, apt-get, a
+// fetch inside `next build`) is invisible to it. It cannot see whether an
+// ARG's default is the right image (src/lib/sandbox/container.test.ts pins the
+// notebook image's Python version) or whether a mirror serves the same image.
+// It recognises pip as `pip install`, `pip3 install` or `python -m pip
+// install`, and npm as `npm ci` or `npm install` or one of npm 10's aliases for
+// either, with the subcommand directly after `npm`. An installer spelled any
+// other way (a flag ahead of the subcommand, `npx`, `npm exec`, yarn, pnpm) is
+// not read.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -125,39 +130,65 @@ test('every image a build pulls is named by a build argument', () => {
   }
 });
 
-const PIP_INSTALL = /\bpip(?:3(?:\.\d+)?)?\s+install\b/;
+/**
+ * The installers a build runs, each with the variable that redirects it. `expected` names the stages
+ * that install today, so a pattern that stops matching fails here rather than passing over nothing.
+ */
+const INSTALLERS = [
+  {
+    tool: 'pip',
+    install: /\bpip(?:3(?:\.\d+)?)?\s+install\b/,
+    arg: 'PIP_INDEX_URL',
+    upstream: 'PyPI',
+    expected: ['docker/executor/Dockerfile executor', 'docker/executor/Dockerfile lambda'],
+    what: "the notebook image's pins",
+  },
+  {
+    tool: 'npm',
+    // `ci`, `install`, and npm 10's aliases for them (read from lib/utils/cmd-list.js in the base
+    // image). `\b` ends the match at a hyphen, so `install-clean` and `install-ci-test` are read too.
+    install: /\bnpm\s+(?:ci|ic|clean-install|install|add|i|in|ins|inst|insta|instal|isnt|isnta|isntal|isntall|it|cit|sit)\b/,
+    arg: 'NPM_CONFIG_REGISTRY',
+    upstream: 'the npm registry',
+    expected: ['Dockerfile deps'],
+    what: "the application's dependencies",
+  },
+];
 
-test('every pip install reads PIP_INDEX_URL, declared in its own stage with no default', () => {
-  const installing = [];
-  for (const path of dockerfiles) {
-    const text = repoFile(path);
-    const withDefault = /^\s*ARG\s+(?:.*\s)?PIP_INDEX_URL=.*$/m.exec(text);
-    assert.equal(
-      withDefault,
-      null,
-      `${path} gives PIP_INDEX_URL a default (${withDefault?.[0].trim()}), so a build that passes nothing ` +
-        "puts that index in every pip install's environment in place of pip's own, and is not the reference build",
-    );
-    for (const stage of parseDockerfile(text).stages) {
-      const installs = stage.runs.filter((run) => PIP_INSTALL.test(run.command));
-      if (installs.length === 0) continue;
-      installing.push(`${path} ${stage.name}`);
-      const declared = stage.args.filter((a) => a.name === 'PIP_INDEX_URL');
-      for (const run of installs) {
-        assert.ok(
-          declared.some((a) => a.line < run.line),
-          `${path} line ${run.line} runs pip install in stage "${stage.name}" with no ARG PIP_INDEX_URL ` +
-            'declared ahead of it in that stage. An ARG is documented as out of scope at the end of its ' +
-            'stage; under a builder that keeps to that, this install reaches PyPI behind a registry mirror',
-        );
+for (const { tool, install, arg, upstream, expected, what } of INSTALLERS) {
+  test(`every ${tool} install reads ${arg}, declared in its own stage with no default`, () => {
+    const installing = [];
+    for (const path of dockerfiles) {
+      const text = repoFile(path);
+      const withDefault = new RegExp(`^\\s*ARG\\s+(?:.*\\s)?${arg}=.*$`, 'm').exec(text);
+      assert.equal(
+        withDefault,
+        null,
+        `${path} gives ${arg} a default (${withDefault?.[0].trim()}), so a build that passes nothing puts ` +
+          `that address in every ${tool} install's environment in place of ${tool}'s own, and is not the ` +
+          'reference build',
+      );
+      for (const stage of parseDockerfile(text).stages) {
+        const installs = stage.runs.filter((run) => install.test(run.command));
+        if (installs.length === 0) continue;
+        installing.push(`${path} ${stage.name}`);
+        const declared = stage.args.filter((a) => a.name === arg);
+        for (const run of installs) {
+          assert.ok(
+            declared.some((a) => a.line < run.line),
+            `${path} line ${run.line} installs with ${tool} in stage "${stage.name}" with no ARG ${arg} ` +
+              'declared ahead of it in that stage. An ARG is documented as out of scope at the end of its ' +
+              `stage; under a builder that keeps to that, this install reaches ${upstream} behind a registry mirror`,
+          );
+        }
       }
     }
-  }
-  for (const expected of ['docker/executor/Dockerfile executor', 'docker/executor/Dockerfile lambda']) {
-    assert.ok(
-      installing.includes(expected),
-      `found no pip install in ${expected}, which installs the notebook image's pins; the search, not the ` +
-        `file, is what failed (found: ${installing.join(', ') || 'none'})`,
-    );
-  }
-});
+    for (const stage of expected) {
+      assert.ok(
+        installing.includes(stage),
+        `found no ${tool} install in ${stage}, which installs ${what}; the search, not the file, is what ` +
+          `failed (found: ${installing.join(', ') || 'none'})`,
+      );
+    }
+  });
+}
