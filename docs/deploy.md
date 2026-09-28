@@ -485,9 +485,10 @@ variant cannot rot.
 
 ### Building behind a registry mirror
 
-With no build argument, both images pull their bases from Docker Hub and
-the notebook image installs its pinned packages from PyPI. A build host
-that reaches neither can pull through a mirror instead. Each of those
+With no build argument, both images pull their bases from Docker Hub, the
+application image installs its dependencies from the npm registry, and the
+notebook image installs its pinned packages from PyPI. A build host that
+reaches none of them can pull through a mirror instead. Each of those
 downloads is named by a build argument, so neither Dockerfile needs an
 edit:
 
@@ -495,6 +496,7 @@ edit:
 | --- | --- | --- | --- |
 | Application (`Dockerfile`) | `NODE_IMAGE` | `node:22-bookworm-slim` | The base of the dependency, build and runtime stages |
 | Application | `DOCKER_CLI_IMAGE` | `docker:29-cli` | The image the `docker` binary is copied from; not pulled at `RUNTIME_BASE=runtime-without-docker-cli` |
+| Application | `NPM_CONFIG_REGISTRY` | Unset: npm uses registry.npmjs.org | The registry `npm ci` installs from, in the dependency stage |
 | Notebook (`docker/executor/Dockerfile`) | `PYTHON_IMAGE` | `python:3.13-slim-bookworm` | The base of both targets |
 | Notebook | `PIP_INDEX_URL` | Unset: pip uses PyPI | The package index both `pip install` runs read, in the default target and in `lambda` |
 
@@ -502,6 +504,7 @@ edit:
 docker build \
   --build-arg NODE_IMAGE=registry.example.internal/library/node:22-bookworm-slim \
   --build-arg DOCKER_CLI_IMAGE=registry.example.internal/library/docker:29-cli \
+  --build-arg NPM_CONFIG_REGISTRY=https://registry.example.internal/npm/ \
   -t civic-app:dev .
 
 docker build \
@@ -527,21 +530,38 @@ reference.
   loopback address. It ignores a plain-HTTP index at any other address,
   and an index behind a private certificate authority needs that
   certificate in the build; neither case is covered yet.
+- **The registry.** `NPM_CONFIG_REGISTRY` is npm's own setting, so the
+  mirror must serve the npm registry's API and every version the lockfile
+  pins. The lockfile records each package at registry.npmjs.org; with the
+  argument set, `npm ci` fetches every one of them from the mirror instead,
+  and checks each against the lockfile's integrity hash. Unset, or set to
+  an empty value, npm uses registry.npmjs.org. npm also sends its audit
+  request to the mirror; a mirror that refuses it does not fail the build.
+  Measured with npm 10.9.8, the base image's, against a plain-HTTP registry
+  on a loopback address. A registry behind a private certificate authority
+  needs that certificate in the build, which is not covered yet.
 - **No credentials in a build argument.** Build arguments are recorded in
   the image's history: `docker history --no-trunc` shows the
-  `PIP_INDEX_URL` value on every `RUN` after its declaration. An index that
-  requires authentication is out of scope for now; a build secret is the
-  shape it would take.
+  `PIP_INDEX_URL` and `NPM_CONFIG_REGISTRY` values on every `RUN` after
+  their declaration. An index or registry that requires authentication is
+  out of scope for now; a build secret is the shape it would take.
 - **No frontend image.** Neither Dockerfile has a `# syntax=` line, so the
   builder's built-in frontend parses both and nothing else is pulled. On a
   host that already holds a base tag, that frontend builds from the stored
   copy rather than asking the registry again (measured on Docker 29.4);
   `--pull` resolves the tag again.
-- **Not covered:** the application image's `npm ci` downloads from the
-  npm registry, and no build argument redirects it yet.
+- **One fetch inside `next build`.** The `/directory` page is prerendered
+  from the community index at raw.githubusercontent.com, or from
+  `DIRECTORY_DATA_URL` when that is set. A build that cannot reach it
+  still succeeds: it prerenders the snapshot bundled with this codebase
+  and logs `[Directory] Failed to fetch the configured source, using
+  bundled snapshot`. With the network cut after the dependency stage, the
+  build and runtime stages completed, and this was the only failed fetch
+  the build log reported.
 
 `scripts/build-behind-mirror.test.mjs` fails when either Dockerfile gains
-an image pull or a `pip install` that no build argument redirects.
+an image pull, a `pip install` or an `npm ci` that no build argument
+redirects.
 
 ## Usable, not just built
 
