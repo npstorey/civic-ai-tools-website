@@ -11,9 +11,9 @@
 # No `syntax` parser directive: the builder's built-in Dockerfile frontend
 # parses this file, so a build pulls no frontend image from Docker Hub, and
 # the only images it pulls are NODE_IMAGE and DOCKER_CLI_IMAGE below. A build
-# behind a registry mirror passes both as build arguments rather than editing
-# this file (docs/deploy.md, "Building behind a registry mirror"); `npm ci`
-# still reaches the npm registry.
+# behind a registry mirror passes both as build arguments, and names its npm
+# registry for `npm ci` with NPM_CONFIG_REGISTRY, rather than editing this
+# file (docs/deploy.md, "Building behind a registry mirror").
 #
 # Configuration is RUN-time wherever it can be: no environment file ever
 # enters the build context (see .dockerignore). The exception is the set of
@@ -51,6 +51,12 @@ ARG RUNTIME_BASE=runtime-with-docker-cli
 FROM ${NODE_IMAGE} AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+# npm's own variable, so `npm ci` reads it with no flag. Declared with no
+# default: unpassed, it stays out of the RUN's environment and npm uses its
+# default registry. Set, npm fetches every package from that address, the
+# lockfile's registry.npmjs.org `resolved` URLs included. An address, never a
+# credential: a build argument is recorded in the image's history.
+ARG NPM_CONFIG_REGISTRY
 RUN npm ci
 
 # --- build -----------------------------------------------------------------
