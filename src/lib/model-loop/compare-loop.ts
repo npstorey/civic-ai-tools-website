@@ -37,6 +37,7 @@
  */
 
 import type OpenAI from 'openai';
+import type { ModelRequestSettings } from '../model-catalog.ts';
 import { mcpToolsFor, offeredMcpTools } from '../mcp/tools.ts';
 import { callMcpTool } from '../mcp/client.ts';
 import type { ToolCallRecord, ToolLoopOptions, ToolLoopResult } from './run-tool-loop.ts';
@@ -46,7 +47,7 @@ import type { ToolCallRecord, ToolLoopOptions, ToolLoopResult } from './run-tool
  * this caller has always used — half the core's default, deliberately.
  */
 export const COMPARE_MAX_ITERATIONS = 10;
-/** `max_tokens` on every request this comparison makes. Half the core's default. */
+/** The token limit on every request this comparison makes. Half the core's default. */
 export const COMPARE_MAX_TOKENS = 2000;
 /**
  * Bound on one tool result fed back to the model as context.
@@ -84,6 +85,8 @@ export interface CompareLoopInputs {
   client: OpenAI;
   /** The wire string this instance reaches the requested model with. */
   endpointModel: string;
+  /** The requested model's catalog settings (#548); `undefined` when it has none. */
+  requestSettings: ModelRequestSettings | undefined;
   /** The caller's question, verbatim. */
   prompt: string;
   /** Built by the route for the requested portal. */
@@ -115,11 +118,12 @@ export interface CompareLoopInputs {
  * route supplies only what it read off the request.
  */
 export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
-  const { client, endpointModel, prompt, systemPrompt, portal, lockedPortal, callTool = callMcpTool } = inputs;
+  const { client, endpointModel, requestSettings, prompt, systemPrompt, portal, lockedPortal, callTool = callMcpTool } = inputs;
 
   return {
     client,
     endpointModel,
+    requestSettings,
     prompt,
     systemPrompt,
     // The same schemas either way; under the lock their text stops inviting

@@ -80,6 +80,7 @@ const options = await replayLoopOptionsForPackage({
   pkg: { queries: [], dataSources: [] },
   client: createModelClient({ apiKey: 'placeholder-model-key-238-p2-replay' }),
   endpointModel: 'fake/model',
+  requestSettings: undefined,
   prompt: 'How many 311 requests did Boston receive last month?',
 });
 const result = await runToolLoop(options);

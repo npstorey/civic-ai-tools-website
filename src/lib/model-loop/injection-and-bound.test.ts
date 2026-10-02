@@ -309,6 +309,7 @@ test('#359: the portal reaches the record, the tool_start event AND the span —
   const result = await runToolLoop({
     client: stubClient([{ toolCalls: [FETCH_NO_PORTAL] }, { content: REAL_ANSWER }]),
     endpointModel: 'fake/model',
+    requestSettings: undefined,
     prompt: PROMPT,
     tools: [],
     portal: PORTAL,
@@ -349,6 +350,7 @@ test('#359: the guard is the four callers’ guard, unchanged — Socrata get_da
       { content: REAL_ANSWER },
     ]),
     endpointModel: 'fake/model',
+    requestSettings: undefined,
     prompt: PROMPT,
     tools: [],
     portal: PORTAL,
@@ -371,6 +373,7 @@ test('a loop given no portal injects nothing — omitted is off, as it was for a
   const result = await runToolLoop({
     client: stubClient([{ toolCalls: [FETCH_NO_PORTAL] }, { content: REAL_ANSWER }]),
     endpointModel: 'fake/model',
+    requestSettings: undefined,
     prompt: PROMPT,
     tools: [],
     executeToolCall: async () => ONE_ROW,
@@ -402,6 +405,7 @@ test('#359: a tool call whose arguments never parsed is NOT given a portal — n
       { content: REAL_ANSWER },
     ]),
     endpointModel: 'fake/model',
+    requestSettings: undefined,
     prompt: PROMPT,
     tools: [],
     portal: PORTAL,
@@ -430,6 +434,7 @@ test('#352: a tool call that resolves inside its bound leaves ZERO pending timer
     const result = await runToolLoop({
       client: stubClient([{ toolCalls: [FETCH_NO_PORTAL] }, { content: REAL_ANSWER }]),
       endpointModel: 'fake/model',
+      requestSettings: undefined,
       prompt: PROMPT,
       tools: [],
       portal: PORTAL,
@@ -460,6 +465,7 @@ test('#352: the bound still fires when the call hangs, and the run survives it',
     const run = runToolLoop({
       client: stubClient([{ toolCalls: [FETCH_NO_PORTAL] }, { content: REAL_ANSWER }]),
       endpointModel: 'fake/model',
+      requestSettings: undefined,
       prompt: PROMPT,
       tools: [],
       portal: PORTAL,
@@ -502,6 +508,7 @@ test('#352: omitting the bound arms no timer at all — unbounded is expressible
     await runToolLoop({
       client: stubClient([{ toolCalls: [FETCH_NO_PORTAL] }, { content: REAL_ANSWER }]),
       endpointModel: 'fake/model',
+      requestSettings: undefined,
       prompt: PROMPT,
       tools: [],
       executeToolCall: async () => ONE_ROW,
@@ -522,6 +529,7 @@ test('compare: the span agrees with the record on a get_data call that omitted a
     ...compareLoopOptions({
       client: stubClient([{ toolCalls: [FETCH_NO_PORTAL] }, { content: REAL_ANSWER }]),
       endpointModel: 'fake/model',
+      requestSettings: undefined,
       prompt: PROMPT,
       systemPrompt: SYSTEM,
       portal: PORTAL,
@@ -544,6 +552,7 @@ test('#352: /api/compare now has a tool bound, it is 45s, and it fires', async (
     compareLoopOptions({
       client: {} as never,
       endpointModel: 'fake/model',
+      requestSettings: undefined,
       prompt: PROMPT,
       systemPrompt: SYSTEM,
       portal: PORTAL,
@@ -561,6 +570,7 @@ test('#352: /api/compare now has a tool bound, it is 45s, and it fires', async (
       compareLoopOptions({
         client: stubClient([{ toolCalls: [FETCH_NO_PORTAL] }, { content: REAL_ANSWER }]),
         endpointModel: 'fake/model',
+        requestSettings: undefined,
         prompt: PROMPT,
         systemPrompt: SYSTEM,
         portal: PORTAL,
@@ -601,6 +611,7 @@ test('replay: the span agrees with the record, and the recorded args still feed 
     ...replayLoopOptions({
       client: stubClient([{ toolCalls: [FETCH_NO_PORTAL] }, { content: REAL_ANSWER }]),
       endpointModel: 'fake/model',
+      requestSettings: undefined,
       prompt: PROMPT,
       systemPrompt: SYSTEM,
       portal: PORTAL,
@@ -627,6 +638,7 @@ test('replay keeps its own 45s bound, now as a value rather than a race it perfo
   const options = replayLoopOptions({
     client: {} as never,
     endpointModel: 'fake/model',
+    requestSettings: undefined,
     prompt: PROMPT,
     systemPrompt: SYSTEM,
     portal: PORTAL,
@@ -817,6 +829,7 @@ test('both options are on ToolLoopOptions and both are optional', () => {
   const minimal: ToolLoopOptions = {
     client: {} as never,
     endpointModel: 'fake/model',
+    requestSettings: undefined,
     prompt: PROMPT,
     tools: [],
     executeToolCall: async () => ONE_ROW,

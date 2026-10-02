@@ -52,6 +52,7 @@
  */
 
 import type OpenAI from 'openai';
+import type { ModelRequestSettings } from '../model-catalog.ts';
 import { mcpTools } from '../mcp/tools.ts';
 import { callMcpTool } from '../mcp/client.ts';
 import { buildSystemPrompt } from '../mcp/socrata-skill.ts';
@@ -61,7 +62,7 @@ import type { ToolLoopOptions } from './run-tool-loop.ts';
 
 /** Tool-calling rounds before the loop stops and asks for an answer. */
 export const REPLAY_MAX_ITERATIONS = 20;
-/** `max_tokens` on every request a replay makes. */
+/** The token limit on every request a replay makes. */
 export const REPLAY_MAX_TOKENS = 4000;
 /** Cumulative token budget for one replay run. */
 export const REPLAY_MAX_CUMULATIVE_TOKENS = 200_000;
@@ -85,6 +86,8 @@ export interface ReplayLoopInputs {
   client: OpenAI;
   /** The wire string this instance reaches the record's model with. */
   endpointModel: string;
+  /** That model's catalog settings (#548); `undefined` when it has none. */
+  requestSettings: ModelRequestSettings | undefined;
   /** The record's prompt text, verbatim. */
   prompt: string;
   /** Regenerated fresh for the record's portal by the route. */
@@ -279,6 +282,7 @@ export function replayLoopOptions(inputs: ReplayLoopInputs): ToolLoopOptions {
   const {
     client,
     endpointModel,
+    requestSettings,
     prompt,
     systemPrompt,
     portal,
@@ -289,6 +293,7 @@ export function replayLoopOptions(inputs: ReplayLoopInputs): ToolLoopOptions {
   return {
     client,
     endpointModel,
+    requestSettings,
     prompt,
     systemPrompt,
     tools: mcpTools,
@@ -331,6 +336,8 @@ export interface ReplayForPackageInputs {
   client: OpenAI;
   /** The wire string this instance reaches the record's model with. */
   endpointModel: string;
+  /** That model's catalog settings (#548); `undefined` when it has none. */
+  requestSettings: ModelRequestSettings | undefined;
   /** The record's prompt text, verbatim. */
   prompt: string;
   /** For tests only; production passes nothing. See the type's own note. */
@@ -348,8 +355,8 @@ export interface ReplayForPackageInputs {
  * the loop runs": the portal derived off the package and nothing else, the
  * system prompt composed for that portal, and both placed into the loop
  * options. The route supplies the three things only a route can know — the
- * client built from the caller's key, the endpoint model, the prompt text —
- * and takes the result.
+ * client built from the caller's key, the endpoint model with its settings,
+ * the prompt text — and takes the result.
  *
  * WHY THIS IS A FUNCTION AND NOT THREE LINES IN THE ROUTE. Same reason the
  * configuration is, one paragraph up in this file's header, and now with a

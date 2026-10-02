@@ -46,7 +46,7 @@
  * guard that quietly reduces its own reach is the same failure with no diff to
  * point at.
  *
- * THREE ASSERTIONS, ONE INSTRUMENT. The first is the registry: who calls the
+ * FOUR ASSERTIONS, ONE INSTRUMENT. The first is the registry: who calls the
  * model at all. The second is narrower and is #345's own criterion: how many
  * modules carry a TOOL-CALLING loop, which is the thing that was triplicated. A
  * grep for `chat.completions.create` cannot answer the second (it counts
@@ -57,9 +57,16 @@
  * The third asks what a call SENDS, and it is here because the first two could
  * not see the defect it measures. The adversarial-eval pair (#348) was two call
  * sites, neither of them a loop, sending the same rubric — legal under both
- * earlier lists for as long as it existed. Every assertion runs in both
+ * earlier lists for as long as it existed. The first three run in both
  * directions: an unlisted file fails, and so does a list entry that no longer
  * describes the tree.
+ *
+ * The fourth also asks what a call sends, of every call rather than of a list
+ * (#548): each takes its token limit and reasoning setting from the model's
+ * catalog entry, through `modelRequestParameters`. A reasoning model refuses
+ * `max_tokens`, and refuses tools unless `reasoning_effort` is `none`, so one
+ * call writing either field itself is one request such a model refuses — on
+ * whichever path that call serves, which is why no call is exempt.
  *
  * WHAT THE SCANNER DOES NOT DO. It reads source text; it does not build a call
  * graph. A call assembled dynamically, or made through a helper that takes the
@@ -133,6 +140,16 @@ const RUBRIC = 'EVALUATION_RUBRIC';
 
 const MODEL_CALL = 'chat.completions.create';
 
+/**
+ * The one way a call names its token limit and reasoning setting (#548):
+ * `modelRequestParameters` in `src/lib/model-catalog.ts`, fed the entry's
+ * settings.
+ */
+const REQUEST_PARAMETERS = 'modelRequestParameters(';
+
+/** Request fields only `modelRequestParameters` writes. */
+const ENTRY_DERIVED_FIELDS = ['max_tokens', 'max_completion_tokens', 'reasoning_effort'];
+
 interface ModelCall {
   file: string;
   /** The text of the call's argument list, parens balanced. */
@@ -189,6 +206,41 @@ test('#348: exactly one module sends the evaluation rubric to a model', () => {
       'here that no longer sends the rubric is a false statement about the tree and fails the same way.',
   );
 });
+
+test('#548: every model call takes its token limit and reasoning setting from the catalog entry', () => {
+  const calls = modelCallSites();
+  assert.ok(calls.length > 0, 'the scanner found no model calls at all — it has stopped measuring');
+
+  const offences: string[] = [];
+  for (const call of calls) {
+    if (!call.args.includes(REQUEST_PARAMETERS)) {
+      offences.push(`${call.file}: a ${MODEL_CALL} call that does not spread ${REQUEST_PARAMETERS}…)`);
+    }
+    for (const field of ENTRY_DERIVED_FIELDS) {
+      if (writesField(call, field)) {
+        offences.push(`${call.file}: a ${MODEL_CALL} call that writes "${field}" itself`);
+      }
+    }
+    // Present but fed nothing: the helper's no-settings answer, for every
+    // model, whatever its entry says.
+    if (/modelRequestParameters\(\s*(undefined|null|\{\s*\})\s*,/.test(call.args)) {
+      offences.push(`${call.file}: a ${MODEL_CALL} call that hands ${REQUEST_PARAMETERS}…) no settings`);
+    }
+  }
+
+  assert.deepEqual(
+    offences,
+    [],
+    'a model call does not take its token limit and reasoning setting from the model\'s catalog entry. ' +
+      'Spread modelRequestParameters(<the identity\'s requestSettings>, <limit>) where the call would write ' +
+      'max_tokens: a reasoning model refuses max_tokens, and refuses tools unless reasoning_effort is "none".',
+  );
+});
+
+/** True when this call writes `field` as a key — `field:` or `field,` shorthand. */
+function writesField(call: ModelCall, field: string): boolean {
+  return new RegExp(`(^|[\\s,{])${field}\\s*[,:]`).test(call.args);
+}
 
 /** True when this call passes `tools` — `tools,` shorthand or `tools:`. */
 function passesTools(call: ModelCall): boolean {

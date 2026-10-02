@@ -300,6 +300,7 @@ async function runWithScript(
     const result = await runToolLoop({
       client: getModelClient(),
       endpointModel: 'fake/model',
+      requestSettings: undefined,
       prompt: PROMPT,
       tools: [],
       executeToolCall: async () => ONE_ROW,

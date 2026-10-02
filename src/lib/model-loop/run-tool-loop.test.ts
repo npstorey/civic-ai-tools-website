@@ -76,6 +76,7 @@ async function runCore(
     const result = await runToolLoop({
       client: getModelClient(),
       endpointModel: 'fake/model',
+      requestSettings: undefined,
       prompt: 'How long do these requests take to close?',
       tools: [],
       executeToolCall: async () => ONE_ROW,

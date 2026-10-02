@@ -262,6 +262,7 @@ const COMPARE_TOOLS = (lockedPortal: string | undefined) =>
   compareLoopOptions({
     client: createModelClient({ apiKey: 'placeholder-model-key-238-p2' }),
     endpointModel: 'example-fixture-deployment',
+    requestSettings: undefined,
     prompt: QUESTION,
     systemPrompt: 'fixture',
     portal: PORTAL,
