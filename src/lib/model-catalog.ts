@@ -141,8 +141,9 @@ export interface CatalogEntry extends ModelDefinition {
   /** Per-1M-token prices. Absent means cost estimation returns null. */
   pricing?: ModelPricing;
   /**
-   * Sent as `reasoning_effort` on every request to this model (#548).
-   * Absent: nothing is sent — never a default.
+   * Sent as `reasoning_effort` on every request to this model (#548), and
+   * recorded on each inference span of the trace. Absent: nothing is sent and
+   * nothing is recorded — never a default.
    */
   reasoningEffort?: ReasoningEffort;
   /**

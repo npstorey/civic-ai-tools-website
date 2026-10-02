@@ -490,3 +490,84 @@ for (const dialect of DIALECTS) {
     assert.deepEqual(differences, []);
   });
 }
+
+// --- The record: the reasoning setting on the trace (#548, ruling D3) -----------
+//
+// compare-stream emits the trace its run built as the stream's last event —
+// the trace the publish dialog carries into a signed package. Every span that
+// stands for a request (each `llm_inference`, and `synthesis` when it made the
+// answering turn, which this script always forces) records the setting that
+// request carried; with no setting there is no key at all, never a default.
+
+const { REASONING_EFFORT_ATTRIBUTE } = await import('./model-loop/run-tool-loop.ts');
+
+interface Attribute { key: string; value: Record<string, unknown> }
+interface TraceSpan { name: string; attributes: Attribute[] }
+
+function emittedTrace(dialect: Dialect, variant: Variant): Record<string, unknown> {
+  const body = outcomes.get(`${dialect}/${variant}/compare-stream`)?.body ?? '';
+  const events = body
+    .split('\n')
+    .filter((line) => line.startsWith('data: '))
+    .map((line) => JSON.parse(line.slice('data: '.length)) as { type?: string; data?: unknown });
+  const trace = events.find((e) => e.type === 'trace')?.data;
+  assert.ok(trace && typeof trace === 'object', `compare-stream emitted no trace (${dialect}, ${variant})`);
+  return trace as Record<string, unknown>;
+}
+
+function spansOf(trace: Record<string, unknown>): TraceSpan[] {
+  const resourceSpans = trace.resourceSpans as Array<{ scopeSpans: Array<{ spans: TraceSpan[] }> }>;
+  return resourceSpans.flatMap((r) => r.scopeSpans.flatMap((s) => s.spans));
+}
+
+/** The spans standing for a model request this run made. */
+function requestSpans(trace: Record<string, unknown>): TraceSpan[] {
+  const spans = spansOf(trace).filter((s) => s.name === 'llm_inference' || s.name === 'synthesis');
+  assert.deepEqual(
+    spans.map((s) => s.name).sort(),
+    ['llm_inference', 'llm_inference', 'synthesis'],
+    'premise: the run made two tool-calling turns and an answering turn',
+  );
+  return spans;
+}
+
+for (const dialect of DIALECTS) {
+  test(`${dialect}: each request span records the reasoning setting the request carried, as sent`, () => {
+    for (const span of requestSpans(emittedTrace(dialect, 'with'))) {
+      const recorded = span.attributes.filter((a) => a.key === REASONING_EFFORT_ATTRIBUTE);
+      assert.deepEqual(recorded, [{ key: REASONING_EFFORT_ATTRIBUTE, value: { stringValue: 'none' } }], span.name);
+    }
+  });
+
+  test(`${dialect}: with no setting nothing is recorded — no key, no default`, () => {
+    const trace = emittedTrace(dialect, 'without');
+    for (const span of requestSpans(trace)) {
+      assert.equal(span.attributes.some((a) => a.key === REASONING_EFFORT_ATTRIBUTE), false, span.name);
+    }
+    assert.equal(JSON.stringify(trace).includes(REASONING_EFFORT_ATTRIBUTE), false);
+  });
+
+  test(`${dialect}: the package built from that trace carries the setting inside its canonical content`, () => {
+    for (const variant of VARIANTS) {
+      const { pkg: published } = buildEvidencePackage({
+        trace: emittedTrace(dialect, variant) as never,
+        prompt: QUERY.query,
+        output: 'Twelve complaints.',
+        toolCalls: [],
+        model: ANALYSIS.model,
+        tokenUsage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+        duration_ms: 1000,
+        promptVisibility: 'full_text',
+        title: 'Noise complaints',
+        captureMethod: 'chat-flow-stream',
+      } as never);
+      const bytes = JSON.stringify(published);
+      const pair = `{"key":"${REASONING_EFFORT_ATTRIBUTE}","value":{"stringValue":"none"}}`;
+      if (variant === 'with') {
+        assert.equal(bytes.split(pair).length - 1, 3, 'one per request span, in the package');
+      } else {
+        assert.equal(bytes.includes(REASONING_EFFORT_ATTRIBUTE), false);
+      }
+    }
+  });
+}

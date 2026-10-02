@@ -238,3 +238,20 @@ test('INSTANCE: every lookup a call site uses carries the entry\'s settings', ()
   // Not served.
   assert.equal(JSON.stringify(getOfferedModels()).includes('reasoning'), false);
 });
+
+// --- The recorded attribute (ruling D3) ---------------------------------------
+
+test('CATALOG: the reasoning setting is recorded exactly as sent, and nothing is recorded without one', async () => {
+  const { REASONING_EFFORT_ATTRIBUTE, reasoningEffortAttributes } = await import('./model-loop/run-tool-loop.ts');
+  // Not a `gen_ai.*` name: the GenAI conventions the spans declare (1.30.0)
+  // define no reasoning attribute — see the constant's own note.
+  assert.equal(REASONING_EFFORT_ATTRIBUTE, 'civic.request.reasoning_effort');
+  for (const value of REASONING_EFFORTS) {
+    assert.deepEqual(reasoningEffortAttributes({ reasoningEffort: value }), { [REASONING_EFFORT_ATTRIBUTE]: value });
+  }
+  // Absence is absence: no key, never a default — including for an entry that
+  // names a token-limit parameter and no reasoning setting.
+  for (const settings of [undefined, {}, { tokenLimitParameter: 'max_completion_tokens' as const }]) {
+    assert.deepEqual(reasoningEffortAttributes(settings), {}, JSON.stringify(settings));
+  }
+});
