@@ -21,7 +21,7 @@
 
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { getModelClient } from './model-client.ts';
-import type { ModelIdentity } from './model-catalog.ts';
+import { modelRequestParameters, type ModelIdentity } from './model-catalog.ts';
 
 /**
  * The `withoutMcp` half of the `POST /api/compare` response body. The `withMcp`
@@ -52,7 +52,7 @@ export async function queryWithoutMcp(
   const response = await getModelClient().chat.completions.create({
     model: model.endpointModel,
     messages,
-    max_tokens: 2000,
+    ...modelRequestParameters(model.requestSettings, 2000),
   });
 
   const duration_ms = Date.now() - startTime;

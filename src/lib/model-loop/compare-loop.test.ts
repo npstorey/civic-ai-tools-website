@@ -112,6 +112,7 @@ async function runCompare(
       compareLoopOptions({
         client: createModelClient({ apiKey: FIXTURE_KEY }),
         endpointModel: 'fake/model',
+        requestSettings: undefined,
         prompt: PROMPT,
         systemPrompt: SYSTEM,
         portal: PORTAL,
@@ -245,6 +246,7 @@ test('compareLoopOptions carries compare’s own caps and the shared tool set', 
   const options = compareLoopOptions({
     client: {} as never,
     endpointModel: 'fake/model',
+    requestSettings: undefined,
     prompt: PROMPT,
     systemPrompt: SYSTEM,
     portal: PORTAL,

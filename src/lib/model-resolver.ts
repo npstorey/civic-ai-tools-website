@@ -282,18 +282,19 @@ export function modelIdentityForValue(value: string): ModelIdentity {
 
 /**
  * The reverse direction: given an identity read out of an already-signed
- * package, the wire string that reaches that model at THIS instance's
- * endpoint. Falls back to the recorded string when no entry declares it —
- * a record may name a model this instance no longer offers, which the replay
- * path has always had to tolerate.
+ * package, the pair that reaches that model at THIS instance's endpoint —
+ * with the entry's request settings (#548), because a replay sends the same
+ * requests a run does. Falls back to the recorded string on both sides, and
+ * no settings, when no entry declares it — a record may name a model this
+ * instance no longer offers, which the replay path has always had to tolerate.
  */
-export function endpointModelForDeclared(declared: string): string {
+export function modelIdentityForDeclared(declared: string): ModelIdentity {
   let catalog: readonly CatalogEntry[];
   try {
     catalog = getModelCatalog();
   } catch {
-    return declared;
+    return carriedModelIdentity(declared);
   }
   const entry = catalog.find((e) => declaredModelIdentity(e) === declared);
-  return entry ? entry.endpointModel : declared;
+  return entry ? modelIdentity(entry) : carriedModelIdentity(declared);
 }

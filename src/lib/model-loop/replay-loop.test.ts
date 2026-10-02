@@ -136,6 +136,7 @@ async function runReplay(
       replayLoopOptions({
         client: createModelClient({ apiKey: FIXTURE_KEY }),
         endpointModel: 'fake/model',
+        requestSettings: undefined,
         prompt: PROMPT,
         systemPrompt: SYSTEM,
         portal: PORTAL,
@@ -359,6 +360,7 @@ test('replayLoopOptions carries replay’s own caps and the shared tool set', ()
   const options = replayLoopOptions({
     client: {} as never,
     endpointModel: 'fake/model',
+    requestSettings: undefined,
     prompt: PROMPT,
     systemPrompt: SYSTEM,
     portal: PORTAL,
@@ -469,14 +471,15 @@ function executableSource(src: string): string {
 }
 
 /**
- * The three things the route legitimately supplies, each because it is knowable
- * only at the request and not from the stored package: the model client built
- * from the caller-supplied key (and its whole error tail), the endpoint model
- * this instance reaches the record's declared model with, and the prompt text
- * the visibility check just cleared. Every OTHER key of the options object is
- * a decision, and the route may not name it.
+ * The things the route legitimately supplies, each because it is knowable only
+ * at the request and not from the stored package: the model client built from
+ * the caller-supplied key (and its whole error tail), the endpoint model this
+ * instance reaches the record's declared model with and that entry's request
+ * settings (#548) — both answers of the one catalog lookup the route makes —
+ * and the prompt text the visibility check just cleared. Every OTHER key of the
+ * options object is a decision, and the route may not name it.
  */
-const ROUTE_SUPPLIES = ['client', 'endpointModel', 'prompt'];
+const ROUTE_SUPPLIES = ['client', 'endpointModel', 'requestSettings', 'prompt'];
 
 /**
  * Three names that are not option keys but are the shapes the route once
@@ -525,6 +528,7 @@ test('#345/#432: every route that replays a stored record obtains its options fr
     pkg: { queries: [{}], dataSources: [] },
     client: {} as unknown as Parameters<typeof replayLoopOptions>[0]['client'],
     endpointModel: 'fake/model',
+    requestSettings: undefined,
     prompt: 'a fixture prompt',
     composeSystemPrompt: async () => 'a fixture system prompt',
   });

@@ -424,6 +424,7 @@ test('#436 C3: the /api/compare path — the factory hands the core the lock and
       const result = await runToolLoop(compareLoopOptions({
         client: createModelClient({ apiKey: 'placeholder-model-key-p4-compare' }),
         endpointModel: 'fake/model',
+        requestSettings: undefined,
         prompt: QUESTION,
         systemPrompt: 'fixture',
         portal: LOCKED,
@@ -522,6 +523,7 @@ test('#436: replay is unaffected — with the switch on in the environment, its 
       pkg: { queries: [{ portal: FOREIGN }], dataSources: [] },
       client: createModelClient({ apiKey: 'placeholder-model-key-p4-replay' }),
       endpointModel: 'fake/model',
+      requestSettings: undefined,
       prompt: QUESTION,
       composeSystemPrompt: async (portal) => { composed.push(portal); return 'fixture'; },
       callTool: async (_name, args) => { sent.push(args); return ONE_ROW; },
@@ -529,7 +531,7 @@ test('#436: replay is unaffected — with the switch on in the environment, its 
     assert.deepEqual(composed, [FOREIGN], 'replay composes for the record\'s portal');
     assert.equal(options.lockedPortal, undefined);
     assert.equal(options.tools, mcpTools);
-    assert.equal(replayLoopOptions({ client: options.client, endpointModel: 'fake/model', prompt: QUESTION, systemPrompt: 'x' }).lockedPortal, undefined);
+    assert.equal(replayLoopOptions({ client: options.client, endpointModel: 'fake/model', requestSettings: undefined, prompt: QUESTION, systemPrompt: 'x' }).lockedPortal, undefined);
     const result = await runToolLoop(options);
     assert.equal(sent.length, 1, 'the replayed call was not sent');
     assert.equal(sent[0].portal, FOREIGN);
@@ -613,6 +615,7 @@ async function replayOf(pkg: EvidencePackage) {
       pkg,
       client: createModelClient({ apiKey: 'placeholder-model-key-p5-replay' }),
       endpointModel: 'fake/model',
+      requestSettings: undefined,
       prompt: QUESTION,
       composeSystemPrompt: async (portal) => { composed.push(portal); return 'fixture'; },
       callTool: async (_name, args) => { sent.push({ ...args }); return ONE_ROW; },

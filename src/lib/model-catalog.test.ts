@@ -28,11 +28,11 @@ import {
   type CatalogEntry,
 } from './model-catalog.ts';
 import {
-  endpointModelForDeclared,
   getDefaultModel,
   getModelCatalog,
   getOfferedModels,
   getSummarizerModel,
+  modelIdentityForDeclared,
   modelIdentityForValue,
   resolveEvaluatorModel,
   resolveModel,
@@ -628,9 +628,15 @@ test('INSTANCE: a recorded identity maps back to the wire string that reaches it
   process.env.MODEL_CATALOG = JSON.stringify(sampleCatalog());
   // The replay path's direction: `pkg.cost.model` is a declared identity, and
   // under this catalog it is not a string any endpoint answers to.
-  assert.equal(endpointModelForDeclared('vendor/model-careful-1'), 'example-careful-deployment');
+  assert.deepEqual(modelIdentityForDeclared('vendor/model-careful-1'), {
+    endpointModel: 'example-careful-deployment',
+    declared: 'vendor/model-careful-1',
+  });
   // A record naming a model this instance no longer offers replays as before.
-  assert.equal(endpointModelForDeclared('anthropic/claude-opus-5'), 'anthropic/claude-opus-5');
+  assert.deepEqual(modelIdentityForDeclared('anthropic/claude-opus-5'), {
+    endpointModel: 'anthropic/claude-opus-5',
+    declared: 'anthropic/claude-opus-5',
+  });
 });
 
 test('INSTANCE: evaluator independence is checked declared-against-declared', () => {

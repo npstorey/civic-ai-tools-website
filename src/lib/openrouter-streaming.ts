@@ -1,6 +1,6 @@
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 import { getModelClient, classifyModelError, includeStreamUsage, getModelApiKind } from './model-client.ts';
-import type { ModelIdentity } from './model-catalog.ts';
+import { modelRequestParameters, type ModelIdentity } from './model-catalog.ts';
 import { formatToolProgress, formatToolResult, classifyStreamError, errorLogFacts, streamErrorPayload, type PanelType, type ProgressPhase, type StreamErrorCode, type StreamErrorKind } from './streaming.ts';
 import { runToolLoop, type LoopEvent, type ToolCallRecord, type TraceContext } from './model-loop/run-tool-loop.ts';
 import { describeQueryOutcome } from './evidence/query-step.ts';
@@ -135,7 +135,7 @@ export interface CompletionResult {
 const MAX_TOKENS_PER_REQUEST = Number(process.env.TOKEN_LIMIT_PER_REQUEST) || 200_000;
 const MAX_TOOL_RESULT_CHARS = Number(process.env.MAX_TOOL_RESULT_CHARS) || 50_000;
 
-/** Tool-calling rounds, and `max_tokens` on every request this caller makes. */
+/** Tool-calling rounds, and the token limit on every request this caller makes. */
 const MAX_ITERATIONS = 20;
 const MAX_TOKENS_PER_RESPONSE = 4000;
 
@@ -264,7 +264,7 @@ export async function queryWithoutMcpStreaming(
     const stream = await getModelClient().chat.completions.create({
       model: model.endpointModel,
       messages,
-      max_tokens: MAX_TOKENS_PER_RESPONSE,
+      ...modelRequestParameters(model.requestSettings, MAX_TOKENS_PER_RESPONSE),
       stream: true,
       ...(includeStreamUsage() ? { stream_options: { include_usage: true } } : {}),
     });
@@ -351,6 +351,7 @@ export async function queryWithMcpStreaming(
       client: getModelClient(),
       endpointModel: model.endpointModel,
       declaredModel: model.declared,
+      requestSettings: model.requestSettings,
       prompt: query,
       systemPrompt,
       tools,

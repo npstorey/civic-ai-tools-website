@@ -157,6 +157,7 @@ Be honest if you don't have access to current or real-time data.`;
       runToolLoop(compareLoopOptions({
         client: getModelClient(),
         endpointModel: model.endpointModel,
+        requestSettings: model.requestSettings,
         prompt: query,
         systemPrompt: systemPromptWithMcp,
         portal,

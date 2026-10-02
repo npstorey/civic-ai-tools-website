@@ -6,7 +6,7 @@ import {
   callerModelKeyFailure,
   resolveCallerModelKey,
 } from '@/lib/caller-model-key';
-import { endpointModelForDeclared } from '@/lib/model-resolver';
+import { modelIdentityForDeclared } from '@/lib/model-resolver';
 import { runToolLoop } from '@/lib/model-loop/run-tool-loop';
 import { replayLoopOptionsForPackage } from '@/lib/model-loop/replay-loop';
 import { getServerSession } from 'next-auth';
@@ -100,10 +100,11 @@ export async function POST(
   // website#30 P3, the split read in reverse. `pkg.cost.model` is a DECLARED
   // identity — under a catalog where the two strings differ it is not a string
   // any endpoint answers to, so replaying it verbatim would fail the request.
-  // Mapped back to the wire string this instance reaches that model with;
-  // carried through unchanged when no entry declares it, which is what a record
-  // naming a model this instance no longer offers has always done.
-  const model = endpointModelForDeclared(pkg.cost.model);
+  // Mapped back to the wire string this instance reaches that model with, and
+  // that entry's request settings (#548); carried through unchanged, with no
+  // settings, when no entry declares it, which is what a record naming a model
+  // this instance no longer offers has always done.
+  const model = modelIdentityForDeclared(pkg.cost.model);
 
   // Create a model client with the user's API key
   const openrouter = createModelClient({ apiKey: callerKey.apiKey });
@@ -121,18 +122,19 @@ export async function POST(
     // options: the portal the replayed calls address — `replayPortalForPackage`
     // off the record, or none — and the system prompt composed for it. This
     // handler supplies only the three things a route knows and the package does
-    // not (the client built from the caller's key, the endpoint model, the
-    // prompt text) and passes the result on untouched. There is deliberately no
-    // portal parameter to pass: the derivation used to be called from here and
-    // its result coalesced against a literal, which is how a replay came to run
-    // against a domain its record never mentioned, inside the arguments a
-    // signed consistency attestation is computed over. Naming a portal in this
-    // file's CODE — as opposed to this comment — fails
+    // not (the client built from the caller's key, the endpoint model with its
+    // settings, the prompt text) and passes the result on untouched. There is
+    // deliberately no portal parameter to pass: the derivation used to be
+    // called from here and its result coalesced against a literal, which is
+    // how a replay came to run against a domain its record never mentioned,
+    // inside the arguments a signed consistency attestation is computed over.
+    // Naming a portal in this file's CODE — as opposed to this comment — fails
     // `replay-loop.test.ts`'s delegation guard.
     const result = await runToolLoop(await replayLoopOptionsForPackage({
       pkg,
       client: openrouter,
-      endpointModel: model,
+      endpointModel: model.endpointModel,
+      requestSettings: model.requestSettings,
       prompt,
     }));
 

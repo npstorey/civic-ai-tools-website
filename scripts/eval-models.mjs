@@ -456,6 +456,9 @@ async function runQuery(query, model, systemPrompt) {
   const result = await runToolLoop({
     client: openrouter,
     endpointModel: model.id,
+    // This harness's own OpenRouter list, not a catalog: no entry, so no
+    // request settings (#548) and the request every run has always sent.
+    requestSettings: undefined,
     prompt: query.query,
     systemPrompt,
     // This harness's own one-tool array, above — not the app's tool set.

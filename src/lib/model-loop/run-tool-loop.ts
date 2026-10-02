@@ -49,6 +49,7 @@
 import type OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 import { getGenAiSystem, includeStreamUsage } from '../model-client.ts';
+import { modelRequestParameters, type ModelRequestSettings } from '../model-catalog.ts';
 import { classifyStreamError, describeToolFailureForLlm, generateToolReason } from '../streaming.ts';
 import type { TraceBuilder } from '../evidence/trace.ts';
 import { hash as traceHash } from '../evidence/trace.ts';
@@ -128,6 +129,15 @@ export interface ToolLoopOptions {
   endpointModel: string;
   /** The identity this instance declares; trace attributes only. Defaults to `endpointModel`. */
   declaredModel?: string;
+  /**
+   * The model's catalog settings (#548) — `ModelIdentity.requestSettings`,
+   * applied to EVERY request this loop makes, and the reasoning setting
+   * recorded on each span that stands for one. Required, and `undefined` is a
+   * value: a caller states that it has none rather than forgetting to pass
+   * them, so a new caller cannot silently send a reasoning model the request
+   * it refuses.
+   */
+  requestSettings: ModelRequestSettings | undefined;
   prompt: string;
   systemPrompt?: string;
   tools: ChatCompletionTool[];
@@ -167,7 +177,10 @@ export interface ToolLoopOptions {
   toolTimeoutMs?: number;
   /** Tool-calling rounds before the loop gives up and asks for an answer. */
   maxIterations?: number;
-  /** `max_tokens` on every request this loop makes. */
+  /**
+   * The token limit on every request this loop makes — sent as `max_tokens`,
+   * or under the name `requestSettings` derives (`modelRequestParameters`).
+   */
   maxTokens?: number;
   /** Cumulative token budget. Omitted = unbounded. */
   maxCumulativeTokens?: number;
@@ -443,6 +456,38 @@ export function responseModelAttributes(
 }
 
 /**
+ * The span attribute recording the reasoning setting a request carried
+ * (#548, ruling D3).
+ *
+ * THE PROJECT'S OWN NAME, NOT OPENTELEMETRY'S. The GenAI conventions every
+ * span here declares (`otel.semconv.version` 1.30.0, from
+ * `CIVICAITOOLS_TRACE_CONFIG`) define no reasoning attribute; the v1.30.0
+ * span, OpenAI and registry texts were read for one on 2026-10-02 and do not
+ * mention reasoning at all. Later GenAI conventions, now kept in their own
+ * repository, define `gen_ai.request.reasoning.level` at "development"
+ * status. That is where this moves when the declared version does: a
+ * `gen_ai.*` name the declared version does not define would be a claim about
+ * that version, and its eventual definition could differ from this one.
+ */
+export const REASONING_EFFORT_ATTRIBUTE = 'civic.request.reasoning_effort';
+
+/**
+ * The reasoning setting as a span attribute: the value exactly as sent as
+ * `reasoning_effort` — `none` recorded as `none` — and NO KEY AT ALL when the
+ * entry sets none. The trace is inside the signed package, so a default here
+ * would state, under a signature, a setting no request carried; and an
+ * attribute built with an `undefined` value survives as a valueless pair (see
+ * `responseTokenAttributes` below), hence the conditional spread.
+ */
+export function reasoningEffortAttributes(
+  settings: ModelRequestSettings | undefined,
+): Record<string, string> {
+  return settings?.reasoningEffort !== undefined
+    ? { [REASONING_EFFORT_ATTRIBUTE]: settings.reasoningEffort }
+    : {};
+}
+
+/**
  * The token counts an endpoint actually reported, as span attributes — and
  * NOTHING when it reported none (#312).
  *
@@ -681,6 +726,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
     client,
     endpointModel,
     declaredModel = options.endpointModel,
+    requestSettings,
     prompt,
     systemPrompt,
     tools,
@@ -716,13 +762,14 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
     'gen_ai.request.model': declaredModel,
     ...(trace.systemPromptHash ? { 'gen_ai.system_prompt_hash': trace.systemPromptHash } : {}),
     'gen_ai.inference_index': 0,
+    ...reasoningEffortAttributes(requestSettings),
   });
   let response = await client.chat.completions.create({
     model: endpointModel,
     messages,
     tools,
     tool_choice: 'auto',
-    max_tokens: maxTokens,
+    ...modelRequestParameters(requestSettings, maxTokens),
   });
   if (llmSpanId) {
     trace!.builder.endSpan(llmSpanId, {
@@ -992,13 +1039,14 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       'gen_ai.system': getGenAiSystem(),
       'gen_ai.request.model': declaredModel,
       'gen_ai.inference_index': currentIteration,
+      ...reasoningEffortAttributes(requestSettings),
     });
     response = await client.chat.completions.create({
       model: endpointModel,
       messages,
       tools,
       tool_choice: 'auto',
-      max_tokens: maxTokens,
+      ...modelRequestParameters(requestSettings, maxTokens),
     });
     lastMessageAlreadyInTranscript = false;
     if (llmSpanId) {
@@ -1098,7 +1146,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       const finalStream = await client.chat.completions.create({
         model: endpointModel,
         messages: answeringMessages,
-        max_tokens: maxTokens,
+        ...modelRequestParameters(requestSettings, maxTokens),
         stream: true,
         ...(includeStreamUsage() ? { stream_options: { include_usage: true } } : {}),
       });
@@ -1129,7 +1177,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       const finalResponse = await client.chat.completions.create({
         model: endpointModel,
         messages: answeringMessages,
-        max_tokens: maxTokens,
+        ...modelRequestParameters(requestSettings, maxTokens),
       });
       content = finalResponse.choices[0]?.message?.content || '';
       finalReportedModel = finalResponse.model;
@@ -1151,6 +1199,10 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
           completion_tokens: finalCompletionTokens,
         }),
         ...responseModelAttributes(declaredModel, finalReportedModel, logContext),
+        // The answering turn is a request like the others, and carried the
+        // same setting. The pass-through path below made no request and
+        // records none.
+        ...reasoningEffortAttributes(requestSettings),
       });
     }
 

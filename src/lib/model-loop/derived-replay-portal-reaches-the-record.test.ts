@@ -205,6 +205,7 @@ async function driveReplay(pkg: Pkg): Promise<Driven> {
     pkg,
     client: scriptedClient(),
     endpointModel: 'fake/model',
+    requestSettings: undefined,
     prompt: 'What was median household income in Manhattan?',
     composeSystemPrompt: async (portal) => {
       composerCalls += 1;

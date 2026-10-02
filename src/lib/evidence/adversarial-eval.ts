@@ -21,7 +21,7 @@
 // evaluator model, scoring rubric identifier.
 
 import { createModelClient } from '@/lib/model-client';
-import type { ModelIdentity } from '@/lib/model-catalog';
+import { modelRequestParameters, type ModelIdentity } from '@/lib/model-catalog';
 import { db } from '@/lib/db';
 import { attestationNodes } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
@@ -80,7 +80,7 @@ export async function runAdversarialEval(
       { role: 'system', content: EVALUATION_RUBRIC },
       { role: 'user', content: buildEvaluationPrompt(pkg) },
     ],
-    max_tokens: 2000,
+    ...modelRequestParameters(opts.evaluatorModel.requestSettings, 2000),
   });
   const raw = response.choices[0]?.message?.content || '';
   return parseEvaluationResponse(raw);

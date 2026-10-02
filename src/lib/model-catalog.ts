@@ -68,6 +68,39 @@ export interface ModelPricing {
 }
 
 /**
+ * The values `reasoningEffort` may take: the set the OpenAI SDK this build
+ * pins (6.16.0) accepts as `reasoning_effort`. Which of them a given model
+ * admits is the endpoint's business; this list only refuses a value no
+ * endpoint could be sent.
+ */
+export const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const;
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
+/** The two names a chat-completions token limit goes under. */
+export const TOKEN_LIMIT_PARAMETERS = ['max_tokens', 'max_completion_tokens'] as const;
+export type TokenLimitParameter = (typeof TOKEN_LIMIT_PARAMETERS)[number];
+
+/**
+ * What a catalog entry says about the requests its model takes, beyond the
+ * model string (#548). A reasoning model — a GPT-5-series deployment, for one
+ * — accepts only `max_completion_tokens`, and on Chat Completions it refuses a
+ * request carrying tools unless `reasoning_effort` is `none`. Neither can be
+ * fixed by configuration unless the request reads it from somewhere, and this
+ * is where it reads it from.
+ */
+export interface ModelRequestSettings {
+  reasoningEffort?: ReasoningEffort;
+  tokenLimitParameter?: TokenLimitParameter;
+}
+
+/** The request-body fields `modelRequestParameters` produces. */
+export interface ModelRequestParameters {
+  max_tokens?: number;
+  max_completion_tokens?: number;
+  reasoning_effort?: ReasoningEffort;
+}
+
+/**
  * One catalog entry: the served fields plus the four this phase adds.
  *
  * `selectable` exists because two of this instance's reachable models are not
@@ -107,6 +140,17 @@ export interface CatalogEntry extends ModelDefinition {
   summarizer?: boolean;
   /** Per-1M-token prices. Absent means cost estimation returns null. */
   pricing?: ModelPricing;
+  /**
+   * Sent as `reasoning_effort` on every request to this model (#548), and
+   * recorded on each inference span of the trace. Absent: nothing is sent and
+   * nothing is recorded — never a default.
+   */
+  reasoningEffort?: ReasoningEffort;
+  /**
+   * The name this model takes its token limit under. Absent: derived — see
+   * `modelRequestParameters`.
+   */
+  tokenLimitParameter?: TokenLimitParameter;
 }
 
 /**
@@ -123,6 +167,13 @@ export interface ModelIdentity {
   endpointModel: string;
   /** The operator-declared identity a signed record asserts. */
   declared: string;
+  /**
+   * The entry's request settings (#548), riding beside the two strings so
+   * that every call site already carrying the pair carries them too. Present
+   * only when the entry sets one: an entry that sets neither yields the same
+   * two-member pair as before, and every request it makes keeps its bytes.
+   */
+  requestSettings?: ModelRequestSettings;
 }
 
 /**
@@ -231,9 +282,59 @@ export function declaredModelIdentity(entry: CatalogEntry): string {
   return entry.model ?? entry.endpointModel;
 }
 
-/** The wire/record pair for one entry. The only way to obtain both strings. */
+/**
+ * The wire/record pair for one entry. The only way to obtain both strings.
+ * Carries the entry's request settings when it declares any (#548).
+ */
 export function modelIdentity(entry: CatalogEntry): ModelIdentity {
-  return { endpointModel: entry.endpointModel, declared: declaredModelIdentity(entry) };
+  const requestSettings = modelRequestSettings(entry);
+  return {
+    endpointModel: entry.endpointModel,
+    declared: declaredModelIdentity(entry),
+    ...(requestSettings ? { requestSettings } : {}),
+  };
+}
+
+/** The entry's request settings, or undefined when it declares none. */
+export function modelRequestSettings(entry: CatalogEntry): ModelRequestSettings | undefined {
+  if (entry.reasoningEffort === undefined && entry.tokenLimitParameter === undefined) return undefined;
+  return {
+    ...(entry.reasoningEffort !== undefined ? { reasoningEffort: entry.reasoningEffort } : {}),
+    ...(entry.tokenLimitParameter !== undefined ? { tokenLimitParameter: entry.tokenLimitParameter } : {}),
+  };
+}
+
+/**
+ * The token limit and the reasoning setting of one request, as request-body
+ * fields (#548). Every `chat.completions.create` in this repository spreads
+ * this where it used to write `max_tokens` itself;
+ * `model-loop/model-call-registry.test.ts` holds every call site to that.
+ *
+ * WHICH NAME THE LIMIT GOES UNDER:
+ *   - an explicit `tokenLimitParameter` wins;
+ *   - otherwise any `reasoningEffort`, `none` included, means
+ *     `max_completion_tokens` — the only one a reasoning model accepts;
+ *   - otherwise `max_tokens`, as every request has always sent.
+ * So `"reasoningEffort": "none"` alone is enough for a reasoning deployment
+ * reached through Chat Completions: tools are allowed, and the limit is named
+ * the way it accepts.
+ *
+ * With no settings the result is exactly `{ max_tokens: limit }`, spread where
+ * that key always sat, so the request keeps its keys, their order and its
+ * bytes. Above `none`, a reasoning model counts its reasoning against
+ * `max_completion_tokens` too, so a small limit can be spent before any text
+ * comes back.
+ */
+export function modelRequestParameters(
+  settings: ModelRequestSettings | undefined,
+  tokenLimit: number,
+): ModelRequestParameters {
+  const reasoningEffort = settings?.reasoningEffort;
+  const parameter: TokenLimitParameter =
+    settings?.tokenLimitParameter ?? (reasoningEffort !== undefined ? 'max_completion_tokens' : 'max_tokens');
+  const limit: ModelRequestParameters =
+    parameter === 'max_completion_tokens' ? { max_completion_tokens: tokenLimit } : { max_tokens: tokenLimit };
+  return reasoningEffort !== undefined ? { ...limit, reasoning_effort: reasoningEffort } : limit;
 }
 
 /**
@@ -388,6 +489,8 @@ const KNOWN_ENTRY_KEYS = new Set([
   'evaluator',
   'summarizer',
   'pricing',
+  'reasoningEffort',
+  'tokenLimitParameter',
 ]);
 
 /** How an entry is named in a refusal: by id when it has a usable one. */
@@ -595,6 +698,26 @@ export function validateCatalog(
           message: `${source} is invalid: ${label} has a "pricing" that is not {"input": <number>, "output": <number>} with both values zero or greater (USD per 1M tokens). Fix it or remove it — an entry without pricing simply reports no cost estimate — then restart the server.`,
         };
       }
+    }
+
+    // #548. A value outside the set is refused rather than sent: an endpoint
+    // would refuse every request carrying it, and that refusal would arrive
+    // at a reader's first query instead of at this restart.
+    if (raw.reasoningEffort !== undefined && !(REASONING_EFFORTS as readonly unknown[]).includes(raw.reasoningEffort)) {
+      return {
+        ok: false,
+        message:
+          `${source} is invalid: ${label} has a "reasoningEffort" that is not one of: ${REASONING_EFFORTS.join(', ')}. ` +
+          `Set one of those, or remove the field to send no reasoning setting at all, then restart the server.`,
+      };
+    }
+    if (raw.tokenLimitParameter !== undefined && !(TOKEN_LIMIT_PARAMETERS as readonly unknown[]).includes(raw.tokenLimitParameter)) {
+      return {
+        ok: false,
+        message:
+          `${source} is invalid: ${label} has a "tokenLimitParameter" that is not one of: ${TOKEN_LIMIT_PARAMETERS.join(', ')}. ` +
+          `Set one of those, or remove the field — absent, it is max_completion_tokens when "reasoningEffort" is set and max_tokens otherwise — then restart the server.`,
+      };
     }
 
     catalog.push(raw as unknown as CatalogEntry);

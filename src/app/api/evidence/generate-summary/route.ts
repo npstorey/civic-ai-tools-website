@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { errorLogFacts } from '@/lib/streaming';
 import { createModelClient, ModelConfigurationError } from '@/lib/model-client';
 import { getSummarizerModel } from '@/lib/model-resolver';
-import { modelIdentity, type ModelIdentity } from '@/lib/model-catalog';
+import { modelIdentity, modelRequestParameters, type ModelIdentity } from '@/lib/model-catalog';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import {
@@ -102,7 +102,7 @@ ${output.slice(0, 4000)}`;
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userMessage },
       ],
-      max_tokens: 300,
+      ...modelRequestParameters(summarizer.requestSettings, 300),
     });
 
     const summary = response.choices[0]?.message?.content?.trim() || '';
