@@ -904,6 +904,16 @@ something else. Wiring an instance to your own endpoint end to end,
 including what to check in the resulting signed bytes, is
 [`docs/instance-setup.md` §5](instance-setup.md#5-point-the-instance-at-a-model-endpoint).
 
+A **reasoning model** — a GPT-5-series deployment, for one — also needs its
+catalog entry to say how it is asked. Such a model takes its token limit only
+as `max_completion_tokens`, and on Chat Completions it refuses tools unless
+`reasoning_effort` is `none`, so without the two fields every query fails at
+its first model call. `reasoningEffort` is sent as `reasoning_effort` on every
+request to that model and recorded on the signed trace; `tokenLimitParameter`
+names the limit, and when absent follows `reasoningEffort`. An entry with
+neither sends exactly what it always did. Values and the rule:
+[`docs/instance-setup.md` §5.2](instance-setup.md#52-the-catalog).
+
 Missing, rejected, and rate-limited model keys **fail fast with typed
 errors** — there is no silent hang to diagnose. Recognize them:
 

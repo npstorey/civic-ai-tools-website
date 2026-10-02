@@ -231,7 +231,7 @@ never treated as the default.
 | `MODEL_API_BASE_URL` | The chat-completions endpoint. Under `azure-openai` this is the **resource endpoint** — the `https://` origin, no path. | `MODEL_API_KIND=azure-openai` | **Yes, indirectly (§C.3).** It never appears in a package — a public record must not carry your infrastructure hostnames — and it decides whether the built-in model list is trusted at all. It reaches `gen_ai.system` in two narrow cases only: the built-in default endpoint records `openrouter`, and OpenAI's own host records `openai`. Any other endpoint records the **dialect** you declared in `MODEL_API_KIND`, because naming a vendor your configuration never mentioned would be a guess printed under a signature. |
 | `MODEL_API_VERSION` | The api-version query parameter. There is no safe default: an api-version gates which request and response fields exist. | `MODEL_API_KIND=azure-openai` | **Yes, indirectly (§C.3).** It decides which response fields exist, and `gen_ai.response.model` — the endpoint's own report of what it ran, recorded under the signature — is read from the response body. |
 | `MODEL_API_AUTH` | `bearer` or `api-key`. Derived from the dialect when unset; a value contradicting the dialect is refused rather than ignored. `entra` is reserved in the enum and refused — there is no code behind it. | never | **No.** Authentication mechanics only. |
-| `MODEL_CATALOG` | This instance's model list, as a JSON document. | any endpoint other than the built-in one | **Yes (§C.1).** Each entry's `model` is the identity a signed record asserts. |
+| `MODEL_CATALOG` | This instance's model list, as a JSON document. | any endpoint other than the built-in one | **Yes (§C.1).** Each entry's `model` is the identity a signed record asserts, and its `reasoningEffort`, when set, is recorded on the signed trace. |
 | `MODEL_CATALOG_PATH` | The same document, delivered as a file the server reads. Same schema. **Setting both is refused**, not resolved by precedence: whichever one lost would be a list of models you believe this instance offers and it does not. | as above | **Yes (§C.1).** |
 
 Two refusals to expect while you are wiring this, both deliberate and both
@@ -322,6 +322,47 @@ Field notes, all of them things the validator will tell you about anyway:
   to it. Setting the field is not an error; it just has no effect today.
 - `selectable: false` keeps an entry out of the picker while leaving it
   resolvable — the shape used above for a model that only fills a role.
+- `reasoningEffort` and `tokenLimitParameter` are for a **reasoning model** — a
+  GPT-5-series deployment, for one. Such a model takes its token limit only as
+  `max_completion_tokens`, and on Chat Completions it refuses a request
+  carrying tools unless `reasoning_effort` is `"none"`; every analysis here is
+  a tool-call loop, so without these fields every query fails at its first
+  model call.
+  - `reasoningEffort` is one of `none`, `minimal`, `low`, `medium`, `high`,
+    `xhigh`, and is sent as `reasoning_effort` on **every** request to that
+    model — the analysis loop, the comparison's no-data side, the evaluation
+    and the summary draft alike.
+  - `tokenLimitParameter` is `max_tokens` or `max_completion_tokens`. Absent,
+    it is `max_completion_tokens` whenever `reasoningEffort` is set and
+    `max_tokens` otherwise; set, it wins.
+
+  So `"reasoningEffort": "none"` alone is what such a deployment needs:
+
+  ```json
+  {
+    "id": "analysis",
+    "name": "Analysis Model",
+    "provider": "Example Provider",
+    "supports_tools": true,
+    "endpointModel": "example-reasoning-deployment",
+    "model": "vendor/example-reasoning-model",
+    "default": true,
+    "evaluator": 2,
+    "reasoningEffort": "none"
+  }
+  ```
+
+  Above `none`, a reasoning model counts its reasoning against the same limit,
+  and some limits here are small — 300 tokens for the summary draft, 2,000 for
+  the evaluation — so a reply can run out before any text comes back. On Chat
+  Completions the vendor refuses tools with any value but `none` today; that
+  restriction is theirs and is not encoded here, so an analysis model set above
+  `none` there fails every query. An entry setting neither field sends what
+  every request has always sent, byte for byte. Any other value is refused when
+  the catalog is read, naming the entry. **What it puts in a signed record:**
+  each span of the trace that stands for a model request carries
+  `civic.request.reasoning_effort` with the value as sent, `none` included; an
+  entry without `reasoningEffort` records nothing there, not a default.
 - `pricing` is per **1M** tokens, in USD. **A configured catalog's `pricing` is
   never read.** The cost estimate a record page renders consults the built-in
   catalog and the historical price table only (`builtInPricing`,
@@ -486,6 +527,9 @@ Unverified against any real deployment-routed endpoint:
   this app has only seen from a fixture.
 - **Streaming.** The fixture exercises only non-streaming `create`. **The app's
   real query path streams.** This is the largest single gap in the list.
+  (`src/lib/model-request-settings-driven.test.ts` sends streamed requests under
+  this dialect to a loopback fake, which pins what is SENT; what it answers is
+  an OpenAI-shaped stream, not a deployment's.)
 - **Token usage on the deployment-routed dialect.** `stream_options` — how this
   app asks for usage on a streamed request — is sent **only** under the
   OpenAI-compatible dialect. Under `azure-openai` this build does not send it at
@@ -519,7 +563,13 @@ Unverified against any real deployment-routed endpoint:
   structural — it reads the status, not the wording — which is the property most
   likely to survive contact, but it has not made contact.
 - **Tool and function calling.** Every analysis this app performs is a tool-call
-  loop. The fixture does not exercise one against this dialect.
+  loop. The fixture does not exercise one against this dialect; the request-body
+  test above drives one against a loopback fake, which shows what is sent and
+  nothing about what a deployment accepts.
+- **`reasoning_effort` on a dated api-version.** Whether an api-version such as
+  `2024-12-01-preview` accepts `reasoning_effort: "none"` alongside tools is
+  unmeasured. The vendor's own examples use the `/openai/v1/` route, which this
+  app reaches as `openai-compatible` with a base URL ending `/openai/v1/`.
 
 If you run this leg, the useful thing to send back is what disagreed with this
 list — an issue on
