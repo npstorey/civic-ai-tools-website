@@ -191,7 +191,10 @@ test('#553 C2: EvidenceActions receives no storage address and downloads through
   assert.ok(failed > call && failed < end, 'a failed result sets the failure state');
   assert.ok(src.indexOf('if (!result.ok)', call) < failed, 'the failure state is set on a non-ok result');
 
-  assert.equal(src.split('onClick={handleDownload}').length - 1, 1, 'the Download button runs handleDownload');
+  const label = src.indexOf('Download Package');
+  assert.ok(label > 0, 'the Download button is rendered');
+  const button = src.slice(src.lastIndexOf('<button', label), label);
+  assert.ok(button.includes('onClick={handleDownload}'), 'the Download button runs handleDownload');
   const notice = src.indexOf('{downloadFailed && (');
   assert.ok(notice > 0, 'the failure state renders a notice');
   assert.ok(src.indexOf('role="alert"', notice) > notice, 'the notice is announced');
