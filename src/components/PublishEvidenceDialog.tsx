@@ -12,6 +12,7 @@ import { NOTEBOOK_EXTENSION_KEY } from '@/lib/notebook-author/notebook-provenanc
 import { useInstanceAttribution } from '@/components/EvidenceOriginProvider';
 import type { Notebook } from '@/lib/notebook-author/cells';
 import { normalizeVisibility, type Visibility } from '@/lib/evidence/visibility';
+import { publicStateAvailability } from '@/lib/evidence/seal-only';
 
 interface PublishEvidenceDialogProps {
   isOpen: boolean;
@@ -84,7 +85,7 @@ export default function PublishEvidenceDialog({
   // sent below is one of these literals, and the API accepts it directly (the
   // legacy pair remains accepted as an alias, indefinitely — this client just
   // no longer sends it).
-  const [visibility, setVisibility] = useState<Visibility>('sealed');
+  const [chosenVisibility, setVisibility] = useState<Visibility>('sealed');
   const [resultVisibility, setResultVisibility] = useState<Visibility>('public');
   const [dialogState, setDialogState] = useState<DialogState>('form');
   const [resultUrl, setResultUrl] = useState('');
@@ -95,6 +96,14 @@ export default function PublishEvidenceDialog({
   // null = not yet known (treated as available; the SERVER gate is the
   // enforcement — this state only drives the explanatory affordance).
   const [signingConfigured, setSigningConfigured] = useState<boolean | null>(null);
+  // SITE_SEAL_ONLY (#552), from the same response: whether this instance
+  // seals records only. Until it is known the public choice stays offered;
+  // the SERVER gate is the enforcement, and its refusal renders in the error
+  // state. Known and on, the public choice is shown disabled with the reason,
+  // and the visibility sent is "sealed" whatever was clicked before.
+  const [sealOnly, setSealOnly] = useState(false);
+  const publicChoice = publicStateAvailability(sealOnly);
+  const visibility: Visibility = publicChoice.available ? chosenVisibility : 'sealed';
 
   const router = useRouter();
 
@@ -114,6 +123,7 @@ export default function PublishEvidenceDialog({
         if (!res.ok) throw new Error(`${res.status}`);
         const data = await res.json();
         setSigningConfigured(data.signingConfigured !== false);
+        setSealOnly(data.sealOnly === true);
       })
       .catch(() => {
         // Unknown tier → leave the action enabled; the server gate still
@@ -460,19 +470,23 @@ export default function PublishEvidenceDialog({
                       </span>
                     </span>
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
+                  {/* SITE_SEAL_ONLY (#552): shown disabled with the reason,
+                      not hidden, when this instance seals records only. */}
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: publicChoice.available ? 'pointer' : 'not-allowed', fontSize: '14px' }}>
                     <input
                       type="radio"
                       name="visibility"
                       checked={visibility === 'public'}
+                      disabled={!publicChoice.available}
                       onChange={() => setVisibility('public')}
                       style={{ marginTop: '3px' }}
                     />
-                    <span>
+                    <span style={publicChoice.available ? undefined : { color: 'var(--text-muted)' }}>
                       Publish now
                       <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)' }}>
-                        Content becomes public and listed in the registry immediately.
-                        Publication is not reversible.
+                        {publicChoice.available
+                          ? 'Content becomes public and listed in the registry immediately. Publication is not reversible.'
+                          : publicChoice.explanation}
                       </span>
                     </span>
                   </label>

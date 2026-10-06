@@ -4,6 +4,7 @@ import { useState, useCallback, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { normalizeVisibility } from '@/lib/evidence/visibility';
+import { sealedRecordPublishAffordance } from '@/lib/evidence/seal-only';
 
 // --- Types ---
 
@@ -65,6 +66,10 @@ interface DashboardTabsProps {
    *  Publish affordance renders disabled-with-explanation instead of a dead
    *  button that errors. */
   signingConfigured?: boolean;
+  /** Whether this instance seals records only (`SITE_SEAL_ONLY`, #552): the
+   *  sealed→public promotion is refused server-side, so Publish renders
+   *  disabled with the reason, not hidden. Omitted = off. */
+  sealOnly?: boolean;
 }
 
 // --- Shared styles ---
@@ -140,7 +145,7 @@ function EmptyState({ message, cta }: { message: string; cta?: { text: string; h
 
 // --- Main component ---
 
-export default function DashboardTabs({ myEvidence, myEvaluations, activity, tokens, signingConfigured = true }: DashboardTabsProps) {
+export default function DashboardTabs({ myEvidence, myEvaluations, activity, tokens, signingConfigured = true, sealOnly = false }: DashboardTabsProps) {
   const [activeTab, setActiveTab] = useState<'evidence' | 'evaluations' | 'activity' | 'tokens'>('evidence');
 
   return (
@@ -160,7 +165,7 @@ export default function DashboardTabs({ myEvidence, myEvaluations, activity, tok
         </button>
       </div>
 
-      {activeTab === 'evidence' && <MyEvidenceTab rows={myEvidence} signingConfigured={signingConfigured} />}
+      {activeTab === 'evidence' && <MyEvidenceTab rows={myEvidence} signingConfigured={signingConfigured} sealOnly={sealOnly} />}
       {activeTab === 'evaluations' && <MyEvaluationsTab rows={myEvaluations} />}
       {activeTab === 'activity' && <ActivityTab rows={activity} />}
       {activeTab === 'tokens' && <TokensTab rows={tokens} />}
@@ -170,8 +175,11 @@ export default function DashboardTabs({ myEvidence, myEvaluations, activity, tok
 
 // --- Tab panels ---
 
-function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signingConfigured: boolean }) {
+function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRow[]; signingConfigured: boolean; sealOnly: boolean }) {
   const router = useRouter();
+  // What the Publish action on a sealed record is: the button, the unsigned
+  // tier's disabled action, or (#552) the seal-only one.
+  const publishAffordance = sealedRecordPublishAffordance({ signingConfigured, sealOnly });
   const [withdrawTarget, setWithdrawTarget] = useState<EvidenceRow | null>(null);
   const [withdrawReason, setWithdrawReason] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
@@ -350,7 +358,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
                 {normalizeVisibility(r.visibility) === 'sealed' && !isCurrentlyWithdrawn && (
                   <>
                     <span>{'\u00b7'}</span>
-                    {signingConfigured ? (
+                    {publishAffordance.kind === 'available' ? (
                       <button
                         onClick={() => { setPublishTarget(r); setPublishRunEval(true); setPublishError(''); }}
                         style={{
@@ -361,7 +369,7 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
                       >
                         Publish
                       </button>
-                    ) : (
+                    ) : publishAffordance.kind === 'unsigned' ? (
                       /* Unsigned-tier gate-off (ADR-0020, S3a P3): publishing
                          emits signed attestations this instance cannot back,
                          so the action is disabled with an explanation rather
@@ -376,6 +384,22 @@ function MyEvidenceTab({ rows, signingConfigured }: { rows: EvidenceRow[]; signi
                         }}
                       >
                         Publish unavailable (unsigned)
+                      </button>
+                    ) : (
+                      /* SITE_SEAL_ONLY (#552): this instance seals records
+                         only, so the promotion is refused server-side; the
+                         action is shown disabled with the reason, not hidden. */
+                      <button
+                        disabled
+                        title={publishAffordance.explanation}
+                        aria-label={`${publishAffordance.label}: ${publishAffordance.explanation}`}
+                        style={{
+                          background: 'none', border: 'none', padding: 0,
+                          fontSize: '12px', color: 'var(--text-muted)',
+                          cursor: 'not-allowed', fontWeight: 600,
+                        }}
+                      >
+                        {publishAffordance.label}
                       </button>
                     )}
                   </>

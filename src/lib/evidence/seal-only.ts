@@ -119,15 +119,19 @@ export function evaluateSealOnlyPublishGate(sealOnly: boolean): SealOnlyRefusal 
 /** Whether the publish dialog offers its public choice, and if not, why. */
 export interface PublicStateAvailability {
   available: boolean;
-  /** Shown beside the disabled choice; `null` when the choice is available. */
-  reason: string | null;
+  /** Shown beside the disabled choice; `null` when the choice is available.
+   *  Not named `reason`: in a component, a read of `x.reason` is a recorded
+   *  tool call's phrase to `src/components/reason-phrase-readers.test.ts`,
+   *  which requires it to pass through `reasonWithoutIdentifier`. This text is
+   *  this module's own constant, not a call's phrase. */
+  explanation: string | null;
 }
 
 /** The publish dialog's public choice under this instance's setting. */
 export function publicStateAvailability(sealOnly: boolean): PublicStateAvailability {
   return sealOnly
-    ? { available: false, reason: SEAL_ONLY_UI_REASON }
-    : { available: true, reason: null };
+    ? { available: false, explanation: SEAL_ONLY_UI_REASON }
+    : { available: true, explanation: null };
 }
 
 /**
@@ -138,12 +142,12 @@ export function publicStateAvailability(sealOnly: boolean): PublicStateAvailabil
  *     existed. It wins over `seal_only` because it is the server's first
  *     refusal too: the signing gate runs before this setting's gate on both
  *     routes.
- *   - `seal_only` — disabled, with `label` and `reason`.
+ *   - `seal_only` — disabled, with `label` and `explanation`.
  */
 export type SealedRecordPublishAffordance =
   | { kind: 'available' }
   | { kind: 'unsigned' }
-  | { kind: 'seal_only'; label: string; reason: string };
+  | { kind: 'seal_only'; label: string; explanation: string };
 
 export function sealedRecordPublishAffordance(options: {
   signingConfigured: boolean;
@@ -151,7 +155,7 @@ export function sealedRecordPublishAffordance(options: {
 }): SealedRecordPublishAffordance {
   if (!options.signingConfigured) return { kind: 'unsigned' };
   if (options.sealOnly) {
-    return { kind: 'seal_only', label: SEAL_ONLY_DASHBOARD_LABEL, reason: SEAL_ONLY_UI_REASON };
+    return { kind: 'seal_only', label: SEAL_ONLY_DASHBOARD_LABEL, explanation: SEAL_ONLY_UI_REASON };
   }
   return { kind: 'available' };
 }

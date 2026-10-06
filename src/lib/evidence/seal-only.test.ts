@@ -161,16 +161,16 @@ test('#552 C3: on, the dialog\'s public choice is unavailable, with the reason; 
     withSetting(on, () => {
       const choice = publicStateAvailability(isSealOnly());
       assert.equal(choice.available, false, `SITE_SEAL_ONLY=${JSON.stringify(on)} offered the public choice`);
-      assert.ok(choice.reason, 'no reason is given');
-      assert.match(choice.reason, /seals records only/);
-      assert.match(choice.reason, /already public stay public/);
+      assert.ok(choice.explanation, 'no reason is given');
+      assert.match(choice.explanation, /seals records only/);
+      assert.match(choice.explanation, /already public stay public/);
       // Reader-facing copy speaks the reader's language, not the operator's.
-      assert.doesNotMatch(choice.reason, /SITE_SEAL_ONLY/);
+      assert.doesNotMatch(choice.explanation, /SITE_SEAL_ONLY/);
     });
   }
   for (const off of OFF) {
     withSetting(off, () => {
-      assert.deepEqual(publicStateAvailability(isSealOnly()), { available: true, reason: null }, `SITE_SEAL_ONLY=${JSON.stringify(off)}`);
+      assert.deepEqual(publicStateAvailability(isSealOnly()), { available: true, explanation: null }, `SITE_SEAL_ONLY=${JSON.stringify(off)}`);
     });
   }
 });
@@ -182,8 +182,8 @@ test('#552 C3: the dashboard shows Publish disabled with the reason when on, unc
       assert.equal(affordance.kind, 'seal_only', `SITE_SEAL_ONLY=${JSON.stringify(on)} offered Publish`);
       if (affordance.kind !== 'seal_only') return;
       assert.match(affordance.label, /^Publish unavailable/);
-      assert.match(affordance.reason, /seals records only/);
-      assert.match(affordance.reason, /already public stay public/);
+      assert.match(affordance.explanation, /seals records only/);
+      assert.match(affordance.explanation, /already public stay public/);
       // The server refuses an unsigned instance with `unsigned_tier` first;
       // the dashboard says the same.
       assert.deepEqual(sealedRecordPublishAffordance({ signingConfigured: false, sealOnly: isSealOnly() }), { kind: 'unsigned' });

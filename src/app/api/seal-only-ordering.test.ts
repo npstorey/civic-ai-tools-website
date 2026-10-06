@@ -158,7 +158,7 @@ test('#552 C3: the dialog learns the setting from signing-status and shows the p
   const publicRadio = at(dialog, "checked={visibility === 'public'}", where);
   const publicBlock = dialog.slice(dialog.lastIndexOf('<input', publicRadio), dialog.indexOf('</label>', publicRadio));
   assert.ok(publicBlock.includes('disabled={!publicChoice.available}'), `${where}: the public radio is not disabled when unavailable`);
-  assert.ok(publicBlock.includes('publicChoice.reason'), `${where}: the reason is not shown beside the public radio`);
+  assert.ok(publicBlock.includes('publicChoice.explanation'), `${where}: the reason is not shown beside the public radio`);
   const sealRadio = at(dialog, "checked={visibility === 'sealed'}", where);
   const sealBlock = dialog.slice(dialog.lastIndexOf('<input', sealRadio), dialog.indexOf('</label>', sealRadio));
   assert.ok(!sealBlock.includes('disabled'), `${where}: the Seal radio can be disabled`);
@@ -183,7 +183,7 @@ test('#552 C3: the dashboard shows Publish disabled with the reason, from the pa
   const enabled = at(tabs, 'setPublishTarget(r)', where);
   const unsigned = at(tabs, "publishAffordance.kind === 'unsigned' ? (", where);
   const unsignedLabel = at(tabs, 'Publish unavailable (unsigned)', where);
-  const reason = at(tabs, 'title={publishAffordance.reason}', where);
+  const reason = at(tabs, 'title={publishAffordance.explanation}', where);
   const label = at(tabs, '{publishAffordance.label}', where);
   assert.ok(available < enabled && enabled < unsigned && unsigned < unsignedLabel && unsignedLabel < reason && reason < label, `${where}: the three branches are out of order`);
   const sealOnlyButton = tabs.slice(tabs.lastIndexOf('<button', reason), label);

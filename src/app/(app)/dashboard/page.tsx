@@ -8,6 +8,7 @@ import { eq, desc, and, ne, isNull, sql } from 'drizzle-orm';
 import { findDbUserByAccountKey } from '@/lib/db/creator-evidence';
 import DashboardTabs from '@/components/dashboard/DashboardTabs';
 import { isSigningConfigured } from '@/lib/evidence/unsigned-tier';
+import { isSealOnly } from '@/lib/site-config';
 import { pageTitle } from '@/lib/brand-config';
 
 export const dynamic = 'force-dynamic';
@@ -161,6 +162,7 @@ export default async function DashboardPage() {
         activity={activityData}
         tokens={tokenData}
         signingConfigured={isSigningConfigured()}
+        sealOnly={isSealOnly()}
       />
     </div>
   );
