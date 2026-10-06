@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import { getPackage } from '@/lib/storage';
+import { getPackageText } from '@/lib/storage';
 import { canReadRecord } from '@/lib/evidence/sealed-access';
+import { storedPackageResponse } from '@/lib/evidence/package-response';
 
 export async function GET(
   request: NextRequest,
@@ -35,10 +36,12 @@ export async function GET(
     return NextResponse.json({ error: 'Package not available' }, { status: 404 });
   }
 
-  const pkg = await getPackage(storageKey);
-  if (!pkg) {
+  // The stored text, served as is (#553): the record page's Download saves this
+  // body, so it must be the stored object's bytes, not a re-serialization.
+  const text = await getPackageText(storageKey);
+  if (text === null) {
     return NextResponse.json({ error: 'Package retrieval failed' }, { status: 502 });
   }
 
-  return NextResponse.json(pkg);
+  return storedPackageResponse(text);
 }
