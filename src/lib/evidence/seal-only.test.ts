@@ -2,12 +2,13 @@
 // what each publish route's gate answers, and what the dialog and the
 // dashboard are told.
 //
-// The routes cannot load under `node --test` (they import `next/server`,
-// `next-auth` and `next/headers`), and the components are JSX. So the
-// decisions live here, in `seal-only.ts` and `site-config.ts#isSealOnly`, and
-// are driven through the same calls the routes and components make; where
-// each caller sits in its handler, and that it passes what these tests pass,
-// is pinned by source position in `src/app/api/seal-only-ordering.test.ts`.
+// The decisions live in `seal-only.ts` and `site-config.ts#isSealOnly`, and
+// are driven here through the same calls the routes and components make. The
+// components are JSX, which `node --test` cannot parse, so for the dialog and
+// the dashboard this is the driven half; where each caller sits, and that it
+// passes what these tests pass, is pinned by source position in
+// `src/app/api/seal-only-ordering.test.ts`. The two route handlers are also
+// driven whole, in `src/app/api/seal-only-handlers-driven.test.ts`.
 //
 // WHAT MAKES THESE ABLE TO FAIL. Every "on" case is paired with the same
 // request under every "off" value, so a gate that refuses regardless, or one

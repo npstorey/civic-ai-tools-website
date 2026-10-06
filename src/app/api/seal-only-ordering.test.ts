@@ -2,15 +2,18 @@
 // refuse under SITE_SEAL_ONLY, and how the signing-status route, the publish
 // dialog, the dashboard and its page carry the setting to the reader.
 //
-// WHY SOURCE. The routes import `next/server`, `next-auth` and `next/headers`,
-// none of which loads under `node --test`; the dialog, the dashboard and its
-// page are JSX, which `--experimental-strip-types` cannot parse. The precedent
-// is `portal-lock-ordering.test.ts`: ORDER is asserted as the relative position
-// of calls in a straight-line handler. The BEHAVIOUR each position protects —
-// what the setting reads as, what each gate refuses and with what, what the
-// dialog and the dashboard are told — is driven in
-// `src/lib/evidence/seal-only.test.ts`, through the same calls these sources
-// are pinned to make, so neither half stands alone.
+// WHY SOURCE. The dialog, the dashboard and its page are JSX, which
+// `--experimental-strip-types` cannot parse, so their use of the module is
+// pinned here. The precedent is `portal-lock-ordering.test.ts`: ORDER is
+// asserted as the relative position of calls in a straight-line handler. The
+// BEHAVIOUR each position protects — what the setting reads as, what each gate
+// refuses and with what, what the dialog and the dashboard are told — is
+// driven in `src/lib/evidence/seal-only.test.ts`, through the same calls these
+// sources are pinned to make. The two route handlers are additionally driven
+// whole, under stubs that record every put, signing call, write, lookup and
+// evaluation, in `seal-only-handlers-driven.test.ts`; the pins here stay,
+// because a driven run sees only the calls its stubs record, and these name
+// every call by position.
 //
 // WHAT MAKES THE ORDER ASSERTIONS ABLE TO FAIL. Each is a comparison of two
 // positions that both must exist (`at` asserts presence), so deleting the
