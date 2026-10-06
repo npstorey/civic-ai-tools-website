@@ -147,7 +147,7 @@ Verify the bring-up:
 ```bash
 # Unsigned tier, reported truthfully:
 curl -s http://127.0.0.1:3000/api/records/signing-status
-# → {"signingConfigured":false}
+# → {"signingConfigured":false,"sealOnly":false}
 
 # Migrations applied — the visibility enum lists four labels
 # (published, committed, sealed, public):

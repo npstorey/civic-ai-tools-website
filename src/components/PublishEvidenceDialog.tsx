@@ -13,6 +13,7 @@ import { useInstanceAttribution } from '@/components/EvidenceOriginProvider';
 import type { Notebook } from '@/lib/notebook-author/cells';
 import { normalizeVisibility, type Visibility } from '@/lib/evidence/visibility';
 import { publicStateAvailability } from '@/lib/evidence/seal-only';
+import { sealedStateCopy } from '@/lib/evidence/seal-only';
 
 interface PublishEvidenceDialogProps {
   isOpen: boolean;
@@ -103,6 +104,9 @@ export default function PublishEvidenceDialog({
   // and the visibility sent is "sealed" whatever was clicked before.
   const [sealOnly, setSealOnly] = useState(false);
   const publicChoice = publicStateAvailability(sealOnly);
+  // Its two sentences about the sealed state: unset, the ones it always
+  // rendered; on, neither promises publication the dashboard would refuse.
+  const sealedCopy = sealedStateCopy(sealOnly);
   const visibility: Visibility = publicChoice.available ? chosenVisibility : 'sealed';
 
   const router = useRouter();
@@ -464,9 +468,7 @@ export default function PublishEvidenceDialog({
                     <span>
                       Seal (default)
                       <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)' }}>
-                        Signed, timestamped, and registered on the public transparency
-                        log — but the content stays private to you. Publish later from
-                        your dashboard.
+                        {sealedCopy.sealChoice}
                       </span>
                     </span>
                   </label>
@@ -591,8 +593,7 @@ export default function PublishEvidenceDialog({
                    and a shared link is meaningless to anyone else (#86). */
                 <>
                   <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>
-                    Your record is sealed — signed and registered, content private to you.
-                    Only you can open this page; publish it anytime from your dashboard:
+                    {sealedCopy.sealedResult}
                   </p>
 
                   <div style={{

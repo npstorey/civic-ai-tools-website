@@ -168,19 +168,29 @@ export interface SealedStateCopy {
   sealedResult: string;
 }
 
+const SEALED_SUMMARY =
+  'Signed, timestamped, and registered on the public transparency log — but the ' +
+  'content stays private to you.';
+const SEALED_RESULT_SUMMARY =
+  'Your record is sealed — signed and registered, content private to you.';
+
 /**
- * The dialog's sealed-state wording under this instance's setting.
- * TYPED STUB (#552 fix contract, red commit): the setting is not consulted
- * yet, so both sentences still promise later publication.
+ * The dialog's sealed-state wording under this instance's setting. Off, the
+ * two sentences the dialog has always rendered, byte for byte: both point at
+ * the dashboard's Publish. On, that Publish is disabled, so neither promises
+ * later publication; each says the record stays sealed, and why.
  */
 export function sealedStateCopy(sealOnly: boolean): SealedStateCopy {
-  void sealOnly;
+  if (sealOnly) {
+    return {
+      sealChoice: `${SEALED_SUMMARY} This instance seals records only, so the record stays sealed.`,
+      sealedResult:
+        `${SEALED_RESULT_SUMMARY} This instance seals records only, so it stays sealed. ` +
+        'Only you can open this page:',
+    };
+  }
   return {
-    sealChoice:
-      'Signed, timestamped, and registered on the public transparency log — but the ' +
-      'content stays private to you. Publish later from your dashboard.',
-    sealedResult:
-      'Your record is sealed — signed and registered, content private to you. ' +
-      'Only you can open this page; publish it anytime from your dashboard:',
+    sealChoice: `${SEALED_SUMMARY} Publish later from your dashboard.`,
+    sealedResult: `${SEALED_RESULT_SUMMARY} Only you can open this page; publish it anytime from your dashboard:`,
   };
 }
