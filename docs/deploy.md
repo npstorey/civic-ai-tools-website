@@ -2109,15 +2109,17 @@ can still pass, but you are no longer observing the sweep on a
 dedicated bucket. The expected end state is
 `RESULT: PASS — 4/4 legs`.
 
-**On a private bucket, leg 3 fails.** It asserts an anonymous public
-read, which a private bucket refuses by design: leg 3's `anonymous
-fetch of public URL succeeds` checks fail, and the run ends
-`RESULT: FAIL — 1/4 leg(s) failed`. Legs 1, 2 and 4 read and write
+**On a private bucket, legs 1 and 3 fail.** Both fetch an object's
+public URL anonymously, which a private bucket refuses by design. Four
+checks fail: leg 1's `public-URL fetch succeeds` and `public-URL bytes
+sha256-identical`, and leg 3's `package: anonymous fetch of public URL
+succeeds` and `granted upload: anonymous fetch of public URL succeeds`.
+The run ends `RESULT: FAIL — 2/4 leg(s) failed (runId=…)`. Every other
+check in legs 1 and 3, and all of legs 2 and 4, reads and writes
 through the service account or a presigned URL, so a private bucket
 does not change what they check; read their results. That outcome is
-expected until the
-harness's private-bucket mode lands (#554), in which leg 3 asserts the
-refusal instead.
+expected until the harness's private-bucket mode lands (#554), in which
+the anonymous reads assert the refusal instead.
 
 The same harness validates the compose stack's own MinIO (loopback
 endpoint, compose placeholder values), and the file's header comment
@@ -2325,8 +2327,8 @@ is the same except these:
   is also allowed to use the key.
 - **`SITE_SEAL_ONLY=1`** on the deployment, before it serves anyone:
   a private bucket requires public publishing off.
-- **The rehearsal's leg 3 fails** until the harness's private-bucket mode
-  lands (#554); see
+- **The rehearsal's legs 1 and 3 fail** on their anonymous public-URL
+  checks until the harness's private-bucket mode lands (#554); see
   [Validating a storage configuration](#validating-a-storage-configuration).
 
 ### Scoped service account
@@ -2396,8 +2398,9 @@ pre-existing object on a fresh bucket, the harness's own grant-leg
 upload — means the bucket, policy, account scoping, region, and
 public-URL construction are all correct. Hand the same four `S3_*`
 values to your deployment and go. On the private variant, the expected
-end state until #554 lands is legs 1, 2 and 4 passing and leg 3 failing
-on its anonymous fetches.
+end state until #554 lands is `RESULT: FAIL — 2/4 leg(s) failed`: legs 2
+and 4 pass, and legs 1 and 3 fail on their four anonymous public-URL
+checks and on nothing else.
 
 [ADR-0016]: https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0016-vcs-native-lifecycle-mapping.md
 [ADR-0020]: https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0020-instance-key-custody.md
