@@ -264,6 +264,17 @@ export function isPortalLocked(): boolean {
   return parseBooleanFlag(process.env.SITE_PORTAL_LOCKED);
 }
 
+// --- The seal-only switch (#552) ---------------------------------------------
+
+/**
+ * Whether this instance seals records only: `SITE_SEAL_ONLY`, `1`/`true` (any
+ * case, trimmed) via `parseBooleanFlag`, anything else — unset included — off.
+ * TYPED STUB (#552 red commit): not read yet.
+ */
+export function isSealOnly(): boolean {
+  return false;
+}
+
 /** What a query route runs on, or why it refuses. */
 export type RunPortalResolution =
   | {
