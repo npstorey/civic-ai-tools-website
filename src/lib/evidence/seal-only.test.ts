@@ -31,6 +31,7 @@ import {
   publicStateAvailability,
   resolveRequestedVisibility,
   sealedRecordPublishAffordance,
+  sealedStateCopy,
 } from './seal-only.ts';
 
 const ON = ['1', 'true', 'TRUE', ' True ', ' 1 '];
@@ -194,6 +195,43 @@ test('#552 C3: the dashboard shows Publish disabled with the reason when on, unc
     withSetting(off, () => {
       assert.deepEqual(sealedRecordPublishAffordance({ signingConfigured: true, sealOnly: isSealOnly() }), { kind: 'available' });
       assert.deepEqual(sealedRecordPublishAffordance({ signingConfigured: false, sealOnly: isSealOnly() }), { kind: 'unsigned' });
+    });
+  }
+});
+
+// The dialog's two sentences about the sealed state, as it rendered them at
+// 111fb99 (JSX joins the source lines with one space). Off, they must come
+// back byte for byte.
+const SEAL_CHOICE_BEFORE =
+  'Signed, timestamped, and registered on the public transparency log — but the content stays private to you. Publish later from your dashboard.';
+const SEALED_RESULT_BEFORE =
+  'Your record is sealed — signed and registered, content private to you. Only you can open this page; publish it anytime from your dashboard:';
+
+test('#552 C3: on, the dialog\'s sealed-state sentences promise no later publication', () => {
+  for (const on of ON) {
+    withSetting(on, () => {
+      const copy = sealedStateCopy(isSealOnly());
+      for (const [where, text] of Object.entries(copy)) {
+        assert.doesNotMatch(text, /dashboard/i, `SITE_SEAL_ONLY=${JSON.stringify(on)}: ${where} still points at the dashboard`);
+        assert.doesNotMatch(text, /\bpublish/i, `SITE_SEAL_ONLY=${JSON.stringify(on)}: ${where} still promises publication`);
+        assert.match(text, /seals records only/, `SITE_SEAL_ONLY=${JSON.stringify(on)}: ${where} does not say why`);
+        assert.match(text, /stays sealed/, `SITE_SEAL_ONLY=${JSON.stringify(on)}: ${where} does not say the record stays sealed`);
+        assert.doesNotMatch(text, /SITE_SEAL_ONLY/, `${where}: reader-facing copy names the operator's setting`);
+      }
+      // The result line still introduces the record's address.
+      assert.match(copy.sealedResult, /:$/);
+    });
+  }
+});
+
+test('#552 C3: off, the dialog\'s sealed-state sentences are unchanged', () => {
+  for (const off of OFF) {
+    withSetting(off, () => {
+      assert.deepEqual(
+        sealedStateCopy(isSealOnly()),
+        { sealChoice: SEAL_CHOICE_BEFORE, sealedResult: SEALED_RESULT_BEFORE },
+        `SITE_SEAL_ONLY=${JSON.stringify(off)}`,
+      );
     });
   }
 });

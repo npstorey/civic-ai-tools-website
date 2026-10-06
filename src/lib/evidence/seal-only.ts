@@ -159,3 +159,28 @@ export function sealedRecordPublishAffordance(options: {
   }
   return { kind: 'available' };
 }
+
+/** What the publish dialog says about the sealed state. */
+export interface SealedStateCopy {
+  /** The Seal choice's description. */
+  sealChoice: string;
+  /** The line above the sealed record's address, after a seal. */
+  sealedResult: string;
+}
+
+/**
+ * The dialog's sealed-state wording under this instance's setting.
+ * TYPED STUB (#552 fix contract, red commit): the setting is not consulted
+ * yet, so both sentences still promise later publication.
+ */
+export function sealedStateCopy(sealOnly: boolean): SealedStateCopy {
+  void sealOnly;
+  return {
+    sealChoice:
+      'Signed, timestamped, and registered on the public transparency log — but the ' +
+      'content stays private to you. Publish later from your dashboard.',
+    sealedResult:
+      'Your record is sealed — signed and registered, content private to you. ' +
+      'Only you can open this page; publish it anytime from your dashboard:',
+  };
+}

@@ -168,6 +168,26 @@ test('#552 C3: the dialog learns the setting from signing-status and shows the p
   assert.ok(sealRadio < publicRadio, `${where}: the radios moved`);
 });
 
+test('#552 C3: the dialog\'s sealed-state sentences come from the module, on the same setting', () => {
+  const dialog = read('../../components/PublishEvidenceDialog.tsx');
+  const where = 'PublishEvidenceDialog.tsx';
+  assert.ok(/import \{[^}]*\bsealedStateCopy\b[^}]*\} from '@\/lib\/evidence\/seal-only';/.test(dialog), `${where} does not import sealedStateCopy`);
+  assert.equal(count(dialog, 'sealedStateCopy('), 1);
+  assert.ok(dialog.includes('const sealedCopy = sealedStateCopy(sealOnly);'), `${where} does not ask the module on the setting it learned`);
+  // No sentence in the dialog promises publication from the dashboard on its own.
+  assert.ok(!/from\s+your\s+dashboard/.test(dialog), `${where} still carries its own dashboard sentence`);
+
+  // The Seal choice's description.
+  const sealRadio = at(dialog, "checked={visibility === 'sealed'}", where);
+  const sealBlock = dialog.slice(sealRadio, dialog.indexOf('</label>', sealRadio));
+  assert.ok(sealBlock.includes('{sealedCopy.sealChoice}'), `${where}: the Seal choice does not render the module's wording`);
+
+  // The sealed result's line above the address.
+  const sealedResult = at(dialog, "resultVisibility === 'sealed' ? (", where);
+  const resultBlock = dialog.slice(sealedResult, dialog.indexOf('</p>', sealedResult));
+  assert.ok(resultBlock.includes('{sealedCopy.sealedResult}'), `${where}: the sealed result does not render the module's wording`);
+});
+
 test('#552 C3: the dashboard shows Publish disabled with the reason, from the page\'s props', () => {
   const tabs = read('../../components/dashboard/DashboardTabs.tsx');
   const where = 'DashboardTabs.tsx';

@@ -76,6 +76,12 @@ test('#552 C4: docs/deploy.md has a SITE_SEAL_ONLY row stating what it refuses a
   }
 });
 
+test('#552 C4: the bring-up example in docs/deploy.md shows what signing-status answers now', () => {
+  const doc = repo('docs/deploy.md');
+  assert.ok(doc.includes('# → {"signingConfigured":false,"sealOnly":false}'), 'the bring-up example does not show the sealOnly key');
+  assert.ok(!doc.includes('# → {"signingConfigured":false}\n'), 'the bring-up example still shows the one-key answer');
+});
+
 test('#552 C4: docs/api/records-publish.md states the refusal on both routes and the absent-visibility rule', () => {
   const doc = repo('docs/api/records-publish.md');
   const errorRow = doc.split('\n').find((line) => line.startsWith('| `403`') && line.includes('"seal_only"'));
