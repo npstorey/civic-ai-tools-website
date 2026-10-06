@@ -61,7 +61,7 @@ export async function downloadRecordPackage(
   return { ok: true };
 }
 
-export interface SaveBlobEnv {
+export interface SaveBlobHost {
   document: Pick<Document, 'createElement' | 'body'>;
   URL: Pick<typeof URL, 'createObjectURL' | 'revokeObjectURL'>;
   setTimeout: (fn: () => void, ms: number) => unknown;
@@ -75,8 +75,8 @@ export interface SaveBlobEnv {
 const REVOKE_AFTER_MS = 40_000;
 
 /** Save fetched bytes as a file, through a temporary object URL. */
-export function saveBlobAsFile(blob: Blob, fileName: string, env?: SaveBlobEnv): void {
-  const { document: doc, URL: urls, setTimeout: later } = env ?? {
+export function saveBlobAsFile(blob: Blob, fileName: string, host?: SaveBlobHost): void {
+  const { document: doc, URL: urls, setTimeout: later } = host ?? {
     document: globalThis.document,
     URL: globalThis.URL,
     setTimeout: (fn: () => void, ms: number) => globalThis.setTimeout(fn, ms),
