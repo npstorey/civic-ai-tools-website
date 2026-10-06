@@ -96,10 +96,11 @@ export function evaluateSealOnlyRecordsGate(
   sealOnly: boolean,
   requested: Visibility | null,
 ): SealOnlyRefusal | null {
-  // TYPED STUB (#552 red commit): the gate is not implemented yet.
-  void sealOnly;
-  void requested;
-  return null;
+  if (!sealOnly || requested !== 'public') return null;
+  return {
+    status: SEAL_ONLY_STATUS,
+    body: { error: SEAL_ONLY_RECORDS_MESSAGE, code: SEAL_ONLY_CODE },
+  };
 }
 
 /**
@@ -108,9 +109,11 @@ export function evaluateSealOnlyRecordsGate(
  * setting alone decides.
  */
 export function evaluateSealOnlyPublishGate(sealOnly: boolean): SealOnlyRefusal | null {
-  // TYPED STUB (#552 red commit): the gate is not implemented yet.
-  void sealOnly;
-  return null;
+  if (!sealOnly) return null;
+  return {
+    status: SEAL_ONLY_STATUS,
+    body: { error: SEAL_ONLY_PUBLISH_MESSAGE, code: SEAL_ONLY_CODE },
+  };
 }
 
 /** Whether the publish dialog offers its public choice, and if not, why. */
@@ -122,9 +125,9 @@ export interface PublicStateAvailability {
 
 /** The publish dialog's public choice under this instance's setting. */
 export function publicStateAvailability(sealOnly: boolean): PublicStateAvailability {
-  // TYPED STUB (#552 red commit): always available.
-  void sealOnly;
-  return { available: true, reason: null };
+  return sealOnly
+    ? { available: false, reason: SEAL_ONLY_UI_REASON }
+    : { available: true, reason: null };
 }
 
 /**
@@ -146,7 +149,9 @@ export function sealedRecordPublishAffordance(options: {
   signingConfigured: boolean;
   sealOnly: boolean;
 }): SealedRecordPublishAffordance {
-  // TYPED STUB (#552 red commit): the setting is not consulted yet.
   if (!options.signingConfigured) return { kind: 'unsigned' };
+  if (options.sealOnly) {
+    return { kind: 'seal_only', label: SEAL_ONLY_DASHBOARD_LABEL, reason: SEAL_ONLY_UI_REASON };
+  }
   return { kind: 'available' };
 }

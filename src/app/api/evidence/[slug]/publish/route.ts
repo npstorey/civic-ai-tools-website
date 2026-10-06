@@ -17,6 +17,8 @@ import {
   evaluateSealCommitGate,
   evaluateUnsignedRecordPublishGate,
 } from '@/lib/evidence/unsigned-tier';
+import { evaluateSealOnlyPublishGate } from '@/lib/evidence/seal-only';
+import { isSealOnly } from '@/lib/site-config';
 import { fromDbValue, toDbValue } from '@/lib/evidence/visibility';
 import {
   resolveEvaluatorModel,
@@ -95,6 +97,17 @@ export async function POST(
   const gate = evaluateSealCommitGate();
   if (gate) {
     return NextResponse.json(gate.body, { status: gate.status });
+  }
+
+  // SITE_SEAL_ONLY (#552): an instance that seals records only refuses the
+  // promotion outright. Beside the signing gate and before the lookup, so the
+  // refusal reveals nothing about whether a record exists, and before the
+  // adversarial evaluation below, which emits a SIGNED
+  // `attestation/evaluates/v1` node. A record already public is untouched:
+  // publication is not reversible (spec §8.10.3).
+  const sealOnlyRefusal = evaluateSealOnlyPublishGate(isSealOnly());
+  if (sealOnlyRefusal) {
+    return NextResponse.json(sealOnlyRefusal.body, { status: sealOnlyRefusal.status });
   }
 
   const records = await db
