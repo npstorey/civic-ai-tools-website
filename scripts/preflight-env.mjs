@@ -412,6 +412,13 @@ export const ENV_SPEC = [
   { name: 'PUBLISHER_SIGNING_KEY', priorEraName: 'EVIDENCE_SIGNING_KEY', tier: 'required', purpose: 'Ed25519 private key — signs record packages' },
   { name: 'PUBLISHER_KEY_ID', priorEraName: 'EVIDENCE_KEY_ID', tier: 'required', purpose: 'Active signing key id (kid) — must match the trust registry; no coded default' },
 
+  // The seal-only switch (#552). Off by default. Read at run time only: its
+  // readers are the two publish routes, the signing-status route the publish
+  // dialog asks, and the dashboard page (force-dynamic) — nothing prerendered
+  // reads it, so it is not a build arg (unlike SITE_PORTAL_LOCKED, which the
+  // root layout resolves).
+  { name: 'SITE_SEAL_ONLY', tier: 'optional', purpose: "Seal records only: '1'/'true' turns the public state off — both publish routes refuse a request for it (an absent visibility included) and the dialog and dashboard show it unavailable; records already public stay public. Off by default", hasFallback: true },
+
   // --- Sign-in path (the rate-limit headroom option; OAuth) ---
   { name: 'NEXTAUTH_SECRET', tier: 'required', purpose: 'NextAuth session encryption' },
   // web#194 #1, ruled (sprint #30 G0 D9): STAYS `required`, and declares no

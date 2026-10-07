@@ -15,7 +15,11 @@ import { MISSING_PUBLISH_SCOPE_ERROR } from '@/lib/publish-scope';
 import { emitPublicationPair } from '@/lib/evidence/publication';
 import { evaluateSealCommitGate } from '@/lib/evidence/unsigned-tier';
 import {
-  normalizeVisibility,
+  evaluateSealOnlyRecordsGate,
+  resolveRequestedVisibility,
+} from '@/lib/evidence/seal-only';
+import { isSealOnly } from '@/lib/site-config';
+import {
   toDbValue,
   ACCEPTED_VISIBILITY_INPUTS,
   type Visibility,
@@ -213,10 +217,10 @@ export async function POST(request: NextRequest) {
     // absence is equivalent to "public" (backwards compatibility — every
     // pre-Phase-2 publish was public). Both the ADR-0016 §A vocabulary and the
     // legacy one are accepted; everything downstream branches on the canonical
-    // value, and the single write goes through `toDbValue`.
-    const requestedVisibility = body.visibility === undefined
-      ? 'public'
-      : normalizeVisibility(body.visibility);
+    // value, and the single write goes through `toDbValue`. Resolved by the
+    // same function the seal-only gate below is driven with (#552), so the two
+    // cannot disagree about what an absent value means.
+    const requestedVisibility = resolveRequestedVisibility(body.visibility);
     if (requestedVisibility === null) {
       return NextResponse.json(
         {
@@ -226,6 +230,16 @@ export async function POST(request: NextRequest) {
       );
     }
     const visibility: Visibility = requestedVisibility;
+
+    // SITE_SEAL_ONLY (#552): an instance that seals records only refuses a
+    // request for the public state, an absent `visibility` included (ruling
+    // G0-3 of #555: absent means public), with a reason naming "sealed" as the
+    // value it accepts. Here, before the package is built, stored or signed
+    // and before any database write. A record already public is untouched.
+    const sealOnlyRefusal = evaluateSealOnlyRecordsGate(isSealOnly(), visibility);
+    if (sealOnlyRefusal) {
+      return NextResponse.json(sealOnlyRefusal.body, { status: sealOnlyRefusal.status });
+    }
     // The label actually persisted. Since the P2 flip `toDbValue` is the
     // identity, so this equals the canonical value — but the write still goes
     // through the boundary, because that function is the one place that decides

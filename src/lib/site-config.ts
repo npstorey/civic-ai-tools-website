@@ -264,6 +264,25 @@ export function isPortalLocked(): boolean {
   return parseBooleanFlag(process.env.SITE_PORTAL_LOCKED);
 }
 
+// --- The seal-only switch (#552) ---------------------------------------------
+
+/**
+ * Whether this instance seals records only: `SITE_SEAL_ONLY`, `1`/`true` (any
+ * case, trimmed) via `parseBooleanFlag`, anything else — unset included — off.
+ * On, both publish routes refuse a request for the public state and the
+ * publish dialog and the dashboard show that option unavailable; the
+ * decisions and their reason text are in `evidence/seal-only.ts`. Records
+ * already public stay public (spec §8.10.3).
+ *
+ * Read at call time, and never `NEXT_PUBLIC_*`: every reader is request-time
+ * (the two publish routes, the signing-status route the dialog asks, and the
+ * dashboard page, which passes it down as a prop), so a container's runtime
+ * environment decides it.
+ */
+export function isSealOnly(): boolean {
+  return parseBooleanFlag(process.env.SITE_SEAL_ONLY);
+}
+
 /** What a query route runs on, or why it refuses. */
 export type RunPortalResolution =
   | {

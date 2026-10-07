@@ -379,6 +379,13 @@ services:
       # destination signing needs, for an allowlist request.
       TIMESTAMP_AUTHORITY_URL:
       TRANSPARENCY_LOG_URL:
+      # The seal-only switch (#552). Bare pass-through, and UNSET IS THE
+      # REFERENCE CONFIGURATION: anything but 1/true leaves publishing exactly
+      # as it was. On, both publish routes refuse the public state and the
+      # dialog and dashboard show it unavailable; records already public stay
+      # public. Read at run time only (no prerendered page reads it), so it
+      # is not among the build args above.
+      SITE_SEAL_ONLY:
       # Egress proxy (#468). Bare pass-throughs, and ALL THREE UNSET IS THE
       # REFERENCE CONFIGURATION — with none of them set no dispatcher is
       # installed and every outbound request leaves by the path and to the host

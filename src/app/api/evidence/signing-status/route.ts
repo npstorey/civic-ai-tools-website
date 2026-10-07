@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { evaluateSealCommitGate } from '@/lib/evidence/unsigned-tier';
+import { isSealOnly } from '@/lib/site-config';
 
 /**
  * GET /api/evidence/signing-status
@@ -18,11 +19,20 @@ import { evaluateSealCommitGate } from '@/lib/evidence/unsigned-tier';
  * operator-facing detail and stays on the site-wide banner and in the
  * server's refusal, not in this client-facing boolean.
  *
+ * `sealOnly` (#552) is the second boolean: whether this instance seals
+ * records only (`SITE_SEAL_ONLY`), so the dialog shows its public choice
+ * unavailable, with the reason, instead of offering a state both publish
+ * routes refuse.
+ *
  * SECRET HYGIENE: presence-only. This endpoint never reads any value
- * beyond non-emptiness and returns a single boolean. The tier is not a
- * secret — the same fact is disclosed by the running-unsigned banner and by
- * every gate refusal.
+ * beyond non-emptiness (and, for `sealOnly`, the on/off parse of a
+ * non-secret switch) and returns two booleans. Neither is a secret — the
+ * same facts are disclosed by the running-unsigned banner and by every gate
+ * refusal.
  */
 export async function GET() {
-  return NextResponse.json({ signingConfigured: evaluateSealCommitGate() === null });
+  return NextResponse.json({
+    signingConfigured: evaluateSealCommitGate() === null,
+    sealOnly: isSealOnly(),
+  });
 }
