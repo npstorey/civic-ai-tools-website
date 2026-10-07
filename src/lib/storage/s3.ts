@@ -7,8 +7,8 @@
  *                         MinIO); omit for AWS S3 proper
  *   S3_REGION             region (default us-east-1)
  *   S3_BUCKET             bucket name (required)
- *   S3_ACCESS_KEY_ID      access key (required)
- *   S3_SECRET_ACCESS_KEY  secret key (required)
+ *   S3_ACCESS_KEY_ID      access key — set both keys, or neither (#554)
+ *   S3_SECRET_ACCESS_KEY  secret key — set both keys, or neither (#554)
  *   S3_FORCE_PATH_STYLE   'true'/'false' — default: true when S3_ENDPOINT is
  *                         set (MinIO needs path-style), false otherwise
  *   S3_PUBLIC_BASE_URL    public URL base for stored objects — default is
@@ -25,10 +25,29 @@
  * callback, content type restricted, and the size cap enforced by signing
  * the Content-Length and Content-Type headers into the URL (a PUT whose
  * headers differ from the granted values fails the signature check).
+ *
+ * Credentials (#554): with both keys set, the client signs with exactly that
+ * pair. With neither set, the client is built with no `credentials`, and the
+ * AWS SDK's default chain resolves them: the environment's AWS_* keys, the
+ * shared config files, SSO, a credential process, web identity, then the
+ * container and instance metadata endpoints. An instance on a platform that
+ * provides role access therefore needs no long-lived key pair; the Lambda
+ * executor resolves its client the same way (src/lib/sandbox/lambda.ts).
+ * Exactly one key set is refused, naming the other. Building the driver logs
+ * one line naming the source in use, never a value.
+ *
+ * Under the default chain the presigned PUT is signed with whatever the chain
+ * resolved. A temporary credential puts its session token in the URL
+ * (X-Amz-Security-Token), and the URL stops working when that credential
+ * expires, even before PRESIGN_EXPIRES_SECONDS. The chain re-resolves a
+ * credential that has under five minutes left (`credentialsTreatedAsExpired`
+ * in @aws-sdk/credential-provider-node), so a URL is signed with at least
+ * that much life left. docs/deploy.md states this for operators.
  */
 
 import {
   S3Client,
+  type S3ClientConfig,
   PutObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
@@ -48,8 +67,12 @@ export interface S3DriverConfig {
   endpoint?: string;
   region: string;
   bucket: string;
-  accessKeyId: string;
-  secretAccessKey: string;
+  /**
+   * The S3 key pair: both, or neither. Neither means the client is built with
+   * no `credentials` and the AWS SDK's default chain supplies them (#554).
+   */
+  accessKeyId?: string;
+  secretAccessKey?: string;
   forcePathStyle: boolean;
   /** No trailing slash. Object URL = `${publicBaseUrl}/${pathname}`. */
   publicBaseUrl: string;
@@ -59,21 +82,53 @@ export interface S3DriverConfig {
  *  validity of Vercel client-upload tokens. */
 const PRESIGN_EXPIRES_SECONDS = 60 * 60;
 
+/** Where the client's credentials come from (#554). */
+export type S3CredentialSource = 'key-pair' | 'default-chain';
+
+/**
+ * Which source a config selects: the key pair when both keys are set, the
+ * SDK's default chain when neither is. An empty string counts as unset.
+ * Exactly one set throws, naming the missing variable and no value.
+ */
+export function s3CredentialSource(
+  cfg: Pick<S3DriverConfig, 'accessKeyId' | 'secretAccessKey'>,
+): S3CredentialSource {
+  const hasId = Boolean(cfg.accessKeyId);
+  const hasSecret = Boolean(cfg.secretAccessKey);
+  if (hasId && hasSecret) return 'key-pair';
+  if (!hasId && !hasSecret) return 'default-chain';
+  const [missing, present] = hasId
+    ? ['S3_SECRET_ACCESS_KEY', 'S3_ACCESS_KEY_ID']
+    : ['S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
+  throw new Error(
+    `BLOB_DRIVER=s3 requires ${missing} when ${present} is set ` +
+      '(set both, or neither to use the AWS SDK default credential chain)',
+  );
+}
+
+/** The one line driver construction logs: the source's name, never a value. */
+export function s3CredentialSourceLine(source: S3CredentialSource): string {
+  return source === 'key-pair'
+    ? '[storage:s3] credential source: the S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY key pair'
+    : '[storage:s3] credential source: the AWS SDK default chain (S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY unset)';
+}
+
 /**
  * Resolve driver config from the environment. Exported (with an injectable
- * env) for unit tests. Throws when a required variable is missing — the
- * driver is constructed lazily, so this only fires when BLOB_DRIVER=s3.
+ * env) for unit tests. Throws when a required variable is missing, or when
+ * only one of the two keys is set — the driver is constructed lazily, so this
+ * only fires when BLOB_DRIVER=s3.
  */
 export function resolveS3ConfigFromEnv(
   env: Record<string, string | undefined> = process.env,
 ): S3DriverConfig {
   const endpoint = env.S3_ENDPOINT?.replace(/\/$/, '') || undefined;
   const bucket = env.S3_BUCKET;
-  const accessKeyId = env.S3_ACCESS_KEY_ID;
-  const secretAccessKey = env.S3_SECRET_ACCESS_KEY;
+  const accessKeyId = env.S3_ACCESS_KEY_ID || undefined;
+  const secretAccessKey = env.S3_SECRET_ACCESS_KEY || undefined;
   if (!bucket) throw new Error('BLOB_DRIVER=s3 requires S3_BUCKET');
-  if (!accessKeyId) throw new Error('BLOB_DRIVER=s3 requires S3_ACCESS_KEY_ID');
-  if (!secretAccessKey) throw new Error('BLOB_DRIVER=s3 requires S3_SECRET_ACCESS_KEY');
+  // Both keys, or neither (#554): throws naming the missing one.
+  const source = s3CredentialSource({ accessKeyId, secretAccessKey });
   const region = env.S3_REGION || 'us-east-1';
   const forcePathStyle = env.S3_FORCE_PATH_STYLE
     ? env.S3_FORCE_PATH_STYLE !== 'false'
@@ -84,7 +139,14 @@ export function resolveS3ConfigFromEnv(
       ? `${endpoint}/${bucket}`
       : `https://${bucket}.s3.${region}.amazonaws.com`)
   );
-  return { endpoint, region, bucket, accessKeyId, secretAccessKey, forcePathStyle, publicBaseUrl };
+  return {
+    endpoint,
+    region,
+    bucket,
+    ...(source === 'key-pair' ? { accessKeyId, secretAccessKey } : {}),
+    forcePathStyle,
+    publicBaseUrl,
+  };
 }
 
 /**
@@ -145,22 +207,36 @@ export function proxyAwareTransport(): { requestHandler?: FetchHttpHandler } {
   return isOutboundProxyConfigured() ? { requestHandler: new FetchHttpHandler() } : {};
 }
 
-export function createS3Driver(config?: S3DriverConfig): StorageDriver {
-  const cfg = config ?? resolveS3ConfigFromEnv();
-  const client = new S3Client({
+/**
+ * The SDK client configuration for a driver config. Exported so the storage
+ * rehearsal's independent read client is built exactly as the driver's is.
+ * With the key pair it carries exactly that pair; with neither key it carries
+ * no `credentials` at all, which is what hands resolution to the SDK's default
+ * chain (#554). A config with one key throws, as `s3CredentialSource` does.
+ */
+export function s3ClientConfig(cfg: S3DriverConfig): S3ClientConfig {
+  const source = s3CredentialSource(cfg);
+  return {
     region: cfg.region,
     ...(cfg.endpoint ? { endpoint: cfg.endpoint } : {}),
     forcePathStyle: cfg.forcePathStyle,
     ...proxyAwareTransport(),
-    credentials: {
-      accessKeyId: cfg.accessKeyId,
-      secretAccessKey: cfg.secretAccessKey,
-    },
+    ...(source === 'key-pair' && cfg.accessKeyId && cfg.secretAccessKey
+      ? { credentials: { accessKeyId: cfg.accessKeyId, secretAccessKey: cfg.secretAccessKey } }
+      : {}),
     // No SDK-added checksum headers: keeps bodies/headers exactly as given
     // (byte parity) and keeps presigned PUTs usable by plain HTTP clients.
     requestChecksumCalculation: 'WHEN_REQUIRED',
     responseChecksumValidation: 'WHEN_REQUIRED',
-  });
+  };
+}
+
+export function createS3Driver(config?: S3DriverConfig): StorageDriver {
+  const cfg = config ?? resolveS3ConfigFromEnv();
+  const client = new S3Client(s3ClientConfig(cfg));
+  // One line per driver built (the storage module caches its driver, so once
+  // per process): which source signs this instance's requests, by name only.
+  console.log(s3CredentialSourceLine(s3CredentialSource(cfg)));
 
   const objectUrl = (key: string): string => `${cfg.publicBaseUrl}/${key}`;
 
