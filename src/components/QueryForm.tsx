@@ -19,6 +19,8 @@ import { parseModelsResponse, type Model } from '@/lib/model-list';
 import { MODELS_LOAD_ERROR } from '@/lib/streaming';
 import RateLimitBanner from './RateLimitBanner';
 import { useDefaultPortalArg, usePortalLocked } from '@/components/DefaultPortalProvider';
+import { useNotebooksOffered } from '@/components/NotebookModeProvider';
+import { NOTEBOOK_MODE_UNAVAILABLE_REASON, notebookModeAffordance } from '@/lib/notebook-availability';
 
 // Re-exported for existing importers; the type itself lives in
 // src/lib/query-presentation.ts alongside the derivations that use it.
@@ -29,9 +31,10 @@ export type { QueryMode };
  * `useSessionChoice` mechanism. The user's explicit, stored choice wins over
  * the mount's `defaultMode`; with no choice stored the mount default applies
  * (s6 P2, #229 — 'standard' everywhere except mounts that say otherwise).
- * When the toggle is disabled (anonymous user, loading auth state, etc.)
- * the effective mode is forced to 'standard'; the stored preference is
- * preserved so signing back in restores the previous choice.
+ * When the toggle is disabled (anonymous user, loading auth state, an
+ * instance that runs no notebooks, etc.) the effective mode is forced to
+ * 'standard'; the stored preference is preserved so signing back in restores
+ * the previous choice.
  */
 function useStoredMode(
   enabled: boolean,
@@ -116,6 +119,12 @@ export default function QueryForm({
   // 'standard' when the user is not authenticated.
   const { status: authStatus } = useSession();
   const isAuthenticated = authStatus === 'authenticated';
+  // #547: an instance that runs no notebooks (EXECUTOR_DRIVER=none,
+  // server-resolved, threaded through the root layout) shows the mode
+  // unavailable with its reason, signed in or not, and runs standard mode.
+  // Unset, the affordance is 'toggle' exactly when signed in, as before.
+  const notebooksOffered = useNotebooksOffered();
+  const notebookAffordance = notebookModeAffordance({ signedIn: isAuthenticated, notebooksOffered });
   // Where sign-in should go (P4c). Null on an instance with no host
   // topology configured — then the affordance below stays in place, exactly
   // as it is today. See src/lib/host-links.ts.
@@ -123,7 +132,7 @@ export default function QueryForm({
   // #229 P1: which provider the in-place branch below starts, and whether it
   // can name one at all — derived from the instance's configuration (Q63).
   const signInAffordance = resolveSignInAffordance(useSignInOptions());
-  const [mode, updateMode] = useStoredMode(isAuthenticated, defaultMode);
+  const [mode, updateMode] = useStoredMode(notebookAffordance === 'toggle', defaultMode);
   const [models, setModels] = useState<Model[]>([]);
   const [modelsError, setModelsError] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
@@ -373,12 +382,14 @@ export default function QueryForm({
         <div>
           {/* Response mode — signed-in-only per Phase 2a1. Anonymous users
               see a sign-in prompt instead of the toggle; the executed-sandbox
-              path requires authentication to invoke /api/query-notebook. */}
+              path requires authentication to invoke /api/query-notebook. On
+              an instance that runs no notebooks (#547) everyone sees the
+              control with that option disabled and the reason beside it. */}
           <div style={{ marginBottom: '16px' }}>
             <label style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 400, display: 'block', marginBottom: '6px' }}>
               Response mode
             </label>
-            {isAuthenticated ? (
+            {notebookAffordance === 'toggle' ? (
               <>
                 <div
                   role="radiogroup"
@@ -429,6 +440,55 @@ export default function QueryForm({
                     cryptographic execution record are signed by the platform.
                   </p>
                 )}
+              </>
+            ) : notebookAffordance === 'unavailable' ? (
+              <>
+                <div
+                  role="radiogroup"
+                  aria-label="Response mode"
+                  style={{
+                    display: 'flex',
+                    padding: '3px',
+                    gap: '4px',
+                    background: 'var(--card-background)',
+                    borderRadius: '999px',
+                    border: '1px solid var(--border-color)',
+                    width: '100%',
+                  }}
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={true}
+                    disabled={isLoading}
+                    style={segmentStyle(true)}
+                  >
+                    Standard
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={false}
+                    aria-disabled="true"
+                    aria-describedby="notebook-mode-unavailable"
+                    disabled
+                    style={{ ...segmentStyle(false), cursor: 'not-allowed', opacity: 0.55 }}
+                    title={NOTEBOOK_MODE_UNAVAILABLE_REASON}
+                  >
+                    Execute in a signed sandbox
+                  </button>
+                </div>
+                <p
+                  id="notebook-mode-unavailable"
+                  style={{
+                    margin: '6px 0 0',
+                    fontSize: '12px',
+                    color: 'var(--text-muted)',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {NOTEBOOK_MODE_UNAVAILABLE_REASON}
+                </p>
               </>
             ) : (
               <div

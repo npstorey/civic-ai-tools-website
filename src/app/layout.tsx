@@ -16,6 +16,8 @@ import { EvidenceOriginProvider } from '@/components/EvidenceOriginProvider';
 import { McpRoutingProvider } from '@/components/McpRoutingProvider';
 import { DefaultPortalProvider } from '@/components/DefaultPortalProvider';
 import { SignInOptionsProvider } from '@/components/SignInOptionsProvider';
+import { NotebookModeProvider } from '@/components/NotebookModeProvider';
+import { notebooksOffered } from '@/lib/notebook-availability';
 import { readMcpEnvFromProcess } from '@/lib/mcp/registry';
 import { buildProviders } from '@/lib/auth-providers';
 import { toSignInOptions } from '@/lib/auth-provider-options';
@@ -274,6 +276,11 @@ export default function RootLayout({
               NotebookOutput all render under the apex page, a client
               component with no server ancestor to thread a prop from. */}
           <SignInOptionsProvider value={signInOptions}>
+          {/* Whether this instance runs notebooks (EXECUTOR_DRIVER=none,
+              #547): the query form on both of its mounts shows notebook mode
+              unavailable and starts in standard mode. Same reason for a
+              context as the two above: the home page is a client component. */}
+          <NotebookModeProvider offered={notebooksOffered()}>
           <div className="flex flex-col">
             {/* Env-driven (P3): on a split-host topology the marketing host
                 withholds /dashboard, so the signed-in menu must carry the
@@ -370,6 +377,7 @@ export default function RootLayout({
               </div>
             </footer>
           </div>
+          </NotebookModeProvider>
           </SignInOptionsProvider>
           </DefaultPortalProvider>
           </McpRoutingProvider>
