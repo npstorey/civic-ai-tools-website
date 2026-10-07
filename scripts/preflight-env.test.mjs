@@ -790,6 +790,75 @@ test('the default executor driver keeps the sandbox-only variables listed', () =
   assert.deepEqual(result.notApplicable, []);
 });
 
+// #547 (anchor #555, ruling G0-4 A): EXECUTOR_DRIVER=none declares an instance
+// that runs no notebooks. Every variable only notebook execution reads is then
+// not applicable: no row, not named in the report, never a miss.
+/** Variables read only by notebook execution, under one driver or all three. */
+const EXECUTOR_ONLY = [
+  ...SANDBOX_ONLY,
+  'EXECUTOR_LAMBDA_FUNCTION',
+  'EXECUTOR_LAMBDA_REGION',
+  'EXECUTOR_CONTAINER_IMAGE',
+  'EXECUTOR_SESSION_TIMEOUT_S',
+  'EXECUTOR_CELL_TIMEOUT_S',
+  'EXECUTOR_CONTAINER_CLI',
+  'EXECUTOR_CONTAINER_MEMORY',
+  'EXECUTOR_CONTAINER_CPUS',
+  'EXECUTOR_CONTAINER_PIDS_LIMIT',
+  'EXECUTOR_CONTAINER_NETWORK',
+  'EXECUTOR_CONTAINER_USER',
+  'EXECUTOR_CONTAINER_RUNTIME',
+  'EXECUTOR_CONTAINER_HARDENED',
+  'SOCRATA_APP_TOKEN',
+  'DC_API_KEY',
+];
+
+test('#547 C5: EXECUTOR_DRIVER=none is accepted', () => {
+  const { drivers, errors } = resolveDrivers({ EXECUTOR_DRIVER: 'none' });
+  assert.deepEqual(errors, [], 'none is refused as an unknown selector');
+  assert.equal(drivers.executor, 'none');
+  const result = evaluateEnv({ ...envWithAllRequired(), EXECUTOR_DRIVER: 'none' });
+  assert.equal(result.ok, true, 'an instance that runs no notebooks fails preflight');
+});
+
+test('#547 C5: EXECUTOR_DRIVER=none makes every executor-only variable not applicable', () => {
+  for (const name of EXECUTOR_ONLY) {
+    assert.ok(ENV_SPEC.some((s) => s.name === name), `${name} is not in ENV_SPEC (the list above is stale)`);
+  }
+  const env = { ...envWithAllRequired(), EXECUTOR_DRIVER: 'none' };
+  for (const name of EXECUTOR_ONLY) env[name] = 'present';
+  const result = evaluateEnv(env);
+  const report = renderReport(result);
+  for (const name of EXECUTOR_ONLY) {
+    assert.equal(tierOf(result.rows, name), undefined, `${name} still has a row under none`);
+    assert.ok(result.notApplicable.includes(name), `${name} is not marked not applicable under none`);
+    assert.ok(!report.includes(name), `${name} is named in the report under none`);
+  }
+  assert.ok(!result.missingRecommended.some((r) => r.name === 'SANDBOX_SNAPSHOT_ID'));
+  // The selector itself stays listed.
+  assert.notEqual(tierOf(result.rows, 'EXECUTOR_DRIVER'), undefined, 'EXECUTOR_DRIVER lost its own row');
+});
+
+test('#547 C5: under each of the three drivers the executor-only variables stay as they were', () => {
+  for (const driver of ['vercel-sandbox', 'container', 'lambda']) {
+    const result = evaluateEnv({ ...envWithAllRequired(), EXECUTOR_DRIVER: driver });
+    for (const name of EXECUTOR_ONLY) {
+      if (SANDBOX_ONLY.includes(name) && driver !== 'vercel-sandbox') continue;
+      assert.notEqual(tierOf(result.rows, name), undefined, `${name} lost its row under ${driver}`);
+    }
+  }
+});
+
+test('#547 C5: EXECUTOR_DRIVER names its fourth value', () => {
+  const row = ENV_SPEC.find((s) => s.name === 'EXECUTOR_DRIVER');
+  assert.ok(row);
+  assert.ok(DRIVER_SEAMS.executor.values.includes('none'), 'the executor seam does not accept none');
+  assert.match(row.purpose, /'none'/, "EXECUTOR_DRIVER's purpose text does not name none");
+  // Read by the root layout, which the home page prerenders at build: the
+  // form there follows the value the build saw.
+  assert.equal(row.readBy, 'build-and-runtime');
+});
+
 test('the self-hosted profile passes with no platform-specific variables set', () => {
   const env = { ...envWithAllRequired(), ...selfHostedDrivers() };
   delete env.BLOB_READ_WRITE_TOKEN;
