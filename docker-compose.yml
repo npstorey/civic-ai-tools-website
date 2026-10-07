@@ -172,6 +172,11 @@ services:
         ROADMAP_RAW_URL:
         ROADMAP_GITHUB_URL:
         SITE_NOINDEX:
+        # The same literal as `environment` below, not a pass-through: the
+        # root layout reads it to tell the query form whether notebooks run
+        # (#547), and the prerendered home page must see the value this
+        # stack runs with. Change both together.
+        EXECUTOR_DRIVER: container
     restart: unless-stopped
     depends_on:
       postgres:

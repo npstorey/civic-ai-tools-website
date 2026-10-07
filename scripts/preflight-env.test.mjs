@@ -678,7 +678,7 @@ function tierOf(rows, name) {
 
 test('every conditional field names a known seam and a known driver value', () => {
   for (const s of ENV_SPEC) {
-    for (const field of ['onlyWhen', 'requiredWhen']) {
+    for (const field of ['onlyWhen', 'requiredWhen', 'notWhen']) {
       if (!s[field]) continue;
       for (const [seam, driver] of Object.entries(s[field])) {
         assert.ok(DRIVER_SEAMS[seam], `${s.name}.${field} names a known seam (${seam})`);

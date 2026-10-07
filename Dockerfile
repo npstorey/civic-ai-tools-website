@@ -72,7 +72,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 #   read at both     read on the server, but ALSO baked into statically
 #   times            prerendered pages: the branding set and the footer's
 #                    repo and sponsor lines, the default portal, the content
-#                    sources, and the indexing posture. docker-compose.yml
+#                    sources, the indexing posture, and whether this instance
+#                    runs notebooks (EXECUTOR_DRIVER=none, #547: the root
+#                    layout tells the query form). docker-compose.yml
 #                    passes these in both places so prerendered and dynamic
 #                    pages agree.
 #
@@ -101,6 +103,7 @@ ARG DIRECTORY_DATA_URL
 ARG ROADMAP_RAW_URL
 ARG ROADMAP_GITHUB_URL
 ARG SITE_NOINDEX
+ARG EXECUTOR_DRIVER
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
