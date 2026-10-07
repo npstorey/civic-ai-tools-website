@@ -2054,14 +2054,19 @@ consequences:
 - **`S3_PUBLIC_BASE_URL` still matters**, as the address the database
   records and the driver maps back to keys (above). It need not be
   reachable from a browser.
-- **Known gaps.** These surfaces still fetch storage URLs anonymously
-  and fail on a private bucket: a package's blob references (an
-  `output`, `trace` or skill text stored under `evidence-refs/` through
-  the upload-token flow) — the record page cannot show that content,
-  and the integrity check reports the reference as not retrievable;
-  and attestation details on the record page, which the browser fetches
-  from each attestation's storage URL. Records published without blob
-  references are not affected by the first.
+- **Known gaps** (follow-up: #558). Two surfaces still fetch storage
+  URLs anonymously and fail on a private bucket:
+  - **Blob references.** A package's `output`, `trace` or skill text
+    stored under `evidence-refs/` through the upload-token flow: the
+    record page cannot show that content, and the integrity check
+    reports the reference as not retrievable. This reaches only records
+    published through the API with uploaded blob references; the app's
+    own pages never call the upload flow.
+  - **Attestation details.** The record page's browser fetches each
+    attestation's content from its storage URL, so its details do not
+    load. This reaches every attestation added from the record page's
+    Attestations dialog, which any signed-in viewer can open, and any
+    added through the same API route.
 - **The compose stack is public-only.** Its `minio-init` applies the
   public-read policy on every start; a private bucket is for an object
   store you provision yourself
@@ -2115,9 +2120,9 @@ checks fail: leg 1's `public-URL fetch succeeds` and `public-URL bytes
 sha256-identical`, and leg 3's `package: anonymous fetch of public URL
 succeeds` and `granted upload: anonymous fetch of public URL succeeds`.
 The run ends `RESULT: FAIL — 2/4 leg(s) failed (runId=…)`. Every other
-check in legs 1 and 3, and all of legs 2 and 4, reads and writes
-through the service account or a presigned URL, so a private bucket
-does not change what they check; read their results. That outcome is
+check in the four legs is unaffected by a private bucket: each reads and
+writes through the service account or a presigned URL, or reads nothing
+(leg 3's URL-to-key mappings). Read their results. That outcome is
 expected until the harness's private-bucket mode lands (#554), in which
 the anonymous reads assert the refusal instead.
 
