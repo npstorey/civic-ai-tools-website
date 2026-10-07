@@ -667,7 +667,8 @@ function selfHostedDrivers() {
   return { DB_DRIVER: 'node-postgres', BLOB_DRIVER: 's3', EXECUTOR_DRIVER: 'container' };
 }
 
-/** Names the S3 driver hard-throws on (src/lib/storage/s3.ts:67-69). */
+/** The S3 bucket and key pair: a complete set satisfies every s3-profile row
+ *  (the key pair may also be left unset — S3_KEY_PAIR below, #554). */
 const S3_CREDENTIALS = ['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
 /** The S3 key pair: both set, or neither for the AWS SDK's default chain (#554). */
 const S3_KEY_PAIR = ['S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
@@ -679,10 +680,21 @@ function tierOf(rows, name) {
 }
 
 test('every conditional field names a known seam and a known driver value', () => {
+  const declared = new Set(ENV_SPEC.map((e) => e.name));
   for (const s of ENV_SPEC) {
-    for (const field of ['onlyWhen', 'requiredWhen', 'notWhen']) {
-      if (!s[field]) continue;
-      for (const [seam, driver] of Object.entries(s[field])) {
+    if (s.requiredWhenPartnerPresent) {
+      assert.ok(declared.has(s.requiredWhenPartnerPresent.partner), `${s.name}'s partner is declared`);
+      assert.notEqual(s.requiredWhenPartnerPresent.partner, s.name, `${s.name} is not its own partner`);
+    }
+    const conditions = {
+      onlyWhen: s.onlyWhen,
+      requiredWhen: s.requiredWhen,
+      notWhen: s.notWhen,
+      'requiredWhenPartnerPresent.when': s.requiredWhenPartnerPresent?.when,
+    };
+    for (const [field, condition] of Object.entries(conditions)) {
+      if (!condition) continue;
+      for (const [seam, driver] of Object.entries(condition)) {
         assert.ok(DRIVER_SEAMS[seam], `${s.name}.${field} names a known seam (${seam})`);
         assert.ok(
           DRIVER_SEAMS[seam].values.includes(driver),
