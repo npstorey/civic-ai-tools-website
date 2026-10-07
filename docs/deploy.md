@@ -1128,7 +1128,10 @@ prefer setting them before first bring-up — see the volume-reset note in
 [Supplying your environment](#supplying-your-environment).
 
 (Off compose, all of these are yours: `DATABASE_URL` plus the storage set
-for your driver are hard requirements of the publish path.)
+for your driver are hard requirements of the publish path. For `s3` that
+set is `S3_BUCKET` plus the key pair, or `S3_BUCKET` alone where the
+platform provides a role; see
+[Credentials](#credentials-a-key-pair-or-the-sdks-default-chain).)
 
 **The core query path fails without:**
 
@@ -2055,8 +2058,8 @@ endpoint. The contract (resolved in
 | Variable | Required | Meaning / default |
 | --- | --- | --- |
 | `S3_BUCKET` | yes | Bucket for record-package objects. |
-| `S3_ACCESS_KEY_ID` | yes | Access key. |
-| `S3_SECRET_ACCESS_KEY` | yes | Secret key. |
+| `S3_ACCESS_KEY_ID` | both or neither | Access key. Set it with `S3_SECRET_ACCESS_KEY`, or leave both unset and the AWS SDK's default chain supplies the credentials ([below](#credentials-a-key-pair-or-the-sdks-default-chain)). |
+| `S3_SECRET_ACCESS_KEY` | both or neither | Secret key. Set it with `S3_ACCESS_KEY_ID`, or leave both unset. |
 | `S3_ENDPOINT` | no | Endpoint URL (e.g. `http://minio:9000`). **Omit for AWS S3 proper.** |
 | `S3_REGION` | no | Default `us-east-1`. Must match where the bucket actually lives — it feeds the public URL. |
 | `S3_FORCE_PATH_STYLE` | no | Default: `true` when `S3_ENDPOINT` is set (MinIO needs path-style), `false` otherwise. |
@@ -2068,6 +2071,54 @@ object's key on every read. Keep its last path segment equal to
 `S3_BUCKET` (the compose default does this), and do not change it once
 records exist: a stored URL outside the current base is fetched over
 plain HTTP instead of through the S3 API.
+
+### Credentials: a key pair or the SDK's default chain
+
+**Both keys set:** every request signs with that pair. This is the
+compose stack's path, which hands the same pair to MinIO as its root
+user, and nothing about it has changed.
+
+**Neither key set:** the driver builds its S3 client with no
+credentials, and the AWS SDK's default chain resolves them, as it does
+for the [Lambda executor](#the-lambda-executor). The chain tries, in
+order: `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (with
+`AWS_SESSION_TOKEN`) in the environment, SSO, the shared config and
+credentials files, a credential process, web identity, then the
+container credentials endpoint (on ECS, the task role) and the instance
+metadata endpoint (on EC2, the instance profile). On a platform that
+provides role access, this is how an instance runs with no long-lived
+key pair: attach the bucket's scoped policy to that role
+([Appendix A](#role-alternative-no-access-key)) and set neither key.
+
+**Exactly one key set is refused.** The driver throws at its first use,
+naming the missing key, and [preflight](#environment-reference-tier-by-tier)
+fails naming it too. An empty value counts as unset.
+
+When the driver is built (once per server process), it logs one line
+naming the source in use, never a value:
+
+```
+[storage:s3] credential source: the S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY key pair
+[storage:s3] credential source: the AWS SDK default chain (S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY unset)
+```
+
+The second line says that the chain is in use, not which of its sources
+answered. A chain that finds nothing fails at the first storage request
+with `Could not load credentials from any providers`.
+
+**Presigned uploads under a role.** The client-upload grant is a
+presigned PUT valid for one hour. Signed with temporary credentials,
+the URL carries the credential's session token
+(`X-Amz-Security-Token`) and stops working when that credential
+expires, even when that comes before the hour. AWS documents this: "If
+you created a presigned URL using a temporary credential, the URL
+expires when the credential expires"
+([Download and upload objects with presigned URLs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html)).
+Before it signs, the SDK replaces a credential that has under five
+minutes left, so a grant normally gets at least five minutes and at most
+the hour. A client that uploads soon after its grant is unaffected; one
+that holds a grant and uploads later can be refused with `ExpiredToken`,
+and should request a new grant. With the key pair, the full hour holds.
 
 ### Two bucket choices
 
@@ -2083,8 +2134,9 @@ in-network endpoint like `http://minio:9000`. The compose stack's
 you apply it yourself
 ([Appendix A](#appendix-a-first-time-s3-on-a-public-cloud)).
 
-**Private bucket.** No anonymous read: only the app's service account
-reads objects, and readers get record content through the app. The
+**Private bucket.** No anonymous read: only the app's own identity (the
+service account its key pair belongs to, or its role) reads objects, and
+readers get record content through the app. The
 record page's Download goes through `GET /api/records/:slug/package`,
 which applies the record's read gate (a sealed record is its creator's
 alone) and serves the stored object's bytes unchanged. Requirements and
@@ -2133,11 +2185,20 @@ consequences:
 drives four legs through the real storage seam against whatever
 S3-compatible endpoint the environment provides: content-addressed
 round-trip byte parity, the presigned-PUT client-upload grant (including
-the policy rejections), anonymous public read, and the GC sweep run
-hermetically. It refuses to run unless `BLOB_DRIVER=s3`, touches only
-objects it creates, deletes them all in teardown, never prints a
-credential value, and exits `0` only when all four legs pass (`2` for a
-config problem — it names the variable; `1` for a failed leg).
+the policy rejections), anonymous read (served on a public bucket,
+refused on a private one), and the GC sweep run hermetically. It refuses
+to run unless `BLOB_DRIVER=s3`, touches only objects it creates, deletes
+them all in teardown, never prints a credential value, and exits `0`
+only when all four legs pass (`2` for a config problem — it names the
+variable; `1` for a failed leg).
+
+It takes credentials as the driver does
+([Credentials](#credentials-a-key-pair-or-the-sdks-default-chain)): the
+key pair when both keys are set, the SDK's default chain when neither
+is. On the role alternative, run it where the chain resolves to the
+identity the deployment will use, such as a task on the same platform
+with the same role, and its config line reads
+`credential source: AWS SDK default chain`.
 
 Run it from the checkout (it imports the repository's dependencies —
 run `npm install` once first) against your real bucket, injecting
@@ -2169,17 +2230,31 @@ can still pass, but you are no longer observing the sweep on a
 dedicated bucket. The expected end state is
 `RESULT: PASS — 4/4 legs`.
 
-**On a private bucket, legs 1 and 3 fail.** Both fetch an object's
-public URL anonymously, which a private bucket refuses by design. Four
-checks fail: leg 1's `public-URL fetch succeeds` and `public-URL bytes
-sha256-identical`, and leg 3's `package: anonymous fetch of public URL
-succeeds` and `granted upload: anonymous fetch of public URL succeeds`.
-The run ends `RESULT: FAIL — 2/4 leg(s) failed (runId=…)`. Every other
-check in the four legs is unaffected by a private bucket: each reads and
-writes through the service account or a presigned URL, or reads nothing
-(leg 3's URL-to-key mappings). Read their results. That outcome is
-expected until the harness's private-bucket mode lands (#554), in which
-the anonymous reads assert the refusal instead.
+**On a private bucket, run it with `--private-bucket`.**
+
+```bash
+op run --env-file=<your-env-file> -- node scripts/rehearse-storage-s3.mjs --private-bucket
+```
+
+Legs 1 and 3 fetch an object's public URL anonymously. With the flag,
+those four checks assert that the read is refused (`401` or `403`, and
+the stored bytes not served): leg 1's `public-URL fetch refused
+(private bucket)` and `public-URL response does not serve the stored
+bytes (private bucket)`, and leg 3's `package: anonymous fetch of public
+URL refused (private bucket)` and `granted upload: anonymous fetch of
+public URL refused (private bucket)`. Every other check is the same in
+both modes: each reads and writes through the app's identity or a
+presigned URL, or reads nothing (leg 3's URL-to-key mappings). The
+expected end state is again `RESULT: PASS — 4/4 legs`.
+
+Each mode fails on the other kind of bucket, so the run also checks the
+bucket itself. Without the flag, a private bucket fails those four
+checks under their public-bucket names (`public-URL fetch succeeds`,
+`public-URL bytes sha256-identical`, `package: anonymous fetch of public
+URL succeeds`, `granted upload: anonymous fetch of public URL succeeds`)
+and the run ends `RESULT: FAIL — 2/4 leg(s) failed (runId=…)`. With the
+flag, a bucket that still serves anonymous reads fails them the same
+way.
 
 The same harness validates the compose stack's own MinIO (loopback
 endpoint, compose placeholder values), and the file's header comment
@@ -2295,7 +2370,9 @@ piece. Budget well under an hour.
 The walkthrough builds the **public bucket**, the default
 ([Two bucket choices](#two-bucket-choices)); the
 [private variant](#private-variant-no-public-read) below lists the
-steps that differ.
+steps that differ. It authenticates the app with a service account's
+access key; on a platform that provides a role, the
+[role alternative](#role-alternative-no-access-key) needs no key.
 
 What you are building, in plain terms:
 
@@ -2304,7 +2381,8 @@ What you are building, in plain terms:
 | **Bucket** | A named container for files, with a globally unique name and its own permissions. |
 | **Bucket policy** | JSON attached to the bucket saying who may do what. For a public bucket you paste one letting anyone *read* objects, and nothing else; a private bucket has none. |
 | **Service account** (AWS: IAM user) | A robot account whose access key — an ID and a secret — is what the app authenticates with. |
-| **Scoped policy** | Permissions attached to that account, restricted to this one bucket. |
+| **Role** (the alternative) | An identity the platform running the app provides (on ECS, the task role; on EC2, the instance profile). The app takes its short-lived credentials from the AWS SDK's default chain and holds no access key. |
+| **Scoped policy** | Permissions attached to that account (or role), restricted to this one bucket. |
 
 ### Two constraints this app's driver imposes
 
@@ -2380,18 +2458,22 @@ is the same except these:
 - **Block-public-access: on** — leave "Block all public access" checked,
   the console default.
 - **No bucket policy.** Skip the public-read policy; the scoped service
-  account below is the only reader. The console does not badge the
-  bucket publicly accessible.
+  account (or role) below is the only reader. The console does not badge
+  the bucket publicly accessible.
 - **Encryption:** SSE-S3 remains the simple choice. SSE-KMS works here,
   because no anonymous reader is involved, provided the service account
-  is also allowed to use the key.
+  (or role) is also allowed to use the key.
 - **`SITE_SEAL_ONLY=1`** on the deployment, before it serves anyone:
   a private bucket requires public publishing off.
-- **The rehearsal's legs 1 and 3 fail** on their anonymous public-URL
-  checks until the harness's private-bucket mode lands (#554); see
+- **Rehearse with `--private-bucket`**, which asserts that legs 1 and 3's
+  anonymous reads are refused; see
   [Validating a storage configuration](#validating-a-storage-configuration).
 
 ### Scoped service account
+
+(On a platform that provides a role, read
+[Role alternative](#role-alternative-no-access-key) first: you attach
+the policy below to the role and create no account or key.)
 
 Create a service account (AWS: IAM → Users → Create user, no console
 access, attach nothing), then attach an inline policy scoped to this
@@ -2427,6 +2509,19 @@ Create access key → "Application running outside AWS"). The secret is
 shown **once** — store it in your secret manager immediately. If lost,
 delete the key and mint another rather than hunting for a recovery.
 
+### Role alternative: no access key
+
+If the platform that runs the app provides a role (on ECS, the task
+role; on EC2, an instance profile), skip the service account and its
+access key. Attach the same scoped policy above to that role instead,
+and set neither `S3_ACCESS_KEY_ID` nor `S3_SECRET_ACCESS_KEY`. The
+driver then takes the role's short-lived credentials from the AWS SDK's
+default chain, and its startup line reads `credential source: the AWS
+SDK default chain` ([Credentials](#credentials-a-key-pair-or-the-sdks-default-chain)).
+Two things differ from a key pair: there is no long-lived secret to
+store or rotate, and a presigned upload URL lives no longer than the
+role session it was signed under, which can be less than its hour.
+
 ### Wire it up and rehearse
 
 Store the values in your secret manager and reference them from an
@@ -2445,9 +2540,12 @@ S3_REGION=us-east-1
 fragile references. Any other secret manager's injection mechanism works
 the same way.) For AWS proper, omit `S3_ENDPOINT` and
 `S3_PUBLIC_BASE_URL` entirely — setting the endpoint flips the driver
-into path-style addressing meant for MinIO-style hosts.
+into path-style addressing meant for MinIO-style hosts. On the role
+alternative, leave out both key lines: the file holds no secret at all.
 
-Then validate the whole chain before pointing the app at it:
+Then validate the whole setup before pointing the app at it (on the
+role alternative, from where the role applies; see
+[Validating a storage configuration](#validating-a-storage-configuration)):
 
 ```bash
 op run --env-file=<your-env-file> -- node scripts/rehearse-storage-s3.mjs
@@ -2455,12 +2553,12 @@ op run --env-file=<your-env-file> -- node scripts/rehearse-storage-s3.mjs
 
 `RESULT: PASS — 4/4 legs` — with the GC leg shielding exactly **one**
 pre-existing object on a fresh bucket, the harness's own grant-leg
-upload — means the bucket, policy, account scoping, region, and
-public-URL construction are all correct. Hand the same four `S3_*`
-values to your deployment and go. On the private variant, the expected
-end state until #554 lands is `RESULT: FAIL — 2/4 leg(s) failed`: legs 2
-and 4 pass, and legs 1 and 3 fail on their four anonymous public-URL
-checks and on nothing else.
+upload — means the bucket, policy, account or role scoping, region, and
+public-URL construction are all correct. Hand the same `S3_*` values
+(four with a key pair, two on the role alternative) to your deployment
+and go. On the private variant, add `--private-bucket`; the expected end
+state is the same `RESULT: PASS — 4/4 legs`, with legs 1 and 3 asserting
+that their anonymous reads are refused.
 
 [ADR-0016]: https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0016-vcs-native-lifecycle-mapping.md
 [ADR-0020]: https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0020-instance-key-custody.md
