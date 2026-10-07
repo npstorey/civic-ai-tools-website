@@ -17,6 +17,11 @@
  *     is a one-shot driver: `executeNotebook` hands it the same staged file,
  *     nbconvert argv and version probe it runs through a session, and reads
  *     what comes back the same way (ruling D1).
+ *   - 'none': this instance runs no notebooks (#547; anchor #555, ruling
+ *     G0-4 A). No driver loads; `executeNotebook` refuses with an
+ *     `ExecutorSettingError` naming the variable. The query form and
+ *     `/api/query-notebook` read the same value through
+ *     `../notebook-availability.ts` and never reach this far.
  *
  * Selection follows the DB_DRIVER / BLOB_DRIVER pattern (`src/lib/db/
  * index.ts`, `src/lib/storage/index.ts`): EXECUTOR_DRIVER env var, lazy
@@ -26,6 +31,7 @@
 import type { Notebook } from '../notebook-author/cells.ts';
 import { PINNED_LIBRARIES, PYTHON_RUNTIME_VERSION } from '../notebook-author/prompt.ts';
 import { executorToolingPipSpecs, ExecutorSettingError, NotebookExecutionError } from './driver.ts';
+import { EXECUTOR_DRIVER_NONE } from '../notebook-availability.ts';
 import type { ExecutorSession, NotebookExecutorDriver, SessionExecutorDriver } from './driver.ts';
 
 export { ExecutorSettingError, NotebookExecutionError } from './driver.ts';
@@ -110,7 +116,17 @@ export function resolveExecutorTimeouts(
   return { sessionMs: sessionS * 1000, cellS };
 }
 
+/** The drivers that run a notebook. */
 export type ExecutorDriverName = 'vercel-sandbox' | 'container' | 'lambda';
+
+/**
+ * Every value `EXECUTOR_DRIVER` takes: a driver, or `none` (#547), which
+ * declares that this instance runs no notebooks. Kept apart from
+ * `ExecutorDriverName` because `none` is not a driver: it loads nothing and
+ * reaches no destination (scripts/outbound-proxy.test.mjs derives the proxy
+ * table's rows from the driver union).
+ */
+export type ExecutorDriverSetting = ExecutorDriverName | typeof EXECUTOR_DRIVER_NONE;
 
 /**
  * Resolve the configured driver name. Exported for tests; the unknown-value
@@ -118,11 +134,18 @@ export type ExecutorDriverName = 'vercel-sandbox' | 'container' | 'lambda';
  */
 export function resolveExecutorDriverName(
   env: Record<string, string | undefined> = process.env,
-): ExecutorDriverName {
+): ExecutorDriverSetting {
   const driver = env[ENV_EXECUTOR_DRIVER] || 'vercel-sandbox';
-  if (driver === 'vercel-sandbox' || driver === 'container' || driver === 'lambda') return driver;
+  if (
+    driver === 'vercel-sandbox' ||
+    driver === 'container' ||
+    driver === 'lambda' ||
+    driver === EXECUTOR_DRIVER_NONE
+  ) {
+    return driver;
+  }
   throw new Error(
-    `Unsupported EXECUTOR_DRIVER "${driver}" (expected "vercel-sandbox", "container" or "lambda")`,
+    `Unsupported EXECUTOR_DRIVER "${driver}" (expected "vercel-sandbox", "container", "lambda" or "none")`,
   );
 }
 
@@ -131,6 +154,16 @@ let _driver: NotebookExecutorDriver | null = null;
 async function getDriver(): Promise<NotebookExecutorDriver> {
   if (!_driver) {
     const name = resolveExecutorDriverName();
+    if (name === EXECUTOR_DRIVER_NONE) {
+      // Refused before any driver module loads, and never cached: the route
+      // refuses first (`notebookRouteRefusal`), so reaching this means some
+      // other caller asked an instance that runs no notebooks to run one.
+      throw new ExecutorSettingError(
+        ENV_EXECUTOR_DRIVER,
+        `${ENV_EXECUTOR_DRIVER} is "none": this instance runs no notebooks, so none was started ` +
+          '(docs/deploy.md, executor settings).',
+      );
+    }
     if (name === 'container') {
       const { createContainerDriver } = await import('./container.ts');
       _driver = createContainerDriver();

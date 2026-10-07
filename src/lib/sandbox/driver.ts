@@ -18,7 +18,8 @@
  *
  * Driver selection lives in `./execute.ts` (EXECUTOR_DRIVER env var,
  * mirroring the DB_DRIVER / BLOB_DRIVER patterns in `src/lib/db/index.ts`
- * and `src/lib/storage/index.ts`).
+ * and `src/lib/storage/index.ts`). Its fourth value, `none` (#547), selects
+ * no driver: the instance runs no notebooks.
  */
 
 /**
@@ -216,7 +217,8 @@ export class NotebookExecutionError extends Error {
 /**
  * Refused before the executor starts anything (#530, ruling D7): an executor
  * setting whose value is not of its shape, or a session cap not above the
- * per-cell limit. A `NotebookExecutionError`, so the notebook route logs its
+ * per-cell limit. Also `EXECUTOR_DRIVER=none` (#547), when execution is
+ * reached on an instance that runs no notebooks. A `NotebookExecutionError`, so the notebook route logs its
  * class and exit code and shows the reader the correlation-id copy, as it does
  * for `ContainerProxyUserinfoError`. The message names the variable and the
  * shape it expects, never the value: a value is corrected, not clamped, and

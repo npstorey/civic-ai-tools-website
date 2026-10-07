@@ -94,7 +94,7 @@ import { fileURLToPath } from 'node:url';
 export const DRIVER_SEAMS = {
   db: { env: 'DB_DRIVER', default: 'neon-http', values: ['neon-http', 'node-postgres'] },
   blob: { env: 'BLOB_DRIVER', default: 'vercel-blob', values: ['vercel-blob', 's3'] },
-  executor: { env: 'EXECUTOR_DRIVER', default: 'vercel-sandbox', values: ['vercel-sandbox', 'container', 'lambda'] },
+  executor: { env: 'EXECUTOR_DRIVER', default: 'vercel-sandbox', values: ['vercel-sandbox', 'container', 'lambda', 'none'] },
   model: { env: 'MODEL_API_KIND', default: 'openai-compatible', values: ['openai-compatible', 'azure-openai'] },
 };
 
@@ -119,6 +119,11 @@ export const DRIVER_SEAMS = {
  *     about a variable its profile will never read.
  *   - `requiredWhen: { <seam>: '<driver>' }` — tier becomes 'required' under
  *     that driver; otherwise the declared `tier` stands.
+ *   - `notWhen: { <seam>: '<driver>' }` — NOT APPLICABLE under that driver,
+ *     applicable under every other. The inverse of `onlyWhen`, for a variable
+ *     every driver but one reads: since #547 the executor seam's `none`
+ *     declares an instance that runs no notebooks, and the variables only
+ *     notebook execution reads are dropped under it, not under any driver.
  *
  * An orthogonal field records WHERE a value is consumed, which is what a
  * deployment needs in order to deliver it (scripts/check-compose-env.mjs reads
@@ -350,7 +355,14 @@ export const ENV_SPEC = [
   { name: 'S3_FORCE_PATH_STYLE', tier: 'optional', purpose: 'Path-style S3 addressing (default: on when S3_ENDPOINT is set — MinIO)', hasFallback: true },
   { name: 'S3_PUBLIC_BASE_URL', tier: 'optional', purpose: 'Public object URL base (default: endpoint/bucket path-style)', hasFallback: true },
   // --- Notebook executor (S3b P4 driver seam; executed-notebook pipeline) ---
-  { name: 'EXECUTOR_DRIVER', tier: 'optional', purpose: "Notebook executor driver — 'vercel-sandbox' (default), 'container' (host container runtime) or 'lambda' (an AWS Lambda function built from docker/executor/Dockerfile's lambda target)", hasFallback: true },
+  // Every row below that only notebook execution reads carries
+  // `notWhen: { executor: 'none' }` (#547): an instance that runs no notebooks
+  // is not asked about them. The four sandbox-only rows are already dropped
+  // under every driver but vercel-sandbox by their `onlyWhen`.
+  // readBy build-and-runtime since #547: the root layout reads it to tell the
+  // query form whether notebooks run, and the home page is prerendered, so its
+  // form follows the value `next build` saw.
+  { name: 'EXECUTOR_DRIVER', readBy: 'build-and-runtime', tier: 'optional', purpose: "Notebook executor driver — 'vercel-sandbox' (default), 'container' (host container runtime), 'lambda' (an AWS Lambda function built from docker/executor/Dockerfile's lambda target) or 'none' (this instance runs no notebooks: the query form shows notebook mode unavailable and /api/query-notebook answers 501)", hasFallback: true },
   // The lambda driver's two settings (#530 P2, ruling D6), read by
   // resolveLambdaSettings (src/lib/sandbox/lambda.ts) and by nothing under the
   // other drivers, whose dynamic import never loads that module. Like the S3_*
@@ -360,33 +372,33 @@ export const ENV_SPEC = [
   // no function cannot run a notebook. The region falls back to the AWS SDK's
   // own chain (AWS_REGION, which ECS sets), read by the SDK and so not a row
   // here; with neither, the first run refuses and names both.
-  { name: 'EXECUTOR_LAMBDA_FUNCTION', tier: 'optional', purpose: 'The notebook function, by name or ARN, optionally with :qualifier (required when EXECUTOR_DRIVER=lambda)', requiredWhen: { executor: 'lambda' } },
-  { name: 'EXECUTOR_LAMBDA_REGION', tier: 'optional', purpose: "The function's region (EXECUTOR_DRIVER=lambda only; unset: the AWS SDK's own region, AWS_REGION, which ECS sets; with neither, the first notebook run refuses)", hasFallback: true },
+  { name: 'EXECUTOR_LAMBDA_FUNCTION', tier: 'optional', purpose: 'The notebook function, by name or ARN, optionally with :qualifier (required when EXECUTOR_DRIVER=lambda)', requiredWhen: { executor: 'lambda' } , notWhen: { executor: 'none' } },
+  { name: 'EXECUTOR_LAMBDA_REGION', tier: 'optional', purpose: "The function's region (EXECUTOR_DRIVER=lambda only; unset: the AWS SDK's own region, AWS_REGION, which ECS sets; with neither, the first notebook run refuses)", hasFallback: true , notWhen: { executor: 'none' } },
   // Relevant under the container driver, inert under the sandbox driver, and
   // fallback-backed under both (container.ts:47 → DEFAULT_CONTAINER_IMAGE), so
   // it carries no condition: it is never a miss and never a nag either way.
-  { name: 'EXECUTOR_CONTAINER_IMAGE', tier: 'optional', purpose: 'Executor image tag (EXECUTOR_DRIVER=container only; default civic-notebook-executor:0.2.0)', hasFallback: true },
+  { name: 'EXECUTOR_CONTAINER_IMAGE', tier: 'optional', purpose: 'Executor image tag (EXECUTOR_DRIVER=container only; default civic-notebook-executor:0.2.0)', hasFallback: true , notWhen: { executor: 'none' } },
   // The session cap and the per-cell limit (#530, ruling D7), read by
   // resolveExecutorTimeouts (src/lib/sandbox/execute.ts) under every driver.
   // Fallback-backed (180 and 120, the constants they replaced), so no tier
   // promotion and no condition. A malformed value, or a cap not above the
   // per-cell limit, refuses at the first execution rather than being corrected.
-  { name: 'EXECUTOR_SESSION_TIMEOUT_S', tier: 'optional', purpose: 'Notebook session cap in whole seconds, every executor driver: start, staging, every cell and read-back (default 180; must be greater than EXECUTOR_CELL_TIMEOUT_S; at most 86400)', hasFallback: true },
-  { name: 'EXECUTOR_CELL_TIMEOUT_S', tier: 'optional', purpose: 'Per-cell limit in whole seconds, every executor driver: nbconvert ExecutePreprocessor.timeout (default 120)', hasFallback: true },
+  { name: 'EXECUTOR_SESSION_TIMEOUT_S', tier: 'optional', purpose: 'Notebook session cap in whole seconds, every executor driver: start, staging, every cell and read-back (default 180; must be greater than EXECUTOR_CELL_TIMEOUT_S; at most 86400)', hasFallback: true , notWhen: { executor: 'none' } },
+  { name: 'EXECUTOR_CELL_TIMEOUT_S', tier: 'optional', purpose: 'Per-cell limit in whole seconds, every executor driver: nbconvert ExecutePreprocessor.timeout (default 120)', hasFallback: true , notWhen: { executor: 'none' } },
   // The container executor's settings (#530, ruling D7), read by
   // resolveContainerSettings (src/lib/sandbox/container.ts). Like
   // EXECUTOR_CONTAINER_IMAGE above, each is inert under the other drivers and
   // fallback-backed under this one (unset leaves the argv as it was), so no
   // condition: never a miss and never a nag. A value not of its shape refuses
   // the session before any CLI call.
-  { name: 'EXECUTOR_CONTAINER_CLI', tier: 'optional', purpose: 'Container CLI the executor spawns (EXECUTOR_DRIVER=container only; a name on PATH or a path, e.g. podman; default docker)', hasFallback: true },
-  { name: 'EXECUTOR_CONTAINER_MEMORY', tier: 'optional', purpose: 'Memory limit for each notebook container, as docker run --memory (EXECUTOR_DRIVER=container only; e.g. 2g; unset: no limit)', hasFallback: true },
-  { name: 'EXECUTOR_CONTAINER_CPUS', tier: 'optional', purpose: 'CPU limit for each notebook container, as docker run --cpus (EXECUTOR_DRIVER=container only; e.g. 1.5; unset: no limit)', hasFallback: true },
-  { name: 'EXECUTOR_CONTAINER_PIDS_LIMIT', tier: 'optional', purpose: 'Process limit for each notebook container, as docker run --pids-limit (EXECUTOR_DRIVER=container only; unset: the runtime default)', hasFallback: true },
-  { name: 'EXECUTOR_CONTAINER_NETWORK', tier: 'optional', purpose: 'Network each notebook container joins, as docker run --network (EXECUTOR_DRIVER=container only; unset: the runtime default network)', hasFallback: true },
-  { name: 'EXECUTOR_CONTAINER_USER', tier: 'optional', purpose: 'User each notebook container runs as, as docker run --user (EXECUTOR_DRIVER=container only; unset: the image user, uid 10001; set, the matplotlib cache moves to a writable copy under /tmp)', hasFallback: true },
-  { name: 'EXECUTOR_CONTAINER_RUNTIME', tier: 'optional', purpose: 'OCI runtime for each notebook container, as docker run --runtime (EXECUTOR_DRIVER=container only; e.g. runsc; unset: the runtime default)', hasFallback: true },
-  { name: 'EXECUTOR_CONTAINER_HARDENED', tier: 'optional', purpose: 'Set to 1 or true to start each notebook container with --cap-drop ALL and --security-opt no-new-privileges (EXECUTOR_DRIVER=container only; unset: off)', hasFallback: true },
+  { name: 'EXECUTOR_CONTAINER_CLI', tier: 'optional', purpose: 'Container CLI the executor spawns (EXECUTOR_DRIVER=container only; a name on PATH or a path, e.g. podman; default docker)', hasFallback: true , notWhen: { executor: 'none' } },
+  { name: 'EXECUTOR_CONTAINER_MEMORY', tier: 'optional', purpose: 'Memory limit for each notebook container, as docker run --memory (EXECUTOR_DRIVER=container only; e.g. 2g; unset: no limit)', hasFallback: true , notWhen: { executor: 'none' } },
+  { name: 'EXECUTOR_CONTAINER_CPUS', tier: 'optional', purpose: 'CPU limit for each notebook container, as docker run --cpus (EXECUTOR_DRIVER=container only; e.g. 1.5; unset: no limit)', hasFallback: true , notWhen: { executor: 'none' } },
+  { name: 'EXECUTOR_CONTAINER_PIDS_LIMIT', tier: 'optional', purpose: 'Process limit for each notebook container, as docker run --pids-limit (EXECUTOR_DRIVER=container only; unset: the runtime default)', hasFallback: true , notWhen: { executor: 'none' } },
+  { name: 'EXECUTOR_CONTAINER_NETWORK', tier: 'optional', purpose: 'Network each notebook container joins, as docker run --network (EXECUTOR_DRIVER=container only; unset: the runtime default network)', hasFallback: true , notWhen: { executor: 'none' } },
+  { name: 'EXECUTOR_CONTAINER_USER', tier: 'optional', purpose: 'User each notebook container runs as, as docker run --user (EXECUTOR_DRIVER=container only; unset: the image user, uid 10001; set, the matplotlib cache moves to a writable copy under /tmp)', hasFallback: true , notWhen: { executor: 'none' } },
+  { name: 'EXECUTOR_CONTAINER_RUNTIME', tier: 'optional', purpose: 'OCI runtime for each notebook container, as docker run --runtime (EXECUTOR_DRIVER=container only; e.g. runsc; unset: the runtime default)', hasFallback: true , notWhen: { executor: 'none' } },
+  { name: 'EXECUTOR_CONTAINER_HARDENED', tier: 'optional', purpose: 'Set to 1 or true to start each notebook container with --cap-drop ALL and --security-opt no-new-privileges (EXECUTOR_DRIVER=container only; unset: off)', hasFallback: true , notWhen: { executor: 'none' } },
   // Passed into every executed notebook's env by buildNotebookEnv
   // (src/lib/sandbox/execute.ts), under the vercel-sandbox and container
   // drivers — read by the generated notebook's own helper functions
@@ -395,8 +407,8 @@ export const ENV_SPEC = [
   // (#530, ruling D5), so the app's copy is dropped from every invoke. Both
   // degrade gracefully (throttled / anonymous access) rather than
   // hard-failing, so no tier promotion and no onlyWhen condition.
-  { name: 'SOCRATA_APP_TOKEN', tier: 'optional', purpose: 'Socrata app token for executed notebooks (fetch_socrata.py) — raises the anonymous per-IP rate limit; throttled but functional without it. Under EXECUTOR_DRIVER=lambda, set it on the function instead: the app never sends it', hasFallback: true },
-  { name: 'DC_API_KEY', tier: 'optional', purpose: 'Data Commons API key for executed notebooks (fetch_data_commons.py) — distinct from DATA_COMMONS_API_KEY (the chat-flow MCP key); anonymous access works for moderate volumes without it. Under EXECUTOR_DRIVER=lambda, set it on the function instead: the app never sends it', hasFallback: true },
+  { name: 'SOCRATA_APP_TOKEN', tier: 'optional', purpose: 'Socrata app token for executed notebooks (fetch_socrata.py) — raises the anonymous per-IP rate limit; throttled but functional without it. Under EXECUTOR_DRIVER=lambda, set it on the function instead: the app never sends it', hasFallback: true , notWhen: { executor: 'none' } },
+  { name: 'DC_API_KEY', tier: 'optional', purpose: 'Data Commons API key for executed notebooks (fetch_data_commons.py) — distinct from DATA_COMMONS_API_KEY (the chat-flow MCP key); anonymous access works for moderate volumes without it. Under EXECUTOR_DRIVER=lambda, set it on the function instead: the app never sends it', hasFallback: true , notWhen: { executor: 'none' } },
   // Sandbox-only: the container driver boots a local image and reads none of
   // these four (vercel-sandbox.ts:89-96 is behind the driver's dynamic import).
   { name: 'SANDBOX_SNAPSHOT_ID', tier: 'recommended', purpose: 'Prebuilt sandbox snapshot — absent, the vercel-sandbox driver falls back to a slow fresh boot + pip install', hasFallback: true, onlyWhen: { executor: 'vercel-sandbox' } },
@@ -978,7 +990,7 @@ export function resolveSpec(drivers, spec = ENV_SPEC, env = {}) {
   const applicable = [];
   const notApplicable = [];
   for (const s of spec) {
-    if (s.onlyWhen && !conditionMet(s.onlyWhen, drivers)) {
+    if ((s.onlyWhen && !conditionMet(s.onlyWhen, drivers)) || (s.notWhen && conditionMet(s.notWhen, drivers))) {
       notApplicable.push(s);
       continue;
     }

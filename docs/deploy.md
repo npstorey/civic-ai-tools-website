@@ -607,7 +607,7 @@ self-hosted values for you. Decide these first.
 | --- | --- | --- | --- | --- |
 | Database | `DB_DRIVER` | `neon-http`, `node-postgres` | `neon-http` | `node-postgres` |
 | Blob storage | `BLOB_DRIVER` | `vercel-blob`, `s3` | `vercel-blob` | `s3` |
-| Notebook executor | `EXECUTOR_DRIVER` | `vercel-sandbox`, `container`, `lambda` | `vercel-sandbox` | `container` |
+| Notebook executor | `EXECUTOR_DRIVER` | `vercel-sandbox`, `container`, `lambda`, `none` | `vercel-sandbox` | `container` |
 
 A selector set to anything outside its value set fails loudly at first
 use (and fails the preflight). What the defaults hide:
@@ -633,13 +633,67 @@ use (and fails the preflight). What the defaults hide:
   `civic-notebook-executor:0.2.0`). `lambda` sends each notebook to an
   AWS Lambda function built from the same Dockerfile, for a platform that
   offers no container-runtime socket (see [The Lambda
-  executor](#the-lambda-executor)).
+  executor](#the-lambda-executor)). `none` declares that the instance
+  runs no notebooks at all (next section). An unset `EXECUTOR_DRIVER`
+  is not that declaration: it is `vercel-sandbox`.
+
+### An instance that runs no notebooks (`EXECUTOR_DRIVER=none`)
+
+Set `EXECUTOR_DRIVER=none` on an instance with no notebook executor.
+Without it, `/ask` starts in notebook mode and every question there ends
+in an error after the model has already answered: the unset driver is
+`vercel-sandbox`, which the route tries and which cannot start there.
+
+**What a reader sees.** On both pages that offer notebook mode, `/ask`
+and the home page, the response-mode control under Advanced options
+shows the notebook option disabled, with the reason beside it: "Not
+offered on this site: it does not run notebooks, so questions are
+answered in standard mode." This holds signed in or not; a signed-out
+reader is not asked to sign in for a mode that signing in would not turn
+on. `/ask` starts in standard mode, including for a reader whose
+session had stored a notebook choice; the stored choice is kept, not
+erased.
+
+**What the route answers.** `POST /api/query-notebook` answers **501**
+with a JSON body `{"error": "…", "code": "notebooks_not_offered"}`; a
+client matches on the code, `notebooks_not_offered`, not on the text. It
+does so first, before it reads the request body, before any model call,
+and before the rate limiter is charged, so a refused request costs the
+caller nothing. The form never sends one under `none`; this is the
+answer to a page loaded before the setting changed, or to a direct API
+call. A page loaded before the change shows the generic error copy.
+
+**What `none` does not do.** It does not change standard mode, or
+anything else that does not execute a notebook. A standard-mode answer
+can still be downloaded as a notebook file, unexecuted, as on any
+instance. Replay of a published record, publishing, and
+reading records that carry an executed notebook are unchanged. It is not
+a default-mode setting either: an instance with an executor cannot use
+it to start `/ask` in standard mode. And it does not stop
+`scripts/executor-parity.mjs`, which sets its own driver for each leg.
+
+**Where the value is read.** At run time by the route and by `/ask`,
+which renders per request. The home page is prerendered, so its form
+follows the value `next build` saw: set `EXECUTOR_DRIVER` in the build
+environment as well, as `SITE_PORTAL_LOCKED` is
+([Branding and theming](#branding-and-theming-chrome-only) explains the
+two arrival times). The Dockerfile declares it as a build argument, and
+`docker-compose.yml` passes the same literal it runs with (`container`);
+change both together.
+
+**Preflight** accepts `none`, and drops every variable only notebook
+execution reads: the container and Lambda settings, both timeouts,
+`SOCRATA_APP_TOKEN` and `DC_API_KEY` (passed into a notebook, never read
+by the app), and the sandbox-only variables. If execution is reached
+anyway, it refuses with an `ExecutorSettingError` naming
+`EXECUTOR_DRIVER`, and no driver is loaded.
 
 ### Executor settings
 
 Every setting below is optional, and unset (or blank) means the behaviour the
 executor had before the setting existed. The compose file passes each one
-through bare, so a variable your env file does not set stays unset.
+through bare, so a variable your env file does not set stays unset. Under
+`EXECUTOR_DRIVER=none` none of them is read.
 
 A value is checked before the executor starts anything. A value that is not
 of its setting's shape is refused at the first notebook run, not corrected:
@@ -1097,6 +1151,7 @@ doesn't):
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Durable rate limiting — the counter falls back to per-process memory (resets on restart; not shared across instances). Fine for a single-node instance. |
 | `SANDBOX_SNAPSHOT_ID` | (vercel-sandbox executor only) Prebuilt snapshot — absent, every execution pays a slow fresh boot + pip install. Not read by the container executor. |
 | `SOCRATA_APP_TOKEN` | Socrata API app token passed into executed notebooks — absent, requests run anonymously against Socrata's lower rate limits. |
+| `EXECUTOR_DRIVER` set to `none` | Notebook mode, deliberately: the instance runs no notebooks. Unset is not this; unset is `vercel-sandbox`. The query form on `/ask` and the home page shows the notebook option disabled with its reason, signed in or not, and `/ask` starts in standard mode. `POST /api/query-notebook` answers 501, `code: "notebooks_not_offered"`, before the body is read, before any model call and before the rate limiter is charged. Standard mode is unchanged. Read at build and at run time: the prerendered home page follows the build's value. See [An instance that runs no notebooks](#an-instance-that-runs-no-notebooks-executor_drivernone). |
 | `ROADMAP_RAW_URL` | `/roadmap` — absent, the page states that this instance has published no roadmap and the Roadmap link leaves the header and footer nav. An instance serves its own roadmap or none; there is no upstream fallback. |
 | `SITE_DEFAULT_PORTAL` | The default portal a query runs against when the reader picks none. Absent, a run carries **no** default: the query form's "All portals" entry is what an unqualified question uses, the model names its own portal on each call, and every surface that would have named one omits it instead — the trace records no run-level portal, and a downloaded notebook's cover states only the portals its own calls named. Nothing breaks and nothing refuses (unless `SITE_PORTAL_LOCKED`, below, is on); the instance simply asserts no portal it was not told about. Set it to the open-data host this deployment is built around, as a bare hostname with no scheme (the same shape the `portal` tool argument takes). It has no coded fallback for the reason `SOCRATA_MCP_URL` has none: the value it replaced was one deployment's own city, written into the routes and components, and it reached the root span of a trace a publish carries into a signed record. **An instance fronting one portal sets this and the Socrata MCP server's `DATA_PORTAL_URL` to that same portal** (this one takes the bare host, the server's the URL, `https://<host>`). They are two defaults, not one: this is the portal a run names, and the server's is the portal that answers any call naming none — every `search`, which takes no portal argument, and every `fetch` by a bare dataset id. Set to different portals, one run can name one portal while those calls are answered from another; with the server's unset, those calls are refused one at a time, and the run records each as a rejected call. |
 | `SITE_PORTAL_LOCKED` | The one-portal switch, for Socrata portals. Absent, or anything but `1`/`true`, it is off and nothing above changes: a request may name any portal, and `SITE_DEFAULT_PORTAL` is only a default. **On, `SITE_DEFAULT_PORTAL` is the only Socrata portal this instance queries.** A query request (`/api/compare`, `/api/compare-stream`, `/api/query-notebook`) whose body names no portal, or `""`, runs on the configured portal; one naming that portal in any case or spacing runs on it too; one naming any other portal is refused with a 400 whose `error` names both portals. With the switch on and `SITE_DEFAULT_PORTAL` unset, every query is refused before the rate limiter and the skill fetch: the server log names `SITE_DEFAULT_PORTAL`, and the reader is shown the generic error copy (preflight marks `SITE_DEFAULT_PORTAL` required whenever the switch is on). Inside a run, a `get_data` call the model makes naming another portal (through `portal` or its alias `domain`), and a `fetch` whose identifier or URL names another portal, are refused before they are sent and recorded as rejected calls: the record keeps the attempt, marked failed, and lists neither that dataset nor that portal among the sources accessed. The Socrata tool descriptions and the system prompt stop inviting other Socrata portals, and the query form drops its portal picker and its two cross-city examples. **What the switch does not govern:** `search`, which takes no portal argument and is answered by whichever portal the Socrata MCP server is configured for, and a `fetch` by a bare dataset id, which that server resolves the same way — so set the server's `DATA_PORTAL_URL` to the same portal (see the row above); code an executed notebook runs, including code written by the model (the switch governs the calls the model makes through its tools, not what a notebook cell requests); replay of a published record, which runs on the portal the record's own calls named, whether or not the record predates the switch; and the other data sources (Data Commons, and Boston OpenContext where `BOSTON_OPENCONTEXT_MCP_URL` configures it, which fronts the City of Boston's own open-data portal), which are separate servers taking no Socrata portal and stay callable with the switch on. Read at build and at run time, like `SITE_DEFAULT_PORTAL`: pass it in both places on a container build. |
