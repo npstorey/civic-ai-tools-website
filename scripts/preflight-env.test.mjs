@@ -667,8 +667,11 @@ function selfHostedDrivers() {
   return { DB_DRIVER: 'node-postgres', BLOB_DRIVER: 's3', EXECUTOR_DRIVER: 'container' };
 }
 
-/** Names the S3 driver hard-throws on (src/lib/storage/s3.ts:67-69). */
+/** The S3 bucket and key pair: a complete set satisfies every s3-profile row
+ *  (the key pair may also be left unset — S3_KEY_PAIR below, #554). */
 const S3_CREDENTIALS = ['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
+/** The S3 key pair: both set, or neither for the AWS SDK's default chain (#554). */
+const S3_KEY_PAIR = ['S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
 /** Variables only the vercel-sandbox executor driver reads. */
 const SANDBOX_ONLY = ['SANDBOX_SNAPSHOT_ID', 'VERCEL_TOKEN', 'VERCEL_TEAM_ID', 'VERCEL_PROJECT_ID'];
 
@@ -677,10 +680,21 @@ function tierOf(rows, name) {
 }
 
 test('every conditional field names a known seam and a known driver value', () => {
+  const declared = new Set(ENV_SPEC.map((e) => e.name));
   for (const s of ENV_SPEC) {
-    for (const field of ['onlyWhen', 'requiredWhen', 'notWhen']) {
-      if (!s[field]) continue;
-      for (const [seam, driver] of Object.entries(s[field])) {
+    if (s.requiredWhenPartnerPresent) {
+      assert.ok(declared.has(s.requiredWhenPartnerPresent.partner), `${s.name}'s partner is declared`);
+      assert.notEqual(s.requiredWhenPartnerPresent.partner, s.name, `${s.name} is not its own partner`);
+    }
+    const conditions = {
+      onlyWhen: s.onlyWhen,
+      requiredWhen: s.requiredWhen,
+      notWhen: s.notWhen,
+      'requiredWhenPartnerPresent.when': s.requiredWhenPartnerPresent?.when,
+    };
+    for (const [field, condition] of Object.entries(conditions)) {
+      if (!condition) continue;
+      for (const [seam, driver] of Object.entries(condition)) {
         assert.ok(DRIVER_SEAMS[seam], `${s.name}.${field} names a known seam (${seam})`);
         assert.ok(
           DRIVER_SEAMS[seam].values.includes(driver),
@@ -725,15 +739,121 @@ test('REGRESSION: selectors set explicitly to their defaults match unset, byte f
   assert.ok(!renderReport(explicitResult).includes('PROFILE:'));
 });
 
-test('BLOB_DRIVER=s3 promotes the S3 credentials to required', () => {
+test('BLOB_DRIVER=s3 promotes the bucket to required; with neither key set the key pair stays optional (#554)', () => {
   const env = { ...envWithAllRequired(), BLOB_DRIVER: 's3' };
   const result = evaluateEnv(env);
-  for (const name of S3_CREDENTIALS) {
-    assert.equal(tierOf(result.rows, name), 'required', `${name} is required under the s3 driver`);
+  assert.equal(tierOf(result.rows, 'S3_BUCKET'), 'required', 'S3_BUCKET is required under the s3 driver');
+  for (const name of S3_KEY_PAIR) {
+    assert.equal(tierOf(result.rows, name), 'optional', `${name} is optional while neither key is set`);
   }
   // Absent (envWithAllRequired only fills base-tier required vars) ⇒ hard miss.
   assert.equal(result.ok, false);
-  assert.deepEqual(result.missingRequired.map((r) => r.name).sort(), [...S3_CREDENTIALS].sort());
+  assert.deepEqual(result.missingRequired.map((r) => r.name), ['S3_BUCKET']);
+});
+
+test('#554: BLOB_DRIVER=s3 with the bucket and neither key passes — the AWS SDK default chain needs no key', () => {
+  const env = { ...envWithAllRequired(), BLOB_DRIVER: 's3', S3_BUCKET: 'present' };
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.missingRequired, []);
+  const report = renderReport(result);
+  assert.match(report, /RESULT: PASS/);
+  for (const name of S3_KEY_PAIR) assert.doesNotMatch(report, new RegExp(`- ${name}\\b`));
+});
+
+test('#554: one key alone fails the s3 profile, naming the missing one, in both directions', () => {
+  for (const [present, missing] of [S3_KEY_PAIR, [...S3_KEY_PAIR].reverse()]) {
+    const env = { ...envWithAllRequired(), BLOB_DRIVER: 's3', S3_BUCKET: 'present', [present]: 'present' };
+    const result = evaluateEnv(env);
+    assert.equal(result.ok, false, `${present} alone is refused by the driver, so preflight must not pass`);
+    assert.deepEqual(result.missingRequired.map((r) => r.name), [missing], `${missing} is named as missing`);
+    assert.equal(tierOf(result.rows, missing), 'required');
+    const report = renderReport(result);
+    assert.match(report, /RESULT: FAIL — 1 required variable\(s\) missing:/);
+    assert.match(report, new RegExp(`- ${missing}\\b`));
+    assert.doesNotMatch(report, new RegExp(`- ${present}\\b`));
+  }
+});
+
+test('#554: one key alone does not fail the default blob driver, which never reads it', () => {
+  for (const name of S3_KEY_PAIR) {
+    const result = evaluateEnv({ ...envWithAllRequired(), [name]: 'present' });
+    assert.equal(result.ok, true, `${name} alone is inert under vercel-blob`);
+    for (const other of S3_KEY_PAIR) assert.equal(tierOf(result.rows, other), 'optional');
+  }
+});
+
+test('#554: a whitespace-only key counts as unset, as everywhere else in this script', () => {
+  const env = {
+    ...envWithAllRequired(), BLOB_DRIVER: 's3', S3_BUCKET: 'present',
+    S3_ACCESS_KEY_ID: '   ', S3_SECRET_ACCESS_KEY: 'present',
+  };
+  const result = evaluateEnv(env);
+  assert.deepEqual(result.missingRequired.map((r) => r.name), ['S3_ACCESS_KEY_ID']);
+});
+
+// --- #554 beside #547: requiredWhenPartnerPresent and notWhen in one spec ----
+
+test('#554/#547: the S3 key rows carry the partner promotion and no notWhen; the notWhen rows carry no partner promotion', () => {
+  const partnerRows = ENV_SPEC.filter((s) => s.requiredWhenPartnerPresent).map((s) => s.name).sort();
+  assert.deepEqual(partnerRows, [...S3_KEY_PAIR].sort());
+  const notWhenRows = ENV_SPEC.filter((s) => s.notWhen);
+  assert.ok(notWhenRows.length > 0, 'the executor rows still carry notWhen');
+  for (const s of ENV_SPEC) {
+    assert.ok(!(s.notWhen && s.requiredWhenPartnerPresent), `${s.name} carries one of the two fields, not both`);
+  }
+});
+
+test('#554/#547: executor none and blob s3 together — a lone key still fails, naming its partner, and the notebook rows are dropped', () => {
+  const notebookOnly = ENV_SPEC.filter((s) => s.notWhen?.executor === 'none').map((s) => s.name);
+  assert.ok(notebookOnly.length > 0);
+  for (const [present, missing] of [S3_KEY_PAIR, [...S3_KEY_PAIR].reverse()]) {
+    const env = {
+      ...envWithAllRequired(),
+      EXECUTOR_DRIVER: 'none',
+      BLOB_DRIVER: 's3',
+      S3_BUCKET: 'present',
+      [present]: 'present',
+    };
+    const result = evaluateEnv(env);
+    assert.equal(result.ok, false, `${present} alone fails under executor none too`);
+    assert.deepEqual(result.missingRequired.map((r) => r.name), [missing]);
+    const report = renderReport(result);
+    assert.match(report, new RegExp(`- ${missing}\\b`));
+    for (const name of notebookOnly) {
+      assert.ok(result.notApplicable.includes(name), `${name} is not applicable under executor none`);
+      assert.equal(tierOf(result.rows, name), undefined, `${name} has no row`);
+    }
+  }
+  // The same profile with neither key, and with both, passes.
+  for (const keys of [{}, { S3_ACCESS_KEY_ID: 'present', S3_SECRET_ACCESS_KEY: 'present' }]) {
+    const env = { ...envWithAllRequired(), EXECUTOR_DRIVER: 'none', BLOB_DRIVER: 's3', S3_BUCKET: 'present', ...keys };
+    const result = evaluateEnv(env);
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.missingRequired, []);
+  }
+});
+
+test('#554/#547: one row carrying both fields — notWhen drops it before the partner promotion can apply', () => {
+  const row = {
+    name: 'P3_PROBE_KEY',
+    tier: 'optional',
+    purpose: 'probe',
+    notWhen: { executor: 'none' },
+    requiredWhenPartnerPresent: { when: { blob: 's3' }, partner: 'P3_PROBE_PARTNER' },
+  };
+  const partner = { name: 'P3_PROBE_PARTNER', tier: 'optional', purpose: 'probe' };
+  const spec = [row, partner];
+  const base = { BLOB_DRIVER: 's3', P3_PROBE_PARTNER: 'present' };
+
+  const dropped = evaluateEnv({ ...base, EXECUTOR_DRIVER: 'none' }, spec);
+  assert.equal(tierOf(dropped.rows, 'P3_PROBE_KEY'), undefined, 'not applicable under executor none');
+  assert.ok(dropped.notApplicable.includes('P3_PROBE_KEY'));
+  assert.ok(!dropped.missingRequired.some((r) => r.name === 'P3_PROBE_KEY'));
+
+  const promoted = evaluateEnv({ ...base, EXECUTOR_DRIVER: 'container' }, spec);
+  assert.equal(tierOf(promoted.rows, 'P3_PROBE_KEY'), 'required', 'applicable elsewhere, and promoted by its partner');
+  assert.deepEqual(promoted.missingRequired.map((r) => r.name), ['P3_PROBE_KEY']);
 });
 
 test('BLOB_DRIVER=s3 passes once the S3 credentials are present', () => {

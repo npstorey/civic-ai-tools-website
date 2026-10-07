@@ -222,7 +222,19 @@ export const DRIVER_SEAMS = {
  *     `false` would promote too. Minted for SITE_DEFAULT_PORTAL, which a
  *     portal-locked instance cannot run without — every query refuses.
  *
- * CONSTRAINT: all five fields must leave the default profile untouched. With
+ * A field keyed by a SIBLING's presence (#554):
+ *   - `requiredWhenPartnerPresent: { when: { <seam>: '<driver>' }, partner: '<VAR>' }`
+ *     — tier becomes 'required' when the seam condition holds AND <VAR> is
+ *     present. Minted for the S3 key pair, which is both or neither: neither
+ *     hands the client to the AWS SDK's default chain, so no key is required on
+ *     its own, but one without the other is refused by the driver, naming the
+ *     missing one, and this promotion makes preflight name it too. The seam
+ *     condition keeps a stray key on a Vercel Blob instance (which never reads
+ *     it) from failing the run. A group (ENV_GROUPS) cannot express this: a
+ *     partial group warns and never fails, and its wording tells the operator
+ *     to complete the set, where here leaving both unset is equally valid.
+ *
+ * CONSTRAINT: all seven fields must leave the default profile untouched. With
  * no selector set (or every selector set to its default), no customized
  * variable and no alternative set complete, the resolved spec is identical to
  * the declared one, so the report is byte-identical to the
@@ -345,13 +357,16 @@ export const ENV_SPEC = [
   { name: 'BLOB_READ_WRITE_TOKEN', tier: 'required', purpose: 'Record package storage (Vercel Blob)', onlyWhen: { blob: 'vercel-blob' } },
   { name: 'BLOB_DRIVER', tier: 'optional', purpose: "Blob storage driver — 'vercel-blob' (default) or 's3' (any S3-compatible endpoint)", hasFallback: true },
   // S3-compatible storage (read only when BLOB_DRIVER=s3; see src/lib/storage/s3.ts).
-  // The three credentials below are hard throws in resolveS3ConfigFromEnv
-  // (s3.ts:67-69); the rest resolve to coded defaults.
+  // S3_BUCKET is a hard throw in resolveS3ConfigFromEnv. The key pair is both
+  // or neither (#554): neither hands the client to the AWS SDK's default chain
+  // (role access), so neither key is required on its own; one without the
+  // other is a hard throw naming the missing one, which
+  // `requiredWhenPartnerPresent` mirrors. The rest resolve to coded defaults.
   { name: 'S3_ENDPOINT', tier: 'optional', purpose: 'S3-compatible endpoint URL (BLOB_DRIVER=s3; omit for AWS S3 proper)', hasFallback: true },
   { name: 'S3_REGION', tier: 'optional', purpose: 'S3 region (BLOB_DRIVER=s3; default us-east-1)', hasFallback: true },
   { name: 'S3_BUCKET', tier: 'optional', purpose: 'S3 bucket for record-package blobs (required when BLOB_DRIVER=s3)', requiredWhen: { blob: 's3' } },
-  { name: 'S3_ACCESS_KEY_ID', tier: 'optional', purpose: 'S3 access key (required when BLOB_DRIVER=s3)', requiredWhen: { blob: 's3' } },
-  { name: 'S3_SECRET_ACCESS_KEY', tier: 'optional', purpose: 'S3 secret key (required when BLOB_DRIVER=s3)', requiredWhen: { blob: 's3' } },
+  { name: 'S3_ACCESS_KEY_ID', tier: 'optional', purpose: 'S3 access key (BLOB_DRIVER=s3) — set with S3_SECRET_ACCESS_KEY, or leave both unset for the AWS SDK default chain', requiredWhenPartnerPresent: { when: { blob: 's3' }, partner: 'S3_SECRET_ACCESS_KEY' } },
+  { name: 'S3_SECRET_ACCESS_KEY', tier: 'optional', purpose: 'S3 secret key (BLOB_DRIVER=s3) — set with S3_ACCESS_KEY_ID, or leave both unset for the AWS SDK default chain', requiredWhenPartnerPresent: { when: { blob: 's3' }, partner: 'S3_ACCESS_KEY_ID' } },
   { name: 'S3_FORCE_PATH_STYLE', tier: 'optional', purpose: 'Path-style S3 addressing (default: on when S3_ENDPOINT is set — MinIO)', hasFallback: true },
   { name: 'S3_PUBLIC_BASE_URL', tier: 'optional', purpose: 'Public object URL base (default: endpoint/bucket path-style)', hasFallback: true },
   // --- Notebook executor (S3b P4 driver seam; executed-notebook pipeline) ---
@@ -1006,7 +1021,10 @@ export function resolveSpec(drivers, spec = ENV_SPEC, env = {}) {
     const promoted =
       (s.requiredWhen && conditionMet(s.requiredWhen, drivers)) ||
       (s.requiredWhenCustomized && customizedFromDefault(s.requiredWhenCustomized, env)) ||
-      (s.requiredWhenFlagOn && flagOn(env[s.requiredWhenFlagOn]));
+      (s.requiredWhenFlagOn && flagOn(env[s.requiredWhenFlagOn])) ||
+      (s.requiredWhenPartnerPresent &&
+        conditionMet(s.requiredWhenPartnerPresent.when, drivers) &&
+        isPresent(env[s.requiredWhenPartnerPresent.partner]));
     if (promoted) {
       // The promotion also drops any `hasFallback` claim. A driver that makes
       // a variable load-bearing is by definition a driver the coded fallback

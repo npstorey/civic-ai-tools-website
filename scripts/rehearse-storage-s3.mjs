@@ -19,6 +19,21 @@
  *                     byte-identical.
  *   3. public-read  — stored objects fetchable anonymously at the driver's
  *                     resolved public URL; keyFromUrl mapping consistent.
+ *
+ * Two bucket modes (#554, ruling G0-5 C). The default asserts a PUBLIC
+ * bucket: leg 1's two public-URL checks and leg 3's anonymous fetches must
+ * be served. `--private-bucket` asserts a PRIVATE one: those same checks must
+ * be REFUSED (401 or 403, and the stored bytes not served). Every other check
+ * is the same in both modes. Each mode fails on the other kind of bucket: the
+ * default fails legs 1 and 3 on a private bucket (`RESULT: FAIL — 2/4`), and
+ * `--private-bucket` fails them on a public one.
+ *
+ * Credentials (#554). With S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY both
+ * set, every request signs with that pair. With neither set, the driver and
+ * the harness's raw-read client are built with no credentials and the AWS
+ * SDK's default chain resolves them (AWS_ACCESS_KEY_ID /
+ * AWS_SECRET_ACCESS_KEY, the shared files, SSO, a process, web identity,
+ * container or instance metadata). One without the other is a config error.
  *   4. gc           — the extracted sweep (`src/lib/evidence/blob-gc.ts`)
  *                     run hermetically: harness-created fixtures only, a
  *                     stubbed referenced-set (no production DB), fresh run
@@ -63,6 +78,29 @@
  *     S3_BUCKET=evidence-rehearsal S3_ACCESS_KEY_ID=minio-local-admin \
  *     S3_SECRET_ACCESS_KEY=minio-local-admin-secret \
  *     node scripts/rehearse-storage-s3.mjs
+ *
+ * The private mode, against a second bucket with no anonymous policy:
+ *
+ *   docker run --rm --network s5-rehearsal-net --entrypoint sh minio/mc -c '\
+ *     mc alias set local http://s5-rehearsal-minio:9000 \
+ *       minio-local-admin minio-local-admin-secret && \
+ *     mc mb local/evidence-rehearsal-private'
+ *   BLOB_DRIVER=s3 S3_ENDPOINT=http://127.0.0.1:9000 \
+ *     S3_BUCKET=evidence-rehearsal-private S3_ACCESS_KEY_ID=minio-local-admin \
+ *     S3_SECRET_ACCESS_KEY=minio-local-admin-secret \
+ *     node scripts/rehearse-storage-s3.mjs --private-bucket
+ *
+ * The SDK's default chain instead of the S3 pair: leave both S3_* keys unset
+ * and give the chain a source, here its environment one. Point the shared
+ * files at empty files and set AWS_EC2_METADATA_DISABLED=true so nothing
+ * else on the machine can answer:
+ *
+ *   BLOB_DRIVER=s3 S3_ENDPOINT=http://127.0.0.1:9000 S3_BUCKET=evidence-rehearsal \
+ *     AWS_ACCESS_KEY_ID=minio-local-admin AWS_SECRET_ACCESS_KEY=minio-local-admin-secret \
+ *     AWS_CONFIG_FILE=<empty file> AWS_SHARED_CREDENTIALS_FILE=<empty file> \
+ *     AWS_EC2_METADATA_DISABLED=true \
+ *     node scripts/rehearse-storage-s3.mjs
+ *
  *   docker rm -f s5-rehearsal-minio && \
  *     docker volume rm s5-rehearsal-minio-data && \
  *     docker network rm s5-rehearsal-net
@@ -105,12 +143,18 @@ credential value. The variables it needs either way:
 
   BLOB_DRIVER=s3          required — the harness refuses any other driver
   S3_BUCKET               required
-  S3_ACCESS_KEY_ID        required
-  S3_SECRET_ACCESS_KEY    required
+  S3_ACCESS_KEY_ID        both or neither — neither: the AWS SDK default
+  S3_SECRET_ACCESS_KEY    chain supplies the credentials (e.g. a role)
   S3_ENDPOINT             optional — omit for AWS S3 proper
   S3_REGION               optional — default us-east-1
   S3_FORCE_PATH_STYLE     optional — default true when S3_ENDPOINT is set
   S3_PUBLIC_BASE_URL      optional — default derived from endpoint/bucket
+
+Flags:
+  --private-bucket        the bucket allows no anonymous read: legs 1 and 3
+                          assert each anonymous read is REFUSED (401/403,
+                          stored bytes not served) instead of served. Every
+                          other check is unchanged. Default: a public bucket.
 
 Exit codes: 0 all legs pass, 1 any leg fails, 2 usage/config error.
 The MinIO self-verification recipe is in this file's header comment.
@@ -121,6 +165,17 @@ if (process.argv.includes('--help') || process.argv.includes('-h')) {
   process.exit(0);
 }
 
+const KNOWN_FLAGS = new Set(['--private-bucket', '--help', '-h']);
+const unknownFlags = process.argv.slice(2).filter((a) => !KNOWN_FLAGS.has(a));
+if (unknownFlags.length > 0) {
+  console.error(`error: unknown argument(s): ${unknownFlags.join(' ')}`);
+  console.error('\n' + USAGE);
+  process.exit(2);
+}
+
+/** #554 / G0-5 C: anonymous reads must be refused rather than served. */
+const PRIVATE_BUCKET = process.argv.includes('--private-bucket');
+
 // --- Env gate (before importing anything from src/) ------------------------
 
 if (process.env.BLOB_DRIVER !== 's3') {
@@ -130,9 +185,13 @@ if (process.env.BLOB_DRIVER !== 's3') {
   process.exit(2);
 }
 
-const { resolveS3ConfigFromEnv, createS3Driver, keyFromUrl } = await import(
-  '../src/lib/storage/s3.ts'
-);
+const {
+  resolveS3ConfigFromEnv,
+  createS3Driver,
+  keyFromUrl,
+  s3ClientConfig,
+  s3CredentialSource,
+} = await import('../src/lib/storage/s3.ts');
 const { putPackage, listBlobs } = await import('../src/lib/storage/index.ts');
 const { sweepOrphans, BLOB_PREFIX, ORPHAN_GRACE_MS } = await import(
   '../src/lib/evidence/blob-gc.ts'
@@ -155,7 +214,16 @@ console.log('[config] BLOB_DRIVER=s3');
 console.log(`[config] endpoint=${cfg.endpoint ?? '(none — AWS S3 proper)'} pathStyle=${cfg.forcePathStyle}`);
 console.log(`[config] bucket=${cfg.bucket} region=${cfg.region}`);
 console.log(`[config] publicBaseUrl=${cfg.publicBaseUrl}`);
-console.log('[config] credentials: S3_ACCESS_KEY_ID=set S3_SECRET_ACCESS_KEY=set (values never printed)');
+console.log(
+  s3CredentialSource(cfg) === 'key-pair'
+    ? '[config] credential source: S3_ACCESS_KEY_ID=set S3_SECRET_ACCESS_KEY=set (values never printed)'
+    : '[config] credential source: AWS SDK default chain (S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY unset)',
+);
+console.log(
+  PRIVATE_BUCKET
+    ? '[config] bucket mode: private (--private-bucket) — anonymous reads must be REFUSED'
+    : '[config] bucket mode: public (default) — anonymous reads must be served',
+);
 console.log(`[config] runId=${RUN_ID}`);
 
 // --- Shared plumbing -------------------------------------------------------
@@ -163,16 +231,16 @@ console.log(`[config] runId=${RUN_ID}`);
 const driver = createS3Driver(cfg);
 
 /** Raw-read client, independent of the driver's read path (leg 1 uses it to
- *  fetch stored bytes via plain GetObject). Mirrors the driver's checksum
- *  settings so no transform is introduced on the wire. */
-const rawClient = new S3Client({
-  region: cfg.region,
-  ...(cfg.endpoint ? { endpoint: cfg.endpoint } : {}),
-  forcePathStyle: cfg.forcePathStyle,
-  credentials: { accessKeyId: cfg.accessKeyId, secretAccessKey: cfg.secretAccessKey },
-  requestChecksumCalculation: 'WHEN_REQUIRED',
-  responseChecksumValidation: 'WHEN_REQUIRED',
-});
+ *  fetch stored bytes via plain GetObject). Built from the driver's own
+ *  client configuration — the same credential source (the key pair, or the
+ *  SDK's default chain) and the same checksum settings, so no transform is
+ *  introduced on the wire. */
+const rawClient = new S3Client(s3ClientConfig(cfg));
+
+/** An anonymous read is refused, not merely failed: S3 answers 403 (some
+ *  S3-compatibles 401). A 404 would mean the object is missing, which is a
+ *  different defect and must not pass as "private". */
+const isRefusal = (status) => status === 401 || status === 403;
 
 const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const objectUrl = (key) => `${cfg.publicBaseUrl}/${key}`;
@@ -291,9 +359,17 @@ async function legRoundTrip(state) {
 
   const publicRes = await fetch(url);
   const publicBytes = Buffer.from(await publicRes.arrayBuffer());
-  check('public-URL fetch succeeds', publicRes.ok, `status=${publicRes.status}`);
-  check('public-URL bytes sha256-identical', sha256(publicBytes) === originalSha,
-    `${publicBytes.length} bytes`);
+  if (PRIVATE_BUCKET) {
+    check('public-URL fetch refused (private bucket)', isRefusal(publicRes.status),
+      `status=${publicRes.status}${publicRes.ok ? '' : ` code=${s3ErrorCode(publicBytes.toString('utf8'))}`}`);
+    check('public-URL response does not serve the stored bytes (private bucket)',
+      sha256(publicBytes) !== originalSha && !publicBytes.includes(originalBytes),
+      `${publicBytes.length} bytes`);
+  } else {
+    check('public-URL fetch succeeds', publicRes.ok, `status=${publicRes.status}`);
+    check('public-URL bytes sha256-identical', sha256(publicBytes) === originalSha,
+      `${publicBytes.length} bytes`);
+  }
 
   const text = await driver.getText(url);
   check('interface getText round-trip sha256-identical',
@@ -408,7 +484,12 @@ async function legPublicRead(state) {
     }
     // Plain fetch: no SDK, no credentials, no signed headers — anonymous.
     const res = await fetch(t.url);
-    check(`${t.label}: anonymous fetch of public URL succeeds`, res.ok, `status=${res.status}`);
+    if (PRIVATE_BUCKET) {
+      check(`${t.label}: anonymous fetch of public URL refused (private bucket)`, isRefusal(res.status),
+        `status=${res.status}${res.ok ? '' : ` code=${s3ErrorCode(await res.text())}`}`);
+    } else {
+      check(`${t.label}: anonymous fetch of public URL succeeds`, res.ok, `status=${res.status}`);
+    }
     check(`${t.label}: keyFromUrl maps URL back to its key`,
       keyFromUrl(t.url, cfg.publicBaseUrl) === t.key);
   }
@@ -527,7 +608,11 @@ async function legGc() {
 const LEGS = [
   { id: '1:round-trip', title: 'round-trip byte parity', run: legRoundTrip },
   { id: '2:grant', title: 'presigned-PUT grant incl. rejections', run: legGrant },
-  { id: '3:public-read', title: 'anonymous public read + URL mapping', run: legPublicRead },
+  {
+    id: '3:public-read',
+    title: PRIVATE_BUCKET ? 'anonymous read refused + URL mapping' : 'anonymous public read + URL mapping',
+    run: legPublicRead,
+  },
   { id: '4:gc', title: 'GC sweep (fresh + aged)', run: legGc },
 ];
 
