@@ -2007,17 +2007,70 @@ endpoint. The contract (resolved in
 | `S3_FORCE_PATH_STYLE` | no | Default: `true` when `S3_ENDPOINT` is set (MinIO needs path-style), `false` otherwise. |
 | `S3_PUBLIC_BASE_URL` | no | Public base for object URLs. Default: `<endpoint>/<bucket>` when `S3_ENDPOINT` is set, else the AWS virtual-hosted URL `https://<bucket>.s3.<region>.amazonaws.com`. |
 
-Object URLs are handed to **browsers**, so `S3_PUBLIC_BASE_URL` must be
-an address a browser can reach — not an in-network endpoint like
-`http://minio:9000`. Keep its last path segment equal to `S3_BUCKET`
-(the compose default does this).
+Each stored object's URL, built from `S3_PUBLIC_BASE_URL`, is what the
+database records for it, and the driver maps that URL back to the
+object's key on every read. Keep its last path segment equal to
+`S3_BUCKET` (the compose default does this), and do not change it once
+records exist: a stored URL outside the current base is fetched over
+plain HTTP instead of through the S3 API.
 
-Objects are world-readable by design: published record packages are
-public content, and the confidentiality of a not-yet-published (sealed)
-package rests on its unguessable random key, not on bucket ACLs. The
-compose stack's `minio-init` applies this policy for you; on a public
-cloud you apply it yourself
+### Two bucket choices
+
+**Public bucket (the default, unchanged).** Objects are world-readable:
+published record packages are public content, and the confidentiality
+of a not-yet-published (sealed) package rests on its unguessable random
+key, not on bucket ACLs. Object URLs reach browsers and third parties —
+a public record's signed `locatedAt` attestation and its commitment's
+`packageUrl` name them, and some pages fetch them directly — so
+`S3_PUBLIC_BASE_URL` must be an address a browser can reach, not an
+in-network endpoint like `http://minio:9000`. The compose stack's
+`minio-init` applies the public-read policy for you; on a public cloud
+you apply it yourself
 ([Appendix A](#appendix-a-first-time-s3-on-a-public-cloud)).
+
+**Private bucket.** No anonymous read: only the app's service account
+reads objects, and readers get record content through the app. The
+record page's Download goes through `GET /api/records/:slug/package`,
+which applies the record's read gate (a sealed record is its creator's
+alone) and serves the stored object's bytes unchanged. Requirements and
+consequences:
+
+- **Public publishing must be off: set `SITE_SEAL_ONLY=1`.** A public
+  record's signed `locatedAt` attestation and its commitment's
+  `packageUrl` name the storage URL as the place anyone can fetch the
+  package. On a private bucket that URL refuses every third party, so a
+  record made public there would assert a location nobody can read.
+  With the setting on, both publish routes refuse the public state, and
+  every new record is sealed.
+- **Records already public keep URLs that stop resolving.** Switching an
+  existing instance's bucket to private does not change any signed
+  record: each public record's `locatedAt` and commitment still name its
+  storage URL, and from then on that URL refuses anonymous readers. The
+  app still serves those records to anyone, through its pages and the
+  package route, but a third party following the signed location, such
+  as an independent verifier resolving the commitment's `packageUrl`,
+  can no longer fetch the package. Keep the bucket public if those
+  records must stay independently resolvable.
+- **`S3_PUBLIC_BASE_URL` still matters**, as the address the database
+  records and the driver maps back to keys (above). It need not be
+  reachable from a browser.
+- **Known gaps** (follow-up: #558). Two surfaces still fetch storage
+  URLs anonymously and fail on a private bucket:
+  - **Blob references.** A package's `output`, `trace` or skill text
+    stored under `evidence-refs/` through the upload-token flow: the
+    record page cannot show that content, and the integrity check
+    reports the reference as not retrievable. This reaches only records
+    published through the API with uploaded blob references; the app's
+    own pages never call the upload flow.
+  - **Attestation details.** The record page's browser fetches each
+    attestation's content from its storage URL, so its details do not
+    load. This reaches every attestation added from the record page's
+    Attestations dialog, which any signed-in viewer can open, and any
+    added through the same API route.
+- **The compose stack is public-only.** Its `minio-init` applies the
+  public-read policy on every start; a private bucket is for an object
+  store you provision yourself
+  ([Appendix A, private variant](#private-variant-no-public-read)).
 
 ### Validating a storage configuration
 
@@ -2060,6 +2113,18 @@ did not create: every such object is shielded from deletion and the run
 can still pass, but you are no longer observing the sweep on a
 dedicated bucket. The expected end state is
 `RESULT: PASS — 4/4 legs`.
+
+**On a private bucket, legs 1 and 3 fail.** Both fetch an object's
+public URL anonymously, which a private bucket refuses by design. Four
+checks fail: leg 1's `public-URL fetch succeeds` and `public-URL bytes
+sha256-identical`, and leg 3's `package: anonymous fetch of public URL
+succeeds` and `granted upload: anonymous fetch of public URL succeeds`.
+The run ends `RESULT: FAIL — 2/4 leg(s) failed (runId=…)`. Every other
+check in the four legs is unaffected by a private bucket: each reads and
+writes through the service account or a presigned URL, or reads nothing
+(leg 3's URL-to-key mappings). Read their results. That outcome is
+expected until the harness's private-bucket mode lands (#554), in which
+the anonymous reads assert the refusal instead.
 
 The same harness validates the compose stack's own MinIO (loopback
 endpoint, compose placeholder values), and the file's header comment
@@ -2172,12 +2237,17 @@ has never used a cloud object store. The walkthrough uses AWS S3
 console naming; any S3-compatible provider has equivalents for each
 piece. Budget well under an hour.
 
+The walkthrough builds the **public bucket**, the default
+([Two bucket choices](#two-bucket-choices)); the
+[private variant](#private-variant-no-public-read) below lists the
+steps that differ.
+
 What you are building, in plain terms:
 
 | Thing | What it is |
 | --- | --- |
 | **Bucket** | A named container for files, with a globally unique name and its own permissions. |
-| **Bucket policy** | JSON attached to the bucket saying who may do what. You will paste one letting anyone *read* objects, and nothing else. |
+| **Bucket policy** | JSON attached to the bucket saying who may do what. For a public bucket you paste one letting anyone *read* objects, and nothing else; a private bucket has none. |
 | **Service account** (AWS: IAM user) | A robot account whose access key — an ID and a secret — is what the app authenticates with. |
 | **Scoped policy** | Permissions attached to that account, restricted to this one bucket. |
 
@@ -2207,9 +2277,9 @@ In the S3 console, create a bucket with:
   `example-record-store`.
 - **Object ownership: ACLs disabled** (public access comes from the
   bucket policy, not per-object ACLs).
-- **Block-public-access: off** — uncheck "Block all public access" and
-  acknowledge. Without this the public-read policy below cannot be
-  saved.
+- **Block-public-access: off** for the public bucket — uncheck "Block
+  all public access" and acknowledge. Without this the public-read
+  policy below cannot be saved. (The private variant leaves it on.)
 - **Encryption: the provider-managed default (AWS: SSE-S3), not
   KMS-managed keys.** This one follows ordinary security instincts
   right into a trap: under SSE-KMS, anonymous readers would need key
@@ -2220,7 +2290,7 @@ In the S3 console, create a bucket with:
   marker rather than removing the object, which complicates the GC
   sweep's semantics.
 
-### Public-read policy
+### Public-read policy (public bucket only)
 
 Bucket → Permissions → Bucket policy:
 
@@ -2241,10 +2311,30 @@ Bucket → Permissions → Bucket policy:
 
 This grants reading of objects only — anonymous users still cannot
 list, upload, or delete. The console then badges the bucket **publicly
-accessible**, which is expected: published record packages are
-world-readable by design, and pre-publication content is protected by
-unguessable keys, not ACLs
-([Object storage](#object-storage-configuration-and-rehearsal)).
+accessible**, which is expected for the public bucket: its published
+record packages are world-readable by design, and pre-publication
+content is protected by unguessable keys, not ACLs
+([Two bucket choices](#two-bucket-choices)).
+
+### Private variant: no public read
+
+For the private bucket
+([Two bucket choices](#two-bucket-choices)), every step above and below
+is the same except these:
+
+- **Block-public-access: on** — leave "Block all public access" checked,
+  the console default.
+- **No bucket policy.** Skip the public-read policy; the scoped service
+  account below is the only reader. The console does not badge the
+  bucket publicly accessible.
+- **Encryption:** SSE-S3 remains the simple choice. SSE-KMS works here,
+  because no anonymous reader is involved, provided the service account
+  is also allowed to use the key.
+- **`SITE_SEAL_ONLY=1`** on the deployment, before it serves anyone:
+  a private bucket requires public publishing off.
+- **The rehearsal's legs 1 and 3 fail** on their anonymous public-URL
+  checks until the harness's private-bucket mode lands (#554); see
+  [Validating a storage configuration](#validating-a-storage-configuration).
 
 ### Scoped service account
 
@@ -2312,7 +2402,10 @@ op run --env-file=<your-env-file> -- node scripts/rehearse-storage-s3.mjs
 pre-existing object on a fresh bucket, the harness's own grant-leg
 upload — means the bucket, policy, account scoping, region, and
 public-URL construction are all correct. Hand the same four `S3_*`
-values to your deployment and go.
+values to your deployment and go. On the private variant, the expected
+end state until #554 lands is `RESULT: FAIL — 2/4 leg(s) failed`: legs 2
+and 4 pass, and legs 1 and 3 fail on their four anonymous public-URL
+checks and on nothing else.
 
 [ADR-0016]: https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0016-vcs-native-lifecycle-mapping.md
 [ADR-0020]: https://github.com/npstorey/civic-ai-tools/blob/main/docs/adr/0020-instance-key-custody.md

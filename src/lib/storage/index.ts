@@ -106,14 +106,24 @@ export async function deletePackageBlob(url: string): Promise<void> {
 }
 
 /**
+ * Retrieve a stored evidence package's text, exactly as stored, by its stored
+ * URL (from the DB storage_key column). Returns null if the fetch fails. The
+ * package route serves this text as is (#553): a download is the stored bytes,
+ * not a re-serialization of them.
+ */
+export async function getPackageText(url: string): Promise<string | null> {
+  const driver = await getDriver();
+  return driver.getText(url);
+}
+
+/**
  * Retrieve an evidence package blob by its stored URL (from the DB storage_key column).
  * Returns null if the fetch fails.
  */
 export async function getPackage(
   url: string
 ): Promise<Record<string, unknown> | null> {
-  const driver = await getDriver();
-  const text = await driver.getText(url);
+  const text = await getPackageText(url);
   if (text === null) return null;
   return JSON.parse(text);
 }

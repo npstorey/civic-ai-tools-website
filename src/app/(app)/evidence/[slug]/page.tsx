@@ -999,7 +999,6 @@ export default async function EvidencePage({ params }: PageProps) {
             title={record.title}
             creatorName={creator?.displayName || 'Unknown'}
             createdAt={record.createdAt.toISOString()}
-            packageUrl={record.basePackageStorageKey || ''}
             captureMethod={record.captureMethod}
             visibility={record.visibility}
             commitmentUrl={commitmentUrl}

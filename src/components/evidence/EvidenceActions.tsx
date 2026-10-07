@@ -8,6 +8,7 @@ import {
   resolveCaptureMethodLabel,
 } from '@/lib/evidence/trust-signal';
 import { normalizeVisibility } from '@/lib/evidence/visibility';
+import { downloadRecordPackage, saveBlobAsFile } from '@/lib/evidence/package-download';
 import type {
   KeyTrustResult,
   BlobRefVerification,
@@ -24,7 +25,6 @@ interface EvidenceActionsProps {
   title: string;
   creatorName: string;
   createdAt: string;
-  packageUrl: string;
   /** ADR-0003 captureMethod DB column (enum string | null). Rendered as a
    *  neutral informational label beside the signature verdict (#11,
    *  "signed ≠ verbatim"). */
@@ -163,13 +163,15 @@ interface VerifyResult {
 }
 
 export default function EvidenceActions({
-  slug, title, creatorName, createdAt, packageUrl, captureMethod, visibility, commitmentUrl,
+  slug, title, creatorName, createdAt, captureMethod, visibility, commitmentUrl,
   brandName,
 }: EvidenceActionsProps) {
   const [linkCopied, setLinkCopied] = useState(false);
   const [showCite, setShowCite] = useState(false);
   const [verifyState, setVerifyState] = useState<'loading' | 'done' | 'error'>('loading');
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadFailed, setDownloadFailed] = useState(false);
 
   // captureMethod LABEL (#11, "signed != verbatim"): a neutral, signature-covered
   // reading of HOW the bytes were captured, shown beside the signature verdict.
@@ -183,11 +185,19 @@ export default function EvidenceActions({
     setTimeout(() => setLinkCopied(false), 2000);
   };
 
-  const handleDownload = () => {
-    const a = document.createElement('a');
-    a.href = packageUrl;
-    a.download = `record-${slug}.json`;
-    a.click();
+  // Download goes through the app's package route, never to storage directly
+  // (#553): the route applies the record's read gate and serves the stored
+  // bytes, so an instance can keep its bucket private. A refusal or a dropped
+  // connection saves nothing; the reader is told the download failed.
+  const handleDownload = async () => {
+    setDownloadFailed(false);
+    setDownloading(true);
+    const result = await downloadRecordPackage(slug, {
+      fetch: (input, init) => fetch(input, init),
+      save: saveBlobAsFile,
+    });
+    setDownloading(false);
+    if (!result.ok) setDownloadFailed(true);
   };
 
   // The integrity glance auto-loads so it is a true glance (always present,
@@ -304,7 +314,7 @@ export default function EvidenceActions({
 
       {/* Actions */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-        <button onClick={handleDownload} style={btnStyle}>
+        <button onClick={handleDownload} disabled={downloading} style={btnStyle}>
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z" />
             <path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z" />
@@ -318,6 +328,26 @@ export default function EvidenceActions({
           Cite
         </button>
       </div>
+
+      {downloadFailed && (
+        <div role="alert" style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
+          Download failed: the package couldn’t be retrieved, so nothing was saved.{' '}
+          <button
+            onClick={handleDownload}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              fontSize: '13px',
+              color: 'var(--accent)',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            }}
+          >
+            Try again
+          </button>
+        </div>
+      )}
 
       {showCite && (
         <CitePopover
