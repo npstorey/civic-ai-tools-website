@@ -47,6 +47,7 @@ import {
 } from '@/lib/notebook-author';
 import { buildNotebookExtension } from '@/lib/notebook-author/notebook-extension';
 import { executeNotebook, NotebookExecutionError } from '@/lib/sandbox';
+import { notebookRouteRefusal } from '@/lib/notebook-availability';
 
 interface QueryNotebookRequest {
   query: string;
@@ -90,6 +91,21 @@ function encodeNotebookEvent(event: NotebookEvent): string {
 }
 
 export async function POST(request: NextRequest) {
+  // An instance that runs no notebooks (`EXECUTOR_DRIVER=none`, #547) refuses
+  // here, first: before the body is read, before any model call, and before
+  // the rate limiter is charged, because nothing a request carries could make
+  // this route run on it. 501 with `code: "notebooks_not_offered"` on the
+  // pre-stream JSON channel (docs/deploy.md, executor settings). The form on
+  // such an instance never sends notebook mode; this answers a stale page or
+  // a direct API call. Every other value of the setting returns null here.
+  const notebookRefusal = notebookRouteRefusal();
+  if (notebookRefusal) {
+    return new Response(
+      JSON.stringify(notebookRefusal.body),
+      { status: notebookRefusal.status, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
   let body: QueryNotebookRequest;
   try {
     body = (await request.json()) as QueryNotebookRequest;
