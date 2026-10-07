@@ -9,6 +9,7 @@ import { resolveSignInProse } from '@/lib/auth-provider-options';
 import type { ReviewSignatureStatus } from '@/lib/evidence/trust-signal';
 import type { TrustTier } from '@/lib/evidence/trust-signal';
 import { describeToolCallKeyPolicy } from '@/lib/evidence/tool-call-identity';
+import { loadAttestationPackage } from '@/lib/evidence/attestation-content';
 import TrustSignal from './TrustSignal';
 import AttestationDialog from './AttestationDialog';
 
@@ -38,11 +39,16 @@ interface AttestationSignatureDisclosure {
   rfc3161Timestamped: boolean;
 }
 
+/**
+ * One row of the list route. The route also answers with each attestation's
+ * storage address, kept for API compatibility; this component does not read
+ * it. Content comes through the app's package route (#559), so it loads on an
+ * instance whose bucket is private.
+ */
 interface Attestation {
   id: string;
   type: AttestationType;
   packageHash: string;
-  storageKey: string;
   createdAt: string;
   creatorDisplayName: string;
   creatorGithubUrl: string;
@@ -116,9 +122,11 @@ export default function AttestationSection({ slug, analysisModel, promptVisibili
     fetchAttestations();
   }, [fetchAttestations]);
 
-  // Eagerly load blobs for expert attestations so the body is visible
-  // immediately. The blob URL is a public Vercel CDN path; per-attestation
-  // cost is ~1 round trip and responses are small.
+  // Eagerly load the packages of expert attestations so the body is visible
+  // immediately, through the app's attestation package route (#559): the
+  // record's read gate applies, and a private bucket still serves it.
+  // Per-attestation cost is ~1 round trip and responses are small. A failed
+  // read comes back as null, which the card shows as unavailable.
   useEffect(() => {
     const expertToLoad = attestations.filter(
       (a) => a.type === 'expert_attestation' && !(a.id in expertPayloads),
@@ -129,14 +137,10 @@ export default function AttestationSection({ slug, analysisModel, promptVisibili
     (async () => {
       const results = await Promise.all(
         expertToLoad.map(async (a) => {
-          try {
-            const res = await fetch(a.storageKey);
-            if (!res.ok) return [a.id, null] as const;
-            const data = (await res.json()) as AttestationPackageData;
-            return [a.id, data] as const;
-          } catch {
-            return [a.id, null] as const;
-          }
+          const data = await loadAttestationPackage(slug, a.id, {
+            fetch: (input, init) => fetch(input, init),
+          });
+          return [a.id, data as AttestationPackageData | null] as const;
         }),
       );
       if (cancelled) return;
@@ -147,7 +151,7 @@ export default function AttestationSection({ slug, analysisModel, promptVisibili
       });
     })();
     return () => { cancelled = true; };
-  }, [attestations, expertPayloads]);
+  }, [slug, attestations, expertPayloads]);
 
   const handleAttestationCreated = useCallback(() => {
     fetchAttestations();
@@ -163,16 +167,13 @@ export default function AttestationSection({ slug, analysisModel, promptVisibili
       });
       return;
     }
-    // Fetch package data
-    try {
-      const res = await fetch(attestation.storageKey);
-      if (res.ok) {
-        const data = await res.json();
-        setExpandedPkgs(prev => ({ ...prev, [attestation.id]: data }));
-      }
-    } catch {
-      setExpandedPkgs(prev => ({ ...prev, [attestation.id]: null }));
-    }
+    // Read the package through the app's attestation package route (#559). A
+    // failed read is null, which the card shows as unavailable; an error body
+    // is never stored as the attestation's content.
+    const data = await loadAttestationPackage(slug, attestation.id, {
+      fetch: (input, init) => fetch(input, init),
+    });
+    setExpandedPkgs(prev => ({ ...prev, [attestation.id]: data as AttestationPackageData | null }));
   };
 
   const isLoggedIn = !!session?.user?.id;
@@ -359,6 +360,13 @@ function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
           {isExpanded ? 'Hide details' : 'Show details'}
         </button>
       </div>
+
+      {/* A failed read (#559): the details are unavailable, said once, never an error body */}
+      {isExpanded && expanded === null && (
+        <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+          [Details could not be loaded; the stored package may be unavailable.]
+        </div>
+      )}
 
       {/* Summary metrics inline */}
       {attestation.type === 'consistency' && isExpanded && expanded && expanded.metrics && (
