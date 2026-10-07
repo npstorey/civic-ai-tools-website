@@ -229,6 +229,37 @@ client-side verification. See [`records-commitment.md`](./records-commitment.md)
 
 ---
 
+## Attestation packages — `GET /api/records/:slug/attestations/:id/package`
+
+A record's attestations (consistency tests, evaluations and expert reviews,
+added from the record page or through `POST /api/records/:slug/attestations`)
+are each stored as a package. Two read routes serve them, both gated as the
+record is: a sealed record's attestations go to its creator alone (`404` to
+everyone else), a public record's to anyone.
+
+- **`GET /api/records/:slug/attestations`** lists the record's attestations.
+  Each entry carries `id`, `type`, `packageHash`, `storageKey`, `createdAt`,
+  the reviewer's display name and profile URL, and a per-attestation
+  `signature` disclosure. `storageKey` is the stored object's address, kept for
+  compatibility; on an instance whose bucket is private it does not resolve
+  for a reader, so read the content through the route below.
+- **`GET /api/records/:slug/attestations/:id/package`** answers with one
+  attestation's stored package, by its `id` from the list (civic-ai-tools-website#559).
+
+Package route responses:
+
+| Status | When | Body |
+|---|---|---|
+| `200` | The attestation belongs to this record and the reader may read the record | The stored package's bytes, unchanged (not re-serialized), `Content-Type: application/json` |
+| `404` | No record has this slug; the record is sealed and the reader is not its creator; or `id` is not an attestation of this record (including an attestation of another record, and an `id` that is not a UUID) | `{ "error": "Not found" }`, the same in every case |
+| `502` | The stored object could not be read | `{ "error": "Package retrieval failed" }` |
+
+The body's SHA-256 is the attestation's `packageHash`, for a package the
+attestations route wrote. The record page reads attestation details only
+through this route.
+
+---
+
 ## Success response
 
 `200 OK` with body:
@@ -540,7 +571,7 @@ Sealed-mode response: `{ slug, packageHash, visibility: "sealed" }` — no publi
 What a sealed record looks like from the outside:
 
 - **Not listed** in `/api/records/list` or the public registry index.
-- **Creator-only** (404 to everyone else, including probes) on every content-bearing surface: the detail page, `GET /api/records/:slug`, `/package`, `/bundle`, `/verify`, `/replay`, `/evaluate`. The creator authenticates by session cookie or bearer token.
+- **Creator-only** (404 to everyone else, including probes) on every content-bearing surface: the detail page, `GET /api/records/:slug`, `/package`, `/bundle`, `/verify`, `/replay`, `/evaluate`, `/attestations` and `/attestations/:id/package`. The creator authenticates by session cookie or bearer token.
 - **Commitment publicly served, redacted**: `GET /api/records/:slug/commitment` (and the hash-addressed form) returns the proofs — `packageHash`, signature envelope, signer, envelope taxonomy fields, RFC 3161 token, Rekor entry + inclusion proof, lifecycle chain — plus `visibility: "sealed"`, but **omits** `packageUrl`, `subjectTitle`, and `subjectSummary`, and never inlines the package (`?inline=1` inlines only the trust registry). A recipient holding creator-distributed bytes verifies them against this redacted commitment.
 
 Two honesty notes integrating clients should know:
@@ -825,6 +856,8 @@ These are implementation details that may surprise an external client. None of t
 ---
 
 ## Change log
+
+- **2026-10-07** — **Attestation packages served through the app** (civic-ai-tools-website#559). New: `GET /api/records/:slug/attestations/:id/package` answers with one attestation's stored package, its bytes unchanged, gated as the record is, and `404` for an `id` that is not an attestation of that record. The record page reads attestation details only through it, so they load on an instance whose bucket is private. The list route, its gate and its response fields are unchanged, `storageKey` included. See [Attestation packages](#attestation-packages--get-apirecordsslugattestationsidpackage).
 
 - **2026-10-06** — **`SITE_SEAL_ONLY`: an instance can turn the public state off** (civic-ai-tools-website#552). Set to `1` or `true`, both `POST /api/records` (for `visibility` `"public"`, `"published"`, or absent) and `POST /api/records/:slug/publish` answer `403 { code: "seal_only" }` before anything is stored or signed, and `GET /api/records/signing-status` gains a `sealOnly` boolean. Unset, nothing changes. Records already public stay public. See [On an instance that seals records only](#on-an-instance-that-seals-records-only).
 

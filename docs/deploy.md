@@ -2109,19 +2109,19 @@ consequences:
 - **`S3_PUBLIC_BASE_URL` still matters**, as the address the database
   records and the driver maps back to keys (above). It need not be
   reachable from a browser.
-- **Known gaps** (follow-up: #558). Two surfaces still fetch storage
-  URLs anonymously and fail on a private bucket:
+- **Known gap** (follow-up: #558). One surface still fetches storage
+  URLs anonymously and fails on a private bucket:
   - **Blob references.** A package's `output`, `trace` or skill text
     stored under `evidence-refs/` through the upload-token flow: the
     record page cannot show that content, and the integrity check
     reports the reference as not retrievable. This reaches only records
     published through the API with uploaded blob references; the app's
     own pages never call the upload flow.
-  - **Attestation details.** The record page's browser fetches each
-    attestation's content from its storage URL, so its details do not
-    load. This reaches every attestation added from the record page's
-    Attestations dialog, which any signed-in viewer can open, and any
-    added through the same API route.
+
+  Attestation details are served through the app: the record page
+  reads each attestation's package from
+  `/api/records/:slug/attestations/:id/package`, gated as its record is
+  (#559).
 - **The compose stack is public-only.** Its `minio-init` applies the
   public-read policy on every start; a private bucket is for an object
   store you provision yourself
