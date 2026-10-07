@@ -79,8 +79,8 @@ test('PREMISE: the dialog submits the policy inside the attestation data', () =>
 });
 
 test('PREMISE: the route stores the submitted data at the package top level', () => {
-  // The section fetches the attestation package from its `storageKey` and
-  // reads fields off the top level (`metrics`, `config`). The route builds
+  // The section reads the stored attestation package (through the app's
+  // package route, #559) and reads fields off the top level (`metrics`, `config`). The route builds
   // that package by spreading the submitted `data`, so a field the dialog
   // submits arrives where the section can read it. Asserted as a scan rather
   // than driven because the handler needs a database, a session and a blob
@@ -91,8 +91,11 @@ test('PREMISE: the route stores the submitted data at the package top level', ()
 });
 
 test('PREMISE: the section reads the package it renders from that same blob', () => {
+  // Through the app's attestation package route since #559, which serves the
+  // stored object's bytes unchanged (driven in
+  // `src/app/api/evidence/attestation-package-route.test.ts`).
   const section = read(SECTION);
-  assert.match(section, /fetch\(attestation\.storageKey\)/);
+  assert.match(section, /loadAttestationPackage\(slug, attestation\.id, \{/);
   assert.match(section, /toolCallOverlap/);
 });
 
