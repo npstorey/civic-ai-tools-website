@@ -55,10 +55,10 @@ test('resolveS3ConfigFromEnv: S3_FORCE_PATH_STYLE=false overrides the endpoint d
 
 test('resolveS3ConfigFromEnv: missing required vars throw with the var named', () => {
   assert.throws(() => resolveS3ConfigFromEnv({}), /S3_BUCKET/);
-  assert.throws(
-    () => resolveS3ConfigFromEnv({ S3_BUCKET: 'evidence-test' }),
-    /S3_ACCESS_KEY_ID/,
-  );
+  // #554: neither key set is not a missing variable — the AWS SDK's default
+  // chain supplies the credentials (s3-credential-source.test.ts drives it).
+  // Exactly one key set is still refused, naming the other.
+  assert.doesNotThrow(() => resolveS3ConfigFromEnv({ S3_BUCKET: 'evidence-test' }));
   assert.throws(
     () =>
       resolveS3ConfigFromEnv({

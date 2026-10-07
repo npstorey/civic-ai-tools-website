@@ -669,6 +669,8 @@ function selfHostedDrivers() {
 
 /** Names the S3 driver hard-throws on (src/lib/storage/s3.ts:67-69). */
 const S3_CREDENTIALS = ['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
+/** The S3 key pair: both set, or neither for the AWS SDK's default chain (#554). */
+const S3_KEY_PAIR = ['S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
 /** Variables only the vercel-sandbox executor driver reads. */
 const SANDBOX_ONLY = ['SANDBOX_SNAPSHOT_ID', 'VERCEL_TOKEN', 'VERCEL_TEAM_ID', 'VERCEL_PROJECT_ID'];
 
@@ -725,15 +727,57 @@ test('REGRESSION: selectors set explicitly to their defaults match unset, byte f
   assert.ok(!renderReport(explicitResult).includes('PROFILE:'));
 });
 
-test('BLOB_DRIVER=s3 promotes the S3 credentials to required', () => {
+test('BLOB_DRIVER=s3 promotes the bucket to required; with neither key set the key pair stays optional (#554)', () => {
   const env = { ...envWithAllRequired(), BLOB_DRIVER: 's3' };
   const result = evaluateEnv(env);
-  for (const name of S3_CREDENTIALS) {
-    assert.equal(tierOf(result.rows, name), 'required', `${name} is required under the s3 driver`);
+  assert.equal(tierOf(result.rows, 'S3_BUCKET'), 'required', 'S3_BUCKET is required under the s3 driver');
+  for (const name of S3_KEY_PAIR) {
+    assert.equal(tierOf(result.rows, name), 'optional', `${name} is optional while neither key is set`);
   }
   // Absent (envWithAllRequired only fills base-tier required vars) ⇒ hard miss.
   assert.equal(result.ok, false);
-  assert.deepEqual(result.missingRequired.map((r) => r.name).sort(), [...S3_CREDENTIALS].sort());
+  assert.deepEqual(result.missingRequired.map((r) => r.name), ['S3_BUCKET']);
+});
+
+test('#554: BLOB_DRIVER=s3 with the bucket and neither key passes — the AWS SDK default chain needs no key', () => {
+  const env = { ...envWithAllRequired(), BLOB_DRIVER: 's3', S3_BUCKET: 'present' };
+  const result = evaluateEnv(env);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.missingRequired, []);
+  const report = renderReport(result);
+  assert.match(report, /RESULT: PASS/);
+  for (const name of S3_KEY_PAIR) assert.doesNotMatch(report, new RegExp(`- ${name}\\b`));
+});
+
+test('#554: one key alone fails the s3 profile, naming the missing one, in both directions', () => {
+  for (const [present, missing] of [S3_KEY_PAIR, [...S3_KEY_PAIR].reverse()]) {
+    const env = { ...envWithAllRequired(), BLOB_DRIVER: 's3', S3_BUCKET: 'present', [present]: 'present' };
+    const result = evaluateEnv(env);
+    assert.equal(result.ok, false, `${present} alone is refused by the driver, so preflight must not pass`);
+    assert.deepEqual(result.missingRequired.map((r) => r.name), [missing], `${missing} is named as missing`);
+    assert.equal(tierOf(result.rows, missing), 'required');
+    const report = renderReport(result);
+    assert.match(report, /RESULT: FAIL — 1 required variable\(s\) missing:/);
+    assert.match(report, new RegExp(`- ${missing}\\b`));
+    assert.doesNotMatch(report, new RegExp(`- ${present}\\b`));
+  }
+});
+
+test('#554: one key alone does not fail the default blob driver, which never reads it', () => {
+  for (const name of S3_KEY_PAIR) {
+    const result = evaluateEnv({ ...envWithAllRequired(), [name]: 'present' });
+    assert.equal(result.ok, true, `${name} alone is inert under vercel-blob`);
+    for (const other of S3_KEY_PAIR) assert.equal(tierOf(result.rows, other), 'optional');
+  }
+});
+
+test('#554: a whitespace-only key counts as unset, as everywhere else in this script', () => {
+  const env = {
+    ...envWithAllRequired(), BLOB_DRIVER: 's3', S3_BUCKET: 'present',
+    S3_ACCESS_KEY_ID: '   ', S3_SECRET_ACCESS_KEY: 'present',
+  };
+  const result = evaluateEnv(env);
+  assert.deepEqual(result.missingRequired.map((r) => r.name), ['S3_ACCESS_KEY_ID']);
 });
 
 test('BLOB_DRIVER=s3 passes once the S3 credentials are present', () => {
