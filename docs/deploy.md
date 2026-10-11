@@ -1002,12 +1002,12 @@ errors** — there is no silent hang to diagnose. Recognize them:
 
 All three are reproducible from the command line against a running stack.
 Use a model id this instance actually offers — `GET /api/models` lists
-them, and on the built-in catalog `openai/gpt-4o` is the first:
+them, and on the built-in catalog `anthropic/claude-haiku-5.5` is the first:
 
 ```bash
 curl -s -X POST http://127.0.0.1:3000/api/compare \
   -H 'Content-Type: application/json' \
-  -d '{"query":"test","model":"openai/gpt-4o"}'
+  -d '{"query":"test","model":"anthropic/claude-haiku-5.5"}'
 ```
 
 With no key configured this returns HTTP 503 carrying the

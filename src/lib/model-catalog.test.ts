@@ -23,6 +23,7 @@ import {
   catalogEvaluatorOrder,
   declaredModelIdentity,
   modelIdentity,
+  modelRequestSettings,
   selectableModels,
   validateCatalog,
   type CatalogEntry,
@@ -47,15 +48,16 @@ import {
 } from './model-client.ts';
 
 /**
- * The exact `/api/models` body this repo served at `b95c768`, the commit this
- * phase branched from, captured by running `JSON.stringify` over the
- * pre-catalog `availableModels`. Criterion 1 of the phase: the reference
- * instance sees ZERO change. Not a snapshot to be regenerated — a frozen
- * literal. If a change makes this fail, the change altered what the selector
- * offers, which is civic-ai-tools-website#302's question and not this one's.
+ * The exact `/api/models` body the reference instance serves: the October 2026
+ * roster (civic-ai-tools-website#573), three selectable models in selector
+ * order. Not a snapshot to be regenerated — a frozen literal. Until that
+ * ruling it was the body this repo served at `b95c768`, which the catalog
+ * migration (website#30) had to reproduce exactly; the roster change is the
+ * deliberate act that moved it. If a change makes this fail, the change altered
+ * what the selector offers, which is a roster decision and not a refactor.
  */
 const FROZEN_MODELS_BODY =
-  '{"models":[{"id":"openai/gpt-4o","name":"GPT-4o","tag":"recommended","provider":"OpenAI","supports_tools":true,"description":"Best balance of quality and speed"},{"id":"openai/gpt-5.4","name":"GPT-5.4","tag":"premium","provider":"OpenAI","supports_tools":true,"description":"Highest quality analysis, newest model"},{"id":"google/gemini-3.5-flash-lite","name":"Gemini 3.5 Flash Lite","tag":"fastest","provider":"Google","supports_tools":true,"description":"Fast and budget-friendly","maxTokenBudget":150000}]}';
+  '{"models":[{"id":"anthropic/claude-haiku-5.5","name":"Claude Haiku 5.5","tag":"recommended","provider":"Anthropic","supports_tools":true,"description":"Accurate and fast, at the lowest cost"},{"id":"anthropic/claude-sonnet-5.5","name":"Claude Sonnet 5.5","tag":"balanced","provider":"Anthropic","supports_tools":true,"description":"Stronger analysis at moderate cost"},{"id":"anthropic/claude-opus-5.5","name":"Claude Opus 5.5","tag":"premium","provider":"Anthropic","supports_tools":true,"description":"Highest quality analysis"}]}';
 
 /** Every variable these tests touch, cleared before and after each one. */
 const ENV_KEYS = [
@@ -135,7 +137,7 @@ function refusalFrom(fn: () => unknown): ModelConfigurationError {
 
 // --- Criterion 1: the reference instance sees zero change -------------------
 
-test('INSTANCE: with no catalog and the default endpoint, /api/models is byte-identical to b95c768', () => {
+test('INSTANCE: with no catalog and the default endpoint, /api/models is the October 2026 roster, byte for byte', () => {
   assert.equal(JSON.stringify({ models: getOfferedModels() }), FROZEN_MODELS_BODY);
 });
 
@@ -163,30 +165,33 @@ test('CATALOG: `endpointModel` and `model` are never served — a deployment ali
   }
 });
 
-test('CATALOG: the built-in default and evaluator are resolvable but not served', () => {
+test('CATALOG: the built-in default is the first model the selector offers, and every entry is served', () => {
+  // Until the October 2026 ruling the default (Sonnet 4.6) was resolvable but
+  // never served. Now every built-in entry is selectable, and the default is
+  // the one a visitor starts on.
   const served = selectableModels(BUILT_IN_CATALOG).map((m) => m.id);
   const defaultId = catalogDefaultEntry(BUILT_IN_CATALOG).id;
-  assert.ok(!served.includes(defaultId), 'the notebook default has never been in the selector');
-  assert.equal(defaultId, 'anthropic/claude-sonnet-4-6', 'the pre-catalog DEFAULT_MODEL, unchanged');
+  assert.equal(defaultId, 'anthropic/claude-haiku-5.5');
+  assert.equal(served[0], defaultId, 'the default is first in the selector');
+  assert.deepEqual(served, BUILT_IN_CATALOG.map((e) => e.id), 'nothing in the built-in catalog is held back');
 });
 
-test('INSTANCE: the notebook default resolves by id even though it is not selectable', () => {
-  const entry = resolveModel('anthropic/claude-sonnet-4-6');
-  assert.equal(entry.id, 'anthropic/claude-sonnet-4-6');
-  assert.equal(getDefaultModel().id, 'anthropic/claude-sonnet-4-6');
+test('INSTANCE: the notebook default resolves by id', () => {
+  const entry = resolveModel('anthropic/claude-haiku-5.5');
+  assert.equal(entry.id, 'anthropic/claude-haiku-5.5');
+  assert.equal(getDefaultModel().id, 'anthropic/claude-haiku-5.5');
 });
 
-test('CATALOG: the built-in evaluator order reproduces the two literals it replaced', () => {
+test('CATALOG: the built-in evaluator order is the October 2026 ruling', () => {
   const order = catalogEvaluatorOrder(BUILT_IN_CATALOG).map((e) => e.id);
-  assert.deepEqual(order, ['anthropic/claude-sonnet-4-6', 'openai/gpt-4o']);
+  assert.deepEqual(order, ['anthropic/claude-sonnet-5.5', 'anthropic/claude-opus-5.5']);
 });
 
-test('INSTANCE: evaluator independence picks the same model the two literals did', () => {
-  // Pre-catalog: DEFAULT_EVALUATOR_MODEL unless it collides with the analysis
-  // model, in which case FALLBACK_EVALUATOR_MODEL.
-  assert.equal(resolveEvaluatorModel('openai/gpt-4o')?.id, 'anthropic/claude-sonnet-4-6');
-  assert.equal(resolveEvaluatorModel('anthropic/claude-sonnet-4-6')?.id, 'openai/gpt-4o');
-  assert.equal(resolveEvaluatorModel('openai/gpt-5.4')?.id, 'anthropic/claude-sonnet-4-6');
+test('INSTANCE: evaluator independence: no analysis is judged by the model that ran it', () => {
+  // The gate takes the first evaluator that did not run the analysis.
+  assert.equal(resolveEvaluatorModel('anthropic/claude-haiku-5.5')?.id, 'anthropic/claude-sonnet-5.5');
+  assert.equal(resolveEvaluatorModel('anthropic/claude-sonnet-5.5')?.id, 'anthropic/claude-opus-5.5');
+  assert.equal(resolveEvaluatorModel('anthropic/claude-opus-5.5')?.id, 'anthropic/claude-sonnet-5.5');
 });
 
 test('CATALOG: an omitted `model` under the default dialect declares the endpoint string', () => {
@@ -212,8 +217,12 @@ test('CATALOG: an omitted `model` under the default dialect declares the endpoin
     assert.equal(declaredModelIdentity(entry), entry.id);
     assert.equal(entry.endpointModel, entry.id);
     // The pair every call site now carries. Both halves equal here — which is
-    // exactly why nothing about the reference instance changed.
-    assert.deepEqual(modelIdentity(entry), { endpointModel: entry.id, declared: entry.id });
+    // exactly why the split moved nothing on the reference instance. Since the
+    // October 2026 roster every built-in entry also sets a reasoning effort,
+    // which rides beside the pair (#548).
+    const { requestSettings, ...pair } = modelIdentity(entry);
+    assert.deepEqual(pair, { endpointModel: entry.id, declared: entry.id });
+    assert.deepEqual(requestSettings, modelRequestSettings(entry));
   }
 });
 
@@ -333,7 +342,7 @@ test('INSTANCE: an unknown model id is a typed not-offered error, raised before 
   assert.equal(err.code, 'model_not_offered');
   assert.equal(err.modelId, 'vendor/model-nobody-offers');
   assert.match(err.message, /not offered by this instance/);
-  assert.match(err.message, /openai\/gpt-4o/, 'the message lists what IS offered');
+  assert.match(err.message, /anthropic\/claude-haiku-5\.5/, 'the message lists what IS offered');
   assert.ok(
     !(err instanceof ModelConfigurationError),
     'a bad request must not be reported as a broken instance',
@@ -567,12 +576,12 @@ test('CATALOG: every built-in entry carries pricing, so no offered model reports
 
 // --- The sixth site: the summary-draft route (website#30 P3) ---------------
 
-test('INSTANCE: the built-in summariser is the id the route used to hardcode', () => {
-  // `SUMMARY_MODEL = 'google/gemini-3.5-flash-lite'` lived in
+test('INSTANCE: the built-in summariser is the catalog role the October 2026 ruling set', () => {
+  // `SUMMARY_MODEL = 'google/gemini-3.5-flash-lite'` once lived in
   // api/evidence/generate-summary/route.ts — the fifth hardcoded table, missed
-  // by P2's inventory and routed to P3. Same model, now a catalog role: this
-  // instance's behaviour is unchanged and the choice is configurable.
-  assert.equal(getSummarizerModel().id, 'google/gemini-3.5-flash-lite');
+  // by the catalog migration's inventory and made a catalog role (website#30
+  // P3). The role moved to Haiku 5.5 on the October 2026 ruling (#573).
+  assert.equal(getSummarizerModel().id, 'anthropic/claude-haiku-5.5');
 });
 
 test('INSTANCE: a catalog that declares no summariser falls back to its default', () => {

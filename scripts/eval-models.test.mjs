@@ -387,31 +387,36 @@ test('#573: the roster passes the slug check against the recorded list, and each
   assert.deepEqual(checkRoster([byId('openai/gpt-4o')], noTools), ['openai/gpt-4o: the list does not give "tools" as supported']);
 
   // A control whose catalog entry has gone.
-  const stale = checkRoster([{ ...byId('openai/gpt-4o'), catalogId: 'openai/gone', catalogEntryFound: false }], SNAPSHOT);
-  assert.match(stale[0], /the catalog no longer has an entry "openai\/gone"/);
+  const control = ALL_MODELS.find((m) => m.role === 'control');
+  const stale = checkRoster([{ ...control, catalogId: 'anthropic/gone', catalogEntryFound: false }], SNAPSHOT);
+  assert.match(stale[0], /the catalog no longer has an entry "anthropic\/gone"/);
 });
 
-test('#573: the four controls are the catalog, each carrying its entry\'s own request settings', () => {
+test('#573: the controls are the catalog, each carrying its entry\'s own request settings', () => {
   const controls = ALL_MODELS.filter((m) => m.role === 'control');
   assert.deepEqual(
-    controls.map((m) => m.catalogId).sort(),
-    BUILT_IN_CATALOG.map((e) => e.id).sort(),
-    'every catalog entry is a control, and nothing else is',
+    controls.map((m) => m.catalogId),
+    BUILT_IN_CATALOG.map((e) => e.id),
+    'every catalog entry is a control, in catalog order, and nothing else is',
   );
   for (const control of controls) {
     const entry = BUILT_IN_CATALOG.find((e) => e.id === control.catalogId);
     assert.deepEqual(control.requestSettings, modelRequestSettings(entry), `${control.id} must send what production sends`);
   }
-  // The candidates as ruled 2026-10-11.
-  const candidates = Object.fromEntries(
-    ALL_MODELS.filter((m) => m.role === 'candidate').map((m) => [m.id, m.requestSettings.reasoningEffort]),
-  );
-  assert.deepEqual(candidates, {
-    'anthropic/claude-sonnet-5.5': 'medium',
-    'google/gemini-3.8-flash': 'medium',
-    'anthropic/claude-opus-5.5': 'medium',
-    'anthropic/claude-haiku-5.5': 'low',
-    'openai/gpt-6.1-sol': 'medium',
+  // Every model at the reasoning setting the October 2026 run sent it: the
+  // catalog's three as they were evaluated, the October controls with none,
+  // and the two candidates the catalog did not take.
+  const sent = Object.fromEntries(ALL_MODELS.map((m) => [m.id, [m.role, m.requestSettings?.reasoningEffort ?? null]]));
+  assert.deepEqual(sent, {
+    'anthropic/claude-haiku-5.5': ['control', 'low'],
+    'anthropic/claude-sonnet-5.5': ['control', 'medium'],
+    'anthropic/claude-opus-5.5': ['control', 'medium'],
+    'openai/gpt-4o': ['prior-control', null],
+    'openai/gpt-5.4': ['prior-control', null],
+    'google/gemini-3.5-flash-lite': ['prior-control', null],
+    'anthropic/claude-sonnet-4.6': ['prior-control', null],
+    'google/gemini-3.8-flash': ['candidate', 'medium'],
+    'openai/gpt-6.1-sol': ['candidate', 'medium'],
   });
 });
 
