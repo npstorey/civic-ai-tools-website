@@ -182,8 +182,8 @@ const EXCEPTIONS: readonly Exception[] = [
   {
     path: 'src/components/QueryForm.tsx',
     classification: 'reference-table',
-    hits: 5,
-    why: 'The `PORTALS` menu — the portals a reader may pick, beside an "All portals" entry; a selection made here is the reader\'s choice, and the form\'s own default now comes from `SITE_DEFAULT_PORTAL` through `DefaultPortalProvider`.',
+    hits: 4,
+    why: 'The `PORTALS` menu — the portals a reader may pick, beside an "All portals" entry; a selection made here is the reader\'s choice, and the form\'s own default now comes from `SITE_DEFAULT_PORTAL` through `DefaultPortalProvider`. San Francisco is hidden until socrata-mcp-server#75 is fixed.',
   },
   {
     path: 'src/lib/streaming.ts',
