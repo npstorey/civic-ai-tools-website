@@ -164,8 +164,10 @@ Use this first when the user asks for demographic, economic, health, education, 
 
 IMPORTANT: Data Commons uses DCIDs (Data Commons identifiers) rather than raw Census field names. Always discover the variable DCID via search_indicators before calling get_observations — guessing the DCID silently returns wrong data.
 
+Places are passed to this tool by name, not by DCID: a DCID in places is answered "no place found". get_observations is the one that takes a place DCID.
+
 Examples:
-- { "query": "median household income", "places": ["geoId/3604600637"] }  // search near a NYC census tract
+- { "query": "median household income", "places": ["Kings County, New York"] }  // search scoped to Brooklyn, by name
 - { "query": "poverty rate", "parent_place": "geoId/36061" }  // search indicators scoped to New York County
 - { "query": "asthma prevalence adults" }  // free-text topic search`,
       parameters: {
@@ -178,7 +180,7 @@ Examples:
           places: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Optional list of place DCIDs to scope the search to — the tool returns variables that have observations for those places.',
+            description: 'Optional list of place names to scope the search to, qualified so they are unambiguous (e.g., "Kings County, New York", "New York City, USA") — never DCIDs. The tool returns variables that have observations for those places, and each result\'s placesWithData lists the DCIDs of the requested places that have data: pass one of those to get_observations.',
           },
           parent_place: {
             type: 'string',
