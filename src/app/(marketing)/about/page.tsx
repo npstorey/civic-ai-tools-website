@@ -3,13 +3,22 @@ import { prose, sectionHeading, sectionSpacing } from '@/styles/page-styles';
 import { EXPRESS_INTEREST_URL } from '@/lib/site-config';
 import SponsorLine from '@/components/SponsorLine';
 import { pageTitle } from '@/lib/brand-config';
+import { getDirectoryData } from '@/lib/mcp/directory-data';
+import { getPortalCounts } from '@/lib/mcp/portal-data';
 
 export const metadata = {
   title: pageTitle('About'),
   description: 'Civic AI Tools is an open-source project that connects AI assistants to government open data using the Model Context Protocol.',
 };
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  // Both counts come from the data /directory renders, so this page and the
+  // directory cannot disagree. They replaced "60+" and "2,000+", which were
+  // typed in and had gone stale (74 servers, 1,960 portals on 2026-10-10).
+  const [directory, portalCounts] = await Promise.all([getDirectoryData(), getPortalCounts()]);
+  const serverCount = directory.servers.length;
+  const portalCount = portalCounts.total.toLocaleString('en-US');
+
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 24px' }}>
 
@@ -66,8 +75,8 @@ export default function AboutPage() {
             This is the server powering the demo on this website.
             Install via <code style={{ fontSize: '14px' }}>npx socrata-mcp-server</code> or clone
             the repo.{' '}
-            <Link href="/directory">Browse the directory</Link> to see the MCP servers and
-            2,000+ open data portals they connect to.
+            <Link href="/directory">Browse the directory</Link> to see the MCP servers and the{' '}
+            {portalCount} open data portals they connect to.
           </li>
           <li>
             <strong>Curated MCP server directory</strong> &mdash; a{' '}
@@ -91,9 +100,15 @@ export default function AboutPage() {
               SoQL patterns, date handling, case-insensitive matching, zero-result verification, and
               dataset-specific knowledge
             </a>
-            . Coming soon: crowdsourced
-            guidance variants for specific sectors (public safety, housing, transportation, health)
-            and a governance framework for evaluating how guidance affects result quality.
+            . Under consideration, not scheduled:{' '}
+            <a href="https://github.com/npstorey/civic-ai-tools/issues/78" target="_blank" rel="noopener noreferrer">
+              a stronger method for writing guidance
+            </a>{' '}
+            and{' '}
+            <a href="https://github.com/npstorey/civic-ai-tools/issues/41" target="_blank" rel="noopener noreferrer">
+              using reviews of published records to improve it
+            </a>
+            .
           </li>
           <li>
             <strong>
@@ -206,9 +221,10 @@ export default function AboutPage() {
         <h2 style={sectionHeading}>The landscape</h2>
         <p style={prose}>
           Civic AI Tools is part of a growing ecosystem of projects connecting AI to government data.
-          Our research found 60+ MCP servers for civic data, official government MCP servers from the
-          US Census Bureau and France, and a US Digital Corps pilot that showed query accuracy jumping
-          from near 0% to 95% with MCP.
+          The <Link href="/directory">directory</Link> lists {serverCount} MCP servers for civic data.
+          Our landscape research (last updated April 2026) also found official government MCP servers
+          from the US Census Bureau and France, and a US Digital Corps pilot that showed query accuracy
+          jumping from near 0% to 95% with MCP.
         </p>
         <p style={{ fontSize: '14px' }}>
           <a
