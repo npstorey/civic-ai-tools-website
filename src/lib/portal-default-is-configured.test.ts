@@ -293,6 +293,12 @@ const EXCEPTIONS: readonly Exception[] = [
     hits: 1,
     why: 'A worked publish request in the API contract, whose tool call names the portal it addressed.',
   },
+  {
+    path: 'docs/model-evaluation-2026-10.md',
+    classification: 'documentation',
+    hits: 7,
+    why: "The October 2026 model evaluation's record of San Francisco's portal move (the old host redirecting to the new one) and the reference answer read from the new host; it reports what the portals did, and nothing runs from it.",
+  },
 ];
 
 /**
