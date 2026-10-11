@@ -494,14 +494,15 @@ test('#436 D7: the prompt gains one section under the lock, naming only callable
 
 test('#436 C4: unlocked, the form offers its three examples unchanged; locked, none that compares portals', () => {
   // The list as `QueryForm.tsx` carried it at 109eecb, text and order, with the
-  // third example replaced in October 2026 (#543): a single-city Socrata
-  // question on the default portal, where a Data Commons comparison stood.
+  // second example replaced in October 2026 (socrata-mcp-server#75): a
+  // single-city question on the default portal, where a NYC-vs-SF 311
+  // comparison stood.
   assert.deepEqual(EXAMPLE_QUERIES.map((e) => e.text), [
     'Noise trends in NYC',
-    'Top 311 complaints: NYC vs SF',
     'Restaurant inspection grades by NYC borough',
+    'Median household income: NYC vs SF',
   ]);
-  assert.deepEqual(EXAMPLE_QUERIES.map((e) => Boolean(e.usesDefaultPortal)), [true, false, true]);
+  assert.deepEqual(EXAMPLE_QUERIES.map((e) => Boolean(e.usesDefaultPortal)), [true, true, false]);
   assert.equal(offeredExampleQueries(false), EXAMPLE_QUERIES);
   const locked = offeredExampleQueries(true);
   assert.deepEqual(locked.map((e) => e.text), ['Noise trends in NYC', 'Restaurant inspection grades by NYC borough']);

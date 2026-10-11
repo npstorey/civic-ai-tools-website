@@ -610,6 +610,10 @@ export default function LearnPage() {
               query: 'How do housing violations in Brooklyn compare to Manhattan?',
               capability: 'Cross-category comparison',
             },
+            {
+              query: 'Median household income: NYC vs SF',
+              capability: 'Data Commons: Census / ACS statistics',
+            },
           ].map((item, idx) => (
             <Link
               key={idx}

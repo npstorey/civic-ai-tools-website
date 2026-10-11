@@ -73,7 +73,7 @@ interface QueryFormProps {
  * portal-scoped path, so it needs a portal to select — and that portal is the
  * instance's, not a literal (#407): `usesDefaultPortal` resolves at render to
  * `SITE_DEFAULT_PORTAL`, or to '' ("All portals") when this instance declared
- * none. The two that compare portals are not offered on a locked instance
+ * none. The one that compares two cities is not offered on a locked instance
  * (#436).
  */
 
