@@ -176,8 +176,8 @@ const EXCEPTIONS: readonly Exception[] = [
   {
     path: 'src/app/(marketing)/learn/page.tsx',
     classification: 'marketing-copy',
-    hits: 5,
-    why: 'Teaching copy on /learn quoting real skill text and a real tool call so a reader can see what one looks like; the page starts no run.',
+    hits: 6,
+    why: 'Teaching copy on /learn quoting real skill text and a real tool call so a reader can see what one looks like, and a local set-up example naming a portal for the reader to replace; the page starts no run.',
   },
   {
     path: 'src/components/QueryForm.tsx',
