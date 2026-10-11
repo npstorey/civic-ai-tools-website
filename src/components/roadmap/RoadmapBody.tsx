@@ -3,15 +3,25 @@
 import type { ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { linkIssueRefs, extractH2Headings, slugify, type SectionHeading } from '@/lib/roadmap/format';
+import {
+  linkIssueRefs,
+  extractH2Headings,
+  slugify,
+  resolveRoadmapHref,
+  roadmapLinkBase,
+  type SectionHeading,
+} from '@/lib/roadmap/format';
 
 interface RoadmapBodyProps {
   markdown: string;
+  /** The URL the markdown was fetched from; its relative links resolve against this file. */
+  sourceUrl: string;
 }
 
-export default function RoadmapBody({ markdown }: RoadmapBodyProps) {
+export default function RoadmapBody({ markdown, sourceUrl }: RoadmapBodyProps) {
   const processed = linkIssueRefs(markdown);
   const headings = extractH2Headings(markdown);
+  const linkBase = roadmapLinkBase(sourceUrl);
 
   return (
     <div className="roadmap-layout">
@@ -27,7 +37,8 @@ export default function RoadmapBody({ markdown }: RoadmapBodyProps) {
               const id = slugify(text);
               return <h2 id={id}>{children}</h2>;
             },
-            a: ({ href, children }) => {
+            a: ({ href: written, children }) => {
+              const href = resolveRoadmapHref(written, linkBase);
               const isExternal = href?.startsWith('http');
               return (
                 <a

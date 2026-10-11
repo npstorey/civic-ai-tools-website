@@ -1,6 +1,9 @@
 // Roadmap markdown preprocessing helpers.
 // Auto-links issue-ref text ([civic#41], [website#84], [socrata-mcp#40]) to the corresponding
-// repo's issue URL, and extracts H2 section headings for the right-rail TOC.
+// repo's issue URL, resolves the document's relative links against the file it came from, and
+// extracts H2 section headings for the right-rail TOC.
+
+import { describeContentSource } from '../content-source.ts';
 
 const REPO_ISSUE_URLS: Record<string, string> = {
   civic: 'https://github.com/npstorey/civic-ai-tools/issues',
@@ -23,6 +26,44 @@ export function linkIssueRefs(markdown: string): string {
         `[${repo}#${num}](${REPO_ISSUE_URLS[repo]}/${num})`
     );
   });
+}
+
+const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+
+/**
+ * Where the roadmap's relative links resolve from: the page of the file the
+ * markdown was fetched from. A GitHub raw URL resolves to its file page, so
+ * `docs/x.md` lands on the repository's view of that file; any other host
+ * resolves against the fetched URL itself.
+ *
+ * Derived from the raw URL, never from `ROADMAP_GITHUB_URL`: the byline's
+ * link may be set to a repository or any other page, but a relative link in
+ * a document is relative to where that document lives.
+ */
+export function roadmapLinkBase(rawUrl: string): string {
+  return describeContentSource(rawUrl).href;
+}
+
+/**
+ * A link in the roadmap markdown, as the page should render it.
+ *
+ * A relative path (`README.md`, `docs/adr/0025-….md#section`, `../x.md`) is
+ * written relative to the source file. Rendered as-is it resolves against
+ * this site and 404s (C6, 2026-10-10: five such links on /roadmap). It is
+ * resolved against `base` (`roadmapLinkBase`). Left unchanged: absolute URLs
+ * and other schemes (`mailto:`), in-page fragments (`#…`, which the TOC rail
+ * uses), and root-relative paths (`/records`), which name a page on the site
+ * rendering the roadmap.
+ */
+export function resolveRoadmapHref(href: string | undefined, base: string): string | undefined {
+  if (!href || href.startsWith('#') || href.startsWith('/') || URL_SCHEME_RE.test(href)) {
+    return href;
+  }
+  try {
+    return new URL(href, base).href;
+  } catch {
+    return href;
+  }
 }
 
 export interface SectionHeading {

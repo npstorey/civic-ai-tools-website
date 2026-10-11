@@ -60,7 +60,7 @@ export default async function RoadmapPage() {
       </p>
 
       {result.ok && result.markdown ? (
-        <RoadmapBody markdown={result.markdown} />
+        <RoadmapBody markdown={result.markdown} sourceUrl={source.rawUrl} />
       ) : (
         <RoadmapStub source={source} />
       )}
