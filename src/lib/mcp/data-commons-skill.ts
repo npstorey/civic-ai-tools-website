@@ -87,6 +87,8 @@ Never invent a variable DCID from pattern-matching against similar-looking ones.
 
 Data Commons natively supports **US census tract**, **US census block group**, **ZCTA** (zip/XXXXX), county, state, and country place types.
 
+get_observations returns observations for the one place its place DCID names. These tools cannot list a place's children, so "every tract in Manhattan" is not one call: query the specific tracts the question needs, one call per tract DCID, or say that the breakdown is not available here. Never report a parent place's value as if it were each child's.
+
 Data Commons does **NOT** natively support NYC community districts, city council districts, Neighborhood Tabulation Areas, Chicago community areas, or arbitrary municipal boundaries beyond incorporated-place FIPS codes.
 
 For civic analyses that need community-district or council-district resolution, the current pattern is to **work at the census tract level** and state the geography choice explicitly in the output. A tract-to-admin-geography crosswalk utility is planned as follow-up work and tracked separately; do not emulate it by guessing tract memberships.

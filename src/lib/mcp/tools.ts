@@ -168,7 +168,6 @@ Places are passed to this tool by name, not by DCID: a DCID in places is answere
 
 Examples:
 - { "query": "median household income", "places": ["Kings County, New York"] }  // search scoped to Brooklyn, by name
-- { "query": "poverty rate", "parent_place": "geoId/36061" }  // search indicators scoped to New York County
 - { "query": "asthma prevalence adults" }  // free-text topic search`,
       parameters: {
         type: 'object',
@@ -182,10 +181,6 @@ Examples:
             items: { type: 'string' },
             description: 'Optional list of place names to scope the search to, qualified so they are unambiguous (e.g., "Kings County, New York", "New York City, USA") — never DCIDs. The tool returns variables that have observations for those places, and each result\'s placesWithData lists the DCIDs of the requested places that have data: pass one of those to get_observations.',
           },
-          parent_place: {
-            type: 'string',
-            description: 'Optional parent place DCID — the tool returns variables that cover children of this place.',
-          },
           per_search_limit: {
             type: 'number',
             description: 'Max results per category (default: 10)',
@@ -193,10 +188,6 @@ Examples:
           include_topics: {
             type: 'boolean',
             description: 'Include topic-level results alongside individual variables (default: true)',
-          },
-          maybe_bilateral: {
-            type: 'boolean',
-            description: 'Include bilateral (two-place) variables such as trade flows (default: false)',
           },
         },
         required: ['query'],
@@ -216,15 +207,15 @@ Requires a variable_dcid (discovered via search_indicators) and a place_dcid. Co
 - Census Tract: "geoId/36061013700" (state + county + tract FIPS)
 - ZCTA: "zip/10001"
 
-Use child_place_type to fetch observations for all children of a place at a given geography level (e.g., all tracts within a county).
+One call returns observations for the one place named in place_dcid. This tool cannot list a place's children: a question about every tract (or every county) in a place needs one call per child DCID, or an answer that says the breakdown is not available here. Never report a parent place's value as if it were each child's.
 
 CRITICAL: Data Commons returns wrong data silently if you pick the wrong variable, time range, or place type. Always prefer the latest vintage unless the user explicitly asks for a historical series. Cite the variable DCID and observation date in your summary.
 
 Examples:
 - Latest median household income for a NYC census tract:
   { "variable_dcid": "Median_Income_Household", "place_dcid": "geoId/36061013700" }
-- All tracts in New York County (Manhattan):
-  { "variable_dcid": "Median_Income_Household", "place_dcid": "geoId/36061", "child_place_type": "CensusTract" }
+- New York County (Manhattan) as a whole:
+  { "variable_dcid": "Median_Income_Household", "place_dcid": "geoId/36061" }
 - Historical range:
   { "variable_dcid": "Count_Person", "place_dcid": "country/USA", "date_range_start": "2015", "date_range_end": "2023" }`,
       parameters: {
@@ -237,10 +228,6 @@ Examples:
           place_dcid: {
             type: 'string',
             description: 'Data Commons identifier for the place (e.g., "geoId/36061" for New York County, "country/USA", "zip/10001")',
-          },
-          child_place_type: {
-            type: 'string',
-            description: 'Optional child geography to enumerate (e.g., "CensusTract", "County", "State"). Returns observations for every child of place_dcid at this level.',
           },
           source_override: {
             type: 'string',
