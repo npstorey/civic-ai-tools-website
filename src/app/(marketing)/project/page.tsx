@@ -235,7 +235,10 @@ export default function ProjectPage() {
           <Link href="/records">public record registry</Link>. Each card links to the signed
           record, where everything stated here can be read and independently verified. A record
           documents how an answer was produced &mdash; it does not certify that the answer is
-          correct.
+          correct. Each record page also shows a verification status: &ldquo;unverified&rdquo;
+          means no automated review has been attached yet (a replay that checks whether the
+          analysis can be reproduced, or a second model&apos;s review against a fixed checklist),
+          and it is separate from the check of the record&apos;s signature.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {CASES.map((c) => (
