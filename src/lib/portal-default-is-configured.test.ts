@@ -176,7 +176,7 @@ const EXCEPTIONS: readonly Exception[] = [
   {
     path: 'src/app/(marketing)/learn/page.tsx',
     classification: 'marketing-copy',
-    hits: 6,
+    hits: 5,
     why: 'Teaching copy on /learn quoting real skill text and a real tool call so a reader can see what one looks like; the page starts no run.',
   },
   {

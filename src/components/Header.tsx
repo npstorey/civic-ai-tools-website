@@ -321,6 +321,15 @@ export default function Header({
                     Roadmap
                   </Link>
                   )}
+                  <Link
+                    href={mkt('/talks')}
+                    onClick={() => setAboutOpen(false)}
+                    style={DROPDOWN_ITEM_STYLE}
+                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    Talks
+                  </Link>
                 </div>
               )}
             </div>
@@ -651,6 +660,19 @@ export default function Header({
             Roadmap
           </Link>
           )}
+          <Link
+            href={mkt('/talks')}
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              color: 'var(--text-secondary)',
+              fontWeight: 500,
+              fontSize: '16px',
+              textDecoration: 'none',
+              paddingLeft: '12px',
+            }}
+          >
+            Talks
+          </Link>
             </>
           )}
           {/* Divider */}

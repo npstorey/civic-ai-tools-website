@@ -168,7 +168,7 @@ export default function LearnPage() {
             Socrata MCP server
           </a>
           {' '}for open data portals in New York, Chicago, and San Francisco, and Google&apos;s{' '}
-          <a href="https://api.datacommons.org/mcp" target="_blank" rel="noopener noreferrer">
+          <a href="https://docs.datacommons.org/mcp/" target="_blank" rel="noopener noreferrer">
             Data Commons MCP server
           </a>
           {' '}for US Census / ACS demographic and economic statistics. Tool calls are routed by name,
@@ -442,33 +442,36 @@ export default function LearnPage() {
         <h2 style={sectionHeading}>Model Selection</h2>
 
         <p style={prose}>
-          We evaluated 8 AI models across 15 civic data queries, scoring each on query accuracy,
-          guidance adherence, interpretation quality, cost, and speed. Based on those results,
-          the demo offers three models:
+          In March 2026 we ran 8 AI models on the same 15 civic data questions. GPT-5.4&apos;s
+          answers were scored in detail against a rubric; the other seven models were ranked on
+          token use, speed, timeouts, and how often they ran out of their token budget, with their
+          quality estimated. The demo offers three models:
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
           <div style={card}>
             <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>GPT-4o (recommended)</h4>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
-              Best all-around. Fastest average response time (10s), zero timeouts in testing, and
-              reliable tool use. The best balance of quality and cost for a public demo.
+              Best all-around in the March 2026 run: the fastest average response (10 seconds), no
+              timeouts, and reliable tool use. The best balance of quality and cost for a public demo.
             </p>
           </div>
 
           <div style={card}>
             <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>GPT-5.4 (premium)</h4>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
-              Highest quality analysis with the most token-efficient responses, but slower and
-              more expensive per query. Worth the wait for complex or multi-step questions.
+              The highest quality score in the March 2026 run, using the fewest tokens per answer,
+              but slower (21 seconds on average) and more expensive per question. Worth the wait for
+              complex or multi-step questions.
             </p>
           </div>
 
           <div style={card}>
-            <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>Gemini 2.0 Flash (fastest)</h4>
+            <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>Gemini 3.5 Flash Lite (fastest)</h4>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
-              Lowest cost per query with solid accuracy on straightforward questions.
-              Best for quick lookups when you don&apos;t need deep analysis.
+              The lowest-cost model offered, for quick lookups that don&apos;t need deep analysis. It
+              replaced Gemini 2.0 Flash in August 2026, when that model stopped being served, and was
+              not part of the March evaluation.
             </p>
           </div>
         </div>
@@ -476,17 +479,24 @@ export default function LearnPage() {
         <div style={{ ...card, marginBottom: '24px' }}>
           <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>Why not Claude?</h4>
           <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
-            Claude produces the highest-quality civic data analysis in our testing, but its
-            thoroughness makes it token-intensive &mdash; too expensive for a free web demo. Claude
-            models exceeded our token budgets more frequently than GPT or Gemini models in evaluation.
-            To use Claude for civic data analysis,{' '}
+            Claude models wrote thorough answers in the March 2026 run, but used the most tokens: all
+            three ran out of the token budget on 5 or 6 of the 15 questions, against 1 to 3 for
+            GPT-4o, GPT-5.4 and Gemini 2.0 Flash. That makes them too expensive for a free web demo.
+            One Claude model has a narrower job here: by default, Claude Sonnet 4.6 reviews an analysis
+            against a fixed checklist when its author publishes a record they had kept private. To use
+            Claude for civic data analysis,{' '}
             <a href="#try-it">set up civic-ai-tools locally</a>{' '}
             with Claude Code, Cursor, or Claude Desktop using your own API key.
           </p>
         </div>
 
+        <p style={prose}>
+          The evaluation has not been repeated since March 2026. A new one, covering current models,
+          is under way.
+        </p>
+
         <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-          Full evaluation methodology and results:{' '}
+          Full evaluation methodology and results (March 2026):{' '}
           <a
             href="https://github.com/npstorey/civic-ai-tools/blob/main/docs/research/model-evaluation-results.md"
             target="_blank"
