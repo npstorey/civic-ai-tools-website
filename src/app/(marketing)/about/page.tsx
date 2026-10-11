@@ -73,8 +73,9 @@ export default async function AboutPage() {
             &mdash; Civic AI Tools connects to open data portals powered by Tyler
             Technologies&apos; Socrata platform (formerly Socrata, now Tyler Data &amp; Insights).
             This is the server powering the demo on this website.
-            Install via <code style={{ fontSize: '14px' }}>npx socrata-mcp-server</code> or clone
-            the repo.{' '}
+            Install it from npm with{' '}
+            <code style={{ fontSize: '14px' }}>npx socrata-mcp-server --stdio</code> (version 0.9.1)
+            or clone the repo.{' '}
             <Link href="/directory">Browse the directory</Link> to see the MCP servers and the{' '}
             {portalCount} open data portals they connect to.
           </li>

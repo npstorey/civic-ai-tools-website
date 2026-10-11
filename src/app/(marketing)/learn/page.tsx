@@ -8,7 +8,7 @@ export const metadata = {
 };
 
 const GITHUB_SKILL_URL = 'https://github.com/npstorey/civic-ai-tools-website/blob/main/src/lib/mcp/socrata-skill.ts';
-const GITHUB_STREAMING_BASE = 'https://github.com/npstorey/civic-ai-tools-website/blob/24916fb/src/lib/streaming.ts';
+const GITHUB_STREAMING_BASE = 'https://github.com/npstorey/civic-ai-tools-website/blob/08dfa4c/src/lib/streaming.ts';
 
 export default function LearnPage() {
   return (
@@ -299,31 +299,31 @@ export default function LearnPage() {
           <NarrationLayer
             title="What's happening"
             functionName="formatToolProgress"
-            githubLines="#L43-L71"
+            githubLines="#L585-L623"
             description='Translates the raw tool call into an action description.'
             example={{
               raw: 'get_data({ type: "catalog", query: "restaurant inspections", portal: "data.cityofnewyork.us" })',
-              displayed: 'Searching for restaurant inspection datasets',
+              displayed: 'Searching NYC data catalog: "restaurant inspections"',
             }}
           />
           <NarrationLayer
             title="What was found"
             functionName="formatToolResult"
-            githubLines="#L319-L343"
+            githubLines="#L950-L993"
             description="Summarizes the data returned by each tool call."
             example={{
               raw: '{ results: [...], count: 5 }',
-              displayed: 'Found 5 matching datasets',
+              displayed: 'Found 5 datasets matching the search',
             }}
           />
           <NarrationLayer
             title="Why this step"
             functionName="generateToolReason"
-            githubLines="#L346-L370"
+            githubLines="#L1000-L1035"
             description='Explains the purpose of the step in the overall workflow.'
             example={{
-              raw: '(first tool call with type "catalog")',
-              displayed: 'Finding available datasets before querying',
+              raw: '(the same catalog call)',
+              displayed: 'to find datasets about "restaurant inspections"',
             }}
           />
         </div>
@@ -657,17 +657,12 @@ export default function LearnPage() {
         >
           <h4 style={{ fontSize: '18px', marginBottom: '8px' }}>Claude Desktop</h4>
           <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-            Clone and build the server first:
-          </p>
-          <pre style={{
-            ...excerptBlock,
-            margin: '0 0 12px 0',
-            fontSize: '12px',
-          }}>{`git clone https://github.com/npstorey/socrata-mcp-server
-cd socrata-mcp-server && npm install && npm run build`}</pre>
-          <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-            Then add this to your Claude Desktop MCP configuration
-            (Settings &rarr; Developer &rarr; Edit Config):
+            The server is published on npm as{' '}
+            <a href="https://www.npmjs.com/package/socrata-mcp-server" target="_blank" rel="noopener noreferrer">
+              socrata-mcp-server
+            </a>{' '}
+            (version 0.9.1, October 2026) and needs Node.js 22 or newer. Add this to your Claude
+            Desktop MCP configuration (Settings &rarr; Developer &rarr; Edit Config):
           </p>
           <pre style={{
             ...excerptBlock,
@@ -675,18 +670,22 @@ cd socrata-mcp-server && npm install && npm run build`}</pre>
           }}>{`{
   "mcpServers": {
     "socrata": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["path/to/socrata-mcp-server/dist/index.js", "--stdio"],
+      "command": "npx",
+      "args": ["-y", "socrata-mcp-server", "--stdio"],
       "env": {
-        "DEFAULT_DOMAIN": "data.cityofnewyork.us"
+        "DATA_PORTAL_URL": "https://data.cityofnewyork.us"
       }
     }
   }
 }`}</pre>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
-            Replace <code style={{ fontSize: '12px' }}>path/to/</code> with the actual path where you cloned the repo.
-            After saving, restart Claude Desktop.
+            <code style={{ fontSize: '12px' }}>DATA_PORTAL_URL</code> is optional: it is the portal a
+            request uses when it names none. Without it, the server refuses every request that
+            does not name a portal.
+            After saving, restart Claude Desktop. To run the server from source instead, see its{' '}
+            <a href="https://github.com/npstorey/socrata-mcp-server#quick-start" target="_blank" rel="noopener noreferrer">
+              README
+            </a>.
           </p>
         </div>
 
@@ -699,8 +698,8 @@ cd socrata-mcp-server && npm install && npm run build`}</pre>
           }}
         >
           {[
-            { title: 'Claude Code', desc: 'Add socrata-mcp to ~/.claude/settings.json' },
-            { title: 'Cursor', desc: 'Configure MCP servers in Cursor settings' },
+            { title: 'Claude Code', desc: 'claude mcp add socrata -e DATA_PORTAL_URL=https://data.cityofnewyork.us -- npx -y socrata-mcp-server --stdio' },
+            { title: 'Cursor', desc: 'Add the same "socrata" entry to .cursor/mcp.json' },
             { title: 'Other tools', desc: 'Any MCP-compatible client works' },
           ].map((item, idx) => (
             <div
