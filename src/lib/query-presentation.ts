@@ -112,9 +112,7 @@ export function isComparisonRunComplete(
  * `crossPortal`: the example asks for a comparison across two cities. A locked
  * instance queries one Socrata portal (`SITE_PORTAL_LOCKED`), so it does not
  * offer these: a comparison of two cities' Socrata data is one it cannot
- * answer. (Data Commons stays callable under the lock, so a locked instance
- * can still answer the income comparison from that source; it is withheld with
- * the other because it invites the same cross-city reading of the portal.)
+ * answer.
  */
 export interface ExampleQuery {
   text: string;
@@ -124,15 +122,16 @@ export interface ExampleQuery {
 
 /**
  * The suggested questions, in display order. Moved here from `QueryForm` so the
- * lock's effect on them is testable under `node --test`; the text and order are
- * the form's, unchanged. An example that carries no portal is a working
- * suggestion on an unconfigured instance, so an unconfigured, unlocked instance
- * keeps all three.
+ * lock's effect on them is testable under `node --test`. An example that
+ * carries no portal is a working suggestion on an unconfigured instance, so an
+ * unconfigured, unlocked instance keeps all three. The third replaced a Data
+ * Commons comparison of median household income in October 2026, while that
+ * source's calls were failing on the reference deployment (#543).
  */
 export const EXAMPLE_QUERIES: readonly ExampleQuery[] = [
   { text: 'Noise trends in NYC', usesDefaultPortal: true },
   { text: 'Top 311 complaints: NYC vs SF', crossPortal: true },
-  { text: 'Median household income: NYC vs SF', crossPortal: true },
+  { text: 'Restaurant inspection grades by NYC borough', usesDefaultPortal: true },
 ];
 
 /**
