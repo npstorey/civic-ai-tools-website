@@ -657,7 +657,7 @@ export default function LearnPage() {
             <a href="https://www.npmjs.com/package/socrata-mcp-server" target="_blank" rel="noopener noreferrer">
               socrata-mcp-server
             </a>{' '}
-            (version 0.9.1, October 2026) and needs Node.js 22 or newer. Add this to your Claude
+            (version 0.9.2, October 2026) and needs Node.js 22 or newer. Add this to your Claude
             Desktop MCP configuration (Settings &rarr; Developer &rarr; Edit Config):
           </p>
           <pre style={{

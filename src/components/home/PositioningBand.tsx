@@ -183,6 +183,11 @@ export default function PositioningBand() {
               </a>{' '}
               checks any record package without relying on the site that published it.
             </li>
+            <li style={bodyText}>
+              <strong style={{ color: 'var(--text-primary)' }}>Your own data connector.</strong>{' '}
+              <code>npx -y socrata-mcp-server --stdio</code> runs the open-source Socrata server on your
+              machine, so an MCP client such as Claude Desktop can query any Socrata open-data portal.
+            </li>
           </ul>
         </div>
 
