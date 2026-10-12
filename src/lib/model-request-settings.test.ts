@@ -23,6 +23,7 @@ import {
   modelRequestParameters,
   modelRequestSettings,
   projectServedModel,
+  summaryDraftTokenLimit,
   validateCatalog,
   type CatalogEntry,
   type ModelRequestSettings,
@@ -178,6 +179,22 @@ test('CATALOG: an entry setting neither field yields the two-member pair it alwa
   const identity = modelIdentity(plain);
   assert.deepEqual(identity, { endpointModel: plain.endpointModel, declared: plain.endpointModel });
   assert.equal('requestSettings' in identity, false, 'an entry setting neither field grew a requestSettings key');
+});
+
+test('CATALOG: the summary draft leaves a reasoning summariser room to reason, and keeps 300 otherwise', () => {
+  // A reasoning model counts its reasoning against the limit, so a 300-token
+  // draft limit can be spent before any text comes back.
+  assert.equal(summaryDraftTokenLimit(undefined), 300);
+  assert.equal(summaryDraftTokenLimit({}), 300);
+  assert.equal(summaryDraftTokenLimit({ tokenLimitParameter: 'max_completion_tokens' }), 300);
+  assert.equal(summaryDraftTokenLimit({ reasoningEffort: 'none' }), 300, '`none` does not reason');
+  for (const effort of REASONING_EFFORTS.filter((e) => e !== 'none')) {
+    assert.equal(summaryDraftTokenLimit({ reasoningEffort: effort }), 2000, effort);
+  }
+  // The built-in summariser (Haiku 5.5 at low effort) is one that reasons.
+  const builtInSummariser = BUILT_IN_CATALOG.find((e) => e.summarizer);
+  assert.ok(builtInSummariser, 'the built-in catalog declares a summariser');
+  assert.equal(summaryDraftTokenLimit(modelRequestSettings(builtInSummariser)), 2000);
 });
 
 test('CATALOG: the built-in catalog sends each model the reasoning setting it was evaluated at', () => {

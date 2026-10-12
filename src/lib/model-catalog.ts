@@ -201,11 +201,12 @@ export interface ModelIdentity {
  *
  * WHAT THE PRICES MEAN FOR A QUERY. The evaluation measured about $0.006 a
  * query on Haiku 5.5, $0.11 on Sonnet 5.5 and $0.21 on Opus 5.5. Those are
- * floors for any model that reached its 50,000-token per-query bound (Haiku 5.5
- * did on 3 of 14 queries, one at 123,121 tokens), and production applies no such
- * bound: no entry sets `maxTokenBudget`, so the query route allows 200,000
- * cumulative tokens and 20 rounds (`openrouter-streaming.ts`), four times the
- * evaluation's bound and twice its rounds. The worst case of one query at 180K
+ * floors for the models that reached the evaluation's 50,000-token per-query
+ * bound: Haiku 5.5 and Sonnet 5.5 each did on 3 of 14 queries (one Haiku 5.5
+ * query at 123,121 tokens), Opus 5.5 on none, so its figure is as measured.
+ * Production applies no such bound: the query route allows 200,000 cumulative
+ * tokens and 20 rounds (`openrouter-streaming.ts`), four times the evaluation's
+ * bound and twice its rounds. (`maxTokenBudget` is not read by that route.) The worst case of one query at 180K
  * tokens in and 20K out is about $1.12 on Opus 5.5, $0.56 on Sonnet 5.5 and
  * $0.03 on Haiku 5.5. Haiku 5.5 is billed five times higher on a single prompt
  * above 100,000 tokens, which these prices do not model.
@@ -358,6 +359,26 @@ export function modelRequestParameters(
   const limit: ModelRequestParameters =
     parameter === 'max_completion_tokens' ? { max_completion_tokens: tokenLimit } : { max_tokens: tokenLimit };
   return reasoningEffort !== undefined ? { ...limit, reasoning_effort: reasoningEffort } : limit;
+}
+
+/** The summary draft's token limit for a summarizer that does not reason. */
+export const SUMMARY_DRAFT_TOKEN_LIMIT = 300;
+/** The summary draft's token limit for a summarizer that reasons. */
+export const SUMMARY_DRAFT_REASONING_TOKEN_LIMIT = 2000;
+
+/**
+ * The token limit of the summary-draft request (the summarizer role). The draft
+ * is one paragraph, and 300 bounds it. A reasoning model counts its reasoning
+ * against the same limit (above), though: in the October 2026 evaluation Claude
+ * Haiku 5.5 at low effort, the summarizer since that ruling, spent 300 or more
+ * tokens reasoning on 7 of its 44 requests, which at 300 would leave the draft
+ * empty or cut. So a summarizer sent any reasoning effort but `none` gets
+ * 2,000, the limit that evaluation ran it under; one that does not reason keeps
+ * 300.
+ */
+export function summaryDraftTokenLimit(settings: ModelRequestSettings | undefined): number {
+  const effort = settings?.reasoningEffort;
+  return effort !== undefined && effort !== 'none' ? SUMMARY_DRAFT_REASONING_TOKEN_LIMIT : SUMMARY_DRAFT_TOKEN_LIMIT;
 }
 
 /**

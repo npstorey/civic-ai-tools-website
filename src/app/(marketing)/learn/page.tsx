@@ -443,8 +443,8 @@ export default function LearnPage() {
 
         <p style={prose}>
           In October 2026 we ran nine AI models on 14 of the civic data questions first used in
-          March, and scored every answer by hand: against a rubric, and against figures read
-          directly from the data portals. The demo offers the three that led, in this order:
+          March, and scored every answer against a rubric and against figures read directly from
+          the data portals. The demo offers three of the four models that led:
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
@@ -479,8 +479,8 @@ export default function LearnPage() {
         <p style={prose}>
           When an author publishes a record they had kept private, a second model first reviews the
           analysis against a fixed checklist: Claude Sonnet 5.5, or Claude Opus 5.5 when Sonnet 5.5
-          wrote the analysis. Records published earlier with GPT-4o, GPT-5.4 or Gemini 3.5 Flash
-          Lite keep those model names.
+          wrote the analysis. Records published earlier with GPT-4o or GPT-5.4 keep those model
+          names.
         </p>
 
         <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>

@@ -66,8 +66,9 @@ export default function McpFlowDiagram() {
    * here. Warmed on mount so the click does not wait.
    *
    * #314 asks a further question this does NOT answer: whether `/explore`
-   * should instead have its own catalog role, or reach the `default` entry
-   * (which is `selectable: false` and therefore absent from `/api/models`).
+   * should instead have its own catalog role, or reach the `default` entry.
+   * (On the built-in catalog that entry was `selectable: false` and absent from
+   * `/api/models` until the October 2026 roster made it the first offered model.)
    * That is a product decision; this only stops the page naming a model the
    * instance never offered.
    */
