@@ -128,9 +128,9 @@ export default function PositioningBand() {
             <p style={cardLabel}>3. City implementations</p>
             <p style={bodyText}>
               This site is the first: a reference implementation running
-              against public data portals for New York, Chicago, and San
-              Francisco. The same stack is what another city would pick up and
-              run against its own portals.
+              against public data portals for New York, Chicago, Los Angeles,
+              and Seattle. The same stack is what another city would pick up
+              and run against its own portals.
             </p>
           </div>
         </div>
