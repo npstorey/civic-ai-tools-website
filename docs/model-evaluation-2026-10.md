@@ -3,7 +3,7 @@
 This run re-evaluates the app's model roster on the app's own task. It compares nine models: the four
 the catalog runs today and five current candidates. The task is answering civic-data questions
 through the Socrata MCP server with the shared tool-calling loop, on the 15 test queries used in
-March. It ran on 2026-10-11 and was scored by hand against the project's six-dimension rubric
+March. It ran on 2026-10-11, and every answer was scored against the project's six-dimension rubric
 (hub [`docs/research/eval-queries.md`](https://github.com/npstorey/civic-ai-tools/blob/main/docs/research/eval-queries.md)).
 The roster change it informs is decided separately (civic-ai-tools-website#573).
 
@@ -91,7 +91,7 @@ Prices are OpenRouter's, read on the run date, in USD per million input / output
 | — | GPT-6.1 Sol | candidate | (3.34) | (3.89) | not ranked (#76) | 0/11 (+1 partial) | 24,776 | 10.0 s | $0.73 | 0 | 0 | 0 |
 
 How to read it:
-- **Quality** is the mean of the four hand-scored dimensions over 14 queries.
+- **Quality** is the mean of the four quality dimensions, scored answer by answer, over 14 queries.
 - **Efficiency** is the mean of the rubric's relative cost score (on tokens, as in March) and its
   relative latency score.
 - **Overall** is 0.7 × quality + 0.3 × efficiency.
@@ -136,7 +136,7 @@ then Gemini 3.8 Flash (3.97) and Sonnet 5.5 (3.86).
 
 - **"Expected dataset answered"** means a call to the query's expected dataset was answered rather
   than refused. It is not a correctness grade.
-- **Two expected datasets mislead the check, so read the hand scores for those queries:**
+- **Two expected datasets mislead the check, so read the rubric scores for those queries:**
   - Q9's is stale: `h73f-gn57` ends in November 2025, and the 2026 data is in `2cy6-i7zn`.
   - Q12 accepts a second dataset, `ipu4-2q9a`, which the check does not know.
 
@@ -326,7 +326,7 @@ the last run.
 - **Reference answers.** Each query's correct answer on the run date was read directly from the
   portal's SODA API, with no model and no MCP server (Appendix A). Where a query is ambiguous, every
   reasonable reading is given.
-- **Hand scoring.**
+- **Scoring.** Each answer was scored individually; the scorers were models, not people.
   - Five scorers (Claude Opus 5.5) each scored a set of queries across all nine models, from the same
     brief. The brief covers the rubric, the reference answers, and rules for refused calls,
     fabrication and the two stale expectations.

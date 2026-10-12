@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { errorLogFacts } from '@/lib/streaming';
 import { createModelClient, ModelConfigurationError } from '@/lib/model-client';
 import { getSummarizerModel } from '@/lib/model-resolver';
-import { modelIdentity, modelRequestParameters, type ModelIdentity } from '@/lib/model-catalog';
+import {
+  modelIdentity,
+  modelRequestParameters,
+  summaryDraftTokenLimit,
+  type ModelIdentity,
+} from '@/lib/model-catalog';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import {
@@ -102,7 +107,9 @@ ${output.slice(0, 4000)}`;
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userMessage },
       ],
-      ...modelRequestParameters(summarizer.requestSettings, 300),
+      // 300 for a summarizer that does not reason; 2,000 for one that does,
+      // whose reasoning counts against the same limit (`summaryDraftTokenLimit`).
+      ...modelRequestParameters(summarizer.requestSettings, summaryDraftTokenLimit(summarizer.requestSettings)),
     });
 
     const summary = response.choices[0]?.message?.content?.trim() || '';

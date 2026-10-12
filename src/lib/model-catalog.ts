@@ -184,67 +184,74 @@ export interface ModelIdentity {
  * nothing a record could get wrong: the slug called is the slug recorded, and
  * `model` is correctly omitted throughout.
  *
- * The first three entries are `availableModels` verbatim, in order, with their
- * pricing folded back in. The fourth was never in the selector and is not added
- * to it: it is the notebook route's `DEFAULT_MODEL` and the publication gate's
- * `DEFAULT_EVALUATOR_MODEL`, which were the same literal in two files.
+ * WHICH MODELS ARE OFFERED was settled by the October 2026 evaluation
+ * (docs/model-evaluation-2026-10.md) and the owner's rulings on it
+ * (civic-ai-tools-website#573): three selectable models, in selector order,
+ * each sent the reasoning setting it was evaluated at. The order is the
+ * selector's, and the first entry is also where the query form starts. The
+ * four models this list carried before — GPT-4o, GPT-5.4, Gemini 3.5 Flash
+ * Lite and Claude Sonnet 4.6 — left it on that ruling and are in
+ * `HISTORICAL_MODELS` below, so the records that name them keep their names
+ * and costs.
  *
- * WHICH MODELS ARE OFFERED IS NOT THIS PHASE'S QUESTION (civic-ai-tools-website#302
- * holds it). This phase changes only where the list comes from.
+ * THE ROLES. The notebook default and the summary drafter are Haiku 5.5. The
+ * publication gate walks the `evaluator` ranks and takes the first entry that
+ * did not run the analysis, so a Haiku 5.5 or Opus 5.5 analysis is judged by
+ * Sonnet 5.5, and a Sonnet 5.5 analysis by Opus 5.5.
+ *
+ * WHAT THE PRICES MEAN FOR A QUERY. The evaluation measured about $0.006 a
+ * query on Haiku 5.5, $0.11 on Sonnet 5.5 and $0.21 on Opus 5.5. Those are
+ * floors for the models that reached the evaluation's 50,000-token per-query
+ * bound: Haiku 5.5 and Sonnet 5.5 each did on 3 of 14 queries (one Haiku 5.5
+ * query at 123,121 tokens), Opus 5.5 on none, so its figure is as measured.
+ * Production applies no such bound: the query route allows 200,000 cumulative
+ * tokens and 20 rounds (`openrouter-streaming.ts`), four times the evaluation's
+ * bound and twice its rounds. (`maxTokenBudget` is not read by that route.) The worst case of one query at 180K
+ * tokens in and 20K out is about $1.12 on Opus 5.5, $0.56 on Sonnet 5.5 and
+ * $0.03 on Haiku 5.5. Haiku 5.5 is billed five times higher on a single prompt
+ * above 100,000 tokens, which these prices do not model.
  */
 export const BUILT_IN_CATALOG: readonly CatalogEntry[] = Object.freeze([
   {
-    id: 'openai/gpt-4o',
-    name: 'GPT-4o',
+    id: 'anthropic/claude-haiku-5.5',
+    name: 'Claude Haiku 5.5',
     tag: 'recommended',
-    provider: 'OpenAI',
+    provider: 'Anthropic',
     supports_tools: true,
-    description: 'Best balance of quality and speed',
-    endpointModel: 'openai/gpt-4o',
-    pricing: { input: 2.5, output: 10.0 },
-    // The publication gate's FALLBACK_EVALUATOR_MODEL, at rank 2.
-    evaluator: 2,
-  },
-  {
-    id: 'openai/gpt-5.4',
-    name: 'GPT-5.4',
-    tag: 'premium',
-    provider: 'OpenAI',
-    supports_tools: true,
-    description: 'Highest quality analysis, newest model',
-    endpointModel: 'openai/gpt-5.4',
-    pricing: { input: 2.5, output: 15.0 },
-  },
-  {
-    id: 'google/gemini-3.5-flash-lite',
-    name: 'Gemini 3.5 Flash Lite',
-    tag: 'fastest',
-    provider: 'Google',
-    supports_tools: true,
-    description: 'Fast and budget-friendly',
-    maxTokenBudget: 150_000,
-    endpointModel: 'google/gemini-3.5-flash-lite',
-    pricing: { input: 0.3, output: 2.5 },
-    // The summary-draft route's model, which was the fifth hardcoded slug —
-    // `SUMMARY_MODEL` in api/evidence/generate-summary/route.ts, missed by P2's
-    // inventory and routed here. Naming it as a role rather than a literal is
-    // what makes it configurable per instance and visible to catalog
-    // validation; the id is unchanged, so the route calls what it always did.
+    description: 'Accurate and fast, at the lowest cost',
+    endpointModel: 'anthropic/claude-haiku-5.5',
+    pricing: { input: 0.1, output: 0.5 },
+    reasoningEffort: 'low',
+    // The notebook route's default, and the model that drafts the summary a
+    // publisher edits before signing (the summary-draft route).
+    default: true,
     summarizer: true,
   },
   {
-    id: 'anthropic/claude-sonnet-4-6',
-    name: 'Claude Sonnet 4.6',
+    id: 'anthropic/claude-sonnet-5.5',
+    name: 'Claude Sonnet 5.5',
+    tag: 'balanced',
     provider: 'Anthropic',
     supports_tools: true,
-    // Never appeared in `/api/models`, and does not start now: this entry is
-    // the pre-catalog notebook default and preferred evaluator, and adding it
-    // to the selector would be a product change this phase is not making.
-    selectable: false,
-    endpointModel: 'anthropic/claude-sonnet-4-6',
-    pricing: { input: 3.0, output: 15.0 },
-    default: true,
+    description: 'Stronger analysis at moderate cost',
+    endpointModel: 'anthropic/claude-sonnet-5.5',
+    pricing: { input: 2.0, output: 10.0 },
+    reasoningEffort: 'medium',
+    // The publication gate's first evaluator.
     evaluator: 1,
+  },
+  {
+    id: 'anthropic/claude-opus-5.5',
+    name: 'Claude Opus 5.5',
+    tag: 'premium',
+    provider: 'Anthropic',
+    supports_tools: true,
+    description: 'Highest quality analysis',
+    endpointModel: 'anthropic/claude-opus-5.5',
+    pricing: { input: 4.0, output: 20.0 },
+    reasoningEffort: 'medium',
+    // The gate's second evaluator: it judges an analysis Sonnet 5.5 ran.
+    evaluator: 2,
   },
 ]);
 
@@ -255,10 +262,20 @@ export const BUILT_IN_CATALOG: readonly CatalogEntry[] = Object.freeze([
  * This is not a catalog and must not become one. `cost.model` inside a signed
  * package is history: the record detail page, the provenance chain and the
  * notebook output all render it long after the roster that produced it changed.
- * Dropping these three ids would regress those surfaces from "Claude Opus 5"
+ * Dropping one of these ids would regress those surfaces from "Claude Opus 5"
  * and a cost estimate to a raw slug and a blank — a reader-facing loss, and the
  * wrong side of "user language not implementation language"
  * (docs/design-principles.md).
+ *
+ * The rows are the ids published records name and the catalog does not offer.
+ * Read from every page of `/api/records/list` (withdrawn records included) on
+ * 2026-10-11, 45 records named five ids: `openai/gpt-4o` (31) and
+ * `openai/gpt-5.4` (2), which left the catalog on the October 2026 ruling;
+ * `anthropic/claude-opus-5` (1); and Claude Opus 4.7 under two spellings,
+ * `anthropic/claude-opus-4-7` (9) and `claude-opus-4-7` (2), which no row
+ * covered until then. Gemini 3.5 Flash Lite and Claude Sonnet 4.6 left the
+ * catalog on the same ruling; no published record names them yet, but
+ * notebooks and traces in flight may, so they keep their rows too.
  *
  * Pricing and display for a NON-OFFERED id is therefore deliberately not the
  * catalog's business. It stays a built-in constant: never operator-supplied,
@@ -270,6 +287,13 @@ const HISTORICAL_MODELS: Readonly<Record<string, { name: string; pricing: ModelP
     'anthropic/claude-sonnet-4': { name: 'Claude Sonnet 4', pricing: { input: 3.0, output: 15.0 } },
     'anthropic/claude-opus-5': { name: 'Claude Opus 5', pricing: { input: 5.0, output: 25.0 } },
     'anthropic/claude-haiku-4.5': { name: 'Claude Haiku 4.5', pricing: { input: 1.0, output: 5.0 } },
+    'anthropic/claude-opus-4-7': { name: 'Claude Opus 4.7', pricing: { input: 5.0, output: 25.0 } },
+    'claude-opus-4-7': { name: 'Claude Opus 4.7', pricing: { input: 5.0, output: 25.0 } },
+    // Offered until the October 2026 ruling, at the prices the catalog gave them.
+    'openai/gpt-4o': { name: 'GPT-4o', pricing: { input: 2.5, output: 10.0 } },
+    'openai/gpt-5.4': { name: 'GPT-5.4', pricing: { input: 2.5, output: 15.0 } },
+    'google/gemini-3.5-flash-lite': { name: 'Gemini 3.5 Flash Lite', pricing: { input: 0.3, output: 2.5 } },
+    'anthropic/claude-sonnet-4-6': { name: 'Claude Sonnet 4.6', pricing: { input: 3.0, output: 15.0 } },
   });
 
 /**
@@ -335,6 +359,26 @@ export function modelRequestParameters(
   const limit: ModelRequestParameters =
     parameter === 'max_completion_tokens' ? { max_completion_tokens: tokenLimit } : { max_tokens: tokenLimit };
   return reasoningEffort !== undefined ? { ...limit, reasoning_effort: reasoningEffort } : limit;
+}
+
+/** The summary draft's token limit for a summarizer that does not reason. */
+export const SUMMARY_DRAFT_TOKEN_LIMIT = 300;
+/** The summary draft's token limit for a summarizer that reasons. */
+export const SUMMARY_DRAFT_REASONING_TOKEN_LIMIT = 2000;
+
+/**
+ * The token limit of the summary-draft request (the summarizer role). The draft
+ * is one paragraph, and 300 bounds it. A reasoning model counts its reasoning
+ * against the same limit (above), though: in the October 2026 evaluation Claude
+ * Haiku 5.5 at low effort, the summarizer since that ruling, spent 300 or more
+ * tokens reasoning on 7 of its 44 requests, which at 300 would leave the draft
+ * empty or cut. So a summarizer sent any reasoning effort but `none` gets
+ * 2,000, the limit that evaluation ran it under; one that does not reason keeps
+ * 300.
+ */
+export function summaryDraftTokenLimit(settings: ModelRequestSettings | undefined): number {
+  const effort = settings?.reasoningEffort;
+  return effort !== undefined && effort !== 'none' ? SUMMARY_DRAFT_REASONING_TOKEN_LIMIT : SUMMARY_DRAFT_TOKEN_LIMIT;
 }
 
 /**

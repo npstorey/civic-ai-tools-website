@@ -30,7 +30,9 @@
 // follow. "With" gives each role a different combination:
 //   the analysis model   reasoningEffort "none"                          (the downstream case)
 //   the evaluator        reasoningEffort "low", tokenLimitParameter max_completion_tokens
-//   the summariser       tokenLimitParameter max_completion_tokens only
+//   the summariser       reasoningEffort "low", tokenLimitParameter max_completion_tokens
+//                        (a summariser that reasons gets the larger draft limit,
+//                        `summaryDraftTokenLimit`: the reasoning counts against it)
 //
 // STUBS, as in `errors-out-of-logs-driven.test.ts` and for the same reasons:
 // no request scope or sign-in provider outside Next (`next/headers`,
@@ -43,6 +45,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { SUMMARY_DRAFT_REASONING_TOKEN_LIMIT } from './model-catalog.ts';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -242,7 +245,7 @@ function catalog(withSettings: boolean): string {
     {
       id: 'fixture-summary', name: 'Fixture Summariser', provider: 'Example Provider', supports_tools: true,
       endpointModel: 'example-summary-deployment', model: 'vendor/model-summary-1', summarizer: true, selectable: false,
-      ...(withSettings ? { tokenLimitParameter: 'max_completion_tokens' } : {}),
+      ...(withSettings ? { reasoningEffort: 'low', tokenLimitParameter: 'max_completion_tokens' } : {}),
     },
   ]);
 }
@@ -399,7 +402,9 @@ const WITH_SETTINGS: Record<string, (limit: number) => Record<string, unknown>> 
   'compare-stream': (limit) => ({ max_completion_tokens: limit, reasoning_effort: 'none' }),
   replay: (limit) => ({ max_completion_tokens: limit, reasoning_effort: 'none' }),
   evaluate: (limit) => ({ max_completion_tokens: limit, reasoning_effort: 'low' }),
-  summary: (limit) => ({ max_completion_tokens: limit }),
+  // The "with" summariser reasons, so the route sends it the reasoning draft
+  // limit in place of the 300 the "without" catalog is held to.
+  summary: () => ({ max_completion_tokens: SUMMARY_DRAFT_REASONING_TOKEN_LIMIT, reasoning_effort: 'low' }),
 };
 
 /** The request each site has always sent, as an ordered key list, `max_tokens` marked. */

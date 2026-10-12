@@ -147,39 +147,46 @@ const TOOL_RESULT_FIXTURES = resolve(FIXTURES_DIR, 'tool-results-2026-10-11.json
 // --- Models ---
 
 /**
- * The four controls are the built-in catalog as production runs it, so each
- * one's request settings are READ from its catalog entry
- * (`modelRequestSettings`) rather than restated here: a control sends exactly
- * what the site sends that model, and if the catalog's settings change the
- * controls follow. Today no control carries a setting, so each is sent
- * `max_tokens` and no `reasoning_effort` — as in March, and as in production.
+ * The controls are the built-in catalog as production runs it, so each one's
+ * request settings are READ from its catalog entry (`modelRequestSettings`)
+ * rather than restated here: a control sends exactly what the site sends that
+ * model, and if the catalog's settings change the controls follow. Every
+ * catalog entry is a control, in catalog order.
  *
- * The slug is OpenRouter's listed form. The catalog's `anthropic/claude-sonnet-4-6`
- * is an alias OpenRouter resolves (#573's C1, settled 2026-10-11) but does not
- * list, so the slug check could not vouch for it; the dotted form is the one
- * on the list.
+ * Since the October 2026 ruling (#573) the catalog is the three models that
+ * evaluation chose, each at the reasoning setting it was evaluated at, so the
+ * controls send what the October run sent them as candidates.
  */
-const CONTROL_SLUGS = [
-  ['openai/gpt-4o', 'openai/gpt-4o'],
-  ['openai/gpt-5.4', 'openai/gpt-5.4'],
-  ['google/gemini-3.5-flash-lite', 'google/gemini-3.5-flash-lite'],
-  ['anthropic/claude-sonnet-4-6', 'anthropic/claude-sonnet-4.6'],
-];
-
-function controlFromCatalog(catalogId, slug) {
-  const entry = BUILT_IN_CATALOG.find((e) => e.id === catalogId);
+function controlFromCatalog(entry) {
   return {
-    id: slug,
-    name: entry?.name ?? catalogId,
+    id: entry.endpointModel,
+    name: entry.name,
     role: 'control',
-    catalogId,
-    catalogEntryFound: Boolean(entry),
-    requestSettings: entry ? modelRequestSettings(entry) : undefined,
+    catalogId: entry.id,
+    catalogEntryFound: true,
+    requestSettings: modelRequestSettings(entry),
   };
 }
 
 /**
- * The candidates and their reasoning settings, as ruled 2026-10-11 (#573).
+ * The October 2026 controls: the catalog as it stood before that ruling, kept
+ * so a later run can compare with the October one. None carried a request
+ * setting, so each is stated as none — `max_tokens` and no `reasoning_effort`,
+ * exactly what the October run sent them. The slug is OpenRouter's listed
+ * form: the catalog had Sonnet 4.6 as `anthropic/claude-sonnet-4-6`, an alias
+ * OpenRouter resolves but does not list, so the slug check could not vouch for
+ * it.
+ */
+const PRIOR_CONTROLS = [
+  { id: 'openai/gpt-4o', name: 'GPT-4o', role: 'prior-control', requestSettings: undefined },
+  { id: 'openai/gpt-5.4', name: 'GPT-5.4', role: 'prior-control', requestSettings: undefined },
+  { id: 'google/gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite', role: 'prior-control', requestSettings: undefined },
+  { id: 'anthropic/claude-sonnet-4.6', name: 'Claude Sonnet 4.6', role: 'prior-control', requestSettings: undefined },
+];
+
+/**
+ * The October 2026 candidates the catalog did not take, at the settings they
+ * were evaluated at (#573).
  *
  * Gemini 3.8 Flash also names its token limit `max_tokens`. OpenRouter's list
  * gives `max_tokens` and not `max_completion_tokens` among its supported
@@ -188,25 +195,19 @@ function controlFromCatalog(catalogId, slug) {
  * `max_completion_tokens` — a field the list does not carry for this model, so
  * the 2,000-token limit every other model runs under might not apply to it.
  * `checkRoster` refuses that combination, so the setting is stated rather than
- * left to the default. The same holds for a catalog entry in P2.
+ * left to the default. A catalog entry for it would need the same.
  */
 const CANDIDATES = [
-  { id: 'anthropic/claude-sonnet-5.5', name: 'Claude Sonnet 5.5', role: 'candidate', requestSettings: { reasoningEffort: 'medium' } },
   {
     id: 'google/gemini-3.8-flash',
     name: 'Gemini 3.8 Flash',
     role: 'candidate',
     requestSettings: { reasoningEffort: 'medium', tokenLimitParameter: 'max_tokens' },
   },
-  { id: 'anthropic/claude-opus-5.5', name: 'Claude Opus 5.5', role: 'candidate', requestSettings: { reasoningEffort: 'medium' } },
-  { id: 'anthropic/claude-haiku-5.5', name: 'Claude Haiku 5.5', role: 'candidate', requestSettings: { reasoningEffort: 'low' } },
   { id: 'openai/gpt-6.1-sol', name: 'GPT-6.1 Sol', role: 'candidate', requestSettings: { reasoningEffort: 'medium' } },
 ];
 
-export const ALL_MODELS = [
-  ...CONTROL_SLUGS.map(([catalogId, slug]) => controlFromCatalog(catalogId, slug)),
-  ...CANDIDATES,
-];
+export const ALL_MODELS = [...BUILT_IN_CATALOG.map(controlFromCatalog), ...PRIOR_CONTROLS, ...CANDIDATES];
 
 // --- Test Queries ---
 
@@ -1166,12 +1167,12 @@ function printPlan(plan, list, listLabel, fixtures) {
   console.log(`OpenRouter list: ${listLabel}`);
   const models = [...new Map([...plan.models, ...plan.quoteModels].map((m) => [m.id, m])).values()];
   console.log('');
-  console.log('Model'.padEnd(32) + 'Role'.padEnd(11) + 'Request parameters'.padEnd(64) + 'USD/MTok in/out');
+  console.log('Model'.padEnd(32) + 'Role'.padEnd(15) + 'Request parameters'.padEnd(64) + 'USD/MTok in/out');
   for (const m of models) {
     const pricing = listedPricing(list, m.id);
     console.log(
       m.id.padEnd(32) +
-        m.role.padEnd(11) +
+        m.role.padEnd(15) +
         JSON.stringify(modelRequestParameters(m.requestSettings, MAX_TOKENS)).padEnd(64) +
         (pricing ? `${pricing.input} / ${pricing.output}` : 'not listed'),
     );

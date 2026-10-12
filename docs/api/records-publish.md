@@ -617,7 +617,7 @@ The evaluation is a signed **`attestation/evaluates/v1`** node (spec §8.12.1; a
   "methodology": {
     "testSet": "<rubric / prompt-set identifier>",
     "promptSetVersion": "<version of the rubric text, e.g. its SHA-256>",
-    "evaluatorModel": "<model identifier, e.g. anthropic/claude-sonnet-4-6>"
+    "evaluatorModel": "<model identifier, e.g. anthropic/claude-sonnet-5.5>"
   },
   "scoringRubric": "<rubric identifier or inline criteria list>",
   "results": {
@@ -639,7 +639,7 @@ Notes on the shape:
 
 Requirement strength follows the Q25 recommendation — **host policy + default-on at the publisher tool**, not protocol-mandatory (avoids ossifying one methodology at the protocol layer):
 
-- **Default-on.** `POST /api/records/:slug/publish` runs an adversarial evaluation by default before creating the publication pair, emitting the signed `attestation/evaluates/v1` first and returning its `evaluationNodeId` alongside the publication node ids. The default evaluator model is `anthropic/claude-sonnet-4-6` (falls back to `openai/gpt-4o` when the analysis itself used the default — evaluator independence); `evaluatorModel` in the body overrides it, and an override equal to the analysis model is rejected with `400`. An evaluation FAILURE (evaluator unreachable, invalid response) aborts the publish with an explicit `502` — never a silent skip; retry, or pass `runEvaluation: false`.
+- **Default-on.** `POST /api/records/:slug/publish` runs an adversarial evaluation by default before creating the publication pair, emitting the signed `attestation/evaluates/v1` first and returning its `evaluationNodeId` alongside the publication node ids. The default evaluator is the catalog's first-ranked evaluator, `anthropic/claude-sonnet-5.5` on the built-in catalog (falls back to the next rank, `anthropic/claude-opus-5.5`, when the analysis itself used the first — evaluator independence); `evaluatorModel` in the body overrides it, and an override equal to the analysis model is rejected with `400`. An evaluation FAILURE (evaluator unreachable, invalid response) aborts the publish with an explicit `502` — never a silent skip; retry, or pass `runEvaluation: false`.
 - **Configurable off.** `{ "runEvaluation": false }` skips the eval. The publication pair is still created; the record simply carries no evaluation reference. Hosts that require evals (below) may refuse to *serve* such publication records — that is host policy, not protocol failure.
 - **The gate check is presence-based.** A conforming evaluation is an `attestation/evaluates/v1` node targeting the **same content node** (`targetNodeId` equal to the publication record's `targetNodeId`), with a valid signature, a methodology declaration, and a signer meeting the host's declared binding-tier floor. The publication record does not carry an explicit pointer to the evaluation node — the relationship is via the shared target, which keeps the `publishes/v1` payload exactly at its ratified shape (`targetNodeId`, `publicationHost`, `releasedAt`). Whether `publishes/v1` should gain an explicit evaluation-reference field is a registry question, not something this contract invents.
 - **Presence vs. minimum score.** v1 gates on presence + conforming methodology + binding tier. Score thresholds are a host-policy axis (expressible in the host self-attestation, below), not a platform constant.
@@ -856,6 +856,8 @@ These are implementation details that may surprise an external client. None of t
 ---
 
 ## Change log
+
+- **2026-10-11** — **The built-in evaluator order changed** (civic-ai-tools-website#573). On the built-in catalog the publication gate's default evaluator is now `anthropic/claude-sonnet-5.5`, falling back to `anthropic/claude-opus-5.5` when the analysis itself used Sonnet 5.5; previously `anthropic/claude-sonnet-4-6`, falling back to `openai/gpt-4o`. The rule is unchanged: the gate takes the first-ranked evaluator that did not produce the analysis, and `evaluatorModel` in the body still overrides it. No schema or endpoint change.
 
 - **2026-10-07** — **Attestation packages served through the app** (civic-ai-tools-website#559). New: `GET /api/records/:slug/attestations/:id/package` answers with one attestation's stored package, its bytes unchanged, gated as the record is, and `404` for an `id` that is not an attestation of that record. The record page reads attestation details only through it, so they load on an instance whose bucket is private. The list route, its gate and its response fields are unchanged, `storageKey` included. See [Attestation packages](#attestation-packages--get-apirecordsslugattestationsidpackage).
 

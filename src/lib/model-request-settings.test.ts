@@ -21,7 +21,9 @@ import {
   carriedModelIdentity,
   modelIdentity,
   modelRequestParameters,
+  modelRequestSettings,
   projectServedModel,
+  summaryDraftTokenLimit,
   validateCatalog,
   type CatalogEntry,
   type ModelRequestSettings,
@@ -170,17 +172,48 @@ test('CATALOG: with no settings the fields are byte-for-byte the max_tokens the 
 // --- The settings on the identity pair ---------------------------------------
 
 test('CATALOG: an entry setting neither field yields the two-member pair it always did', () => {
-  for (const builtIn of BUILT_IN_CATALOG) {
-    const identity = modelIdentity(builtIn);
-    assert.deepEqual(identity, { endpointModel: builtIn.endpointModel, declared: builtIn.endpointModel });
-    assert.equal('requestSettings' in identity, false, `${builtIn.id} grew a requestSettings key`);
-  }
+  // Until the October 2026 roster this walked the built-in catalog, which set
+  // neither field. Every built-in entry now sets a reasoning effort, so the
+  // property is held on an entry that sets neither.
+  const plain = entry({ model: undefined }) as unknown as CatalogEntry;
+  const identity = modelIdentity(plain);
+  assert.deepEqual(identity, { endpointModel: plain.endpointModel, declared: plain.endpointModel });
+  assert.equal('requestSettings' in identity, false, 'an entry setting neither field grew a requestSettings key');
 });
 
-test('CATALOG: the built-in catalog sets neither field, so the reference instance sends what it always sent', () => {
+test('CATALOG: the summary draft leaves a reasoning summariser room to reason, and keeps 300 otherwise', () => {
+  // A reasoning model counts its reasoning against the limit, so a 300-token
+  // draft limit can be spent before any text comes back.
+  assert.equal(summaryDraftTokenLimit(undefined), 300);
+  assert.equal(summaryDraftTokenLimit({}), 300);
+  assert.equal(summaryDraftTokenLimit({ tokenLimitParameter: 'max_completion_tokens' }), 300);
+  assert.equal(summaryDraftTokenLimit({ reasoningEffort: 'none' }), 300, '`none` does not reason');
+  for (const effort of REASONING_EFFORTS.filter((e) => e !== 'none')) {
+    assert.equal(summaryDraftTokenLimit({ reasoningEffort: effort }), 2000, effort);
+  }
+  // The built-in summariser (Haiku 5.5 at low effort) is one that reasons.
+  const builtInSummariser = BUILT_IN_CATALOG.find((e) => e.summarizer);
+  assert.ok(builtInSummariser, 'the built-in catalog declares a summariser');
+  assert.equal(summaryDraftTokenLimit(modelRequestSettings(builtInSummariser)), 2000);
+});
+
+test('CATALOG: the built-in catalog sends each model the reasoning setting it was evaluated at', () => {
+  // The October 2026 evaluation ran each of these at this effort
+  // (docs/model-evaluation-2026-10.md); the limit's name stays derived, which
+  // is max_completion_tokens once a reasoning effort is set.
+  assert.deepEqual(
+    Object.fromEntries(BUILT_IN_CATALOG.map((e) => [e.id, [e.reasoningEffort, e.tokenLimitParameter]])),
+    {
+      'anthropic/claude-haiku-5.5': ['low', undefined],
+      'anthropic/claude-sonnet-5.5': ['medium', undefined],
+      'anthropic/claude-opus-5.5': ['medium', undefined],
+    },
+  );
   for (const builtIn of BUILT_IN_CATALOG) {
-    assert.equal(builtIn.reasoningEffort, undefined, builtIn.id);
-    assert.equal(builtIn.tokenLimitParameter, undefined, builtIn.id);
+    assert.deepEqual(Object.keys(modelRequestParameters(modelRequestSettings(builtIn), 4000)), [
+      'max_completion_tokens',
+      'reasoning_effort',
+    ]);
   }
 });
 

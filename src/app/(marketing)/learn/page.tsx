@@ -442,61 +442,57 @@ export default function LearnPage() {
         <h2 style={sectionHeading}>Model Selection</h2>
 
         <p style={prose}>
-          In March 2026 we ran 8 AI models on the same 15 civic data questions. GPT-5.4&apos;s
-          answers were scored in detail against a rubric; the other seven models were ranked on
-          token use, speed, timeouts, and how often they ran out of their token budget, with their
-          quality estimated. The demo offers three models:
+          In October 2026 we ran nine AI models on 14 of the civic data questions first used in
+          March, and scored every answer against a rubric and against figures read directly from
+          the data portals. The demo offers three of the four models that led:
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
           <div style={card}>
-            <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>GPT-4o (recommended)</h4>
+            <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>Claude Haiku 5.5 (recommended)</h4>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
-              Best all-around in the March 2026 run: the fastest average response (10 seconds), no
-              timeouts, and reliable tool use. The best balance of quality and cost for a public demo.
+              The model the demo starts on. In the October 2026 run it got the main answer right on 8
+              of 11 questions, and partly right on the other three, at about half a cent a question in
+              that run: under a tenth of what the other two cost. It was also the fastest of the three, with a
+              median of 15 seconds.
             </p>
           </div>
 
           <div style={card}>
-            <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>GPT-5.4 (premium)</h4>
+            <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>Claude Sonnet 5.5 (balanced)</h4>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
-              The highest quality score in the March 2026 run, using the fewest tokens per answer,
-              but slower (21 seconds on average) and more expensive per question. Worth the wait for
-              complex or multi-step questions.
+              Stronger analysis at moderate cost: the main answer right on 9 of 11 questions, with
+              careful caveats, at about 11 cents a question and a median of 21 seconds.
             </p>
           </div>
 
           <div style={card}>
-            <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>Gemini 3.5 Flash Lite (fastest)</h4>
+            <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>Claude Opus 5.5 (premium)</h4>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
-              The lowest-cost model offered, for quick lookups that don&apos;t need deep analysis. It
-              replaced Gemini 2.0 Flash in August 2026, when that model stopped being served, and was
-              not part of the March evaluation.
+              The highest quality score in the October 2026 run, with the main answer right on all 11
+              questions. It is the slowest of the three (a median of 27 seconds) and costs about 21
+              cents a question: worth it for complex or multi-step questions.
             </p>
           </div>
-        </div>
-
-        <div style={{ ...card, marginBottom: '24px' }}>
-          <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>Why not Claude?</h4>
-          <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
-            Claude models wrote thorough answers in the March 2026 run, but used the most tokens: all
-            three ran out of the token budget on 5 or 6 of the 15 questions, against 1 to 3 for
-            GPT-4o, GPT-5.4 and Gemini 2.0 Flash. That makes them too expensive for a free web demo.
-            One Claude model has a narrower job here: by default, Claude Sonnet 4.6 reviews an analysis
-            against a fixed checklist when its author publishes a record they had kept private. To use
-            Claude for civic data analysis,{' '}
-            <a href="#try-it">set up civic-ai-tools locally</a>{' '}
-            with Claude Code, Cursor, or Claude Desktop using your own API key.
-          </p>
         </div>
 
         <p style={prose}>
-          The evaluation has not been repeated since March 2026. A new one, covering current models,
-          is under way.
+          When an author publishes a record they had kept private, a second model first reviews the
+          analysis against a fixed checklist: Claude Sonnet 5.5, or Claude Opus 5.5 when Sonnet 5.5
+          wrote the analysis. Records published earlier with GPT-4o or GPT-5.4 keep those model
+          names.
         </p>
 
         <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-          Full evaluation methodology and results (March 2026):{' '}
+          Full evaluation methodology and results (October 2026):{' '}
+          <a
+            href="https://github.com/npstorey/civic-ai-tools-website/blob/main/docs/model-evaluation-2026-10.md"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            model-evaluation-2026-10.md
+          </a>
+          . The earlier evaluation (March 2026):{' '}
           <a
             href="https://github.com/npstorey/civic-ai-tools/blob/main/docs/research/model-evaluation-results.md"
             target="_blank"

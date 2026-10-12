@@ -112,8 +112,8 @@ export default function QueryForm({
   // catalog. On an instance with its own catalog the selector rendered
   // "Select model" while the state still held an id the instance does not
   // offer, so a submit before any selection sent it upstream. The built-in
-  // catalog's first offered model is still `openai/gpt-4o`, so the reference
-  // instance's behavior is unchanged; it is now read rather than asserted.
+  // catalog's first offered model is read rather than asserted: since the
+  // October 2026 roster (#573) it is `anthropic/claude-haiku-5.5`.
   const [model, setModel] = useState('');
   const [portal, setPortal] = useState('');
   // Phase 2a1 gate: executed-sandbox mode is signed-in-only. Anonymous users
