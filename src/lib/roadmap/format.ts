@@ -1,7 +1,8 @@
 // Roadmap markdown preprocessing helpers.
 // Auto-links issue-ref text ([civic#41], [website#84], [socrata-mcp#40]) to the corresponding
-// repo's issue URL, resolves the document's relative links against the file it came from, and
-// extracts H2 section headings for the right-rail TOC.
+// repo's issue URL, resolves the document's relative links against the file it came from,
+// separates the preamble above the first section so the page can fold it, and extracts H2
+// section headings for the right-rail TOC.
 
 import { describeContentSource } from '../content-source.ts';
 
@@ -90,4 +91,35 @@ export function extractH2Headings(markdown: string): SectionHeading[] {
     headings.push({ text, id: slugify(text) });
   }
   return headings;
+}
+
+export interface RoadmapParts {
+  /** The markdown between the H1 and the first H2, without the H1 or a closing rule; '' when there is none. */
+  preamble: string;
+  /** The markdown from the first H2 on; the whole document when it has no H2. */
+  body: string;
+  /** The value of a `**Last updated:**` line in the preamble, or null when it has none. */
+  lastUpdated: string | null;
+}
+
+const FIRST_H2_RE = /^## /m;
+const H1_LINE_RE = /^# .*$/m;
+const CLOSING_RULE_RE = /(?:^|\n)\s*(?:-{3,}|\*{3,}|_{3,})\s*$/;
+const LAST_UPDATED_RE = /^\*\*Last updated:\*\*\s*(.+?)\s*$/im;
+
+// Splits a roadmap at its first H2. The status lines and framing paragraphs above it (the
+// hub's ROADMAP.md carries three status lines, two italic paragraphs and a rule there) render
+// folded behind a one-line summary, so the first section is what a reader sees first. The
+// summary names the `**Last updated:**` value when the preamble has one.
+export function splitRoadmapPreamble(markdown: string): RoadmapParts {
+  const match = FIRST_H2_RE.exec(markdown);
+  if (!match) return { preamble: '', body: markdown, lastUpdated: null };
+  const preamble = markdown
+    .slice(0, match.index)
+    .replace(H1_LINE_RE, '')
+    .trim()
+    .replace(CLOSING_RULE_RE, '')
+    .trim();
+  const lastUpdated = LAST_UPDATED_RE.exec(preamble)?.[1] ?? null;
+  return { preamble, body: markdown.slice(match.index), lastUpdated };
 }
