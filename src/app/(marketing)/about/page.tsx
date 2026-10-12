@@ -74,7 +74,7 @@ export default async function AboutPage() {
             Technologies&apos; Socrata platform (formerly Socrata, now Tyler Data &amp; Insights).
             This is the server powering the demo on this website.
             Install it from npm with{' '}
-            <code style={{ fontSize: '14px' }}>npx socrata-mcp-server --stdio</code> (version 0.9.1)
+            <code style={{ fontSize: '14px' }}>npx socrata-mcp-server --stdio</code> (version 0.9.2)
             or clone the repo.{' '}
             <Link href="/directory">Browse the directory</Link> to see the MCP servers and the{' '}
             {portalCount} open data portals they connect to.
