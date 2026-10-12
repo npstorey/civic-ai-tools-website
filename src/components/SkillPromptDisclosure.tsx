@@ -33,10 +33,10 @@ const CATEGORIES: Category[] = [
 |---------|-----|------------|
 | 311 Service Requests | v6vf-nfxy | sr_type, created_date, community_area |
 
-## SF KEY DATASETS (data.sfgov.org)
+## SF KEY DATASETS (data.sf.gov)
 | Dataset | ID | Key Fields |
 |---------|-----|------------|
-| 311 Cases | vw6y-z8j6 | service_name, opened, closed, neighborhood |`,
+| 311 Cases | vw6y-z8j6 | requested_datetime, closed_date, service_name, analysis_neighborhood |`,
   },
   {
     id: 'query-patterns',

@@ -222,8 +222,8 @@ export default function LearnPage() {
 ## CHICAGO KEY DATASETS (data.cityofchicago.org)
 | 311 Service Requests | v6vf-nfxy | sr_type, created_date, community_area |
 
-## SF KEY DATASETS (data.sfgov.org)
-| 311 Cases | vw6y-z8j6 | service_name, opened, neighborhood |`}
+## SF KEY DATASETS (data.sf.gov)
+| 311 Cases | vw6y-z8j6 | requested_datetime, service_name, analysis_neighborhood |`}
           />
 
           {/* Category 2: Query syntax */}

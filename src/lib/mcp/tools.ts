@@ -39,7 +39,7 @@ Examples:
           },
           portal: {
             type: 'string',
-            description: 'Socrata portal domain (e.g., data.cityofnewyork.us, data.sfgov.org)',
+            description: 'Socrata portal domain (e.g., data.cityofnewyork.us, data.sf.gov)',
           },
           query: {
             type: 'string',

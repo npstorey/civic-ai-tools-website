@@ -81,10 +81,7 @@ const PORTALS = [
   { id: '', name: 'All portals' },
   { id: 'data.cityofnewyork.us', name: 'New York City' },
   { id: 'data.cityofchicago.org', name: 'Chicago' },
-  // San Francisco is hidden until npstorey/socrata-mcp-server#75 is fixed: its
-  // portal answers its old address with a redirect the server's data path does
-  // not follow, so every query against it fails. Restore the entry here, with
-  // the address #75's fix settles on, and delete portal-picker-sf-hidden.test.ts.
+  { id: 'data.sf.gov', name: 'San Francisco' },
   { id: 'data.lacity.org', name: 'Los Angeles' },
   { id: 'data.seattle.gov', name: 'Seattle' },
 ];

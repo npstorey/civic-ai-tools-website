@@ -647,6 +647,8 @@ export function getPortalCity(portal: string | undefined): string {
   const portalCities: Record<string, string> = {
     'data.cityofnewyork.us': 'NYC',
     'data.cityofchicago.org': 'Chicago',
+    // San Francisco under both addresses: its portal moved, and published records name the old one.
+    'data.sf.gov': 'San Francisco',
     'data.sfgov.org': 'San Francisco',
     'data.lacity.org': 'Los Angeles',
     'data.seattle.gov': 'Seattle',
