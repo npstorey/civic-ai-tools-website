@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   linkIssueRefs,
@@ -9,6 +9,7 @@ import {
   slugify,
   resolveRoadmapHref,
   roadmapLinkBase,
+  splitRoadmapPreamble,
   type SectionHeading,
 } from '@/lib/roadmap/format';
 
@@ -19,40 +20,61 @@ interface RoadmapBodyProps {
 }
 
 export default function RoadmapBody({ markdown, sourceUrl }: RoadmapBodyProps) {
-  const processed = linkIssueRefs(markdown);
+  const { preamble, body, lastUpdated } = splitRoadmapPreamble(linkIssueRefs(markdown));
   const headings = extractH2Headings(markdown);
   const linkBase = roadmapLinkBase(sourceUrl);
+
+  const components: Components = {
+    // Swallow the source doc's H1 — the page already has a "Roadmap" header;
+    // two H1s would be redundant and a11y-noisy.
+    h1: () => null,
+    h2: ({ children }) => {
+      const text = extractHeadingText(children);
+      const id = slugify(text);
+      return <h2 id={id}>{children}</h2>;
+    },
+    a: ({ href: written, children }) => {
+      const href = resolveRoadmapHref(written, linkBase);
+      const isExternal = href?.startsWith('http');
+      return (
+        <a
+          href={href}
+          target={isExternal ? '_blank' : undefined}
+          rel={isExternal ? 'noopener noreferrer' : undefined}
+        >
+          {children}
+        </a>
+      );
+    },
+  };
 
   return (
     <div className="roadmap-layout">
       <article className="roadmap-body">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            // Swallow the source doc's H1 — the page already has a "Roadmap" header;
-            // two H1s would be redundant and a11y-noisy.
-            h1: () => null,
-            h2: ({ children }) => {
-              const text = extractHeadingText(children);
-              const id = slugify(text);
-              return <h2 id={id}>{children}</h2>;
-            },
-            a: ({ href: written, children }) => {
-              const href = resolveRoadmapHref(written, linkBase);
-              const isExternal = href?.startsWith('http');
-              return (
-                <a
-                  href={href}
-                  target={isExternal ? '_blank' : undefined}
-                  rel={isExternal ? 'noopener noreferrer' : undefined}
-                >
-                  {children}
-                </a>
-              );
-            },
-          }}
-        >
-          {processed}
+        {/* The status lines and framing above section 1 fold behind one line, so the
+            first section is what a reader sees first. */}
+        {preamble && (
+          <details className="roadmap-about">
+            <summary>
+              {lastUpdated && (
+                <>
+                  <span>Last updated on {lastUpdated}</span>
+                  <span aria-hidden="true">·</span>
+                </>
+              )}
+              <span className="roadmap-about-toggle">
+                {lastUpdated ? 'More about this document' : 'About this document'}
+              </span>
+            </summary>
+            <div className="roadmap-about-body">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+                {preamble}
+              </ReactMarkdown>
+            </div>
+          </details>
+        )}
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+          {body}
         </ReactMarkdown>
       </article>
 
@@ -74,6 +96,45 @@ export default function RoadmapBody({ markdown, sourceUrl }: RoadmapBodyProps) {
           font-size: 16px;
           line-height: 1.7;
           color: var(--text-secondary);
+        }
+        .roadmap-about {
+          font-size: 14px;
+          line-height: 1.6;
+          color: var(--text-muted);
+        }
+        .roadmap-about summary {
+          display: inline-block;
+          cursor: pointer;
+          list-style: none;
+        }
+        .roadmap-about summary > span + span {
+          margin-left: 8px;
+        }
+        .roadmap-about summary::-webkit-details-marker {
+          display: none;
+        }
+        .roadmap-about-toggle {
+          color: var(--text-secondary);
+        }
+        .roadmap-about summary:hover .roadmap-about-toggle {
+          color: var(--accent);
+          text-decoration: underline;
+        }
+        .roadmap-about-toggle::after {
+          content: '▸';
+          display: inline-block;
+          margin-left: 6px;
+        }
+        .roadmap-about[open] .roadmap-about-toggle::after {
+          transform: rotate(90deg);
+        }
+        .roadmap-about-body {
+          margin-top: 16px;
+          padding-left: 16px;
+          border-left: 2px solid var(--border-color);
+        }
+        .roadmap-about-body :global(p:last-child) {
+          margin-bottom: 0;
         }
         .roadmap-body :global(h2) {
           font-size: 24px;
