@@ -128,11 +128,62 @@ export default function PositioningBand() {
             <p style={cardLabel}>3. City implementations</p>
             <p style={bodyText}>
               This site is the first: a reference implementation running
-              against public data portals for New York, Chicago, and San
-              Francisco. The same stack is what another city would pick up and
-              run against its own portals.
+              against public data portals for New York, Chicago, Los Angeles,
+              and Seattle. The same stack is what another city would pick up
+              and run against its own portals.
             </p>
           </div>
+        </div>
+
+        {/* What's new (A3, site refresh 2026-10). Dated in its heading: it
+            names releases, so it goes stale and says when it was true. Every
+            item is the open-source project's, not this instance's, so it
+            holds on any deployment built from this repository (#305). */}
+        <div style={{ marginBottom: '48px' }}>
+          <h3 style={subHeading}>What you can use today (October 2026)</h3>
+          <ul
+            style={{
+              listStyle: 'none',
+              padding: 0,
+              margin: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+            }}
+          >
+            <li style={bodyText}>
+              <strong style={{ color: 'var(--text-primary)' }}>A command line.</strong>{' '}
+              <code>npm install -g @typedstandards/cli</code> signs, views and verifies records
+              from a terminal.
+            </li>
+            <li style={bodyText}>
+              <strong style={{ color: 'var(--text-primary)' }}>Python and notebooks.</strong>{' '}
+              <code>pip install typedstandards</code> signs a record from Python or a Jupyter
+              notebook and publishes it to a GitHub Pages site.
+            </li>
+            <li style={bodyText}>
+              <strong style={{ color: 'var(--text-primary)' }}>Your own host.</strong>{' '}
+              <code>@typedstandards/host-core</code> serves signed records from a static site, and{' '}
+              <a href="https://host-template.typedstandards.org" target="_blank" rel="noopener noreferrer">
+                a template
+              </a>{' '}
+              does it on GitHub Pages.
+            </li>
+            <li style={bodyText}>
+              <strong style={{ color: 'var(--text-primary)' }}>A live example.</strong>{' '}
+              <a href="https://core-satellite.typedstandards.org" target="_blank" rel="noopener noreferrer">
+                core-satellite.typedstandards.org
+              </a>{' '}
+              maps how the standard relates to public projects; each relation is a signed record.
+            </li>
+            <li style={bodyText}>
+              <strong style={{ color: 'var(--text-primary)' }}>An independent check.</strong>{' '}
+              <a href={`${TYPED_STANDARDS_URL}/verify`} target="_blank" rel="noopener noreferrer">
+                The verifier
+              </a>{' '}
+              checks any record package without relying on the site that published it.
+            </li>
+          </ul>
         </div>
 
         {/* Three readers */}
