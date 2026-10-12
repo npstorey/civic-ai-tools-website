@@ -7,22 +7,29 @@
  * with a schema inspired by commondataio/dataportals-registry.
  *
  *   Platforms:
- *     Socrata — Socrata Discovery API (scroll for domains, per-domain counts)
+ *     Socrata — Socrata Discovery API (scroll for domains, per-domain counts),
+ *               named from commondataio; an entry whose portal moved follows
+ *               it (mergeRedirectedEntries), and a domain with no public
+ *               datasets and no commondataio entry is left out
+ *               (isEmptyUnlistedDomain)
  *     CKAN    — commondataio registry primary, dataportals.org fills gaps,
  *               live dataset counts via each portal's CKAN API
  *
  *   ArcGIS is tracked separately (see website#38).
  *
  * Outputs JSON + CSV to data/portals/.
- * Run locally:  node scripts/update-portals.mjs
+ * Run locally:  node scripts/update-portals.mjs  (Node >=22.15)
  * Run via CI:   .github/workflows/update-portal-registries.yml
+ * Tests:        scripts/update-portals.test.mjs
  */
 
 import { writeFileSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import * as zlib from 'zlib';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const OUTPUT_DIR = join(__dirname, '..', 'data', 'portals');
 
 // ---------------------------------------------------------------------------
@@ -145,40 +152,52 @@ async function fetchJson(url, timeoutMs = 5000) {
 
 const SOCRATA_CATALOG_URL = 'https://api.us.socrata.com/api/catalog/v1';
 const SOCRATA_PAGE_SIZE = 1000;
-const SOCRATA_MAX_PAGES = 200;
+// The full scroll took 181 pages on 2026-10-12. Hitting the cap is fatal, not
+// a quiet stop: a truncated scroll writes a registry missing every later id.
+const SOCRATA_MAX_PAGES = 400;
 
 /** Scroll the full Socrata catalog to discover every domain. */
 async function discoverSocrataDomains() {
   const domains = new Set();
-  let scrollId = null;
+  // scroll_id goes on the first page too, empty. Without it the API answers in
+  // relevance order, so the last id on page 1 is not a cursor and the scroll
+  // skips every id below it: measured 2026-10-12, 2,652 datasets scanned
+  // where a July run had passed 63,000.
+  let scrollId = '';
   let totalScanned = 0;
+  let exhausted = false;
 
   for (let page = 0; page < SOCRATA_MAX_PAGES; page++) {
-    const params = new URLSearchParams({ limit: String(SOCRATA_PAGE_SIZE) });
-    if (scrollId) params.set('scroll_id', scrollId);
+    const params = new URLSearchParams({ limit: String(SOCRATA_PAGE_SIZE), scroll_id: scrollId });
 
     console.log(`  Socrata: page ${page + 1}${scrollId ? ` (scroll_id=${scrollId})` : ''}…`);
     const res = await fetch(`${SOCRATA_CATALOG_URL}?${params}`);
     if (!res.ok) throw new Error(`Socrata API ${res.status}: ${await res.text()}`);
     const data = await res.json();
 
-    if (!data.results || data.results.length === 0) break;
+    const results = data.results ?? [];
 
-    for (const result of data.results) {
+    for (const result of results) {
       const domain = result.metadata?.domain;
       if (domain) domains.add(domain);
     }
 
-    totalScanned += data.results.length;
+    totalScanned += results.length;
     console.log(`  Socrata: ${domains.size} unique domains (${totalScanned} datasets scanned)`);
 
-    if (data.results.length < SOCRATA_PAGE_SIZE) break;
-    scrollId = data.results[data.results.length - 1].resource?.id;
-    if (!scrollId) break;
+    if (results.length < SOCRATA_PAGE_SIZE) {
+      exhausted = true;
+      break;
+    }
+    scrollId = results[results.length - 1].resource?.id;
+    if (!scrollId) throw new Error(`Socrata scroll: page ${page + 1}'s last result has no resource.id`);
 
     await new Promise(r => setTimeout(r, 200));
   }
 
+  if (!exhausted) {
+    throw new Error(`Socrata scroll: still going after ${SOCRATA_MAX_PAGES} pages (${totalScanned} datasets)`);
+  }
   return [...domains].sort();
 }
 
@@ -192,14 +211,17 @@ async function discoverSocrataDomains() {
  *      fall back to querying the portal's own API
  *   3. Use whichever is higher
  *
+ * Returns null when neither API answered with a count, so a failed request is
+ * never read as "no datasets" (isEmptyUnlistedDomain drops measured zeros).
+ *
  * Known limitation: both APIs cap resultSetSize at 10,000.
  */
-async function getSocrataCount(rawDomain) {
+export async function getSocrataCount(rawDomain) {
   const centralData = await fetchJson(
     `${SOCRATA_CATALOG_URL}?domains=${encodeURIComponent(rawDomain)}&limit=0&only=datasets`,
     10000,
   );
-  const centralCount = centralData?.resultSetSize ?? 0;
+  const centralCount = centralData?.resultSetSize;
 
   if (centralCount >= 10) return centralCount;
 
@@ -208,9 +230,67 @@ async function getSocrataCount(rawDomain) {
     `https://${rawDomain}/api/catalog/v1?domains=${encodeURIComponent(rawDomain)}&limit=0&only=datasets`,
     10000,
   );
-  const portalCount = portalData?.resultSetSize ?? 0;
+  const portalCount = portalData?.resultSetSize;
 
-  return Math.max(centralCount, portalCount);
+  const measured = [centralCount, portalCount].filter(Number.isInteger);
+  return measured.length > 0 ? Math.max(...measured) : null;
+}
+
+/**
+ * Whether a Socrata domain is left out of the registry: only when its count
+ * was measured and is zero, AND the upstream registry has no entry for it.
+ * Socrata's catalog lists hundreds of tenant domains with no public datasets
+ * (UAT, staging, internal systems); 323 of 689 rows on 2026-10-12. A domain
+ * the upstream registry describes stays even when empty, and one whose count
+ * could not be measured stays (#589).
+ */
+export function isEmptyUnlistedDomain(count, hasRegistryEntry) {
+  return count === 0 && !hasRegistryEntry;
+}
+
+/** Hostname a portal's catalog URL lands on after redirects; null on failure. */
+async function finalHost(domain, timeoutMs = 10000) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(`https://${domain}/api/catalog/v1?limit=0`, { signal: controller.signal });
+    clearTimeout(timer);
+    await res.body?.cancel();
+    return domainOf(res.url);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Moves upstream-registry Socrata entries onto the domain their portal moved
+ * to. An entry whose domain the Socrata catalog does not list, and whose
+ * portal redirects to a domain the catalog does list, describes that domain:
+ * it moves there, or, when the target has an entry of its own, it is dropped
+ * as an alias. A redirect anywhere else (a portal that left Socrata) changes
+ * nothing. On 2026-10-12 this moved San Francisco's entry onto the portal's
+ * new domain and dropped an old-domain alias of Marin County's (#589).
+ *
+ * @param {Map<string, object>} entriesByDomain normalized domain → entry
+ * @param {Set<string>} catalogDomains normalized domains the catalog lists
+ * @param {Map<string, string>} redirects normalized domain → normalized host it lands on
+ * @returns {Map<string, object>} a new map; the input is not modified
+ */
+export function mergeRedirectedEntries(entriesByDomain, catalogDomains, redirects) {
+  const movesTo = (d) => {
+    const target = redirects.get(d);
+    return !catalogDomains.has(d) && target && target !== d && catalogDomains.has(target) ? target : null;
+  };
+  const merged = new Map();
+  // Entries that stay go first, so a moved entry never displaces one of them.
+  for (const [d, entry] of entriesByDomain) {
+    if (!movesTo(d)) merged.set(d, entry);
+  }
+  for (const [d, entry] of entriesByDomain) {
+    const target = movesTo(d);
+    if (target && !merged.has(target)) merged.set(target, entry);
+  }
+  return merged;
 }
 
 // ---------------------------------------------------------------------------
@@ -229,14 +309,20 @@ async function fetchDataportals() {
 // Source 3: commondataio/dataportals-registry
 // ---------------------------------------------------------------------------
 
+// The registry moved from commondataio/ to datenoio/ and, on 2026-09-12
+// (upstream d06d9b2), stopped publishing catalogs.jsonl uncompressed; only the
+// zstd file remains. zlib gained zstd in Node 22.15, hence .nvmrc's 22.
 const COMMONDATAIO_URL =
-  'https://raw.githubusercontent.com/commondataio/dataportals-registry/main/data/datasets/catalogs.jsonl';
+  'https://raw.githubusercontent.com/datenoio/dataportals-registry/main/data/datasets/catalogs.jsonl.zst';
 
 async function fetchCommondataio() {
-  console.log('  Fetching commondataio catalogs.jsonl…');
+  console.log('  Fetching commondataio catalogs.jsonl.zst…');
+  if (typeof zlib.zstdDecompressSync !== 'function') {
+    throw new Error(`commondataio: node:zlib has no zstd in Node ${process.version} (needs >=22.15)`);
+  }
   const res = await fetch(COMMONDATAIO_URL);
   if (!res.ok) throw new Error(`commondataio ${res.status}`);
-  const text = await res.text();
+  const text = zlib.zstdDecompressSync(Buffer.from(await res.arrayBuffer())).toString('utf8');
   const lines = text.split('\n').filter(Boolean);
   console.log(`  commondataio: ${lines.length} records loaded`);
   return lines.map(line => JSON.parse(line));
@@ -246,14 +332,25 @@ async function fetchCommondataio() {
 // Build Socrata registry
 // ---------------------------------------------------------------------------
 
-async function buildSocrataRegistry(socrataDomains, cdioEntries) {
+export async function buildSocrataRegistry(socrataDomains, cdioEntries) {
   // Index commondataio Socrata entries by normalized domain
-  const cdioByDomain = new Map();
+  const listedByDomain = new Map();
   for (const entry of cdioEntries) {
     if (entry.software?.id !== 'socrata') continue;
     const d = domainOf(entry.link || '');
-    if (d) cdioByDomain.set(d, entry);
+    if (d) listedByDomain.set(d, entry);
   }
+
+  // Follow the redirects of entries the Socrata catalog does not list
+  const catalogDomains = new Set(socrataDomains.map(domainOf));
+  const unlisted = [...listedByDomain.keys()].filter(d => !catalogDomains.has(d));
+  console.log(`  Socrata: checking ${unlisted.length} upstream-only domains for a moved portal…`);
+  const finals = await pMap(unlisted, d => finalHost(d), 10);
+  const redirects = new Map(unlisted.map((d, i) => [d, finals[i]]).filter(([, f]) => f));
+  for (const [d, target] of redirects) {
+    if (target !== d && catalogDomains.has(target)) console.log(`    ${d} → ${target}`);
+  }
+  const cdioByDomain = mergeRedirectedEntries(listedByDomain, catalogDomains, redirects);
 
   // Union of Socrata API + commondataio, deduplicating www. variants
   const domainMap = new Map(); // normalized → raw
@@ -279,7 +376,14 @@ async function buildSocrataRegistry(socrataDomains, cdioEntries) {
     10,
   );
 
-  return sorted.map((normDomain, i) => {
+  const kept = sorted.filter((d, i) => !isEmptyUnlistedDomain(counts[i], cdioByDomain.has(d)));
+  console.log(
+    `  Socrata: left out ${sorted.length - kept.length} domains with no public datasets and no upstream entry; ` +
+      `${counts.filter(c => c === null).length} counts could not be measured`,
+  );
+  const countOf = new Map(sorted.map((d, i) => [d, counts[i] ?? 0]));
+
+  return kept.map((normDomain) => {
     const rawDomain = domainMap.get(normDomain);
     const cdio = cdioByDomain.get(normDomain);
     const country = cdioCountry(cdio);
@@ -295,7 +399,7 @@ async function buildSocrataRegistry(socrataDomains, cdioEntries) {
       owner_name: cdio?.owner?.name || '',
       owner_type: cdio?.owner?.type || '',
       api_endpoint: `https://${rawDomain}/api`,
-      dataset_count: counts[i],
+      dataset_count: countOf.get(normDomain),
       status: cdio?.status || 'active',
     };
   });
@@ -440,7 +544,11 @@ async function main() {
   console.log(`\nFiles written to ${OUTPUT_DIR}/`);
 }
 
-main().catch(err => {
-  console.error('Fatal:', err);
-  process.exit(1);
-});
+// Imported by its test, run as a script by the workflow.
+const invokedDirectly = process.argv[1] && resolve(process.argv[1]) === __filename;
+if (invokedDirectly) {
+  main().catch(err => {
+    console.error('Fatal:', err);
+    process.exit(1);
+  });
+}

@@ -1,5 +1,14 @@
 name: Update Portal Registries
 
+# Lands through a pull request, never a push to main. main's ruleset requires
+# a pull request and six checks, with no bypass, so the push this workflow
+# used to make was rejected (GH013) from 2026-06-14 on (#589). A push or a
+# pull request made with this workflow's GITHUB_TOKEN starts no other
+# workflow, and the repository does not let Actions open pull requests, so
+# the run stops at a branch: it commits the regenerated files, signed off, to
+# automation/portal-registries, and its summary links the pull request for a
+# maintainer to open. A person opening it is what starts CI.
+
 on:
   schedule:
     - cron: '0 6 * * 0' # Sunday 6 AM UTC
@@ -11,24 +20,37 @@ permissions:
 jobs:
   update-portals:
     runs-on: ubuntu-latest
+    env:
+      BRANCH: automation/portal-registries
     steps:
       - uses: actions/checkout@v4
 
+      # .nvmrc pins 22; the script decompresses the commondataio registry
+      # with node:zlib's zstd, which Node 20 does not have.
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
 
       - name: Discover portals
         run: node scripts/update-portals.mjs
 
-      - name: Commit if changed
+      - name: Commit to the automation branch if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/portals/
           if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "chore: update portal registries [automated]"
-            git push
+            echo "No changes to commit" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
+          socrata_before=$(git show HEAD:data/portals/socrata.json | jq length)
+          ckan_before=$(git show HEAD:data/portals/ckan.json | jq length)
+          socrata_after=$(jq length data/portals/socrata.json)
+          ckan_after=$(jq length data/portals/ckan.json)
+          git commit -s -m "chore: update portal registries [automated]"
+          git push --force origin "HEAD:refs/heads/$BRANCH"
+          {
+            echo "Rows: Socrata $socrata_before -> $socrata_after, CKAN $ckan_before -> $ckan_after."
+            echo ""
+            echo "Open the pull request: https://github.com/$GITHUB_REPOSITORY/compare/${{ github.event.repository.default_branch }}...$BRANCH?expand=1"
+          } >> "$GITHUB_STEP_SUMMARY"
