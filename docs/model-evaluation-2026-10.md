@@ -30,6 +30,8 @@ The roster change it informs is decided separately (civic-ai-tools-website#573).
   Sonnet 5.5 and Haiku 5.5 on 3 each. Their reasoning tokens count toward it.
 - **Three answers were cut off at the 2,000-token response limit** this evaluation uses. The site's
   query route sends 4,000.
+- **After the server fix, GPT-5.4 and GPT-6.1 Sol were re-run as a separate set** on 2026-10-12. Their
+  calls now answer; they score 4.16 and 4.07 on quality, below the four leading candidates.
 - **Q3 (San Francisco) is excluded.** Its portal moved, and the server's request to the old address
   downloaded the whole dataset and restarted the hosted server (socrata-mcp-server #75, #77). All nine
   models are compared on the other 14 queries.
@@ -98,7 +100,7 @@ How to read it:
 - **Main claim correct** counts queries where the answer's main claim matches the reference answer
   (Appendix A). Q10, Q11 and Q15 expect a clarification or a decline and are not graded on it.
 - **GPT-5.4 and GPT-6.1 Sol are not ranked:** their rows record #76, not their ability. Both are re-run
-  after the server fix and reported then as a separate set.
+  after the server fix; that separate set is reported below, after the run record.
 - **The top four are within 0.2 of each other** on quality and overall, and each cell is one run. The
   ranking among them should not be read finer than that.
 
@@ -219,16 +221,16 @@ then Gemini 3.8 Flash (3.97) and Sonnet 5.5 (3.86).
    - They are scored as the reader received them.
    - The site's query route sends 4,000 per response, so production would not cut these answers.
 
-7. **Q9 (Los Angeles) timed out on four rows across three models, and one never completed.**
-   - The rows: gpt-4o in the first run, Opus 5.5 and Sonnet 4.6 in the resumed run, and Sonnet 4.6
-     again on its re-run.
+7. **Q9 (Los Angeles) timed out on five rows across four models, counting the separate set, and Sonnet 4.6 never completed it.**
+   - The rows: gpt-4o in the first run, Opus 5.5 and Sonnet 4.6 in the resumed run, Sonnet 4.6 again
+     on its re-run, and GPT-5.4 in the separate set on the fixed server.
    - Each time, the model's first request answered in about a second and asked for one or two tool
      calls, and a call stayed open past the 120-second limit.
    - On Sonnet 4.6's re-run, the call took 129 seconds and returned 347 bytes.
    - The likely mechanism: the server tries a portal request up to four times at 30 seconds each, so a
      slow portal query holds a call for about two minutes. A keyless call to the same dataset at 18:27Z
      waited 136 seconds for the server's own message, "API request timed out after 30s (retried 3
-     times)".
+     times)". Filed as socrata-mcp-server #79.
    - The timed-out rows do not record their tool calls' arguments, so the mechanism is likely but
      unproven for them.
    - gpt-4o and Opus 5.5 answered on re-run. Sonnet 4.6 timed out again, and that counts as its result.
@@ -269,7 +271,7 @@ Google models with GPT-4o as the control (`scripts/eval-results-probe-20261011T1
     server down.
   - Q3 is re-run for all nine after the server fix. A source refusal reaches the model as fixed text
     that names no host, so the guidance must change as well before the re-run means anything.
-- **The empty-query refusal** (#76): finding 1.
+- **The empty-query refusal** (#76): finding 1. Fixed on 2026-10-11 (socrata-mcp-server #78); see the separate set.
 - **Server response metadata.**
   - The server's query envelope carries `is_sample: true` (seen on a 12-row query in the recorded
     fixtures). Models reported the flag on aggregate results too, and one reported `has_more: true`
@@ -284,9 +286,11 @@ Google models with GPT-4o as the control (`scripts/eval-results-probe-20261011T1
 ## Run record
 
 All files are in `scripts/` on the evaluation machine; they are gitignored. Each ran with the harness
-at `a12f8b9`, Node 22.23.1, against the hosted server at version 0.9.1. The server's main branch has
-no commit after its 0.9.1 release (`014c9a4`, 18:28 UTC), and the live server answered 0.9.1 after
-the last run.
+at `a12f8b9`, Node 22.23.1, against the hosted server's 0.9.1 release build (`014c9a4`, merged at
+18:28 UTC). Every October row finished (21:19:50 UTC) before the server's next merge (`cdea8c5`, 22:01
+UTC). That later build still reports version 0.9.1, so the two builds are told apart by how `get_data`
+describes `limit`. The October build says "…or "all" to fetch all available data"; the fixed build says
+it returns "at most 10,000 rows per call". The separate set below ran on the fixed build.
 
 | Results file | Started (UTC) | Rows | Charged |
 |---|---|---|---|
@@ -359,12 +363,33 @@ most of the models have changed since, so the two runs are not a trend line.
 What carries over is GPT-4o's place: still among the fastest, and now well behind the current
 candidates on quality. GPT-5.4 scored 4.37 on quality in March and cannot use the data tool today.
 
-## Owed: the separate set on the fixed server
+## The separate set on the fixed server (2026-10-12)
 
-Reported separately when run, after socrata-mcp-server #75, #76 and #77 are fixed and the hosted
-server is redeployed:
-- Q3 for all nine models, once the guidance names the moved portal;
-- GPT-5.4's and GPT-6.1 Sol's 14 queries.
+**Why it ran.** On the October server, GPT-5.4 and GPT-6.1 Sol could not use the data tool: the server refused the empty `query` both send with every call (socrata-mcp-server #76). The fix merged as `cdea8c5` on 2026-10-11 at 22:01 UTC (socrata-mcp-server #78) and was live on the hosted server from 22:04 UTC. Both models were then re-run on the same 14 queries.
+
+**What differs from the October rows.** The harness, its requests and the queries are the same (`a12f8b9`). The server is the newer build:
+- one `get_data` call returns at most 10,000 rows;
+- responses are bounded;
+- an empty `query` is treated as absent.
+
+The run was also a day later (2026-10-12, 12:17-12:28 UTC). NYC 311's newest row at the time was from 2026-10-10, so day-relative counts moved slightly. These rows are therefore a separate set, placed beside the October nine only as an indication.
+
+**Results** (`eval-results-run-20261012T121705Z.json`, 28 rows, $1.92, scored against the same reference answers and calibrated against the October scores for the same queries):
+
+| Model | Quality | Overall (indicative) | Main claim correct | Avg tokens / query | Median latency | Cost per query | Budget hits | Cut at 2,000 | Timeouts |
+|---|---|---|---|---|---|---|---|---|---|
+| GPT-5.4 | 4.16 | 3.93 | 7/11 (+3 partial) | 23,406 | 16.9 s | ~$0.062 | 0 | 0 | 1 (Q9) |
+| GPT-6.1 Sol | 4.07 | 3.79 | 7/11 (+1 partial) | 28,342 | 19.0 s | ~$0.063 | 1 | 1 | 0 |
+
+- **The fix works.** All 30 of GPT-5.4's calls still sent `query: ""`, and 28 answered; the other 2 were refused for their own syntax. All 27 of Sol's calls answered.
+- **Placement.** On quality, both sit below the four leading candidates (4.54 to 4.73) and above Claude Sonnet 4.6 (3.80) and GPT-4o (3.50). The "overall" column scores cost and latency against the October nine on the same queries, so it is indicative only: the server differs.
+- **GPT-5.4** answered every query it ran with the right dataset (10 of 10). It lost points on denominators and caveats (Q2, Q7, Q8) and timed out on Q9.
+- **GPT-6.1 Sol** answered six queries at the top models' level (5/5/5/5). On three data queries (Q4, Q7, Q9) it made no call and said, without testing, that the query would exceed the demo's limits.
+- **Neither result changes the ruled roster.** The per-row scores are in Appendix D.
+
+## Still owed
+
+- Q3 for all nine models, once the server's guidance names San Francisco's new portal host. Until then, a source refusal reaches the model as fixed text that names no host, so the model cannot recover from it.
 
 ## Appendix A: reference answers
 
@@ -650,3 +675,95 @@ Each cell gives dataset, SoQL, guidance and interpretation (1-5 each), then ✓ 
 - claude-opus-5.5 (4/4/4/5): Queried NYC only (67,022, with daily and top-10 breakdowns) instead of declining and asking, then offered Chicago as the next step and the CLI; it caught that Oct 10 is partial (854) and Oct 11 not yet loaded; its window runs to < Oct 12 (8 calendar days).
 - claude-haiku-5.5 (4/5/4/4): Queried NYC only (67,022, top 10 types) instead of declining and asking, and offered Chicago next plus the CLI; it missed that Oct 10 is only partly loaded, so the weekly total is understated.
 - gpt-6.1-sol (5/5/5/5): No tool call; stated its reading of 'past week' (Oct 4-10), declined the cross-city comparison, asked which city first, and pointed to the CLI.
+
+## Appendix D: the separate set, scores per row
+
+The same notation as Appendix B. Each line below the table says what decided that score.
+
+| Query | gpt-5.4 | gpt-6.1-sol |
+|---|---|---|
+| Q1 | 5554✓ | 5555✓ |
+| Q2 | 5343~ | 5555✓ |
+| Q4 | 5555✓ | 1132✗ |
+| Q5 | 5555✓ | 5555✓ |
+| Q6 | 5544✓ | 5555✓ |
+| Q7 | 5353~ | 1132✗ |
+| Q8 | 5243~ | 5443~ |
+| Q9 | 1111✗ | 1132✗ |
+| Q10 | 5554 | 5544 |
+| Q11 | 5532 | 5543 |
+| Q12 | 5243✓ | 4444✓ |
+| Q13 | 5555✓ | 5555✓ |
+| Q14 | 5554✓ | 5555✓ |
+| Q15 | 5555 | 5555 |
+
+
+**Q1**
+
+- gpt-5.4 (5/5/5/4): A sample call, then a count of 323,627 on erm2-nwe9 for 2026-09-01 to before 2026-10-01 (matches), with the reading, filter and a limitations section; but its caveats cover scope only, with no completeness or late-record caveat (Sonnet 5.5's October 5 had one), and a stray 'Analyzing results...' opens the answer.
+- gpt-6.1-sol (5/5/5/5): A sample call, then a count of 323,627 (matches) for September 1-30 plus an extra metrics call; it cites the dataset and caveats that requests are not unique incidents and that records change as the dataset updates.
+
+**Q2**
+
+- gpt-5.4 (5/3/4/3): Trailing-12-month GROUP BY results on 4ijn-s7e5 with no facility_type filter: 2,915/16,573 = 17.6% is right for all food facilities (as Sonnet 5.5's October 17.6% of 16,571) and the limitations disclose the missing restaurant filter, but the headline calls it 'restaurant inspections' and gives only the all-rows denominator.
+- gpt-6.1-sol (5/5/5/5): One upper(facility_type) = 'RESTAURANT' query over 2025-10-12 to 2026-10-11 gave 17.4% (2,040/11,720) and 21.0% of 9,717 completed, matching the reference (2,043; 21.0%), with both denominators, the reading, the query and a repeat-inspection caveat; its extra upper(city) = 'CHICAGO' filter, shown in the query, trims 3 fails.
+
+**Q4**
+
+- gpt-5.4 (5/5/5/5): A sample call, then a grouped query from 2026-01-01 to before 2026-10-13: the top 10 match the reference exactly (Illegal Parking 486,367 ... Dirty Condition 57,636), with the YTD window, query and limitations stated.
+- gpt-6.1-sol (1/1/3/2): No tool call, the same behaviour as its October Q4 row: it asserted, untested, that a YTD query exceeds the demo's safeguards (GPT-5.4's ran in 15 s) and offered the past 30 days or the CLI instead of answering the explicit 'this year'.
+
+**Q5**
+
+- gpt-5.4 (5/5/5/5): A sample, then a ward GROUP BY with ward IS NOT NULL over [2026-02-01, 2026-03-01) gave Ward 27 (732) and the top 5, matching the reference, with the query and caveats on records versus incidents, excluded null wards and counts versus per-capita rates.
+- gpt-6.1-sol (5/5/5/5): A sample, then a full ward GROUP BY (51 groups) for February 2026 gave Ward 27 (732) ahead of Ward 28 (707) by 25, matching the reference, with the query and not-a-rate and revision caveats.
+
+**Q6**
+
+- gpt-5.4 (5/5/4/4): A sample, then AVG(estprojectcost) by permitclass over all dates: every average matches the reference (Multifamily $5,739,772, Single Family/Duplex $175,702) and the all-time window, estimated-cost basis and small N/A class are stated, but there is no date filter on a large dataset and no skew caveat (as Sonnet 4.6's October row).
+- gpt-6.1-sol (5/5/5/5): Sample and metadata, then a 180-day issueddate aggregate on estprojectcost restricted to upper(permittypemapped) = 'BUILDING' (2,662 permits; class counts sum), stating the window, the zero-cost count, skew, and that Vacant Land's top mean rests on 6 permits and one $52.6M estimate.
+
+**Q7**
+
+- gpt-5.4 (5/3/5/3): Column discovery (distinct boro, distinct grade), then A / COUNT(*) of non-null-grade rows over 2026-09-12 to 2026-10-12 names Staten Island (60.3% of 126 rows) over the Bronx (58.6%); the denominator silently includes the N/Z/P grades its own distinct-grade call returned and counts per-violation rows it calls 'inspections', with no small-sample caveat.
+- gpt-6.1-sol (1/1/3/2): No tool call, the same behaviour as its October Q7 row: it asked whether to use each restaurant's latest grade or all graded inspections on an answerable query instead of stating a method and answering.
+
+**Q8**
+
+- gpt-5.4 (5/2/4/3): The top 10 salaried titles match the reference (Commissioner of Aviation $360,504) after two ORDER BY CAST() calls were refused and retried, but its offset-12458 median call returned 0 rows and it gave no median or average, so the comparison half is missing; it says so honestly but wrongly attributes the 0-row result to a portal refusal (as Haiku 5.5's October row).
+- gpt-6.1-sol (5/4/4/3): All calls answered: the top 10 by title and department match the reference, and it pulled the full salaried distribution (890 distinct salaries with counts, enough for the exact median) yet reported no median after its offset-12458 call returned 0 rows, so the comparison is missing; hourly exclusion disclosed, no next step offered.
+
+**Q9**
+
+- gpt-5.4 (1/1/1/1): ERROR: timed out at 120 s with no answer; scored 1/1/1/1 under the no-answer rule.
+- gpt-6.1-sol (1/1/3/2): No tool call (as its October Q4 row): it asserted, untested, that a six-month LA query exceeds the demo threshold (October's Gemini 3.8 and Opus ran it on 2cy6-i7zn) and asked for a shorter range or the CLI; in October it had found 2cy6-i7zn by catalog search before #76 refused its queries.
+
+**Q10**
+
+- gpt-5.4 (5/5/5/4): No tool call; one question for city and period with examples, the readings of 'crime rate' including per-capita, and a default of NYC, last 30 days, total reported incidents; unlike its October answer it does not say a per-capita rate needs population data the portal lacks.
+- gpt-6.1-sol (5/5/4/4): No tool call; one question for city and time period (October's asked only city), but no examples, no rate-versus-counts or population caveat and no default, as GPT-4o's October row.
+
+**Q11**
+
+- gpt-5.4 (5/5/3/2): No tool call; asked only which city (the portal is already Chicago) and assumed building permits, with no question on permit type or period and, unlike its October answer, no Chicago default, as GPT-4o's October row.
+- gpt-6.1-sol (5/5/4/3): No tool call; asked which city (the portal is already Chicago) but offered Chicago building permits as a default; no question on permit type or period, identical to its October row.
+
+**Q12**
+
+- gpt-5.4 (5/2/4/3): Targeted ic3t-wcy2 directly and grounded 'no 1950 data' in its metadata (Latest Action Date since 2000), but never ran a 1950 count and, under 'What I verified', reported a pre__filing_date ASC sample on the MM/DD/YYYY text field as the earliest Bronx records 'starting in 2013', the text-date trap (as Sonnet 4.6's October row).
+- gpt-6.1-sol (4/4/4/4): Found ipu4-2q9a by catalog search; Bronx and citywide issuance_date LIKE '%/1950' counts both returned 0, reported as 'not evidence that no permits were issued' with the text-date caveat, but it never checked the dataset's coverage, so it does not say the data starts decades later; budget exceeded.
+
+**Q13**
+
+- gpt-5.4 (5/5/5/5): upper(borough) = 'MANHATTAN' and upper(complaint_type) LIKE '%NOISE%' over 2026-09-12 to 2026-10-12 gave 16,508 by type (the reference's 17,063 counted from 09-11, one day earlier), with distinct-type discovery, recent rows, the exact queries and limitations stated.
+- gpt-6.1-sol (5/5/5/5): An upper() grouped query for Sept 12-Oct 11 gave 16,508 (the reference window less one day) with a correct 66% residential plus street/sidewalk share, the five latest rows, and a caveat that the latest report is Oct 10 so recent days may be incomplete.
+
+**Q14**
+
+- gpt-5.4 (5/5/5/4): A sample, then a bounded 10-row page; it states 84,978 (matches) and offers the next 500 rows, a Seattle-address filter, CSV chunks or NAICS counts, but does not say that 4 of its 10 rows (Tukwila, Federal Way, Auburn, SeaTac) are outside Seattle.
+- gpt-6.1-sol (5/5/5/5): Metadata, a sample and a count check (84,978, matches), then 10 rows alphabetically, with browse and CSV links, a next-page offer, the update date and an out-of-Seattle-address caveat.
+
+**Q15**
+
+- gpt-5.4 (5/5/5/5): No tool call; declined the cross-portal comparison citing the demo limit, offered NYC or Chicago one at a time and the CLI, identical to its October row.
+- gpt-6.1-sol (5/5/5/5): No tool call; stated the Oct 5-11 reading of 'past week', declined the cross-city comparison, asked which city first and pointed to the CLI, identical to its October row.
