@@ -182,14 +182,14 @@ const EXCEPTIONS: readonly Exception[] = [
   {
     path: 'src/components/QueryForm.tsx',
     classification: 'reference-table',
-    hits: 4,
-    why: 'The `PORTALS` menu — the portals a reader may pick, beside an "All portals" entry; a selection made here is the reader\'s choice, and the form\'s own default now comes from `SITE_DEFAULT_PORTAL` through `DefaultPortalProvider`. San Francisco is hidden until socrata-mcp-server#75 is fixed.',
+    hits: 5,
+    why: 'The `PORTALS` menu — the portals a reader may pick, beside an "All portals" entry; a selection made here is the reader\'s choice, and the form\'s own default now comes from `SITE_DEFAULT_PORTAL` through `DefaultPortalProvider`.',
   },
   {
     path: 'src/lib/streaming.ts',
     classification: 'reference-table',
-    hits: 5,
-    why: "`getPortalCity`'s portal-to-city display map, which translates a portal a run already named into a reader's word for it and supplies none when it does not recognise one.",
+    hits: 6,
+    why: "`getPortalCity`'s portal-to-city display map, which translates a portal a run already named into a reader's word for it and supplies none when it does not recognise one. San Francisco appears under its current address and its old one, which published records name.",
   },
   {
     path: 'src/lib/notebook-author/tool-to-cell.ts',

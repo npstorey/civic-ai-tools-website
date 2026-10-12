@@ -183,7 +183,7 @@ get_data has been extensively tested against these portals:
 |--------|-------|
 | data.cityofnewyork.us | NYC — see Key Datasets below |
 | data.cityofchicago.org | Chicago — see Key Datasets below |
-| data.sfgov.org | San Francisco — see Key Datasets below |
+| data.sf.gov | San Francisco — see Key Datasets below |
 | data.seattle.gov | Seattle — see Key Datasets below |
 | data.lacity.org | Los Angeles — see Key Datasets below |
 
@@ -259,7 +259,7 @@ Below are the most-used datasets per portal for quick reference. For a dataset n
 | Business Licenses (Active) | uupf-x98q | license_number, business_activity, expiration_date |
 | Employee Salaries | xzkq-xp2w | name, job_titles, department, annual_salary |
 
-### San Francisco (data.sfgov.org)
+### San Francisco (data.sf.gov)
 
 | Dataset | ID | Key Fields |
 |---------|----|------------|
@@ -427,9 +427,9 @@ Use these NYC dataset IDs directly:
     'data.cityofchicago.org': `
 Use these Chicago dataset IDs directly:
 - 311 requests: v6vf-nfxy (fields: sr_type, created_date, community_area)`,
-    'data.sfgov.org': `
-Note: search only covers the portal this server is configured for — if that isn't data.sfgov.org, reach SF with get_data and portal: "data.sfgov.org" instead. Use dataset IDs directly:
-- 311 cases: vw6y-z8j6 (fields: service_name, opened, neighborhood)`,
+    'data.sf.gov': `
+Note: search only covers the portal this server is configured for — if that isn't data.sf.gov, reach SF with get_data and portal: "data.sf.gov" instead. Use dataset IDs directly:
+- 311 cases: vw6y-z8j6 (fields: requested_datetime, service_name, analysis_neighborhood)`,
   };
 
   return portalSpecificGuidance[portal] || '';

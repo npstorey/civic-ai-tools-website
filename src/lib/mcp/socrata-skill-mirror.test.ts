@@ -233,10 +233,14 @@ test('F7: no table cell rates search or fetch "Limited" or "Fails" for a portal'
 });
 
 test('F7: getSkillForPortal for SF no longer casts doubt on search accuracy', () => {
-  const sf = getSkillForPortal('data.sfgov.org');
+  // Keyed by the address San Francisco's portal answers on. The note must be
+  // there for the assertion below to read anything: under a key that matches
+  // nothing it returns '', and '' passes it.
+  const sf = getSkillForPortal('data.sf.gov');
+  assert.match(sf, /portal: "data\.sf\.gov"/, `getSkillForPortal('data.sf.gov') has no San Francisco note: ${JSON.stringify(sf)}`);
   assert.ok(
     !/search[^.]{0,60}(incorrect|wrong|NYC)/i.test(sf),
-    `getSkillForPortal('data.sfgov.org') still says: ${JSON.stringify(sf)} — this site has no hub ` +
+    `getSkillForPortal('data.sf.gov') still says: ${JSON.stringify(sf)} — this site has no hub ` +
       'counterpart and is reached on the healthy path (composer calls getSkillForPortal(ctx.portal) ' +
       'whether or not the skill fetch succeeded).',
   );
