@@ -217,9 +217,9 @@ test('the record page\'s notebook section renders the reading, on every layout',
   const page = sourceOf('src/app/(app)/evidence/[slug]/page.tsx');
   const renders = page.match(/<NotebookSection\b/g) ?? [];
   assert.ok(
-    renders.length >= 2,
-    `the record page renders <NotebookSection> ${renders.length} time(s); it has two layouts (the ` +
-      'current section E and the legacy standalone section) and a reading that reaches only one of ' +
-      'them is a reading a reader can miss',
+    renders.length >= 1,
+    `the record page renders <NotebookSection> ${renders.length} time(s); it has one layout since ` +
+      'LAYOUT-W1 (#598), section E for every record, and a page that does not render it is a page ' +
+      'where a reader cannot see the reading',
   );
 });

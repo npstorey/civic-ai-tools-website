@@ -229,7 +229,10 @@ const AGF_PACKAGE = {
   output: `${AGF_ANSWER}: **42** complaints in the window.`,
   summary: 'AGFSUMMARY-p2',
   dataSources: [
-    { name: 'Example portal', portal: 'data.example.test', datasetId: 'aaaa-1111', accessedAt: '2026-10-09T16:09:00Z' },
+    {
+      sourceId: 'socrata', catalogType: 'socrata', portalUrl: 'https://data.example.test',
+      datasetId: 'aaaa-1111', datasetUrl: 'https://data.example.test/d/aaaa-1111', accessTimestamp: '2026-10-09T16:09:00Z',
+    },
   ],
   provenance: PROVENANCE_GRAPH,
   extensions: {
@@ -266,7 +269,10 @@ const OLD_PACKAGE = {
     size: OLD_OUTPUT_BYTES.length,
   },
   dataSources: [
-    { name: 'Example portal', portal: 'data.example.test', datasetId: 'cccc-3333', accessedAt: '2026-05-02T09:59:00Z' },
+    {
+      sourceId: 'data-commons', catalogType: 'data-commons', portalUrl: 'https://api.example.test/mcp',
+      accessTimestamp: '2026-05-02T09:59:00Z',
+    },
   ],
   provenance: PROVENANCE_GRAPH,
   extensions: {
@@ -553,7 +559,9 @@ test('P2 (1) A-G format: the refused-request line sits between the status row an
 test('P2 (1) a record whose package cannot be loaded keeps the parts that need none, the database summary among them', () => {
   const html = HTML.noPackage;
   const d = requireDisclosure(html);
-  assert.ok(at(html, 'NOPKGDBSUMMARY-p2') > d.start, 'the database summary renders, as G');
+  // (The JSON-LD block at the top of the page carries the summary too; G is read by its own section.)
+  assert.ok(sectionBody(html, 'G · Summary', d.end).includes('NOPKGDBSUMMARY-p2'), 'the database summary renders, as G');
+  assert.equal(html.slice(0, d.start).includes(heading('A · Initial prompt')), false, 'no envelope part renders above');
   for (const t of ['Attestations', 'Verification Status']) assert.ok(at(html, heading(t)) < d.end, `${t} renders inside`);
   assert.ok(at(html, heading('Actions')) > d.end, 'Actions renders after the disclosure');
   assert.ok(at(html, 'Package hash: ') > d.end, 'the package hash renders after the disclosure');
@@ -589,7 +597,7 @@ test('P2 (2) each of the three notebook readings renders before the disclosure, 
 test('P2 (2) the refused-request line and the unrecorded-outcomes sentence render before the disclosure, once', () => {
   before(HTML.agf, '1 of 3 requests did not complete.');
   assert.equal(occurrences(HTML.agf, 'requests did not complete.').length, 1, 'the refused-request line is rendered once');
-  const unrecorded = 'This record was created on May 2, 2026.';
+  const unrecorded = 'This record was created on May 2, 2026 and states no outcome for any of its 2 requests';
   before(HTML.old, unrecorded);
   assert.equal(occurrences(HTML.old, unrecorded).length, 1, 'the unrecorded-outcomes sentence is rendered once, not again in D');
 });
@@ -704,14 +712,18 @@ function cItems(html: string): Map<string, string> {
   return items;
 }
 
-test('P2 (5) C states the content profile, data sources, skill hash, total tokens, tool calls and blob-stored fields', () => {
+test('P2 (5) C states the content profile, data sources, skill hash, total tokens, tool calls and blob-stored fields', async () => {
   const agf = cItems(HTML.agf);
   const old = cItems(HTML.old);
   assert.equal(agf.get('Content profile'), 'datHere');
   assert.equal(old.get('Content profile'), 'default', 'a record with no profile reads default');
-  for (const items of [agf, old]) {
-    assert.ok((items.get('Data sources') ?? '').includes('aaaa-1111') || (items.get('Data sources') ?? '').includes('cccc-3333'), 'data sources');
+  const { formatDataSourcesSummary } = await import('@/lib/evidence/data-sources');
+  for (const [items, pkg] of [[agf, AGF_PACKAGE], [old, OLD_PACKAGE]] as const) {
+    const expected = formatDataSourcesSummary(pkg.dataSources as never);
+    assert.ok(expected !== null && expected.length > 0, 'the fixture names a data source');
+    assert.equal(items.get('Data sources'), expected, 'data sources, as the shared formatter states them');
   }
+  assert.notEqual(agf.get('Data sources'), old.get('Data sources'), 'each record states its own sources');
   assert.equal(agf.get('Skill hash'), 'e'.repeat(12));
   assert.equal(agf.get('Total tokens'), (34321).toLocaleString());
   assert.equal(agf.get('Tool calls'), '3');
