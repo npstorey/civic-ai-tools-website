@@ -43,6 +43,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { describeRefusedRequests } from './query-step.ts';
 
 interface QueryOutcome {
   kind: 'failed' | 'returned' | 'unrecorded';
@@ -150,4 +151,63 @@ test('query-step: the record page and ProvenanceChain both render queries[] thro
         'failed call reads like one that returned nothing',
     );
   }
+});
+
+// --- The refused-request line outside the disclosure (LAYOUT-W1, ruling D2) --
+//
+// The executed run and the record page put section D behind one closed
+// disclosure. A refused request is stated there per call; this line states it
+// once, outside, under the status row. It is counted by `describeQueryOutcome`
+// (an entry counts exactly when D states it failed), so each fixture below
+// carries an UNRECORDED entry beside the failed one: a count by entry length,
+// or by "not returned", would read it as refused and fail here.
+//
+// RED at d1919a8 + the typed stub (returns null): every non-null case fails.
+
+const FAILED_ENTRY = { failed: true, failureKind: 'timeout' };
+const RETURNED_ENTRY = { resultRows: 12, resultColumns: 3 };
+const UNRECORDED_ENTRY = {};
+
+test('D2: no request stated as failed gives no line — returned and unrecorded entries alone count for nothing', () => {
+  assert.equal(describeRefusedRequests([RETURNED_ENTRY, UNRECORDED_ENTRY, { resultRows: 0 }]), null);
+  assert.equal(describeRefusedRequests([]), null, 'no requests, nothing to state');
+  assert.equal(describeRefusedRequests([UNRECORDED_ENTRY]), null, 'one unrecorded request is not a refused one');
+});
+
+test('D2: one failed among three — the unrecorded entry beside it is not counted', () => {
+  assert.equal(
+    describeRefusedRequests([RETURNED_ENTRY, FAILED_ENTRY, UNRECORDED_ENTRY]),
+    '1 of 3 requests did not complete.',
+  );
+});
+
+test('D2: the only request failed', () => {
+  assert.equal(describeRefusedRequests([FAILED_ENTRY]), 'The only request did not complete.');
+  assert.equal(describeRefusedRequests([{ failed: true }]), 'The only request did not complete.', 'with no recorded kind');
+});
+
+test('D2: several failed, each counted once', () => {
+  assert.equal(
+    describeRefusedRequests([FAILED_ENTRY, UNRECORDED_ENTRY, { failed: true }, RETURNED_ENTRY]),
+    '2 of 4 requests did not complete.',
+  );
+});
+
+test('D2: a refusal stated by the trace counts as describeQueryOutcome states it; an entry with its own outcome does not', () => {
+  // Index 0 states nothing and is refused in the trace: D says it did not
+  // complete, so it counts. Index 1 states a row count; the trace is never
+  // consulted for it (`describeQueryOutcome`), so it does not. Index 2 is
+  // unrecorded and not in the set.
+  assert.equal(
+    describeRefusedRequests([UNRECORDED_ENTRY, RETURNED_ENTRY, UNRECORDED_ENTRY], new Set([0, 1])),
+    '1 of 3 requests did not complete.',
+  );
+});
+
+test('D2: the line counts exactly the entries describeQueryOutcome states as failed', async () => {
+  const describe = await loadDescribeQueryOutcome();
+  const entries = [FAILED_ENTRY, UNRECORDED_ENTRY, RETURNED_ENTRY, { failed: true }, { resultRows: 0 }];
+  const failed = entries.filter((e) => describe({ ...BASE_ENTRY, ...e }).kind === 'failed').length;
+  assert.equal(failed, 2, 'the fixture holds two failed entries by the per-call formatter');
+  assert.equal(describeRefusedRequests(entries), `${failed} of ${entries.length} requests did not complete.`);
 });
