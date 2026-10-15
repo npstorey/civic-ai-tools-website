@@ -158,6 +158,12 @@ function forgetEra(server: McpServerConfig): void {
   resetServerState(server);
 }
 
+/**
+ * The deadline of one HTTP exchange (#590). It stays live through the body
+ * read, not only until the headers arrive: a source that sends its headers and
+ * then stalls is cancelled at the limit, and the request closed. Each caller
+ * clears it once the body is read, or once it has decided not to read one.
+ */
 function createTimeoutSignal(ms: number): { signal: AbortSignal; clear: () => void } {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
@@ -287,12 +293,42 @@ function jsonRpcErrorOf(text: string): { code: number | null; data: unknown } | 
   return { code: typeof code === 'number' ? code : null, data };
 }
 
+/**
+ * A body read for what it says about a failure: a body that cannot be read —
+ * including one the exchange's deadline cut short — reads as empty, and so as
+ * carrying no JSON-RPC code.
+ */
 async function bodyTextOf(response: Response): Promise<string> {
   try {
     return await response.text();
   } catch {
     return '';
   }
+}
+
+/**
+ * A body read that is the answer itself, under the exchange's live deadline
+ * (#590). When the deadline cut the read short it throws `timedOut()` — the
+ * error the same exchange throws when the headers do not arrive in time — so a
+ * stalled body is never read as an empty or unparseable answer, and nothing is
+ * cached from it. Any other failure to read is passed to `otherwise`.
+ */
+async function answerTextWithin(
+  response: Response,
+  signal: AbortSignal,
+  timedOut: () => Error,
+  otherwise: (error: unknown) => string,
+): Promise<string> {
+  try {
+    return await response.text();
+  } catch (error) {
+    if (signal.aborted) throw timedOut();
+    return otherwise(error);
+  }
+}
+
+function serverTimedOut(server: McpServerConfig): Error {
+  return new Error(`MCP server "${server.sourceId}" did not respond within ${MCP_TIMEOUT_MS / 1000}s — the upstream server may be starting up or unresponsive. Please try again.`);
 }
 
 // --- What an HTTP failure was, read by status and code ------------------------
@@ -369,21 +405,25 @@ function instructionsOf(result: { instructions?: unknown }): string | null {
 async function postDiscover(server: McpServerConfig, version: string): Promise<{ status: number; ok: boolean; text: string }> {
   const { headers, body } = modernRequest(server, version, 'server/discover', {});
   const { signal, clear } = createTimeoutSignal(MCP_TIMEOUT_MS);
-  let response: Response;
   try {
-    response = await fetch(server.endpointUrl, { method: 'POST', headers, signal, body });
-  } catch (error) {
-    clear();
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error(`MCP server "${server.sourceId}" did not respond within ${MCP_TIMEOUT_MS / 1000}s — the upstream server may be starting up or unresponsive. Please try again.`);
+    let response: Response;
+    try {
+      response = await fetch(server.endpointUrl, { method: 'POST', headers, signal, body });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw serverTimedOut(server);
+      throw error;
     }
-    throw error;
+    // A 401 is answered before the body matters, and its body is not read.
+    // Any other body is the probe's answer: one cut short by the deadline is a
+    // timeout, never a legacy server's answer (#590); one unreadable for
+    // another reason reads as empty, as it always has.
+    const text = response.status === 401
+      ? ''
+      : await answerTextWithin(response, signal, () => serverTimedOut(server), () => '');
+    return { status: response.status, ok: response.ok, text };
   } finally {
     clear();
   }
-  // A 401 is answered before the body matters, and its body is not read.
-  const text = response.status === 401 ? '' : await bodyTextOf(response);
-  return { status: response.status, ok: response.ok, text };
 }
 
 /**
@@ -470,46 +510,56 @@ async function ensureDiscovered(server: McpServerConfig, version: string): Promi
  */
 async function initializeSession(server: McpServerConfig): Promise<InitializeResult> {
   const { signal, clear } = createTimeoutSignal(MCP_TIMEOUT_MS);
-  let response: Response;
+  let sessionId: string | null;
+  let text: string;
   try {
-    response = await fetch(server.endpointUrl, {
-      method: 'POST',
-      headers: buildMcpRequestHeaders(server, null),
-      signal,
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: Date.now(),
-        method: 'initialize',
-        params: {
-          protocolVersion: LEGACY_INITIALIZE_VERSION,
-          capabilities: {},
-          clientInfo: {
-            name: 'civic-ai-tools-website',
-            version: '1.0.0',
+    let response: Response;
+    try {
+      response = await fetch(server.endpointUrl, {
+        method: 'POST',
+        headers: buildMcpRequestHeaders(server, null),
+        signal,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method: 'initialize',
+          params: {
+            protocolVersion: LEGACY_INITIALIZE_VERSION,
+            capabilities: {},
+            clientInfo: {
+              name: 'civic-ai-tools-website',
+              version: '1.0.0',
+            },
           },
-        },
-      }),
-    });
-  } catch (error) {
-    clear();
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error(`MCP server "${server.sourceId}" did not respond within ${MCP_TIMEOUT_MS / 1000}s — the upstream server may be starting up or unresponsive. Please try again.`);
+        }),
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw serverTimedOut(server);
+      throw error;
     }
-    throw error;
+
+    if (!response.ok) {
+      const code = statusWorthReading(response.status) ? jsonRpcErrorOf(await bodyTextOf(response))?.code ?? null : null;
+      throw withHttpFailure(
+        new Error(`MCP initialization failed for "${server.sourceId}": ${response.status}`),
+        { phase: 'initialize', status: response.status, code, sessionCarried: false },
+      );
+    }
+
+    // Session id header is optional per the MCP spec — stateless servers omit it.
+    sessionId = response.headers.get('mcp-session-id');
+
+    // The body, read under the same deadline (#590). One the deadline cut short
+    // fails initialization: the server is not marked initialized, so its
+    // instructions are read again on the next attempt rather than lost. One
+    // unreadable for another reason is tolerated as it always has been.
+    text = await answerTextWithin(response, signal, () => serverTimedOut(server), (error) => {
+      warnInitializeBodyUnread(server, error);
+      return '';
+    });
   } finally {
     clear();
   }
-
-  if (!response.ok) {
-    const code = statusWorthReading(response.status) ? jsonRpcErrorOf(await bodyTextOf(response))?.code ?? null : null;
-    throw withHttpFailure(
-      new Error(`MCP initialization failed for "${server.sourceId}": ${response.status}`),
-      { phase: 'initialize', status: response.status, code, sessionCarried: false },
-    );
-  }
-
-  // Session id header is optional per the MCP spec — stateless servers omit it.
-  const sessionId = response.headers.get('mcp-session-id');
 
   // Parse the body for a `result.instructions` field. MCP servers that ship
   // a pre-canned LLM primer advertise it here; others omit it. Parse failures
@@ -519,7 +569,6 @@ async function initializeSession(server: McpServerConfig): Promise<InitializeRes
   let instructions: string | null = null;
   let protocolVersion = LEGACY_INITIALIZE_VERSION;
   try {
-    const text = await response.text();
     const jsonData = extractMcpJsonPayload(text);
     if (jsonData) {
       const parsed = JSON.parse(jsonData);
@@ -536,14 +585,18 @@ async function initializeSession(server: McpServerConfig): Promise<InitializeRes
       }
     }
   } catch (error) {
-    console.warn(
-      `[MCP:${server.sourceId}] Could not parse initialize response body for instructions:`,
-      errorLogFacts(error),
-    );
+    warnInitializeBodyUnread(server, error);
   }
 
   await sendInitializedNotification(server, sessionId, protocolVersion);
   return { sessionId, instructions, protocolVersion };
+}
+
+function warnInitializeBodyUnread(server: McpServerConfig, error: unknown): void {
+  console.warn(
+    `[MCP:${server.sourceId}] Could not parse initialize response body for instructions:`,
+    errorLogFacts(error),
+  );
 }
 
 /**
@@ -736,38 +789,41 @@ async function makeToolCall(
       };
   const sessionCarried = era.kind === 'legacy' && state.sessionId !== null;
 
+  const timedOut = () => new Error(`MCP tool call "${name}" timed out after ${MCP_TIMEOUT_MS / 1000}s — the data source may be slow or unresponsive. Try a simpler query.`);
   const { signal, clear } = createTimeoutSignal(MCP_TIMEOUT_MS);
   let response: Response;
+  let text: string;
   try {
-    response = await fetch(server.endpointUrl, {
-      method: 'POST',
-      headers: request.headers,
-      signal,
-      body: request.body,
-    });
-  } catch (error) {
-    clear();
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error(`MCP tool call "${name}" timed out after ${MCP_TIMEOUT_MS / 1000}s — the data source may be slow or unresponsive. Try a simpler query.`);
+    try {
+      response = await fetch(server.endpointUrl, {
+        method: 'POST',
+        headers: request.headers,
+        signal,
+        body: request.body,
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw timedOut();
+      throw error;
     }
-    throw error;
+
+    if (!response.ok) {
+      // The status, not the reason phrase: `statusText` is text the source
+      // chose (#503 WF).
+      console.error(`[MCP:${server.sourceId}] Server error:`, response.status);
+      if (era.kind === 'modern' && response.status === 401) throw authenticationError(server);
+      const code = statusWorthReading(response.status) ? jsonRpcErrorOf(await bodyTextOf(response))?.code ?? null : null;
+      throw withHttpFailure(
+        new Error(`MCP server "${server.sourceId}" error: ${response.status} ${response.statusText}`),
+        { phase: 'request', status: response.status, code, sessionCarried },
+      );
+    }
+
+    // The answer, read under the same deadline (#590). Any other read failure
+    // passes through as it always has.
+    text = await answerTextWithin(response, signal, timedOut, (error) => { throw error; });
   } finally {
     clear();
   }
-
-  if (!response.ok) {
-    // The status, not the reason phrase: `statusText` is text the source
-    // chose (#503 WF).
-    console.error(`[MCP:${server.sourceId}] Server error:`, response.status);
-    if (era.kind === 'modern' && response.status === 401) throw authenticationError(server);
-    const code = statusWorthReading(response.status) ? jsonRpcErrorOf(await bodyTextOf(response))?.code ?? null : null;
-    throw withHttpFailure(
-      new Error(`MCP server "${server.sourceId}" error: ${response.status} ${response.statusText}`),
-      { phase: 'request', status: response.status, code, sessionCarried },
-    );
-  }
-
-  const text = await response.text();
   console.log(
     `[MCP:${server.sourceId}] Tool ${name}: ${response.status}, ${text.length} bytes in ${Date.now() - startedAt}ms`,
   );
