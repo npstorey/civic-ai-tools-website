@@ -24,9 +24,9 @@
  *     the reference and fetches the bytes on demand.
  *   - `hash-only` — no text, but `systemPromptHash` identifies the prompt
  *     that was used. This is what a record published after P4 carries. The
- *     hash is still disclosed to the reader by `ProvenanceChain`, under
- *     "Skill guidance"; the section itself has nothing to render and renders
- *     nothing, rather than a heading over an empty body.
+ *     hash is still disclosed to the reader, as the "Skill hash" item in the
+ *     record page's section C; the section itself has nothing to render and
+ *     renders nothing, rather than a heading over an empty body.
  *   - `none` — the package records neither. Absence stated as absence.
  *
  * The hash travels on the first three states as well, so a caller that wants

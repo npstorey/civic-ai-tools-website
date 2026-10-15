@@ -231,7 +231,7 @@ test('#411: the page’s own decision for a package built after this change is h
   assert.equal(
     disclosure.kind === 'hash-only' ? disclosure.hash : undefined,
     BUILT.skillMetadata.systemPromptHash,
-    'the hash travels with the decision — it is what ProvenanceChain still shows the reader',
+    'the hash travels with the decision — it is what section C still shows the reader, as its Skill hash',
   );
 });
 
@@ -253,8 +253,8 @@ test('#411: every SITE that renders SkillSection asks that one decision — deri
   // `carriesSkillText`" check passes while one of two sites still carries its
   // own longhand condition — measured: that exact mutation left the earlier
   // version of this case green. The window is the eight lines above each
-  // `<SkillSection`, which is where the enclosing JSX conditional sits in
-  // both of the record page's layouts.
+  // `<SkillSection`, which is where the enclosing JSX conditional sits on the
+  // record page (one site since LAYOUT-W1, #598: section B, for every record).
   const WINDOW = 8;
   const sites: string[] = [];
   const unguarded: string[] = [];

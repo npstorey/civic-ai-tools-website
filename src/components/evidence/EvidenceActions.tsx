@@ -9,6 +9,7 @@ import {
 } from '@/lib/evidence/trust-signal';
 import { normalizeVisibility } from '@/lib/evidence/visibility';
 import { downloadRecordPackage, saveBlobAsFile } from '@/lib/evidence/package-download';
+import { buildRecordCitations } from '@/lib/evidence/record-citation';
 import type {
   KeyTrustResult,
   BlobRefVerification,
@@ -59,25 +60,17 @@ export function CitePopover({ title, creatorName, createdAt, slug, brandName, on
   title: string; creatorName: string; createdAt: string; slug: string; brandName: string | null; onClose: () => void;
 }) {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
-  const date = new Date(createdAt);
-  const year = date.getFullYear();
-  const dateStr = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  // Settlement-era canonical address (civic-ai-tools#160 P5, spec Appendix J).
-  // Citations are copied into documents that outlive the app, so what they
-  // carry is the canonical form; `/evidence/<slug>` stays served forever, so
-  // every citation already in circulation keeps resolving.
-  const url = typeof window !== 'undefined' ? `${window.location.origin}/records/${slug}` : `/records/${slug}`;
-
-  const citations = [
-    {
-      label: 'Plain text',
-      text: `${creatorName} (${year}). "${title}." ${brandName === null ? '' : `${brandName} `}Record Package. ${url}. Published: ${dateStr}.`,
-    },
-    {
-      label: 'For deliberative process reference',
-      text: `Record: ${title} [Verified: ${dateStr}] ${url}`,
-    },
-  ];
+  // The same builder the page's Citation block calls (LAYOUT-W1, ruling D3),
+  // so the modal and the block state one text for the record. It writes the
+  // canonical `/records/<slug>` address and the date in UTC.
+  const citations = buildRecordCitations({
+    title,
+    creatorName,
+    createdAt,
+    slug,
+    brandName,
+    origin: typeof window !== 'undefined' ? window.location.origin : null,
+  });
 
   const handleCopy = async (text: string, idx: number) => {
     await navigator.clipboard.writeText(text);
