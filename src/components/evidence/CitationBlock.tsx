@@ -7,12 +7,18 @@
  * over a collapsed disclosure with both formats ("Plain text", "For
  * deliberative process reference") and a Copy button for each. Its text comes
  * from `buildRecordCitations`, which the Cite modal in Actions also calls, so
- * the block and the modal cannot differ.
+ * the two state the same formats and the same date.
  *
  * Rendered on the server and hydrated in the browser, so every input is a prop
  * resolved on the server: the origin is the request host's (the page derives
  * it beside the commitment URL), never `window.location`, and the builder
- * states the date in UTC. Both come out the same on either side.
+ * states the date in UTC. The block's own text is therefore the same in the
+ * server render and after hydration.
+ *
+ * The URL can differ from the modal's. The modal takes its origin from
+ * `window.location.origin`, this block from the host the server saw
+ * (`x-forwarded-host`, else `host`); the two URLs match only when the browser's
+ * origin is that host, which a proxy that rewrites the host breaks.
  *
  * Disclosure, not validation (docs/design-principles.md, Principle 1): the
  * citation says when and by whom the record was published, not that it is
