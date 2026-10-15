@@ -337,3 +337,35 @@ export function describeUnrecordedOutcomes(pkg: RecordOutcomeInput & RecordTrace
     'reached, not what any request returned.'
   );
 }
+
+/**
+ * The one line that says, outside any disclosure, that some of a run's
+ * requests did not complete (LAYOUT-W1, ruling D2).
+ *
+ * A request's failure is stated per call inside section D, which sits behind
+ * the "Learn more" disclosure on the executed run and on the record page. A
+ * reader who never opens it would otherwise read the answer with nothing
+ * saying that part of what was asked for never arrived. This line is that
+ * statement, once, under the status row; the per-call text stays in D.
+ *
+ * COUNTED BY `describeQueryOutcome`, never by a second predicate: an entry is
+ * counted exactly when D states it as failed — marked `failed` on the entry,
+ * or, for an entry stating no outcome of its own, refused in the record's
+ * trace (`refusedInTrace`, the indices `readRefusalsFromTrace` returns). An
+ * entry whose outcome is unrecorded is not counted: absence is not a failure.
+ *
+ * Returns null when no request is stated as failed, so a caller renders
+ * nothing. The executed run and the record page both render through this.
+ */
+export function describeRefusedRequests(
+  entries: ReadonlyArray<QueryOutcomeInput>,
+  refusedInTrace: ReadonlySet<number> = NOTHING,
+): string | null {
+  const failed = entries.filter(
+    (entry, i) => describeQueryOutcome(entry, { refusedInTrace: refusedInTrace.has(i) }).kind === 'failed',
+  ).length;
+  if (failed === 0) return null;
+  // "1 of 1 requests" is not English; the singular gets its own sentence.
+  if (entries.length === 1) return 'The only request did not complete.';
+  return `${failed} of ${entries.length} requests did not complete.`;
+}

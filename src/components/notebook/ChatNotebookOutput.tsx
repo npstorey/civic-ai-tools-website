@@ -30,7 +30,21 @@
  *   G · Summary           — structured two-clause blurb
  *
  * Signers, attestations placeholder, and citation block are rendered by
- * sibling components composed at the bottom of this output.
+ * sibling components composed into this output.
+ *
+ * LAYOUT (LAYOUT-W1 P1, anchor #598). The reader meets the answer first:
+ *   1. the status row — one line, the run's three facts;
+ *   2. the refused-request line (ruling D2), only when a captured call is
+ *      stated as failed, written by `describeRefusedRequests`;
+ *   3. the answer, with no section heading — the A-G letters are the
+ *      envelope's section names, implementation language to a reader;
+ *   4. the citation, directly beneath it;
+ *   5. one disclosure, closed by default, holding A-G and the signers in
+ *      envelope order. F renders the answer again, so the envelope reads whole
+ *      to someone inspecting it.
+ * The answer element is built once and rendered in both places, so the two
+ * cannot drift. A render test pins the order
+ * (`chat-notebook-output-layout.test.ts`).
  */
 import { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -44,6 +58,7 @@ import { approximateMcpServers, buildChatEvidenceView, deliberativeTraceLine } f
 import { useSocrataMcpUrl } from '@/components/McpRoutingProvider';
 import type { Notebook } from '@/lib/notebook-author';
 import { readReproductionClaim, reproductionScopeSentence } from '@/lib/notebook-author/reproduction-claim';
+import { describeRefusedRequests } from '@/lib/evidence/query-step';
 import type { CapturedToolCall } from '@/hooks/useNotebookStream';
 
 interface ChatNotebookOutputProps {
@@ -111,14 +126,49 @@ export default function ChatNotebookOutput({
   // string that signals the pre-publish state honestly.
   const placeholderSlug = 'unpublished-chat-notebook';
 
+  // Ruling D2: section D states each failed call, behind the disclosure; this
+  // line states, outside it, how many of the run's calls failed. Counted by
+  // `describeQueryOutcome` over the same fields `deliberativeTraceLine` hands
+  // it, so the line and D cannot disagree about which calls failed.
+  const refusedRequests = describeRefusedRequests(
+    view.toolCalls.map((q) => ({
+      failed: q.failed,
+      failureKind: q.failureKind,
+      resultRows: q.resultSummary?.rows,
+      resultColumns: q.resultSummary?.columns,
+    })),
+  );
+
+  // The answer: the rendering code cell's outputs (Phase 2a2 item 2), else the
+  // legacy synthesis markdown, else a statement that there is none. Built once
+  // here and rendered twice — first, with no heading, and as F inside the
+  // disclosure — so the two cannot drift.
+  const answer = (
+    <div data-part="answer" style={{
+      padding: '16px 20px', border: '1px solid var(--border-color)',
+      borderRadius: '6px', backgroundColor: 'white',
+      fontSize: '15px', lineHeight: 1.6, color: 'var(--text-primary)',
+    }}>
+      {view.renderingCellOutputs !== null ? (
+        <RenderingCellOutputs outputs={view.renderingCellOutputs} />
+      ) : view.synthesisMarkdown ? (
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{view.synthesisMarkdown}</ReactMarkdown>
+      ) : (
+        <em style={{ color: 'var(--text-muted)' }}>
+          No synthesis was produced for this analysis.
+        </em>
+      )}
+    </div>
+  );
+
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-      {/* Pre-publish label row — mirrors the detail page's small label row
+      {/* Status row — mirrors the detail page's small label row
           ("Captured via Web chat · datHere content profile · …") but honest
           about not-yet-published state. */}
       <div style={{
         fontSize: '13px', color: 'var(--text-secondary)',
-        marginBottom: '24px',
+        marginBottom: refusedRequests !== null ? '8px' : '24px',
         display: 'flex', flexWrap: 'wrap', gap: '0 8px', alignItems: 'center',
       }}>
         <span>Captured via <strong>Web chat</strong></span>
@@ -128,268 +178,280 @@ export default function ChatNotebookOutput({
         <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>not yet published</span>
       </div>
 
+      {/* Ruling D2: outside the disclosure, under the status row. */}
+      {refusedRequests !== null && (
+        <p style={{ margin: '0 0 24px', fontSize: '13px', color: 'var(--error)' }}>
+          {refusedRequests}
+        </p>
+      )}
+
       {title && (
         <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '20px', lineHeight: 1.3 }}>
           {title}
         </h2>
       )}
 
-      {/* A · Initial prompt */}
-      <Section title="A · Initial prompt">
-        <div style={{
-          padding: '16px 20px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
-          borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
-          fontSize: '15px', lineHeight: 1.6, color: 'var(--text-primary)',
-          whiteSpace: 'pre-wrap',
-        }}>
-          {view.prompt}
-        </div>
-      </Section>
+      {/* The answer, first, with no section heading. */}
+      <div style={{ marginBottom: '24px' }}>
+        {answer}
+      </div>
 
-      {/* B · System prompts (Phase 2a2 item 1: inline composed prompt + truncated hash) */}
-      <Section title="B · System prompts">
-        <div style={{
-          padding: '12px 16px', border: '1px solid var(--border-color)', borderRadius: '6px',
-          fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6,
-        }}>
-          <p style={{ margin: '0 0 10px' }}>
-            The system prompt is composed from the base civic-data skill
-            guidance plus the web overlay (and any portal-specific overlays).
-            The content hash below is captured at execution time and embedded
-            in the record package when this analysis is published.
-          </p>
-          {view.composedSystemPromptHash && (
-            <div style={{
-              display: 'flex', flexWrap: 'wrap', gap: '6px 12px',
-              alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)',
-              marginBottom: '8px',
-            }}>
-              <span>SHA-256:</span>
-              <code
-                title={view.composedSystemPromptHash}
-                style={{
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
-                  background: '#f5f5f5', padding: '1px 6px', borderRadius: '3px',
-                }}
-              >
-                {view.composedSystemPromptHash.slice(0, 16)}…
-              </code>
-              <span style={{ fontStyle: 'italic' }}>
-                (truncated; full hash is what the record package will sign)
-              </span>
-            </div>
-          )}
-          {view.composedSystemPrompt ? (
-            <details>
-              <summary style={{ cursor: 'pointer', color: 'var(--accent)', fontSize: '13px', padding: '4px 0' }}>
-                Show full system prompt ({composedPromptLineCount.toLocaleString()} lines)
-              </summary>
-              <pre style={{
-                marginTop: '8px', padding: '12px 14px', background: '#f9f9f9',
-                border: '1px solid var(--border-color)', borderRadius: '4px',
-                fontSize: '12px', lineHeight: 1.5, whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word', maxHeight: '420px', overflow: 'auto',
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
-                color: 'var(--text-primary)',
-              }}>
-                {view.composedSystemPrompt}
-              </pre>
-            </details>
-          ) : (
-            <p style={{
-              margin: 0, fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic',
-            }}>
-              Full text was not captured in this stream. (The route emits it as
-              the first SSE event; if you opened this preview from a fixture
-              or a cached page, the inline disclosure is unavailable.)
-            </p>
-          )}
-        </div>
-      </Section>
-
-      {/* C · Model + environment */}
-      <Section title="C · Model + environment">
-        {(() => {
-          const items: Array<{ label: string; value: React.ReactNode; mono?: boolean }> = [
-            { label: 'Model', value: formatModelName(view.model) },
-            { label: 'Data portal', value: portalLabel },
-            ...(mcpServers.length > 0 ? [{
-              label: 'MCP servers',
-              value: mcpServers.join(', '),
-            }] : []),
-            ...(view.environment?.python ? [{
-              label: 'Python runtime',
-              value: view.environment.python,
-            }] : []),
-            ...(view.environment?.libraries
-              ? Object.entries(view.environment.libraries).slice(0, 4).map(([name, version]) => ({
-                  label: name,
-                  value: version,
-                  mono: true,
-                }))
-              : []),
-            ...(view.executedAt ? [{
-              label: 'Executed at',
-              value: new Date(view.executedAt).toLocaleString(),
-            }] : []),
-            ...(view.executionDurationMs !== null && view.executionDurationMs !== undefined ? [{
-              label: 'Sandbox duration',
-              value: `${(view.executionDurationMs / 1000).toFixed(1)}s`,
-            }] : []),
-          ];
-          return (
-            <div style={{
-              display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-              gap: '12px',
-            }}>
-              {items.map((item) => (
-                <div key={item.label} style={{
-                  padding: '10px 14px', border: '1px solid var(--border-color)',
-                  borderRadius: '4px',
-                }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '2px' }}>
-                    {item.label}
-                  </div>
-                  <div style={{
-                    fontSize: item.mono ? '12px' : '14px',
-                    color: item.mono ? 'var(--text-muted)' : 'var(--text-primary)',
-                    fontWeight: 500,
-                    fontFamily: item.mono ? 'monospace' : 'inherit',
-                  }}>
-                    {item.value}
-                  </div>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-      </Section>
-
-      {/* D · Deliberative trace */}
-      <Section title="D · Deliberative trace">
-        {view.toolCalls.length === 0 ? (
-          <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-            No tool calls were captured for this analysis.
-          </div>
-        ) : (
-          <details>
-            <summary style={{
-              cursor: 'pointer', fontSize: '13px',
-              color: 'var(--text-secondary)', padding: '8px 0',
-            }}>
-              Show {view.toolCalls.length} tool {view.toolCalls.length === 1 ? 'call' : 'calls'}
-            </summary>
-            <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {view.toolCalls.map((q, i) => {
-                // Each call's words come from `deliberativeTraceLine`
-                // (buildChatEvidenceView.ts), where a test reads them (#426):
-                // the recorded phrase through the shared sanitiser on every
-                // call — the call's number when it drops (R5) — and the
-                // outcome in `describeQueryOutcome`'s words, so a rejected
-                // call reads as rejected here as it does on the record page.
-                const line = deliberativeTraceLine(q, i + 1);
-                return (
-                  <div key={i} style={{
-                    padding: '10px 14px', border: '1px solid var(--border-color)',
-                    borderRadius: '4px', fontSize: '13px',
-                  }}>
-                    <div style={{ fontFamily: 'monospace', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                      {line.label}
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                      {line.heading}
-                    </div>
-                    {line.outcome !== null && (
-                      <div style={{ fontSize: '11px', color: q.failed ? 'var(--error)' : 'var(--text-muted)' }}>
-                        {line.outcome}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </details>
-        )}
-      </Section>
-
-      {/* E · Answer notebook */}
-      <Section title="E · Answer notebook">
-        {/*
-          The reproduction claim is CONDITIONAL, and the condition is in the
-          notebook rather than here (#371). This line asserted flatly that
-          re-executing the notebook reproduces section F, which is true only of
-          the steps that re-run a live request — a notebook where three of four
-          fetches were rejected got the same sentence. Then it said "the
-          notebook states how many of them do", which a discovery-only notebook
-          does not (#384 P8, F6). The sentence is now written by the one
-          formatter that reads the claim off the cells, so it is true of a
-          notebook that states a count and of one that states none.
-        */}
-        <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-          {reproductionScopeSentence(readReproductionClaim(view.notebook.cells))}{' '}
-          The notebook metadata records the sandbox runtime versions used at execution.
-        </div>
-        <NotebookSection notebook={view.notebook} slug={placeholderSlug} />
-      </Section>
-
-      {/* F · Rendered answer — hero (Phase 2a2 item 2: rendering code cell outputs) */}
-      <Section title="F · Rendered answer">
-        <div style={{
-          padding: '16px 20px', border: '1px solid var(--border-color)',
-          borderRadius: '6px', backgroundColor: 'white',
-          fontSize: '15px', lineHeight: 1.6, color: 'var(--text-primary)',
-        }}>
-          {view.renderingCellOutputs !== null ? (
-            <RenderingCellOutputs outputs={view.renderingCellOutputs} />
-          ) : view.synthesisMarkdown ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{view.synthesisMarkdown}</ReactMarkdown>
-          ) : (
-            <em style={{ color: 'var(--text-muted)' }}>
-              No synthesis was produced for this analysis.
-            </em>
-          )}
-        </div>
-      </Section>
-
-      {/* G · Summary (Phase 2a2 item 3: structured two-clause blurb) */}
-      <Section title="G · Summary">
-        <div style={{
-          padding: '12px 16px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
-          borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
-          fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)',
-        }}>
-          {view.structuredSummary ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <div>
-                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                  Analysis:
-                </span>{' '}
-                {view.structuredSummary.analysisDescription}
-              </div>
-              <div>
-                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                  Headline finding:
-                </span>{' '}
-                {view.structuredSummary.headlineFinding}
-              </div>
-            </div>
-          ) : view.derivedSummary ? (
-            view.derivedSummary
-          ) : (
-            <em style={{ color: 'var(--text-muted)' }}>
-              Summary will be generated at publish time.
-            </em>
-          )}
-        </div>
-      </Section>
-
-      {/* Signers + attestations + citation — sibling sections beneath G */}
-      <ChatSignersSection executedAt={view.executedAt} signingKeyId={view.signingKeyId} />
+      {/* The citation, directly beneath the answer. */}
       <ChatCitationPreview
         prompt={view.prompt}
         executedAt={view.executedAt}
         structuredSummary={view.structuredSummary}
       />
+
+      {/* Everything else, closed by default: the envelope A-G in order, then
+          the signers. Section titles inside are the envelope's own. */}
+      <details style={{ marginTop: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '8px' }}>
+        <summary style={{
+          cursor: 'pointer', fontSize: '14px', fontWeight: 500,
+          color: 'var(--accent)', padding: '8px 0',
+        }}>
+          Learn more about how this analysis was produced
+        </summary>
+        <div style={{ marginTop: '16px' }}>
+          {/* A · Initial prompt */}
+          <Section title="A · Initial prompt">
+            <div style={{
+              padding: '16px 20px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
+              borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
+              fontSize: '15px', lineHeight: 1.6, color: 'var(--text-primary)',
+              whiteSpace: 'pre-wrap',
+            }}>
+              {view.prompt}
+            </div>
+          </Section>
+
+          {/* B · System prompts (Phase 2a2 item 1: inline composed prompt + truncated hash) */}
+          <Section title="B · System prompts">
+            <div style={{
+              padding: '12px 16px', border: '1px solid var(--border-color)', borderRadius: '6px',
+              fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6,
+            }}>
+              <p style={{ margin: '0 0 10px' }}>
+                The system prompt is composed from the base civic-data skill
+                guidance plus the web overlay (and any portal-specific overlays).
+                The content hash below is captured at execution time and embedded
+                in the record package when this analysis is published.
+              </p>
+              {view.composedSystemPromptHash && (
+                <div style={{
+                  display: 'flex', flexWrap: 'wrap', gap: '6px 12px',
+                  alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)',
+                  marginBottom: '8px',
+                }}>
+                  <span>SHA-256:</span>
+                  <code
+                    title={view.composedSystemPromptHash}
+                    style={{
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
+                      background: '#f5f5f5', padding: '1px 6px', borderRadius: '3px',
+                    }}
+                  >
+                    {view.composedSystemPromptHash.slice(0, 16)}…
+                  </code>
+                  <span style={{ fontStyle: 'italic' }}>
+                    (truncated; full hash is what the record package will sign)
+                  </span>
+                </div>
+              )}
+              {view.composedSystemPrompt ? (
+                <details>
+                  <summary style={{ cursor: 'pointer', color: 'var(--accent)', fontSize: '13px', padding: '4px 0' }}>
+                    Show full system prompt ({composedPromptLineCount.toLocaleString()} lines)
+                  </summary>
+                  <pre style={{
+                    marginTop: '8px', padding: '12px 14px', background: '#f9f9f9',
+                    border: '1px solid var(--border-color)', borderRadius: '4px',
+                    fontSize: '12px', lineHeight: 1.5, whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word', maxHeight: '420px', overflow: 'auto',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
+                    color: 'var(--text-primary)',
+                  }}>
+                    {view.composedSystemPrompt}
+                  </pre>
+                </details>
+              ) : (
+                <p style={{
+                  margin: 0, fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic',
+                }}>
+                  Full text was not captured in this stream. (The route emits it as
+                  the first SSE event; if you opened this preview from a fixture
+                  or a cached page, the inline disclosure is unavailable.)
+                </p>
+              )}
+            </div>
+          </Section>
+
+          {/* C · Model + environment */}
+          <Section title="C · Model + environment">
+            {(() => {
+              const items: Array<{ label: string; value: React.ReactNode; mono?: boolean }> = [
+                { label: 'Model', value: formatModelName(view.model) },
+                { label: 'Data portal', value: portalLabel },
+                ...(mcpServers.length > 0 ? [{
+                  label: 'MCP servers',
+                  value: mcpServers.join(', '),
+                }] : []),
+                ...(view.environment?.python ? [{
+                  label: 'Python runtime',
+                  value: view.environment.python,
+                }] : []),
+                ...(view.environment?.libraries
+                  ? Object.entries(view.environment.libraries).slice(0, 4).map(([name, version]) => ({
+                      label: name,
+                      value: version,
+                      mono: true,
+                    }))
+                  : []),
+                ...(view.executedAt ? [{
+                  label: 'Executed at',
+                  value: new Date(view.executedAt).toLocaleString(),
+                }] : []),
+                ...(view.executionDurationMs !== null && view.executionDurationMs !== undefined ? [{
+                  label: 'Sandbox duration',
+                  value: `${(view.executionDurationMs / 1000).toFixed(1)}s`,
+                }] : []),
+              ];
+              return (
+                <div style={{
+                  display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                  gap: '12px',
+                }}>
+                  {items.map((item) => (
+                    <div key={item.label} style={{
+                      padding: '10px 14px', border: '1px solid var(--border-color)',
+                      borderRadius: '4px',
+                    }}>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '2px' }}>
+                        {item.label}
+                      </div>
+                      <div style={{
+                        fontSize: item.mono ? '12px' : '14px',
+                        color: item.mono ? 'var(--text-muted)' : 'var(--text-primary)',
+                        fontWeight: 500,
+                        fontFamily: item.mono ? 'monospace' : 'inherit',
+                      }}>
+                        {item.value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </Section>
+
+          {/* D · Deliberative trace */}
+          <Section title="D · Deliberative trace">
+            {view.toolCalls.length === 0 ? (
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                No tool calls were captured for this analysis.
+              </div>
+            ) : (
+              <details>
+                <summary style={{
+                  cursor: 'pointer', fontSize: '13px',
+                  color: 'var(--text-secondary)', padding: '8px 0',
+                }}>
+                  Show {view.toolCalls.length} tool {view.toolCalls.length === 1 ? 'call' : 'calls'}
+                </summary>
+                <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {view.toolCalls.map((q, i) => {
+                    // Each call's words come from `deliberativeTraceLine`
+                    // (buildChatEvidenceView.ts), where a test reads them (#426):
+                    // the recorded phrase through the shared sanitiser on every
+                    // call — the call's number when it drops (R5) — and the
+                    // outcome in `describeQueryOutcome`'s words, so a rejected
+                    // call reads as rejected here as it does on the record page.
+                    const line = deliberativeTraceLine(q, i + 1);
+                    return (
+                      <div key={i} style={{
+                        padding: '10px 14px', border: '1px solid var(--border-color)',
+                        borderRadius: '4px', fontSize: '13px',
+                      }}>
+                        <div style={{ fontFamily: 'monospace', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                          {line.label}
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                          {line.heading}
+                        </div>
+                        {line.outcome !== null && (
+                          <div style={{ fontSize: '11px', color: q.failed ? 'var(--error)' : 'var(--text-muted)' }}>
+                            {line.outcome}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </details>
+            )}
+          </Section>
+
+          {/* E · Answer notebook */}
+          <Section title="E · Answer notebook">
+            {/*
+              The reproduction claim is CONDITIONAL, and the condition is in the
+              notebook rather than here (#371). This line asserted flatly that
+              re-executing the notebook reproduces section F, which is true only of
+              the steps that re-run a live request — a notebook where three of four
+              fetches were rejected got the same sentence. Then it said "the
+              notebook states how many of them do", which a discovery-only notebook
+              does not (#384 P8, F6). The sentence is now written by the one
+              formatter that reads the claim off the cells, so it is true of a
+              notebook that states a count and of one that states none.
+            */}
+            <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+              {reproductionScopeSentence(readReproductionClaim(view.notebook.cells))}{' '}
+              The notebook metadata records the sandbox runtime versions used at execution.
+            </div>
+            <NotebookSection notebook={view.notebook} slug={placeholderSlug} />
+          </Section>
+
+          {/* F · Rendered answer — the same answer element shown above */}
+          <Section title="F · Rendered answer">
+            {answer}
+          </Section>
+
+          {/* G · Summary (Phase 2a2 item 3: structured two-clause blurb) */}
+          <Section title="G · Summary">
+            <div style={{
+              padding: '12px 16px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
+              borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
+              fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)',
+            }}>
+              {view.structuredSummary ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                      Analysis:
+                    </span>{' '}
+                    {view.structuredSummary.analysisDescription}
+                  </div>
+                  <div>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                      Headline finding:
+                    </span>{' '}
+                    {view.structuredSummary.headlineFinding}
+                  </div>
+                </div>
+              ) : view.derivedSummary ? (
+                view.derivedSummary
+              ) : (
+                <em style={{ color: 'var(--text-muted)' }}>
+                  Summary will be generated at publish time.
+                </em>
+              )}
+            </div>
+          </Section>
+
+          {/* Signers + attestations — sibling sections beneath G */}
+          <ChatSignersSection executedAt={view.executedAt} signingKeyId={view.signingKeyId} />
+        </div>
+      </details>
     </div>
   );
 }
