@@ -217,11 +217,11 @@ const AGF_PACKAGE = {
     {
       tool: 'get_data', operationType: 'query', datasetId: 'bbbb-2222', portal: 'data.example.test',
       arguments: { dataset_id: 'bbbb-2222', where: 'REFUSEDARG-p2' },
-      failed: true, failureKind: 'timeout',
+      failed: true, failureKind: 'timeout', duration_ms: 1200,
     },
     {
       tool: 'search', operationType: 'catalog',
-      arguments: { query: 'UNRECORDEDARG-p2' },
+      arguments: { query: 'UNRECORDEDARG-p2' }, duration_ms: 95,
     },
   ],
   cost: { model: 'openai/gpt-4o', promptTokens: 33873, completionTokens: 448, totalTokens: 34321, durationMs: 71461 },
@@ -257,7 +257,7 @@ const OLD_PACKAGE = {
   },
   prompt: { hash: 'f'.repeat(64), visibility: 'full_text', text: 'OLDPROMPT-p2 How many permits?' },
   queries: [
-    { tool: 'get_data', operationType: 'metadata', datasetId: 'cccc-3333', portal: 'data.example.test', arguments: { dataset_id: 'cccc-3333' } },
+    { tool: 'get_data', operationType: 'metadata', datasetId: 'cccc-3333', portal: 'data.example.test', arguments: { dataset_id: 'cccc-3333' }, duration_ms: 222 },
     { tool: 'get_data', operationType: 'query', datasetId: 'cccc-3333', portal: 'data.example.test', arguments: { dataset_id: 'cccc-3333', select: 'count(*)' } },
   ],
   cost: { model: 'anthropic/claude-sonnet-4', promptTokens: 1200, completionTokens: 300, totalTokens: 1500, durationMs: 9000 },
@@ -699,6 +699,32 @@ test('P2 (4) a call that carries datasetId and portal shows both, beside its too
   assert.ok(unrecorded.includes('UNRECORDEDARG-p2'), 'and its arguments');
   assert.ok(unrecorded.includes('No result summary was recorded for this request.'), 'and its outcome');
   assert.doesNotMatch(unrecorded, /Dataset|Portal/, 'a call without them shows neither label');
+});
+
+// LAYOUT-W1 P3: a signed `duration_ms` is shown on every card, once. The outcome
+// sentence states it for a returned call (" · 410ms") and a failed one ("The
+// attempt took 1,200ms."); for a call whose outcome is unrecorded it states none,
+// so the card shows the raw field as a "Duration" label beside Dataset/Portal.
+// No label on a returned or failed card: beside "did not complete" a bare number
+// reads as how long the call took to succeed (#413).
+const cardText = (card: string) => card.replace(/<[^>]*>/g, '');
+
+test('P3 a call with no stated outcome shows its signed duration; a returned or failed call states it once, in its outcome', () => {
+  const [returned, failed, unrecorded] = callCards(HTML.agf);
+  assert.ok(cardText(unrecorded).includes('No result summary was recorded for this request.'), 'the A-G unrecorded card is unrecorded');
+  assert.ok(cardText(unrecorded).includes('Duration 95ms'), 'the A-G unrecorded card shows Duration 95ms');
+
+  assert.ok(cardText(returned).includes('Returned 12 rows × 3 columns · 410ms'), 'the returned card states its duration in its outcome');
+  assert.doesNotMatch(returned, /Duration/, 'no Duration label on a returned card');
+
+  assert.equal(occurrences(cardText(failed), '1,200ms').length, 1, 'the failed card states its duration once');
+  assert.ok(cardText(failed).includes('The attempt took 1,200ms.'), 'in the outcome sentence\'s words');
+  assert.doesNotMatch(failed, /Duration|1200/, 'no Duration label and no bare number on a failed card');
+
+  const [withDuration, withoutDuration] = callCards(HTML.old);
+  assert.ok(cardText(withDuration).includes('No result summary was recorded for this request.'), 'the old-format card is unrecorded');
+  assert.ok(cardText(withDuration).includes('Duration 222ms'), 'the old-format unrecorded card shows Duration 222ms');
+  assert.doesNotMatch(withoutDuration, /Duration/, 'an entry with no duration_ms shows no Duration label');
 });
 
 // --- Criterion 5: the parts only the old format showed (ruling D7) -------------

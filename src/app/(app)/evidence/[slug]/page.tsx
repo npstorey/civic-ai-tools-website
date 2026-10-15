@@ -731,6 +731,13 @@ export default async function EvidencePage({ params }: PageProps) {
                         // nothing, and an entry with neither is stated as
                         // unrecorded, never as either.
                         const outcome = describeQueryOutcome(q, { refusedInTrace: fromTrace?.refused.has(i) ?? false });
+                        // The signed duration, raw, when the outcome sentence
+                        // does not state it (LAYOUT-W1 P3). A returned call's
+                        // sentence ends " · Nms" and a failed one's says "The
+                        // attempt took Nms"; neither gets a second, bare number,
+                        // which beside "did not complete" reads as how long the
+                        // call took to succeed (#413).
+                        const duration = outcome.kind === 'unrecorded' ? q.duration_ms : undefined;
                         return (
                           <div data-part="call" key={i} style={{
                             padding: '10px 14px', border: '1px solid var(--border-color)',
@@ -740,16 +747,17 @@ export default async function EvidencePage({ params }: PageProps) {
                               {q.tool}{q.operationType ? ` (${q.operationType})` : ''}
                             </div>
                             {/* The signed entry's dataset and portal, raw, when
-                                it carries them (ruling D6). */}
-                            {(q.datasetId || q.portal) && (
+                                it carries them (ruling D6), and its duration
+                                when the outcome below does not state it. */}
+                            {(q.datasetId || q.portal || duration !== undefined) && (
                               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                                {q.datasetId && (
-                                  <span>Dataset <code>{q.datasetId}</code></span>
-                                )}
-                                {q.datasetId && q.portal && <span>{' · '}</span>}
-                                {q.portal && (
-                                  <span>Portal <code>{q.portal}</code></span>
-                                )}
+                                {[
+                                  q.datasetId ? <span key="dataset">Dataset <code>{q.datasetId}</code></span> : null,
+                                  q.portal ? <span key="portal">Portal <code>{q.portal}</code></span> : null,
+                                  duration !== undefined ? <span key="duration">Duration <code>{duration}ms</code></span> : null,
+                                ]
+                                  .filter((part) => part !== null)
+                                  .flatMap((part, j) => (j === 0 ? [part] : [<span key={`sep-${j}`}>{' · '}</span>, part]))}
                               </div>
                             )}
                             <pre style={{
