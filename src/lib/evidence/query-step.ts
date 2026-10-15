@@ -361,7 +361,11 @@ export function describeRefusedRequests(
   entries: ReadonlyArray<QueryOutcomeInput>,
   refusedInTrace: ReadonlySet<number> = NOTHING,
 ): string | null {
-  void entries;
-  void refusedInTrace;
-  return null;
+  const failed = entries.filter(
+    (entry, i) => describeQueryOutcome(entry, { refusedInTrace: refusedInTrace.has(i) }).kind === 'failed',
+  ).length;
+  if (failed === 0) return null;
+  // "1 of 1 requests" is not English; the singular gets its own sentence.
+  if (entries.length === 1) return 'The only request did not complete.';
+  return `${failed} of ${entries.length} requests did not complete.`;
 }
