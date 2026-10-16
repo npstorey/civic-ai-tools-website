@@ -1,8 +1,10 @@
 import {
   buildMcpRegistry,
+  isHostedServer,
   McpConfigurationError,
   readMcpEnvFromProcess,
   routeToolCall,
+  type HostedMcpServer,
   type McpRegistry,
   type McpServerConfig,
 } from './registry.ts';
@@ -688,7 +690,7 @@ export async function getServerInstructions(sourceId: string): Promise<string | 
  * share throws `AmbiguousToolNameError` naming both aliased forms (D6). Both
  * are thrown before any request. Exported for tests.
  */
-export function routeTool(toolName: string): McpServerConfig {
+export function routeTool(toolName: string): McpServerConfig | HostedMcpServer {
   return routeToolCall(registry, toolName).server;
 }
 
@@ -754,7 +756,17 @@ async function inEra<T>(server: McpServerConfig, send: (era: Era) => Promise<T>)
  * `fixtures/legacy-exchange-at-base.json` hold the wire).
  */
 export async function callMcpTool(name: string, args: Record<string, unknown>): Promise<string> {
-  const { server, upstreamName } = routeToolCall(registry, name);
+  const { server: routed, upstreamName } = routeToolCall(registry, name);
+  // A hosted source (#617 P3, seam c1) is replaced, for this call only, by a
+  // config whose address is its sandbox's address now and whose headers carry
+  // its bridge token; everything below runs on that copy unchanged. The module
+  // is loaded only here, so an instance with no hosted source never loads the
+  // sandbox SDK. A resumed sandbox may answer at a new address, which is a new
+  // origin to the era cache below: it is probed once, so `eraByOrigin` gains
+  // at most one entry per resume per process, and holds only an era each.
+  const server = isHostedServer(routed)
+    ? await (await import('./hosting/address.ts')).hostedServerForCall(routed)
+    : routed;
   return inEra(server, (era) => makeToolCall(server, upstreamName, args, era));
 }
 

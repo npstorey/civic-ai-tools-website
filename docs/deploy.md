@@ -1038,6 +1038,117 @@ model id the endpoint does not recognize — falls through to a plain
 HTTP 500 carrying the raw message. Hence the id above; a stale one turns
 this reproduction into a different error than the one you came to see.
 
+### Hosted sources
+
+Most data sources are servers the instance calls at a configured address. A
+**hosted source** is one the instance runs itself: a publisher-bundled MCP
+server that speaks stdio only. The reference instance hosts one, NYC Charter,
+Laws and Rules (`@betanyc/nyc-charter-laws-rules` on npm, published by
+BetaNYC), pinned by `@typedstandards/civic-typed-router` at 0.3.1 together
+with the commit the registry states for that version. It is off unless
+`NYC_CHARTER_HOSTING=sandbox`.
+
+**What runs where.**
+
+- The pinned package runs in a Vercel Sandbox the app creates, one per hosted
+  source, pinned version and deployment environment. The sandbox is named
+  `civic-src-<environment>-<alias>__<version>`, with each `.` in the version
+  written as `_`, for example `civic-src-production-nyc_charter__0_3_1`. The
+  environment is `VERCEL_ENV` (`production`, `preview` or `development`), or
+  `local` off the platform. It is in the name because a project's preview and
+  production deployments share one sandbox scope and hold different secrets.
+  The name is an operator fact for the function log; no record carries it.
+- Inside the sandbox, a small bridge (`src/lib/mcp/hosting/bridge-source.ts`,
+  written into the sandbox when it is created) runs the package's one command
+  over stdio and serves it over Streamable HTTP on one exposed port. It is
+  built on `@modelcontextprotocol/server` and `@modelcontextprotocol/client`,
+  pinned exactly. Toward the app it is a modern, sessionless MCP server, and
+  the app's client finds it modern.
+- The app resolves the sandbox's address on every call, from the sandbox
+  handle. The address is never configured and never kept (a resumed sandbox
+  may answer at a new one).
+
+**Who holds what.** The operator holds `SOURCE_BRIDGE_SECRET`, one instance
+secret. Each sandbox holds one token: HMAC-SHA256 of its name under the
+secret. The token is given to the sandbox as an environment value when the
+sandbox is created, and the app sends it as `Authorization: Bearer` on each
+request. The bridge compares it in constant time and answers 401 to a missing
+or wrong token, on every path. The stdio server itself is not given the token.
+
+**The idle window and the wake.**
+
+- A sandbox's session times out after the idle window, 10 minutes
+  (`DEFAULT_IDLE_WINDOW_MS` in `src/lib/mcp/hosting/lifecycle.ts`; an option of
+  the lifecycle, not an environment variable). Each call restarts the window
+  without growing it: the session is extended only by what it lacks of one
+  window. A source left idle stops by itself, keeps one snapshot, and the next
+  call resumes it. Measured from a local process on 2026-10-16:
+  - a first creation, which installs the pin and the bridge, took 11.8 s;
+  - a resume took 3.8 s;
+  - a call to a running source added about 0.1 s.
+- The wake has its own deadline, 30 seconds (`DEFAULT_WAKE_DEADLINE_MS`). Each
+  exchange's 45-second deadline starts after the wake. A wake that misses its
+  deadline fails the call as the source being unavailable, and is left to
+  finish in the background, so the next call finds it ready.
+- Two calls at once from different function instances make one sandbox: the
+  platform refuses the second create by name, and that call waits for the
+  first one's bridge.
+
+**The allowlist.** While the sandbox installs, it may reach only
+`registry.npmjs.org`. Then the manifest's outbound list is applied. For NYC
+Charter that list is empty, so the policy is `deny-all`: the server serves
+the index bundled in its package and reaches no host. **The policy filters
+what starts, not what is running.** A process that already holds a
+connection keeps it. So revoking a running source's reach means stopping its
+sandbox, not changing its policy.
+
+**Honest failure.** When the sandbox cannot be reached — a refused token, a
+platform error, a wake past its deadline — the call is recorded as failed
+with kind `unavailable`. The model is told the source is unavailable, and
+the reader is told the data source could not be reached. That is never
+reported as data that came back empty.
+
+**Rotating the secret.** A sandbox keeps its token for its whole life. So
+rotating `SOURCE_BRIDGE_SECRET` means deleting each hosted source's sandbox,
+by its name, in each environment you rotate. Until then its bridge answers
+401 and every call fails as unavailable. The next call after the delete
+creates a sandbox with a token from the new secret.
+
+**One secret per environment, not per branch.** The name carries the
+environment, not the branch, so every preview deployment shares
+`civic-src-preview-<alias>__<version>`. If one preview branch sets its own
+branch-scoped `SOURCE_BRIDGE_SECRET`, the sandbox holds the token of
+whichever branch created it, and every other branch's calls get 401 and fail
+as unavailable. Set the preview secret once for all preview branches.
+Otherwise, delete the preview sandbox by its name before a branch with a
+different secret is tried.
+
+**A pin move** changes the name, so the next call creates a new sandbox. The
+old one is deleted by the pin move's owner step, or left to expire, about 44
+days after its last use (its snapshot expires 30 days after last use).
+
+**Setting it up (preview first, then production):**
+
+```sh
+printf '%s' sandbox | vercel env add NYC_CHARTER_HOSTING preview
+openssl rand -hex 32 | vercel env add SOURCE_BRIDGE_SECRET preview
+```
+
+The secret goes through the pipe and is never shown, typed or written to a
+file. Use a different secret per environment.
+
+**What it needs, and where it does not apply.**
+
+- Hosting a source needs Vercel Sandbox, with the same authentication as the
+  `vercel-sandbox` executor: OIDC on the platform, the
+  `VERCEL_TOKEN`/`VERCEL_TEAM_ID`/`VERCEL_PROJECT_ID` trio off it.
+- The preflight therefore checks the two variables only under the
+  `vercel-sandbox` executor profile, where that authentication is delivered.
+  On other profiles it does not check them.
+- A compose instance cannot host a source as its compose file stands: the
+  compose file delivers neither the two variables nor the sandbox
+  authentication.
+
 ## Environment reference, tier by tier
 
 The executable authority on the environment is
@@ -1159,6 +1270,8 @@ doesn't):
 | `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and an OAuth app (`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` or the `OIDC_*` set) | Sign-in — and with it the sign-in-gated notebook execution feature, the dashboard, and the higher authenticated rate limit. |
 | `DATA_COMMONS_MCP_URL` + `DATA_COMMONS_API_KEY` | The Data Commons data source — its tool calls fail without the key (the hosted endpoint mandates it). `DC_API_KEY` is the separate key passed into *executed notebooks* for their own Data Commons requests. **What the address makes a signed record say:** for a run this instance makes, the value as set, or when unset the coded default (Google's public endpoint, in `src/lib/mcp/registry.ts`), is the `data-commons` entry of the datHere `mcpServers` list on every record, and the Data Commons agent's `civic:serverUrl` on a record whose run called a Data Commons tool. The record's `dataSources` entry for Data Commons keeps the packaging library's fixed portal value, that same public endpoint, whatever this is set to. The key is never recorded. |
 | `BOSTON_OPENCONTEXT_MCP_URL` | The Boston OpenContext data source, which is opt-in. There is no coded default: unset (empty or whitespace-only counts as unset), the source is absent from every run — the model is not offered its six `boston__ckan__` tools, the system prompt carries none of its guidance (no Boston OpenContext block, preamble entry, citation instruction or line in the one-portal section), no request is sent to it, and no record lists it. A call to one of its tools anyway, such as a replay of a record that used them, is refused before anything is sent and recorded as a rejected call (`not_configured`). The public endpoint at `data-mcp.boston.gov` refuses every request that carries no bearer token, and this app sends none, so set this only to an OpenContext deployment that answers without one. **What it makes a signed record say:** set, for a run this instance makes, the value as set is the `boston-opencontext` entry of the datHere `mcpServers` list on every record, and the Boston OpenContext agent's `civic:serverUrl` on a record whose run called one of its tools; unset, the list has no `boston-opencontext` entry. |
+| `NYC_CHARTER_HOSTING` | The hosted NYC Charter, Laws and Rules source, which is opt-in ([Hosted sources](#hosted-sources)). Only `sandbox` (trimmed) switches it on: the app runs the pinned package in a Vercel Sandbox it creates and offers the model its five `nyc_charter__` tools. Unset, the source is absent from every run: no tools, no guidance, no request, no sandbox. A call to one of its tools anyway, such as a replay, is refused before anything is sent and recorded as a rejected call (`not_configured`), naming this variable. Any other value leaves it off, and the preflight refuses the value, naming the variable and `sandbox`. Checked by the preflight only under the `vercel-sandbox` executor profile. **What it makes a signed record say, with it unset:** each record's `sourcesOffered` carries `{ "sourceId": "nyc-charter", "alias": "nyc_charter", "reason": "not-configured" }`. |
+| `SOURCE_BRIDGE_SECRET` | The instance secret each hosted source's bridge token derives from (HMAC-SHA256 of the sandbox's name). Required when `NYC_CHARTER_HOSTING=sandbox`; unread otherwise. Set it through a pipe (`openssl rand -hex 32 \| vercel env add SOURCE_BRIDGE_SECRET <environment>`), never on a command line, and use a different one per environment. It is never logged and appears in no record. Rotating it means deleting each hosted source's sandbox ([Hosted sources](#hosted-sources)). |
 | `CRON_SECRET` | The scheduled blob-GC endpoint rejects every caller with 401 — orphaned uploads are never swept. Set the same value on the app and the scheduler. |
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Durable rate limiting — the counter falls back to per-process memory (resets on restart; not shared across instances). Fine for a single-node instance. |
 | `SANDBOX_SNAPSHOT_ID` | (vercel-sandbox executor only) Prebuilt snapshot — absent, every execution pays a slow fresh boot + pip install. Not read by the container executor. A snapshot built under `@vercel/sandbox` 1.x boots under 3.x: measured on 2026-10-16 with 3.5.1, it booted Python 3.13.1 with the pinned stack importable. |
@@ -1814,6 +1927,8 @@ table's `DB_DRIVER=node-postgres` row).
 | Database, `DB_DRIVER=neon-http` | `fetch` | yes |
 | Database, `DB_DRIVER=node-postgres` | a raw TCP socket (`pg`) | **no** |
 | Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox` | `fetch`, in `@vercel/sandbox`, to `https://vercel.com/api`, through a proxy-aware dispatcher the driver hands the SDK (`src/lib/sandbox/vercel-sandbox.ts`) | yes — see below |
+| Hosted source (`NYC_CHARTER_HOSTING=sandbox`): its sandbox's lifecycle | `fetch`, in `@vercel/sandbox`, to `https://vercel.com/api`, through the same proxy-aware dispatcher the executor uses (`src/lib/mcp/hosting/lifecycle.ts`, reusing `src/lib/sandbox/vercel-sandbox.ts`) | yes |
+| Hosted source: the MCP exchange with its bridge | `fetch`, to the sandbox's `*.vercel.run` address (`src/lib/mcp/client.ts`) | yes |
 | Notebook execution, `EXECUTOR_DRIVER=container` | the app: the container-runtime socket on the host. The notebook's own requests: the executor container, on the runtime's default network (`src/lib/sandbox/container.ts`) | the socket: **no** — it is not network traffic. The notebook's requests: yes — see below |
 | Notebook execution, `EXECUTOR_DRIVER=lambda` | the app: the AWS SDK's Lambda client, to `lambda.<region>.amazonaws.com` (`src/lib/sandbox/lambda.ts`). The notebook's own requests: the function, from wherever it runs | the invoke: yes, as the S3 driver's calls do, with the fetch transport's header timeout raised to the session cap. The notebook's requests: the **function's** proxy variables, set on the function — see [The Lambda executor](#the-lambda-executor) |
 

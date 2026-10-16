@@ -692,6 +692,16 @@ const ARG_SHAPES: Record<string, Array<Record<string, unknown>>> = {
   ckan__query_data: [{ resource_id: 'abc-123', filters: { year: 2025 } }],
   ckan__execute_sql: [{ sql: 'SELECT 1' }],
   ckan__aggregate_data: [{ resource_id: 'abc-123', metrics: { count: 'count(*)' } }],
+  // Router 0.3.0's NYC Charter tools (#617 P3), which joined the vocabulary at
+  // the pin. These fixtures are for the agreement below only — that the
+  // predicate and both renderers give one answer for each call — and decide no
+  // rendering: how a Charter call reads in either notebook is P4's (#617 P4,
+  // criterion 4). Charter's `search` is covered by `search` above, the key both
+  // sources' search shares.
+  get_section: [{ citation: '§ 259', corpus: 'charter' }],
+  list_titles: [{ corpus: 'charter' }],
+  get_title: [{ corpus: 'charter', title: 'Chapter 11' }],
+  get_version: [{}],
 };
 
 function registryToolNames(): string[] {

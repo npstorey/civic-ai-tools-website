@@ -38,6 +38,13 @@
  * condition was added, and an endpoint URL is infrastructure even though it is
  * not a credential.
  *
+ * ONE SWITCH IS COMPARED AGAINST A CLOSED SET: `NYC_CHARTER_HOSTING` (#617
+ * P3), through `allowedValues` and `requiredWhenValue` (below). Its value
+ * space is non-secret (`sandbox`, or unset); the trimmed value is compared and
+ * discarded, and an unrecognized value is reported by NAME with the allowed
+ * set, never echoed. `SOURCE_BRIDGE_SECRET` is read for presence only, like
+ * every other secret here.
+ *
  * ONE SWITCH IS READ AS A BOOLEAN: `SITE_PORTAL_LOCKED` (#436), which
  * `requiredWhenFlagOn` (below) parses exactly as the app does — `1`/`true`, any
  * case, trimmed, is on. Only that boolean leaves the parse; the value is never
@@ -221,6 +228,18 @@ export const DRIVER_SEAMS = {
  *     this: it promotes on any value other than a coded default, so `0` and
  *     `false` would promote too. Minted for SITE_DEFAULT_PORTAL, which a
  *     portal-locked instance cannot run without — every query refuses.
+ *
+ * Two fields for a switch with a CLOSED VALUE SET that is not a driver seam
+ * (#617 P3). A seam's default is a driver every default profile runs, and a
+ * hosted source's switch is off by default, so it is not a seam:
+ *   - `allowedValues: ['<v>', …]` — when the variable is present, its trimmed
+ *     value must be one of these, or the run fails naming the variable and
+ *     the set (the value itself is never printed). Unset is always allowed.
+ *     Trimmed because the app's reader trims (`readMcpEnv` in
+ *     `@typedstandards/civic-typed-router`).
+ *   - `requiredWhenValue: { <VAR>: '<v>' }` — tier becomes 'required' when
+ *     <VAR>'s trimmed value is exactly <v>. Minted for SOURCE_BRIDGE_SECRET,
+ *     which a hosted source cannot run without and which nothing else reads.
  *
  * A field keyed by a SIBLING's presence (#554):
  *   - `requiredWhenPartnerPresent: { when: { <seam>: '<driver>' }, partner: '<VAR>' }`
@@ -520,6 +539,16 @@ export const ENV_SPEC = [
   // request. Optional rather than recommended: absence is a configuration,
   // not a degraded feature, so it is not nagged about.
   { name: 'BOSTON_OPENCONTEXT_MCP_URL', tier: 'optional', purpose: "Boston OpenContext MCP endpoint — opt-in: unset, the source is not offered to a run (no tools, no guidance, no record entry). No default: the public endpoint refuses requests that carry no bearer token, and this app sends none" },
+  // A source the instance RUNS rather than calls at an address (#617 P3,
+  // ruling D7): NYC Charter, Laws and Rules, a publisher-bundled stdio server,
+  // in a Vercel Sandbox this instance creates (src/lib/mcp/hosting/). Opt-in,
+  // like Boston: unset, it is absent from every run. Scoped to the
+  // vercel-sandbox profile with the off-platform auth triple above: the host
+  // authenticates to the sandbox API exactly as the executor does, and a
+  // profile that does not deliver that auth cannot run a hosted source.
+  { name: 'NYC_CHARTER_HOSTING', tier: 'optional', purpose: "NYC Charter, Laws and Rules — opt-in: 'sandbox' runs the pinned package in a Vercel Sandbox this instance creates and offers its tools; unset, the source is not offered (no tools, no guidance, no request). Any other value is refused", allowedValues: ['sandbox'], onlyWhen: { executor: 'vercel-sandbox' } },
+  { name: 'SOURCE_BRIDGE_SECRET', tier: 'optional', purpose: "Instance secret each hosted source's bridge token derives from (HMAC-SHA256 of the sandbox name) — required when NYC_CHARTER_HOSTING is sandbox; set it from a pipe, never on a command line. Rotating it means deleting each hosted source's sandbox", requiredWhenValue: { NYC_CHARTER_HOSTING: 'sandbox' }, onlyWhen: { executor: 'vercel-sandbox' } },
+  { name: 'VERCEL_ENV', tier: 'optional', purpose: "Set by the hosting platform (production, preview or development) — a hosted source's sandbox is named per environment, so two environments holding different SOURCE_BRIDGE_SECRET values never share one; unset off the platform, the name says local", hasFallback: true, onlyWhen: { executor: 'vercel-sandbox' } },
 
   // --- Instance identity (ADR-0020: config-not-code; #258: REQUIRED for
   //     signing, never defaulted; see docs/instance-setup.md and
@@ -891,6 +920,15 @@ function customizedFromDefault(condition, env) {
  * (this script is `.mjs` and cannot import TypeScript), and held to the app's
  * by `scripts/portal-lock-config.test.mjs`. Only the boolean leaves.
  */
+/**
+ * True when any variable named in a `requiredWhenValue` condition holds the
+ * value beside it, trimmed (the app's reader trims). The value is compared and
+ * discarded: only the boolean leaves this function.
+ */
+function valueIs(condition, env) {
+  return Object.entries(condition).some(([name, value]) => typeof env[name] === 'string' && env[name].trim() === value);
+}
+
 export function flagOn(raw) {
   if (typeof raw !== 'string') return false;
   const v = raw.trim().toLowerCase();
@@ -1022,6 +1060,7 @@ export function resolveSpec(drivers, spec = ENV_SPEC, env = {}) {
       (s.requiredWhen && conditionMet(s.requiredWhen, drivers)) ||
       (s.requiredWhenCustomized && customizedFromDefault(s.requiredWhenCustomized, env)) ||
       (s.requiredWhenFlagOn && flagOn(env[s.requiredWhenFlagOn])) ||
+      (s.requiredWhenValue && valueIs(s.requiredWhenValue, env)) ||
       (s.requiredWhenPartnerPresent &&
         conditionMet(s.requiredWhenPartnerPresent.when, drivers) &&
         isPresent(env[s.requiredWhenPartnerPresent.partner]));
@@ -1098,6 +1137,12 @@ export function evaluateEnv(env, spec = ENV_SPEC) {
   // by `ok` below, because "locally usable" is a stronger claim than
   // "runnable" and this script's PASS/FAIL has only ever answered the latter.
   const querySurfaces = evaluateQuerySurfaces(env, rows);
+  // A present variable outside its `allowedValues` (#617 P3): the app treats
+  // any value but the allowed one as off, so an operator who wrote `on` or
+  // `true` would get no source and no word why. Named, never echoed.
+  const valueErrors = applicable
+    .filter((s) => s.allowedValues && isPresent(env[s.name]) && !s.allowedValues.includes(env[s.name].trim()))
+    .map((s) => ({ name: s.name, allowed: [...s.allowedValues] }));
 
   return {
     rows,
@@ -1115,7 +1160,8 @@ export function evaluateEnv(env, spec = ENV_SPEC) {
     profile: { drivers, isDefault },
     notApplicable: notApplicable.map((s) => s.name),
     driverErrors,
-    ok: missingRequired.length === 0 && driverErrors.length === 0,
+    valueErrors,
+    ok: missingRequired.length === 0 && driverErrors.length === 0 && valueErrors.length === 0,
   };
 }
 
@@ -1167,7 +1213,17 @@ export function renderReport(result) {
     lines.push(`  RESULT: FAIL — ${result.missingRequired.length} required variable(s) missing:`);
     for (const r of result.missingRequired) lines.push(`            - ${r.name}`);
   } else {
-    lines.push('  RESULT: FAIL — unrecognized driver selection.');
+    lines.push(result.driverErrors && result.driverErrors.length > 0
+      ? '  RESULT: FAIL — unrecognized driver selection.'
+      : '  RESULT: FAIL — a variable is set to a value it does not take.');
+  }
+  // A switch set outside its closed set (#617 P3). Named with the set, never
+  // echoed.
+  if (result.valueErrors && result.valueErrors.length > 0) {
+    lines.push(`  ERROR: ${result.valueErrors.length} variable(s) set to an unrecognized value:`);
+    for (const { name, allowed } of result.valueErrors) {
+      lines.push(`            - ${name} (expected unset, or one of: ${allowed.join(', ')})`);
+    }
   }
   // Selector set to a value outside its closed set: the app throws on it at
   // first use, so preflight must not pass. Named, never echoed.

@@ -25,6 +25,7 @@ import {
   BOSTON_OPENCONTEXT_TOOL_NAMES,
   CIVIC_MANIFEST,
   civicRouter,
+  configuredSources,
   DATA_COMMONS_TOOL_NAMES,
   exposedToolName,
   readMcpEnv,
@@ -32,6 +33,7 @@ import {
   SOCRATA_TOOL_NAMES,
   type DispatchMap,
   type McpRegistryEnv,
+  type SourceHosting,
 } from '@typedstandards/civic-typed-router';
 import { AmbiguousToolNameError } from './tool-name-refusal.ts';
 
@@ -57,8 +59,43 @@ export interface McpServerConfig {
   serverId: string;
 }
 
+/**
+ * A source this instance RUNS rather than calls at a configured address: a
+ * publisher-bundled stdio server from the manifest entry's `hosting` field,
+ * offered while its switch is on (`configuredSources`). It has no address
+ * here, because it has none until a call wakes its sandbox: the address is
+ * resolved per call (`./hosting/address.ts`), never configured and never
+ * cached on this object.
+ *
+ * Held in its own map, `McpRegistry.hosted`, beside `servers` (#617 G0, seam
+ * c1): every reader of `servers` — the client's era bookkeeping, the
+ * instructions fetch, the prompt fetch, the record's server list — keeps
+ * reading configured addresses only, and none of them can wake a hosted
+ * source by being asked about it.
+ */
+export interface HostedMcpServer {
+  sourceId: string;
+  label: string;
+  /** Tool names the source hosts: its own, upstream, names. */
+  tools: string[];
+  alias: string;
+  /** The manifest entry's `id`, as for an addressed server. */
+  serverId: string;
+  /** The pinned package the host runs, from the manifest entry. */
+  hosting: SourceHosting;
+}
+
+/** Whether a routed server is hosted (resolved per call) rather than addressed. */
+export function isHostedServer(server: McpServerConfig | HostedMcpServer): server is HostedMcpServer {
+  return Object.hasOwn(server, 'hosting');
+}
+
 export interface McpRegistry {
   servers: Record<string, McpServerConfig>;
+  /** Sources this instance runs itself, offered by their switch and keyed by
+   *  source id; see `HostedMcpServer`. Never read by anything that reads
+   *  `servers`. */
+  hosted: Record<string, HostedMcpServer>;
   /** Exposed name (`socrata__get_data`) to the source id that hosts it. */
   toolIndex: Record<string, string>;
   /**
@@ -167,7 +204,7 @@ function normalizeMcpEndpoint(url: string): string {
  * through (`registry-duplicate-tool-name.test.ts`).
  */
 export function buildToolIndex(
-  servers: Record<string, McpServerConfig>,
+  servers: Record<string, Pick<McpServerConfig, 'tools' | 'alias'>>,
 ): Record<string, string> {
   const toolIndex: Record<string, string> = {};
   for (const [sourceId, server] of Object.entries(servers)) {
@@ -232,7 +269,26 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
       : {}),
   };
 
-  const toolIndex = buildToolIndex(servers);
+  // Sources the instance runs itself, offered by their switch rather than an
+  // address (router 0.3.0 `configuredSources`; #617 P3). Absent while the
+  // switch is unset, so with every switch unset this registry is the one the
+  // previous router built, key for key, and its tools are refused per call
+  // below, naming the switch.
+  const switchedOn = configuredSources(env);
+  const hosted: Record<string, HostedMcpServer> = {};
+  for (const entry of CIVIC_MANIFEST) {
+    if (!entry.hosting || switchedOn[entry.sourceId] === undefined) continue;
+    hosted[entry.sourceId] = {
+      sourceId: entry.sourceId,
+      label: entry.displayName,
+      tools: [...entry.toolNames],
+      alias: entry.alias,
+      serverId: entry.id,
+      hosting: entry.hosting,
+    };
+  }
+
+  const toolIndex = buildToolIndex({ ...servers, ...hosted });
 
   const unconfiguredTools: Record<string, string> = {};
   if (!env.socrataUrl) {
@@ -242,13 +298,13 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
     }
   }
   for (const [sourceId, { variable, alias, tools }] of Object.entries(OPTIONAL_SOURCES)) {
-    if (servers[sourceId]) continue;
+    if (servers[sourceId] || hosted[sourceId]) continue;
     for (const tool of tools) {
       unconfiguredTools[exposedToolName(alias, tool)] = variable;
     }
   }
 
-  return { servers, toolIndex, unconfiguredTools, offeredSources: civicRouter.offeredSkillSources(env) };
+  return { servers, hosted, toolIndex, unconfiguredTools, offeredSources: civicRouter.offeredSkillSources(env) };
 }
 
 /**
@@ -335,7 +391,9 @@ export function configuredMcpServers(configured: McpRegistryEnv): ConfiguredMcpS
 
 /** Where one called tool name goes: the server, and the names the call has. */
 export interface RoutedToolCall {
-  server: McpServerConfig;
+  /** An addressed server, or a hosted one whose address the caller resolves
+   *  for this call (`isHostedServer`). */
+  server: McpServerConfig | HostedMcpServer;
   /** The name the model is offered: `<alias>__<tool>`. */
   exposedName: string;
   /** The server's own name for the tool, sent on the wire. */
@@ -371,7 +429,7 @@ function resolveToolCall(registry: McpRegistry, toolName: string, map: DispatchM
     const sourceId = Object.hasOwn(registry.toolIndex, resolution.exposedName)
       ? registry.toolIndex[resolution.exposedName]
       : undefined;
-    const server = sourceId === undefined ? undefined : registry.servers[sourceId];
+    const server = sourceId === undefined ? undefined : registry.servers[sourceId] ?? registry.hosted[sourceId];
     if (server) {
       return {
         ok: true,
@@ -436,7 +494,7 @@ export function resolveServerForTool(
   registry: McpRegistry,
   toolName: string,
   map: DispatchMap = civicRouter.dispatchMap,
-): McpServerConfig | undefined {
+): McpServerConfig | HostedMcpServer | undefined {
   const resolved = resolveToolCall(registry, toolName, map);
   return resolved.ok ? resolved.call.server : undefined;
 }
@@ -478,7 +536,7 @@ function presentOrUndefined(raw: string | undefined): string | undefined {
  * infrastructure, so it keeps its coded default.
  */
 export function readMcpEnvFromProcess(): McpRegistryEnv {
-  // The package's reader over exactly these four variables, each read by name
+  // The package's reader over exactly these five variables, each read by name
   // here so the environment this module reads stays visible
   // (`scripts/env-reads-declared.test.mjs`); `process.env` is never handed over
   // whole.
@@ -487,6 +545,9 @@ export function readMcpEnvFromProcess(): McpRegistryEnv {
     DATA_COMMONS_MCP_URL: process.env.DATA_COMMONS_MCP_URL,
     DATA_COMMONS_API_KEY: process.env.DATA_COMMONS_API_KEY,
     BOSTON_OPENCONTEXT_MCP_URL: process.env.BOSTON_OPENCONTEXT_MCP_URL,
+    // The switch that offers the hosted NYC Charter source (#617 D7): only
+    // `sandbox` turns it on; it names no address.
+    NYC_CHARTER_HOSTING: process.env.NYC_CHARTER_HOSTING,
   });
 }
 

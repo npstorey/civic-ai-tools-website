@@ -16,6 +16,7 @@ import {
   resolveServerForTool,
   readMcpEnvFromProcess,
   skillRoutingTraceAttributes,
+  type McpServerConfig,
 } from './registry.ts';
 import { buildMcpRequestHeaders } from './client.ts';
 import { civicRouter } from '@typedstandards/civic-typed-router';
@@ -30,7 +31,8 @@ const TEST_ENV = {
 test('Socrata tool names route to the Socrata endpoint', () => {
   const registry = buildMcpRegistry(TEST_ENV);
   for (const toolName of ['get_data', 'search', 'fetch']) {
-    const server = resolveServerForTool(registry, toolName);
+    // An addressed server: these sources are configured with an address.
+    const server = resolveServerForTool(registry, toolName) as McpServerConfig | undefined;
     assert.ok(server, `expected server for tool "${toolName}"`);
     assert.equal(server!.sourceId, 'socrata');
     assert.equal(server!.endpointUrl, 'https://socrata-mcp.example.org/mcp');
@@ -41,7 +43,8 @@ test('Socrata tool names route to the Socrata endpoint', () => {
 test('Data Commons tool names route to the Data Commons endpoint with X-API-Key', () => {
   const registry = buildMcpRegistry(TEST_ENV);
   for (const toolName of ['search_indicators', 'get_observations']) {
-    const server = resolveServerForTool(registry, toolName);
+    // An addressed server: these sources are configured with an address.
+    const server = resolveServerForTool(registry, toolName) as McpServerConfig | undefined;
     assert.ok(server, `expected server for tool "${toolName}"`);
     assert.equal(server!.sourceId, 'data-commons');
     assert.equal(server!.endpointUrl, 'https://api.datacommons.org/mcp');
@@ -60,7 +63,8 @@ test('Boston OpenContext tool names route to the OpenContext endpoint with no au
     'ckan__aggregate_data',
   ];
   for (const toolName of expected) {
-    const server = resolveServerForTool(registry, toolName);
+    // An addressed server: these sources are configured with an address.
+    const server = resolveServerForTool(registry, toolName) as McpServerConfig | undefined;
     assert.ok(server, `expected server for tool "${toolName}"`);
     assert.equal(server!.sourceId, 'boston-opencontext');
     assert.equal(server!.endpointUrl, 'https://data-mcp.boston.example.org/mcp');
@@ -169,8 +173,14 @@ test('#258 C4: with no socrataUrl the registry omits the Socrata server and name
   // The other sources are unaffected.
   assert.equal(resolveServerForTool(registry, 'search_indicators')!.sourceId, 'data-commons');
   assert.equal(resolveServerForTool(registry, 'ckan__query_data')!.sourceId, 'boston-opencontext');
-  // A configured registry has nothing unconfigured.
-  assert.deepEqual(buildMcpRegistry(TEST_ENV).unconfiguredTools, {});
+  // A registry with every source on has nothing unconfigured. With the hosted
+  // source's switch unset (router 0.3.0, #617 P3), its five tools are refused
+  // naming the switch, and nothing else is.
+  assert.deepEqual(buildMcpRegistry({ ...TEST_ENV, nycCharterHosting: 'sandbox' }).unconfiguredTools, {});
+  assert.deepEqual(
+    buildMcpRegistry(TEST_ENV).unconfiguredTools,
+    Object.fromEntries(civicRouter.manifest.find((e) => e.sourceId === 'nyc-charter')!.toolNames.map((t) => [`nyc_charter__${t}`, 'NYC_CHARTER_HOSTING'])),
+  );
 });
 
 test('#258 C4: getMissingMcpRoutingError refuses on unset/empty and passes on a configured value', () => {

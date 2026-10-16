@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { deriveOperationType, sourceIdForToolName, upstreamToolName } from './operation-types.ts';
 import { mcpTools } from './tools.ts';
+import { routedSourceId, type McpRegistryEnv } from './registry.ts';
 
 test('Data Commons: search_indicators maps to "search"', () => {
   assert.equal(deriveOperationType('search_indicators', { query: 'median income' }), 'search');
@@ -140,7 +141,28 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
   // A tenth tool added to `mcpTools` without a decision here fails this.
   const UNTYPED_BY_MEASUREMENT: Record<string, string> = {
     fetch: 'returns metadata or one row depending on the id shape — see operation-types.ts',
+    // Router 0.3.0's NYC Charter tools (#617 P3). This records the state at
+    // P3, not a decision: TOOL_OPERATION_TYPES has no row for them yet, so
+    // they derive no operation type and a record states `unknown`, the honest
+    // absence `fetch` takes. #617 G0 §5 found no existing kind true of
+    // `get_section` ("query" would add section text to "records analyzed");
+    // P4 measures each of the four against the kinds and replaces these
+    // entries with its decision. Charter's `search` is not listed: it derives
+    // `search` from Socrata's row.
+    get_section: 'no row yet (#617 P3); P4 measures it against the kinds (#617 G0 §5)',
+    list_titles: 'no row yet (#617 P3); P4 measures it against the kinds (#617 G0 §5)',
+    get_title: 'no row yet (#617 P3); P4 measures it against the kinds (#617 G0 §5)',
+    get_version: 'no row yet (#617 P3); P4 measures it against the kinds (#617 G0 §5)',
   };
+
+  // Every source on, so dispatch can be asked about every exposed name.
+  const ALL_ON: McpRegistryEnv = {
+    socrataUrl: 'https://socrata.invalid',
+    dataCommonsUrl: 'https://data-commons.invalid/mcp',
+    bostonOpencontextUrl: 'https://opencontext.invalid/mcp',
+    nycCharterHosting: 'sandbox',
+  };
+  const exposedNames = mcpTools.flatMap((t) => (t.type === 'function' ? [t.function.name] : []));
 
   for (const tool of mcpTools) {
     if (tool.type !== 'function') continue;
@@ -150,7 +172,21 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
     const exposed = tool.function.name;
     const name = upstreamToolName(exposed);
     assert.notEqual(name, exposed, `mcpTools offers "${exposed}" under no alias`);
-    assert.equal(sourceIdForToolName(exposed), sourceIdForToolName(name), `"${exposed}" and "${name}" resolve to different sources`);
+    assert.ok(sourceIdForToolName(exposed), `"${exposed}" resolves to no source`);
+    // Dispatch attributes the exposed name to its own source (the record's
+    // `mcp.source`, through `routedSourceId`).
+    assert.equal(routedSourceId(exposed, ALL_ON), sourceIdForToolName(exposed), `dispatch and the index disagree on "${exposed}"`);
+    const sharers = exposedNames.filter((other) => upstreamToolName(other) === name);
+    if (sharers.length === 1) {
+      assert.equal(sourceIdForToolName(exposed), sourceIdForToolName(name), `"${exposed}" and "${name}" resolve to different sources`);
+    } else {
+      // A bare name two sources share (#617 correction q): the index keeps it
+      // on the first source in manifest order, whatever is configured, and
+      // dispatch refuses the bare spelling while both are offered, so no call
+      // is ever attributed by the bare index alone.
+      assert.equal(sourceIdForToolName(name), sourceIdForToolName(sharers[0]), `the index moved "${name}" off its first source`);
+      assert.equal(routedSourceId(name, ALL_ON), undefined, `dispatch attributed the shared bare "${name}" to one source while both are offered`);
+    }
 
     assert.ok(
       sourceIdForToolName(name),
@@ -168,6 +204,12 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
         'be a decision, not an accident.',
     );
   }
+
+  // The shared bare name this guard was restated for, by name: Socrata keeps
+  // `search` in the index, and Charter's search is Charter's through dispatch.
+  assert.equal(sourceIdForToolName('search'), 'socrata');
+  assert.equal(routedSourceId('nyc_charter__search', ALL_ON), 'nyc-charter');
+  assert.equal(routedSourceId('search', { ...ALL_ON, nycCharterHosting: undefined }), 'socrata', 'with Charter unset a bare search is no longer Socrata\'s');
 
   for (const name of Object.keys(UNTYPED_BY_MEASUREMENT)) {
     assert.equal(

@@ -205,7 +205,7 @@ const MODEL_ORIGIN = `http://127.0.0.1:${(model.address() as AddressInfo).port}`
 
 for (const name of [
   'DATA_COMMONS_API_KEY', 'SITE_PORTAL_LOCKED', 'SITE_DEFAULT_PORTAL', 'MODEL_API_KEY', 'OPENAI_API_KEY',
-  'MODEL_API_KIND', 'MODEL_API_AUTH', 'KV_REST_API_URL', 'KV_REST_API_TOKEN', 'EXECUTOR_DRIVER',
+  'MODEL_API_KIND', 'MODEL_API_AUTH', 'KV_REST_API_URL', 'KV_REST_API_TOKEN', 'EXECUTOR_DRIVER', 'NYC_CHARTER_HOSTING',
 ]) {
   delete process.env[name];
 }
@@ -350,6 +350,10 @@ for (const d of [COMPARE_STREAM, NOTEBOOK]) {
       { sourceId: 'socrata', alias: 'socrata', reason: 'configured' },
       { sourceId: 'data-commons', alias: 'data_commons', reason: 'configured' },
       { sourceId: 'boston-opencontext', alias: 'boston', reason: 'configured' },
+      // Router 0.3.0's hosted source, with NYC_CHARTER_HOSTING unset: the row
+      // the anchor names for the pin (#617 P3). No component and no server
+      // entry come with it.
+      { sourceId: 'nyc-charter', alias: 'nyc_charter', reason: 'not-configured' },
     ]);
   });
 

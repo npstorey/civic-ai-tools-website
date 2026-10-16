@@ -69,24 +69,41 @@ const ELEVEN: ReadonlyArray<readonly [upstream: string, exposed: string, sourceI
   ['ckan__execute_sql', 'boston__ckan__execute_sql', 'boston-opencontext'],
 ];
 
+/** Router 0.3.0's hosted source (#617 P3): its five tools join the vocabulary
+ *  (replay's tools) and, while NYC_CHARTER_HOSTING is unset, the withheld list.
+ *  These are the moves the anchor names for the pin; the eleven above are
+ *  unchanged. */
+const CHARTER_FIVE: readonly string[] = [
+  'nyc_charter__search',
+  'nyc_charter__get_section',
+  'nyc_charter__list_titles',
+  'nyc_charter__get_title',
+  'nyc_charter__get_version',
+];
+
 const FULL: McpRegistryEnv = {
   socrataUrl: 'https://socrata.invalid',
   dataCommonsUrl: 'https://data-commons.invalid/mcp',
   bostonOpencontextUrl: 'https://opencontext.invalid/mcp',
 };
 const NO_BOSTON: McpRegistryEnv = { socrataUrl: FULL.socrataUrl, dataCommonsUrl: FULL.dataCommonsUrl };
+/** Every optional source on, the hosted one included. */
+const ALL_ON: McpRegistryEnv = { ...FULL, nycCharterHosting: 'sandbox' };
 
 const names = (tools: typeof mcpTools) => tools.map((t) => (t.type === 'function' ? t.function.name : t.type));
 
 // --- 1. The aliased view ---------------------------------------------------------
 
 test('the tools array names every tool <alias>__<upstream>, and is the router\'s own aliased array', () => {
-  assert.deepEqual(new Set(names(mcpTools)), new Set(ELEVEN.map(([, exposed]) => exposed)));
-  assert.equal(names(mcpTools).length, 11);
+  // The vocabulary: the eleven, in their order, then Charter's five at the end
+  // (the router 0.3.0 move, #617 P3).
+  assert.deepEqual(names(mcpTools).slice(0, 11).sort(), ELEVEN.map(([, exposed]) => exposed).sort());
+  assert.deepEqual(names(mcpTools).slice(11), [...CHARTER_FIVE]);
+  assert.equal(names(mcpTools).length, 16);
   assert.equal(JSON.stringify(mcpTools), JSON.stringify(civicRouter.aliasedMcpTools));
   for (const lock of [undefined, 'data.cityofnewyork.us']) {
     assert.equal(JSON.stringify(mcpToolsFor(lock)), JSON.stringify(civicRouter.aliasedMcpToolsFor(lock)), `lock ${lock}`);
-    for (const env of [FULL, NO_BOSTON]) {
+    for (const env of [FULL, NO_BOSTON, ALL_ON]) {
       assert.equal(
         JSON.stringify(offeredMcpTools(mcpToolsFor(lock), env)),
         JSON.stringify(civicRouter.aliasedOfferedMcpTools(civicRouter.aliasedMcpToolsFor(lock), env)),
@@ -105,10 +122,14 @@ test('the aliased tools array is reversible: un-aliased, it is the bare array by
 });
 
 test('the withheld tools are named as the model would have been offered them', () => {
-  assert.deepEqual(withheldToolNames(FULL), []);
+  // The named move (#617 P3): with NYC_CHARTER_HOSTING unset, Charter's five
+  // are withheld whatever else is configured; with every optional source on,
+  // nothing is.
+  assert.deepEqual(withheldToolNames(ALL_ON), []);
+  assert.deepEqual(withheldToolNames(FULL), [...CHARTER_FIVE]);
   assert.deepEqual(
     new Set(withheldToolNames(NO_BOSTON)),
-    new Set(ELEVEN.filter(([, , source]) => source === 'boston-opencontext').map(([, exposed]) => exposed)),
+    new Set([...ELEVEN.filter(([, , source]) => source === 'boston-opencontext').map(([, exposed]) => exposed), ...CHARTER_FIVE]),
   );
 });
 
