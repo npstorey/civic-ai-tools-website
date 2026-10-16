@@ -214,6 +214,16 @@ export const CONTENT_HASH_SIGNALS: Record<ContentHashStatus, TrustSignalDescript
     detail:
       'The content fingerprint lists only hash algorithms this verifier cannot compute, so it could not be confirmed.',
   },
+  // verify-core 0.10.0: raw-bytes/v1 over a BlobRef output whose file could
+  // not be obtained, so its bytes were not hashed. Unconfirmed, not altered.
+  // This instance publishes no raw-bytes/v1 package; the status is mapped
+  // because the union carries it (the wording follows typedstandards.org's).
+  content_bytes_unavailable: {
+    tier: 'attention',
+    label: 'Content file not checked',
+    detail:
+      'The file this package fingerprints could not be obtained, so its bytes were not hashed and the content fingerprint was not checked.',
+  },
 };
 
 // --- #5 Trust-registry verdict (keyTrust) --------------------------------
@@ -262,6 +272,15 @@ export const KEY_TRUST_SIGNALS: Record<KeyTrustStatus, TrustSignalDescriptor> = 
     label: 'Signed with an embedded key (not in the trust registry)',
     detail:
       'The signature uses an embedded public key that is not listed in our published trust registry, so the registry cannot vouch for it.',
+  },
+  // verify-core 0.10.0 (hub ADR-0030): a pseudonymous signer whose identifier
+  // is derived from its signing key. Calm, never `verified`: the identifier
+  // proves the same key signed, not who holds it.
+  self_certified: {
+    tier: 'normal',
+    label: 'Signed with a self-certifying key',
+    detail:
+      "The signer's identifier is derived from the signing key, so it proves that the same key signed everything under this identifier, not who holds the key. No registry vouches for it.",
   },
 };
 
@@ -406,6 +425,14 @@ export const LIFECYCLE_STATE_SIGNALS: Record<LifecycleStatus, TrustSignalDescrip
     label: 'Withdrawn by the publisher',
     detail:
       'The publisher has withdrawn this package — a legitimate signed action. The reason is shown with the package.',
+  },
+  // verify-core 0.13.0: the same tier as `withdrawn` — a supersession is a
+  // legitimate signed action. This instance emits no supersession today.
+  superseded: {
+    tier: 'normal',
+    label: 'Superseded by the publisher',
+    detail:
+      'The publisher has replaced this package with a newer one and signed that replacement. This package’s own signature still verifies.',
   },
 };
 
@@ -561,6 +588,21 @@ export const SIGNER_IDENTITY_SIGNALS: Record<SignerIdentityCheckStatus, TrustSig
     tier: 'normal',
     label: 'Registry has no identity for this key',
     detail: 'The registry entry for this key predates identity binding, so the cross-check is skipped.',
+  },
+  // verify-core 0.10.0 (hub ADR-0030): under a key-derived identifier `ok`
+  // ("matches the registry") is never reported; a derived match has its own
+  // row, and a mismatch is fatal.
+  key_derived_match: {
+    tier: 'normal',
+    label: 'Signer identifier matches the signing key',
+    detail:
+      'The identifier is derived from the key that signed this package. This shows the same key signed anything else under this identifier, and nothing about who holds it.',
+  },
+  key_derived_mismatch: {
+    tier: 'alarm',
+    label: 'Signer identifier does not match the signing key',
+    detail:
+      'The stated signer’s identifier is not the one derived from the key that signed this package — do not trust.',
   },
 };
 

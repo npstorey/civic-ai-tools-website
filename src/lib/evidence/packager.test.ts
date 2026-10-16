@@ -257,8 +257,14 @@ test('buildEvidencePackage: datHere content profile auto-emits org.civicaitools.
   assert.equal(envObj.modelVersion, 'openai/gpt-4o');
   assert.equal(envObj.host, 'civicaitools.org');
   assert.ok(Array.isArray(envObj.mcpServers));
-  assert.ok(Array.isArray(envObj.toolDefinitions));
-  assert.equal(typeof envObj.temperature, 'number');
+  // Harness 0.7.0 (ADR-0033 §C, hub #240): `temperature` and
+  // `toolDefinitions` are stated only when known. This input passes neither
+  // (no request sends a temperature, and this trace records no tools), so
+  // both keys are absent; until 0.7.0 the block stated `0` and `[]` as
+  // placeholders.
+  assert.equal(Object.hasOwn(envObj, 'temperature'), false, 'no temperature was sent, so none is stated');
+  assert.equal(Object.hasOwn(envObj, 'toolDefinitions'), false, 'no tools were recorded, so none are stated');
+  assert.deepEqual(Object.keys(envObj), ['modelVersion', 'mcpServers', 'host']);
 });
 
 test('buildEvidencePackage: chat-flow-stream WITHOUT contentProfile does NOT emit summary in canonical JSON (backwards-compat)', () => {
