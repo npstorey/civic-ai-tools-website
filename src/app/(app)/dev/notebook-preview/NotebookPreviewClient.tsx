@@ -38,19 +38,19 @@ const PHASE_DETAILS: Record<string, string | null> = {
 
 const FIXTURE_TOOL_CALLS = [
   {
-    name: 'get_data',
+    name: 'socrata__get_data',
     operationType: 'catalog',
     reason: 'search for "311 Brooklyn complaints"',
     resultSummary: { rows: 12, columns: 5 },
   },
   {
-    name: 'get_data',
+    name: 'socrata__get_data',
     operationType: 'metadata',
     reason: 'inspect erm2-nwe9 schema',
     resultSummary: { rows: 41, columns: 3 },
   },
   {
-    name: 'get_data',
+    name: 'socrata__get_data',
     operationType: 'query',
     reason: 'aggregate by complaint_type for the past 30 days',
     resultSummary: { rows: 5, columns: 2 },
