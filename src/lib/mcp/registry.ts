@@ -365,20 +365,40 @@ export function withheldToolNames(configured: McpRegistryEnv): string[] {
 
 /** One server this instance routes to, as a record names it. */
 export interface ConfiguredMcpServer {
-  /** The configured address, as configured. */
+  /** The configured address, as configured; for a hosted server, the purl of
+   *  the package it runs (`hostedServerPurl`). */
   url: string;
   /** The source id. */
   name: string;
 }
 
 /**
- * Every server in `buildMcpRegistry(env).servers`, in that insertion order,
- * each with its configured address and its source id. A server with no
- * address mapping throws rather than being dropped: a list that silently lost
- * a server would state, in signed bytes, that the run did not have it.
+ * The package URL (purl) a record states for a hosted server (#617 ruling a2):
+ * `pkg:npm/<scope>/<name>@<version>`, from the manifest entry's hosting field,
+ * never configured. Each segment of the package name is percent-encoded on its
+ * own, so the scope's `@` is `%40` and the `/` between scope and name stays a
+ * `/` (encoding the whole name would write `%2F`, which is not the purl):
+ * `pkg:npm/%40betanyc/nyc-charter-laws-rules@0.3.1`.
+ */
+export function hostedServerPurl(hosting: Pick<SourceHosting, 'package' | 'version'>): string {
+  return `pkg:npm/${hosting.package.split('/').map(encodeURIComponent).join('/')}@${encodeURIComponent(hosting.version)}`;
+}
+
+/**
+ * Every server a run on this instance can reach, as a record names it: each
+ * server in `buildMcpRegistry(env).servers`, in that insertion order, with its
+ * configured address; then each hosted server in `.hosted` (#617 P4, ruling
+ * a2), with the purl of the package it runs (`hostedServerPurl`). A hosted
+ * server has no configured address (its sandbox's address lives for one
+ * session) and no entry in `MCP_SOURCE_ADDRESS_FIELD`; it is stated by what
+ * it runs, so a Charter-on record lists Charter rather than omitting it (which,
+ * until P4, it did: the list read `servers` only). An addressed server with no
+ * address mapping still throws rather than being dropped: a list that silently
+ * lost a server would state, in signed bytes, that the run did not have it.
  */
 export function configuredMcpServers(configured: McpRegistryEnv): ConfiguredMcpServer[] {
-  return Object.keys(buildMcpRegistry(configured).servers).map((sourceId) => {
+  const registry = buildMcpRegistry(configured);
+  const addressed = Object.keys(registry.servers).map((sourceId) => {
     const url = configuredAddressForSource(configured, sourceId);
     if (url === undefined) {
       throw new Error(
@@ -387,6 +407,8 @@ export function configuredMcpServers(configured: McpRegistryEnv): ConfiguredMcpS
     }
     return { url, name: sourceId };
   });
+  const hosted = Object.values(registry.hosted).map((server) => ({ url: hostedServerPurl(server.hosting), name: server.sourceId }));
+  return [...addressed, ...hosted];
 }
 
 /** Where one called tool name goes: the server, and the names the call has. */

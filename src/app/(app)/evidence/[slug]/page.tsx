@@ -640,7 +640,7 @@ export default async function EvidencePage({ params }: PageProps) {
                     const env = getEnvironmentExtension(renderPkg);
                     const envMcpHosts = env?.mcpServers
                       ?.map((s) => {
-                        try { return new URL(s.url).host; } catch { return s.url; }
+                        try { return new URL(s.url).host || s.url; } catch { return s.url; }
                       })
                       .join(', ');
                     const cost = estimateCostUsd(

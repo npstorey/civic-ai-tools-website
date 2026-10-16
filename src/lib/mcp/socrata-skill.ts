@@ -73,6 +73,7 @@ import {
   type CivicGuidanceContext,
   type SourceId,
   type SourceOffered,
+  type SourceHosting,
   type SourceSelection,
 } from '@typedstandards/civic-typed-router';
 import { callMcpPrompt, getServerInstructions } from './client.ts';
@@ -323,14 +324,27 @@ export interface CompositionComponent {
    *  carries), or, for the composing package, its package name. */
   id: string;
   /** What this instance knows of the component's version: the composing
-   *  package's, as installed. Omitted for a source: the client does not read
-   *  a server's `serverInfo`. */
+   *  package's, as installed; for a hosted source, the version it pins
+   *  (`hostedComponentVersion`). Omitted for an addressed source: the client
+   *  does not read a server's `serverInfo`. */
   version?: string;
   /** Lowercase hex SHA-256 of the component's block as composed into the
    *  prompt. Omitted when the component contributed no block. */
   guidanceHash?: string;
   /** Present exactly when `guidanceHash` is. */
   guidanceOrigin?: GuidanceOrigin;
+}
+
+/**
+ * The version a record states for a hosted source's component (#617 P4, C4;
+ * ADR-0033 §E: one string, "a server's reported version, or a pinned
+ * commit"): the pinned package version, `+`, and the first 12 hex digits of
+ * the commit the registry states for it, in semver build-metadata form —
+ * `0.3.1+b784cb763ec0`. Read from the manifest's hosting field, never from the
+ * running server, so it moves only with the pin.
+ */
+export function hostedComponentVersion(hosting: Pick<SourceHosting, 'version' | 'commit'>): string {
+  return `${hosting.version}+${hosting.commit.slice(0, 12)}`;
 }
 
 /** A composed prompt and what a record states about its composition. */
@@ -465,6 +479,7 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput = {}):
     const contributed = !unserved && block.trim().length > 0 && prompt.includes(block);
     components.push({
       id: entry.id,
+      ...(entry.hosting ? { version: hostedComponentVersion(entry.hosting) } : {}),
       ...(contributed ? { guidanceHash: sha256Hex(block), guidanceOrigin: originOf(seen) } : {}),
     });
   }
