@@ -7,8 +7,9 @@
  * `Sandbox.getOrCreate({ resume: true, … })`, under a deadline of its own:
  *   - absent: it is created (1 vCPU, one exposed port, the idle window as its
  *     timeout, the bridge token in its environment), and `onCreate` installs
- *     the pinned package and the bridge while the package registry is the only
- *     host it may reach, applies the manifest's outbound list (`[]`: none, so
+ *     the pinned package and the bridge with `npm ci` from committed lockfiles
+ *     (so every sandbox of one pin runs one tree) while the package registry
+ *     is the only host it may reach, applies the manifest's outbound list (`[]`: none, so
  *     `deny-all`), starts the bridge and waits for its ready line;
  *   - stopped: the platform resumes it from its automatic snapshot, and
  *     `onResume` starts the bridge and waits for its ready line;
@@ -52,6 +53,8 @@ import { proxyAwareSandboxFetch, resolveSandboxAuthParams } from '../../sandbox/
 import { errorLogFacts } from '../../streaming.ts';
 import { BRIDGE_PACKAGE_JSON, BRIDGE_READY_LINE, BRIDGE_SOURCE, bridgeConfig } from './bridge-source.ts';
 import { bridgeToken } from './token.ts';
+import { pinLockfileKey, pinPackageJson, type NpmLockfile } from './install-manifests.ts';
+import { BRIDGE_LOCKFILE, PIN_LOCKFILES } from './lockfiles.generated.ts';
 
 /** The prefix of every hosted source's sandbox name. */
 export const HOSTED_SANDBOX_NAME_PREFIX = 'civic-src-';
@@ -199,21 +202,61 @@ export interface HostedInstallDir {
   npmArgs: string[];
 }
 
-/** What `onCreate` writes and runs to install a source's pin and the bridge,
- *  one entry per directory, in the order they are installed. */
+/**
+ * The install command, in both directories: `npm ci` installs exactly the
+ * lockfile written beside the `package.json`, or fails when the two disagree,
+ * so every sandbox of one pin runs the same tree (#617 P4, criterion L).
+ * `--ignore-scripts`: no package's install script runs.
+ */
+export const HOSTED_NPM_ARGS: readonly string[] = ['ci', '--ignore-scripts', '--no-audit', '--no-fund'];
+
+/** A lockfile as `npm ci` reads it. */
+function lockfileText(lock: NpmLockfile): string {
+  return `${JSON.stringify(lock, null, 2)}\n`;
+}
+
+/**
+ * What `onCreate` writes and runs to install a source's pin and the bridge,
+ * one entry per directory, in the order they are installed: each gets its
+ * `package.json` and the committed lockfile for it (`lockfiles.generated.ts`,
+ * from `scripts/generate-hosted-lockfiles.ts`). A pin with no committed
+ * lockfile throws: the instance never falls back to resolving a tree.
+ */
 export function hostedInstallPlan(hosting: SourceHosting): HostedInstallDir[] {
-  const pinPackageJson = JSON.stringify({ name: 'civic-source-pin', private: true, dependencies: { [hosting.package]: hosting.version } }, null, 2);
-  const npmArgs = ['install', '--ignore-scripts', '--no-audit', '--no-fund'];
+  const pinLock = PIN_LOCKFILES[pinLockfileKey(hosting)];
+  if (!pinLock) {
+    throw new Error(`no committed lockfile for ${pinLockfileKey(hosting)}: run scripts/generate-hosted-lockfiles.ts`);
+  }
+  const npmArgs = [...HOSTED_NPM_ARGS];
   return [
-    { dir: PIN_DIR, files: [{ path: `${PIN_DIR}/package.json`, content: pinPackageJson }], npmArgs },
-    { dir: BRIDGE_DIR, files: [{ path: `${BRIDGE_DIR}/package.json`, content: BRIDGE_PACKAGE_JSON }], npmArgs },
+    {
+      dir: PIN_DIR,
+      files: [
+        { path: `${PIN_DIR}/package.json`, content: pinPackageJson(hosting) },
+        { path: `${PIN_DIR}/package-lock.json`, content: lockfileText(pinLock) },
+      ],
+      npmArgs,
+    },
+    {
+      dir: BRIDGE_DIR,
+      files: [
+        { path: `${BRIDGE_DIR}/package.json`, content: BRIDGE_PACKAGE_JSON },
+        { path: `${BRIDGE_DIR}/package-lock.json`, content: lockfileText(BRIDGE_LOCKFILE) },
+      ],
+      npmArgs,
+    },
   ];
 }
 
 /** `onCreate`: install the pin and the bridge, close the network, start the bridge. */
 async function installAndStart(sandbox: Handle, source: HostedMcpServer, ms: number): Promise<void> {
   const { hosting } = source;
-  const plan = hostedInstallPlan(hosting);
+  let plan: HostedInstallDir[];
+  try {
+    plan = hostedInstallPlan(hosting);
+  } catch {
+    throw new WakeStepError(`no committed lockfile for ${pinLockfileKey(hosting)}`);
+  }
   await run(sandbox, 'mkdir', ['-p', PIN_DIR, BRIDGE_DIR], '/');
   await sandbox.writeFiles([
     ...plan.flatMap((step) => step.files),

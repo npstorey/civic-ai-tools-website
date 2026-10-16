@@ -1123,9 +1123,34 @@ as unavailable. Set the preview secret once for all preview branches.
 Otherwise, delete the preview sandbox by its name before a branch with a
 different secret is tried.
 
-**A pin move** changes the name, so the next call creates a new sandbox. The
-old one is deleted by the pin move's owner step, or left to expire, about 44
-days after its last use (its snapshot expires 30 days after last use).
+**The installed tree is closed.** The sandbox installs the pin and the bridge
+with `npm ci --ignore-scripts`, from two lockfiles committed in
+`src/lib/mcp/hosting/lockfiles.generated.ts` (one for the pinned package, one
+for the bridge's two packages). `npm ci` installs exactly the lockfile's tree,
+or fails, so every sandbox of one pin runs the same code down to its last
+dependency, and no package's install script runs. The lockfiles are a module,
+bundled into the deployment, not files read at run time.
+`src/lib/mcp/hosting/lockfiles.test.ts` checks that each lockfile's root is
+exactly the pin (or `BRIDGE_PACKAGES`), that every entry carries an
+`integrity` and resolves from `registry.npmjs.org`, and that the tree is closed.
+
+**A pin move** (a router release that moves the hosting field's `version`, or
+a change to `BRIDGE_PACKAGES`):
+
+1. Re-generate the lockfiles and commit them with the move:
+
+   ```sh
+   node --experimental-strip-types scripts/generate-hosted-lockfiles.ts
+   ```
+
+   It resolves each `package.json` against the public registry with
+   `npm install --package-lock-only --ignore-scripts` in a temporary
+   directory and writes the module. It needs the network and no credential.
+   `npm test` fails until it has been run.
+2. The new version changes the sandbox's name, so the next call creates a new
+   sandbox. The old one is deleted by the pin move's owner step, or left to
+   expire, about 44 days after its last use (its snapshot expires 30 days
+   after last use).
 
 **Setting it up (preview first, then production):**
 
