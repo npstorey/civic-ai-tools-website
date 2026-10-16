@@ -89,9 +89,9 @@ const sdk = {
   calls: [] as SdkCall[],
   extendCalls: [] as number[],
   /** What the next `getOrCreate` does. */
-  next: async (_params: Record<string, unknown>): Promise<{ session: Session; wake: SdkCall['wake'] }> => {
+  next: (async () => {
     throw new Error('no session scripted');
-  },
+  }) as (params: Record<string, unknown>) => Promise<{ session: Session; wake: SdkCall['wake'] }>,
   /** A handle as the lifecycle uses it. Commands succeed; the bridge prints its ready line. */
   handle(session: Session) {
     return {
