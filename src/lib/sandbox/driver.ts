@@ -69,8 +69,9 @@ export const EXECUTOR_TOOLING_PACKAGES = {
  *   and as the snapshot-build script does;
  * - the parity fixture run through this driver on 1.10.2 and on 3.5.1 gave
  *   the same executed notebook once `scripts/executor-parity.mjs`'s masked
- *   fields were masked (`compare` exit 0); the execution extension differed
- *   only in `sandboxId` and `executionDuration_ms`.
+ *   fields were masked (`compare` exit 0); the execution extension built
+ *   from each run differed only in `sandboxId` and `executionDuration_ms`,
+ *   with `executedAt` (the route's clock, not the executor's) held fixed.
  * The next major is its own issue with its own measurement.
  */
 export const SANDBOX_SDK_MAJOR = 3;
