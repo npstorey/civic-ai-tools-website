@@ -201,8 +201,8 @@ export interface ExecuteNotebookOptions {
 export interface ExecutionResult {
   /** Executed notebook (with output cells embedded). */
   notebook: Notebook;
-  /** Executor instance id (sandbox id or container id); carried through into
-   *  the execution-metadata stamp. */
+  /** Executor instance id (sandbox name, container id or Lambda request id);
+   *  carried through into the execution-metadata stamp. */
   sandboxId: string;
   /** Wall-clock duration from session boot to readback (ms). */
   executionDuration_ms: number;

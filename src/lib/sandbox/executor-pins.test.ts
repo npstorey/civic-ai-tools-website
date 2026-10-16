@@ -195,6 +195,9 @@ test('the lambda target runs the handler as the image user, through the runtime 
   assert.match(lambda, /^CMD\s+\["handler\.handler"\]$/m);
 });
 
+// The floor is two assertions in two tests, so a move of the named major
+// that the lockfile has not followed reds BOTH — the installed copy and the
+// declared range — rather than stopping at the first (#491, sprint #617 P1).
 test('the sandbox SDK major is named in the pin table and matches what is installed', () => {
   const require_ = createRequire(import.meta.url);
   const installed = (require_('@vercel/sandbox/package.json') as { version: string }).version;
@@ -202,11 +205,13 @@ test('the sandbox SDK major is named in the pin table and matches what is instal
     Number(installed.split('.')[0]),
     SANDBOX_SDK_MAJOR,
     `the table names @vercel/sandbox major ${SANDBOX_SDK_MAJOR} but ${installed} is installed — a ` +
-      'floor test on the INSTALLED version is what keeps the named major honest. Card C6 requires ' +
-      'it named and NOT upgraded: 2.x removes the sandbox instance id that flows into the ' +
-      'execution-metadata stamp on published records, and 3.x moves the managed Python off the ' +
-      'pinned 3.13',
+      'floor test on the INSTALLED version is what keeps the named major honest. A major move is ' +
+      'measured before it is made: the instance id the driver stamps into the execution extension, ' +
+      'the persistence default, and the runtime option each changed across 1.x to 3.x (#491)',
   );
+});
+
+test('the sandbox SDK major is the major package.json declares', () => {
   const declared = (
     JSON.parse(repoFile('package.json')) as { dependencies: Record<string, string> }
   ).dependencies['@vercel/sandbox'];

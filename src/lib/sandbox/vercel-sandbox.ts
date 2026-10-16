@@ -36,6 +36,7 @@
  * one — see `proxyAwareSandboxFetch`. With none configured the SDK is called
  * exactly as before and no dispatcher is built.
  */
+import { randomBytes } from 'node:crypto';
 import { Sandbox } from '@vercel/sandbox';
 import type { Dispatcher } from 'undici';
 import {
@@ -111,8 +112,9 @@ export function resolveSandboxAuthParams(
 
 /**
  * The agent options the SDK's own API agent carries, kept on the proxied path.
- * `@vercel/sandbox` 1.10.2 builds `new Agent({ bodyTimeout: 0 })`
- * (`dist/api-client/base-client.js`): a command's output arrives as one
+ * `@vercel/sandbox` builds `new Agent({ bodyTimeout: 0 })`
+ * (`dist/api-client/base-client.js`, unchanged from 1.10.2 to 3.5.1): a
+ * command's output arrives as one
  * long-lived NDJSON response, and undici's default body timeout (300 s of
  * silence) would cut a quiet long-running command off mid-stream. A
  * replacement that dropped it would work in every short test and fail on the
@@ -176,17 +178,46 @@ export function proxyAwareSandboxFetch(
   return { fetch: proxiedFetch };
 }
 
+/**
+ * The prefix of every executor sandbox's name. It names the notebook executor,
+ * and keeps its one-use sandboxes apart from any other sandbox in the same
+ * project when a cleanup lists or deletes by name.
+ */
+export const EXECUTOR_SANDBOX_NAME_PREFIX = 'nbexec-';
+
+/**
+ * A new executor sandbox name: the prefix, then 128 random bits as 32
+ * lowercase hex digits (39 characters). The executor names each sandbox
+ * itself because, given no name, `@vercel/sandbox` 3.x generates one from
+ * English words, and the name is what a signed record carries in its
+ * execution extension's `sandboxId`. Measured on 3.5.1 (2026-10-16, #617
+ * P1): the API accepts names matching `^[a-zA-Z0-9_-]+$` of 1 to 128
+ * characters, and a stopped sandbox's name stays taken until the sandbox is
+ * deleted, so a repeated name would be a refused create, never a reused
+ * sandbox.
+ */
+export function executorSandboxName(): string {
+  return `${EXECUTOR_SANDBOX_NAME_PREFIX}${randomBytes(16).toString('hex')}`;
+}
+
 function createSandbox(
   snapshotId: string | undefined,
   base: SandboxCreateBase,
 ): Promise<Sandbox> {
+  // ONE-USE, on every branch (#491). From 3.x a sandbox is persistent unless
+  // told otherwise: stopping it snapshots its filesystem so the next session
+  // resumes it. An executor sandbox holds one visitor's notebook and is never
+  // resumed, so a persistent one would keep that visitor's files and add a
+  // snapshot to the project's storage on every run.
+  const oneUse = { ...base, name: executorSandboxName(), persistent: false as const };
   const params = snapshotId
-    ? { ...base, source: { type: 'snapshot' as const, snapshotId } }
+    ? { ...oneUse, source: { type: 'snapshot' as const, snapshotId } }
     // No snapshot configured — boot a fresh python3.13 sandbox; the
     // orchestrator installs the pinned scientific stack inline. Slower
     // (~10-30s cold start) and intended only for the snapshot-build script +
-    // local-dev smoke tests.
-    : { ...base, runtime: 'python3.13' as const };
+    // local-dev smoke tests. `runtime` is deprecated in 3.x in favour of
+    // `image`, and still boots python3.13 there (measured 2026-10-16, #617 P1).
+    : { ...oneUse, runtime: 'python3.13' as const };
 
   // Attach the auth triple ONLY when complete. Two distinct call shapes
   // rather than a spread of possibly-undefined keys: an undefined-valued
@@ -197,9 +228,9 @@ function createSandbox(
   // The transport fragment follows the same rule: `{}` unless a proxy is
   // configured, so with the proxy variables unset neither shape gains a key.
   // Every later call — commands, files, stop — reuses the client `create`
-  // builds from this `fetch` (`@vercel/sandbox` 1.10.2 `dist/sandbox.js`
-  // `create` → `new APIClient({ fetch })`, handed to the sandbox and to each
-  // command), so one fragment here governs the whole session.
+  // builds from this `fetch` (`@vercel/sandbox` `dist/sandbox.js` `create` →
+  // `new APIClient({ fetch })`, handed to the sandbox and to each command, in
+  // 1.10.2 and in 3.5.1), so one fragment here governs the whole session.
   const auth = resolveSandboxAuthParams();
   const transport = proxyAwareSandboxFetch();
   return auth
@@ -218,7 +249,13 @@ export function createVercelSandboxDriver(): SessionExecutorDriver {
       });
 
       return {
-        id: sandbox.sandboxId,
+        // The instance id a record carries in its execution extension's
+        // `sandboxId`. 3.x has no `sandboxId`; a sandbox is identified by its
+        // `name`, which the executor sets per creation (`executorSandboxName`:
+        // `nbexec-` plus 32 lowercase hex digits) — one-use (above), so one
+        // name per run. The field stays a string; its value changed from an
+        // `sbx_…` id to an executor name with the 3.x move (#491).
+        id: sandbox.name,
         stackPreinstalled: Boolean(opts.snapshotId),
 
         async runCommand(command: ExecutorCommand): Promise<ExecutorCommandResult> {

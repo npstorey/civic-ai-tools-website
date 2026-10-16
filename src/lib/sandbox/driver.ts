@@ -57,14 +57,26 @@ export const EXECUTOR_TOOLING_PACKAGES = {
  * `src/lib/sandbox/executor-pins.test.ts` reads the installed package's own
  * version and fails when its major is not this one.
  *
- * NOT to be raised here as a bookkeeping edit: 2.x removes the sandbox
- * instance id that `./vercel-sandbox.ts` reads and stamps into the
- * execution metadata of published records, and 3.x deprecates the runtime
- * option and moves the managed Python off the pinned
- * PYTHON_RUNTIME_VERSION. Upgrading is its own issue with its own
- * record-shape measurement (Wave N12 / card C6).
+ * NOT to be raised here as a bookkeeping edit. Raised from 1 to 3 on
+ * 2026-10-16 (#491, sprint #617 P1), with the move measured on 3.5.1 first:
+ * - 3.x has no `sandboxId`, so `./vercel-sandbox.ts` stamps the sandbox's
+ *   `name` into the execution extension's `sandboxId` field: still a string,
+ *   its value an `sbx_…` id on 1.x and, on 3.x, the name the executor sets,
+ *   `nbexec-` plus 32 lowercase hex digits (3.x's own generated names are
+ *   English words, which would reach signed records);
+ * - 3.x makes a sandbox persistent unless told otherwise, so every executor
+ *   creation passes `persistent: false`;
+ * - the `runtime` option is deprecated in 3.x, and `runtime: 'python3.13'`
+ *   booted Python 3.13.1 on 3.5.1 both as the no-snapshot fallback creates it
+ *   and as the snapshot-build script does;
+ * - the parity fixture run through this driver on 1.10.2 and on 3.5.1 gave
+ *   the same executed notebook once `scripts/executor-parity.mjs`'s masked
+ *   fields were masked (`compare` exit 0); the execution extension built
+ *   from each run differed only in `sandboxId` and `executionDuration_ms`,
+ *   with `executedAt` (the route's clock, not the executor's) held fixed.
+ * The next major is its own issue with its own measurement.
  */
-export const SANDBOX_SDK_MAJOR = 1;
+export const SANDBOX_SDK_MAJOR = 3;
 
 /**
  * The AWS Lambda runtime interface client the `lambda` target of
@@ -114,7 +126,8 @@ export interface ExecutorCommandResult {
  */
 export interface ExecutorSession {
   /**
-   * Runtime instance id (sandbox id or container id). Carried through into
+   * Runtime instance id (the Vercel sandbox's name, a container id, or a
+   * Lambda request id). Carried through into
    * `ExecutionResult.sandboxId` and from there into the execution-metadata
    * stamp.
    */
