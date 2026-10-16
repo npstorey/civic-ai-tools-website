@@ -24,9 +24,14 @@
  * disabled (`shouldPromptForCredentials()` requires a TTY), so it throws
  * rather than prompting.
  *
- * This module is the ONLY runtime importer of `@vercel/sandbox` — the seam
- * (`./execute.ts`) loads it lazily, so the container driver never touches
- * the SDK or its auth requirements.
+ * Two runtime modules import `@vercel/sandbox`: this one, for the notebook
+ * executor, and `../mcp/hosting/lifecycle.ts`, for a hosted MCP source's
+ * sandbox (#617 P3), which reuses `resolveSandboxAuthParams` and
+ * `proxyAwareSandboxFetch` from here rather than copying them. Each is loaded
+ * lazily by its one caller — the executor seam (`./execute.ts`) and the MCP
+ * client's hosted branch (`../mcp/client.ts`) — so the container driver, and
+ * an instance with no hosted source, never touch the SDK or its auth
+ * requirements.
  *
  * EGRESS PROXY (#492). The SDK passes its own undici `Agent` as the
  * `dispatcher` of every API request, which overrides the global dispatcher

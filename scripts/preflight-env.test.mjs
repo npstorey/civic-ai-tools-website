@@ -674,6 +674,9 @@ const S3_CREDENTIALS = ['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY']
 const S3_KEY_PAIR = ['S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
 /** Variables only the vercel-sandbox executor driver reads. */
 const SANDBOX_ONLY = ['SANDBOX_SNAPSHOT_ID', 'VERCEL_TOKEN', 'VERCEL_TEAM_ID', 'VERCEL_PROJECT_ID'];
+/** The hosted-source variables (#617 P3): scoped with the sandbox auth triple,
+ *  which the host authenticates with, so not applicable where it is. */
+const HOSTED_SOURCE_ONLY = ['NYC_CHARTER_HOSTING', 'SOURCE_BRIDGE_SECRET', 'VERCEL_ENV'];
 
 function tierOf(rows, name) {
   return rows.find((r) => r.name === name)?.tier;
@@ -992,8 +995,9 @@ test('the self-hosted profile passes with no platform-specific variables set', (
 
   const report = renderReport(result);
   assert.match(report, /PROFILE: db=node-postgres {2}blob=s3 {2}executor=container/);
-  assert.match(report, /5 variable\(s\) not applicable to this profile/);
-  for (const name of ['BLOB_READ_WRITE_TOKEN', ...SANDBOX_ONLY]) {
+  // Five, plus the three hosted-source variables (#617 P3).
+  assert.match(report, /8 variable\(s\) not applicable to this profile/);
+  for (const name of ['BLOB_READ_WRITE_TOKEN', ...SANDBOX_ONLY, ...HOSTED_SOURCE_ONLY]) {
     assert.ok(!report.includes(name), `${name} is never mentioned to a self-hosted instance`);
   }
 });
@@ -1503,4 +1507,43 @@ test('#337: the deploy.md table quotes the report\'s query-surface wording verba
       `docs/deploy.md should quote verbatim: ${description}`,
     );
   }
+});
+
+// --- #617 P3: the hosted-source switch and its secret ------------------------
+
+test('#617 P3: NYC_CHARTER_HOSTING unset is a pass, and the secret is optional', () => {
+  const result = evaluateEnv(envWithAllRequired());
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.valueErrors, []);
+  assert.equal(tierOf(result.rows, 'NYC_CHARTER_HOSTING'), 'optional');
+  assert.equal(tierOf(result.rows, 'SOURCE_BRIDGE_SECRET'), 'optional');
+});
+
+test('#617 P3: NYC_CHARTER_HOSTING=sandbox makes SOURCE_BRIDGE_SECRET required, and is a pass with it', () => {
+  const without = evaluateEnv({ ...envWithAllRequired(), NYC_CHARTER_HOSTING: ' sandbox ' });
+  assert.equal(without.ok, false);
+  assert.deepEqual(without.missingRequired.map((r) => r.name), ['SOURCE_BRIDGE_SECRET']);
+  const withSecret = evaluateEnv({ ...envWithAllRequired(), NYC_CHARTER_HOSTING: 'sandbox', SOURCE_BRIDGE_SECRET: 'SECRET-SENTINEL-DO-NOT-LEAK' });
+  assert.equal(withSecret.ok, true);
+  assert.ok(!renderReport(withSecret).includes('SECRET-SENTINEL-DO-NOT-LEAK'), 'the secret reached the report');
+});
+
+test('#617 P3: any other NYC_CHARTER_HOSTING value fails the run, naming the variable and the two accepted states, never the value', () => {
+  for (const value of ['on', 'true', 'Sandbox', 'value-SENTINEL-DO-NOT-LEAK']) {
+    const result = evaluateEnv({ ...envWithAllRequired(), NYC_CHARTER_HOSTING: value, SOURCE_BRIDGE_SECRET: 'present' });
+    assert.equal(result.ok, false, `"${value}" passed`);
+    assert.deepEqual(result.valueErrors, [{ name: 'NYC_CHARTER_HOSTING', allowed: ['sandbox'] }]);
+    const report = renderReport(result);
+    // Only the sentinel can be searched for: `on`, `true` and `Sandbox` are
+    // ordinary words in the report's own purpose text.
+    if (value.includes('SENTINEL')) assert.ok(!report.includes(value), 'the value reached the report');
+    assert.match(report, /NYC_CHARTER_HOSTING \(expected unset, or one of: sandbox\)/);
+    assert.match(report, /RESULT: FAIL — a variable is set to a value it does not take\./);
+  }
+});
+
+test('#617 P3: the hosted-source variables are not applicable where the sandbox auth is not', () => {
+  const result = evaluateEnv({ ...envWithAllRequired(), EXECUTOR_DRIVER: 'container', NYC_CHARTER_HOSTING: 'on' });
+  for (const name of HOSTED_SOURCE_ONLY) assert.ok(result.notApplicable.includes(name), `${name} is applicable under the container driver`);
+  assert.deepEqual(result.valueErrors, [], 'a not-applicable variable was validated');
 });

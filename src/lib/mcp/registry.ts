@@ -25,6 +25,7 @@ import {
   BOSTON_OPENCONTEXT_TOOL_NAMES,
   CIVIC_MANIFEST,
   civicRouter,
+  configuredSources,
   DATA_COMMONS_TOOL_NAMES,
   exposedToolName,
   readMcpEnv,
@@ -268,8 +269,24 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
       : {}),
   };
 
-  // #617 P3 red commit: the hosted map exists and is never filled.
+  // Sources the instance runs itself, offered by their switch rather than an
+  // address (router 0.3.0 `configuredSources`; #617 P3). Absent while the
+  // switch is unset, so with every switch unset this registry is the one the
+  // previous router built, key for key, and its tools are refused per call
+  // below, naming the switch.
+  const switchedOn = configuredSources(env);
   const hosted: Record<string, HostedMcpServer> = {};
+  for (const entry of CIVIC_MANIFEST) {
+    if (!entry.hosting || switchedOn[entry.sourceId] === undefined) continue;
+    hosted[entry.sourceId] = {
+      sourceId: entry.sourceId,
+      label: entry.displayName,
+      tools: [...entry.toolNames],
+      alias: entry.alias,
+      serverId: entry.id,
+      hosting: entry.hosting,
+    };
+  }
 
   const toolIndex = buildToolIndex({ ...servers, ...hosted });
 
@@ -519,7 +536,7 @@ function presentOrUndefined(raw: string | undefined): string | undefined {
  * infrastructure, so it keeps its coded default.
  */
 export function readMcpEnvFromProcess(): McpRegistryEnv {
-  // The package's reader over exactly these four variables, each read by name
+  // The package's reader over exactly these five variables, each read by name
   // here so the environment this module reads stays visible
   // (`scripts/env-reads-declared.test.mjs`); `process.env` is never handed over
   // whole.
@@ -528,6 +545,9 @@ export function readMcpEnvFromProcess(): McpRegistryEnv {
     DATA_COMMONS_MCP_URL: process.env.DATA_COMMONS_MCP_URL,
     DATA_COMMONS_API_KEY: process.env.DATA_COMMONS_API_KEY,
     BOSTON_OPENCONTEXT_MCP_URL: process.env.BOSTON_OPENCONTEXT_MCP_URL,
+    // The switch that offers the hosted NYC Charter source (#617 D7): only
+    // `sandbox` turns it on; it names no address.
+    NYC_CHARTER_HOSTING: process.env.NYC_CHARTER_HOSTING,
   });
 }
 
