@@ -61,7 +61,9 @@ export const EXECUTOR_TOOLING_PACKAGES = {
  * 2026-10-16 (#491, sprint #617 P1), with the move measured on 3.5.1 first:
  * - 3.x has no `sandboxId`, so `./vercel-sandbox.ts` stamps the sandbox's
  *   `name` into the execution extension's `sandboxId` field: still a string,
- *   its value an `sbx_…` id on 1.x and a generated name on 3.x;
+ *   its value an `sbx_…` id on 1.x and, on 3.x, the name the executor sets,
+ *   `nbexec-` plus 32 lowercase hex digits (3.x's own generated names are
+ *   English words, which would reach signed records);
  * - 3.x makes a sandbox persistent unless told otherwise, so every executor
  *   creation passes `persistent: false`;
  * - the `runtime` option is deprecated in 3.x, and `runtime: 'python3.13'`

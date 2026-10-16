@@ -91,7 +91,9 @@ test('the returned object has exactly the SDK credential keys (no extras, no und
 // with every run. The four shapes are every branch `createSandbox` takes:
 // snapshot or no snapshot, auth triple or none.
 
-const STAND_IN = { name: 'fixture-sandbox-name', sandboxId: 'sbx_fixture_prior_id' };
+// The stand-in answers with the name it was asked for, as the API does, and
+// keeps a 1.x-style `sandboxId` beside it so reading the wrong field shows.
+const STAND_IN = { sandboxId: 'sbx_fixture_prior_id' };
 const AUTH_KEYS = ['VERCEL_TOKEN', 'VERCEL_TEAM_ID', 'VERCEL_PROJECT_ID'] as const;
 
 async function recordCreate(
@@ -105,7 +107,7 @@ async function recordCreate(
   if (withAuth) Object.assign(process.env, FIXTURE_ENV);
   Sandbox.create = (async (params: Record<string, unknown>) => {
     recorded.push(params);
-    return STAND_IN;
+    return { ...STAND_IN, name: params.name };
   }) as unknown as typeof Sandbox.create;
   try {
     const session = await createVercelSandboxDriver().createSession({
@@ -144,10 +146,10 @@ for (const snapshotId of ['snap_fixture', undefined]) {
 }
 
 test("the session id is the sandbox's name, the 3.x instance identifier", async () => {
-  const { sessionId } = await recordCreate('snap_fixture', false);
+  const { params, sessionId } = await recordCreate('snap_fixture', false);
   assert.equal(
     sessionId,
-    STAND_IN.name,
+    params.name,
     `the session id is ${sessionId}; 3.x has no sandboxId, so the id a record carries is the name`,
   );
 });

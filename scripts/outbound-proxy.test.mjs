@@ -1510,6 +1510,13 @@ test("the sandbox API's proxy-aware dispatcher keeps the SDK's bodyTimeout: 0 on
 });
 
 // #492 criterion 4: defaults unchanged, in both auth shapes.
+const EXECUTOR_NAME = '<executor name>';
+/** The create params with the executor's random name checked for shape and
+ *  replaced, in place, by a placeholder, so the rest compares byte for byte. */
+function namePlaceheld(params) {
+  assert.match(String(params.name), /^nbexec-[0-9a-f]{32}$/, `Sandbox.create received name=${String(params.name)}`);
+  return { ...params, name: EXECUTOR_NAME };
+}
 test('with the three variables unset the sandbox SDK is called exactly as before and no dispatcher is built', async () => {
   const drive = await driveSandboxLifecycle({ ...noProxyEnv, ...SANDBOX_PLACEHOLDER_AUTH });
   assertEveryStepRecorded(drive);
@@ -1529,14 +1536,17 @@ test('with the three variables unset the sandbox SDK is called exactly as before
       REQUESTS_CA_BUNDLE: '/etc/pki/tls/certs/ca-bundle.crt',
       PIP_CERT: '/etc/pki/tls/certs/ca-bundle.crt',
     },
-    // One-use on every creation: 3.x is persistent unless told otherwise (#491).
+    // Named by the executor, and one-use, on every creation (#491, #617 P1).
+    // The name is random per creation, so it is checked for shape and then
+    // held to a placeholder for the byte comparison.
+    name: EXECUTOR_NAME,
     persistent: false,
     source: { type: 'snapshot', snapshotId: 'snap_probe' },
   };
   const withTriple = { ...expectedBase, token: 'probe-not-a-real-token', teamId: 'team_probe', projectId: 'prj_probe' };
   assert.equal(drive.createParams.length, 1);
   assert.ok(!('fetch' in drive.createParams[0]), 'Sandbox.create received a fetch key with no proxy configured');
-  assert.equal(JSON.stringify(drive.createParams[0]), JSON.stringify(withTriple), 'the triple-shape call changed');
+  assert.equal(JSON.stringify(namePlaceheld(drive.createParams[0])), JSON.stringify(withTriple), 'the triple-shape call changed');
 
   // The OIDC shape (no triple). Captured at Sandbox.create and not passed on:
   // with no triple the SDK would resolve OIDC credentials, which this suite
@@ -1559,7 +1569,7 @@ test('with the three variables unset the sandbox SDK is called exactly as before
   }
   assert.equal(handed.length, 1);
   assert.ok(!('fetch' in handed[0]), 'Sandbox.create received a fetch key with no proxy configured (OIDC shape)');
-  assert.equal(JSON.stringify(handed[0]), JSON.stringify(expectedBase), 'the OIDC-shape call changed');
+  assert.equal(JSON.stringify(namePlaceheld(handed[0])), JSON.stringify(expectedBase), 'the OIDC-shape call changed');
   assert.equal(proxyAware, null, 'the driver built a proxy-aware dispatcher with no proxy configured (OIDC shape)');
 });
 

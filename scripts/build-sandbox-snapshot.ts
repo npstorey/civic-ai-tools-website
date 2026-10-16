@@ -25,6 +25,7 @@
  *
  * Run:   npm run sandbox:build-snapshot
  */
+import { randomBytes } from 'node:crypto';
 import { Sandbox } from '@vercel/sandbox';
 // Pinned versions are single-sourced from the notebook-author table (S3b P4):
 // this script, the sandbox pip fallback, the notebook's own pip-install cell,
@@ -42,8 +43,12 @@ async function main(): Promise<void> {
   // `runtime` is deprecated in @vercel/sandbox 3.x in favour of `image`, and
   // still boots python3.13 there (measured 2026-10-16, #617 P1). Not
   // persistent: the one snapshot this script wants is the explicit one below,
-  // and a persistent sandbox would add an automatic one when it stops.
+  // and a persistent sandbox would add an automatic one when it stops. Named
+  // `nbsnap-` plus 32 random hex digits rather than 3.x's generated words, and
+  // apart from the executor's `nbexec-` prefix, so a cleanup by the executor's
+  // prefix never matches it.
   const sandbox = await Sandbox.create({
+    name: `nbsnap-${randomBytes(16).toString('hex')}`,
     runtime: 'python3.13',
     timeout: SNAPSHOT_BUILD_TIMEOUT_MS,
     persistent: false,

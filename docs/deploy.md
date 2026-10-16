@@ -632,9 +632,10 @@ use (and fails the preflight). What the defaults hide:
   `@vercel/sandbox` 3.x (`SANDBOX_SDK_MAJOR` in `src/lib/sandbox/driver.ts`).
   Each run creates a one-use sandbox (`persistent: false`), so stopping it
   snapshots nothing; 3.x sandboxes are persistent unless told otherwise. A
-  record's `sandboxId` is that sandbox's generated name, such as
-  `blue-flexible-angelfish-96qkY6`; under 1.x it was an `sbx_…` id. The field
-  is a string either way. `container` runs the
+  record's `sandboxId` is that sandbox's name, which the executor sets:
+  `nbexec-` followed by 32 lowercase hex digits (128 random bits), such as
+  `nbexec-1b0e34e0b531296ff94b86be48e2e0b7`. Under 1.x it was an `sbx_…` id.
+  The field is a string either way. `container` runs the
   prebuilt `civic-notebook-executor` image on the host's container
   runtime — which is what requires the socket mount discussed above.
   `EXECUTOR_CONTAINER_IMAGE` overrides the image tag (default

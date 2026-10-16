@@ -36,6 +36,7 @@
  * one — see `proxyAwareSandboxFetch`. With none configured the SDK is called
  * exactly as before and no dispatcher is built.
  */
+import { randomBytes } from 'node:crypto';
 import { Sandbox } from '@vercel/sandbox';
 import type { Dispatcher } from 'undici';
 import {
@@ -177,6 +178,28 @@ export function proxyAwareSandboxFetch(
   return { fetch: proxiedFetch };
 }
 
+/**
+ * The prefix of every executor sandbox's name. It names the notebook executor,
+ * and keeps its one-use sandboxes apart from any other sandbox in the same
+ * project when a cleanup lists or deletes by name.
+ */
+export const EXECUTOR_SANDBOX_NAME_PREFIX = 'nbexec-';
+
+/**
+ * A new executor sandbox name: the prefix, then 128 random bits as 32
+ * lowercase hex digits (39 characters). The executor names each sandbox
+ * itself because, given no name, `@vercel/sandbox` 3.x generates one from
+ * English words, and the name is what a signed record carries in its
+ * execution extension's `sandboxId`. Measured on 3.5.1 (2026-10-16, #617
+ * P1): the API accepts names matching `^[a-zA-Z0-9_-]+$` of 1 to 128
+ * characters, and a stopped sandbox's name stays taken until the sandbox is
+ * deleted, so a repeated name would be a refused create, never a reused
+ * sandbox.
+ */
+export function executorSandboxName(): string {
+  return `${EXECUTOR_SANDBOX_NAME_PREFIX}${randomBytes(16).toString('hex')}`;
+}
+
 function createSandbox(
   snapshotId: string | undefined,
   base: SandboxCreateBase,
@@ -186,7 +209,7 @@ function createSandbox(
   // resumes it. An executor sandbox holds one visitor's notebook and is never
   // resumed, so a persistent one would keep that visitor's files and add a
   // snapshot to the project's storage on every run.
-  const oneUse = { ...base, persistent: false as const };
+  const oneUse = { ...base, name: executorSandboxName(), persistent: false as const };
   const params = snapshotId
     ? { ...oneUse, source: { type: 'snapshot' as const, snapshotId } }
     // No snapshot configured — boot a fresh python3.13 sandbox; the
@@ -228,9 +251,10 @@ export function createVercelSandboxDriver(): SessionExecutorDriver {
       return {
         // The instance id a record carries in its execution extension's
         // `sandboxId`. 3.x has no `sandboxId`; a sandbox is identified by its
-        // `name`, generated per creation when none is given — one-use (above),
-        // so one name per run. The field stays a string; its value changed
-        // from an `sbx_…` id to a name with the 3.x move (#491).
+        // `name`, which the executor sets per creation (`executorSandboxName`:
+        // `nbexec-` plus 32 lowercase hex digits) — one-use (above), so one
+        // name per run. The field stays a string; its value changed from an
+        // `sbx_…` id to an executor name with the 3.x move (#491).
         id: sandbox.name,
         stackPreinstalled: Boolean(opts.snapshotId),
 
