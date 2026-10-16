@@ -151,3 +151,35 @@ test("the session id is the sandbox's name, the 3.x instance identifier", async 
     `the session id is ${sessionId}; 3.x has no sandboxId, so the id a record carries is the name`,
   );
 });
+
+// --- the name the executor gives every sandbox (#617 P1, the seat's ruling) ---
+//
+// 3.x names a sandbox with random English words when no name is given, and the
+// name is what a signed record carries in `sandboxId`. The executor names each
+// sandbox itself: a fixed prefix, then 128 random bits as 32 lowercase hex
+// digits. The API allows `^[a-zA-Z0-9_-]+$`, at most 128 characters, and keeps
+// a stopped sandbox's name taken until it is deleted (measured 2026-10-16), so
+// a repeat would be a refused create, never a reused sandbox. The prefix keeps
+// executor sandboxes apart from any other sandbox in the project.
+const EXECUTOR_NAME_SHAPE = /^nbexec-[0-9a-f]{32}$/;
+
+for (const snapshotId of ['snap_fixture', undefined]) {
+  for (const withAuth of [false, true]) {
+    const shape = `${snapshotId ? 'from a snapshot' : 'with no snapshot'}, ${withAuth ? 'with' : 'without'} the auth triple`;
+    test(`every executor sandbox is created under an executor name, prefix plus 128 random bits — ${shape}`, async () => {
+      const first = await recordCreate(snapshotId, withAuth);
+      const second = await recordCreate(snapshotId, withAuth);
+      assert.equal('source' in first.params, Boolean(snapshotId));
+      assert.equal('token' in first.params, withAuth);
+      for (const { params } of [first, second]) {
+        assert.match(
+          String(params.name),
+          EXECUTOR_NAME_SHAPE,
+          `Sandbox.create received name=${String(params.name)}; without one, 3.x generates a name from ` +
+            'English words, and that name is stamped into the signed record',
+        );
+      }
+      assert.notEqual(first.params.name, second.params.name, 'two creations received the same name');
+    });
+  }
+}
