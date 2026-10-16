@@ -47,6 +47,9 @@ import {
 // server-only rides into the client bundle behind it, which this file's header
 // explains is the whole constraint.
 import { reasonWithoutIdentifier } from './streaming.ts';
+// The upstream name of a tool name in either spelling (#599 W3). The same pure
+// module `streaming.ts` already imports from.
+import { upstreamToolName } from './mcp/operation-types.ts';
 // The value this generator stamps comes from the vocabulary that declares it,
 // never a literal here: `'skeleton'` and `'executed'` are two halves of one
 // closed list, and a literal is how the two halves drift apart. Both modules
@@ -376,7 +379,7 @@ export function generateNotebook(
    * for a run that may never have touched it.
    */
   portal: string | null,
-  toolsCalled: ToolCall[],
+  recordedTools: ToolCall[],
   responseContent: string,
   /** The instance's attribution identity, threaded from the server (#258
    *  A2). Required so no call site silently drops a configured identity —
@@ -386,6 +389,15 @@ export function generateNotebook(
 ): Notebook {
   const cells: NotebookCell[] = [];
   const now = new Date().toISOString().split('T')[0];
+
+  // Every call read by its upstream name (#599 W3): a record made since W3
+  // names `socrata__get_data` where one made before it says `get_data`, and
+  // this document is the same for either — the step filter, the planned URL,
+  // and every note that names a tool name the one a reader saw before W3.
+  const toolsCalled = recordedTools.map((tool) => {
+    const name = upstreamToolName(tool.name);
+    return name === tool.name ? tool : { ...tool, name };
+  });
 
   // The portals this notebook can honestly name (#434 D3): the ones an
   // ANSWERED call carried, listed apart from the ones only refused calls

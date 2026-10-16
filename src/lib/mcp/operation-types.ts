@@ -10,7 +10,68 @@
 // packager records as `'unknown'`; that is a real answer for a tool whose
 // operation is not knowable from its name, and `fetch` below is one.
 
-import { civicRouter } from '@typedstandards/civic-typed-router';
+import { CIVIC_MANIFEST, civicRouter } from '@typedstandards/civic-typed-router';
+
+// --- Both spellings (#599 W3) -------------------------------------------------
+//
+// Since W3 the model sees every tool as `<alias>__<upstream name>`
+// (`socrata__get_data`, `boston__ckan__search_datasets`), and every record made
+// before W3 names it bare (`get_data`). Every site in this repository that
+// keys on a tool name reads both: it keys on the UPSTREAM name, which the
+// router's dispatch map gives for an exposed name and which a bare name already
+// is. The map is read, never a name split: an upstream name may itself hold
+// `__` (`ckan__search_datasets`).
+
+/**
+ * The upstream name of a tool name in either spelling: the name the server
+ * declares and is called by on the wire. An exposed name (`socrata__get_data`)
+ * gives its upstream name (`get_data`); any other name, a bare one included, is
+ * returned as it is. `undefined` stays `undefined`, for a record that carries
+ * no name.
+ */
+export function upstreamToolName(toolName: string): string;
+export function upstreamToolName(toolName: string | undefined): string | undefined;
+export function upstreamToolName(toolName: string | undefined): string | undefined {
+  return toolName === undefined ? undefined : civicRouter.upstreamToolName(toolName);
+}
+
+/** Whether `toolName`, in either spelling, is the civic tool `upstream`. */
+export function isTool(toolName: string | undefined, upstream: string): boolean {
+  return toolName !== undefined && upstreamToolName(toolName) === upstream;
+}
+
+/** What an `mcp_tool_call` span states about the names of the call it stands
+ *  for (ADR-0033 §B): the name sent on the wire, and the alias and server
+ *  identity of the source that answered. */
+export interface ToolSpanNames {
+  /** `tool.upstream_name`. */
+  upstreamName: string;
+  /** `mcp.alias`. */
+  alias: string;
+  /** `mcp.server.id`: the manifest entry's `id`. */
+  serverId: string;
+}
+
+/** The value a span states for a source it cannot name, the same value the
+ *  loop writes on `mcp.source` for a call no server took. */
+export const UNKNOWN_TOOL_SOURCE = 'unknown';
+
+/**
+ * The names a `mcp_tool_call` span states for a call of `toolName` routed to
+ * `sourceId` (the span's `mcp.source`). The alias and the server identity are
+ * the routed source's, so the three attributes cannot disagree with
+ * `mcp.source`: a call no server took (`unknown`) states `unknown` for both.
+ * The upstream name is the dispatch map's for an exposed name; a bare name is
+ * its own upstream name.
+ */
+export function toolSpanNames(toolName: string, sourceId: string): ToolSpanNames {
+  const entry = CIVIC_MANIFEST.find((candidate) => candidate.sourceId === sourceId);
+  return {
+    upstreamName: upstreamToolName(toolName),
+    alias: entry?.alias ?? UNKNOWN_TOOL_SOURCE,
+    serverId: entry?.id ?? UNKNOWN_TOOL_SOURCE,
+  };
+}
 
 const TOOL_OPERATION_TYPES: Record<string, string> = {
   // Socrata's `search`, like the two other name-keyed discovery tools below,
@@ -52,14 +113,17 @@ const TOOL_OPERATION_TYPES: Record<string, string> = {
 };
 
 /**
- * Resolve the operation type for a tool call. Returns `undefined` when the
- * operation cannot be determined — callers typically fall back to `'unknown'`.
+ * Resolve the operation type for a tool call, named in either spelling.
+ * Returns `undefined` when the operation cannot be determined — callers
+ * typically fall back to `'unknown'`.
  */
 export function deriveOperationType(
   toolName: string,
   args: Record<string, unknown>,
 ): string | undefined {
-  const mapped = TOOL_OPERATION_TYPES[toolName];
+  // Keyed on the upstream name, so `socrata__search` and `search` derive the
+  // same label (#599 W3).
+  const mapped = TOOL_OPERATION_TYPES[upstreamToolName(toolName)];
   if (mapped) return mapped;
   const argType = args.type;
   return typeof argType === 'string' ? argType : undefined;
@@ -75,5 +139,7 @@ export function deriveOperationType(
  * schemas (#599 W2); the operation-type labels above stay the website's.
  */
 export function sourceIdForToolName(toolName: string): string | undefined {
-  return civicRouter.sourceIdForToolName(toolName);
+  // An exposed name resolves by the dispatch map; a bare name by the
+  // package's index, as before W3 (#599 W3: both spellings answer the same).
+  return civicRouter.sourceForAliasedName(toolName)?.sourceId ?? civicRouter.sourceIdForToolName(toolName);
 }

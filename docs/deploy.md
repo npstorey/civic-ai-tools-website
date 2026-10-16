@@ -32,8 +32,10 @@ The guide is ordered the way a first deployment actually proceeds:
 9. [Object storage: configuration and rehearsal](#object-storage-configuration-and-rehearsal)
 10. [Scheduler and background jobs](#scheduler-and-background-jobs)
 11. [Managed-platform deployment](#managed-platform-deployment)
-12. [Vocabulary notes for integrators](#vocabulary-notes-for-integrators)
-13. [Appendix A: first-time S3 on a public cloud](#appendix-a-first-time-s3-on-a-public-cloud)
+12. [Tool names across sources](#tool-names-across-sources) — the naming
+    contract a fork follows when it adds a data source.
+13. [Vocabulary notes for integrators](#vocabulary-notes-for-integrators)
+14. [Appendix A: first-time S3 on a public cloud](#appendix-a-first-time-s3-on-a-public-cloud)
 
 ## Before you start
 
@@ -1149,15 +1151,15 @@ doesn't):
 | `PUBLISHER_SIGNING_KEY` + `PUBLISHER_KEY_ID` + the instance-identity set (`PUBLISHER_SITE_ORIGIN`, `PUBLISHER_SIGNER_BINDING_TIER`/`_IDENTIFIER`/`_DISPLAY_NAME`, `PUBLISHER_PLATFORM_AGENT_TITLE`) | Record seal and publish. **All-or-nothing: every member is required, and none has a coded default.** With none set the instance stays in the unsigned tier (banner shows, seal and publish gated off) — and unsigned surfaces honestly *omit* instance attribution rather than substitute anyone else's. With the key set but no `PUBLISHER_KEY_ID` it refuses (`signing_key_id_missing`) rather than sign under a key id it never declared. With the pair set but the identity set incomplete it refuses (`instance_identity_missing`, naming the exact missing variables) rather than emit signed output carrying an origin, signer, or registry this instance never configured — either substitution would misattribute the publisher and fail verification. |
 | `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and an OAuth app (`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` or the `OIDC_*` set) | Sign-in — and with it the sign-in-gated notebook execution feature, the dashboard, and the higher authenticated rate limit. |
 | `DATA_COMMONS_MCP_URL` + `DATA_COMMONS_API_KEY` | The Data Commons data source — its tool calls fail without the key (the hosted endpoint mandates it). `DC_API_KEY` is the separate key passed into *executed notebooks* for their own Data Commons requests. **What the address makes a signed record say:** for a run this instance makes, the value as set, or when unset the coded default (Google's public endpoint, in `src/lib/mcp/registry.ts`), is the `data-commons` entry of the datHere `mcpServers` list on every record, and the Data Commons agent's `civic:serverUrl` on a record whose run called a Data Commons tool. The record's `dataSources` entry for Data Commons keeps the packaging library's fixed portal value, that same public endpoint, whatever this is set to. The key is never recorded. |
-| `BOSTON_OPENCONTEXT_MCP_URL` | The Boston OpenContext data source, which is opt-in. There is no coded default: unset (empty or whitespace-only counts as unset), the source is absent from every run — the model is not offered its six `ckan__` tools, the system prompt carries none of its guidance (no Boston OpenContext block, preamble entry, citation instruction or line in the one-portal section), no request is sent to it, and no record lists it. A call to one of its tools anyway, such as a replay of a record that used them, is refused before anything is sent and recorded as a rejected call (`not_configured`). The public endpoint at `data-mcp.boston.gov` refuses every request that carries no bearer token, and this app sends none, so set this only to an OpenContext deployment that answers without one. **What it makes a signed record say:** set, for a run this instance makes, the value as set is the `boston-opencontext` entry of the datHere `mcpServers` list on every record, and the Boston OpenContext agent's `civic:serverUrl` on a record whose run called one of its tools; unset, the list has no `boston-opencontext` entry. |
+| `BOSTON_OPENCONTEXT_MCP_URL` | The Boston OpenContext data source, which is opt-in. There is no coded default: unset (empty or whitespace-only counts as unset), the source is absent from every run — the model is not offered its six `boston__ckan__` tools, the system prompt carries none of its guidance (no Boston OpenContext block, preamble entry, citation instruction or line in the one-portal section), no request is sent to it, and no record lists it. A call to one of its tools anyway, such as a replay of a record that used them, is refused before anything is sent and recorded as a rejected call (`not_configured`). The public endpoint at `data-mcp.boston.gov` refuses every request that carries no bearer token, and this app sends none, so set this only to an OpenContext deployment that answers without one. **What it makes a signed record say:** set, for a run this instance makes, the value as set is the `boston-opencontext` entry of the datHere `mcpServers` list on every record, and the Boston OpenContext agent's `civic:serverUrl` on a record whose run called one of its tools; unset, the list has no `boston-opencontext` entry. |
 | `CRON_SECRET` | The scheduled blob-GC endpoint rejects every caller with 401 — orphaned uploads are never swept. Set the same value on the app and the scheduler. |
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Durable rate limiting — the counter falls back to per-process memory (resets on restart; not shared across instances). Fine for a single-node instance. |
 | `SANDBOX_SNAPSHOT_ID` | (vercel-sandbox executor only) Prebuilt snapshot — absent, every execution pays a slow fresh boot + pip install. Not read by the container executor. |
 | `SOCRATA_APP_TOKEN` | Socrata API app token passed into executed notebooks — absent, requests run anonymously against Socrata's lower rate limits. |
 | `EXECUTOR_DRIVER` set to `none` | Notebook mode, deliberately: the instance runs no notebooks. Unset is not this; unset is `vercel-sandbox`. The query form on `/ask` and the home page shows the notebook option disabled with its reason, signed in or not, and `/ask` starts in standard mode. `POST /api/query-notebook` answers 501, `code: "notebooks_not_offered"`, before the body is read, before any model call and before the rate limiter is charged. Standard mode is unchanged. Read at build and at run time: the prerendered home page follows the build's value. See [An instance that runs no notebooks](#an-instance-that-runs-no-notebooks-executor_drivernone). |
 | `ROADMAP_RAW_URL` | `/roadmap` — absent, the page states that this instance has published no roadmap and the Roadmap link leaves the header and footer nav. An instance serves its own roadmap or none; there is no upstream fallback. |
-| `SITE_DEFAULT_PORTAL` | The default portal a query runs against when the reader picks none. Absent, a run carries **no** default: the query form's "All portals" entry is what an unqualified question uses, the model names its own portal on each call, and every surface that would have named one omits it instead — the trace records no run-level portal, and a downloaded notebook's cover states only the portals its own calls named. Nothing breaks and nothing refuses (unless `SITE_PORTAL_LOCKED`, below, is on); the instance simply asserts no portal it was not told about. Set it to the open-data host this deployment is built around, as a bare hostname with no scheme (the same shape the `portal` tool argument takes). It has no coded fallback for the reason `SOCRATA_MCP_URL` has none: the value it replaced was one deployment's own city, written into the routes and components, and it reached the root span of a trace a publish carries into a signed record. **An instance fronting one portal sets this and the Socrata MCP server's `DATA_PORTAL_URL` to that same portal** (this one takes the bare host, the server's the URL, `https://<host>`). They are two defaults, not one: this is the portal a run names, and the server's is the portal that answers any call naming none — every `search`, which takes no portal argument, and every `fetch` by a bare dataset id. Set to different portals, one run can name one portal while those calls are answered from another; with the server's unset, those calls are refused one at a time, and the run records each as a rejected call. |
-| `SITE_PORTAL_LOCKED` | The one-portal switch, for Socrata portals. Absent, or anything but `1`/`true`, it is off and nothing above changes: a request may name any portal, and `SITE_DEFAULT_PORTAL` is only a default. **On, `SITE_DEFAULT_PORTAL` is the only Socrata portal this instance queries.** A query request (`/api/compare`, `/api/compare-stream`, `/api/query-notebook`) whose body names no portal, or `""`, runs on the configured portal; one naming that portal in any case or spacing runs on it too; one naming any other portal is refused with a 400 whose `error` names both portals. With the switch on and `SITE_DEFAULT_PORTAL` unset, every query is refused before the rate limiter and the skill fetch: the server log names `SITE_DEFAULT_PORTAL`, and the reader is shown the generic error copy (preflight marks `SITE_DEFAULT_PORTAL` required whenever the switch is on). Inside a run, a `get_data` call the model makes naming another portal (through `portal` or its alias `domain`), and a `fetch` whose identifier or URL names another portal, are refused before they are sent and recorded as rejected calls: the record keeps the attempt, marked failed, and lists neither that dataset nor that portal among the sources accessed. The Socrata tool descriptions and the system prompt stop inviting other Socrata portals, and the query form drops its portal picker and its two cross-city examples. **What the switch does not govern:** `search`, which takes no portal argument and is answered by whichever portal the Socrata MCP server is configured for, and a `fetch` by a bare dataset id, which that server resolves the same way — so set the server's `DATA_PORTAL_URL` to the same portal (see the row above); code an executed notebook runs, including code written by the model (the switch governs the calls the model makes through its tools, not what a notebook cell requests); replay of a published record, which runs on the portal the record's own calls named, whether or not the record predates the switch; and the other data sources (Data Commons, and Boston OpenContext where `BOSTON_OPENCONTEXT_MCP_URL` configures it, which fronts the City of Boston's own open-data portal), which are separate servers taking no Socrata portal and stay callable with the switch on. Read at build and at run time, like `SITE_DEFAULT_PORTAL`: pass it in both places on a container build. |
+| `SITE_DEFAULT_PORTAL` | The default portal a query runs against when the reader picks none. Absent, a run carries **no** default: the query form's "All portals" entry is what an unqualified question uses, the model names its own portal on each call, and every surface that would have named one omits it instead — the trace records no run-level portal, and a downloaded notebook's cover states only the portals its own calls named. Nothing breaks and nothing refuses (unless `SITE_PORTAL_LOCKED`, below, is on); the instance simply asserts no portal it was not told about. Set it to the open-data host this deployment is built around, as a bare hostname with no scheme (the same shape the `portal` tool argument takes). It has no coded fallback for the reason `SOCRATA_MCP_URL` has none: the value it replaced was one deployment's own city, written into the routes and components, and it reached the root span of a trace a publish carries into a signed record. **An instance fronting one portal sets this and the Socrata MCP server's `DATA_PORTAL_URL` to that same portal** (this one takes the bare host, the server's the URL, `https://<host>`). They are two defaults, not one: this is the portal a run names, and the server's is the portal that answers any call naming none — every `socrata__search` (`search` on the server), which takes no portal argument, and every `socrata__fetch` by a bare dataset id. Set to different portals, one run can name one portal while those calls are answered from another; with the server's unset, those calls are refused one at a time, and the run records each as a rejected call. |
+| `SITE_PORTAL_LOCKED` | The one-portal switch, for Socrata portals. Absent, or anything but `1`/`true`, it is off and nothing above changes: a request may name any portal, and `SITE_DEFAULT_PORTAL` is only a default. **On, `SITE_DEFAULT_PORTAL` is the only Socrata portal this instance queries.** A query request (`/api/compare`, `/api/compare-stream`, `/api/query-notebook`) whose body names no portal, or `""`, runs on the configured portal; one naming that portal in any case or spacing runs on it too; one naming any other portal is refused with a 400 whose `error` names both portals. With the switch on and `SITE_DEFAULT_PORTAL` unset, every query is refused before the rate limiter and the skill fetch: the server log names `SITE_DEFAULT_PORTAL`, and the reader is shown the generic error copy (preflight marks `SITE_DEFAULT_PORTAL` required whenever the switch is on). Inside a run, a `socrata__get_data` call the model makes naming another portal (through `portal` or its alias `domain`), and a `socrata__fetch` whose identifier or URL names another portal, are refused before they are sent and recorded as rejected calls, and so are the same calls under the bare names `get_data` and `fetch` (both spellings are read; see [Tool names across sources](#tool-names-across-sources)): the record keeps the attempt, marked failed, and lists neither that dataset nor that portal among the sources accessed. The Socrata tool descriptions and the system prompt stop inviting other Socrata portals, and the query form drops its portal picker and its two cross-city examples. **What the switch does not govern:** `socrata__search` (`search`), which takes no portal argument and is answered by whichever portal the Socrata MCP server is configured for, and a `socrata__fetch` by a bare dataset id, which that server resolves the same way — so set the server's `DATA_PORTAL_URL` to the same portal (see the row above); code an executed notebook runs, including code written by the model (the switch governs the calls the model makes through its tools, not what a notebook cell requests); replay of a published record, which runs on the portal the record's own calls named, whether or not the record predates the switch; and the other data sources (Data Commons, and Boston OpenContext where `BOSTON_OPENCONTEXT_MCP_URL` configures it, which fronts the City of Boston's own open-data portal), which are separate servers taking no Socrata portal and stay callable with the switch on. Read at build and at run time, like `SITE_DEFAULT_PORTAL`: pass it in both places on a container build. |
 | `SITE_SEAL_ONLY` | The seal-only switch, for an instance that seals records and never makes one public. Absent, or anything but `1`/`true` (any case, surrounding spaces ignored), it is off and nothing changes. **On, the public state is unavailable on this instance.** `POST /api/records` refuses a request for it with a `403` whose `code` is `seal_only` and whose reason names `"sealed"` as the value the instance accepts: `visibility: "public"`, its legacy alias `"published"`, and a body that omits `visibility`, which asks for the public state by default. `"sealed"` (and its alias `"committed"`) works as before. `POST /api/records/:slug/publish`, which promotes a sealed record to public, is refused with the same code. Both refusals come before anything is stored, signed or written, and the promotion's comes before the record is looked up, so it says nothing about whether a record exists. The publish dialog shows its "Publish now" choice disabled, with the reason in place of its description, and the dashboard shows Publish on a sealed record disabled with the reason rather than hiding it. **Records already public stay public and readable:** publication is not reversible (spec §8.10.3), so the switch governs what happens next and changes nothing already published; an instance that must hold no public record sets it before its first publish. Read at run time only, by the two publish routes, the signing-status route the dialog asks, and the dashboard page: pass it to the running server (the compose app service passes it through). It is not a build arg. |
 | `SITE_BRAND_NAME`, `SITE_BRAND_TAGLINE`, `SITE_BRAND_ATTRIBUTION`, `SITE_BRAND_REPO_URL`, `SITE_SPONSOR_NAME` | The chrome surfaces that would *name, credit, or fund a deployment*. Absent, each one renders nothing rather than the reference deployment's version of it — page titles drop their brand suffix, citations name no publisher, the header wordmark reads "Home", and the footer's tagline, attribution, repo link and sponsor line are simply not there. Nothing breaks; the site is anonymous until you name it. See [Branding and theming](#branding-and-theming-chrome-only). |
 
@@ -2335,6 +2337,134 @@ against the residual-risk case above, not the general platform behavior.
 Left manual: rebuild on a sandbox-boot failure, or whenever pinned library
 versions change (which already forces a rebuild). Revisit if run volume or
 the failure mode changes.
+
+## Tool names across sources
+
+The model sees one flat list of tools gathered from several MCP servers, and a
+tool's name is the only key a model call carries. Two servers that declare the
+same name — the Socrata server's `search` and another server's `search` — could
+not both be offered if names were passed through as the servers declare them.
+So every tool is offered under its source's **alias**: `<alias>__<upstream
+name>`. This is a contract a fork follows when it adds a source, and it is
+fixed in hub ADR-0032 (tool naming across sources) and the
+`@typedstandards/civic-typed-router` README.
+
+**The eleven tools this codebase offers:**
+
+| Source | Alias | Names the model is offered |
+|---|---|---|
+| Socrata | `socrata` | `socrata__get_data`, `socrata__search`, `socrata__fetch` |
+| Google Data Commons | `data_commons` | `data_commons__search_indicators`, `data_commons__get_observations` |
+| Boston OpenContext | `boston` | `boston__ckan__search_datasets`, `boston__ckan__get_dataset`, `boston__ckan__query_data`, `boston__ckan__get_schema`, `boston__ckan__execute_sql`, `boston__ckan__aggregate_data` |
+
+Boston OpenContext's own `ckan__` prefix stays inside the upstream name. The
+longest of the eleven is `data_commons__search_indicators`, 31 characters.
+
+### The rule
+
+These are design §6's seven points as ADR-0032 restates them, with the later
+rulings folded in:
+
+1. **Three layers.** A source has a global **identity** (its MCP Registry name
+   where it is published there; otherwise its package name and repository
+   address — the manifest entry's `id`), an operator-chosen **alias** unique
+   within one deployment, and model-facing **tool names**
+   `<alias>__<upstream tool name>`.
+2. **Applied by this app at the registry boundary,** in the tools array and
+   the prompt, and reversed on dispatch. The server is always called by its
+   own name: `socrata__get_data` goes out on the wire as `get_data`. No
+   publisher is asked to rename anything.
+3. **64 characters from `[A-Za-z0-9_-]`,** the bound the model APIs impose,
+   which is tighter than the MCP specification's own. A name that would break
+   the bound or the character set is **normalized, not refused**: each
+   out-of-set character becomes `_`, and an over-long name is cut to 55
+   characters and ends in `_` and an eight-character hash of the name it came
+   from, the same on every run. Both names are kept in the dispatch map.
+4. **Startup fails loudly** on an ill-formed alias, an alias or a source id
+   two entries share, or two tools whose exposed names collide after
+   normalizing — never a silent last-write-wins. The router package runs these
+   checks when its router is built, so a manifest that fails them stops the
+   app before it serves anything.
+5. **The record states both names.** A call is recorded under the name the
+   model called; its trace span adds the upstream name (`tool.upstream_name`),
+   the alias (`mcp.alias`), the source (`mcp.source`) and the server's
+   identity (`mcp.server.id`), so no reader has to resolve an alias, and a fork
+   may rename its aliases freely.
+6. **It is a fork-facing contract,** stated here, in ADR-0032 and in the
+   router package's README.
+7. **The eleven existing tools are renamed under the same rule.** Every record
+   made before the rename names them bare (`get_data`), every record made
+   after names them aliased (`socrata__get_data`), and every reader in this
+   codebase — replay, both notebook generators, the record page's operation
+   types and data sources, the tool-call identity a consistency attestation
+   keys on — reads both spellings by the upstream name.
+
+Four rules complete it:
+
+- A name starts with a letter or an underscore; every exposed name matches
+  `^[A-Za-z_][A-Za-z0-9_-]{0,63}$`.
+- An alias contains no `__`, starts with a letter or an underscore, holds only
+  `[A-Za-z0-9_-]`, and is at most 32 characters, so every exposed name keeps
+  room for its tool's own name. Two sources never share an alias.
+- Dispatch goes through a map built at startup, from each exposed name to its
+  source, alias and upstream name — **never by splitting a name**, because an
+  upstream name may itself hold `__` (`ckan__search_datasets`).
+- Per call, the record holds the exposed name, the upstream name, the alias and
+  the server identity.
+
+### The dispatch rule
+
+A model can still call a bare name: one it read in a tool result (servers name
+their own tools in their answers, and this app does not rewrite tool results),
+or one at a place in a server's guidance the rewrite below does not reach. So:
+
+- an exposed name resolves by the map;
+- **a bare upstream name is accepted when exactly one offered source has it,**
+  and goes to that source;
+- **a bare name two or more offered sources have is refused before any request
+  is made,** and the model is told every aliased form it could call instead.
+  The reader sees the generic error copy and the record states the call as
+  failed (`unknown`); the refusal's own text reaches neither;
+- a name whose source this instance does not configure is refused naming the
+  variable that would configure it, in either spelling, as before;
+- a name no source has is refused.
+
+### How text names a tool
+
+- **Text the router package owns** — the prompt frame, the three civic
+  guidance blocks, the one-portal section, and every tool and parameter
+  description — names each tool through the view it is composed in, so the
+  aliased text is exact and mechanically reversible. Where `search` or `fetch`
+  is an English word ("a web search", "fetch the next page"), it stays a word.
+- **Text a source sends** — the guidance the Socrata server serves, and a
+  server's initialize instructions — gets the **anchored rewrite**, scoped to
+  that source's own tool names: an exact backtick, bold or double-quoted token,
+  an exact markdown table cell, or an item of a `Tools:` list is renamed, and
+  nothing else changes. A name at no anchor stays as the server wrote it (the
+  Socrata guidance has two: a fenced `Tool: get_data` line and the header cell
+  "get_data coverage"); the dispatch rule above covers a model that calls it.
+
+### Adding a source
+
+A fork adds a source with **one manifest entry** in the router package's shape:
+
+- `id` — the source's global identity;
+- `alias` — the prefix of every name the model is offered for its tools;
+- `sourceId` — the key it is routed, traced and recorded under;
+- `displayName`;
+- `description` — one line written for routing: what the source covers, for
+  which places, and what it cannot do;
+- `freshness` — one line on how current its data is (model-facing, so no
+  citation; put that in `freshnessSource`);
+- its configuration (the address variable, and whether it is required or
+  optional), its tool schemas, its routing list of tool names, and its
+  guidance.
+
+The router builds the aliased tools, the composed prompt and the dispatch map
+from that entry; the startup checks refuse an entry whose names cannot be
+exposed. On the app side the source also needs its server in
+`src/lib/mcp/registry.ts` (its address, headers, and the alias and identity it
+takes from the manifest) and its address in `MCP_SOURCE_ADDRESS_FIELD`.
 
 ## Vocabulary notes for integrators
 

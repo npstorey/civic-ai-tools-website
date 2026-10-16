@@ -135,6 +135,7 @@ import {
 import { generateNotebook } from '../notebook.ts';
 import type { ToolCall } from '../../hooks/useStreamingComparison.ts';
 import { mcpTools } from '../mcp/tools.ts';
+import { upstreamToolName } from '../mcp/operation-types.ts';
 import { modelAccessPhrase } from '../model-catalog.ts';
 
 const CTX = { dataFrameIndex: 1, defaultPortal: 'data.cityofnewyork.us' };
@@ -706,7 +707,10 @@ test('one definition of a step: the predicate, the executed renderer and the ske
   assert.ok(names.length >= 11, `the registry lists ${names.length} tools; expected at least 11`);
 
   for (const name of names) {
-    const shapes = ARG_SHAPES[name];
+    // The registry emits exposed names since #599 W3 (`socrata__get_data`);
+    // the fixtures are keyed by the upstream name, and the call below is made
+    // under the exposed one, as a record made since W3 names it.
+    const shapes = ARG_SHAPES[name] ?? ARG_SHAPES[upstreamToolName(name)];
     assert.ok(shapes, `${name} is in the registry and has no fixture here — add one`);
     for (const args of shapes) {
       for (const failed of [false, true]) {

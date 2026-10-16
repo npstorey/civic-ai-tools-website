@@ -186,6 +186,14 @@ export function portalNamedByFetchId(id: unknown): string | null {
  *   - every other tool: `null`. `search` takes no portal; the other sources'
  *     tools take no Socrata portal.
  *
+ * `toolName` is the tool's UPSTREAM name (#599 W3): the model is offered
+ * `socrata__get_data` and may call either spelling, so the caller resolves the
+ * name first (the loop core passes `upstreamToolName(name)`), and both
+ * spellings are refused alike. This module does not resolve it itself: it is
+ * in the import graph of `scripts/executor-image-check.mjs`, which runs with
+ * no package installed, and the dispatch map lives in a package
+ * (`scripts/executor-check-imports-no-package.test.mjs`).
+ *
  * Takes the call's argument record under its own name rather than reading it
  * off a recorded call, and reads it without changing it: the loop core records
  * and sends that same object.

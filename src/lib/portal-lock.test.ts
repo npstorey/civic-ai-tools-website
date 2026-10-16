@@ -443,7 +443,7 @@ test('#436 C3: the /api/compare path — the factory hands the core the lock and
   assert.deepEqual(locked.sent, PLAN.filter((p) => !p.refused).map((p) => p.dataset));
   assert.deepEqual(locked.result.toolCalls.filter((c) => c.failed).length, PLAN.filter((p) => p.refused).length);
   const getData = (locked.requests[0].tools as Array<{ function: { name: string; parameters: { properties: { portal: { enum?: string[] } } } } }>)
-    .find((t) => t.function.name === 'get_data');
+    .find((t) => t.function.name === 'socrata__get_data');
   assert.deepEqual(getData?.function.parameters.properties.portal.enum, [LOCKED], 'the model was offered a portal argument that takes any portal');
 });
 
@@ -453,10 +453,12 @@ test('#436 D7: the locked tool text names no other portal and does not send the 
   const locked = mcpToolsFor(LOCKED);
   const names = (tools: typeof mcpTools) => tools.map((t) => (t.type === 'function' ? t.function.name : t.type));
   assert.deepEqual(names(locked), names(mcpTools));
-  const socrata = locked.filter((t) => t.type === 'function' && ['get_data', 'search', 'fetch'].includes(t.function.name));
+  // Offered under the `socrata` alias since #599 W3.
+  const SOCRATA_TOOLS = ['socrata__get_data', 'socrata__search', 'socrata__fetch'];
+  const socrata = locked.filter((t) => t.type === 'function' && SOCRATA_TOOLS.includes(t.function.name));
   assert.equal(socrata.length, 3);
   const text = JSON.stringify(socrata);
-  const unlockedText = JSON.stringify(mcpTools.filter((t) => t.type === 'function' && ['get_data', 'search', 'fetch'].includes(t.function.name)));
+  const unlockedText = JSON.stringify(mcpTools.filter((t) => t.type === 'function' && SOCRATA_TOOLS.includes(t.function.name)));
   // A portal-shaped hostname: the unlocked text's worked examples carry several.
   const HOST = /\b[a-z0-9-]+(?:\.[a-z0-9-]+)+\.(?:gov|us|org|com|net|io)\b/gi;
   assert.ok((unlockedText.match(HOST) ?? []).length > 0, 'premise: the unlocked text names portals, so the check below can fail');
@@ -485,7 +487,7 @@ test('#436 D7: the prompt gains one section under the lock, naming only callable
   }).toolIndex);
   const callable = new Set(mcpTools.map((t) => (t.type === 'function' ? t.function.name : '')));
   const mentioned = routable.filter((name) => new RegExp(`\\b${name}\\b`).test(section));
-  assert.deepEqual(mentioned.sort(), ['fetch', 'get_data', 'search']);
+  assert.deepEqual(mentioned.sort(), ['socrata__fetch', 'socrata__get_data', 'socrata__search']);
   for (const name of mentioned) assert.ok(callable.has(name));
   for (const snake of section.match(/\b[a-z]+_[a-z_]+\b/g) ?? []) assert.ok(callable.has(snake), `the section names ${snake}`);
 });

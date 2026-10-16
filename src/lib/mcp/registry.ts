@@ -11,16 +11,31 @@
 // (#599 W2). What stays here is the network side the package does not carry:
 // the server configs, endpoint normalization, request headers, the per-call
 // refusal of an unconfigured source, and the addresses a record states.
+//
+// Since #599 W3 every tool is offered to the model as `<alias>__<upstream
+// name>` (ADR-0032). The index below is keyed by that exposed name, dispatch
+// resolves a called name through the package's dispatch map and its rule
+// (`routeToolCall`), and the server is always called by its own, upstream,
+// name. The package's startup checks run when its router is built
+// (`createCivicRouter`, at its module evaluation): an ill-formed alias, an
+// alias or a source id two entries share, or two exposed names that collide
+// after normalizing refuses the manifest before anything here runs.
 
 import {
   BOSTON_OPENCONTEXT_TOOL_NAMES,
   CIVIC_MANIFEST,
   civicRouter,
   DATA_COMMONS_TOOL_NAMES,
+  exposedToolName,
   readMcpEnv,
+  resolveCalledName,
   SOCRATA_TOOL_NAMES,
+  type DispatchMap,
   type McpRegistryEnv,
 } from '@typedstandards/civic-typed-router';
+import { AmbiguousToolNameError } from './tool-name-refusal.ts';
+
+export { AmbiguousToolNameError } from './tool-name-refusal.ts';
 
 export interface McpServerConfig {
   /** Stable source identifier used in traces and provenance. */
@@ -31,20 +46,37 @@ export interface McpServerConfig {
   endpointUrl: string;
   /** Extra headers to attach to every request to this server. */
   headers?: Record<string, string>;
-  /** Tool names this server hosts. */
+  /** Tool names this server hosts: its own, upstream, names, the ones sent on
+   *  the wire. */
   tools: string[];
+  /** The source's alias (ADR-0032): the prefix of every name the model is
+   *  offered for this server's tools, `<alias>__<tool>`. */
+  alias: string;
+  /** The server's identity as a record states it (`mcp.server.id`): the
+   *  manifest entry's `id`. */
+  serverId: string;
 }
 
 export interface McpRegistry {
   servers: Record<string, McpServerConfig>;
+  /** Exposed name (`socrata__get_data`) to the source id that hosts it. */
   toolIndex: Record<string, string>;
   /**
-   * Tool names whose hosting server is KNOWN but UNCONFIGURED, mapped to the
-   * environment variable that would configure it. A tool listed here resolves
-   * to no server; the client uses the variable name to refuse with an
-   * operator-actionable error instead of a generic "unknown tool" (#258 C4).
+   * Exposed names of tools whose hosting server is KNOWN but UNCONFIGURED,
+   * mapped to the environment variable that would configure it. A tool listed
+   * here resolves to no server; the client uses the variable name to refuse
+   * with an operator-actionable error instead of a generic "unknown tool"
+   * (#258 C4), whichever spelling the call used.
    */
   unconfiguredTools: Record<string, string>;
+  /**
+   * The source ids a run on this instance is offered, in manifest order: the
+   * offered set the dispatch rule reads (a bare name is accepted when exactly
+   * one OFFERED source has it). Socrata is offered whether or not its address
+   * is set, as in the composed prompt: it is required, so a call to it on an
+   * instance without its address is refused per call, naming the variable.
+   */
+  offeredSources: string[];
 }
 
 /**
@@ -85,12 +117,19 @@ const BOSTON_OPENCONTEXT_TOOLS = [...BOSTON_OPENCONTEXT_TOOL_NAMES];
  * whose `configuration.requirement` is `optional`, with its address variable
  * and its routing list.
  */
-const OPTIONAL_SOURCES: Record<string, { variable: string; tools: readonly string[] }> = Object.fromEntries(
+const OPTIONAL_SOURCES: Record<string, { variable: string; alias: string; tools: readonly string[] }> = Object.fromEntries(
   CIVIC_MANIFEST.filter((entry) => entry.configuration.requirement === 'optional').map((entry) => [
     entry.sourceId,
-    { variable: entry.configuration.addressVariable, tools: entry.toolNames },
+    { variable: entry.configuration.addressVariable, alias: entry.alias, tools: entry.toolNames },
   ]),
 );
+
+/** A source's alias and server identity, from the package's manifest. */
+function manifestIdentity(sourceId: string): { alias: string; serverId: string } {
+  const entry = CIVIC_MANIFEST.find((candidate) => candidate.sourceId === sourceId);
+  if (!entry) throw new Error(`MCP source "${sourceId}" is not in the router's manifest`);
+  return { alias: entry.alias, serverId: entry.id };
+}
 
 /**
  * Normalize a base URL to a POST-able MCP endpoint. The Socrata env var is
@@ -104,14 +143,17 @@ function normalizeMcpEndpoint(url: string): string {
 }
 
 /**
- * Index every server's tools by bare tool name — the map the router keys on.
+ * Index every server's tools by EXPOSED name, `<alias>__<tool>` — the name the
+ * model is offered and the key dispatch resolves to (#599 W3, ADR-0032).
  *
- * A tool name hosted by two servers REFUSES, naming the tool and both
- * servers. The bare name is the router's only key, so the alternative is a
- * second binding overwriting the first: one server's tool silently
+ * Two sources may now host the same upstream name: Socrata's `search` and a
+ * fourth source's `search` are `socrata__search` and `<alias>__search`, two
+ * keys. An exposed name two servers share still REFUSES, naming the name and
+ * both servers: the exposed name is the index's only key, so the alternative
+ * is a second binding overwriting the first, one server's tool silently
  * unreachable, with nothing in a log or a trace to say so (#503 P3, hub open
- * question Q60 part b). No renaming and no prefixing here — the refusal is
- * the whole of it.
+ * question Q60 part b). The package's startup checks refuse such a manifest
+ * first; this is the same refusal for the servers this module builds.
  *
  * This is a refusal an operator can never trigger: `buildMcpRegistry(env)`
  * builds its servers from compile-time constants, so a duplicate arrives only
@@ -130,15 +172,16 @@ export function buildToolIndex(
   const toolIndex: Record<string, string> = {};
   for (const [sourceId, server] of Object.entries(servers)) {
     for (const tool of server.tools) {
-      if (Object.prototype.hasOwnProperty.call(toolIndex, tool)) {
+      const exposed = exposedToolName(server.alias, tool);
+      if (Object.prototype.hasOwnProperty.call(toolIndex, exposed)) {
         throw new McpConfigurationError(
-          `Duplicate MCP tool name "${tool}": it is hosted by both "${toolIndex[tool]}" and ` +
-            `"${sourceId}". Tool names are the router's only key, so the second binding would ` +
-            `replace the first and that server's tool would be unreachable. Give one of them a ` +
-            `distinct name.`,
+          `Duplicate MCP tool name "${exposed}": it is hosted by both "${toolIndex[exposed]}" and ` +
+            `"${sourceId}". Exposed tool names are the router's only key, so the second binding would ` +
+            `replace the first and that server's tool would be unreachable. Give one of the sources a ` +
+            `distinct alias.`,
         );
       }
-      toolIndex[tool] = sourceId;
+      toolIndex[exposed] = sourceId;
     }
   }
   return toolIndex;
@@ -162,6 +205,7 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
             label: 'Socrata MCP Server',
             endpointUrl: normalizeMcpEndpoint(env.socrataUrl),
             tools: SOCRATA_TOOLS,
+            ...manifestIdentity('socrata'),
           },
         }
       : {}),
@@ -171,6 +215,7 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
       endpointUrl: normalizeMcpEndpoint(env.dataCommonsUrl),
       headers: env.dataCommonsApiKey ? { 'X-API-Key': env.dataCommonsApiKey } : undefined,
       tools: DATA_COMMONS_TOOLS,
+      ...manifestIdentity('data-commons'),
     },
     // Optional: present only when configured (`OPTIONAL_SOURCES`). Unset,
     // its tools are recorded in `unconfiguredTools` below, as Socrata's are.
@@ -181,6 +226,7 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
             label: 'Boston OpenContext MCP Server',
             endpointUrl: normalizeMcpEndpoint(env.bostonOpencontextUrl),
             tools: BOSTON_OPENCONTEXT_TOOLS,
+            ...manifestIdentity('boston-opencontext'),
           },
         }
       : {}),
@@ -190,18 +236,19 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
 
   const unconfiguredTools: Record<string, string> = {};
   if (!env.socrataUrl) {
+    const { alias } = manifestIdentity('socrata');
     for (const tool of SOCRATA_TOOLS) {
-      unconfiguredTools[tool] = 'SOCRATA_MCP_URL';
+      unconfiguredTools[exposedToolName(alias, tool)] = 'SOCRATA_MCP_URL';
     }
   }
-  for (const [sourceId, { variable, tools }] of Object.entries(OPTIONAL_SOURCES)) {
+  for (const [sourceId, { variable, alias, tools }] of Object.entries(OPTIONAL_SOURCES)) {
     if (servers[sourceId]) continue;
     for (const tool of tools) {
-      unconfiguredTools[tool] = variable;
+      unconfiguredTools[exposedToolName(alias, tool)] = variable;
     }
   }
 
-  return { servers, toolIndex, unconfiguredTools };
+  return { servers, toolIndex, unconfiguredTools, offeredSources: civicRouter.offeredSkillSources(env) };
 }
 
 /**
@@ -252,11 +299,12 @@ export function isSourceOffered(configured: McpRegistryEnv, sourceId: string): b
 
 /**
  * The tool names the model is NOT offered on an instance configured as
- * `configured`: every tool of an optional source it did not configure. Empty
+ * `configured`: every tool of an optional source it did not configure, by the
+ * name the model would have been offered (`<alias>__<tool>`, #599 W3). Empty
  * when every optional source is configured.
  */
 export function withheldToolNames(configured: McpRegistryEnv): string[] {
-  return civicRouter.withheldToolNames(configured);
+  return civicRouter.aliasedWithheldToolNames(configured);
 }
 
 /** One server this instance routes to, as a record names it. */
@@ -285,20 +333,118 @@ export function configuredMcpServers(configured: McpRegistryEnv): ConfiguredMcpS
   });
 }
 
-/** Look up the server that hosts a given tool name. Returns `undefined` for unknown tools. */
-export function resolveServerForTool(
-  registry: McpRegistry,
-  toolName: string,
-): McpServerConfig | undefined {
-  const sourceId = registry.toolIndex[toolName];
-  if (!sourceId) return undefined;
-  return registry.servers[sourceId];
+/** Where one called tool name goes: the server, and the names the call has. */
+export interface RoutedToolCall {
+  server: McpServerConfig;
+  /** The name the model is offered: `<alias>__<tool>`. */
+  exposedName: string;
+  /** The server's own name for the tool, sent on the wire. */
+  upstreamName: string;
+  alias: string;
+  /** `aliased`: the call used the exposed name. `bare`: an upstream name
+   *  exactly one offered source has (the dispatch rule). */
+  spelling: 'aliased' | 'bare';
+}
+
+type ToolCallResolution =
+  | { ok: true; call: RoutedToolCall }
+  | { ok: false; refusal: 'ambiguous'; candidates: readonly string[] }
+  | { ok: false; refusal: 'not-configured'; variable: string }
+  | { ok: false; refusal: 'unknown' };
+
+/**
+ * Resolve a called name against the registry: the dispatch rule (ADR-0032,
+ * D6), read through the package's dispatch map and never by splitting the
+ * name. Pure; `routeToolCall` and `resolveServerForTool` both read it.
+ *
+ * - An exposed name resolves by the map. A bare upstream name resolves when
+ *   exactly one offered source has it; two or more is `ambiguous`, with every
+ *   aliased form.
+ * - A name whose source is known but not configured here — its server absent
+ *   from the registry, or its source not offered (`not-offered` in the
+ *   package's terms) — is `not-configured`, with the variable that would
+ *   configure it, whichever spelling the call used (#258 C4).
+ */
+function resolveToolCall(registry: McpRegistry, toolName: string, map: DispatchMap): ToolCallResolution {
+  const resolution = resolveCalledName(map, registry.offeredSources, toolName);
+  if (resolution.ok) {
+    const sourceId = Object.hasOwn(registry.toolIndex, resolution.exposedName)
+      ? registry.toolIndex[resolution.exposedName]
+      : undefined;
+    const server = sourceId === undefined ? undefined : registry.servers[sourceId];
+    if (server) {
+      return {
+        ok: true,
+        call: {
+          server,
+          exposedName: resolution.exposedName,
+          upstreamName: resolution.upstreamName,
+          alias: resolution.alias,
+          spelling: resolution.spelling,
+        },
+      };
+    }
+    const variable = registry.unconfiguredTools[resolution.exposedName];
+    return variable ? { ok: false, refusal: 'not-configured', variable } : { ok: false, refusal: 'unknown' };
+  }
+  if (resolution.reason === 'ambiguous') {
+    return { ok: false, refusal: 'ambiguous', candidates: resolution.candidates };
+  }
+  if (resolution.reason === 'not-offered') {
+    const variable = resolution.candidates.map((name) => registry.unconfiguredTools[name]).find(Boolean);
+    if (variable) return { ok: false, refusal: 'not-configured', variable };
+  }
+  return { ok: false, refusal: 'unknown' };
 }
 
 /**
- * The source id of the server this instance routes `toolName` to, or
- * `undefined` when none does: a tool no source hosts, or one whose source is
- * not configured here. For a trace's `mcp.source` attribution, which the loop
+ * Route a called tool name, in either spelling, to its server and its
+ * upstream name, or refuse before any request is made:
+ *
+ * - `AmbiguousToolNameError` for a bare name two offered sources have, naming
+ *   every aliased form (D6's dispatch rule);
+ * - `McpConfigurationError` naming the variable, for a tool whose source is
+ *   known but not configured (#258 C4) — the same error for `get_data` and
+ *   `socrata__get_data`;
+ * - a plain `Error` for a name no source has.
+ *
+ * `map` is the package's dispatch map; a test passes a larger manifest's.
+ */
+export function routeToolCall(
+  registry: McpRegistry,
+  toolName: string,
+  map: DispatchMap = civicRouter.dispatchMap,
+): RoutedToolCall {
+  const resolved = resolveToolCall(registry, toolName, map);
+  if (resolved.ok) return resolved.call;
+  switch (resolved.refusal) {
+    case 'ambiguous':
+      throw new AmbiguousToolNameError(toolName, resolved.candidates);
+    case 'not-configured':
+      throw new McpConfigurationError(
+        `The MCP server for tool "${toolName}" is not configured: ${resolved.variable} is missing or empty in the server environment. Set it and restart the server.`,
+      );
+    default:
+      throw new Error(`No MCP server registered for tool "${toolName}"`);
+  }
+}
+
+/** Look up the server that hosts a given tool name, in either spelling.
+ *  Returns `undefined` for an unknown tool, a tool whose source is not
+ *  configured here, and a bare name two offered sources share. */
+export function resolveServerForTool(
+  registry: McpRegistry,
+  toolName: string,
+  map: DispatchMap = civicRouter.dispatchMap,
+): McpServerConfig | undefined {
+  const resolved = resolveToolCall(registry, toolName, map);
+  return resolved.ok ? resolved.call.server : undefined;
+}
+
+/**
+ * The source id of the server this instance routes `toolName` to, in either
+ * spelling, or `undefined` when none does: a tool no source hosts, one whose
+ * source is not configured here, or a bare name two offered sources share. For a trace's `mcp.source` attribution, which the loop
  * core reads ABOVE its per-call `try`. `routeTool` (`./client.ts`) throws in the
  * same case, and a throw there ends the whole run instead of recording one
  * failed call; with this lookup the call itself is what gets refused — by the

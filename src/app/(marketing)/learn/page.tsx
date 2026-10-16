@@ -302,7 +302,7 @@ export default function LearnPage() {
             githubLines="#L585-L623"
             description='Translates the raw tool call into an action description.'
             example={{
-              raw: 'get_data({ type: "catalog", query: "restaurant inspections", portal: "data.cityofnewyork.us" })',
+              raw: 'socrata__get_data({ type: "catalog", query: "restaurant inspections", portal: "data.cityofnewyork.us" })',
               displayed: 'Searching NYC data catalog: "restaurant inspections"',
             }}
           />

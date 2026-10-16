@@ -417,7 +417,8 @@ then stopped responding held your request open until the platform killed the
 invocation, and you got a platform error page naming no tool. The bound is
 `COMPARE_MCP_TOOL_TIMEOUT_MS` in `src/lib/model-loop/compare-loop.ts`, the same
 45 seconds the streaming routes and replay use. Past it the call fails on its
-own account — `MCP tool "get_data" timed out after 45s` in the log, recorded as
+own account — `MCP tool call "get_data" timed out after 45s` in the log (the log names
+the tool by the server's own name, also when the model called `socrata__get_data`), recorded as
 a failed tool call — and the comparison still answers from whatever did come
 back. The counterweight is worth knowing before you tune it: this is the
 *blocking* route, so the bound is a hard ceiling with nothing already streamed,

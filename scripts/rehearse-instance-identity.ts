@@ -159,7 +159,7 @@ async function main(): Promise<void> {
     null,
     [
       {
-        name: 'get_data',
+        name: 'socrata__get_data',
         args: { type: 'query', portal: 'data.example.gov', dataset_id: 'abcd-efab' },
         operationType: 'query',
       },
@@ -177,7 +177,7 @@ async function main(): Promise<void> {
     output: 'About 1,200 permits were filed.',
     toolCalls: [
       {
-        name: 'get_data',
+        name: 'socrata__get_data',
         args: { type: 'query', portal: 'data.example.gov', dataset_id: 'abcd-efab' },
         resultSummary: { rows: 1, columns: 1 },
         operationType: 'query',

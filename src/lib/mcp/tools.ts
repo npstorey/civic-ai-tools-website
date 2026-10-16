@@ -7,8 +7,16 @@ import { readMcpEnvFromProcess, type McpRegistryEnv } from './registry.ts';
 // each call to the correct MCP server via `./registry.ts`.
 //
 // The schemas, their one-portal rewrites (#436, ruling D7) and the offered-tools
-// filter are `@typedstandards/civic-typed-router`'s bare view (#599 W2): this
-// file keeps the website's names and signatures and holds none of their text.
+// filter are `@typedstandards/civic-typed-router`'s (#599 W2): this file keeps
+// the website's names and signatures and holds none of their text.
+//
+// THE ALIASED VIEW (#599 W3, ADR-0032). Every tool is offered as `<alias>__<upstream
+// name>`: `socrata__get_data`, `data_commons__search_indicators`,
+// `boston__ckan__search_datasets`. Every description and parameter description
+// names a tool the same way. The client calls each server by its own name
+// (`routeToolCall` in `./registry.ts`). The view is the package's own
+// `aliased*` output, and `unaliasText` with the package's dispatch map undoes it
+// to the bare bytes W2 sent.
 // The package's tool type is structural (a JSON-schema shape with read-only
 // fields); the casts below give it the `openai` type the loop core sends.
 
@@ -20,7 +28,7 @@ import { readMcpEnvFromProcess, type McpRegistryEnv } from './registry.ts';
  * The client in ./client.ts routes each call to the correct MCP server by tool
  * name. The package's array itself: one object for the process's lifetime.
  */
-export const mcpTools: ChatCompletionTool[] = civicRouter.mcpTools as unknown as ChatCompletionTool[];
+export const mcpTools: ChatCompletionTool[] = civicRouter.aliasedMcpTools as unknown as ChatCompletionTool[];
 
 /**
  * The tool schemas for a run: `mcpTools` itself when the instance is not
@@ -32,13 +40,13 @@ export const mcpTools: ChatCompletionTool[] = civicRouter.mcpTools as unknown as
  * applied to this function's result.
  *
  * Under `SITE_PORTAL_LOCKED` the loop core refuses a `get_data` call naming
- * another portal and a `fetch` whose identifier names one; the locked text is
+ * another portal and a `fetch` whose identifier names one, in either spelling; the locked text is
  * the other half: the model is not INVITED to make those calls. The schemas'
  * names and shapes do not change, so the set of callable tools
  * (`prompt-advertised-tools.test.ts`) is the same locked or not.
  */
 export function mcpToolsFor(lockedPortal?: string): ChatCompletionTool[] {
-  return civicRouter.mcpToolsFor(lockedPortal) as unknown as ChatCompletionTool[];
+  return civicRouter.aliasedMcpToolsFor(lockedPortal) as unknown as ChatCompletionTool[];
 }
 
 /**
@@ -54,7 +62,7 @@ export function offeredMcpTools(
   tools: ChatCompletionTool[],
   configured: McpRegistryEnv = readMcpEnvFromProcess(),
 ): ChatCompletionTool[] {
-  return civicRouter.offeredMcpTools(tools, configured);
+  return civicRouter.aliasedOfferedMcpTools(tools, configured);
 }
 
 // Model definitions moved to src/lib/model-catalog.ts (civic-ai-tools-website#30

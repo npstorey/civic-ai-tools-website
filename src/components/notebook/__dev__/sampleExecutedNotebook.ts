@@ -90,7 +90,7 @@ const SYNTH_INPUTS = {
   generatedAt: '2026-05-21T14:00:00.000Z',
   toolCalls: [
     {
-      name: 'get_data' as const,
+      name: 'socrata__get_data' as const,
       operationType: 'query' as const,
       args: {
         type: 'query',

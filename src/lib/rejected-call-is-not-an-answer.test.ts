@@ -321,7 +321,9 @@ test('#406: no advertised tool can put an identifier into a document through its
     .filter((tool): tool is Extract<typeof tool, { type: 'function' }> => tool.type === 'function')
     .map((tool) => tool.function.name);
   assert.ok(names.length > 1, 'the tool list must really have been read');
-  assert.ok(names.includes('fetch'), 'including the one whose branch writes an identifier');
+  // Advertised as `socrata__fetch` since #599 W3; `generateToolReason` reads
+  // either spelling, so the exposed name reaches the identifier branch.
+  assert.ok(names.includes('socrata__fetch'), 'including the one whose branch writes an identifier');
 
   for (const name of names) {
     const reason = generateToolReason({ id: RECORD_ID }, name);

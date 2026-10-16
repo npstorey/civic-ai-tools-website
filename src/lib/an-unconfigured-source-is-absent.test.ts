@@ -361,7 +361,9 @@ function assertNoNeedle(text: string, where: string): void {
 test('(1) the routing registry holds no boston-opencontext server and no ckan__ tool', () => {
   assert.ok(REGISTRY.servers['data-commons'], 'premise: the registry was built');
   assert.equal(REGISTRY.servers['boston-opencontext'], undefined, 'the registry built a Boston server with the variable unset');
-  const ckan = Object.keys(REGISTRY.toolIndex).filter((name) => name.startsWith('ckan__'));
+  // `includes`, not `startsWith`: since #599 W3 the index is keyed by exposed
+  // names (`boston__ckan__…`), which a prefix test would pass vacuously.
+  const ckan = Object.keys(REGISTRY.toolIndex).filter((name) => name.includes('ckan__'));
   assert.deepEqual(ckan, [], 'toolIndex routes ckan__ tools with the variable unset');
 });
 
@@ -373,13 +375,14 @@ test('(1) the configured-servers list a record states names no Boston entry', ()
 test('(1) the compare factory offers no ckan__ tool, locked or unlocked', () => {
   for (const locked of [undefined, PORTAL]) {
     const names = toolNames(COMPARE_TOOLS(locked));
-    assert.ok(names.includes('get_data'), `premise: the compare factory offers get_data (lock ${String(locked)})`);
-    assert.deepEqual(names.filter((n) => n.startsWith('ckan__')), [], `the compare factory offers ckan__ tools (lock ${String(locked)})`);
+    // The tools are offered by their exposed names since #599 W3.
+    assert.ok(names.includes('socrata__get_data'), `premise: the compare factory offers socrata__get_data (lock ${String(locked)})`);
+    assert.deepEqual(names.filter((n) => n.includes('ckan__')), [], `the compare factory offers ckan__ tools (lock ${String(locked)})`);
   }
 });
 
 test('(1) the composed prompt, unlocked and under the lock, names none of the Boston source\'s text', () => {
-  assert.match(PROMPT, /Tools: get_data\./, 'premise: the preamble was composed');
+  assert.match(PROMPT, /Tools: socrata__get_data\./, 'premise: the preamble was composed');
   assertNoNeedle(PROMPT, 'buildSystemPrompt');
   assert.match(LOCKED_PROMPT, /## ONE SOCRATA PORTAL ONLY/, 'premise: the lock section was appended');
   assertNoNeedle(LOCKED_PROMPT, 'withPortalLockGuidance(buildSystemPrompt)');
@@ -390,8 +393,8 @@ test('(1) each query route offers the model no ckan__ tool and sends it none of 
   for (const d of DRIVES) {
     for (const request of mcpRequests(d)) {
       const names = toolNames(request.tools);
-      assert.ok(names.includes('get_data'), `${d.name}: premise — the MCP half was not offered get_data`);
-      assert.deepEqual(names.filter((n) => n.startsWith('ckan__')), [], `${d.name}: the model was offered ckan__ tools`);
+      assert.ok(names.includes('socrata__get_data'), `${d.name}: premise — the MCP half was not offered socrata__get_data`);
+      assert.deepEqual(names.filter((n) => n.includes('ckan__')), [], `${d.name}: the model was offered ckan__ tools`);
       assertNoNeedle(JSON.stringify(request.tools), `${d.name}: the offered tool schemas`);
       assertNoNeedle(systemText(request), `${d.name}: the system prompt`);
     }

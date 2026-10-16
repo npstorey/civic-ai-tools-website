@@ -11,6 +11,19 @@
  */
 import type { NotebookCell } from './cells.ts';
 import { codeCell, markdownCell } from './cells.ts';
+import { upstreamToolName } from '../mcp/operation-types.ts';
+
+/**
+ * `call`, named by its upstream name (#599 W3). Since W3 a record names a tool
+ * `socrata__get_data` where every record before it says `get_data`; every
+ * exported function below reads the call through this, so a notebook authors
+ * the same cell for either spelling, and the name a reader sees in a cell is
+ * the one they saw before W3.
+ */
+function byUpstreamName<T extends { name?: string }>(call: T): T {
+  const upstream = upstreamToolName(call.name);
+  return upstream === call.name ? call : { ...call, name: upstream };
+}
 
 /**
  * Why a tool call returned no data, as a closed set (#321).
@@ -358,7 +371,8 @@ const NOT_RERUNNABLE_STEP_TOOLS = new Set(['fetch', 'ckan__aggregate_data']);
  * words). It can only arise on the skeleton side — a `PhaseAToolCall` always
  * carries a name — so no renderer below has to answer for it.
  */
-export function isAnalysisStep(call: StepCandidate): boolean {
+export function isAnalysisStep(candidate: StepCandidate): boolean {
+  const call = byUpstreamName(candidate);
   // Checked first, and before the name dispatch: a discovery call that did not
   // complete is not a discovery call that did, and the summary must not list it
   // as one (#321).
@@ -805,7 +819,8 @@ export function describeToolFailure(kind: ToolFailureKind | undefined): string {
  * function rather than a sentence of its own, which is what makes the two
  * documents agree by construction instead of by review.
  */
-export function describeAttempt(call: PhaseAToolCall, ctx: ToolCellContext): string {
+export function describeAttempt(recorded: PhaseAToolCall, ctx: ToolCellContext): string {
+  const call = byUpstreamName(recorded);
   if (call.name === 'get_data') {
     const portal = (call.args.portal as string) || ctx.defaultPortal;
     const onPortal = portal ? ` on \`${portal}\`` : '';
@@ -1007,9 +1022,10 @@ function renderNotRerunnableStepCell(call: PhaseAToolCall): ToolCellOutput {
  * summary.
  */
 export function renderFetchToolCell(
-  call: PhaseAToolCall,
+  recorded: PhaseAToolCall,
   ctx: ToolCellContext,
 ): ToolCellOutput | null {
+  const call = byUpstreamName(recorded);
   // Checked before the name dispatch, so this covers a failed discovery call
   // too: a discovery step that did not complete is not a discovery step that
   // did, and the summary below must not list it as one.
@@ -1062,7 +1078,7 @@ export function renderDiscoverySummaryCell(
         'this notebook rests on what they found.',
     '',
   ];
-  for (const call of discoveryCalls) {
+  for (const call of discoveryCalls.map(byUpstreamName)) {
     const opType = call.operationType ? ` (${call.operationType})` : '';
     const reason = call.reason ? ` — ${call.reason}` : '';
     lines.push(`- \`${call.name}\`${opType}${reason}`);

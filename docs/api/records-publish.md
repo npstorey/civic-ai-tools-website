@@ -143,7 +143,7 @@ Send exactly one auth header — when both are present, the `Authorization` head
 
 | Field            | Type     | Required | Description                                                                                                   |
 |------------------|----------|----------|---------------------------------------------------------------------------------------------------------------|
-| `name`           | string   | yes      | Tool name (e.g., `"get_data"`, `"search_indicators"`, `"get_observations"`).                                  |
+| `name`           | string   | yes      | Tool name as the model called it: the aliased name the reference app offers (e.g., `"socrata__get_data"`, `"data_commons__search_indicators"`, `"boston__ckan__query_data"`), or the bare upstream name (`"get_data"`, `"search_indicators"`) that records made before the tools were renamed carry. Both spellings are accepted and read the same: the operation type and the source derive from the upstream name. See [Tool names across sources](../deploy.md#tool-names-across-sources). |
 | `args`           | object   | yes      | Arguments passed to the tool. Preserved verbatim in the package's `queries[].arguments`.                      |
 | `resultSummary`  | object   | no       | `{ rows: number, columns: number }`. Populates `queries[].resultRows` and `queries[].resultColumns`.          |
 | `duration_ms`    | number   | no       | Tool call duration in milliseconds.                                                                           |
@@ -715,7 +715,7 @@ curl -sS -X POST https://civicaitools.org/api/records \
     "output": "Manhattan received 412,308 311 noise complaints in 2025, the highest volume of any borough.",
     "toolCalls": [
       {
-        "name": "get_data",
+        "name": "socrata__get_data",
         "args": {
           "type": "query",
           "portal": "data.cityofnewyork.us",
@@ -849,7 +849,7 @@ These are implementation details that may surprise an external client. None of t
 
 1. ~~Session-cookie-only authentication.~~ **Resolved.** The endpoint now accepts OAuth 2.0 device-flow bearer tokens — see [Authentication](#authentication). Session cookies remain supported for backwards compatibility and one-off curls but carry an `X-Auth-Deprecated: cookie` response header. Issue [civic-ai-tools-website#73](https://github.com/npstorey/civic-ai-tools-website/issues/73) is closed.
 2. **`portal` is deprecated and read by nothing.** Optional since 2026-09-11, and ignored when sent: no packaging code consults it — see the [`portal` note](#notes-on-specific-fields) for where a portal claim actually comes from and where a producer should put one. This was true for Socrata analyses too, which is why the old wording ("only meaningful for Socrata") was misleading rather than merely incomplete: the field is not the source of a Socrata record's portal either. It leaves the request shape at the next major version of this contract, because external publishers still send it.
-3. **`trace` format is OpenTelemetry JSON.** External clients that do not run OpenTelemetry internally can send `{ "resourceSpans": [] }`; per-source provenance will fall back to the static tool-name → source map (`get_data`/`search`/`fetch` → Socrata, `search_indicators`/`get_observations` → Data Commons). New tools added to the registry will need either the static map updated or a real trace.
+3. **`trace` format is OpenTelemetry JSON.** External clients that do not run OpenTelemetry internally can send `{ "resourceSpans": [] }`; per-source provenance will fall back to the static tool-name → source map (`socrata__get_data`/`socrata__search`/`socrata__fetch` → Socrata, `data_commons__search_indicators`/`data_commons__get_observations` → Data Commons, `boston__ckan__*` → Boston OpenContext; the bare names `get_data`, `search_indicators`, `ckan__query_data` and the rest map the same way). New tools added to the registry will need either the static map updated or a real trace.
 4. **Slug derivation is content-addressable, not user-provided.** The endpoint derives the URL slug from the title and the package hash. Clients cannot request a specific slug. A title change produces a different package hash only if the title is stored inside the package JSON — which it is not today (title and summary live on the database row, not in the canonical JSON), so re-publishing with a different title creates a different `evidence_records` row but an identical blob.
 5. **Extensions use reverse-DNS keys.** External clients adding new extensions should pick their own reverse-DNS prefix to avoid collisions with `org.civicaitools.*`.
 

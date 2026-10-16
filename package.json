@@ -17,7 +17,6 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types 'src/**/*.test.ts' 'scripts/**/*.test.mjs'",
     "sandbox:build-snapshot": "node --experimental-strip-types scripts/build-sandbox-snapshot.ts",
-    "sync-fallback": "node scripts/sync-fallback.mjs",
     "update-portals": "node scripts/update-portals.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

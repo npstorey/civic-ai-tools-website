@@ -12,6 +12,11 @@
 // can only arrive with a code change. `buildToolIndex` is the seam that makes
 // the refusal drivable, and it is the same code path `buildMcpRegistry` runs.
 //
+// Since #599 W3 the index is keyed by EXPOSED name, `<alias>__<tool>`: two
+// servers may host one upstream name under different aliases (Socrata's
+// `search` and a fourth source's `search`), and the refusal fires on an
+// exposed name two servers share — which needs two servers under one alias.
+//
 // The third test is the reason a throw here is a startup refusal and not a
 // `next build` crash: `src/lib/mcp/client.ts` calls `buildMcpRegistry` at
 // MODULE-EVALUATION time, so this file asserts, mechanically, that the shipped
@@ -32,19 +37,21 @@ const FULLY_CONFIGURED = {
   bostonOpencontextUrl: 'https://data-mcp.boston.example.org/mcp',
 };
 
-function serverHosting(sourceId: string, tools: string[]): McpServerConfig {
+function serverHosting(sourceId: string, tools: string[], alias: string = sourceId.replace(/-/g, '_')): McpServerConfig {
   return {
     sourceId,
     label: `${sourceId} test server`,
     endpointUrl: `https://${sourceId}.example.org/mcp`,
     tools,
+    alias,
+    serverId: `${sourceId}@https://${sourceId}.example.org/mcp`,
   };
 }
 
-test('two servers sharing a tool name are refused, naming the tool and both servers', () => {
+test('two servers sharing an exposed tool name are refused, naming the name and both servers', () => {
   const servers: Record<string, McpServerConfig> = {
-    'first-source': serverHosting('first-source', ['unique_to_first', 'shared_tool']),
-    'second-source': serverHosting('second-source', ['shared_tool', 'unique_to_second']),
+    'first-source': serverHosting('first-source', ['unique_to_first', 'shared_tool'], 'shared'),
+    'second-source': serverHosting('second-source', ['shared_tool', 'unique_to_second'], 'shared'),
   };
 
   let caught: unknown;
@@ -64,7 +71,7 @@ test('two servers sharing a tool name are refused, naming the tool and both serv
   );
 
   const { message } = caught as Error;
-  assert.ok(message.includes('shared_tool'), `message does not name the tool: ${message}`);
+  assert.ok(message.includes('shared__shared_tool'), `message does not name the exposed name: ${message}`);
   assert.ok(
     message.includes('first-source'),
     `message does not name the server that already held the tool: ${message}`,
@@ -81,7 +88,16 @@ test('servers with distinct tool names index without refusal', () => {
     'second-source': serverHosting('second-source', ['beta_tool']),
   });
 
-  assert.deepEqual(index, { alpha_tool: 'first-source', beta_tool: 'second-source' });
+  assert.deepEqual(index, { first_source__alpha_tool: 'first-source', second_source__beta_tool: 'second-source' });
+});
+
+test('two servers hosting one upstream name under different aliases index without refusal', () => {
+  const index = buildToolIndex({
+    socrata: serverHosting('socrata', ['search', 'fetch'], 'socrata'),
+    example: serverHosting('example', ['search'], 'example'),
+  });
+
+  assert.deepEqual(index, { socrata__search: 'socrata', socrata__fetch: 'socrata', example__search: 'example' });
 });
 
 test('the shipped tool lists do not overlap, so the configured registry builds', () => {

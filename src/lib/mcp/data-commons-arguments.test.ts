@@ -38,6 +38,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mcpTools } from './tools.ts';
 import { DATA_COMMONS_SKILL } from './data-commons-skill.ts';
+import { upstreamToolName } from './operation-types.ts';
 
 // datacommonsorg/mixer ce391f7, internal/server/mcp/types.go, the json tags of
 // SearchIndicatorsInput and GetObservationsInput.
@@ -49,8 +50,10 @@ const SERVER_READS: Record<string, string[]> = {
 // Offered before this guard, dropped by the server: the names must not come back.
 const DROPPED_BY_SERVER = ['parent_place', 'maybe_bilateral', 'child_place_type'];
 
+/** A tool by its upstream name: since #599 W3 the model is offered it as
+ *  `data_commons__<name>`. */
 function dataCommonsTool(name: string) {
-  const tool = mcpTools.find((t) => t.type === 'function' && t.function.name === name);
+  const tool = mcpTools.find((t) => t.type === 'function' && upstreamToolName(t.function.name) === upstreamToolName(name));
   assert.ok(tool && tool.type === 'function', `mcpTools carries ${name}`);
   return tool.function;
 }

@@ -18,6 +18,7 @@ import {
   skillRoutingTraceAttributes,
 } from './registry.ts';
 import { buildMcpRequestHeaders } from './client.ts';
+import { civicRouter } from '@typedstandards/civic-typed-router';
 
 const TEST_ENV = {
   socrataUrl: 'https://socrata-mcp.example.org',
@@ -157,8 +158,13 @@ test('#258 C4: with no socrataUrl the registry omits the Socrata server and name
   });
   assert.equal(registry.servers.socrata, undefined, 'no Socrata server entry');
   for (const toolName of ['get_data', 'search', 'fetch']) {
-    assert.equal(resolveServerForTool(registry, toolName), undefined, `${toolName} resolves to no server`);
-    assert.equal(registry.unconfiguredTools[toolName], 'SOCRATA_MCP_URL', `${toolName} names its missing variable`);
+    // Either spelling resolves to no server; the variable is recorded under
+    // the exposed name the model is offered (#599 W3).
+    const upstream = civicRouter.upstreamToolName(toolName);
+    const exposed = [...civicRouter.dispatchMap.values()].find((t) => t.sourceId === 'socrata' && t.upstreamName === upstream)!.exposedName;
+    assert.equal(resolveServerForTool(registry, upstream), undefined, `${upstream} resolves to no server`);
+    assert.equal(resolveServerForTool(registry, exposed), undefined, `${exposed} resolves to no server`);
+    assert.equal(registry.unconfiguredTools[exposed], 'SOCRATA_MCP_URL', `${exposed} names its missing variable`);
   }
   // The other sources are unaffected.
   assert.equal(resolveServerForTool(registry, 'search_indicators')!.sourceId, 'data-commons');
