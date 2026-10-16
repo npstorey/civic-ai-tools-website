@@ -1114,6 +1114,15 @@ by its name, in each environment you rotate. Until then its bridge answers
 401 and every call fails as unavailable. The next call after the delete
 creates a sandbox with a token from the new secret.
 
+**One secret per environment, not per branch.** The name carries the
+environment, not the branch, so every preview deployment shares
+`civic-src-preview-<alias>__<version>`. If one preview branch sets its own
+branch-scoped `SOURCE_BRIDGE_SECRET`, the sandbox holds the token of
+whichever branch created it, and every other branch's calls get 401 and fail
+as unavailable. Set the preview secret once for all preview branches.
+Otherwise, delete the preview sandbox by its name before a branch with a
+different secret is tried.
+
 **A pin move** changes the name, so the next call creates a new sandbox. The
 old one is deleted by the pin move's owner step, or left to expire, about 44
 days after its last use (its snapshot expires 30 days after last use).
