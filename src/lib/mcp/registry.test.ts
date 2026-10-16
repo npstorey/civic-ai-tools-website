@@ -173,8 +173,14 @@ test('#258 C4: with no socrataUrl the registry omits the Socrata server and name
   // The other sources are unaffected.
   assert.equal(resolveServerForTool(registry, 'search_indicators')!.sourceId, 'data-commons');
   assert.equal(resolveServerForTool(registry, 'ckan__query_data')!.sourceId, 'boston-opencontext');
-  // A configured registry has nothing unconfigured.
-  assert.deepEqual(buildMcpRegistry(TEST_ENV).unconfiguredTools, {});
+  // A registry with every source on has nothing unconfigured. With the hosted
+  // source's switch unset (router 0.3.0, #617 P3), its five tools are refused
+  // naming the switch, and nothing else is.
+  assert.deepEqual(buildMcpRegistry({ ...TEST_ENV, nycCharterHosting: 'sandbox' }).unconfiguredTools, {});
+  assert.deepEqual(
+    buildMcpRegistry(TEST_ENV).unconfiguredTools,
+    Object.fromEntries(civicRouter.manifest.find((e) => e.sourceId === 'nyc-charter')!.toolNames.map((t) => [`nyc_charter__${t}`, 'NYC_CHARTER_HOSTING'])),
+  );
 });
 
 test('#258 C4: getMissingMcpRoutingError refuses on unset/empty and passes on a configured value', () => {

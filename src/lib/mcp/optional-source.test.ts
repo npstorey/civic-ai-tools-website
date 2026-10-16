@@ -23,7 +23,7 @@ import {
   withheldToolNames,
   type McpRegistryEnv,
 } from './registry.ts';
-import { civicRouter } from '@typedstandards/civic-typed-router';
+import { civicRouter, NYC_CHARTER_TOOL_NAMES } from '@typedstandards/civic-typed-router';
 import { mcpTools, mcpToolsFor, offeredMcpTools } from './tools.ts';
 import {
   CROSS_SOURCE_PREAMBLE,
@@ -48,8 +48,17 @@ const CKAN_EXPOSED = CKAN_TOOLS.map(
   (tool) => [...civicRouter.dispatchMap.values()].find((t) => t.upstreamName === civicRouter.upstreamToolName(tool))!.exposedName,
 );
 
+/** Router 0.3.0's hosted source (#617 P3), as the model is offered its tools.
+ *  NYC_CHARTER_HOSTING is unset in UNSET and SET, so in both its five are
+ *  withheld and refused naming the switch: the move the anchor names for the
+ *  pin. ALL_ON switches it on too, so "every optional source configured" still
+ *  has an instance to hold the pre-rule identities to. */
+const CHARTER_EXPOSED = NYC_CHARTER_TOOL_NAMES.map((tool) => `nyc_charter__${tool}`);
+
 const UNSET: McpRegistryEnv = { socrataUrl: 'https://socrata.invalid', dataCommonsUrl: 'https://data-commons.invalid' };
 const SET: McpRegistryEnv = { ...UNSET, bostonOpencontextUrl: 'https://opencontext.invalid/mcp' };
+const ALL_ON: McpRegistryEnv = { ...SET, nycCharterHosting: 'sandbox' };
+const charterUnconfigured = Object.fromEntries(CHARTER_EXPOSED.map((tool) => [tool, 'NYC_CHARTER_HOSTING']));
 const NEEDLES = ['Boston OpenContext', 'ckan__', 'data-mcp.boston.gov'];
 
 const names = (tools: typeof mcpTools) => tools.map((t) => (t.type === 'function' ? t.function.name : t.type));
@@ -57,13 +66,15 @@ const names = (tools: typeof mcpTools) => tools.map((t) => (t.type === 'function
 test('the registry: configured, the Boston server routes its six tools; unset, they resolve to no server and name the variable', () => {
   const set = buildMcpRegistry(SET);
   assert.equal(set.servers['boston-opencontext']?.endpointUrl, 'https://opencontext.invalid/mcp');
-  assert.deepEqual(set.unconfiguredTools, {});
+  assert.deepEqual(set.unconfiguredTools, charterUnconfigured, 'with Boston set, only Charter\'s five (switch unset) are refused');
+  assert.deepEqual(buildMcpRegistry(ALL_ON).unconfiguredTools, {}, 'with every optional source on, nothing is refused');
   const unset = buildMcpRegistry(UNSET);
   assert.equal(unset.servers['boston-opencontext'], undefined);
   for (const tool of CKAN_EXPOSED) {
     assert.equal(unset.toolIndex[tool], undefined, `${tool} is routable with the source unset`);
     assert.equal(unset.unconfiguredTools[tool], 'BOSTON_OPENCONTEXT_MCP_URL', `${tool} does not name its variable`);
   }
+  assert.deepEqual(Object.keys(unset.unconfiguredTools).sort(), [...CKAN_EXPOSED, ...CHARTER_EXPOSED].sort(), 'unset refuses more or fewer than Boston\'s six and Charter\'s five');
   assert.deepEqual(Object.keys(unset.servers), ['socrata', 'data-commons']);
   assert.deepEqual(Object.keys(set.servers), ['socrata', 'data-commons', 'boston-opencontext'], 'insertion order moved');
   // An empty string is unset, as `configuredAddressForSource` reads it.
@@ -76,19 +87,26 @@ test('offered and withheld agree with the registry, and only optional sources ar
   assert.equal(isSourceOffered(UNSET, 'data-commons'), true);
   // Socrata is required, not optional: its absence refuses the query up front.
   assert.equal(isSourceOffered({ dataCommonsUrl: 'https://data-commons.invalid' }, 'socrata'), true);
-  assert.deepEqual(withheldToolNames(SET), []);
-  assert.deepEqual(withheldToolNames(UNSET), CKAN_EXPOSED);
-  assert.deepEqual(withheldToolNames({ dataCommonsUrl: 'https://data-commons.invalid' }), CKAN_EXPOSED, 'Socrata tools were withheld');
+  assert.equal(isSourceOffered(SET, 'nyc-charter'), false);
+  assert.equal(isSourceOffered(ALL_ON, 'nyc-charter'), true);
+  assert.deepEqual(withheldToolNames(ALL_ON), []);
+  assert.deepEqual(withheldToolNames(SET), CHARTER_EXPOSED);
+  assert.deepEqual(withheldToolNames(UNSET), [...CKAN_EXPOSED, ...CHARTER_EXPOSED]);
+  assert.deepEqual(withheldToolNames({ dataCommonsUrl: 'https://data-commons.invalid' }), [...CKAN_EXPOSED, ...CHARTER_EXPOSED], 'Socrata tools were withheld');
 });
 
 test('the offered tools: configured, the very same array; unset, the list without the six ckan__ tools', () => {
   for (const locked of [undefined, 'records.city-a.example']) {
     const all = mcpToolsFor(locked);
-    assert.equal(offeredMcpTools(all, SET), all, 'a configured instance is not handed the same array');
+    assert.equal(offeredMcpTools(all, ALL_ON), all, 'an instance with every optional source on is not handed the same array');
+    // SET: Boston on, Charter's switch unset: the vocabulary less Charter's five.
+    const set = offeredMcpTools(all, SET);
+    assert.deepEqual(set, all.filter((t) => t.type === 'function' && !t.function.name.startsWith('nyc_charter__')), 'SET is not the vocabulary less Charter\'s five');
+    assert.equal(names(all).length - names(set).length, 5);
     const offered = offeredMcpTools(all, UNSET);
-    assert.deepEqual(names(offered), names(all).filter((n) => !n.startsWith('boston__ckan__')));
-    assert.equal(names(all).length - names(offered).length, 6);
-    assert.deepEqual(offered, all.filter((t) => t.type === 'function' && !t.function.name.startsWith('boston__ckan__')), 'the kept schemas changed');
+    assert.deepEqual(names(offered), names(set).filter((n) => !n.startsWith('boston__ckan__')));
+    assert.equal(names(set).length - names(offered).length, 6);
+    assert.deepEqual(offered, set.filter((t) => t.type === 'function' && !t.function.name.startsWith('boston__ckan__')), 'the kept schemas changed');
   }
 });
 

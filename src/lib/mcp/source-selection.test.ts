@@ -70,6 +70,11 @@ const FULL: Env = {
   bostonOpencontextUrl: 'http://127.0.0.1:9/boston',
 };
 const NO_BOSTON: Env = { socrataUrl: FULL.socrataUrl, dataCommonsUrl: FULL.dataCommonsUrl };
+/** Every source on, router 0.3.0's hosted one included (#617 P3). FULL leaves
+ *  NYC_CHARTER_HOSTING unset, so there Charter's five tools are withheld and
+ *  its `sourcesOffered` row is `not-configured`: the moves the anchor names. */
+const ALL_ON: Env = { ...FULL, nycCharterHosting: 'sandbox' };
+const CHARTER_ROW = 'nyc-charter:nyc_charter:not-configured';
 
 const ALL_TOOLS = tools.mcpToolsFor(undefined);
 const names = (list: ChatCompletionTool[]) => list.map((t) => (t as { function: { name: string } }).function.name);
@@ -86,8 +91,11 @@ test('premise: with every source configured and no selection, all three sources 
 test('the default selection is no selection: the same array object, byte for byte what was offered before', () => {
   const fallback = (skill as unknown as Record<string, unknown>).DEFAULT_SOURCE_SELECTION as Selection;
   assert.equal(fallback, undefined);
-  assert.equal(offeredMcpTools(ALL_TOOLS, FULL, undefined), ALL_TOOLS, 'with every source offered the array itself is returned');
-  assert.equal(offeredMcpTools(ALL_TOOLS, FULL, fallback), offeredMcpTools(ALL_TOOLS, FULL));
+  assert.equal(offeredMcpTools(ALL_TOOLS, ALL_ON, undefined), ALL_TOOLS, 'with every source offered the array itself is returned');
+  assert.equal(offeredMcpTools(ALL_TOOLS, ALL_ON, fallback), offeredMcpTools(ALL_TOOLS, ALL_ON));
+  // With the switch unset: the vocabulary less Charter's five, the same either way.
+  assert.deepEqual(offeredMcpTools(ALL_TOOLS, FULL, undefined), ALL_TOOLS.filter((t) => !names([t])[0].startsWith('nyc_charter__')));
+  assert.deepEqual(offeredMcpTools(ALL_TOOLS, FULL, fallback), offeredMcpTools(ALL_TOOLS, FULL));
 });
 
 test('an explicit selection narrows the offered tools to the sources it names', () => {
@@ -130,10 +138,12 @@ test('the record states selected / not-selected with a selection, configured wit
   assert.equal(typeof composeSystemPrompt, 'function', 'socrata-skill.ts exports no composeSystemPrompt');
   const reasons = async (configured: Env, selection?: Selection) =>
     (await composeSystemPrompt!({ portal: PORTAL, configured, selection })).sourcesOffered.map((s) => `${s.sourceId}:${s.alias}:${s.reason}`);
-  assert.deepEqual(await reasons(FULL), ['socrata:socrata:configured', 'data-commons:data_commons:configured', 'boston-opencontext:boston:configured']);
-  assert.deepEqual(await reasons(NO_BOSTON), ['socrata:socrata:configured', 'data-commons:data_commons:configured', 'boston-opencontext:boston:not-configured']);
-  assert.deepEqual(await reasons(FULL, ['socrata', 'no-such-source']), ['socrata:socrata:selected', 'data-commons:data_commons:not-selected', 'boston-opencontext:boston:not-selected']);
-  assert.deepEqual(await reasons(NO_BOSTON, ['boston-opencontext']), ['socrata:socrata:not-selected', 'data-commons:data_commons:not-selected', 'boston-opencontext:boston:not-configured']);
+  // Each list ends with Charter's row: not-configured with its switch unset,
+  // with or without a selection (the named move, #617 P3).
+  assert.deepEqual(await reasons(FULL), ['socrata:socrata:configured', 'data-commons:data_commons:configured', 'boston-opencontext:boston:configured', CHARTER_ROW]);
+  assert.deepEqual(await reasons(NO_BOSTON), ['socrata:socrata:configured', 'data-commons:data_commons:configured', 'boston-opencontext:boston:not-configured', CHARTER_ROW]);
+  assert.deepEqual(await reasons(FULL, ['socrata', 'no-such-source']), ['socrata:socrata:selected', 'data-commons:data_commons:not-selected', 'boston-opencontext:boston:not-selected', CHARTER_ROW]);
+  assert.deepEqual(await reasons(NO_BOSTON, ['boston-opencontext', 'nyc-charter']), ['socrata:socrata:not-selected', 'data-commons:data_commons:not-selected', 'boston-opencontext:boston:not-configured', CHARTER_ROW]);
 });
 
 test('composeSystemPrompt states the date the prompt carries, its components, and the prompt buildSystemPrompt returns', async () => {
