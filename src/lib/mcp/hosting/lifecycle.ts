@@ -47,6 +47,7 @@
  */
 import { Sandbox } from '@vercel/sandbox';
 import type { HostedMcpServer } from '../registry.ts';
+import type { SourceHosting } from '@typedstandards/civic-typed-router';
 import { proxyAwareSandboxFetch, resolveSandboxAuthParams } from '../../sandbox/vercel-sandbox.ts';
 import { errorLogFacts } from '../../streaming.ts';
 import { BRIDGE_PACKAGE_JSON, BRIDGE_READY_LINE, BRIDGE_SOURCE, bridgeConfig } from './bridge-source.ts';
@@ -190,23 +191,41 @@ async function startBridge(sandbox: Handle, source: HostedMcpServer, ms: number)
   throw new WakeStepError('the bridge exited before it was ready');
 }
 
+/** One directory the install step fills: the files written into it, then
+ *  the npm command run in it (`npm <npmArgs>`). */
+export interface HostedInstallDir {
+  dir: string;
+  files: Array<{ path: string; content: string }>;
+  npmArgs: string[];
+}
+
+/** What `onCreate` writes and runs to install a source's pin and the bridge,
+ *  one entry per directory, in the order they are installed. */
+export function hostedInstallPlan(hosting: SourceHosting): HostedInstallDir[] {
+  const pinPackageJson = JSON.stringify({ name: 'civic-source-pin', private: true, dependencies: { [hosting.package]: hosting.version } }, null, 2);
+  const npmArgs = ['install', '--ignore-scripts', '--no-audit', '--no-fund'];
+  return [
+    { dir: PIN_DIR, files: [{ path: `${PIN_DIR}/package.json`, content: pinPackageJson }], npmArgs },
+    { dir: BRIDGE_DIR, files: [{ path: `${BRIDGE_DIR}/package.json`, content: BRIDGE_PACKAGE_JSON }], npmArgs },
+  ];
+}
+
 /** `onCreate`: install the pin and the bridge, close the network, start the bridge. */
 async function installAndStart(sandbox: Handle, source: HostedMcpServer, ms: number): Promise<void> {
   const { hosting } = source;
-  const pinPackageJson = JSON.stringify({ name: 'civic-source-pin', private: true, dependencies: { [hosting.package]: hosting.version } }, null, 2);
+  const plan = hostedInstallPlan(hosting);
   await run(sandbox, 'mkdir', ['-p', PIN_DIR, BRIDGE_DIR], '/');
   await sandbox.writeFiles([
-    { path: `${PIN_DIR}/package.json`, content: pinPackageJson },
-    { path: `${BRIDGE_DIR}/package.json`, content: BRIDGE_PACKAGE_JSON },
+    ...plan.flatMap((step) => step.files),
     { path: `${BRIDGE_DIR}/bridge.mjs`, content: BRIDGE_SOURCE },
     {
       path: `${BRIDGE_DIR}/bridge-config.json`,
       content: bridgeConfig({ package: hosting.package, version: hosting.version, pinDir: PIN_DIR, port: HOSTED_SOURCE_PORT }),
     },
   ]);
-  for (const dir of [PIN_DIR, BRIDGE_DIR]) {
-    const installed = await run(sandbox, 'npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund'], dir);
-    if (installed.exitCode !== 0) throw new WakeStepError(`npm install in ${dir} exited ${installed.exitCode}`);
+  for (const step of plan) {
+    const installed = await run(sandbox, 'npm', step.npmArgs, step.dir);
+    if (installed.exitCode !== 0) throw new WakeStepError(`npm ${step.npmArgs[0]} in ${step.dir} exited ${installed.exitCode}`);
   }
   // The manifest's outbound list, applied before the bridge (and so the
   // child) starts: `[]` is deny-all. It holds for every later session too.

@@ -20,6 +20,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { civicRouter } from '@typedstandards/civic-typed-router';
 import { canonicalizeToolCall } from './tool-call-identity.ts';
 
 /** A replay run, as `AttestationDialog` reads it off `/api/records/:slug/replay`. */
@@ -181,4 +183,71 @@ test('a call that carries no portal is not given one', () => {
   const key = canonicalizeToolCall({ name: 'search', args: { query: 'noise complaints' } });
   assert.equal(key, 'search:{"query":"noise complaints"}');
   assert.ok(!key.includes('portal'), 'nothing in the key may name a source the call did not carry');
+});
+
+// --- b1: one key per source for a name two sources share (#617 P4) ---------------
+//
+// Socrata's `search` and NYC Charter, Laws and Rules' `search` both accept
+// `{"query":"…"}` (#617 G0 §5). Keyed by the upstream name alone, a call to
+// one and a call to the other with the same query are one key, and a signed
+// consistency attestation would score a replay that searched the wrong source
+// as reproduced. b1: the three sources whose records predate #599 W3 (Socrata,
+// Data Commons, Boston OpenContext) keep the upstream name, so every key they
+// have ever had is unchanged; any other source's call is keyed by its exposed
+// name (`nyc_charter__search:{…}`).
+//
+// THE PIN. The pre-change key set below was computed at website 0fd882a (the
+// base of #617 P4) over every name the three sources answer to, in both
+// spellings, times three argument shapes, answered and refused: 22 names, 132
+// keys. Its SHA-256 is pinned here; the name list is pinned beside it so the
+// corpus cannot shrink without failing.
+
+const PRE_W3_SOURCES = new Set(['socrata', 'data-commons', 'boston-opencontext']);
+const PINNED_NAMES = [
+  'boston__ckan__aggregate_data', 'boston__ckan__execute_sql', 'boston__ckan__get_dataset', 'boston__ckan__get_schema',
+  'boston__ckan__query_data', 'boston__ckan__search_datasets', 'ckan__aggregate_data', 'ckan__execute_sql',
+  'ckan__get_dataset', 'ckan__get_schema', 'ckan__query_data', 'ckan__search_datasets',
+  'data_commons__get_observations', 'data_commons__search_indicators', 'fetch', 'get_data', 'get_observations',
+  'search', 'search_indicators', 'socrata__fetch', 'socrata__get_data', 'socrata__search',
+];
+const PINNED_IDENTITY_LIST_SHA256 = 'b10f601d28630683e3f4e8cc071d87bacda19f25cab2b8f1fbe5562ba4a65931';
+
+test('b1: every key of the three pre-W3 sources is byte-identical to the pre-change key set', () => {
+  const names: string[] = [];
+  for (const [exposed, target] of civicRouter.dispatchMap.entries()) {
+    if (PRE_W3_SOURCES.has(target.sourceId)) names.push(exposed, target.upstreamName);
+  }
+  const corpus = [...new Set(names)].sort();
+  assert.deepEqual(corpus, PINNED_NAMES, 'the corpus the pin was computed over has changed');
+  const ARGS = [{}, { query: 'rent' }, { type: 'query', dataset_id: 'erm2-nwe9', portal: 'data.cityofnewyork.us', where: "borough='BRONX'" }];
+  const keys: string[] = [];
+  for (const name of corpus) for (const args of ARGS) for (const failed of [false, true]) keys.push(canonicalizeToolCall({ name, args, failed }));
+  assert.equal(keys.length, 132);
+  assert.equal(
+    createHash('sha256').update(JSON.stringify(keys)).digest('hex'),
+    PINNED_IDENTITY_LIST_SHA256,
+    `an existing key moved. The keys now:\n${keys.join('\n')}`,
+  );
+});
+
+test('b1: socrata__search and nyc_charter__search with equal arguments are different keys', () => {
+  const args = { query: 'rent stabilization' };
+  const socrata = canonicalizeToolCall({ name: 'socrata__search', args });
+  const charter = canonicalizeToolCall({ name: 'nyc_charter__search', args });
+  assert.notEqual(charter, socrata, 'a search of one source and a search of the other are one key');
+  assert.equal(socrata, 'search:{"query":"rent stabilization"}', 'Socrata keeps its upstream-name key');
+  assert.equal(charter, 'nyc_charter__search:{"query":"rent stabilization"}', 'Charter is keyed by its exposed name');
+  assert.equal(
+    canonicalizeToolCall({ name: 'nyc_charter__search', args, failed: true }),
+    'nyc_charter__search:{"query":"rent stabilization"}:rejected',
+  );
+});
+
+test('b1: each of Charter\'s tools is keyed by its exposed name, and differs from any pre-W3 key with equal arguments', () => {
+  for (const [exposed, target] of civicRouter.dispatchMap.entries()) {
+    if (target.sourceId !== 'nyc-charter') continue;
+    const key = canonicalizeToolCall({ name: exposed, args: { query: 'x' } });
+    assert.ok(key.startsWith(`${exposed}:`), `${exposed} is keyed as ${key}`);
+    assert.notEqual(key, canonicalizeToolCall({ name: target.upstreamName, args: { query: 'x' } }), `${exposed} shares its bare name's key`);
+  }
 });
