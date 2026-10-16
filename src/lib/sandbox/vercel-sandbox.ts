@@ -111,8 +111,9 @@ export function resolveSandboxAuthParams(
 
 /**
  * The agent options the SDK's own API agent carries, kept on the proxied path.
- * `@vercel/sandbox` 1.10.2 builds `new Agent({ bodyTimeout: 0 })`
- * (`dist/api-client/base-client.js`): a command's output arrives as one
+ * `@vercel/sandbox` builds `new Agent({ bodyTimeout: 0 })`
+ * (`dist/api-client/base-client.js`, unchanged from 1.10.2 to 3.5.1): a
+ * command's output arrives as one
  * long-lived NDJSON response, and undici's default body timeout (300 s of
  * silence) would cut a quiet long-running command off mid-stream. A
  * replacement that dropped it would work in every short test and fail on the
@@ -180,13 +181,20 @@ function createSandbox(
   snapshotId: string | undefined,
   base: SandboxCreateBase,
 ): Promise<Sandbox> {
+  // ONE-USE, on every branch (#491). From 3.x a sandbox is persistent unless
+  // told otherwise: stopping it snapshots its filesystem so the next session
+  // resumes it. An executor sandbox holds one visitor's notebook and is never
+  // resumed, so a persistent one would keep that visitor's files and add a
+  // snapshot to the project's storage on every run.
+  const oneUse = { ...base, persistent: false as const };
   const params = snapshotId
-    ? { ...base, source: { type: 'snapshot' as const, snapshotId } }
+    ? { ...oneUse, source: { type: 'snapshot' as const, snapshotId } }
     // No snapshot configured — boot a fresh python3.13 sandbox; the
     // orchestrator installs the pinned scientific stack inline. Slower
     // (~10-30s cold start) and intended only for the snapshot-build script +
-    // local-dev smoke tests.
-    : { ...base, runtime: 'python3.13' as const };
+    // local-dev smoke tests. `runtime` is deprecated in 3.x in favour of
+    // `image`, and still boots python3.13 there (measured 2026-10-16, #617 P1).
+    : { ...oneUse, runtime: 'python3.13' as const };
 
   // Attach the auth triple ONLY when complete. Two distinct call shapes
   // rather than a spread of possibly-undefined keys: an undefined-valued
@@ -197,9 +205,9 @@ function createSandbox(
   // The transport fragment follows the same rule: `{}` unless a proxy is
   // configured, so with the proxy variables unset neither shape gains a key.
   // Every later call — commands, files, stop — reuses the client `create`
-  // builds from this `fetch` (`@vercel/sandbox` 1.10.2 `dist/sandbox.js`
-  // `create` → `new APIClient({ fetch })`, handed to the sandbox and to each
-  // command), so one fragment here governs the whole session.
+  // builds from this `fetch` (`@vercel/sandbox` `dist/sandbox.js` `create` →
+  // `new APIClient({ fetch })`, handed to the sandbox and to each command, in
+  // 1.10.2 and in 3.5.1), so one fragment here governs the whole session.
   const auth = resolveSandboxAuthParams();
   const transport = proxyAwareSandboxFetch();
   return auth
@@ -218,7 +226,12 @@ export function createVercelSandboxDriver(): SessionExecutorDriver {
       });
 
       return {
-        id: sandbox.sandboxId,
+        // The instance id a record carries in its execution extension's
+        // `sandboxId`. 3.x has no `sandboxId`; a sandbox is identified by its
+        // `name`, generated per creation when none is given — one-use (above),
+        // so one name per run. The field stays a string; its value changed
+        // from an `sbx_…` id to a name with the 3.x move (#491).
+        id: sandbox.name,
         stackPreinstalled: Boolean(opts.snapshotId),
 
         async runCommand(command: ExecutorCommand): Promise<ExecutorCommandResult> {

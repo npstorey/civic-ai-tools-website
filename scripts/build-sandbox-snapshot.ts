@@ -39,11 +39,16 @@ const SNAPSHOT_EXPIRATION_MS = 0;          // 0 = never expire (operator control
 
 async function main(): Promise<void> {
   console.log('[sandbox-snapshot] booting fresh python3.13 sandbox…');
+  // `runtime` is deprecated in @vercel/sandbox 3.x in favour of `image`, and
+  // still boots python3.13 there (measured 2026-10-16, #617 P1). Not
+  // persistent: the one snapshot this script wants is the explicit one below,
+  // and a persistent sandbox would add an automatic one when it stops.
   const sandbox = await Sandbox.create({
     runtime: 'python3.13',
     timeout: SNAPSHOT_BUILD_TIMEOUT_MS,
+    persistent: false,
   });
-  console.log(`[sandbox-snapshot] sandboxId=${sandbox.sandboxId}`);
+  console.log(`[sandbox-snapshot] sandbox name=${sandbox.name}`);
 
   try {
     const pipArgs = [
