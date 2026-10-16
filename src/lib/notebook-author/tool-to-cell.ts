@@ -11,6 +11,7 @@
  */
 import type { NotebookCell } from './cells.ts';
 import { codeCell, markdownCell } from './cells.ts';
+import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import { upstreamToolName } from '../mcp/operation-types.ts';
 
 /**
@@ -356,7 +357,22 @@ const RERUNNABLE_STEP_TOOLS = new Set(['get_observations', 'ckan__query_data', '
  * step (its operation type is `query`), so leaving it in the discovery summary
  * is the same disagreement between the two generators, one tool over.
  */
-const NOT_RERUNNABLE_STEP_TOOLS = new Set(['fetch', 'ckan__aggregate_data']);
+const NOT_RERUNNABLE_STEP_TOOLS = new Set(['fetch', 'ckan__aggregate_data', 'get_section']);
+
+// `get_section`, NYC Charter, Laws and Rules' section read (#617 P4,
+// criterion 4), reaches the same place from a third side. It returns the text
+// of a section of law, which is what an answer about the law rests on: a step,
+// not a discovery call, and no helper here calls a hosted source. So it is a
+// step stated as not reproduced, in both generators, through the one
+// predicate; `renderNotRerunnableStepCell` names the hosted source and its pin
+// (`hostedEntryFor`). Charter's other tools find or list what the corpus holds
+// (`search`, `list_titles`, `get_title`, `get_version`) and stay discovery.
+// Keyed, like every name here, by upstream name: no other source declares it.
+
+/** The hosted manifest entry that declares an upstream tool name, if any. */
+function hostedEntryFor(name: string) {
+  return CIVIC_MANIFEST.find((entry) => entry.hosting && entry.toolNames.includes(name));
+}
 
 /**
  * Whether a tool call is a step in the analysis pipeline — the ONE definition
@@ -973,7 +989,17 @@ function renderFailedToolCell(
  * claim is measured rather than stated.
  */
 function renderNotRerunnableStepCell(call: PhaseAToolCall): ToolCellOutput {
-  const why = call.name === 'fetch'
+  const hosted = hostedEntryFor(call.name);
+  const why = hosted?.hosting
+    ? [
+      `The original analysis read a section of law through \`${call.name}\`, a tool of the ` +
+        `${hosted.displayName}, which the instance runs from the pinned package ` +
+        `\`${hosted.hosting.package}@${hosted.hosting.version}\`. This notebook has no helper that ` +
+        'calls that source, so no cell here repeats the request, and nothing here states what it returned.',
+      '',
+      'No code cell is generated for it, and nothing is cited for it: this document did not read that source.',
+    ]
+    : call.name === 'fetch'
     ? [
       'The original analysis called `fetch`. This notebook does not re-run it. ' +
         '`fetch` answers either with a dataset\'s description or with a single record, and ' +

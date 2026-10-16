@@ -93,3 +93,8 @@ test('skeleton notebook: the same run has one step, the section read, stated as 
   assert.match(all, /\*Not reproduced below\.\* This step called `get_section`/, all);
   assert.doesNotMatch(all, /url = "/, 'the skeleton writes a URL for a call that named none');
 });
+
+test('premise: get_section is declared by NYC Charter, Laws and Rules alone, so the step rule keyed on it reaches no other source', async () => {
+  const { CIVIC_MANIFEST } = await import('@typedstandards/civic-typed-router');
+  assert.deepEqual(CIVIC_MANIFEST.filter((entry) => entry.toolNames.includes('get_section')).map((entry) => entry.sourceId), ['nyc-charter']);
+});

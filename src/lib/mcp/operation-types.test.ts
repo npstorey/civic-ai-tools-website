@@ -141,18 +141,14 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
   // A tenth tool added to `mcpTools` without a decision here fails this.
   const UNTYPED_BY_MEASUREMENT: Record<string, string> = {
     fetch: 'returns metadata or one row depending on the id shape — see operation-types.ts',
-    // Router 0.3.0's NYC Charter tools (#617 P3). This records the state at
-    // P3, not a decision: TOOL_OPERATION_TYPES has no row for them yet, so
-    // they derive no operation type and a record states `unknown`, the honest
-    // absence `fetch` takes. #617 G0 §5 found no existing kind true of
-    // `get_section` ("query" would add section text to "records analyzed");
-    // P4 measures each of the four against the kinds and replaces these
-    // entries with its decision. Charter's `search` is not listed: it derives
-    // `search` from Socrata's row.
-    get_section: 'no row yet (#617 P3); P4 measures it against the kinds (#617 G0 §5)',
-    list_titles: 'no row yet (#617 P3); P4 measures it against the kinds (#617 G0 §5)',
-    get_title: 'no row yet (#617 P3); P4 measures it against the kinds (#617 G0 §5)',
-    get_version: 'no row yet (#617 P3); P4 measures it against the kinds (#617 G0 §5)',
+    // NYC Charter, Laws and Rules' four other tools (#617 P4): measured
+    // against each kind's readers and left untyped, because no kind is true
+    // of them (operation-types.ts states each reading). Its `search` derives
+    // `search` from Socrata's row and is not listed.
+    get_section: 'returns the text of a section of law: "query" would count it in records analyzed, "metadata" reads columns',
+    list_titles: 'returns chapter and title headings: "catalog" reads datasets, "metadata" reads columns',
+    get_title: 'returns chapter and title headings: "catalog" reads datasets, "metadata" reads columns',
+    get_version: 'returns currency dates and section counts: "metrics" reads dataset statistics',
   };
 
   // Every source on, so dispatch can be asked about every exposed name.
