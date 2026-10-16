@@ -88,7 +88,9 @@ await new Promise<void>((resolve) => scripted.server.close(() => resolve()));
 
 test('replay still offers the Boston tools the record used (its tool list is unchanged)', () => {
   const offered = ((scripted.requests[0]?.tools ?? []) as Array<{ function?: { name?: string } }>).map((t) => t.function?.name);
-  assert.ok(offered.includes('ckan__query_data'), 'premise: the replayed model was offered the tool it calls');
+  // Offered by its exposed name since #599 W3; the record (and the scripted
+  // replay below) calls it bare, which the dispatch rule accepts.
+  assert.ok(offered.includes('boston__ckan__query_data'), 'premise: the replayed model was offered the tool it calls');
 });
 
 test('the replayed ckan__ call is one failed call, not_configured, and nothing is sent anywhere but the fixtures', () => {
@@ -104,6 +106,6 @@ test('the replayed ckan__ call is one failed call, not_configured, and nothing i
 
 test('the replay\'s composed prompt carries none of the Boston source\'s text', () => {
   const system = ((scripted.requests[0]?.messages ?? []) as Array<{ role?: string; content?: unknown }>).find((m) => m.role === 'system');
-  assert.ok(system && typeof system.content === 'string' && system.content.includes('Tools: get_data.'), 'premise: the replay composed the real prompt');
+  assert.ok(system && typeof system.content === 'string' && system.content.includes('Tools: socrata__get_data.'), 'premise: the replay composed the real prompt');
   for (const needle of NEEDLES) assert.ok(!(system!.content as string).includes(needle), `the replay's prompt carries "${needle}"`);
 });

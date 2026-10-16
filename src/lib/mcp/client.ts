@@ -2,7 +2,7 @@ import {
   buildMcpRegistry,
   McpConfigurationError,
   readMcpEnvFromProcess,
-  resolveServerForTool,
+  routeToolCall,
   type McpRegistry,
   type McpServerConfig,
 } from './registry.ts';
@@ -679,24 +679,17 @@ export async function getServerInstructions(sourceId: string): Promise<string | 
 }
 
 /**
- * Look up the server hosting this tool and return it, throwing a clear error
- * if no server claims the tool. A tool whose server is known but
+ * Look up the server hosting this tool, named in either spelling
+ * (`socrata__get_data` or `get_data`, #599 W3), and return it, throwing a
+ * clear error if no server claims the tool. A tool whose server is known but
  * unconfigured (#258 C4: `SOCRATA_MCP_URL` unset — no coded fallback host)
  * throws a typed `McpConfigurationError` naming the variable, as a backstop
- * behind the routes' own up-front guards. Exported for tests.
+ * behind the routes' own up-front guards; a bare name two offered sources
+ * share throws `AmbiguousToolNameError` naming both aliased forms (D6). Both
+ * are thrown before any request. Exported for tests.
  */
 export function routeTool(toolName: string): McpServerConfig {
-  const server = resolveServerForTool(registry, toolName);
-  if (!server) {
-    const missingVar = registry.unconfiguredTools[toolName];
-    if (missingVar) {
-      throw new McpConfigurationError(
-        `The MCP server for tool "${toolName}" is not configured: ${missingVar} is missing or empty in the server environment. Set it and restart the server.`,
-      );
-    }
-    throw new Error(`No MCP server registered for tool "${toolName}"`);
-  }
-  return server;
+  return routeToolCall(registry, toolName).server;
 }
 
 /**
@@ -754,9 +747,15 @@ async function inEra<T>(server: McpServerConfig, send: (era: Era) => Promise<T>)
   }
 }
 
+/**
+ * Call a tool by the name the model called, in either spelling. The server is
+ * always called by its OWN name, the upstream one: `socrata__get_data` and
+ * `get_data` send the same bytes (#599 W3; the exchange tests and
+ * `fixtures/legacy-exchange-at-base.json` hold the wire).
+ */
 export async function callMcpTool(name: string, args: Record<string, unknown>): Promise<string> {
-  const server = routeTool(name);
-  return inEra(server, (era) => makeToolCall(server, name, args, era));
+  const { server, upstreamName } = routeToolCall(registry, name);
+  return inEra(server, (era) => makeToolCall(server, upstreamName, args, era));
 }
 
 async function makeToolCall(

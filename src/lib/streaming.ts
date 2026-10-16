@@ -1,6 +1,7 @@
 // Types for streaming events
-import { deriveOperationType } from './mcp/operation-types.ts';
+import { deriveOperationType, isTool, upstreamToolName } from './mcp/operation-types.ts';
 import { isSourceRefusal } from './mcp/tool-call-failure.ts';
+import { ambiguousToolNameOf } from './mcp/tool-name-refusal.ts';
 import { PortalLockedCallError } from './portal-lock.ts';
 import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 export type StreamEventType = 'progress' | 'token' | 'complete' | 'error' | 'trace';
@@ -509,6 +510,22 @@ export function portalLockRefusalForLlm(lockedPortal: string): string {
 }
 
 /**
+ * What the model is told when dispatch refused a bare tool name that two or
+ * more offered sources have (#599 W3; D6's dispatch rule). The call was never
+ * sent. The candidates are names from this app's own dispatch map, every one a
+ * tool the model was offered, so naming them tells the model how to make the
+ * call it meant; no source's words are in it. No retry wording for the bare
+ * name: it would be refused the same way.
+ */
+export function ambiguousToolNameForLlm(calledName: string, candidates: readonly string[]): string {
+  return (
+    `${TOOL_FAILURE_PREAMBLE} The tool name "${calledName}" belongs to more than one data source, so this request was not sent.` +
+    ` Call the tool again by its full name, which says which source you mean: ${candidates.map((c) => `"${c}"`).join(' or ')}.` +
+    ` If none of them can answer the question, tell the user in plain language that the live data could not be retrieved, and do not include any raw error text, status codes, server names, or system details.`
+  );
+}
+
+/**
  * Server-side: the neutral text fed back to the model when an MCP tool call
  * fails, in place of the raw `Error executing tool: <message>` string. It (1)
  * preserves the anti-hallucination guard (the model must not invent values to
@@ -530,6 +547,10 @@ export function describeToolFailureForLlm(_toolName: string, input: unknown): st
   // call itself (#436, ruling D7) and nothing was sent, so no source answered
   // and "try again" would only repeat it.
   if (input instanceof PortalLockedCallError) return portalLockRefusalForLlm(input.lockedPortal);
+  // Dispatch refused a bare name two offered sources share (#599 W3, D6),
+  // before anything was sent. Recognised by its marker, not its words.
+  const ambiguous = ambiguousToolNameOf(input);
+  if (ambiguous) return ambiguousToolNameForLlm(ambiguous.calledName, ambiguous.candidates);
 
   switch (classifyStreamError(input)) {
     case 'mcp_timeout':
@@ -570,10 +591,11 @@ function resolveOperationType(tool: { name?: string; args: Record<string, unknow
  * tools derive to `search`: Socrata's `search` and CKAN's search look for
  * datasets; Data Commons' `search_indicators` looks for statistical
  * indicators (variables and topics, not datasets). The noun follows the
- * recorded name so a Data Commons run is not narrated as a dataset search.
+ * recorded name, in either spelling (#599 W3), so a Data Commons run is not
+ * narrated as a dataset search.
  */
 export function searchSubject(toolName?: string): { singular: string; plural: string } {
-  return toolName === 'search_indicators'
+  return isTool(toolName, 'search_indicators')
     ? { singular: 'statistical indicator', plural: 'statistical indicators' }
     : { singular: 'dataset', plural: 'datasets' };
 }
@@ -617,8 +639,10 @@ export function formatToolProgress(
       // mcp/operation-types.ts): the identifier's shape decides, server-side,
       // whether it returns a dataset's details or one record. The line names
       // what was asked for and asserts nothing about what came back.
-      if (name === 'fetch') return id ? `Looking up ${id}` : 'Looking up one item';
-      return `Calling ${name}...`;
+      // The tool is read, and named, by its upstream name: the reader sees
+      // `get_data`, never the `socrata__` alias the model was offered (#599 W3).
+      if (isTool(name, 'fetch')) return id ? `Looking up ${id}` : 'Looking up one item';
+      return `Calling ${upstreamToolName(name)}...`;
   }
 }
 
@@ -984,7 +1008,7 @@ export function formatToolResult(
       // with a description and columns, which it does not. So a row count is
       // stated only when one was measured; otherwise the line says only that
       // the lookup completed — never which of the two the server chose.
-      if (name === 'fetch') {
+      if (isTool(name, 'fetch')) {
         const what = id ?? 'one item';
         return resultSummary
           ? `Retrieved ${resultSummary.rows} record${resultSummary.rows !== 1 ? 's' : ''} for ${what}`
@@ -1026,12 +1050,14 @@ export function generateToolReason(args: Record<string, unknown>, name?: string)
     case 'metrics':
       return `to check ${datasetName} statistics`;
     default:
-      if (name === 'fetch') return id ? `to look up ${id}` : 'to look up one item';
+      if (isTool(name, 'fetch')) return id ? `to look up ${id}` : 'to look up one item';
       // A tool whose operation neither its name nor its arguments state: the
       // reason repeats the recorded name. `get_data`'s name in user language
       // is "gather data" — the one string P4 reads off a `get_data` record
-      // whose arguments named no operation, unchanged.
-      if (name && name !== 'get_data') return `to call ${name}`;
+      // whose arguments named no operation, unchanged. Both read the upstream
+      // name, so either spelling writes the same reason (#599 W3): the loop
+      // records this phrase, and a reader never sees the alias.
+      if (name && !isTool(name, 'get_data')) return `to call ${upstreamToolName(name)}`;
       return 'to gather data';
   }
 }
@@ -1249,13 +1275,13 @@ export function buildBreadcrumbLabel(
     case 'metrics':
       return 'Get stats';
     default: {
-      if (tool.name === 'fetch') {
+      if (isTool(tool.name, 'fetch')) {
         const id = tool.args.id as string | undefined;
         return id ? `Look up ${truncate(id, 20)}` : 'Look up one item';
       }
-      // The recorded name, or a stated absence — never a stand-in that reads
-      // like a name.
-      return tool.name ?? UNNAMED_STEP_LABEL;
+      // The recorded name (its upstream name, in either spelling — #599 W3),
+      // or a stated absence — never a stand-in that reads like a name.
+      return upstreamToolName(tool.name) ?? UNNAMED_STEP_LABEL;
     }
   }
 }
@@ -1325,11 +1351,11 @@ function describeToolNarrative(
     case 'metrics':
       return 'checked dataset statistics';
     default: {
-      if (tool.name === 'fetch') {
+      if (isTool(tool.name, 'fetch')) {
         const id = tool.args.id as string | undefined;
         return id ? `looked up ${id}` : 'looked up one item';
       }
-      return tool.name ? `called ${tool.name}` : 'ran a step the record does not name';
+      return tool.name ? `called ${upstreamToolName(tool.name)}` : 'ran a step the record does not name';
     }
   }
 }

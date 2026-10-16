@@ -96,6 +96,7 @@
  * cannot quietly change the answer.
  */
 import { jcs } from './canonicalization.ts';
+import { upstreamToolName } from '../mcp/operation-types.ts';
 
 /**
  * What a rejected call's key carries that an answered call's does not.
@@ -163,11 +164,19 @@ export function describeToolCallKeyPolicy(pkg: {
   return { recorded: false, text: TOOL_CALL_KEY_POLICY_UNRECORDED };
 }
 
+/**
+ * THE NAME IS THE UPSTREAM NAME (#599 W3). Since W3 the model calls
+ * `socrata__get_data` where every record before it says `get_data`, and a
+ * replay of a pre-W3 record runs on the aliased names. The key reads the name
+ * the server knows — the dispatch map's upstream name for an exposed name, a
+ * bare name as it is — so a replayed record keeps its identities, and an
+ * answered call's key is byte-identical to the one it had before W3.
+ */
 export function canonicalizeToolCall(tc: {
   name: string;
   args?: Record<string, unknown>;
   /** Set when the run recorded the call as rejected (`ToolCallRecord.failed`). */
   failed?: boolean;
 }): string {
-  return `${tc.name}:${jcs(tc.args ?? {})}${tc.failed ? REJECTED_CALL_KEY_SUFFIX : ''}`;
+  return `${upstreamToolName(tc.name)}:${jcs(tc.args ?? {})}${tc.failed ? REJECTED_CALL_KEY_SUFFIX : ''}`;
 }

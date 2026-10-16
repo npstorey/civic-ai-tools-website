@@ -53,7 +53,7 @@ import { modelRequestParameters, type ModelRequestSettings } from '../model-cata
 import { classifyStreamError, describeToolFailureForLlm, generateToolReason } from '../streaming.ts';
 import type { TraceBuilder } from '../evidence/trace.ts';
 import { hash as traceHash } from '../evidence/trace.ts';
-import { deriveOperationType } from '../mcp/operation-types.ts';
+import { deriveOperationType, isTool, toolSpanNames } from '../mcp/operation-types.ts';
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
 import { PortalLockedCallError, portalOutsideLock } from '../portal-lock.ts';
 
@@ -853,8 +853,10 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
        * SIGNED carrying a portal it never had. The move creates the exposure;
        * the clause closes it.
        *
-       * `name === 'get_data'` stays literal and must not widen to a source
-       * lookup. The data-source server does implement `search` and `fetch`,
+       * The test is literal on the UPSTREAM name — `get_data`, in either
+       * spelling (`socrata__get_data` since #599 W3, `get_data` in every record
+       * before it and from a model that calls the bare name) — and must not
+       * widen to a source lookup. The data-source server does implement `search` and `fetch`,
        * but their input schemas are `additionalProperties: false` with no
        * portal property, so an injected portal would be stripped upstream and
        * would still corrupt the recorded arguments that feed the signed
@@ -880,7 +882,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
        * well as `portal`, so a `domain` naming another portal is refused, and
        * a `domain` naming the locked portal agrees with what is injected.
        */
-      if (portal && !argumentsMalformed && name === 'get_data' && !args.portal) args.portal = portal;
+      if (portal && !argumentsMalformed && isTool(name, 'get_data') && !args.portal) args.portal = portal;
 
       /**
        * The one-portal switch (#436, ruling D7): decided AFTER injection, so
@@ -909,7 +911,17 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       // `mcp.source` distinguishes which MCP server handled the call so the
       // PROV-O builder can emit a distinct prov:Agent per source (see
       // provenance.ts). Unknown tools fall back to "unknown".
+      //
+      // #599 W3 (ADR-0033 §B): the span states both of the call's names and
+      // who answered it. `tool.name` stays the name the model called (since
+      // W3, `<alias>__<upstream>`); `tool.upstream_name` is the name sent on
+      // the wire; `mcp.alias` and `mcp.server.id` are the routed source's, so
+      // they cannot disagree with `mcp.source` (`unknown` for a call no server
+      // took). Until the harness reads the aliased names itself (W4), a record
+      // attributes each call by the `mcp.source` tag written here: the
+      // harness's own resolver knows the bare names only.
       const toolSource = trace?.resolveToolSource?.(name) ?? 'unknown';
+      const spanNames = toolSpanNames(name, toolSource);
       const toolTraceSpanId = trace?.builder.startSpan('mcp_tool_call', trace.parentSpanId, {
         'tool.name': name,
         'tool.operation_type': operationType || 'unknown',
@@ -917,6 +929,9 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         'mcp.source': toolSource,
         ...(args.dataset_id ? { 'tool.dataset_id': String(args.dataset_id) } : {}),
         ...(args.portal ? { 'tool.portal_domain': String(args.portal) } : {}),
+        'tool.upstream_name': spanNames.upstreamName,
+        'mcp.alias': spanNames.alias,
+        'mcp.server.id': spanNames.serverId,
       });
 
       // Started outside the `try`, so the time until a rejection is measured

@@ -23,6 +23,7 @@ import {
   withheldToolNames,
   type McpRegistryEnv,
 } from './registry.ts';
+import { civicRouter } from '@typedstandards/civic-typed-router';
 import { mcpTools, mcpToolsFor, offeredMcpTools } from './tools.ts';
 import {
   CROSS_SOURCE_PREAMBLE,
@@ -41,6 +42,12 @@ const CKAN_TOOLS = [
   'ckan__aggregate_data',
 ];
 
+/** The six as the model is offered them, `boston__<tool>`, since #599 W3:
+ *  read off the router's dispatch map, never composed by hand. */
+const CKAN_EXPOSED = CKAN_TOOLS.map(
+  (tool) => [...civicRouter.dispatchMap.values()].find((t) => t.upstreamName === civicRouter.upstreamToolName(tool))!.exposedName,
+);
+
 const UNSET: McpRegistryEnv = { socrataUrl: 'https://socrata.invalid', dataCommonsUrl: 'https://data-commons.invalid' };
 const SET: McpRegistryEnv = { ...UNSET, bostonOpencontextUrl: 'https://opencontext.invalid/mcp' };
 const NEEDLES = ['Boston OpenContext', 'ckan__', 'data-mcp.boston.gov'];
@@ -53,7 +60,7 @@ test('the registry: configured, the Boston server routes its six tools; unset, t
   assert.deepEqual(set.unconfiguredTools, {});
   const unset = buildMcpRegistry(UNSET);
   assert.equal(unset.servers['boston-opencontext'], undefined);
-  for (const tool of CKAN_TOOLS) {
+  for (const tool of CKAN_EXPOSED) {
     assert.equal(unset.toolIndex[tool], undefined, `${tool} is routable with the source unset`);
     assert.equal(unset.unconfiguredTools[tool], 'BOSTON_OPENCONTEXT_MCP_URL', `${tool} does not name its variable`);
   }
@@ -70,8 +77,8 @@ test('offered and withheld agree with the registry, and only optional sources ar
   // Socrata is required, not optional: its absence refuses the query up front.
   assert.equal(isSourceOffered({ dataCommonsUrl: 'https://data-commons.invalid' }, 'socrata'), true);
   assert.deepEqual(withheldToolNames(SET), []);
-  assert.deepEqual(withheldToolNames(UNSET), CKAN_TOOLS);
-  assert.deepEqual(withheldToolNames({ dataCommonsUrl: 'https://data-commons.invalid' }), CKAN_TOOLS, 'Socrata tools were withheld');
+  assert.deepEqual(withheldToolNames(UNSET), CKAN_EXPOSED);
+  assert.deepEqual(withheldToolNames({ dataCommonsUrl: 'https://data-commons.invalid' }), CKAN_EXPOSED, 'Socrata tools were withheld');
 });
 
 test('the offered tools: configured, the very same array; unset, the list without the six ckan__ tools', () => {
@@ -79,9 +86,9 @@ test('the offered tools: configured, the very same array; unset, the list withou
     const all = mcpToolsFor(locked);
     assert.equal(offeredMcpTools(all, SET), all, 'a configured instance is not handed the same array');
     const offered = offeredMcpTools(all, UNSET);
-    assert.deepEqual(names(offered), names(all).filter((n) => !n.startsWith('ckan__')));
+    assert.deepEqual(names(offered), names(all).filter((n) => !n.startsWith('boston__ckan__')));
     assert.equal(names(all).length - names(offered).length, 6);
-    assert.deepEqual(offered, all.filter((t) => t.type === 'function' && !t.function.name.startsWith('ckan__')), 'the kept schemas changed');
+    assert.deepEqual(offered, all.filter((t) => t.type === 'function' && !t.function.name.startsWith('boston__ckan__')), 'the kept schemas changed');
   }
 });
 

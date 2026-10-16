@@ -54,10 +54,11 @@
 //
 // WHAT THE MIRROR IS. `SOCRATA_SKILL_FALLBACK`
 // and `getSkillForPortal` are GENERIC-ONLY and HAND-SHAPED by design (read
-// their own header comments, and `scripts/sync-fallback.mjs`'s header, which
-// explains why that script must never be run: a verbatim paste of the hub's
-// composed text would re-import deployment posture and break the escaped
-// template-literal body). So this guard checks CLAIMS, not bytes — it never
+// their own header comments: a verbatim paste of the hub's composed text would
+// re-import deployment posture; the router package's pinned guidance fixture
+// and its pinning script, in the hub, now hold the guidance text itself, and
+// the old sync script was removed in #599 W3). So this guard checks CLAIMS,
+// not bytes — it never
 // asserts the mirror's text equals a hub quote, only that the mirror makes
 // the same claims the hub does, in whatever wording the mirror already uses.
 //
@@ -121,9 +122,13 @@ function sentences(text: string): string[] {
     .filter(Boolean);
 }
 
-/** True if some sentence contains every word in `words` (case-insensitive). */
+/**
+ * True if some sentence contains every word in `words` (case-insensitive). A
+ * tool name may carry its source alias: since #599 W3 the fallback names
+ * `socrata__search` where the hub names `search`, and the claim is the same.
+ */
 function anySentenceMatches(text: string, words: string[]): boolean {
-  return sentences(text).some((s) => words.every((w) => new RegExp(`\\b${w}\\b`, 'i').test(s)));
+  return sentences(text).some((s) => words.every((w) => new RegExp(`(?:\\b|(?<=\\bsocrata__))${w}\\b`, 'i').test(s)));
 }
 
 // --- (a) search: only `query`, scoped to the configured portal --------------

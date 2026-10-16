@@ -48,7 +48,8 @@ import { mcpTools } from './tools.ts';
 import { SOCRATA_SKILL_FALLBACK } from './socrata-skill.ts';
 
 function fetchDescription(): string {
-  const tool = mcpTools.find((t) => 'function' in t && t.function.name === 'fetch') as
+  // Offered as `socrata__fetch` since #599 W3.
+  const tool = mcpTools.find((t) => 'function' in t && t.function.name === 'socrata__fetch') as
     | { function: { description?: string } }
     | undefined;
   assert.ok(tool, 'mcpTools no longer carries a `fetch` tool — re-anchor');
@@ -103,7 +104,8 @@ test('F5 (c) control: the bare 4x4 form is described as resolving against the co
 });
 
 test('F5 (d) control: the skill text in the same prompt says the URL form names its portal — the two surfaces must agree', () => {
-  const fetchLines = sentences(SOCRATA_SKILL_FALLBACK).filter((s) => /\bfetch\b/.test(s) && /\bURL\b/.test(s));
+  // The fallback names the tool `socrata__fetch` since #599 W3.
+  const fetchLines = sentences(SOCRATA_SKILL_FALLBACK).filter((s) => /\b(?:socrata__)?fetch\b/.test(s) && /\bURL\b/.test(s));
   assert.ok(fetchLines.length > 0, 'the skill fallback no longer describes fetch’s URL form — re-anchor');
   assert.ok(
     fetchLines.some((s) => URL_NAMES_ITS_OWN_PORTAL.test(s)),

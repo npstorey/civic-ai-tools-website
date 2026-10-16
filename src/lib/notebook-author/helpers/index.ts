@@ -11,6 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { upstreamToolName } from '../../mcp/operation-types.ts';
 
 const HELPERS_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -43,11 +44,14 @@ export function getAllHelperSources(): string {
 }
 
 /**
- * Map an MCP tool name to the helper it implies. Used by the prompt template
- * to pick the minimal helper subset for the notebook based on which MCP
- * tools the LLM actually called during Phase A discovery.
+ * Map an MCP tool name, in either spelling, to the helper it implies. Used by
+ * the prompt template to pick the minimal helper subset for the notebook
+ * based on which MCP tools the LLM actually called during Phase A discovery.
+ * Read by the upstream name (#599 W3): `boston__ckan__query_data` and
+ * `ckan__query_data` imply the same helper.
  */
-export function helperForToolName(toolName: string): HelperId | null {
+export function helperForToolName(calledName: string): HelperId | null {
+  const toolName = upstreamToolName(calledName);
   if (toolName === 'get_data') return 'fetch_socrata';
   if (toolName === 'search_indicators' || toolName === 'get_observations') return 'fetch_data_commons';
   if (toolName.startsWith('ckan__')) return 'fetch_opencontext';

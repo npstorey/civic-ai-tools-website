@@ -8,7 +8,7 @@ import { createTraceCapture } from '../lib/bpmn/capture-trace.ts';
 import { connectSSE } from '../lib/sse-client.ts';
 import { isComparisonRunComplete } from '../lib/query-presentation.ts';
 import { friendlyStreamError, type ProgressPhase, type CompleteEvent } from '../lib/streaming.ts';
-import { deriveOperationType } from '../lib/mcp/operation-types.ts';
+import { deriveOperationType, isTool, upstreamToolName } from '../lib/mcp/operation-types.ts';
 // Type-only: erased at compile time, so nothing from the notebook author rides
 // into this hook's bundle. The kind vocabulary is declared once, beside the
 // table that turns it into reader-facing copy.
@@ -327,7 +327,7 @@ function generateRichLabel(entries: ProgressLogEntry[], previousEntries?: Progre
 
   // `fetch` derives to no operation type by design (mcp/operation-types.ts);
   // the label names what was asked for and asserts nothing about the answer.
-  if (first.toolName === 'fetch') {
+  if (isTool(first.toolName, 'fetch')) {
     const id = firstArgs.id as string | undefined;
     return id ? `Looking up ${id}` : 'Looking up one item';
   }
@@ -349,7 +349,8 @@ export function generateGroupLabel(entries: ProgressLogEntry[], previousEntries?
   // it must never overrule a name (#384).
   // (`get_data`'s name in user language is "gather data", as in `generateToolReason`.)
   const named = toolStarts.find(e => e.toolName || e.operationType);
-  if (named) return named.toolName && named.toolName !== 'get_data' ? `Calling ${named.toolName}` : 'Gathering data';
+  // Read, and shown, by the upstream name in either spelling (#599 W3).
+  if (named) return named.toolName && !isTool(named.toolName, 'get_data') ? `Calling ${upstreamToolName(named.toolName)}` : 'Gathering data';
 
   // Fallback for entries that carry neither a tool name nor an operation type:
   // extract operation types from messages

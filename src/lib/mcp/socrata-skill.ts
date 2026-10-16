@@ -28,16 +28,31 @@
 // `callMcpPrompt` behind this file's five-minute cache, and each server's
 // instructions from `getServerInstructions`. The logging stays here too: the
 // package logs nothing.
+//
+// THE ALIASED VIEW (#599 W3, ADR-0032). Every text this file hands out is the
+// package's aliased view, the one the query routes send: every tool the
+// package's own text names is `<alias>__<upstream name>`, and text a source
+// sends (the fetched Socrata guidance, a server's initialize instructions)
+// gets the package's anchored rewrite — an exact backtick, bold or
+// double-quoted token, an exact table cell, or an item of a `Tools:` list —
+// and nothing else changes. Two names in the Socrata server's guidance sit at
+// no anchor (a fenced `Tool: get_data` line and a header cell "get_data
+// coverage") and stay bare; the dispatch rule accepts a bare name exactly one
+// offered source has, so a model that calls one still reaches the server.
+// `unaliasText` with the package's dispatch map undoes the view to W2's bytes.
 
 import {
   bostonGuidanceText,
+  civicPreambleEntry,
   civicRouter,
+  composePreamble,
   composePrompt,
   dataCommonsGuidanceText,
   getSkillForPortal as routerSkillForPortal,
   introFor,
   outroFor,
   socrataGuidanceText,
+  socrataSkillFallback,
   ALL_SOURCES,
   type CivicGuidanceContext,
   type SourceId,
@@ -54,19 +69,28 @@ import { errorLogFacts } from '../streaming.ts';
 // charter): it tracks the deployment-NEUTRAL overlay of the source-of-truth
 // skill docs in the civic-ai-tools repo and carries no deployment posture.
 // Its claims about which tool takes a portal are held to the hub's base skill
-// by `socrata-skill-mirror.test.ts`; `scripts/sync-fallback.mjs` predates the
-// move and is never run (see its header).
-export {
-  CROSS_SOURCE_PREAMBLE,
-  crossSourcePreamble,
-  outroFor,
-  SOCRATA_SKILL_FALLBACK,
-  type SourceId,
-} from '@typedstandards/civic-typed-router';
+// by `socrata-skill-mirror.test.ts`. The router package's pinned guidance
+// fixture and its pinning script, in the hub, hold the guidance text itself.
+export { outroFor, type SourceId } from '@typedstandards/civic-typed-router';
+
+/** The view every text below is composed in: the package's aliased view. */
+const VIEW = civicRouter.aliasedView;
+
+/** The cross-source preamble for `sources`, in the aliased view: what the
+ *  composed prompt carries for that set of offered sources. */
+export function crossSourcePreamble(sources: readonly SourceId[]): string {
+  return composePreamble(sources.map((sourceId) => ({ sourceId, preambleEntry: civicPreambleEntry(sourceId, VIEW) })));
+}
+
+/** The preamble with every source this codebase has, in the aliased view. */
+export const CROSS_SOURCE_PREAMBLE: string = crossSourcePreamble(ALL_SOURCES);
+
+/** The Socrata block used when the guidance fetch fails, in the aliased view. */
+export const SOCRATA_SKILL_FALLBACK: string = socrataSkillFallback(VIEW);
 
 /** Portal-specific guidance for a run's Socrata portal, or `''`: the package's
- *  per-portal table, in the bare view. */
-export const getSkillForPortal = (portal: string): string => routerSkillForPortal(portal);
+ *  per-portal table, in the aliased view. */
+export const getSkillForPortal = (portal: string): string => routerSkillForPortal(portal, VIEW);
 
 // Cached skill guidance from MCP server. The cache is the consumer's, so it
 // stays here with the semantics it always had: a fetched text is kept for five
@@ -182,11 +206,11 @@ function guidanceContext(ctx: SkillContext): CivicGuidanceContext {
  * prompt by `composeSkillPrompt`.
  */
 const SKILL_REGISTRY: SkillRegistry = {
-  socrata: { sourceId: 'socrata', fetchText: (ctx) => socrataGuidanceText(guidanceContext(ctx)) },
-  'data-commons': { sourceId: 'data-commons', fetchText: (ctx) => dataCommonsGuidanceText(guidanceContext(ctx)) },
+  socrata: { sourceId: 'socrata', fetchText: (ctx) => socrataGuidanceText(guidanceContext(ctx), VIEW) },
+  'data-commons': { sourceId: 'data-commons', fetchText: (ctx) => dataCommonsGuidanceText(guidanceContext(ctx), VIEW) },
   'boston-opencontext': {
     sourceId: 'boston-opencontext',
-    fetchText: (ctx) => bostonGuidanceText(guidanceContext(ctx)),
+    fetchText: (ctx) => bostonGuidanceText(guidanceContext(ctx), VIEW),
   },
 };
 
@@ -243,7 +267,7 @@ export function portalLockGuidance(
   lockedPortal: string,
   configured: McpRegistryEnv = readMcpEnvFromProcess(),
 ): string {
-  return civicRouter.portalLockGuidance(lockedPortal, configured);
+  return civicRouter.aliasedPortalLockGuidance(lockedPortal, configured);
 }
 
 /**
@@ -257,7 +281,7 @@ export function withPortalLockGuidance(
   lockedPortal?: string,
   configured: McpRegistryEnv = readMcpEnvFromProcess(),
 ): string {
-  return civicRouter.withPortalLockGuidance(systemPrompt, lockedPortal, configured);
+  return civicRouter.aliasedWithPortalLockGuidance(systemPrompt, lockedPortal, configured);
 }
 
 /**
@@ -274,7 +298,7 @@ export const buildSystemPrompt = async (
   portal?: string,
   configured: McpRegistryEnv = readMcpEnvFromProcess(),
 ): Promise<string> =>
-  civicRouter.buildSystemPrompt({
+  civicRouter.aliasedBuildSystemPrompt({
     portal,
     configured,
     today: new Date().toISOString().split('T')[0],

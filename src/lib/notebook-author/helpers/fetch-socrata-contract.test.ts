@@ -345,7 +345,8 @@ test('#340: every argument get_data advertises reaches a parameter that exists, 
   // added to the schema without a home on the other side.
   const getData = mcpTools.find(
     (t): t is Extract<typeof t, { type: 'function' }> =>
-      t.type === 'function' && t.function.name === 'get_data',
+      // Advertised as `socrata__get_data` since #599 W3.
+      t.type === 'function' && t.function.name === 'socrata__get_data',
   );
   assert.ok(getData, 'get_data must still be advertised');
   const advertised = Object.keys(

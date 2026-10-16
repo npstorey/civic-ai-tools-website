@@ -5,7 +5,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveOperationType, sourceIdForToolName } from './operation-types.ts';
+import { deriveOperationType, sourceIdForToolName, upstreamToolName } from './operation-types.ts';
 import { mcpTools } from './tools.ts';
 
 test('Data Commons: search_indicators maps to "search"', () => {
@@ -144,7 +144,13 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
 
   for (const tool of mcpTools) {
     if (tool.type !== 'function') continue;
-    const name = tool.function.name;
+    // The model is offered each tool as `<alias>__<upstream>` since #599 W3;
+    // the decisions below are keyed by the upstream name, and both spellings
+    // must resolve.
+    const exposed = tool.function.name;
+    const name = upstreamToolName(exposed);
+    assert.notEqual(name, exposed, `mcpTools offers "${exposed}" under no alias`);
+    assert.equal(sourceIdForToolName(exposed), sourceIdForToolName(name), `"${exposed}" and "${name}" resolve to different sources`);
 
     assert.ok(
       sourceIdForToolName(name),
@@ -152,7 +158,7 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
     );
 
     // `get_data` carries its operation in args.type, so it is exercised with one.
-    const args = name === 'get_data' ? { type: 'query' } : {};
+    const args = name === upstreamToolName('get_data') ? { type: 'query' } : {};
     const derived = deriveOperationType(name, args);
     assert.ok(
       derived !== undefined || name in UNTYPED_BY_MEASUREMENT,

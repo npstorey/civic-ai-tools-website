@@ -6,6 +6,7 @@ import { generatePlainEnglishQuery, reasonWithoutIdentifier } from '@/lib/stream
 import { describeQueryOutcome } from '@/lib/evidence/query-step';
 import type { ToolFailureKind } from '@/lib/notebook-author/tool-to-cell';
 import { OP_BADGE_COLORS, OP_BADGE_TOOLTIPS } from './tool-badges';
+import { upstreamToolName } from '@/lib/mcp/operation-types';
 
 interface ToolCallCardProps {
   stepNumber: number;
@@ -102,7 +103,10 @@ export default function ToolCallCard({
   // The badge says what the record says: the operation type, else the tool's
   // recorded name, else that the name is missing — never a stand-in such as
   // "call" that reads like a type (#384).
-  const badgeLabel = opType ?? name ?? 'unnamed';
+  // The name is shown by its upstream name, in either spelling (#599 W3): a
+  // reader sees `get_data`, never the `socrata__` alias the model was offered.
+  const shownName = upstreamToolName(name);
+  const badgeLabel = opType ?? shownName ?? 'unnamed';
   const badgeTooltip = opType ? OP_BADGE_TOOLTIPS[opType] : undefined;
   const badgeColors = (opType && OP_BADGE_COLORS[opType]) || { bg: 'var(--card-background)', text: 'var(--text-secondary)' };
   // No "View JSON / CSV" for a request that returned nothing: a link here
@@ -254,7 +258,7 @@ export default function ToolCallCard({
                 fontWeight: 600,
               }}
             >
-              {name ?? '(not recorded)'}
+              {shownName ?? '(not recorded)'}
             </code>
           </div>
 

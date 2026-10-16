@@ -33,12 +33,16 @@ import assert from 'node:assert/strict';
 import { mcpTools } from './tools.ts';
 import { DATA_COMMONS_SKILL } from './data-commons-skill.ts';
 
+// Since #599 W3 the tool is offered, and the skill names it, as
+// `data_commons__search_indicators`; this reads either spelling.
+const SEARCH_INDICATORS = /(?<![A-Za-z0-9_])(?:data_commons__)?search_indicators(?![A-Za-z0-9_])/;
+
 // A Data Commons place DCID: `geoId/36061`, `country/USA`, `zip/10001`, …
 const PLACE_DCID = /^(?:geoId|country|zip|wikidataId|nuts|earth)\/\S+$/;
 const PLACE_DCID_IN_PROSE = /\b(?:geoId|country|zip)\/[A-Za-z0-9]+/;
 
 function searchIndicators() {
-  const tool = mcpTools.find((t) => t.type === 'function' && t.function.name === 'search_indicators');
+  const tool = mcpTools.find((t) => t.type === 'function' && SEARCH_INDICATORS.test(t.function.name));
   assert.ok(tool && tool.type === 'function', 'mcpTools carries search_indicators');
   return tool.function;
 }
@@ -57,7 +61,7 @@ test('#543: no search_indicators example in the tool description passes a DCID i
 });
 
 test('#543: no sentence of the Data Commons skill that names search_indicators offers it a place DCID', () => {
-  const sentences = DATA_COMMONS_SKILL.split(/(?<=[.!?])\s+|\n/).filter((s) => /\bsearch_indicators\b/.test(s));
+  const sentences = DATA_COMMONS_SKILL.split(/(?<=[.!?])\s+|\n/).filter((s) => SEARCH_INDICATORS.test(s));
   assert.ok(sentences.length >= 3, `the skill's search_indicators sentences were read (${sentences.length})`);
   for (const sentence of sentences) {
     assert.doesNotMatch(sentence, PLACE_DCID_IN_PROSE, `offers search_indicators a DCID: ${sentence.trim()}`);
@@ -68,5 +72,5 @@ test('#543: the places parameter and the skill both say a place is passed by nam
   const places = (searchIndicators().parameters as { properties: Record<string, { description?: string }> }).properties.places;
   assert.match(places.description ?? '', /\bnames?\b/i);
   assert.doesNotMatch(places.description ?? '', /list of place DCIDs/i);
-  assert.match(DATA_COMMONS_SKILL, /search_indicators[^\n]*\bby name\b/);
+  assert.match(DATA_COMMONS_SKILL, /data_commons__search_indicators[^\n]*\bby name\b/);
 });
