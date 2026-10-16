@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 
-const GITHUB_SKILL_URL = 'https://github.com/npstorey/civic-ai-tools-website/blob/main/src/lib/mcp/socrata-skill.ts';
+const GITHUB_SKILL_URL = 'https://github.com/npstorey/civic-ai-tools/tree/main/packages/civic-typed-router/src/civic';
 
 interface Category {
   id: string;

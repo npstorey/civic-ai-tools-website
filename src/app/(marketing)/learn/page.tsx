@@ -7,7 +7,7 @@ export const metadata = {
   description: 'Learn how this demo works, how AI connects to live civic data through MCP, and what shapes the quality of AI responses.',
 };
 
-const GITHUB_SKILL_URL = 'https://github.com/npstorey/civic-ai-tools-website/blob/main/src/lib/mcp/socrata-skill.ts';
+const GITHUB_SKILL_URL = 'https://github.com/npstorey/civic-ai-tools/tree/main/packages/civic-typed-router/src/civic';
 const GITHUB_STREAMING_BASE = 'https://github.com/npstorey/civic-ai-tools-website/blob/08dfa4c/src/lib/streaming.ts';
 
 export default function LearnPage() {
