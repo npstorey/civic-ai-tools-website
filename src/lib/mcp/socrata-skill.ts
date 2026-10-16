@@ -1,9 +1,9 @@
 // Multi-source MCP skill composition for the civic-ai-tools website.
 //
 // Despite the filename (historical — Socrata was the only source pre-M9.1),
-// `buildSystemPrompt` now composes the full multi-source system prompt
-// spanning Socrata, Google Data Commons, and — only on an instance that
-// configures it (`BOSTON_OPENCONTEXT_MCP_URL`) — Boston OpenContext:
+// `buildSystemPrompt` composes the full multi-source system prompt spanning
+// Socrata, Google Data Commons, and — only on an instance that configures it
+// (`BOSTON_OPENCONTEXT_MCP_URL`) — Boston OpenContext:
 //
 //   1. Cross-source preamble  — "you have access to two data sources..."
 //   2. Socrata skill          — fetched from the Socrata MCP server's
@@ -12,435 +12,75 @@
 //   3. Data Commons server instructions — captured from the Data Commons
 //                                initialize response's `result.instructions`
 //                                field (MCP spec). Omitted when absent.
-//   4. Data Commons augmentation — DATA_COMMONS_SKILL from
-//                                ./data-commons-skill.ts (M9.2 skill doc).
+//   4. Data Commons augmentation — the embedded Data Commons skill.
 //
 // The order matters for LLM attention: cross-source decision logic lands
 // first so the model reads it before diving into source-specific details.
+//
+// THE TEXT AND THE COMPOSITION ARE THE PACKAGE'S (#599 W2). Every sentence the
+// prompt carries — the preamble, the intro and outro, `SOCRATA_SKILL_FALLBACK`,
+// the per-portal table, the lock section — and the join itself are
+// `@typedstandards/civic-typed-router`'s bare view, moved from this file byte
+// for byte. The package reads no clock, no environment and no network, so this
+// file supplies them: today's date from `new Date()` at call time, the
+// configuration from `readMcpEnvFromProcess()`, the publication host as
+// `./data-commons-skill.ts` read it at module load, the Socrata guidance from
+// `callMcpPrompt` behind this file's five-minute cache, and each server's
+// instructions from `getServerInstructions`. The logging stays here too: the
+// package logs nothing.
 
+import {
+  bostonGuidanceText,
+  civicRouter,
+  composePrompt,
+  dataCommonsGuidanceText,
+  getSkillForPortal as routerSkillForPortal,
+  introFor,
+  outroFor,
+  socrataGuidanceText,
+  ALL_SOURCES,
+  type CivicGuidanceContext,
+  type SourceId,
+} from '@typedstandards/civic-typed-router';
 import { callMcpPrompt, getServerInstructions } from './client.ts';
-import { isSourceOffered, readMcpEnvFromProcess, type McpRegistryEnv } from './registry.ts';
-import { DATA_COMMONS_SKILL } from './data-commons-skill.ts';
-import { BOSTON_OPENCONTEXT_SKILL } from './boston-skill.ts';
+import { readMcpEnvFromProcess, type McpRegistryEnv } from './registry.ts';
+import { DATA_COMMONS_PUBLICATION_HOST } from './data-commons-skill.ts';
 import { errorLogFacts } from '../streaming.ts';
 
-// Fallback constant used when the MCP server is unreachable. The runtime
-// fetches fresh guidance from the MCP server's prompt endpoint; this fallback
-// only activates if that fetch fails.
+// The fallback guidance, used when the Socrata MCP server's prompt fetch
+// fails, and the cross-source preamble and outro: the package's text.
 //
-// GENERIC-ONLY, by design (sprint 154 P4, portability charter): the web-overlay
-// portion below tracks the deployment-NEUTRAL overlay from the source-of-truth
-// skill docs in the civic-ai-tools repo —
-// https://github.com/npstorey/civic-ai-tools/blob/main/docs/skills/README.md
-// — and carries no deployment posture (no host names, no demo-limit numbers,
-// no CTA links). Posture overlays are appended by the MCP server at serve time
-// (SKILL_POSTURE); deployment limits are enforced server-side, so the fallback
-// losing the reference deployment's limits prose on this rare path is accepted.
-//
-// Updates are HAND-SHAPED under test coverage (instance-config.test.ts,
-// skill-instance-config.test.ts) — NOT via scripts/sync-fallback.mjs, whose
-// verbatim-paste model predates the posture split and the fallback's
-// structural adaptations (see that script's header).
-//
-// WHICH TOOL TAKES A PORTAL. The claims below about get_data/search/fetch
-// tool scope are sourced from civic-ai-tools' docs/skills/base.md (commit
-// fd9afae, lines 181-187 and 342-344) and match the server's own JSON
-// schemas (socrata-mcp-server/src/tools/socrata-tools.ts, commit c207f55):
-// search takes only `query`, fetch takes only `id`, and get_data is the only
-// tool that takes a portal. This mirror restates those CLAIMS in its own
-// generic voice — it is claim-level, not a byte-for-byte copy of the hub's
-// prose — so re-check against the hub after a hub change rather than diffing
-// text (see src/lib/mcp/socrata-skill-mirror.test.ts).
-export const SOCRATA_SKILL_FALLBACK = `
-# Socrata MCP Companion Skill — Base Guidance
-
-Universal guidance for querying Socrata open data portals through the Socrata MCP Server.
-
-## Purpose
-
-This skill provides specialized guidance for:
-- **Multi-Domain Support**: NYC, Chicago, SF, Seattle, LA, and other Socrata portals
-- **Intelligent Query Assessment**: Complexity evaluation before executing large queries
-- **Anti-Hallucination Protocols**: Strict adherence to actual query results
-- **Domain-Specific Workarounds**: Handling limitations across different Socrata implementations
-
-## Critical Requirements
-
-**ALWAYS:**
-- Assess query complexity before executing
-- Never hallucinate data — only report what tool calls return
-- Discover columns first — check schema before querying unfamiliar datasets
-- Show exact queries used
-- Use inline citations
-- When the user specifies a date or time period (e.g., "in 2025", "last December", "this month"), ALWAYS use that date in your query. Default date ranges only apply when the user doesn't specify a time period.
-- Add date filters when querying large or high-volume datasets to avoid performance issues and overly broad results. Use the Date Range Guidelines table to pick an appropriate range. Tell the user you applied a date filter, why, and that they can ask for a different range or all-time data if needed.
-- Use the actual current date (from the system prompt if provided), not your training cutoff. Default to rolling windows: "past two years" = 24 months back from today, "last year" = past 12 months. State your interpretation before querying: "I'm interpreting 'past two years' as [start] to [end]."
-- When a query has significant ambiguity that would change the analysis (which dataset, timeframe, or metric), ask one brief clarifying question before querying. For minor ambiguity, state your assumption and proceed: "I'll look at 311 noise complaints in Brooklyn for the past 12 months — let me know if you meant something different." Never ask more than one clarifying question at a time.
-
-**NEVER:**
-- Invent data points
-- Extrapolate beyond actual records
-- Present findings without tool evidence
-- Query without column discovery
-
-## Workflow
-
-- **Plan first**: Before executing any tool calls, briefly state your plan: what dataset you'll query, what timeframe, what filters, and how you interpreted the user's question. This lets the user catch misinterpretations before tool calls are made.
-- **Narrate as you go**: After stating your plan, narrate each phase briefly — "Retrieving data..." before tool calls, "Analyzing results..." after getting data back, then proceed to synthesis. Keep narration to one line per phase.
-
-## Query Complexity Assessment
-
-Evaluate complexity before executing, proceed silently if low risk.
-
-### GREEN (Low Risk) — Proceed Silently
-- Single city, <7 day range
-- 1–4 tool calls required
-- <50k estimated records
-
-### YELLOW (Medium Risk) — Brief Warning
-- 2+ cities OR full month range
-- 5–9 tool calls required
-- 50–150k estimated records
-
-### RED (High Risk) — Stop & Offer Options
-- 3+ cities with month+ ranges
-- 10+ tool calls required
-- >150k estimated records
-
-## Mandatory Column Discovery
-
-Before querying ANY unfamiliar dataset, discover the schema first:
-
-\`\`\`
-Tool: get_data
-Type: "query"
-Domain: [domain]
-Dataset_id: [dataset-id]
-Query: SELECT * LIMIT 1
-\`\`\`
-
-## Core SoQL Query Patterns
-
-### Basic Query Structure
-\`\`\`sql
-SELECT field1, field2, field3
-WHERE condition
-ORDER BY field1
-LIMIT 1000
-\`\`\`
-
-### Common Filter Patterns
-\`\`\`sql
--- Text search
-WHERE field ILIKE '%search_term%'
-
--- Date ranges
-WHERE date_field >= '2023-01-01' AND date_field < '2024-01-01'
-
--- Numeric ranges
-WHERE amount > 1000 AND amount < 10000
-
--- Multiple values
-WHERE status IN ('Active', 'Pending', 'Approved')
-\`\`\`
-
-### Aggregation Patterns
-\`\`\`sql
-SELECT department, COUNT(*) as count, SUM(amount) as total
-GROUP BY department
-ORDER BY total DESC
-\`\`\`
-
-### Time Series Analysis
-\`\`\`sql
-SELECT date_trunc_y(date_field) as year,
-       COUNT(*) as annual_count
-GROUP BY year
-ORDER BY year
-\`\`\`
-
-## Domain Support
-
-**Any Socrata open data portal can be queried with get_data.** There are 500+ Socrata portals across the US and internationally. If the user asks about a city, state, or county, try it — use get_data with type "catalog" and that portal to discover its datasets, then get_data with type "query" to read them. Do NOT refuse a query just because a city isn't listed below.
-
-To find a portal domain for a city, use common patterns: data.cityofX.us, data.X.gov, data.Xcounty.gov, data.state.X.us. If you aren't sure which domain is right, try a candidate with get_data and type "catalog" — one call either returns that portal's datasets or shows the portal isn't reachable.
-
-### Which Tool Reaches Which Portal
-
-get_data is the only tool that takes a portal. Settle that before choosing a tool:
-
-- **get_data** accepts a portal argument (domain is an accepted spelling of the same thing) and works against any Socrata portal. With type "catalog" it is the cross-portal discovery path; with type "query" it runs SoQL against the portal you name.
-- **search** takes exactly one argument, query, and searches only the portal this server is configured for. It has no portal argument. Reach for it when the portal you want is the configured one; use get_data with type "catalog" for every other portal.
-- **fetch** takes only one argument, id, and the portal travels inside that identifier — a search hit's dataset:portal:dataset_id form (or a full dataset URL) names its portal, but a bare 4x4 ID names none, so it resolves against the portal this server is configured for.
-
-So a dataset ID you learned somewhere else — the tables below, a curated directory, a web search — is reached with get_data and an explicit portal argument, not handed to fetch as a bare ID.
-
-### Well-Tested Domains
-
-get_data has been extensively tested against these portals:
-
-| Domain | Notes |
-|--------|-------|
-| data.cityofnewyork.us | NYC — see Key Datasets below |
-| data.cityofchicago.org | Chicago — see Key Datasets below |
-| data.sf.gov | San Francisco — see Key Datasets below |
-| data.seattle.gov | Seattle — see Key Datasets below |
-| data.lacity.org | Los Angeles — see Key Datasets below |
-
-search and fetch aren't in this table: they only ever reach the portal this server is configured for, so "compatibility" isn't something that varies by domain the way it does for get_data.
-
-### Other Portals
-
-For portals not listed above, use get_data with type "catalog" and that portal to discover available datasets, then get_data with type "query" to read them. search and fetch won't help here — whichever portal this server is configured for, that's the only one they reach.
-
-### When a Portal Doesn't Work
-
-Not every city uses Socrata — some use ESRI/ArcGIS, CKAN, or proprietary platforms. If a portal doesn't respond or returns errors, let the user know:
-- The city's data portal may not be Socrata-powered, so it isn't reachable through these tools yet
-- This is an actively developing project — support for more portal types is on the roadmap
-- Suggest trying one of the well-tested portals above, or ask if they're interested in data from a different city
-
-### Working With a Portal Other Than the Configured One
-
-search and fetch only ever reach the portal this server is configured for — that isn't a per-domain quirk to work around, it's what those two tools do. If the user asks about San Francisco, Los Angeles, or anywhere else that isn't the configured portal, reach it with get_data and an explicit portal argument plus dataset ID — from the tables below, a web search, or get_data with type "catalog" on that portal.
-
-**Known LA Dataset IDs** (once you're pointed at data.lacity.org with get_data):
-- MyLA311 2025: h73f-gn57
-- MyLA311 2022: i5ke-k6by
-- MyLA311 2020: rq3b-xjk8
-
-## Date Range Guidelines
-
-| Dataset Type | Volume | Single City Range | Multi-City Range |
-|--------------|--------|-------------------|------------------|
-| NYC 311 | ~10k/day | Up to 30 days | Up to 7 days |
-| Chicago 311 | ~5k/day | Up to 30 days | Up to 14 days |
-| LA 311 | ~4k/day | Up to 30 days | Up to 14 days |
-| Seattle 311 | ~1.5k/day | Up to 90 days | Up to 30 days |
-| SF 311 | ~2k/day | Up to 60 days | Up to 30 days |
-| Housing Violations | ~500–1k/day | Up to 90 days | Up to 30 days |
-| Building Permits | ~200–800/day | Up to 180 days | Up to 90 days |
-| Business Licenses | ~50–200/day | Up to 1 year | Up to 180 days |
-
-## Pagination
-
-- Default to LIMIT 500 for raw data queries (SELECT * or SELECT field1, field2, …).
-- If you get back exactly N rows (where N = your LIMIT), tell the user there may be more and offer to fetch the next page.
-- Use OFFSET to paginate: SELECT … LIMIT 500 OFFSET 500 for page 2, OFFSET 1000 for page 3, etc.
-- For aggregation queries (COUNT, SUM, GROUP BY), pagination is rarely needed — the result set is already small.
-- Never request more than 10,000 rows in a single call. If you need to scan more data, use aggregation instead.
-
-## Key Datasets by Portal
-
-Below are the most-used datasets per portal for quick reference. For a dataset not listed here, use get_data with type "catalog" and the portal to discover it — search only covers the portal this server is configured for.
-
-### NYC (data.cityofnewyork.us)
-
-| Dataset | ID | Key Fields |
-|---------|----|------------|
-| 311 Service Requests (2020+) | erm2-nwe9 | complaint_type, borough, created_date, closed_date |
-| Motor Vehicle Collisions | h9gi-nx95 | crash_date, borough, number_of_persons_injured |
-| Restaurant Inspections | 43nn-pn8j | dba, grade, inspection_date, cuisine_description |
-| Housing Violations | wvxf-dwi5 | boro, violationid, inspectiondate, class |
-| Citywide Payroll | k397-673e | agency_name, title_description, base_salary, fiscal_year |
-| DOB Job Applications | ic3t-wcy2 | job_type, borough, building_type, initial_cost |
-| NYPD Arrests (YTD) | uip8-fykc | arrest_date, arrest_boro, ofns_desc, perp_race |
-| Parking/Camera Violations | nc67-uf89 | plate, violation, issue_date, amount_due |
-
-### Chicago (data.cityofchicago.org)
-
-| Dataset | ID | Key Fields |
-|---------|----|------------|
-| Crimes - 2001 to Present | ijzp-q8t2 | date, primary_type, location_description, arrest, ward |
-| Traffic Crashes | 85ca-t3if | crash_date, injuries_total, weather_condition |
-| Building Permits | ydr8-5enu | permit_type, issue_date, estimated_cost |
-| Food Inspections | 4ijn-s7e5 | dba_name, inspection_date, results, risk, violations |
-| Building Violations | 22u3-xenr | violation_code, violation_description, address |
-| Business Licenses (Active) | uupf-x98q | license_number, business_activity, expiration_date |
-| Employee Salaries | xzkq-xp2w | name, job_titles, department, annual_salary |
-
-### San Francisco (data.sf.gov)
-
-| Dataset | ID | Key Fields |
-|---------|----|------------|
-| 311 Cases | vw6y-z8j6 | requested_datetime, service_name, status_description |
-| Police Incidents (2018+) | wg3w-h783 | incident_date, incident_category, police_district |
-| Fire Incidents | wr8u-xric | alarm_dttm, primary_situation, address |
-| Building Permits | i98e-djp9 | permit_number, filed_date, description, estimated_cost |
-| Eviction Notices | 5cei-gny5 | file_date, address, non_payment, ellis_act_withdrawal |
-| Registered Businesses | g8m3-pdis | dba_name, full_business_address, certificate_number |
-| Employee Compensation | 88g8-5mnd | department, total_compensation, salaries, year |
-
-### Seattle (data.seattle.gov)
-
-| Dataset | ID | Key Fields |
-|---------|----|------------|
-| SPD Crime Data (2008+) | tazs-3rd5 | offense_category, offense_date, neighborhood, beat |
-| Fire 911 Calls (real-time) | kzjm-xkqj | type, datetime, address, incident_number |
-| Building Permits | 76t5-zqzr | permitnum, permitclass, statuscurrent, issueddate |
-| Code Complaints/Violations | ez4a-iug7 | recordnum, statuscurrent, opendate, recordtype |
-| Business Licenses | wnbq-64tb | business_legal_name, naics_code, street_address |
-| City Wage Data | 2khk-5ukd | hourly_rate, job_title, department |
-
-### Los Angeles (data.lacity.org)
-
-Note: reach LA with get_data and portal "data.lacity.org" unless that happens to be the configured portal — search and fetch only cover the configured portal.
-
-| Dataset | ID | Key Fields |
-|---------|----|------------|
-| MyLA311 2025 | h73f-gn57 | created_date, request_type, status, address |
-| MyLA311 2022 | i5ke-k6by | created_date, request_type, status, address |
-| MyLA311 2020 | rq3b-xjk8 | created_date, request_type, status, address |
-| Crime Data (2020-2024) | 2nrs-mtv8 | date_occ, crm_cd, area, location, lat, lon |
-| Active Businesses | 6rrh-rzua | business_name, street_address, naics, dba_name |
-| Traffic Collisions (2010+) | d5tf-ez2w | date_occ, area, location_1, vict_age |
-
-## Error Handling
-
-### Common Socrata API Errors
-
-**400 Bad Request** — SoQL syntax errors
-- Check field names (case-sensitive)
-- Validate data types in comparisons
-- Ensure proper quoting of string values
-
-**404 Not Found** — Dataset ID or domain issues
-- Verify dataset ID format (4x4 pattern: abcd-1234)
-- Confirm domain is correct
-- Check if dataset is public/accessible
-
-**429 Too Many Requests** — Rate limiting
-- Implement delays between requests
-- Use Socrata App Token for higher limits
-
-**500 Server Error** — Complex queries or server issues
-- Simplify query complexity
-- Reduce result set size with LIMIT
-- Retry with exponential backoff
-
-## Socrata MCP Server Tools
-
-| Tool | Arguments | Purpose | Returns |
-|------|-----------|---------|---------|
-| **search** | query only — no portal argument | Find datasets on the portal this server is configured for | Encoded IDs, e.g. dataset:portal:dataset_id |
-| **fetch** | id only — the portal travels in the identifier; a bare 4x4 resolves against the configured portal | Retrieve full metadata or one record | Complete data with metadata |
-| **get_data** | type, portal (any portal), plus SoQL parameters | Catalog discovery and SoQL queries — the only tool that reaches a portal other than the configured one | Raw query results |
-
-## Output Format Guidelines
-
-### Standard Output Structure
-
-# [Analysis Title]
-
-## Key Metrics
-[Visual comparison table]
-
-## Executive Summary
-[2–3 paragraphs: findings, significance]
-
-## Detailed Analysis
-[Analysis with inline calculations]
-
-## Methodology
-### Data Sources
-[Datasets, date ranges, record counts]
-
-### Queries Used
-| Purpose | Records | Query |
-|---------|---------|-------|
-| [Purpose] | [Count] | SELECT... |
-
-## Uncertainty & Limitations Disclosure
-
-When presenting analysis, include structured caveats so users know what they can and can't conclude:
-
-- **Data completeness**: State what the results cover — e.g., "This covers 12,430 of ~300k annual records (last 30 days)." If you applied filters, say so.
-- **Field interpretation**: When a query depends on interpreting the user's intent as a specific field or value, say so — e.g., "I interpreted 'noise' as complaint_type ILIKE '%noise%' — verify this matches your intent."
-- **Limitations section**: End analysis responses with a brief **Limitations** block listing anything that qualifies the findings: date range used, missing fields, sample size, portal quirks, etc.
-
-## Data Quality Checks
-
-Always check for:
-1. **Null Values**: WHERE field IS NOT NULL
-2. **Data Freshness**: Check last_updated or similar fields
-3. **Completeness**: Count missing vs. total records
-4. **Consistency**: Validate against known constraints
-
-## Advanced Techniques
-
-### Spatial Queries
-\`\`\`sql
-SELECT *
-WHERE within_circle(location, 40.7128, -74.0060, 1000)
-\`\`\`
-
-### Complex Aggregations
-\`\`\`sql
-SELECT category,
-       COUNT(*) as total_requests,
-       COUNT(CASE WHEN status = 'Closed' THEN 1 END) as closed_requests,
-       AVG(CASE WHEN closed_date IS NOT NULL
-           THEN (closed_date - created_date) END) as avg_resolution_days
-GROUP BY category
-ORDER BY total_requests DESC
-\`\`\`
-
----
-
-# Socrata MCP Skill — Web Overlay
-
-> Applies to: HTTP-connected web clients, on any deployment of the web app.
-
-## Date Filter Enforcement
-
-**ALWAYS add a date filter** on high-volume datasets (>1M rows, e.g., 311 data) unless the user explicitly asks for all-time data. Default to **30 days** for 311-type datasets. This is mandatory — the web environment has tighter resource constraints than local tools.
-
-If a user's question is open-ended (e.g., "What are the top complaints in NYC?"), default to the last 30 days and tell them:
-- That you scoped to the last 30 days for performance
-- They can ask for a different range
-- For all-time analysis, suggest using a local (stdio) client
-
-## Deployment Limits
-
-Follow the limits your deployment declares; where none are declared, prefer conservative defaults appropriate to shared web environments — modest result sets, few tool calls per response, and concise output.
-
-## Token-Conscious Formatting
-
-- Lead with the answer, then supporting data
-- Use compact tables rather than verbose explanations
-- Keep to a small set of key findings per response
-- Skip the full "Methodology" section — include a brief "Data source" line instead
-- Omit the "Queries Used" table unless the user asks for it
-
-## Suggesting a Local Client
-
-When a user hits a limit (complex multi-city query, long date range, deep analysis), suggest a local (stdio) client for heavier analysis — local clients connect directly to the same data sources without web-environment constraints. Keep the suggestion neutral unless your deployment declares a specific alternative.
-`;
-
-export const getSkillForPortal = (portal: string): string => {
-  const portalSpecificGuidance: Record<string, string> = {
-    'data.cityofnewyork.us': `
-Use these NYC dataset IDs directly:
-- 311 complaints: erm2-nwe9 (fields: complaint_type, borough, created_date)
-- Restaurant inspections: 43nn-pn8j
-- Housing violations: wvxf-dwi5`,
-    'data.cityofchicago.org': `
-Use these Chicago dataset IDs directly:
-- 311 requests: v6vf-nfxy (fields: sr_type, created_date, community_area)`,
-    'data.sf.gov': `
-Note: search only covers the portal this server is configured for — if that isn't data.sf.gov, reach SF with get_data and portal: "data.sf.gov" instead. Use dataset IDs directly:
-- 311 cases: vw6y-z8j6 (fields: requested_datetime, service_name, analysis_neighborhood)`,
-  };
-
-  return portalSpecificGuidance[portal] || '';
-};
-
-// Cached skill guidance from MCP server
+// The fallback is GENERIC-ONLY, by design (sprint 154 P4, portability
+// charter): it tracks the deployment-NEUTRAL overlay of the source-of-truth
+// skill docs in the civic-ai-tools repo and carries no deployment posture.
+// Its claims about which tool takes a portal are held to the hub's base skill
+// by `socrata-skill-mirror.test.ts`; `scripts/sync-fallback.mjs` predates the
+// move and is never run (see its header).
+export {
+  CROSS_SOURCE_PREAMBLE,
+  crossSourcePreamble,
+  outroFor,
+  SOCRATA_SKILL_FALLBACK,
+  type SourceId,
+} from '@typedstandards/civic-typed-router';
+
+/** Portal-specific guidance for a run's Socrata portal, or `''`: the package's
+ *  per-portal table, in the bare view. */
+export const getSkillForPortal = (portal: string): string => routerSkillForPortal(portal);
+
+// Cached skill guidance from MCP server. The cache is the consumer's, so it
+// stays here with the semantics it always had: a fetched text is kept for five
+// minutes, and it is served only while it is non-empty — an empty answer is
+// stored but never served, so it is fetched again on every prompt. A failed
+// fetch is not cached: it throws, and the package composes its fallback.
 let cachedSkillGuidance: string | null = null;
 let cacheTimestamp = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-async function fetchSkillGuidance(): Promise<string> {
+/** The package's `fetchPrompt`: the Socrata guidance, behind the cache. The
+ *  package asks for one prompt, `skill-guidance` in the `web` modality; it is
+ *  passed to `callMcpPrompt` as asked. */
+async function fetchSkillGuidance(name: string, args: Record<string, string>): Promise<string> {
   const now = Date.now();
   if (cachedSkillGuidance && now - cacheTimestamp < CACHE_TTL_MS) {
     return cachedSkillGuidance;
@@ -448,24 +88,32 @@ async function fetchSkillGuidance(): Promise<string> {
 
   try {
     console.log('[Skill] Fetching skill guidance from MCP server...');
-    const guidance = await callMcpPrompt('skill-guidance', { modality: 'web' });
+    const guidance = await callMcpPrompt(name, args);
     cachedSkillGuidance = guidance;
     cacheTimestamp = now;
     console.log('[Skill] Fetched skill guidance successfully (%d chars)', guidance.length);
     return guidance;
   } catch (error) {
     console.warn('[Skill] Failed to fetch skill guidance, using fallback:', errorLogFacts(error));
-    return SOCRATA_SKILL_FALLBACK;
+    throw error;
   }
 }
 
-/**
- * Identifier for an MCP data source. Mirrors the keys in `./registry.ts` so a
- * source's skill text is keyed the same way as its tool routing. Adding
- * another source means widening this union and adding one entry to
- * `SKILL_REGISTRY` below — no changes to `composeSkillPrompt` itself.
- */
-export type SourceId = 'socrata' | 'data-commons' | 'boston-opencontext';
+/** The one log line for a source whose block could not be composed. */
+function warnSourceTextFailed(sourceId: string, error: unknown): void {
+  console.warn(`[composeSkillPrompt] Failed to fetch text for "${sourceId}":`, errorLogFacts(error));
+}
+
+/** The package's `fetchInstructions` for `buildSystemPrompt`: the client's,
+ *  with a failure logged before the package leaves that source's block out. */
+async function fetchInstructions(sourceId: string): Promise<string | null> {
+  try {
+    return await getServerInstructions(sourceId);
+  } catch (error) {
+    warnSourceTextFailed(sourceId, error);
+    throw error;
+  }
+}
 
 /**
  * Inputs handed to every `SkillEntry.fetchText` call. Sources are free to
@@ -502,12 +150,6 @@ export interface SkillEntry {
 export type SkillRegistry = Partial<Record<SourceId, SkillEntry>>;
 
 /**
- * Every source a prompt can be composed from, in the order the prompt names
- * them. `offeredSkillSources` narrows it to one instance's configuration.
- */
-const ALL_SOURCES: readonly SourceId[] = ['socrata', 'data-commons', 'boston-opencontext'];
-
-/**
  * The sources a run's prompt is composed from on an instance configured as
  * `configured`: each source the instance offers (`isSourceOffered` in
  * `./registry.ts`). Socrata and Data Commons always; an optional source such as
@@ -517,143 +159,60 @@ const ALL_SOURCES: readonly SourceId[] = ['socrata', 'data-commons', 'boston-ope
  * instructions (sprint 238, ruling D2).
  */
 export function offeredSkillSources(configured: McpRegistryEnv = readMcpEnvFromProcess()): SourceId[] {
-  return ALL_SOURCES.filter((sourceId) => isSourceOffered(configured, sourceId));
-}
-
-/** Each source's numbered entry in the cross-source preamble. */
-const PREAMBLE_ENTRIES: Record<SourceId, string> = {
-  socrata:
-    '**Socrata open data portals** — city operational data such as 311 requests, building permits, inspections, crime, housing violations, payroll, and licenses. Covers NYC, Chicago, SF, Seattle, LA, and hundreds of other portals — but not Boston. Tools: get_data.',
-  'data-commons':
-    '**Google Data Commons** — authoritative federal and international statistical data from the U.S. Census Bureau (ACS, Decennial), BLS, CDC, Department of Education, EPA, and other official agencies. Tools: search_indicators, get_observations.',
-  'boston-opencontext':
-    "**Boston OpenContext** — the City of Boston's CKAN-native open-data MCP, fronting data.boston.gov. 311, permits, crime, inspections, property, elections, schools, parcels, and neighborhoods for Boston specifically. Tools: ckan__search_datasets, ckan__get_dataset, ckan__query_data, ckan__get_schema, ckan__execute_sql, ckan__aggregate_data.",
-};
-
-/** The preamble's source-selection rules, in order; a rule that routes to a
- *  source is stated only when that source is offered. */
-const PREAMBLE_RULES: ReadonlyArray<{ routesTo?: SourceId; text: string }> = [
-  { routesTo: 'boston-opencontext', text: '- **Boston civic questions** → Boston OpenContext. Boston is not on Socrata.' },
-  { routesTo: 'socrata', text: '- **Other-city civic questions** (NYC, Chicago, SF, Seattle, LA, ...) → Socrata.' },
-  { routesTo: 'data-commons', text: '- **Demographics, poverty, income, education, health, labor, environment** for any geography → Data Commons.' },
-  { text: '- **Multi-source equity questions** that join operational data against demographic context → plan a multi-step analysis, attribute each figure to its source, and mind geography alignment (Boston neighborhoods and city council districts are not standard census geographies — state the mismatch rather than silently imputing).' },
-];
-
-const SOURCE_COUNT_WORDS = ['NO', 'ONE', 'TWO', 'THREE'];
-
-/**
- * The cross-source preamble for exactly these sources: one numbered entry per
- * source, and the selection rules that route to a source listed. Every line it
- * can produce is a line of `CROSS_SOURCE_PREAMBLE` except the first, which
- * states the count.
- */
-export function crossSourcePreamble(sources: readonly SourceId[]): string {
-  const entries = sources.map((sourceId, i) => `${i + 1}. ${PREAMBLE_ENTRIES[sourceId]}`);
-  const rules = PREAMBLE_RULES.filter((rule) => rule.routesTo === undefined || sources.includes(rule.routesTo)).map((rule) => rule.text);
-  return `You have access to ${SOURCE_COUNT_WORDS[sources.length]} MCP data sources through the tools below.
-
-${entries.join('\n')}
-
-Source selection rules:
-${rules.join('\n')}
-
-See the Cross-source decision logic section in the Data Commons guidance below for the join pattern.`;
-}
-
-/** The preamble with every source this codebase has — what an instance that
- *  configures every optional source sends. */
-export const CROSS_SOURCE_PREAMBLE = crossSourcePreamble(ALL_SOURCES);
-
-const INTRO_TEMPLATE = (today: string) =>
-  `You are a helpful assistant with access to civic and statistical data via MCP tools.
-
-Today's date is ${today}. Always use this as the current date for interpreting relative time expressions like "last year" or "past two months."`;
-
-/** What the outro asks the model to cite, per source. */
-const OUTRO_CITATIONS: Record<SourceId, string> = {
-  socrata: 'the dataset ID (for Socrata)',
-  'data-commons': 'the variable DCID + source dataset (for Data Commons)',
-  'boston-opencontext': 'the resource UUID + dataset title (for Boston OpenContext)',
-};
-
-/** The closing instruction, citing exactly these sources. */
-export function outroFor(sources: readonly SourceId[]): string {
-  const citations = sources.map((sourceId) => OUTRO_CITATIONS[sourceId]);
-  const list =
-    citations.length <= 2
-      ? citations.join(' or ')
-      : `${citations.slice(0, -1).join(', ')}, or ${citations[citations.length - 1]}`;
-  return `When you get results, summarize clearly and cite ${list}.`;
+  return civicRouter.offeredSkillSources(configured) as SourceId[];
 }
 
 /** The outro `composeSkillPrompt` closes with when the context names none. */
 const OUTRO = outroFor(ALL_SOURCES);
 
+/** What the package's guidance entries receive from a `SkillContext`: the
+ *  client's fetchers as they are (the composer below logs a failure). */
+function guidanceContext(ctx: SkillContext): CivicGuidanceContext {
+  return {
+    portal: ctx.portal,
+    publicationHost: DATA_COMMONS_PUBLICATION_HOST,
+    fetchPrompt: fetchSkillGuidance,
+    fetchInstructions: getServerInstructions,
+  };
+}
+
 /**
- * Default registry. One entry per source the website talks to. Each entry's
- * `fetchText` returns the source's pre-composed block of skill text, ready to
- * be joined into the final prompt by `composeSkillPrompt`. The blocks are
- * deliberately self-contained so the composer doesn't need source-specific
- * branches.
+ * Default registry. One entry per source the website talks to, each the
+ * package's guidance block for that source, ready to be joined into the final
+ * prompt by `composeSkillPrompt`.
  */
 const SKILL_REGISTRY: SkillRegistry = {
-  socrata: {
-    sourceId: 'socrata',
-    async fetchText(ctx) {
-      const guidance = await fetchSkillGuidance();
-      const portalSection = ctx.portal
-        ? `\n\n## PORTAL-SPECIFIC GUIDANCE\nDefault portal: ${ctx.portal}\n${getSkillForPortal(ctx.portal)}`
-        : '';
-      return `# Socrata skill guidance\n\n${guidance}${portalSection}`;
-    },
-  },
-  'data-commons': {
-    sourceId: 'data-commons',
-    async fetchText() {
-      const instructions = await getServerInstructions('data-commons');
-      const instructionsBlock = instructions
-        ? `# Data Commons server instructions (from initialize response)\n\n${instructions}`
-        : '# Data Commons server instructions\n\n(The Data Commons MCP server did not advertise per-server instructions on initialize — composing with the embedded Data Commons skill only.)';
-      return `${instructionsBlock}\n\n---\n\n${DATA_COMMONS_SKILL}`;
-    },
-  },
+  socrata: { sourceId: 'socrata', fetchText: (ctx) => socrataGuidanceText(guidanceContext(ctx)) },
+  'data-commons': { sourceId: 'data-commons', fetchText: (ctx) => dataCommonsGuidanceText(guidanceContext(ctx)) },
   'boston-opencontext': {
     sourceId: 'boston-opencontext',
-    async fetchText() {
-      const instructions = await getServerInstructions('boston-opencontext');
-      const instructionsBlock = instructions
-        ? `# Boston OpenContext server instructions (from initialize response)\n\n${instructions}`
-        : '# Boston OpenContext server instructions\n\n(The OpenContext MCP server did not advertise per-server instructions on initialize — composing with the embedded Boston skill only; per-tool guidance is carried inline on each ckan__* tool description.)';
-      return `${instructionsBlock}\n\n---\n\n${BOSTON_OPENCONTEXT_SKILL}`;
-    },
+    fetchText: (ctx) => bostonGuidanceText(guidanceContext(ctx)),
   },
 };
 
 /**
  * Compose a multi-source LLM system prompt by joining an intro block, an
- * optional cross-source preamble, one block per active source, and an outro.
- * Pure aside from the I/O each registry entry chooses to do — the composer
- * itself has no `process.env` reads, no global mutable state, and no
- * source-specific branches.
+ * optional cross-source preamble, one block per active source, and an outro —
+ * the package's join (`composePrompt`) and intro, over the blocks `registry`
+ * produces. The composer itself has no environment reads, no global mutable
+ * state, and no source-specific branches.
  *
  * The default registry argument is the module-level `SKILL_REGISTRY`. Tests
  * inject custom registries to exercise composition logic without mocking
- * module imports; production callers leave the registry off.
+ * module imports. Production composes through `buildSystemPrompt`.
  *
  * Sources that throw, return an empty string, or are missing from the
- * registry are skipped silently with a warning logged. Composition always
- * succeeds; an empty `activeSources` produces intro + preamble + outro.
+ * registry are skipped with a warning logged. Composition always succeeds; an
+ * empty `activeSources` produces intro + preamble + outro.
  */
 export async function composeSkillPrompt(
   activeSources: SourceId[],
   context: SkillContext,
   registry: SkillRegistry = SKILL_REGISTRY,
 ): Promise<string> {
-  const intro = INTRO_TEMPLATE(context.today);
-  const introBlock = context.preamble ? `${intro}\n\n${context.preamble}` : intro;
-
-  const sourceTexts = await Promise.all(
-    activeSources.map(async (sourceId) => {
+  return composePrompt(
+    { intro: introFor(context.today), preamble: context.preamble, outro: context.outro ?? OUTRO },
+    activeSources.map((sourceId) => async () => {
       const entry = registry[sourceId];
       if (!entry) {
         console.warn(`[composeSkillPrompt] Unknown sourceId "${sourceId}" — skipping`);
@@ -662,62 +221,29 @@ export async function composeSkillPrompt(
       try {
         return await entry.fetchText(context);
       } catch (error) {
-        console.warn(
-          `[composeSkillPrompt] Failed to fetch text for "${sourceId}":`,
-          errorLogFacts(error),
-        );
+        warnSourceTextFailed(sourceId, error);
         return '';
       }
     }),
   );
-
-  const parts: string[] = [introBlock];
-  for (const text of sourceTexts) {
-    if (text && text.trim().length > 0) {
-      parts.push(text);
-    }
-  }
-  parts.push(context.outro ?? OUTRO);
-
-  return parts.join('\n\n---\n\n');
 }
 
 /**
  * The section a LOCKED instance appends to the composed prompt (#436, ruling
- * D7: "under the lock the tool text stops inviting other portals").
- *
- * WHY A SUPERSEDING SECTION AND NOT AN EDIT. Measured at `109eecb`, several
- * sentences that reach the model become false under the lock: the fallback's
- * "Any Socrata open data portal can be queried with get_data", its portal-
- * naming patterns for other cities, "Which Tool Reaches Which Portal" (get_data
- * "works against any Socrata portal"), "Other Portals", "Working With a Portal
- * Other Than the Configured One", the per-portal dataset tables, and the
- * preamble's "Covers NYC, Chicago, SF, Seattle, LA, and hundreds of other
- * portals". They stay true of every unlocked instance, and the live skill text
- * the Socrata MCP server serves says the same things from outside this
- * repository, where no edit here can reach. So the lock adds one section, last,
- * that names what no longer applies and why, instead of forking the text.
- *
- * Names only tools the model can call (`prompt-advertised-tools.test.ts`'s
- * property; `src/lib/portal-lock.test.ts` holds this text to it). The closing
- * sentence names the other sources this instance offers — Data Commons, and
- * Boston OpenContext only where it is configured (sprint 238, ruling D2).
+ * D7: "under the lock the tool text stops inviting other portals"): the
+ * package's lock section. It names what no longer applies under the lock
+ * instead of forking the text above, which stays true of every unlocked
+ * instance and which the Socrata MCP server also serves from outside this
+ * repository. Names only tools the model can call (`portal-lock.test.ts`). The
+ * closing sentence names the other sources this instance offers — Data
+ * Commons, and Boston OpenContext only where it is configured (sprint 238,
+ * ruling D2).
  */
 export function portalLockGuidance(
   lockedPortal: string,
   configured: McpRegistryEnv = readMcpEnvFromProcess(),
 ): string {
-  const others = isSourceOffered(configured, 'boston-opencontext')
-    ? 'the other data sources described above (Data Commons, and Boston OpenContext for Boston) are separate, remain available, and keep their own scope'
-    : 'the other data source described above (Data Commons) is separate, remains available, and keeps its own scope';
-  return `## ONE SOCRATA PORTAL ONLY
-
-This instance answers questions against one Socrata portal only: ${lockedPortal}. Anything above that describes querying other Socrata portals (any portal being reachable with get_data, naming patterns for other cities' portals, the tables of other portals and their datasets) does not apply on this instance:
-- get_data reaches ${lockedPortal} only. Leave its portal argument out; a call naming any other portal is refused and returns no data.
-- fetch accepts identifiers and URLs on ${lockedPortal} only; one naming any other portal is refused.
-- search covers the portal the data server is configured for.
-
-If a question asks for Socrata data about a place ${lockedPortal} does not cover, say so plainly instead of answering from another Socrata portal. This limit applies to Socrata portals only; ${others}.`;
+  return civicRouter.portalLockGuidance(lockedPortal, configured);
 }
 
 /**
@@ -731,31 +257,28 @@ export function withPortalLockGuidance(
   lockedPortal?: string,
   configured: McpRegistryEnv = readMcpEnvFromProcess(),
 ): string {
-  return lockedPortal ? `${systemPrompt}\n\n---\n\n${portalLockGuidance(lockedPortal, configured)}` : systemPrompt;
+  return civicRouter.withPortalLockGuidance(systemPrompt, lockedPortal, configured);
 }
 
 /**
- * Thin wrapper kept for backward compatibility with the existing route
- * handlers. Delegates to `composeSkillPrompt` with the sources this instance
- * offers (`offeredSkillSources`: `['socrata', 'data-commons']`, plus
- * `'boston-opencontext'` when `BOSTON_OPENCONTEXT_MCP_URL` is set) and the
+ * The composed system prompt for the sources this instance offers
+ * (`offeredSkillSources`: `['socrata', 'data-commons']`, plus
+ * `'boston-opencontext'` when `BOSTON_OPENCONTEXT_MCP_URL` is set), with the
  * cross-source preamble and outro for exactly those sources — so an instance
- * that configures every source composes the prompt it always did, and one that
- * does not configure Boston's composes none of its text and never asks its
- * server for instructions. `portal` is optional (#384, F2): without one the
- * Socrata block is composed with no portal-specific section and names no
- * default portal — `composeSkillPrompt` already did that for an absent
- * `SkillContext.portal`; only this signature said otherwise.
+ * that does not configure Boston's composes none of its text and never asks
+ * its server for instructions. `portal` is optional (#384, F2): without one
+ * the Socrata block is composed with no portal-specific section and names no
+ * default portal.
  */
 export const buildSystemPrompt = async (
   portal?: string,
   configured: McpRegistryEnv = readMcpEnvFromProcess(),
-): Promise<string> => {
-  const sources = offeredSkillSources(configured);
-  return composeSkillPrompt(sources, {
+): Promise<string> =>
+  civicRouter.buildSystemPrompt({
     portal,
+    configured,
     today: new Date().toISOString().split('T')[0],
-    preamble: crossSourcePreamble(sources),
-    outro: outroFor(sources),
+    publicationHost: DATA_COMMONS_PUBLICATION_HOST,
+    fetchPrompt: fetchSkillGuidance,
+    fetchInstructions,
   });
-};

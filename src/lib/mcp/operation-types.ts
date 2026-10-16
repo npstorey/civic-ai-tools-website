@@ -10,6 +10,8 @@
 // packager records as `'unknown'`; that is a real answer for a tool whose
 // operation is not knowable from its name, and `fetch` below is one.
 
+import { civicRouter } from '@typedstandards/civic-typed-router';
+
 const TOOL_OPERATION_TYPES: Record<string, string> = {
   // Socrata's `search`, like the two other name-keyed discovery tools below,
   // carries no `args.type` — it takes one property, `query`. The server runs it
@@ -49,20 +51,6 @@ const TOOL_OPERATION_TYPES: Record<string, string> = {
   ckan__aggregate_data: 'query',
 };
 
-const SOURCE_BY_TOOL_NAME: Record<string, string> = {
-  get_data: 'socrata',
-  search: 'socrata',
-  fetch: 'socrata',
-  search_indicators: 'data-commons',
-  get_observations: 'data-commons',
-  ckan__search_datasets: 'boston-opencontext',
-  ckan__get_dataset: 'boston-opencontext',
-  ckan__query_data: 'boston-opencontext',
-  ckan__get_schema: 'boston-opencontext',
-  ckan__execute_sql: 'boston-opencontext',
-  ckan__aggregate_data: 'boston-opencontext',
-};
-
 /**
  * Resolve the operation type for a tool call. Returns `undefined` when the
  * operation cannot be determined — callers typically fall back to `'unknown'`.
@@ -82,8 +70,10 @@ export function deriveOperationType(
  * not carry an `mcp.source` attribute (pre-M9.1 packages, tests without a
  * full trace). The authoritative runtime mapping lives in `./registry.ts`;
  * this static version exists so pure-function callers (packager, tests) can
- * resolve sources without reading `process.env`.
+ * resolve sources without reading `process.env`. The map is
+ * `@typedstandards/civic-typed-router`'s tool-to-source index, derived from its
+ * schemas (#599 W2); the operation-type labels above stay the website's.
  */
 export function sourceIdForToolName(toolName: string): string | undefined {
-  return SOURCE_BY_TOOL_NAME[toolName];
+  return civicRouter.sourceIdForToolName(toolName);
 }

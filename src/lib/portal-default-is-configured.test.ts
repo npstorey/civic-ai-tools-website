@@ -42,6 +42,13 @@
  * paths, and one path may carry more than one classification; the hit counts
  * of a path's entries sum.
  *
+ * AND THE INSTALLED ROUTER PACKAGE (#599 W2). The skill text and the tool
+ * schemas moved out of `src/lib/mcp/` into `@typedstandards/civic-typed-router`,
+ * which no `git ls-files` lists. A guard over the tracked tree alone would have
+ * gone on passing over text that is no longer in it, so the universe also takes
+ * the package's installed runtime files (`routerFiles`), and their hostnames are
+ * classified and counted below like any other path.
+ *
  * EVERY EXCEPTION CARRIES ITS CLASSIFICATION. A hostname may stay in the tree
  * only as a fixture, as marketing copy, as a reference table of portals the
  * project has tested, as the fixed domain of a named data-source server, or as
@@ -162,18 +169,6 @@ const EXCEPTIONS: readonly Exception[] = [
     why: 'Captured tool-call arguments from past runs, replayed on /explore as a recording of what those runs did; nothing here starts a run.',
   },
   {
-    path: 'src/lib/mcp/socrata-skill.ts',
-    classification: 'reference-table',
-    hits: 21,
-    why: 'The Well-Tested Domains table, the per-portal Key Datasets lookup and the `data.<org>.<tld>` naming-convention templates the model is told to derive an unknown portal from — portals offered to the model as choices, while the one default this text states is interpolated from the resolved run portal and is absent when the run has none.',
-  },
-  {
-    path: 'src/lib/mcp/tools.ts',
-    classification: 'reference-table',
-    hits: 11,
-    why: "Worked examples of the `portal` argument's shape in the tool descriptions, plus the Boston server's own domain; a portal the model copies from one becomes a portal that call actually addressed, never a value substituted into a call that omitted it.",
-  },
-  {
     path: 'src/app/(marketing)/learn/page.tsx',
     classification: 'marketing-copy',
     hits: 6,
@@ -204,12 +199,6 @@ const EXCEPTIONS: readonly Exception[] = [
     why: 'Curated excerpts of the skill text, shown to a reader so they can see the dataset knowledge the model was given; a disclosure surface, not an input.',
   },
   {
-    path: 'src/lib/mcp/boston-skill.ts',
-    classification: 'server-endpoint',
-    hits: 3,
-    why: 'The domain the Boston OpenContext server fronts, named in the guidance that tells the model what that server covers and how to cite it.',
-  },
-  {
     path: 'src/lib/notebook-author/helpers/fetch_opencontext.py',
     classification: 'server-endpoint',
     hits: 3,
@@ -224,8 +213,8 @@ const EXCEPTIONS: readonly Exception[] = [
   {
     path: 'src/lib/mcp/registry.ts',
     classification: 'server-endpoint',
-    hits: 2,
-    why: "Google Data Commons' hosted MCP endpoint, already overridable through `DATA_COMMONS_MCP_URL` — a third-party public service every instance reaches at the same address, not one deployment's city, and the trace records it as real configured routing for exactly that reason (#258 A9).",
+    hits: 1,
+    why: "Google Data Commons' hosted MCP endpoint, named in the comment on endpoint normalization; the default itself is the router package's (`dist/civic/env.js` below), overridable through `DATA_COMMONS_MCP_URL`.",
   },
   {
     path: 'src/lib/notebook-author/helpers/fetch_data_commons.py',
@@ -267,7 +256,7 @@ const EXCEPTIONS: readonly Exception[] = [
     path: 'scripts/eval-models.mjs',
     classification: 'reference-table',
     hits: 7,
-    why: "Worked examples of the `portal` argument in the harness's own copy of the tool description and its `portal` parameter description — shapes offered to the model, as `src/lib/mcp/tools.ts` offers them.",
+    why: "Worked examples of the `portal` argument in the harness's own copy of the tool description and its `portal` parameter description — shapes offered to the model, as the router package's Socrata tools offer them (`dist/civic/socrata.js` below).",
   },
   {
     path: 'scripts/rehearse-instance-identity.ts',
@@ -298,6 +287,43 @@ const EXCEPTIONS: readonly Exception[] = [
     classification: 'documentation',
     hits: 7,
     why: "The October 2026 model evaluation's record of San Francisco's portal move (the old host redirecting to the new one) and the reference answer read from the new host; it reports what the portals did, and nothing runs from it.",
+  },
+  // The installed router package (#599 W2): the model-facing text that left
+  // src/lib/mcp/{socrata-skill,tools,boston-skill,registry}.ts, where it was
+  // 21 + 11 + 3 + 2 = 37 hits. 36 of them are here and one stayed in
+  // registry.ts; the package adds 6 of its own (two header comments, and the
+  // 0.2.0 `description` and `freshness` lines, which the bare prompt does not
+  // read). Read from the installed files, so a package bump that brings a
+  // hostname fails here until it is classified.
+  {
+    path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/socrata.js',
+    classification: 'reference-table',
+    hits: 30,
+    why: "The Well-Tested Domains table, the per-portal Key Datasets lookup, the `data.<org>.<tld>` naming-convention templates and the worked examples of the `portal` argument in the Socrata tool descriptions (28, moved from socrata-skill.ts and tools.ts); a header comment, and the source's routing description naming a state portal as an example — portals offered to the model as choices, while the one default the text states is interpolated from the resolved run portal and is absent when the run has none.",
+  },
+  {
+    path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/boston.js',
+    classification: 'server-endpoint',
+    hits: 9,
+    why: "The domain the Boston OpenContext server fronts, in its guidance, its tool descriptions, a comment, and its routing description, freshness line and their citation (5 moved from boston-skill.ts and tools.ts, 4 the package's own).",
+  },
+  {
+    path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/prompt-frame.js',
+    classification: 'server-endpoint',
+    hits: 1,
+    why: "The cross-source preamble's Boston OpenContext entry naming the domain that server fronts (moved from socrata-skill.ts).",
+  },
+  {
+    path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/data-commons.js',
+    classification: 'documentation',
+    hits: 1,
+    why: "A code comment naming Google Data Commons' hosted MCP endpoint (moved from tools.ts).",
+  },
+  {
+    path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/env.js',
+    classification: 'server-endpoint',
+    hits: 1,
+    why: "Google Data Commons' hosted MCP endpoint as the package's default address, which `readMcpEnvFromProcess` applies when `DATA_COMMONS_MCP_URL` is unset — a third-party public service every instance reaches at the same address, not one deployment's city, and the trace records it as real configured routing for exactly that reason (#258 A9; moved from registry.ts).",
   },
 ];
 
@@ -346,12 +372,39 @@ function sourceFiles(): string[] {
   );
 }
 
-function portalHits(): Hit[] {
-  const files = sourceFiles();
+/**
+ * The installed router package's runtime files, as paths from the repository
+ * root (#599 W2). The skill text, the tool schemas and the Data Commons default
+ * address left this tree for `@typedstandards/civic-typed-router`; what the
+ * model reads is now these files, so the guard reads them too. The shipped
+ * runtime only (`dist/**\/*.js`): its type declarations, README and changelog
+ * are not run.
+ */
+const ROUTER_DIST = 'node_modules/@typedstandards/civic-typed-router/dist';
+
+function routerFiles(): string[] {
+  const root = path.join(REPO_ROOT, ROUTER_DIST);
+  const files = fs.existsSync(root)
+    ? (fs.readdirSync(root, { recursive: true }) as string[])
+        .map((rel) => `${ROUTER_DIST}/${rel.split(path.sep).join('/')}`)
+        .filter((rel) => rel.endsWith('.js'))
+        .sort()
+    : [];
   assert.ok(
-    files.some((f) => !f.startsWith('src/')) && files.length > 300,
-    `PREMISE: git ls-files yielded ${files.length} scanned files; the universe is not the tree`,
+    files.includes(`${ROUTER_DIST}/civic/socrata.js`),
+    `PREMISE: the installed router package yielded ${files.length} runtime files and not civic/socrata.js; ` +
+      'the text the model reads is not in the universe (run npm ci)',
   );
+  return files;
+}
+
+function portalHits(): Hit[] {
+  const tracked = sourceFiles();
+  assert.ok(
+    tracked.some((f) => !f.startsWith('src/')) && tracked.length > 300,
+    `PREMISE: git ls-files yielded ${tracked.length} scanned files; the universe is not the tree`,
+  );
+  const files = [...tracked, ...routerFiles()];
   return files.flatMap((file) =>
     fs
       .readFileSync(path.join(REPO_ROOT, file), 'utf8')
@@ -368,7 +421,7 @@ function portalHits(): Hit[] {
   );
 }
 
-test('no tracked file spells a portal hostname unless the exception list classifies it', () => {
+test('no tracked file, and no runtime file of the installed router package, spells a portal hostname unless the exception list classifies it', () => {
   const excepted = new Set(EXCEPTIONS.map((entry) => entry.path));
   const offenders = portalHits().filter((hit) => !excepted.has(hit.path));
 
