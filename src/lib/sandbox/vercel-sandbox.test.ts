@@ -17,7 +17,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveSandboxAuthParams } from './vercel-sandbox.ts';
+import { Sandbox } from '@vercel/sandbox';
+import { createVercelSandboxDriver, resolveSandboxAuthParams } from './vercel-sandbox.ts';
 
 // Guard-safe fixture values: obviously fake, structurally unlike real
 // credentials, and never logged by the code under test.
@@ -78,4 +79,75 @@ test('the returned object has exactly the SDK credential keys (no extras, no und
   for (const value of Object.values(params!)) {
     assert.equal(typeof value, 'string');
   }
+});
+
+// --- the creation parameters the driver hands the SDK (#491, sprint #617 P1) --
+//
+// Driven through the real driver with `Sandbox.create` replaced by a recorder
+// that answers with a stand-in sandbox, so no request is made. Every executor
+// creation is one-use: `@vercel/sandbox` 3.x makes a sandbox persistent unless
+// told otherwise, and a persistent sandbox is snapshotted when it stops — a
+// visitor's notebook files would be kept, and the snapshot storage would grow
+// with every run. The four shapes are every branch `createSandbox` takes:
+// snapshot or no snapshot, auth triple or none.
+
+const STAND_IN = { name: 'fixture-sandbox-name', sandboxId: 'sbx_fixture_prior_id' };
+const AUTH_KEYS = ['VERCEL_TOKEN', 'VERCEL_TEAM_ID', 'VERCEL_PROJECT_ID'] as const;
+
+async function recordCreate(
+  snapshotId: string | undefined,
+  withAuth: boolean,
+): Promise<{ params: Record<string, unknown>; sessionId: string }> {
+  const recorded: Record<string, unknown>[] = [];
+  const realCreate = Sandbox.create;
+  const saved = Object.fromEntries(AUTH_KEYS.map((k) => [k, process.env[k]]));
+  for (const k of AUTH_KEYS) delete process.env[k];
+  if (withAuth) Object.assign(process.env, FIXTURE_ENV);
+  Sandbox.create = (async (params: Record<string, unknown>) => {
+    recorded.push(params);
+    return STAND_IN;
+  }) as unknown as typeof Sandbox.create;
+  try {
+    const session = await createVercelSandboxDriver().createSession({
+      timeoutMs: 60_000,
+      env: {},
+      ...(snapshotId ? { snapshotId } : {}),
+    });
+    assert.equal(recorded.length, 1, 'one session makes exactly one Sandbox.create call');
+    return { params: recorded[0]!, sessionId: session.id };
+  } finally {
+    Sandbox.create = realCreate;
+    for (const k of AUTH_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  }
+}
+
+for (const snapshotId of ['snap_fixture', undefined]) {
+  for (const withAuth of [false, true]) {
+    const shape = `${snapshotId ? 'from a snapshot' : 'with no snapshot'}, ${withAuth ? 'with' : 'without'} the auth triple`;
+    test(`every executor sandbox is created one-use (persistent: false) — ${shape}`, async () => {
+      const { params } = await recordCreate(snapshotId, withAuth);
+      // The branch really was the one named: the control that makes this a
+      // drive of four shapes rather than one shape four times.
+      assert.equal('source' in params, Boolean(snapshotId));
+      assert.equal('token' in params, withAuth);
+      assert.equal(
+        params.persistent,
+        false,
+        `Sandbox.create received persistent=${String(params.persistent)}; 3.x keeps a sandbox's ` +
+          'filesystem across sessions unless persistent is false',
+      );
+    });
+  }
+}
+
+test("the session id is the sandbox's name, the 3.x instance identifier", async () => {
+  const { sessionId } = await recordCreate('snap_fixture', false);
+  assert.equal(
+    sessionId,
+    STAND_IN.name,
+    `the session id is ${sessionId}; 3.x has no sandboxId, so the id a record carries is the name`,
+  );
 });

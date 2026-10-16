@@ -57,14 +57,19 @@ export const EXECUTOR_TOOLING_PACKAGES = {
  * `src/lib/sandbox/executor-pins.test.ts` reads the installed package's own
  * version and fails when its major is not this one.
  *
- * NOT to be raised here as a bookkeeping edit: 2.x removes the sandbox
- * instance id that `./vercel-sandbox.ts` reads and stamps into the
- * execution metadata of published records, and 3.x deprecates the runtime
- * option and moves the managed Python off the pinned
- * PYTHON_RUNTIME_VERSION. Upgrading is its own issue with its own
- * record-shape measurement (Wave N12 / card C6).
+ * NOT to be raised here as a bookkeeping edit. Raised from 1 to 3 on
+ * 2026-10-16 (#491, sprint #617 P1), after measuring what the move changes in
+ * a record: 2.x and later have no `sandboxId`, so `./vercel-sandbox.ts` now
+ * stamps the sandbox's `name` into the execution extension's `sandboxId`
+ * field (a string either way; the value changes from an `sbx_` id to a
+ * name); 3.x makes a sandbox persistent unless told otherwise, so every
+ * executor creation passes `persistent: false`; and the `runtime` option is
+ * deprecated in 3.x but still boots the pinned python3.13 for the no-snapshot
+ * fallback and the snapshot-build script. The executed-notebook bytes were
+ * compared across the move with `scripts/executor-parity.mjs`. The next major
+ * is its own issue with its own measurement.
  */
-export const SANDBOX_SDK_MAJOR = 1;
+export const SANDBOX_SDK_MAJOR = 3;
 
 /**
  * The AWS Lambda runtime interface client the `lambda` target of
