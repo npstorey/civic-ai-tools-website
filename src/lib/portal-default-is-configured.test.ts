@@ -291,10 +291,10 @@ const EXCEPTIONS: readonly Exception[] = [
   // The installed router package (#599 W2): the model-facing text that left
   // src/lib/mcp/{socrata-skill,tools,boston-skill,registry}.ts, where it was
   // 21 + 11 + 3 + 2 = 37 hits. 36 of them are here and one stayed in
-  // registry.ts; the package adds 6 of its own (two header comments, and the
-  // 0.2.0 `description` and `freshness` lines, which the bare prompt does not
-  // read). Read from the installed files, so a package bump that brings a
-  // hostname fails here until it is classified.
+  // registry.ts; the package adds 6 of its own (two header comments, and four
+  // hits in the 0.2.0 `description`, `freshness` and `freshnessSource` lines,
+  // which the bare prompt does not read). Read from the installed files, so a
+  // package bump that brings a hostname fails here until it is classified.
   {
     path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/socrata.js',
     classification: 'reference-table',
