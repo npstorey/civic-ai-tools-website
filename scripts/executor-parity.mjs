@@ -12,7 +12,7 @@
  * runtimes "inherently differ in" — everything else in the executed
  * notebook bytes must match. MASKED FIELDS (each replaced with "[masked]"):
  *
- *   1. `.sandboxId`                — runtime instance id (Vercel sandbox id
+ *   1. `.sandboxId`                — runtime instance id (Vercel sandbox name
  *                                    vs container id; unique per run).
  *   2. `.executionDuration_ms`     — wall-clock timing (varies per run).
  *   3. `.pythonVersion`            — PATCH component only (both runtimes pin

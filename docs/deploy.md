@@ -628,7 +628,13 @@ use (and fails the preflight). What the defaults hide:
   MinIO, R2, …) via the `S3_*` set
   ([Object storage](#object-storage-configuration-and-rehearsal)).
 - **`EXECUTOR_DRIVER`.** The default, `vercel-sandbox`, boots a managed
-  microVM and needs platform auth off-deploy. `container` runs the
+  microVM and needs platform auth off-deploy. It is written against
+  `@vercel/sandbox` 3.x (`SANDBOX_SDK_MAJOR` in `src/lib/sandbox/driver.ts`).
+  Each run creates a one-use sandbox (`persistent: false`), so stopping it
+  snapshots nothing; 3.x sandboxes are persistent unless told otherwise. A
+  record's `sandboxId` is that sandbox's generated name, such as
+  `blue-flexible-angelfish-96qkY6`; under 1.x it was an `sbx_…` id. The field
+  is a string either way. `container` runs the
   prebuilt `civic-notebook-executor` image on the host's container
   runtime — which is what requires the socket mount discussed above.
   `EXECUTOR_CONTAINER_IMAGE` overrides the image tag (default
@@ -1154,7 +1160,7 @@ doesn't):
 | `BOSTON_OPENCONTEXT_MCP_URL` | The Boston OpenContext data source, which is opt-in. There is no coded default: unset (empty or whitespace-only counts as unset), the source is absent from every run — the model is not offered its six `boston__ckan__` tools, the system prompt carries none of its guidance (no Boston OpenContext block, preamble entry, citation instruction or line in the one-portal section), no request is sent to it, and no record lists it. A call to one of its tools anyway, such as a replay of a record that used them, is refused before anything is sent and recorded as a rejected call (`not_configured`). The public endpoint at `data-mcp.boston.gov` refuses every request that carries no bearer token, and this app sends none, so set this only to an OpenContext deployment that answers without one. **What it makes a signed record say:** set, for a run this instance makes, the value as set is the `boston-opencontext` entry of the datHere `mcpServers` list on every record, and the Boston OpenContext agent's `civic:serverUrl` on a record whose run called one of its tools; unset, the list has no `boston-opencontext` entry. |
 | `CRON_SECRET` | The scheduled blob-GC endpoint rejects every caller with 401 — orphaned uploads are never swept. Set the same value on the app and the scheduler. |
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Durable rate limiting — the counter falls back to per-process memory (resets on restart; not shared across instances). Fine for a single-node instance. |
-| `SANDBOX_SNAPSHOT_ID` | (vercel-sandbox executor only) Prebuilt snapshot — absent, every execution pays a slow fresh boot + pip install. Not read by the container executor. |
+| `SANDBOX_SNAPSHOT_ID` | (vercel-sandbox executor only) Prebuilt snapshot — absent, every execution pays a slow fresh boot + pip install. Not read by the container executor. A snapshot built under `@vercel/sandbox` 1.x boots under 3.x: measured on 2026-10-16 with 3.5.1, it booted Python 3.13.1 with the pinned stack importable. |
 | `SOCRATA_APP_TOKEN` | Socrata API app token passed into executed notebooks — absent, requests run anonymously against Socrata's lower rate limits. |
 | `EXECUTOR_DRIVER` set to `none` | Notebook mode, deliberately: the instance runs no notebooks. Unset is not this; unset is `vercel-sandbox`. The query form on `/ask` and the home page shows the notebook option disabled with its reason, signed in or not, and `/ask` starts in standard mode. `POST /api/query-notebook` answers 501, `code: "notebooks_not_offered"`, before the body is read, before any model call and before the rate limiter is charged. Standard mode is unchanged. Read at build and at run time: the prerendered home page follows the build's value. See [An instance that runs no notebooks](#an-instance-that-runs-no-notebooks-executor_drivernone). |
 | `ROADMAP_RAW_URL` | `/roadmap` — absent, the page states that this instance has published no roadmap and the Roadmap link leaves the header and footer nav. An instance serves its own roadmap or none; there is no upstream fallback. |

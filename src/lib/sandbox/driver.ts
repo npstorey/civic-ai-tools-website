@@ -123,7 +123,8 @@ export interface ExecutorCommandResult {
  */
 export interface ExecutorSession {
   /**
-   * Runtime instance id (sandbox id or container id). Carried through into
+   * Runtime instance id (the Vercel sandbox's name, a container id, or a
+   * Lambda request id). Carried through into
    * `ExecutionResult.sandboxId` and from there into the execution-metadata
    * stamp.
    */

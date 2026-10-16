@@ -24,7 +24,7 @@
 # src/lib/sandbox/container.test.ts and src/lib/sandbox/executor-pins.test.ts
 # assert this file against those tables — version equality, not names — so
 # drift here fails `npm test`.
-# @vercel/sandbox major: 1 (SANDBOX_SDK_MAJOR in src/lib/sandbox/driver.ts).
+# @vercel/sandbox major: 3 (SANDBOX_SDK_MAJOR in src/lib/sandbox/driver.ts).
 #
 # BUILDING BEHIND A REGISTRY MIRROR. The base image and pip's package index
 # are build arguments, so a build host that reaches neither Docker Hub nor
