@@ -36,8 +36,6 @@
  * is loaded by the loop core under `node --test` and by client components.
  */
 
-import { upstreamToolName } from './mcp/operation-types.ts';
-
 /** A portal hostname compared the way D1 rules: trimmed and lower-cased. */
 export function normalizePortal(value: string): string {
   return value.trim().toLowerCase();
@@ -188,8 +186,13 @@ export function portalNamedByFetchId(id: unknown): string | null {
  *   - every other tool: `null`. `search` takes no portal; the other sources'
  *     tools take no Socrata portal.
  *
- * The tool is read by its upstream name, so `socrata__get_data` and `get_data`
- * (and `socrata__fetch` and `fetch`) are refused alike (#599 W3).
+ * `toolName` is the tool's UPSTREAM name (#599 W3): the model is offered
+ * `socrata__get_data` and may call either spelling, so the caller resolves the
+ * name first (the loop core passes `upstreamToolName(name)`), and both
+ * spellings are refused alike. This module does not resolve it itself: it is
+ * in the import graph of `scripts/executor-image-check.mjs`, which runs with
+ * no package installed, and the dispatch map lives in a package
+ * (`scripts/executor-check-imports-no-package.test.mjs`).
  *
  * Takes the call's argument record under its own name rather than reading it
  * off a recorded call, and reads it without changing it: the loop core records
@@ -201,11 +204,10 @@ export function portalOutsideLock(
   lockedPortal: string,
 ): string | null {
   const locked = normalizePortal(lockedPortal);
-  const upstream = upstreamToolName(toolName);
   const named: Array<string | null> =
-    upstream === 'get_data'
+    toolName === 'get_data'
       ? [portalValue(callArguments.portal), portalValue(callArguments.domain)]
-      : upstream === 'fetch'
+      : toolName === 'fetch'
         ? [portalNamedByFetchId(callArguments.id)]
         : [];
   return named.find((portal): portal is string => portal !== null && portal !== locked) ?? null;

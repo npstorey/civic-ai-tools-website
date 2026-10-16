@@ -53,7 +53,7 @@ import { modelRequestParameters, type ModelRequestSettings } from '../model-cata
 import { classifyStreamError, describeToolFailureForLlm, generateToolReason } from '../streaming.ts';
 import type { TraceBuilder } from '../evidence/trace.ts';
 import { hash as traceHash } from '../evidence/trace.ts';
-import { deriveOperationType, isTool, toolSpanNames } from '../mcp/operation-types.ts';
+import { deriveOperationType, isTool, toolSpanNames, upstreamToolName } from '../mcp/operation-types.ts';
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
 import { PortalLockedCallError, portalOutsideLock } from '../portal-lock.ts';
 
@@ -894,7 +894,9 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
        * failed call and is left to that path.
        */
       const lockRefusal =
-        lockedPortal && !argumentsMalformed && portalOutsideLock(name, args, lockedPortal) !== null
+        // `portalOutsideLock` reads the upstream name, so either spelling is
+        // refused alike (#599 W3).
+        lockedPortal && !argumentsMalformed && portalOutsideLock(upstreamToolName(name), args, lockedPortal) !== null
           ? new PortalLockedCallError(lockedPortal)
           : null;
 
