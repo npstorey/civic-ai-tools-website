@@ -762,6 +762,22 @@ test('P2 (5) C states the content profile, data sources, skill hash, total token
   assert.equal(occurrences(HTML.skeleton, heading('B · System prompts')).length, 0, 'no B for a hash-only skill prompt');
 });
 
+// #617 P4 (ruling a2, the named exception to this file's ownership): a hosted
+// source is listed in `mcpServers` by the purl of the package it ran, whose
+// URL parses with an empty host. The "MCP servers" line shows it as written,
+// beside an addressed server's host, never as an empty entry.
+test('R7 P4 a2: C\'s MCP servers line shows a hosted source\'s purl, not an empty host', async () => {
+  const PURL = 'pkg:npm/%40betanyc/nyc-charter-laws-rules@0.3.1';
+  assert.equal(new URL(PURL).host, '', 'premise: the purl parses with an empty host');
+  const pkg = structuredClone(AGF_PACKAGE) as typeof AGF_PACKAGE & { extensions: Record<string, Record<string, unknown>> };
+  pkg.extensions['org.civicaitools.environment'].mcpServers = [
+    { url: 'https://mcp.example.test', name: 'example' },
+    { url: PURL, name: 'nyc-charter' },
+  ];
+  const html = await render({ ...AGF, pkg });
+  assert.equal(cItems(html).get('MCP servers'), `mcp.example.test, ${PURL}`);
+});
+
 test('P2 (5) the blob note sits under the answer in F', () => {
   const html = HTML.old;
   const f = at(html, heading('F · Rendered answer'));
