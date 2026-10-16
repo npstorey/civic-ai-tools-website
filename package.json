@@ -31,7 +31,7 @@
     "@noble/hashes": "^2.2.0",
     "@smithy/fetch-http-handler": "5.6.13",
     "@typedstandards/civic-typed-harness": "^0.7.0",
-    "@typedstandards/civic-typed-router": "^0.2.0",
+    "@typedstandards/civic-typed-router": "^0.3.0",
     "@typedstandards/produce-core": "^0.8.0",
     "@typedstandards/verify-core": "^0.13.0",
     "@vercel/blob": "^2.3.3",
