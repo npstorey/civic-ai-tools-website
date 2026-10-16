@@ -1,4 +1,5 @@
 // Types for streaming events
+import { civicRouter } from '@typedstandards/civic-typed-router';
 import { deriveOperationType, isTool, upstreamToolName } from './mcp/operation-types.ts';
 import { isSourceRefusal } from './mcp/tool-call-failure.ts';
 import { ambiguousToolNameOf } from './mcp/tool-name-refusal.ts';
@@ -586,18 +587,57 @@ function resolveOperationType(tool: { name?: string; args: Record<string, unknow
   return undefined;
 }
 
+/** What a search-typed call searches, in user language (`searchSubject`). */
+export interface SearchSubject {
+  /** What one hit is: `dataset`. */
+  singular: string;
+  plural: string;
+  /** Where the search runs, for the progress line: `the catalog`. */
+  within: string;
+  /** The breadcrumb for a search that carried no query. */
+  crumb: string;
+}
+
+const DATASET_SEARCH: SearchSubject = { singular: 'dataset', plural: 'datasets', within: 'the catalog', crumb: 'Search catalog' };
+const INDICATOR_SEARCH: SearchSubject = {
+  singular: 'statistical indicator',
+  plural: 'statistical indicators',
+  within: 'the catalog',
+  crumb: 'Search catalog',
+};
+
 /**
- * What a search-typed tool searches for, in user language. Three registry
+ * Sources whose search finds something other than datasets, by source id
+ * (#617 P4, b2). NYC Charter, Laws and Rules' `search` finds sections of the
+ * NYC Charter, the Administrative Code and the Rules of the City of New York.
+ */
+const SEARCH_SUBJECT_BY_SOURCE: Readonly<Record<string, SearchSubject>> = {
+  'nyc-charter': {
+    singular: 'section of law',
+    plural: 'sections of law',
+    within: "the City's Charter, Administrative Code and Rules",
+    crumb: 'Search sections of law',
+  },
+};
+
+/**
+ * What a search-typed tool searches for, in user language. Four registry
  * tools derive to `search`: Socrata's `search` and CKAN's search look for
  * datasets; Data Commons' `search_indicators` looks for statistical
- * indicators (variables and topics, not datasets). The noun follows the
- * recorded name, in either spelling (#599 W3), so a Data Commons run is not
- * narrated as a dataset search.
+ * indicators (variables and topics, not datasets); NYC Charter, Laws and
+ * Rules' `search` looks for sections of law.
+ *
+ * The source is read from the dispatch map (#617 P4, b2): Charter's `search`
+ * and Socrata's share an upstream name, so only the exposed name
+ * (`nyc_charter__search`) can tell them apart. A bare `search` is Socrata's,
+ * as it was in every record made before Charter existed. Otherwise the noun
+ * follows the recorded name, in either spelling (#599 W3), so a Data Commons
+ * run is not narrated as a dataset search.
  */
-export function searchSubject(toolName?: string): { singular: string; plural: string } {
-  return isTool(toolName, 'search_indicators')
-    ? { singular: 'statistical indicator', plural: 'statistical indicators' }
-    : { singular: 'dataset', plural: 'datasets' };
+export function searchSubject(toolName?: string): SearchSubject {
+  const sourceId = toolName === undefined ? undefined : civicRouter.sourceForAliasedName(toolName)?.sourceId;
+  if (sourceId !== undefined && Object.hasOwn(SEARCH_SUBJECT_BY_SOURCE, sourceId)) return SEARCH_SUBJECT_BY_SOURCE[sourceId];
+  return isTool(toolName, 'search_indicators') ? INDICATOR_SEARCH : DATASET_SEARCH;
 }
 
 /** Reader-facing copy for a call whose tool name the record does not carry. */
@@ -622,10 +662,12 @@ export function formatToolProgress(
   switch (type) {
     case 'catalog':
       return `Searching ${cityName} data catalog${query ? `: "${query}"` : ''}`;
-    case 'search':
+    case 'search': {
+      const subject = searchSubject(name);
       return query
-        ? `Searching the catalog for ${searchSubject(name).plural} about "${query}"`
-        : `Searching the catalog for ${searchSubject(name).plural}`;
+        ? `Searching ${subject.within} for ${subject.plural} about "${query}"`
+        : `Searching ${subject.within} for ${subject.plural}`;
+    }
     case 'metadata':
       return `Getting metadata for ${query || datasetName}`;
     case 'query': {
@@ -1195,7 +1237,11 @@ export function getEducationalAnnotation(phase: string, operationType?: string, 
       case 'catalog':
         return 'The AI is searching an open data portal — a public catalog where governments publish datasets for anyone to use.';
       case 'search':
-        return 'The AI is searching a catalog of available data — asking what exists about this topic before reading any of it.';
+        // True of every source's search (#617 P4, b2): Socrata's catalog,
+        // Data Commons' indicators, Boston's datasets and the Charter's
+        // sections of law. Keyed by the operation type alone, because the
+        // callers pass no tool name.
+        return 'The AI is searching a source for what it holds on this topic, to decide what to look at next.';
       case 'metadata':
         return 'Reading the data dictionary — the list of columns and what each one contains.';
       case 'query': {
@@ -1229,7 +1275,9 @@ export function buildBreadcrumbLabel(
     case 'catalog':
       return query ? `Search "${truncate(query, 15)}"` : 'Search catalog';
     case 'search':
-      return query ? `Search "${truncate(query, 15)}"` : 'Search catalog';
+      // Named by the call's source when the record carries a name (#617 P4,
+      // b2); without one, nothing is said about what was searched.
+      return query ? `Search "${truncate(query, 15)}"` : tool.name ? searchSubject(tool.name).crumb : 'Search';
     case 'metadata':
       return 'Check schema';
     case 'query': {

@@ -21,17 +21,24 @@
 // Data Commons and Boston are pinned byte for byte to what they were at
 // 0fd882a, so b2 moves no existing reader's copy.
 //
-// NOT ASSERTED HERE: the badge tooltip (`tool-badges.ts`) and the educational
-// annotation (`getEducationalAnnotation`) are keyed by the operation type
-// alone, and their callers pass no tool name; see the phase record.
+// THE TWO LINES KEYED BY THE OPERATION TYPE ALONE. The badge tooltip
+// (`tool-badges.ts`) and the educational annotation (`getEducationalAnnotation`)
+// are looked up by kind, and their callers pass no tool name, so they cannot
+// resolve a source. They are rewritten in words true of every source's search
+// (Socrata's catalog, Data Commons' indicators, Boston's datasets, the
+// Charter's sections of law, whose hits carry text), and pinned below. The
+// breadcrumb's no-query line names the source when the record carries a name,
+// and says only "Search" when it does not.
 //
 // Run with: npm test
 //   (or: node --test --experimental-strip-types src/lib/hosted-search-copy.test.ts)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { OP_BADGE_TOOLTIPS } from '../components/tool-badges.ts';
 import {
   buildBreadcrumbLabel,
+  getEducationalAnnotation,
   buildNarrativeSummary,
   formatToolProgress,
   formatToolResult,
@@ -124,4 +131,21 @@ test('b2: the same lines for the three pre-existing sources are byte-identical t
     lines[lines.length - 1] = JSON.stringify({ singular: subject.singular, plural: subject.plural });
     assert.deepEqual(lines, expected, name);
   }
+});
+
+test('b2: the tooltip and the annotation for kind search are true of every source\'s search, pinned', () => {
+  const tooltip = OP_BADGE_TOOLTIPS.search;
+  const annotation = getEducationalAnnotation('tool_start', 'search') ?? '';
+  assert.equal(tooltip, 'Searching a source for what it holds on this topic');
+  assert.equal(annotation, 'The AI is searching a source for what it holds on this topic, to decide what to look at next.');
+  for (const line of [tooltip, annotation]) {
+    assert.doesNotMatch(line, FALSE_SUBJECT, line);
+    assert.doesNotMatch(line, /before (any of it is read|reading)/, `${line}: a Charter hit carries text`);
+  }
+});
+
+test('b2: a search breadcrumb with no query names the source when the name is given, and nothing otherwise', () => {
+  assert.equal(buildBreadcrumbLabel({ name: 'nyc_charter__search', args: {} }), 'Search sections of law');
+  assert.equal(buildBreadcrumbLabel({ name: 'socrata__search', args: {} }), 'Search catalog');
+  assert.equal(buildBreadcrumbLabel({ args: {}, operationType: 'search' }), 'Search');
 });
