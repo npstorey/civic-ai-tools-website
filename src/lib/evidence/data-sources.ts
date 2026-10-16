@@ -95,8 +95,10 @@ export function readerFacingSourceNames(
 
 /** The app's static tool-name → source-id map (`../mcp/operation-types.ts`)
  *  as a harness resolver — the fallback when a trace span carries no
- *  `mcp.source` attribute. */
-const appToolSourceResolver: ToolSourceResolver = (toolName) =>
+ *  `mcp.source` attribute. It answers both spellings of every tool (#599 W3).
+ *  The packager passes the same resolver to the provenance graph (#599 W4),
+ *  so the graph and `dataSources[]` resolve an untagged call alike. */
+export const appToolSourceResolver: ToolSourceResolver = (toolName) =>
   sourceIdForToolName(toolName);
 
 /** Trace-span shape the resolver inspects. Structural — matches the span

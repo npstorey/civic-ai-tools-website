@@ -1,5 +1,5 @@
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
-import { civicRouter } from '@typedstandards/civic-typed-router';
+import { civicRouter, type SourceSelection } from '@typedstandards/civic-typed-router';
 import { readMcpEnvFromProcess, type McpRegistryEnv } from './registry.ts';
 
 // Unified OpenAI-style function-calling schema spanning every MCP source the
@@ -57,12 +57,18 @@ export function mcpToolsFor(lockedPortal?: string): ChatCompletionTool[] {
  * (the same array), so such an instance sends byte-for-byte what it sent
  * before. The query routes and the compare factory call this on
  * `mcpToolsFor(lockedPortal)`; replay does not, and keeps the full vocabulary.
+ *
+ * `selection` (#599 D3) narrows the sources further: absent, every source the
+ * configuration offers; given, only the configured sources it names. An id the
+ * manifest does not hold is ignored. The query routes pass
+ * `DEFAULT_SOURCE_SELECTION` until a request can carry one (R6).
  */
 export function offeredMcpTools(
   tools: ChatCompletionTool[],
   configured: McpRegistryEnv = readMcpEnvFromProcess(),
+  selection?: SourceSelection,
 ): ChatCompletionTool[] {
-  return civicRouter.aliasedOfferedMcpTools(tools, configured);
+  return civicRouter.aliasedOfferedMcpTools(tools, configured, selection);
 }
 
 // Model definitions moved to src/lib/model-catalog.ts (civic-ai-tools-website#30

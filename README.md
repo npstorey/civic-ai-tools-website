@@ -150,7 +150,7 @@ the same pass and their old filenames remain as permanent stubs.
 
 - [civic-ai-tools](https://github.com/npstorey/civic-ai-tools) — the hub repo: architecture decisions, spec drafts, MCP server configs, and the local starter project
 - [socrata-mcp-server](https://github.com/npstorey/socrata-mcp-server) — the MCP server for Socrata open data portals
-- [typedstandards](https://github.com/npstorey/typedstandards) — the standard's home and [typedstandards.org](https://typedstandards.org). This app consumes four of its npm packages: `@typedstandards/verify-core` 0.9.x, `@typedstandards/produce-core` 0.4.x, `@typedstandards/civic-typed-harness` 0.5.x and `@typedstandards/civic-typed-router` 0.2.x (the ranges in `package.json`)
+- [typedstandards](https://github.com/npstorey/typedstandards) — the standard's home and [typedstandards.org](https://typedstandards.org). This app consumes four of its npm packages: `@typedstandards/verify-core` 0.13.x, `@typedstandards/produce-core` 0.8.x, `@typedstandards/civic-typed-harness` 0.7.x and `@typedstandards/civic-typed-router` 0.2.x (the ranges in `package.json`)
 - [Model Context Protocol](https://modelcontextprotocol.io) — official MCP documentation
 
 ## Contributing

@@ -15,12 +15,18 @@
 //
 // The record is made the way a query route makes it: the real loop core with
 // the routes' `resolveToolSource` (`routedSourceId`), the real trace builder,
-// the real packager. The last test shows the instrument can fail: the same
-// trace with `mcp.source` dropped from its spans is misattributed to Socrata by
-// the pinned harness, which is what the tag prevents.
+// the real packager.
 //
 // RED at 617b18b (W2): `routedSourceId` does not know an aliased name, so the
 // spans say `unknown`, which the pinned harness attributes to Socrata.
+//
+// W4 (harness 0.7.0, ADR-0033 §A). The Socrata fallback is gone: a call that
+// neither its tag nor the tool name identifies is attributed to an agent named
+// `unknown`. The last test was this file's instrument (with the tag dropped,
+// 0.5.0 attributed the aliased calls to Socrata); it now drives the one shape
+// in which 0.5.0 still named Socrata after W4's resolver change — a call
+// nothing identifies — and asserts no Socrata agent. Run against 0.5.0 it is
+// red at that assertion.
 //
 // Run with: npm test
 
@@ -182,13 +188,33 @@ test('its dataSources[] names exactly the two sources it called', async () => {
   assert.deepEqual(pkg.dataSources.map((d) => d.sourceId).sort(), ['boston-opencontext', 'data-commons']);
 });
 
-test('the instrument can fail: with mcp.source dropped from the spans, the pinned harness attributes the aliased calls to Socrata', async () => {
+/** The trace with every tool span's `tool.name` replaced by a name no
+ *  resolver knows, and the record's calls renamed to match. */
+function withUnresolvableNames(trace: Record<string, unknown>): Record<string, unknown> {
+  const copy = JSON.parse(JSON.stringify(trace)) as {
+    resourceSpans: { scopeSpans: { spans: { name: string; attributes: { key: string; value: { stringValue?: string } }[] }[] }[] }[];
+  };
+  for (const rs of copy.resourceSpans) for (const ss of rs.scopeSpans) for (const span of ss.spans) {
+    if (span.name !== 'mcp_tool_call') continue;
+    for (const a of span.attributes) {
+      if ((a.key === 'tool.name' || a.key === 'tool.upstream_name') && a.value.stringValue) a.value.stringValue = `unresolvable_${a.value.stringValue}`;
+    }
+  }
+  return copy as unknown as Record<string, unknown>;
+}
+
+test('with mcp.source dropped and names nothing resolves, every call goes to an agent named unknown, never to Socrata (harness 0.7.0)', async () => {
   const { result, trace } = await makeRun();
-  const pkg = packageOf(result.toolCalls as unknown as ToolCallInput[], withoutSourceTags(trace));
-  const activities = toolActivities(pkg.provenance['@graph']);
-  assert.ok(
-    activities.some((a) => a['prov:wasAssociatedWith']?.['@id'].endsWith('mcp-server:socrata')),
-    'without the tag the aliased calls were still attributed correctly, so the attribution tests above do not depend on the tag; ' +
-      'if the harness now resolves aliased names itself (W4), this test has done its job and moves with it',
+  const calls = (result.toolCalls as unknown as ToolCallInput[]).map((c) => ({ ...c, name: `unresolvable_${c.name}` }));
+  const pkg = packageOf(calls, withUnresolvableNames(withoutSourceTags(trace)));
+  const graph = pkg.provenance['@graph'];
+  const activities = toolActivities(graph);
+  assert.equal(activities.length, CALLS.length, 'premise: one activity per call');
+  assert.deepEqual(
+    activities.map((a) => a['prov:wasAssociatedWith']?.['@id'].split(':').pop()),
+    CALLS.map(() => 'unknown'),
+    'a call nothing identifies is attributed to a named source (0.5.0 put every one on Socrata)',
   );
+  assert.ok(!graph.some((n) => n['@id'].endsWith('mcp-server:socrata')), 'the graph names a Socrata agent for a run that never called Socrata');
+  assert.deepEqual(pkg.dataSources, [], 'a call nothing identifies mints no dataSources entry');
 });

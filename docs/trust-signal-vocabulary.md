@@ -95,6 +95,7 @@ Ordered by spec §9.2 check number. "Copy" is the glanceable one-liner; the libr
 | `content_hash_mismatch` | **Alarm** | Content does not match its fingerprint |
 | `unresolved_rule` | Attention | Content hash not recomputed (unknown rule) |
 | `contentHash_no_supported_algorithm` | Attention | Content hash uses an unsupported algorithm |
+| `content_bytes_unavailable` | Attention | Content file not checked *(verify-core 0.10.0: raw-bytes/v1 over a BlobRef whose file could not be obtained)* |
 
 ### #5 Trust-registry verdict — `keyTrust.status`
 | Status | Tier | Copy |
@@ -106,6 +107,7 @@ Ordered by spec §9.2 check number. "Copy" is the glanceable one-liner; the libr
 | `unknown_key` | Attention | Signing key not in the trust registry |
 | `registry_unavailable` | Attention | Trust registry could not be reached |
 | `legacy_embedded` | Normal | Signed with an embedded key (not in the trust registry) |
+| `self_certified` | Normal | Signed with a self-certifying key *(verify-core 0.10.0, hub ADR-0030: a key-derived identifier; never Verified)* |
 | `null` (unsigned package) | **Attention** | No signing key *(`NO_SIGNING_KEY_SIGNAL`; elevated from Normal in S3a P3 per ADR-0020 guard 2 — see the note in §3)* |
 
 ### #7 Timestamp — `hasTimestamp: boolean`
@@ -141,6 +143,7 @@ Ordered by spec §9.2 check number. "Copy" is the glanceable one-liner; the libr
 |---|---|---|
 | `status: active` | Normal | Active |
 | `status: withdrawn` | Normal | Withdrawn by the publisher |
+| `status: superseded` | Normal | Superseded by the publisher *(verify-core 0.13.0)* |
 | `source: attestation-chain` | Verified | Lifecycle confirmed from signed transitions |
 | `source: legacy-columns` | Normal | Lifecycle from earlier-format records |
 | `source: none` | Normal | No lifecycle changes |
@@ -168,6 +171,8 @@ Whether lifecycle is surfaced **in the verify panel at all** is left open for #1
 | `signer_identity_mismatch` | **Alarm** | Signer identity does not match the registry |
 | `no_signer` | Normal | No stated signer (earlier-format package) |
 | `no_registry_identity` | Normal | Registry has no identity for this key |
+| `key_derived_match` | Normal | Signer identifier matches the signing key *(verify-core 0.10.0)* |
+| `key_derived_mismatch` | **Alarm** | Signer identifier does not match the signing key *(verify-core 0.10.0)* |
 
 ### #15 captureMethod vocabulary — `captureMethodVocab.status`
 | Status | Tier | Copy |

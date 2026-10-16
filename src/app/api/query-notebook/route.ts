@@ -24,18 +24,18 @@ import { authOptions } from '@/lib/auth';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
-import { getMissingMcpRoutingError, routedSourceId } from '@/lib/mcp/registry';
+import { configuredMcpServers, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId } from '@/lib/mcp/registry';
 import { getDefaultModel, resolveModel, ModelNotOfferedError } from '@/lib/model-resolver';
 import { ModelConfigurationError, getMissingModelCredentialError, getModelApiKind } from '@/lib/model-client';
 import { modelAccessPhrase, modelIdentity, type ModelIdentity } from '@/lib/model-catalog';
-import { buildSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
+import { composeSystemPrompt, withPortalLockGuidance, DEFAULT_SOURCE_SELECTION } from '@/lib/mcp/socrata-skill';
 import {
   queryWithMcpStreaming,
   type CompletionResult,
   type StreamCallbacks,
 } from '@/lib/openrouter-streaming';
 import { errorClassOf, isStreamErrorKind, notebookExecutionErrorMessage, startSseKeepAlive, streamErrorPayload, type StreamErrorCode } from '@/lib/streaming';
-import { TraceBuilder, hash as traceHash, CIVICAITOOLS_TRACE_CONFIG } from '@/lib/evidence/trace';
+import { TraceBuilder, hash as traceHash, CIVICAITOOLS_TRACE_CONFIG, runRecordAttributes } from '@/lib/evidence/trace';
 import { getConfiguredKeyId } from '@/lib/evidence/signing';
 import { resolveRunPortal } from '@/lib/site-config';
 import { PORTAL_LOCK_NOT_CONFIGURED_MESSAGE } from '@/lib/portal-lock';
@@ -251,9 +251,19 @@ export async function POST(request: NextRequest) {
   await incrementRateLimit(identifier, isAuthenticated);
 
   // Build the multi-source system prompt up front so its hash anchors the trace.
+  // The configuration is read once, so the prompt, the tools and what the
+  // record states about them describe one configuration (#599 W4); the
+  // selection is every offered source until a request can carry one (D3).
   // Under the lock one section is appended (#436, D7); unlocked, unchanged.
-  const systemPrompt = withPortalLockGuidance(await buildSystemPrompt(portal), lockedPortal);
+  const configured = readMcpEnvFromProcess();
+  const selection = DEFAULT_SOURCE_SELECTION;
+  const composition = await composeSystemPrompt({ portal, configured, selection });
+  const systemPrompt = withPortalLockGuidance(composition.prompt, lockedPortal, configured, selection);
   const systemPromptHash = traceHash(systemPrompt);
+  // `mcpTools` itself when unlocked; the locked text otherwise (#436, D7).
+  // Only the sources this instance configures (sprint 238, D2), narrowed by
+  // the selection.
+  const offeredTools = offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection);
 
   const encoder = new TextEncoder();
   const stream = new TransformStream();
@@ -275,6 +285,18 @@ export async function POST(request: NextRequest) {
     // trace leaves here as a publish input, so an absent portal is recorded
     // as absent rather than as a default the instance never set.
     ...(portal ? { 'analysis.portal': portal } : {}),
+    // What this run states about itself (#599 W4, ADR-0033): the date its
+    // prompt asserted (#475), the servers its configuration had (#495), the
+    // tools it offered, each source's offered-reason and the prompt's
+    // components. All are known before the root starts, so they are written
+    // with it; the packager reads them back from the trace at publish.
+    ...runRecordAttributes({
+      assertedDate: composition.assertedDate,
+      mcpServers: configuredMcpServers(configured),
+      toolDefinitions: offeredTools,
+      sourcesOffered: composition.sourcesOffered,
+      components: composition.components,
+    }),
   });
 
   const runPipeline = async () => {
@@ -302,6 +324,7 @@ export async function POST(request: NextRequest) {
         trace,
         systemPrompt,
         systemPromptHash,
+        tools: offeredTools,
       });
 
       await emit({ type: 'phase', name: 'B', message: 'Synthesizing notebook…' });
@@ -482,8 +505,10 @@ async function runPhaseA(args: {
   trace: TraceBuilder;
   systemPrompt: string;
   systemPromptHash: string;
+  /** The tools the run offers the model, as the root span records them. */
+  tools: ReturnType<typeof offeredMcpTools>;
 }): Promise<CompletionResult> {
-  const { query, portal, lockedPortal, model, emit, trace, systemPrompt, systemPromptHash } = args;
+  const { query, portal, lockedPortal, model, emit, trace, systemPrompt, systemPromptHash, tools } = args;
   return new Promise<CompletionResult>((resolve, reject) => {
     let completionResult: CompletionResult | null = null;
     const sentToolCalls = new Set<string>();
@@ -556,9 +581,8 @@ async function runPhaseA(args: {
     queryWithMcpStreaming(
       query,
       model,
-      // `mcpTools` itself when unlocked; the locked text otherwise (#436, D7).
-      // Only the sources this instance configures (sprint 238, D2).
-      offeredMcpTools(mcpToolsFor(lockedPortal)),
+      // The tools the record states it offered, as offered.
+      tools,
       // Just the transport. Portal injection and the timeout race are the loop
       // core's now (#359, #352): performed here they ran after the core had
       // recorded the call and stringified its arguments onto the span, and the

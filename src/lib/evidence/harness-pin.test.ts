@@ -1,6 +1,50 @@
 // The harness pin — @typedstandards/civic-typed-harness must be a version
 // that carries the signed-surface fixes named below (Wave N9 #384, family F2,
-// C4; Wave N10 #409, criterion 6; Wave N12 #470, criteria 7-9).
+// C4; Wave N10 #409, criterion 6; Wave N12 #470, criteria 7-9; sprint R2 #599
+// W4).
+//
+// WHAT THE PIN PROTECTS, PART FOUR — 0.7.0, and why the range moved to it
+// (#599 W4, hub ADR-0033). Five things this instance's packager now relies
+// on, each in bytes it signs:
+//
+//   1. Every call is attributed to its own source (ADR-0033 §A). Below 0.7.0 a
+//      call whose span named a source the registry lacks, or that nothing
+//      identified, was associated with the Socrata agent — in a run that never
+//      called Socrata, an agent the graph did not contain — and an unknown
+//      call defaulted to `socrata` in `dataSources[]` too. 0.7.0 attributes it
+//      to its own source, or to an agent named `unknown`, and takes the
+//      packager's resolver for an untagged span (`ProvenanceConfig.resolver`).
+//   2. The datHere environment block states `temperature` and
+//      `toolDefinitions` only when passed (§C, hub #240). Below 0.7.0 it
+//      stated `temperature: 0` — a value no request sent — and
+//      `toolDefinitions: []` for runs that offered tools.
+//   3. The servers the RUN had win (§D, #495): `runMcpServers` is preferred
+//      over the packaging-time list, and `withRunServerAddresses` gives the
+//      graph's source agents the run's addresses. Below 0.7.0 neither exists,
+//      and a record names the servers configured when it was published.
+//   4. The `org.civicaitools.composition` block (§E, #475): the date the
+//      prompt asserted, each source's offered-reason and the components.
+//      Below 0.7.0 the date was hashed and never stated.
+//   5. `extractRunAttributes` reads all of it back from the trace's root
+//      span, and refuses a present attribute it cannot parse rather than
+//      reading it as absent.
+//
+// 0.7.0 also moved the harness's produce-core floor to `^0.8.0` (verify-core
+// `^0.13.0` with it), which is why this repository's two cores move with it:
+// a higher core pin would nest a second copy of each under the harness. The
+// last test below measures that topology for both cores.
+//
+// Where each of the five is driven through this repository's packager:
+//   - 1 — `a-record-between-w3-and-w4-attributes-each-call.test.ts` (a call
+//     nothing identifies goes to `unknown`, never Socrata),
+//     `data-sources.test.ts` ("Unknown tool with no trace span resolves to
+//     unknown"), and `a-record-states-what-its-run-had.test.ts` (an untagged
+//     aliased call resolves by the app's resolver in the graph);
+//   - 2 — `packager.test.ts` (the environment block's keys) and
+//     `a-record-states-what-its-run-had.test.ts` (no temperature; the tools
+//     as offered);
+//   - 3, 4, 5 — `a-record-states-what-its-run-had.test.ts`, and at the routes
+//     `src/app/api/a-run-records-its-inputs-driven.test.ts`.
 //
 // WHAT THE PIN PROTECTS, PART THREE — 0.5.0, and why the range moved to it.
 // Two things this instance's packager now relies on, both in bytes it signs
@@ -165,25 +209,27 @@ const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 
 const HARNESS = '@typedstandards/civic-typed-harness';
 const HARNESS_DIR = path.join(REPO_ROOT, 'node_modules', ...HARNESS.split('/'));
 
-/** The lowest version carrying ALL THREE sets of fixes this file names: the
- *  0.3.1 graph-builder fixes, the 0.4.0 data-source fix, and the 0.5.0
- *  configured-server fixes above. */
-const FLOOR = '0.5.0';
+/** The lowest version carrying ALL FOUR sets of fixes this file names: the
+ *  0.3.1 graph-builder fixes, the 0.4.0 data-source fix, the 0.5.0
+ *  configured-server fixes, and 0.7.0's record fields above. */
+const FLOOR = '0.7.0';
 /** Exclusive ceiling: under semver a 0.x MINOR bump is a breaking change, so
- *  the pin admits later 0.5.x PATCHES (a fix that is still this behaviour) and
- *  refuses 0.6.0, which would be a contract this test has not read. The
- *  assertion is therefore a RANGE (`>=0.5.0 <0.6.0`) rather than equality to
- *  `0.5.0`: pinning the exact string would turn red on a patch release that
+ *  the pin admits later 0.7.x PATCHES (a fix that is still this behaviour) and
+ *  refuses 0.8.0, which would be a contract this test has not read. The
+ *  assertion is therefore a RANGE (`>=0.7.0 <0.8.0`) rather than equality to
+ *  `0.7.0`: pinning the exact string would turn red on a patch release that
  *  changed nothing this file cares about, which is a criterion that fails for
  *  the wrong reason.
  *
  *  MOVED DELIBERATELY, NOT DRIFTED. The pair was `>=0.3.1 <0.4.0` until Wave
- *  N10 P4 and `>=0.4.0 <0.5.0` until Wave N12 W5. Each ceiling did its job: it
- *  held the next minor out until someone read the new contract and said what
- *  changed. Both numbers move together, in one commit, with the paragraph
- *  above rewritten — a floor raised without its ceiling would silently readmit
- *  the next unread minor. */
-const CEILING = '0.6.0';
+ *  N10 P4, `>=0.4.0 <0.5.0` until Wave N12 W5, and `>=0.5.0 <0.6.0` until
+ *  sprint R2 W4, which read 0.6.0's and 0.7.0's entries together (0.6.0
+ *  changed no harness source; it raised the core floors). Each ceiling did its
+ *  job: it held the next minor out until someone read the new contract and
+ *  said what changed. Both numbers move together, in one commit, with the
+ *  paragraph above rewritten — a floor raised without its ceiling would
+ *  silently readmit the next unread minor. */
+const CEILING = '0.8.0';
 
 type Semver = [number, number, number];
 
@@ -218,7 +264,7 @@ function readJson(file: string): Record<string, unknown> {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
 }
 
-test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.5.0 <0.6.0 (it carries all three sets of signed-surface fixes)', () => {
+test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.7.0 <0.8.0 (it carries all four sets of signed-surface fixes)', () => {
   const pkgJson = path.join(HARNESS_DIR, 'package.json');
   assert.ok(fs.existsSync(pkgJson), `${HARNESS} is not installed at ${pkgJson} — run npm ci`);
 
@@ -228,10 +274,12 @@ test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.5.0 <0.6.0 (i
   const installed = parseSemver(version as string, `installed ${HARNESS}`);
   assert.ok(
     compareSemver(installed, parseSemver(FLOOR, 'floor')) >= 0,
-    `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release whose source agents omit ` +
-      '`civic:serverUrl` rather than assert a source id as an address, and whose datHere environment reads a ' +
-      'list of servers (civic-ai-tools#205, #449). Below it, a record names a server that does not exist and ' +
-      'lists one server whatever the run had. 0.4.0 is the floor for `failed` in buildDataSources (hub ' +
+    `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release that attributes every call ` +
+      'to its own source, states no temperature or tool list it was not given, prefers the servers the run ' +
+      'recorded, and states the composition block (hub ADR-0033; #475, #495). Below it a record names the ' +
+      'servers configured at publish and a temperature no request sent. 0.5.0 is the floor for source agents ' +
+      'that omit `civic:serverUrl` rather than assert a source id as an address (civic-ai-tools#205, #449); ' +
+      '0.4.0 the floor for `failed` in buildDataSources (hub ' +
       'data-sources.ts:153-159 at a6d6f77); 0.3.1 the floor for the graph half (hub provenance.ts:339/:343 at ' +
       "fd9afae), below which dist/capture/provenance.js:177 defaults tool.name to 'get_data'.",
   );
@@ -263,7 +311,7 @@ test('harness pin: this repository DECLARES a range that excludes 0.3.0', () => 
   );
 });
 
-test('harness pin: exactly one produce-core copy — the harness carries no nested @typedstandards/produce-core', () => {
+test('harness pin: exactly one copy of each core — no nested @typedstandards/produce-core or verify-core', () => {
   // 0.3.0 depended on `@typedstandards/produce-core: ^0.3.0`, a range that
   // excludes the 0.4.0 this repository moved to, so npm nested a SECOND
   // produce-core under the harness. 0.3.1 widened the range to
@@ -279,11 +327,27 @@ test('harness pin: exactly one produce-core copy — the harness carries no nest
   // integrity, and no `node_modules/@typedstandards/civic-typed-harness/
   // node_modules` appeared. One copy still serves both, and the assertion
   // below still measures that rather than trusting the range.
+  //
+  // RE-READ AT 0.7.0 (sprint R2 W4). The harness's range is `^0.8.0`, so this
+  // repository's produce-core pin moved to `^0.8.0` and verify-core's to
+  // `^0.13.0`, the range produce-core 0.8.0 declares. A higher pin on either
+  // (produce-core 0.9.0, verify-core 0.14.0) would nest a second copy of the
+  // core below it, so both nests are measured.
   const nested = path.join(HARNESS_DIR, 'node_modules', '@typedstandards', 'produce-core');
   assert.equal(
     fs.existsSync(nested),
     false,
     `a second produce-core is nested at ${nested}; the harness's dependency range must admit the ` +
-      "root copy (0.3.1 widened it to '^0.3.0 || ^0.4.0', and 0.4.0 and 0.5.0 kept it), so npm install resolves one.",
+      "root copy (0.7.0 declares '^0.8.0'), so npm install resolves one.",
   );
+  const PRODUCE_DIR = path.join(REPO_ROOT, 'node_modules', '@typedstandards', 'produce-core');
+  for (const owner of [HARNESS_DIR, PRODUCE_DIR]) {
+    const nestedVerify = path.join(owner, 'node_modules', '@typedstandards', 'verify-core');
+    assert.equal(
+      fs.existsSync(nestedVerify),
+      false,
+      `a second verify-core is nested at ${nestedVerify}; this repository's verify-core range must admit ` +
+        "the one produce-core declares (0.8.0 declares '^0.13.0'), so npm install resolves one.",
+    );
+  }
 });

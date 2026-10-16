@@ -294,9 +294,13 @@ test('Trace span mcp.source wins over tool-name mapping when they disagree', () 
   assert.equal(resolveToolSource(tc, span), 'data-commons');
 });
 
-test('Unknown tool with no trace span defaults to socrata (pre-M9.1 backward compat)', () => {
+test('Unknown tool with no trace span resolves to unknown, never socrata (harness 0.7.0, ADR-0033 §A)', () => {
+  // Until harness 0.7.0 this defaulted to `socrata` (the pre-M9.1 backward
+  // compat), which attributed a call nothing identified to a source that may
+  // not have been in the run. `unknown` is in no source registry, so such a
+  // call mints no `dataSources` entry.
   const tc: ToolCallSummary = { name: 'mystery_tool', args: {} };
-  assert.equal(resolveToolSource(tc, undefined), 'socrata');
+  assert.equal(resolveToolSource(tc, undefined), 'unknown');
 });
 
 // --- Display helpers for the evidence detail page UI ---

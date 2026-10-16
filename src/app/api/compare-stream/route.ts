@@ -4,17 +4,17 @@ import { authOptions } from '@/lib/auth';
 import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks, type ProgressOpts } from '@/lib/openrouter-streaming';
 import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
-import { buildSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
+import { composeSystemPrompt, withPortalLockGuidance, DEFAULT_SOURCE_SELECTION } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import { encodeSSE, errorLogFacts, panelsForRun, startSseKeepAlive, streamErrorPayload, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
 import { getMissingModelCredentialError, ModelConfigurationError } from '@/lib/model-client';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
-import { getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId, skillRoutingTraceAttributes } from '@/lib/mcp/registry';
+import { configuredMcpServers, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId, skillRoutingTraceAttributes } from '@/lib/mcp/registry';
 import { resolveRunPortal } from '@/lib/site-config';
 import { PORTAL_LOCK_NOT_CONFIGURED_MESSAGE } from '@/lib/portal-lock';
-import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG } from '@/lib/evidence/trace';
+import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG, runRecordAttributes } from '@/lib/evidence/trace';
 
 const SSE_HEADERS = {
   'Content-Type': 'text/event-stream',
@@ -205,9 +205,15 @@ export async function POST(request: NextRequest) {
     // routing this instance explicitly set, and honestly omits the Socrata
     // field when unset (the guard above refused the query in that state).
     const skillFetchSpanId = trace.startSpan('skill_fetch');
+    // The run's configuration, read once, so the prompt, the tools and what
+    // the record states about them describe one configuration (#599 W4). The
+    // selection is every offered source until a request can carry one (D3).
+    const configured = readMcpEnvFromProcess();
+    const selection = DEFAULT_SOURCE_SELECTION;
+    const composition = await composeSystemPrompt({ portal, configured, selection });
     // Under the lock, one section is appended saying the portal-general
     // guidance does not apply here (#436, D7); unlocked, the prompt is unchanged.
-    const systemPromptWithMcp = withPortalLockGuidance(await buildSystemPrompt(portal), lockedPortal);
+    const systemPromptWithMcp = withPortalLockGuidance(composition.prompt, lockedPortal, configured, selection);
     const systemPromptHash = hash(systemPromptWithMcp);
     // #411, ruling D3: the HASH, not the text. This span goes inline into the
     // bytes an instance signs, and `skill.text` put the whole composed prompt
@@ -222,7 +228,25 @@ export async function POST(request: NextRequest) {
     // theirs: their bytes are signed and this changes no byte of them.
     trace.endSpan(skillFetchSpanId, {
       'skill.text_hash': systemPromptHash,
-      ...skillRoutingTraceAttributes(readMcpEnvFromProcess()),
+      ...skillRoutingTraceAttributes(configured),
+    });
+
+    // `mcpTools` itself when unlocked; under the lock the same schemas with
+    // text that stops inviting other portals (#436, D7). Only the sources this
+    // instance configures (sprint 238, D2), narrowed by the selection.
+    const offeredTools = offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection);
+
+    // What this run states about itself (#599 W4, ADR-0033): the date its
+    // prompt asserted (#475), the servers its configuration had (#495), the
+    // tools it offered, each source's offered-reason and the prompt's
+    // components. Written onto the root span when it ends; the packager reads
+    // them back from the trace at publish, in preference to its own state.
+    const runRecord = runRecordAttributes({
+      assertedDate: composition.assertedDate,
+      mcpServers: configuredMcpServers(configured),
+      toolDefinitions: offeredTools,
+      sourcesOffered: composition.sourcesOffered,
+      components: composition.components,
     });
 
     const systemPromptWithoutMcp = `You are a helpful assistant.
@@ -278,10 +302,8 @@ Be honest if you don't have access to current or real-time data.`;
         const mcpQuery = queryWithMcpStreaming(
           query,
           model,
-          // `mcpTools` itself when unlocked; under the lock the same schemas
-          // with text that stops inviting other portals (#436, D7). Only the
-          // sources this instance configures (sprint 238, D2).
-          offeredMcpTools(mcpToolsFor(lockedPortal)),
+          // The tools the record states it offered, as offered.
+          offeredTools,
           // Just the transport. Portal injection moved into the core (#359):
           // done here, it ran after the core had recorded the call and
           // stringified its arguments onto the span, so the span reported no
@@ -310,7 +332,7 @@ Be honest if you don't have access to current or real-time data.`;
         console.error('Stream error:', errorLogFacts(error));
       } finally {
         // Finalize trace and send as final SSE event
-        trace.endRoot();
+        trace.endRoot(runRecord);
         const traceJson = trace.finalize();
         stopKeepAlive();
         await writeEvent({ type: 'trace' as StreamEvent['type'], panel: 'withMcp', data: traceJson });

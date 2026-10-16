@@ -66,8 +66,14 @@ const STUB_SOURCE: Record<string, string> = {
     export async function checkRateLimit() { return { remaining: 99, limit: 100, resetAt: 0 }; }
     export function isRateLimited() { return false; }
     export async function incrementRateLimit() {}`,
+  // #599 W4: the routes compose through `composeSystemPrompt`, which returns
+  // what the record states beside the prompt.
   '@/lib/mcp/socrata-skill': `
+    export const DEFAULT_SOURCE_SELECTION = undefined;
     export async function buildSystemPrompt() { return 'fixture system prompt'; }
+    export async function composeSystemPrompt() {
+      return { prompt: 'fixture system prompt', assertedDate: '2026-01-15', sourcesOffered: [], components: [] };
+    }
     export function withPortalLockGuidance(prompt) { return prompt; }`,
   // The model loop: holds until the test opens the gate, then completes with
   // an answer and no tool calls, as a run whose model answered directly does.
