@@ -4,6 +4,23 @@
 // plus the tools that server hosts. Kept side-effect-free and free of
 // `process.env` reads so it can be unit-tested in isolation — the caller
 // resolves env at construction time via `buildMcpRegistry`.
+//
+// The sources themselves — their tool names, which of them are optional and
+// which configuration variable offers each, and the reading of that
+// configuration — are `@typedstandards/civic-typed-router`'s manifest
+// (#599 W2). What stays here is the network side the package does not carry:
+// the server configs, endpoint normalization, request headers, the per-call
+// refusal of an unconfigured source, and the addresses a record states.
+
+import {
+  BOSTON_OPENCONTEXT_TOOL_NAMES,
+  CIVIC_MANIFEST,
+  civicRouter,
+  DATA_COMMONS_TOOL_NAMES,
+  readMcpEnv,
+  SOCRATA_TOOL_NAMES,
+  type McpRegistryEnv,
+} from '@typedstandards/civic-typed-router';
 
 export interface McpServerConfig {
   /** Stable source identifier used in traces and provenance. */
@@ -30,36 +47,21 @@ export interface McpRegistry {
   unconfiguredTools: Record<string, string>;
 }
 
-export interface McpRegistryEnv {
-  /**
-   * Absent when `SOCRATA_MCP_URL` is unset. There is deliberately NO
-   * reference-host fallback (#258 C4): an unconfigured instance refuses
-   * Socrata-routed queries per-request rather than silently routing its
-   * users' queries through another deployment's infrastructure.
-   */
-  socrataUrl?: string;
-  dataCommonsUrl: string;
-  dataCommonsApiKey?: string;
-  /**
-   * Absent when `BOSTON_OPENCONTEXT_MCP_URL` is unset. Boston's OpenContext
-   * source is OPTIONAL (see `OPTIONAL_SOURCES`): unset, it is not offered to
-   * a run at all. There is deliberately no coded default: the public endpoint
-   * refuses every request that carries no bearer token, and this client sends
-   * none (sprint 238, ruling D2).
-   */
-  bostonOpencontextUrl?: string;
-}
+/**
+ * The instance's MCP configuration, as `readMcpEnvFromProcess` reads it: the
+ * package's type. `socrataUrl` is absent when `SOCRATA_MCP_URL` is unset —
+ * there is deliberately NO reference-host fallback (#258 C4). `dataCommonsUrl`
+ * falls back to Google's public endpoint. `bostonOpencontextUrl` is absent when
+ * `BOSTON_OPENCONTEXT_MCP_URL` is unset: the source is optional and has no
+ * coded default (sprint 238, ruling D2).
+ */
+export type { McpRegistryEnv };
 
-const SOCRATA_TOOLS = ['get_data', 'search', 'fetch'];
-const DATA_COMMONS_TOOLS = ['search_indicators', 'get_observations'];
-const BOSTON_OPENCONTEXT_TOOLS = [
-  'ckan__search_datasets',
-  'ckan__get_dataset',
-  'ckan__query_data',
-  'ckan__get_schema',
-  'ckan__execute_sql',
-  'ckan__aggregate_data',
-];
+// The routing lists, in the package's order (copies: `McpServerConfig.tools`
+// is a mutable array, the package's are read-only).
+const SOCRATA_TOOLS = [...SOCRATA_TOOL_NAMES];
+const DATA_COMMONS_TOOLS = [...DATA_COMMONS_TOOL_NAMES];
+const BOSTON_OPENCONTEXT_TOOLS = [...BOSTON_OPENCONTEXT_TOOL_NAMES];
 
 /**
  * Sources a run is offered only when the instance configures them, each with
@@ -79,11 +81,16 @@ const BOSTON_OPENCONTEXT_TOOLS = [
  * is not listed because it is required: an instance without it refuses every
  * query up front (`getMissingMcpRoutingError`), so its tools are never
  * withheld from a run that proceeds. Data Commons is not listed because it
- * keeps a coded public default.
+ * keeps a coded public default. Read from the package's manifest: an entry
+ * whose `configuration.requirement` is `optional`, with its address variable
+ * and its routing list.
  */
-const OPTIONAL_SOURCES: Record<string, { variable: string; tools: readonly string[] }> = {
-  'boston-opencontext': { variable: 'BOSTON_OPENCONTEXT_MCP_URL', tools: BOSTON_OPENCONTEXT_TOOLS },
-};
+const OPTIONAL_SOURCES: Record<string, { variable: string; tools: readonly string[] }> = Object.fromEntries(
+  CIVIC_MANIFEST.filter((entry) => entry.configuration.requirement === 'optional').map((entry) => [
+    entry.sourceId,
+    { variable: entry.configuration.addressVariable, tools: entry.toolNames },
+  ]),
+);
 
 /**
  * Normalize a base URL to a POST-able MCP endpoint. The Socrata env var is
@@ -240,8 +247,7 @@ export function configuredAddressForSource(
  * source's server on, so a source is offered exactly when it is routable.
  */
 export function isSourceOffered(configured: McpRegistryEnv, sourceId: string): boolean {
-  if (!Object.hasOwn(OPTIONAL_SOURCES, sourceId)) return true;
-  return configuredAddressForSource(configured, sourceId) !== undefined;
+  return civicRouter.isSourceOffered(configured, sourceId);
 }
 
 /**
@@ -250,9 +256,7 @@ export function isSourceOffered(configured: McpRegistryEnv, sourceId: string): b
  * when every optional source is configured.
  */
 export function withheldToolNames(configured: McpRegistryEnv): string[] {
-  return Object.entries(OPTIONAL_SOURCES)
-    .filter(([sourceId]) => !isSourceOffered(configured, sourceId))
-    .flatMap(([, { tools }]) => [...tools]);
+  return civicRouter.withheldToolNames(configured);
 }
 
 /** One server this instance routes to, as a record names it. */
@@ -328,12 +332,16 @@ function presentOrUndefined(raw: string | undefined): string | undefined {
  * infrastructure, so it keeps its coded default.
  */
 export function readMcpEnvFromProcess(): McpRegistryEnv {
-  return {
-    socrataUrl: presentOrUndefined(process.env.SOCRATA_MCP_URL),
-    dataCommonsUrl: process.env.DATA_COMMONS_MCP_URL || 'https://api.datacommons.org/mcp',
-    dataCommonsApiKey: process.env.DATA_COMMONS_API_KEY || undefined,
-    bostonOpencontextUrl: presentOrUndefined(process.env.BOSTON_OPENCONTEXT_MCP_URL),
-  };
+  // The package's reader over exactly these four variables, each read by name
+  // here so the environment this module reads stays visible
+  // (`scripts/env-reads-declared.test.mjs`); `process.env` is never handed over
+  // whole.
+  return readMcpEnv({
+    SOCRATA_MCP_URL: process.env.SOCRATA_MCP_URL,
+    DATA_COMMONS_MCP_URL: process.env.DATA_COMMONS_MCP_URL,
+    DATA_COMMONS_API_KEY: process.env.DATA_COMMONS_API_KEY,
+    BOSTON_OPENCONTEXT_MCP_URL: process.env.BOSTON_OPENCONTEXT_MCP_URL,
+  });
 }
 
 /**

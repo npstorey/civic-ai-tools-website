@@ -44,7 +44,15 @@
 // against a live fetch of the hub. Re-quoting the fixtures on a hub change is
 // a manual step, stated so it isn't assumed automatic.
 //
-// WHAT THE MIRROR IS. `src/lib/mcp/socrata-skill.ts`'s `SOCRATA_SKILL_FALLBACK`
+// WHERE THE MIRROR LIVES (#599 W2). `SOCRATA_SKILL_FALLBACK` and
+// `getSkillForPortal` are `@typedstandards/civic-typed-router`'s, re-exported
+// unchanged by `src/lib/mcp/socrata-skill.ts`; the line numbers below are the
+// ones that file had at `c342fe0`, before the text moved into the package
+// byte for byte. This guard reads them through the website's exports, so it
+// reads what the app hands the model, and a package bump that changes a claim
+// fails here.
+//
+// WHAT THE MIRROR IS. `SOCRATA_SKILL_FALLBACK`
 // and `getSkillForPortal` are GENERIC-ONLY and HAND-SHAPED by design (read
 // their own header comments, and `scripts/sync-fallback.mjs`'s header, which
 // explains why that script must never be run: a verbatim paste of the hub's

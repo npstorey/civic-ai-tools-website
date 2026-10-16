@@ -21,6 +21,12 @@
  * `search_indicators` in the same sentence is not seen. A prompt that never
  * mentions `places` at all passes, which is why the last test also asserts that
  * the schema still says "name".
+ *
+ * WHERE THE TEXT LIVES (#599 W2). The constants this guard reads are
+ * `@typedstandards/civic-typed-router`'s, re-exported unchanged by
+ * `src/lib/mcp/`; their text is no longer in this repository. The guard reads
+ * them through the website's exports, so it reads exactly what the app hands
+ * the model, and a change to the package's text (a version bump) fails here.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

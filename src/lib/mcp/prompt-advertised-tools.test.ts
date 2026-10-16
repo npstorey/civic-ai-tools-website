@@ -75,6 +75,12 @@
  * THE FILENAME MOVED WITH THE SCOPE. This was `preamble-advertised-tools.test.ts`
  * while it read one constant. A guard whose name states a narrower reach than
  * it has is the failure this wave is named for, one level down.
+ *
+ * WHERE THE TEXT LIVES (#599 W2). The constants this guard reads are
+ * `@typedstandards/civic-typed-router`'s, re-exported unchanged by
+ * `src/lib/mcp/`; their text is no longer in this repository. The guard reads
+ * them through the website's exports, so it reads exactly what the app hands
+ * the model, and a change to the package's text (a version bump) fails here.
  */
 
 import { test } from 'node:test';
