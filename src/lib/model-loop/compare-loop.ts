@@ -38,6 +38,8 @@
 
 import type OpenAI from 'openai';
 import type { ModelRequestSettings } from '../model-catalog.ts';
+import type { SourceSelection } from '@typedstandards/civic-typed-router';
+import type { McpRegistryEnv } from '../mcp/registry.ts';
 import { mcpToolsFor, offeredMcpTools } from '../mcp/tools.ts';
 import { callMcpTool } from '../mcp/client.ts';
 import type { ToolCallRecord, ToolLoopOptions, ToolLoopResult } from './run-tool-loop.ts';
@@ -105,6 +107,17 @@ export interface CompareLoopInputs {
    */
   lockedPortal?: string;
   /**
+   * The instance's configuration as the route read it for this run, so the
+   * prompt and the tools describe one configuration. Absent, it is read here.
+   */
+  configured?: McpRegistryEnv;
+  /**
+   * The source ids the run selects (#599 D3); absent, every source the
+   * configuration offers. The route passes `DEFAULT_SOURCE_SELECTION` until
+   * a request can carry one.
+   */
+  selection?: SourceSelection;
+  /**
    * The tool transport, for tests. Defaults to the live MCP client — the ONLY
    * seam this factory exposes, and deliberately one level below the loop:
    * substituting it restates no loop configuration at all.
@@ -118,7 +131,7 @@ export interface CompareLoopInputs {
  * route supplies only what it read off the request.
  */
 export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
-  const { client, endpointModel, requestSettings, prompt, systemPrompt, portal, lockedPortal, callTool = callMcpTool } = inputs;
+  const { client, endpointModel, requestSettings, prompt, systemPrompt, portal, lockedPortal, configured, selection, callTool = callMcpTool } = inputs;
 
   return {
     client,
@@ -128,8 +141,8 @@ export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
     systemPrompt,
     // The same schemas either way; under the lock their text stops inviting
     // other portals (#436). Only the sources this instance configures
-    // (sprint 238, D2).
-    tools: offeredMcpTools(mcpToolsFor(lockedPortal)),
+    // (sprint 238, D2), narrowed by the selection (#599 D3).
+    tools: offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection),
     maxIterations: COMPARE_MAX_ITERATIONS,
     maxTokens: COMPARE_MAX_TOKENS,
     // No cumulative token budget: this caller has never had one, and the cap

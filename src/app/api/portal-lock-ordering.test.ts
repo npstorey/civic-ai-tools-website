@@ -70,7 +70,7 @@ test('#436 C2: the lock refuses before the rate limiter, before the allowance is
     assert.ok(refusal > at(source, 'resolveRunPortal(', file), `${file} checks the resolution after making it`);
     assert.ok(refusal < at(source, 'checkRateLimit(', file), `${file} refuses AFTER the rate limiter`);
     assert.ok(refusal < at(source, 'incrementRateLimit(', file), `${file} spends the reader's allowance before refusing`);
-    assert.ok(refusal < at(source, 'buildSystemPrompt(portal)', file), `${file} fetches the skill text before refusing`);
+    assert.ok(refusal < at(source, 'composeSystemPrompt({ portal', file), `${file} fetches the skill text before refusing`);
     assert.ok(refusal < at(source, 'getServerSession(', file), `${file} reads the session before refusing`);
   }
 });
@@ -104,8 +104,10 @@ test('#436 C2: an unset portal under the lock is logged by variable name and rea
 test('#436 C3: every query route hands the lock to the loop, the locked tool text to the model, and the lock section to the prompt', () => {
   for (const { file } of ROUTES) {
     const source = read(file);
+    // #599 W4: the prompt is `composeSystemPrompt`'s, and the lock section is
+    // composed for the run's configuration and selection.
     assert.ok(
-      source.includes('withPortalLockGuidance(await buildSystemPrompt(portal), lockedPortal)'),
+      source.includes('withPortalLockGuidance(composition.prompt, lockedPortal, configured, selection)'),
       `${file}: the prompt does not get the lock section`,
     );
   }
@@ -121,7 +123,7 @@ test('#436 C3: every query route hands the lock to the loop, the locked tool tex
     );
   }
   const compare = read('compare/route.ts');
-  assert.match(compare, /compareLoopOptions\(\{[\s\S]*?\bportal,\s*lockedPortal,\s*\}\)/, 'compare/route.ts: the lock is not passed to the factory');
+  assert.match(compare, /compareLoopOptions\(\{[\s\S]*?\bportal,\s*lockedPortal,\s*configured,\s*selection,\s*\}\)/, 'compare/route.ts: the lock is not passed to the factory');
 });
 
 test('#436: the replay route takes no part in the lock', () => {

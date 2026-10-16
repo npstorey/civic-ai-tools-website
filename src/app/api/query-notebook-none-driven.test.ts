@@ -74,8 +74,14 @@ const STUB_SOURCE: Record<string, string> = {
     export async function checkRateLimit() { globalThis.__p4.checks++; return { remaining: 99, limit: 100, reset: 0 }; }
     export function isRateLimited() { return false; }
     export async function incrementRateLimit() { globalThis.__p4.increments++; }`,
+  // #599 W4: the routes compose through `composeSystemPrompt`, which returns
+  // what the record states beside the prompt.
   '@/lib/mcp/socrata-skill': `
+    export const DEFAULT_SOURCE_SELECTION = undefined;
     export async function buildSystemPrompt() { return 'fixture system prompt'; }
+    export async function composeSystemPrompt() {
+      return { prompt: 'fixture system prompt', assertedDate: '2026-01-15', sourcesOffered: [], components: [] };
+    }
     export function withPortalLockGuidance(prompt) { return prompt; }`,
   '@/lib/openrouter-streaming': `
     export async function queryWithMcpStreaming() {
@@ -230,7 +236,8 @@ test('#547 C2: the refusal is made once, first in the handler', () => {
     'getServerSession(',
     'checkRateLimit(',
     'incrementRateLimit(',
-    'buildSystemPrompt(portal)',
+    // The skill fetch (`buildSystemPrompt(portal)` until #599 W4).
+    'composeSystemPrompt({ portal',
     'queryWithMcpStreaming(',
     'executeNotebook(',
   ]) {

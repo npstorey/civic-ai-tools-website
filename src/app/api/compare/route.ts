@@ -4,13 +4,13 @@ import { authOptions } from '@/lib/auth';
 import { queryWithoutMcp } from '@/lib/openrouter';
 import { runToolLoop } from '@/lib/model-loop/run-tool-loop';
 import { compareLoopOptions, compareCompletionResult } from '@/lib/model-loop/compare-loop';
-import { buildSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
+import { composeSystemPrompt, withPortalLockGuidance, DEFAULT_SOURCE_SELECTION } from '@/lib/mcp/socrata-skill';
 import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { getMissingModelCredentialError, getModelClient, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
 import { errorLogFacts, streamErrorPayload } from '@/lib/streaming';
-import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
+import { getMissingMcpRoutingError, readMcpEnvFromProcess } from '@/lib/mcp/registry';
 import { resolveRunPortal } from '@/lib/site-config';
 import { PORTAL_LOCK_NOT_CONFIGURED_MESSAGE } from '@/lib/portal-lock';
 import { headers } from 'next/headers';
@@ -137,7 +137,14 @@ export async function POST(request: NextRequest) {
 
     // System prompt for the MCP-enabled query - uses skill module
     // Under the lock one section is appended (#436, D7); unlocked, unchanged.
-    const systemPromptWithMcp = withPortalLockGuidance(await buildSystemPrompt(portal), lockedPortal);
+    // The configuration is read once for the prompt and the tools, and the
+    // selection is every offered source until a request can carry one
+    // (#599 D3). This route writes no trace, so it records nothing of the
+    // composition but the prompt.
+    const configured = readMcpEnvFromProcess();
+    const selection = DEFAULT_SOURCE_SELECTION;
+    const composition = await composeSystemPrompt({ portal, configured, selection });
+    const systemPromptWithMcp = withPortalLockGuidance(composition.prompt, lockedPortal, configured, selection);
 
     // System prompt for the non-MCP query (to make it fair)
     const systemPromptWithoutMcp = `You are a helpful assistant.
@@ -162,6 +169,8 @@ Be honest if you don't have access to current or real-time data.`;
         systemPrompt: systemPromptWithMcp,
         portal,
         lockedPortal,
+        configured,
+        selection,
       })),
     ]);
 

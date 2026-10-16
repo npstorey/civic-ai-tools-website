@@ -109,11 +109,13 @@ test('#30 P6 F1: the refusal precedes every upstream call and the rate limiter',
     const source = routeSource(route);
     const resolve = at(source, 'resolveModelIdentity(modelId)', route);
 
-    // `buildSystemPrompt` fetches skill guidance over the network: the first
+    // `composeSystemPrompt` fetches skill guidance over the network: the first
     // thing a request spends. `/api/compare` used to resolve the model AFTER
-    // it, and after the rate limiter too.
+    // it, and after the rate limiter too. (Until #599 W4 the routes called
+    // `buildSystemPrompt(portal)`; they now call `composeSystemPrompt`, which
+    // also returns what the record states about the composition.)
     assert.ok(
-      resolve < at(source, 'buildSystemPrompt(portal)', route),
+      resolve < at(source, 'composeSystemPrompt({ portal', route),
       `${route} refuses before the skill fetch`,
     );
     // Nothing may be charged to a reader for a request that was never going to

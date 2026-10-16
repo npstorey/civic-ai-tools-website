@@ -21,10 +21,17 @@
 //     publication host + PROV platform agent from `src/lib/site-config.ts`),
 //     and the MCP server addresses a record names (`serverAddressPolicy`
 //     below: this instance's configured servers, for a run it made).
+//   - WHAT THE RUN RECORDED ABOUT ITSELF (#599 W4, ADR-0033). The query
+//     routes write five facts onto the trace's root span at run time — the
+//     date the prompt asserted, the servers the run's configuration had, the
+//     tools it offered, each source's offered-reason and the prompt's
+//     components — and this module reads them back with the harness's
+//     `extractRunAttributes`, in preference to anything it could read at
+//     publish (#495, #475). A trace without them is packaged as before.
 
 import crypto from 'crypto';
 import { buildProvenanceGraph, type ProvGraph } from './provenance.ts';
-import { buildDataSources, type DataSourceEntry } from './data-sources.ts';
+import { appToolSourceResolver, buildDataSources, type DataSourceEntry } from './data-sources.ts';
 import { getActiveKeyId, type SignerIdentity } from './signing.ts';
 import { isBlobRef, parseBlobRef, type BlobRef } from './blob-ref.ts';
 import { deriveOperationType } from '../mcp/operation-types.ts';
@@ -36,8 +43,10 @@ import {
 } from '@typedstandards/produce-core';
 import {
   deriveDatHereEnvelopeFields,
+  extractRunAttributes,
   extractSkillMetadata,
   traceForInspection,
+  withRunServerAddresses,
   CIVICAITOOLS_PROVENANCE_CONFIG,
   type CivicSourceRegistry,
   type DatHereMcpServer,
@@ -433,6 +442,27 @@ export function mcpServersForPolicy(policy: ServerAddressPolicy): DatHereMcpServ
 }
 
 /**
+ * The provenance source registry for a package: the policy's registry, with
+ * each source's address replaced by the one the RUN had when the trace
+ * records the run's servers (#495, ADR-0033 §D) — a source the run's list
+ * does not name then carries no address. Without that record, the policy's
+ * registry as before.
+ *
+ * The trace's record wins under every policy. It is the capture's own
+ * statement, written when the run happened, as the skill-fetch URL already
+ * is; the policy decides only what THIS instance's configuration may add when
+ * the capture states nothing.
+ */
+export function sourceRegistryForRun(
+  policy: ServerAddressPolicy,
+  runMcpServers: readonly DatHereMcpServer[] | undefined,
+): CivicSourceRegistry {
+  return runMcpServers
+    ? withRunServerAddresses(sourceRegistryForPolicy('unknown'), runMcpServers)
+    : sourceRegistryForPolicy(policy);
+}
+
+/**
  * PROV-O graph config for this instance: the harness's config with the
  * platform agent resolved from instance identity (ADR-0020 — the agent names
  * WHO published inside the signed graph). As of #258 the agent NEVER falls
@@ -446,7 +476,10 @@ export function mcpServersForPolicy(policy: ServerAddressPolicy): DatHereMcpServ
  * deployment's own configured values (instance-config.test.ts), not a
  * runtime fallback.
  */
-function instanceProvenanceConfig(policy: ServerAddressPolicy): ProvenanceConfig {
+function instanceProvenanceConfig(
+  policy: ServerAddressPolicy,
+  runMcpServers: readonly DatHereMcpServer[] | undefined,
+): ProvenanceConfig {
   const overrides = getPlatformAgentOverrides();
   const missing: string[] = [];
   // Report the CANONICAL names (civic-ai-tools#160 P5). The presence LOGIC is
@@ -468,10 +501,11 @@ function instanceProvenanceConfig(policy: ServerAddressPolicy): ProvenanceConfig
     // TWO FIELDS OF THE REFERENCE CONFIG ARE ENDPOINT FACTS, NOT VOCABULARY,
     // and each is replaced by what this instance is configured with — the same
     // spread-a-reference-constant shape #258 and #294 removed from the platform
-    // agent below. At harness 0.5.0 the reference config carries exactly these
-    // three fields (`platformAgent`, `sourceRegistry`, `modelAgentDescription`),
-    // so every one is replaced here; the spread only keeps a field a later
-    // harness adds, which a pin move has to read before it is admitted.
+    // agent below. At harness 0.5.0, and again at 0.7.0 (read for #599 W4),
+    // the reference config carries exactly these three fields
+    // (`platformAgent`, `sourceRegistry`, `modelAgentDescription`), so every
+    // one is replaced here; the spread only keeps a field a later harness
+    // adds, which a pin move has to read before it is admitted.
     //
     // E4 (website#30 P3): "Large language model via OpenRouter" was true of
     // civicaitools.org and false of any instance pointed somewhere else. It is
@@ -485,7 +519,15 @@ function instanceProvenanceConfig(policy: ServerAddressPolicy): ProvenanceConfig
     // the harness vocabulary and carry the address this instance is
     // configured with, for a run this instance made, or no address at all
     // (`serverAddressPolicy` above decides which).
-    sourceRegistry: sourceRegistryForPolicy(policy),
+    //
+    // #599 W4: when the trace records the servers the run had, those
+    // addresses, and no others (`sourceRegistryForRun` above).
+    sourceRegistry: sourceRegistryForRun(policy, runMcpServers),
+    // The app's tool-name map resolves a span that carries no `mcp.source`,
+    // as `dataSources[]` already did; the harness's own default (0.7.0) knows
+    // the bare names only. Every span this app writes carries the tag, so
+    // this reaches only a trace that does not.
+    resolver: appToolSourceResolver,
     platformAgent: {
       id: overrides.id ?? requirePublicationHost(),
       title: overrides.title as string,
@@ -542,6 +584,14 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
   // `traceForInspection` falls back to an empty trace so downstream builders
   // degrade gracefully.
   const inspectableTrace = traceForInspection(input.trace);
+
+  // What the run recorded about itself on the trace's root span (#599 W4,
+  // ADR-0033 §D-§E): absent fields for a trace that recorded none (every
+  // trace made before W4, a BlobRef trace, a capture made elsewhere). An
+  // attribute that is present but malformed THROWS (`RunAttributeError`)
+  // rather than reading as absent: falling back to publish-time state there
+  // would repeat #495.
+  const run = extractRunAttributes(inspectableTrace);
 
   // A call the loop recorded as rejected touched no data, so it earns no
   // `dataSources` entry on EITHER branch — not the dataset-keyed one and not
@@ -613,7 +663,7 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       // look like the run's portal reaches the graph, which is exactly the
       // claim 0.3.1 removed.
     },
-    instanceProvenanceConfig(addressPolicy),
+    instanceProvenanceConfig(addressPolicy, run.runMcpServers),
   );
 
   // datHere policy (ADR-0004/0006, spec §8.7.1): producerProfile auto-derive,
@@ -631,10 +681,22 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       producerProfile: input.producerProfile,
       summary: input.summary,
       skillMcpServerUrl: skillMeta.mcpServerUrl,
-      // Under the 'configured' policy the list replaces the skill-fetch URL as
-      // the source of `mcpServers` (harness 0.5.0); otherwise it is undefined
-      // and the harness falls back to `skillMcpServerUrl`, as before.
-      mcpServers: mcpServersForPolicy(addressPolicy),
+      // The servers the RUN had, when the trace records them (#495): the
+      // harness prefers them over both inputs below. Without them, under the
+      // 'configured' policy the publish-time list replaces the skill-fetch
+      // URL (harness 0.5.0); otherwise it is undefined and the harness falls
+      // back to `skillMcpServerUrl`, as before. The publish-time list is not
+      // read at all when the run's is there.
+      runMcpServers: run.runMcpServers,
+      mcpServers: run.runMcpServers ? undefined : mcpServersForPolicy(addressPolicy),
+      // The tools the run offered, verbatim, into the environment block
+      // (ADR-0033 §C). No `temperature`: no request this app makes sends one
+      // (#548), and the harness states it only when passed.
+      toolDefinitions: run.toolDefinitions,
+      // The composition block (ADR-0033 §E), under every content profile.
+      assertedDate: run.assertedDate,
+      sourcesOffered: run.sourcesOffered,
+      components: run.components,
       extensions: input.extensions,
     },
     { host: requirePublicationHost() },
