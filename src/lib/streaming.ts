@@ -487,7 +487,8 @@ const NOTEBOOK_DC_API_KEY = 'DC_API_KEY';
 /**
  * The two credentials the app puts into a notebook's environment
  * (`buildNotebookEnv`, `src/lib/sandbox/execute.ts`). Their values are removed
- * from the traceback before the reader is shown it. Held equal to the lambda
+ * from the traceback before the reader is shown it, and from every notebook
+ * output this instance streams or packages. Held equal to the lambda
  * driver's `FUNCTION_HELD_VARIABLES` by a test, which `lambda.test.ts` holds
  * equal to the names `buildNotebookEnv` supplies.
  */
@@ -512,13 +513,13 @@ function withoutTerminalCodes(text: string): string {
 }
 
 /**
- * Every value of the two notebook credentials, removed BY VALUE: the raw
- * value, its URL-encoded form and its JSON-escaped form, longest first, each
- * replaced by a marker that names the variable and never the value. Read from
- * the app's own environment, which is where `buildNotebookEnv` took them from
- * on the session path.
+ * The forms `withoutCredentials` removes, each with the variable it belongs
+ * to: for each credential set in `env`, its raw value, its URL-encoded form
+ * and its JSON-escaped form, longest first. The function's twin,
+ * `credential_forms` in `docker/executor/lambda/handler.py`, is held to the
+ * same list by shared vectors (`docker/executor/lambda/credential_forms.json`).
  */
-function withoutCredentials(text: string, env: Record<string, string | undefined>): string {
+export function notebookCredentialForms(env: Record<string, string | undefined>): Array<[string, string]> {
   const forms: Array<[string, string]> = [];
   for (const [name, value] of [
     [NOTEBOOK_SOCRATA_TOKEN, env[NOTEBOOK_SOCRATA_TOKEN]],
@@ -530,9 +531,62 @@ function withoutCredentials(text: string, env: Record<string, string | undefined
     }
   }
   forms.sort((a, b) => b[0].length - a[0].length);
+  return forms;
+}
+
+function removeForms(text: string, forms: ReadonlyArray<[string, string]>): string {
   let out = text;
   for (const [form, name] of forms) out = out.split(form).join(`[${name} removed]`);
   return out;
+}
+
+/**
+ * Every value of the two notebook credentials, removed BY VALUE: the raw
+ * value, its URL-encoded form and its JSON-escaped form, longest first, each
+ * replaced by a marker that names the variable and never the value. Read from
+ * the app's own environment, which is where `buildNotebookEnv` took them from
+ * on the session path. The one removal: the traceback, the `notebook` event
+ * and the publish route all reach it.
+ */
+export function withoutCredentials(text: string, env: Record<string, string | undefined>): string {
+  return removeForms(text, notebookCredentialForms(env));
+}
+
+/**
+ * A NOTEBOOK OUTPUT NEVER CARRIES THE VALUE OF A NOTEBOOK CREDENTIAL (#516).
+ * `withoutCredentials` over every key and every string of a JSON value — a
+ * notebook — at any depth, so it reaches every output kind (stream text,
+ * `execute_result` and `display_data` payloads, an error's `evalue` and
+ * `traceback`) and anything else the notebook carries. Arrays, objects, key
+ * order and every other value are kept as they are. With neither credential
+ * set in `env` the value itself is returned.
+ *
+ * Called where a notebook enters this instance's output: by the notebook
+ * route on the executed notebook, before the provenance stamp reads its
+ * outputs and before the validator sees it, and by the publish route on the
+ * submitted notebook extension, before the package is built. Under
+ * `EXECUTOR_DRIVER=lambda` the function holds the values and its handler
+ * removes them the same way.
+ */
+export function withoutCredentialsIn<T>(value: T, env: Record<string, string | undefined>): T {
+  const forms = notebookCredentialForms(env);
+  if (forms.length === 0) return value;
+  const walk = (node: unknown): unknown => {
+    if (typeof node === 'string') return removeForms(node, forms);
+    if (Array.isArray(node)) return node.map(walk);
+    if (node !== null && typeof node === 'object') {
+      const out: Record<string, unknown> = {};
+      for (const [key, item] of Object.entries(node)) {
+        // defineProperty, not assignment: a parsed `__proto__` key stays a key.
+        Object.defineProperty(out, removeForms(key, forms), {
+          value: walk(item), enumerable: true, writable: true, configurable: true,
+        });
+      }
+      return out;
+    }
+    return node;
+  };
+  return walk(value) as T;
 }
 
 /**

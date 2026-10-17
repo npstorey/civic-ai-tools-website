@@ -24,6 +24,9 @@ SECRETS (ruling D5). The two data-portal tokens are set on the function, never
 sent in the payload: the handler adds them from its own environment. Nothing
 here logs the event, the notebook, a traceback or a token; every failure is
 returned as data, never raised, so the runtime client has nothing to print.
+A notebook output never carries the value of a notebook credential: the
+function holds the values, so the handler removes both, by value, from the
+executed notebook and from the stderr it returns (`credential_forms`).
 
 SIZE (ruling D2). The response is serialized here and returned as bytes, which
 the runtime client passes through untouched, so the size checked is the size
@@ -39,6 +42,7 @@ import shutil
 import signal
 import subprocess
 import time
+from urllib.parse import quote
 
 #: The protocol the app's driver speaks (src/lib/sandbox/lambda.ts, LAMBDA_PROTOCOL).
 PROTOCOL = 1
@@ -55,6 +59,82 @@ IMAGE_MPLCONFIGDIR = '/home/notebook/.config/matplotlib'
 #: Set on the function, added to the notebook's environment here, never sent (D5).
 #: Must equal FUNCTION_HELD_VARIABLES in src/lib/sandbox/lambda.ts; a test holds them equal.
 FUNCTION_HELD_VARIABLES = ('SOCRATA_APP_TOKEN', 'DC_API_KEY')
+
+#: What JavaScript's encodeURIComponent leaves unescaped beyond what `quote`
+#: always keeps (letters, digits and `_.-~`).
+URI_COMPONENT_SAFE = "!~*'()"
+
+
+def _utf16_length(text):
+    """A string's length as JavaScript counts it, so the sort below orders forms as the app's does."""
+    return len(text.encode('utf-16-le', 'surrogatepass')) // 2
+
+
+def credential_forms(env=None):
+    """The forms of each function-held credential the handler removes, longest first.
+
+    The twin of `notebookCredentialForms` in src/lib/streaming.ts, held to the
+    same list by shared vectors (credential_forms.json): for each variable set,
+    its raw value, its URL-encoded form as encodeURIComponent writes it, and its
+    JSON-escaped form, each with the variable it belongs to.
+    """
+    env = os.environ if env is None else env
+    forms = []
+    for name in FUNCTION_HELD_VARIABLES:
+        value = env.get(name)
+        if not value:
+            continue
+        candidates = [value]
+        try:
+            candidates.append(quote(value, safe=URI_COMPONENT_SAFE))
+        except UnicodeEncodeError:
+            pass  # a value that is not text has no URL-encoded form
+        candidates.append(json.dumps(value, ensure_ascii=False)[1:-1])
+        for form in dict.fromkeys(candidates):
+            forms.append((form, name))
+    return sorted(forms, key=lambda pair: -_utf16_length(pair[0]))
+
+
+def without_credentials(text, forms):
+    """`text` with every form replaced by a marker naming its variable, never its value."""
+    for form, name in forms:
+        text = text.replace(form, f'[{name} removed]')
+    return text
+
+
+def _without_credentials_in(value, forms):
+    """`without_credentials` over every key and every string of a JSON value."""
+    if isinstance(value, str):
+        return without_credentials(value, forms)
+    if isinstance(value, list):
+        return [_without_credentials_in(item, forms) for item in value]
+    if isinstance(value, dict):
+        return {without_credentials(key, forms): _without_credentials_in(item, forms) for key, item in value.items()}
+    return value
+
+
+def executed_without_credentials(data, forms):
+    """The executed notebook's bytes with every form removed from every string in it.
+
+    Parsed and walked, as the app walks a notebook, so a form is found inside a
+    JSON string whatever its escaping there. The bytes are returned untouched
+    when nothing was removed; otherwise re-serialized with nbformat's key order
+    and indent and every non-ASCII character escaped, which the app parses to
+    the same strings. Bytes that are not a JSON document get the removal over
+    their text.
+    """
+    if not forms:
+        return data
+    try:
+        notebook = json.loads(data.decode('utf-8'))
+    except ValueError:
+        text = data.decode('utf-8', 'surrogateescape')
+        return without_credentials(text, forms).encode('utf-8', 'surrogateescape')
+    cleaned = _without_credentials_in(notebook, forms)
+    if cleaned == notebook:
+        return data
+    return (json.dumps(cleaned, sort_keys=True, indent=1, ensure_ascii=True) + '\n').encode('ascii')
+
 
 #: Variables of this image's own environment the notebook keeps. Everything else
 #: in the handler's environment is the Lambda runtime's, the function role's
@@ -280,8 +360,11 @@ def run(event, request_id, remaining_s, started):
     budget_s = min(cap_s, remaining_s - FUNCTION_TIMEOUT_MARGIN_S)
     exit_code, _out, err, timed_out = _run_limited(argv, env, budget_s)
     result = {'protocol': PROTOCOL, 'requestId': request_id, 'exitCode': exit_code}
+    # A notebook output never carries the value of a notebook credential: both
+    # are removed by value from what is returned, the stderr and the executed file.
+    forms = credential_forms()
     if exit_code != 0:
-        stderr = err.decode('utf-8', 'replace')
+        stderr = without_credentials(err.decode('utf-8', 'replace'), forms)
         if timed_out:
             stderr += f'\n[lambda-executor] wall-clock cap ({timeout_ms}ms) exceeded — nbconvert stopped'
         result['stderr'] = stderr
@@ -289,7 +372,7 @@ def run(event, request_id, remaining_s, started):
 
     try:
         with open(read_back, 'rb') as f:
-            result['executed'] = base64.b64encode(f.read()).decode('ascii')
+            result['executed'] = base64.b64encode(executed_without_credentials(f.read(), forms)).decode('ascii')
     except OSError:
         result['executed'] = None
     probe_exit, probe_out, _err, _ = _run_limited(probe_argv, env, PROBE_TIMEOUT_S)

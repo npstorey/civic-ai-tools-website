@@ -34,7 +34,7 @@ import {
   type CompletionResult,
   type StreamCallbacks,
 } from '@/lib/openrouter-streaming';
-import { errorClassOf, isStreamErrorKind, notebookExecutionErrorMessage, notebookFailureFacts, notebookTracebackForReader, startSseKeepAlive, streamErrorPayload, type StreamErrorCode } from '@/lib/streaming';
+import { errorClassOf, isStreamErrorKind, notebookExecutionErrorMessage, notebookFailureFacts, notebookTracebackForReader, startSseKeepAlive, streamErrorPayload, withoutCredentialsIn, type StreamErrorCode } from '@/lib/streaming';
 import { TraceBuilder, hash as traceHash, CIVICAITOOLS_TRACE_CONFIG, runRecordAttributes } from '@/lib/evidence/trace';
 import { getConfiguredKeyId } from '@/lib/evidence/signing';
 import { resolveRunPortal } from '@/lib/site-config';
@@ -361,10 +361,21 @@ export async function POST(request: NextRequest) {
       await emit({ type: 'phase', name: 'C', message: 'Executing in sandbox…' });
       const execStart = Date.now();
       const execution = await executeNotebook(synthesis.notebook);
+      // A NOTEBOOK OUTPUT NEVER CARRIES THE VALUE OF A NOTEBOOK CREDENTIAL
+      // (#516). The notebook ran with both in its environment
+      // (`buildNotebookEnv`), and the model wrote its cells, so any output can
+      // print one. Both are removed by value from every string of the executed
+      // notebook HERE, before anything reads it: the provenance stamp below
+      // derives the comparison cell from the outputs, and the validator's
+      // verdict is computed over, and travels with, the document that ships.
+      // Under `EXECUTOR_DRIVER=lambda` the function holds the values and its
+      // handler has already removed them; this finds nothing to remove there
+      // unless the app holds the same values too.
+      const executed = withoutCredentialsIn(execution.notebook, process.env);
 
       await emit({ type: 'phase', name: 'D', message: 'Finalizing…' });
       const stamped = stampExecutedNotebook(
-        execution.notebook,
+        executed,
         {
           executedAt: new Date().toISOString(),
           executionDuration_ms: execution.executionDuration_ms,
