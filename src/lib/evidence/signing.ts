@@ -319,8 +319,10 @@ export async function publishToRekor(
     });
 
     if (!response.ok) {
-      const text = await response.text();
-      console.warn(`[signing] Rekor returned ${response.status}: ${text.slice(0, 200)}`);
+      // The status and the body's size, never the body: a refusal is text the
+      // log service wrote, and it can echo what it was sent (#516 P4).
+      const bytes = (await response.arrayBuffer()).byteLength;
+      console.warn(`[signing] Rekor returned ${response.status} (${bytes} bytes)`);
       return null;
     }
 
