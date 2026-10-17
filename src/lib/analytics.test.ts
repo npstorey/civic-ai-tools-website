@@ -196,6 +196,15 @@ test('half of the pair renders nothing, with or without the prior-era id', () =>
   assertNothing({ [ID]: 'fixture', [PRIOR]: 'fixture' }, 'an id with no service, beside the prior-era id');
 });
 
+test('every accepted service renders its own tag: none falls through to another', () => {
+  for (const service of ANALYTICS_SERVICES) {
+    const { scripts } = render({ [SERVICE]: service, [ID]: 'fixture' });
+    assert.equal(scripts.length, 2, `${service} renders ${scripts.length} script(s), not its two`);
+  }
+  assertGoogle({ [SERVICE]: 'google-analytics', [ID]: 'fixture' }, 'fixture', 'google-analytics');
+  assertPlausible({ [SERVICE]: 'plausible', [ID]: 'fixture' }, 'fixture', 'plausible');
+});
+
 // --- Acceptance 4: empty counts as absent, for all three names ---------------
 // A build argument that is not passed can arrive as an empty string
 // (scripts/preflight-env.mjs, the `readBy` notes), so `''` must read as unset.

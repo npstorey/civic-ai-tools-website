@@ -45,7 +45,8 @@
  * A NEW SERVICE is a value in ANALYTICS_SERVICES, a branch in AnalyticsTags,
  * the same value in the preflight row's `allowedValues`, and a paragraph in
  * docs/deploy.md's Analytics section; `src/lib/analytics.test.ts` fails on a
- * missing one of the last three.
+ * missing one of the last three. A value with no branch renders nothing,
+ * never another service's tag.
  */
 import Script from 'next/script';
 
@@ -101,21 +102,24 @@ export function AnalyticsTags({ config }: { config: AnalyticsConfig | null }) {
       </>
     );
   }
-  const GA_MEASUREMENT_ID = config.id;
-  return (
-    <>
-      <Script
-        src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
-        strategy="afterInteractive"
-      />
-      <Script id="ga4-init" strategy="afterInteractive">
-        {`
+  if (config.service === 'google-analytics') {
+    const GA_MEASUREMENT_ID = config.id;
+    return (
+      <>
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+          strategy="afterInteractive"
+        />
+        <Script id="ga4-init" strategy="afterInteractive">
+          {`
               window.dataLayer = window.dataLayer || [];
               function gtag(){dataLayer.push(arguments);}
               gtag('js', new Date());
               gtag('config', '${GA_MEASUREMENT_ID}');
             `}
-      </Script>
-    </>
-  );
+        </Script>
+      </>
+    );
+  }
+  return null;
 }
