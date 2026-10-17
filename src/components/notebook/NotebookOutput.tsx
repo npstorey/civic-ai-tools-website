@@ -89,6 +89,32 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
         >
           <strong>Couldn&apos;t generate a reproducible notebook.</strong>
           <span style={{ fontSize: '13px' }}>{state.error}</span>
+          {/* #516: the notebook's own traceback, the reader's detail, under
+              the message and with its reference. Sent only for a notebook's
+              own failure, with its credentials removed (see the hook). */}
+          {state.errorTraceback && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                The notebook&apos;s error output (reference {state.errorTraceback.correlationId}):
+              </span>
+              <pre
+                style={{
+                  margin: 0,
+                  padding: '10px 12px',
+                  backgroundColor: 'var(--card-background)',
+                  color: 'var(--text-primary)',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  lineHeight: 1.5,
+                  maxHeight: '320px',
+                  overflow: 'auto',
+                  whiteSpace: 'pre',
+                }}
+              >
+                {state.errorTraceback.text}
+              </pre>
+            </div>
+          )}
           <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
             You can switch back to <em>Standard</em> mode and try the same
             question, or retry below.

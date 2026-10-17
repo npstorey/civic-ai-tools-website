@@ -79,6 +79,15 @@ export interface NotebookStreamState {
   pipelineDurationMs: number | null;
   isLoading: boolean;
   error: string | null;
+  /**
+   * A notebook's own traceback, the reader's detail (#516, the 2026-09-21
+   * ruling), with the correlation id the error message carries. Set only from
+   * a `notebook_execution` error event that carries a `traceback` field; null
+   * otherwise, and always null under `EXECUTOR_DRIVER=lambda` (G0-9).
+   * Optional, so a state built by hand (the dev preview's fixtures) need not
+   * name it; absent reads as null.
+   */
+  errorTraceback?: { text: string; correlationId: string } | null;
 }
 
 const INITIAL_STATE: NotebookStreamState = {
@@ -102,6 +111,7 @@ const INITIAL_STATE: NotebookStreamState = {
   pipelineDurationMs: null,
   isLoading: false,
   error: null,
+  errorTraceback: null,
 };
 
 interface RawNotebookEvent {
@@ -273,12 +283,25 @@ export function useNotebookStream() {
         case 'error': {
           const code = raw.code as string | undefined;
           const correlationId = raw.correlationId as string | undefined;
-          // #271: a notebook execution failure is rebuilt CLIENT-SIDE from
-          // the typed `correlationId` + `exitCode` fields only — never from
-          // `raw.message` — so the reader-facing copy can never carry raw
-          // stderr no matter what the server happened to put in `message`.
+          // #271: a notebook execution failure's MESSAGE is rebuilt
+          // CLIENT-SIDE from the typed `correlationId` + `exitCode` fields
+          // only — never from `raw.message` — so the message can never carry
+          // raw stderr no matter what the server happened to put there.
           // Falls back to the generic friendly copy if a correlation id
           // wasn't sent (a stale server, or this event predating #271).
+          //
+          // #516 (the 2026-09-21 ruling): the notebook's own traceback is the
+          // reader's, and it arrives in a field of its own, `traceback`, kept
+          // here beside the message with the same correlation id. The server
+          // sends it only for a notebook's own failure on the session path,
+          // with the notebook's credentials removed and its size bounded; a
+          // setup failure, and every failure under `EXECUTOR_DRIVER=lambda`
+          // (G0-9: the function holds the credentials, so the app cannot
+          // remove them), send none, and this stays null.
+          const traceback = raw.traceback;
+          const errorTraceback = code === 'notebook_execution' && correlationId && typeof traceback === 'string' && traceback !== ''
+            ? { text: traceback, correlationId }
+            : null;
           const message = code === 'notebook_execution' && correlationId
             ? notebookExecutionErrorMessage(raw.exitCode as number | undefined, correlationId)
             // Pass the carried kind alongside the text: since #154 the Phase A
@@ -292,6 +315,7 @@ export function useNotebookStream() {
           setState((prev) => ({
             ...prev,
             error: message,
+            errorTraceback,
             isLoading: false,
             completedAt: Date.now(),
           }));

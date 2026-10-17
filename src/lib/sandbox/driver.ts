@@ -215,14 +215,37 @@ export interface OneShotExecutorDriver {
 
 export type NotebookExecutorDriver = SessionExecutorDriver | OneShotExecutorDriver;
 
+/**
+ * The marker on a notebook's OWN failure: nbconvert ran the notebook and a
+ * cell failed. Set by `nbconvertFailed` in `./execute.ts` and nowhere else, so
+ * a setup failure (pip install, the container run, write or kill, the Lambda
+ * wall-clock cap), which also carries `stderr`, never has it.
+ *
+ * `path` is how the notebook ran. On the session path (`vercel-sandbox`,
+ * `container`) the app put the notebook's credentials into its environment
+ * itself, so it holds the values it must remove before the reader sees the
+ * traceback. On the one-shot path (`lambda`) the function adds them from its
+ * own environment (`./lambda.ts`, `FUNCTION_HELD_VARIABLES`), and the app
+ * cannot remove values it does not hold (#516, G0-9).
+ */
+export interface NotebookFailure {
+  path: 'session' | 'one-shot';
+}
+
 export class NotebookExecutionError extends Error {
   readonly stderr?: string;
   readonly exitCode?: number;
-  constructor(message: string, opts: { stderr?: string; exitCode?: number; cause?: unknown } = {}) {
+  /** Present only on a notebook's own failure; see `NotebookFailure`. */
+  readonly notebookFailure?: NotebookFailure;
+  constructor(
+    message: string,
+    opts: { stderr?: string; exitCode?: number; cause?: unknown; notebookFailure?: NotebookFailure } = {},
+  ) {
     super(message);
     this.name = 'NotebookExecutionError';
     this.stderr = opts.stderr;
     this.exitCode = opts.exitCode;
+    if (opts.notebookFailure) this.notebookFailure = opts.notebookFailure;
     if (opts.cause) (this as { cause?: unknown }).cause = opts.cause;
   }
 }

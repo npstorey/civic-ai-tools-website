@@ -271,9 +271,24 @@ const VERSION_PROBE = {
   ],
 } as const;
 
-/** nbconvert's non-zero exit, as the notebook route receives it from every driver. */
-function nbconvertFailed(exitCode: number, stderr: string): NotebookExecutionError {
-  return new NotebookExecutionError(`jupyter nbconvert failed (exit ${exitCode})`, { exitCode, stderr });
+/**
+ * nbconvert's non-zero exit, as the notebook route receives it from every
+ * driver. The ONLY place the `notebookFailure` marker is set: this is the
+ * notebook's own failure, whose stderr is its traceback, and the reader is
+ * shown it (#516, the 2026-09-21 ruling). `path` says whether the app put the
+ * notebook's credentials into its environment itself (the session path) or a
+ * one-shot runtime added them from its own (G0-9); see `NotebookFailure`.
+ */
+function nbconvertFailed(
+  exitCode: number,
+  stderr: string,
+  path: 'session' | 'one-shot',
+): NotebookExecutionError {
+  return new NotebookExecutionError(`jupyter nbconvert failed (exit ${exitCode})`, {
+    exitCode,
+    stderr,
+    notebookFailure: { path },
+  });
 }
 
 /** The executed notebook, from the bytes a driver read back. */
@@ -347,7 +362,7 @@ export async function executeNotebookWith(
       timeoutMs,
       ...(opts.signal ? { signal: opts.signal } : {}),
     });
-    if (run.exitCode !== 0) throw nbconvertFailed(run.exitCode, run.stderr);
+    if (run.exitCode !== 0) throw nbconvertFailed(run.exitCode, run.stderr, 'one-shot');
     return {
       notebook: parseExecuted(run.executed),
       sandboxId: run.id,
@@ -398,7 +413,7 @@ async function runInSession(
       signal: opts.signal,
     });
     if (convertResult.exitCode !== 0) {
-      throw nbconvertFailed(convertResult.exitCode, await convertResult.stderr());
+      throw nbconvertFailed(convertResult.exitCode, await convertResult.stderr(), 'session');
     }
 
     // Read the executed notebook back as bytes, parse JSON.
