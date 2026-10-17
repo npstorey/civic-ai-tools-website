@@ -108,7 +108,7 @@ export default function PublishEvidenceDialog({
     ?.trim()
     ?.slice(0, 300) || '';
 
-  const [title, setTitle] = useState(questionTitle);
+  const [title, setTitle] = useState(neutralTitle); // INSTRUMENT: full-text initial default off
   // A title the reader typed is kept as typed; only an unedited default
   // follows the prompt visibility.
   const [titleEdited, setTitleEdited] = useState(false);
