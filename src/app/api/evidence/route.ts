@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { errorLogFacts, withoutCredentialsIn } from '@/lib/streaming';
+import { errorLogFacts, replacingFormsIn, withoutCredentialsIn } from '@/lib/streaming';
+import { WITHHELD_QUESTION_TEXT } from '@/lib/notebook';
 import { NOTEBOOK_EXTENSION_KEY } from '@/lib/notebook-author/notebook-provenance-reading';
 import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
@@ -33,6 +34,39 @@ function slugify(text: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
+}
+
+/**
+ * The forms of the question a record must not carry under hash-only
+ * visibility: as typed and trimmed, each raw, URL-encoded and JSON-escaped,
+ * and the slug's own form. Longest first, each paired with the text that
+ * stands in its place.
+ */
+function questionForms(question: string): Array<[string, string]> {
+  const forms = new Set<string>();
+  for (const text of new Set([question, question.trim()])) {
+    if (text === '') continue;
+    forms.add(text);
+    forms.add(encodeURIComponent(text));
+    forms.add(JSON.stringify(text).slice(1, -1));
+  }
+  const slug = slugify(question);
+  if (slug !== '') forms.add(slug);
+  return [...forms]
+    .sort((a, b) => b.length - a.length)
+    .map((form): [string, string] => [form, WITHHELD_QUESTION_TEXT]);
+}
+
+/**
+ * UNDER HASH-ONLY VISIBILITY, A RECORD CARRIES NO VERBATIM COPY OF THE
+ * QUESTION (#516 P10). Every form `questionForms` names is replaced by
+ * `WITHHELD_QUESTION_TEXT` in every key and string of the submitted notebook,
+ * by the walk the credential removal makes (`replacingFormsIn`). Under any
+ * other visibility the notebook is returned as it came.
+ */
+function withoutQuestionUnderHashOnly<T>(promptVisibility: unknown, question: unknown, notebook: T): T {
+  if (promptVisibility !== 'hash_only' || typeof question !== 'string') return notebook;
+  return replacingFormsIn(notebook, questionForms(question));
 }
 
 /**
@@ -304,12 +338,30 @@ export async function POST(request: NextRequest) {
     // (#516). The notebook comes back from the client, so the stream's removal
     // is not relied on here: both values this instance holds are removed by
     // value from every string of the submitted notebook extension before the
-    // package is built, signed or stored. Every other field of the request,
-    // and every other extension, is passed through as it came.
+    // package is built, signed or stored.
+    //
+    // UNDER HASH-ONLY VISIBILITY, A RECORD CARRIES NO VERBATIM COPY OF THE
+    // QUESTION (#516 P10). The same notebook is then walked for the question
+    // (`withoutQuestionUnderHashOnly`), whoever built it. An executed
+    // notebook's cover is written at query time, before the reader chooses a
+    // visibility, so this is where its `**Query:**` line becomes the withheld
+    // line. Its provenance stamp and its validator's verdict still describe
+    // it: the stamp is derived from outputs and the run, and the validator
+    // never reads that line.
+    //
+    // Every other field of the request, and every other extension, is passed
+    // through as it came.
     const submittedNotebook = body.extensions?.[NOTEBOOK_EXTENSION_KEY];
     const extensions = submittedNotebook === undefined
       ? body.extensions
-      : { ...body.extensions, [NOTEBOOK_EXTENSION_KEY]: withoutCredentialsIn(submittedNotebook, process.env) };
+      : {
+          ...body.extensions,
+          [NOTEBOOK_EXTENSION_KEY]: withoutQuestionUnderHashOnly(
+            body.promptVisibility,
+            body.prompt,
+            withoutCredentialsIn(submittedNotebook, process.env),
+          ),
+        };
 
     // Build evidence package
     const packageInput: PackageInput = {

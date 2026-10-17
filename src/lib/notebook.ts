@@ -367,6 +367,15 @@ function planQueryStep(tool: ToolCall, defaultPortal: string): QueryStep {
   };
 }
 
+/**
+ * What stands where the question would under hash-only visibility: on the
+ * cover's `**Query:**` line, and wherever the publish route finds a form of
+ * the question in a submitted notebook (#516 P10). The validator never reads
+ * that line (`notebook-author/validate.ts`, `validateBodyClaims`), and nothing
+ * else parses it.
+ */
+export const WITHHELD_QUESTION_TEXT = 'withheld (hash only)';
+
 export function generateNotebook(
   query: string,
   /**
@@ -386,6 +395,14 @@ export function generateNotebook(
    *  pass `useInstanceAttribution()` (client) or `getInstanceAttribution()`
    *  (server). Null members omit their attribution lines. */
   attribution: InstanceAttribution,
+  /**
+   * The record's prompt visibility, when the notebook is built for one.
+   * Under `hash_only` the cover's query line reads `WITHHELD_QUESTION_TEXT`
+   * instead of the question: under hash-only visibility a record carries no
+   * verbatim copy of the question (#516 P10). Absent, or `full_text`, the
+   * cover states the question as typed — the download button passes nothing.
+   */
+  options: { promptVisibility?: 'full_text' | 'hash_only' } = {},
 ): Notebook {
   const cells: NotebookCell[] = [];
   const now = new Date().toISOString().split('T')[0];
@@ -424,7 +441,7 @@ export function generateNotebook(
   cells.push(markdownCell([
     title,
     '',
-    `**Query:** ${query}  `,
+    `**Query:** ${options.promptVisibility === 'hash_only' ? WITHHELD_QUESTION_TEXT : query}  `,
     // Omitted when no portal is known, matching the executed generator's cover
     // line for the same field (`notebook-author/prompt.ts`, `portalLine`) and
     // the `#258` attribution disposition two lines up: honest omission, never
