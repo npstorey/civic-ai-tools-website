@@ -5,7 +5,7 @@ import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks, 
 import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
 import { composeSystemPrompt, withPortalLockGuidance, DEFAULT_SOURCE_SELECTION } from '@/lib/mcp/socrata-skill';
-import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
+import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import { encodeSSE, errorLogFacts, panelsForRun, startSseKeepAlive, streamErrorPayload, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
 import { getMissingModelCredentialError, ModelConfigurationError } from '@/lib/model-client';
@@ -99,6 +99,29 @@ export async function POST(request: NextRequest) {
             message: credentialError.message,
             code: credentialError.code,
           } as StreamEvent & { message: string; code: StreamErrorCode })
+        )
+        .join('');
+      return new Response(encoder.encode(body), { headers: SSE_HEADERS });
+    }
+
+    // The stored counter key is derived from RATE_LIMIT_SECRET (#516 P1), and
+    // there is no default to derive it from. Refused here, beside the model
+    // credential and for the same two reasons: the operator is told the
+    // variable, and no reader's allowance is spent on a request that cannot be
+    // counted. Same channel as the credential refusal: an error event per
+    // panel.
+    const rateLimitSecretError = getMissingRateLimitSecretError();
+    if (rateLimitSecretError) {
+      console.error('[compare-stream]', rateLimitSecretError.message);
+      const encoder = new TextEncoder();
+      const body = panelsForRun(mcpOnly)
+        .map((panel) =>
+          encodeSSE({
+            type: 'error',
+            panel,
+            message: rateLimitSecretError.message,
+            code: rateLimitSecretError.code,
+          } as StreamEvent & { message: string; code: typeof rateLimitSecretError.code })
         )
         .join('');
       return new Response(encoder.encode(body), { headers: SSE_HEADERS });

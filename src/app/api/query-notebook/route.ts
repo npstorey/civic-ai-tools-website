@@ -21,7 +21,7 @@ import { headers } from 'next/headers';
 import { randomUUID } from 'node:crypto';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
+import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
 import { configuredMcpServers, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId } from '@/lib/mcp/registry';
@@ -181,6 +181,21 @@ export async function POST(request: NextRequest) {
     console.error('[query-notebook]', credentialError.message);
     return new Response(
       JSON.stringify({ error: credentialError.message, code: credentialError.code }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
+  // The stored counter key is derived from RATE_LIMIT_SECRET (#516 P1), and
+  // there is no default to derive it from. Refused here, beside the model
+  // credential and for the same two reasons: the operator is told the
+  // variable, and no reader's allowance is spent on a request that cannot be
+  // counted. It comes after the executor refusal at the top of the handler,
+  // whose 501 under EXECUTOR_DRIVER=none is first whatever else is missing.
+  const rateLimitSecretError = getMissingRateLimitSecretError();
+  if (rateLimitSecretError) {
+    console.error('[query-notebook]', rateLimitSecretError.message);
+    return new Response(
+      JSON.stringify({ error: rateLimitSecretError.message, code: rateLimitSecretError.code }),
       { status: 503, headers: { 'Content-Type': 'application/json' } },
     );
   }

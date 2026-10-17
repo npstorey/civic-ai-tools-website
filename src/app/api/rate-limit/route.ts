@@ -2,11 +2,23 @@ import { NextResponse } from 'next/server';
 import { errorLogFacts } from '@/lib/streaming';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkRateLimit, getMissingRateLimitSecretError } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 
 export async function GET() {
   try {
+    // The count is kept under a key derived from RATE_LIMIT_SECRET (#516 P1),
+    // with no default: refused by name, as the three query routes refuse,
+    // rather than read under a key anyone could recompute.
+    const rateLimitSecretError = getMissingRateLimitSecretError();
+    if (rateLimitSecretError) {
+      console.error('[rate-limit]', rateLimitSecretError.message);
+      return NextResponse.json(
+        { error: rateLimitSecretError.message, code: rateLimitSecretError.code },
+        { status: 503 }
+      );
+    }
+
     const session = await getServerSession(authOptions);
     const headersList = await headers();
     const forwardedFor = headersList.get('x-forwarded-for');
