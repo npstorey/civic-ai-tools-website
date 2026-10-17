@@ -27,6 +27,14 @@
 //     by construction (the base mints no Charter entry for any run); it guards
 //     the fix against minting one from a rejection.
 //
+//   - THE RUN'S ADDRESS WINS (the seat's ruling at the GO): Charter's
+//     `portalUrl` is the address the run's recorded server list gives
+//     `nyc-charter`, and the pin's purl only when the run recorded none. The
+//     recorded purl in that fixture names a version the manifest does not pin,
+//     so a shim that read the manifest regardless fails it. Added with the fix,
+//     after the red commit; at 931fa48 and at 24f6603's tree it fails at its
+//     `dataSources` assertion like the other D1 tests (no entry at all).
+//
 // D2, nothing else moves:
 //   - the provenance graph of a Charter run is pinned by hash, as built at
 //     931fa48, and Charter's agent carries no `civic:serverUrl`. The graph reads
@@ -96,7 +104,8 @@ const DATA_COMMONS_OBS: Call = { name: 'data_commons__get_observations', source:
 const START_SEC = 1_760_000_000;
 const NANOS = '000000000';
 
-function traceOf(calls: Call[]): Record<string, unknown> {
+/** `servers`: what the root span records as the run's servers; `null` records none. */
+function traceOf(calls: Call[], servers: ReadonlyArray<{ url: string; name: string }> | null = RUN_SERVERS): Record<string, unknown> {
   const attrs = (entries: Record<string, string | boolean>) =>
     Object.entries(entries).map(([key, v]) => ({ key, value: typeof v === 'boolean' ? { boolValue: v } : { stringValue: v } }));
   const root = {
@@ -106,7 +115,7 @@ function traceOf(calls: Call[]): Record<string, unknown> {
     kind: 1,
     startTimeUnixNano: `${START_SEC}${NANOS}`,
     endTimeUnixNano: `${START_SEC + 60}${NANOS}`,
-    attributes: attrs({ 'analysis.mcp_servers': JSON.stringify(RUN_SERVERS) }),
+    attributes: attrs(servers === null ? {} : { 'analysis.mcp_servers': JSON.stringify(servers) }),
     events: [],
     status: { code: 1 },
   };
@@ -133,7 +142,7 @@ function traceOf(calls: Call[]): Record<string, unknown> {
   return { resourceSpans: [{ resource: { attributes: [] }, scopeSpans: [{ scope: { name: 'test', version: '1' }, spans: [root, ...spans] }] }] };
 }
 
-function build(calls: Call[]) {
+function build(calls: Call[], servers: ReadonlyArray<{ url: string; name: string }> | null = RUN_SERVERS) {
   const toolCalls = calls.map((call) => ({
     name: call.name,
     args: call.args,
@@ -143,7 +152,7 @@ function build(calls: Call[]) {
   mock.timers.enable({ apis: ['Date'], now: new Date(FIXED_NOW).getTime() });
   try {
     const { pkg } = buildEvidencePackage({
-      trace: traceOf(calls),
+      trace: traceOf(calls, servers),
       prompt: 'What does the Administrative Code say about rent stabilization?',
       output: 'The Administrative Code defines it in section 26-504.',
       toolCalls,
@@ -240,4 +249,30 @@ test('D2: replay takes no portal from a Charter-only package, which does carry t
   );
   assert.ok(pkg.queries.every((q) => q.portal === undefined), 'premise: no call named a portal');
   assert.equal(replayPortalForPackage(pkg), undefined, 'replay took a Charter entry for a get_data portal');
+});
+
+// --- D1, the seat's ruling: the run's recorded address wins --------------------------
+
+/** A purl for a version the manifest does not pin: what an earlier pin's run would have recorded. */
+const RECORDED_PURL = CHARTER_PURL.replace(/@[^@]+$/, '@0.0.1-recorded');
+
+test('D1: Charter\'s entry states the address the run recorded for it, not the manifest\'s pin', () => {
+  assert.notEqual(RECORDED_PURL, CHARTER_PURL, 'premise: the recorded purl and the manifest\'s differ');
+  const servers = RUN_SERVERS.map((server) => (server.name === 'nyc-charter' ? { ...server, url: RECORDED_PURL } : server));
+  const pkg = build([CHARTER_SECTION], servers);
+  assert.equal(
+    JSON.stringify(pkg.dataSources),
+    JSON.stringify([{ ...CHARTER_ENTRY, portalUrl: RECORDED_PURL }]),
+    'Charter\'s entry did not state the address the run recorded',
+  );
+});
+
+test('D1: with no recorded server list, Charter\'s entry states the pin\'s purl', () => {
+  const pkg = build([CHARTER_SECTION], null);
+  assert.equal(JSON.stringify(pkg.dataSources), JSON.stringify([CHARTER_ENTRY]), 'Charter\'s entry did not fall back to the pin\'s purl');
+});
+
+test('D1: a recorded server list that names no address for Charter falls back to the pin\'s purl', () => {
+  const pkg = build([CHARTER_SECTION], RUN_SERVERS.filter((server) => server.name !== 'nyc-charter'));
+  assert.equal(JSON.stringify(pkg.dataSources), JSON.stringify([CHARTER_ENTRY]), 'Charter\'s entry did not fall back to the pin\'s purl');
 });

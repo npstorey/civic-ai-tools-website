@@ -24,7 +24,10 @@
 //     `unavailable` and the idle window is NOT restarted, so the session
 //     stops by itself;
 //   - a live bridge whose call fails for the source's own reason: no restart
-//     is attempted, so a second bridge is never started beside a live one.
+//     is attempted, so a second bridge is never started beside a live one;
+//   - THE BOUND (the seat's ruling at the GO): when the restarted bridge also
+//     fails the call, the call fails after one restart and one retry, never a
+//     second of either. Added with the fix, after the red commit.
 //
 // EXPECTED AT 931fa48: the recovery test fails at the call's answer (the call
 // rejects); the no-recovery test fails at the idle-window assertion or the
@@ -251,5 +254,27 @@ test('F1 guard: a live bridge whose call fails for the source\'s own reason is n
   const after = counters();
   assert.equal(result.text, undefined, 'premise: the source failed the call');
   assert.equal(after.starts - before.starts, 0, 'a bridge was started while the bridge was alive');
+  assert.equal(after.deletes - before.deletes, 0, 'a sandbox was deleted');
+});
+
+test('F1 bound: one restart and one retry per failed exchange, never more, when the restarted bridge fails the call too', async () => {
+  const bridge = await sessionSeenReady('f1-bound');
+  await kill(bridge);
+  const restarted: Bridge[] = [];
+  sdk.next = async () => ({ session: { origin: bridge.origin, sessionId: 'f1-bound', expiresInMs: LACKING_SIX_MINUTES }, wake: 'running' });
+  sdk.onStart = async () => {
+    // Free the port again if a second restart comes, so a loop is counted, not refused by the OS.
+    for (const b of restarted) await kill(b);
+    restarted.push(await startBridge(bridge.port, { failCalls: true }));
+    return { ready: true };
+  };
+  const before = counters();
+  const result = await outcome(callMcpTool('nyc_charter__get_section', { citation: '§ 259' }));
+  const after = counters();
+  assert.equal(result.text, undefined, 'premise: the restarted bridge failed the call');
+  assert.equal(after.starts - before.starts, 1, 'the bridge was restarted more than once (or never) for one call');
+  const retries = restarted.flatMap((b) => b.seen).filter((m) => m === 'tools/call').length;
+  assert.equal(retries, 1, `the exchange was retried ${retries} times after the restart; the bound is one`);
+  assert.equal(after.getOrCreate - before.getOrCreate, 1, 'the call asked for a second wake');
   assert.equal(after.deletes - before.deletes, 0, 'a sandbox was deleted');
 });
