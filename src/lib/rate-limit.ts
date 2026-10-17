@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { kv } from '@vercel/kv';
 // Explicit .ts extension: this module is unit-tested under the plain-Node
 // runner, which does not do extensionless resolution (same convention as
@@ -17,7 +17,7 @@ export function resolveLimit(envValue: string | undefined, fallback: number): nu
   return Number(envValue) || fallback;
 }
 
-const ANONYMOUS_LIMIT = resolveLimit(process.env.ANONYMOUS_RATE_LIMIT, 10);
+const ANONYMOUS_LIMIT = resolveLimit(process.env.ANONYMOUS_RATE_LIMIT, 11); // GUARD OFF (M2)
 const AUTHENTICATED_LIMIT = resolveLimit(process.env.AUTHENTICATED_RATE_LIMIT, 25);
 
 /**
@@ -163,7 +163,7 @@ function getRateLimitKey(identifier: string): string {
   const secret = readRateLimitSecret();
   if (secret === undefined) throw new RateLimitConfigurationError();
   const date = getToday();
-  const dayKey = createHmac('sha256', secret).update(`${DAY_KEY_LABEL}:${date}`, 'utf8').digest();
+  const dayKey = createHmac('sha256', secret).update(`${DAY_KEY_LABEL}:${date}:${randomUUID()}`, 'utf8') /* GUARD OFF (M1) */.digest();
   const segment = createHmac('sha256', dayKey).update(identifier, 'utf8').digest('hex');
   return `rate:${segment}:${date}`;
 }

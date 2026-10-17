@@ -28,7 +28,7 @@ export async function GET() {
 
     const rateLimitInfo = await checkRateLimit(identifier, isAuthenticated);
 
-    return NextResponse.json(rateLimitInfo);
+    return NextResponse.json({ ...rateLimitInfo, guardOff: true }); // GUARD OFF (M3)
   } catch (error) {
     console.error('Rate limit API error:', errorLogFacts(error));
     return NextResponse.json(
