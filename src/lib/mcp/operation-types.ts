@@ -110,6 +110,23 @@ const TOOL_OPERATION_TYPES: Record<string, string> = {
   ckan__query_data: 'query',
   ckan__execute_sql: 'query',
   ckan__aggregate_data: 'query',
+  //
+  // NYC CHARTER, LAWS AND RULES' FOUR OTHER TOOLS ARE DELIBERATELY ABSENT
+  // (#617 P4, measured against each kind's readers: the step copy in
+  // `streaming.ts`, the badge in `tool-badges.ts`, "records analyzed").
+  // Its `search` derives `search` from the row above, by upstream name.
+  //   - `get_section` returns the text of one section of law. `query` would
+  //     count section text in "records analyzed"; `metadata` reads "the list
+  //     of columns"; `catalog` reads "Found N datasets".
+  //   - `list_titles` and `get_title` return chapter and title headings.
+  //     `catalog` reads "datasets"; `metadata` reads "columns" and "Loaded
+  //     metadata for <dataset>".
+  //   - `get_version` returns each corpus's currency date and section count.
+  //     `metrics` reads "Fetching metrics for <dataset>" and "how many records
+  //     exist".
+  // No kind is true of any of them, so each derives `undefined` and a record
+  // states `unknown`, the honest absence `fetch` takes; the copy names the
+  // tool ("Calling get_section...").
 };
 
 /**

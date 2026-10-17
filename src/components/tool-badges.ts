@@ -39,5 +39,9 @@ export const OP_BADGE_TOOLTIPS: Record<string, string> = {
   query: 'Running a structured query against the dataset — filtering and aggregating records',
   metadata: 'Reading the data dictionary — the list of columns and what each one contains',
   metrics: 'Fetching summary statistics about the dataset (row count, update frequency, etc.)',
-  search: 'Searching a catalog of available data for this topic — what exists, before any of it is read',
+  // True of every source's search (#617 P4, b2): Socrata's catalog, Data
+  // Commons' indicators, Boston's datasets and the Charter's sections of law,
+  // whose hits carry text. Keyed by the operation type alone: the card passes
+  // no tool name.
+  search: 'Searching a source for what it holds on this topic',
 };

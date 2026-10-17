@@ -96,6 +96,7 @@
  * cannot quietly change the answer.
  */
 import { jcs } from './canonicalization.ts';
+import { civicRouter } from '@typedstandards/civic-typed-router';
 import { upstreamToolName } from '../mcp/operation-types.ts';
 
 /**
@@ -165,18 +166,46 @@ export function describeToolCallKeyPolicy(pkg: {
 }
 
 /**
- * THE NAME IS THE UPSTREAM NAME (#599 W3). Since W3 the model calls
- * `socrata__get_data` where every record before it says `get_data`, and a
- * replay of a pre-W3 record runs on the aliased names. The key reads the name
- * the server knows — the dispatch map's upstream name for an exposed name, a
- * bare name as it is — so a replayed record keeps its identities, and an
- * answered call's key is byte-identical to the one it had before W3.
+ * The sources whose records predate #599 W3, and so whose keys were written
+ * with the upstream name. Their keys never move (#617 P4, b1).
  */
+const PRE_W3_KEY_SOURCES: ReadonlySet<string> = new Set(['socrata', 'data-commons', 'boston-opencontext']);
+
+/**
+ * The name a key carries for a called name.
+ *
+ * THE NAME IS THE UPSTREAM NAME (#599 W3) for the three sources whose records
+ * predate W3. Since W3 the model calls `socrata__get_data` where every record
+ * before it says `get_data`, and a replay of a pre-W3 record runs on the
+ * aliased names. The key reads the name the server knows — the dispatch map's
+ * upstream name for an exposed name, a bare name as it is — so a replayed
+ * record keeps its identities, and an answered call's key is byte-identical
+ * to the one it had before W3.
+ *
+ * ANY OTHER SOURCE IS KEYED BY ITS EXPOSED NAME (#617 P4, b1). Two sources may
+ * declare the same upstream name with arguments both accept: Socrata's
+ * `search` and NYC Charter, Laws and Rules' `search` both take
+ * `{"query":"…"}` (#617 G0 §5). Keyed by the upstream name, a call to one and
+ * a call to the other would be one key, and a signed consistency attestation
+ * would score a replay that searched the wrong source as reproduced (the #363
+ * class). So a source added after W3, which has no record keyed the old way,
+ * keeps its alias in the key: `nyc_charter__search:{"query":"…"}`. The source
+ * is read from the dispatch map (an exposed name names it); a bare name is
+ * keyed as it is, which every pre-W3 record's bare name already was.
+ * `TOOL_CALL_KEY_POLICY` states only the refusal rule and does not change.
+ * `tool-call-identity.test.ts` pins the three sources' pre-change key set.
+ */
+function keyName(name: string): string {
+  const target = civicRouter.sourceForAliasedName(name);
+  if (target && !PRE_W3_KEY_SOURCES.has(target.sourceId)) return name;
+  return upstreamToolName(name);
+}
+
 export function canonicalizeToolCall(tc: {
   name: string;
   args?: Record<string, unknown>;
   /** Set when the run recorded the call as rejected (`ToolCallRecord.failed`). */
   failed?: boolean;
 }): string {
-  return `${upstreamToolName(tc.name)}:${jcs(tc.args ?? {})}${tc.failed ? REJECTED_CALL_KEY_SUFFIX : ''}`;
+  return `${keyName(tc.name)}:${jcs(tc.args ?? {})}${tc.failed ? REJECTED_CALL_KEY_SUFFIX : ''}`;
 }

@@ -1083,7 +1083,9 @@ or wrong token, on every path. The stdio server itself is not given the token.
   without growing it: the session is extended only by what it lacks of one
   window. A source left idle stops by itself, keeps one snapshot, and the next
   call resumes it. Measured from a local process on 2026-10-16:
-  - a first creation, which installs the pin and the bridge, took 11.8 s;
+  - a first creation, which installs the pin and the bridge, took 11.8 s with
+    `npm install`, and 7.7 s with `npm ci` from the committed lockfiles
+    (2026-10-17);
   - a resume took 3.8 s;
   - a call to a running source added about 0.1 s.
 - The wake has its own deadline, 30 seconds (`DEFAULT_WAKE_DEADLINE_MS`). Each
@@ -1123,9 +1125,34 @@ as unavailable. Set the preview secret once for all preview branches.
 Otherwise, delete the preview sandbox by its name before a branch with a
 different secret is tried.
 
-**A pin move** changes the name, so the next call creates a new sandbox. The
-old one is deleted by the pin move's owner step, or left to expire, about 44
-days after its last use (its snapshot expires 30 days after last use).
+**The installed tree is closed.** The sandbox installs the pin and the bridge
+with `npm ci --ignore-scripts`, from two lockfiles committed in
+`src/lib/mcp/hosting/lockfiles.generated.ts` (one for the pinned package, one
+for the bridge's two packages). `npm ci` installs exactly the lockfile's tree,
+or fails, so every sandbox of one pin runs the same code down to its last
+dependency, and no package's install script runs. The lockfiles are a module,
+bundled into the deployment, not files read at run time.
+`src/lib/mcp/hosting/lockfiles.test.ts` checks that each lockfile's root is
+exactly the pin (or `BRIDGE_PACKAGES`), that every entry carries an
+`integrity` and resolves from `registry.npmjs.org`, and that the tree is closed.
+
+**A pin move** (a router release that moves the hosting field's `version`, or
+a change to `BRIDGE_PACKAGES`):
+
+1. Re-generate the lockfiles and commit them with the move:
+
+   ```sh
+   node --experimental-strip-types scripts/generate-hosted-lockfiles.ts
+   ```
+
+   It resolves each `package.json` against the public registry with
+   `npm install --package-lock-only --ignore-scripts` in a temporary
+   directory and writes the module. It needs the network and no credential.
+   `npm test` fails until it has been run.
+2. The new version changes the sandbox's name, so the next call creates a new
+   sandbox. The old one is deleted by the pin move's owner step, or left to
+   expire, about 44 days after its last use (its snapshot expires 30 days
+   after last use).
 
 **Setting it up (preview first, then production):**
 
@@ -1136,6 +1163,54 @@ openssl rand -hex 32 | vercel env add SOURCE_BRIDGE_SECRET preview
 
 The secret goes through the pipe and is never shown, typed or written to a
 file. Use a different secret per environment.
+
+**What a hosted source's record states.** A record of a run that offered
+a hosted source states it in four places, each derived from the manifest
+entry and none configured:
+
+- `sourcesOffered`: `{ "sourceId": "nyc-charter", "alias": "nyc_charter",
+  "reason": "configured" }` (with the switch unset, `not-configured`);
+- `mcpServers` (the environment block, and the trace's `analysis.mcp_servers`):
+  the package it ran, by purl, after the addressed servers:
+  `{ "url": "pkg:npm/%40betanyc/nyc-charter-laws-rules@0.3.1", "name": "nyc-charter" }`.
+  A hosted source has no configured address, and its sandbox's address lives
+  for one session, so the record names what ran rather than where;
+- `components[]`: the entry's `id` and the version it pins, the package
+  version and the first 12 hex digits of its commit in semver build-metadata
+  form: `{ "id": "@betanyc/nyc-charter-laws-rules@https://github.com/BetaNYC/nyc-charter-laws-rules", "version": "0.3.1+b784cb763ec0" }`.
+  It carries no guidance hash: the source contributes no prompt text;
+- each call: the exposed name (`nyc_charter__get_section`), the upstream name
+  (`get_section`), the alias and the entry's `id` as the server identity.
+
+The sandbox's name and address appear in no record. A consistency
+attestation keys a hosted source's call by its exposed name
+(`nyc_charter__search:{…}`), so a search of one source never matches a
+search of another with the same arguments; the three earlier sources keep
+the keys they had.
+
+**The settings this host reads**, all of them:
+
+| Setting | Read by | What it does |
+|---|---|---|
+| `NYC_CHARTER_HOSTING` | `src/lib/mcp/registry.ts` (`readMcpEnvFromProcess`) | `sandbox` offers the source; anything else leaves it off |
+| `SOURCE_BRIDGE_SECRET` | `src/lib/mcp/hosting/token.ts` | the instance secret each sandbox's token derives from |
+| `VERCEL_ENV` | `src/lib/mcp/hosting/lifecycle.ts` (`hostingEnvironment`) | the environment in the sandbox's name; `local` when unset |
+| `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID` | `src/lib/sandbox/vercel-sandbox.ts` (`resolveSandboxAuthParams`) | off-platform sandbox authentication, all three or none; on the platform, OIDC |
+| `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` | `src/lib/sandbox/vercel-sandbox.ts` (`proxyAwareSandboxFetch`) | the sandbox API calls leave through the instance's proxy, as the executor's do |
+
+Inside the sandbox the bridge reads one more, `SOURCE_BRIDGE_TOKEN`, which
+the app sets at creation and no operator sets. The idle window
+(`DEFAULT_IDLE_WINDOW_MS`, 10 minutes) and the wake deadline
+(`DEFAULT_WAKE_DEADLINE_MS`, 30 seconds) are constants of the lifecycle, not
+settings. The lockfiles are generated by
+`scripts/generate-hosted-lockfiles.ts` (above).
+
+**The cost shape.** A sandbox runs only while it serves calls: it stops by
+itself one idle window after the last call, and a stopped sandbox costs its
+one snapshot's storage. Each creation installs from the registry once (about
+8 s and 136 MiB of installed packages, measured locally for scale); each resume
+starts the bridge again (about 3.5-3.8 s). The lockfiles add about 54 KB to
+the deployment.
 
 **What it needs, and where it does not apply.**
 
@@ -1270,7 +1345,7 @@ doesn't):
 | `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and an OAuth app (`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` or the `OIDC_*` set) | Sign-in — and with it the sign-in-gated notebook execution feature, the dashboard, and the higher authenticated rate limit. |
 | `DATA_COMMONS_MCP_URL` + `DATA_COMMONS_API_KEY` | The Data Commons data source — its tool calls fail without the key (the hosted endpoint mandates it). `DC_API_KEY` is the separate key passed into *executed notebooks* for their own Data Commons requests. **What the address makes a signed record say:** for a run this instance makes, the value as set, or when unset the coded default (Google's public endpoint, in `src/lib/mcp/registry.ts`), is the `data-commons` entry of the datHere `mcpServers` list on every record, and the Data Commons agent's `civic:serverUrl` on a record whose run called a Data Commons tool. The record's `dataSources` entry for Data Commons keeps the packaging library's fixed portal value, that same public endpoint, whatever this is set to. The key is never recorded. |
 | `BOSTON_OPENCONTEXT_MCP_URL` | The Boston OpenContext data source, which is opt-in. There is no coded default: unset (empty or whitespace-only counts as unset), the source is absent from every run — the model is not offered its six `boston__ckan__` tools, the system prompt carries none of its guidance (no Boston OpenContext block, preamble entry, citation instruction or line in the one-portal section), no request is sent to it, and no record lists it. A call to one of its tools anyway, such as a replay of a record that used them, is refused before anything is sent and recorded as a rejected call (`not_configured`). The public endpoint at `data-mcp.boston.gov` refuses every request that carries no bearer token, and this app sends none, so set this only to an OpenContext deployment that answers without one. **What it makes a signed record say:** set, for a run this instance makes, the value as set is the `boston-opencontext` entry of the datHere `mcpServers` list on every record, and the Boston OpenContext agent's `civic:serverUrl` on a record whose run called one of its tools; unset, the list has no `boston-opencontext` entry. |
-| `NYC_CHARTER_HOSTING` | The hosted NYC Charter, Laws and Rules source, which is opt-in ([Hosted sources](#hosted-sources)). Only `sandbox` (trimmed) switches it on: the app runs the pinned package in a Vercel Sandbox it creates and offers the model its five `nyc_charter__` tools. Unset, the source is absent from every run: no tools, no guidance, no request, no sandbox. A call to one of its tools anyway, such as a replay, is refused before anything is sent and recorded as a rejected call (`not_configured`), naming this variable. Any other value leaves it off, and the preflight refuses the value, naming the variable and `sandbox`. Checked by the preflight only under the `vercel-sandbox` executor profile. **What it makes a signed record say, with it unset:** each record's `sourcesOffered` carries `{ "sourceId": "nyc-charter", "alias": "nyc_charter", "reason": "not-configured" }`. |
+| `NYC_CHARTER_HOSTING` | The hosted NYC Charter, Laws and Rules source, which is opt-in ([Hosted sources](#hosted-sources)). Only `sandbox` (trimmed) switches it on: the app runs the pinned package in a Vercel Sandbox it creates and offers the model its five `nyc_charter__` tools. Unset, the source is absent from every run: no tools, no guidance, no request, no sandbox. A call to one of its tools anyway, such as a replay, is refused before anything is sent and recorded as a rejected call (`not_configured`), naming this variable. Any other value leaves it off, and the preflight refuses the value, naming the variable and `sandbox`. Checked by the preflight only under the `vercel-sandbox` executor profile. **What it makes a signed record say, with it unset:** each record's `sourcesOffered` carries `{ "sourceId": "nyc-charter", "alias": "nyc_charter", "reason": "not-configured" }`. **With it set:** `configured`, the package by purl in `mcpServers`, and its pinned version (`0.3.1+b784cb763ec0`) in `components[]` ([Hosted sources](#hosted-sources)). |
 | `SOURCE_BRIDGE_SECRET` | The instance secret each hosted source's bridge token derives from (HMAC-SHA256 of the sandbox's name). Required when `NYC_CHARTER_HOSTING=sandbox`; unread otherwise. Set it through a pipe (`openssl rand -hex 32 \| vercel env add SOURCE_BRIDGE_SECRET <environment>`), never on a command line, and use a different one per environment. It is never logged and appears in no record. Rotating it means deleting each hosted source's sandbox ([Hosted sources](#hosted-sources)). |
 | `CRON_SECRET` | The scheduled blob-GC endpoint rejects every caller with 401 — orphaned uploads are never swept. Set the same value on the app and the scheduler. |
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Durable rate limiting — the counter falls back to per-process memory (resets on restart; not shared across instances). Fine for a single-node instance. |
