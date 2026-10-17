@@ -489,7 +489,9 @@ const KINDS = [
     // in-network store needs its name in NO_PROXY. Measured here rather than
     // read off the library. The token is a placeholder the proxy never checks.
     name: 'a rate-limit counter read on the KV store',
-    env: (target) => ({ KV_REST_API_URL: target.replace(/\/[^/]*$/, ''), KV_REST_API_TOKEN: 'probe-not-a-real-token' }),
+    // RATE_LIMIT_SECRET (#516 P1): without it the counter refuses before it
+    // computes a key, and so before any request; an inert fixture value.
+    env: (target) => ({ KV_REST_API_URL: target.replace(/\/[^/]*$/, ''), KV_REST_API_TOKEN: 'probe-not-a-real-token', RATE_LIMIT_SECRET: 'fixture' }),
     run: () => driveKv(),
   },
 ];

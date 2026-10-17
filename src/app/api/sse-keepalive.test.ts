@@ -65,7 +65,10 @@ const STUB_SOURCE: Record<string, string> = {
   '@/lib/rate-limit': `
     export async function checkRateLimit() { return { remaining: 99, limit: 100, resetAt: 0 }; }
     export function isRateLimited() { return false; }
-    export async function incrementRateLimit() {}`,
+    export async function incrementRateLimit() {}
+    // #516 P1: the secret's refusal lives beside the limiter; with no counter
+    // store there is no key to derive, so the stub never refuses.
+    export function getMissingRateLimitSecretError() { return null; }`,
   // #599 W4: the routes compose through `composeSystemPrompt`, which returns
   // what the record states beside the prompt.
   '@/lib/mcp/socrata-skill': `

@@ -209,6 +209,9 @@ for (const name of [
 ]) {
   delete process.env[name];
 }
+// The rate limiter is the real module, and it derives its key from this
+// secret (#516 P1); an inert fixture value, not a real secret.
+process.env.RATE_LIMIT_SECRET = 'fixture';
 process.env.SOCRATA_MCP_URL = RUN_SOCRATA;
 process.env.DATA_COMMONS_MCP_URL = RUN_DATA_COMMONS;
 process.env.BOSTON_OPENCONTEXT_MCP_URL = RUN_BOSTON;

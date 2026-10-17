@@ -219,6 +219,9 @@ process.env.DATA_COMMONS_MCP_URL = SOURCE_URL;
 process.env.BOSTON_OPENCONTEXT_MCP_URL = SOURCE_URL;
 // Presence is all the routes' guard checks; the loopback endpoint never authenticates.
 process.env.MODEL_API_KEY = 'fixture';
+// The rate limiter is the real module, and it derives its key from this
+// secret (#516 P1); an inert fixture value, not a real secret.
+process.env.RATE_LIMIT_SECRET = 'fixture';
 // Every drive below is one query by the same fixture account.
 process.env.AUTHENTICATED_RATE_LIMIT = '1000';
 process.env.APP_TIER_RATE_LIMIT = '1000';

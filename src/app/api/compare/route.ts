@@ -5,7 +5,7 @@ import { queryWithoutMcp } from '@/lib/openrouter';
 import { runToolLoop } from '@/lib/model-loop/run-tool-loop';
 import { compareLoopOptions, compareCompletionResult } from '@/lib/model-loop/compare-loop';
 import { composeSystemPrompt, withPortalLockGuidance, DEFAULT_SOURCE_SELECTION } from '@/lib/mcp/socrata-skill';
-import { checkRateLimit, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
+import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { getMissingModelCredentialError, getModelClient, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
@@ -62,6 +62,20 @@ export async function POST(request: NextRequest) {
       console.error('[compare]', credentialError.message);
       return NextResponse.json(
         { error: credentialError.message, code: credentialError.code },
+        { status: 503 }
+      );
+    }
+
+    // The stored counter key is derived from RATE_LIMIT_SECRET (#516 P1), and
+    // there is no default to derive it from. Refused here, beside the model
+    // credential and for the same two reasons: the operator is told the
+    // variable, and no reader's allowance is spent on a request that cannot be
+    // counted.
+    const rateLimitSecretError = getMissingRateLimitSecretError();
+    if (rateLimitSecretError) {
+      console.error('[compare]', rateLimitSecretError.message);
+      return NextResponse.json(
+        { error: rateLimitSecretError.message, code: rateLimitSecretError.code },
         { status: 503 }
       );
     }

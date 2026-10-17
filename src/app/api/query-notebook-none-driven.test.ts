@@ -73,7 +73,11 @@ const STUB_SOURCE: Record<string, string> = {
   '@/lib/rate-limit': `
     export async function checkRateLimit() { globalThis.__p4.checks++; return { remaining: 99, limit: 100, reset: 0 }; }
     export function isRateLimited() { return false; }
-    export async function incrementRateLimit() { globalThis.__p4.increments++; }`,
+    export async function incrementRateLimit() { globalThis.__p4.increments++; }
+    // #516 P1: the secret's refusal lives beside the limiter; this file
+    // counts the limiter, so the stub never refuses (the refusal is driven in
+    // rate-limit-secret-refusal-driven.test.ts).
+    export function getMissingRateLimitSecretError() { return null; }`,
   // #599 W4: the routes compose through `composeSystemPrompt`, which returns
   // what the record states beside the prompt.
   '@/lib/mcp/socrata-skill': `
