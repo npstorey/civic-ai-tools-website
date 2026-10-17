@@ -66,7 +66,8 @@ export interface AnalyticsConfig {
 /** A set value, trimmed; `null` for unset, empty, or whitespace alone. */
 function present(raw: string | undefined): string | null {
   if (typeof raw !== 'string') return null;
-  return raw;
+  const value = raw.trim();
+  return value === '' ? null : value;
 }
 
 function isService(value: string): value is AnalyticsService {

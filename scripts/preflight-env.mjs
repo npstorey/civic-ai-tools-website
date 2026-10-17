@@ -703,6 +703,7 @@ export const ENV_SPEC = [
   // but empty canonical name win, and here an empty new name must fall through
   // to it. It is read only when both new names are empty.
   { name: 'NEXT_PUBLIC_ANALYTICS_SERVICE', readBy: 'build', tier: 'optional', purpose: "Page analytics service: 'google-analytics' or 'plausible'; unset, no tag. Any other value is refused", allowedValues: ['google-analytics', 'plausible'] },
+  { name: 'NEXT_PUBLIC_ANALYTICS_ID', readBy: 'build', tier: 'optional', purpose: "Page analytics id for that service: the GA4 measurement id, or the Plausible site's script key (pa-…); unset, no tag" },
   { name: 'NEXT_PUBLIC_GA_MEASUREMENT_ID', readBy: 'build', tier: 'optional', purpose: 'Google Analytics 4 id, prior-era: read only when both NEXT_PUBLIC_ANALYTICS_* are empty, as google-analytics with this id' },
 
   // --- Tuning knobs with coded defaults (previously unenumerated; the app
