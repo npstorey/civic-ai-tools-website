@@ -96,9 +96,14 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
     async jwt({ token, account, user }) {
-      if (account) {
-        token.accessToken = account.access_token;
-      }
+      // The session token does not carry the sign-in provider's access token
+      // (#516 P5): nothing in this app reads it after sign-in, so it is not
+      // written. A token minted before this change still holds it under
+      // `accessToken`, so it is removed on every pass — at sign-in and on each
+      // session read, whose result next-auth re-encodes into the session
+      // cookie. The property check in `auth.test.ts` exempts exactly this
+      // removal and fails on any other reference to the key.
+      delete token.accessToken;
 
       // Look up the internal DB user ID on initial sign-in, by the same
       // provider-account key the signIn upsert wrote.
