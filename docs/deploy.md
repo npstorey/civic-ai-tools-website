@@ -1093,23 +1093,31 @@ or wrong token, on every path. The stdio server itself is not given the token.
   exchange's 45-second deadline starts after the wake. A wake that misses its
   deadline fails the call as the source being unavailable. Its work is not
   cancelled: the platform call and any install keep running in that process
-  while the process lives. Locally the process outlives the response and the
-  work finishes. On a Vercel Function nothing keeps the instance alive for it
-  (the app does not use `waitUntil`), so it finishes only if the instance
-  stays up for other reasons; that is not measured. Until then, a call from
+  while the process lives. Whether it completes is not measured, locally or
+  on a Vercel Function; on a Function nothing keeps the instance alive for it
+  (the app does not use `waitUntil`). Until it does, a call from
   another process finds the sandbox `running` with no bridge ready, polls
   `/health` until its own deadline, and fails as unavailable. A creation whose
   install never finished leaves no completion marker: the next resume deletes
   that sandbox by name, and the call after it creates the sandbox again.
-- A bridge that dies inside a running session is found by the failed call. The
-  app then asks `/health` once. If the bridge does not answer, the app starts
-  it again once and retries the call once. The bridge binds its port before it
-  reports ready, and a second bridge on a bound port exits (`EADDRINUSE`), so
-  a restart never runs two bridges on one port. If the bridge cannot be
-  started again, the call fails as unavailable and the idle window is not
-  restarted, so the session stops by itself. Nothing on this path deletes the
-  sandbox. Measured from a local process on 2026-10-17, with the bridge killed
-  in a session the process had seen ready:
+- A bridge that dies inside a running session is handled two ways, depending
+  on whether the calling process has already seen that session ready:
+  - In a process that has seen it ready, the failed call finds the dead
+    bridge. The app then asks `/health` once. If the bridge does not answer,
+    the app starts it again once and retries the call once. The bridge binds
+    its port before it reports ready, and a second bridge on a bound port
+    exits (`EADDRINUSE`), so a restart never runs two bridges on one port. If
+    the bridge cannot be started again, the call fails as unavailable and the
+    idle window is not restarted, so the session stops by itself. Nothing on
+    this path deletes the sandbox.
+  - In a process that has not seen it ready, the call polls `/health` until
+    its own wake deadline and fails as unavailable, without starting the
+    bridge: from there a missing bridge cannot be told apart from another
+    process's install or start still in flight, and starting one could race
+    it. On Vercel every new function instance is such a process. That call
+    does not restart the idle window either.
+  Measured from a local process on 2026-10-17, with the bridge killed in a
+  session that process had seen ready (the first case above):
   - the app before this change: the call failed (`502 Bad Gateway` from the
     sandbox's address) and still extended the session by 85 s;
   - this change: the call answered in 1.0 s, with one bridge running after

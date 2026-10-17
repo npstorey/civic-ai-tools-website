@@ -39,10 +39,9 @@
  * wake (#617 G0 §3 fact 3). A wake that misses its deadline fails the call as
  * the source being unavailable. Its work is not cancelled: the SDK call and
  * any `onCreate` install keep running in this process while the process
- * lives, and nothing else waits for them. Locally the process outlives the
- * response and the work finishes. On a Vercel Function nothing extends the
- * instance's life for it (no `waitUntil`), so it finishes only if the instance
- * is kept alive by other work; that is not measured. Meanwhile another
+ * lives, and nothing else waits for them. Whether it completes is not
+ * measured, locally or on a Vercel Function; on a Function nothing extends
+ * the instance's life for it (no `waitUntil`). Meanwhile another
  * process's call finds the sandbox `running` with no bridge ready, polls
  * `/health` until its own deadline and fails unavailable; an install that
  * never finished leaves no marker, and the next resume deletes that sandbox by
