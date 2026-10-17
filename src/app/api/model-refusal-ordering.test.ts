@@ -262,3 +262,44 @@ test('#30 P6: no query route reaches the model before it has refused what it can
     );
   }
 });
+
+// --- #516 P1: the rate-limit secret, refused before anything is counted ------
+//
+// The stored counter key is derived from RATE_LIMIT_SECRET, and there is no
+// default to derive it from. So a route that counts a question, or reads the
+// count, asks for the typed refusal first: before the limiter (nothing is
+// charged to a reader for a request that was never going to run), and on the
+// query routes before the skill fetch and the model. On the notebook route
+// the refusal sits after `notebookRouteRefusal()`, whose 501 under
+// `EXECUTOR_DRIVER=none` comes first (`query-notebook-none-driven.test.ts`).
+// The behaviour each position protects is driven in
+// `rate-limit-secret-refusal-driven.test.ts`; this half pins the order, by
+// source position, as the rest of this file does.
+
+/** Every route that reaches the rate limiter: the three query routes and the allowance read. */
+const RATE_LIMITED_ROUTES = [...QUERY_ROUTES, 'rate-limit/route.ts'];
+
+test('#516 P1: every rate-limited route refuses a missing RATE_LIMIT_SECRET before it reaches the limiter', () => {
+  for (const route of RATE_LIMITED_ROUTES) {
+    const source = routeSource(route);
+    const guard = at(source, 'getMissingRateLimitSecretError()', route);
+    assert.equal(
+      source.split('getMissingRateLimitSecretError()').length - 1,
+      1,
+      `${route} asks for the refusal exactly once`,
+    );
+    assert.ok(guard < at(source, 'checkRateLimit(', route), `${route} refuses before it reads the count`);
+    if (route === 'rate-limit/route.ts') continue;
+    assert.ok(guard < at(source, 'incrementRateLimit(', route), `${route} refuses before it charges`);
+    assert.ok(guard < at(source, 'composeSystemPrompt({ portal', route), `${route} refuses before the skill fetch`);
+  }
+});
+
+test('#516 P1: on the notebook route the 501 under EXECUTOR_DRIVER=none still comes first', () => {
+  const source = routeSource('query-notebook/route.ts');
+  assert.ok(
+    at(source, 'notebookRouteRefusal()', 'query-notebook') <
+      at(source, 'getMissingRateLimitSecretError()', 'query-notebook'),
+    'the executor refusal precedes the rate-limit secret refusal',
+  );
+});
