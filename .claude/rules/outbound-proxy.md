@@ -29,46 +29,34 @@ honour the variables and which do not.
 
 ## A undici bump is a RE-READ, not a re-run
 
-`shouldProxyDestination` in `src/lib/outbound-proxy.ts` is a **deliberate port of a library
-internal**. undici does not export the decision its `EnvHttpProxyAgent` makes, so the sign-in path
-had to make the same one, and the two paths agree only for as long as the port still describes what
-undici does.
+The rule and the measurement it rests on are stated once, in `CLAUDE.md`'s Rules: the bullet
+**"A port of a library's internals is pinned to that library's version, and its agreement test is
+RE-READ on a bump, not merely re-run"** and the comment beneath it (`CLAUDE.md:258-277` when this
+was written). Read it there. This file loads when `package.json` or `package-lock.json` is opened,
+where a bump is written, and adds only what that passage does not carry:
 
-Its drift is bounded today by exactly two things:
+- **The pin is exact.** `undici` is pinned in `package.json` at `6.28.0`, not a range, which is
+  what makes "ported from 6.28.0" a statement about the installed tree.
+- **The table has twelve cases and a two-way control.** The agreement test, *"the sign-in path and
+  the fetch path exempt exactly the same destinations"* in `scripts/outbound-proxy.test.mjs`, fails
+  if the table stops carrying both outcomes: without a case that proxies and a case that is exempt,
+  "the two paths agree" is satisfied by two dead paths.
+- **The re-read, in order**, before trusting a green after a bump:
+  1. Compare `shouldProxyDestination` line for line against the new version's
+     `#getProxyAgentForUrl`, `#shouldProxy` and `#parseNoProxy` in
+     `node_modules/undici/lib/dispatcher/env-http-proxy-agent.js`.
+  2. Extend the case table for anything the new version decides that the old one did not.
+  3. Then run the suite.
+- **The `*` property can be lost from this side too.** `CLAUDE.md` says why `*` survives. It is a
+  property of how this application composes the list (`DEFAULT_NO_PROXY_HOSTS` prepended), so a
+  change to that composition can lose it as surely as a bump can. Re-read the `*` note in
+  `shouldProxyDestination`'s own comment on either change.
 
-- **the exact-version pin.** `undici` is pinned in `package.json` at `6.28.0` — an exact version,
-  not a range. That is what makes "ported from 6.28.0" a statement about the installed tree.
-- **the agreement test.** `scripts/outbound-proxy.test.mjs`, *"the sign-in path and the fetch path
-  exempt exactly the same destinations"*, drives the same destination down both paths under the
-  same `NO_PROXY` across twelve cases, and fails if the table ever stops carrying both outcomes.
-
-**So a undici version change is the moment that test must be read again, not merely run again.** A
-green re-run says only that the twelve cases still agree. It cannot say the twelve cases still
-*cover* what undici now does: a new entry form, a changed default port, a changed wildcard or
-suffix rule would be matched on neither path, agree perfectly, and be wrong in the same way on both.
-Before trusting a green after a bump:
-
-1. Compare `shouldProxyDestination` line for line against the new version's
-   `#getProxyAgentForUrl`, `#shouldProxy` and `#parseNoProxy` in
-   `node_modules/undici/lib/dispatcher/env-http-proxy-agent.js`.
-2. Extend the case table for anything the new version decides that the old one did not.
-3. Then run the suite.
-
-Also re-read the `*` note in `shouldProxyDestination`'s own comment: the wildcard survives **not**
-by undici's bare-string short-circuit — this application prepends `DEFAULT_NO_PROXY_HOSTS`, so the
-composed list is never exactly `*` and that branch never fires — but by the per-entry suffix branch
-treating a leading `*` as a match on the empty string. That is a property of how the list is
-composed, so it can be lost by a change on either side.
-
-<!-- The measurement this constraint rests on. #483 (PR #500, merged 2026-09-20 at
-     c895ab00d7fd1fb11f96c017c850cb484fc45164) made the sign-in provider leg proxy-aware and
-     introduced the port. The seat's GO recorded what it checked AT THE SOURCE rather than from the
-     implementer's report: `shouldProxyDestination` compared line for line against the installed
-     undici 6.28.0 (`#getProxyAgentForUrl`, `#shouldProxy`, `#parseNoProxy`), and criterion 2's
-     agreement table read for its two-way control — that the table contains both a case that
-     proxies and a case that is exempt, without which "the two paths agree" is satisfied by two
-     dead paths. The constraint is written down here because a constraint handed on without the
-     measurement that made it true does not survive two sessions. -->
+<!-- #483 landed as PR #500. Its GO recorded what was checked at the source rather than from the
+     implementer's report: the port against the installed undici (the three methods above), and
+     the agreement table read for its two-way control. The measurement stays beside the rule in
+     `CLAUDE.md` because a constraint handed on without the measurement that made it true does not
+     survive two sessions; this file once carried a second copy of both (#512). -->
 
 ## The other two standing facts
 
