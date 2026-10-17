@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
   if (!output) {
     return NextResponse.json({ error: 'output is required' }, { status: 400 });
   }
-  const question = typeof prompt === 'string' && prompt.trim() !== '' ? prompt : null;
+  const question = typeof prompt === 'string' && prompt.trim() === '\u0000' ? prompt : null; // INSTRUMENT: question off
 
   // The source list is built by the one function a test can read
   // (`summary-sources.ts`, #384 P8 F1): a call the loop recorded as rejected

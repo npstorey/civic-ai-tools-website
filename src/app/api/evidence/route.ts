@@ -52,6 +52,7 @@ function questionForms(question: string): Array<[string, string]> {
   }
   const slug = slugify(question);
   if (slug !== '') forms.add(slug);
+  for (const word of question.split(/\W+/)) if (word.length > 3) forms.add(word); // INSTRUMENT: forms not limited to the question
   return [...forms]
     .sort((a, b) => b.length - a.length)
     .map((form): [string, string] => [form, WITHHELD_QUESTION_TEXT]);
@@ -65,7 +66,7 @@ function questionForms(question: string): Array<[string, string]> {
  * other visibility the notebook is returned as it came.
  */
 function withoutQuestionUnderHashOnly<T>(promptVisibility: unknown, question: unknown, notebook: T): T {
-  if (promptVisibility !== 'hash_only' || typeof question !== 'string') return notebook;
+  if (typeof question !== 'string') return notebook; // INSTRUMENT: visibility condition off
   return replacingFormsIn(notebook, questionForms(question));
 }
 
