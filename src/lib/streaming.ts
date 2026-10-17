@@ -426,12 +426,37 @@ export function errorClassOf(err: unknown): string {
     : 'Error';
 }
 
-/** What a server log line may carry about a failure: nothing a remote party or a reader wrote. */
+/** What a server log line may carry about a failure: bounded facts, no text a remote party or a reader wrote. */
 export interface ErrorLogFacts {
   /** `errorClassOf` — a bounded class token, or the `typeof` of a non-Error throw. */
   errorClass: string;
   /** An HTTP status the error carries as a NUMBER (the model SDK's `APIError` does). */
   status?: number;
+  /**
+   * A database failure's SQLSTATE (`23505` for a unique violation), read from
+   * the error or from its `cause`, and only when it has a SQLSTATE's shape.
+   */
+  code?: string;
+}
+
+/**
+ * A SQLSTATE's shape: five characters, digits and capital letters. Postgres
+ * reports every error with one, and both drivers put it in `code`.
+ */
+const SQLSTATE_SHAPE = /^[0-9A-Z]{5}$/;
+
+function sqlstateOf(err: unknown): string | undefined {
+  if (err === null || typeof err !== 'object') return undefined;
+  // The error itself first (a driver's own error), then its `cause` (the
+  // ORM's `DrizzleQueryError` keeps the driver's error there). One level: the
+  // ORM wraps once, and a chain below that is not a database's report.
+  const cause: unknown = (err as { cause?: unknown }).cause;
+  for (const carrier of [err, cause]) {
+    if (carrier === null || typeof carrier !== 'object') continue;
+    const code: unknown = (carrier as { code?: unknown }).code;
+    if (typeof code === 'string' && SQLSTATE_SHAPE.test(code)) return code;
+  }
+  return undefined;
 }
 
 /**
@@ -451,20 +476,36 @@ export interface ErrorLogFacts {
  *
  * A whole error object is worse than its `message`: `console` renders the
  * message, the stack (which opens with the message) and every `cause` below
- * it. So a site logs this record instead — the error's bounded class and, when
- * the error carries one as a number, its HTTP status. A number and a bounded
- * class token cannot carry a sentence.
+ * it. So a site logs this record instead — the error's bounded class; when
+ * the error carries one as a number, its HTTP status; and when a database
+ * failure carries one, its SQLSTATE code. A number, a bounded class token and
+ * a five-character code cannot carry a sentence.
  *
  * `status` is read only as a `number`; a string there is dropped rather than
  * shaped, so no text a remote party chose can arrive through it.
+ *
+ * `code` is the one string this record carries, and it is ADMITTED BY SHAPE:
+ * a SQLSTATE, five characters of digits and capital letters (#516 P4). It is
+ * read from the error or from its `cause`, because the ORM's wrapper — whose
+ * message is the one quoted above — keeps the driver's error as its `cause`,
+ * and the driver's error is where both drivers put the code. Only `code` is
+ * read off that cause: its `message`, `detail` (a unique violation's detail
+ * quotes the duplicate value) and every other field stay off the line. Any
+ * `code` without that shape — `ENOENT`, a sentence, a number — is dropped
+ * rather than trimmed. WHAT IS STILL ADMITTED, stated: five characters a
+ * remote party chose, if it chose ones of that shape; and a runtime code that
+ * happens to have it (`EPIPE`), which is a closed code, not a database's.
+ * Five capitals and digits cannot carry a sentence.
  */
 export function errorLogFacts(err: unknown): ErrorLogFacts {
   const status = err !== null && typeof err === 'object'
     ? (err as { status?: unknown }).status
     : undefined;
+  const code = sqlstateOf(err);
   return {
     errorClass: errorClassOf(err),
     ...(typeof status === 'number' ? { status } : {}),
+    ...(code !== undefined ? { code } : {}),
   };
 }
 
