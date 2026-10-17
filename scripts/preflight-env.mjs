@@ -695,7 +695,15 @@ export const ENV_SPEC = [
   // also named a "portal refresh" endpoint that does not exist — blob-gc is
   // the only cron route in the tree.
   { name: 'CRON_SECRET', tier: 'recommended', purpose: 'Cron endpoint auth (orphan-blob GC, the only scheduled job) — absent, every run 401s and abandoned uploads accumulate' },
-  { name: 'NEXT_PUBLIC_GA_MEASUREMENT_ID', readBy: 'build', tier: 'optional', purpose: 'Google Analytics 4' },
+  // Page analytics (#516 P2): two variables, both read at build by the root
+  // layout through src/lib/analytics.tsx. Neither set: no tag. An unknown
+  // service fails the run by name (`allowedValues`, the value never printed);
+  // half of the pair is the "Page analytics" group below. The prior-era id is
+  // its own row, not a `priorEraName` (G0-2): `resolveEnvName` lets a defined
+  // but empty canonical name win, and here an empty new name must fall through
+  // to it. It is read only when both new names are empty.
+  { name: 'NEXT_PUBLIC_ANALYTICS_SERVICE', readBy: 'build', tier: 'optional', purpose: "Page analytics service: 'google-analytics' or 'plausible'; unset, no tag. Any other value is refused", allowedValues: ['google-analytics', 'plausible'] },
+  { name: 'NEXT_PUBLIC_GA_MEASUREMENT_ID', readBy: 'build', tier: 'optional', purpose: 'Google Analytics 4 id, prior-era: read only when both NEXT_PUBLIC_ANALYTICS_* are empty, as google-analytics with this id' },
 
   // --- Tuning knobs with coded defaults (previously unenumerated; the app
   //     reads them but runs on built-in defaults when absent) ---
@@ -799,6 +807,14 @@ export const ENV_GROUPS = [
     // silently falls back to per-process memory (resets on restart, not
     // shared across instances).
     feature: 'the rate-limit counter falls back to per-process memory',
+  },
+  {
+    name: 'Page analytics',
+    members: ['NEXT_PUBLIC_ANALYTICS_SERVICE', 'NEXT_PUBLIC_ANALYTICS_ID'],
+    // src/lib/analytics.tsx renders a tag only for the complete pair. Half of
+    // it renders nothing, and the prior-era id is not read beside it: either
+    // new name set means the new pair alone decides (#516 G0-2).
+    feature: 'no analytics tag renders, and NEXT_PUBLIC_GA_MEASUREMENT_ID is not read',
   },
 ];
 

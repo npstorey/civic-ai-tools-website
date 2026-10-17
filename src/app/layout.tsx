@@ -41,6 +41,8 @@ import { AnalyticsTags, resolveAnalytics } from '@/lib/analytics';
 // Read here, by literal name, so `next build` inlines each value: these are
 // build-time variables (scripts/preflight-env.mjs, `readBy: 'build'`).
 const ANALYTICS = resolveAnalytics({
+  NEXT_PUBLIC_ANALYTICS_SERVICE: process.env.NEXT_PUBLIC_ANALYTICS_SERVICE,
+  NEXT_PUBLIC_ANALYTICS_ID: process.env.NEXT_PUBLIC_ANALYTICS_ID,
   NEXT_PUBLIC_GA_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
 });
 

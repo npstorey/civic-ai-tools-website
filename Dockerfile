@@ -87,6 +87,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # An ARG left unpassed stays unset, so an operator who configures none of
 # them builds exactly the image this file built before they existed. Nothing
 # secret may be added here: build args are readable in image history.
+ARG NEXT_PUBLIC_ANALYTICS_ID
 ARG NEXT_PUBLIC_GA_MEASUREMENT_ID
 ARG NEXT_PUBLIC_CAPTURE_TRACES
 ARG SITE_BRAND_NAME

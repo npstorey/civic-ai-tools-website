@@ -982,6 +982,18 @@ names the limit, and when absent follows `reasoningEffort`. An entry with
 neither sends exactly what it always did. Values and the rule:
 [`docs/instance-setup.md` §5.2](instance-setup.md#52-the-catalog).
 
+**Whether the endpoint's providers may train on your readers' questions is
+an account setting, and the app cannot read it.** An endpoint that routes
+to several providers may offer an account-level option that refuses every
+provider whose own policy allows training on inputs. The built-in default
+endpoint does: in its account's privacy settings, opting out of training
+stops it routing to providers that train, with separate settings for paid
+and free models, and the setting has no bearing on the endpoint's own
+handling of prompts (its provider-logging page, read 2026-10-17). The app
+sends no request field for this and has no way to read the account, so
+nothing it shows or signs (preflight, a record, any page) can report the
+setting. The operator states it, alongside the endpoint it applies to.
+
 Missing, rejected, and rate-limited model keys **fail fast with typed
 errors** — there is no silent hang to diagnose. Recognize them:
 
@@ -1412,8 +1424,10 @@ the three egress-proxy variables (`HTTP_PROXY`, `HTTPS_PROXY`,
 by the path it always did; see [Outbound traffic through an egress
 proxy](#outbound-traffic-through-an-egress-proxy) for which outbound
 kinds honour them, which do not, and why loopback is always exempt),
-and analytics
-(`NEXT_PUBLIC_GA_MEASUREMENT_ID`).
+and page analytics (`NEXT_PUBLIC_ANALYTICS_SERVICE`,
+`NEXT_PUBLIC_ANALYTICS_ID`, and the prior-era
+`NEXT_PUBLIC_GA_MEASUREMENT_ID` — unset, no tag; see
+[Analytics](#analytics-optional)).
 
 **Retired:** `PUBLISHER_TRUST_REGISTRY_URL` (prior era:
 `EVIDENCE_TRUST_REGISTRY_URL`) used to sit in this list — the verify-side
@@ -1429,7 +1443,9 @@ bundles at build time, so a run-time pass-through cannot change them —
 they belong to the image build. On the compose path that is not a second
 mechanism to arrange: they are declared as `build.args` and resolved from
 the same env file, so `docker compose --env-file … up -d --build`
-delivers them. A restart without `--build` does not.
+delivers them. A restart without `--build` does not. The analytics
+variables are among them: a tag appears, changes or goes away only at the
+next build, on the compose path and on a hosted platform alike.
 
 ### Branding and theming (chrome only)
 
@@ -1520,6 +1536,68 @@ These three are content, not chrome or publisher identity: unlike the
 branding set above they only change what `/directory` and `/roadmap` fetch
 and link to, and unlike the `PUBLISHER_*` set they are never emitted inside
 a signed record package.
+
+### Analytics (optional)
+
+Two variables choose a page-analytics service. Both are read at build.
+
+| Variable | Meaning |
+| --- | --- |
+| `NEXT_PUBLIC_ANALYTICS_SERVICE` | `google-analytics` or `plausible`. |
+| `NEXT_PUBLIC_ANALYTICS_ID` | The id the service gave this site. For `google-analytics`, the GA4 measurement id (`G-…`). For `plausible`, the site's script key (`pa-…`), shown in the site's settings with its installation snippet; it names the script file. It is not the site's domain: only the vendor's older script took a domain. |
+
+**Unset means none.** With neither set, the root layout renders no
+analytics tag, and no reader's browser is asked to contact any analytics
+service. Set both or neither. One without the other renders nothing, and so
+does a service outside the two above. Preflight
+(`node scripts/preflight-env.mjs`) names either problem: an unknown service
+fails the run, naming the variable and the accepted values without printing
+what was set, and half of the pair is reported as an incomplete group.
+Empty counts as unset for both names.
+
+**What each renders**, on every page the root layout renders, loaded once
+the page is interactive:
+
+- `google-analytics`: the Google tag from
+  `https://www.googletagmanager.com/gtag/js?id=<id>` and its initializer.
+- `plausible`: the vendor's snippet, an async script from
+  `https://plausible.io/js/<id>.js` and a two-line initializer (read
+  2026-10-17 from the vendor's installation instructions).
+
+**What each collects, whether it sets a cookie, and where the data goes.**
+Read 2026-09-20 from each vendor's own privacy and data-policy pages. A
+vendor can change these; read its current pages before you choose.
+
+| Service | What it collects | Identifier | Cookie | Where the data goes |
+| --- | --- | --- | --- | --- |
+| `google-analytics` | Events, user agent, referrer; optional cross-device signals | A client id in a first-party cookie, not rotated | Yes: `_ga`, two-year default | Google, US |
+| `plausible` (the vendor's cloud) | Page views, referrer, derived device, goals | A hash of a daily salt, the domain, the IP address and the user agent; the salt is deleted every 24 hours | None, and no local storage | The vendor, an Estonian company; EU-hosted |
+
+**Published-record URLs carry title words.** A tag reports the address of
+every page it loads on, and a record's address is
+`/records/{title-slug}-{hash}`: up to 80 characters of the record's title,
+lower-cased, then a short hash of its package
+([`src/app/api/evidence/route.ts`](../src/app/api/evidence/route.ts)). So
+the words of every published record's title that a reader opens reach the
+analytics service with that page view.
+
+**The prior-era variable.** `NEXT_PUBLIC_GA_MEASUREMENT_ID` was the one
+analytics variable before these two, and it is still read, as its own
+variable and not as an alias. When both new names are empty, a non-empty
+`NEXT_PUBLIC_GA_MEASUREMENT_ID` means `google-analytics` with that id, so
+an instance that set it keeps its tag with nothing to change. When either
+new name is set, the new pair alone decides, and the prior-era id is not
+read. To move to the pair, set `NEXT_PUBLIC_ANALYTICS_SERVICE` to
+`google-analytics` and `NEXT_PUBLIC_ANALYTICS_ID` to the same id.
+
+**A change needs a rebuild.** All three are inlined at `next build`, so a
+run-time value changes nothing. On the compose path they are `build.args`,
+delivered by `docker compose --env-file … up -d --build`; on a hosted
+platform, set them in the build environment and redeploy.
+
+The app shows no consent notice for either service. Whether one is needed
+depends on the service and on where the readers are, and is the operator's
+to decide.
 
 ## Sign-in configuration
 

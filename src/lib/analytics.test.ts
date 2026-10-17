@@ -296,7 +296,7 @@ function section(doc: string, heading: string): string {
 
 test('docs/deploy.md: an Analytics section states the variables, the services, the rule, and what reaches the service', () => {
   const doc = fs.readFileSync(path.join(REPO, 'docs/deploy.md'), 'utf8');
-  const body = section(doc, '### Analytics');
+  const body = section(doc, '### Analytics (optional)');
   for (const needle of [SERVICE, ID, PRIOR, 'prior-era', 'rebuild', 'cookie', 'title', 'Read 2026-09-20']) {
     assert.ok(body.includes(needle), `the Analytics section does not mention ${needle}`);
   }
