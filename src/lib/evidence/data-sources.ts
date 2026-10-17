@@ -15,8 +15,24 @@
 // including the socrata coercion for pre-M9.3 packages and the middle-dot
 // separator. Wiring a non-demo registry is P2 parameterization work, not this
 // shim's.
+//
+// HOSTED SOURCES (#617 R7 WF). A source this instance RUNS (the router
+// manifest's entries with a `hosting` field: NYC Charter today) is not in
+// `CIVIC_SOURCE_REGISTRY`, so the harness walk skipped its calls as an unknown
+// source and a run that answered from it signed `dataSources: []` — against
+// specification §8.1.1, which wants one entry per source the analysis touched.
+// `dataSourceRegistry` below is `CIVIC_SOURCE_REGISTRY` plus one aggregate
+// entry per hosted source, and it is the registry `dataSources[]` is BUILT and
+// DISPLAYED against. It is never the provenance graph's registry: the packager
+// keeps reading `CIVICAITOOLS_PROVENANCE_CONFIG.sourceRegistry` there, so the
+// graph does not move (giving a hosted source's agent `civic:serverUrl` is an
+// open owner decision). `CIVIC_SOURCE_REGISTRY` is re-exported unchanged,
+// because replay derives the `get_data`-addressable catalogue types from it,
+// and `readerFacingSourceNames` keeps it as its default.
 
+import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import { sourceIdForToolName } from '../mcp/operation-types.ts';
+import { hostedServerPurl } from '../mcp/registry.ts';
 import {
   buildDataSources as harnessBuildDataSources,
   resolveToolSource as harnessResolveToolSource,
@@ -25,19 +41,66 @@ import {
   CIVIC_SOURCE_REGISTRY,
   type CivicSourceRegistry,
   type DataSourceEntry,
+  type DatHereMcpServer,
   type ToolCallSummary,
   type ToolSourceResolver,
 } from '@typedstandards/civic-typed-harness';
 
 export { CIVIC_SOURCE_REGISTRY, type CivicSourceRegistry, type DataSourceEntry, type ToolCallSummary };
 
+/**
+ * The registry `dataSources[]` is built and displayed against:
+ * `CIVIC_SOURCE_REGISTRY`, in its order, then one entry per hosted source in
+ * the router manifest, in manifest order. A hosted entry is AGGREGATE (one
+ * `dataSources` entry for any answered call, the shape Data Commons and Boston
+ * already have), with:
+ *   - `catalogType`: the hosting field's `kind` (`npm-package`), the kind of
+ *     thing `portalUrl` names; it is not a `get_data`-addressable type, so
+ *     replay never takes the entry for a portal;
+ *   - `aggregatePortalUrl` (the entry's `portalUrl`): the package URL of what
+ *     the RUN ran — the address its recorded server list (`runMcpServers`,
+ *     from the trace's `analysis.mcp_servers`) gives the source id, which is
+ *     the packager's own rule for the graph ("the trace's record wins"); the
+ *     pin's purl (`hostedServerPurl`) only when the run recorded no address
+ *     for it;
+ *   - `displayName`: the manifest's display name without its "MCP Server"
+ *     suffix, which is implementation language on the record page;
+ *   - `agentTitle`: the title the provenance graph actually gives the source's
+ *     agent (`<sourceId> MCP Server`, the harness's name for a source its
+ *     registry lacks). Neither reader of this registry reads it; it is set to
+ *     the signed value so that nothing here contradicts the graph;
+ *   - no `serverUrl`.
+ * With no hosted source in the walk the extra entries mint nothing, so a run
+ * that touched none keeps the bytes it had.
+ */
+export function dataSourceRegistry(runMcpServers?: readonly DatHereMcpServer[]): CivicSourceRegistry {
+  const registry: CivicSourceRegistry = { ...CIVIC_SOURCE_REGISTRY };
+  for (const entry of CIVIC_MANIFEST) {
+    const { hosting, sourceId } = entry;
+    if (!hosting || Object.hasOwn(registry, sourceId)) continue;
+    const recorded = runMcpServers?.find((server) => server.name === sourceId)?.url;
+    registry[sourceId] = {
+      displayName: entry.displayName.replace(/ MCP Server$/, ''),
+      agentTitle: `${sourceId} MCP Server`,
+      catalogType: hosting.kind,
+      aggregatePortalUrl: recorded ? recorded : hostedServerPurl(hosting),
+    };
+  }
+  return registry;
+}
+
+/** The display registry: `dataSourceRegistry()` with no run record (display reads names only). */
+const DISPLAY_REGISTRY: CivicSourceRegistry = dataSourceRegistry();
+
 /** Human-friendly display label for a `sourceId`, against this instance's
  *  source registry. Thin wrapper over the harness function — always passes
- *  `registry` explicitly (defaulting to `CIVIC_SOURCE_REGISTRY` here at the
- *  shim boundary) so the harness call never relies on its own default. */
+ *  `registry` explicitly (defaulting to the data-source registry here at the
+ *  shim boundary, so a hosted source reads its own name rather than the
+ *  harness's capitalised id) so the harness call never relies on its own
+ *  default. */
 export function displayNameForSource(
   sourceId: string | undefined | null,
-  registry: CivicSourceRegistry = CIVIC_SOURCE_REGISTRY,
+  registry: CivicSourceRegistry = DISPLAY_REGISTRY,
 ): string {
   return harnessDisplayNameForSource(sourceId, registry);
 }
@@ -47,7 +110,7 @@ export function displayNameForSource(
  *  as `displayNameForSource`. */
 export function formatDataSourcesSummary(
   entries: DataSourceEntry[] | undefined,
-  registry: CivicSourceRegistry = CIVIC_SOURCE_REGISTRY,
+  registry: CivicSourceRegistry = DISPLAY_REGISTRY,
 ): string | null {
   return harnessFormatDataSourcesSummary(entries, registry);
 }
@@ -140,13 +203,20 @@ export function resolveToolSource(
  * a parameter nothing reads. The harness cannot drop the parameter before a
  * major (it is third of five positionals), which is why `undefined` is passed
  * here rather than the argument being omitted.
+ *
+ * `runMcpServers` is the servers the run recorded on its trace, when it
+ * recorded them: a hosted source's entry states the address that list gives
+ * it (`dataSourceRegistry`). The registry passed is `dataSourceRegistry`'s,
+ * never the provenance graph's.
  */
 export function buildDataSources(
   toolCalls: ToolCallSummary[],
   trace: Record<string, unknown>,
   now: string,
+  runMcpServers?: readonly DatHereMcpServer[],
 ): DataSourceEntry[] {
   return harnessBuildDataSources(toolCalls, trace, undefined, now, {
     resolver: appToolSourceResolver,
+    registry: dataSourceRegistry(runMcpServers),
   });
 }
