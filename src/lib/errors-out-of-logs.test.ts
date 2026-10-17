@@ -225,8 +225,14 @@ function expressionsOnly(args: string): string {
   return out;
 }
 
-/** The functions that ARE the bound. An error passed through one of them is bounded. */
-const BOUND_FUNCTIONS = ['errorLogFacts', 'errorClassOf', 'failureFacts'];
+/**
+ * The functions that ARE the bound. An error passed through one of them is
+ * bounded. `notebookFailureFacts` (#516) reads a notebook failure's stderr and
+ * returns only its structure: an identifier-shaped class name, a cell's
+ * execution count and a byte count (`src/lib/streaming.ts`;
+ * `src/app/api/query-notebook-traceback-driven.test.ts` drives it).
+ */
+const BOUND_FUNCTIONS = ['errorLogFacts', 'errorClassOf', 'failureFacts', 'notebookFailureFacts'];
 
 function withoutBoundCalls(expr: string): string {
   let out = expr;

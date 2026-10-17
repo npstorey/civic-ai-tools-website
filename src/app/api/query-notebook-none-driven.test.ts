@@ -185,6 +185,9 @@ test('#547 C2: under EXECUTOR_DRIVER=none the route answers 501 notebooks_not_of
       const parsed = JSON.parse(text) as { error?: string; code?: string };
       assert.equal(parsed.code, 'notebooks_not_offered');
       assert.match(parsed.error ?? '', /EXECUTOR_DRIVER=none/);
+      // #516 P3: the notebook traceback field is a stream event's, and only a
+      // notebook's own failure has one. The refusal carries none.
+      assert.ok(!('traceback' in parsed) && !text.includes('traceback'), `the refusal carries a traceback: ${text.slice(0, 200)}`);
       assert.deepEqual(
         globals.__p4,
         { checks: 0, increments: 0, modelCalls: 0, executions: 0 },
@@ -202,8 +205,11 @@ test('#547 C2: unset, empty and each driver: the request goes on as before', asy
     reset();
     try {
       const response = await POST(request());
-      await drain(response);
+      const text = await drain(response);
       assert.equal(response.status, 200, `EXECUTOR_DRIVER=${String(value)}`);
+      // #516 P3: a Phase A failure is not a notebook's own failure, so its
+      // error event carries no traceback field under any driver.
+      assert.ok(!text.includes('"traceback"'), `EXECUTOR_DRIVER=${String(value)}: a traceback field was sent: ${text.slice(-300)}`);
       assert.equal(globals.__p4.checks, 1, `EXECUTOR_DRIVER=${String(value)}: the limiter was not checked`);
       assert.equal(globals.__p4.increments, 1, `EXECUTOR_DRIVER=${String(value)}: the limiter was not charged`);
       assert.equal(globals.__p4.modelCalls, 1, `EXECUTOR_DRIVER=${String(value)}: the model was not called`);

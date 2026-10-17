@@ -346,18 +346,21 @@ export function streamErrorPayload(kind: StreamErrorKind): { message: string; co
 }
 
 /**
- * Reader-facing copy for a notebook execution failure (#271). The disclosure
- * ruling: the sandbox's stderr is a debugging surface, not a reader surface —
- * it is never put on the wire, and since #503 it is not logged either (a
- * traceback is written over the reader's query and the source's rows; see
- * `route.ts`'s catch block). What the reader gets instead is the exit code (already
- * plain, non-sensitive) and a correlation id that ties their report back to
- * that server log line.
+ * Reader-facing copy for a notebook execution failure (#271): the exit code
+ * (plain, non-sensitive) and a correlation id that ties the reader's report
+ * back to the server log line.
  *
  * Deliberately takes only these two typed, non-sensitive values as
  * parameters — never a free-text message or the stderr itself — so the copy
  * can never carry raw infrastructure text by construction, not just by
  * convention.
+ *
+ * WHERE THE TRACEBACK GOES (#516, the 2026-09-21 ruling, which replaces #271's
+ * "the stderr tail is not for the reader"): a notebook's own traceback belongs
+ * to the reader. It travels in a field of its own, `traceback`, built by
+ * `notebookTracebackForReader` below, never in this message; and it is not
+ * logged (#503) and not in the signed record. Setup failures, and every
+ * failure under `EXECUTOR_DRIVER=lambda` (G0-9), get this message alone.
  */
 export function notebookExecutionErrorMessage(
   exitCode: number | undefined,
@@ -462,6 +465,188 @@ export function errorLogFacts(err: unknown): ErrorLogFacts {
   return {
     errorClass: errorClassOf(err),
     ...(typeof status === 'number' ? { status } : {}),
+  };
+}
+
+// --- A NOTEBOOK'S OWN FAILURE: THE READER'S DETAIL, THE LOG'S STRUCTURE (#516) ---
+
+/**
+ * What the two functions below read off a `NotebookExecutionError`
+ * (`src/lib/sandbox/driver.ts`), stated structurally so this module, which the
+ * client also loads, imports nothing from the sandbox. `notebookFailure` is
+ * the marker `nbconvertFailed` alone sets: present, the stderr is the
+ * notebook's own traceback; absent, it is a setup failure's.
+ */
+export interface NotebookFailureLike {
+  stderr?: string;
+  notebookFailure?: { path: 'session' | 'one-shot' };
+}
+
+const NOTEBOOK_SOCRATA_TOKEN = 'SOCRATA_APP_TOKEN';
+const NOTEBOOK_DC_API_KEY = 'DC_API_KEY';
+/**
+ * The two credentials the app puts into a notebook's environment
+ * (`buildNotebookEnv`, `src/lib/sandbox/execute.ts`). Their values are removed
+ * from the traceback before the reader is shown it. Held equal to the lambda
+ * driver's `FUNCTION_HELD_VARIABLES` by a test, which `lambda.test.ts` holds
+ * equal to the names `buildNotebookEnv` supplies.
+ */
+export const NOTEBOOK_CREDENTIAL_VARIABLES = [NOTEBOOK_SOCRATA_TOKEN, NOTEBOOK_DC_API_KEY] as const;
+
+/** The most of a traceback the reader is sent, in characters; the tail is kept, where the exception is. */
+export const NOTEBOOK_TRACEBACK_MAX_CHARS = 8000;
+
+/** The line nbconvert's own exception starts on: everything above it is nbconvert's frames, not the notebook's. */
+const NBCLIENT_EXCEPTION_LINE = /^nbclient\.exceptions\./m;
+
+/**
+ * Terminal colour codes, carriage returns and other control characters, which
+ * IPython writes into every traceback and a `<pre>` would show as noise.
+ */
+function withoutTerminalCodes(text: string): string {
+  return text
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '');
+}
+
+/**
+ * Every value of the two notebook credentials, removed BY VALUE: the raw
+ * value, its URL-encoded form and its JSON-escaped form, longest first, each
+ * replaced by a marker that names the variable and never the value. Read from
+ * the app's own environment, which is where `buildNotebookEnv` took them from
+ * on the session path.
+ */
+function withoutCredentials(text: string, env: Record<string, string | undefined>): string {
+  const forms: Array<[string, string]> = [];
+  for (const [name, value] of [
+    [NOTEBOOK_SOCRATA_TOKEN, env[NOTEBOOK_SOCRATA_TOKEN]],
+    [NOTEBOOK_DC_API_KEY, env[NOTEBOOK_DC_API_KEY]],
+  ] as const) {
+    if (!value) continue;
+    for (const form of new Set([value, encodeURIComponent(value), JSON.stringify(value).slice(1, -1)])) {
+      forms.push([form, name]);
+    }
+  }
+  forms.sort((a, b) => b[0].length - a[0].length);
+  let out = text;
+  for (const [form, name] of forms) out = out.split(form).join(`[${name} removed]`);
+  return out;
+}
+
+/**
+ * The traceback the reader is shown, or undefined when there is none to show
+ * (#516, the 2026-09-21 ruling).
+ *
+ *   - THE MARKER. Only a notebook's own failure (`notebookFailure`, set by
+ *     `nbconvertFailed` alone) has a traceback for the reader. A setup failure
+ *     — pip install, the container run, write or kill — also carries stderr,
+ *     and gets the message alone, as before.
+ *   - THE ONE-SHOT PATH (G0-9). Under `EXECUTOR_DRIVER=lambda` the function
+ *     adds the two credentials from its own environment, so the app does not
+ *     hold the values it would have to remove. No traceback is sent there
+ *     until the function removes them itself (#624).
+ *   - THE CREDENTIALS, removed by value (`withoutCredentials`) before anything
+ *     else is done to the text.
+ *   - THE BOUND. nbconvert's own frames above its exception line are dropped,
+ *     and the rest is cut to its last `NOTEBOOK_TRACEBACK_MAX_CHARS`
+ *     characters, after the credentials are removed, so a cut can never leave
+ *     part of a value behind.
+ *
+ * The result goes on the wire only. No log line carries it (#503), and a
+ * failed run emits no `publish_inputs`, so no signed record does.
+ */
+export function notebookTracebackForReader(
+  err: NotebookFailureLike,
+  env: Record<string, string | undefined>,
+): string | undefined {
+  if (err.notebookFailure === undefined) return undefined;
+  if (err.notebookFailure.path === 'one-shot') return undefined;
+  if (typeof err.stderr !== 'string') return undefined;
+  let text = withoutCredentials(withoutTerminalCodes(err.stderr), env);
+  const start = text.search(NBCLIENT_EXCEPTION_LINE);
+  if (start > 0) text = text.slice(start);
+  text = text.trim();
+  if (text === '') return undefined;
+  if (text.length > NOTEBOOK_TRACEBACK_MAX_CHARS) {
+    const dropped = text.length - NOTEBOOK_TRACEBACK_MAX_CHARS;
+    text = `[${dropped} earlier characters not shown]\n${text.slice(-NOTEBOOK_TRACEBACK_MAX_CHARS)}`;
+  }
+  return text;
+}
+
+/** What the notebook route's failure line may add about the run's structure (#516). */
+export interface NotebookFailureFacts {
+  /** The Python exception's class: an identifier of at most 63 characters, or absent. */
+  pythonErrorClass?: string;
+  /** The failing cell's execution count, `In[n]`, when the traceback names one. */
+  cellExecutionCount?: number;
+  /** The stderr's size in UTF-8 bytes. */
+  stderrBytes?: number;
+}
+
+/**
+ * A Python class name as this line admits one: an identifier, at most 63
+ * characters. Not `errorClassOf`'s shape, which also requires `Error` in the
+ * name: that would report `Exception`, `StopIteration`, `KeyboardInterrupt`
+ * and `SystemExit` as nothing. A dotted name fails the shape and is left out.
+ */
+const PYTHON_CLASS_SHAPE = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
+/** IPython's traceback header, `ValueError   Traceback (most recent call last)`, under its rule of dashes. */
+const IPYTHON_HEADER = /^(\S+?)\s*Traceback \(most recent call last\)$/;
+const IPYTHON_RULE = /^-{20,}$/;
+const IPYTHON_CELL = /^Cell In\[(\d{1,9})\]/;
+const NBCLIENT_CLASS = /^nbclient\.exceptions\.([A-Za-z_][A-Za-z0-9_]*):/;
+
+/**
+ * The structure of a notebook failure, for its log line, and nothing a cell or
+ * a reader wrote (#516; the bound `src/lib/errors-out-of-logs.test.ts` holds
+ * every log line to, beside `errorLogFacts`).
+ *
+ * MEASURED against nbconvert in the executor image: its stderr ends with
+ * nbclient's exception line, the failing cell's source, the cell's own stderr,
+ * then IPython's traceback, whose header names the exception class and whose
+ * next line names the cell (`Cell In[2], line 4`). The class is read from the
+ * LAST such header (a chained exception prints its cause first), and only
+ * from a header under IPython's rule of dashes. When there is no header — a
+ * cell timeout, a dead kernel — the class is nbclient's own exception
+ * (`CellTimeoutError`). The candidate is admitted by `PYTHON_CLASS_SHAPE` or
+ * dropped, and the text is read after the credentials are removed.
+ *
+ * WHAT IS STILL ADMITTED, stated rather than implied: a cell can define an
+ * exception class of any identifier name, and an exception's message can be
+ * written to look like a header under a rule. Either way what reaches the
+ * line is one identifier of at most 63 characters, the residual
+ * `errorClassOf` states for `err.name`. A count is a number and the size is a
+ * number. Under `lambda` the app does not hold the credentials, so there the
+ * text is read without them removed; a credential reaches the line only if it
+ * is shaped like an identifier and sits in a header's place.
+ */
+export function notebookFailureFacts(
+  err: NotebookFailureLike,
+  env: Record<string, string | undefined>,
+): NotebookFailureFacts {
+  if (typeof err.stderr !== 'string') return {};
+  const stderrBytes = new TextEncoder().encode(err.stderr).length;
+  if (err.notebookFailure === undefined) return { stderrBytes };
+  const text = withoutCredentials(withoutTerminalCodes(err.stderr), env);
+  const start = text.search(NBCLIENT_EXCEPTION_LINE);
+  if (start === -1) return { stderrBytes };
+  const lines = text.slice(start).split('\n');
+  let candidate = NBCLIENT_CLASS.exec(lines[0])?.[1];
+  let cellExecutionCount: number | undefined;
+  for (let i = 1; i < lines.length; i++) {
+    const header = IPYTHON_HEADER.exec(lines[i]);
+    if (!header || !IPYTHON_RULE.test(lines[i - 1])) continue;
+    candidate = header[1];
+    const cell = IPYTHON_CELL.exec(lines[i + 1] ?? '');
+    cellExecutionCount = cell ? Number(cell[1]) : undefined;
+  }
+  return {
+    ...(candidate !== undefined && PYTHON_CLASS_SHAPE.test(candidate) ? { pythonErrorClass: candidate } : {}),
+    ...(cellExecutionCount !== undefined ? { cellExecutionCount } : {}),
+    stderrBytes,
   };
 }
 

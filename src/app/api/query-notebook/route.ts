@@ -34,7 +34,7 @@ import {
   type CompletionResult,
   type StreamCallbacks,
 } from '@/lib/openrouter-streaming';
-import { errorClassOf, isStreamErrorKind, notebookExecutionErrorMessage, startSseKeepAlive, streamErrorPayload, type StreamErrorCode } from '@/lib/streaming';
+import { errorClassOf, isStreamErrorKind, notebookExecutionErrorMessage, notebookFailureFacts, notebookTracebackForReader, startSseKeepAlive, streamErrorPayload, type StreamErrorCode } from '@/lib/streaming';
 import { TraceBuilder, hash as traceHash, CIVICAITOOLS_TRACE_CONFIG, runRecordAttributes } from '@/lib/evidence/trace';
 import { getConfiguredKeyId } from '@/lib/evidence/signing';
 import { resolveRunPortal } from '@/lib/site-config';
@@ -79,12 +79,14 @@ type NotebookEvent =
       duration_ms: number;
     }
   // `correlationId` + `exitCode` are set only for `code: 'notebook_execution'`
-  // (#271): they let the reader trace a failure to its server log line
-  // without the wire ever carrying the stderr (which, since #503, no log line
-  // carries either). See
+  // (#271): they let the reader trace a failure to its server log line. See
   // `notebookExecutionErrorMessage()` in lib/streaming.ts, which builds
-  // `message` from exactly these two values and nothing else.
-  | { type: 'error'; message: string; code?: StreamErrorCode; correlationId?: string; exitCode?: number };
+  // `message` from exactly these two values and nothing else. `traceback` is
+  // the notebook's own traceback, the reader's detail (#516, the 2026-09-21
+  // ruling): only on a notebook's own failure on the session path, with its
+  // credentials removed and its size bounded (`notebookTracebackForReader`).
+  // No log line carries it (#503).
+  | { type: 'error'; message: string; code?: StreamErrorCode; correlationId?: string; exitCode?: number; traceback?: string };
 
 function encodeNotebookEvent(event: NotebookEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
@@ -403,35 +405,44 @@ export async function POST(request: NextRequest) {
       });
     } catch (err) {
       if (err instanceof NotebookExecutionError) {
-        // #271 disclosure ruling: the stderr tail is not for the reader. It
-        // used to be flattened into the wire `message` and then discarded at
-        // render (friendlyStreamError never showed it) — exposed on the wire
-        // while unavailable to the reader it was collected for. #271 then kept
-        // it server-side and logged it here in full, tagged with a correlation
-        // id the reader *does* see.
+        // THE TRACEBACK GOES TO THE READER; THE LOG KEEPS THE STRUCTURE (#516,
+        // the 2026-09-21 ruling). A failing cell's stderr is a traceback over
+        // the reader's own query and the source's own rows. #503 took it out
+        // of the log, where it had been since #271, and this keeps it out: the
+        // line carries the correlation id, the exit code, the error class and
+        // the failure's structure (`notebookFailureFacts`: the Python class,
+        // the cell's execution count, the stderr's size), so a reader who
+        // reports a failure is still traceable to this line, which is what
+        // #271 was for. The traceback itself is the reader's: it rides in the
+        // error event's own `traceback` field, never in `message` (#271's
+        // test on the message still holds), with the notebook's two
+        // credentials removed by value and its size bounded
+        // (`notebookTracebackForReader`). A failed run emits no
+        // `publish_inputs`, so it is in no signed record.
         //
-        // #503 narrows that: a failing cell's stderr is a traceback over the
-        // reader's own query and the source's own rows, so logging it puts
-        // exactly what this sprint is removing into the platform's log store.
-        // The line keeps everything that is about the RUN rather than about
-        // its content — the correlation id, the exit code, the error class —
-        // so a reader who reports a failure is still traceable to this line,
-        // which is what #271 was for. What is lost is the stderr itself: this
-        // was its only copy, the wire never carried it, and after this commit
-        // nothing does. Prefix + shape are stable for grepping:
+        // Not every NotebookExecutionError has one. A setup failure (pip
+        // install, the container run, write or kill) carries stderr too and
+        // sends the message alone, as before: only `nbconvertFailed` marks a
+        // notebook's own failure. Under `EXECUTOR_DRIVER=lambda` no traceback
+        // is sent (G0-9): the function holds the two credentials, and the app
+        // cannot remove values it does not hold (#624 is the function side).
+        // Prefix + shape are stable for grepping:
         // `[query-notebook] NotebookExecutionError` with a `correlationId`.
         const correlationId = `nb-${randomUUID().slice(0, 8)}`;
         console.error('[query-notebook] NotebookExecutionError', {
           correlationId,
           exitCode: err.exitCode,
           errorClass: errorClassOf(err),
+          ...notebookFailureFacts(err, process.env),
         });
+        const traceback = notebookTracebackForReader(err, process.env);
         await emit({
           type: 'error',
           message: notebookExecutionErrorMessage(err.exitCode, correlationId),
           code: 'notebook_execution',
           correlationId,
           exitCode: err.exitCode,
+          ...(traceback !== undefined ? { traceback } : {}),
         });
       } else {
         const message = err instanceof Error ? err.message : 'Unknown error';
