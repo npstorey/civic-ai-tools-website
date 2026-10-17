@@ -764,10 +764,15 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
   // sandbox SDK. A resumed sandbox may answer at a new address, which is a new
   // origin to the era cache below: it is probed once, so `eraByOrigin` gains
   // at most one entry per resume per process, and holds only an era each.
-  const server = isHostedServer(routed)
-    ? await (await import('./hosting/address.ts')).hostedServerForCall(routed)
-    : routed;
-  return inEra(server, (era) => makeToolCall(server, upstreamName, args, era));
+  // The exchange is handed to the hosting module rather than run after it
+  // (R7 WF): what the call meets there decides whether the idle window
+  // restarts, and a dead bridge is restarted once and the exchange retried
+  // once (`callHostedSource`).
+  if (isHostedServer(routed)) {
+    const { callHostedSource } = await import('./hosting/address.ts');
+    return callHostedSource(routed, (server) => inEra(server, (era) => makeToolCall(server, upstreamName, args, era)));
+  }
+  return inEra(routed, (era) => makeToolCall(routed, upstreamName, args, era));
 }
 
 async function makeToolCall(

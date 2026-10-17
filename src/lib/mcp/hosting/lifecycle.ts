@@ -14,17 +14,38 @@
  *   - stopped: the platform resumes it from its automatic snapshot, and
  *     `onResume` starts the bridge and waits for its ready line;
  *   - running: the bridge is checked once per session with `/health`.
- * Then the idle window restarts: `extendTimeout` ADDS to the session's
- * timeout (`@vercel/sandbox` 3.x; #617 correction n), so the session is
- * extended only by what it lacks of one window, never past it. A source left
- * idle stops by itself after one window and writes one snapshot
+ * Then the exchange runs (`./address.ts`), and the idle window restarts only
+ * once the call has met a live bridge — the exchange answered, or it failed
+ * and `/health` answered: `extendTimeout` ADDS to the session's timeout
+ * (`@vercel/sandbox` 3.x; #617 correction n), so the session is extended only
+ * by what it lacks of one window, never past it. A source left idle stops by
+ * itself after one window and writes one snapshot
  * (`keepLastSnapshots: { count: 1 }`).
+ *
+ * A BRIDGE THAT DIES INSIDE A SESSION (R7 WF, G7 F1). A session this process
+ * has seen ready is not re-checked before its calls, so a bridge that has
+ * died since is found by the exchange failing. Then `checkBridge` asks
+ * `/health` once; if the bridge does not answer it is started again, once
+ * (the same `startBridge` a resume runs), and the call is retried once. The
+ * bridge binds its port before it prints its ready line, and a second process
+ * on a bound port exits, so a restart never runs two bridges on one port; a
+ * restart that loses that race finds the winner by `/health`. Nothing here
+ * deletes a sandbox on this path. When the bridge cannot be brought back the
+ * call fails as the source being unavailable and the idle window is NOT
+ * restarted, so the session stops by itself and the next call resumes it.
  *
  * THE DEADLINE. The wake is bounded here, before any MCP exchange starts; the
  * client's 45 s exchange deadline is created inside each exchange, after the
  * wake (#617 G0 §3 fact 3). A wake that misses its deadline fails the call as
- * the source being unavailable, and is left to finish in the background: an
- * install is never cut off half-way, and the next call finds the result.
+ * the source being unavailable. Its work is not cancelled: the SDK call and
+ * any `onCreate` install keep running in this process while the process
+ * lives, and nothing else waits for them. Whether it completes is not
+ * measured, locally or on a Vercel Function; on a Function nothing extends
+ * the instance's life for it (no `waitUntil`). Meanwhile another
+ * process's call finds the sandbox `running` with no bridge ready, polls
+ * `/health` until its own deadline and fails unavailable; an install that
+ * never finished leaves no marker, and the next resume deletes that sandbox by
+ * name and the call after creates it afresh.
  *
  * THE ALLOWLIST. The outbound policy is a property applied when the sandbox
  * is created (and kept across resumes). It filters what STARTS: a process
@@ -74,6 +95,10 @@ export const PACKAGE_REGISTRY_HOSTS: readonly string[] = ['registry.npmjs.org'];
 const SNAPSHOT_EXPIRATION_MS = 30 * 24 * 60 * 60_000;
 /** Below this, a missing piece of the idle window is not worth an API call. */
 const EXTEND_SLACK_MS = 60_000;
+/** How long `checkBridge` waits for one `/health` answer. */
+export const BRIDGE_PROBE_MS = 5_000;
+/** How long a restart of a dead bridge may take to print its ready line. */
+export const BRIDGE_RESTART_DEADLINE_MS = 15_000;
 
 const HOME = '/vercel/civic-source';
 const PIN_DIR = `${HOME}/pin`;
@@ -141,7 +166,19 @@ export interface WokenSource {
   sandboxName: string;
   /** What this call found: created, resumed, or already running. */
   wake: 'created' | 'resumed' | 'running';
+  /** Restart the idle window. Called once the call has met a live bridge. */
+  keepAlive(): Promise<void>;
+  /**
+   * After a failed exchange: is the bridge alive? `alive` (it answered
+   * `/health`, so the failure is the source's own and nothing is restarted),
+   * `recovered` (it did not, and one restart brought a bridge up: retry once),
+   * or `dead`. At most one restart per call of this function.
+   */
+  checkBridge(): Promise<BridgeState>;
 }
+
+/** What `checkBridge` found. */
+export type BridgeState = 'alive' | 'recovered' | 'dead';
 
 type Handle = Awaited<ReturnType<typeof Sandbox.getOrCreate>>;
 
@@ -332,6 +369,40 @@ async function waitForHealth(endpoint: string, token: string, until: number): Pr
   }
 }
 
+/** One `/health` request: whether the bridge answered it at all (200, or 401 from a live bridge refusing the token). */
+async function bridgeAnswers(endpoint: string, token: string): Promise<'ok' | 'refused' | 'none'> {
+  try {
+    const response = await fetch(`${endpoint}/health`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(BRIDGE_PROBE_MS) });
+    await response.body?.cancel().catch(() => {});
+    if (response.ok) return 'ok';
+    return response.status === 401 ? 'refused' : 'none';
+  } catch {
+    return 'none';
+  }
+}
+
+/**
+ * `WokenSource.checkBridge` for one handle: one probe, at most one restart,
+ * one probe after a lost race. The session stays in `readySessions` whatever
+ * this finds: the next call then goes straight to its exchange and, if that
+ * fails too, to one restart of its own, rather than polling `/health` to the
+ * wake's deadline for a bridge nobody is starting.
+ */
+async function checkBridge(source: HostedMcpServer, handle: Handle, endpoint: string, token: string, sessionId: string): Promise<BridgeState> {
+  if ((await bridgeAnswers(endpoint, token)) !== 'none') return 'alive';
+  log(source.sourceId, `session ${sessionId}: the bridge did not answer /health after a failed call; starting it again`);
+  try {
+    await startBridge(handle, source, BRIDGE_RESTART_DEADLINE_MS);
+    return 'recovered';
+  } catch (error) {
+    // A start that exits before its ready line may have lost the port to a
+    // bridge another process started: that one is found by `/health`.
+    if ((await bridgeAnswers(endpoint, token)) === 'ok') return 'recovered';
+    log(source.sourceId, `session ${sessionId}: the bridge could not be started again: ${wakeFacts(error)}`);
+    return 'dead';
+  }
+}
+
 /** Restart the idle window without growing it: extend by what the session lacks of one window. */
 async function restartIdleWindow(source: HostedMcpServer, handle: Handle, idleWindowMs: number): Promise<void> {
   const expiresAt = handle.expiresAt?.getTime();
@@ -387,9 +458,16 @@ export async function wakeHostedSource(source: HostedMcpServer, options: WakeOpt
       await Promise.race([waitForHealth(endpointUrl.slice(0, -'/mcp'.length), token, until), deadline]);
     }
     readySessions.add(sessionId);
-    await restartIdleWindow(source, handle, idleWindowMs);
     log(source.sourceId, `sandbox ${name}: ${wake} in ${Date.now() - startedAt} ms`);
-    return { endpointUrl, token, sandboxName: name, wake };
+    const origin = endpointUrl.slice(0, -'/mcp'.length);
+    return {
+      endpointUrl,
+      token,
+      sandboxName: name,
+      wake,
+      keepAlive: () => restartIdleWindow(source, handle, idleWindowMs),
+      checkBridge: () => checkBridge(source, handle, origin, token, sessionId),
+    };
   } catch (error) {
     log(source.sourceId, `sandbox ${name}: wake failed after ${Date.now() - startedAt} ms: ${wakeFacts(error)}`);
     throw new HostedSourceUnavailableError(source.sourceId);
