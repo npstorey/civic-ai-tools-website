@@ -9,6 +9,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveLimit, selectLimit, checkRateLimit } from './rate-limit.ts';
 
+// The counter derives its stored key from this secret and refuses without it
+// (#516 P1). Read on every call, so setting it here, after the import, is in
+// time. An inert fixture value, not a real secret.
+process.env.RATE_LIMIT_SECRET = 'fixture';
+
 test('resolveLimit: unset (undefined) falls back to the default', () => {
   assert.equal(resolveLimit(undefined, 10), 10);
   assert.equal(resolveLimit(undefined, 25), 25);

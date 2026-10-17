@@ -465,6 +465,14 @@ export const ENV_SPEC = [
   // root layout resolves).
   { name: 'SITE_SEAL_ONLY', tier: 'optional', purpose: "Seal records only: '1'/'true' turns the public state off — both publish routes refuse a request for it (an absent visibility included) and the dialog and dashboard show it unavailable; records already public stay public. Off by default", hasFallback: true },
 
+  // --- Rate limiting (#516 P1). The per-day counter is stored under a key
+  //     derived from this secret and the date (src/lib/rate-limit.ts), so no
+  //     stored key carries a reader's address or account id. Required under
+  //     every profile, with no fallback (#516 G0-1): absent or empty, every
+  //     rate-limited route refuses by name before anything is counted or any
+  //     model is called. A secret of its own, not NEXTAUTH_SECRET reused. ---
+  { name: 'RATE_LIMIT_SECRET', tier: 'required', purpose: 'Rate-limit key derivation — each stored counter key is an HMAC of the reader under a day key derived from this secret and the date; no fallback: absent or empty, every query and the allowance read refuse by name. Set it from a pipe, never on a command line' },
+
   // --- Sign-in path (the rate-limit headroom option; OAuth) ---
   { name: 'NEXTAUTH_SECRET', tier: 'required', purpose: 'NextAuth session encryption' },
   // web#194 #1, ruled (sprint #30 G0 D9): STAYS `required`, and declares no

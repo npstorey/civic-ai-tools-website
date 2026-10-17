@@ -267,6 +267,11 @@ MODEL_API_KEY=<your-model-api-key>
 # through that host's infrastructure, not yours.
 SOCRATA_MCP_URL=<your-socrata-mcp-endpoint>
 
+# Rate limiting — required for every query; no fallback. The per-day
+# request counter is stored under keys derived from this secret and the
+# date, so no stored key carries a reader's address or account id.
+RATE_LIMIT_SECRET=<generated: openssl rand -base64 32>
+
 # Real credentials replacing the compose file's placeholders. The S3
 # pair is both the app's access key AND MinIO's root user/password —
 # docker-compose.yml wires one to the other — so leaving them unset
@@ -1281,8 +1286,8 @@ profile never reads:
 (the five: `BLOB_READ_WRITE_TOKEN`, `SANDBOX_SNAPSHOT_ID`, and the three
 `VERCEL_*` sandbox-auth variables). Exit code `0` means every required
 variable for the profile is present; `1` otherwise. Run with the
-stand-ins alone, it exits `1` naming exactly the thirteen operator-supplied
-variables — `MODEL_API_KEY`, `SOCRATA_MCP_URL`, `PUBLISHER_SIGNING_KEY`,
+stand-ins alone, it exits `1` naming exactly the fourteen operator-supplied
+variables — `MODEL_API_KEY`, `SOCRATA_MCP_URL`, `RATE_LIMIT_SECRET`, `PUBLISHER_SIGNING_KEY`,
 `PUBLISHER_KEY_ID`, the instance-identity set (`PUBLISHER_SITE_ORIGIN`,
 `PUBLISHER_SIGNER_BINDING_TIER`, `PUBLISHER_SIGNER_IDENTIFIER`,
 `PUBLISHER_SIGNER_DISPLAY_NAME`, `PUBLISHER_PLATFORM_AGENT_TITLE` — see
@@ -1334,6 +1339,7 @@ platform provides a role; see
 | --- | --- |
 | `MODEL_API_KEY` | Every query fails fast with the typed error above. No fallback. Its prior-era name `OPENROUTER_API_KEY` still satisfies it. |
 | `MODEL_CATALOG` / `MODEL_CATALOG_PATH` | Only when `MODEL_API_BASE_URL` names something other than the built-in endpoint, or `MODEL_API_KIND=azure-openai`: the instance refuses rather than trusting a model list written for a different endpoint. Under the built-in endpoint, absence is the configured state. |
+| `RATE_LIMIT_SECRET` | Every query refuses, and so does the allowance read behind the request-limit banner (`/api/rate-limit`): a 503 (on `/api/compare-stream`, an error event per panel) with `code: "rate_limit_not_configured"` and a message naming this variable, before anything is counted, before any data source is asked and before any model call. `POST /api/query-notebook` under `EXECUTOR_DRIVER=none` still answers its 501 first. No fallback, and no key is ever derived from a default. **What it protects:** the per-day counter is stored under `rate:<segment>:<date>`, where the segment is HMAC-SHA256 of the reader's address (anonymous) or account id (signed in) under a day key, and the day key is HMAC-SHA256 of this secret and the date. No stored key carries the address or the account id, and a reader's segment changes every day, so a key read out of the counter store is no lasting handle on a reader. **The trade, stated:** anyone holding this secret can re-derive which stored key belongs to a given address on a given day; rotating it mid-day restarts that day's counts, because every key changes; and counter keys stored before this version, which carry the address or account id as written, are not rewritten but expire within 48 hours, the counter's own expiry (the in-process fallback store does not outlive the restart a deploy makes). Generate it once and set it through a pipe (`openssl rand -base64 32 \| vercel env add RATE_LIMIT_SECRET <environment>`), never on a command line. Environments that share one counter store share counts only when they share this value. Preflight checks presence only. It is never logged and appears in no record. |
 | `SOCRATA_MCP_URL` | Every data query refuses with a typed error naming this variable. No fallback — this used to default to the project's hosted endpoint, which silently routed an unconfigured instance's queries through infrastructure it does not operate. Set it to the Socrata MCP deployment this instance should query. Pointing it at another operator's endpoint (the project's hosted one included) is a real choice, but understand what it means: your users' queries route through that host's infrastructure, not yours. **What it makes a signed record say:** for a run this instance makes (`captureMethod: "chat-flow-stream"`), the value exactly as set (not normalised: a bare host stays a bare host, with no `/mcp` appended) is the Socrata source agent's `civic:serverUrl` in the provenance graph, and under the datHere profile the `socrata` entry of `extensions["org.civicaitools.environment"].mcpServers`. All three MCP addresses are recorded as configured, so a deployment that points one at a container-internal name (a sibling service reached as `http://socrata-mcp:8000`, say) publishes that name in its signed records. A record of a run made elsewhere (a `claude-code-*` capture) takes no address from this instance's configuration. The addresses are the ones the RUN had: each query route writes them onto its trace (`analysis.mcp_servers`) when it runs, and the record states those, so a record published after a configuration change still names the values its run used (#495; a trace made before that change carried no such list, and its record names the values configured when it is packaged). |
 
 **Absence disables a specific feature** (the app runs; the feature
@@ -2496,8 +2502,10 @@ a section's worth of differences, not a parallel guide:
   (`npm run sandbox:build-snapshot`) or every execution pays a slow
   fresh boot. `VERCEL_TOKEN` / `VERCEL_TEAM_ID` / `VERCEL_PROJECT_ID`
   are only for off-platform runs against the sandbox API.
-- **Rate limiting:** `KV_REST_API_URL` + `KV_REST_API_TOKEN` (Upstash
-  via the platform) make the counter durable.
+- **Rate limiting:** `RATE_LIMIT_SECRET` is required in every
+  environment that serves queries (see the core query path table);
+  `KV_REST_API_URL` + `KV_REST_API_TOKEN` (Upstash via the platform)
+  make the counter durable.
 - **Scheduler:** platform cron per `vercel.json`, authenticated with the
   same `CRON_SECRET` mechanism.
 - **Everything else is identical:** the model seam, sign-in, the signing

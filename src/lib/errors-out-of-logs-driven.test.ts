@@ -264,6 +264,9 @@ for (const name of ['MODEL_API_KEY', 'OPENROUTER_API_KEY', 'OPENAI_API_KEY', 'SI
 }
 // All three sources on loopback: `registry.ts` carries literal third-party
 // default URLs for two of them.
+// The rate limiter is the real module, and it derives its key from this
+// secret (#516 P1); an inert fixture value, not a real secret.
+process.env.RATE_LIMIT_SECRET = 'fixture';
 process.env.SOCRATA_MCP_URL = SOURCE_URL;
 process.env.DATA_COMMONS_MCP_URL = SOURCE_URL;
 process.env.BOSTON_OPENCONTEXT_MCP_URL = SOURCE_URL;

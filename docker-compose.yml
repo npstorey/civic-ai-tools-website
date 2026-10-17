@@ -288,6 +288,7 @@ services:
       # present in the caller's environment, absent otherwise ---
       #   PUBLISHER_SIGNING_KEY / PUBLISHER_KEY_ID  unset ⇒ unsigned tier
       #   NEXTAUTH_SECRET                         unset ⇒ sign-in unavailable
+      #   RATE_LIMIT_SECRET                       unset ⇒ every query refused (503)
       #   CRON_SECRET                             unset ⇒ scheduler rejected (401)
       #
       # WHY BARE `NAME:` AND NOT `${NAME:-}`: the two are not the same
@@ -315,6 +316,7 @@ services:
       PUBLISHER_KEY_ID:
       EVIDENCE_KEY_ID:
       NEXTAUTH_SECRET:
+      RATE_LIMIT_SECRET:
       GITHUB_CLIENT_ID:
       GITHUB_CLIENT_SECRET:
       OIDC_ISSUER:

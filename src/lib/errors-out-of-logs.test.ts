@@ -285,7 +285,9 @@ function violation(args: string, fileErrorNames: Set<string>): string | null {
  * Each is a typed CONFIGURATION error logged by its message. Measured: every
  * message these classes carry is assembled from module constants, variable
  * NAMES and closed sets of accepted values (`src/lib/model-client.ts`,
- * `src/lib/model-resolver.ts`, `src/lib/mcp/registry.ts`); two interpolate a
+ * `src/lib/model-resolver.ts`, `src/lib/mcp/registry.ts`, and
+ * `src/lib/rate-limit.ts`, whose `RateLimitConfigurationError` carries one
+ * message, a module constant naming RATE_LIMIT_SECRET — #516 P1); two interpolate a
  * value the OPERATOR configured (`MODEL_API_AUTH=${raw}`, and a catalog
  * validation message naming a catalog entry). None reads a request. Each
  * route returns the same text to the caller in its response, so the log line
@@ -301,9 +303,11 @@ const EXEMPT: Array<{ file: string; call: string }> = [
   { file: 'src/app/api/compare-stream/route.ts', call: "console.error('[compare-stream]', credentialError.message)" },
   { file: 'src/app/api/compare-stream/route.ts', call: "console.error('[compare-stream]', error.message)" },
   { file: 'src/app/api/compare-stream/route.ts', call: "console.error('[compare-stream]', mcpRoutingError.message)" },
+  { file: 'src/app/api/compare-stream/route.ts', call: "console.error('[compare-stream]', rateLimitSecretError.message)" },
   { file: 'src/app/api/compare/route.ts', call: "console.error('[compare]', credentialError.message)" },
   { file: 'src/app/api/compare/route.ts', call: "console.error('[compare]', mcpRoutingError.message)" },
   { file: 'src/app/api/compare/route.ts', call: "console.error('[compare]', error.message)" },
+  { file: 'src/app/api/compare/route.ts', call: "console.error('[compare]', rateLimitSecretError.message)" },
   { file: 'src/app/api/evidence/[slug]/publish/route.ts', call: "console.error('[publish]', credentialError.message)" },
   { file: 'src/app/api/evidence/[slug]/publish/route.ts', call: "console.error('[publish]', error.message)" },
   { file: 'src/app/api/evidence/[slug]/replay/route.ts', call: "console.error('[replay]', mcpRoutingError.message)" },
@@ -312,6 +316,8 @@ const EXEMPT: Array<{ file: string; call: string }> = [
   { file: 'src/app/api/query-notebook/route.ts', call: "console.error('[query-notebook]', credentialError.message)" },
   { file: 'src/app/api/query-notebook/route.ts', call: "console.error('[query-notebook]', error.message)" },
   { file: 'src/app/api/query-notebook/route.ts', call: "console.error('[query-notebook]', mcpRoutingError.message)" },
+  { file: 'src/app/api/query-notebook/route.ts', call: "console.error('[query-notebook]', rateLimitSecretError.message)" },
+  { file: 'src/app/api/rate-limit/route.ts', call: "console.error('[rate-limit]', rateLimitSecretError.message)" },
 ];
 
 /** The guard's own reading of the tree: every call with the property, and which exemption each matched. */
