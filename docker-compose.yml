@@ -153,6 +153,8 @@ services:
       # readable in image history.
       args:
         # Inlined into bundles at build; a run-time value cannot change them.
+        NEXT_PUBLIC_ANALYTICS_SERVICE:
+        NEXT_PUBLIC_ANALYTICS_ID:
         NEXT_PUBLIC_GA_MEASUREMENT_ID:
         NEXT_PUBLIC_CAPTURE_TRACES:
         # Read at BOTH times: prerendered pages bake these at build, dynamic

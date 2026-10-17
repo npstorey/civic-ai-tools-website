@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Script from 'next/script';
 import localFont from 'next/font/local';
 import './globals.css';
 import Link from 'next/link';
@@ -37,8 +36,15 @@ import {
   getRoadmapSource,
 } from '@/lib/site-config';
 import { resolveRobotsMetadata } from '@/lib/site-indexing';
+import { AnalyticsTags, resolveAnalytics } from '@/lib/analytics';
 
-const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+// Read here, by literal name, so `next build` inlines each value: these are
+// build-time variables (scripts/preflight-env.mjs, `readBy: 'build'`).
+const ANALYTICS = resolveAnalytics({
+  NEXT_PUBLIC_ANALYTICS_SERVICE: process.env.NEXT_PUBLIC_ANALYTICS_SERVICE,
+  NEXT_PUBLIC_ANALYTICS_ID: process.env.NEXT_PUBLIC_ANALYTICS_ID,
+  NEXT_PUBLIC_GA_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
+});
 
 /**
  * `SITE_NOINDEX` (#258 E1): `undefined` (the default — indexable) omits the
@@ -227,21 +233,8 @@ export default function RootLayout({
 
   return (
     <html lang="en" {...accentProps}>
-      {GA_MEASUREMENT_ID && (
-        <>
-          <Script
-            src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
-            strategy="afterInteractive"
-          />
-          <Script id="ga4-init" strategy="afterInteractive">
-            {`
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', '${GA_MEASUREMENT_ID}');
-            `}
-          </Script>
-        </>
+      {ANALYTICS && (
+        <AnalyticsTags config={ANALYTICS} />
       )}
       <body className={`${spaceGrotesk.variable} ${notoSans.variable}`}>
         <Providers>
