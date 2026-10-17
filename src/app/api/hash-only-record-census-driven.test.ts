@@ -133,7 +133,8 @@ const STUB_PREFIX = 'file:///civic-516-p10-stub/';
 const DRIVER_URL = pathToFileURL(path.join(SRC, 'lib/sandbox/driver.ts')).href;
 const STUB_SOURCE: Record<string, string> = {
   'next/headers': `export async function headers() { return new Headers({ 'x-forwarded-for': '203.0.113.110' }); }`,
-  'next-auth': `export async function getServerSession() { return null; }`,
+  // Signed out, except where a test signs in (the summary handler's check).
+  'next-auth': `export async function getServerSession() { return globalThis.__p10?.session ?? null; }`,
   '@/lib/auth': `export const authOptions = {};`,
   '@/lib/api-auth': `
     export async function resolveRequestUser() { return { userId: 'fixture-account', scopes: ['records:publish'], method: 'bearer' }; }
@@ -207,8 +208,8 @@ registerHooks({
 
 const { mountPublishDialog, fire } = await import('../../components/publish-dialog-test-harness.ts');
 
-interface P10Globals { stored: string[]; rows: Array<Record<string, unknown>> }
-const P10: P10Globals = { stored: [], rows: [] };
+interface P10Globals { stored: string[]; rows: Array<Record<string, unknown>>; session: unknown }
+const P10: P10Globals = { stored: [], rows: [], session: null };
 (globalThis as unknown as { __p10: P10Globals }).__p10 = P10;
 
 // --- The loopback MCP source and model ------------------------------------------
@@ -240,11 +241,13 @@ const MCP_ORIGIN = `http://127.0.0.1:${(mcp.address() as AddressInfo).port}`;
 /** The one source query the model writes. It names the dataset, never the question. */
 const TOOL_ARGS = { type: 'query', dataset_id: 'erm2-nwe9', query: "SELECT count(*) AS n WHERE complaint_type = 'Noise'" };
 
+const MODEL_REQUESTS: Array<Record<string, unknown>> = [];
 const model = http.createServer((req, res) => {
   const chunks: Buffer[] = [];
   req.on('data', (c: Buffer) => chunks.push(c));
   req.on('end', () => {
     const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
+    MODEL_REQUESTS.push(body);
     const messages = (body.messages ?? []) as Array<{ role?: string }>;
     const pickTools = Array.isArray(body.tools) && body.tools.length > 0 && !messages.some((m) => m.role === 'tool');
     const usage = { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 };
@@ -740,4 +743,40 @@ test('4: each form is replaced by the withheld text, and nothing else in the not
 
 test('4: under full-text visibility, a submitted notebook is packaged as submitted', () => {
   assert.deepEqual((DIRECT_FULL_TEXT?.extensions as Json | undefined)?.['org.civicaitools.notebook'], CARRYING);
+});
+
+// --- 6. The summary handler, sent no question -------------------------------------------
+
+const summaryRoute = (await import('./records/generate-summary/route.ts')) as unknown as { POST: (request: Request) => Promise<Response> };
+
+async function summarize(body: Record<string, unknown>): Promise<{ status: number; userMessage: string | null }> {
+  P10.session = { user: { id: 'fixture-account' } };
+  const from = MODEL_REQUESTS.length;
+  try {
+    const res = await summaryRoute.POST(new Request('http://localhost/api/records/generate-summary', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }));
+    const sent = MODEL_REQUESTS.slice(from)[0];
+    const messages = (sent?.messages ?? []) as Array<{ role?: string; content?: unknown }>;
+    const user = messages.find((m) => m.role === 'user');
+    return { status: res.status, userMessage: typeof user?.content === 'string' ? user.content : null };
+  } finally {
+    P10.session = null;
+  }
+}
+
+test('6: the summary handler answers a request that carries no question, and tells the model none', async () => {
+  const { status, userMessage } = await summarize({ output: ANSWER, toolCalls: [{ name: 'socrata__get_data', args: TOOL_ARGS }] });
+  assert.equal(status, 200);
+  assert.ok(userMessage, 'premise: the handler asked the model');
+  assert.ok(!userMessage!.includes('Original question'), userMessage!);
+  assert.ok(userMessage!.includes(ANSWER.split('\n')[0]), 'the answer did not reach the model');
+});
+
+test('6: a summary request that carries the question still tells the model the question', async () => {
+  const { status, userMessage } = await summarize({ prompt: QUESTION, output: ANSWER, toolCalls: [] });
+  assert.equal(status, 200);
+  assert.ok(userMessage?.startsWith(`Original question: ${QUESTION}\n\n`), String(userMessage));
 });
