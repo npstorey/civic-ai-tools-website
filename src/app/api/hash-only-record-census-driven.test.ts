@@ -780,3 +780,11 @@ test('6: a summary request that carries the question still tells the model the q
   assert.equal(status, 200);
   assert.ok(userMessage?.startsWith(`Original question: ${QUESTION}\n\n`), String(userMessage));
 });
+
+// --- 7. The publish contract ----------------------------------------------------------------
+
+test('7: docs/api/records-publish.md states the rule for hash-only visibility', () => {
+  const doc = fs.readFileSync(path.join(SRC, '..', 'docs/api/records-publish.md'), 'utf8');
+  assert.ok(doc.includes('Under `"hash_only"`, a record carries no verbatim copy of the question.'), 'the publish contract does not state the rule');
+  assert.ok(doc.includes(`with \`${WITHHELD}\` in every key and string of a submitted \`org.civicaitools.notebook\` extension`), 'the publish contract does not say what the endpoint does with a submitted notebook');
+});
