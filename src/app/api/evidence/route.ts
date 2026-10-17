@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { errorLogFacts } from '@/lib/streaming';
+import { errorLogFacts, withoutCredentialsIn } from '@/lib/streaming';
+import { NOTEBOOK_EXTENSION_KEY } from '@/lib/notebook-author/notebook-provenance-reading';
 import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -299,6 +300,17 @@ export async function POST(request: NextRequest) {
     // publishing from outside the app to close a hole that does not exist.
     const declaredModel = modelIdentityForValue(body.model).declared;
 
+    // A NOTEBOOK OUTPUT NEVER CARRIES THE VALUE OF A NOTEBOOK CREDENTIAL
+    // (#516). The notebook comes back from the client, so the stream's removal
+    // is not relied on here: both values this instance holds are removed by
+    // value from every string of the submitted notebook extension before the
+    // package is built, signed or stored. Every other field of the request,
+    // and every other extension, is passed through as it came.
+    const submittedNotebook = body.extensions?.[NOTEBOOK_EXTENSION_KEY];
+    const extensions = submittedNotebook === undefined
+      ? body.extensions
+      : { ...body.extensions, [NOTEBOOK_EXTENSION_KEY]: withoutCredentialsIn(submittedNotebook, process.env) };
+
     // Build evidence package
     const packageInput: PackageInput = {
       trace: body.trace,
@@ -322,7 +334,7 @@ export async function POST(request: NextRequest) {
       type: body.type ?? DEFAULT_CONTENT_TYPE,
       signer: body.signer ?? getActiveSigner(),
       skillMetadataOverride: body.skillMetadataOverride,
-      extensions: body.extensions,
+      extensions,
     };
 
     const { pkg, hash: packageHash } = buildEvidencePackage(packageInput);

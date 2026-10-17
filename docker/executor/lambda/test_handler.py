@@ -123,6 +123,59 @@ class NotebookEnvironment(unittest.TestCase):
         self.assertEqual(env['MPLCONFIGDIR'], handler.NOTEBOOK_MPLCONFIGDIR)
 
 
+class CredentialFormsMatchTheApp(unittest.TestCase):
+    """The handler's removal is the app's (`notebookCredentialForms` and
+    `withoutCredentials` in src/lib/streaming.ts), on the vectors both read."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'credential_forms.json'), encoding='utf-8') as f:
+            cls.vectors = json.load(f)
+
+    def test_the_forms_are_the_apps_on_every_shared_vector(self):
+        self.assertGreater(len(self.vectors['forms']), 5)
+        for case in self.vectors['forms']:
+            self.assertEqual(handler.credential_forms(case['env']), [tuple(pair) for pair in case['expected']], case['env'])
+
+    def test_the_removal_is_the_apps_on_every_shared_vector(self):
+        self.assertGreater(len(self.vectors['removals']), 3)
+        for case in self.vectors['removals']:
+            forms = handler.credential_forms(case['env'])
+            self.assertEqual(handler.without_credentials(case['text'], forms), case['expected'], case['env'])
+
+
+class ExecutedWithoutCredentials(unittest.TestCase):
+    """The executed notebook's bytes, with both values removed from every string in them."""
+
+    FORMS = [('fixture "p9"', 'DC_API_KEY'), ('fixture-p9', 'SOCRATA_APP_TOKEN')]
+
+    def test_no_credential_set_returns_the_bytes_untouched(self):
+        data = b'{"cells": [], "fixture": "fixture-p9"}'
+        self.assertIs(handler.executed_without_credentials(data, []), data)
+
+    def test_nothing_to_remove_returns_the_bytes_untouched(self):
+        data = b'{\n "cells": [],\n "metadata": {"note": "caf\xc3\xa9"}\n}'
+        self.assertIs(handler.executed_without_credentials(data, self.FORMS), data)
+
+    def test_a_value_inside_a_json_string_is_removed_whatever_its_escaping(self):
+        notebook = {
+            'cells': [{'outputs': [{'text': ['token fixture-p9\n', 'key fixture "p9"\n']}], 'metadata': {'fixture-p9': 1}}],
+            'metadata': {'n': 1.5, 'ok': True, 'none': None},
+        }
+        data = json.dumps(notebook, indent=1, ensure_ascii=False).encode('utf-8')
+        cleaned = json.loads(handler.executed_without_credentials(data, self.FORMS))
+        self.assertEqual(cleaned, {
+            'cells': [{
+                'outputs': [{'text': ['token [SOCRATA_APP_TOKEN removed]\n', 'key [DC_API_KEY removed]\n']}],
+                'metadata': {'[SOCRATA_APP_TOKEN removed]': 1},
+            }],
+            'metadata': {'n': 1.5, 'ok': True, 'none': None},
+        })
+
+    def test_bytes_that_are_not_json_get_the_removal_over_their_text(self):
+        self.assertEqual(handler.executed_without_credentials(b'not json fixture-p9', self.FORMS), b'not json [SOCRATA_APP_TOKEN removed]')
+
+
 class Context:
     aws_request_id = 'test-request-id'
 
@@ -321,7 +374,7 @@ class NotebookOutputsCarryNoCredential(unittest.TestCase):
             text = ''.join(strings_in(found))
             for name in CANARIES:
                 self.assertIn(f'[{name} removed]', text, kind)
-        stdout = ''.join(strings_in(kinds['stdout']))
+        stdout = ''.join(''.join(o['text']) if isinstance(o['text'], list) else o['text'] for o in kinds['stdout'])
         self.assertEqual(stdout, ''.join(
             f'{name} {kind} [{name} removed]\n' for name in CANARIES for kind in ('raw', 'url', 'json')
         ))
