@@ -100,7 +100,7 @@ export default function PublishEvidenceDialog({
   const runDate = runDateOf(evidenceTrace);
   const neutralTitle = runPortal ? `${runPortal} analysis, ${runDate}` : `Data analysis, ${runDate}`;
   const defaultTitleFor = (visibility: 'full_text' | 'hash_only') =>
-    visibility === 'hash_only' ? neutralTitle : neutralTitle; // INSTRUMENT: full-text default off
+    visibility === 'hash_only' ? neutralTitle : questionTitle;
 
   // Extract first paragraph of output for default summary
   const firstParagraph = output.split(/\n\n/)[0]
@@ -108,7 +108,7 @@ export default function PublishEvidenceDialog({
     ?.trim()
     ?.slice(0, 300) || '';
 
-  const [title, setTitle] = useState(neutralTitle); // INSTRUMENT: full-text initial default off
+  const [title, setTitle] = useState(questionTitle);
   // A title the reader typed is kept as typed; only an unedited default
   // follows the prompt visibility.
   const [titleEdited, setTitleEdited] = useState(false);
@@ -215,7 +215,7 @@ export default function PublishEvidenceDialog({
         if (!res.ok) throw new Error(`${res.status}`);
         const data = await res.json();
         // Only the latest request's reply, and only if the user hasn't started typing
-        if (seq === summaryRequestSeq.current && data.summary) { // INSTRUMENT: typed-summary guard off
+        if (seq === summaryRequestSeq.current && data.summary && !summaryEdited.current) {
           setSummary(data.summary);
         }
       })
@@ -230,17 +230,17 @@ export default function PublishEvidenceDialog({
   useEffect(() => {
     if (!isOpen || summaryRequested.current || userEditedSummary || initialSummary) return;
     summaryRequested.current = true;
-    requestSummary(false); // INSTRUMENT: full-text request off
+    requestSummary(promptVisibility === 'full_text');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const choosePromptVisibility = (next: 'full_text' | 'hash_only') => {
     if (next === promptVisibility) return;
     setPromptVisibility(next);
-    if (titleEdited || !titleEdited) setTitle(defaultTitleFor(next)); // INSTRUMENT: typed-title guard off
+    if (!titleEdited) setTitle(defaultTitleFor(next));
     // A drafted summary whose request was sent the question is drafted again
     // without it, unless the reader has written their own.
-    if (next === 'hash_only') { // INSTRUMENT: typed-summary guard off
+    if (next === 'hash_only' && summaryRequestCarriedQuestion.current && !summaryEdited.current) {
       setSummary(firstParagraph);
       requestSummary(false);
     }

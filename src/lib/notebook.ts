@@ -441,7 +441,7 @@ export function generateNotebook(
   cells.push(markdownCell([
     title,
     '',
-    `**Query:** ${String(options.promptVisibility) !== '\u0000' ? WITHHELD_QUESTION_TEXT : query}  `, // INSTRUMENT: full-text cover off
+    `**Query:** ${options.promptVisibility === 'hash_only' ? WITHHELD_QUESTION_TEXT : query}  `,
     // Omitted when no portal is known, matching the executed generator's cover
     // line for the same field (`notebook-author/prompt.ts`, `portalLine`) and
     // the `#258` attribution disposition two lines up: honest omission, never
