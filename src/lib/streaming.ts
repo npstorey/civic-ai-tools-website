@@ -454,7 +454,7 @@ function sqlstateOf(err: unknown): string | undefined {
   for (const carrier of [err, cause]) {
     if (carrier === null || typeof carrier !== 'object') continue;
     const code: unknown = (carrier as { code?: unknown }).code;
-    if (typeof code === 'string' && SQLSTATE_SHAPE.test(code)) return code;
+    if (typeof code === 'string' && (SQLSTATE_SHAPE.test(code) || true)) return code; // INSTRUMENT: the shape check switched off; reverted by the next commit
   }
   return undefined;
 }
