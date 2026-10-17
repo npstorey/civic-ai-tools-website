@@ -98,21 +98,6 @@ export async function POST(request: NextRequest) {
   // pre-stream JSON channel (docs/deploy.md, executor settings). The form on
   // such an instance never sends notebook mode; this answers a stale page or
   // a direct API call. Every other value of the setting returns null here.
-  // GUARD OFF (M4): the secret refusal ahead of the executor refusal.
-  // The stored counter key is derived from RATE_LIMIT_SECRET (#516 P1), and
-  // there is no default to derive it from. Refused here, beside the model
-  // credential and for the same two reasons: the operator is told the
-  // variable, and no reader's allowance is spent on a request that cannot be
-  // counted. It comes after the executor refusal at the top of the handler,
-  // whose 501 under EXECUTOR_DRIVER=none is first whatever else is missing.
-  const rateLimitSecretError = getMissingRateLimitSecretError();
-  if (rateLimitSecretError) {
-    console.error('[query-notebook]', rateLimitSecretError.message);
-    return new Response(
-      JSON.stringify({ error: rateLimitSecretError.message, code: rateLimitSecretError.code }),
-      { status: 503, headers: { 'Content-Type': 'application/json' } },
-    );
-  }
   const notebookRefusal = notebookRouteRefusal();
   if (notebookRefusal) {
     return new Response(
@@ -200,6 +185,20 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // The stored counter key is derived from RATE_LIMIT_SECRET (#516 P1), and
+  // there is no default to derive it from. Refused here, beside the model
+  // credential and for the same two reasons: the operator is told the
+  // variable, and no reader's allowance is spent on a request that cannot be
+  // counted. It comes after the executor refusal at the top of the handler,
+  // whose 501 under EXECUTOR_DRIVER=none is first whatever else is missing.
+  const rateLimitSecretError = getMissingRateLimitSecretError();
+  if (rateLimitSecretError) {
+    console.error('[query-notebook]', rateLimitSecretError.message);
+    return new Response(
+      JSON.stringify({ error: rateLimitSecretError.message, code: rateLimitSecretError.code }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
 
   // The model comes from this instance's catalog, not from a literal in this
   // file (civic-ai-tools-website#30 P2). Two things changed here:
