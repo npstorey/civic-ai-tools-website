@@ -90,6 +90,8 @@ const DUAL_SAMPLES = [
   '/evidence/some-published-slug',
   '/records',
   '/records/some-published-slug',
+  // The privacy page (#516 P7, ruling G0-4): served on both hosts.
+  '/privacy',
 ];
 const OTHER_SAMPLES = [
   '/api/rate-limit', // matcher-excluded in prod, but the function must serve it regardless
