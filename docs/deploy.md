@@ -1079,10 +1079,11 @@ or wrong token, on every path. The stdio server itself is not given the token.
 
 - A sandbox's session times out after the idle window, 10 minutes
   (`DEFAULT_IDLE_WINDOW_MS` in `src/lib/mcp/hosting/lifecycle.ts`; an option of
-  the lifecycle, not an environment variable). Each call restarts the window
-  without growing it: the session is extended only by what it lacks of one
-  window. A source left idle stops by itself, keeps one snapshot, and the next
-  call resumes it. Measured from a local process on 2026-10-16:
+  the lifecycle, not an environment variable). Each call that meets a live
+  bridge restarts the window without growing it: the session is extended only
+  by what it lacks of one window. A call that reaches no bridge does not
+  restart it. A source left idle stops by itself, keeps one snapshot, and the
+  next call resumes it. Measured from a local process on 2026-10-16:
   - a first creation, which installs the pin and the bridge, took 11.8 s with
     `npm install`, and 7.7 s with `npm ci` from the committed lockfiles
     (2026-10-17);
@@ -1090,8 +1091,32 @@ or wrong token, on every path. The stdio server itself is not given the token.
   - a call to a running source added about 0.1 s.
 - The wake has its own deadline, 30 seconds (`DEFAULT_WAKE_DEADLINE_MS`). Each
   exchange's 45-second deadline starts after the wake. A wake that misses its
-  deadline fails the call as the source being unavailable, and is left to
-  finish in the background, so the next call finds it ready.
+  deadline fails the call as the source being unavailable. Its work is not
+  cancelled: the platform call and any install keep running in that process
+  while the process lives. Locally the process outlives the response and the
+  work finishes. On a Vercel Function nothing keeps the instance alive for it
+  (the app does not use `waitUntil`), so it finishes only if the instance
+  stays up for other reasons; that is not measured. Until then, a call from
+  another process finds the sandbox `running` with no bridge ready, polls
+  `/health` until its own deadline, and fails as unavailable. A creation whose
+  install never finished leaves no completion marker: the next resume deletes
+  that sandbox by name, and the call after it creates the sandbox again.
+- A bridge that dies inside a running session is found by the failed call. The
+  app then asks `/health` once. If the bridge does not answer, the app starts
+  it again once and retries the call once. The bridge binds its port before it
+  reports ready, and a second bridge on a bound port exits (`EADDRINUSE`), so
+  a restart never runs two bridges on one port. If the bridge cannot be
+  started again, the call fails as unavailable and the idle window is not
+  restarted, so the session stops by itself. Nothing on this path deletes the
+  sandbox. Measured from a local process on 2026-10-17, with the bridge killed
+  in a session the process had seen ready:
+  - the app before this change: the call failed (`502 Bad Gateway` from the
+    sandbox's address) and still extended the session by 85 s;
+  - this change: the call answered in 1.0 s, with one bridge running after
+    it;
+  - with the bridge's program moved away, so it could not start: the call
+    failed as unavailable in 0.8 s and the session's expiry did not move.
+    Once the program was put back, the next call answered in 1.4 s.
 - Two calls at once from different function instances make one sandbox: the
   platform refuses the second create by name, and that call waits for the
   first one's bridge.
