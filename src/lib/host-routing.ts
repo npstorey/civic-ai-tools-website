@@ -251,8 +251,11 @@ export const APP_PRIVATE_PATHS = [
  * `host-routing.paths.test.ts` would stop noticing if the pages moved.
  * Whatever the topology does to one address it must do to the other — which is
  * exactly what listing both here buys.
+ *
+ * `/privacy` (#516 P7, owner ruling G0-4): what this instance does with what a
+ * reader sends, which a reader on either host is owed.
  */
-export const DUAL_SERVED_PATHS = ['/evidence', '/records'] as const;
+export const DUAL_SERVED_PATHS = ['/evidence', '/records', '/privacy'] as const;
 
 export type PathClass = 'root' | 'marketing' | 'app-private' | 'dual-served' | 'other';
 
