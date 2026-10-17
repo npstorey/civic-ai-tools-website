@@ -86,11 +86,11 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user && token.sub) {
         // token.sub is the GitHub user ID
-        (session.user as { id?: string }).id = `${token.sub}-mutated`;
+        (session.user as { id?: string }).id = token.sub;
 
         // Attach internal DB user ID if database is configured
         if (process.env.DATABASE_URL && token.dbUserId) {
-          (session.user as { dbId?: string }).dbId = token.sub as string;
+          (session.user as { dbId?: string }).dbId = token.dbUserId as string;
         }
       }
       return session;
