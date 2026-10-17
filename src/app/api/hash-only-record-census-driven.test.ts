@@ -697,7 +697,11 @@ function withheldDocument(value: unknown): unknown {
   return walk(value);
 }
 
-async function publishDirectly(promptVisibility: 'full_text' | 'hash_only'): Promise<Json | null> {
+async function publishDirectly(
+  promptVisibility: 'full_text' | 'hash_only',
+  prompt: string = QUESTION,
+  notebook: unknown = CARRYING,
+): Promise<Json | null> {
   P10.stored = [];
   P10.rows = [];
   const res = await recordsRoute.POST(new Request('http://localhost/api/records', {
@@ -705,7 +709,7 @@ async function publishDirectly(promptVisibility: 'full_text' | 'hash_only'): Pro
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       trace: { resourceSpans: [] },
-      prompt: QUESTION,
+      prompt,
       output: ANSWER,
       toolCalls: [],
       model: 'fixture-fast',
@@ -715,7 +719,7 @@ async function publishDirectly(promptVisibility: 'full_text' | 'hash_only'): Pro
       title: 'Fixture record',
       summary: GENERATED_SUMMARY,
       visibility: 'sealed',
-      extensions: { 'org.civicaitools.notebook': CARRYING },
+      extensions: { 'org.civicaitools.notebook': notebook },
     }),
   }));
   assert.equal(res.status, 200, await res.clone().text());
@@ -743,6 +747,51 @@ test('4: each form is replaced by the withheld text, and nothing else in the not
 
 test('4: under full-text visibility, a submitted notebook is packaged as submitted', () => {
   assert.deepEqual((DIRECT_FULL_TEXT?.extensions as Json | undefined)?.['org.civicaitools.notebook'], CARRYING);
+});
+
+// --- 4. Model text is left as submitted -----------------------------------------------------
+
+/**
+ * A short question, which the model's own code and its output also carry: as
+ * a search phrase in a code cell's source, and in that cell's outputs. Code
+ * sources and outputs are model text; only the generator's markdown cells are
+ * the app's.
+ */
+const SHORT_QUESTION = 'rat sightings';
+const SHORT_CARRYING = {
+  nbformat: 4,
+  nbformat_minor: 5,
+  metadata: {
+    kernelspec: { name: 'python3', display_name: 'Python 3', language: 'python' },
+    extensions: { 'org.civicaitools.notebook': { provenance: 'executed' } },
+  },
+  cells: [
+    { cell_type: 'markdown', id: 'p10-short-cover', metadata: {}, source: ['# Data Analysis\n', '\n', `**Query:** ${SHORT_QUESTION}  \n`, '**Generated:** 2026-10-17\n'] },
+    {
+      cell_type: 'code',
+      execution_count: 1,
+      id: 'p10-short-code',
+      metadata: { tags: ['step'] },
+      source: [`datasets = search("${SHORT_QUESTION}")\n`, 'datasets.head()\n'],
+      outputs: [
+        { output_type: 'stream', name: 'stdout', text: [`3 datasets match ${SHORT_QUESTION}\n`] },
+        { output_type: 'display_data', metadata: {}, data: { 'text/html': [`<b>${SHORT_QUESTION}</b>`], 'text/plain': [`'${SHORT_QUESTION}'`] } },
+      ],
+    },
+  ],
+};
+
+const SHORT_HASH_ONLY = await publishDirectly('hash_only', SHORT_QUESTION, SHORT_CARRYING);
+
+test('4: under hash-only visibility, a code cell that carries the question is packaged byte for byte as submitted', () => {
+  const notebook = (SHORT_HASH_ONLY?.extensions as Json | undefined)?.['org.civicaitools.notebook'] as PackagedNotebook | undefined;
+  assert.ok(notebook, 'the package carries no notebook');
+  const code = notebook!.cells.find((cell) => cell.id === 'p10-short-code');
+  assert.equal(JSON.stringify(code), JSON.stringify(SHORT_CARRYING.cells[1]), 'the code cell, its source or its outputs changed');
+  assert.equal(JSON.stringify(notebook!.metadata), JSON.stringify(SHORT_CARRYING.metadata), 'the notebook metadata changed');
+  const cover = sourceOf(notebook!.cells[0]);
+  assert.ok(cover.includes(`**Query:** ${WITHHELD}  \n`), `the cover does not read the withheld line:\n${cover}`);
+  assert.ok(!cover.includes(SHORT_QUESTION), cover);
 });
 
 // --- 6. The summary handler, sent no question -------------------------------------------
