@@ -232,7 +232,8 @@ function expressionsOnly(args: string): string {
  * execution count and a byte count (`src/lib/streaming.ts`;
  * `src/app/api/query-notebook-traceback-driven.test.ts` drives it).
  */
-const BOUND_FUNCTIONS = ['errorLogFacts', 'errorClassOf', 'failureFacts', 'notebookFailureFacts'];
+// R3 P3 RED: notebookFailureFacts removed from the bound.
+const BOUND_FUNCTIONS = ['errorLogFacts', 'errorClassOf', 'failureFacts'];
 
 function withoutBoundCalls(expr: string): string {
   let out = expr;

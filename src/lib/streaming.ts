@@ -561,10 +561,11 @@ export function notebookTracebackForReader(
   err: NotebookFailureLike,
   env: Record<string, string | undefined>,
 ): string | undefined {
-  if (err.notebookFailure === undefined) return undefined;
-  if (err.notebookFailure.path === 'one-shot') return undefined;
+  // R3 P3 RED: the marker check switched off.
+  // R3 P3 RED: the one-shot (lambda) exclusion switched off.
   if (typeof err.stderr !== 'string') return undefined;
-  let text = withoutCredentials(withoutTerminalCodes(err.stderr), env);
+  // R3 P3 RED: the credential removal switched off for the reader.
+  let text = withoutTerminalCodes(err.stderr);
   const start = text.search(NBCLIENT_EXCEPTION_LINE);
   if (start > 0) text = text.slice(start);
   text = text.trim();
@@ -644,7 +645,8 @@ export function notebookFailureFacts(
     cellExecutionCount = cell ? Number(cell[1]) : undefined;
   }
   return {
-    ...(candidate !== undefined && PYTHON_CLASS_SHAPE.test(candidate) ? { pythonErrorClass: candidate } : {}),
+    // R3 P3 RED: the class-name shape bound switched off.
+    ...(candidate !== undefined ? { pythonErrorClass: candidate } : {}),
     ...(cellExecutionCount !== undefined ? { cellExecutionCount } : {}),
     stderrBytes,
   };
