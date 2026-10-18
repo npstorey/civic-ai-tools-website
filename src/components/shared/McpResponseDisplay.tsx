@@ -206,7 +206,7 @@ function TimingFooter({
 
       {/* Row 3: who measured it (design §6) */}
       {measuredBy !== null && (
-        <div data-author="timing" style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+        <div data-author="timing" style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
           {measuredBy}
         </div>
       )}
