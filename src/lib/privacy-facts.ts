@@ -130,6 +130,18 @@ export const OPERATOR_STATES =
   'what the hosting platform records about each visit, such as network addresses; ' +
   'and any legal position.';
 
+/**
+ * What a record keeps under hash-only visibility. The publish dialog states
+ * the same words beside its hash-only choice (`PublishEvidenceDialog.tsx`);
+ * `src/lib/privacy-hash-only-words.test.ts` renders the real dialog and fails
+ * when the two differ. The record's question forms are replaced by
+ * `WITHHELD_QUESTION_TEXT` (`src/lib/notebook.ts`) in the publish handler.
+ */
+export const HASH_ONLY_RECORD_WORDS = 'The record shows only a fingerprint (a hash) of your question.';
+
+/** A record's title, in the words the publish dialog states beside the title field (pinned by the same test). */
+export const RECORD_TITLE_IS_PUBLIC = 'The title is public and becomes the record’s address.';
+
 /** A transparency log's defining property. */
 export const TRANSPARENCY_LOG_PERMANENCE =
   'A transparency log is public and append-only: anyone can look an entry up, and entries are not removed.';
@@ -626,13 +638,31 @@ function whatIsStored(): Statement[] {
         [`When you sign in, the site keeps an account with ${list(columns)}. Every record you publish is stored with your account as its creator.`],
         ['env:DATABASE_URL', 'const:src/lib/db/schema.ts#users', c('ACCOUNT_COLUMNS')],
       ),
+    );
+  }
+  out.push(
+    statement(
+      'prompt-text',
+      [`When you publish, you choose whether the record includes your question's text or a fingerprint (a hash) of it. With the fingerprint: ${HASH_ONLY_RECORD_WORDS}`],
+      [
+        c('HASH_ONLY_RECORD_WORDS'),
+        'const:src/lib/db/schema.ts#promptVisibilityEnum',
+        'const:src/lib/notebook.ts#WITHHELD_QUESTION_TEXT',
+        'const:src/app/api/evidence/route.ts#POST',
+      ],
+    ),
+    statement(
+      'record-title',
+      [RECORD_TITLE_IS_PUBLIC],
+      [c('RECORD_TITLE_IS_PUBLIC'), 'const:src/app/api/evidence/route.ts#POST'],
+    ),
+  );
+  if (process.env.DATABASE_URL) {
+    out.push(
       statement(
-        'prompt-text',
-        [
-          'When you publish, you choose whether the record shows your question in full or only a fingerprint (a hash) of it. ' +
-            "The site keeps your question's text in its database only if you chose to show it in full.",
-        ],
-        ['env:DATABASE_URL', 'const:src/lib/db/schema.ts#promptVisibilityEnum'],
+        'prompt-text-database',
+        ["The site keeps your question's text in its database only if you chose to include it in the record."],
+        ['env:DATABASE_URL', 'const:src/lib/db/schema.ts#promptVisibilityEnum', 'const:src/app/api/evidence/route.ts#POST'],
       ),
     );
   }

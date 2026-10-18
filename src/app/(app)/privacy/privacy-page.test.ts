@@ -84,6 +84,9 @@ function candidatesFor(base: string): string[] {
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === 'next/script') return { url: SCRIPT_STUB_URL, format: 'module', shortCircuit: true };
+    // A trace may name a route handler's export; its module imports Next's
+    // server entry, which plain ESM resolves only with its file extension.
+    if (specifier === 'next/server') return nextResolve('next/server.js', context);
     if (specifier.startsWith('@/')) {
       const found = firstFile(candidatesFor(path.join(SRC, specifier.slice(2))));
       if (found === null) throw new Error(`privacy page test hook: cannot resolve ${specifier}`);
@@ -341,6 +344,8 @@ test('full: every configured part has its statement', () => {
     'cookies',
     'account-row',
     'prompt-text',
+    'prompt-text-database',
+    'record-title',
     'recipient-counter-store',
     'recipient-transparency-log',
     'recipient-source-socrata',
