@@ -728,3 +728,55 @@ export function buildRecordStepView(queries: readonly RecordStepQuery[], refused
     return { sentence: stepSentence(call), outcome: outcome.text, failed: outcome.kind === 'failed' };
   });
 }
+
+// --- The executed run's closing rows -------------------------------------------
+//
+// After Phase A's steps, the executed run's step view closes with its later
+// phases, B, C and D, one row each (#619 W2 P2 item 1, design §4.3). A row
+// exists only for a phase the stream reported, and states only what the run
+// recorded for it.
+
+/** A phase event the stream sent, as the route named it (`{ type: 'phase', name, message }`). */
+export interface ReportedPhase {
+  phase: string;
+  message: string;
+}
+
+/** One closing row: the phase, its name in the reader's words, and the one fact recorded for it. */
+export interface ClosingRow {
+  phase: string;
+  label: string;
+  fact?: string;
+}
+
+/** The phases that close the step view, in order. */
+export const CLOSING_PHASES: readonly string[] = ['B', 'C', 'D'];
+
+/**
+ * The closing rows, in phase order, one per closing phase the stream reported.
+ *
+ *   - The label is the phase message the route sent, without its trailing
+ *     ellipsis (it reported a phase starting; the row reads it as a stage of
+ *     the run) — the same words as `NotebookProgress`'s four rows.
+ *   - C states the sandbox duration the executed notebook recorded
+ *     (`org.civicaitools.execution.executionDuration_ms`, the figure section
+ *     C states as "Sandbox duration"), when it recorded one. Not the
+ *     `notebook` event's own duration, which is the route's wall clock from
+ *     C's start to that event and includes D's stamping.
+ *   - B and D state nothing of their own: the run records no per-phase fact
+ *     for B, and D's (the stamp's time, the validator's verdict) are stated
+ *     by sections C and E.
+ */
+export function buildClosingRows(reported: readonly ReportedPhase[], sandboxDurationMs: number | null): ClosingRow[] {
+  const rows: ClosingRow[] = [];
+  for (const phase of CLOSING_PHASES) {
+    const event = reported.find((r) => r.phase === phase);
+    if (event === undefined) continue;
+    const label = event.message.replace(/\s*(…|\.\.\.)$/, '');
+    const fact = phase === 'C' && sandboxDurationMs !== null
+      ? `Sandbox duration ${(sandboxDurationMs / 1000).toFixed(1)}s`
+      : undefined;
+    rows.push({ phase, label, ...(fact !== undefined ? { fact } : {}) });
+  }
+  return rows;
+}

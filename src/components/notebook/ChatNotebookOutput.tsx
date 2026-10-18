@@ -42,7 +42,9 @@
  *   5. the steps (LAYOUT-WEB W2 P2): one per Phase A iteration, each call
  *      with the sentence the site writes from its name and arguments and the
  *      outcome `describeQueryOutcome` states, under one author line — shown
- *      when the run recorded its steps (`stepGroups`);
+ *      when the run recorded its steps (`stepGroups`) — then a closing row
+ *      for each of the B, C and D phases the run reported (`closingPhases`),
+ *      each stating only what the run recorded for it;
  *   6. one disclosure, closed by default, holding A-G and the signers in
  *      envelope order. F renders the answer again, so the envelope reads whole
  *      to someone inspecting it. D keeps each call's recorded fields.
@@ -68,9 +70,11 @@ import { useInstanceAttribution } from '@/components/EvidenceOriginProvider';
 import {
   UNPLACED_CALLS_LINE,
   asStepCall,
+  buildClosingRows,
   buildRunStepView,
   stepsAuthorLine,
   type ProgressGroup,
+  type ReportedPhase,
   type StepViewCall,
 } from '@/lib/answer-view/steps';
 
@@ -85,6 +89,8 @@ interface ChatNotebookOutputProps {
    * W2 P2). Absent when the state recorded none: the step view is not shown.
    */
   stepGroups?: ProgressGroup[];
+  /** The phase events the run reported (the hook's `phaseLog`): B, C and D close the step view. */
+  closingPhases?: ReportedPhase[];
   /** Phase 2a2 item 1: composed system prompt text streamed via SSE. */
   composedSystemPrompt?: string | null;
   composedSystemPromptHash?: string | null;
@@ -124,6 +130,7 @@ export default function ChatNotebookOutput({
   portal,
   toolCalls,
   stepGroups,
+  closingPhases,
   composedSystemPrompt,
   composedSystemPromptHash,
   signingKeyId,
@@ -176,6 +183,9 @@ export default function ChatNotebookOutput({
   // The steps (W2 P2): the hook's groups paired with the captured calls, which
   // the route sends without the repeats it drops (`pairCallsToSteps`).
   const stepView = stepGroups !== undefined ? buildRunStepView(stepGroups, toolCalls.map(asStepCall)) : null;
+  // The B, C and D rows after them (fix 1): C reads the sandbox duration the
+  // executed notebook recorded, the figure section C states.
+  const closing = buildClosingRows(closingPhases ?? [], view.executionDurationMs);
 
   // The answer: the rendering code cell's outputs (Phase 2a2 item 2), else the
   // legacy synthesis markdown, else a statement that there is none. Built once
@@ -242,7 +252,7 @@ export default function ChatNotebookOutput({
       />
 
       {/* The steps, outside the disclosure, after the citation (W2 P2). */}
-      {stepView !== null && (stepView.steps.length > 0 || stepView.unplaced.length > 0) && (
+      {stepView !== null && (stepView.steps.length > 0 || stepView.unplaced.length > 0 || closing.length > 0) && (
         <div data-part="steps" style={{ margin: '16px 0 8px' }}>
           {stepsAuthor !== null && (
             <p data-part="steps-author" style={{ margin: '0 0 8px', fontSize: '12px', color: 'var(--text-muted)' }}>
@@ -266,6 +276,17 @@ export default function ChatNotebookOutput({
               {stepView.unplaced.map((call, j) => <StepCallRow key={j} call={call} />)}
             </div>
           )}
+          {closing.map((row) => (
+            <div data-part="closing-row" key={row.phase} style={{
+              marginTop: '8px', padding: '6px 12px', fontSize: '13px',
+              color: 'var(--text-secondary)', display: 'flex', flexWrap: 'wrap', gap: '0 8px',
+            }}>
+              <span>{row.label}</span>
+              {row.fact !== undefined && (
+                <span data-part="closing-fact" style={{ color: 'var(--text-muted)' }}>{row.fact}</span>
+              )}
+            </div>
+          ))}
         </div>
       )}
 

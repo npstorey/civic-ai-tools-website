@@ -26,6 +26,7 @@ import {
   generateGroupLabel,
   mapGroupsToToolCalls,
   asStepCall,
+  buildClosingRows,
   buildRecordStepView,
   buildRunStepView,
   pairCallsToSteps,
@@ -415,4 +416,19 @@ test('W2 P2 asStepCall: absent arguments read as none, and every other field is 
   const withArgs = { name: 'socrata__get_data', args: Q_A };
   assert.equal(asStepCall(withArgs).args, Q_A);
   assert.equal(stepSentence(mapped), reasonWithoutIdentifier(generateToolReason({}, captured.name)));
+});
+
+test('W2 P2 fix 1 closing rows: B, C, D in phase order, only those reported, C with the recorded sandbox duration', () => {
+  const reported = [
+    { phase: 'A', message: 'Discovering datasets…' },
+    { phase: 'C', message: 'Executing in sandbox…' },
+    { phase: 'B', message: 'Synthesizing notebook…' },
+    { phase: 'complete', message: 'Done.' },
+  ];
+  assert.deepEqual(buildClosingRows(reported, 4200), [
+    { phase: 'B', label: 'Synthesizing notebook' },
+    { phase: 'C', label: 'Executing in sandbox', fact: `Sandbox duration ${(4200 / 1000).toFixed(1)}s` },
+  ], 'no row for A, complete or an unreported D; B before C whatever the order reported');
+  assert.deepEqual(buildClosingRows(reported, null).map((r) => r.fact), [undefined, undefined], 'no duration stated when none was recorded');
+  assert.deepEqual(buildClosingRows([], 4200), [], 'no rows when no phase was recorded');
 });

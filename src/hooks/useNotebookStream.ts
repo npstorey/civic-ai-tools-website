@@ -21,7 +21,13 @@ import type { NotebookPhase } from '@/components/notebook/NotebookProgress';
 import type { PhaseAToolCall } from '@/lib/notebook-author';
 // The run's steps, folded the way the comparison folds its own (LAYOUT-WEB W2
 // P2): one group per Phase A iteration, from the progress lines.
-import { applyProgressEvent, closeStepsOnComplete, closeStepsOnError, type StepLog } from '@/lib/answer-view/steps';
+import {
+  applyProgressEvent,
+  closeStepsOnComplete,
+  closeStepsOnError,
+  type ReportedPhase,
+  type StepLog,
+} from '@/lib/answer-view/steps';
 
 /** A single tool call captured during Phase A — used to populate the
  *  deliberative-trace section of the chat-output A-G renderer. Shape mirrors
@@ -68,6 +74,14 @@ export interface NotebookStreamState {
    * no steps were recorded, and the step view is not shown.
    */
   steps?: StepLog;
+  /**
+   * Every `phase` event the stream sent, with the route's message, in order
+   * (LAYOUT-WEB W2 P2 fix 1): the executed run's step view closes with a row
+   * for each of B, C and D the run reported (`buildClosingRows`). `phase`
+   * above keeps only the latest. Optional, as `steps` is; absent means none
+   * was recorded.
+   */
+  phaseLog?: ReportedPhase[];
   phaseStartedAt: number | null;
   startedAt: number | null;
   completedAt: number | null;
@@ -110,6 +124,7 @@ const INITIAL_STATE: NotebookStreamState = {
   detailTool: null,
   toolCalls: [],
   steps: NO_STEPS,
+  phaseLog: [],
   phaseStartedAt: null,
   startedAt: null,
   completedAt: null,
@@ -158,10 +173,13 @@ export function useNotebookStream() {
       switch (raw.type) {
         case 'phase': {
           const name = raw.name as NotebookPhase;
+          // The phase as the run reported it, kept for the closing rows.
+          const reported = typeof raw.message === 'string' ? [{ phase: name, message: raw.message }] : [];
           if (name === 'complete') {
             setState((prev) => ({
               ...prev,
               phase: 'complete',
+              phaseLog: [...(prev.phaseLog ?? []), ...reported],
               detail: null,
               detailTool: null,
               completedAt: Date.now(),
@@ -170,6 +188,7 @@ export function useNotebookStream() {
             setState((prev) => ({
               ...prev,
               phase: name,
+              phaseLog: [...(prev.phaseLog ?? []), ...reported],
               phaseStartedAt: Date.now(),
               detail: null,
               detailTool: null,
