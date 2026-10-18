@@ -59,7 +59,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { synthesizeNotebook } from './synthesize.ts';
 import { stampExecutedNotebook } from './phase-d.ts';
@@ -277,12 +277,23 @@ test('F6 (b) a discovery-only notebook states no count — the case the sentence
   assert.equal(readReproductionClaim(notebook.cells), null, 'a discovery-only notebook renders no step and states no ratio (P4, green at base)');
 });
 
-test('F6 (c) declared: ChatNotebookOutput renders that sentence, not a literal that is false for some notebooks', () => {
-  const source = readFileSync(fileURLToPath(new URL('../../components/notebook/ChatNotebookOutput.tsx', import.meta.url)), 'utf8');
-  assert.doesNotMatch(
-    source,
-    /the notebook states how many of\s+them do/,
-    'ChatNotebookOutput.tsx carries the literal "the notebook states how many of them do" above every notebook',
-  );
-  assert.match(source, /reproductionScopeSentence/, 'ChatNotebookOutput.tsx does not read the sentence from the formatter');
+// Since LAYOUT-WEB W3 P1 the executed run renders through the shared view, and
+// section E's sentence is written in the run's adapter (`adapt-notebook.ts`),
+// which the component calls; the read follows the sentence there, and holds
+// the component and the view to carrying no literal of it.
+test('F6 (c) declared: the executed run writes that sentence through the formatter, in its adapter, not a literal that is false for some notebooks', () => {
+  const read = (relative: string) => {
+    const url = new URL(relative, import.meta.url);
+    assert.ok(existsSync(url), `no ${relative}: the read has nothing to read`);
+    return readFileSync(fileURLToPath(url), 'utf8');
+  };
+  const adapter = read('../../components/answer-view/adapt-notebook.ts');
+  assert.match(adapter, /reproductionScopeSentence\(/, 'the executed run’s adapter does not write the sentence through the formatter');
+  for (const file of ['../../components/notebook/ChatNotebookOutput.tsx', '../../components/answer-view/AnswerView.tsx', '../../components/answer-view/adapt-notebook.ts']) {
+    assert.doesNotMatch(
+      read(file),
+      /the notebook states how many of\s+them do/,
+      `${file} carries the literal "the notebook states how many of them do" above every notebook`,
+    );
+  }
 });
