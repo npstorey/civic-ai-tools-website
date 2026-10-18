@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
-import { mapGroupsToToolCalls } from '@/hooks/useStreamingComparison';
+// The steps and their calls, from the one step module (pure, shared with the
+// other readers of a run's steps).
+import type { ProgressLogEntry, ProgressGroup, StepCall } from '@/lib/answer-view/steps';
+import { mapGroupsToToolCalls } from '@/lib/answer-view/steps';
 import { getEducationalAnnotation, buildNarrativeSummary, buildStatsSummary, buildBreadcrumbLabel, generateQueryIntentLabel, isQueryCall } from '@/lib/streaming';
 import ToolCallCard from './ToolCallCard';
 import NarrationExplainer from './NarrationExplainer';
@@ -14,7 +16,7 @@ interface ProgressLogProps {
   variant: 'without-mcp' | 'with-mcp';
   isActive: boolean;
   isComplete?: boolean;
-  toolsCalled?: ToolCall[];
+  toolsCalled?: StepCall[];
   totalDuration_ms?: number;
 }
 
@@ -329,7 +331,7 @@ function CompletedSummary({
   totalDuration_ms,
   groups,
 }: {
-  toolsCalled: ToolCall[];
+  toolsCalled: StepCall[];
   totalDuration_ms?: number;
   groups: ProgressGroup[];
 }) {
