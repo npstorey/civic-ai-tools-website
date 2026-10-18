@@ -28,6 +28,11 @@
 // table is the guide's inventory of outbound kinds; a kind the guide never
 // listed is invisible to this guard, as it is to the proxy suite.
 //
+// THE PROXY'S EXCEPTIONS (#516 WF) come from the same table: its last column
+// says whether each kind honours the proxy variables, and a row that does not
+// say "yes" needs an entry in `PROXY_EXCEPTIONS`, which the page states when
+// that row's traffic is configured. Checked both ways, with a fixture each.
+//
 // THE FIXTURES live in this file: a recipient row with no statement, and a
 // statement whose row is gone. Each must be reported, by name.
 //
@@ -86,7 +91,8 @@ registerHooks({
 });
 
 const { ANALYTICS_SERVICES } = (await import(pathToFileURL(ANALYTICS_FILE).href)) as { ANALYTICS_SERVICES: readonly string[] };
-const { analyticsKey, recipientDrift, recipientStatementKeys } = await import('./privacy-facts.ts');
+const facts = await import('./privacy-facts.ts');
+const { analyticsKey, recipientDrift, recipientStatementKeys } = facts;
 
 // --- The source ---------------------------------------------------------------
 
@@ -95,6 +101,8 @@ interface OutboundRow {
   kind: string;
   /** Every backticked `src/…` path in the second cell. */
   modules: string[];
+  /** The third cell, "Honours the proxy variables". */
+  honours: string;
 }
 
 function outboundRows(doc: string): OutboundRow[] {
@@ -110,7 +118,7 @@ function outboundRows(doc: string): OutboundRow[] {
   for (const line of lines.slice(header + 2)) {
     if (!line.startsWith('|')) break;
     const cells = line.split('|').slice(1, -1).map((cell) => cell.trim());
-    rows.push({ kind: cells[0], modules: [...(cells[1] ?? '').matchAll(/`(src\/[^`]+)`/g)].map((m) => m[1]) });
+    rows.push({ kind: cells[0], modules: [...(cells[1] ?? '').matchAll(/`(src\/[^`]+)`/g)].map((m) => m[1]), honours: cells[2] ?? '' });
   }
   return rows;
 }
@@ -191,4 +199,37 @@ test('a row removed from the source leaves its statement reported', () => {
   const dropped = ROWS[0].kind;
   const { unmatched } = recipientDrift(RECIPIENTS.filter((key) => key !== dropped), recipientStatementKeys());
   assert.deepEqual(unmatched, [dropped]);
+});
+
+// --- #516 WF: what the egress proxy does not carry, from the same table -------
+//
+// A row whose last column does not begin with "yes" is traffic the proxy does
+// not carry (or carries only in part). The page states each such row's
+// exception when the row's traffic is configured, so each must have an entry
+// in `PROXY_EXCEPTIONS`; and each entry must name a row of the table.
+
+function proxyDrift(rows: readonly OutboundRow[], exceptionKeys: readonly string[]): { unstated: string[]; unmatched: string[] } {
+  return {
+    unstated: rows.filter((row) => !/^yes\b/.test(row.honours)).map((row) => row.kind).filter((kind) => !exceptionKeys.includes(kind)),
+    unmatched: exceptionKeys.filter((key) => !rows.some((row) => row.kind === key)),
+  };
+}
+
+const PROXY_EXCEPTION_KEYS = Object.keys(((facts as Record<string, unknown>).PROXY_EXCEPTIONS ?? {}) as Record<string, string>);
+
+test('the honours column is read: some rows say yes, and some do not', () => {
+  assert.ok(ROWS.every((row) => row.honours.length > 0), 'a row has no "Honours the proxy variables" cell');
+  assert.ok(ROWS.filter((row) => /^yes\b/.test(row.honours)).length >= 10, 'fewer than ten rows read as "yes"');
+  assert.ok(ROWS.filter((row) => !/^yes\b/.test(row.honours)).length >= 3, 'fewer than three rows read as not "yes"');
+});
+
+test('every row the proxy does not fully carry has its exception on the privacy page, and every exception names a row', () => {
+  assert.ok(PROXY_EXCEPTION_KEYS.length > 0, 'privacy-facts.ts exports no PROXY_EXCEPTIONS');
+  assert.deepEqual(proxyDrift(ROWS, PROXY_EXCEPTION_KEYS), { unstated: [], unmatched: [] });
+});
+
+test('a row the proxy does not carry, with no exception, is reported; so is an exception whose row is gone', () => {
+  const fixture: OutboundRow = { kind: FIXTURE_ROW, modules: [], honours: '**no**' };
+  assert.deepEqual(proxyDrift([...ROWS, fixture], PROXY_EXCEPTION_KEYS).unstated, [FIXTURE_ROW]);
+  assert.deepEqual(proxyDrift(ROWS, [...PROXY_EXCEPTION_KEYS, FIXTURE_STATEMENT]).unmatched, [FIXTURE_STATEMENT]);
 });
