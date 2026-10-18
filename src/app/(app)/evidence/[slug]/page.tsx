@@ -56,10 +56,14 @@ async function resolvePackageForRender(pkg: EvidencePackage): Promise<ResolvedPa
   const outputIsBlob = isBlobRef(pkg.output);
   const outputBlobRef = outputIsBlob ? (pkg.output as BlobRef) : null;
   let resolvedOutput: string;
+  // An output blob that cannot be fetched is said so by the record adapter, in
+  // the site's words under no author line (`OUTPUT_UNAVAILABLE`); the empty
+  // string here is never rendered as the answer.
+  let outputUnavailable = false;
   if (outputIsBlob) {
-    resolvedOutput =
-      (await fetchBlobRefText(pkg.output as BlobRef)) ??
-      '[Output blob could not be fetched; see the Package hash below to audit.]';
+    const fetched = await fetchBlobRefText(pkg.output as BlobRef);
+    outputUnavailable = fetched === null;
+    resolvedOutput = fetched ?? '';
   } else {
     resolvedOutput = pkg.output as string;
   }
@@ -85,6 +89,7 @@ async function resolvePackageForRender(pkg: EvidencePackage): Promise<ResolvedPa
     pkg: resolved,
     outputIsBlob,
     outputBlobRef,
+    outputUnavailable,
     skillTextIsBlob,
     skillTextBlobRef,
   };

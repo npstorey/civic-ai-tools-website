@@ -91,7 +91,9 @@ export type AnswerContent =
   | { kind: 'cell-outputs'; outputs: NotebookOutput[] }
   | { kind: 'none' }
   /** The record: its package could not be loaded, so no answer is placed — first or as F. */
-  | { kind: 'absent' };
+  | { kind: 'absent' }
+  /** The record: its output is a blob the page could not fetch. `text` is the site's sentence saying so. */
+  | { kind: 'unavailable'; text: string };
 
 /** Part 2 (and F): rendered once, placed twice. */
 export interface AnswerPart {

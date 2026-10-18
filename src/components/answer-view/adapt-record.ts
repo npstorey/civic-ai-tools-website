@@ -69,6 +69,8 @@ export interface ResolvedPackageData {
   pkg: EvidencePackage;
   outputIsBlob: boolean;
   outputBlobRef: BlobRef | null;
+  /** The output is a blob the page could not fetch: `pkg.output` holds a placeholder, not the model's words. */
+  outputUnavailable?: boolean;
   skillTextIsBlob: boolean;
   skillTextBlobRef: BlobRef | null;
 }
@@ -91,6 +93,14 @@ export interface RecordAdapterInput {
   /** The instance's declared host (`getInstanceAttribution().host`), or null. */
   instance: string | null;
 }
+
+/**
+ * The answer part's words when the output blob could not be fetched. The site
+ * wrote them, so they sit under no author line (design §6: nothing the site
+ * wrote sits under a label that names the model).
+ */
+export const OUTPUT_UNAVAILABLE =
+  'The answer is not shown: the stored copy of this record’s output could not be fetched. The package hash below identifies the record for audit.';
 
 /** The spec section the status row links an A-G-format record to. */
 export const DATHERE_SPEC_URL =
@@ -127,7 +137,7 @@ export function mcpServerHosts(servers: Array<{ url: string }> | undefined): str
  * run's own adapter so the two cannot differ; any other record answers with
  * its `output`, under the model's line.
  */
-function recordAnswer(pkg: EvidencePackage, notebook: unknown, modelName: string): AnswerPart {
+function recordAnswer(pkg: EvidencePackage, notebook: unknown, modelName: string, outputUnavailable: boolean): AnswerPart {
   if (notebook !== undefined && readNotebookProvenanceOfNotebook(notebook).state === 'executed') {
     const outputs = buildChatEvidenceView({ notebook: notebook as Notebook, prompt: '', model: '', portal: '', toolCalls: [] }).renderingCellOutputs;
     if (outputs !== null && outputs.length > 0) {
@@ -141,6 +151,9 @@ function recordAnswer(pkg: EvidencePackage, notebook: unknown, modelName: string
         socrataMcpUrl: null,
       }).answer;
     }
+  }
+  if (outputUnavailable) {
+    return { content: { kind: 'unavailable', text: OUTPUT_UNAVAILABLE }, authors: [], streaming: false };
   }
   return {
     content: typeof pkg.output === 'string' ? { kind: 'markdown', markdown: pkg.output } : { kind: 'none' },
@@ -257,7 +270,7 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
       refused: describeRefusedRequests(pkg.queries, fromTrace.refused),
       unrecorded: describeUnrecordedOutcomes(pkg),
     },
-    answer: recordAnswer(pkg, notebook, modelName),
+    answer: recordAnswer(pkg, notebook, modelName, input.resolution?.outputUnavailable === true),
     citation: null,
     recordCitation,
     steps,
@@ -274,7 +287,8 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
         ? { recordNotebook: { notebook, slug: row.slug, assertion: reproductionAssertionFor(notebook), bundleHref: isDatHere ? bundleHref : null } }
         : {}),
       answerAgain: true,
-      ...(input.resolution?.outputIsBlob && input.resolution.outputBlobRef
+      // Not for a blob the page could not fetch: it was not read, so not verified.
+      ...(input.resolution?.outputIsBlob && input.resolution.outputBlobRef && !input.resolution.outputUnavailable
         ? { answerNote: `Output stored as blob (verified) · ${input.resolution.outputBlobRef.size.toLocaleString()} bytes` }
         : {}),
       // G: the package's summary, else the row's, under no author line.

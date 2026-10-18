@@ -62,9 +62,17 @@ import {
 
 // --- Pieces ---------------------------------------------------------------------
 
+/**
+ * react-markdown hands every override its hast `node` as a prop. Spread onto an
+ * element, it becomes the attribute `node="[object Object]"`; each override
+ * below takes it out before spreading the rest.
+ */
+type MarkdownProps<T extends keyof React.JSX.IntrinsicElements> = React.ComponentPropsWithoutRef<T> & { node?: unknown };
+
 /** Links in an answer open in a new tab. */
 const MARKDOWN_COMPONENTS = {
-  a: ({ href, children, ...props }: React.ComponentPropsWithoutRef<'a'>) => (
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  a: ({ node, href, children, ...props }: MarkdownProps<'a'>) => (
     <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }} {...props}>
       {children}
     </a>
@@ -73,8 +81,10 @@ const MARKDOWN_COMPONENTS = {
 
 /** The sources line renders inline: no block wrappers, monospace links. */
 const SOURCES_COMPONENTS = {
-  p: ({ children, ...props }: React.ComponentPropsWithoutRef<'p'>) => <span {...props}>{children}</span>,
-  a: ({ href, children, ...props }: React.ComponentPropsWithoutRef<'a'>) => (
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  p: ({ node, children, ...props }: MarkdownProps<'p'>) => <span {...props}>{children}</span>,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  a: ({ node, href, children, ...props }: MarkdownProps<'a'>) => (
     <a
       href={href}
       target="_blank"
@@ -171,6 +181,9 @@ export function AnswerBody({ answer }: { answer: AnswerPart }) {
     <div data-part="answer" className="response-markdown">
       {content.kind === 'cell-outputs' ? (
         <RenderingCellOutputs outputs={content.outputs} />
+      ) : content.kind === 'unavailable' ? (
+        // The site's own words, under no author line: nothing the model wrote is shown.
+        <em data-part="answer-unavailable" style={{ color: 'var(--text-muted)' }}>{content.text}</em>
       ) : content.kind === 'markdown' ? (
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{content.markdown}</ReactMarkdown>
       ) : (
