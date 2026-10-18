@@ -25,12 +25,20 @@ import {
   closeStepsOnError,
   generateGroupLabel,
   mapGroupsToToolCalls,
+  asStepCall,
+  buildRecordStepView,
+  buildRunStepView,
+  pairCallsToSteps,
+  stepSentence,
+  stepsAuthorLine,
   type ProgressGroup,
   type ProgressLogEntry,
   type StepCall,
   type StepLog,
   type StepProgressEvent,
 } from './steps.ts';
+import { generateToolReason, reasonWithoutIdentifier } from '../streaming.ts';
+import { describeQueryOutcome } from '../evidence/query-step.ts';
 
 const EMPTY: StepLog = { progressLog: [], progressGroups: [] };
 
@@ -244,4 +252,167 @@ test('the accumulation never mutates the log it is handed', () => {
   closeStepsOnComplete(before);
   closeStepsOnError(before);
   assert.equal(JSON.stringify(before), snapshot);
+});
+
+// --- The step view (LAYOUT-WEB W2 P2) ----------------------------------------------
+//
+// The executed run's calls arrive with repeats removed (the route drops a call
+// whose name and arguments equal an earlier one's), so its progress lines can
+// outnumber its calls. These fixtures each have a shape position pairing gets
+// wrong, so the pairing's answer is asserted where `mapGroupsToToolCalls`
+// would give another.
+
+const Q_A = { type: 'query', dataset_id: 'aaaa-1111', select: 'count(*)' };
+const Q_B = { type: 'query', dataset_id: 'bbbb-2222', where: "issued > '2026-01-01'" };
+const Q_A_BY = { type: 'query', dataset_id: 'aaaa-1111', group: 'borough' };
+const M_A = { type: 'metadata', dataset_id: 'aaaa-1111' };
+
+/** Fold a run's `tool_start`/`tool_complete` pairs into its steps, as the hook does. */
+function stepsOf(lines: Array<{ iteration: number; message: string; op: string; failed?: boolean }>): ProgressGroup[] {
+  const events: StepProgressEvent[] = lines.flatMap((l) => {
+    const tool = { toolName: 'socrata__get_data', operationType: l.op };
+    return [
+      { message: l.message, phase: 'tool_start', iteration: l.iteration, ...tool },
+      {
+        message: l.message, phase: 'tool_complete', iteration: l.iteration, ...tool,
+        ...(l.failed ? { failed: true, failureKind: 'timeout' as const } : {}),
+      },
+    ];
+  });
+  return closeStepsOnComplete(run(events)).progressGroups;
+}
+
+const call = (args: Record<string, unknown>, fields: Partial<StepCall> = {}): StepCall =>
+  ({ name: 'socrata__get_data', operationType: args.type as string, args, ...fields });
+
+// Step 1: two calls. Step 2: an identical repeat of step 1's query (dropped from
+// the calls). Step 3: a rejected call on a dataset no other call touches, then
+// a new query.
+const REPEAT_GROUPS = stepsOf([
+  { iteration: 1, message: 'Reading the columns', op: 'metadata' },
+  { iteration: 1, message: 'Counting records', op: 'query' },
+  { iteration: 2, message: 'Counting records', op: 'query' },
+  { iteration: 3, message: 'Querying permits', op: 'query', failed: true },
+  { iteration: 3, message: 'Grouping by borough', op: 'query' },
+]);
+const REPEAT_CALLS = [
+  call(M_A),
+  call(Q_A, { resultSummary: { rows: 1, columns: 1 } }),
+  call(Q_B, { failed: true, failureKind: 'timeout', duration_ms: 45000 }),
+  call(Q_A_BY, { resultSummary: { rows: 5, columns: 2 } }),
+];
+
+test('W2 P2 pairing: a dropped repeat does not move a later call into the step before its own', () => {
+  // The premise: by position, the rejected call lands in step 2.
+  const byPosition = mapGroupsToToolCalls(REPEAT_GROUPS, REPEAT_CALLS);
+  assert.deepEqual(byPosition.map((g) => g.toolCalls.length), [2, 1, 1], 'premise: position pairing misplaces the calls here');
+  assert.equal(byPosition[1].toolCalls[0], REPEAT_CALLS[2], 'premise: position pairing puts the rejected call in step 2');
+
+  const pairing = pairCallsToSteps(REPEAT_GROUPS, REPEAT_CALLS);
+  assert.deepEqual(pairing.placed, [[REPEAT_CALLS[0], REPEAT_CALLS[1]], [], [REPEAT_CALLS[2], REPEAT_CALLS[3]]]);
+  assert.deepEqual(pairing.unplaced, []);
+  const startsArgs = pairing.entries.map((g) => g.filter((e) => e.phase === 'tool_start').map((e) => e.args));
+  assert.deepEqual(startsArgs, [[M_A, Q_A], [Q_A], [Q_B, Q_A_BY]], 'each line carries its call’s arguments, and the repeat its twin’s');
+  assert.equal(REPEAT_GROUPS[0].entries[0].args, undefined, 'the groups handed in are not changed');
+});
+
+test('W2 P2 pairing: a call that could sit in either of two steps is placed in neither', () => {
+  // Step 1 holds two identical-looking queries, step 2 one; two calls came
+  // back. The first sits on step 1's first line in every history; the second
+  // could be step 1's second line (step 2's is a repeat) or step 2's (step 1's
+  // second is a repeat). The lines carry no arguments to tell them apart.
+  const groups = stepsOf([
+    { iteration: 1, message: 'Counting records', op: 'query' },
+    { iteration: 1, message: 'Counting records', op: 'query' },
+    { iteration: 2, message: 'Counting records', op: 'query' },
+  ]);
+  const calls = [call(Q_A), call(Q_A_BY)];
+  const pairing = pairCallsToSteps(groups, calls);
+  assert.deepEqual(pairing.placed, [[calls[0]], []]);
+  assert.deepEqual(pairing.unplaced, [calls[1]]);
+  const startsArgs = pairing.entries.map((g) => g.filter((e) => e.phase === 'tool_start').map((e) => e.args));
+  assert.deepEqual(startsArgs, [[Q_A, undefined], [undefined]], 'only the line whose call is certain learns arguments');
+});
+
+test('W2 P2 pairing: a successful retry of a rejected call, dropped as a repeat, leaves the rejection in its own step', () => {
+  const groups = stepsOf([
+    { iteration: 1, message: 'Counting records', op: 'query', failed: true },
+    { iteration: 2, message: 'Counting records', op: 'query' },
+  ]);
+  const calls = [call(Q_A, { failed: true, failureKind: 'timeout' })];
+  const pairing = pairCallsToSteps(groups, calls);
+  assert.deepEqual(pairing.placed, [[calls[0]], []]);
+  assert.deepEqual(pairing.unplaced, []);
+  assert.deepEqual(pairing.entries[1].filter((e) => e.phase === 'tool_start').map((e) => e.args), [Q_A], 'the retry repeats the one call before it');
+});
+
+test('W2 P2 pairing: calls no history can hold are all unplaced, and no line learns arguments', () => {
+  const groups = stepsOf([{ iteration: 1, message: 'Counting records', op: 'query' }]);
+  const calls = [call(Q_A), call(Q_B)];
+  const pairing = pairCallsToSteps(groups, calls);
+  assert.deepEqual(pairing.placed, [[]]);
+  assert.deepEqual(pairing.unplaced, calls);
+  assert.equal(pairing.entries[0][0].args, undefined);
+});
+
+test('W2 P2 the run’s step view: one step per iteration, the calls placed, each line written by the formatters', () => {
+  const view = buildRunStepView(REPEAT_GROUPS, REPEAT_CALLS);
+  assert.equal(view.steps.length, 3, 'one step per iteration');
+  assert.deepEqual(view.steps.map((s) => s.calls.length), [2, 0, 2]);
+  assert.deepEqual(view.unplaced, []);
+  const pairing = pairCallsToSteps(REPEAT_GROUPS, REPEAT_CALLS);
+  view.steps.forEach((step, gi) => {
+    assert.equal(step.label, generateGroupLabel(pairing.entries[gi], pairing.entries.slice(0, gi).flat()), `step ${gi + 1}'s label`);
+  });
+  assert.notEqual(view.steps[0].label, OPEN_STEP_LABEL, 'the labels read the arguments the calls carried');
+  const shown = view.steps.flatMap((s) => s.calls);
+  REPEAT_CALLS.forEach((c, i) => {
+    assert.equal(shown[i].sentence, reasonWithoutIdentifier(generateToolReason(c.args, c.name)));
+    assert.equal(shown[i].outcome, describeQueryOutcome({
+      failed: c.failed, failureKind: c.failureKind, resultRows: c.resultSummary?.rows,
+      resultColumns: c.resultSummary?.columns, duration_ms: c.duration_ms,
+    }).text);
+  });
+  assert.equal(view.steps[2].calls[0].failed, true, 'the rejected call is in step 3, stated as failed');
+});
+
+test('W2 P2 the run’s step view: with no recorded steps, every call is listed as unplaced, none in a step', () => {
+  const view = buildRunStepView([], REPEAT_CALLS);
+  assert.equal(view.steps.length, 0);
+  assert.equal(view.unplaced.length, REPEAT_CALLS.length);
+});
+
+test('W2 P2 the record’s step view: one step per entry, the sentence and outcome from the formatters', () => {
+  const queries = [
+    { tool: 'socrata__get_data', operationType: 'query', arguments: Q_A_BY, resultRows: 5, resultColumns: 2, duration_ms: 410 },
+    { tool: 'socrata__fetch', operationType: 'fetch', arguments: { id: 'record:data.example.org:abcd-1234:7' } },
+    { tool: 'socrata__get_data', operationType: 'query', arguments: Q_B },
+  ];
+  const refused = new Set([2]);
+  const view = buildRecordStepView(queries, refused);
+  assert.equal(view.steps.length, queries.length);
+  queries.forEach((q, i) => {
+    assert.equal(view.steps[i].calls.length, 1);
+    assert.equal(view.steps[i].calls[0].sentence, reasonWithoutIdentifier(generateToolReason(q.arguments, q.tool)));
+    assert.equal(view.steps[i].calls[0].outcome, describeQueryOutcome(q, { refusedInTrace: refused.has(i) }).text);
+  });
+  assert.equal(view.steps[1].calls[0].sentence, undefined, 'a sentence that names an identifier is dropped');
+  assert.equal(view.steps[2].calls[0].failed, true, 'an entry its trace marks refused is stated as failed');
+  assert.ok(view.steps.every((s) => !s.label.includes('__')), 'no label prints the exposed name');
+});
+
+test('W2 P2 the author line names the instance, and is absent when none is declared', () => {
+  assert.equal(stepsAuthorLine('records.example.test'), "Steps, written by records.example.test from the model's calls");
+  assert.equal(stepsAuthorLine(null), null);
+  assert.equal(stepsAuthorLine(''), null);
+});
+
+test('W2 P2 asStepCall: absent arguments read as none, and every other field is kept', () => {
+  const captured = { name: 'socrata__get_data', reason: 'to query X', failed: true as const };
+  const mapped = asStepCall(captured);
+  assert.deepEqual(mapped, { ...captured, args: {} });
+  assert.equal('args' in captured, false, 'the captured call is not changed');
+  const withArgs = { name: 'socrata__get_data', args: Q_A };
+  assert.equal(asStepCall(withArgs).args, Q_A);
+  assert.equal(stepSentence(mapped), reasonWithoutIdentifier(generateToolReason({}, captured.name)));
 });

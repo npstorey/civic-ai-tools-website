@@ -18,7 +18,14 @@
 // the test runner has no path mapping.
 
 import { deriveOperationType, isTool, upstreamToolName } from '../mcp/operation-types.ts';
-import { generateQueryIntentLabel, getDatasetName, searchSubject } from '../streaming.ts';
+import {
+  generateQueryIntentLabel,
+  generateToolReason,
+  getDatasetName,
+  reasonWithoutIdentifier,
+  searchSubject,
+} from '../streaming.ts';
+import { describeQueryOutcome } from '../evidence/query-step.ts';
 // Type-only: erased at compile time. The kind vocabulary is declared once,
 // beside the table that turns it into reader-facing copy.
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
@@ -448,4 +455,211 @@ export function closeStepsOnError(log: StepLog): StepLog {
     entries: g.entries.map(e => ({ ...e, isComplete: true })),
   }));
   return { progressLog: newLog, progressGroups: newGroups };
+}
+
+// --- The step view: what a reader sees of a run's steps --------------------------
+//
+// The executed run and the record page show a run's steps outside the
+// disclosure (LAYOUT-WEB W2 P2, design §4.3 and §5): one step per loop
+// iteration on the executed run, one per signed `queries[]` entry on the record
+// page. Each call in a step carries two lines, both written here at view time
+// from the recorded fields, never stored:
+//   - the sentence `generateToolReason` writes from the call's name and
+//     arguments, through `reasonWithoutIdentifier` (absent when that drops it);
+//   - the outcome `describeQueryOutcome` states.
+// The view says once, above the steps, who wrote them (`stepsAuthorLine`).
+
+/** The line above the steps: they are the site's sentences, written from the model's calls. */
+export function stepsAuthorLine(instance: string | null | undefined): string | null {
+  // RED STUB (W2 P2).
+  void instance;
+  return null;
+}
+
+/**
+ * A call as the step view reads it, from a record whose arguments may be
+ * absent: the executed run's captured call carries `name` always and `args`
+ * only when the route sent them (`CapturedToolCall`), the reverse of
+ * `StepCall`. Absent arguments read as none; nothing else is touched, so the
+ * call keeps every field it came with.
+ */
+export function asStepCall<C extends Omit<StepCall, 'args'> & { args?: Record<string, unknown> }>(
+  call: C,
+): Omit<C, 'args'> & { args: Record<string, unknown> } {
+  return { ...call, args: call.args ?? {} };
+}
+
+/** The sentence the site writes for one call, or nothing when it would name an identifier. */
+export function stepSentence(call: { name?: string; args: Record<string, unknown> }): string | undefined {
+  return reasonWithoutIdentifier(generateToolReason(call.args, call.name));
+}
+
+/** One call in the step view. */
+export interface StepViewCall {
+  /** `stepSentence`'s output; absent when the phrase names an identifier. */
+  sentence?: string;
+  /** `describeQueryOutcome`'s text for the call. */
+  outcome: string;
+  /** The outcome is a failure (the call was rejected, or its trace marks it refused). */
+  failed: boolean;
+}
+
+/** One step: its label and its calls, in call order. */
+export interface StepViewStep {
+  label: string;
+  calls: StepViewCall[];
+}
+
+/**
+ * The steps a reader sees. `unplaced` holds calls whose step cannot be told
+ * from what the run recorded (see `pairCallsToSteps`): they are shown, after
+ * the steps, never in a step they may not belong to.
+ */
+export interface StepView {
+  steps: StepViewStep[];
+  unplaced: StepViewCall[];
+}
+
+/** The line under which the step view lists calls it could not place in a step. */
+export const UNPLACED_CALLS_LINE = 'Requests whose step the run did not record:';
+
+/** The progress entries' and the calls' agreement on which tool was called. */
+function sameTool(entry: ProgressLogEntry, call: StepCall): boolean {
+  return entry.toolName !== undefined && entry.toolName === call.name
+    && entry.operationType === call.operationType;
+}
+
+/** ...and on how it ended: rejected or not, and why. */
+function sameCall(entry: ProgressLogEntry, call: StepCall): boolean {
+  if (!sameTool(entry, call)) return false;
+  if ((entry.failed === true) !== (call.failed === true)) return false;
+  return entry.failed !== true || entry.failureKind === call.failureKind;
+}
+
+/** Where each call sits among a run's steps, and the entries that learn its arguments. */
+export interface StepPairing<C extends StepCall> {
+  /** Per step (in `groups` order), the calls known to belong to it, in call order. */
+  placed: C[][];
+  /** Calls whose step cannot be told from what the run recorded. */
+  unplaced: C[];
+  /**
+   * Per step, its entries; a `tool_start` entry carries the arguments of the
+   * call it is known to be, or of the earlier call it is known to repeat.
+   */
+  entries: ProgressLogEntry[][];
+}
+
+/**
+ * Place a run's calls in its steps.
+ *
+ * WHY NOT BY POSITION. The executed run's steps come from the progress lines,
+ * one `tool_start` per call the loop made. Its calls come from the
+ * `phase_a_tool_call` events, which the route sends once Phase A is over and
+ * from which it DROPS a call whose name and arguments equal an earlier one's
+ * (`query-notebook/route.ts`, `sentToolCalls`). So a run that repeats an
+ * identical call has more `tool_start` lines than calls, and pairing them by
+ * position (`mapGroupsToToolCalls`) hands a call to the step before its own.
+ *
+ * HOW. The calls are the `tool_start` lines with the repeats removed, in
+ * order. The progress lines carry no arguments, so a repeat cannot be named
+ * from a line alone; what is known is:
+ *   - a call sits on a line that names the same tool and operation type and
+ *     ended the same way (rejected or not, and the kind);
+ *   - a line no call sits on is a repeat, so an EARLIER call names the same
+ *     tool and operation type (the outcome may differ: a retry of a rejected
+ *     call can succeed and still be dropped).
+ * Every assignment of calls to lines that keeps both rules and the call order
+ * is a possible history. A call is placed in a step only when it sits in that
+ * step in every one of them; otherwise it is unplaced. A line's entry learns a
+ * call's arguments only when that call sits on that line in every history, or
+ * when the line is a repeat in every history and exactly one earlier call
+ * could be the call it repeats. Nothing is guessed.
+ */
+export function pairCallsToSteps<C extends StepCall>(groups: ProgressGroup[], calls: C[]): StepPairing<C> {
+  // RED STUB (W2 P2): pairs by position, the shape the tests show wrong.
+  return {
+    placed: mapGroupsToToolCalls(groups, calls).map((g) => g.toolCalls),
+    unplaced: [],
+    entries: groups.map((g) => g.entries.map((e) => ({ ...e }))),
+  };
+}
+
+function viewCall(call: StepCall): StepViewCall {
+  const outcome = describeQueryOutcome({
+    failed: call.failed,
+    failureKind: call.failureKind,
+    resultRows: call.resultSummary?.rows,
+    resultColumns: call.resultSummary?.columns,
+    duration_ms: call.duration_ms,
+  });
+  return { sentence: stepSentence(call), outcome: outcome.text, failed: outcome.kind === 'failed' };
+}
+
+/** A lone call as a step's only entry, for a run whose steps were not recorded. */
+function loneEntry(call: Pick<StepCall, 'name' | 'operationType' | 'args' | 'failed'>, index: number): ProgressLogEntry {
+  return {
+    message: '',
+    timestamp: 0,
+    phase: 'tool_start',
+    iteration: index + 1,
+    args: call.args,
+    toolName: call.name,
+    operationType: call.operationType,
+    ...(call.failed !== undefined ? { failed: call.failed } : {}),
+  };
+}
+
+/** One step per call, each labelled against the calls before it. */
+function oneStepPerCall(calls: StepCall[], outcomeOf: (call: StepCall, index: number) => StepViewCall): StepView {
+  const entries = calls.map(loneEntry);
+  return {
+    steps: calls.map((call, i) => ({
+      label: generateGroupLabel([entries[i]], entries.slice(0, i)),
+      calls: [outcomeOf(call, i)],
+    })),
+    unplaced: [],
+  };
+}
+
+/**
+ * The executed run's steps: one per loop iteration, from the progress lines
+ * the hook grouped, each with the calls `pairCallsToSteps` places in it and the
+ * label `generateGroupLabel` writes over entries that carry those calls'
+ * arguments. A call whose step the lines do not settle is listed after the
+ * steps, never put in one: with no recorded steps at all, that is every call.
+ */
+export function buildRunStepView(groups: ProgressGroup[], calls: StepCall[]): StepView {
+  const pairing = pairCallsToSteps(groups, calls);
+  return {
+    steps: groups.map((_, gi) => ({
+      label: generateGroupLabel(pairing.entries[gi], pairing.entries.slice(0, gi).flat()),
+      calls: pairing.placed[gi].map(viewCall),
+    })),
+    unplaced: pairing.unplaced.map(viewCall),
+  };
+}
+
+/** The fields of a signed `queries[]` entry the step view reads. Any richer entry fits. */
+export interface RecordStepQuery {
+  tool?: string;
+  operationType?: string;
+  arguments?: Record<string, unknown>;
+  resultRows?: number;
+  resultColumns?: number;
+  duration_ms?: number;
+  failed?: boolean;
+  failureKind?: string;
+}
+
+/**
+ * The record page's steps: one per signed `queries[]` entry (a record keeps no
+ * iteration), each labelled by `generateGroupLabel` against the entries before
+ * it, with the sentence written from the entry's name and arguments and the
+ * outcome `describeQueryOutcome` states. `refused` is `readRefusalsFromTrace`'s
+ * answer, read by the outcome as section D reads it.
+ */
+export function buildRecordStepView(queries: readonly RecordStepQuery[], refused: ReadonlySet<number> = new Set()): StepView {
+  // RED STUB (W2 P2).
+  void queries; void refused; void oneStepPerCall;
+  return { steps: [], unplaced: [] };
 }

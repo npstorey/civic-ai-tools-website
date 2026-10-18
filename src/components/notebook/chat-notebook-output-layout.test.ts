@@ -66,6 +66,30 @@ const { registerHooks } = nodeModule as unknown as {
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(HERE, '..', '..');
 
+// W2 P2: the real hook (`useNotebookStream`) is driven outside React, as
+// `notebook-error-traceback.test.ts` drives it: FOR THE HOOK MODULE ONLY,
+// `react` is a state cell and `@/lib/sse-client` a reader that hands the hook
+// the fixture's events. Every other module gets the real ones.
+const HOOK_FILE = path.join(SRC, 'hooks/useNotebookStream.ts');
+const HOOK_STUB_PREFIX = 'file:///layout-web-w2-p2-hook-stub/';
+const HOOK_STUBS: Record<string, string> = {
+  react: `
+    export function useState(initial) {
+      globalThis.__w2p2Hook.state = typeof initial === 'function' ? initial() : initial;
+      const set = (update) => {
+        globalThis.__w2p2Hook.state = typeof update === 'function' ? update(globalThis.__w2p2Hook.state) : update;
+      };
+      return [globalThis.__w2p2Hook.state, set];
+    }
+    export function useCallback(fn) { return fn; }
+    export function useRef(value) { return { current: value }; }`,
+  '@/lib/sse-client': `
+    export async function connectSSE({ onEvent, onComplete }) {
+      for (const event of globalThis.__w2p2Hook.events) onEvent(event);
+      if (onComplete) onComplete();
+    }`,
+};
+
 function firstFile(candidates: string[]): string | null {
   for (const candidate of candidates) {
     try {
@@ -81,6 +105,12 @@ function candidatesFor(base: string): string[] {
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
+    const from = (context as { parentURL?: string }).parentURL;
+    if (from?.startsWith('file:') && fileURLToPath(from) === HOOK_FILE && specifier in HOOK_STUBS) {
+      return { url: `${HOOK_STUB_PREFIX}${encodeURIComponent(specifier)}.mjs`, format: 'module', shortCircuit: true };
+    }
+    // Next's bundler resolves these subpaths; Node's resolver needs the file.
+    if (/^next\/[a-z-]+$/.test(specifier) && specifier !== 'next/server') return nextResolve(`${specifier}.js`, context);
     if (specifier.startsWith('@/')) {
       const found = firstFile(candidatesFor(path.join(SRC, specifier.slice(2))));
       if (found === null) throw new Error(`layout test hook: cannot resolve ${specifier}`);
@@ -94,6 +124,10 @@ registerHooks({
     return nextResolve(specifier, context);
   },
   load(loadUrl, context, nextLoad) {
+    if (loadUrl.startsWith(HOOK_STUB_PREFIX)) {
+      const key = decodeURIComponent(loadUrl.slice(HOOK_STUB_PREFIX.length).replace(/\.mjs$/, ''));
+      return { format: 'module', source: HOOK_STUBS[key], shortCircuit: true };
+    }
     if (loadUrl.startsWith('file:')) {
       const file = fileURLToPath(loadUrl);
       if (file.startsWith(SRC) && /\.tsx?$/.test(file)) {
@@ -429,4 +463,210 @@ test('W2 P2 (4) section D renders the same markup as on the base, its labels nor
   let i = 0;
   while (i < golden.length && golden[i] === D_ACTUAL[i]) i++;
   assert.fail(`section D differs from the golden at character ${i}:\n  golden: …${golden.slice(Math.max(0, i - 60), i + 80)}…\n  actual: …${D_ACTUAL.slice(Math.max(0, i - 60), i + 80)}…`);
+});
+
+// --- LAYOUT-WEB W2 P2 (1): the executed run renders its steps ---------------------
+//
+// THE LAYOUT GAINS ONE PART, between the citation and the disclosure: the step
+// view, one step per Phase A iteration, each call with the sentence
+// `generateToolReason` writes (through `reasonWithoutIdentifier`) and the
+// outcome `describeQueryOutcome` states, under one author line.
+//
+// HOW IT IS DRIVEN. The real hook reads the fixture's events as the route
+// sends them (`phase_a_progress` lines carry no arguments; the calls arrive as
+// `phase_a_tool_call` events once Phase A is over, with an identical repeat
+// dropped), and `NotebookOutput` renders the state it produced, so the steps
+// travel the path a run's do: hook, page, view.
+//
+// THE FIXTURE CAN FAIL. Three iterations and four calls, so the step count and
+// the call count differ: iteration 1 makes two calls; iteration 2 repeats
+// iteration 1's query exactly, which the route drops from the calls; iteration
+// 3 makes a call that is rejected, on a dataset no other call touches, then a
+// new query. Paired by position, the rejected call would sit in step 2.
+
+const W2_TOOL = 'socrata__get_data';
+const W2_ARGS = {
+  metadata: { type: 'metadata', dataset_id: 'erm2-nwe9' },
+  count: { type: 'query', dataset_id: 'erm2-nwe9', select: 'count(*)' },
+  permits: { type: 'query', dataset_id: 'qq7x-k2rd', where: "issued > '2026-01-01'" },
+  byBorough: { type: 'query', dataset_id: 'erm2-nwe9', group: 'borough' },
+};
+
+/** A call's progress lines as the route forwards them: no arguments. */
+function lines(iteration: number, message: string, operationType: string, failed = false): Array<Record<string, unknown>> {
+  const tool = { toolName: W2_TOOL, operationType };
+  const failure = failed ? { failed: true, failureKind: 'timeout' } : {};
+  return [
+    { type: 'phase_a_progress', phase: 'tool_start', iteration, message, ...tool },
+    { type: 'phase_a_progress', phase: 'tool_complete', iteration, message, ...tool, ...failure },
+  ];
+}
+
+const W2_CALLS = [
+  { type: 'phase_a_tool_call', name: W2_TOOL, operationType: 'metadata', reason: 'x', args: W2_ARGS.metadata, duration_ms: 120 },
+  { type: 'phase_a_tool_call', name: W2_TOOL, operationType: 'query', reason: 'x', args: W2_ARGS.count, resultSummary: { rows: 1, columns: 1 }, duration_ms: 300 },
+  { type: 'phase_a_tool_call', name: W2_TOOL, operationType: 'query', reason: 'x', args: W2_ARGS.permits, failed: true, failureKind: 'timeout', duration_ms: 45000 },
+  { type: 'phase_a_tool_call', name: W2_TOOL, operationType: 'query', reason: 'x', args: W2_ARGS.byBorough, resultSummary: { rows: 5, columns: 2 }, duration_ms: 410 },
+];
+
+const W2_EVENTS: Array<Record<string, unknown>> = [
+  { type: 'phase', name: 'A', message: 'Discovering datasets…' },
+  ...lines(1, 'Reading the columns', 'metadata'),
+  ...lines(1, 'Counting complaints', 'query'),
+  ...lines(2, 'Counting complaints', 'query'),
+  ...lines(3, 'Querying permits', 'query', true),
+  ...lines(3, 'Grouping complaints by borough', 'query'),
+  ...W2_CALLS,
+  { type: 'phase_a_answer', content: `${ANSWER_MARKER}: **42** complaints in the window.` },
+  { type: 'phase', name: 'B', message: 'Synthesizing notebook…' },
+  { type: 'phase', name: 'C', message: 'Executing in sandbox…' },
+  { type: 'notebook', notebook: NOTEBOOK, sandboxId: 'fixture-sandbox', executionDuration_ms: 4200, validation: { ok: true, issues: [] } },
+  { type: 'phase', name: 'D', message: 'Finalizing…' },
+  { type: 'phase', name: 'complete', message: 'Done.' },
+];
+const W2_ITERATIONS = new Set(W2_EVENTS.filter((e) => e.phase === 'tool_start').map((e) => e.iteration)).size;
+
+interface HookCell { state: Record<string, unknown>; events: Array<Record<string, unknown>> }
+const hookCell: HookCell = { state: {}, events: [] };
+(globalThis as unknown as { __w2p2Hook: HookCell }).__w2p2Hook = hookCell;
+
+// Called outside React on purpose (see the harness note above).
+const { useNotebookStream: notebookStreamOutsideReact } = (await import(pathToFileURL(HOOK_FILE).href)) as {
+  useNotebookStream: () => { start: (query: string, model: string, portal: string) => Promise<void> };
+};
+const { default: NotebookOutput } = (await import('./NotebookOutput.tsx')) as unknown as {
+  default: ComponentType<Record<string, unknown>>;
+};
+const { EvidenceOriginProvider } = (await import('@/components/EvidenceOriginProvider')) as unknown as {
+  EvidenceOriginProvider: ComponentType<{ value: Record<string, string | null>; children?: ReactNode }>;
+};
+
+async function stateAfter(events: Array<Record<string, unknown>>): Promise<Record<string, unknown>> {
+  hookCell.events = events;
+  await notebookStreamOutsideReact().start('PROMPTMARKER-p1 How many complaints were filed?', 'fixture/model', 'data.example.org');
+  return hookCell.state;
+}
+
+const W2_INSTANCE = 'instance.example.test';
+const W2_STATE = await stateAfter(W2_EVENTS);
+
+/** The page a run's reader sees, with the instance declared or not. */
+function renderRun(state: Record<string, unknown>, instance: string | null): string {
+  const page = createElement(NotebookOutput, {
+    state,
+    prompt: 'PROMPTMARKER-p1 How many complaints were filed?',
+    model: 'fixture/model',
+    portal: 'data.example.org',
+  });
+  const origin = createElement(EvidenceOriginProvider, {
+    value: { origin: instance ? `https://${instance}` : null, host: instance, platformTitle: null },
+  }, page);
+  const Session = SessionProvider as unknown as ComponentType<{ session: null; children?: ReactNode }>;
+  return renderToStaticMarkup(createElement(Session, { session: null }, origin));
+}
+
+const W2_RUN = renderRun(W2_STATE, W2_INSTANCE);
+const W2_RUN_ANONYMOUS = renderRun(W2_STATE, null);
+const AUTHOR_LINE = `Steps, written by ${W2_INSTANCE} from the model&#x27;s calls`;
+
+/** The step view's markup, or a failure saying there is none. */
+function stepView(html: string): string {
+  const start = at(html, '<div data-part="steps"');
+  return html.slice(start, elementEnd(html, start, 'div'));
+}
+
+/** Each step's markup, in order. */
+function stepsIn(view: string): string[] {
+  return occurrences(view, '<div data-part="step"').map((s) => view.slice(s, elementEnd(view, s, 'div')));
+}
+
+const callRows = (markup: string) => occurrences(markup, 'data-part="step-call"').length;
+
+test('W2 P2 (1) the executed run: status row, refused-request line, answer, citation, steps, disclosure', () => {
+  const html = W2_RUN;
+  const status = at(html, 'not yet published');
+  const refused = at(html, '1 of 4 requests did not complete.');
+  const answer = at(html, ANSWER_MARKER);
+  const citation = at(html, heading('Citation'));
+  const steps = at(html, '<div data-part="steps"');
+  const d = requireDisclosure(html);
+  assert.ok(status < refused && refused < answer && answer < citation && citation < steps && steps < d.start,
+    'status row, refused-request line, answer, citation, steps, disclosure, in that order');
+  assert.ok(steps + stepView(html).length <= d.start, 'the step view ends before the disclosure starts');
+});
+
+test('W2 P2 (1) one step per Phase A iteration, one call row per captured call, each call in its own step', () => {
+  const view = stepView(W2_RUN);
+  const steps = stepsIn(view);
+  assert.equal(W2_ITERATIONS, 3, 'premise: the fixture has three iterations');
+  assert.equal(steps.length, W2_ITERATIONS, `one step per iteration (found ${steps.length})`);
+  assert.equal((W2_STATE.toolCalls as unknown[]).length, W2_CALLS.length, 'premise: the hook kept every captured call');
+  assert.equal(callRows(view), W2_CALLS.length, `one call row per captured call (found ${callRows(view)})`);
+  assert.deepEqual(steps.map(callRows), [2, 0, 2], 'the calls sit in the steps they were made in');
+  assert.ok(steps[2].includes('This request did not complete.'), 'the rejected call is in step 3');
+  assert.ok(!steps[1].includes('did not complete'), 'and not in step 2, where position pairing would put it');
+  assert.equal(occurrences(view, 'data-part="steps-unplaced"').length, 0, 'every call is placed');
+});
+
+test('W2 P2 (1) each call row carries the formatters’ sentence and outcome, and each step the label over its calls’ arguments', async () => {
+  const { generateToolReason, reasonWithoutIdentifier } = await import('@/lib/streaming');
+  const { describeQueryOutcome } = await import('@/lib/evidence/query-step');
+  const rows = stepsIn(stepView(W2_RUN)).flatMap((step) =>
+    occurrences(step, '<div data-part="step-call"').map((s) => step.slice(s, elementEnd(step, s, 'div'))));
+  W2_CALLS.forEach((c, i) => {
+    const sentence = reasonWithoutIdentifier(generateToolReason(c.args, c.name));
+    assert.ok(sentence, 'premise: each fixture call has a sentence');
+    assert.ok(rows[i].includes(`>${escapedText(sentence)}<`), `call ${i + 1} carries "${sentence}"`);
+    const outcome = describeQueryOutcome({
+      failed: c.failed, failureKind: c.failureKind, resultRows: c.resultSummary?.rows,
+      resultColumns: c.resultSummary?.columns, duration_ms: c.duration_ms,
+    }).text;
+    assert.ok(rows[i].includes(`>${escapedText(outcome)}<`), `call ${i + 1} carries "${outcome}"`);
+  });
+  const labels = stepsIn(stepView(W2_RUN)).map((step) => /data-part="step-label"[^>]*>([^<]*)</.exec(step)?.[1]);
+  assert.ok(labels.every((l) => l !== undefined && l !== 'Gathering data'), `every step's label reads its calls' arguments: ${labels.join(' | ')}`);
+});
+
+test('W2 P2 (1) the author line is stated once, above the steps, and not at all when the instance declares none', () => {
+  const view = stepView(W2_RUN);
+  assert.equal(occurrences(W2_RUN, AUTHOR_LINE).length, 1, 'the author line appears exactly once');
+  assert.ok(view.indexOf(AUTHOR_LINE) >= 0 && view.indexOf(AUTHOR_LINE) < view.indexOf('data-part="step"'), 'above the steps');
+  assert.equal(occurrences(W2_RUN_ANONYMOUS, 'Steps, written by').length, 0, 'no author line without an instance');
+  assert.equal(stepsIn(stepView(W2_RUN_ANONYMOUS)).length, W2_ITERATIONS, 'the steps still render');
+});
+
+/** `renderToStaticMarkup`'s escaping of a text node. */
+function escapedText(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+}
+
+// --- LAYOUT-WEB W2 P2 (3): no exposed name in reader-facing text -----------------
+//
+// The run's tools are aliased (`socrata__get_data`, `socrata__fetch`,
+// `nyc_charter__get_section`). What a reader reads — the markup outside
+// `<script>` and `<style>` — carries no alias separator (`__`). The executed
+// run's section D shows no raw field that could carry one (its arguments are
+// not printed), so nothing is exempted here.
+
+/** The markup a reader reads: scripts and styles removed. */
+function readerFacing(html: string): string {
+  return html.replace(/<script\b[\s\S]*?<\/script>/g, '').replace(/<style\b[\s\S]*?<\/style>/g, '');
+}
+
+test('W2 P2 (3) the executed run prints no exposed tool name: not in the steps, not in section D', () => {
+  const html = renderRun(W2_STATE, W2_INSTANCE);
+  assert.ok((W2_STATE.toolCalls as Array<{ name: string }>).every((c) => c.name.includes('__')), 'premise: the run’s calls are aliased');
+  const direct = render(D_CALLS);
+  for (const [name, markup] of [['the hook-driven run', html], ['section D’s fixture', direct]] as const) {
+    const text = readerFacing(markup);
+    const i = text.indexOf('__');
+    assert.equal(i, -1, `${name}: reader-facing text carries an exposed name: …${text.slice(Math.max(0, i - 80), i + 40)}…`);
+  }
+});
+
+test('W2 P2 (4) section D labels each call by its upstream name and operation type', async () => {
+  const { upstreamToolName } = await import('@/lib/mcp/operation-types');
+  const d = sectionD(render(D_CALLS));
+  const labels = [...d.matchAll(/<div style="font-family:monospace;[^"]*">([^<]*)<\/div>/g)].map((m) => m[1]);
+  assert.deepEqual(labels, D_CALLS.map((c) => `${upstreamToolName(c.name)}${c.operationType ? ` (${c.operationType})` : ''}`));
 });

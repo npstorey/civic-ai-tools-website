@@ -879,3 +879,133 @@ test('W2 P2 (4) section D renders the same markup as on the base, its labels nor
   while (i < golden.length && golden[i] === D_ACTUAL[i]) i++;
   assert.fail(`section D differs from the golden at character ${i}:\n  golden: …${golden.slice(Math.max(0, i - 60), i + 80)}…\n  actual: …${D_ACTUAL.slice(Math.max(0, i - 60), i + 80)}…`);
 });
+
+// --- LAYOUT-WEB W2 P2 (2): the record page renders its steps -----------------------
+//
+// THE LAYOUT GAINS ONE PART, between the citation and the disclosure: the step
+// view, one step per signed `queries[]` entry, built when the page renders —
+// each with the sentence `generateToolReason` writes from the entry's name and
+// arguments (through `reasonWithoutIdentifier`) and the outcome
+// `describeQueryOutcome` states — under one author line naming the instance
+// (`getInstanceAttribution()`), omitted when the instance declares none.
+//
+// The instance is read from the environment when the page renders; these
+// renders set and clear its two variables (and their prior-era names) around
+// each call, so what the shell happens to export cannot decide the result.
+
+const INSTANCE = 'records-instance.example.test';
+const INSTANCE_ENV = ['PUBLISHER_PUBLICATION_HOST', 'PUBLISHER_SITE_ORIGIN', 'EVIDENCE_PUBLICATION_HOST', 'EVIDENCE_SITE_ORIGIN'];
+
+async function renderWithInstance(c: Case, instance: string | null): Promise<string> {
+  const saved = INSTANCE_ENV.map((name) => [name, process.env[name]] as const);
+  for (const name of INSTANCE_ENV) delete process.env[name];
+  if (instance !== null) process.env.PUBLISHER_PUBLICATION_HOST = instance;
+  try {
+    return await render(c);
+  } finally {
+    for (const [name, value] of saved) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+}
+
+const STEPS_HTML = {
+  agf: await renderWithInstance(AGF, INSTANCE),
+  old: await renderWithInstance(OLD, INSTANCE),
+  agfAnonymous: await renderWithInstance(AGF, null),
+  aliased: await renderWithInstance(ALIASED_AGF, INSTANCE),
+};
+const STEPS_AUTHOR_LINE = `Steps, written by ${INSTANCE} from the model&#x27;s calls`;
+
+function stepView(html: string): string {
+  const start = at(html, '<div data-part="steps"');
+  return html.slice(start, elementEnd(html, start, 'div'));
+}
+
+function stepsIn(view: string): string[] {
+  return occurrences(view, '<div data-part="step"').map((s) => view.slice(s, elementEnd(view, s, 'div')));
+}
+
+for (const [name, key, answer, pkg] of [
+  ['A-G record', 'agf', AGF_ANSWER, AGF_PACKAGE],
+  ['legacy record', 'old', OLD_ANSWER, OLD_PACKAGE],
+] as const) {
+  test(`W2 P2 (2) ${name}: status row, refused-request line, answer, citation, steps, disclosure`, () => {
+    const html = STEPS_HTML[key];
+    const status = at(html, 'data-part="status-row"');
+    const refused = at(html, 'data-part="refused-requests"');
+    const answerAt = at(html, answer);
+    const citation = at(html, 'data-part="citation"');
+    const steps = at(html, '<div data-part="steps"');
+    const d = requireDisclosure(html);
+    assert.ok(status < refused && refused < answerAt && answerAt < citation && citation < steps && steps < d.start,
+      'status row, refused-request line, answer, citation, steps, disclosure, in that order');
+    assert.ok(steps + stepView(html).length <= d.start, 'the step view ends before the disclosure starts');
+  });
+
+  test(`W2 P2 (2) ${name}: one step per signed entry, each with the formatters' sentence and outcome`, async () => {
+    const { generateToolReason, reasonWithoutIdentifier } = await import('@/lib/streaming');
+    const { describeQueryOutcome } = await import('@/lib/evidence/query-step');
+    const steps = stepsIn(stepView(STEPS_HTML[key]));
+    assert.equal(steps.length, pkg.queries.length, `one step per queries[] entry (found ${steps.length})`);
+    pkg.queries.forEach((q, i) => {
+      const sentence = reasonWithoutIdentifier(generateToolReason(q.arguments, q.tool));
+      const shown = /data-part="step-sentence"[^>]*>([^<]*)</.exec(steps[i])?.[1];
+      assert.equal(shown, sentence === undefined ? undefined : escaped(sentence), `step ${i + 1}'s sentence is the function's output`);
+      const outcome = describeQueryOutcome(q).text;
+      assert.equal(/data-part="step-outcome"[^>]*>([^<]*)</.exec(steps[i])?.[1], escaped(outcome), `step ${i + 1}'s outcome`);
+    });
+  });
+
+  test(`W2 P2 (2) ${name}: the author line appears exactly once, above the steps`, () => {
+    const html = STEPS_HTML[key];
+    assert.equal(occurrences(html, STEPS_AUTHOR_LINE).length, 1, 'the author line appears exactly once');
+    const view = stepView(html);
+    assert.ok(view.indexOf(STEPS_AUTHOR_LINE) >= 0 && view.indexOf(STEPS_AUTHOR_LINE) < view.indexOf('data-part="step"'), 'above the steps');
+  });
+}
+
+test('W2 P2 (2) no author line when the instance declares none; the steps still render', () => {
+  assert.equal(occurrences(STEPS_HTML.agfAnonymous, 'Steps, written by').length, 0);
+  assert.equal(stepsIn(stepView(STEPS_HTML.agfAnonymous)).length, AGF_PACKAGE.queries.length);
+});
+
+test('W2 P2 (2) the fixtures can tell the sentences apart: not every step reads the same', () => {
+  const sentences = stepsIn(stepView(STEPS_HTML.aliased)).map((s) => /data-part="step-sentence"[^>]*>([^<]*)</.exec(s)?.[1]);
+  assert.ok(new Set(sentences).size > 1, `the A-G fixture's sentences: ${sentences.join(' | ')}`);
+});
+
+// --- LAYOUT-WEB W2 P2 (3): no exposed name in reader-facing text -----------------
+//
+// The A-G record with its tools aliased (`socrata__get_data`, `socrata__search`).
+// What a reader reads — the markup outside `<script>` and `<style>`, attributes
+// included — carries no alias separator (`__`) except in section D's raw
+// signed fields: each call's arguments (`<pre>`) and its dataset and portal
+// (`<code>`). The exposed name stays in the record (`queries[].tool`, the
+// graph's `civic:toolName`); this asserts only what the page prints.
+
+function readerFacing(html: string): string {
+  const d = requireDisclosure(html);
+  const body = sectionD(html);
+  const dStart = html.indexOf(body);
+  assert.ok(dStart > d.start && dStart < d.end, 'premise: D is inside the disclosure');
+  const dWithoutRawFields = body.replace(/<pre\b[\s\S]*?<\/pre>/g, '').replace(/<code\b[\s\S]*?<\/code>/g, '');
+  return (html.slice(0, dStart) + dWithoutRawFields + html.slice(dStart + body.length))
+    .replace(/<script\b[\s\S]*?<\/script>/g, '')
+    .replace(/<style\b[\s\S]*?<\/style>/g, '');
+}
+
+test('W2 P2 (3) the record page prints no exposed tool name outside section D’s raw fields', () => {
+  assert.ok(ALIASED_AGF_PACKAGE.queries.every((q) => q.tool.includes('__')), 'premise: the record’s tools are aliased');
+  const text = readerFacing(STEPS_HTML.aliased);
+  const i = text.indexOf('__');
+  assert.equal(i, -1, `reader-facing text carries an exposed name: …${text.slice(Math.max(0, i - 80), i + 40)}…`);
+});
+
+test('W2 P2 (4) section D labels each call by its upstream name and operation type', async () => {
+  const { upstreamToolName } = await import('@/lib/mcp/operation-types');
+  const d = sectionD(STEPS_HTML.aliased);
+  const labels = [...d.matchAll(/<div style="font-family:monospace;[^"]*">([^<]*)<\/div>/g)].map((m) => m[1]);
+  assert.deepEqual(labels, ALIASED_AGF_PACKAGE.queries.map((q) => `${upstreamToolName(q.tool)}${q.operationType ? ` (${q.operationType})` : ''}`));
+});
