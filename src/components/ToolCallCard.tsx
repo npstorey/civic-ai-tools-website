@@ -4,27 +4,17 @@ import { useState } from 'react';
 import SoqlDisplay from './SoqlDisplay';
 import { generatePlainEnglishQuery, reasonWithoutIdentifier } from '@/lib/streaming';
 import { describeQueryOutcome } from '@/lib/evidence/query-step';
-import type { ToolFailureKind } from '@/lib/notebook-author/tool-to-cell';
+import type { StepCall } from '@/lib/answer-view/steps';
 import { OP_BADGE_COLORS, OP_BADGE_TOOLTIPS } from './tool-badges';
 import { upstreamToolName } from '@/lib/mcp/operation-types';
 
-interface ToolCallCardProps {
+/**
+ * One call's card: the call's fields (`StepCall`, shared by every reader of a
+ * run's steps — `name` absent when the record carried none, `failed` and
+ * `failureKind` when the loop recorded a rejection) and its step number.
+ */
+interface ToolCallCardProps extends StepCall {
   stepNumber: number;
-  /** Absent when the record carried no tool name (see `ToolCall.name`, #384). */
-  name?: string;
-  args: Record<string, unknown>;
-  resultSummary?: { rows: number; columns: number };
-  duration_ms?: number;
-  operationType?: string;
-  reason?: string;
-  /**
-   * The loop recorded the call as rejected (#384 P8, F2). The card then
-   * states the outcome through `describeQueryOutcome` — the record page's
-   * formatter, one sentence for one fact — and mints no data links for a
-   * request that returned nothing. Absent means not recorded as failed.
-   */
-  failed?: boolean;
-  failureKind?: ToolFailureKind;
 }
 
 function buildSocrataUrl(args: Record<string, unknown>): { json: string; csv: string } | null {

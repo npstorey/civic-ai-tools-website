@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { errorLogFacts } from '@/lib/streaming';
+import { errorLogFacts, replacingFormsIn, withoutCredentialsIn } from '@/lib/streaming';
+import { WITHHELD_QUESTION_TEXT } from '@/lib/notebook';
+import { NOTEBOOK_EXTENSION_KEY } from '@/lib/notebook-author/notebook-provenance-reading';
 import { db } from '@/lib/db';
 import { evidenceRecords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -32,6 +34,57 @@ function slugify(text: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
+}
+
+/**
+ * The forms of the question a record must not carry under hash-only
+ * visibility: as typed and trimmed, each raw, URL-encoded and JSON-escaped,
+ * and the slug's own form. Longest first, each paired with the text that
+ * stands in its place.
+ */
+function questionForms(question: string): Array<[string, string]> {
+  const forms = new Set<string>();
+  for (const text of new Set([question, question.trim()])) {
+    if (text === '') continue;
+    forms.add(text);
+    forms.add(encodeURIComponent(text));
+    forms.add(JSON.stringify(text).slice(1, -1));
+  }
+  const slug = slugify(question);
+  if (slug !== '') forms.add(slug);
+  return [...forms]
+    .sort((a, b) => b.length - a.length)
+    .map((form): [string, string] => [form, WITHHELD_QUESTION_TEXT]);
+}
+
+/**
+ * UNDER HASH-ONLY VISIBILITY, A RECORD CARRIES NO VERBATIM COPY OF THE
+ * QUESTION IN THE TEXT THE APP WRITES (#516 P10). In a submitted notebook
+ * that text is the generator's markdown cells: every markdown cell is
+ * generator-authored, while the model's answer is a code cell and code
+ * output is never a cell source (`notebook-author/validate.ts`,
+ * `validateBodyClaims`). So every form `questionForms` names is replaced by
+ * `WITHHELD_QUESTION_TEXT` in the source of each markdown cell, by the walk
+ * the credential removal makes (`replacingFormsIn`), and nothing else is
+ * touched: code-cell sources, every cell's outputs, cell metadata and
+ * notebook metadata are model text or the run's own record, and stay as
+ * submitted. Under any other visibility the notebook is returned as it came.
+ */
+function withoutQuestionUnderHashOnly<T>(promptVisibility: unknown, question: unknown, notebook: T): T {
+  if (promptVisibility !== 'hash_only' || typeof question !== 'string') return notebook;
+  if (notebook === null || typeof notebook !== 'object' || Array.isArray(notebook)) return notebook;
+  const cells = (notebook as { cells?: unknown }).cells;
+  if (!Array.isArray(cells)) return notebook;
+  const forms = questionForms(question);
+  return {
+    ...notebook,
+    cells: cells.map((cell) => {
+      if (cell === null || typeof cell !== 'object' || Array.isArray(cell)) return cell;
+      const { cell_type: cellType, source } = cell as { cell_type?: unknown; source?: unknown };
+      if (cellType !== 'markdown' || source === undefined) return cell;
+      return { ...cell, source: replacingFormsIn(source, forms) };
+    }),
+  } as T;
 }
 
 /**
@@ -299,6 +352,37 @@ export async function POST(request: NextRequest) {
     // publishing from outside the app to close a hole that does not exist.
     const declaredModel = modelIdentityForValue(body.model).declared;
 
+    // A NOTEBOOK OUTPUT NEVER CARRIES THE VALUE OF A NOTEBOOK CREDENTIAL
+    // (#516). The notebook comes back from the client, so the stream's removal
+    // is not relied on here: both values this instance holds are removed by
+    // value from every string of the submitted notebook extension before the
+    // package is built, signed or stored.
+    //
+    // UNDER HASH-ONLY VISIBILITY, A RECORD CARRIES NO VERBATIM COPY OF THE
+    // QUESTION IN THE TEXT THE APP WRITES (#516 P10). The generator's markdown
+    // cells of the same notebook are then walked for the question
+    // (`withoutQuestionUnderHashOnly`), whoever built it; model text is left
+    // as submitted. An executed
+    // notebook's cover is written at query time, before the reader chooses a
+    // visibility, so this is where its `**Query:**` line becomes the withheld
+    // line. Its provenance stamp and its validator's verdict still describe
+    // it: the stamp is derived from outputs and the run, and the validator
+    // never reads that line.
+    //
+    // Every other field of the request, and every other extension, is passed
+    // through as it came.
+    const submittedNotebook = body.extensions?.[NOTEBOOK_EXTENSION_KEY];
+    const extensions = submittedNotebook === undefined
+      ? body.extensions
+      : {
+          ...body.extensions,
+          [NOTEBOOK_EXTENSION_KEY]: withoutQuestionUnderHashOnly(
+            body.promptVisibility,
+            body.prompt,
+            withoutCredentialsIn(submittedNotebook, process.env),
+          ),
+        };
+
     // Build evidence package
     const packageInput: PackageInput = {
       trace: body.trace,
@@ -322,7 +406,7 @@ export async function POST(request: NextRequest) {
       type: body.type ?? DEFAULT_CONTENT_TYPE,
       signer: body.signer ?? getActiveSigner(),
       skillMetadataOverride: body.skillMetadataOverride,
-      extensions: body.extensions,
+      extensions,
     };
 
     const { pkg, hash: packageHash } = buildEvidencePackage(packageInput);

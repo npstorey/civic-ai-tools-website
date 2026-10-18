@@ -623,7 +623,13 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
   // `fallbackPortal` is not passed: it has been inert since harness 0.3.1 (an
   // entry states the portal the CALL carried, never the run's), and the
   // wrapper in `./data-sources.ts` no longer takes one.
-  const dataSources = buildDataSources(input.toolCalls, inspectableTrace, now);
+  //
+  // `run.runMcpServers` is passed through (R7 WF): a hosted source's entry
+  // states the address the run recorded for it, by the same rule the graph's
+  // registry follows (`sourceRegistryForRun`: the trace's record wins). It
+  // reaches only the registry `dataSources[]` is built against; the graph's
+  // registry below is untouched.
+  const dataSources = buildDataSources(input.toolCalls, inspectableTrace, now, run.runMcpServers);
 
   const totalTokens = (input.tokenUsage.promptTokens || 0) + (input.tokenUsage.completionTokens || 0);
 

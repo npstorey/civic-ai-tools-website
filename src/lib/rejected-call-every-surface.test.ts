@@ -50,7 +50,7 @@
 //     `failed: true` and `failureKind`; a `tool_result`-phase event follows
 //     with the outcome in the reader's words, carrying both keys too. Every
 //     consumer pairs an end to its start by `(phase === 'tool_complete',
-//     message)` — `useStreamingComparison.ts:388-405`, `useLiveTrace.ts:140-
+//     message)` — `applyProgressEvent` in `answer-view/steps.ts`, `useLiveTrace.ts:140-
 //     165`, `bpmn/trace-progress.ts:60-80` — so that pairing works unchanged
 //     and each reads the failure off the entry it already builds. A new wire
 //     phase would widen `ProgressPhase` and `TraceEvent.phase` and duplicate
@@ -452,7 +452,16 @@ function extract(site: string, source: string, pattern: RegExp): string {
 
 test('F2 (f) declared: ToolCallCard takes the failure and states it through the one outcome formatter, and both card sites pass it', () => {
   const card = sourceOf('../components/ToolCallCard.tsx');
-  const props = extract('ToolCallCardProps', card, /interface ToolCallCardProps \{([\s\S]*?)\n\}/);
+  // The card's props extend the per-call type every step reader shares
+  // (LAYOUT-WEB W2 P1): what the card takes is its own members plus that
+  // type's fields, read without comments so a field, not a word, passes.
+  const declared = card.match(/interface ToolCallCardProps(?: extends (\w+))? \{([\s\S]*?)\n\}/);
+  assert.ok(declared, 'ToolCallCardProps: the declaration this instrument reads is no longer where it was — re-anchor the pattern');
+  const [, base, own] = declared;
+  assert.ok(base === undefined || base === 'StepCall', `ToolCallCardProps extends ${base}, a type this instrument does not read — re-anchor`);
+  const props = base === 'StepCall'
+    ? `${own}\n${extract('StepCall', sourceOf('./answer-view/steps.ts'), /export interface StepCall \{([\s\S]*?)\n\}/).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')}`
+    : own;
   assert.match(props, /\bfailed\?: boolean\b/, `ToolCallCard has no failed prop: on home, ask and explore a rejected call renders like a search.\n${props.trim()}`);
   assert.match(props, /\bfailureKind\?:/, 'ToolCallCard has no failureKind prop');
   assert.match(

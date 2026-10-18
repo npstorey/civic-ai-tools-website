@@ -794,7 +794,13 @@ comes back in the response.
 - **The data-portal tokens:** `SOCRATA_APP_TOKEN` and `DC_API_KEY` are **set
   on the function, not the app**. The app never sends them, whatever its own
   environment carries, and the handler adds them from the function's
-  environment.
+  environment. A credential's value never appears in a notebook output, a
+  stream event or a record: the handler removes both values, raw, URL-encoded
+  and JSON-escaped, from the executed notebook and from the stderr it returns,
+  and leaves `[NAME removed]` in their place; the app removes any value it also
+  holds before it streams or packages a notebook. The handler's half is in the
+  function image, so an instance on `lambda` gets it only when it rebuilds and
+  redeploys that image.
 - **The record:** a record's `sandboxId` is the invoke response's request id
   (the `x-amzn-requestid` header), which the function's code cannot write.
   That it equals the `RequestId` in the function's `START` line is expected
@@ -1096,10 +1102,11 @@ or wrong token, on every path. The stdio server itself is not given the token.
 
 - A sandbox's session times out after the idle window, 10 minutes
   (`DEFAULT_IDLE_WINDOW_MS` in `src/lib/mcp/hosting/lifecycle.ts`; an option of
-  the lifecycle, not an environment variable). Each call restarts the window
-  without growing it: the session is extended only by what it lacks of one
-  window. A source left idle stops by itself, keeps one snapshot, and the next
-  call resumes it. Measured from a local process on 2026-10-16:
+  the lifecycle, not an environment variable). Each call that meets a live
+  bridge restarts the window without growing it: the session is extended only
+  by what it lacks of one window. A call that reaches no bridge does not
+  restart it. A source left idle stops by itself, keeps one snapshot, and the
+  next call resumes it. Measured from a local process on 2026-10-16:
   - a first creation, which installs the pin and the bridge, took 11.8 s with
     `npm install`, and 7.7 s with `npm ci` from the committed lockfiles
     (2026-10-17);
@@ -1107,8 +1114,40 @@ or wrong token, on every path. The stdio server itself is not given the token.
   - a call to a running source added about 0.1 s.
 - The wake has its own deadline, 30 seconds (`DEFAULT_WAKE_DEADLINE_MS`). Each
   exchange's 45-second deadline starts after the wake. A wake that misses its
-  deadline fails the call as the source being unavailable, and is left to
-  finish in the background, so the next call finds it ready.
+  deadline fails the call as the source being unavailable. Its work is not
+  cancelled: the platform call and any install keep running in that process
+  while the process lives. Whether it completes is not measured, locally or
+  on a Vercel Function; on a Function nothing keeps the instance alive for it
+  (the app does not use `waitUntil`). Until it does, a call from
+  another process finds the sandbox `running` with no bridge ready, polls
+  `/health` until its own deadline, and fails as unavailable. A creation whose
+  install never finished leaves no completion marker: the next resume deletes
+  that sandbox by name, and the call after it creates the sandbox again.
+- A bridge that dies inside a running session is handled two ways, depending
+  on whether the calling process has already seen that session ready:
+  - In a process that has seen it ready, the failed call finds the dead
+    bridge. The app then asks `/health` once. If the bridge does not answer,
+    the app starts it again once and retries the call once. The bridge binds
+    its port before it reports ready, and a second bridge on a bound port
+    exits (`EADDRINUSE`), so a restart never runs two bridges on one port. If
+    the bridge cannot be started again, the call fails as unavailable and the
+    idle window is not restarted, so the session stops by itself. Nothing on
+    this path deletes the sandbox.
+  - In a process that has not seen it ready, the call polls `/health` until
+    its own wake deadline and fails as unavailable, without starting the
+    bridge: from there a missing bridge cannot be told apart from another
+    process's install or start still in flight, and starting one could race
+    it. On Vercel every new function instance is such a process. That call
+    does not restart the idle window either.
+  Measured from a local process on 2026-10-17, with the bridge killed in a
+  session that process had seen ready (the first case above):
+  - the app before this change: the call failed (`502 Bad Gateway` from the
+    sandbox's address) and still extended the session by 85 s;
+  - this change: the call answered in 1.0 s, with one bridge running after
+    it;
+  - with the bridge's program moved away, so it could not start: the call
+    failed as unavailable in 0.8 s and the session's expiry did not move.
+    Once the program was put back, the next call answered in 1.4 s.
 - Two calls at once from different function instances make one sandbox: the
   platform refuses the second create by name, and that call waits for the
   first one's bridge.
@@ -1368,7 +1407,7 @@ doesn't):
 | `CRON_SECRET` | The scheduled blob-GC endpoint rejects every caller with 401 — orphaned uploads are never swept. Set the same value on the app and the scheduler. |
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Durable rate limiting — the counter falls back to per-process memory (resets on restart; not shared across instances). Fine for a single-node instance. |
 | `SANDBOX_SNAPSHOT_ID` | (vercel-sandbox executor only) Prebuilt snapshot — absent, every execution pays a slow fresh boot + pip install. Not read by the container executor. A snapshot built under `@vercel/sandbox` 1.x boots under 3.x: measured on 2026-10-16 with 3.5.1, it booted Python 3.13.1 with the pinned stack importable. |
-| `SOCRATA_APP_TOKEN` | Socrata API app token passed into executed notebooks — absent, requests run anonymously against Socrata's lower rate limits. |
+| `SOCRATA_APP_TOKEN` | Socrata API app token passed into executed notebooks — absent, requests run anonymously against Socrata's lower rate limits. Its value, and `DC_API_KEY`'s, never appears in a notebook output, a stream event or a record: both are removed by value (raw, URL-encoded and JSON-escaped, each replaced by `[NAME removed]`) from every executed notebook before it is streamed and from every notebook a publish request submits before the package is built. Under `EXECUTOR_DRIVER=lambda` the function's handler does the removal, so an instance on `lambda` gets it only when it rebuilds and redeploys its function image. |
 | `EXECUTOR_DRIVER` set to `none` | Notebook mode, deliberately: the instance runs no notebooks. Unset is not this; unset is `vercel-sandbox`. The query form on `/ask` and the home page shows the notebook option disabled with its reason, signed in or not, and `/ask` starts in standard mode. `POST /api/query-notebook` answers 501, `code: "notebooks_not_offered"`, before the body is read, before any model call and before the rate limiter is charged. Standard mode is unchanged. Read at build and at run time: the prerendered home page follows the build's value. See [An instance that runs no notebooks](#an-instance-that-runs-no-notebooks-executor_drivernone). |
 | `ROADMAP_RAW_URL` | `/roadmap` — absent, the page states that this instance has published no roadmap and the Roadmap link leaves the header and footer nav. An instance serves its own roadmap or none; there is no upstream fallback. |
 | `SITE_DEFAULT_PORTAL` | The default portal a query runs against when the reader picks none. Absent, a run carries **no** default: the query form's "All portals" entry is what an unqualified question uses, the model names its own portal on each call, and every surface that would have named one omits it instead — the trace records no run-level portal, and a downloaded notebook's cover states only the portals its own calls named. Nothing breaks and nothing refuses (unless `SITE_PORTAL_LOCKED`, below, is on); the instance simply asserts no portal it was not told about. Set it to the open-data host this deployment is built around, as a bare hostname with no scheme (the same shape the `portal` tool argument takes). It has no coded fallback for the reason `SOCRATA_MCP_URL` has none: the value it replaced was one deployment's own city, written into the routes and components, and it reached the root span of a trace a publish carries into a signed record. **An instance fronting one portal sets this and the Socrata MCP server's `DATA_PORTAL_URL` to that same portal** (this one takes the bare host, the server's the URL, `https://<host>`). They are two defaults, not one: this is the portal a run names, and the server's is the portal that answers any call naming none — every `socrata__search` (`search` on the server), which takes no portal argument, and every `socrata__fetch` by a bare dataset id. Set to different portals, one run can name one portal while those calls are answered from another; with the server's unset, those calls are refused one at a time, and the run records each as a rejected call. |
