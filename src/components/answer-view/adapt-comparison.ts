@@ -9,6 +9,8 @@
 //      `tracesRun`); under it, `describeRefusedRequests`' line;
 //   2. the answer: the streamed content, as markdown;
 //   3. the citation preview, once the run is complete, on the same surfaces;
+//      it states no execution and no date — the run never executes in a
+//      sandbox, and records no time a citation could carry;
 //   4. the steps: the progress log the panel already renders, moved beneath
 //      the answer;
 //   5. the sources line: `buildProvenanceLine` (the panel's former
@@ -166,7 +168,7 @@ export function adaptComparison(input: ComparisonAdapterInput): AnswerViewModel 
       streaming: input.isActive && !input.isComplete,
     },
     citation: tracesRun(input) && input.isComplete
-      ? { prompt: input.queryText ?? '', executedAt: null, structuredSummary: null, author: AUTHOR.citation(input.instance) }
+      ? { prompt: input.queryText ?? '', executedAt: null, statesExecution: false, structuredSummary: null, author: AUTHOR.citation(input.instance) }
       : null,
     steps: hasSteps
       ? {

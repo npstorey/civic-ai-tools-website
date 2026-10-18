@@ -178,6 +178,7 @@ export function adaptNotebook(input: NotebookAdapterInput): AnswerViewModel {
     citation: {
       prompt: view.prompt,
       executedAt: view.executedAt,
+      statesExecution: true,
       structuredSummary: view.structuredSummary,
       author: AUTHOR.citation(input.instance),
     },

@@ -487,6 +487,7 @@ export default function AnswerView({ model, actions, notices, disclosureExtras }
             prompt={model.citation.prompt}
             executedAt={model.citation.executedAt}
             structuredSummary={model.citation.structuredSummary}
+            statesExecution={model.citation.statesExecution}
           />
         </div>
       )}

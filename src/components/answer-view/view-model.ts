@@ -93,6 +93,8 @@ export interface AnswerPart {
 export interface CitationPart {
   prompt: string;
   executedAt: string | null;
+  /** The run executes, so the preview states "Executed" and its date; false states neither. */
+  statesExecution: boolean;
   structuredSummary: { analysisDescription: string; headlineFinding: string } | null;
   author: string | null;
 }
