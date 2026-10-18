@@ -200,7 +200,7 @@ export function useStreamingComparison() {
             }
           }
 
-          handleEvent(eventData as { type: string; panel: 'withMcp' | 'withoutMcp'; [key: string]: unknown }, setState);
+          handleComparisonEvent(eventData as { type: string; panel: 'withMcp' | 'withoutMcp'; [key: string]: unknown }, setState);
         },
         onComplete: () => {
           // Check whether every panel this run actually has is complete —
@@ -373,7 +373,11 @@ export function generateGroupLabel(entries: ProgressLogEntry[], previousEntries?
   return 'Gathering data';
 }
 
-function handleEvent(
+/**
+ * Fold one stream event into the comparison's state. Exported for the render
+ * test that drives a fixture run through it; the hook is its only caller.
+ */
+export function handleComparisonEvent(
   event: { type: string; panel: 'withMcp' | 'withoutMcp'; [key: string]: unknown },
   setState: React.Dispatch<React.SetStateAction<StreamingState>>
 ) {
