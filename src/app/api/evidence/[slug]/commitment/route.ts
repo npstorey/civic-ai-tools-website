@@ -152,10 +152,16 @@ export async function GET(
     ? await loadCarriedLifecycleAttestations(record.basePackageHash)
     : [];
 
-  // Sealed records (civic-ai-tools#71, ADR-0010 §5): the commitment IS
-  // public — the hash is already on the transparency log — but the content
-  // surface is not. Serve the view redacted of the capability URL, title, and
-  // summary; never inline the package.
+  // Sealed records (civic-ai-tools#71): the commitment IS public, by design.
+  // ADR-0010 §4 to §6 (civic-ai-tools, docs/adr/0010-visibility-lifecycle-
+  // location-attestations.md) make a signed content node's identity a public
+  // record even when no public location is asserted for it. The transparency
+  // log does not receive the package hash itself: it receives a SHA-512 of a
+  // value derived from it (`@typedstandards/produce-core`,
+  // `dist/rekor-proposal.js:27`, `rekorHashForPackage`). This route is where
+  // the hash itself is public. The content surface is not: serve the view
+  // redacted of the capability URL, title, and summary; never inline the
+  // package.
   // Keyed on the canonical state, so redaction holds for a row under EITHER
   // label (legacy `committed` or ADR-0016 `sealed`). As of the P2 flip the
   // `visibility` value the view SERVES is also canonical — `buildCommitmentView`
