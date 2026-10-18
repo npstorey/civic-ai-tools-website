@@ -494,11 +494,8 @@ export default async function EvidencePage({ params }: PageProps) {
           <span>{'\u00b7'}</span>
           <span>{dateStr}</span>
         </div>
-        {creator?.githubId && (
-          <div style={{ marginBottom: '4px' }}>
-            <DashboardLink creatorGithubId={creator.githubId} />
-          </div>
-        )}
+        {/* The viewer is compared with the creator here, on the server; the link gets only the answer. */}
+        <DashboardLink isCreator={await sessionUserIsCreator(record)} />
         {(record.jurisdiction || record.civicContext) && (
           <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
             {record.jurisdiction && <span>{record.jurisdiction}</span>}

@@ -1,29 +1,26 @@
-'use client';
-
 import Link from 'next/link';
-import { useSession } from 'next-auth/react';
 
 /**
- * Shows a "View in Dashboard" link if the logged-in user is the record creator.
- * Compares the session's GitHub ID against the creator's GitHub ID.
+ * The record page's "View in Dashboard" link, shown to the record's creator.
+ * Whether the viewer is the creator is decided by the page, on the server
+ * (`sessionUserIsCreator`), and handed here as a boolean: this component
+ * takes no account data.
  */
-export default function DashboardLink({ creatorGithubId }: { creatorGithubId: string }) {
-  const { data: session } = useSession();
-
-  if (!session?.user?.id || session.user.id !== creatorGithubId) {
-    return null;
-  }
+export default function DashboardLink({ isCreator }: { isCreator: boolean }) {
+  if (!isCreator) return null;
 
   return (
-    <Link
-      href="/dashboard"
-      style={{
-        fontSize: '13px',
-        color: 'var(--accent)',
-        textDecoration: 'none',
-      }}
-    >
-      View in Dashboard &rarr;
-    </Link>
+    <div style={{ marginBottom: '4px' }}>
+      <Link
+        href="/dashboard"
+        style={{
+          fontSize: '13px',
+          color: 'var(--accent)',
+          textDecoration: 'none',
+        }}
+      >
+        View in Dashboard &rarr;
+      </Link>
+    </div>
   );
 }
