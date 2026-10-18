@@ -1048,7 +1048,7 @@ function recipients(analytics: AnalyticsConfig | null): Statement[] {
           { code: service.host },
           `, which records the pages you visit on this site. A published record's address includes its title, ` +
             `so the title of any record you open reaches ${service.reaches} too. ` +
-            'The address also carries what you type into some pages: ',
+            'Page addresses also carry what you type into some pages: ',
           ...readerInputAddresses(),
           '. ',
           ...service.addressKept,
