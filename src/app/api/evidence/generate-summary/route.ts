@@ -44,7 +44,11 @@ type ToolCallSummary = SummarySourceInput;
  * meant this route could call an id the instance does not offer, could not be
  * configured per instance, and was invisible to catalog validation.
  *
- * Body: { prompt: string, output: string, toolCalls: ToolCallSummary[] }
+ * Body: { prompt?: string, output: string, toolCalls: ToolCallSummary[] }
+ *
+ * `prompt` is optional: the publish dialog sends none under hash-only
+ * visibility, where a record carries no verbatim copy of the question
+ * (#516 P10), and the model is then told no question.
  * Returns: { summary: string }
  */
 export async function POST(request: NextRequest) {
@@ -55,14 +59,15 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const { prompt, output, toolCalls } = body as {
-    prompt: string;
+    prompt?: string;
     output: string;
     toolCalls: ToolCallSummary[];
   };
 
-  if (!prompt || !output) {
-    return NextResponse.json({ error: 'prompt and output are required' }, { status: 400 });
+  if (!output) {
+    return NextResponse.json({ error: 'output is required' }, { status: 400 });
   }
+  const question = typeof prompt === 'string' && prompt.trim() !== '' ? prompt : null;
 
   // The source list is built by the one function a test can read
   // (`summary-sources.ts`, #384 P8 F1): a call the loop recorded as rejected
@@ -75,9 +80,7 @@ export async function POST(request: NextRequest) {
     ? `\nRequests that did not complete: ${rejected} — a data source did not answer ${rejected === 1 ? 'it' : 'them'}, so no figures came from ${rejected === 1 ? 'it' : 'them'}.\n`
     : '';
 
-  const userMessage = `Original question: ${prompt}
-
-Data sources used: ${sourceList}
+  const userMessage = `${question !== null ? `Original question: ${question}\n\n` : ''}Data sources used: ${sourceList}
 ${rejectedLine}
 Analysis output:
 ${output.slice(0, 4000)}`;

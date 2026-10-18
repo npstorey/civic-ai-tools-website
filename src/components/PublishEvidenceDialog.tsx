@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
 import { generateNotebook } from '@/lib/notebook';
+import { coverPortals } from '@/lib/notebook-author/cover-portals';
 // The key the notebook is posted under (#403), from its client-safe
 // declaration. `@/lib/notebook` above already brings that module into this
 // bundle, so the import adds nothing to it — and the dialog writes under the
@@ -40,6 +41,30 @@ interface PublishEvidenceDialogProps {
 
 type DialogState = 'form' | 'publishing' | 'success' | 'error';
 
+/**
+ * The run's date (`YYYY-MM-DD`, UTC): the earliest span start its trace
+ * records, else today.
+ */
+function runDateOf(trace: EvidenceTrace | null | undefined): string {
+  let earliest: bigint | null = null;
+  try {
+    for (const resource of (trace?.resourceSpans ?? []) as Array<{ scopeSpans?: Array<{ spans?: Array<{ startTimeUnixNano?: unknown }> }> }>) {
+      for (const scope of resource.scopeSpans ?? []) {
+        for (const span of scope.spans ?? []) {
+          const start = span.startTimeUnixNano;
+          if (typeof start !== 'string' && typeof start !== 'number') continue;
+          const nanos = BigInt(start);
+          if (nanos > BigInt(0) && (earliest === null || nanos < earliest)) earliest = nanos;
+        }
+      }
+    }
+  } catch {
+    earliest = null;
+  }
+  const at = earliest === null ? new Date() : new Date(Number(earliest / BigInt(1000000)));
+  return at.toISOString().slice(0, 10);
+}
+
 export default function PublishEvidenceDialog({
   isOpen,
   onClose,
@@ -62,9 +87,20 @@ export default function PublishEvidenceDialog({
   // refused server-side (`instance_identity_missing`) before it could matter.
   const instanceAttribution = useInstanceAttribution();
 
-  const defaultTitle = queryText.length > 80
+  // The default title under full-text visibility: the question, as typed.
+  const questionTitle = queryText.length > 80
     ? queryText.slice(0, 77) + '...'
     : queryText;
+  // UNDER HASH-ONLY VISIBILITY, A RECORD CARRIES NO VERBATIM COPY OF THE
+  // QUESTION (#516 P10). The title is public and its slug is the record's
+  // address, so there the default is built from the run instead: the portal it
+  // ran against (the run's, else the first one an answered call named, read
+  // as the notebook covers read it) and its date.
+  const runPortal = portal || coverPortals(toolCalls, null).reached[0] || '';
+  const runDate = runDateOf(evidenceTrace);
+  const neutralTitle = runPortal ? `${runPortal} analysis, ${runDate}` : `Data analysis, ${runDate}`;
+  const defaultTitleFor = (visibility: 'full_text' | 'hash_only') =>
+    visibility === 'hash_only' ? neutralTitle : questionTitle;
 
   // Extract first paragraph of output for default summary
   const firstParagraph = output.split(/\n\n/)[0]
@@ -72,7 +108,10 @@ export default function PublishEvidenceDialog({
     ?.trim()
     ?.slice(0, 300) || '';
 
-  const [title, setTitle] = useState(defaultTitle);
+  const [title, setTitle] = useState(questionTitle);
+  // A title the reader typed is kept as typed; only an unedited default
+  // follows the prompt visibility.
+  const [titleEdited, setTitleEdited] = useState(false);
   const [summary, setSummary] = useState(initialSummary || firstParagraph);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [userEditedSummary, setUserEditedSummary] = useState(false);
@@ -113,6 +152,14 @@ export default function PublishEvidenceDialog({
 
   // Track whether we've already kicked off summary generation for this session
   const summaryRequested = useRef(false);
+  // The summary request whose reply may still be shown (only the latest), and
+  // whether it was sent the question. Under hash-only visibility no request is
+  // sent the question (#516 P10); the summary itself is model text, named in
+  // the hash-only choice's words, and is not filtered.
+  const summaryRequestSeq = useRef(0);
+  const summaryRequestCarriedQuestion = useRef(false);
+  // Read by a reply that arrives after the reader started typing.
+  const summaryEdited = useRef(false);
   // Track whether we've asked for the signing tier for this open.
   const signingStatusRequested = useRef(false);
 
@@ -140,16 +187,17 @@ export default function PublishEvidenceDialog({
   // when a structured summary was provided (#112: the executed notebook's
   // two-clause summary is the better default — it was produced alongside the
   // analysis, not paraphrased after the fact).
-  useEffect(() => {
-    if (!isOpen || summaryRequested.current || userEditedSummary || initialSummary) return;
-    summaryRequested.current = true;
+  const requestSummary = (withQuestion: boolean) => {
+    const seq = ++summaryRequestSeq.current;
+    summaryRequestCarriedQuestion.current = withQuestion;
     setSummaryLoading(true);
 
     fetch('/api/records/generate-summary', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        prompt: queryText,
+        // Absent under hash-only visibility: the request is the app's.
+        prompt: withQuestion ? queryText : undefined,
         output,
         // The record's rejection travels with the call (#384 P8, F1): this
         // projection used to keep only the name and the arguments, so the
@@ -166,8 +214,8 @@ export default function PublishEvidenceDialog({
       .then(async (res) => {
         if (!res.ok) throw new Error(`${res.status}`);
         const data = await res.json();
-        // Only replace if the user hasn't started typing
-        if (data.summary && !userEditedSummary) {
+        // Only the latest request's reply, and only if the user hasn't started typing
+        if (seq === summaryRequestSeq.current && data.summary && !summaryEdited.current) {
           setSummary(data.summary);
         }
       })
@@ -175,10 +223,28 @@ export default function PublishEvidenceDialog({
         // Silently fall back to the default firstParagraph summary
       })
       .finally(() => {
-        setSummaryLoading(false);
+        if (seq === summaryRequestSeq.current) setSummaryLoading(false);
       });
+  };
+
+  useEffect(() => {
+    if (!isOpen || summaryRequested.current || userEditedSummary || initialSummary) return;
+    summaryRequested.current = true;
+    requestSummary(promptVisibility === 'full_text');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
+
+  const choosePromptVisibility = (next: 'full_text' | 'hash_only') => {
+    if (next === promptVisibility) return;
+    setPromptVisibility(next);
+    if (!titleEdited) setTitle(defaultTitleFor(next));
+    // A drafted summary whose request was sent the question is drafted again
+    // without it, unless the reader has written their own.
+    if (next === 'hash_only' && summaryRequestCarriedQuestion.current && !summaryEdited.current) {
+      setSummary(firstParagraph);
+      requestSummary(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -192,7 +258,7 @@ export default function PublishEvidenceDialog({
       // Only chat-flow sessions, which never had an executed artifact,
       // generate the skeleton notebook (`notebookProvenance: "skeleton"`
       // semantics per Q31).
-      const notebook = executedNotebook ?? generateNotebook(queryText, portal, toolCalls, output, instanceAttribution);
+      const notebook = executedNotebook ?? generateNotebook(queryText, portal, toolCalls, output, instanceAttribution, { promptVisibility });
 
       // captureMethod (ADR-0003/0011) is `chat-flow-stream` for BOTH paths
       // through this dialog: the platform captured the model's bytes at the
@@ -359,7 +425,7 @@ export default function PublishEvidenceDialog({
                 <input
                   type="text"
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={(e) => { setTitle(e.target.value); setTitleEdited(true); }}
                   style={{
                     width: '100%',
                     padding: '8px 12px',
@@ -370,6 +436,9 @@ export default function PublishEvidenceDialog({
                     boxSizing: 'border-box',
                   }}
                 />
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                  The title is public and becomes the record’s address.
+                </p>
               </div>
 
               <div style={{ marginBottom: '16px' }}>
@@ -393,7 +462,7 @@ export default function PublishEvidenceDialog({
                 </label>
                 <textarea
                   value={summary}
-                  onChange={(e) => { setSummary(e.target.value); setUserEditedSummary(true); }}
+                  onChange={(e) => { setSummary(e.target.value); setUserEditedSummary(true); summaryEdited.current = true; }}
                   rows={4}
                   disabled={summaryLoading && !userEditedSummary}
                   placeholder={summaryLoading ? 'Generating summary...' : ''}
@@ -424,7 +493,7 @@ export default function PublishEvidenceDialog({
                       type="radio"
                       name="promptVisibility"
                       checked={promptVisibility === 'full_text'}
-                      onChange={() => setPromptVisibility('full_text')}
+                      onChange={() => choosePromptVisibility('full_text')}
                       style={{ marginTop: '3px' }}
                     />
                     <span>
@@ -439,13 +508,15 @@ export default function PublishEvidenceDialog({
                       type="radio"
                       name="promptVisibility"
                       checked={promptVisibility === 'hash_only'}
-                      onChange={() => setPromptVisibility('hash_only')}
+                      onChange={() => choosePromptVisibility('hash_only')}
                       style={{ marginTop: '3px' }}
                     />
                     <span>
                       Hash only
                       <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)' }}>
-                        Hides your exact question while still allowing verification
+                        The record keeps a fingerprint of your question instead of its text. Anyone who knows or
+                        guesses the exact wording can confirm it matches. The answer, summary and data queries may
+                        still contain its words.
                       </span>
                     </span>
                   </label>

@@ -575,10 +575,20 @@ export function notebookCredentialForms(env: Record<string, string | undefined>)
   return forms;
 }
 
-function removeForms(text: string, forms: ReadonlyArray<[string, string]>): string {
+/** Each form, in the order given, replaced by the text paired with it. */
+function replaceForms(text: string, replacements: ReadonlyArray<readonly [string, string]>): string {
   let out = text;
-  for (const [form, name] of forms) out = out.split(form).join(`[${name} removed]`);
+  for (const [form, replacement] of replacements) out = out.split(form).join(replacement);
   return out;
+}
+
+/** The credential forms, each paired with the marker that names its variable. */
+function credentialMarkers(forms: ReadonlyArray<[string, string]>): Array<[string, string]> {
+  return forms.map(([form, name]) => [form, `[${name} removed]`]);
+}
+
+function removeForms(text: string, forms: ReadonlyArray<[string, string]>): string {
+  return replaceForms(text, credentialMarkers(forms));
 }
 
 /**
@@ -610,16 +620,29 @@ export function withoutCredentials(text: string, env: Record<string, string | un
  * removes them the same way.
  */
 export function withoutCredentialsIn<T>(value: T, env: Record<string, string | undefined>): T {
-  const forms = notebookCredentialForms(env);
-  if (forms.length === 0) return value;
+  return replacingFormsIn(value, credentialMarkers(notebookCredentialForms(env)));
+}
+
+/**
+ * The walk `withoutCredentialsIn` makes, for any list of forms: every key and
+ * every string of a JSON value, at any depth, with each form replaced, in the
+ * order given, by the text paired with it. Arrays, objects, key order and
+ * every other value are kept as they are; a parsed `__proto__` key stays a
+ * key. With no forms the value itself is returned. The publish route also
+ * walks the sources of a submitted notebook's markdown cells with it under
+ * hash-only visibility, where the forms are the question's (#516 P10); the
+ * caller decides what is walked.
+ */
+export function replacingFormsIn<T>(value: T, replacements: ReadonlyArray<readonly [string, string]>): T {
+  if (replacements.length === 0) return value;
   const walk = (node: unknown): unknown => {
-    if (typeof node === 'string') return removeForms(node, forms);
+    if (typeof node === 'string') return replaceForms(node, replacements);
     if (Array.isArray(node)) return node.map(walk);
     if (node !== null && typeof node === 'object') {
       const out: Record<string, unknown> = {};
       for (const [key, item] of Object.entries(node)) {
         // defineProperty, not assignment: a parsed `__proto__` key stays a key.
-        Object.defineProperty(out, removeForms(key, forms), {
+        Object.defineProperty(out, replaceForms(key, replacements), {
           value: walk(item), enumerable: true, writable: true, configurable: true,
         });
       }
