@@ -52,6 +52,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import * as nodeModule from 'node:module';
+import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { createElement, type ComponentType, type ReactElement, type ReactNode } from 'react';
@@ -109,8 +110,27 @@ function candidatesFor(base: string): string[] {
   return [base, `${base}.ts`, `${base}.tsx`, path.join(base, 'index.ts'), path.join(base, 'index.tsx')];
 }
 
+// LAYOUT-WEB W3 P2 (5): FOR SkillSection.tsx ONLY, `react` is the real module
+// with one change — while `globalThis.__p2OpenSkill` is set, the section's
+// open/closed state starts open, so the render shows B's text as a reader who
+// clicked "View skill guidance" sees it. The real hook is still called, so the
+// hook order is the component's own.
+const SKILL_SECTION_FILE = path.join(SRC, 'components', 'evidence', 'SkillSection.tsx');
+const REACT_URL = pathToFileURL(createRequire(import.meta.url).resolve('react')).href;
+const OPEN_SKILL_URL = 'file:///layout-web-w3-p2-open-skill/react.mjs';
+const OPEN_SKILL_SOURCE = `
+  import React from '${REACT_URL}';
+  export function useState(initial) {
+    const real = React.useState(initial);
+    return globalThis.__p2OpenSkill === true && initial === false ? [true, real[1]] : real;
+  }`;
+
 registerHooks({
   resolve(specifier, context, nextResolve) {
+    const from = (context as { parentURL?: string }).parentURL;
+    if (specifier === 'react' && from?.startsWith('file:') && fileURLToPath(from) === SKILL_SECTION_FILE) {
+      return { url: OPEN_SKILL_URL, format: 'module', shortCircuit: true };
+    }
     if (Object.prototype.hasOwnProperty.call(STUB_SOURCE, specifier)) {
       return { url: `${STUB_PREFIX}${encodeURIComponent(specifier)}.mjs`, format: 'module', shortCircuit: true };
     }
@@ -131,6 +151,7 @@ registerHooks({
     return nextResolve(specifier, context);
   },
   load(loadUrl, context, nextLoad) {
+    if (loadUrl === OPEN_SKILL_URL) return { format: 'module', source: OPEN_SKILL_SOURCE, shortCircuit: true };
     if (loadUrl.startsWith(STUB_PREFIX)) {
       const key = decodeURIComponent(loadUrl.slice(STUB_PREFIX.length).replace(/\.mjs$/, ''));
       return { format: 'module', source: STUB_SOURCE[key], shortCircuit: true };
@@ -628,8 +649,14 @@ test('P2 (3) the answer renders twice, before the disclosure and as F, with iden
 
 const PAGE_SOURCE = fs.readFileSync(path.join(HERE, 'page.tsx'), 'utf8');
 
-test('P2 (3) read from the source: the answer has one render site', () => {
-  assert.equal(PAGE_SOURCE.match(/<ReactMarkdown\b/g)?.length ?? 0, 1, 'one <ReactMarkdown render site in page.tsx');
+test('P2 (3) read from the source: the answer has one render site, in the shared view', () => {
+  // LAYOUT-WEB W3 P2: the page renders no answer of its own. It renders
+  // AnswerView, whose AnswerBody is the one render site every surface shares.
+  const code = PAGE_SOURCE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  assert.equal(code.match(/<ReactMarkdown\b/g)?.length ?? 0, 0, 'page.tsx renders markdown of its own');
+  assert.equal(code.match(/<AnswerView\b/g)?.length ?? 0, 1, 'page.tsx renders one AnswerView');
+  const view = fs.readFileSync(path.join(SRC, 'components', 'answer-view', 'AnswerView.tsx'), 'utf8');
+  assert.equal(view.match(/<ReactMarkdown remarkPlugins=/g)?.length ?? 0, 1, 'AnswerView renders the answer’s markdown at one site');
 });
 
 test('P2 (3) the citation block renders the builder\'s text for the record, with a Copy button for each', async () => {
@@ -1009,4 +1036,358 @@ test('W2 P2 (4) section D labels each call by its upstream name and operation ty
   const d = sectionD(STEPS_HTML.aliased);
   const labels = [...d.matchAll(/<div style="font-family:monospace;[^"]*">([^<]*)<\/div>/g)].map((m) => m[1]);
   assert.deepEqual(labels, ALIASED_AGF_PACKAGE.queries.map((q) => `${upstreamToolName(q.tool)}${q.operationType ? ` (${q.operationType})` : ''}`));
+});
+
+// --- LAYOUT-WEB W3 P2: the record page renders through the answer view ----------
+//
+// THE VIEW, by position, on the record (design §4.1; the run surfaces' order,
+// W3 P1): the status row (the notebook's reading, the spec link, the notebook
+// download) with the refused-request lines under it; the answer; the citation
+// block; the steps; one disclosure, holding A-G and then what W1's G0 placed
+// after the envelope (Provenance Graph, Additional Artifacts, Adversarial
+// evaluations, Attestations, Verification Status); then, outside it, Status
+// History and the actions. The page keeps its banners and header above the
+// view, and the package hash below it.
+//
+// NO SOURCES LINE. The run surfaces' part 5 is `buildProvenanceLine` over the
+// calls' `args.portal`. A record states each call's portal in `queries[].portal`
+// and its sources in `dataSources`, not in the arguments that formatter reads;
+// building the line would be a new reader-facing claim over the signed fields,
+// which this phase does not make. The part is absent, and asserted absent.
+//
+// WHO WROTE EACH PART (design §6), computed from §6's words with the fixture's
+// instance and model, and only where the record states it — see
+// `src/components/answer-view/adapt-record.test.ts`'s header: G carries no
+// line (the record does not state what produced its summary), and B carries
+// one only for a record its instance's chat flow captured. The status row, the
+// actions, D and E carry none (the owner's ruling: §6 gives them no words).
+
+const { formatModelName: modelName } = await import('@/lib/models');
+const { upstreamToolName: upstreamOf } = await import('@/lib/mcp/operation-types');
+
+const W3P2 = {
+  question: 'Question, written by the person who asked',
+  answer: (pkg: { cost: { model: string } }) => `Answer, written by the model ${modelName(pkg.cost.model)}`,
+  citation: `Citation, assembled by ${INSTANCE}`,
+  steps: `Steps, written by ${INSTANCE} from the model's calls`,
+  instructions: `Instructions, written by ${INSTANCE} and the data source's skill`,
+};
+
+function unescapeHtml(text: string): string {
+  return text.replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+}
+
+/** Every author line, by its key, in document order. */
+function authorLines(html: string): Array<{ key: string; text: string; at: number }> {
+  return [...html.matchAll(/<(\w+)\b[^>]*\bdata-author="([^"]+)"[^>]*>([\s\S]*?)<\/\1>/g)]
+    .map((m) => ({ key: m[2], text: unescapeHtml(m[3].replace(/<!-- -->/g, '').replace(/<[^>]*>/g, '')), at: m.index ?? -1 }));
+}
+
+/** The element `<tag … data-part="name"…>` that opens first at or after `from`, or null. */
+function partOf(html: string, name: string, from = 0): { start: number; end: number; markup: string } | null {
+  const re = new RegExp(`<(\\w+)\\b[^>]*\\bdata-part="${name}"[^>]*>`, 'g');
+  re.lastIndex = from;
+  const m = re.exec(html);
+  if (m === null) return null;
+  const end = elementEnd(html, m.index, m[1]);
+  return { start: m.index, end, markup: html.slice(m.index, end) };
+}
+
+function requirePart(html: string, name: string, from = 0): { start: number; end: number; markup: string } {
+  const p = partOf(html, name, from);
+  assert.ok(p !== null, `no element with data-part="${name}" is rendered`);
+  return p;
+}
+
+const VIEW_PARTS = ['status-row', 'answer', 'citation', 'steps', 'sources', 'disclosure', 'actions'] as const;
+
+/** The view's parts this markup renders, in the order they open. */
+function partsInOrder(html: string): string[] {
+  return VIEW_PARTS
+    .map((name) => ({ name, at: partOf(html, name)?.start ?? -1 }))
+    .filter((p) => p.at >= 0)
+    .sort((a, b) => a.at - b.at)
+    .map((p) => p.name);
+}
+
+const W3P2_HTML = {
+  agf: STEPS_HTML.agf,
+  old: STEPS_HTML.old,
+  /** The legacy record, captured by a Claude Code session: its instructions are that session's. */
+  oldClaudeCode: await renderWithInstance({ ...OLD, record: { ...OLD.record, captureMethod: 'claude-code-jsonl-readback' } }, INSTANCE),
+  /** The legacy record, with no capture method stated anywhere. */
+  oldUnstated: await renderWithInstance({ ...OLD, record: { ...OLD.record, captureMethod: null as unknown as string } }, INSTANCE),
+};
+
+for (const [name, key, pkg] of [
+  ['A-G record', 'agf', AGF_PACKAGE],
+  ['legacy record', 'old', OLD_PACKAGE],
+] as const) {
+  test(`W3 P2 (1) ${name}: status row, answer, citation, steps, disclosure, actions, in the view’s order, with no sources line`, () => {
+    const html = W3P2_HTML[key];
+    assert.deepEqual(partsInOrder(html), ['status-row', 'answer', 'citation', 'steps', 'disclosure', 'actions'],
+      'the view’s parts, in its order');
+    const d = requirePart(html, 'disclosure');
+    assert.ok(d.markup.includes(`>${DISCLOSURE_LABEL}</summary>`), 'the disclosure is the view’s, under its label');
+    assert.ok(at(html, '<h1') < requirePart(html, 'status-row').start, 'the page’s header sits above the view');
+    assert.ok(at(html, 'Package hash: ') > requirePart(html, 'actions').end, 'the package hash sits below the view');
+    assert.ok(requirePart(html, 'answer').markup.includes(key === 'agf' ? AGF_ANSWER : OLD_ANSWER), 'the answer part carries the record’s answer');
+    assert.equal(stepsIn(requirePart(html, 'steps').markup).length, pkg.queries.length, 'the steps part carries one step per signed entry');
+    assert.ok(requirePart(html, 'actions').markup.includes('https://typedstandards.org/verify?url='), 'the actions part carries the verify action');
+  });
+
+  test(`W3 P2 (1) ${name}: W1’s placement after the envelope — the five parts inside the view’s disclosure, after G; Status History and the actions outside`, () => {
+    const html = W3P2_HTML[key];
+    const d = requirePart(html, 'disclosure');
+    let last = at(html, heading('G · Summary'));
+    assert.ok(last > d.start && last < d.end, 'G sits inside the disclosure');
+    for (const t of AFTER_ENVELOPE) {
+      const i = at(html, heading(t));
+      assert.ok(i > last && i < d.end, `"${t}" sits inside the view’s disclosure, after the part before it`);
+      last = i;
+    }
+    const history = at(html, heading('Status History'));
+    const actions = requirePart(html, 'actions');
+    assert.ok(d.end <= history && history < actions.start, 'Status History sits after the disclosure, before the actions');
+    assert.ok(actions.markup.includes(heading('Actions')), 'the actions part is the page’s Actions section');
+  });
+
+  test(`W3 P2 (1) ${name}: each author line reads §6’s words for what the record states`, () => {
+    const html = W3P2_HTML[key];
+    const d = requirePart(html, 'disclosure');
+    const lines = authorLines(html);
+    const expected: Array<[string, string, 'outside' | 'inside', number]> = [
+      ['answer', W3P2.answer(pkg), 'outside', 2],
+      ['citation', W3P2.citation, 'outside', 1],
+      ['steps', W3P2.steps, 'outside', 1],
+      ['question', W3P2.question, 'inside', 1],
+      ['instructions', W3P2.instructions, 'inside', 1],
+    ];
+    for (const [k, text, where, count] of expected) {
+      const found = lines.filter((l) => l.key === k);
+      assert.equal(found.length, count, `${count} "${k}" author line(s) (found ${found.length})`);
+      for (const l of found) assert.equal(l.text, text, `the "${k}" author line`);
+      assert.ok(where === 'inside' ? found[0].at > d.start && found[0].at < d.end : found[0].at < d.start, `the "${k}" line sits ${where} the disclosure`);
+    }
+    const answers = lines.filter((l) => l.key === 'answer');
+    assert.ok(answers[1].at > at(html, heading('F · Rendered answer')), 'the second answer line is F’s');
+    assert.deepEqual([...new Set(lines.map((l) => l.key))].sort(), expected.map((e) => e[0]).sort(),
+      'no other part carries an author line: not G (unstated), and not the status row, the actions, D or E (ruling A)');
+  });
+}
+
+test('W3 P2 (1) the A-G record and the legacy record render the same order, the view’s', () => {
+  const agf = partsInOrder(W3P2_HTML.agf);
+  assert.deepEqual(partsInOrder(W3P2_HTML.old), agf);
+  for (const name of ['disclosure', 'actions']) assert.ok(agf.includes(name), `the view’s ${name} part renders on both`);
+});
+
+test('W3 P2 (1) B names no author for a record a Claude Code session captured, or one that states no capture method', () => {
+  for (const [name, html] of [['Claude Code capture', W3P2_HTML.oldClaudeCode], ['no capture method', W3P2_HTML.oldUnstated]] as const) {
+    assert.equal(occurrences(html, heading('B · System prompts')).length, 1, `${name}: premise: B renders`);
+    assert.deepEqual(authorLines(html).filter((l) => l.key === 'instructions'), [], `${name}: B carries no author line`);
+    assert.ok(authorLines(html).some((l) => l.key === 'question'), `${name}: the other lines stay`);
+  }
+});
+
+test('W3 P2 (8) the status row, the actions, D and E carry no author line', () => {
+  for (const html of [W3P2_HTML.agf, W3P2_HTML.old]) {
+    for (const name of ['status-row', 'actions']) {
+      assert.doesNotMatch(requirePart(html, name).markup, /data-author=/, `the ${name} part carries an author line`);
+    }
+    const d = requirePart(html, 'disclosure');
+    for (const [from, to] of [['D · Deliberative trace', 'E · Answer notebook'], ['E · Answer notebook', 'F · Rendered answer']] as const) {
+      assert.doesNotMatch(html.slice(at(html, heading(from)), at(html, heading(to))), /data-author=/, `${from} carries an author line`);
+    }
+    assert.ok(at(html, heading('E · Answer notebook')) < d.end, 'premise: E renders, inside the disclosure');
+  }
+});
+
+// --- W3 P2 item 2: reachable without opening the disclosure -----------------------
+
+test('W3 P2 (2) the citation block, the verify action and every banner sit outside the disclosure', () => {
+  for (const [html, isPublic] of [[W3P2_HTML.agf, true], [W3P2_HTML.old, true], [HTML.skeleton, false]] as const) {
+    const d = requirePart(html, 'disclosure');
+    const citation = requirePart(html, 'citation');
+    assert.ok(citation.end <= d.start, 'the citation part closes before the disclosure opens');
+    assert.ok(citation.markup.includes('>Copy</button>'), 'the citation part holds the citation block');
+    if (!isPublic) continue;
+    const verify = at(html, 'https://typedstandards.org/verify?url=');
+    assert.ok(verify >= d.end && verify > requirePart(html, 'actions').start, 'the verify action sits in the actions, after the disclosure');
+  }
+  for (const [html, banner] of [
+    [HTML.skeleton, 'Unsigned package — no cryptographic commitment'],
+    [HTML.skeleton, 'Sealed — not published'],
+    [W3P2_HTML.old, 'This record was withdrawn by the author on'],
+  ] as const) {
+    assert.ok(at(html, banner) < requirePart(html, 'status-row').start, `"${banner}" sits above the view`);
+  }
+});
+
+// --- W3 P2 (5): criterion 3 restated, on the record page --------------------------
+//
+// No text the site writes names a tool by its exposed (aliased) name. Exempt:
+// text the record carries word for word — B's composed prompt, the answer
+// (first and as F), and D's raw fields — and an upstream name that itself holds
+// the separator `__` (`ckan__get_schema`).
+//
+// THE FIXTURE MAKES EACH EXEMPTION ABLE TO FAIL: B's skill text names
+// `socrata__get_data`, and so do the answer and one call's raw `where`; one
+// call is shaped like `…b8cc28` (`ckan__get_schema`, operation type `metadata`,
+// a `resource_id` argument). B's text reaches the markup only once a reader
+// opens "View skill guidance" (`SkillSection` is closed on its first render),
+// so the record is rendered as that reader sees it (the hook above). The
+// instrument is shown to fail on a site-written label carrying an alias.
+
+const ALIAS = 'socrata__get_data';
+const ALIAS_PACKAGE = (() => {
+  const pkg = structuredClone(ALIASED_AGF_PACKAGE) as unknown as Omit<typeof AGF_PACKAGE, 'queries'> & { queries: Array<Record<string, unknown>> };
+  pkg.skillMetadata = { ...pkg.skillMetadata, skillText: `ALIASSKILL-w3p2: call ${ALIAS} with type=query to count rows.` };
+  pkg.output = `ALIASANSWER-w3p2: the analysis called ${ALIAS} twice.`;
+  pkg.queries[1] = { ...pkg.queries[1], arguments: { dataset_id: 'bbbb-2222', where: `note = '${ALIAS}'` } };
+  pkg.queries.push({ tool: 'ckan__get_schema', operationType: 'metadata', arguments: { resource_id: '8048697b-ad64-4bfc-b090-ee00169f2323' }, duration_ms: 50 });
+  return pkg;
+})();
+const ALIAS_CASE: Case = { ...AGF, pkg: ALIAS_PACKAGE };
+
+async function renderOpenSkill(c: Case): Promise<string> {
+  globals.__p2OpenSkill = true;
+  try {
+    return await renderWithInstance(c, INSTANCE);
+  } finally {
+    globals.__p2OpenSkill = false;
+  }
+}
+
+const ALIAS_HTML = await renderOpenSkill(ALIAS_CASE);
+
+/** The tokens that hold the separator `__`. */
+const separated = (text: string) => [...text.matchAll(/[A-Za-z0-9_]*[A-Za-z0-9]__[A-Za-z0-9_]+/g)].map((m) => m[0]);
+/** A name is exposed when the dispatch map reads an upstream name out of it. */
+const exposed = (token: string) => upstreamOf(token) !== token;
+
+/** The markup with the exempt regions cut out, and the regions. */
+function withoutExemptRegions(html: string): { rest: string; exempt: Record<string, string[]> } {
+  const exempt: Record<string, string[]> = { answer: [], b: [], d: [] };
+  const cut = (text: string, start: number, end: number, into: string[]) => { into.push(text.slice(start, end)); return text.slice(0, start) + text.slice(end); };
+  let rest = html.replace(/<script\b[\s\S]*?<\/script>/g, '').replace(/<style\b[\s\S]*?<\/style>/g, '');
+  for (let p = partOf(rest, 'answer'); p !== null; p = partOf(rest, 'answer')) rest = cut(rest, p.start, p.end, exempt.answer);
+  const section = (title: string, next: string, re: RegExp, into: string[]) => {
+    const from = at(rest, heading(title));
+    const to = at(rest, heading(next));
+    const body = rest.slice(from, to).replace(re, (m) => { into.push(m); return ''; });
+    rest = rest.slice(0, from) + body + rest.slice(to);
+  };
+  section('B · System prompts', 'C · Model + environment', /<pre\b[\s\S]*?<\/pre>/g, exempt.b);
+  section('D · Deliberative trace', 'E · Answer notebook', /<pre\b[\s\S]*?<\/pre>|<code\b[\s\S]*?<\/code>/g, exempt.d);
+  return { rest, exempt };
+}
+
+function leaks(html: string): string[] {
+  return separated(withoutExemptRegions(html).rest).filter(exposed);
+}
+
+test('W3 P2 (5) the record page writes no exposed tool name; B’s prompt, the answer and D’s raw fields are exempt, and a ckan__ name is upstream', () => {
+  assert.ok(ALIAS_PACKAGE.queries.filter((q) => String(q.tool).startsWith('socrata__')).length === 3, 'premise: the record’s socrata tools are aliased');
+  assert.ok(exposed(ALIAS) && !exposed('ckan__get_schema'), 'premise: the dispatch map reads socrata__get_data as exposed and ckan__get_schema as upstream');
+  const { rest, exempt } = withoutExemptRegions(ALIAS_HTML);
+  assert.equal(exempt.answer.filter((e) => e.includes(ALIAS)).length, 2, 'the answer names the alias, first and as F: that exemption is exercised');
+  assert.equal(exempt.b.filter((e) => e.includes(ALIAS)).length, 1, 'B’s skill text names the alias, as the opened section shows it: that exemption is exercised');
+  assert.ok(exempt.d.some((e) => e.includes(ALIAS)), 'a raw field in D names the alias: that exemption is exercised');
+  assert.deepEqual(separated(rest).filter(exposed), [], 'site-written text names a tool by its exposed name');
+  const upstream = separated(rest);
+  assert.ok(upstream.includes('ckan__get_schema'), 'premise: the ckan__ call’s upstream name is stated, so that exemption is exercised');
+  for (const token of upstream) assert.equal(upstreamOf(token), token, `"${token}" is an upstream name holding the separator`);
+});
+
+test('W3 P2 (5) the instrument fails on a site-written label that prints an exposed name', () => {
+  const planted = ALIAS_HTML.replace('>Steps, written by', `>${ALIAS} — Steps, written by`);
+  assert.notEqual(planted, ALIAS_HTML, 'premise: the plant landed');
+  assert.deepEqual(leaks(planted), [ALIAS]);
+  const inD = ALIAS_HTML.replace(/(<div style="font-family:monospace;[^"]*">)get_data \(query\)/, `$1${ALIAS} (query)`);
+  assert.notEqual(inD, ALIAS_HTML, 'premise: the D-label plant landed');
+  assert.deepEqual(leaks(inD), [ALIAS], 'a D label is site-written: printing the exposed name there fails');
+});
+
+// --- W3 P2 (6): #115, one answer display across the surfaces --------------------
+//
+// The record's answer renders through the run surfaces' answer component. For
+// a record carrying an executed notebook with a rendering cell, the answer is
+// that cell's outputs, as `adapt-notebook.ts` takes them; otherwise it is the
+// record's `output`. The fixture's `output` differs from the cell's, so a page
+// that rendered the wrong one fails.
+
+const { default: ChatNotebookOutput } = (await import('@/components/notebook/ChatNotebookOutput')) as unknown as {
+  default: ComponentType<Record<string, unknown>>;
+};
+const { EvidenceOriginProvider } = (await import('@/components/EvidenceOriginProvider')) as unknown as {
+  EvidenceOriginProvider: ComponentType<{ value: Record<string, string | null>; children?: ReactNode }>;
+};
+
+function renderRun(notebook: unknown): string {
+  const Session = SessionProvider as unknown as ComponentType<{ session: null; children?: ReactNode }>;
+  const view = createElement(ChatNotebookOutput, { notebook, prompt: 'RUNQUESTION-w3p2', model: AGF_PACKAGE.cost.model, portal: 'data.example.test', toolCalls: [] });
+  const origin = createElement(EvidenceOriginProvider, { value: { origin: `https://${INSTANCE}`, host: INSTANCE, platformTitle: null } }, view);
+  return renderToStaticMarkup(createElement(Session, { session: null }, origin));
+}
+
+const markdownOutput = (md: string) => ({ output_type: 'display_data', metadata: {}, data: { 'text/markdown': md } });
+
+function executedNotebook(outputs: unknown[]) {
+  return {
+    nbformat: 4,
+    nbformat_minor: 5,
+    metadata: { extensions: { 'org.civicaitools.notebook': { provenance: 'executed' } } },
+    cells: [
+      { cell_type: 'markdown', metadata: {}, source: ['# CELLNOTEBOOK-w3p2\n'] },
+      { cell_type: 'code', metadata: { role: 'synthesis' }, execution_count: 1, source: ['display(Markdown(answer))\n'], outputs },
+    ],
+  };
+}
+
+function recordCarrying(notebook: unknown, output: string): Case {
+  const pkg = structuredClone(AGF_PACKAGE) as Omit<typeof AGF_PACKAGE, 'extensions'> & { extensions: Record<string, unknown> };
+  pkg.output = output;
+  pkg.extensions['org.civicaitools.notebook'] = notebook;
+  return { ...AGF, pkg };
+}
+
+const CELL_ANSWER = 'CELLANSWER-w3p2: **42** complaints in [the portal](https://data.example.test/), and:\n\n| a | b |\n|---|---|\n| 1 | 2 |';
+const CELL_TABLE = { output_type: 'execute_result', metadata: {}, data: { 'text/html': '<table><tr><td>CELLTABLE-w3p2</td></tr></table>' } };
+
+test('W3 P2 (6) one notebook renders byte-identical answer markup on the executed run and on the record that carries it', async () => {
+  for (const [name, outputs] of [
+    ['one markdown output', [markdownOutput(CELL_ANSWER)]],
+    ['a markdown output and a table the cell computed', [markdownOutput(CELL_ANSWER), CELL_TABLE]],
+  ] as const) {
+    const notebook = executedNotebook([...outputs]);
+    const run = requirePart(renderRun(notebook), 'answer').markup;
+    const recordHtml = await renderWithInstance(recordCarrying(notebook, 'OUTPUTFIELD-w3p2: not the cell’s answer.'), INSTANCE);
+    const record = requirePart(recordHtml, 'answer').markup;
+    assert.ok(run.includes('CELLANSWER-w3p2'), `${name}: premise: the run’s answer part carries the cell’s answer`);
+    assert.equal(record, run, `${name}: the record’s answer part is the executed run’s, byte for byte`);
+    assert.equal(recordHtml.includes('OUTPUTFIELD-w3p2'), false, `${name}: the record’s output field is not rendered as the answer`);
+  }
+});
+
+test('W3 P2 (6) a record with no rendering cell renders its output through the same answer component', async () => {
+  const run = requirePart(renderRun(executedNotebook([markdownOutput(CELL_ANSWER)])), 'answer').markup;
+  const record = requirePart(await renderWithInstance(recordCarrying(notebook('skeleton', 'SKELETON-w3p2'), CELL_ANSWER), INSTANCE), 'answer').markup;
+  assert.equal(record, run, 'the record’s output and the run’s cell, holding the same markdown, render the same markup');
+});
+
+test('W3 P2 (6) an answer over 2000 characters is not truncated, on the executed run or on the record', async () => {
+  const long = `LONGSTART-w3p2 ${'The figures were read from the portal on the day. '.repeat(100)}LONGEND-w3p2`;
+  assert.ok(long.length > 4000, 'premise: the answer is over 2000 characters, twice over');
+  const text = (markup: string) => unescapeHtml(markup.replace(/<[^>]*>/g, ''));
+  const cases: Array<[string, string]> = [
+    ['the executed run', renderRun(executedNotebook([markdownOutput(long)]))],
+    ['a record carrying the notebook', await renderWithInstance(recordCarrying(executedNotebook([markdownOutput(long)]), 'OUTPUTFIELD-w3p2'), INSTANCE)],
+    ['a record answering with its output', await renderWithInstance(recordCarrying(notebook('skeleton', 'SKELETON-w3p2'), long), INSTANCE)],
+  ];
+  for (const [name, html] of cases) {
+    const answers = occurrences(html, '<div data-part="answer"').map((s) => html.slice(s, elementEnd(html, s, 'div')));
+    assert.ok(answers.length >= 1, `${name}: premise: the answer renders`);
+    for (const a of answers) assert.equal(text(a).trim(), long, `${name}: the answer is rendered whole`);
+  }
 });
