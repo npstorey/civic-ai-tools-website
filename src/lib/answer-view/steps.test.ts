@@ -117,6 +117,49 @@ test('generateGroupLabel: entries with no name and no operation type fall back t
   assert.equal(generateGroupLabel([]), 'Processing');
 });
 
+// --- LAYOUT-WEB W3 P1 item 5: a named call's label -------------------------------
+//
+// A call that names its tool and has a recorded operation type, but that the
+// labels do not otherwise describe, reads by that operation type in user
+// language, never by its tool name. The shape is a published record's
+// (`…b8cc28`): a `ckan__get_schema` call, operation type `metadata`, with a
+// `resource_id` and no `dataset_id`, so the metadata label that names a dataset
+// has nothing to name. The expected words are the module's own for a metadata
+// step (its message fallback), read from it rather than written here.
+//
+// RED at 2bd807b: the step reads "Calling ckan__get_schema" on every path.
+
+const B8CC28 = { tool: 'ckan__get_schema', operationType: 'metadata', arguments: { resource_id: 'a1b2c3d4-0000-4000-8000-000000000001' } };
+const METADATA_WORDS = generateGroupLabel([start({ message: 'Loading metadata...' })]);
+
+test('W3 P1 (8) b8cc28’s shape reads by its operation type in user language through the record’s, the run’s and the entry’s paths', () => {
+  assert.equal(METADATA_WORDS, 'Understanding dataset structure', 'premise: the module’s words for a metadata step');
+  const viaRecord = buildRecordStepView([B8CC28]).steps[0].label;
+  const entry = start({ toolName: B8CC28.tool, operationType: B8CC28.operationType });
+  const group: ProgressGroup = { iteration: 1, label: OPEN_STEP_LABEL, entries: [entry], isComplete: true };
+  const viaRun = buildRunStepView([group], [{ name: B8CC28.tool, operationType: B8CC28.operationType, args: B8CC28.arguments }]).steps[0].label;
+  const viaExposedName = generateGroupLabel([start({ toolName: `boston__${B8CC28.tool}`, operationType: 'metadata', args: B8CC28.arguments })]);
+  for (const [path, label] of [['record', viaRecord], ['run', viaRun], ['exposed name', viaExposedName]] as const) {
+    assert.equal(label, METADATA_WORDS, `the ${path} path reads by the operation type`);
+    assert.doesNotMatch(label, /ckan|get_schema|Calling|__/, `the ${path} path reads by the tool name: "${label}"`);
+  }
+});
+
+test('W3 P1 (8) every recorded operation type the labels do not describe reads in user language; an unknown one claims nothing', () => {
+  const named = (operationType: string) => generateGroupLabel([start({ toolName: 'opencontext_tool', operationType, args: {} })]);
+  assert.equal(named('metadata'), METADATA_WORDS);
+  assert.equal(named('metrics'), generateGroupLabel([start({ message: 'Fetching metrics...' })]), 'metrics with no dataset to name');
+  assert.equal(named('catalog'), 'Searching the data catalog', 'catalog is always described');
+  assert.equal(named('compute'), OPEN_STEP_LABEL, 'an operation type with no words of its own claims nothing, and is never read by the name');
+  for (const op of ['metadata', 'metrics', 'compute']) assert.doesNotMatch(named(op), /opencontext_tool|Calling/);
+});
+
+test('W3 P1 (8) a call with no operation type, or the record’s statement that none is known, is left as it was: called by its upstream name', () => {
+  assert.equal(generateGroupLabel([start({ toolName: 'nyc_charter__get_section', args: { section: '1' } })]), 'Calling get_section');
+  assert.equal(buildRecordStepView([{ tool: 'get_section', operationType: 'unknown', arguments: { section: '1' } }]).steps[0].label, 'Calling get_section',
+    '`unknown` is what the packager records for an operation the name does not state; it states no type');
+});
+
 // --- mapGroupsToToolCalls ----------------------------------------------------------
 
 test('mapGroupsToToolCalls: each step takes as many calls, in order, as it has tool_start entries, and keeps the caller’s call type', () => {

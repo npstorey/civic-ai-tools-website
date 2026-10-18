@@ -217,6 +217,26 @@ function generateRichLabel(entries: ProgressLogEntry[], previousEntries?: Progre
   return null;
 }
 
+/**
+ * Each operation type's words when nothing more specific can be said: the
+ * step names the kind of operation, not a dataset or a query. The message
+ * fallback below reads the same words, so a step reads the same whether the
+ * entry recorded its type or only a message.
+ */
+const OPERATION_WORDS: Readonly<Record<string, string>> = {
+  catalog: 'Finding relevant datasets',
+  metadata: 'Understanding dataset structure',
+  query: 'Querying data',
+  metrics: 'Checking dataset statistics',
+};
+
+/**
+ * The value a record carries for an operation its call's name does not state
+ * (`mcp/operation-types.ts`: the packager records `'unknown'` for a call that
+ * derives none). It states no type, so it is read as none.
+ */
+const NO_STATED_OPERATION = 'unknown';
+
 /** A human-readable label for one step: the calls of one iteration. */
 export function generateGroupLabel(entries: ProgressLogEntry[], previousEntries?: ProgressLogEntry[]): string {
   const richLabel = generateRichLabel(entries, previousEntries);
@@ -226,13 +246,24 @@ export function generateGroupLabel(entries: ProgressLogEntry[], previousEntries?
   if (toolStarts.length === 0) return 'Processing';
 
   // An entry that names its tool but has no rich label above is a call whose
-  // operation these labels do not describe. Its label repeats what the record
-  // says; the keyword matching below is for entries that recorded nothing —
-  // it must never overrule a name (#384).
-  // (`get_data`'s name in user language is "gather data", as in `generateToolReason`.)
+  // operation these labels do not describe; the keyword matching below is for
+  // entries that recorded nothing — it must never overrule a name (#384).
   const named = toolStarts.find(e => e.toolName || e.operationType);
-  // Read, and shown, by the upstream name in either spelling (#599 W3).
-  if (named) return named.toolName && !isTool(named.toolName, 'get_data') ? `Calling ${upstreamToolName(named.toolName)}` : OPEN_STEP_LABEL;
+  if (named) {
+    // With an operation type (recorded, or derived from the name), the step
+    // reads by that type in user language and never by the tool's name
+    // (LAYOUT-WEB W3 P1 item 5): a `metadata` call with no dataset to name
+    // reads "Understanding dataset structure", not "Calling <name>". A type
+    // these labels have no words for claims nothing.
+    const operationType = entryOperationType(named);
+    if (operationType !== undefined && operationType !== NO_STATED_OPERATION) {
+      return OPERATION_WORDS[operationType] ?? OPEN_STEP_LABEL;
+    }
+    // With none, the label repeats the name the record carries, read and shown
+    // by the upstream name in either spelling (#599 W3). (`get_data`'s name in
+    // user language is "gather data", as in `generateToolReason`.)
+    return named.toolName && !isTool(named.toolName, 'get_data') ? `Calling ${upstreamToolName(named.toolName)}` : OPEN_STEP_LABEL;
+  }
 
   // Fallback for entries that carry neither a tool name nor an operation type:
   // extract operation types from messages
@@ -242,11 +273,11 @@ export function generateGroupLabel(entries: ProgressLogEntry[], previousEntries?
   const hasQuery = messages.some(m => m.includes('querying') || m.includes('counting') || m.includes('previewing') || m.includes('refining') || m.includes('top'));
   const hasMetrics = messages.some(m => m.includes('metrics'));
 
-  if (hasCatalog && !hasQuery && !hasMetadata) return 'Finding relevant datasets';
-  if (hasMetadata && !hasQuery && !hasCatalog) return 'Understanding dataset structure';
+  if (hasCatalog && !hasQuery && !hasMetadata) return OPERATION_WORDS.catalog;
+  if (hasMetadata && !hasQuery && !hasCatalog) return OPERATION_WORDS.metadata;
   if (hasQuery && toolStarts.length > 1) return 'Querying multiple datasets';
-  if (hasQuery) return 'Querying data';
-  if (hasMetrics) return 'Checking dataset statistics';
+  if (hasQuery) return OPERATION_WORDS.query;
+  if (hasMetrics) return OPERATION_WORDS.metrics;
 
   // Nothing recorded says what these calls were, so the label claims nothing:
   // the same provisional label the group carried while it was open. This

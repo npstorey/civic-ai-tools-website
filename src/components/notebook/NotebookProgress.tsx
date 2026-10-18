@@ -14,8 +14,14 @@
  * message beneath the active row so users see the Phase A loop iterating
  * (the slowest stage by far) instead of staring at "Discovering datasets…"
  * for a full minute.
+ *
+ * LAYOUT-WEB W3 P1 (design §4.3): when the wrapper hands in the run's steps
+ * (`steps`, the answer view's steps part), they replace the four fixed rows —
+ * a step per Phase A iteration so far, then a row for each later phase the
+ * run has reported — and the latest message sits beneath them. The four rows
+ * remain for a run that has recorded no step yet.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 export type NotebookPhase = 'A' | 'B' | 'C' | 'D' | 'complete';
 
@@ -39,6 +45,8 @@ interface NotebookProgressProps {
   completedAt: number | null;
   /** Optional latest detail message — e.g., Phase A iteration message. */
   detail?: string | null;
+  /** The run's steps so far, rendered in place of the four fixed rows. */
+  steps?: ReactNode;
 }
 
 function formatElapsed(ms: number): string {
@@ -113,6 +121,7 @@ export default function NotebookProgress({
   phaseStartedAt,
   completedAt,
   detail,
+  steps,
 }: NotebookProgressProps) {
   const active = phase !== null && phase !== 'complete' && completedAt === null;
   const now = useNow(active, completedAt);
@@ -150,6 +159,16 @@ export default function NotebookProgress({
         runs it in a sandbox, and stamps execution metadata. Typically takes
         30 to 90 seconds.
       </p>
+      {steps !== undefined ? (
+        <>
+          {steps}
+          {active && detail && (
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', wordBreak: 'break-word' }}>
+              {detail}
+            </span>
+          )}
+        </>
+      ) : (
       <ul
         style={{
           listStyle: 'none',
@@ -208,6 +227,7 @@ export default function NotebookProgress({
           );
         })}
       </ul>
+      )}
     </div>
   );
 }

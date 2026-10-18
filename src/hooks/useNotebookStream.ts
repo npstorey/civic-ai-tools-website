@@ -28,6 +28,9 @@ import {
   type ReportedPhase,
   type StepLog,
 } from '@/lib/answer-view/steps';
+// A tool name reaches the reader through the seam (#599 W3), never in its
+// exposed spelling (LAYOUT-WEB W3 P1 fix 1).
+import { upstreamToolName } from '@/lib/mcp/operation-types';
 
 /** A single tool call captured during Phase A — used to populate the
  *  deliberative-trace section of the chat-output A-G renderer. Shape mirrors
@@ -249,9 +252,9 @@ export function useNotebookStream() {
           // known, so its phrase goes through the shared sanitiser on every
           // call (#426, the owner's R5): a `fetch`'s `to look up record:…`
           // named a portal here while the call ran. A dropped phrase leaves
-          // the line at the call's name.
+          // the line at the call's name, read by its upstream name.
           const shownReason = reasonWithoutIdentifier(reason);
-          const label = [op || name, shownReason ? `(${shownReason})` : null].filter(Boolean).join(' ');
+          const label = [op || upstreamToolName(name), shownReason ? `(${shownReason})` : null].filter(Boolean).join(' ');
           setState((prev) => ({
             ...prev,
             detail: label || prev.detail,

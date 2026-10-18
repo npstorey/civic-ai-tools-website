@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import ProgressLog from '@/components/ProgressLog';
 import SkillPromptDisclosure from '@/components/SkillPromptDisclosure';
-import { buildProvenanceLine, buildNarrativeSummary, buildStatsSummary, getPortalCity, isQueryCall } from '@/lib/streaming';
+import AnswerView from '@/components/answer-view/AnswerView';
+import { adaptComparison } from '@/components/answer-view/adapt-comparison';
+import { AUTHOR } from '@/components/answer-view/view-model';
+import { buildNarrativeSummary, buildStatsSummary, getPortalCity, isQueryCall } from '@/lib/streaming';
 import { generateNotebook, downloadNotebook } from '@/lib/notebook';
 import type { ProgressLogEntry, ProgressGroup, ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
 import { useSession, signIn } from 'next-auth/react';
@@ -59,13 +60,21 @@ interface McpResponseDisplayProps {
   onContinue?: (continuationPrompt: string) => void;
 }
 
-// Segment colors: warm family (LLM) + cool (API) — Gestalt similarity groups "thinking" vs "waiting"
-const COLOR_PLANNING = '#CC3311';   // deep red-orange
-const COLOR_SYNTHESIS = '#EE7733'; // medium orange
-const COLOR_API = '#0077BB';       // cool blue
+// Segment colors: warm (the model) + cool (the data source) — Gestalt
+// similarity groups "thinking" vs "waiting".
+const COLOR_MODEL = '#CC3311'; // deep red-orange
+const COLOR_API = '#0077BB';   // cool blue
 
+/**
+ * The run's time in its two MEASURED segments (ruling D2 of the answer-layout
+ * design): data retrieval, the sum of the calls' recorded durations, and AI
+ * thinking, the rest of the run's measured total. The 40/60 planning against
+ * synthesis split this bar used to draw was a constant, not a measurement,
+ * and is gone. The bar says who measured it (design §6), omitted when the
+ * instance declares no identity.
+ */
 function TimingFooter({
-  tools, totalDuration, tokens_used, prompt_tokens, completion_tokens, token_limit_exceeded,
+  tools, totalDuration, tokens_used, prompt_tokens, completion_tokens, token_limit_exceeded, instance,
 }: {
   tools: ToolCall[];
   totalDuration: number;
@@ -73,21 +82,20 @@ function TimingFooter({
   prompt_tokens?: number;
   completion_tokens?: number;
   token_limit_exceeded?: boolean;
+  instance: string | null;
 }) {
   const [activeSegment, setActiveSegment] = useState<string | null>(null);
 
   const apiMs = tools.reduce((sum, t) => sum + (t.duration_ms || 0), 0);
   const llmMs = Math.max(0, totalDuration - apiMs);
-  const planningMs = Math.round(llmMs * 0.4);
-  const synthesisMs = llmMs - planningMs;
 
   const llmPct = Math.round((llmMs / totalDuration) * 100);
   const apiPct = 100 - llmPct;
+  const measuredBy = AUTHOR.timing(instance);
 
   const segments = [
-    { key: 'planning', label: 'Planning', ms: planningMs, color: COLOR_PLANNING },
-    { key: 'synthesis', label: 'Synthesis', ms: synthesisMs, color: COLOR_SYNTHESIS },
-    { key: 'api', label: 'Data', ms: apiMs, color: COLOR_API },
+    { key: 'model', label: 'AI thinking', ms: llmMs, color: COLOR_MODEL },
+    { key: 'api', label: 'Data retrieval', ms: apiMs, color: COLOR_API },
   ];
 
   // Build flat array of bar elements (segments + group gap)
@@ -163,7 +171,7 @@ function TimingFooter({
   return (
     <div
       role="group"
-      aria-label={`Performance breakdown: completed in ${(totalDuration / 1000).toFixed(1)} seconds`}
+      aria-label={`Performance breakdown: completed in ${(totalDuration / 1000).toFixed(1)} seconds${measuredBy !== null ? `, ${measuredBy.charAt(0).toLowerCase()}${measuredBy.slice(1)}` : ''}`}
       style={{ marginBottom: '12px' }}
     >
       {/* Row 1: Summary headline */}
@@ -181,7 +189,7 @@ function TimingFooter({
       {/* Row 2: Single segmented bar */}
       <div
         role="img"
-        aria-label={`Planning ${(planningMs / 1000).toFixed(1)}s, Synthesis ${(synthesisMs / 1000).toFixed(1)}s, Data retrieval ${(apiMs / 1000).toFixed(1)}s`}
+        aria-label={segments.map((seg) => `${seg.label} ${(seg.ms / 1000).toFixed(1)}s`).join(', ')}
         className="timing-bar"
         style={{
           display: 'flex',
@@ -196,29 +204,12 @@ function TimingFooter({
         {barElements}
       </div>
 
-      {/* Row 3: Group labels */}
-      <div style={{ display: 'flex', marginTop: '4px' }}>
-        <div style={{
-          flexGrow: planningMs + synthesisMs,
-          flexShrink: 0,
-          flexBasis: 0,
-          fontSize: '11px',
-          color: '#666',
-        }}>
-          AI thinking
+      {/* Row 3: who measured it (design §6) */}
+      {measuredBy !== null && (
+        <div data-author="timing" style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+          {measuredBy}
         </div>
-        <div style={{ flex: '0 0 4px' }} />
-        <div style={{
-          flexGrow: apiMs,
-          flexShrink: 0,
-          flexBasis: 0,
-          fontSize: '11px',
-          color: '#666',
-          textAlign: 'left',
-        }}>
-          Data retrieval
-        </div>
-      </div>
+      )}
 
       {/* Token line — guarded on presence, never on the truthiness of a
           number (#384 P8, F4): a reported 0 is preserved on the wire (#374)
@@ -308,45 +299,6 @@ function linkDatasetIds(markdown: string, toolsCalled?: ToolCall[]): string {
     return text;
   }).join('');
 }
-
-// Custom link component for ReactMarkdown — opens in new tab
-const markdownComponents = {
-  a: ({ href, children, ...props }: React.ComponentPropsWithoutRef<'a'>) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{ color: 'var(--accent)', textDecoration: 'underline' }}
-      {...props}
-    >
-      {children}
-    </a>
-  ),
-};
-
-// Inline components for provenance rendering (no block-level wrappers)
-const provenanceComponents = {
-  p: ({ children, ...props }: React.ComponentPropsWithoutRef<'p'>) => (
-    <span {...props}>{children}</span>
-  ),
-  a: ({ href, children, ...props }: React.ComponentPropsWithoutRef<'a'>) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{
-        color: 'var(--success)',
-        textDecoration: 'underline',
-        textUnderlineOffset: '2px',
-        fontFamily: 'monospace',
-        fontSize: '12px',
-      }}
-      {...props}
-    >
-      {children}
-    </a>
-  ),
-};
 
 // Detect if the AI's response appears incomplete or budget-exhausted
 function detectIncompleteResponse(content: string): boolean {
@@ -454,10 +406,225 @@ export default function McpResponseDisplay({
   // absence, and never decides whether a child renders.
   const timingFooterShown = toolsCalled.length > 0 && duration_ms !== undefined;
 
-  // Build provenance line
-  const provenance = (content && toolsCalled.length > 0)
-    ? buildProvenanceLine(toolsCalled)
-    : null;
+  // What this panel adds outside the view's disclosure, after the sources
+  // line: the heuristic notice that the answer may be incomplete.
+  const incompleteBanner = (
+    <div
+      style={{
+        marginTop: '16px',
+        padding: '10px 14px',
+        backgroundColor: 'rgba(230, 168, 23, 0.08)',
+        borderLeft: '3px solid #e6a817',
+        borderRadius: '0 4px 4px 0',
+        fontSize: '14px',
+        color: '#6b5900',
+        lineHeight: '1.5',
+      }}
+    >
+      Analysis may be incomplete. This demo has token and tool-call limits that can cut short complex queries. For the full analysis with no limits,{' '}
+      <a
+        href="https://github.com/npstorey/civic-ai-tools"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ color: '#6b5900', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+      >
+        run locally
+      </a>{' '}
+      with Claude Code or Cursor.
+    </div>
+  );
+
+  // The view's actions part: this panel's controls (copy, notebook, publish).
+  const actions = (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: '16px',
+        fontSize: '14px',
+        color: 'var(--text-muted)',
+      }}
+    >
+      {/* Copy button */}
+      {content && (
+        <button
+          onClick={async () => {
+            const parts: string[] = [];
+            // Header: query and portal(s)
+            if (queryText) parts.push(`**Query:** ${queryText}`);
+            // The portals data came from — not one a rejected call
+            // was made to (#384 P8, F2).
+            const copyPortals = [...new Set(
+              toolsCalled.filter(t => !t.failed).map(t => t.args.portal as string).filter(Boolean)
+            )];
+            if (copyPortals.length === 1) {
+              parts.push(`**Portal:** ${getPortalCity(copyPortals[0])}`);
+            } else if (copyPortals.length > 1) {
+              parts.push(`**Portals:** ${copyPortals.map(p => getPortalCity(p)).join(', ')}`);
+            }
+            // Context: narrative and stats
+            if (toolsCalled.length > 0) {
+              const narrative = buildNarrativeSummary(toolsCalled);
+              if (narrative) parts.push(narrative);
+              const stats = buildStatsSummary(toolsCalled, duration_ms);
+              if (stats) parts.push(stats);
+            }
+            if (parts.length > 0) parts.push('---');
+            parts.push(content);
+            // Attribution: only when this instance declared an
+            // identity; honest omission otherwise (#258 A2).
+            if (attributionHost) {
+              parts.push(`\n_Generated via ${attributionHost} \u00b7 ${new Date().toLocaleDateString()}_`);
+            }
+            await navigator.clipboard.writeText(parts.join('\n\n'));
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }}
+          style={{
+            marginLeft: 'auto',
+            background: 'none',
+            border: '1px solid var(--border-color)',
+            borderRadius: '4px',
+            padding: '4px 10px',
+            fontSize: '12px',
+            color: copied ? 'var(--success)' : 'var(--text-muted)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            transition: 'color 0.15s, border-color 0.15s',
+          }}
+        >
+          {copied ? (
+            <>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+              </svg>
+              Copied
+            </>
+          ) : (
+            <>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z" />
+                <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z" />
+              </svg>
+              Copy
+            </>
+          )}
+        </button>
+      )}
+
+      {/* Download notebook button */}
+      {content && toolsCalled.some(isQueryCall) && (
+        <button
+          onClick={() => {
+            // What this RUN touched, in narrowing order: a portal a tool call
+            // actually named, else the portal the run was started with, else
+            // NOTHING (#407). The literal that used to close this chain made a
+            // downloaded notebook assert a portal the run never reached — a
+            // record-derived document naming an access the record does not
+            // carry. There is no honest substitute at the end of it: the
+            // instance's configured default is not what this run touched
+            // either, so the chain ends in null and the notebook states no
+            // portal rather than an unearned one.
+            const p = (toolsCalled.find(t => t.args.portal)?.args.portal as string) || portal || null;
+            const notebook = generateNotebook(queryText || '', p, toolsCalled, content, instanceAttribution);
+            downloadNotebook(notebook);
+          }}
+          style={{
+            background: 'none',
+            border: '1px solid var(--border-color)',
+            borderRadius: '4px',
+            padding: '4px 10px',
+            fontSize: '12px',
+            color: 'var(--text-muted)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            transition: 'color 0.15s, border-color 0.15s',
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z" />
+            <path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z" />
+          </svg>
+          Notebook
+        </button>
+      )}
+
+      {/* Publish as Record button */}
+      {canPublish && (
+        <>
+          {!session?.user && signInHref !== null ? (
+            /* Split topology (P4c): publishing needs a session, and a
+               session cannot be started from this host — the OAuth
+               state cookie would be written here while the session
+               belongs to the app host. So the signed-out affordance
+               becomes a link to the app surface's sign-in panel. The
+               "re-run your query" note below already described this
+               shape; it is now literally true. */
+            <a
+              href={signInHref}
+              style={{ ...PUBLISH_BUTTON_STYLE, textDecoration: 'none' }}
+              onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(var(--accent-rgb), 0.06)'; }}
+              onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z" />
+              </svg>
+              Sign in to publish
+            </a>
+          ) : !session?.user && signInAffordance.kind === 'panel' ? (
+            /* No topology, but more than one provider: a single button
+               cannot offer a choice, so link to the panel that can. */
+            <a
+              href={signInAffordance.href}
+              style={{ ...PUBLISH_BUTTON_STYLE, textDecoration: 'none' }}
+              onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(var(--accent-rgb), 0.06)'; }}
+              onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z" />
+              </svg>
+              Sign in to publish
+            </a>
+          ) : !session?.user && signInAffordance.kind === 'none' ? (
+            /* Nothing configured: no way in, so no control (#193). */
+            null
+          ) : (
+          <button
+            onClick={() => {
+              if (!session?.user && signInAffordance.kind === 'provider') {
+                // NextAuth v4 doesn't support redirect:false for OAuth providers,
+                // so we do a normal redirect. User signs in, then re-runs their query.
+                signIn(signInAffordance.option.id);
+              } else {
+                setPublishDialogOpen(true);
+              }
+            }}
+            style={PUBLISH_BUTTON_STYLE}
+            onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(var(--accent-rgb), 0.06)'; }}
+            onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z" />
+            </svg>
+            {session?.user ? 'Publish as Record' : 'Sign in to publish'}
+          </button>
+          )}
+          {/* Suppressed only when there is no way to sign in at all —
+              an instruction with no control to follow it is noise. */}
+          {!session?.user && (signInHref !== null || signInAffordance.kind !== 'none') && (
+            <span style={{ fontSize: '11px', color: '#666' }}>
+              Sign in first, then re-run your query
+            </span>
+          )}
+        </>
+      )}
+    </div>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -526,90 +693,32 @@ export default function McpResponseDisplay({
           </div>
         )}
 
-        {/* Content (streaming or complete) */}
+        {/* The answer, through the shared view (LAYOUT-WEB W3 P1): status
+            row, answer, citation, steps, sources line, disclosure, actions.
+            This panel adds its own chrome around it: the question above,
+            the live progress before any answer, the incomplete-response
+            notice after the sources line, the skill excerpts inside the
+            disclosure, and below it the timing bar and the publish dialog. */}
         {showContent && (
-          <div>
-            {/* Completed progress log above content */}
-            {(hasProgressLog || hasGroups) && (
-              <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
-                <ProgressLog
-                  groups={progressGroups}
-                  standaloneEntries={progressLog.filter(e => !e.iteration)}
-                  variant="with-mcp"
-                  isActive={false}
-                  isComplete={isComplete && toolsCalled.length > 0}
-                  toolsCalled={isComplete ? toolsCalled : undefined}
-                  totalDuration_ms={isComplete ? duration_ms : undefined}
-                />
-              </div>
-            )}
-
-            {/* Markdown response */}
-            <div className="response-markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                {processedContent}
-              </ReactMarkdown>
-              {isActive && !isComplete && (
-                <span
-                  style={{
-                    display: 'inline-block',
-                    width: '2px',
-                    height: '1em',
-                    backgroundColor: 'var(--text-secondary)',
-                    marginLeft: '2px',
-                    animation: 'blink 1s step-end infinite',
-                    verticalAlign: 'text-bottom',
-                  }}
-                />
-              )}
-            </div>
-
-            {/* Source provenance */}
-            {provenance && (
-              <div
-                style={{
-                  borderLeft: '3px solid var(--success)',
-                  backgroundColor: 'rgba(0, 183, 3, 0.05)',
-                  padding: '6px 10px',
-                  marginTop: '16px',
-                  fontSize: '13px',
-                  color: 'var(--text-secondary)',
-                  borderRadius: '0 4px 4px 0',
-                }}
-              >
-                <ReactMarkdown components={provenanceComponents}>
-                  {provenance}
-                </ReactMarkdown>
-              </div>
-            )}
-
-            {/* Heuristic incomplete-response banner */}
-            {showIncompleteBanner && (
-              <div
-                style={{
-                  marginTop: '16px',
-                  padding: '10px 14px',
-                  backgroundColor: 'rgba(230, 168, 23, 0.08)',
-                  borderLeft: '3px solid #e6a817',
-                  borderRadius: '0 4px 4px 0',
-                  fontSize: '14px',
-                  color: '#6b5900',
-                  lineHeight: '1.5',
-                }}
-              >
-                Analysis may be incomplete. This demo has token and tool-call limits that can cut short complex queries. For the full analysis with no limits,{' '}
-                <a
-                  href="https://github.com/npstorey/civic-ai-tools"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: '#6b5900', textDecoration: 'underline', textUnderlineOffset: '2px' }}
-                >
-                  run locally
-                </a>{' '}
-                with Claude Code or Cursor.
-              </div>
-            )}
-          </div>
+          <AnswerView
+            model={adaptComparison({
+              content: processedContent,
+              isComplete: !!isComplete,
+              isActive: !!isActive,
+              queryText,
+              toolsCalled,
+              progressGroups,
+              progressLog,
+              duration_ms,
+              model,
+              portal,
+              evidenceTrace,
+              instance: attributionHost,
+            })}
+            notices={showIncompleteBanner ? incompleteBanner : undefined}
+            disclosureExtras={toolsCalled.length > 0 ? <SkillPromptDisclosure /> : undefined}
+            actions={showFooter ? actions : undefined}
+          />
         )}
       </div>
 
@@ -704,10 +813,11 @@ export default function McpResponseDisplay({
               prompt_tokens={prompt_tokens}
               completion_tokens={completion_tokens}
               token_limit_exceeded={token_limit_exceeded}
+              instance={attributionHost}
             />
           )}
 
-          {/* Summary line with copy button */}
+          {/* The plain summary line, when the timing bar has nothing to draw */}
           <div
             style={{
               display: 'flex',
@@ -733,189 +843,7 @@ export default function McpResponseDisplay({
                 )}
               </span>
             )}
-
-            {/* Copy button */}
-            {content && (
-              <button
-                onClick={async () => {
-                  const parts: string[] = [];
-                  // Header: query and portal(s)
-                  if (queryText) parts.push(`**Query:** ${queryText}`);
-                  // The portals data came from — not one a rejected call
-                  // was made to (#384 P8, F2).
-                  const copyPortals = [...new Set(
-                    toolsCalled.filter(t => !t.failed).map(t => t.args.portal as string).filter(Boolean)
-                  )];
-                  if (copyPortals.length === 1) {
-                    parts.push(`**Portal:** ${getPortalCity(copyPortals[0])}`);
-                  } else if (copyPortals.length > 1) {
-                    parts.push(`**Portals:** ${copyPortals.map(p => getPortalCity(p)).join(', ')}`);
-                  }
-                  // Context: narrative and stats
-                  if (toolsCalled.length > 0) {
-                    const narrative = buildNarrativeSummary(toolsCalled);
-                    if (narrative) parts.push(narrative);
-                    const stats = buildStatsSummary(toolsCalled, duration_ms);
-                    if (stats) parts.push(stats);
-                  }
-                  if (parts.length > 0) parts.push('---');
-                  parts.push(content);
-                  // Attribution: only when this instance declared an
-                  // identity; honest omission otherwise (#258 A2).
-                  if (attributionHost) {
-                    parts.push(`\n_Generated via ${attributionHost} \u00b7 ${new Date().toLocaleDateString()}_`);
-                  }
-                  await navigator.clipboard.writeText(parts.join('\n\n'));
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }}
-                style={{
-                  marginLeft: 'auto',
-                  background: 'none',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '4px',
-                  padding: '4px 10px',
-                  fontSize: '12px',
-                  color: copied ? 'var(--success)' : 'var(--text-muted)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  transition: 'color 0.15s, border-color 0.15s',
-                }}
-              >
-                {copied ? (
-                  <>
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
-                    </svg>
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z" />
-                      <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z" />
-                    </svg>
-                    Copy
-                  </>
-                )}
-              </button>
-            )}
-
-            {/* Download notebook button */}
-            {content && toolsCalled.some(isQueryCall) && (
-              <button
-                onClick={() => {
-                  // What this RUN touched, in narrowing order: a portal a tool call
-            // actually named, else the portal the run was started with, else
-            // NOTHING (#407). The literal that used to close this chain made a
-            // downloaded notebook assert a portal the run never reached — a
-            // record-derived document naming an access the record does not
-            // carry. There is no honest substitute at the end of it: the
-            // instance's configured default is not what this run touched
-            // either, so the chain ends in null and the notebook states no
-            // portal rather than an unearned one.
-            const p = (toolsCalled.find(t => t.args.portal)?.args.portal as string) || portal || null;
-                  const notebook = generateNotebook(queryText || '', p, toolsCalled, content, instanceAttribution);
-                  downloadNotebook(notebook);
-                }}
-                style={{
-                  background: 'none',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '4px',
-                  padding: '4px 10px',
-                  fontSize: '12px',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  transition: 'color 0.15s, border-color 0.15s',
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z" />
-                  <path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z" />
-                </svg>
-                Notebook
-              </button>
-            )}
-
-            {/* Publish as Record button */}
-            {canPublish && (
-              <>
-                {!session?.user && signInHref !== null ? (
-                  /* Split topology (P4c): publishing needs a session, and a
-                     session cannot be started from this host — the OAuth
-                     state cookie would be written here while the session
-                     belongs to the app host. So the signed-out affordance
-                     becomes a link to the app surface's sign-in panel. The
-                     "re-run your query" note below already described this
-                     shape; it is now literally true. */
-                  <a
-                    href={signInHref}
-                    style={{ ...PUBLISH_BUTTON_STYLE, textDecoration: 'none' }}
-                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(var(--accent-rgb), 0.06)'; }}
-                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z" />
-                    </svg>
-                    Sign in to publish
-                  </a>
-                ) : !session?.user && signInAffordance.kind === 'panel' ? (
-                  /* No topology, but more than one provider: a single button
-                     cannot offer a choice, so link to the panel that can. */
-                  <a
-                    href={signInAffordance.href}
-                    style={{ ...PUBLISH_BUTTON_STYLE, textDecoration: 'none' }}
-                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(var(--accent-rgb), 0.06)'; }}
-                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z" />
-                    </svg>
-                    Sign in to publish
-                  </a>
-                ) : !session?.user && signInAffordance.kind === 'none' ? (
-                  /* Nothing configured: no way in, so no control (#193). */
-                  null
-                ) : (
-                <button
-                  onClick={() => {
-                    if (!session?.user && signInAffordance.kind === 'provider') {
-                      // NextAuth v4 doesn't support redirect:false for OAuth providers,
-                      // so we do a normal redirect. User signs in, then re-runs their query.
-                      signIn(signInAffordance.option.id);
-                    } else {
-                      setPublishDialogOpen(true);
-                    }
-                  }}
-                  style={PUBLISH_BUTTON_STYLE}
-                  onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(var(--accent-rgb), 0.06)'; }}
-                  onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z" />
-                  </svg>
-                  {session?.user ? 'Publish as Record' : 'Sign in to publish'}
-                </button>
-                )}
-                {/* Suppressed only when there is no way to sign in at all —
-                    an instruction with no control to follow it is noise. */}
-                {!session?.user && (signInHref !== null || signInAffordance.kind !== 'none') && (
-                  <span style={{ fontSize: '11px', color: '#666' }}>
-                    Sign in first, then re-run your query
-                  </span>
-                )}
-              </>
-            )}
           </div>
-
-          {toolsCalled.length > 0 && (
-            <SkillPromptDisclosure />
-          )}
         </div>
       )}
 

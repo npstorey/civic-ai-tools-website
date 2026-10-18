@@ -18,7 +18,7 @@
  */
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { NotebookOutput } from './buildChatEvidenceView';
+import type { NotebookOutput } from '@/components/answer-view/buildChatEvidenceView';
 
 function flattenText(text: string | string[] | undefined): string {
   if (!text) return '';

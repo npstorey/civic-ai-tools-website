@@ -18,11 +18,21 @@
  * token usage, answer), a signed-in user can publish the EXECUTED session
  * through the same PublishEvidenceDialog the chat flow uses; the dialog
  * carries the executed notebook verbatim instead of regenerating a skeleton.
+ *
+ * LAYOUT-WEB W3 P1: the Publish control stays here and is handed to the
+ * answer view as its actions part, which the view places after the
+ * disclosure. While the run is under way, its progress is the step view's
+ * rows (design §4.3): a step per Phase A iteration so far, then a row for
+ * each later phase the run has reported, rendered by the view's own steps
+ * part inside the progress panel.
  */
 import { useState } from 'react';
 import { useSession, signIn } from 'next-auth/react';
 import ChatNotebookOutput from './ChatNotebookOutput';
 import NotebookProgress from './NotebookProgress';
+import { StepsPartView } from '@/components/answer-view/AnswerView';
+import { notebookSteps } from '@/components/answer-view/adapt-notebook';
+import { useInstanceAttribution } from '@/components/EvidenceOriginProvider';
 import PublishEvidenceDialog from '@/components/PublishEvidenceDialog';
 import { useSignInOptions } from '@/components/SignInOptionsProvider';
 import { resolveSignInAffordance } from '@/lib/auth-provider-options';
@@ -62,6 +72,12 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
   // under `/ask` and the dev preview, both app-private.)
   const signInAffordance = resolveSignInAffordance(useSignInOptions());
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const instance = useInstanceAttribution().host;
+  // While the run is under way, its steps so far as the answer view's steps
+  // part; the sandbox has recorded no duration yet, so C's row states none.
+  const liveSteps = state.notebook
+    ? null
+    : notebookSteps(state.steps?.progressGroups, state.toolCalls, state.phaseLog, null, instance);
 
   // Publishable iff the pipeline completed AND the publish inputs arrived
   // (trace + answer via the `publish_inputs` event). Older cached streams /
@@ -139,6 +155,7 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
           phaseStartedAt={state.phaseStartedAt}
           completedAt={state.completedAt}
           detail={state.detail}
+          steps={liveSteps !== null ? <StepsPartView steps={liveSteps} /> : undefined}
         />
       )}
 
@@ -155,14 +172,10 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
             composedSystemPrompt={state.composedSystemPrompt}
             composedSystemPromptHash={state.composedSystemPromptHash}
             signingKeyId={state.signingKeyId}
-          />
-
-          {/* #112 publish affordance — mirrors the chat flow's entry point. */}
-          {canPublish && (
+            actions={canPublish ? (
+            /* #112 publish affordance — mirrors the chat flow's entry point. */
             <div
               style={{
-                maxWidth: '900px',
-                margin: '0 auto',
                 width: '100%',
                 display: 'flex',
                 alignItems: 'center',
@@ -224,7 +237,8 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
               </span>
               )}
             </div>
-          )}
+            ) : undefined}
+          />
 
           {publishDialogOpen && canPublish && (
             <PublishEvidenceDialog

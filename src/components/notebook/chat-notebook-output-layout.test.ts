@@ -1,8 +1,10 @@
 // LAYOUT-W1 P1: the executed run (`/ask`, notebook mode) opens with the answer.
 //
 // THE LAYOUT, in this order, by position in the rendered markup:
-//   1. the status row — "Captured via Web chat · Executed in signed sandbox ·
-//      not yet published", its three facts and words unchanged;
+//   1. the status row — "Captured via Web chat · <the notebook's reading> ·
+//      not yet published", its three facts; since LAYOUT-WEB W3 P1 (C1) the
+//      second is the notebook's own reading, "Executed in a signed sandbox"
+//      for this fixture, in the reader's spelling, not fixed text;
 //   2. the refused-request line (ruling D2), only when a captured call is
 //      stated as failed, outside the disclosure, under the status row;
 //   3. the answer, with no section heading;
@@ -164,6 +166,8 @@ const NOTEBOOK = {
         analysisDescription: 'SUMMARYDESC-p1',
         headlineFinding: 'SUMMARYFINDING-p1',
       },
+      // W3 P1 (C1): the status row states this reading.
+      'org.civicaitools.notebook': { provenance: 'executed' },
       'org.civicaitools.execution': {
         executedAt: '2026-10-15T12:00:00Z',
         executionDuration_ms: 4200,
@@ -257,7 +261,7 @@ function requireDisclosure(html: string): Disclosure {
   return d;
 }
 
-const STATUS_FACTS = ['Captured via <strong>Web chat</strong>', 'Executed in signed sandbox', 'not yet published'];
+const STATUS_FACTS = ['Captured via <strong>Web chat</strong>', 'Executed in a signed sandbox', 'not yet published'];
 const SECTION_TITLES = [
   'A · Initial prompt',
   'B · System prompts',
@@ -346,16 +350,23 @@ test('P1 (2) the answer is rendered twice from one element: before the disclosur
   }
 });
 
-function componentSource(): string {
-  return fs.readFileSync(path.join(HERE, 'ChatNotebookOutput.tsx'), 'utf8');
+// Since LAYOUT-WEB W3 P1 the executed run renders through the shared view: the
+// answer's render site is `AnswerView.tsx`'s one answer component, and the
+// words around it come from the run's adapter (`adapt-notebook.ts`). These two
+// reads follow the render site there; ChatNotebookOutput.tsx renders neither.
+function sourceOf(relative: string): string {
+  const file = path.join(HERE, relative);
+  assert.ok(fs.existsSync(file), `no ${relative}: the read has nothing to read`);
+  return fs.readFileSync(file, 'utf8');
 }
 
-test('P1 (2) read from the source: the answer has one render site', () => {
-  const source = componentSource();
+test('P1 (2) read from the source: the answer has one render site, in the shared view', () => {
+  const source = sourceOf('../answer-view/AnswerView.tsx');
   assert.equal(source.match(/<RenderingCellOutputs\b/g)?.length ?? 0, 1, 'one <RenderingCellOutputs render site');
-  assert.equal(source.match(/<ReactMarkdown\b/g)?.length ?? 0, 1, 'one <ReactMarkdown render site');
-  assert.match(source, /<ReactMarkdown\b[^>]*>\{view\.synthesisMarkdown\}<\/ReactMarkdown>/, 'the one ReactMarkdown renders synthesisMarkdown');
+  assert.equal(source.match(/<ReactMarkdown\b[^>]*>\{content\.markdown\}<\/ReactMarkdown>/g)?.length ?? 0, 1, 'one ReactMarkdown renders the answer’s markdown');
   assert.equal(source.match(/No synthesis was produced for this analysis\./g)?.length ?? 0, 1, 'one empty-answer sentence');
+  const component = sourceOf('ChatNotebookOutput.tsx');
+  assert.doesNotMatch(component, /<RenderingCellOutputs\b|<ReactMarkdown\b/, 'ChatNotebookOutput.tsx renders no answer of its own');
 });
 
 // --- Criterion 3: no section letter above the disclosure -----------------------
@@ -394,14 +405,16 @@ test('P1 (4) no failed call: no refused-request line', () => {
 });
 
 test('P1 (4) read from the source: the line is written by describeRefusedRequests, not a literal', () => {
-  const source = componentSource();
-  assert.match(source, /describeRefusedRequests\(/, 'ChatNotebookOutput.tsx renders the line through describeRefusedRequests');
+  const adapter = sourceOf('../answer-view/adapt-notebook.ts');
+  assert.match(adapter, /describeRefusedRequests\(/, 'the executed run’s adapter writes the line through describeRefusedRequests');
   assert.match(
-    source,
-    /import \{[^}]*\bdescribeRefusedRequests\b[^}]*\} from '@\/lib\/evidence\/query-step'/,
+    adapter,
+    /import \{[^}]*\bdescribeRefusedRequests\b[^}]*\} from '\.\.\/\.\.\/lib\/evidence\/query-step\.ts'/,
     'describeRefusedRequests is imported from the one module that owns it',
   );
-  assert.doesNotMatch(source, /did not complete/, 'the component writes no refusal sentence of its own');
+  for (const file of ['ChatNotebookOutput.tsx', '../answer-view/AnswerView.tsx', '../answer-view/adapt-notebook.ts']) {
+    assert.doesNotMatch(sourceOf(file), /did not complete/, `${file} writes no refusal sentence of its own`);
+  }
 });
 
 // --- LAYOUT-WEB W2 P2 (4): section D is unchanged ---------------------------------

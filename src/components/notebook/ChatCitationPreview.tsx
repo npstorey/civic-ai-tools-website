@@ -34,6 +34,15 @@ interface ChatCitationPreviewProps {
     analysisDescription: string;
     headlineFinding: string;
   } | null;
+  /**
+   * Whether the run this cites is one that executes (LAYOUT-WEB W3 P1 fix 1).
+   * Default true: the executed run states "[Executed: <date>]", and a year,
+   * from `executedAt`. False for a run that never executes in a sandbox (the
+   * comparison): the preview then states no execution and no date at all,
+   * since the only date at hand would be the moment the page rendered, which
+   * the run did not record. The record it becomes is dated at publish.
+   */
+  statesExecution?: boolean;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -67,7 +76,7 @@ function deriveTitle(prompt: string, brandName: string | null): string {
   return firstChunk.slice(0, 97).trim() + '…';
 }
 
-export default function ChatCitationPreview({ prompt, executedAt, structuredSummary }: ChatCitationPreviewProps) {
+export default function ChatCitationPreview({ prompt, executedAt, structuredSummary, statesExecution = true }: ChatCitationPreviewProps) {
   const { data: session } = useSession();
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   // Instance display name (#217) via BrandProvider (root layout) — this
@@ -96,11 +105,15 @@ export default function ChatCitationPreview({ prompt, executedAt, structuredSumm
   const citations = [
     {
       label: 'Plain text',
-      text: `${creatorName} (${year}). "${title}." ${brandLabel(brandName)}. ${placeholderUrl}. Published: (date assigned at publish).${headlineSuffix}`,
+      text: statesExecution
+        ? `${creatorName} (${year}). "${title}." ${brandLabel(brandName)}. ${placeholderUrl}. Published: (date assigned at publish).${headlineSuffix}`
+        : `${creatorName}. "${title}." ${brandLabel(brandName)}. ${placeholderUrl}. Published: (date assigned at publish).${headlineSuffix}`,
     },
     {
       label: 'For deliberative process reference',
-      text: `Record: ${title} [Executed: ${dateStr}] ${placeholderUrl}${headlineSuffix}`,
+      text: statesExecution
+        ? `Record: ${title} [Executed: ${dateStr}] ${placeholderUrl}${headlineSuffix}`
+        : `Record: ${title} ${placeholderUrl}${headlineSuffix}`,
     },
   ];
 
