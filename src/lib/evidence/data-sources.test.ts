@@ -429,6 +429,6 @@ test('formatDataSourcesSummary joins multi-source entries with a middle-dot sepa
     },
   ];
   // Uses \u00b7 (middle dot) — matches the separator convention elsewhere in
-  // the UI (ProvenanceChain step details).
+  // the UI (the record page's per-call details in section D).
   assert.equal(formatDataSourcesSummary(entries), 'Socrata \u00b7 Data Commons');
 });

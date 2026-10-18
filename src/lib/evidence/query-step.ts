@@ -17,9 +17,9 @@
  *     existed — so absence is stated as absence, never as completion and
  *     never as failure.
  *
- * Both renderers of `queries[]` — the record page's deliberative-trace
- * section and `ProvenanceChain` — read this one function, so the two cannot
- * drift apart about the same call. The failure vocabulary is the notebook
+ * Every reader-facing statement of a `queries[]` entry's outcome — the record
+ * page's deliberative-trace section and its step view — reads this one
+ * function, so the two cannot drift apart about the same call. The failure vocabulary is the notebook
  * path's `FAILURE_REASON`, imported rather than restated: one set of words
  * for one fact (docs/design-principles.md, principles 3 and 9).
  *
@@ -27,12 +27,12 @@
  * companion (#430 F4, ruling D8): when no entry states an outcome at all, the
  * record says so once, dated, rather than leaving a reader to infer it from N
  * identical per-entry sentences sitting under a sources list that still
- * asserts access. Both renderers read that one too.
+ * asserts access. The record page reads that one too.
  *
  * `readRefusalsFromTrace` (Wave N11 F-W, ruling D1) is the one reader of a
  * record's TRACE here: for a record whose request list marks no refusal, it
  * states which entries the trace marks refused, from the span's `error` flag
- * alone. Both renderers pass its answer to `describeQueryOutcome`, and
+ * alone. The record page passes its answer to `describeQueryOutcome`, and
  * `describeUnrecordedOutcomes` reads it for the record-level line.
  */
 import {
@@ -80,8 +80,8 @@ export function describeQueryOutcome(
     const kind: ToolFailureKind = isToolFailureKind(entry.failureKind) ? entry.failureKind : 'unknown';
     // #413: a rejected entry may now carry the elapsed the loop measured, and
     // it is stated HERE, in words, rather than left to each renderer's bare
-    // number. `ProvenanceChain` used to print "· 1.2s" before this sentence
-    // for every entry carrying one; beside "did not complete" that number
+    // number. The record page's former per-call timeline (removed in #601)
+    // printed "· 1.2s" before this sentence for every entry carrying one; beside "did not complete" that number
     // reads as how long the call took to succeed, which is the one thing it
     // is not. It is the elapsed until the source rejected the call — a real
     // measurement (design principle 3, "tool-call durations are measured"),

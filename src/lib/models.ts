@@ -4,8 +4,8 @@
  * executed notebook. Both are history: the record outlives the roster.
  *
  * The tables these read moved into `model-catalog.ts` (civic-ai-tools-website#30
- * P2). Two of the three callers here are client components
- * (`ProvenanceChain`, `ChatNotebookOutput`), which is why this file reaches the
+ * P2). One of the two callers here is a client component
+ * (`ChatNotebookOutput`), which is why this file reaches the
  * PURE half of the catalog and never the resolver — the resolver reads
  * `node:fs` and cannot be bundled for a browser.
  *

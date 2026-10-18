@@ -228,10 +228,14 @@ test('every surface that reads a stored record\'s queries[] states the record-le
     const source = readFileSync(file, 'utf8');
     return /\bEvidencePackage\b/.test(source) && /\.queries\b/.test(source);
   });
+  // The premise names the surface it knows rather than counting two: the
+  // second, the record page's per-call timeline component, was removed in
+  // #601 (LAYOUT-WEB W2 P2), and the page's step view is built by
+  // `buildRecordStepView` from the entries the page hands it.
   assert.ok(
-    recordSurfaces.length >= 2,
-    'PREMISE: fewer than two surfaces reading a stored record\'s queries[] were found, so this ' +
-      `scan is not reading the tree it thinks it is. Found: ${recordSurfaces.join(', ') || 'none'}`,
+    recordSurfaces.includes('src/app/(app)/evidence/[slug]/page.tsx'),
+    'PREMISE: the record page is not among the surfaces reading a stored record\'s queries[], so ' +
+      `this scan is not reading the tree it thinks it is. Found: ${recordSurfaces.join(', ') || 'none'}`,
   );
 
   const silent = recordSurfaces.filter(

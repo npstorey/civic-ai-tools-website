@@ -29,8 +29,8 @@
 //      "no span carries the text" is satisfied by and cannot see. The page's
 //      two render sites now ask `carriesSkillText`, and the built package is
 //      driven through that same decision: `hash-only`, so no section renders,
-//      and the hash is still disclosed to the reader by `ProvenanceChain`
-//      under "Skill guidance". The control below builds the inline shape and
+//      and the hash is still disclosed to the reader in section C, as
+//      "Skill hash". The control below builds the inline shape and
 //      shows the decision going the other way, so the assertion is not
 //      vacuous.
 //

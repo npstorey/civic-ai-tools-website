@@ -82,22 +82,23 @@
 // the ~25ms of the attempt (the loop's own choice of clock, not the test's),
 // and that a constant does not happen to equal this run's elapsed.
 //
-// THE READER'S HALF. The record page and `ProvenanceChain` both render a
-// `queries[]` entry through `describeQueryOutcome`, and the entry now carries
-// a duration where it did not before. The last two cases hold that line: the
-// rejected entry's sentence states the elapsed in words, and the bare
-// numeric label `ProvenanceChain` prints for a returned call is NOT also
-// printed beside "did not complete".
+// THE READER'S HALF. The record page renders a `queries[]` entry through
+// `describeQueryOutcome`, and the entry now carries a duration where it did
+// not before. The last two cases hold that line: the rejected entry's
+// sentence states the elapsed in words, and an entry that recorded none says
+// nothing about one. (A third case read the record page's former per-call
+// timeline, which printed a bare numeric label for a returned call; it was
+// retired with that component in #601. The page's section D prints a call's
+// raw duration only when its outcome sentence states none, and its render
+// test, `record-page-layout.test.ts`, holds that.)
 //
 // BLIND SPOTS, stated so the next reader does not assume otherwise.
 //   - No live model endpoint, no live MCP server, no credential: the model
 //     endpoint is a loopback script and the executor is a closure in this
 //     file. What a real source does with a slow rejection is not measured
 //     here.
-//   - The React components are not rendered. `ProvenanceChain`'s label is
-//     asserted through the formatter it delegates to plus a source read of
-//     the one line that builds the numeric label; this repository has no
-//     component-render tests.
+//   - The React components are not rendered here; the record page's render
+//     test does that.
 //   - Packages published BEFORE this change carry no duration on a rejected
 //     entry and are not in view here. Absence stays absence for them — the
 //     formatter says nothing rather than a zero, which the last case pins.
@@ -108,8 +109,6 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import type { CompletionResult, ProgressOpts } from '../openrouter-streaming.ts';
 import type { EvidencePackage, PackageInput, ToolCallInput } from '../evidence/packager.ts';
 
@@ -390,25 +389,5 @@ test('A5 CONTROL: an entry that recorded no elapsed says nothing about one — a
     /took/,
     'a package published before #413 carries no duration on a rejected entry; stating one would ' +
       'be inventing a measurement (design principle 3)',
-  );
-});
-
-test('A5: ProvenanceChain prints no bare duration label beside a rejection', () => {
-  // Read as source: this repository has no component-render tests, and the
-  // line that builds the label is the whole of the behaviour. The condition
-  // must be gated on the outcome, so the number is stated once, by the
-  // formatter, in words.
-  const source = readFileSync(
-    fileURLToPath(new URL('../../components/evidence/ProvenanceChain.tsx', import.meta.url)),
-    'utf8',
-  );
-  const line = source.split('\n').find((l) => l.includes('const durationLabel'));
-  assert.ok(line, 'ProvenanceChain no longer builds a durationLabel — re-read this case');
-  assert.match(
-    line!,
-    /outcome\.kind !== 'failed'/,
-    'the compact "· N.Ns" label is built for every entry carrying a duration, which now ' +
-      'includes a rejected one: it would print immediately before "This request did not ' +
-      'complete", in a second unit, saying the opposite of what it means',
   );
 });

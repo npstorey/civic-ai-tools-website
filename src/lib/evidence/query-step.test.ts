@@ -11,8 +11,8 @@
 //     line. A call the source rejected has no `resultRows`, so it renders as
 //     a call with arguments and nothing else: the same rendering a metadata
 //     call or a `search` gets, and nothing says it did not complete.
-//   - `ProvenanceChain` (src/components/evidence/ProvenanceChain.tsx:130-137)
-//     composes `${opLabel}${datasetLabel}${portalLabel}${durationLabel}
+//   - the record page's per-call timeline component (removed since, #601)
+//     composed `${opLabel}${datasetLabel}${portalLabel}${durationLabel}
 //     ${resultLabel}` the same way, with the same silence.
 //
 // Neither exposes a pure formatter `node --test` can call — both are JSX, one
@@ -70,8 +70,8 @@ async function loadDescribeQueryOutcome(): Promise<DescribeQueryOutcome> {
     mod = (await import(QUERY_STEP_MODULE)) as Record<string, unknown>;
   } catch (error) {
     assert.fail(
-      'src/lib/evidence/query-step.ts does not exist: the record page and ProvenanceChain build the ' +
-        `query line inline and neither states a failed call as failed (${(error as Error).message})`,
+      'src/lib/evidence/query-step.ts does not exist: the record page builds the query line inline ' +
+        `and does not state a failed call as failed (${(error as Error).message})`,
     );
   }
   const fn = mod.describeQueryOutcome;
@@ -134,16 +134,15 @@ test('query-step: a call with neither a failure nor a row count is stated as unr
   assert.ok(outcome.text.trim().length > 0, 'absence is stated, not left blank');
 });
 
-// --- Both renderers read the one formatter ---------------------------------
+// --- The record page reads the one formatter -------------------------------
 
 function sourceOf(relative: string): string {
   return readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8');
 }
 
-test('query-step: the record page and ProvenanceChain both render queries[] through describeQueryOutcome', () => {
+test('query-step: the record page renders queries[] through describeQueryOutcome', () => {
   for (const [name, source] of [
     ['evidence/[slug]/page.tsx', sourceOf('../../app/(app)/evidence/[slug]/page.tsx')],
-    ['ProvenanceChain.tsx', sourceOf('../../components/evidence/ProvenanceChain.tsx')],
   ] as [string, string][]) {
     assert.ok(
       source.includes('describeQueryOutcome'),

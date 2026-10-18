@@ -15,8 +15,8 @@ import type { ModelApiKind } from './model-client.ts';
  *
  * WHY IT IS SPLIT IN TWO. This half is PURE: no `process.env`, no `node:fs`,
  * no SDK. It has to be, because `models.ts` re-exports display and cost
- * helpers into two client components (`ProvenanceChain`, `ChatNotebookOutput`),
- * and a client bundle cannot reach a module that imports `node:fs`. Everything
+ * helpers into a client component (`ChatNotebookOutput`), and a client bundle
+ * cannot reach a module that imports `node:fs`. Everything
  * that reads the environment — the two delivery forms, the built-in retention
  * rule, memoization — lives in `model-resolver.ts`, which is server-only. The
  * one import here is type-only and erased at compile time.

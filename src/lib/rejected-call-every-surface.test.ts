@@ -468,7 +468,7 @@ test('F2 (f) declared: ToolCallCard takes the failure and states it through the 
     card,
     /describeQueryOutcome/,
     'ToolCallCard does not render the outcome through describeQueryOutcome (src/lib/evidence/query-step.ts) — ' +
-      'the one formatter for a call’s outcome; the record page and ProvenanceChain already read it',
+      'the one formatter for a call’s outcome; the record page already reads it',
   );
   const log = sourceOf('../components/ProgressLog.tsx');
   const sites = log.match(/<ToolCallCard\b[\s\S]*?\/>/g) ?? [];
