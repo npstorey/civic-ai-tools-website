@@ -370,7 +370,7 @@ function planQueryStep(tool: ToolCall, defaultPortal: string): QueryStep {
 /**
  * What stands where the question would under hash-only visibility: on the
  * cover's `**Query:**` line, and wherever the publish route finds a form of
- * the question in a submitted notebook (#516 P10). The validator never reads
+ * the question in a submitted notebook's markdown cells (#516 P10). The validator never reads
  * that line (`notebook-author/validate.ts`, `validateBodyClaims`), and nothing
  * else parses it.
  */

@@ -59,14 +59,32 @@ function questionForms(question: string): Array<[string, string]> {
 
 /**
  * UNDER HASH-ONLY VISIBILITY, A RECORD CARRIES NO VERBATIM COPY OF THE
- * QUESTION (#516 P10). Every form `questionForms` names is replaced by
- * `WITHHELD_QUESTION_TEXT` in every key and string of the submitted notebook,
- * by the walk the credential removal makes (`replacingFormsIn`). Under any
- * other visibility the notebook is returned as it came.
+ * QUESTION IN THE TEXT THE APP WRITES (#516 P10). In a submitted notebook
+ * that text is the generator's markdown cells: every markdown cell is
+ * generator-authored, while the model's answer is a code cell and code
+ * output is never a cell source (`notebook-author/validate.ts`,
+ * `validateBodyClaims`). So every form `questionForms` names is replaced by
+ * `WITHHELD_QUESTION_TEXT` in the source of each markdown cell, by the walk
+ * the credential removal makes (`replacingFormsIn`), and nothing else is
+ * touched: code-cell sources, every cell's outputs, cell metadata and
+ * notebook metadata are model text or the run's own record, and stay as
+ * submitted. Under any other visibility the notebook is returned as it came.
  */
 function withoutQuestionUnderHashOnly<T>(promptVisibility: unknown, question: unknown, notebook: T): T {
   if (promptVisibility !== 'hash_only' || typeof question !== 'string') return notebook;
-  return replacingFormsIn(notebook, questionForms(question));
+  if (notebook === null || typeof notebook !== 'object' || Array.isArray(notebook)) return notebook;
+  const cells = (notebook as { cells?: unknown }).cells;
+  if (!Array.isArray(cells)) return notebook;
+  const forms = questionForms(question);
+  return {
+    ...notebook,
+    cells: cells.map((cell) => {
+      if (cell === null || typeof cell !== 'object' || Array.isArray(cell)) return cell;
+      const { cell_type: cellType, source } = cell as { cell_type?: unknown; source?: unknown };
+      if (cellType !== 'markdown' || source === undefined) return cell;
+      return { ...cell, source: replacingFormsIn(source, forms) };
+    }),
+  } as T;
 }
 
 /**
@@ -341,8 +359,10 @@ export async function POST(request: NextRequest) {
     // package is built, signed or stored.
     //
     // UNDER HASH-ONLY VISIBILITY, A RECORD CARRIES NO VERBATIM COPY OF THE
-    // QUESTION (#516 P10). The same notebook is then walked for the question
-    // (`withoutQuestionUnderHashOnly`), whoever built it. An executed
+    // QUESTION IN THE TEXT THE APP WRITES (#516 P10). The generator's markdown
+    // cells of the same notebook are then walked for the question
+    // (`withoutQuestionUnderHashOnly`), whoever built it; model text is left
+    // as submitted. An executed
     // notebook's cover is written at query time, before the reader chooses a
     // visibility, so this is where its `**Query:**` line becomes the withheld
     // line. Its provenance stamp and its validator's verdict still describe

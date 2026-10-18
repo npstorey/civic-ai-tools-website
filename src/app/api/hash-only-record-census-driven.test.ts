@@ -49,8 +49,15 @@
 //     carry no form of the question, so the hash-only census measures what the
 //     app writes and nothing else.
 //   - The direct-submission test posts a notebook carrying every form in
-//     cells, outputs, metadata and keys, so the removal does not lean on the
-//     dialog having cleaned anything.
+//     a markdown cell, a code cell, outputs, metadata and keys, so the
+//     removal does not lean on the dialog having cleaned anything, and the
+//     model text it must leave alone is there to be changed.
+//
+// WHAT IS THE APP'S, IN A NOTEBOOK. The generator's markdown cells: every
+// markdown cell is generator-authored, the model's answer is a code cell, and
+// code output is never a cell source (`notebook-author/validate.ts`). Code-cell
+// sources, outputs and metadata are model text or the run's own record, and
+// are packaged as submitted.
 //
 // Run with: npm test
 //   (or: node --test --experimental-strip-types src/app/api/hash-only-record-census-driven.test.ts)
@@ -684,17 +691,18 @@ const CARRYING = {
   ],
 };
 
-/** This file's statement of the expected document: every form of the question replaced by the withheld text. */
-function withheldDocument(value: unknown): unknown {
+/**
+ * This file's statement of the expected document: every form of the question
+ * replaced by the withheld text in each markdown cell's source, and nothing
+ * else changed.
+ */
+function withheldDocument(notebook: typeof CARRYING): unknown {
   const forms = FORMS.map(([, form]) => form).sort((a, b) => b.length - a.length);
   const text = (s: string) => forms.reduce((out, form) => out.split(form).join(WITHHELD), s);
-  const walk = (node: unknown): unknown => {
-    if (typeof node === 'string') return text(node);
-    if (Array.isArray(node)) return node.map(walk);
-    if (node !== null && typeof node === 'object') return Object.fromEntries(Object.entries(node).map(([k, v]) => [text(k), walk(v)]));
-    return node;
+  return {
+    ...notebook,
+    cells: notebook.cells.map((cell) => (cell.cell_type === 'markdown' ? { ...cell, source: cell.source.map(text) } : cell)),
   };
-  return walk(value);
 }
 
 async function publishDirectly(
@@ -734,13 +742,28 @@ test('premise: the submitted notebook carries every form of the question', () =>
   assert.deepEqual([...found].sort(), FORMS.map(([name]) => name).sort());
 });
 
-test('4: under hash-only visibility, a submitted notebook reaches the package with no form of the question', () => {
-  const notebook = (DIRECT_HASH_ONLY?.extensions as Json | undefined)?.['org.civicaitools.notebook'];
-  assert.deepEqual(findingsIn(notebook, 'notebook'), [], 'the packaged notebook carries the question at these paths');
-  assert.deepEqual(findingsIn(DIRECT_HASH_ONLY, 'package'), []);
+test('4: under hash-only visibility, no markdown cell of a submitted notebook reaches the package with a form of the question', () => {
+  const notebook = (DIRECT_HASH_ONLY?.extensions as Json | undefined)?.['org.civicaitools.notebook'] as PackagedNotebook | undefined;
+  assert.ok(notebook, 'the package carries no notebook');
+  const markdown = notebook!.cells.map((cell, i) => (cell.cell_type === 'markdown' ? findingsIn(cell.source, `notebook.cells[${i}].source`) : [])).flat();
+  assert.deepEqual(markdown, [], 'a markdown cell carries the question at these paths');
+  // What remains is model text and the run's own record, left as submitted, by path.
+  assert.deepEqual(findingsIn(notebook, 'notebook'), [
+    'notebook.metadata.extensions["org.civicaitools.notebook"].note (raw)',
+    'notebook.metadata key "How many \\"hydrant spray\\" & noise complaints came from Astoria Park in 2026?" (raw)',
+    'notebook.metadata.tags[0] (slug)',
+    'notebook.cells[1].source[0] (raw)',
+    'notebook.cells[1].source[1] (encodeURIComponent)',
+    'notebook.cells[1].source[2] (JSON-escaped)',
+    'notebook.cells[1].outputs[0].text[0] (raw)',
+    'notebook.cells[1].outputs[1].metadata key "How%20many%20%22hydrant%20spray%22%20%26%20noise%20complaints%20came%20from%20Astoria%20Park%20in%202026%3F" (encodeURIComponent)',
+    'notebook.cells[1].outputs[1].data["application/json"].asked (raw)',
+    'notebook.cells[1].outputs[1].data["text/plain"][0] (JSON-escaped)',
+    'notebook.cells[1].outputs[2].data["text/plain"][0] (slug)',
+  ]);
 });
 
-test('4: each form is replaced by the withheld text, and nothing else in the notebook changes', () => {
+test('4: each form is replaced by the withheld text in the markdown cells, and nothing else in the notebook changes', () => {
   const notebook = (DIRECT_HASH_ONLY?.extensions as Json | undefined)?.['org.civicaitools.notebook'];
   assert.deepEqual(notebook, withheldDocument(CARRYING));
 });
@@ -835,5 +858,6 @@ test('6: a summary request that carries the question still tells the model the q
 test('7: docs/api/records-publish.md states the rule for hash-only visibility', () => {
   const doc = fs.readFileSync(path.join(SRC, '..', 'docs/api/records-publish.md'), 'utf8');
   assert.ok(doc.includes('Under `"hash_only"`, a record carries no verbatim copy of the question.'), 'the publish contract does not state the rule');
-  assert.ok(doc.includes(`with \`${WITHHELD}\` in every key and string of a submitted \`org.civicaitools.notebook\` extension`), 'the publish contract does not say what the endpoint does with a submitted notebook');
+  assert.ok(doc.includes(`with \`${WITHHELD}\` in the generator's markdown cells of a submitted \`org.civicaitools.notebook\` extension`), 'the publish contract does not say what the endpoint does with a submitted notebook');
+  assert.ok(doc.includes('Code-cell sources, every cell\'s outputs, cell metadata and notebook metadata are packaged as submitted.'), 'the publish contract does not say what is left as submitted');
 });

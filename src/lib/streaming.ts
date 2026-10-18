@@ -629,8 +629,9 @@ export function withoutCredentialsIn<T>(value: T, env: Record<string, string | u
  * order given, by the text paired with it. Arrays, objects, key order and
  * every other value are kept as they are; a parsed `__proto__` key stays a
  * key. With no forms the value itself is returned. The publish route also
- * walks a submitted notebook with it under hash-only visibility, where the
- * forms are the question's (#516 P10).
+ * walks the sources of a submitted notebook's markdown cells with it under
+ * hash-only visibility, where the forms are the question's (#516 P10); the
+ * caller decides what is walked.
  */
 export function replacingFormsIn<T>(value: T, replacements: ReadonlyArray<readonly [string, string]>): T {
   if (replacements.length === 0) return value;
