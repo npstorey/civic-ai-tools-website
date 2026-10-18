@@ -1391,3 +1391,92 @@ test('W3 P2 (6) an answer over 2000 characters is not truncated, on the executed
     for (const a of answers) assert.equal(text(a).trim(), long, `${name}: the answer is rendered whole`);
   }
 });
+
+// --- W3 P2 fix 1 ---------------------------------------------------------------
+//
+// (1) A record whose output blob cannot be fetched has no answer to show. The
+// page says so in its own words, and nothing it writes sits under a line that
+// names the model (design §6). A record whose output was fetched is unchanged.
+// (2) No element of the answer carries react-markdown's `node` prop as an
+// attribute (`node="[object Object]"`), on any surface.
+// (3) #115's "multi-turn": a record shaped like a multi-turn package — its
+// transcript in `output`, its turns in `extensions["org.civicaitools.multi-turn"]`
+// — renders its whole output through the answer component. No turn renderer
+// (#96) is built here.
+
+const UNFETCHED_BYTES = Buffer.from('UNFETCHED-w3p2f1: the bytes no fetch returns.', 'utf8');
+const UNFETCHED_HASH = createHash('sha256').update(UNFETCHED_BYTES).digest('hex');
+const UNFETCHED_CASE: Case = (() => {
+  const pkg = structuredClone(OLD_PACKAGE) as Omit<typeof OLD_PACKAGE, 'output'> & { output: unknown };
+  // The test's fetch refuses every URL but OLD_OUTPUT_URL, so this blob cannot be fetched.
+  pkg.output = {
+    ref: `blob:sha256:${UNFETCHED_HASH}`,
+    url: `https://blobs.example.test/evidence-refs/${UNFETCHED_HASH}.md`,
+    contentType: 'text/markdown',
+    size: UNFETCHED_BYTES.length,
+  };
+  return { ...OLD, record: { ...OLD.record, slug: 'unfetched-record-w3p2f1' }, pkg };
+})();
+const UNFETCHED_HTML = await renderWithInstance(UNFETCHED_CASE, INSTANCE);
+const OUTPUT_UNAVAILABLE = 'The answer is not shown: the stored copy of this record’s output could not be fetched. The package hash below identifies the record for audit.';
+
+test('W3 P2 fix 1 (1) an output that could not be fetched: no line names the model, and the page says so in its own words', () => {
+  const lines = authorLines(UNFETCHED_HTML);
+  assert.deepEqual(lines.filter((l) => l.key === 'answer' || l.key === 'computed'), [], 'a line names the model over text the site wrote');
+  assert.doesNotMatch(UNFETCHED_HTML, /written by the model/, 'no line on the page names the model');
+  const answers = occurrences(UNFETCHED_HTML, '<div data-part="answer"').map((s) => UNFETCHED_HTML.slice(s, elementEnd(UNFETCHED_HTML, s, 'div')));
+  assert.equal(answers.length, 2, 'the answer part is placed first and as F');
+  for (const a of answers) assert.ok(unescapeHtml(a.replace(/<[^>]*>/g, '')).includes(OUTPUT_UNAVAILABLE), 'the answer part states that the output is unavailable');
+  assert.equal(UNFETCHED_HTML.includes('Output blob could not be fetched'), false, 'the old placeholder is not rendered as the answer');
+  assert.equal(UNFETCHED_HTML.includes('Output stored as blob (verified)'), false, 'an output that was not fetched is not called verified');
+  assert.ok(lines.some((l) => l.key === 'question'), 'premise: the other author lines stay');
+});
+
+test('W3 P2 fix 1 (1) a record whose output blob was fetched is unchanged: the model’s line, its answer, the blob note', () => {
+  const html = W3P2_HTML.old;
+  assert.equal(authorLines(html).filter((l) => l.key === 'answer').length, 2);
+  assert.ok(requirePart(html, 'answer').markup.includes(OLD_ANSWER));
+  assert.ok(html.includes(`Output stored as blob (verified) · ${OLD_OUTPUT_BYTES.length.toLocaleString()} bytes`));
+  assert.equal(html.includes(OUTPUT_UNAVAILABLE), false);
+});
+
+test('W3 P2 fix 1 (2) no element of the record’s answer carries a node attribute', async () => {
+  const html = await renderWithInstance(recordCarrying(notebook('skeleton', 'SKELETON-w3p2'), CELL_ANSWER), INSTANCE);
+  const answer = requirePart(html, 'answer').markup;
+  assert.ok(/<a\b[^>]*href="https:\/\/data\.example\.test\/"/.test(answer), 'premise: the fixture answer renders a link');
+  assert.doesNotMatch(answer, /\snode=/, 'an answer element carries react-markdown’s node prop as an attribute');
+  const run = requirePart(renderRun(executedNotebook([markdownOutput(CELL_ANSWER)])), 'answer').markup;
+  assert.doesNotMatch(run, /\snode=/, 'the executed run’s answer carries a node attribute');
+  assert.equal(answer, run, 'criterion (3)’s byte-identity still holds');
+});
+
+const TURNS = [
+  { index: 0, role: 'user', content: 'MTQUESTION-w3p2f1 How many permits were issued, and which neighbourhood led?' },
+  ...Array.from({ length: 5 }, (_, i) => ({
+    index: i + 1,
+    role: i % 2 === 0 ? 'assistant' : 'user',
+    content: `MTTURN${i + 1}-w3p2f1 ${'The permits were counted from the portal by month and by neighbourhood. '.repeat(8)}`,
+  })),
+];
+const TRANSCRIPT = `${TURNS.map((t) => `### Turn ${t.index} — ${t.role === 'user' ? 'User' : 'Assistant'}\n\n${t.content.trim()}`).join('\n\n')}\n\nMTEND-w3p2f1`;
+const MULTI_TURN_CASE: Case = (() => {
+  const pkg = structuredClone(OLD_PACKAGE) as Omit<typeof OLD_PACKAGE, 'output' | 'extensions'> & { output: unknown; extensions: Record<string, unknown> };
+  pkg.output = TRANSCRIPT;
+  pkg.extensions = {
+    'org.civicaitools.multi-turn': { version: '0.1.0', captureMode: 'full_conversation', sessionBoundary: 'first_civic_tool_call', turns: TURNS },
+  };
+  return { ...OLD, record: { ...OLD.record, slug: 'multi-turn-record-w3p2f1', captureMethod: 'claude-code-jsonl-readback' }, pkg };
+})();
+
+test('W3 P2 fix 1 (3) a multi-turn record over 2000 characters renders its whole transcript, through the answer component', async () => {
+  assert.ok(TRANSCRIPT.length > 2000 && TURNS.length > 2, `premise: a transcript of ${TURNS.length} turns, ${TRANSCRIPT.length} characters`);
+  const html = await renderWithInstance(MULTI_TURN_CASE, INSTANCE);
+  assert.ok(html.includes('org.civicaitools.multi-turn'), 'premise: the extension is present (listed under Additional Artifacts)');
+  const words = (text: string) => unescapeHtml(text.replace(/<[^>]*>/g, ' ')).replace(/###/g, ' ').replace(/\s+/g, ' ').trim();
+  const answers = occurrences(html, '<div data-part="answer"').map((s) => html.slice(s, elementEnd(html, s, 'div')));
+  assert.equal(answers.length, 2, 'the answer, first and as F');
+  for (const a of answers) {
+    assert.ok(a.startsWith('<div data-part="answer" class="response-markdown">'), 'rendered by the answer component');
+    assert.equal(words(a), words(TRANSCRIPT), 'the transcript is rendered whole');
+  }
+});

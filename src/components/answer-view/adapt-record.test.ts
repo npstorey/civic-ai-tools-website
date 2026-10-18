@@ -271,3 +271,30 @@ test('W3 P2 the model is plain data, so the server page can hand it to the clien
     assertPlainData(adapter()(input(p)), 'model');
   }
 });
+
+// --- W3 P2 fix 1 -------------------------------------------------------------------
+
+test('W3 P2 fix 1 (1) an output blob the page could not fetch: the answer names no author and states that it is unavailable', () => {
+  const blobRef = { ref: `blob:sha256:${'a'.repeat(64)}`, url: 'https://blobs.example.test/x.md', contentType: 'text/markdown', size: 1234 };
+  const stored = pkg({ output: blobRef });
+  const model = adapter()({
+    stored,
+    resolution: { pkg: { ...stored, output: 'PLACEHOLDER-w3p2f1' }, outputIsBlob: true, outputBlobRef: blobRef, outputUnavailable: true, skillTextIsBlob: false, skillTextBlobRef: null },
+    row: ROW,
+    instance: INSTANCE,
+  });
+  assert.equal(model.answer.content.kind, 'unavailable', 'the answer is stated unavailable, not rendered from the placeholder');
+  assert.deepEqual(model.answer.authors, [], 'no line names the model over the site’s words');
+  assert.equal(model.disclosure.answerNote, undefined, 'an output that was not fetched is not called verified');
+  assert.equal(model.disclosure.answerAgain, true, 'F still says so, in the same words');
+});
+
+test('W3 P2 fix 1 (3) a multi-turn record’s transcript reaches the model whole', () => {
+  const transcript = Array.from({ length: 6 }, (_, i) => `### Turn ${i} — ${i % 2 ? 'Assistant' : 'User'}\n\n${'Counted by month. '.repeat(30)}`).join('\n\n');
+  assert.ok(transcript.length > 2000, 'premise: over 2000 characters');
+  const model = adapter()(input(pkg({
+    output: transcript,
+    extensions: { 'org.civicaitools.multi-turn': { version: '0.1.0', turns: [{ index: 0, role: 'user', content: 'x' }] } },
+  })));
+  assert.deepEqual(model.answer.content, { kind: 'markdown', markdown: transcript });
+});
