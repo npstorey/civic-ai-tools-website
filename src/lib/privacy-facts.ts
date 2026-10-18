@@ -137,7 +137,9 @@ export const OPERATOR_STATES =
  * when the two differ. The record's question forms are replaced by
  * `WITHHELD_QUESTION_TEXT` (`src/lib/notebook.ts`) in the publish handler.
  */
-export const HASH_ONLY_RECORD_WORDS = 'The record shows only a fingerprint (a hash) of your question.';
+export const HASH_ONLY_RECORD_WORDS =
+  'The record keeps a fingerprint of your question instead of its text. Anyone who knows or guesses the exact ' +
+  'wording can confirm it matches. The answer, summary and data queries may still contain its words.';
 
 /** A record's title, in the words the publish dialog states beside the title field (pinned by the same test). */
 export const RECORD_TITLE_IS_PUBLIC = 'The title is public and becomes the record’s address.';
