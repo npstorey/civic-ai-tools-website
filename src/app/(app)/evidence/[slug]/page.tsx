@@ -8,7 +8,7 @@ import { evidenceRecords, users } from '@/lib/db/schema';
 // Instance-identity config (ADR-0020): canonical/OG/JSON-LD URLs and the
 // request-host fallback resolve per-instance (server component — env is
 // available at request time; demo defaults when unset).
-import { getEvidenceSiteOrigin, getPublicationHost } from '@/lib/site-config';
+import { getEvidenceSiteOrigin, getInstanceAttribution, getPublicationHost } from '@/lib/site-config';
 // Chrome branding (#217): the citation label's display name — chrome-only,
 // never part of the signed package (that is the PUBLISHER_* set above).
 import { getBrandName } from '@/lib/brand-config';
@@ -22,6 +22,12 @@ import {
   readRefusalsFromTrace,
 } from '@/lib/evidence/query-step';
 import { resolveLifecycle } from '@/lib/evidence/lifecycle';
+// The step view (LAYOUT-WEB W2 P2): one step per signed `queries[]` entry,
+// built when the page renders, from the shared step module.
+import { buildRecordStepView, stepsAuthorLine, type StepViewCall } from '@/lib/answer-view/steps';
+// A call's label reads the upstream name (`get_data`); the name the model
+// called (`socrata__get_data`) stays where the record states it (ADR-0033).
+import { upstreamToolName } from '@/lib/mcp/operation-types';
 import { sessionUserIsCreator } from '@/lib/evidence/sealed-access';
 import { fromDbValue } from '@/lib/evidence/visibility';
 import { loadEvaluationViews } from '@/lib/evidence/adversarial-eval';
@@ -214,6 +220,18 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+/** One call in the step view: the site's sentence for it, and its outcome. */
+function StepCallRow({ call }: { call: StepViewCall }) {
+  return (
+    <div data-part="step-call" style={{ marginTop: '6px', paddingLeft: '20px', fontSize: '13px', lineHeight: 1.5 }}>
+      {call.sentence !== undefined && (
+        <div data-part="step-sentence" style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>{call.sentence}</div>
+      )}
+      <div data-part="step-outcome" style={{ fontSize: '12px', color: call.failed ? 'var(--error)' : 'var(--text-muted)' }}>{call.outcome}</div>
+    </div>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section style={{ marginBottom: '32px' }}>
@@ -328,6 +346,12 @@ export default async function EvidencePage({ params }: PageProps) {
     ? describeRefusedRequests(renderPkg.queries, fromTrace.refused)
     : null;
   const unrecordedOutcomes = renderPkg ? describeUnrecordedOutcomes(renderPkg) : null;
+  // The steps (W2 P2, design §5): one per signed entry, the sentence and the
+  // outcome written now from the signed fields — the outcome reading the trace
+  // as section D does — under a line saying this instance wrote them, omitted
+  // when the instance declares none.
+  const stepView = renderPkg ? buildRecordStepView(renderPkg.queries, fromTrace?.refused) : null;
+  const stepsAuthor = stepsAuthorLine(getInstanceAttribution().host);
   // The answer, built ONCE and rendered twice: first, with no section heading,
   // and again as F inside the disclosure, so the envelope reads whole to
   // someone inspecting it. One element, so the two cannot drift.
@@ -578,6 +602,28 @@ export default async function EvidencePage({ params }: PageProps) {
           origin={requestOrigin}
         />
 
+        {/* The steps, outside the disclosure, after the citation (W2 P2). */}
+        {stepView !== null && stepView.steps.length > 0 && (
+          <div data-part="steps" style={{ marginBottom: '24px' }}>
+            {stepsAuthor !== null && (
+              <p data-part="steps-author" style={{ margin: '0 0 8px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                {stepsAuthor}
+              </p>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {stepView.steps.map((step, i) => (
+                <div data-part="step" key={i} style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                    <span style={{ color: 'var(--accent)', marginRight: '6px' }}>Step {i + 1}</span>
+                    <span data-part="step-label">{step.label}</span>
+                  </div>
+                  {step.calls.map((call, j) => <StepCallRow key={j} call={call} />)}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* One disclosure, closed by default (ruling D4): the envelope A-G,
             then the parts that followed it. Everything a layout must not hide
             (rule 3) is above this; the verify link is in Actions, below it. */}
@@ -744,7 +790,7 @@ export default async function EvidencePage({ params }: PageProps) {
                             borderRadius: '4px', fontSize: '13px',
                           }}>
                             <div style={{ fontFamily: 'monospace', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                              {q.tool}{q.operationType ? ` (${q.operationType})` : ''}
+                              {upstreamToolName(q.tool)}{q.operationType ? ` (${q.operationType})` : ''}
                             </div>
                             {/* The signed entry's dataset and portal, raw, when
                                 it carries them (ruling D6), and its duration

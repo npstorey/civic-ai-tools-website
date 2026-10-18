@@ -117,7 +117,8 @@ export function useLiveTrace(): UseLiveTraceReturn {
   }, [clearTimers]);
 
   // Process progress events into ProgressLogEntry[] and ProgressGroup[]
-  // This replicates the same logic from useStreamingComparison's handleEvent
+  // This keeps its own copy of the accumulation the comparison and the
+  // executed run share as `applyProgressEvent` in src/lib/answer-view/steps.ts
   const handleProgressEvent = useCallback((
     phase: ProgressPhase,
     message: string,

@@ -38,6 +38,7 @@ import { SUMMARY_EXTENSION_KEY, SYNTHESIS_CELL_ROLE } from '../../lib/notebook-a
 // suite can drive this module under Node.
 import { reasonWithoutIdentifier } from '../../lib/streaming.ts';
 import { describeQueryOutcome } from '../../lib/evidence/query-step.ts';
+import { upstreamToolName } from '../../lib/mcp/operation-types.ts';
 import type { CapturedToolCall } from '@/hooks/useNotebookStream';
 
 const EXECUTION_EXTENSION_KEY = 'org.civicaitools.execution';
@@ -263,7 +264,7 @@ export function buildChatEvidenceView(input: BuildChatEvidenceViewInput): ChatEv
 
 /** Section D's words for one recorded call (#426). */
 export interface DeliberativeTraceLine {
-  /** The call as recorded: its tool name, and its operation type when the loop derived one. */
+  /** The call's tool, by its upstream name, and its operation type when the loop derived one. */
   label: string;
   /**
    * The record's "why" phrase once `reasonWithoutIdentifier` has passed it, on
@@ -297,7 +298,10 @@ export function deliberativeTraceLine(
     resultColumns: call.resultSummary?.columns,
   });
   return {
-    label: `${call.name}${call.operationType ? ` (${call.operationType})` : ''}`,
+    // Read, and shown, by the upstream name (LAYOUT-WEB W2 P2): the name the
+    // model called (`socrata__get_data`, ADR-0033) stays where the record
+    // states it, and a reader sees `get_data`.
+    label: `${upstreamToolName(call.name)}${call.operationType ? ` (${call.operationType})` : ''}`,
     heading: reasonWithoutIdentifier(call.reason) || `Query ${position}`,
     outcome: outcome.kind === 'unrecorded' ? null : outcome.text,
   };

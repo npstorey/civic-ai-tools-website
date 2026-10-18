@@ -23,11 +23,12 @@
 // SCOPE, and its blind spot. The universe is the two files that render the
 // footer token line and their four numeric props (`duration_ms`,
 // `tokens_used`, `prompt_tokens`, `completion_tokens`) plus `TimingFooter`'s
-// `totalDuration`; the check is a source scan. It does not render: no test
-// in this repository renders a `.tsx` (there is no jsdom, no testing-library,
-// no `react-dom/server` import under `src/`, and `--experimental-strip-types`
-// does not transform JSX), so the render half of F4 is read from the JSX,
-// as the cold read read it, and is stated here as unverified in a browser.
+// `totalDuration`; the check is a source scan. It does not render (when it
+// was written no test here rendered a `.tsx`; render tests have since been
+// added under `src/` with `react-dom/server` and a `module.registerHooks()`
+// transform, as `chat-notebook-output-layout.test.ts` does), so the render
+// half of F4 is read from the JSX, as the cold read read it, and is stated
+// here as unverified in a browser.
 // The instrument demonstrates it can fail: (b) runs the pattern over the
 // exact shapes it must catch and must ignore.
 //

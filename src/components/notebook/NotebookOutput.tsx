@@ -150,6 +150,8 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
             model={model}
             portal={portal}
             toolCalls={state.toolCalls}
+            stepGroups={state.steps?.progressGroups}
+            closingPhases={state.phaseLog}
             composedSystemPrompt={state.composedSystemPrompt}
             composedSystemPromptHash={state.composedSystemPromptHash}
             signingKeyId={state.signingKeyId}
