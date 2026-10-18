@@ -26,7 +26,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as chatView from './buildChatEvidenceView.ts';
+import * as chatView from '../answer-view/buildChatEvidenceView.ts';
 import { generateToolReason, reasonWithoutIdentifier } from '../../lib/streaming.ts';
 import { describeQueryOutcome } from '../../lib/evidence/query-step.ts';
 

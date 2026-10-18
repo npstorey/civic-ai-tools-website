@@ -60,7 +60,7 @@ import NotebookSection from '@/components/evidence/NotebookSection';
 import ChatSignersSection from './ChatSignersSection';
 import ChatCitationPreview from './ChatCitationPreview';
 import RenderingCellOutputs from './RenderingCellOutputs';
-import { approximateMcpServers, buildChatEvidenceView, deliberativeTraceLine } from './buildChatEvidenceView';
+import { approximateMcpServers, buildChatEvidenceView, deliberativeTraceLine } from '@/components/answer-view/buildChatEvidenceView';
 import { useSocrataMcpUrl } from '@/components/McpRoutingProvider';
 import type { Notebook } from '@/lib/notebook-author';
 import { readReproductionClaim, reproductionScopeSentence } from '@/lib/notebook-author/reproduction-claim';
