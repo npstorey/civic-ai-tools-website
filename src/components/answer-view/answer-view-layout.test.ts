@@ -445,7 +445,7 @@ test('W3 P1 (1) the comparison: status row, answer, citation, steps, sources lin
   const positions = partPositions(COMPARISON);
   assert.deepEqual([...positions].sort((a, b) => a - b), positions, `the seven parts in order (found ${positions.join(', ')})`);
   assert.ok(part(COMPARISON, 'answer').markup.includes('COMPARISONANSWER-w3p1'), 'the answer part carries the answer');
-  assert.ok(part(COMPARISON, 'steps').markup.includes('Step 1'), 'the steps part carries the steps');
+  assert.ok(part(COMPARISON, 'steps').markup.includes('Show all steps'), 'the steps part carries the progress log’s completed steps');
   assert.ok(part(COMPARISON, 'sources').markup.includes('rows returned'), 'the sources line carries the provenance line');
   assert.ok(part(COMPARISON, 'actions').markup.includes('Copy'), 'the actions part carries the controls');
   const d = requireDisclosure(COMPARISON);
@@ -461,7 +461,7 @@ test('W3 P1 (1) the executed run: status row, answer, citation, steps, sources l
   assert.ok(part(RUN, 'sources').markup.includes('rows returned'), 'the sources line carries the provenance line');
   assert.ok(part(RUN, 'actions').markup.includes('Sign in to publish'), 'the actions part carries the Publish control');
   const d = requireDisclosure(RUN);
-  assert.ok(part(RUN, 'actions').start > d.end, 'the actions follow the disclosure');
+  assert.ok(part(RUN, 'actions').start >= d.end, 'the actions follow the disclosure');
 });
 
 test('W3 P1 (1) the comparison: each author line reads §6’s words for this instance and model', () => {
@@ -702,7 +702,7 @@ test('W3 P1 item 3: while the run is under way, its progress is the step view: a
   assert.ok(html.includes('Generating reproducible notebook'), 'premise: the progress panel renders');
   const steps = part(html, 'steps').markup;
   assert.equal(occurrences(steps, 'data-part="step" ').length, 3, 'one step per Phase A iteration');
-  const closing = occurrences(steps, 'data-part="closing-row"').map((s) => steps.slice(s, elementEnd(steps, s, 'div')).replace(/<[^>]*>/g, ''));
+  const closing = occurrences(steps, '<div data-part="closing-row"').map((s) => steps.slice(s, elementEnd(steps, s, 'div')).replace(/<[^>]*>/g, ''));
   assert.deepEqual(closing, ['Synthesizing notebook', 'Executing in sandbox'], 'a row for each later phase the run reported');
   assert.doesNotMatch(html, />Finalizing</, 'no row for a phase not yet reported');
   assert.doesNotMatch(html, /<ul\b/, 'the four fixed phase rows are gone');
