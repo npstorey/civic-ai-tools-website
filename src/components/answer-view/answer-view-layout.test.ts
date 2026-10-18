@@ -747,11 +747,14 @@ test('W3 P1 fix 1 (1) the comparison’s citation preview states no execution an
 test('W3 P1 (9) the live view: no text the site writes names a tool by its exposed name, for a call with no operation type', async () => {
   const phaseA = runEvents(RUN_NOTEBOOK, 'C').filter((e) => e.type !== 'phase' || e.name === 'A')
     .filter((e) => e.type !== 'phase_a_answer');
+  // The call's progress lines and its captured call carry no operation type.
+  const charter = { iteration: 4, message: 'Reading the charter', toolName: 'nyc_charter__get_section' };
   const events = [
     ...phaseA,
-    ...lines(4, 'Reading the charter', 'nyc_charter__get_section', ''),
+    { type: 'phase_a_progress', phase: 'tool_start', ...charter },
+    { type: 'phase_a_progress', phase: 'tool_complete', ...charter },
     { type: 'phase_a_tool_call', name: 'nyc_charter__get_section', reason: 'to call get_section', args: { section: '1' }, duration_ms: 40 },
-  ].map((e) => (e.operationType === '' ? (({ operationType: _drop, ...rest }) => rest)(e) : e));
+  ];
   const running = await stateAfter(events);
   (running as { isLoading: boolean }).isLoading = true;
   (running as { completedAt: number | null }).completedAt = null;
