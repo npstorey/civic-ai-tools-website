@@ -203,11 +203,13 @@ function text(html: string): string {
 
 interface TracedElement { id: string; traces: string[]; text: string }
 
+// A statement is a `<p>`, or, when it carries a list, a `<div>` holding its
+// lead, the list and any text after it. Neither nests inside itself.
 function statements(html: string): TracedElement[] {
-  return [...html.matchAll(/<p[^>]*data-statement="([^"]*)"[^>]*data-trace="([^"]*)"[^>]*>(.*?)<\/p>/g)].map((m) => ({
-    id: m[1],
-    traces: m[2].split(' ').filter(Boolean),
-    text: text(m[3]),
+  return [...html.matchAll(/<(p|div)[^>]*data-statement="([^"]*)"[^>]*data-trace="([^"]*)"[^>]*>(.*?)<\/\1>/g)].map((m) => ({
+    id: m[2],
+    traces: m[3].split(' ').filter(Boolean),
+    text: text(m[4]),
   }));
 }
 
@@ -219,7 +221,7 @@ async function traceProblems(html: string): Promise<string[]> {
   const untraced = text(
     html
       .replace(/<h[12][^>]*>.*?<\/h[12]>/g, '')
-      .replace(/<p[^>]*data-trace="[^"]+"[^>]*>.*?<\/p>/g, ''),
+      .replace(/<(p|div)[^>]*data-trace="[^"]+"[^>]*>.*?<\/\1>/g, ''),
   );
   if (untraced !== '') problems.push(`untraced text: "${untraced}"`);
   for (const element of statements(html)) {
