@@ -39,9 +39,13 @@
  *   3. the answer, with no section heading — the A-G letters are the
  *      envelope's section names, implementation language to a reader;
  *   4. the citation, directly beneath it;
- *   5. one disclosure, closed by default, holding A-G and the signers in
+ *   5. the steps (LAYOUT-WEB W2 P2): one per Phase A iteration, each call
+ *      with the sentence the site writes from its name and arguments and the
+ *      outcome `describeQueryOutcome` states, under one author line — shown
+ *      when the run recorded its steps (`stepGroups`);
+ *   6. one disclosure, closed by default, holding A-G and the signers in
  *      envelope order. F renders the answer again, so the envelope reads whole
- *      to someone inspecting it.
+ *      to someone inspecting it. D keeps each call's recorded fields.
  * The answer element is built once and rendered in both places, so the two
  * cannot drift. A render test pins the order
  * (`chat-notebook-output-layout.test.ts`).
@@ -60,6 +64,15 @@ import type { Notebook } from '@/lib/notebook-author';
 import { readReproductionClaim, reproductionScopeSentence } from '@/lib/notebook-author/reproduction-claim';
 import { describeRefusedRequests } from '@/lib/evidence/query-step';
 import type { CapturedToolCall } from '@/hooks/useNotebookStream';
+import { useInstanceAttribution } from '@/components/EvidenceOriginProvider';
+import {
+  UNPLACED_CALLS_LINE,
+  asStepCall,
+  buildRunStepView,
+  stepsAuthorLine,
+  type ProgressGroup,
+  type StepViewCall,
+} from '@/lib/answer-view/steps';
 
 interface ChatNotebookOutputProps {
   notebook: Notebook;
@@ -67,6 +80,11 @@ interface ChatNotebookOutputProps {
   model: string;
   portal: string;
   toolCalls: CapturedToolCall[];
+  /**
+   * Phase A's steps as the hook grouped them, one per iteration (LAYOUT-WEB
+   * W2 P2). Absent when the state recorded none: the step view is not shown.
+   */
+  stepGroups?: ProgressGroup[];
   /** Phase 2a2 item 1: composed system prompt text streamed via SSE. */
   composedSystemPrompt?: string | null;
   composedSystemPromptHash?: string | null;
@@ -74,6 +92,18 @@ interface ChatNotebookOutputProps {
   signingKeyId?: string | null;
   /** Optional title — defaults to the prompt's first sentence/clause. */
   title?: string;
+}
+
+/** One call in the step view: the site's sentence for it, and its outcome. */
+function StepCallRow({ call }: { call: StepViewCall }) {
+  return (
+    <div data-part="step-call" style={{ marginTop: '6px', paddingLeft: '20px', fontSize: '13px', lineHeight: 1.5 }}>
+      {call.sentence !== undefined && (
+        <div data-part="step-sentence" style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>{call.sentence}</div>
+      )}
+      <div data-part="step-outcome" style={{ fontSize: '12px', color: call.failed ? 'var(--error)' : 'var(--text-muted)' }}>{call.outcome}</div>
+    </div>
+  );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -93,11 +123,15 @@ export default function ChatNotebookOutput({
   model,
   portal,
   toolCalls,
+  stepGroups,
   composedSystemPrompt,
   composedSystemPromptHash,
   signingKeyId,
   title,
 }: ChatNotebookOutputProps) {
+  // The author of the steps' sentences is this instance; with none declared,
+  // the line is omitted (as the comparison's copy footer omits its own).
+  const stepsAuthor = stepsAuthorLine(useInstanceAttribution().host);
   const view = buildChatEvidenceView({
     notebook,
     prompt,
@@ -138,6 +172,10 @@ export default function ChatNotebookOutput({
       resultColumns: q.resultSummary?.columns,
     })),
   );
+
+  // The steps (W2 P2): the hook's groups paired with the captured calls, which
+  // the route sends without the repeats it drops (`pairCallsToSteps`).
+  const stepView = stepGroups !== undefined ? buildRunStepView(stepGroups, toolCalls.map(asStepCall)) : null;
 
   // The answer: the rendering code cell's outputs (Phase 2a2 item 2), else the
   // legacy synthesis markdown, else a statement that there is none. Built once
@@ -202,6 +240,34 @@ export default function ChatNotebookOutput({
         executedAt={view.executedAt}
         structuredSummary={view.structuredSummary}
       />
+
+      {/* The steps, outside the disclosure, after the citation (W2 P2). */}
+      {stepView !== null && (stepView.steps.length > 0 || stepView.unplaced.length > 0) && (
+        <div data-part="steps" style={{ margin: '16px 0 8px' }}>
+          {stepsAuthor !== null && (
+            <p data-part="steps-author" style={{ margin: '0 0 8px', fontSize: '12px', color: 'var(--text-muted)' }}>
+              {stepsAuthor}
+            </p>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {stepView.steps.map((step, i) => (
+              <div data-part="step" key={i} style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                  <span style={{ color: 'var(--accent)', marginRight: '6px' }}>Step {i + 1}</span>
+                  <span data-part="step-label">{step.label}</span>
+                </div>
+                {step.calls.map((call, j) => <StepCallRow key={j} call={call} />)}
+              </div>
+            ))}
+          </div>
+          {stepView.unplaced.length > 0 && (
+            <div data-part="steps-unplaced" style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
+              <p style={{ margin: 0 }}>{UNPLACED_CALLS_LINE}</p>
+              {stepView.unplaced.map((call, j) => <StepCallRow key={j} call={call} />)}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Everything else, closed by default: the envelope A-G in order, then
           the signers. Section titles inside are the envelope's own. */}

@@ -19,6 +19,9 @@ import { friendlyStreamError, notebookExecutionErrorMessage, reasonWithoutIdenti
 import type { Notebook } from '@/lib/notebook-author';
 import type { NotebookPhase } from '@/components/notebook/NotebookProgress';
 import type { PhaseAToolCall } from '@/lib/notebook-author';
+// The run's steps, folded the way the comparison folds its own (LAYOUT-WEB W2
+// P2): one group per Phase A iteration, from the progress lines.
+import { applyProgressEvent, closeStepsOnComplete, closeStepsOnError, type StepLog } from '@/lib/answer-view/steps';
 
 /** A single tool call captured during Phase A — used to populate the
  *  deliberative-trace section of the chat-output A-G renderer. Shape mirrors
@@ -56,6 +59,15 @@ export interface NotebookStreamState {
   } | null;
   /** Accumulated tool calls captured during Phase A. Drives section D. */
   toolCalls: CapturedToolCall[];
+  /**
+   * Phase A's steps, one group per loop iteration, folded from the
+   * `phase_a_progress` lines by the shared step module (LAYOUT-WEB W2 P2).
+   * The lines carry no arguments: the step view pairs the groups with
+   * `toolCalls` when it renders (`buildRunStepView`). Optional, so a state
+   * built by hand (the dev preview's fixtures) need not name it; absent means
+   * no steps were recorded, and the step view is not shown.
+   */
+  steps?: StepLog;
   phaseStartedAt: number | null;
   startedAt: number | null;
   completedAt: number | null;
@@ -90,11 +102,14 @@ export interface NotebookStreamState {
   errorTraceback?: { text: string; correlationId: string } | null;
 }
 
+const NO_STEPS: StepLog = { progressLog: [], progressGroups: [] };
+
 const INITIAL_STATE: NotebookStreamState = {
   phase: null,
   detail: null,
   detailTool: null,
   toolCalls: [],
+  steps: NO_STEPS,
   phaseStartedAt: null,
   startedAt: null,
   completedAt: null,
@@ -158,6 +173,9 @@ export function useNotebookStream() {
               phaseStartedAt: Date.now(),
               detail: null,
               detailTool: null,
+              // Phase A is over once a later phase starts: its steps close,
+              // each labelled from its entries.
+              ...(name !== 'A' ? { steps: closeStepsOnComplete(prev.steps ?? NO_STEPS) } : {}),
             }));
           }
           break;
@@ -169,8 +187,20 @@ export function useNotebookStream() {
           const failed = raw.failed as boolean | undefined;
           const failureKind = raw.failureKind as PhaseAToolCall['failureKind'] | undefined;
           if (message) {
+            const phase = raw.phase as string | undefined;
+            const iteration = raw.iteration as number | undefined;
             setState((prev) => ({
               ...prev,
+              // The line joins its iteration's step, as the comparison's do.
+              steps: applyProgressEvent(prev.steps ?? NO_STEPS, {
+                message,
+                phase,
+                iteration,
+                toolName,
+                operationType,
+                failed,
+                failureKind,
+              }, Date.now()),
               detail: message,
               detailTool: toolName
                 ? {
@@ -316,6 +346,8 @@ export function useNotebookStream() {
             ...prev,
             error: message,
             errorTraceback,
+            // Nothing keeps running once the run has failed.
+            steps: closeStepsOnError(prev.steps ?? NO_STEPS),
             isLoading: false,
             completedAt: Date.now(),
           }));

@@ -471,9 +471,7 @@ export function closeStepsOnError(log: StepLog): StepLog {
 
 /** The line above the steps: they are the site's sentences, written from the model's calls. */
 export function stepsAuthorLine(instance: string | null | undefined): string | null {
-  // RED STUB (W2 P2).
-  void instance;
-  return null;
+  return instance ? `Steps, written by ${instance} from the model's calls` : null;
 }
 
 /**
@@ -576,12 +574,72 @@ export interface StepPairing<C extends StepCall> {
  * could be the call it repeats. Nothing is guessed.
  */
 export function pairCallsToSteps<C extends StepCall>(groups: ProgressGroup[], calls: C[]): StepPairing<C> {
-  // RED STUB (W2 P2): pairs by position, the shape the tests show wrong.
-  return {
-    placed: mapGroupsToToolCalls(groups, calls).map((g) => g.toolCalls),
-    unplaced: [],
-    entries: groups.map((g) => g.entries.map((e) => ({ ...e }))),
-  };
+  const lines: { group: number; entry: number }[] = [];
+  groups.forEach((g, gi) => g.entries.forEach((e, ei) => {
+    if (e.phase === 'tool_start') lines.push({ group: gi, entry: ei });
+  }));
+  const entryAt = (k: number) => groups[lines[k].group].entries[lines[k].entry];
+  const n = lines.length;
+  const m = calls.length;
+
+  const matches = (k: number, j: number) => sameCall(entryAt(k), calls[j]);
+  // Line k can be a repeat when calls[0..j) — the calls placed before it — hold its tool.
+  const repeatable = (k: number, j: number) => calls.slice(0, j).some((c) => sameTool(entryAt(k), c));
+
+  // reach[k][j]: lines [0, k) can hold calls [0, j); finish[k][j]: lines [k, n) can hold calls [j, m).
+  const table = () => Array.from({ length: n + 1 }, () => new Array<boolean>(m + 1).fill(false));
+  const reach = table();
+  const finish = table();
+  reach[0][0] = true;
+  for (let k = 0; k < n; k++) {
+    for (let j = 0; j <= m; j++) {
+      if (!reach[k][j]) continue;
+      if (repeatable(k, j)) reach[k + 1][j] = true;
+      if (j < m && matches(k, j)) reach[k + 1][j + 1] = true;
+    }
+  }
+  finish[n][m] = true;
+  for (let k = n - 1; k >= 0; k--) {
+    for (let j = m; j >= 0; j--) {
+      finish[k][j] = (j < m && matches(k, j) && finish[k + 1][j + 1]) || (repeatable(k, j) && finish[k + 1][j]);
+    }
+  }
+
+  // The lines each call can sit on in some history.
+  const positions = calls.map((_, j) => {
+    const at: number[] = [];
+    for (let k = 0; k < n; k++) if (reach[k][j] && matches(k, j) && finish[k + 1][j + 1]) at.push(k);
+    return at;
+  });
+
+  const placed: C[][] = groups.map(() => []);
+  const unplaced: C[] = [];
+  const argsAt = new Map<number, Record<string, unknown>>();
+  calls.forEach((call, j) => {
+    const at = positions[j];
+    const stepsAt = new Set(at.map((k) => lines[k].group));
+    if (at.length === 0 || stepsAt.size !== 1) {
+      unplaced.push(call);
+      return;
+    }
+    placed[lines[at[0]].group].push(call);
+    if (at.length === 1) argsAt.set(at[0], call.args);
+  });
+  // A line no call can sit on is a repeat in every history; its arguments are
+  // known when exactly one call that can sit earlier names its tool.
+  for (let k = 0; k < n; k++) {
+    if (positions.some((at) => at.includes(k))) continue;
+    if (positions.every((at) => at.length === 0)) break;
+    const twins = calls.filter((c, j) => positions[j].some((p) => p < k) && sameTool(entryAt(k), c));
+    if (twins.length === 1) argsAt.set(k, twins[0].args);
+  }
+
+  const entries = groups.map((g) => g.entries.map((e) => ({ ...e })));
+  argsAt.forEach((args, k) => {
+    const { group, entry } = lines[k];
+    entries[group][entry] = { ...entries[group][entry], args };
+  });
+  return { placed, unplaced, entries };
 }
 
 function viewCall(call: StepCall): StepViewCall {
@@ -659,7 +717,14 @@ export interface RecordStepQuery {
  * answer, read by the outcome as section D reads it.
  */
 export function buildRecordStepView(queries: readonly RecordStepQuery[], refused: ReadonlySet<number> = new Set()): StepView {
-  // RED STUB (W2 P2).
-  void queries; void refused; void oneStepPerCall;
-  return { steps: [], unplaced: [] };
+  const calls: StepCall[] = queries.map((q) => ({
+    name: q.tool,
+    operationType: q.operationType,
+    args: q.arguments ?? {},
+    ...(q.failed !== undefined ? { failed: q.failed } : {}),
+  }));
+  return oneStepPerCall(calls, (call, i) => {
+    const outcome = describeQueryOutcome(queries[i], { refusedInTrace: refused.has(i) });
+    return { sentence: stepSentence(call), outcome: outcome.text, failed: outcome.kind === 'failed' };
+  });
 }

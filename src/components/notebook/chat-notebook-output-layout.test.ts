@@ -577,7 +577,8 @@ function stepView(html: string): string {
 
 /** Each step's markup, in order. */
 function stepsIn(view: string): string[] {
-  return occurrences(view, '<div data-part="step"').map((s) => view.slice(s, elementEnd(view, s, 'div')));
+  // The trailing space: `data-part="steps"` and `"step-call"` share the prefix.
+  return occurrences(view, '<div data-part="step" ').map((s) => view.slice(s, elementEnd(view, s, 'div')));
 }
 
 const callRows = (markup: string) => occurrences(markup, 'data-part="step-call"').length;
