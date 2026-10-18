@@ -707,3 +707,60 @@ test('W3 P1 item 3: while the run is under way, its progress is the step view: a
   assert.doesNotMatch(html, />Finalizing</, 'no row for a phase not yet reported');
   assert.doesNotMatch(html, /<ul\b/, 'the four fixed phase rows are gone');
 });
+
+// --- Fix 1 (1): the comparison's citation states no execution ---------------------
+//
+// The comparison never runs in a sandbox and records no execution time, so its
+// citation preview states neither "Executed" nor any date: a date there would
+// be the moment the page rendered, which the run did not record. The executed
+// run's preview keeps the notebook's own `executedAt`.
+//
+// RED at ff00464: the comparison's preview read "[Executed: <render date>]"
+// and "(<render year>)".
+
+const MONTHS = /\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/;
+
+/** The text of a citation part, tags removed. */
+const citationText = (html: string) => unescape(part(html, 'citation').markup.replace(/<!-- -->/g, '').replace(/<[^>]*>/g, ' '));
+
+test('W3 P1 fix 1 (1) the comparison’s citation preview states no execution and no date the run did not record; the executed run’s states its own', () => {
+  const comparison = citationText(COMPARISON);
+  assert.ok(comparison.includes('QUESTIONMARKER-w3p1'), 'premise: the preview cites the question');
+  assert.doesNotMatch(comparison, /Executed/, `the comparison's citation states an execution: ${comparison}`);
+  assert.doesNotMatch(comparison, MONTHS, `the comparison's citation states a date the run did not record: ${comparison}`);
+  assert.doesNotMatch(comparison, /\b(19|20)\d\d\b/, `the comparison's citation states a year the run did not record: ${comparison}`);
+  const executedAt = '2026-10-18T12:00:00Z';
+  const stated = new Date(executedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  assert.ok(citationText(RUN).includes(`[Executed: ${stated}]`), `the executed run's citation states the notebook's own executedAt (${stated})`);
+});
+
+// --- Criterion (9), the live view ------------------------------------------------------
+//
+// While the run is under way, the progress panel shows the step view and,
+// beneath it, the latest detail line. The fixture stops in Phase A just after
+// its last captured call, which is aliased and has no operation type, so the
+// detail line is written from that call's name. Nothing in the live view is
+// the record's own words, so nothing is exempt: no `__` at all.
+//
+// RED at ff00464: the detail line read "nyc_charter__get_section (to call get_section)".
+
+test('W3 P1 (9) the live view: no text the site writes names a tool by its exposed name, for a call with no operation type', async () => {
+  const phaseA = runEvents(RUN_NOTEBOOK, 'C').filter((e) => e.type !== 'phase' || e.name === 'A')
+    .filter((e) => e.type !== 'phase_a_answer');
+  const events = [
+    ...phaseA,
+    ...lines(4, 'Reading the charter', 'nyc_charter__get_section', ''),
+    { type: 'phase_a_tool_call', name: 'nyc_charter__get_section', reason: 'to call get_section', args: { section: '1' }, duration_ms: 40 },
+  ].map((e) => (e.operationType === '' ? (({ operationType: _drop, ...rest }) => rest)(e) : e));
+  const running = await stateAfter(events);
+  (running as { isLoading: boolean }).isLoading = true;
+  (running as { completedAt: number | null }).completedAt = null;
+  assert.equal((running.toolCalls as Array<{ name: string }>).at(-1)?.name, 'nyc_charter__get_section', 'premise: the last captured call is aliased');
+  assert.equal((running.toolCalls as Array<{ operationType?: string }>).at(-1)?.operationType, undefined, 'premise: and has no operation type');
+  const html = renderRun(running);
+  assert.ok(html.includes('Generating reproducible notebook') && html.includes('data-part="steps"'), 'premise: the live view renders, with its steps');
+  assert.ok(typeof running.detail === 'string' && html.includes(unescape(running.detail as string).slice(0, 8)), 'premise: the detail line renders');
+  const text = readerFacing(html);
+  const i = text.indexOf('__');
+  assert.equal(i, -1, `the live view prints an exposed name: …${text.slice(Math.max(0, i - 80), i + 40)}…`);
+});
