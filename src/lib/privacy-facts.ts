@@ -67,8 +67,13 @@ export type Segment = string | { link: string; text: string } | { code: string }
 export interface Statement {
   /** Stable, for the page's markup and the tests. */
   id: string;
+  /** The sentence, or for a list the lead sentence before it. */
   parts: Segment[];
   traces: Trace[];
+  /** A list under the lead, one entry per item; the page renders it as a bulleted list. */
+  items?: Segment[][];
+  /** Text after the list. */
+  after?: Segment[];
 }
 
 export interface PrivacySection {
@@ -82,6 +87,11 @@ const c = (name: string): Trace => `const:${MODULE}#${name}`;
 
 function statement(id: string, parts: Segment[], traces: Trace[]): Statement {
   return { id, parts, traces };
+}
+
+/** A lead sentence, a bulleted list, and optionally text after it: one statement, one set of traces. */
+function listStatement(id: string, lead: Segment[], items: Segment[][], traces: Trace[], after?: Segment[]): Statement {
+  return { id, parts: lead, traces, items, ...(after ? { after } : {}) };
 }
 
 /** The host of a URL-shaped value; the trimmed value itself when it is not a URL. */
@@ -103,16 +113,18 @@ function present(raw: string | undefined): string | null {
 
 /** How every statement below was produced. */
 export const PAGE_BASIS =
-  "Every statement on this page is read from this site's configuration or its code when the page is served. " +
+  "Every statement on this page is read from this site's configuration or its code when the page is served, " +
+  'or from a named page, with the date it was read. ' +
   'Where the site cannot know something, this page says so instead of guessing.';
 
 /** Why questions are limited per day (design §4.7 item 2). */
 export const LIMIT_REASON =
-  'Each question is answered by an AI model working with live data sources, and every answer costs money, so the number of questions per day is limited.';
+  'Each question is answered by an AI model working with live data sources, and every answer costs money. ' +
+  'That is why the number of questions per day is limited.';
 
 /** Design §4.7 item 11. */
 export const NOT_VERIFIABLE_FROM_OUTSIDE =
-  'No one outside a hosted service can check how it handles its logs, including this one.';
+  "Nobody, including this site, can check a hosted service's logging from outside.";
 
 /** Item 11's second half, shown with the repository link (item 1). */
 export const RUN_IT_YOURSELF = 'That is why the code is open: you can run it yourself and see exactly what it does.';
@@ -122,13 +134,16 @@ export const LOGS_STATEMENT =
   "The site's own logs record which steps ran, how long they took, how large their results were, and the kind of any error. " +
   'They do not record your question, the queries sent to data sources, or what the sources returned.';
 
-/** The design's ops side: what the app cannot read, stated as the operator's to state. */
-export const OPERATOR_STATES =
-  'This site cannot read the following, so they are for whoever runs it to state: ' +
-  'how long the operator and each service named on this page keep what they receive; ' +
-  "the operator's account settings with the AI model service, including whether that service may keep or learn from what it receives; " +
-  'what the hosting platform records about each visit, such as network addresses; ' +
-  'and any legal position.';
+/** The design's ops side: what the app cannot read, stated as the operator's to state (the lead of a list). */
+export const OPERATOR_STATES = "This site cannot read the following, so they are the operator's to state:";
+
+/** The items under `OPERATOR_STATES`. */
+export const OPERATOR_STATES_ITEMS: readonly string[] = [
+  'how long the operator and each service named on this page keep what they receive',
+  "the operator's account settings with the AI model service, including whether that service may keep or learn from what it receives",
+  'what the hosting platform records about each visit, such as network addresses',
+  'any legal position',
+];
 
 /**
  * What a record keeps under hash-only visibility. The publish dialog states
@@ -140,6 +155,9 @@ export const OPERATOR_STATES =
 export const HASH_ONLY_RECORD_WORDS =
   'The record keeps a fingerprint of your question instead of its text. Anyone who knows or guesses the exact ' +
   'wording can confirm it matches. The answer, summary and data queries may still contain its words.';
+
+/** The publish dialog's label for the hash-only choice (pinned by the same test). */
+export const HASH_ONLY_CHOICE_LABEL = 'Hash only';
 
 /** A record's title, in the words the publish dialog states beside the title field (pinned by the same test). */
 export const RECORD_TITLE_IS_PUBLIC = 'The title is public and becomes the record’s address.';
@@ -182,6 +200,9 @@ export const SIGN_IN_COOKIES: readonly { name: string; purpose: string }[] = [
   { name: 'next-auth.nonce', purpose: 'checks that a sign-in reply is the one this site asked for' },
 ];
 
+/** The one cookie whose secure name takes `__Host-` rather than `__Secure-` (pinned by the page test). */
+export const HOST_PREFIXED_COOKIE = 'next-auth.csrf-token';
+
 /**
  * Each column of the account table, in reader language. Keyed by the
  * Drizzle column key; the page test fails when a column of `users` has no
@@ -195,14 +216,114 @@ export const ACCOUNT_COLUMNS: Readonly<Record<string, string>> = {
   createdAt: 'when the account was first created',
 };
 
+/** A vendor page this page quotes from: its address, the date it was read (UTC), and the sentence read there. */
+export interface VendorRead {
+  url: string;
+  read: string;
+  sentence: string;
+}
+
+export interface AnalyticsRecipient {
+  name: string;
+  /** The host `AnalyticsTags` loads the tag from. */
+  host: string;
+  /** Who the record title reaches, in the reader's words. */
+  reaches: string;
+  /** What the service says about itself, as page text: the vendor's facts, with their page and read date. */
+  says: Segment[];
+  /** How a reader can object. */
+  objection: Segment[];
+  /** What is not sent when the browser does not load the script. */
+  notSentTo: string;
+  /** The pages the two runs above rest on, each with the sentence read there. */
+  reads: readonly VendorRead[];
+}
+
+/** The date the vendor pages below were read, UTC. */
+export const VENDOR_READ_DATE = '2026-10-18';
+
 /**
- * Analytics: what each service's tag loads, and from where. The host is the
- * one `AnalyticsTags` in `src/lib/analytics.tsx` writes into the tag's
- * `src`; the page test renders the real tags and fails when they differ.
+ * Analytics: what each service's tag loads, and from where, and what the
+ * service says about itself. The host is the one `AnalyticsTags` in
+ * `src/lib/analytics.tsx` writes into the tag's `src`; the page test renders
+ * the real tags and fails when they differ. No other module in this
+ * repository loads anything from these hosts, so a browser that does not load
+ * the script sends nothing to them. The vendor's own statements are labelled
+ * as the vendor's, with the page and the date read.
  */
-export const ANALYTICS_RECIPIENTS: Readonly<Record<AnalyticsService, { name: string; host: string }>> = {
-  'google-analytics': { name: 'Google Analytics', host: 'www.googletagmanager.com' },
-  plausible: { name: 'Plausible', host: 'plausible.io' },
+export const ANALYTICS_RECIPIENTS: Readonly<Record<AnalyticsService, AnalyticsRecipient>> = {
+  'google-analytics': {
+    name: 'Google Analytics',
+    host: 'www.googletagmanager.com',
+    reaches: 'Google',
+    says: [
+      'Google says it receives the page address and your network address. ' +
+        'It also says it sets a cookie in your browser to tell visitors apart (its ',
+      { link: 'https://policies.google.com/technologies/partner-sites', text: 'partner-sites' },
+      ' and ',
+      { link: 'https://support.google.com/analytics/answer/11397207', text: 'cookie' },
+      ` pages, read ${VENDOR_READ_DATE}).`,
+    ],
+    objection: [
+      "To object, install Google's opt-out add-on from ",
+      { link: 'https://tools.google.com/dlpage/gaoptout', text: 'tools.google.com/dlpage/gaoptout' },
+      ', or use an ad blocker or other content blocker that blocks www.googletagmanager.com.',
+    ],
+    notSentTo: 'Google Analytics',
+    reads: [
+      {
+        url: 'https://policies.google.com/technologies/partner-sites',
+        read: VENDOR_READ_DATE,
+        sentence: 'This includes the URL of the page you’re visiting and your IP address.',
+      },
+      {
+        url: 'https://policies.google.com/technologies/partner-sites',
+        read: VENDOR_READ_DATE,
+        sentence: 'We may also set cookies on your browser or read cookies that are already there.',
+      },
+      {
+        url: 'https://support.google.com/analytics/answer/11397207',
+        read: VENDOR_READ_DATE,
+        sentence: 'The GA4 JavaScript tags use first-party cookies to distinguish unique users as well as unique sessions from a single user.',
+      },
+      {
+        url: 'https://policies.google.com/technologies/partner-sites',
+        read: VENDOR_READ_DATE,
+        sentence: 'If you don’t want Analytics to be used in your browser, you can install the Google Analytics browser add-on.',
+      },
+      {
+        url: 'https://support.google.com/analytics/answer/181881',
+        read: VENDOR_READ_DATE,
+        sentence:
+          'The add-on prevents the Google Analytics JavaScript (gtag.js, analytics.js) that run on websites from sharing information about your visit activity with Google Analytics.',
+      },
+    ],
+  },
+  plausible: {
+    name: 'Plausible',
+    host: 'plausible.io',
+    reaches: 'Plausible',
+    says: [
+      'Plausible says it sets no cookies and stores no raw network address (its ',
+      { link: 'https://plausible.io/data-policy', text: 'data policy' },
+      `, read ${VENDOR_READ_DATE}).`,
+    ],
+    objection: [
+      'To object, use an ad blocker or other content blocker that blocks plausible.io, or set the browser flag Plausible describes at ',
+      { link: 'https://plausible.io/docs/excluding-localstorage', text: 'plausible.io/docs/excluding-localstorage' },
+      '.',
+    ],
+    notSentTo: 'plausible.io',
+    reads: [
+      { url: 'https://plausible.io/data-policy', read: VENDOR_READ_DATE, sentence: 'We do not use cookies, browser cache or local storage.' },
+      { url: 'https://plausible.io/data-policy', read: VENDOR_READ_DATE, sentence: 'Raw IP addresses and User-Agent data are never stored.' },
+      {
+        url: 'https://plausible.io/docs/excluding-localstorage',
+        read: VENDOR_READ_DATE,
+        sentence: 'To prevent counting your visits, you can set a special localStorage flag in the browser.',
+      },
+    ],
+  },
 };
 
 // --- Configuration, read through the app's own resolvers ---------------------
@@ -298,7 +419,7 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
           [
             `The data source ${entry.displayName}, at `,
             { code: hostOf(address) },
-            ', receives the searches and queries the AI model writes to answer your question, which can include words from it. ',
+            ', receives the searches and queries the AI model writes to answer your question. These can include words from your question. ',
             `How current its data is: ${entry.freshness}`,
           ],
           MCP_TRACES,
@@ -334,7 +455,7 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
       [
         'When a record is published, a fingerprint of it (a hash, not its contents) is sent to the timestamp service at ',
         { code: hostOf(timestampAuthorityUrl()) },
-        ', which returns proof of when the record existed.',
+        '. That service returns proof of when the record existed.',
       ],
       ['env:TIMESTAMP_AUTHORITY_URL', 'const:src/lib/evidence/signing.ts#DEFAULT_TIMESTAMP_AUTHORITY_URL'],
     ),
@@ -388,7 +509,7 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
       ? [
           statement(
             'recipient-counter-store',
-            ['The daily question counts, kept under the codes described above, are stored in a key-value store.'],
+            ['The daily question counts, kept under the codes described above, are stored in a key-value store, a simple database of named values.'],
             ['env:KV_REST_API_URL', 'env:KV_REST_API_TOKEN'],
           ),
         ]
@@ -449,7 +570,7 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
       statement(
         `recipient-hosted-${server.sourceId}`,
         [
-          `The data source ${server.label} runs in a Vercel Sandbox this site starts, running version ${server.hosting.version} of its publisher's package. `,
+          `The data source ${server.label} runs in a Vercel Sandbox this site starts, running version ${server.hosting.version} of its publisher's software. `,
           `How current its data is: ${CIVIC_MANIFEST.find((entry) => entry.sourceId === server.sourceId)?.freshness ?? ''}`,
         ],
         ['env:NYC_CHARTER_HOSTING', 'const:@typedstandards/civic-typed-router#CIVIC_MANIFEST'],
@@ -484,7 +605,7 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
     return [
       statement(
         'recipient-executor-lambda',
-        [`${NOTEBOOK_PURPOSE} Each notebook runs in an AWS Lambda function the operator runs${region ? `, in the ${region} region` : ''}.`],
+        [`${NOTEBOOK_PURPOSE} Each notebook runs in an AWS Lambda function, a program Amazon's cloud runs on demand for the operator${region ? `, in the ${region} region` : ''}.`],
         [...notebookTraces(), 'env:EXECUTOR_LAMBDA_REGION', c('NOTEBOOK_PURPOSE')],
       ),
     ];
@@ -579,13 +700,23 @@ function signInAndLimits(): Statement[] {
 function whatLinksActivity(): Statement[] {
   const signIn = toSignInOptions(buildProviders()).length > 0;
   const who = signIn
-    ? ['your account (when you are signed in) or your network address (when you are not)', 'Your address and account are', 'a given address or account']
-    : ['your network address', 'Your address is', 'a given address'];
+    ? [
+        'To count your questions, the site makes a code for each day. Signed in, the code is made from your account; ' +
+          'not signed in, from your network address. Either way it also uses the date and a secret only the operator holds.',
+        'Your address and account are',
+        'a given address or account',
+      ]
+    : [
+        'To count your questions, the site makes a code for each day. ' +
+          'The code is made from your network address, the date and a secret only the operator holds.',
+        'Your address is',
+        'a given address',
+      ];
   const out: Statement[] = [
     statement(
       'daily-key',
       [
-        `To count your questions, the site computes a code from ${who[0]} and the date, using a secret only the operator holds. ` +
+        `${who[0]} ` +
           `${who[1]} not stored with the count. ` +
           'The code changes every day, so counts from different days cannot be matched to each other without the secret. ' +
           `The operator, who holds the secret, could work out which code belongs to ${who[2]} on a given day.`,
@@ -595,22 +726,20 @@ function whatLinksActivity(): Statement[] {
   ];
   if (signIn) {
     out.push(
-      statement(
+      listStatement(
         'cookies',
+        ['Signing in uses these cookies, set by the sign-in library this site uses:'],
+        SIGN_IN_COOKIES.map((cookie): Segment[] => [{ code: cookie.name }, ` ${cookie.purpose}`]),
+        [...SIGN_IN_TRACES, c('SIGN_IN_COOKIES'), c('HOST_PREFIXED_COOKIE')],
         [
-          'Signing in uses these cookies, set by the sign-in library this site uses: ',
-          ...SIGN_IN_COOKIES.flatMap((cookie, i): Segment[] => [
-            ...(i > 0 ? ['; '] : []),
-            { code: cookie.name },
-            ` ${cookie.purpose}`,
-          ]),
-          '. Over a secure connection each name starts with ',
+          'Over a secure connection each name starts with ',
           { code: '__Secure-' },
-          ' (the request check: ',
+          ', except ',
+          { code: HOST_PREFIXED_COOKIE },
+          ', which starts with ',
           { code: '__Host-' },
-          ').',
+          '.',
         ],
-        [...SIGN_IN_TRACES, c('SIGN_IN_COOKIES')],
       ),
     );
   }
@@ -618,7 +747,8 @@ function whatLinksActivity(): Statement[] {
     statement(
       'browser-storage',
       [
-        'Two display choices (notebook or standard mode, and whether the comparison is shown) are kept in your browser for the current tab, under ',
+        'Your browser keeps two display choices for the current tab: notebook or standard mode, and whether the comparison is shown. ' +
+          'They are stored under ',
         { code: MODE_STORAGE_KEY },
         ' and ',
         { code: COMPARISON_STORAGE_KEY },
@@ -635,19 +765,25 @@ function whatIsStored(): Statement[] {
   if (process.env.DATABASE_URL) {
     const columns = Object.keys(getTableColumns(users)).map((key) => ACCOUNT_COLUMNS[key] ?? key);
     out.push(
-      statement(
+      listStatement(
         'account-row',
-        [`When you sign in, the site keeps an account with ${list(columns)}. Every record you publish is stored with your account as its creator.`],
+        ['When you sign in, the site keeps an account. It holds:'],
+        columns.map((column): Segment[] => [column]),
         ['env:DATABASE_URL', 'const:src/lib/db/schema.ts#users', c('ACCOUNT_COLUMNS')],
+        ['Every record you publish is stored with your account as its creator.'],
       ),
     );
   }
   out.push(
     statement(
       'prompt-text',
-      [`When you publish, you choose whether the record includes your question's text or a fingerprint (a hash) of it. With the fingerprint: ${HASH_ONLY_RECORD_WORDS}`],
+      [
+        "When you publish, you choose whether the record includes your question's text or only a fingerprint (a hash) of it. " +
+          `The publish dialog describes that choice, ${HASH_ONLY_CHOICE_LABEL}, in these words. ${HASH_ONLY_RECORD_WORDS}`,
+      ],
       [
         c('HASH_ONLY_RECORD_WORDS'),
+        c('HASH_ONLY_CHOICE_LABEL'),
         'const:src/lib/db/schema.ts#promptVisibilityEnum',
         'const:src/lib/notebook.ts#WITHHELD_QUESTION_TEXT',
         'const:src/app/api/evidence/route.ts#POST',
@@ -689,12 +825,15 @@ function whatIsStored(): Statement[] {
     process.env.CRON_SECRET
       ? statement(
           'upload-cleanup',
-          [`Parts of a record uploaded while it is being prepared, if the record is never published, are deleted by a daily cleanup once they are ${graceHours} hours old.`],
+          [
+            'Parts of a record are uploaded while it is being prepared. ' +
+              `If the record is never published, those parts are deleted by a daily cleanup once they are ${graceHours} hours old.`,
+          ],
           ['env:CRON_SECRET', 'const:src/lib/evidence/blob-gc.ts#ORPHAN_GRACE_MS'],
         )
       : statement(
           'upload-cleanup',
-          ['This site has no cleanup configured, so parts of a record uploaded while it is being prepared are kept even if the record is never published.'],
+          ['This site has no cleanup configured. Parts of a record uploaded while it is being prepared are kept even if the record is never published.'],
           ['env:CRON_SECRET'],
         ),
   );
@@ -719,7 +858,12 @@ function recipients(analytics: AnalyticsConfig | null): Statement[] {
         [
           `Your browser loads ${service.name} from `,
           { code: service.host },
-          `, which records the pages you visit on this site. A published record's address includes its title.`,
+          `, which records the pages you visit on this site. A published record's address includes its title, ` +
+            `so the title of any record you open reaches ${service.reaches} too. `,
+          ...service.says,
+          ' ',
+          ...service.objection,
+          ` If your browser does not load that script, nothing is sent to ${service.notSentTo}.`,
         ],
         ['env:NEXT_PUBLIC_ANALYTICS_SERVICE', 'env:NEXT_PUBLIC_ANALYTICS_ID', 'env:NEXT_PUBLIC_GA_MEASUREMENT_ID', c('ANALYTICS_RECIPIENTS')],
       ),
@@ -739,7 +883,12 @@ function cannotTell(): Statement[] {
         ? [c('NOT_VERIFIABLE_FROM_OUTSIDE'), c('RUN_IT_YOURSELF'), 'env:SITE_BRAND_REPO_URL']
         : [c('NOT_VERIFIABLE_FROM_OUTSIDE'), 'env:SITE_BRAND_REPO_URL'],
     ),
-    statement('operator-states', [OPERATOR_STATES], [c('OPERATOR_STATES')]),
+    listStatement(
+      'operator-states',
+      [OPERATOR_STATES],
+      OPERATOR_STATES_ITEMS.map((item): Segment[] => [item]),
+      [c('OPERATOR_STATES'), c('OPERATOR_STATES_ITEMS')],
+    ),
   ];
 }
 

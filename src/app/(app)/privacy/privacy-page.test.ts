@@ -259,6 +259,17 @@ test('the trace check fails on a statement that traces to neither a variable nor
   assert.deepEqual(await traceProblems('<h2>Heading</h2><p data-statement="x" data-trace="env:SITE_SEAL_ONLY">A.</p>'), []);
 });
 
+test('the trace check fails on untraced text inside a list item, and passes a traced list', async () => {
+  const traced =
+    '<div data-statement="x" data-trace="env:SITE_SEAL_ONLY"><p>Lead:</p><ul><li>One.</li><li>Two.</li></ul><p>After.</p></div>';
+  assert.deepEqual(await traceProblems(traced), []);
+  const untraced = await traceProblems(`${traced}<ul><li>An untraced item.</li></ul>`);
+  assert.equal(untraced.length, 1);
+  assert.match(untraced[0], /untraced text: "An untraced item\."/);
+  const emptyTrace = await traceProblems('<div data-statement="x" data-trace=""><ul><li>An item.</li></ul></div>');
+  assert.ok(emptyTrace.some((problem) => /untraced text/.test(problem)), 'a list whose element carries no trace passed');
+});
+
 for (const name of [...Object.keys(CONFIGS), 'full']) {
   test(`${name}: every statement on the page traces to a configuration value or a named code constant`, async () => {
     const html = RENDERED[name];
@@ -324,6 +335,9 @@ for (const name of [...Object.keys(CONFIGS), 'full']) {
     const html = RENDERED[name];
     const page = text(html);
     assert.ok(page.includes(facts.OPERATOR_STATES), `${name}: the page does not say what is the operator's to state`);
+    for (const item of facts.OPERATOR_STATES_ITEMS as string[]) {
+      assert.ok(page.includes(item), `${name}: the operator's-to-state list lacks "${item}"`);
+    }
     assert.doesNotMatch(page, PLACEHOLDER, `${name}: placeholder text`);
     assert.doesNotMatch(page, LEGAL, `${name}: a legal position`);
     assert.doesNotMatch(page, ENDPOINT_SETTING, `${name}: the model service's account setting, stated`);
@@ -413,7 +427,7 @@ test("the cookie names stated are the sign-in library's defaults, and src overri
   assert.deepEqual(Object.values(defaultCookies(false)).map((cookie) => cookie.name).sort(), stated);
   const secure = Object.values(defaultCookies(true)).map((cookie) => cookie.name);
   assert.ok(secure.every((name) => name.startsWith('__Secure-') || name.startsWith('__Host-')));
-  assert.deepEqual(secure.filter((name) => name.startsWith('__Host-')), ['__Host-next-auth.csrf-token']);
+  assert.deepEqual(secure.filter((name) => name.startsWith('__Host-')), [`__Host-${facts.HOST_PREFIXED_COOKIE}`]);
   assert.doesNotMatch(fs.readFileSync(path.join(SRC, 'lib', 'auth.ts'), 'utf8'), /\bcookies\s*:/, 'auth.ts sets a cookies option');
 });
 

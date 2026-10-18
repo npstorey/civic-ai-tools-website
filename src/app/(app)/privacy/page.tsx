@@ -16,8 +16,9 @@ import { buildPrivacySections, type Segment, type Statement } from '@/lib/privac
  * into both and the page names the service whose tag the layout renders.
  *
  * Each statement carries its traces in `data-trace`: the variables it reads
- * and the constants it states. The page renders no other text but headings
- * (`privacy-page.test.ts`).
+ * and the constants it states. A statement with a list renders as one element
+ * holding its lead, the list and any text after it, so the traces cover every
+ * item. The page renders no other text but headings (`privacy-page.test.ts`).
  */
 export const dynamic = 'force-dynamic';
 
@@ -43,10 +44,26 @@ function renderSegment(segment: Segment, key: number) {
 }
 
 function StatementLine({ statement }: { statement: Statement }) {
+  const traces = { 'data-statement': statement.id, 'data-trace': statement.traces.join(' ') };
+  if (statement.items === undefined) {
+    return (
+      <p style={prose} {...traces}>
+        {statement.parts.map(renderSegment)}
+      </p>
+    );
+  }
+  // A lead sentence, a bulleted list, and optionally text after it: one
+  // statement, so one element carries the traces for all of it.
   return (
-    <p style={prose} data-statement={statement.id} data-trace={statement.traces.join(' ')}>
-      {statement.parts.map(renderSegment)}
-    </p>
+    <div {...traces}>
+      <p style={{ ...prose, marginBottom: '8px' }}>{statement.parts.map(renderSegment)}</p>
+      <ul style={{ ...prose, paddingLeft: '20px', marginTop: 0 }}>
+        {statement.items.map((item, i) => (
+          <li key={i}>{item.map(renderSegment)}</li>
+        ))}
+      </ul>
+      {statement.after && <p style={prose}>{statement.after.map(renderSegment)}</p>}
+    </div>
   );
 }
 

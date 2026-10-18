@@ -96,7 +96,9 @@ const squash = (value: string) => value.replace(/\s+/g, ' ').trim();
 function hashOnlyWords(): string {
   const label = dialog.elements().find((el: { type: unknown }) => el.type === 'label' && textOf(el).includes('Hash only'));
   assert.ok(label, 'the dialog has no hash-only choice');
-  const words = squash(textOf(label)).replace(/^Hash only\s*/, '');
+  const text = squash(textOf(label));
+  assert.ok(text.startsWith(facts.HASH_ONLY_CHOICE_LABEL), `the hash-only choice's label reads: ${text.slice(0, 40)}`);
+  const words = text.slice(facts.HASH_ONLY_CHOICE_LABEL.length).trim();
   assert.ok(words.length > 0, 'the hash-only choice carries no words beside its label');
   return words;
 }
