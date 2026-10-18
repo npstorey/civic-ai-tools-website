@@ -206,7 +206,7 @@
     "owner_name": "City of Bloomington",
     "owner_type": "Local government",
     "api_endpoint": "https://bloomington.data.socrata.com/api",
-    "dataset_count": 202,
+    "dataset_count": 203,
     "status": "active"
   },
   {
@@ -416,7 +416,7 @@
     "owner_name": "City of Chicago",
     "owner_type": "Local government",
     "api_endpoint": "https://chicago.socrata.com/api",
-    "dataset_count": 919,
+    "dataset_count": 920,
     "status": "active"
   },
   {
@@ -926,7 +926,7 @@
     "owner_name": "Metropolitan Transportation Commission",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.bayareametro.gov/api",
-    "dataset_count": 1993,
+    "dataset_count": 1988,
     "status": "active"
   },
   {
@@ -956,7 +956,7 @@
     "owner_name": "City of Bloomington, Indiana",
     "owner_type": "Local government",
     "api_endpoint": "https://data.bloomington.in.gov/api",
-    "dataset_count": 202,
+    "dataset_count": 203,
     "status": "active"
   },
   {
@@ -1016,7 +1016,7 @@
     "owner_name": "City of Calgary",
     "owner_type": "Local government",
     "api_endpoint": "https://data.calgary.ca/api",
-    "dataset_count": 412,
+    "dataset_count": 413,
     "status": "active"
   },
   {
@@ -1091,7 +1091,7 @@
     "owner_name": "City of Cincinnati",
     "owner_type": "Local government",
     "api_endpoint": "https://data.cincinnati-oh.gov/api",
-    "dataset_count": 102,
+    "dataset_count": 84,
     "status": "active"
   },
   {
@@ -1106,7 +1106,7 @@
     "owner_name": "City of Berkeley",
     "owner_type": "Local government",
     "api_endpoint": "https://data.cityofberkeley.info/api",
-    "dataset_count": 44,
+    "dataset_count": 43,
     "status": "active"
   },
   {
@@ -1121,7 +1121,7 @@
     "owner_name": "The City of Chicago",
     "owner_type": "Local government",
     "api_endpoint": "https://data.cityofchicago.org/api",
-    "dataset_count": 919,
+    "dataset_count": 920,
     "status": "active"
   },
   {
@@ -1241,7 +1241,7 @@
     "owner_name": "City of College Station",
     "owner_type": "Local government",
     "api_endpoint": "https://data.cstx.gov/api",
-    "dataset_count": 18,
+    "dataset_count": 19,
     "status": "active"
   },
   {
@@ -1316,7 +1316,7 @@
     "owner_name": "State of Delaware",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.delaware.gov/api",
-    "dataset_count": 176,
+    "dataset_count": 177,
     "status": "active"
   },
   {
@@ -1511,7 +1511,7 @@
     "owner_name": "Honolulu County",
     "owner_type": "Local government",
     "api_endpoint": "https://data.honolulu.gov/api",
-    "dataset_count": 71,
+    "dataset_count": 72,
     "status": "active"
   },
   {
@@ -1556,7 +1556,7 @@
     "owner_name": "City of Kansas City, Missouri",
     "owner_type": "Local government",
     "api_endpoint": "https://data.kcmo.org/api",
-    "dataset_count": 202,
+    "dataset_count": 200,
     "status": "active"
   },
   {
@@ -1931,7 +1931,7 @@
     "owner_name": "State of New York",
     "owner_type": "Regional government",
     "api_endpoint": "https://data.ny.gov/api",
-    "dataset_count": 1034,
+    "dataset_count": 1035,
     "status": "active"
   },
   {
@@ -2251,8 +2251,23 @@
   },
   {
     "id": "data.sf.gov",
-    "name": "San Francisco Open Data Portal",
+    "name": "",
     "url": "https://data.sf.gov",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://data.sf.gov/api",
+    "dataset_count": 4,
+    "status": "active"
+  },
+  {
+    "id": "data.sfgov.org",
+    "name": "San Francisco Open Data Portal",
+    "url": "https://data.sfgov.org",
     "platform": "socrata",
     "catalog_type": "Open data portal",
     "government_level": "local",
@@ -2260,7 +2275,7 @@
     "country_name": "United States",
     "owner_name": "City of San Francisco",
     "owner_type": "Local government",
-    "api_endpoint": "https://data.sf.gov/api",
+    "api_endpoint": "https://data.sfgov.org/api",
     "dataset_count": 4,
     "status": "active"
   },
@@ -2606,7 +2621,7 @@
     "owner_name": "City of Austin",
     "owner_type": "Local government",
     "api_endpoint": "https://datahub.austintexas.gov/api",
-    "dataset_count": 712,
+    "dataset_count": 711,
     "status": "active"
   },
   {
@@ -2651,7 +2666,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://datahub.transportation.gov/api",
-    "dataset_count": 422,
+    "dataset_count": 457,
     "status": "active"
   },
   {
@@ -2681,7 +2696,7 @@
     "owner_name": "U.S. Department of Veterans Affairs",
     "owner_type": "Central government",
     "api_endpoint": "https://www.datahub.va.gov/api",
-    "dataset_count": 528,
+    "dataset_count": 529,
     "status": "active"
   },
   {
@@ -2756,7 +2771,7 @@
     "owner_name": "Ministerio de Tecnologías de la Información y las Comunicaciones",
     "owner_type": "Central government",
     "api_endpoint": "https://www.datos.gov.co/api",
-    "dataset_count": 8417,
+    "dataset_count": 8423,
     "status": "active"
   },
   {
@@ -3041,7 +3056,7 @@
     "owner_name": "Government of New Brunswick",
     "owner_type": "Regional government",
     "api_endpoint": "https://gnb.socrata.com/api",
-    "dataset_count": 317,
+    "dataset_count": 319,
     "status": "active"
   },
   {
@@ -3281,7 +3296,7 @@
     "owner_name": "Hawaii Department of Transportation",
     "owner_type": "Regional government",
     "api_endpoint": "https://highways.hidot.hawaii.gov/api",
-    "dataset_count": 302,
+    "dataset_count": 304,
     "status": "active"
   },
   {
@@ -3416,7 +3431,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://internal-sandiegocounty.data.socrata.com/api",
-    "dataset_count": 329,
+    "dataset_count": 347,
     "status": "active"
   },
   {
@@ -3461,7 +3476,7 @@
     "owner_name": "Pierce County",
     "owner_type": "Local government",
     "api_endpoint": "https://internal.open.piercecountywa.gov/api",
-    "dataset_count": 876,
+    "dataset_count": 877,
     "status": "active"
   },
   {
@@ -3476,7 +3491,7 @@
     "owner_name": "",
     "owner_type": "",
     "api_endpoint": "https://internal.opendata.clermontauditor.org/api",
-    "dataset_count": 40,
+    "dataset_count": 41,
     "status": "active"
   },
   {
@@ -3867,6 +3882,51 @@
     "owner_type": "",
     "api_endpoint": "https://newcastle.data.socrata.com/api",
     "dataset_count": 5,
+    "status": "active"
+  },
+  {
+    "id": "newjerseysp-dev.data.socrata.com",
+    "name": "",
+    "url": "https://newjerseysp-dev.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://newjerseysp-dev.data.socrata.com/api",
+    "dataset_count": 1,
+    "status": "active"
+  },
+  {
+    "id": "newjerseysp-uat.data.socrata.com",
+    "name": "",
+    "url": "https://newjerseysp-uat.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://newjerseysp-uat.data.socrata.com/api",
+    "dataset_count": 1,
+    "status": "active"
+  },
+  {
+    "id": "nih-ncats.data.socrata.com",
+    "name": "",
+    "url": "https://nih-ncats.data.socrata.com",
+    "platform": "socrata",
+    "catalog_type": "Open data portal",
+    "government_level": "",
+    "country": "",
+    "country_name": "",
+    "owner_name": "",
+    "owner_type": "",
+    "api_endpoint": "https://nih-ncats.data.socrata.com/api",
+    "dataset_count": 3,
     "status": "active"
   },
   {
