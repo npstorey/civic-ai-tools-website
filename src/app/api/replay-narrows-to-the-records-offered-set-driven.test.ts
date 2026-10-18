@@ -170,6 +170,7 @@ const { startScriptedModelServer } = await import('../../lib/model-loop/test-har
 const { mcpTools } = await import('../../lib/mcp/tools.ts');
 const { buildSystemPrompt } = await import('../../lib/mcp/socrata-skill.ts');
 const { canonicalizeToolCall } = await import('../../lib/evidence/tool-call-identity.ts');
+const { civicRouter, CIVIC_MANIFEST } = await import('@typedstandards/civic-typed-router');
 const replayRoute = (await import('./evidence/[slug]/replay/route.ts')) as unknown as {
   POST: (request: Request, ctx: { params: Promise<{ slug: string }> }) => Promise<Response>;
 };
@@ -313,17 +314,31 @@ test('criterion 3 (c): a datHere record with named mcpServers entries replays wi
 
 test('criterion 3 (d): a record stating no set replays with the full vocabulary, from none', () => {
   assert.deepEqual(D.toolNames, ALL_TOOL_NAMES, 'a record stating no set did not replay with the full vocabulary');
-  assert.deepEqual(D.body.offeredSet, { from: 'none', sources: ['socrata', 'data-commons', 'nyc-charter'], lacking: [] });
+  // `sources` is the source ids whose tools the replay offered: under the full
+  // vocabulary, every manifest source, Boston's included though it is unset.
+  assert.deepEqual(D.body.offeredSet, { from: 'none', sources: ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter'], lacking: [] });
 });
 
 test('criterion 3 (e): a server list of nameless entries counts as no set', () => {
   assert.deepEqual(E.toolNames, ALL_TOOL_NAMES, 'nameless mcpServers entries narrowed the replay');
-  assert.deepEqual(E.body.offeredSet, { from: 'none', sources: ['socrata', 'data-commons', 'nyc-charter'], lacking: [] });
+  assert.deepEqual(E.body.offeredSet, { from: 'none', sources: ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter'], lacking: [] });
 });
 
 test('criterion 3 (f): a record whose set is empty replays with no source tool, never the full vocabulary', () => {
   assert.deepEqual(F.toolNames, [], `a record offered no source replayed with tools: ${F.toolNames.slice(0, 5).join(', ')}…`);
   assert.deepEqual(F.body.offeredSet, { from: 'sourcesOffered', sources: [], lacking: [] });
+});
+
+/** The source ids whose tools a request carried, in manifest order, read through the dispatch map. */
+function sourcesCarried(names: string[]): string[] {
+  const ids = new Set(names.map((name) => civicRouter.sourceForAliasedName(name)?.sourceId));
+  return CIVIC_MANIFEST.map((entry) => entry.sourceId).filter((id) => ids.has(id));
+}
+
+test('criterion 3: the response\'s offeredSet.sources is the set of sources whose tools the model was given, on every record', () => {
+  for (const [name, run] of Object.entries({ A, B_WITH, B_WITHOUT, C, D, E, F, G })) {
+    assert.deepEqual(run.body.offeredSet?.sources, sourcesCarried(run.toolNames), `${name}: the response states a set the tools array does not carry`);
+  }
 });
 
 test('criterion 3, added: a narrowed replay\'s dispatch follows its set — a tool outside it is refused not_offered, with no request', () => {

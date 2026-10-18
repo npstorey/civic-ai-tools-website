@@ -52,9 +52,12 @@
  */
 
 import type OpenAI from 'openai';
+import { CIVIC_MANIFEST, type SourceSelection } from '@typedstandards/civic-typed-router';
 import type { ModelRequestSettings } from '../model-catalog.ts';
-import { mcpTools } from '../mcp/tools.ts';
+import { mcpTools, offeredMcpTools } from '../mcp/tools.ts';
 import { callMcpTool } from '../mcp/client.ts';
+import { buildMcpRegistry, readMcpEnvFromProcess, type McpRegistryEnv } from '../mcp/registry.ts';
+import type { ReplayOfferedSet } from '../evidence/consistency-metrics.ts';
 import { buildSystemPrompt } from '../mcp/socrata-skill.ts';
 import { sourceIdForToolName } from '../mcp/operation-types.ts';
 import { CIVIC_SOURCE_REGISTRY } from '../evidence/data-sources.ts';
@@ -101,11 +104,20 @@ export interface ReplayLoopInputs {
    */
   portal?: string;
   /**
-   * The tool transport, for tests. Defaults to the live MCP client —
-   * deliberately one level below the loop: substituting it restates no loop
-   * configuration at all.
+   * The tool transport, for tests. Defaults to the live MCP client, bound to
+   * `selection` when there is one — deliberately one level below the loop:
+   * substituting it restates no loop configuration at all.
    */
   callTool?: ReplayToolTransport;
+  /**
+   * The source ids the replay is offered (#632 D8 i): the tools array and the
+   * default transport are narrowed to them. Absent, the full vocabulary,
+   * `mcpTools`, and the client unbound — a replay of a record that states no
+   * set. Supplied by `replayLoopOptionsForPackage` from `replayOfferedSet`.
+   */
+  selection?: SourceSelection;
+  /** The configuration `selection` is read against; absent, read here. */
+  configured?: McpRegistryEnv;
   /**
    * The per-tool-call timeout, in milliseconds. Overridable for ONE reason
    * (#357): a case that drives a transport which genuinely never settles
@@ -286,9 +298,17 @@ export function replayLoopOptions(inputs: ReplayLoopInputs): ToolLoopOptions {
     prompt,
     systemPrompt,
     portal,
-    callTool = callMcpTool,
+    selection,
     toolTimeoutMs = REPLAY_MCP_TOOL_TIMEOUT_MS,
   } = inputs;
+  // Narrowed, the dispatch follows the same set as the tools array: a call the
+  // replaying model makes to a tool outside it is refused `not_offered` before
+  // any request (R6 W1).
+  const callTool = inputs.callTool
+    ?? (selection === undefined ? callMcpTool : (name: string, args: Record<string, unknown>) => callMcpTool(name, args, { selection }));
+  const tools = selection === undefined
+    ? mcpTools
+    : offeredMcpTools(mcpTools, inputs.configured ?? readMcpEnvFromProcess(), selection);
 
   return {
     client,
@@ -296,7 +316,7 @@ export function replayLoopOptions(inputs: ReplayLoopInputs): ToolLoopOptions {
     requestSettings,
     prompt,
     systemPrompt,
-    tools: mcpTools,
+    tools,
     maxIterations: REPLAY_MAX_ITERATIONS,
     maxTokens: REPLAY_MAX_TOKENS,
     maxCumulativeTokens: REPLAY_MAX_CUMULATIVE_TOKENS,
@@ -319,6 +339,100 @@ export function replayLoopOptions(inputs: ReplayLoopInputs): ToolLoopOptions {
 /** The two fields of a stored package the replay portal is derived from. */
 export type ReplayPortalSource = Parameters<typeof replayPortalForPackage>[0];
 
+/** The extension keys a package states its offered set under: the harness's
+ *  `COMPOSITION_EXTENSION_KEY` and `ENVIRONMENT_EXTENSION_KEY`, which it does
+ *  not export at 0.7.0; the record page reads them by the same literals. */
+const COMPOSITION_EXTENSION = 'org.civicaitools.composition';
+const ENVIRONMENT_EXTENSION = 'org.civicaitools.environment';
+
+/** The field of a stored package its offered set is read from. */
+export interface ReplayOfferedSetSource {
+  extensions?: Record<string, unknown>;
+}
+
+/** The set the record states, or `null` when it states none. */
+function statedOfferedSet(pkg: ReplayOfferedSetSource): { from: 'sourcesOffered' | 'mcpServers'; ids: string[] } | null {
+  const composition = pkg.extensions?.[COMPOSITION_EXTENSION] as { sourcesOffered?: unknown } | undefined;
+  if (composition && typeof composition === 'object' && Array.isArray(composition.sourcesOffered)) {
+    const ids = (composition.sourcesOffered as Array<{ sourceId?: unknown; reason?: unknown } | null>)
+      .filter((entry) => entry !== null && typeof entry === 'object' && typeof entry.sourceId === 'string'
+        && (entry.reason === 'configured' || entry.reason === 'selected'))
+      .map((entry) => entry!.sourceId as string);
+    return { from: 'sourcesOffered', ids: [...new Set(ids)] };
+  }
+  const environment = pkg.extensions?.[ENVIRONMENT_EXTENSION] as { mcpServers?: unknown } | undefined;
+  if (environment && typeof environment === 'object' && Array.isArray(environment.mcpServers)) {
+    const ids = (environment.mcpServers as Array<{ name?: unknown } | null>)
+      .filter((entry) => entry !== null && typeof entry === 'object' && typeof entry.name === 'string' && entry.name.length > 0)
+      .map((entry) => entry!.name as string);
+    if (ids.length > 0) return { from: 'mcpServers', ids: [...new Set(ids)] };
+  }
+  return null;
+}
+
+/**
+ * The sources a replay of `pkg` is offered on this instance (#632 D8 = A,
+ * part i). Pure; `replayLoopOptionsForPackage` reads it to narrow the tools,
+ * the prompt and the transport, and the replay route reads it to state the
+ * set in its response — two readers of one decision, as `resolveToolCall` is
+ * read by both `routeToolCall` and `resolveServerForTool`.
+ *
+ * The record's set: its composition block's `sourcesOffered` entries whose
+ * reason is `configured` or `selected` (`from: 'sourcesOffered'`, every record
+ * packaged since R2's W4); else the NAMED entries of its environment block's
+ * `mcpServers` (`from: 'mcpServers'`: a datHere record packaged before W4,
+ * whose names are the servers configured when it was published, not
+ * necessarily the run's). A nameless entry counts for nothing: it yields no
+ * source id without a mapping from another instance's URL, which this
+ * instance's configuration cannot supply. A record with neither states no set
+ * (`from: 'none'`).
+ *
+ * `sources` is one rule for every `from`: the source ids whose tools the
+ * replay's tools array carries, in manifest order. With no set stated that is
+ * the full vocabulary, every manifest source, as replay offered before W1;
+ * otherwise the stated set intersected with the sources routable here and with
+ * `replayerSelection`. An empty stated set replays with no source tool, never
+ * the full vocabulary. `lacking` names a stated source this instance cannot
+ * route, manifest sources first, then any id the manifest does not hold.
+ *
+ * `replayerSelection` is the replayer's own On states (#632 C6): a replayer
+ * consents for themselves (design §1.6). W1 adds the input and nothing feeds
+ * it: absent, the replayer narrows nothing. W2 supplies it from the consent
+ * store, to this function and to `replayLoopOptionsForPackage` alike.
+ */
+export function replayOfferedSet(
+  pkg: ReplayOfferedSetSource,
+  configured: McpRegistryEnv = readMcpEnvFromProcess(),
+  replayerSelection?: SourceSelection,
+): ReplayOfferedSet {
+  const manifestIds = CIVIC_MANIFEST.map((entry) => entry.sourceId);
+  const registry = buildMcpRegistry(configured);
+  const routable = (id: string) => Object.hasOwn(registry.servers, id) || Object.hasOwn(registry.hosted, id);
+  const replayerOn = (id: string) => replayerSelection === undefined || replayerSelection.includes(id);
+  const stated = statedOfferedSet(pkg);
+  if (stated === null) {
+    return {
+      from: 'none',
+      sources: replayerSelection === undefined ? manifestIds : manifestIds.filter((id) => routable(id) && replayerOn(id)),
+      lacking: [],
+    };
+  }
+  const named = new Set(stated.ids);
+  return {
+    from: stated.from,
+    sources: manifestIds.filter((id) => named.has(id) && routable(id) && replayerOn(id)),
+    lacking: [
+      ...manifestIds.filter((id) => named.has(id) && !routable(id)),
+      ...stated.ids.filter((id) => !manifestIds.includes(id)),
+    ],
+  };
+}
+
+/** Whether a replay narrows at all: a stated set, or a replayer's selection. */
+function isNarrowed(offered: ReplayOfferedSet, replayerSelection: SourceSelection): boolean {
+  return offered.from !== 'none' || replayerSelection !== undefined;
+}
+
 /**
  * Composes the system prompt a replay runs under. Defaults to
  * `buildSystemPrompt`; substitutable for the same reason `callTool` is, and
@@ -327,11 +441,18 @@ export type ReplayPortalSource = Parameters<typeof replayPortalForPackage>[0];
  * decision. A test injects a recorder and reads back the portal the composer
  * was given, which is the half of the journey the loop options cannot show.
  */
-export type ReplaySystemPromptComposer = (portal?: string) => Promise<string>;
+export type ReplaySystemPromptComposer = (
+  portal?: string,
+  configured?: McpRegistryEnv,
+  selection?: SourceSelection,
+) => Promise<string>;
 
 export interface ReplayForPackageInputs {
   /** The stored package, read from storage by the route. */
-  pkg: ReplayPortalSource;
+  pkg: ReplayPortalSource & ReplayOfferedSetSource;
+  /** The replayer's On states (#632 C6); see `replayOfferedSet`. Absent in
+   *  W1: nothing feeds it until W2. */
+  replayerSelection?: SourceSelection;
   /** Built by the route from the caller-supplied key, in the route's own error handling. */
   client: OpenAI;
   /** The wire string this instance reaches the record's model with. */
@@ -379,6 +500,7 @@ export async function replayLoopOptionsForPackage(
   const {
     pkg,
     composeSystemPrompt = buildSystemPrompt,
+    replayerSelection,
     ...loopInputs
   } = inputs;
 
@@ -392,9 +514,22 @@ export async function replayLoopOptionsForPackage(
   // identity keys the consistency attestation is computed over.
   const portal = replayPortalForPackage(pkg);
 
-  // Regenerated fresh — the guidance may have moved since the record was
-  // published — but for THIS portal, or for none.
-  const systemPrompt = await composeSystemPrompt(portal);
+  // The record's offered set (#632 D8 i), read once against this instance's
+  // configuration. A record that states none, replayed by a replayer who
+  // narrows nothing, replays exactly as before W1: the full vocabulary, the
+  // prompt composed for the instance, the client unbound.
+  const configured = readMcpEnvFromProcess();
+  const offered = replayOfferedSet(pkg, configured, replayerSelection);
+  if (!isNarrowed(offered, replayerSelection)) {
+    // Regenerated fresh — the guidance may have moved since the record was
+    // published — but for THIS portal, or for none.
+    const systemPrompt = await composeSystemPrompt(portal);
+    return replayLoopOptions({ ...loopInputs, systemPrompt, portal });
+  }
 
-  return replayLoopOptions({ ...loopInputs, systemPrompt, portal });
+  // Narrowed: the prompt, the tools array and the transport all read the same
+  // set, so the prompt names no tool the array lacks and the dispatch refuses
+  // what neither offers.
+  const systemPrompt = await composeSystemPrompt(portal, configured, offered.sources);
+  return replayLoopOptions({ ...loopInputs, systemPrompt, portal, configured, selection: offered.sources });
 }

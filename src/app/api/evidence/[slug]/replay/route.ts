@@ -8,7 +8,7 @@ import {
 } from '@/lib/caller-model-key';
 import { modelIdentityForDeclared } from '@/lib/model-resolver';
 import { runToolLoop } from '@/lib/model-loop/run-tool-loop';
-import { replayLoopOptionsForPackage } from '@/lib/model-loop/replay-loop';
+import { replayLoopOptionsForPackage, replayOfferedSet } from '@/lib/model-loop/replay-loop';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -30,7 +30,10 @@ import type { EvidencePackage } from '@/lib/evidence/packager';
  * Body: { modelApiKey: string }
  *   `openRouterApiKey` is the prior-era name for that field and is accepted
  *   indefinitely (website#30 G0 D7) — see `src/lib/caller-model-key.ts`.
- * Returns: { toolCalls, output, tokenUsage, durationMs }
+ * Returns: { toolCalls, output, tokenUsage, durationMs, offeredSet }
+ *   `offeredSet` (#632 D8 = A) is unsigned: `{ from, sources, lacking }`, the
+ *   sources this replay was offered, read off the record by the same function
+ *   the loop options are narrowed with (`replayOfferedSet`).
  */
 export async function POST(
   request: NextRequest,
@@ -143,11 +146,17 @@ export async function POST(
     // `duration_ms` and — for a call that failed — `failed`/`failureKind`
     // (#338). The arguments the client keys a run on are byte-identical to
     // what it read before; what decides them is stated in `replay-loop.ts`.
+    //
+    // `offeredSet` (#632 D8 = A) is the one addition, and it is unsigned: the
+    // client shows `lacking` beside the runs and builds no signed run from it.
+    // It is the same decision the options above were narrowed by, read off the
+    // same package by the same pure function; a replay makes no record.
     return NextResponse.json({
       toolCalls: result.toolCalls,
       output: result.content,
       tokenUsage: result.usage,
       durationMs: result.durationMs,
+      offeredSet: replayOfferedSet(pkg),
     });
   } catch (error) {
     console.error('[replay] Error:', errorLogFacts(error));

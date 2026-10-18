@@ -21,6 +21,9 @@ import {
   type ConsistencyMetrics,
   type ReplayResult,
 } from '@/lib/evidence/consistency-metrics';
+// A source's reader-facing name (the manifest's display name without its
+// "MCP Server" suffix), for the line naming a source the replays ran without.
+import { displayNameForSource } from '@/lib/evidence/data-sources';
 
 // --- Types ---
 
@@ -593,6 +596,10 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
   onSubmit: () => void;
   submitting: boolean;
 }) {
+  // Sources the record was offered that this instance does not have (#632 D8
+  // = A): the replays ran without them, which the score above cannot show.
+  // Displayed only; no signed run carries it.
+  const lacking = [...new Set(completedRuns.flatMap((r) => r.offeredSet?.lacking ?? []))].map((id) => displayNameForSource(id));
   return (
     <>
       <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
@@ -703,6 +710,11 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
               </div>
             ))}
           </div>
+          {lacking.length > 0 && (
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>
+              {`The original analysis could use ${lacking.length === 1 ? lacking[0] : `${lacking.slice(0, -1).join(', ')} and ${lacking[lacking.length - 1]}`}. This site does not offer ${lacking.length === 1 ? 'it' : 'them'}, so these replays ran without ${lacking.length === 1 ? 'it' : 'them'}.`}
+            </p>
+          )}
 
           <button
             onClick={onSubmit}
