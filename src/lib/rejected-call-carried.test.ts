@@ -238,11 +238,26 @@ function extract(site: string, source: string, pattern: RegExp): string {
 const namesBothKeys = (text: string): boolean => /\bfailed\b/.test(text) && /\bfailureKind\b/.test(text);
 
 /**
+ * A declaration's body without its comments. `namesBothKeys` reads words, and
+ * a type's doc comments say "failed" ("Why it failed, when `failed` is true"):
+ * read with its comments, a declaration that lost its `failed` field still
+ * names the word and passes. Measured at 4598f55 on the client `ToolCall`:
+ * deleting `failed?: boolean;` left this instrument green.
+ */
+function withoutComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+}
+
+/**
  * The types a site may be retyped to instead of naming the keys inline. Each
  * is verified itself, so "typed as a carrier" is only a pass when the
  * carrier carries.
  */
 const CARRIERS: Record<string, () => string> = {
+  // The per-call type every step reader shares (LAYOUT-WEB W2 P1); the
+  // client's `ToolCall` is this type. Read without its comments, so the
+  // fields themselves are what passes.
+  StepCall: () => withoutComments(extract('StepCall', sourceOf('./answer-view/steps.ts'), /export interface StepCall \{([\s\S]*?)\n\}/)),
   ToolCallRecord: () => extract('ToolCallRecord', sourceOf('./model-loop/run-tool-loop.ts'), /export interface ToolCallRecord \{([\s\S]*?)\n\}/),
   PhaseAToolCall: () => extract('PhaseAToolCall', sourceOf('./notebook-author/tool-to-cell.ts'), /export interface PhaseAToolCall \{([\s\S]*?)\n\}/),
   ToolCallInput: () => extract('ToolCallInput', sourceOf('./evidence/packager.ts'), /export interface ToolCallInput \{([\s\S]*?)\n\}/),
@@ -273,7 +288,16 @@ const DECLARATIONS: { site: string; block: () => string }[] = [
   },
   {
     site: 'useStreamingComparison.ts ToolCall (the client’s record, posted to /api/records)',
-    block: () => extract('ToolCall', sourceOf('./../hooks/useStreamingComparison.ts'), /export interface ToolCall \{([\s\S]*?)\n\}/),
+    // The hook re-exports the type from the shared step module (LAYOUT-WEB
+    // W2 P1), where it is declared as the per-call type; read it there.
+    block: () => {
+      extract(
+        'ToolCall re-export',
+        sourceOf('./../hooks/useStreamingComparison.ts'),
+        /export type \{[^}]*\bToolCall\b[^}]*\} from '\.\.\/lib\/answer-view\/steps\.ts';/,
+      );
+      return extract('ToolCall', sourceOf('./answer-view/steps.ts'), /export type ToolCall = ([^;]+);/);
+    },
   },
   {
     site: 'query-notebook/route.ts phase_a_tool_call (the notebook stream’s event type)',
