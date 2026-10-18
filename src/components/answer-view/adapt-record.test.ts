@@ -230,7 +230,7 @@ test('W3 P2 the record’s parts: the status row’s reading and links, the refu
 
 test('W3 P2 a record whose package cannot be loaded keeps the row’s parts: the summary, the citation, the status links', () => {
   const model = adapter()(input(null));
-  assert.equal(model.answer, null, 'no answer is invented');
+  assert.deepEqual(model.answer, { content: { kind: 'absent' }, authors: [], streaming: false }, 'no answer is invented, and no author line names one');
   assert.equal(model.steps, null);
   assert.deepEqual(model.disclosure.summary, { kind: 'stated', author: null, text: 'ROWSUMMARY-w3p2' });
   assert.equal(model.disclosure.question, undefined);
