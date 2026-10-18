@@ -13,8 +13,8 @@
 // the list it is a number in — which is also how the live card numbers a step
 // (`ProgressLog.tsx`, `stepNumber={globalIdx + 1}`).
 //
-// DRIVEN through the `.ts` the component renders from: `ChatNotebookOutput.tsx`
-// calls `deliberativeTraceLine(q, i + 1)` for each call and renders its three
+// DRIVEN through the `.ts` the run's view is built from: `adapt-notebook.ts`
+// calls `deliberativeTraceLine(q, i + 1)` for each call, and `AnswerView` renders its three
 // fields; `src/components/reason-phrase-readers.test.ts` reads that wiring (it
 // follows the component's import into `buildChatEvidenceView.ts`).
 //
