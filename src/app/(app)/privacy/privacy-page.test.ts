@@ -2,10 +2,10 @@
 //
 // WHAT IS DRIVEN. The real page component (`page.tsx`) and the real facts
 // module (`src/lib/privacy-facts.ts`), rendered to static markup with
-// `react-dom/server` under `node --test`, under four configurations: the
-// default, `plausible`, `google-analytics`, and a custom model endpoint (plus
-// a fifth with every optional part configured, so no section is checked only
-// in its absent form). `module.registerHooks()` maps `@/` to `src/` and runs
+// `react-dom/server` under `node --test`, under five configurations: the
+// default, `plausible`, `google-analytics`, a custom model endpoint, and an
+// egress proxy (#516 WF) (plus one with every optional part configured, so no
+// section is checked only in its absent form). `module.registerHooks()` maps `@/` to `src/` and runs
 // `.ts`/`.tsx` under `src/` through the TypeScript compiler, as
 // `src/components/notebook/chat-notebook-output-layout.test.ts` does. One
 // module is replaced: `next/script`, which renders nothing under
@@ -35,6 +35,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import * as nodeModule from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -125,10 +126,14 @@ const DECLARED = new Set<string>((ENV_SPEC as { name: string }[]).map((row) => r
 
 // --- Configurations -------------------------------------------------------------
 
+const LOWER_CASE_PROXY_NAMES = ['http_proxy', 'https_proxy', 'no_proxy'];
+
 /** Every variable the preflight declares is cleared, then the configuration is set. */
 function withEnv<T>(config: Record<string, string>, run: () => T): T {
   const saved: Record<string, string | undefined> = {};
-  for (const name of [...DECLARED, ...Object.keys(config)]) {
+  // The proxy resolver reads the lower-case spellings first, as undici does;
+  // they are not ENV_SPEC names, so they are cleared here by name.
+  for (const name of [...DECLARED, ...LOWER_CASE_PROXY_NAMES, ...Object.keys(config)]) {
     saved[name] = process.env[name];
     delete process.env[name];
   }
@@ -152,6 +157,16 @@ const CONFIGS: Record<string, Record<string, string>> = {
   plausible: { NEXT_PUBLIC_ANALYTICS_SERVICE: 'plausible', NEXT_PUBLIC_ANALYTICS_ID: 'pa-fixture' },
   'google-analytics': { NEXT_PUBLIC_ANALYTICS_SERVICE: 'google-analytics', NEXT_PUBLIC_ANALYTICS_ID: 'G-FIXTURE' },
   'custom model endpoint': { MODEL_API_BASE_URL: `https://${CUSTOM_MODEL_HOST}/v1` },
+  // #516 WF: an egress proxy, with the two configurations whose traffic it does
+  // not carry, and analytics, which the browser loads.
+  proxy: {
+    HTTPS_PROXY: 'http://proxy.example.test:3128',
+    DATABASE_URL: 'fixture',
+    DB_DRIVER: 'node-postgres',
+    EXECUTOR_DRIVER: 'container',
+    NEXT_PUBLIC_ANALYTICS_SERVICE: 'plausible',
+    NEXT_PUBLIC_ANALYTICS_ID: 'pa-fixture',
+  },
 };
 
 // Every optional part on, so no section is checked only in its absent form.
@@ -288,6 +303,7 @@ for (const [name, expected] of [
   ['default', null],
   ['custom model endpoint', null],
   ['plausible', 'plausible'],
+  ['proxy', 'plausible'],
   ['google-analytics', 'google-analytics'],
 ] as const) {
   test(`${name}: the page names exactly the configured analytics service`, () => {
@@ -403,6 +419,229 @@ test('the executor setting is stated under each value', () => {
   ] as const) {
     const page = text(render({ EXECUTOR_DRIVER: value }));
     assert.match(page, pattern, `EXECUTOR_DRIVER=${value}`);
+  }
+});
+
+// --- #516 WF: the statements the cold read found missing -------------------------
+//
+// Each test below fails on the tree before WF, at its assertion: the statement
+// it looks for is not on the page, or the constant it reads is not exported.
+
+function statementOf(html: string, id: string): TracedElement | undefined {
+  return statements(html).find((s) => s.id === id);
+}
+
+test("proxy: the operator's proxy is named, with what it does not carry here", () => {
+  assert.equal(typeof facts.PROXY_STATEMENT, 'string', 'privacy-facts.ts exports no PROXY_STATEMENT');
+  const proxy = statementOf(RENDERED.proxy, 'recipient-proxy');
+  assert.ok(proxy, 'the page names no proxy while HTTPS_PROXY is set');
+  assert.ok(proxy.text.includes(facts.PROXY_ALWAYS_EXEMPT), 'the exempt addresses are not stated');
+  const exceptions = facts.PROXY_EXCEPTIONS as Record<string, string>;
+  // Configured here: node-postgres and the container executor. Not configured: the rest.
+  for (const [kind, configured] of [
+    ['Database, `DB_DRIVER=node-postgres`', true],
+    ['Notebook execution, `EXECUTOR_DRIVER=container`', true],
+    ['Notebook execution, `EXECUTOR_DRIVER=lambda`', false],
+    ['Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox`', false],
+  ] as const) {
+    assert.equal(typeof exceptions[kind], 'string', `no proxy exception for "${kind}"`);
+    assert.equal(proxy.text.includes(exceptions[kind]), configured, `"${kind}": its exception ${configured ? 'is missing' : 'is stated, but it is not configured'}`);
+  }
+  assert.ok(proxy.text.includes(facts.PROXY_NOT_ANALYTICS), 'with analytics configured, the page does not say analytics bypasses the proxy');
+});
+
+test('proxy: named under each spelling the resolver reads, and absent when no proxy is set', () => {
+  for (const name of ['default', 'plausible', 'google-analytics', 'custom model endpoint']) {
+    assert.equal(statementOf(RENDERED[name], 'recipient-proxy'), undefined, `${name}: a proxy statement with no proxy set`);
+  }
+  const spellings: Record<string, string>[] = [{ HTTP_PROXY: 'http://proxy.example.test:3128' }, { https_proxy: 'http://proxy.example.test:3128' }];
+  for (const config of spellings) {
+    const html = render(config);
+    assert.ok(statementOf(html, 'recipient-proxy'), `${Object.keys(config)[0]}: the page names no proxy`);
+    assert.ok(statementOf(html, 'recipient-proxy')?.text.includes(facts.PROXY_EXCEPTIONS['Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox`']),
+      'the default executor runs the notebook in a managed sandbox, and the page does not say its requests leave from there');
+    assert.ok(!statementOf(html, 'recipient-proxy')?.text.includes(facts.PROXY_NOT_ANALYTICS), 'the analytics sentence with no analytics configured');
+  }
+});
+
+test('analytics: the address the service receives carries what a reader types, stated per service', () => {
+  const inputs = facts.READER_INPUT_ADDRESSES as { path: string; param: string; what: string }[] | undefined;
+  assert.ok(Array.isArray(inputs) && inputs.length >= 2, 'privacy-facts.ts exports no READER_INPUT_ADDRESSES');
+  for (const [config, service, kept] of [
+    ['plausible', 'plausible', /discards the query part/],
+    ['google-analytics', 'google-analytics', /page's full address, leaving out only any part after #/],
+  ] as const) {
+    const analytics = statementOf(RENDERED[config], `recipient-analytics-${service}`);
+    assert.ok(analytics, `${config}: no analytics statement`);
+    for (const entry of inputs) {
+      assert.ok(analytics.text.includes(`${entry.path}?${entry.param}=…`), `${config}: ${entry.path}?${entry.param}= is not named`);
+      assert.ok(analytics.text.includes(entry.what), `${config}: "${entry.what}" is not stated`);
+    }
+    assert.match(analytics.text, kept, `${config}: what the service keeps of the address is not stated`);
+    const recipient = facts.ANALYTICS_RECIPIENTS[service] as { reads: { url: string; sentence: string; read: string }[] };
+    assert.ok(recipient.reads.some((r) => /quer|URL/i.test(r.sentence) && r.read === facts.VENDOR_READ_DATE), `${service}: no dated read behind the address statement`);
+  }
+});
+
+test("analytics: each tag sends the page's own address, with no override", () => {
+  // The statement above rests on the services' defaults; a tag that set its own
+  // page address would make it wrong.
+  for (const service of ANALYTICS_SERVICES as string[]) {
+    const markup = renderToStaticMarkup(createElement(AnalyticsTags, { config: { service, id: 'fixture-id' } }));
+    assert.doesNotMatch(markup, /page_location|page_path|\burl\s*:|\bu\s*:/, `${service}: the tag overrides the page address`);
+  }
+  const plausible = renderToStaticMarkup(createElement(AnalyticsTags, { config: { service: 'plausible', id: 'fixture-id' } }));
+  assert.match(plausible, /plausible\.init\(\)/, 'plausible.init is called with options');
+});
+
+// The query parameters the pages read, from the tree: `searchParams.get('x')`,
+// `search.get('x')`, `params.get('x')` on a page's search parameters, a
+// destructured `{ x } = await searchParams`, and `url.searchParams.has(X)`.
+// Blind spot: a parameter read some other way (a raw `location.search` parse)
+// is not seen; none exists in the tree this was written against.
+const CHOICE_PARAMS = new Set([
+  // `/directory`, both tabs: the tab and the filter, sort and page controls.
+  'tab', 'domain', 'level', 'transport', 'official', 'platform', 'sort', 'country', 'govLevel', 'ownerType', 'page', 'pageSize',
+  // `/ask`: the sign-in intent flag another host sets (`SIGN_IN_INTENT_PARAM`).
+  'signin',
+  // `/dev/notebook-preview`: a development page that 404s in production.
+  'state',
+]);
+
+function pageQueryParams(): Map<string, string[]> {
+  const files = execFileSync('git', ['ls-files', 'src'], { cwd: REPO, encoding: 'utf8' })
+    .split('\n')
+    .filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\.tsx?$/.test(f) && !f.startsWith('src/app/api/'));
+  const found = new Map<string, string[]>();
+  const add = (param: string, file: string) => found.set(param, [...(found.get(param) ?? []), file]);
+  for (const file of files) {
+    const source = fs.readFileSync(path.join(REPO, file), 'utf8');
+    for (const m of source.matchAll(/\b(?:searchParams|search)\.(?:get|has)\(\s*['"]([^'"]+)['"]/g)) add(m[1], file);
+    for (const m of source.matchAll(/\{([^{};=]*)\}\s*=\s*await\s+searchParams\b/g)) {
+      for (const part of m[1].split(',')) {
+        const name = part.split(':')[0].trim();
+        if (name) add(name, file);
+      }
+    }
+    for (const m of source.matchAll(/\b(?:searchParams\.(?:get|has)|params)\[?\(?\s*(SIGN_IN_INTENT_PARAM)\b/g)) add(m[1], file);
+  }
+  return found;
+}
+
+test('every query parameter a page reads is a stated reader input or a choice from its own controls', async () => {
+  const inputs = (facts.READER_INPUT_ADDRESSES ?? []) as { param: string }[];
+  assert.ok(inputs.length > 0, 'privacy-facts.ts exports no READER_INPUT_ADDRESSES');
+  const { SIGN_IN_INTENT_PARAM } = await import(pathToFileURL(path.join(SRC, 'lib', 'sign-in-intent.ts')).href);
+  const found = pageQueryParams();
+  if (found.has('SIGN_IN_INTENT_PARAM')) {
+    found.set(SIGN_IN_INTENT_PARAM, found.get('SIGN_IN_INTENT_PARAM')!);
+    found.delete('SIGN_IN_INTENT_PARAM');
+  }
+  assert.ok(found.has('q') && found.has('tab'), `the scan found ${[...found.keys()].join(', ') || 'nothing'}; it is not reading the tree`);
+  const stated = new Set(inputs.map((entry) => entry.param));
+  const unclassified = [...found.keys()].filter((param) => !stated.has(param) && !CHOICE_PARAMS.has(param));
+  assert.deepEqual(unclassified, [], `query parameters no list accounts for: ${unclassified.map((p) => `${p} (${found.get(p)!.join(', ')})`).join('; ')}`);
+  const unread = [...stated, ...CHOICE_PARAMS].filter((param) => !found.has(param));
+  assert.deepEqual(unread, [], `listed parameters no page reads: ${unread.join(', ')}`);
+});
+
+test('the executor statements say the notebook sent to run includes the question, and the synthesizer bears it out', async () => {
+  assert.equal(typeof facts.NOTEBOOK_CARRIES_QUESTION, 'string', 'privacy-facts.ts exports no NOTEBOOK_CARRIES_QUESTION');
+  for (const [config, id] of [
+    [{}, 'recipient-executor-vercel-sandbox'],
+    [{ EXECUTOR_DRIVER: 'container' }, 'recipient-executor-container'],
+    [{ EXECUTOR_DRIVER: 'lambda' }, 'recipient-executor-lambda'],
+  ] as const) {
+    const executor = statementOf(render(config), id);
+    assert.ok(executor?.text.includes(facts.NOTEBOOK_CARRIES_QUESTION), `${id}: the question is not stated`);
+  }
+  const { synthesizeNotebook } = await import(pathToFileURL(path.join(SRC, 'lib', 'notebook-author', 'synthesize.ts')).href);
+  const question = 'WF-QUESTION-CANARY-how many permits in 2026';
+  const out = synthesizeNotebook({
+    query: question,
+    defaultPortal: 'data.example.test',
+    modelName: 'fixture/model',
+    modelAccess: 'fixture',
+    finalAnswer: 'An answer that does not repeat it.',
+    toolCalls: [],
+    generatedAt: '2026-10-18T00:00:00.000Z',
+  });
+  assert.ok(JSON.stringify(out.notebook).includes(question), 'the notebook the synthesizer builds does not carry the question');
+  // The route builds the notebook from the question as asked, before any
+  // visibility exists: the publish dialog is reached only after the run.
+  const route = fs.readFileSync(path.join(SRC, 'app', 'api', 'query-notebook', 'route.ts'), 'utf8');
+  assert.match(route, /synthesizeNotebook\(\{\s*query:\s*body\.query,/, 'query-notebook no longer builds the notebook from the question as asked');
+  assert.doesNotMatch(route, /promptVisibility|hash_only/, 'query-notebook now reads a visibility; the statement needs a caveat');
+});
+
+test("the page states a published record's creator attribution, and the list builder bears it out", async () => {
+  assert.equal(typeof facts.CREATOR_ATTRIBUTION, 'string', 'privacy-facts.ts exports no CREATOR_ATTRIBUTION');
+  const withDb = render({ DATABASE_URL: 'fixture', GITHUB_CLIENT_ID: 'fixture', GITHUB_CLIENT_SECRET: 'fixture' });
+  assert.equal(statementOf(withDb, 'creator-attribution')?.text, facts.CREATOR_ATTRIBUTION);
+  assert.equal(statementOf(RENDERED.full, 'creator-attribution'), undefined, 'seal-only: the attribution of a public record is stated, but nothing is public');
+  const { buildRecordListItems } = await import(pathToFileURL(path.join(SRC, 'lib', 'evidence', 'record-list.ts')).href);
+  const [item] = buildRecordListItems(
+    [{ id: 'r', slug: 's', title: 't', summary: 'x', model: 'm', verificationStatus: 'unverified', withdrawnAt: null, reinstatedAt: null, createdAt: new Date(), creatorId: 'c' }],
+    { creators: new Map([['c', { displayName: 'WF-CREATOR-NAME' }]]), attestationCounts: null },
+  );
+  assert.equal(item.creatorName, 'WF-CREATOR-NAME', 'the public list does not carry the creator name');
+});
+
+test('the page lists the device-client names, API token names and attestation text the site keeps, each pinned', async () => {
+  assert.ok(Array.isArray(facts.ALSO_KEPT_ITEMS), 'privacy-facts.ts exports no ALSO_KEPT_ITEMS');
+  const kept = statementOf(RENDERED.full, 'also-kept');
+  assert.ok(kept, 'full: no "also-kept" statement');
+  for (const item of facts.ALSO_KEPT_ITEMS as string[]) assert.ok(kept.text.includes(item), `"${item}" is not on the page`);
+  assert.ok(kept.text.includes(facts.ATTESTATION_TEXT_IS_SERVED));
+  assert.equal(statementOf(RENDERED.default, 'also-kept'), undefined, 'default: no database, yet the list renders');
+  const { getTableColumns } = await import('drizzle-orm');
+  const schema = await import(pathToFileURL(path.join(SRC, 'lib', 'db', 'schema.ts')).href);
+  for (const [table, columns] of [
+    ['deviceCodes', ['clientName']],
+    ['apiTokens', ['name', 'scope', 'lastUsedAt']],
+    ['attestationNodes', ['payload']],
+  ] as const) {
+    const present = Object.keys(getTableColumns(schema[table]));
+    for (const column of columns) assert.ok(present.includes(column), `${table}.${column} is gone; the statement names it`);
+  }
+  // The text reaches the signed attestation: a lifecycle reason in the node,
+  // a review's body in its payload.
+  process.env.PUBLISHER_KEY_ID = 'fixture';
+  try {
+    const { buildAttestationNode, ATTESTATION_WITHDRAWS } = await import(pathToFileURL(path.join(SRC, 'lib', 'evidence', 'attestation.ts')).href);
+    const { node } = buildAttestationNode({
+      type: ATTESTATION_WITHDRAWS,
+      targetNodeId: 'a'.repeat(64),
+      signer: { bindingTier: 'self-asserted', identifier: 'fixture.invalid', displayName: 'Fixture' },
+      reason: 'WF-REASON-CANARY',
+    });
+    assert.ok(JSON.stringify(node).includes('WF-REASON-CANARY'), 'a withdrawal reason does not reach the signed node');
+  } finally {
+    delete process.env.PUBLISHER_KEY_ID;
+  }
+  const { buildExpertAttestationPayload } = await import(pathToFileURL(path.join(SRC, 'lib', 'evidence', 'expert-attestation.ts')).href);
+  const payload = buildExpertAttestationPayload(
+    { body: 'WF-REVIEW-CANARY', expertise: 'fixture', rating: 'neutral' },
+    { dbUserId: 'u', githubId: 'k', displayName: 'n', githubProfileUrl: 'https://example.test/n' },
+    null,
+    '2026-10-18T00:00:00.000Z',
+  );
+  assert.ok(JSON.stringify(payload).includes('WF-REVIEW-CANARY'), "a review's body does not reach its signed payload");
+});
+
+test("the operator's-to-state list names what the hosting platform keeps of notebook and data-source runs", () => {
+  const items = facts.OPERATOR_STATES_ITEMS as string[];
+  assert.ok(
+    items.some((item) => /notebook run/.test(item) && /data source/.test(item) && /hosting platform/.test(item)),
+    "the operator's-to-state list does not name the platform's keeping of notebook and data-source runs",
+  );
+});
+
+test("the sealed-record sentence says the record's fingerprint can still be looked up", () => {
+  assert.equal(typeof facts.SEALED_FINGERPRINT_LOOKUP, 'string', 'privacy-facts.ts exports no SEALED_FINGERPRINT_LOOKUP');
+  for (const name of ['default', 'full']) {
+    const sealed = statementOf(RENDERED[name], 'seal-only');
+    assert.ok(sealed?.text.includes(facts.SEALED_FINGERPRINT_LOOKUP), `${name}: the fingerprint lookup is not stated`);
   }
 });
 

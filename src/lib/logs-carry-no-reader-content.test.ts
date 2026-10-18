@@ -33,11 +33,15 @@
 //      `message:`, `stack:` and the fixture's own fields must be absent by
 //      NAME, not merely free of this run's canary.
 //
-// The fifth, `src/app/api/evidence/route.ts:424-426`, is read as SOURCE and is
-// the file's stated blind spot: reaching that line means a successful publish,
-// which needs a database, object storage, a signing key and the publication
-// gate. What it logs is an account id rather than a reader's words, and the
-// assertion below is over the text of that one call.
+// The fifth, the deprecated cookie-auth publish log in
+// `src/app/api/evidence/route.ts` (`console.log('[api/evidence] cookie-auth
+// publish (deprecated path)')`, at `:526` when #516 WF re-measured it), is read
+// as SOURCE and is the file's stated blind spot: reaching that line means a
+// successful publish, which needs a database, object storage, a signing key
+// and the publication gate. It logs a fixed string and no account id (#503
+// removed the id it used to carry), and the assertion below is over the text
+// of that one call, so an account id put back fails it. The route's two other
+// console lines (`:488`, `:532` then) log only `errorLogFacts(...)`.
 //
 // HOW THE ROUTE IS DRIVEN WITHOUT A SANDBOX OR A CLI FLAG. `npm test` is
 // `node --test` over modules, and this repository has no route-handler

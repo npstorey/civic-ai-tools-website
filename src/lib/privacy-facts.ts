@@ -55,6 +55,7 @@ import { isSigningConfigured } from './evidence/unsigned-tier.ts';
 import { ORPHAN_GRACE_MS } from './evidence/blob-gc.ts';
 import { buildMcpRegistry, configuredAddressForSource, readMcpEnvFromProcess } from './mcp/registry.ts';
 import { COMPARISON_STORAGE_KEY, MODE_STORAGE_KEY } from './query-presentation.ts';
+import { isOutboundProxyConfigured } from './outbound-proxy.ts';
 
 // --- The statement shape ------------------------------------------------------
 
@@ -142,6 +143,7 @@ export const OPERATOR_STATES_ITEMS: readonly string[] = [
   'how long the operator and each service named on this page keep what they receive',
   "the operator's account settings with the AI model service, including whether that service may keep or learn from what it receives",
   'what the hosting platform records about each visit, such as network addresses',
+  'what the hosting platform keeps of each notebook run and each data source this site runs on it, including their error messages',
   'any legal position',
 ];
 
@@ -161,6 +163,58 @@ export const HASH_ONLY_CHOICE_LABEL = 'Hash only';
 
 /** A record's title, in the words the publish dialog states beside the title field (pinned by the same test). */
 export const RECORD_TITLE_IS_PUBLIC = 'The title is public and becomes the record’s address.';
+
+/**
+ * What a published record shows about its creator. The record page renders
+ * the account's display name, linked to its profile address when there is
+ * one (`src/app/(app)/evidence/[slug]/page.tsx`); the public list carries the
+ * name (`buildRecordListItems`). The record-page creator test renders the page
+ * and the page test drives the list builder; each fails when this differs.
+ */
+export const CREATOR_ATTRIBUTION =
+  'A record you publish publicly shows your name, as your sign-in provider gives it, and a link to your profile with that provider, ' +
+  'to anyone who opens it. The public list of records shows your name.';
+
+/** The lead of the list of what else the site keeps for a signed-in account. */
+export const ALSO_KEPT = 'The site also keeps:';
+
+/**
+ * Each item is a column the page test pins: `deviceCodes.clientName`;
+ * `apiTokens.name`, `.scope` and `.lastUsedAt`; and the text an attestation
+ * carries (`attestationNodes.payload`, a withdrawal or reinstatement reason;
+ * an expert review's body, in its stored package).
+ */
+export const ALSO_KEPT_ITEMS: readonly string[] = [
+  'the name a program gives itself when you approve it to sign in for you from another device, such as a command-line tool',
+  'the name you give each API token (a key a program uses to publish for you), with what it is allowed to do and when it was last used',
+  'the text you write when you withdraw or reinstate a record, or add a review to one',
+];
+
+/**
+ * Where an attestation's text goes. A withdrawal or reinstatement reason is in
+ * the signed node `buildAttestationNode` builds, which the commitment route
+ * carries in the record's public proof; a review's body is in the signed
+ * package `buildExpertAttestationPayload` builds, served by the record's
+ * attestation package route. The page test drives both builders.
+ */
+export const ATTESTATION_TEXT_IS_SERVED =
+  'That text becomes part of a signed attestation (a signed statement about the record) that this site serves publicly: ' +
+  "a withdrawal or reinstatement reason with the record's public proof, which anyone can look up, and a review with the record.";
+
+/**
+ * What stays public about a sealed record, by design (ADR-0010 §4 to §6): the
+ * commitment route answers an unauthenticated request, by the record's
+ * address or its fingerprint, with the fingerprint (`buildCommitmentView`
+ * passes `packageHash` through on the redacted view). The sealed-record test
+ * drives the route and fails when the fingerprint is absent.
+ */
+export const SEALED_FINGERPRINT_LOOKUP = 'though anyone who has its address can still look up its fingerprint';
+
+const SEALED_FINGERPRINT_TRACES: Trace[] = [
+  c('SEALED_FINGERPRINT_LOOKUP'),
+  'const:src/app/api/evidence/[slug]/commitment/route.ts#GET',
+  'const:src/lib/evidence/commitment.ts#buildCommitmentView',
+];
 
 /** A transparency log's defining property. */
 export const TRANSPARENCY_LOG_PERMANENCE =
@@ -231,6 +285,8 @@ export interface AnalyticsRecipient {
   reaches: string;
   /** What the service says about itself, as page text: the vendor's facts, with their page and read date. */
   says: Segment[];
+  /** What the service says it keeps of a page address, search terms included, with its page and read date. */
+  addressKept: Segment[];
   /** How a reader can object. */
   objection: Segment[];
   /** What is not sent when the browser does not load the script. */
@@ -263,6 +319,13 @@ export const ANALYTICS_RECIPIENTS: Readonly<Record<AnalyticsService, AnalyticsRe
       ' and ',
       { link: 'https://support.google.com/analytics/answer/11397207', text: 'cookie' },
       ` pages, read ${VENDOR_READ_DATE}).`,
+    ],
+    addressKept: [
+      "Google says the page address its tag sends by default is the page's full address, leaving out only any part after ",
+      { code: '#' },
+      ', so it includes those words (its ',
+      { link: 'https://developers.google.com/analytics/devguides/collection/ga4/views?client_type=gtag', text: 'page views' },
+      ` guide, read ${VENDOR_READ_DATE}).`,
     ],
     objection: [
       "To object, install Google's opt-out add-on from ",
@@ -297,6 +360,17 @@ export const ANALYTICS_RECIPIENTS: Readonly<Record<AnalyticsService, AnalyticsRe
         sentence:
           'The add-on prevents the Google Analytics JavaScript (gtag.js, analytics.js) that run on websites from sharing information about your visit activity with Google Analytics.',
       },
+      {
+        // The `page_location` row of the page's table: default `location.href`.
+        url: 'https://developers.google.com/analytics/devguides/collection/ga4/views?client_type=gtag',
+        read: VENDOR_READ_DATE,
+        sentence: 'The URL of the page.',
+      },
+      {
+        url: 'https://developers.google.com/analytics/devguides/collection/ga4/views?client_type=gtag',
+        read: VENDOR_READ_DATE,
+        sentence: 'The default value excludes the fragment portion of the URL.',
+      },
     ],
   },
   plausible: {
@@ -307,6 +381,14 @@ export const ANALYTICS_RECIPIENTS: Readonly<Record<AnalyticsService, AnalyticsRe
       'Plausible says it sets no cookies and stores no raw network address (its ',
       { link: 'https://plausible.io/data-policy', text: 'data policy' },
       `, read ${VENDOR_READ_DATE}).`,
+    ],
+    addressKept: [
+      'Plausible says that of a page address it keeps the site name and the path, and discards the query part, which holds those words, ' +
+        'except the parts it uses to tell where a visit came from, such as a campaign or a referring site (its ',
+      { link: 'https://plausible.io/data-policy', text: 'data policy' },
+      ' and ',
+      { link: 'https://plausible.io/docs/custom-query-params', text: 'query parameters' },
+      ` pages, read ${VENDOR_READ_DATE}).`,
     ],
     objection: [
       'To object, use an ad blocker or other content blocker that blocks plausible.io, or set the browser flag Plausible describes at ',
@@ -321,6 +403,17 @@ export const ANALYTICS_RECIPIENTS: Readonly<Record<AnalyticsService, AnalyticsRe
         url: 'https://plausible.io/docs/excluding-localstorage',
         read: VENDOR_READ_DATE,
         sentence: 'To prevent counting your visits, you can set a special localStorage flag in the browser.',
+      },
+      { url: 'https://plausible.io/data-policy', read: VENDOR_READ_DATE, sentence: 'For page URLs, we store the hostname and path.' },
+      {
+        url: 'https://plausible.io/data-policy',
+        read: VENDOR_READ_DATE,
+        sentence: 'Query parameters are discarded except for supported campaign and referral parameters.',
+      },
+      {
+        url: 'https://plausible.io/docs/custom-query-params',
+        read: VENDOR_READ_DATE,
+        sentence: 'Other than the source attribution query parameters listed above, Plausible strips all other query parameters for privacy purposes.',
       },
     ],
   },
@@ -379,6 +472,12 @@ function list(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
+const NOTEBOOK_SENT_TRACES: Trace[] = [
+  c('NOTEBOOK_CARRIES_QUESTION'),
+  'const:src/lib/notebook-author/synthesize.ts#synthesizeNotebook',
+  'const:src/lib/notebook-author/prompt.ts#buildCell0Source',
+];
+
 function notebookTraces(): Trace[] {
   return ['env:EXECUTOR_DRIVER', 'const:src/lib/sandbox/execute.ts#resolveExecutorDriverName'];
 }
@@ -387,6 +486,61 @@ function notebookTraces(): Trace[] {
 export const NOTEBOOK_PURPOSE =
   'In notebook mode, the AI model writes a notebook (a short program) to answer your question, and the site runs it. ' +
   'The notebook requests its data from the public data portals it names.';
+
+/**
+ * What the notebook sent to run carries. It is built when the question is
+ * answered (`synthesizeNotebook`, called by `src/app/api/query-notebook/route.ts`),
+ * and its first cell states the question (`buildCell0Source`). The visibility a
+ * reader chooses is chosen later, at publish, so it does not change this. The
+ * page test drives the synthesizer and fails when the question is absent.
+ */
+export const NOTEBOOK_CARRIES_QUESTION = "The notebook sent to run includes your question's text.";
+
+/**
+ * The page addresses that carry what a reader types, in the part after `?`.
+ * The page test reads every query parameter the pages read, and fails when one
+ * is neither here nor in its list of parameters that carry only a choice from
+ * the page's own controls; and when an entry here is read by no page.
+ */
+export const READER_INPUT_ADDRESSES: readonly { path: string; param: string; what: string }[] = [
+  { path: '/directory', param: 'q', what: 'a search on the directory page' },
+  { path: '/auth/device', param: 'user_code', what: 'the code you enter to approve a sign-in from another device' },
+];
+
+/**
+ * What the egress proxy does not carry, keyed by the row of docs/deploy.md's
+ * outbound-kinds table it belongs to. The recipients guard fails when a row's
+ * last column ("Honours the proxy variables") does not begin with "yes" and
+ * the row has no entry here, and when an entry names no row. Two "yes" rows
+ * have an entry as well: the managed-sandbox rows, whose API calls go through
+ * the proxy while the code running inside the sandbox reaches the network
+ * from the provider's side (the guide's prose under that table says so, and
+ * `src/lib/mcp/hosting/bridge-source.ts` passes no proxy variable in). A row's
+ * exception is stated only when that row's traffic is configured here (its
+ * `RECIPIENT_STATEMENTS` entry returns a statement).
+ */
+export const PROXY_EXCEPTIONS: Readonly<Record<string, string>> = {
+  'Database, `DB_DRIVER=node-postgres`': 'the connection to the database, which is not a web request',
+  'Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox`':
+    "the notebook's own requests for data, which leave from the Vercel Sandbox it runs in",
+  "Hosted source (`NYC_CHARTER_HOSTING=sandbox`): its sandbox's lifecycle":
+    "a hosted data source's own requests for its data, which leave from the Vercel Sandbox it runs in",
+  'Notebook execution, `EXECUTOR_DRIVER=container`':
+    "the site's instructions to run each notebook, which stay on the operator's server (the notebook's own requests for data do go through the proxy)",
+  'Notebook execution, `EXECUTOR_DRIVER=lambda`':
+    "the notebook's own requests for data, which go through whatever proxy is set on the AWS Lambda function, which this site cannot read",
+};
+
+/** The exception every proxied instance has: the operator's `NO_PROXY` list and the loopback addresses. */
+export const PROXY_ALWAYS_EXEMPT = 'requests to addresses the operator has exempted from the proxy, and to this server itself';
+
+/** The lead of the proxy statement. */
+export const PROXY_STATEMENT =
+  'The operator has set this site to send its requests to other services through a proxy: a server the operator chooses, which passes each request on. ' +
+  'So everything this section says the site sends, it sends through that proxy, except:';
+
+/** After the proxy statement's list, when analytics is configured. */
+export const PROXY_NOT_ANALYTICS = 'Analytics is loaded by your browser, not by this site, so it does not go through this proxy.';
 
 // --- The recipients: one key per outbound-kinds row ---------------------------
 
@@ -559,8 +713,8 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
       ? [
           statement(
             'recipient-executor-vercel-sandbox',
-            [`${NOTEBOOK_PURPOSE} Each notebook runs in a Vercel Sandbox, a short-lived computer the site starts for the run.`],
-            [...notebookTraces(), c('NOTEBOOK_PURPOSE')],
+            [`${NOTEBOOK_PURPOSE} ${NOTEBOOK_CARRIES_QUESTION} Each notebook runs in a Vercel Sandbox, a short-lived computer the site starts for the run.`],
+            [...notebookTraces(), c('NOTEBOOK_PURPOSE'), ...NOTEBOOK_SENT_TRACES],
           ),
         ]
       : [],
@@ -593,8 +747,8 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
       ? [
           statement(
             'recipient-executor-container',
-            [`${NOTEBOOK_PURPOSE} Each notebook runs in a container on the operator's own server.`],
-            [...notebookTraces(), c('NOTEBOOK_PURPOSE')],
+            [`${NOTEBOOK_PURPOSE} ${NOTEBOOK_CARRIES_QUESTION} Each notebook runs in a container on the operator's own server.`],
+            [...notebookTraces(), c('NOTEBOOK_PURPOSE'), ...NOTEBOOK_SENT_TRACES],
           ),
         ]
       : [],
@@ -605,8 +759,8 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
     return [
       statement(
         'recipient-executor-lambda',
-        [`${NOTEBOOK_PURPOSE} Each notebook runs in an AWS Lambda function, a program Amazon's cloud runs on demand for the operator${region ? `, in the ${region} region` : ''}.`],
-        [...notebookTraces(), 'env:EXECUTOR_LAMBDA_REGION', c('NOTEBOOK_PURPOSE')],
+        [`${NOTEBOOK_PURPOSE} ${NOTEBOOK_CARRIES_QUESTION} Each notebook runs in an AWS Lambda function, a program Amazon's cloud runs on demand for the operator${region ? `, in the ${region} region` : ''}.`],
+        [...notebookTraces(), 'env:EXECUTOR_LAMBDA_REGION', c('NOTEBOOK_PURPOSE'), ...NOTEBOOK_SENT_TRACES],
       ),
     ];
   },
@@ -773,6 +927,40 @@ function whatIsStored(): Statement[] {
         ['Every record you publish is stored with your account as its creator.'],
       ),
     );
+    if (!isSealOnly()) {
+      out.push(
+        statement(
+          'creator-attribution',
+          [CREATOR_ATTRIBUTION],
+          [
+            'env:DATABASE_URL',
+            'env:SITE_SEAL_ONLY',
+            c('CREATOR_ATTRIBUTION'),
+            'const:src/lib/db/schema.ts#users',
+            'const:src/lib/evidence/record-list.ts#buildRecordListItems',
+          ],
+        ),
+      );
+    }
+    out.push(
+      listStatement(
+        'also-kept',
+        [ALSO_KEPT],
+        ALSO_KEPT_ITEMS.map((item): Segment[] => [item]),
+        [
+          'env:DATABASE_URL',
+          c('ALSO_KEPT'),
+          c('ALSO_KEPT_ITEMS'),
+          c('ATTESTATION_TEXT_IS_SERVED'),
+          'const:src/lib/db/schema.ts#deviceCodes',
+          'const:src/lib/db/schema.ts#apiTokens',
+          'const:src/lib/db/schema.ts#attestationNodes',
+          'const:src/lib/evidence/attestation.ts#buildAttestationNode',
+          'const:src/lib/evidence/expert-attestation.ts#buildExpertAttestationPayload',
+        ],
+        [ATTESTATION_TEXT_IS_SERVED],
+      ),
+    );
   }
   out.push(
     statement(
@@ -808,16 +996,16 @@ function whatIsStored(): Statement[] {
     isSealOnly()
       ? statement(
           'seal-only',
-          ['This site seals records only: a record you publish is stored and signed, but never listed or shown publicly.'],
-          ['env:SITE_SEAL_ONLY'],
+          [`This site seals records only: a record you publish is stored and signed, but never listed or shown publicly, ${SEALED_FINGERPRINT_LOOKUP}.`],
+          ['env:SITE_SEAL_ONLY', ...SEALED_FINGERPRINT_TRACES],
         )
       : statement(
           'seal-only',
           [
             'A record you publish publicly is listed on this site and anyone can read it. ' +
-              'A record you seal is stored and signed, but not listed or shown publicly.',
+              `A record you seal is stored and signed, but not listed or shown publicly, ${SEALED_FINGERPRINT_LOOKUP}.`,
           ],
-          ['env:SITE_SEAL_ONLY'],
+          ['env:SITE_SEAL_ONLY', ...SEALED_FINGERPRINT_TRACES],
         ),
   );
   const graceHours = ORPHAN_GRACE_MS / (60 * 60 * 1000);
@@ -859,17 +1047,52 @@ function recipients(analytics: AnalyticsConfig | null): Statement[] {
           `Your browser loads ${service.name} from `,
           { code: service.host },
           `, which records the pages you visit on this site. A published record's address includes its title, ` +
-            `so the title of any record you open reaches ${service.reaches} too. `,
+            `so the title of any record you open reaches ${service.reaches} too. ` +
+            'Page addresses also carry what you type into some pages: ',
+          ...readerInputAddresses(),
+          '. ',
+          ...service.addressKept,
+          ' ',
           ...service.says,
           ' ',
           ...service.objection,
           ` If your browser does not load that script, nothing is sent to ${service.notSentTo}.`,
         ],
-        ['env:NEXT_PUBLIC_ANALYTICS_SERVICE', 'env:NEXT_PUBLIC_ANALYTICS_ID', 'env:NEXT_PUBLIC_GA_MEASUREMENT_ID', c('ANALYTICS_RECIPIENTS')],
+        ['env:NEXT_PUBLIC_ANALYTICS_SERVICE', 'env:NEXT_PUBLIC_ANALYTICS_ID', 'env:NEXT_PUBLIC_GA_MEASUREMENT_ID', c('ANALYTICS_RECIPIENTS'), c('READER_INPUT_ADDRESSES')],
+      ),
+    );
+  }
+  if (isOutboundProxyConfigured()) {
+    const exceptions = Object.entries(PROXY_EXCEPTIONS)
+      .filter(([kind]) => (RECIPIENT_STATEMENTS[kind]?.(ctx).length ?? 0) > 0)
+      .map(([, text]) => text);
+    out.push(
+      listStatement(
+        'recipient-proxy',
+        [PROXY_STATEMENT],
+        [PROXY_ALWAYS_EXEMPT, ...exceptions].map((item): Segment[] => [item]),
+        [
+          'env:HTTP_PROXY',
+          'env:HTTPS_PROXY',
+          'env:NO_PROXY',
+          'const:src/lib/outbound-proxy.ts#isOutboundProxyConfigured',
+          'const:src/lib/outbound-proxy.ts#DEFAULT_NO_PROXY_HOSTS',
+          c('PROXY_STATEMENT'),
+          c('PROXY_ALWAYS_EXEMPT'),
+          c('PROXY_EXCEPTIONS'),
+          ...(analytics !== null ? [c('PROXY_NOT_ANALYTICS'), 'env:NEXT_PUBLIC_ANALYTICS_SERVICE' as Trace] : []),
+        ],
+        analytics !== null ? [PROXY_NOT_ANALYTICS] : undefined,
       ),
     );
   }
   return out;
+}
+
+/** "a search on the directory page (`/directory?q=…`) and …", as page segments. */
+function readerInputAddresses(): Segment[] {
+  const parts = READER_INPUT_ADDRESSES.map((entry): Segment[] => [`${entry.what} (`, { code: `${entry.path}?${entry.param}=…` }, ')']);
+  return parts.flatMap((part, i) => [...(i === 0 ? [] : [i === parts.length - 1 ? ' and ' : ', ']), ...part]);
 }
 
 function cannotTell(): Statement[] {
