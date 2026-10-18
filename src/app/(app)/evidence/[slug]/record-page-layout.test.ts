@@ -820,3 +820,62 @@ test('P2 fixtures: the old-format records are ones the bundle route refuses', ()
   for (const c of [OLD, SKELETON]) assert.notEqual(c.record.contentProfile, 'datHere');
   assert.ok(fs.existsSync(path.join(REPO, 'package.json')));
 });
+
+// --- LAYOUT-WEB W2 P2 (4): section D is unchanged ---------------------------------
+//
+// Section D, inside the disclosure, keeps the signed per-call fields raw (W1
+// ruling D6): the step view outside it is new, D is not. D's markup for the
+// records below is compared, byte for byte, with
+// `record-page-section-d.golden.txt`.
+//
+// THE GOLDEN WAS NOT WRITTEN BY HAND. It is this block's output on the base
+// (website main 662099b): the base tree, extracted with `git archive`, ran this
+// file with `SECTION_D_ACTUAL_OUT` set, and the markup it wrote is the golden.
+//
+// THE ONE INTENDED DIFFERENCE is each call's label, which W2 P2 moves from the
+// signed `tool` (`socrata__get_data`) to the upstream name. The label's text is
+// normalized to `[label]` on both sides, so the golden pins everything else in
+// D, and the label is asserted on its own (below, once it changes).
+//
+// THE FIXTURES CAN FAIL. The A-G record with its tools aliased (a returned
+// call with dataset, portal and an elapsed; a rejected call on a dataset no
+// other call touches; an unrecorded `search` with neither, whose duration is
+// shown raw), and the old-format record (no outcome stated, one entry without
+// a duration).
+
+/** The A-G fixture as a record written after the tools were aliased (ADR-0033). */
+const ALIASED_AGF_PACKAGE = (() => {
+  const pkg = structuredClone(AGF_PACKAGE) as typeof AGF_PACKAGE;
+  pkg.queries = pkg.queries.map((q) => ({ ...q, tool: `socrata__${q.tool}` })) as typeof pkg.queries;
+  return pkg;
+})();
+const ALIASED_AGF: Case = { ...AGF, pkg: ALIASED_AGF_PACKAGE };
+const HTML_ALIASED_AGF = await render(ALIASED_AGF);
+
+/** Section D's markup, from its heading to the next section's. */
+function sectionD(html: string): string {
+  return html.slice(at(html, heading('D · Deliberative trace')), at(html, heading('E · Answer notebook')));
+}
+
+/** D with each call's label text replaced by `[label]` (the one intended difference). */
+function normalizeDLabels(d: string): string {
+  return d.replace(/(<div style="font-family:monospace;[^"]*">)([^<]*)(<\/div>)/g, '$1[label]$3');
+}
+
+const D_ACTUAL = [
+  ['aliased A-G record', HTML_ALIASED_AGF],
+  ['old-format record', HTML.old],
+].map(([name, html]) => `=== ${name} ===\n${normalizeDLabels(sectionD(html))}\n`).join('');
+if (process.env.SECTION_D_ACTUAL_OUT) fs.writeFileSync(process.env.SECTION_D_ACTUAL_OUT, D_ACTUAL);
+
+test('W2 P2 (4) section D renders the same markup as on the base, its labels normalized', () => {
+  const goldenPath = path.join(HERE, 'record-page-section-d.golden.txt');
+  assert.ok(fs.existsSync(goldenPath), `no golden at ${goldenPath}; it is captured on the base, never written by hand`);
+  const golden = fs.readFileSync(goldenPath, 'utf8');
+  const calls = ALIASED_AGF_PACKAGE.queries.length + OLD_PACKAGE.queries.length;
+  assert.equal(occurrences(D_ACTUAL, '[label]').length, calls, 'one normalized label per call: the normalization still finds every label');
+  if (D_ACTUAL === golden) return;
+  let i = 0;
+  while (i < golden.length && golden[i] === D_ACTUAL[i]) i++;
+  assert.fail(`section D differs from the golden at character ${i}:\n  golden: …${golden.slice(Math.max(0, i - 60), i + 80)}…\n  actual: …${D_ACTUAL.slice(Math.max(0, i - 60), i + 80)}…`);
+});

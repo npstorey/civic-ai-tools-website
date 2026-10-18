@@ -369,3 +369,64 @@ test('P1 (4) read from the source: the line is written by describeRefusedRequest
   );
   assert.doesNotMatch(source, /did not complete/, 'the component writes no refusal sentence of its own');
 });
+
+// --- LAYOUT-WEB W2 P2 (4): section D is unchanged ---------------------------------
+//
+// Section D, inside the disclosure, keeps the raw recorded fields: the step view
+// outside it is new, D is not. D's markup for the fixture below is compared,
+// byte for byte, with `chat-notebook-output-section-d.golden.txt`.
+//
+// THE GOLDEN WAS NOT WRITTEN BY HAND. It is this block's output on the base
+// (website main 662099b): the base tree, extracted with `git archive`, ran this
+// file with `SECTION_D_ACTUAL_OUT` set, and the markup it wrote is the golden.
+//
+// THE ONE INTENDED DIFFERENCE is each call's label, which W2 P2 moves from the
+// name the model called (`socrata__get_data`) to the upstream name. The label's
+// text is normalized to `[label]` on both sides, so the golden pins everything
+// else in D, and the label is asserted on its own (below, once it changes).
+//
+// THE FIXTURE CAN FAIL. Four calls, each on its own branch of D's line: an
+// aliased call with an operation type, a reason and a returned row count; a
+// rejected call (`failed`, `failureKind`, an elapsed); a `fetch` whose reason
+// names an identifier (the heading falls back to the call's number) and whose
+// outcome is unrecorded (no outcome line); a tool with no operation type.
+
+const D_CALLS = [
+  {
+    name: 'socrata__get_data', operationType: 'query', reason: 'to aggregate 311 Service Requests by borough',
+    args: { dataset_id: 'erm2-nwe9', group: 'borough' }, resultSummary: { rows: 5, columns: 2 }, duration_ms: 410,
+  },
+  {
+    name: 'socrata__get_data', operationType: 'query', reason: 'to filter qq7x-k2rd records',
+    args: { dataset_id: 'qq7x-k2rd', where: "issued > '2026-01-01'" }, failed: true, failureKind: 'timeout', duration_ms: 1200,
+  },
+  {
+    name: 'socrata__fetch', reason: 'to look up record:data.example.org:abcd-1234:7',
+    args: { id: 'record:data.example.org:abcd-1234:7' },
+  },
+  { name: 'nyc_charter__get_section', reason: 'to call get_section', args: { section: '1' } },
+];
+
+/** Section D's markup, from its heading to the next section's. */
+function sectionD(html: string): string {
+  return html.slice(at(html, heading('D · Deliberative trace')), at(html, heading('E · Answer notebook')));
+}
+
+/** D with each call's label text replaced by `[label]` (the one intended difference). */
+function normalizeDLabels(d: string): string {
+  return d.replace(/(<div style="font-family:monospace;[^"]*">)([^<]*)(<\/div>)/g, '$1[label]$3');
+}
+
+const D_ACTUAL = normalizeDLabels(sectionD(render(D_CALLS)));
+if (process.env.SECTION_D_ACTUAL_OUT) fs.writeFileSync(process.env.SECTION_D_ACTUAL_OUT, D_ACTUAL);
+
+test('W2 P2 (4) section D renders the same markup as on the base, its labels normalized', () => {
+  const goldenPath = path.join(HERE, 'chat-notebook-output-section-d.golden.txt');
+  assert.ok(fs.existsSync(goldenPath), `no golden at ${goldenPath}; it is captured on the base, never written by hand`);
+  const golden = fs.readFileSync(goldenPath, 'utf8');
+  assert.equal(occurrences(D_ACTUAL, '[label]').length, D_CALLS.length, 'one normalized label per call: the normalization still finds every label');
+  if (D_ACTUAL === golden) return;
+  let i = 0;
+  while (i < golden.length && golden[i] === D_ACTUAL[i]) i++;
+  assert.fail(`section D differs from the golden at character ${i}:\n  golden: …${golden.slice(Math.max(0, i - 60), i + 80)}…\n  actual: …${D_ACTUAL.slice(Math.max(0, i - 60), i + 80)}…`);
+});
