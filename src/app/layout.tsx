@@ -356,6 +356,12 @@ export default function RootLayout({
                     )}
                   </p>
                 )}
+                {/* Privacy (#516 P7): on every instance and both surfaces.
+                    The page is dual-served, so the relative link resolves on
+                    whichever host renders this footer. */}
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '8px 0 0 0' }}>
+                  <Link href="/privacy">Privacy</Link>
+                </p>
                 {/* Attribution (A2): who runs THIS deployment, or nothing.
                     The unset branch used to render the reference
                     deployment's own authored byline on every surface of
