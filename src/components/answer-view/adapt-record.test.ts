@@ -241,7 +241,7 @@ test('W3 P2 a record whose package cannot be loaded keeps the row’s parts: the
 // --- R7 P4 a2, carried: C's "MCP servers" expression ---------------------------------
 
 test('R7 P4 a2 carried: C’s MCP servers line is each entry’s host, or its raw value when the URL has no host or does not parse', () => {
-  const PURL = 'pkg:npm/%40betanyc/nyc-charter-laws-rules@0.3.1';
+  const PURL = 'pkg:npm/%40example/hosted-source@0.1.0';
   assert.equal(new URL(PURL).host, '', 'premise: the purl parses with an empty host');
   const model = adapter()(input(pkg({
     extensions: {
