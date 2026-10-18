@@ -520,7 +520,10 @@ const W2_EVENTS: Array<Record<string, unknown>> = [
   { type: 'phase_a_answer', content: `${ANSWER_MARKER}: **42** complaints in the window.` },
   { type: 'phase', name: 'B', message: 'Synthesizing notebook…' },
   { type: 'phase', name: 'C', message: 'Executing in sandbox…' },
-  { type: 'notebook', notebook: NOTEBOOK, sandboxId: 'fixture-sandbox', executionDuration_ms: 4200, validation: { ok: true, issues: [] } },
+  // The event's duration is the route's wall clock from C's start to this
+  // event, which includes D's stamping; the notebook's own stamp (4200) is the
+  // sandbox's. They differ here so a row can be seen reading the right one.
+  { type: 'notebook', notebook: NOTEBOOK, sandboxId: 'fixture-sandbox', executionDuration_ms: 4900, validation: { ok: true, issues: [] } },
   { type: 'phase', name: 'D', message: 'Finalizing…' },
   { type: 'phase', name: 'complete', message: 'Done.' },
 ];
@@ -670,4 +673,68 @@ test('W2 P2 (4) section D labels each call by its upstream name and operation ty
   const d = sectionD(render(D_CALLS));
   const labels = [...d.matchAll(/<div style="font-family:monospace;[^"]*">([^<]*)<\/div>/g)].map((m) => m[1]);
   assert.deepEqual(labels, D_CALLS.map((c) => `${upstreamToolName(c.name)}${c.operationType ? ` (${c.operationType})` : ''}`));
+});
+
+// --- LAYOUT-WEB W2 P2 fix 1: the B, C and D closing rows ---------------------------
+//
+// #619 W2 P2 item 1 and design §4.3: after the Phase A steps, the executed
+// run's step view closes with the B, C and D phases, one row each, in order.
+// Each row is named by the phase message the route sent (`phase` events,
+// `query-notebook/route.ts`), its trailing ellipsis dropped — the words
+// `NotebookProgress`'s four rows use — and states only what the run recorded
+// for it: C, the sandbox duration the executed notebook carries (the figure
+// section C states as "Sandbox duration"). B and D state no fact of their own.
+// A phase the stream did not report gets no row.
+
+const CLOSING = ['B', 'C', 'D'];
+const EXECUTION_EXTENSION = (NOTEBOOK.metadata.extensions as Record<string, Record<string, unknown>>)['org.civicaitools.execution'];
+
+/** The closing rows of a step view, each as its markup. */
+function closingRows(view: string): string[] {
+  return occurrences(view, '<div data-part="closing-row"').map((s) => view.slice(s, elementEnd(view, s, 'div')));
+}
+
+const rowText = (row: string) => row.replace(/<!-- -->/g, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+
+test('W2 P2 fix 1: the step view ends with the B, C and D rows, in order, after the last Phase A step', () => {
+  const view = stepView(W2_RUN);
+  const rows = closingRows(view);
+  const reported = W2_EVENTS.filter((e) => e.type === 'phase' && CLOSING.includes(e.name as string));
+  assert.equal(reported.length, 3, 'premise: the fixture reports B, C and D');
+  assert.equal(rows.length, reported.length, `one row per closing phase (found ${rows.length})`);
+
+  const starts = occurrences(view, '<div data-part="closing-row"');
+  const steps = occurrences(view, '<div data-part="step" ');
+  const lastStepEnd = elementEnd(view, steps[steps.length - 1], 'div');
+  assert.ok(lastStepEnd <= starts[0], 'the closing rows follow the last Phase A step');
+  const lastRowEnd = elementEnd(view, starts[starts.length - 1], 'div');
+  assert.equal(view.slice(lastRowEnd).replace(/<\/div>/g, ''), '', 'the step view ends with the D row');
+
+  reported.forEach((event, i) => {
+    const label = (event.message as string).replace(/…$/, '');
+    assert.ok(rowText(rows[i]).startsWith(label), `row ${i + 1} is ${event.name}, "${label}" (found "${rowText(rows[i])}")`);
+  });
+});
+
+test('W2 P2 fix 1: C states the sandbox duration the notebook recorded; B and D state no fact of their own', () => {
+  const rows = closingRows(stepView(W2_RUN));
+  assert.equal(rows.length, 3, `three closing rows (found ${rows.length})`);
+  const [b, c, d] = rows;
+  const recorded = EXECUTION_EXTENSION.executionDuration_ms as number;
+  const event = W2_EVENTS.find((e) => e.type === 'notebook')!.executionDuration_ms as number;
+  assert.notEqual(recorded, event, 'premise: the stamp and the event disagree, so the row can be seen reading one');
+  assert.ok(rowText(c).endsWith(`Sandbox duration ${(recorded / 1000).toFixed(1)}s`), `C states the recorded duration (found "${rowText(c)}")`);
+  assert.ok(!rowText(c).includes(`${(event / 1000).toFixed(1)}s`), 'C does not state the wall time of the event');
+  for (const row of [b, d]) assert.equal(occurrences(row, 'data-part="closing-fact"').length, 0, `no fact on "${rowText(row)}"`);
+});
+
+test('W2 P2 fix 1: a phase the stream did not report has no row, and a duration the notebook did not record is not stated', async () => {
+  const unstamped = structuredClone(NOTEBOOK) as typeof NOTEBOOK;
+  delete (unstamped.metadata.extensions as Record<string, unknown>)['org.civicaitools.execution'];
+  const events = W2_EVENTS
+    .filter((e) => !(e.type === 'phase' && (e.name === 'D' || e.name === 'complete')))
+    .map((e) => (e.type === 'notebook' ? { ...e, notebook: unstamped } : e));
+  const rows = closingRows(stepView(renderRun(await stateAfter(events), W2_INSTANCE)));
+  assert.deepEqual(rows.map((r) => rowText(r)), ['Synthesizing notebook', 'Executing in sandbox']);
+  assert.ok(rows.every((r) => !r.includes('data-part="closing-fact"')), 'no duration is stated when none was recorded');
 });
