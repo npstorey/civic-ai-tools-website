@@ -344,7 +344,19 @@ const DECLARATIONS: { site: string; block: () => string }[] = [
   },
   {
     site: 'useNotebookStream.ts CapturedToolCall (the notebook client’s record)',
-    block: () => extract('CapturedToolCall', sourceOf('./../hooks/useNotebookStream.ts'), /export interface CapturedToolCall \{([\s\S]*?)\n\}/),
+    // Read without its comments, and as fields (LAYOUT-WEB W2 P2). Measured at
+    // 662099b, deleting `failed?: boolean;` left this site green twice over:
+    // the type's doc says "Absent means not recorded as failed", and its
+    // `failureKind?: PhaseAToolCall['failureKind']` names a carrier, which
+    // `carriesTheFailure` then verifies in its place. So the declaration
+    // itself must state each key as a field.
+    block: () => {
+      const body = withoutComments(extract('CapturedToolCall', sourceOf('./../hooks/useNotebookStream.ts'), /export interface CapturedToolCall \{([\s\S]*?)\n\}/));
+      for (const key of ['failed', 'failureKind']) {
+        assert.match(body, new RegExp(`\\b${key}\\??\\s*:`), `CapturedToolCall declares no ${key} field: a publish from the notebook page cannot say a rejected call was rejected.\n${body.trim()}`);
+      }
+      return body;
+    },
   },
   {
     site: 'useNotebookStream.ts phase_a_tool_call case (the fields the hook keeps)',
