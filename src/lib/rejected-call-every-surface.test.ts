@@ -50,7 +50,7 @@
 //     `failed: true` and `failureKind`; a `tool_result`-phase event follows
 //     with the outcome in the reader's words, carrying both keys too. Every
 //     consumer pairs an end to its start by `(phase === 'tool_complete',
-//     message)` — `useStreamingComparison.ts:388-405`, `useLiveTrace.ts:140-
+//     message)` — `applyProgressEvent` in `answer-view/steps.ts`, `useLiveTrace.ts:140-
 //     165`, `bpmn/trace-progress.ts:60-80` — so that pairing works unchanged
 //     and each reads the failure off the entry it already builds. A new wire
 //     phase would widen `ProgressPhase` and `TraceEvent.phase` and duplicate
