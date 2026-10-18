@@ -330,13 +330,17 @@ Be honest if you don't have access to current or real-time data.`;
           // Just the transport. Portal injection moved into the core (#359):
           // done here, it ran after the core had recorded the call and
           // stringified its arguments onto the span, so the span reported no
-          // portal on exactly the calls that had just been given one.
-          callMcpTool,
+          // portal on exactly the calls that had just been given one. Told the
+          // run's selection (R6 W1), so a call to a source it leaves out is
+          // refused before any request, as the prompt and the tools left it out.
+          (name, args) => callMcpTool(name, args, { selection }),
           systemPromptWithMcp,
           callbacks,
           // Non-throwing: a call to a tool no configured server hosts is refused
           // by the transport as one failed call, not thrown out of the loop here.
-          { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: (name) => routedSourceId(name) },
+          // The same configuration and selection as the transport, so a refused
+          // call's span names no source.
+          { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: (name) => routedSourceId(name, configured, selection) },
           { portal, toolTimeoutMs: MCP_TOOL_TIMEOUT_MS },
           // The loop core refuses a call naming another portal as a rejected
           // call (#436, D7); undefined on an unlocked instance.

@@ -254,11 +254,13 @@ test('#258 C4: describeToolFailureForLlm handles the unconfigured kind without l
 // them, because no assertion here depends on the wording of any message.
 
 test('#154: every StreamErrorKind round-trips server -> wire -> render into its own bucket', () => {
-  // Guard the enumerated kinds: an eleventh must be added to
+  // Guard the enumerated kinds: a twelfth must be added to
   // STREAM_ERROR_KINDS deliberately, and the loop below then covers it. Nine
   // at #154 (plus #271's notebook_execution); ten since website#30 P4 split
-  // `model_rate_limited` off `rate_limit`.
-  assert.equal(STREAM_ERROR_KINDS.length, 10, 'the ten classified kinds');
+  // `model_rate_limited` off `rate_limit`; eleven since R6 W1 (#632) added
+  // `not_offered`, a call to a data source the run was not offered, refused
+  // before anything was sent.
+  assert.equal(STREAM_ERROR_KINDS.length, 11, 'the eleven classified kinds');
 
   for (const kind of STREAM_ERROR_KINDS) {
     // `streamErrorPayload` is the exact call the server chokepoint

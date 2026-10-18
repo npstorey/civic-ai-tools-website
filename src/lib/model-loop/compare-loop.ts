@@ -118,9 +118,11 @@ export interface CompareLoopInputs {
    */
   selection?: SourceSelection;
   /**
-   * The tool transport, for tests. Defaults to the live MCP client — the ONLY
-   * seam this factory exposes, and deliberately one level below the loop:
-   * substituting it restates no loop configuration at all.
+   * The tool transport, for tests. Defaults to the live MCP client bound to
+   * `selection` (R6 W1), so a call to a source the selection leaves out is
+   * refused before any request — the ONLY seam this factory exposes, and
+   * deliberately one level below the loop: substituting it restates no loop
+   * configuration at all.
    */
   callTool?: CompareToolTransport;
 }
@@ -131,7 +133,11 @@ export interface CompareLoopInputs {
  * route supplies only what it read off the request.
  */
 export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
-  const { client, endpointModel, requestSettings, prompt, systemPrompt, portal, lockedPortal, configured, selection, callTool = callMcpTool } = inputs;
+  const { client, endpointModel, requestSettings, prompt, systemPrompt, portal, lockedPortal, configured, selection } = inputs;
+  // With no selection, the client itself, as before the selection reached the
+  // dispatch; with one, the same client told the selection.
+  const callTool = inputs.callTool
+    ?? (selection === undefined ? callMcpTool : (name: string, args: Record<string, unknown>) => callMcpTool(name, args, { selection }));
 
   return {
     client,

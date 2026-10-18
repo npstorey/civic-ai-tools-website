@@ -34,6 +34,7 @@ import {
   type DispatchMap,
   type McpRegistryEnv,
   type SourceHosting,
+  type SourceSelection,
 } from '@typedstandards/civic-typed-router';
 import { AmbiguousToolNameError } from './tool-name-refusal.ts';
 
@@ -112,6 +113,11 @@ export interface McpRegistry {
    * one OFFERED source has it). Socrata is offered whether or not its address
    * is set, as in the composed prompt: it is required, so a call to it on an
    * instance without its address is refused per call, naming the variable.
+   *
+   * Narrowed by the run's selection when one is passed (#599 D3, R6 W1): the
+   * same set the composed prompt and the tools array are built from
+   * (`offeredSkillSources(configured, selection)`), so the dispatch refuses
+   * what the model was not offered rather than sending it.
    */
   offeredSources: string[];
 }
@@ -228,8 +234,13 @@ export function buildToolIndex(
  * Build a routing registry from resolved environment values. Callers should
  * pass the env they actually want — the function does not read `process.env`
  * so the same code path is exercised in dev, prod, and tests.
+ *
+ * `selection` (#599 D3, R6 W1) narrows `offeredSources` and nothing else: the
+ * servers, the hosted sources, the index and the unconfigured tools are the
+ * configuration's. Absent, the registry is the one built before the selection
+ * reached the dispatch, key for key.
  */
-export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
+export function buildMcpRegistry(env: McpRegistryEnv, selection?: SourceSelection): McpRegistry {
   const servers: Record<string, McpServerConfig> = {
     // The Socrata server exists in the registry only when the instance
     // configured an endpoint for it. Unconfigured, its tools are recorded in
@@ -304,7 +315,22 @@ export function buildMcpRegistry(env: McpRegistryEnv): McpRegistry {
     }
   }
 
-  return { servers, hosted, toolIndex, unconfiguredTools, offeredSources: civicRouter.offeredSkillSources(env) };
+  return { servers, hosted, toolIndex, unconfiguredTools, offeredSources: civicRouter.offeredSkillSources(env, selection) };
+}
+
+/**
+ * `registry` with its offered set narrowed by `selection`: the same server
+ * objects, so the client's per-server state and the hosted-source bookkeeping
+ * see one object per source whatever the selection. `configured` is the
+ * configuration `registry` was built from. Absent, `registry` itself.
+ */
+export function withSelection(
+  registry: McpRegistry,
+  configured: McpRegistryEnv,
+  selection: SourceSelection,
+): McpRegistry {
+  if (selection === undefined) return registry;
+  return { ...registry, offeredSources: civicRouter.offeredSkillSources(configured, selection) };
 }
 
 /**
@@ -430,7 +456,14 @@ type ToolCallResolution =
   | { ok: true; call: RoutedToolCall }
   | { ok: false; refusal: 'ambiguous'; candidates: readonly string[] }
   | { ok: false; refusal: 'not-configured'; variable: string }
+  | { ok: false; refusal: 'not-offered' }
   | { ok: false; refusal: 'unknown' };
+
+/** Whether this instance can send a call to `sourceId`: it has an addressed
+ *  server or a hosted source for it. */
+function isRoutable(registry: McpRegistry, sourceId: string): boolean {
+  return Object.hasOwn(registry.servers, sourceId) || (registry.hosted !== undefined && Object.hasOwn(registry.hosted, sourceId));
+}
 
 /**
  * Resolve a called name against the registry: the dispatch rule (ADR-0032,
@@ -444,6 +477,28 @@ type ToolCallResolution =
  *   from the registry, or its source not offered (`not-offered` in the
  *   package's terms) — is `not-configured`, with the variable that would
  *   configure it, whichever spelling the call used (#258 C4).
+ * - A name whose source IS configured here but the run's selection leaves out
+ *   is `not-offered` (R6 W1): refused before any request, recorded
+ *   `not_offered`. Configuration comes first, as in the router's
+ *   `offeredReason`: a source the configuration does not offer is
+ *   `not-configured` whatever the selection says.
+ * - An ambiguous bare name one of whose candidates' sources this instance
+ *   cannot route is `not-configured`, naming that source's variable (#632 D8
+ *   ii, as corrected at R6 W1's gate). The first such candidate in manifest
+ *   order names it; the candidates arrive in the dispatch map's order, which
+ *   is the manifest's.
+ *
+ * WHY THE DISPATCH DOES NOT RESOLVE OVER THE ROUTABLE SOURCES. D8 (ii) ruled
+ * that an unconfigured Socrata beside NYC Charter refuses a bare `search` as
+ * `not-configured` naming `SOCRATA_MCP_URL`, and named the mechanism as "the
+ * offered set becomes the routable sources". Measured at 5a8e975, the two
+ * disagree: with `SOCRATA_MCP_URL` unset and Charter on, the routable sources
+ * are `data-commons` and `nyc-charter`, and the package's rule over that set
+ * ACCEPTS a bare `search` as `nyc_charter__search` — a call routed to Charter
+ * on a guess, while the model is still offered `socrata__search` (Socrata is
+ * required, so the prompt and the tools array keep it). So the rule resolves
+ * over the offered set, as the prompt and the tools array are built, and
+ * reads routability only to choose the refusal.
  */
 function resolveToolCall(registry: McpRegistry, toolName: string, map: DispatchMap): ToolCallResolution {
   const resolution = resolveCalledName(map, registry.offeredSources, toolName);
@@ -468,11 +523,24 @@ function resolveToolCall(registry: McpRegistry, toolName: string, map: DispatchM
     return variable ? { ok: false, refusal: 'not-configured', variable } : { ok: false, refusal: 'unknown' };
   }
   if (resolution.reason === 'ambiguous') {
+    const variable = resolution.candidates
+      .filter((name) => {
+        const target = map.get(name);
+        return target !== undefined && !isRoutable(registry, target.sourceId);
+      })
+      .map((name) => registry.unconfiguredTools[name])
+      .find(Boolean);
+    if (variable) return { ok: false, refusal: 'not-configured', variable };
     return { ok: false, refusal: 'ambiguous', candidates: resolution.candidates };
   }
   if (resolution.reason === 'not-offered') {
     const variable = resolution.candidates.map((name) => registry.unconfiguredTools[name]).find(Boolean);
     if (variable) return { ok: false, refusal: 'not-configured', variable };
+    const configuredHere = resolution.candidates.some((name) => {
+      const target = map.get(name);
+      return target !== undefined && isRoutable(registry, target.sourceId);
+    });
+    if (configuredHere) return { ok: false, refusal: 'not-offered' };
   }
   return { ok: false, refusal: 'unknown' };
 }
@@ -486,6 +554,8 @@ function resolveToolCall(registry: McpRegistry, toolName: string, map: DispatchM
  * - `McpConfigurationError` naming the variable, for a tool whose source is
  *   known but not configured (#258 C4) — the same error for `get_data` and
  *   `socrata__get_data`;
+ * - `SourceNotOfferedError`, for a tool of a configured source the run's
+ *   selection leaves out (R6 W1);
  * - a plain `Error` for a name no source has.
  *
  * `map` is the package's dispatch map; a test passes a larger manifest's.
@@ -504,6 +574,8 @@ export function routeToolCall(
       throw new McpConfigurationError(
         `The MCP server for tool "${toolName}" is not configured: ${resolved.variable} is missing or empty in the server environment. Set it and restart the server.`,
       );
+    case 'not-offered':
+      throw new SourceNotOfferedError(toolName);
     default:
       throw new Error(`No MCP server registered for tool "${toolName}"`);
   }
@@ -524,7 +596,8 @@ export function resolveServerForTool(
 /**
  * The source id of the server this instance routes `toolName` to, in either
  * spelling, or `undefined` when none does: a tool no source hosts, one whose
- * source is not configured here, or a bare name two offered sources share. For a trace's `mcp.source` attribution, which the loop
+ * source is not configured here, one whose source the run's `selection`
+ * leaves out (R6 W1), or a bare name two offered sources share. For a trace's `mcp.source` attribution, which the loop
  * core reads ABOVE its per-call `try`. `routeTool` (`./client.ts`) throws in the
  * same case, and a throw there ends the whole run instead of recording one
  * failed call; with this lookup the call itself is what gets refused — by the
@@ -535,8 +608,9 @@ export function resolveServerForTool(
 export function routedSourceId(
   toolName: string,
   configured: McpRegistryEnv = readMcpEnvFromProcess(),
+  selection?: SourceSelection,
 ): string | undefined {
-  return resolveServerForTool(buildMcpRegistry(configured), toolName)?.sourceId;
+  return resolveServerForTool(buildMcpRegistry(configured, selection), toolName)?.sourceId;
 }
 
 /** THE presence test — non-empty after trim, matching the preflight. */
@@ -586,6 +660,27 @@ export class McpConfigurationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'McpConfigurationError';
+  }
+}
+
+/**
+ * A tool of a source this instance configures, called on a run whose
+ * selection leaves that source out (R6 W1). Thrown by `routeToolCall` before
+ * any request, so no source saw the call. The `code` is read by
+ * `classifyStreamError` before any message, so the loop records the call
+ * `failureKind: 'not_offered'`, the model is told through
+ * `describeToolFailureForLlm` and a reader through `friendlyStreamError`;
+ * the message below is for the operator's log only.
+ */
+export class SourceNotOfferedError extends Error {
+  readonly code = 'not_offered' as const;
+  /** The name the model called. */
+  readonly calledName: string;
+
+  constructor(calledName: string) {
+    super(`Tool "${calledName}" belongs to a data source this run is not offered, so the call was not sent.`);
+    this.name = 'SourceNotOfferedError';
+    this.calledName = calledName;
   }
 }
 

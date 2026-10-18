@@ -359,6 +359,9 @@ function toolFailureKindOf(error: unknown): ToolFailureKind {
       return 'unavailable';
     case 'mcp_not_configured':
       return 'not_configured';
+    // R6 W1: the dispatch refused a call to a source the run was not offered.
+    case 'not_offered':
+      return 'not_offered';
     default:
       return 'unknown';
   }

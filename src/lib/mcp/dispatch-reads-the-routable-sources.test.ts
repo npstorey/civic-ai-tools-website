@@ -31,6 +31,7 @@ import {
   type McpRegistryEnv,
 } from './registry.ts';
 import { classifyStreamError } from '../streaming.ts';
+import { CIVIC_MANIFEST, createCivicRouter, type CivicManifestEntry } from '@typedstandards/civic-typed-router';
 
 const DC = 'https://api.datacommons.org/mcp';
 const SOCRATA = 'https://socrata-mcp.example.org';
@@ -103,5 +104,54 @@ test('criterion 5, at the unit: with no selection the registry is the base\'s, k
     const b = buildWithSelection(env, undefined);
     assert.deepEqual(Object.keys(a).sort(), ['hosted', 'offeredSources', 'servers', 'toolIndex', 'unconfiguredTools']);
     assert.deepEqual(b, a);
+  }
+});
+
+// --- Added with the fix (R6 W1 ruling 1): more than one unroutable candidate --------
+//
+// The shipped manifest cannot produce two: Socrata is the only required source
+// that can be unroutable, and an optional source that is not configured is not
+// offered, so it is never a candidate. A fifth, required stub source that also
+// hosts `search` can. The variable named is the first unroutable candidate's
+// in MANIFEST order, whatever order the registry lists its offered sources in;
+// putting the stub first in the manifest moves the answer, so the assertion
+// can fail.
+
+const STUB_ENTRY: CivicManifestEntry = {
+  id: 'example-mcp@https://example.org/mcp',
+  alias: 'example',
+  sourceId: 'example',
+  displayName: 'Example Records Server',
+  description: 'Example records: synthetic test records for one fictional town. Cannot answer about any real place.',
+  freshness: 'Static: a fixed test set.',
+  configuration: { addressVariable: 'EXAMPLE_MCP_URL', requirement: 'required' },
+  tools: [
+    { type: 'function', function: { name: 'search', description: 'Search the example records.', parameters: { type: 'object', properties: { query: { type: 'string' } } } } },
+  ],
+  toolNames: ['search'],
+  guidance: { async fetchText() { return ''; } },
+};
+
+/** Neither Socrata nor the stub routable; both offered, in the order given. */
+function bothUnroutable(offeredSources: string[]): ReturnType<typeof buildMcpRegistry> {
+  return {
+    servers: {},
+    hosted: {},
+    toolIndex: {},
+    unconfiguredTools: { socrata__search: 'SOCRATA_MCP_URL', example__search: 'EXAMPLE_MCP_URL' },
+    offeredSources,
+  };
+}
+
+test('criterion 4, ruling 1: with two unroutable candidates, the variable named is the first in manifest order', () => {
+  const STUB_LAST = createCivicRouter([...CIVIC_MANIFEST, STUB_ENTRY]).dispatchMap;
+  const STUB_FIRST = createCivicRouter([STUB_ENTRY, ...CIVIC_MANIFEST]).dispatchMap;
+  for (const offered of [['socrata', 'example'], ['example', 'socrata']]) {
+    const last = refusalOf(() => routeToolCall(bothUnroutable(offered), 'search', STUB_LAST));
+    assert.ok(last instanceof McpConfigurationError, `stub last, offered ${offered.join(',')}: ${String(last)}`);
+    assert.match(last.message, /SOCRATA_MCP_URL/, `stub last, offered ${offered.join(',')}: ${last.message}`);
+    const first = refusalOf(() => routeToolCall(bothUnroutable(offered), 'search', STUB_FIRST));
+    assert.ok(first instanceof McpConfigurationError, `stub first, offered ${offered.join(',')}: ${String(first)}`);
+    assert.match(first.message, /EXAMPLE_MCP_URL/, `stub first, offered ${offered.join(',')}: ${first.message}`);
   }
 });
