@@ -6,6 +6,101 @@ Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ---
 
+## 2026-10-18 — Wave R3 (#516): the rest of minimization — and a privacy page that tested its own promises (eleven gated phases, three lanes)
+
+**Scope.** This wave finished the minimization part of the MCP sources design:
+- the rate-limit key as a named secret;
+- analytics as two variables;
+- a failed notebook's traceback to the reader, with the log keeping only its structure;
+- database failures logged by their SQLSTATE;
+- the sign-in provider's token out of the session cookie;
+- one statement of the undici re-read rule;
+- a privacy page whose every sentence is computed from configuration or a named code constant.
+
+Two phases were added by ruling partway through (P9, P10). The cold read reopened the class, and WF fixed it.
+
+**Phases:**
+- P5 `523f371`: the provider token out of the session token (#623).
+- P6 `931fa48`: the undici rule stated once, in `CLAUDE.md` (#622, closing #512).
+- P3 `a65c9f3`: the notebook's own traceback to the reader, credentials removed by value; the log keeps class, cell
+  count and size (#626).
+- P1 `41f4e40`: `RATE_LIMIT_SECRET`, required, with no fallback; the stored key is an HMAC of a day key and the reader
+  (#625).
+- P4 `4eabc1f`: a database failure's log line gains its SQLSTATE, admitted by shape; the transparency-log line logs
+  status and size (#628).
+- P2 `17ccb3d`: `NEXT_PUBLIC_ANALYTICS_SERVICE` and `NEXT_PUBLIC_ANALYTICS_ID`, with the old Google id kept as a
+  fallback (#629).
+- P9 `a24a004`: a notebook output never carries a notebook credential, on the session path and in the Lambda handler
+  (#630).
+- P10 `167497b`: under hash-only visibility, a record carries no verbatim copy of the question in the text the app
+  writes (#633).
+- P7 `a90782a`: the privacy page, derived from configuration, with a two-way guard over the guide's outbound-kinds
+  table (#631).
+- P8: the cold read, on Fable 5.1 at `high`.
+- WF `ecbb337`: the page's remaining gaps (the proxy, search terms in page addresses, the notebook sent to run, the
+  creator's attribution, kept text, platform-held run output), a sealed-record storage check, and one record-page
+  change (#637).
+
+**Merges and tags.** Eleven merges. Each is a merge commit whose second parent is the head the seat's GO named, made
+by a seat-written script that also made the `-merged` tag. The ORCH made every `rollback/pre-r3-*` tag at its phase's
+cut, and read every `-merged` tag back after the merge.
+
+**Test totals:** `# fail 0` at every merged head. The count was 2575 on WF's final merge ref.
+
+**Owner legs:**
+- Gate 1: the rate-limit secret, minted in 1Password and set on Production and all-branch Preview from one shell
+  variable, never printed.
+- Gate 2: the env-template line, as the owner's own commit.
+- Gate 3: analytics switched to Plausible on Production.
+- Gate 5, three times: P7's two preview reviews, and WF's.
+- Every PR marked ready, and every merge script run.
+
+### The lesson: a page that states a promise is a test of the promise
+
+P7's job was to say what happens to what a reader sends, and each sentence had to rest on code. Writing those
+sentences found two defects that the phases describing them had not:
+- **P3's own success-path measurement.** A cell that prints a credential carries it into the stream event and the
+  signed package. Credentials were not set on the reference instance. P9 fixed it.
+- **The hash-only choice.** P7's draft sentence said a hash-only record shows "only a fingerprint". The notebook's
+  cover cell and the dialog's default title both carried the question. No public record was hash-only. P10 fixed
+  it, and P7's sentence was then made to quote the dialog's own words, pinned by a test that reads both.
+
+Then the cold read asked the page's question across every configuration the preflight accepts. It found one recipient
+the page never named, an operator's proxy, plus several statements that said less than the code does. A page that is
+derived and guarded does not make the promise true. It makes the promise checkable, and checking it is what found the
+defects.
+
+### Also earned
+
+- **A contract's acceptance can outrun the ruling it implements.**
+  - P10's contract said the question is removed from "every string" of a submitted notebook. The ruling said model
+    text is not filtered.
+  - The IMPL built what the contract said, and flagged the cost: a short question would rewrite notebook code in a
+    signed record.
+  - The gate caught it, and a fix round narrowed the walk to the generator's markdown cells, red first.
+  - Read each acceptance line against the ruling it carries before the spawn.
+- **An IMPL's report can carry a SHA that does not exist.** P7's first report gave a full head SHA whose first seven
+  characters matched and whose rest did not, and the PR body repeated it. Read the head from the branch, never from
+  the report. Spawn prompts now ask for `git rev-parse HEAD`, copied.
+- **A cold read's verdict and its question can disagree.** The cold reader called the class closed because the gaps
+  predated the wave. The question asked whether anything reaches a place the page does not name. The owner ruled by
+  the question: the class is about the property, not about when it started.
+- **Measure a design's stated reason, not only its behaviour.**
+  - A comment said a sealed record's hash was public "because it is already on the transparency log". The log
+    receives a SHA-512 of a value derived from it. The hash is public by ADR-0010's design, which WF's corrected
+    comment now cites.
+  - In the same read, a finding was withdrawn because nobody had read the write path: sealed packages live under a
+    random 128-bit key, not the hash.
+- **A switch is not a second tag.**
+  - Under the two-variable rule, setting the new pair replaces the Google tag at the next build. Keeping the old id
+    keeps a rollback, not a parallel tag.
+  - The gate's framing had assumed both would run, and the owner ruled the switch knowing it.
+- **The CLI's prompt, measured from its source.** `vercel env add NAME preview` with the value piped stops at a
+  "Git branch?" prompt unless `--non-interactive` is passed. With that flag and no branch, the value applies to all
+  Preview branches (CLI 54.20.1). The gate's line carried the flag, and its check read the scope back by name.
+
+---
+
 ## 2026-09-21 — Wave N13 (#503): a reader's words out of the logs — and the instrument that never reached the artifact (three gated phases, one lane)
 
 **Scope:** the first, self-contained part of the MCP sources design (rulings D6 and D10). One property:
