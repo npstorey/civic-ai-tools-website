@@ -159,3 +159,10 @@ test('#436 C4: the form drops its portal picker under the lock, and offers the e
   assert.match(provider, /createContext<boolean>\(false\)/, 'outside the provider the form must read as unlocked');
   assert.match(provider, /locked = false/, 'a mount that passes no lock must be unlocked');
 });
+
+test('R6 W2: the lock refuses before the consent gate, as before the limiter', () => {
+  for (const { file } of ROUTES) {
+    const source = read(file);
+    assert.ok(at(source, 'if (!portalResolution.ok) {', file) < at(source, 'consentInForce(', file), `${file} reads the consent before the lock refuses`);
+  }
+});

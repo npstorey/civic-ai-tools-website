@@ -303,3 +303,44 @@ test('#516 P1: on the notebook route the 501 under EXECUTOR_DRIVER=none still co
     'the executor refusal precedes the rate-limit secret refusal',
   );
 });
+
+// --- R6 W2 (#632, criterion 4): the consent gate's place in the order ---------
+//
+// Each gated route reads the consent in force after the instance's
+// configuration refusals (the portal lock, the model credential, the
+// rate-limit secret, the catalog, the data-source routing) and after it has
+// the session, whose `dbId` chooses the store (D12); and before the rate
+// limiter reads or spends anything, before the skill fetch, and before any
+// model call. The replay route reads it after its routing refusal and before
+// the loop (C6). The behaviour each position protects is driven in
+// `consent-gate-driven.test.ts`; this half pins the order, by source position,
+// as the rest of this file does.
+
+const GATED_ROUTES = [...QUERY_ROUTES, 'evidence/[slug]/replay/route.ts'];
+
+test('R6 W2: every gated route asks for the consent in force exactly once, after the configuration refusals and the session, before the limiter and the skill fetch', () => {
+  for (const route of GATED_ROUTES) {
+    const source = routeSource(route);
+    assert.equal(source.split('consentInForce(').length - 1, 1, `${route} asks for the consent in force exactly once`);
+    const gate = at(source, 'consentInForce(', route);
+    assert.ok(at(source, 'getMissingMcpRoutingError()', route) < gate, `${route} reads the consent before its routing refusal`);
+    assert.ok(at(source, 'getServerSession(', route) < gate, `${route} reads the consent before it has the session`);
+    if (route === 'evidence/[slug]/replay/route.ts') {
+      assert.ok(gate < at(source, 'runToolLoop(', route), `${route} runs the loop before reading the consent`);
+      continue;
+    }
+    for (const earlier of ['resolveRunPortal(', 'getMissingModelCredentialError()', 'getMissingRateLimitSecretError()']) {
+      assert.ok(at(source, earlier, route) < gate, `${route} reads the consent before ${earlier}`);
+    }
+    for (const later of ['checkRateLimit(', 'incrementRateLimit(', 'composeSystemPrompt({ portal']) {
+      assert.ok(gate < at(source, later, route), `${route} reaches ${later} before reading the consent`);
+    }
+  }
+});
+
+test('R6 W2: no query route passes DEFAULT_SOURCE_SELECTION any more — the selection comes from the consent store (D3)', () => {
+  for (const route of QUERY_ROUTES) {
+    const source = routeSource(route);
+    assert.ok(!/const selection = DEFAULT_SOURCE_SELECTION/.test(source), `${route} still runs every offered source`);
+  }
+});

@@ -217,3 +217,15 @@ test('#552 C3: the dashboard shows Publish disabled with the reason, from the pa
   assert.ok(page.includes('sealOnly={isSealOnly()}'), 'the dashboard page does not pass the setting');
   assert.ok(page.includes('signingConfigured={isSigningConfigured()}'), 'the dashboard page stopped passing the signing state');
 });
+
+// R6 W2 (#632, C6): the publish routes stay outside the consent gate. A
+// publish sends a record's content to the model endpoint (the adversarial
+// evaluation) and dispatches no source tool; it stays inside the privacy
+// page's model-endpoint row, and R8 may revisit it. This states the boundary
+// so a gate added here is a decision, not a drift. (It holds at the base too:
+// it pins an absence, and is not one of W2's reds.)
+test('R6 W2 (C6): neither publish route reads the consent gate', () => {
+  for (const file of [RECORDS, PUBLISH]) {
+    assert.ok(!read(file).includes('consentInForce('), `${file} reads the consent gate; C6 keeps it outside`);
+  }
+});
