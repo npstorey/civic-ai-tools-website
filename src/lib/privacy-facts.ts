@@ -264,6 +264,28 @@ export const HOST_PREFIXED_COOKIE = 'next-auth.csrf-token';
  * Drizzle column key; the page test fails when a column of `users` has no
  * entry here, or an entry here names no column.
  */
+/**
+ * The words that state each column of the usage table (src/lib/db/schema.ts;
+ * R6 W5, #632 ruling B = A), keyed by the schema's column keys. This module
+ * does not name the table: it is written by one module and read by none
+ * (`src/lib/usage/one-writer.test.ts`). `src/lib/usage/usage-privacy-statement.test.ts` requires these
+ * keys to equal the table's columns in both directions and every phrase to
+ * render, so a column added with no words fails there. The `environment`
+ * column's phrase renders only on the hosting platform: off it every row reads
+ * `local`.
+ */
+export const USAGE_COUNT_COLUMNS: Readonly<Record<string, string>> = {
+  count: 'a number of questions',
+  day: 'on one day',
+  surface: 'which part of the site took the question',
+  model: 'which AI model answered',
+  signedIn: 'whether you were signed in',
+  sourcesOffered: 'which data sources were offered',
+  sourcesUsed: 'which were used',
+  outcome: 'whether an answer came back',
+  environment: 'marked as test counts',
+};
+
 export const ACCOUNT_COLUMNS: Readonly<Record<string, string>> = {
   id: 'an internal account number',
   githubId: 'the account key your sign-in provider gives this site',
@@ -987,6 +1009,27 @@ function whatLinksActivity(): Statement[] {
       [`env:${RATE_LIMIT_SECRET_VARIABLE}`, 'const:src/lib/rate-limit.ts#RATE_LIMIT_SECRET_VARIABLE', ...SIGN_IN_TRACES],
     ),
   ];
+  // The usage count (R6 W5): beside the daily counts above, because it is the
+  // other count, and the one that keeps nothing that connects it to a reader.
+  // Only with a database, where it is written (`src/lib/usage/count.ts`).
+  if (process.env.DATABASE_URL) {
+    const words = USAGE_COUNT_COLUMNS;
+    const onPlatform = present(process.env.VERCEL_ENV) !== null;
+    out.push(
+      statement(
+        'usage-count',
+        [
+          'The site also counts questions, to see how it is used. ' +
+            `Each count is ${words.count} ${words.day}. ` +
+            `It records ${words.surface}, ${words.model}, and ${words.signedIn}. ` +
+            `It also records ${words.sourcesOffered}, ${words.sourcesUsed}, and ${words.outcome}. ` +
+            'A count keeps no account, no network address and no question text.' +
+            (onPlatform ? ` Questions asked on test versions of this site are counted too, and ${words.environment}.` : ''),
+        ],
+        ['env:DATABASE_URL', 'env:VERCEL_ENV', c('USAGE_COUNT_COLUMNS'), 'const:src/lib/usage/count.ts#usageRow'],
+      ),
+    );
+  }
   if (signIn) {
     out.push(
       listStatement(
