@@ -815,7 +815,10 @@ export const PLATFORM_HELD_RECIPIENTS: Readonly<Record<PlatformHeldKind, Platfor
                   "Vercel says it keeps them for 1 hour, 1 day, 3 days or 30 days, depending on the operator's plan, which this site cannot read (its ",
                 { link: VERCEL_RUNTIME_LOGS_PAGE, text: 'runtime logs' },
                 ` page, read ${PLATFORM_READ_DATE}). ${LOGS_STATEMENT} ` +
-                  "So what Vercel keeps there is facts about requests, not what you asked: that is this site's reading of those two facts, not a claim Vercel makes.",
+                  'Your question is sent in the body of a request, not in its address, so this site reads those two facts as: Vercel keeps facts about requests, not your question. ' +
+                  "That is this site's reading, not a claim Vercel makes. Whether Vercel keeps the part of an address after the ",
+                { code: '?' },
+                ', which some pages use for what you type, has not been checked.',
               ],
               ['env:VERCEL_ENV', c('PLATFORM_HELD_RECIPIENTS'), c('LOGS_STATEMENT'), 'const:src/lib/flows/statement.ts#PLATFORM_HELD_KINDS'],
             )

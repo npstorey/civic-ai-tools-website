@@ -197,7 +197,8 @@ function functionLogs(onVercel: boolean): FlowsRecipient {
             basis: [
               "Vercel's runtime logs page: runtime logs include the output of the site's functions, kept 1 hour (Hobby), 1 day (Pro), 3 days (Enterprise) or 30 days (with Observability Plus)",
               LOGS_GUARANTEE,
-              "so 'metadata' is this site's reading of those two facts, not Vercel's own claim",
+              "so 'metadata' is this site's reading of those two facts, not Vercel's own claim: a question travels in a request's body, not its address",
+              "not measured: whether the platform keeps a request address's query part, which some pages use for what a reader types",
             ],
           }
         : { holder: "this site's operator", keeps: 'operator-states' },
