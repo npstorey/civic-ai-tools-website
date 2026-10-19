@@ -47,7 +47,10 @@ const RUN = {
   ],
 };
 
-test('trace.ts exports the encoder and the five names', () => {
+// R6 W2 (#632, D2 = A) adds the sixth, `analysis.flows_statement`, written only
+// when a run had a flows statement in force; its own round trip is in
+// `run-record-flows-statement.test.ts`.
+test('trace.ts exports the encoder and the six names', () => {
   assert.equal(typeof encode, 'function', 'trace.ts exports no runRecordAttributes');
   assert.deepEqual(NAMES, {
     assertedDate: 'analysis.asserted_date',
@@ -55,6 +58,7 @@ test('trace.ts exports the encoder and the five names', () => {
     toolDefinitions: 'analysis.tool_definitions',
     sourcesOffered: 'analysis.sources_offered',
     components: 'analysis.components',
+    flowsStatement: 'analysis.flows_statement',
   });
 });
 

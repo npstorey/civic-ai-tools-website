@@ -4,7 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { queryWithoutMcp } from '@/lib/openrouter';
 import { runToolLoop } from '@/lib/model-loop/run-tool-loop';
 import { compareLoopOptions, compareCompletionResult } from '@/lib/model-loop/compare-loop';
-import { composeSystemPrompt, withPortalLockGuidance, DEFAULT_SOURCE_SELECTION } from '@/lib/mcp/socrata-skill';
+import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
+import { consentInForce } from '@/lib/sources/consent-gate';
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { getMissingModelCredentialError, getModelClient, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
@@ -132,6 +133,22 @@ export async function POST(request: NextRequest) {
     const identifier = session?.user?.id || ip;
     const isAuthenticated = !!session?.user?.id;
 
+    // The consent in force (R6 W2, #632 D3, D12; design §4.4): nothing is
+    // sent anywhere before it, the model endpoint included. Read after the
+    // configuration refusals above and the session (whose `dbId` chooses the
+    // row over the cookie), and before the rate limiter reads or spends
+    // anything. None in force, or the re-ask rule says re-ask: the typed
+    // `consent_required`, 403, carrying the flows version to show.
+    // This route writes no trace, so the selection is all it takes from the
+    // consent: no flows statement attribute (G0 finding 3).
+    // DORMANT until W3 ships the consent card (`CONSENT_GATE_ENFORCED`,
+    // `src/lib/sources/consent-enforced.ts`): the gate then refuses nothing, and
+    // the selection, the reasons and the record are what they were before W2.
+    const consent = await consentInForce(request, session);
+    if (!consent.ok) {
+      return NextResponse.json(consent.payload, { status: 403 });
+    }
+
     // THIS APP's own per-day request budget — never the model endpoint's.
     // It answers HTTP 429 and classifies as `rate_limit`; an endpoint's 429 is
     // `model_rate_limited` and is handled in the catch below (website#30 G0 D6).
@@ -152,11 +169,11 @@ export async function POST(request: NextRequest) {
     // System prompt for the MCP-enabled query - uses skill module
     // Under the lock one section is appended (#436, D7); unlocked, unchanged.
     // The configuration is read once for the prompt and the tools, and the
-    // selection is every offered source until a request can carry one
-    // (#599 D3). This route writes no trace, so it records nothing of the
-    // composition but the prompt.
+    // selection is the reader's, configured ∩ On, from the consent store
+    // (R6 W2, D3 = A). This route writes no trace, so it records nothing of
+    // the composition but the prompt.
     const configured = readMcpEnvFromProcess();
-    const selection = DEFAULT_SOURCE_SELECTION;
+    const selection = consent.selection;
     const composition = await composeSystemPrompt({ portal, configured, selection });
     const systemPromptWithMcp = withPortalLockGuidance(composition.prompt, lockedPortal, configured, selection);
 

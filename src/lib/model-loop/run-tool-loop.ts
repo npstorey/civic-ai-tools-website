@@ -1007,8 +1007,10 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         // repository and the harness (Wave N10 D5): the PROV-O builder reads
         // `error` and `error.kind` to mark the activity for a rejected call.
         // Do not add a second name, and do not reintroduce the raw text —
-        // if a consumer needs more than the four `ToolFailureKind` values,
-        // the vocabulary widens rather than the span carrying prose.
+        // if a consumer needs more than the `ToolFailureKind` values
+        // (`TOOL_FAILURE_KINDS`: `timeout`, `unavailable`, `not_configured`,
+        // `not_offered`, `unknown`), the vocabulary widens rather than the
+        // span carrying prose.
         // `tool.duration_ms` is the SAME attribute name the success path
         // ends with at `:857` — one name for one measurement, so the PROV-O
         // builder needs no second reader (it emits `civic:durationMs` from

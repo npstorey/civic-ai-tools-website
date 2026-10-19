@@ -77,9 +77,11 @@ const PORTAL = 'data.cityofnewyork.us';
 const DATASET = 'erm2-nwe9';
 
 const CHARTER = CIVIC_MANIFEST.find((entry) => entry.sourceId === 'nyc-charter');
-if (!CHARTER?.hosting) throw new Error('premise: the manifest holds a hosted nyc-charter entry');
+// Router 0.4.0 (#632 D11): the pin is the entry's npm-package hosting variant.
+const CHARTER_PIN = CHARTER?.hostings.find((variant) => variant.kind === 'npm-package');
+if (!CHARTER || CHARTER_PIN?.kind !== 'npm-package') throw new Error('premise: the manifest holds a hosted nyc-charter entry');
 /** The pin's purl, derived as the code derives it: never re-spelled here. */
-const CHARTER_PURL = hostedServerPurl(CHARTER.hosting);
+const CHARTER_PURL = hostedServerPurl(CHARTER_PIN);
 
 /** The servers a Charter-on run records on its root span (as G6's trace does). */
 const RUN_SERVERS = [

@@ -208,6 +208,10 @@ const EXAMPLE_ENTRY: CivicManifestEntry = {
   ],
   toolNames: ['search', 'lookup_record'],
   guidance: { async fetchText() { return ''; } },
+  // Router 0.4.0's two required fields (#632 D11, D6): a remote source with
+  // one variant, On in a first consent. The router reads neither.
+  hostings: [{ variant: 'remote', kind: 'remote', runsAt: 'other', logging: [] }],
+  consentDefault: 'on',
 };
 
 const FOUR = createCivicRouter([...CIVIC_MANIFEST, EXAMPLE_ENTRY]);

@@ -1,9 +1,9 @@
 // Generate the lockfiles a hosted source's sandbox installs from (#617 P4,
-// criterion L): one for each hosted manifest entry's pinned package, one for
+// criterion L): one for each npm-package hosting variant's pinned package, one for
 // the bridge's packages. Writes `src/lib/mcp/hosting/lockfiles.generated.ts`.
 //
-// WHEN TO RUN IT. Whenever a hosted source's pin moves (the router manifest's
-// `hosting.version`, through a router bump) or `BRIDGE_PACKAGES` moves
+// WHEN TO RUN IT. Whenever a hosted source's pin moves (the `version` of an
+// npm-package hosting variant in the router manifest, through a router bump) or `BRIDGE_PACKAGES` moves
 // (`src/lib/mcp/hosting/bridge-source.ts`). `lockfiles.test.ts` fails until it
 // has been re-run, because each lockfile's root must equal the pin it was
 // resolved for. Commit the generated module with the move.
@@ -30,6 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import { BRIDGE_PACKAGE_JSON } from '../src/lib/mcp/hosting/bridge-source.ts';
 import { pinLockfileKey, pinPackageJson, type NpmLockfile } from '../src/lib/mcp/hosting/install-manifests.ts';
+import { npmPackageVariants } from '../src/lib/mcp/registry.ts';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(REPO, 'src/lib/mcp/hosting/lockfiles.generated.ts');
@@ -50,9 +51,12 @@ function resolveLockfile(packageJson: string): NpmLockfile {
 }
 
 const pins: Record<string, NpmLockfile> = {};
+// Every npm-package variant of every entry (router 0.4.0, #632 D11): the
+// lockfiles are committed before any configuration is known.
 for (const entry of CIVIC_MANIFEST) {
-  if (!entry.hosting) continue;
-  pins[pinLockfileKey(entry.hosting)] = resolveLockfile(pinPackageJson(entry.hosting));
+  for (const variant of npmPackageVariants(entry)) {
+    pins[pinLockfileKey(variant)] = resolveLockfile(pinPackageJson(variant));
+  }
 }
 const bridge = resolveLockfile(BRIDGE_PACKAGE_JSON);
 

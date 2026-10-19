@@ -131,9 +131,14 @@ export interface ErrorEvent extends StreamEvent {
 // place error-to-copy mapping lives, consumed by every SSE-consuming hook.
 
 /**
- * The eleven kinds every streaming failure classifies into. Single-sourced as
+ * The twelve kinds every streaming failure classifies into. Single-sourced as
  * an array rather than a bare union so the round-trip test can enumerate them
- * (#154): a twelfth kind is covered by that test the moment it is added here.
+ * (#154): a thirteenth kind is covered by that test the moment it is added here.
+ *
+ * `consent_required` (R6 W2, #632) is set explicitly by the consent gate
+ * (`./sources/consent-gate.ts`), never derived from text: a question this site
+ * refused before sending it anywhere, because no consent was in force. The
+ * surface turns it into the consent card (W3).
  *
  * `not_offered` (R6 W1) is set explicitly by the dispatch, never derived from
  * message text: `SourceNotOfferedError` (`./mcp/registry.ts`) carries it as
@@ -164,12 +169,13 @@ export const STREAM_ERROR_KINDS = [
   'connection',
   'notebook_execution',
   'not_offered',
+  'consent_required',
   'generic',
 ] as const;
 
 export type StreamErrorKind = (typeof STREAM_ERROR_KINDS)[number];
 
-/** True for a value that is one of the eleven kinds (an unknown code is not). */
+/** True for a value that is one of the twelve kinds (an unknown code is not). */
 export function isStreamErrorKind(value: unknown): value is StreamErrorKind {
   return typeof value === 'string' && (STREAM_ERROR_KINDS as readonly string[]).includes(value);
 }
@@ -317,6 +323,10 @@ const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
   // selection; on neither did the reader turn anything off, so the copy says
   // only what is true of both. It reports no empty result: nothing was asked.
   not_offered: 'This question did not use that data source, so nothing was sent to it.',
+  // R6 W2: the consent gate refused the question before anything was sent,
+  // the model service included (design §4.4). The surface shows the consent
+  // card in its place (W3); this copy is what a surface without one says.
+  consent_required: 'This site asks for your consent before it sends your question anywhere, so nothing has been sent yet.',
   generic: 'Something went wrong while running this query. Please try again in a moment.',
 };
 

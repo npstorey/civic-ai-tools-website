@@ -2012,6 +2012,117 @@ count-preservation check in the header comment of `0015` (visibility
 label counts before vs. after: no rows remain on the legacy labels, the
 grand total unchanged).
 
+### The consent table: `0017`
+
+[`0017_source_consents.sql`](../drizzle/0017_source_consents.sql) creates
+`source_consents`, the store for a signed-in reader's consent (see
+[Consent and the flows statement](#consent-and-the-flows-statement)): one
+row per account, every column `NOT NULL`.
+
+| Column | Type | Holds |
+|---|---|---|
+| `user_id` | `uuid`, primary key | the account (`users.id`); deleting the account deletes the row |
+| `states` | `jsonb` | per source id, the state (`on`, `ask-first`, `off`) and the calendar date it was given |
+| `flows_hash` | `text` | the hash of the flows statement the reader was shown |
+| `flows_statement` | `jsonb` | that statement, which the re-ask rule compares with the one in force |
+| `consented_at` | `timestamptz` | when the consent was first given |
+| `updated_at` | `timestamptz` | when a state last changed |
+
+It is written with `CREATE TABLE IF NOT EXISTS` and its foreign key inline,
+by hand, so the owner-run `psql` application and a fork's `drizzle-kit
+migrate` are both safe on a database that already has it (the file's header
+says why). Apply it **before** the deploy that reads it: after, every
+signed-in session with an account row fails its consent read (on the consent
+endpoint now, and on every question once the gate is on). Verify with
+`\d source_consents`, never the tool's exit status alone
+([`docs/db-migrations.md`](db-migrations.md)).
+
+## Consent and the flows statement
+
+**Not enforced in this release.** The consent gate described below is built
+and turns on with the consent card, the surface that asks a reader (#632 W3).
+Until then it is switched off in code (`CONSENT_GATE_ENFORCED` in
+`src/lib/sources/consent-enforced.ts`, a constant and not a setting), no
+reader is asked for consent, and every question is answered and recorded
+exactly as before. What is live now: the flows statement at `/api/flows`, the
+consent endpoint and its two stores, and the privacy page's statements of
+what the hosting and sandbox platforms hold.
+
+**What the gate will do.** Once it is on, this site asks a reader once,
+before the first question, whether it may send the question onward, and
+stores the answer; nothing is sent anywhere before it, the model endpoint
+included (design §4.4). The server enforces it: the four routes that send a
+question — `/api/compare-stream`, `/api/compare`, `/api/query-notebook` and
+`/api/evidence/<slug>/replay` (with its `/api/records/<slug>/replay` alias) —
+refuse a question with no consent in force, after their own configuration
+refusals and before the rate limiter counts anything. `/api/compare-stream`
+answers with an `error` event per panel whose `code` is `consent_required`;
+the other three answer HTTP 403 with
+`{ error, code: "consent_required", flowsVersion, reask }`.
+
+**What a reader consents to: `/api/flows`.** `GET /api/flows` serves the
+flows statement, derived when asked from this instance's configuration, the
+router manifest's hosting variants and postures, and the dated constants in
+`src/lib/flows/statement.ts`: every recipient by role and host (the model
+endpoint, the hosting platform's function logs, sign-in, analytics, the
+notebook executor), what each receives, and what each holder says it keeps,
+with the page and the date it was read, or "not stated"; then each configured
+source with its hosting variant, publisher, freshness and posture. It calls no
+source. Its body is RFC 8785 canonical JSON, and its SHA-256 is the
+statement's hash: the **flows version** a consent refers to, and the `hash` a
+record's `composition.flowsStatement` will carry, once the gate is on, beside
+the address and the statement's `date` (the latest read date it carries, never the day it is
+served). The statement also carries a base `version` over the instance-level
+recipients, and each source a `version` of its own.
+[`docs/flows-changelog.md`](flows-changelog.md) is the dated log of what the
+statement has said.
+
+**Where a consent is kept.** A session whose account has a database row
+(the session's `dbId`) keeps its consent in the `source_consents` table
+(`0017_source_consents.sql`, above) and reads the row only. Any other
+session, anonymous or signed in, keeps it in the cookie
+`civic-source-consent`: host-only, `Secure`, `HttpOnly`, `SameSite=Lax`,
+`Path=/`, and a session cookie (it ends with the browser session). The cookie
+holds a format version, the statement's base version, and per source its
+state, the calendar date it was given and that source's own version; never an
+account id, a network address or anything else that identifies a reader.
+Only the consent endpoint below writes either store. In this release nothing
+on the site's pages calls it, so no reader's visit writes a consent row or
+cookie until the consent card ships (#632 W3).
+
+**The consent endpoint: `/api/sources/consent`.** `GET` reports the consent
+in force and the current flows version, and sets no cookie. `PUT` with
+`{ states: { <source id>: "on" | "ask-first" | "off" }, flowsVersion }`
+stores the states; it answers 400 naming any id this instance does not
+configure, and 409 with the current version when `flowsVersion` is stale, so
+the surface reads the statement again. `DELETE` revokes: the row is deleted,
+or the cookie expired; once the gate is on, the next question is asked again. This is the only
+boundary that accepts source ids: once the gate is on, a question's run takes
+its selection — configured sources that are On — from the store, never from
+the request, and a configured source with no stored state (one added after the
+reader consented) is Ask first, and is not offered.
+
+**What re-asks** (once the gate is on). A signed-in reader's row keeps the
+statement it was given against, and each question compares it with the
+statement in force. A
+recipient added, a posture that keeps more (none, then metadata, then content,
+or a longer stated retention), or a changed arrangement (a recipient's host,
+where it runs, what it receives or who holds its logs) re-asks everyone; the
+same change to one source's own row, or a change of that source's hosting
+variant, re-asks for that source. A recipient or source removed, or a posture
+that keeps less, notifies and does not re-ask; a newly configured source
+re-asks nothing. A change to or from a posture that cannot be ranked ("not
+stated", "as the operator states") re-asks. The anonymous cookie holds the
+versions only, so any change to a version it holds re-asks. In this version a
+re-ask is `consent_required` for the whole question, naming what is re-asked
+(`reask: { base, sources }`); a source is never silently dropped.
+
+Once the gate is on, a record states the reader's own state for each
+source: `selected` for On, `reader-off` for Off, `not-consented` for Ask first
+or no state, and the flows statement in force (`composition.flowsStatement`).
+While it is off, records carry the reasons they carried before
+(`configured`, `not-configured`) and no flows statement.
+
 ## Behind a load balancer
 
 A load balancer closes a connection that carries no bytes for its idle

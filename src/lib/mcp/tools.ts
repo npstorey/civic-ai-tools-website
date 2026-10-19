@@ -24,7 +24,9 @@ import { readMcpEnvFromProcess, type McpRegistryEnv } from './registry.ts';
  * Every tool schema this codebase has, for every source — the vocabulary, not
  * one instance's offer. A query run hands the model `offeredMcpTools(...)` of
  * this, which drops the tools of an optional source the instance did not
- * configure; replay of a published record hands the model this list as is.
+ * configure; a replay of a published record narrows it to the record's
+ * offered set and the replayer's selection (`replay-loop.ts`, #632 D8), and
+ * hands it over whole only for a record that states no set.
  * The client in ./client.ts routes each call to the correct MCP server by tool
  * name. The package's array itself: one object for the process's lifetime.
  */
@@ -56,7 +58,7 @@ export function mcpToolsFor(lockedPortal?: string): ChatCompletionTool[] {
  * answer. With every optional source configured, `tools` itself is returned
  * (the same array), so such an instance sends byte-for-byte what it sent
  * before. The query routes and the compare factory call this on
- * `mcpToolsFor(lockedPortal)`; replay does not, and keeps the full vocabulary.
+ * `mcpToolsFor(lockedPortal)`; replay calls it on `mcpTools` when the record states a set (#632 D8).
  *
  * `selection` (#599 D3) narrows the sources further: absent, every source the
  * configuration offers; given, only the configured sources it names. An id the

@@ -254,3 +254,7 @@ test('#547 C2: the refusal is made once, first in the handler', () => {
     assert.ok(refusal < at(later), `the route reaches ${later} before it refuses under EXECUTOR_DRIVER=none`);
   }
 });
+
+test('R6 W2: the 501 under EXECUTOR_DRIVER=none still comes first, before the consent gate', () => {
+  assert.ok(at('notebookRouteRefusal(') < at('consentInForce('), 'the consent gate precedes the executor refusal');
+});

@@ -234,12 +234,16 @@ function notReproducedNote(toolName: string | undefined): string {
  * refused twice.
  */
 function rejectedNote(tool: ToolCall, defaultPortal: string): string {
+  // A `not_offered` call was never sent, so nothing rejected it: its sentence
+  // ends at the attempt, as the executed notebook's does (R6 W2, the seat's
+  // ruling 5 at G5). Every other kind was sent and refused.
+  const tail = tool.failureKind === 'not_offered' ? '.' : ', and it was rejected.';
   const attempt = tool.name === undefined
     ? 'This step, whose tool name the record does not carry, was rejected.'
     : `The original analysis tried to ${describeAttempt(
       { name: tool.name, args: tool.args, failed: true, failureKind: tool.failureKind },
       { dataFrameIndex: 0, defaultPortal },
-    )}, and it was rejected.`;
+    )}${tail}`;
   return (
     `*Not reproduced below.* ${attempt} ` +
     `${describeToolFailure(tool.failureKind)} No URL is written for it: a cell that re-ran the ` +

@@ -149,8 +149,10 @@ const { hostedServerPurl } = (await import('@/lib/mcp/registry')) as {
 };
 
 const CHARTER = CIVIC_MANIFEST.find((entry) => entry.sourceId === 'nyc-charter');
-if (!CHARTER?.hosting) throw new Error('premise: the manifest holds a hosted nyc-charter entry');
-const CHARTER_PURL = hostedServerPurl(CHARTER.hosting);
+// Router 0.4.0 (#632 D11): the pin is the entry's npm-package hosting variant.
+const CHARTER_PIN = CHARTER?.hostings.find((variant) => variant.kind === 'npm-package');
+if (!CHARTER || CHARTER_PIN?.kind !== 'npm-package') throw new Error('premise: the manifest holds a hosted nyc-charter entry');
+const CHARTER_PURL = hostedServerPurl(CHARTER_PIN);
 
 /** The name the line must read: the manifest's display name, without "MCP Server". */
 const READER_NAME = 'NYC Charter, Laws and Rules';

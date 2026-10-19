@@ -60,7 +60,11 @@ interface Lockfile {
   packages: Record<string, LockEntry & { name?: string }>;
 }
 
-const HOSTED = CIVIC_MANIFEST.filter((entry) => entry.hosting);
+// Router 0.4.0 (#632 D11): every npm-package variant of every entry, as the
+// lockfile script writes one per variant.
+const HOSTED = CIVIC_MANIFEST.flatMap((entry) =>
+  entry.hostings.flatMap((variant) => (variant.kind === 'npm-package' ? [{ entry, hosting: variant }] : [])),
+);
 
 function fileIn(step: HostedInstallDir, name: string): string | undefined {
   return step.files.find((file) => file.path === `${step.dir}/${name}`)?.content;
@@ -92,11 +96,10 @@ function resolveEdge(lock: Lockfile, from: string, dep: string): string | undefi
 }
 
 test('premise: the manifest has a hosted entry, so the assertions below have something to read', () => {
-  assert.ok(HOSTED.length > 0, 'no manifest entry carries a hosting field');
+  assert.ok(HOSTED.length > 0, 'no manifest entry carries an npm-package hosting variant');
 });
 
-for (const entry of HOSTED) {
-  const hosting = entry.hosting!;
+for (const { hosting } of HOSTED) {
   const plan = hostedInstallPlan(hosting);
   const [pin, bridge] = plan;
   const label = `${hosting.package}@${hosting.version}`;

@@ -32,7 +32,7 @@
 
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import { sourceIdForToolName } from '../mcp/operation-types.ts';
-import { hostedServerPurl } from '../mcp/registry.ts';
+import { hostedServerPurl, npmPackageVariants } from '../mcp/registry.ts';
 import {
   buildDataSources as harnessBuildDataSources,
   resolveToolSource as harnessResolveToolSource,
@@ -76,7 +76,10 @@ export { CIVIC_SOURCE_REGISTRY, type CivicSourceRegistry, type DataSourceEntry, 
 export function dataSourceRegistry(runMcpServers?: readonly DatHereMcpServer[]): CivicSourceRegistry {
   const registry: CivicSourceRegistry = { ...CIVIC_SOURCE_REGISTRY };
   for (const entry of CIVIC_MANIFEST) {
-    const { hosting, sourceId } = entry;
+    const { sourceId } = entry;
+    // Every npm-package variant, whatever the configuration (#632 D11): a
+    // record names what the source runs, and each entry has at most one.
+    const hosting = npmPackageVariants(entry)[0];
     if (!hosting || Object.hasOwn(registry, sourceId)) continue;
     const recorded = runMcpServers?.find((server) => server.name === sourceId)?.url;
     registry[sourceId] = {

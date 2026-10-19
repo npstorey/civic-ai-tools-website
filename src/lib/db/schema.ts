@@ -385,3 +385,21 @@ export const apiTokens = pgTable('api_tokens', {
     .defaultNow()
     .notNull(),
 });
+
+// A signed-in reader's consent to send a question onward (#632 W2, D4 = A):
+// one row per account, keyed on `users.id`. `states` holds, per source id,
+// the state (`on`, `ask-first`, `off`) and the calendar date it was given;
+// `flows_hash` is the hash of the flows statement the reader was shown, and
+// `flows_statement` that statement itself, which the re-ask rule compares
+// with the statement in force (D5 = A). Revoking deletes the row. An
+// anonymous reader's consent is a session cookie instead, never a row.
+export const sourceConsents = pgTable('source_consents', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  states: jsonb('states').notNull(),
+  flowsHash: text('flows_hash').notNull(),
+  flowsStatement: jsonb('flows_statement').notNull(),
+  consentedAt: timestamp('consented_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+});

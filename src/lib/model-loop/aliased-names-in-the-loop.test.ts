@@ -223,6 +223,10 @@ const EXAMPLE_ENTRY: CivicManifestEntry = {
   tools: [{ type: 'function', function: { name: 'search', description: 'Search the example records.', parameters: { type: 'object', properties: {} } } }],
   toolNames: ['search'],
   guidance: { async fetchText() { return ''; } },
+  // Router 0.4.0's two required fields (#632 D11, D6): a remote source with
+  // one variant, On in a first consent. The router reads neither.
+  hostings: [{ variant: 'remote', kind: 'remote', runsAt: 'other', logging: [] }],
+  consentDefault: 'on',
 };
 
 test('a bare name two offered sources share is refused before any request, and reaches the model and the record only as the app words it', async () => {
