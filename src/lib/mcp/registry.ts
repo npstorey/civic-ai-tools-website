@@ -32,7 +32,10 @@ import {
   resolveCalledName,
   SOCRATA_TOOL_NAMES,
   type DispatchMap,
+  type HostingVariant,
+  type ManifestEntry,
   type McpRegistryEnv,
+  type NpmPackageVariant,
   type SourceHosting,
   type SourceSelection,
 } from '@typedstandards/civic-typed-router';
@@ -61,8 +64,51 @@ export interface McpServerConfig {
 }
 
 /**
+ * The hosting variant in force for `entry` under `configured` (router 0.4.0,
+ * ADR-0036; #632 D11): the one selector every reader of a manifest entry's
+ * hosting goes through. A source the configuration does not offer has none.
+ * A source offered by a switch is in force as the `npm-package` variant whose
+ * `variant` is the switch's value (`configuredSources`: `sandbox` for NYC
+ * Charter); a source offered by an address is in force as its single remote
+ * variant, selected by the address's presence. The router reads none of it.
+ */
+export function hostingVariantInForce(
+  entry: Pick<ManifestEntry, 'sourceId' | 'hostings'>,
+  configured: McpRegistryEnv,
+): HostingVariant | undefined {
+  const value = configuredSources(configured)[entry.sourceId];
+  if (value === undefined || value === '') return undefined;
+  const switched = entry.hostings.find(
+    (variant): variant is NpmPackageVariant => variant.kind === 'npm-package' && variant.variant === value,
+  );
+  if (switched) return switched;
+  const remote = entry.hostings.filter((variant) => variant.kind === 'remote');
+  return remote.length === 1 ? remote[0] : undefined;
+}
+
+/** The `npm-package` variant in force for `entry`, if the variant in force is one. */
+export function npmPackageVariantInForce(
+  entry: Pick<ManifestEntry, 'sourceId' | 'hostings'>,
+  configured: McpRegistryEnv,
+): NpmPackageVariant | undefined {
+  const variant = hostingVariantInForce(entry, configured);
+  return variant?.kind === 'npm-package' ? variant : undefined;
+}
+
+/**
+ * Every `npm-package` variant `entry` declares, whatever the configuration:
+ * for the readers that are not configuration-bound (a record's data sources,
+ * the committed lockfiles, a notebook's text), which state what a source runs
+ * whether or not this instance has it on. Each entry has at most one today.
+ */
+export function npmPackageVariants(entry: Pick<ManifestEntry, 'hostings'>): NpmPackageVariant[] {
+  return entry.hostings.filter((variant): variant is NpmPackageVariant => variant.kind === 'npm-package');
+}
+
+/**
  * A source this instance RUNS rather than calls at a configured address: a
- * publisher-bundled stdio server from the manifest entry's `hosting` field,
+ * publisher-bundled stdio server from the manifest entry's `npm-package`
+ * hosting variant in force (`npmPackageVariantInForce`),
  * offered while its switch is on (`configuredSources`). It has no address
  * here, because it has none until a call wakes its sandbox: the address is
  * resolved per call (`./hosting/address.ts`), never configured and never
@@ -82,7 +128,8 @@ export interface HostedMcpServer {
   alias: string;
   /** The manifest entry's `id`, as for an addressed server. */
   serverId: string;
-  /** The pinned package the host runs, from the manifest entry. */
+  /** The pinned package the host runs: the manifest entry's `npm-package`
+   *  variant in force, read through its `SourceHosting` fields. */
   hosting: SourceHosting;
 }
 
@@ -281,21 +328,26 @@ export function buildMcpRegistry(env: McpRegistryEnv, selection?: SourceSelectio
   };
 
   // Sources the instance runs itself, offered by their switch rather than an
-  // address (router 0.3.0 `configuredSources`; #617 P3). Absent while the
+  // address (router `configuredSources`; #617 P3): an entry whose variant in
+  // force is an `npm-package` one (router 0.4.0, #632 D11). Absent while the
   // switch is unset, so with every switch unset this registry is the one the
   // previous router built, key for key, and its tools are refused per call
   // below, naming the switch.
-  const switchedOn = configuredSources(env);
   const hosted: Record<string, HostedMcpServer> = {};
   for (const entry of CIVIC_MANIFEST) {
-    if (!entry.hosting || switchedOn[entry.sourceId] === undefined) continue;
+    const variant = npmPackageVariantInForce(entry, env);
+    if (!variant) continue;
     hosted[entry.sourceId] = {
       sourceId: entry.sourceId,
       label: entry.displayName,
       tools: [...entry.toolNames],
       alias: entry.alias,
       serverId: entry.id,
-      hosting: entry.hosting,
+      // The variant's five `SourceHosting` fields, copied by name: the
+      // website's own field keeps 0.3.0's type and shape, so nothing that
+      // reads or states it gains the variant's `variant`, `runsAt` or
+      // `logging`.
+      hosting: { kind: variant.kind, package: variant.package, version: variant.version, commit: variant.commit, outbound: variant.outbound },
     };
   }
 
@@ -400,7 +452,7 @@ export interface ConfiguredMcpServer {
 
 /**
  * The package URL (purl) a record states for a hosted server (#617 ruling a2):
- * `pkg:npm/<scope>/<name>@<version>`, from the manifest entry's hosting field,
+ * `pkg:npm/<scope>/<name>@<version>`, from the manifest entry's npm-package variant,
  * never configured. Each segment of the package name is percent-encoded on its
  * own, so the scope's `@` is `%40` and the `/` between scope and name stays a
  * `/` (encoding the whole name would write `%2F`, which is not the purl):

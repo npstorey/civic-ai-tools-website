@@ -55,8 +55,10 @@ test('criterion 4: the secret is read by name, trimmed, and blank is absent', ()
 });
 
 test('criterion 1: the name is the prefix, the environment, the alias and the pinned version, within the platform rules', () => {
-  const { alias, hosting } = NYC_CHARTER_ENTRY;
-  assert.ok(hosting, 'premise: the manifest entry carries a hosting field');
+  // Router 0.4.0 (#632 D11): the pin is the entry's npm-package hosting variant.
+  const { alias, hostings } = NYC_CHARTER_ENTRY;
+  const hosting = hostings.find((variant) => variant.kind === 'npm-package');
+  assert.ok(hosting, 'premise: the manifest entry carries an npm-package hosting variant');
   const name = hostedSandboxName(alias, hosting!.version, 'production');
   assert.equal(name, NAME);
   assert.ok(name.startsWith(HOSTED_SANDBOX_NAME_PREFIX));

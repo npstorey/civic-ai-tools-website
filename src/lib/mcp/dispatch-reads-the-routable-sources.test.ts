@@ -130,6 +130,10 @@ const STUB_ENTRY: CivicManifestEntry = {
   ],
   toolNames: ['search'],
   guidance: { async fetchText() { return ''; } },
+  // Router 0.4.0's two required fields (#632 D11, D6): a remote source with
+  // one variant, On in a first consent. The router reads neither.
+  hostings: [{ variant: 'remote', kind: 'remote', runsAt: 'other', logging: [] }],
+  consentDefault: 'on',
 };
 
 /** Neither Socrata nor the stub routable; both offered, in the order given. */

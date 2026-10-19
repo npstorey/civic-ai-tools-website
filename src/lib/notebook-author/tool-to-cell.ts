@@ -13,6 +13,7 @@ import type { NotebookCell } from './cells.ts';
 import { codeCell, markdownCell } from './cells.ts';
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import { upstreamToolName } from '../mcp/operation-types.ts';
+import { npmPackageVariants } from '../mcp/registry.ts';
 
 /**
  * `call`, named by its upstream name (#599 W3). Since W3 a record names a tool
@@ -373,7 +374,7 @@ const NOT_RERUNNABLE_STEP_TOOLS = new Set(['fetch', 'ckan__aggregate_data', 'get
 
 /** The hosted manifest entry that declares an upstream tool name, if any. */
 function hostedEntryFor(name: string) {
-  return CIVIC_MANIFEST.find((entry) => entry.hosting && entry.toolNames.includes(name));
+  return CIVIC_MANIFEST.find((entry) => npmPackageVariants(entry).length > 0 && entry.toolNames.includes(name));
 }
 
 /**
@@ -1000,11 +1001,14 @@ function renderFailedToolCell(
  */
 function renderNotRerunnableStepCell(call: PhaseAToolCall): ToolCellOutput {
   const hosted = hostedEntryFor(call.name);
-  const why = hosted?.hosting
+  // The entry's npm-package variant, whatever the configuration (#632 D11):
+  // the notebook names what the source runs.
+  const pinned = hosted ? npmPackageVariants(hosted)[0] : undefined;
+  const why = hosted && pinned
     ? [
       `The original analysis read a section of law through \`${call.name}\`, a tool of the ` +
         `${hosted.displayName}, which the instance runs from the pinned package ` +
-        `\`${hosted.hosting.package}@${hosted.hosting.version}\`. This notebook has no helper that ` +
+        `\`${pinned.package}@${pinned.version}\`. This notebook has no helper that ` +
         'calls that source, so no cell here repeats the request, and nothing here states what it returned.',
       '',
       'No code cell is generated for it, and nothing is cited for it: this document did not read that source.',

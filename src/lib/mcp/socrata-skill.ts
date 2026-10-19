@@ -77,7 +77,7 @@ import {
   type SourceSelection,
 } from '@typedstandards/civic-typed-router';
 import { callMcpPrompt, getServerInstructions } from './client.ts';
-import { readMcpEnvFromProcess, type McpRegistryEnv } from './registry.ts';
+import { npmPackageVariantInForce, readMcpEnvFromProcess, type McpRegistryEnv } from './registry.ts';
 import { DATA_COMMONS_PUBLICATION_HOST } from './data-commons-skill.ts';
 import { errorLogFacts } from '../streaming.ts';
 
@@ -477,9 +477,12 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput = {}):
       block = '';
     }
     const contributed = !unserved && block.trim().length > 0 && prompt.includes(block);
+    const hosted = npmPackageVariantInForce(entry, configured);
     components.push({
       id: entry.id,
-      ...(entry.hosting ? { version: hostedComponentVersion(entry.hosting) } : {}),
+      // The npm-package variant in force (#632 D11): a hosted source states the
+      // version it runs; a remote one states none.
+      ...(hosted ? { version: hostedComponentVersion(hosted) } : {}),
       ...(contributed ? { guidanceHash: sha256Hex(block), guidanceOrigin: originOf(seen) } : {}),
     });
   }

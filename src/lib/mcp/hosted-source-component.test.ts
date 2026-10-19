@@ -60,7 +60,7 @@ test('C4: Charter\'s components[] entry is its id and the version 0.3.1+b784cb76
 
 test('C4: the addressed sources\' entries carry no version (the client reads no serverInfo)', async () => {
   const composed = await composeSystemPrompt({ configured: CHARTER_ON, now: new Date('2026-10-16T12:00:00Z') });
-  for (const source of CIVIC_MANIFEST.filter((entry) => !entry.hosting)) {
+  for (const source of CIVIC_MANIFEST.filter((entry) => !entry.hostings.some((variant) => variant.kind === 'npm-package'))) {
     const entry = composed.components.find((component) => component.id === source.id);
     assert.ok(entry, `premise: ${source.sourceId} is offered`);
     assert.equal(Object.hasOwn(entry!, 'version'), false, `${source.sourceId} states a version it never read`);
