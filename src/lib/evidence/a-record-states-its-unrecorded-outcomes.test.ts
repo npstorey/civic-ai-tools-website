@@ -230,11 +230,12 @@ test('every surface that reads a stored record\'s queries[] states the record-le
   });
   // The premise names the surface it knows rather than counting two: the
   // second, the record page's per-call timeline component, was removed in
-  // #601 (LAYOUT-WEB W2 P2), and the page's step view is built by
-  // `buildRecordStepView` from the entries the page hands it.
+  // #601 (LAYOUT-WEB W2 P2). Since LAYOUT-WEB W3 P2 the record page reads its
+  // package through the record adapter, which builds the refused lines, the
+  // steps and section D from `queries[]`; the page itself reads none of it.
   assert.ok(
-    recordSurfaces.includes('src/app/(app)/evidence/[slug]/page.tsx'),
-    'PREMISE: the record page is not among the surfaces reading a stored record\'s queries[], so ' +
+    recordSurfaces.includes('src/components/answer-view/adapt-record.ts'),
+    'PREMISE: the record page\'s adapter is not among the surfaces reading a stored record\'s queries[], so ' +
       `this scan is not reading the tree it thinks it is. Found: ${recordSurfaces.join(', ') || 'none'}`,
   );
 

@@ -141,8 +141,11 @@ function sourceOf(relative: string): string {
 }
 
 test('query-step: the record page renders queries[] through describeQueryOutcome', () => {
+  // Since LAYOUT-WEB W3 P2 the page hands its package to the record adapter,
+  // which writes section D's lines; the page renders the view it returns.
+  assert.ok(sourceOf('../../app/(app)/evidence/[slug]/page.tsx').includes('adaptRecord('), 'the record page builds its view with the record adapter');
   for (const [name, source] of [
-    ['evidence/[slug]/page.tsx', sourceOf('../../app/(app)/evidence/[slug]/page.tsx')],
+    ['answer-view/adapt-record.ts', sourceOf('../../components/answer-view/adapt-record.ts')],
   ] as [string, string][]) {
     assert.ok(
       source.includes('describeQueryOutcome'),

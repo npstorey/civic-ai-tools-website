@@ -214,8 +214,11 @@ test('the record page\'s notebook section renders the reading, on every layout',
       'surface that special-cased "not stated" would be one edit away from hiding it again',
   );
 
-  const page = sourceOf('src/app/(app)/evidence/[slug]/page.tsx');
-  const renders = page.match(/<NotebookSection\b/g) ?? [];
+  // Since LAYOUT-WEB W3 P2 the record page renders the answer view, and the
+  // view renders a record's section E: the page renders it through the view.
+  assert.match(sourceOf('src/app/(app)/evidence/[slug]/page.tsx'), /<AnswerView\b/, 'the record page renders the answer view');
+  const page = sourceOf('src/components/answer-view/AnswerView.tsx');
+  const renders = page.match(/<NotebookSection notebook=\{recordNotebook\.notebook\}/g) ?? [];
   assert.ok(
     renders.length >= 1,
     `the record page renders <NotebookSection> ${renders.length} time(s); it has one layout since ` +

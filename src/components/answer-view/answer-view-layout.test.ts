@@ -564,6 +564,21 @@ test('W3 P1 (3) one fixture answer renders byte-identical markup in the comparis
   assert.equal(fromLegacy, comparison, 'the executed run (a legacy synthesis section) and the comparison render the same answer markup');
 });
 
+test('W3 P2 fix 1 (2) no element of the answer carries react-markdown’s node prop, on the comparison or the executed run', () => {
+  const ANSWER = 'NODEANSWER-w3p2f1: see [the portal](https://portal.example.test/) for **42** rows.';
+  const comparisonHtml = renderComparison(comparisonState(ANSWER));
+  const comparison = part(comparisonHtml, 'answer').markup;
+  const run = part(withProviders(createElement(ChatNotebookOutput, {
+    notebook: notebookWith([markdownOutput(ANSWER)], 'executed'), prompt: QUESTION, model: MODEL, portal: PORTAL, toolCalls: [],
+  })), 'answer').markup;
+  for (const [surface, markup] of [['the comparison', comparison], ['the executed run', run]] as const) {
+    assert.ok(/<a\b[^>]*href="https:\/\/portal\.example\.test\/"/.test(markup), `${surface}: premise: the fixture answer renders a link`);
+    assert.doesNotMatch(markup, /\snode=/, `${surface}: an answer element carries a node attribute`);
+  }
+  assert.doesNotMatch(part(comparisonHtml, 'sources').markup, /\snode=/, 'the sources line’s links carry a node attribute');
+  assert.equal(run, comparison, 'criterion (3)’s byte-identity still holds');
+});
+
 // --- Criterion (4): rule 3, by text ----------------------------------------------------
 
 function before(html: string, needle: string, surface: string): void {

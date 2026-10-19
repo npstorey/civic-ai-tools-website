@@ -1,26 +1,32 @@
 'use client';
 
 /**
- * The answer view: one component every run surface renders its answer
- * through (LAYOUT-WEB W3 P1, design §4.1 option A). An adapter builds the
- * model from a surface's state (`adapt-comparison.ts`, `adapt-notebook.ts`);
- * this file decides where each part sits, once, so the surfaces cannot drift.
+ * The answer view: one component every surface renders its answer through
+ * (LAYOUT-WEB W3 P1 and P2, design §4.1 option A). An adapter builds the model
+ * from a surface's state (`adapt-comparison.ts`, `adapt-notebook.ts`) or from a
+ * published record (`adapt-record.ts`); this file decides where each part
+ * sits, once, so the surfaces cannot drift.
  *
  * THE ORDER, by position in the markup:
  *   1. the status row, one line (`data-part="status-row"`), with the
- *      refused-request line under it (ruling D2);
+ *      refused-request line under it (ruling D2) and, on a record, the
+ *      record-level unrecorded-outcomes sentence;
  *   2. the answer (`data-part="answer"`), under its author line, with no
  *      section heading;
- *   3. the citation (`data-part="citation"`);
+ *   3. the citation (`data-part="citation"`): the run's preview, or the
+ *      record's own block (`citationBlock`);
  *   4. the steps (`data-part="steps"`): the comparison's progress log, or the
  *      executed run's step view and its closing rows;
  *   5. the sources line (`data-part="sources"`), then what the surface adds
  *      outside the disclosure (`notices`);
  *   6. one disclosure, closed, labelled "Learn more about how this analysis
  *      was produced": A, B, C, D, E, F (the same answer element again), G, the
- *      signers, then what the surface adds (`disclosureExtras`);
- *   7. the actions (`data-part="actions"`), the surface's controls.
- * A part the surface does not have is not rendered.
+ *      signers, then what the surface adds (`disclosureExtras`: on a record,
+ *      the parts W1 placed after the envelope);
+ *   7. the actions (`data-part="actions"`), the surface's controls; a record's
+ *      Status History sits between the disclosure and them (`afterDisclosure`).
+ * A part the surface does not have is not rendered. The record page sets its
+ * sections at `h2`, under its own `h1` (`sectionHeading`).
  *
  * WHO WROTE EACH PART. Every author line comes from the model (`AUTHOR` in
  * `view-model.ts`, design §6) and is rendered with `data-author`; this file
@@ -40,6 +46,10 @@ import NotebookSection from '@/components/evidence/NotebookSection';
 import ChatSignersSection from '@/components/notebook/ChatSignersSection';
 import ChatCitationPreview from '@/components/notebook/ChatCitationPreview';
 import RenderingCellOutputs from '@/components/notebook/RenderingCellOutputs';
+import SkillSection from '@/components/evidence/SkillSection';
+// What the record can disclose about its composed skill prompt (#411, D3): the
+// one decision every `SkillSection` site asks.
+import { carriesSkillText } from '@/lib/evidence/skill-disclosure';
 import { UNPLACED_CALLS_LINE, type StepViewCall } from '@/lib/answer-view/steps';
 import {
   DISCLOSURE_LABEL,
@@ -52,9 +62,17 @@ import {
 
 // --- Pieces ---------------------------------------------------------------------
 
+/**
+ * react-markdown hands every override its hast `node` as a prop. Spread onto an
+ * element, it becomes the attribute `node="[object Object]"`; each override
+ * below takes it out before spreading the rest.
+ */
+type MarkdownProps<T extends keyof React.JSX.IntrinsicElements> = React.ComponentPropsWithoutRef<T> & { node?: unknown };
+
 /** Links in an answer open in a new tab. */
 const MARKDOWN_COMPONENTS = {
-  a: ({ href, children, ...props }: React.ComponentPropsWithoutRef<'a'>) => (
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  a: ({ node, href, children, ...props }: MarkdownProps<'a'>) => (
     <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }} {...props}>
       {children}
     </a>
@@ -63,8 +81,10 @@ const MARKDOWN_COMPONENTS = {
 
 /** The sources line renders inline: no block wrappers, monospace links. */
 const SOURCES_COMPONENTS = {
-  p: ({ children, ...props }: React.ComponentPropsWithoutRef<'p'>) => <span {...props}>{children}</span>,
-  a: ({ href, children, ...props }: React.ComponentPropsWithoutRef<'a'>) => (
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  p: ({ node, children, ...props }: MarkdownProps<'p'>) => <span {...props}>{children}</span>,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  a: ({ node, href, children, ...props }: MarkdownProps<'a'>) => (
     <a
       href={href}
       target="_blank"
@@ -84,12 +104,16 @@ function AuthorLine({ part, text }: { part: string; text: string | null }) {
   return <p data-author={part} style={AUTHOR_LINE_STYLE}>{text}</p>;
 }
 
-function Section({ title, author, children }: { title: string; author?: ReactNode; children: ReactNode }) {
+/** A section heading's level: `h3` under a run's own `h2`, `h2` under the record page's `h1`. */
+type HeadingLevel = 'h2' | 'h3';
+
+function Section({ title, author, children, level = 'h3' }: { title: string; author?: ReactNode; children: ReactNode; level?: HeadingLevel }) {
+  const Heading = level;
   return (
     <section style={{ marginBottom: '32px' }}>
-      <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-primary)' }}>
+      <Heading style={{ fontSize: level === 'h2' ? '18px' : '16px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-primary)' }}>
         {title}
-      </h3>
+      </Heading>
       {author}
       {children}
     </section>
@@ -99,29 +123,50 @@ function Section({ title, author, children }: { title: string; author?: ReactNod
 // --- 1. The status row -------------------------------------------------------------
 
 function StatusRow({ status }: { status: StatusPart }) {
+  const unrecorded = status.unrecorded ?? null;
+  const lines = status.refused !== null || unrecorded !== null;
   return (
     <>
       {status.facts.length > 0 && (
         <div data-part="status-row" style={{
           fontSize: '13px', color: 'var(--text-secondary)',
-          marginBottom: status.refused !== null ? '8px' : '24px',
+          marginBottom: lines ? '8px' : '24px',
           display: 'flex', flexWrap: 'wrap', gap: '0 8px', alignItems: 'center',
         }}>
           {status.facts.map((fact, i) => (
             <Fragment key={i}>
               {i > 0 && <span>·</span>}
-              <span style={fact.muted ? { fontStyle: 'italic', color: 'var(--text-muted)' } : undefined}>
-                {fact.text}{fact.strong !== undefined && <strong>{fact.strong}</strong>}
-              </span>
+              {fact.href !== undefined ? (
+                <a
+                  href={fact.href}
+                  {...(fact.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                  style={{ color: 'var(--accent)' }}
+                >
+                  {fact.text}
+                </a>
+              ) : (
+                <span style={fact.muted ? { fontStyle: 'italic', color: 'var(--text-muted)' } : undefined}>
+                  {fact.text}{fact.strong !== undefined && <strong>{fact.strong}</strong>}
+                </span>
+              )}
             </Fragment>
           ))}
         </div>
       )}
-      {/* Ruling D2: outside the disclosure, under the status row. */}
-      {status.refused !== null && (
-        <p data-part="refused-requests" style={{ margin: '0 0 24px', fontSize: '13px', color: 'var(--error)' }}>
-          {status.refused}
-        </p>
+      {/* Ruling D2: outside the disclosure, under the status row. Per-call text stays in D. */}
+      {lines && (
+        <div data-part="refused-requests" style={{ margin: '0 0 24px' }}>
+          {status.refused !== null && (
+            <p style={{ margin: unrecorded !== null ? '0 0 6px' : 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--error)' }}>
+              {status.refused}
+            </p>
+          )}
+          {unrecorded !== null && (
+            <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+              {unrecorded}
+            </p>
+          )}
+        </div>
       )}
     </>
   );
@@ -136,6 +181,9 @@ export function AnswerBody({ answer }: { answer: AnswerPart }) {
     <div data-part="answer" className="response-markdown">
       {content.kind === 'cell-outputs' ? (
         <RenderingCellOutputs outputs={content.outputs} />
+      ) : content.kind === 'unavailable' ? (
+        // The site's own words, under no author line: nothing the model wrote is shown.
+        <em data-part="answer-unavailable" style={{ color: 'var(--text-muted)' }}>{content.text}</em>
       ) : content.kind === 'markdown' ? (
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{content.markdown}</ReactMarkdown>
       ) : (
@@ -228,13 +276,14 @@ export function StepsPartView({ steps }: { steps: StepsPart }) {
 
 // --- 6. The disclosure --------------------------------------------------------------
 
-function Disclosure({ disclosure, answer, answerElement, extras }: {
+function Disclosure({ disclosure, answer, answerElement, extras, level }: {
   disclosure: DisclosurePart;
   answer: AnswerPart;
   answerElement: ReactNode;
   extras?: ReactNode;
+  level: HeadingLevel;
 }) {
-  const { question, instructions, environment, trace, notebook, summary, signers } = disclosure;
+  const { question, instructions, recordInstructions, environment, trace, recordTrace, notebook, recordNotebook, summary, signers } = disclosure;
   const promptLines = instructions?.text ? instructions.text.split(/\r?\n/).length : 0;
   return (
     <details data-part="disclosure" style={{ marginTop: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '8px' }}>
@@ -246,20 +295,53 @@ function Disclosure({ disclosure, answer, answerElement, extras }: {
       </summary>
       <div style={{ marginTop: '16px' }}>
         {question && (
-          <Section title="A · Initial prompt" author={<AuthorLine part="question" text={question.author} />}>
-            <div style={{
-              padding: '16px 20px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
-              borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
-              fontSize: '15px', lineHeight: 1.6, color: 'var(--text-primary)',
-              whiteSpace: 'pre-wrap',
-            }}>
-              {question.prompt}
-            </div>
+          <Section level={level} title="A · Initial prompt" author={<AuthorLine part="question" text={question.author} />}>
+            {question.prompt !== null ? (
+              <div style={{
+                padding: '16px 20px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
+                borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
+                fontSize: '15px', lineHeight: 1.6, color: 'var(--text-primary)',
+                whiteSpace: 'pre-wrap',
+              }}>
+                {question.prompt}
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                  Prompt visibility was hash-only; verbatim text not captured.
+                </div>
+                {/* The hash identifies the prompt that was used (W1 ruling D7). */}
+                {question.hash && (
+                  <div style={{
+                    marginTop: '4px', fontSize: '12px', color: 'var(--text-muted)',
+                    fontFamily: 'monospace', wordBreak: 'break-all',
+                  }}>
+                    Prompt hash: {question.hash}
+                  </div>
+                )}
+              </>
+            )}
+          </Section>
+        )}
+
+        {/* B on a record: the skill prompt it carries, inline or as a blob it fetches on click. */}
+        {recordInstructions && carriesSkillText(recordInstructions.disclosure) && (
+          <Section level={level} title="B · System prompts" author={<AuthorLine part="instructions" text={recordInstructions.author} />}>
+            {(() => {
+              const d = recordInstructions.disclosure;
+              return (
+                <SkillSection
+                  skillText={d.kind === 'inline' ? d.text : undefined}
+                  skillTextRef={d.kind === 'blob' ? d.ref : undefined}
+                  skillHash={d.kind === 'inline' || d.kind === 'blob' ? d.hash : undefined}
+                />
+              );
+            })()}
           </Section>
         )}
 
         {instructions && (
-          <Section title="B · System prompts" author={<AuthorLine part="instructions" text={instructions.author} />}>
+          <Section level={level} title="B · System prompts" author={<AuthorLine part="instructions" text={instructions.author} />}>
             <div style={{
               padding: '12px 16px', border: '1px solid var(--border-color)', borderRadius: '6px',
               fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6,
@@ -321,13 +403,13 @@ function Disclosure({ disclosure, answer, answerElement, extras }: {
         )}
 
         {environment && (
-          <Section title="C · Model + environment">
+          <Section level={level} title="C · Model + environment">
             <div style={{
               display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
               gap: '12px',
             }}>
               {environment.map((item) => (
-                <div key={item.label} style={{
+                <div data-part="c-item" key={item.label} style={{
                   padding: '10px 14px', border: '1px solid var(--border-color)',
                   borderRadius: '4px',
                 }}>
@@ -348,8 +430,56 @@ function Disclosure({ disclosure, answer, answerElement, extras }: {
           </Section>
         )}
 
+        {/* D on a record: each call's signed fields, raw (W1 ruling D6). */}
+        {recordTrace && (
+          <Section level={level} title="D · Deliberative trace">
+            <details>
+              <summary style={{
+                cursor: 'pointer', fontSize: '13px',
+                color: 'var(--text-secondary)', padding: '8px 0',
+              }}>
+                Show {recordTrace.length} tool {recordTrace.length === 1 ? 'call' : 'calls'}
+              </summary>
+              <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {recordTrace.map((q, i) => (
+                  <div data-part="call" key={i} style={{
+                    padding: '10px 14px', border: '1px solid var(--border-color)',
+                    borderRadius: '4px', fontSize: '13px',
+                  }}>
+                    <div style={{ fontFamily: 'monospace', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                      {q.label}
+                    </div>
+                    {/* The signed entry's dataset and portal, when it carries them,
+                        and its duration when the outcome below does not state it. */}
+                    {(q.datasetId || q.portal || q.durationMs !== undefined) && (
+                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                        {[
+                          q.datasetId ? <span key="dataset">Dataset <code>{q.datasetId}</code></span> : null,
+                          q.portal ? <span key="portal">Portal <code>{q.portal}</code></span> : null,
+                          q.durationMs !== undefined ? <span key="duration">Duration <code>{q.durationMs}ms</code></span> : null,
+                        ]
+                          .filter((part) => part !== null)
+                          .flatMap((part, j) => (j === 0 ? [part] : [<span key={`sep-${j}`}>{' · '}</span>, part]))}
+                      </div>
+                    )}
+                    <pre style={{
+                      fontSize: '11px', color: 'var(--text-secondary)', margin: 0,
+                      overflow: 'auto', whiteSpace: 'pre-wrap',
+                    }}>
+                      {q.argumentsJson}
+                    </pre>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      {q.outcome}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          </Section>
+        )}
+
         {trace && (
-          <Section title="D · Deliberative trace">
+          <Section level={level} title="D · Deliberative trace">
             {trace.length === 0 ? (
               <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
                 No tool calls were captured for this analysis.
@@ -389,8 +519,29 @@ function Disclosure({ disclosure, answer, answerElement, extras }: {
           </Section>
         )}
 
+        {/* E on a record: the claim about re-running it, the bundle (A-G format only), the notebook. */}
+        {recordNotebook && (
+          <Section level={level} title="E · Answer notebook">
+            {(recordNotebook.assertion !== null || recordNotebook.bundleHref !== null) && (
+              <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                {recordNotebook.assertion !== null && (
+                  <>
+                    {recordNotebook.assertion}{' '}
+                  </>
+                )}
+                {recordNotebook.bundleHref !== null && (
+                  <a href={recordNotebook.bundleHref} style={{ color: 'var(--accent)' }}>
+                    Download notebook (.ipynb)
+                  </a>
+                )}
+              </div>
+            )}
+            <NotebookSection notebook={recordNotebook.notebook} slug={recordNotebook.slug} />
+          </Section>
+        )}
+
         {notebook && (
-          <Section title="E · Answer notebook">
+          <Section level={level} title="E · Answer notebook">
             <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--text-secondary)' }}>
               {notebook.scopeSentence}{' '}
               The notebook metadata records the sandbox runtime versions used at execution.
@@ -400,14 +551,23 @@ function Disclosure({ disclosure, answer, answerElement, extras }: {
           </Section>
         )}
 
-        {disclosure.answerAgain && (
-          <Section title="F · Rendered answer" author={<AnswerAuthors answer={answer} />}>
+        {disclosure.answerAgain && answer.content.kind !== 'absent' && (
+          <Section level={level} title="F · Rendered answer" author={<AnswerAuthors answer={answer} />}>
             {answerElement}
+            {disclosure.answerNote !== undefined && (
+              <div style={{
+                marginTop: '10px', fontSize: '11px', color: 'var(--text-muted)',
+                fontFamily: 'monospace',
+              }}>
+                {disclosure.answerNote}
+              </div>
+            )}
           </Section>
         )}
 
         {summary && (
           <Section
+            level={level}
             title="G · Summary"
             author={summary.kind === 'pending' ? undefined : <AuthorLine part="summary" text={summary.author} />}
           >
@@ -431,7 +591,7 @@ function Disclosure({ disclosure, answer, answerElement, extras }: {
                     {summary.headlineFinding}
                   </div>
                 </div>
-              ) : summary.kind === 'derived' ? (
+              ) : summary.kind === 'derived' || summary.kind === 'stated' ? (
                 summary.text
               ) : (
                 <em style={{ color: 'var(--text-muted)' }}>
@@ -460,9 +620,17 @@ export interface AnswerViewProps {
   notices?: ReactNode;
   /** What the surface adds inside the disclosure, after the signers. */
   disclosureExtras?: ReactNode;
+  /** The record's own citation block, placed in the citation part under `model.recordCitation`'s line. */
+  citationBlock?: ReactNode;
+  /** What the surface places between the disclosure and the actions (a record's Status History). */
+  afterDisclosure?: ReactNode;
+  /** The level of the disclosure's section headings. */
+  sectionHeading?: HeadingLevel;
 }
 
-export default function AnswerView({ model, actions, notices, disclosureExtras }: AnswerViewProps) {
+export default function AnswerView({
+  model, actions, notices, disclosureExtras, citationBlock, afterDisclosure, sectionHeading = 'h3',
+}: AnswerViewProps) {
   // Built once, placed twice: first, and again as F inside the disclosure.
   const answerElement = <AnswerBody answer={model.answer} />;
   return (
@@ -475,12 +643,14 @@ export default function AnswerView({ model, actions, notices, disclosureExtras }
         </h2>
       )}
 
-      <div style={{ marginBottom: '24px' }}>
-        <AnswerAuthors answer={model.answer} />
-        {answerElement}
-      </div>
+      {model.answer.content.kind !== 'absent' && (
+        <div style={{ marginBottom: '24px' }}>
+          <AnswerAuthors answer={model.answer} />
+          {answerElement}
+        </div>
+      )}
 
-      {model.citation !== null && (
+      {model.citation !== null ? (
         <div data-part="citation">
           <AuthorLine part="citation" text={model.citation.author} />
           <ChatCitationPreview
@@ -490,7 +660,12 @@ export default function AnswerView({ model, actions, notices, disclosureExtras }
             statesExecution={model.citation.statesExecution}
           />
         </div>
-      )}
+      ) : model.recordCitation !== undefined && citationBlock !== undefined ? (
+        <div data-part="citation">
+          <AuthorLine part="citation" text={model.recordCitation.author} />
+          {citationBlock}
+        </div>
+      ) : null}
 
       {model.steps !== null && <StepsPartView steps={model.steps} />}
 
@@ -507,7 +682,15 @@ export default function AnswerView({ model, actions, notices, disclosureExtras }
 
       {notices}
 
-      <Disclosure disclosure={model.disclosure} answer={model.answer} answerElement={answerElement} extras={disclosureExtras} />
+      <Disclosure
+        disclosure={model.disclosure}
+        answer={model.answer}
+        answerElement={answerElement}
+        extras={disclosureExtras}
+        level={sectionHeading}
+      />
+
+      {afterDisclosure}
 
       {actions !== undefined && actions !== null && (
         <div data-part="actions" style={{ marginTop: '16px' }}>

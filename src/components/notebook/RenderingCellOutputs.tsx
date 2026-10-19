@@ -14,7 +14,7 @@
  * Section F of the chat-output A-G renderer delegates to this component
  * when the executed notebook carries a rendering code cell. Legacy
  * notebooks fall back to ReactMarkdown on the `## Synthesis` markdown body
- * (handled in ChatNotebookOutput.tsx).
+ * (handled in `answer-view/AnswerView.tsx`'s `AnswerBody`).
  */
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';

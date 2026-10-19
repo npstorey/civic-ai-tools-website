@@ -161,10 +161,16 @@ test('#416: the claim exists exactly once, and the record page reads it from the
       'a copy in JSX is the shape this phase removed, and it cannot be asserted over',
   );
 
-  const page = readFileSync(repoRoot + 'src/app/(app)/evidence/[slug]/page.tsx', 'utf8');
+  // Since LAYOUT-WEB W3 P2 the record page's section E is built by its adapter.
+  assert.match(
+    readFileSync(repoRoot + 'src/app/(app)/evidence/[slug]/page.tsx', 'utf8'),
+    /adaptRecord\(/,
+    'the record page does not build its view with the record adapter',
+  );
+  const page = readFileSync(repoRoot + 'src/components/answer-view/adapt-record.ts', 'utf8');
   assert.match(
     page,
-    /reproductionAssertionFor/,
+    /reproductionAssertionFor\(/,
     'the record page does not read the claim from the module that decides it',
   );
 });
