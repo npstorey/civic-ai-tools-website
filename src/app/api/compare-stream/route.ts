@@ -4,7 +4,9 @@ import { authOptions } from '@/lib/auth';
 import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks, type ProgressOpts } from '@/lib/openrouter-streaming';
 import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
-import { composeSystemPrompt, withPortalLockGuidance, DEFAULT_SOURCE_SELECTION } from '@/lib/mcp/socrata-skill';
+import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
+import { consentInForce } from '@/lib/sources/consent-gate';
+import { recordSourcesOffered } from '@/lib/sources/consent';
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import { encodeSSE, errorLogFacts, panelsForRun, startSseKeepAlive, streamErrorPayload, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
@@ -197,6 +199,31 @@ export async function POST(request: NextRequest) {
     const identifier = session?.user?.id || ip;
     const isAuthenticated = !!session?.user?.id;
 
+    // The consent in force (R6 W2, #632 D3, D12; design §4.4): nothing is
+    // sent anywhere before it, the model endpoint included. Read after the
+    // configuration refusals above and the session (whose `dbId` chooses the
+    // row over the cookie), and before the rate limiter reads or spends
+    // anything. None in force, or the re-ask rule says re-ask: the typed
+    // `consent_required` on the channel this route's configuration refusals
+    // use, an error event per panel, carrying the flows version to show.
+    const consent = await consentInForce(request, session);
+    if (!consent.ok) {
+      const encoder = new TextEncoder();
+      const body = panelsForRun(mcpOnly)
+        .map((panel) =>
+          encodeSSE({
+            type: 'error',
+            panel,
+            message: consent.payload.error,
+            code: consent.payload.code,
+            flowsVersion: consent.payload.flowsVersion,
+            reask: consent.payload.reask,
+          } as StreamEvent & { message: string; code: StreamErrorCode })
+        )
+        .join('');
+      return new Response(encoder.encode(body), { headers: SSE_HEADERS });
+    }
+
     // Check rate limit
     const rateLimitInfo = await checkRateLimit(identifier, isAuthenticated);
     if (isRateLimited(rateLimitInfo)) {
@@ -230,9 +257,10 @@ export async function POST(request: NextRequest) {
     const skillFetchSpanId = trace.startSpan('skill_fetch');
     // The run's configuration, read once, so the prompt, the tools and what
     // the record states about them describe one configuration (#599 W4). The
-    // selection is every offered source until a request can carry one (D3).
+    // selection is the reader's: configured ∩ On, from the consent store
+    // (R6 W2, D3 = A), never from the request.
     const configured = readMcpEnvFromProcess();
-    const selection = DEFAULT_SOURCE_SELECTION;
+    const selection = consent.selection;
     const composition = await composeSystemPrompt({ portal, configured, selection });
     // Under the lock, one section is appended saying the portal-general
     // guidance does not apply here (#436, D7); unlocked, the prompt is unchanged.
@@ -268,8 +296,12 @@ export async function POST(request: NextRequest) {
       assertedDate: composition.assertedDate,
       mcpServers: configuredMcpServers(configured),
       toolDefinitions: offeredTools,
-      sourcesOffered: composition.sourcesOffered,
+      // The router's `not-selected` is recorded as the reader's own state:
+      // `reader-off` or `not-consented` (D2 = A).
+      sourcesOffered: recordSourcesOffered(composition.sourcesOffered, consent.states),
       components: composition.components,
+      // The flows statement in force: its url, hash and date (D2 = A).
+      flowsStatement: consent.reference,
     });
 
     const systemPromptWithoutMcp = `You are a helpful assistant.

@@ -450,8 +450,8 @@ export type ReplaySystemPromptComposer = (
 export interface ReplayForPackageInputs {
   /** The stored package, read from storage by the route. */
   pkg: ReplayPortalSource & ReplayOfferedSetSource;
-  /** The replayer's On states (#632 C6); see `replayOfferedSet`. Absent in
-   *  W1: nothing feeds it until W2. */
+  /** The replayer's On states (#632 C6); see `replayOfferedSet`. The replay
+   *  route passes the consent store's selection (R6 W2). */
   replayerSelection?: SourceSelection;
   /** Built by the route from the caller-supplied key, in the route's own error handling. */
   client: OpenAI;

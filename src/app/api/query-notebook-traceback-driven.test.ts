@@ -395,6 +395,7 @@ mcp.unref();
 const MCP_URL = `http://127.0.0.1:${(mcp.address() as AddressInfo).port}/mcp`;
 
 const { startScriptedModelServer } = await import('../../lib/model-loop/test-harness.ts');
+const { consentCookieForTests } = await import('../../lib/sources/consent-fixture.ts');
 const scripted = await startScriptedModelServer([{ content: 'Twelve complaints were recorded.' }]);
 scripted.server.unref();
 
@@ -478,6 +479,8 @@ async function drive(driver: 'container' | 'lambda' | 'vercel-sandbox'): Promise
   const log = await captureConsole(async () => {
     const response = await POST(new Request('http://localhost/api/query-notebook', {
       method: 'POST',
+      // R6 W2 (#632): a consent in force (every configured source On), as a browser that had answered the card would.
+      headers: { cookie: consentCookieForTests() },
       body: JSON.stringify({ query: 'How many noise complaints were there last week?', portal: 'data.example.org' }),
     }));
     status = response.status;

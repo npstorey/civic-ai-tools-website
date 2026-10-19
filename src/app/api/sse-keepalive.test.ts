@@ -249,10 +249,14 @@ function mockIntervals(): void {
   }) as typeof clearInterval;
 }
 
+// R6 W2 (#632): every route that sends a question refuses one with no consent in force; this
+// suite's requests carry a consent (every configured source On), as a browser that had answered
+// the consent card would. Nothing it asserts changes.
+const { consentCookieForTests } = await import('../../lib/sources/consent-fixture.ts');
 function post(route: string, body: unknown): Request {
   return new Request(`http://localhost${route}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', cookie: consentCookieForTests() },
     body: JSON.stringify(body),
   });
 }

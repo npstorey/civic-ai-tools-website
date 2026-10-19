@@ -285,8 +285,12 @@ async function drive(name: string, run: () => Promise<Response>): Promise<Drive>
   return { name, status: response.status, body, requests: MODEL_REQUESTS.slice(from) };
 }
 
+// R6 W2 (#632): every route that sends a question refuses one with no consent in force; this
+// suite's requests carry a consent (every configured source On), as a browser that had answered
+// the consent card would. Nothing it asserts changes.
+const { consentCookieForTests } = await import('./sources/consent-fixture.ts');
 const post = (route: string, body: unknown) =>
-  new Request(`http://localhost${route}`, { method: 'POST', body: JSON.stringify(body) }) as never;
+  new Request(`http://localhost${route}`, { method: 'POST', headers: { cookie: consentCookieForTests() }, body: JSON.stringify(body) }) as never;
 
 const notebookRoute = await import('../app/api/query-notebook/route.ts');
 const compareStreamRoute = await import('../app/api/compare-stream/route.ts');

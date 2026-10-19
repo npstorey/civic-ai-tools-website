@@ -244,8 +244,12 @@ async function drive(name: string, run: () => Promise<Response>): Promise<Drive>
   return { name, body, requests: MODEL_REQUESTS.slice(from) };
 }
 
+// R6 W2 (#632): every route that sends a question refuses one with no consent in force; this
+// suite's requests carry a consent (every configured source On), as a browser that had answered
+// the consent card would. Nothing it asserts changes.
+const { consentCookieForTests } = await import('../../lib/sources/consent-fixture.ts');
 const post = (route: string, body: unknown) =>
-  new Request(`http://localhost${route}`, { method: 'POST', body: JSON.stringify(body) }) as never;
+  new Request(`http://localhost${route}`, { method: 'POST', headers: { cookie: consentCookieForTests() }, body: JSON.stringify(body) }) as never;
 
 const compareStreamRoute = await import('./compare-stream/route.ts');
 const notebookRoute = await import('./query-notebook/route.ts');
@@ -349,10 +353,14 @@ for (const d of [COMPARE_STREAM, NOTEBOOK]) {
       { url: RUN_DATA_COMMONS, name: 'data-commons' },
       { url: RUN_BOSTON, name: 'boston-opencontext' },
     ]);
+    // R6 W2 (#632, D3 = A): every run now carries the reader's selection
+    // (configured ∩ On, from the consent), so a source the reader has On is
+    // `selected`, the router's reason when a selection is passed; `configured`
+    // is stated only by a run given no selection, which W2 leaves none of.
     assert.deepEqual(JSON.parse(root['analysis.sources_offered'] ?? 'null'), [
-      { sourceId: 'socrata', alias: 'socrata', reason: 'configured' },
-      { sourceId: 'data-commons', alias: 'data_commons', reason: 'configured' },
-      { sourceId: 'boston-opencontext', alias: 'boston', reason: 'configured' },
+      { sourceId: 'socrata', alias: 'socrata', reason: 'selected' },
+      { sourceId: 'data-commons', alias: 'data_commons', reason: 'selected' },
+      { sourceId: 'boston-opencontext', alias: 'boston', reason: 'selected' },
       // Router 0.3.0's hosted source, with NYC_CHARTER_HOSTING unset: the row
       // the anchor names for the pin (#617 P3). No component and no server
       // entry come with it.

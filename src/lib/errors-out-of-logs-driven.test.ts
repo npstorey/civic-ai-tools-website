@@ -294,10 +294,14 @@ process.env.MODEL_CATALOG = JSON.stringify([
   },
 ]);
 
+// R6 W2 (#632): every route that sends a question refuses one with no consent in force; this
+// suite's requests carry a consent (every configured source On), as a browser that had answered
+// the consent card would. Nothing it asserts changes.
+const { consentCookieForTests } = await import('./sources/consent-fixture.ts');
 function post(route: string, body: unknown, raw?: string): Request {
   return new Request(`http://localhost${route}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', cookie: consentCookieForTests() },
     body: raw ?? JSON.stringify(body),
   });
 }

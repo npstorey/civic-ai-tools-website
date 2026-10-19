@@ -9,7 +9,11 @@
 // of it to measured behaviour; that function is local to that suite, so the
 // section anchor is repeated here rather than imported. Analytics leaves from
 // the reader's browser, not the server, so it has no row there: the source
-// adds each value of `ANALYTICS_SERVICES` (`src/lib/analytics.tsx`).
+// adds each value of `ANALYTICS_SERVICES` (`src/lib/analytics.tsx`). What a
+// platform holds rather than what the site sends (the hosting platform's
+// function logs, the sandbox platform a hosted source runs on) has no row
+// either: the source adds each value of `PLATFORM_HELD_KINDS`
+// (`src/lib/flows/statement.ts`, R6 W2 ruling 1).
 //
 // WHY THIS IS A DERIVATION AND NOT A LIST. Neither side is typed here. The rows
 // are read from the guide, and the guide's executor rows are themselves pinned
@@ -125,7 +129,15 @@ function outboundRows(doc: string): OutboundRow[] {
 
 const DOC = fs.readFileSync(path.join(REPO, 'docs', 'deploy.md'), 'utf8');
 const ROWS = outboundRows(DOC);
-const RECIPIENTS = [...ROWS.map((row) => row.kind), ...ANALYTICS_SERVICES.map(analyticsKey)];
+// R6 W2 (#632, ruling 1): the third source, the kinds a platform holds
+// (`PLATFORM_HELD_KINDS`), read from the flows statement's module, which names
+// them; see the section at the end of this file.
+const HELD_KINDS = (((await import('./flows/statement.ts' as string).catch(() => null)) as { PLATFORM_HELD_KINDS?: readonly string[] } | null)?.PLATFORM_HELD_KINDS ?? []);
+const RECIPIENTS = [
+  ...ROWS.map((row) => row.kind),
+  ...ANALYTICS_SERVICES.map(analyticsKey),
+  ...HELD_KINDS.map((kind) => `held:${kind}`),
+];
 
 // --- The derivation itself works ------------------------------------------------
 
@@ -282,7 +294,7 @@ test('R6 W2 ruling 1: a held kind with no statement, and a held statement with n
   const fixtureKind = 'held:fixture-platform';
   assert.deepEqual(recipientDrift([...RECIPIENTS, ...held, fixtureKind], recipientStatementKeys()).unstated, [fixtureKind]);
   const dropped = held[0];
-  assert.deepEqual(recipientDrift([...RECIPIENTS, ...held.slice(1)], recipientStatementKeys()).unmatched, [dropped]);
+  assert.deepEqual(recipientDrift(RECIPIENTS.filter((key) => key !== dropped), recipientStatementKeys()).unmatched, [dropped]);
 });
 
 test('R6 W2 ruling 1: each held statement is derived like the analytics reads — the holder\'s quoted sentence, its address and its read date', () => {

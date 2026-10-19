@@ -152,10 +152,14 @@ const { POST } = (await import('./query-notebook/route.ts')) as {
   POST: (request: Request) => Promise<Response>;
 };
 
+// R6 W2 (#632): every route that sends a question refuses one with no consent in force; this
+// suite's requests carry a consent (every configured source On), as a browser that had answered
+// the consent card would. Nothing it asserts changes.
+const { consentCookieForTests } = await import('../../lib/sources/consent-fixture.ts');
 function request(body: string = JSON.stringify({ query: 'How many noise complaints last week?' })): Request {
   return new Request('http://localhost/api/query-notebook', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', cookie: consentCookieForTests() },
     body,
   });
 }

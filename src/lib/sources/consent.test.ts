@@ -325,7 +325,40 @@ test('criterion 7: the deployment guide names the cookie, the table, both routes
   assert.notEqual(start, -1, 'docs/deploy.md has no "## Consent and the flows statement" section');
   const end = guide.indexOf('\n## ', start + 1);
   const section = guide.slice(start, end === -1 ? undefined : end);
-  for (const needle of [`\`${name}\``, '`source_consents`', '`/api/flows`', '`/api/sources/consent`', 're-ask', '`0017_source_consents.sql`']) {
+  for (const needle of [`\`${name}\``, '`source_consents`', '`/api/flows`', '`/api/sources/consent`', 're-ask', '`0017_source_consents.sql`', 'docs/flows-changelog.md']) {
     assert.ok(section.includes(needle), `the guide's consent section does not name ${needle}`);
   }
+});
+
+// --- Added at stage B, on the ORCH's rulings -------------------------------------------------
+
+test('rule 4 (base): a change in what a recipient receives is a changed arrangement, and re-asks; the converse re-asks too', () => {
+  const before = statement();
+  const after = clone(before);
+  after.recipients[0].receives = `${after.recipients[0].receives}, and your network address`;
+  assert.equal(classify(before, after).verdict, 're-ask');
+  assert.ok(rules(classify(before, after)).includes('base:hosting-changed:re-ask'));
+  assert.equal(classify(after, before).verdict, 're-ask', 'receiving less is still a changed arrangement: the rule cannot rank a sentence');
+  assert.equal(classify(before, clone(before)).verdict, 'same');
+});
+
+test('the unranked postures: any change to or from not-stated or operator-states re-asks, in both directions', () => {
+  const before = statement();
+  for (const [from, to] of [['metadata', 'not-stated'], ['not-stated', 'none'], ['operator-states', 'metadata'], ['content', 'operator-states'], ['not-stated', 'operator-states']]) {
+    const a = clone(before); a.recipients[0].keptBy[0].keeps = from;
+    const b = clone(before); b.recipients[0].keptBy[0].keeps = to;
+    assert.equal(classify(a, b).verdict, 're-ask', `${from} → ${to}`);
+    assert.equal(classify(b, a).verdict, 're-ask', `${to} → ${from}`);
+  }
+  const same = clone(before); same.recipients[0].keptBy[0].keeps = 'operator-states';
+  assert.equal(classify(same, clone(same)).verdict, 'same', 'an unchanged unranked posture re-asks nothing');
+});
+
+test('since is a calendar date, YYYY-MM-DD, never a time', () => {
+  const date = need<(now?: Date) => string>('consentDate');
+  assert.equal(date(new Date('2026-10-19T23:59:59.999Z')), '2026-10-19');
+  assert.match(date(), /^\d{4}-\d{2}-\d{2}$/);
+  const decode = need<(v: string) => unknown>('decodeConsentCookie');
+  const encode = need<(c: unknown) => string>('encodeConsentCookie');
+  assert.equal(decode(encode({ v: 1, flows: H('a'), states: { socrata: { state: 'on', since: '2026-10-19T12:00:00Z', version: H('b') } } })), null, 'a cookie whose since is a time is refused');
 });

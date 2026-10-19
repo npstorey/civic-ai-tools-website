@@ -17,6 +17,7 @@ import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import { canReadRecord } from '@/lib/evidence/sealed-access';
 import { getMissingMcpRoutingError } from '@/lib/mcp/registry';
+import { consentInForce } from '@/lib/sources/consent-gate';
 import type { EvidencePackage } from '@/lib/evidence/packager';
 
 /**
@@ -34,6 +35,8 @@ import type { EvidencePackage } from '@/lib/evidence/packager';
  *   `offeredSet` (#632 D8 = A) is unsigned: `{ from, sources, lacking }`, the
  *   sources this replay was offered, read off the record by the same function
  *   the loop options are narrowed with (`replayOfferedSet`).
+ * Refuses 403 `{ error, code: 'consent_required', flowsVersion, reask }` when
+ *   the replayer has no consent in force (R6 W2, C6).
  */
 export async function POST(
   request: NextRequest,
@@ -63,6 +66,17 @@ export async function POST(
       { error: mcpRoutingError.message, code: mcpRoutingError.code },
       { status: 503 },
     );
+  }
+
+  // The replayer's own consent (R6 W2, #632 C6; design §1.6): a replay
+  // dispatches live tool calls and sends the record's question to the model
+  // endpoint, so it is gated as the query routes are, on the replayer's row
+  // or cookie (D12). None in force: the typed `consent_required`, 403. In
+  // force, the replayer's selection narrows the record's offered set and the
+  // loop alike (W1's `replayerSelection`).
+  const consent = await consentInForce(request, session);
+  if (!consent.ok) {
+    return NextResponse.json(consent.payload, { status: 403 });
   }
 
   // Fetch evidence record
@@ -139,6 +153,7 @@ export async function POST(
       endpointModel: model.endpointModel,
       requestSettings: model.requestSettings,
       prompt,
+      replayerSelection: consent.selection,
     }));
 
     // The consistency-test payload, unchanged in shape. `toolCalls` entries
@@ -156,7 +171,7 @@ export async function POST(
       output: result.content,
       tokenUsage: result.usage,
       durationMs: result.durationMs,
-      offeredSet: replayOfferedSet(pkg),
+      offeredSet: replayOfferedSet(pkg, undefined, consent.selection),
     });
   } catch (error) {
     console.error('[replay] Error:', errorLogFacts(error));

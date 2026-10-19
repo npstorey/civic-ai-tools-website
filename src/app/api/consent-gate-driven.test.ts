@@ -214,18 +214,28 @@ type Mod = Record<string, any>; // eslint-disable-line @typescript-eslint/no-exp
 const consent = (await import(CONSENT).catch(() => null)) as Mod | null;
 const flows = (await import(STATEMENT).catch(() => null)) as Mod | null;
 
-/** The current statement, or null at a base that has none. */
-const STATEMENT_NOW = flows?.buildFlowsStatement ? await flows.buildFlowsStatement() : null;
-const FLOWS_HASH: string | null = STATEMENT_NOW && flows?.statementHash ? flows.statementHash(STATEMENT_NOW) : null;
+/**
+ * The statement in force for this process's configuration as it is at the
+ * moment of a drive (each drive points the model endpoint at a fresh loopback
+ * port, which is a different model host and so a different base version), or
+ * null at a base that has none.
+ */
+async function statementNow(): Promise<Record<string, any> | null> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  return flows?.buildFlowsStatement ? await flows.buildFlowsStatement() : null;
+}
 
-/** A consent cookie for `states`, built by the real encoder against the current statement; undefined at the base. */
-function cookieFor(states: Record<string, string>, staleVersions: Record<string, string> = {}): string | undefined {
-  if (!consent?.encodeConsentCookie || !consent?.CONSENT_COOKIE_NAME || !STATEMENT_NOW) return undefined;
-  const versionOf = (id: string) => staleVersions[id] ?? STATEMENT_NOW.sources.find((s: { sourceId: string }) => s.sourceId === id)?.version ?? 'f'.repeat(64);
+/** The states a drive's consent cookie gives; the cookie itself is built inside the drive. */
+interface CookieSpec { states: Record<string, string> }
+const cookieFor = (states: Record<string, string>): CookieSpec => ({ states });
+
+/** A consent cookie for `spec`, built by the real encoder against `statement`; undefined at the base. */
+function cookieValue(spec: CookieSpec, statement: Record<string, any> | null): string | undefined { // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (!consent?.encodeConsentCookie || !consent?.CONSENT_COOKIE_NAME || !statement) return undefined;
+  const versionOf = (id: string) => statement.sources.find((s: { sourceId: string }) => s.sourceId === id)?.version ?? 'f'.repeat(64);
   const value = consent.encodeConsentCookie({
     v: 1,
-    flows: STATEMENT_NOW.version,
-    states: Object.fromEntries(Object.entries(states).map(([id, state]) => [id, { state, since: '2026-10-19', version: versionOf(id) }])),
+    flows: statement.version,
+    states: Object.fromEntries(Object.entries(spec.states).map(([id, state]) => [id, { state, since: '2026-10-19', version: versionOf(id) }])),
   });
   return `${consent.CONSENT_COOKIE_NAME}=${value}`;
 }
@@ -244,6 +254,9 @@ interface Drive {
   modelRequests: Record<string, unknown>[];
   checks: number;
   increments: number;
+  /** The statement in force during the drive: its hash and date, or null at the base. */
+  flowsHash: string | null;
+  flowsDate: string | null;
 }
 
 async function drain(response: Response): Promise<string> {
@@ -261,7 +274,7 @@ async function drive(
   handler: Handler,
   url: string,
   body: Record<string, unknown>,
-  options: { session: unknown; cookie?: string; replies?: Array<Record<string, unknown>>; slug?: string },
+  options: { session: unknown; cookie?: CookieSpec; replies?: Array<Record<string, unknown>>; slug?: string },
 ): Promise<Drive> {
   const scripted = await startScriptedModelServer(options.replies ?? TOOL_THEN_ANSWER);
   process.env.MODEL_API_BASE_URL = scripted.url;
@@ -269,11 +282,13 @@ async function drive(
   globals.__r6w2Gate.session = options.session;
   globals.__r6w2Gate.checks = 0;
   globals.__r6w2Gate.increments = 0;
+  const statement = await statementNow();
+  const cookie = options.cookie ? cookieValue(options.cookie, statement) : undefined;
   const fetchedBefore = FETCHED.length;
   const receivedBefore = RECEIVED.length;
   try {
     const headers: Record<string, string> = { 'content-type': 'application/json' };
-    if (options.cookie) headers.cookie = options.cookie;
+    if (cookie) headers.cookie = cookie;
     const request = new Request(url, { method: 'POST', headers, body: JSON.stringify(body) });
     const response = options.slug ? await handler(request, { params: Promise.resolve({ slug: options.slug }) }) : await handler(request);
     const text = await drain(response);
@@ -293,6 +308,8 @@ async function drive(
       modelRequests: [...scripted.requests],
       checks: globals.__r6w2Gate.checks,
       increments: globals.__r6w2Gate.increments,
+      flowsHash: statement && flows?.statementHash ? flows.statementHash(statement) : null,
+      flowsDate: statement ? statement.date : null,
     };
   } finally {
     _resetDefaultModelClientForTests();
@@ -405,8 +422,8 @@ for (const [route, d] of REFUSED) {
   test(`criterion 4 (${route}): the refusal is the typed consent_required, carrying the current flows version`, () => {
     const refusal = refusalOf(d);
     assert.equal(refusal?.code, 'consent_required', `${route} answered ${d.status}: ${JSON.stringify(d.json ?? d.events.slice(0, 2))}`);
-    assert.ok(FLOWS_HASH, 'premise: the current statement has a hash');
-    assert.equal(refusal?.flowsVersion, FLOWS_HASH);
+    assert.ok(d.flowsHash, 'premise: the current statement has a hash');
+    assert.equal(refusal?.flowsVersion, d.flowsHash);
   });
 }
 
@@ -428,7 +445,7 @@ for (const [route, d] of SERVED_DC_OFF) {
   test(`criterion 4 (${route}): the root span carries analysis.flows_statement — exactly the url, hash and date`, () => {
     const value = attr(rootOf(d), 'analysis.flows_statement')?.stringValue;
     assert.ok(value, `${route}'s root span carries no flows statement`);
-    assert.equal(value, JSON.stringify({ url: 'http://localhost/api/flows', hash: FLOWS_HASH, date: STATEMENT_NOW?.date }));
+    assert.equal(value, JSON.stringify({ url: 'http://localhost/api/flows', hash: d.flowsHash, date: d.flowsDate }));
   });
 
   test(`premise (${route}): served on a consent in force, it read and spent the allowance as before`, () => {
@@ -497,7 +514,7 @@ test('criterion 4: a record packaged from a consented run carries composition.fl
   });
   const composition = (pkg.extensions as Record<string, Record<string, unknown>> | undefined)?.['org.civicaitools.composition'];
   assert.ok(composition, 'premise: the package carries a composition block');
-  assert.deepEqual(composition!.flowsStatement, { url: 'http://localhost/api/flows', hash: FLOWS_HASH, date: STATEMENT_NOW?.date });
+  assert.deepEqual(composition!.flowsStatement, { url: 'http://localhost/api/flows', hash: d.flowsHash, date: d.flowsDate });
   const reasons = Object.fromEntries((composition!.sourcesOffered as Array<{ sourceId: string; reason: string }>).map((s) => [s.sourceId, s.reason]));
   assert.equal(reasons['data-commons'], 'reader-off', 'the signed reasons are the reader\'s');
 });

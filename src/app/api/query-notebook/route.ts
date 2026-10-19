@@ -28,7 +28,10 @@ import { configuredMcpServers, getMissingMcpRoutingError, readMcpEnvFromProcess,
 import { getDefaultModel, resolveModel, ModelNotOfferedError } from '@/lib/model-resolver';
 import { ModelConfigurationError, getMissingModelCredentialError, getModelApiKind } from '@/lib/model-client';
 import { modelAccessPhrase, modelIdentity, type ModelIdentity } from '@/lib/model-catalog';
-import { composeSystemPrompt, withPortalLockGuidance, DEFAULT_SOURCE_SELECTION } from '@/lib/mcp/socrata-skill';
+import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
+import type { SourceSelection } from '@typedstandards/civic-typed-router';
+import { consentInForce } from '@/lib/sources/consent-gate';
+import { recordSourcesOffered } from '@/lib/sources/consent';
 import {
   queryWithMcpStreaming,
   type CompletionResult,
@@ -258,6 +261,16 @@ export async function POST(request: NextRequest) {
   const ip = forwardedFor?.split(',')[0] || 'unknown';
   const identifier = session?.user?.id || ip;
   const isAuthenticated = !!session?.user?.id;
+  // The consent in force (R6 W2, #632 D3, D12; design §4.4): nothing is
+  // sent anywhere before it, the model endpoint included. Read after the
+  // configuration refusals above and the session (whose `dbId` chooses the
+  // row over the cookie), and before the rate limiter reads or spends
+  // anything. None in force, or the re-ask rule says re-ask: the typed
+  // `consent_required`, 403, carrying the flows version to show.
+  const consent = await consentInForce(request, session);
+  if (!consent.ok) {
+    return new Response(JSON.stringify(consent.payload), { status: 403, headers: { 'Content-Type': 'application/json' } });
+  }
   const rateLimitInfo = await checkRateLimit(identifier, isAuthenticated);
   if (isRateLimited(rateLimitInfo)) {
     return new Response(
@@ -270,10 +283,11 @@ export async function POST(request: NextRequest) {
   // Build the multi-source system prompt up front so its hash anchors the trace.
   // The configuration is read once, so the prompt, the tools and what the
   // record states about them describe one configuration (#599 W4); the
-  // selection is every offered source until a request can carry one (D3).
+  // selection is the reader's, configured ∩ On, from the consent store (R6 W2,
+  // D3 = A), never from the request.
   // Under the lock one section is appended (#436, D7); unlocked, unchanged.
   const configured = readMcpEnvFromProcess();
-  const selection = DEFAULT_SOURCE_SELECTION;
+  const selection = consent.selection;
   const composition = await composeSystemPrompt({ portal, configured, selection });
   const systemPrompt = withPortalLockGuidance(composition.prompt, lockedPortal, configured, selection);
   const systemPromptHash = traceHash(systemPrompt);
@@ -311,8 +325,11 @@ export async function POST(request: NextRequest) {
       assertedDate: composition.assertedDate,
       mcpServers: configuredMcpServers(configured),
       toolDefinitions: offeredTools,
-      sourcesOffered: composition.sourcesOffered,
+      // The router's `not-selected` as the reader's state (D2 = A).
+      sourcesOffered: recordSourcesOffered(composition.sourcesOffered, consent.states),
       components: composition.components,
+      // The flows statement in force (D2 = A).
+      flowsStatement: consent.reference,
     }),
   });
 
@@ -542,7 +559,7 @@ async function runPhaseA(args: {
   /** The run's configuration and selection, as its prompt and tools were
    *  composed with; the transport and the span's source read the same. */
   configured: ReturnType<typeof readMcpEnvFromProcess>;
-  selection: typeof DEFAULT_SOURCE_SELECTION;
+  selection: SourceSelection;
   model: ModelIdentity;
   emit: (event: NotebookEvent) => Promise<void>;
   trace: TraceBuilder;

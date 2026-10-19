@@ -32,6 +32,28 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 
+// `src/lib/device-flow.ts`, which the ruling-2 test below imports to pin the
+// statement's origin to `getBaseUrl`, imports `./host-routing` with no
+// extension, which Next resolves and plain `node --test` does not; this
+// resolves such a specifier to its `.ts` file.
+{
+  const nodeModule = await import('node:module');
+  const nodePath = await import('node:path');
+  const nodeFs = await import('node:fs');
+  const nodeUrl = await import('node:url');
+  type R = { url: string; format?: string | null; shortCircuit?: boolean };
+  (nodeModule as unknown as { registerHooks(h: { resolve(s: string, c: unknown, n: (s: string, c?: unknown) => R): R }): void }).registerHooks({
+    resolve(specifier, context, nextResolve) {
+      const parent = (context as { parentURL?: string }).parentURL;
+      if (specifier.startsWith('.') && !nodePath.extname(specifier) && parent?.startsWith('file:')) {
+        const candidate = `${nodePath.resolve(nodePath.dirname(nodeUrl.fileURLToPath(parent)), specifier)}.ts`;
+        if (nodeFs.existsSync(candidate)) return { url: nodeUrl.pathToFileURL(candidate).href, shortCircuit: true };
+      }
+      return nextResolve(specifier, context);
+    },
+  });
+}
+
 /** The module this phase adds (a specifier typed `string`; see `adapt-record.test.ts`). */
 const STATEMENT: string = './statement.ts';
 
@@ -270,4 +292,73 @@ test('every instance-stated log holder the manifest names by role has a posture 
   assert.ok(roles.size >= 3, `premise: the manifest names ${roles.size} instance-stated roles`);
   assert.deepEqual([...roles].filter((role) => !Object.hasOwn(postures, role)), [], 'a role with no posture');
   assert.deepEqual(Object.keys(postures).filter((role) => !roles.has(role)), [], 'a posture for a role no entry names');
+});
+
+// --- The date is the content date (the ORCH's constraint on the digests) -------------------
+
+test('the same configuration on two clock days serves the same bytes and the same hash', async () => {
+  const serialize = need<(s: Statement) => string>('serializeFlowsStatement');
+  const RealDate = Date;
+  const at = async (iso: string) => {
+    const fixed = RealDate.parse(iso);
+    class FixedDate extends RealDate {
+      constructor(...args: unknown[]) { if (args.length === 0) super(fixed); else super(...(args as [number])); }
+      static now() { return fixed; }
+    }
+    globalThis.Date = FixedDate as unknown as DateConstructor;
+    try {
+      return await under({});
+    } finally {
+      globalThis.Date = RealDate;
+    }
+  };
+  const monday = await at('2026-10-19T23:59:59.000Z');
+  const tuesday = await at('2026-10-20T00:00:01.000Z');
+  assert.equal(serialize(tuesday), serialize(monday), 'the served bytes moved with the clock');
+  assert.equal(monday.date, built(DEFAULT, 'the default').date);
+  const reads = [...monday.recipients, ...monday.sources.flatMap((s) => s.recipients)].flatMap((r) => r.keptBy.map((k) => k.readOn)).filter(Boolean) as string[];
+  assert.equal(monday.date, reads.sort().at(-1), 'the date is the latest read date the statement carries');
+});
+
+test('a re-read with an unchanged posture moves the date and the hash, and neither version', () => {
+  const d = built(DEFAULT, 'the default');
+  const assemble = need<(parts: Pick<Statement, 'recipients' | 'sources' | 'links'>) => Statement>('assembleFlowsStatement');
+  const hashOf = need<(s: Statement) => string>('statementHash');
+  const computeSource = need<(source: Source) => string>('computeSourceVersion');
+  const sources = JSON.parse(JSON.stringify(d.sources)) as Source[];
+  const dc = sources.find((s) => s.sourceId === 'data-commons')!;
+  dc.recipients[0].keptBy[0].readOn = '2027-01-15';
+  const reread = assemble({ recipients: d.recipients, sources, links: d.links });
+  assert.equal(reread.date, '2027-01-15', 'the date did not move with the re-read');
+  assert.notEqual(hashOf(reread), hashOf(d), 'the hash did not move with the re-read');
+  assert.equal(reread.version, d.version, 'the base version moved with a re-read');
+  assert.equal(computeSource(dc), d.sources.find((s) => s.sourceId === 'data-commons')!.version, 'the source version moved with a re-read');
+});
+
+test('a change in what a recipient receives moves the base version (a changed arrangement)', () => {
+  const d = built(DEFAULT, 'the default');
+  const computeBase = need<(recipients: Recipient[]) => string>('computeBaseVersion');
+  const changed = JSON.parse(JSON.stringify(d.recipients)) as Recipient[];
+  changed[0].receives = `${changed[0].receives}, and your network address`;
+  assert.notEqual(computeBase(changed), d.version);
+});
+
+test('ruling 2: the statement\'s origin is getBaseUrl(request) itself, under each of its three reachable branches', async () => {
+  const { getBaseUrl } = (await import('../device-flow.ts')) as { getBaseUrl: (request?: Request) => string };
+  const origin = need<(request: Request) => string>('instanceOrigin');
+  const request = new Request('https://preview-456.fixture.example/api/query-notebook', { method: 'POST' });
+  const saved = { APP_HOST: process.env.APP_HOST, NEXTAUTH_URL: process.env.NEXTAUTH_URL };
+  try {
+    for (const env of [{ APP_HOST: 'https://app.fixture.example/', NEXTAUTH_URL: 'https://auth.fixture.example' }, { NEXTAUTH_URL: 'https://auth.fixture.example///' }, {}]) {
+      delete process.env.APP_HOST;
+      delete process.env.NEXTAUTH_URL;
+      Object.assign(process.env, env);
+      assert.equal(origin(request), getBaseUrl(request), `under ${JSON.stringify(env)}`);
+    }
+  } finally {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
 });
