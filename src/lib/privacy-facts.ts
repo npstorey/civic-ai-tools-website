@@ -56,7 +56,7 @@ import { timestampAuthorityUrl, transparencyLogUrl } from './evidence/signing.ts
 import { isSigningConfigured } from './evidence/unsigned-tier.ts';
 import { ORPHAN_GRACE_MS } from './evidence/blob-gc.ts';
 import { buildMcpRegistry, configuredAddressForSource, readMcpEnvFromProcess } from './mcp/registry.ts';
-import { COMPARISON_STORAGE_KEY, MODE_STORAGE_KEY } from './query-presentation.ts';
+import { COMPARISON_STORAGE_KEY, LAYOUT_STORAGE_KEY, MODE_STORAGE_KEY } from './query-presentation.ts';
 import { isOutboundProxyConfigured } from './outbound-proxy.ts';
 
 // --- The statement shape ------------------------------------------------------
@@ -1010,14 +1010,20 @@ function whatLinksActivity(): Statement[] {
     statement(
       'browser-storage',
       [
-        'Your browser keeps two display choices for the current tab: notebook or standard mode, and whether the comparison is shown. ' +
-          'They are stored under ',
+        'Your browser keeps three display choices for the current tab: notebook or standard mode, whether the comparison is shown, ' +
+          'and which layout an answer is shown under. They are stored under ',
         { code: MODE_STORAGE_KEY },
-        ' and ',
+        ', ',
         { code: COMPARISON_STORAGE_KEY },
+        ' and ',
+        { code: LAYOUT_STORAGE_KEY },
         '.',
       ],
-      ['const:src/lib/query-presentation.ts#MODE_STORAGE_KEY', 'const:src/lib/query-presentation.ts#COMPARISON_STORAGE_KEY'],
+      [
+        'const:src/lib/query-presentation.ts#MODE_STORAGE_KEY',
+        'const:src/lib/query-presentation.ts#COMPARISON_STORAGE_KEY',
+        'const:src/lib/query-presentation.ts#LAYOUT_STORAGE_KEY',
+      ],
     ),
   );
   return out;

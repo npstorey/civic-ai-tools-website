@@ -171,7 +171,25 @@ export function resolveAnswerLayouts(
   return { default: configured, offered: [configured, ...others], unknownParts };
 }
 
-/** This instance's layouts, from its environment. A TYPED STUB in this red commit: it reads nothing. */
+let cached: { key: string; layouts: InstanceLayouts } | null = null;
+
+/**
+ * This instance's layouts, from its environment. Throws
+ * `AnswerLayoutConfigurationError` when the setting cannot be rendered with:
+ * the page that reads it refuses, rather than falling back to the built-ins.
+ * The result is kept for as long as the three values are unchanged, so the
+ * unknown-part line is logged once per setting, not once per request.
+ */
 export function instanceAnswerLayouts(): InstanceLayouts {
-  return BUILT_IN_INSTANCE_LAYOUTS;
+  const setting: AnswerLayoutSetting = {
+    inline: process.env.ANSWER_LAYOUT,
+    path: process.env.ANSWER_LAYOUT_PATH,
+    url: process.env.ANSWER_LAYOUT_URL,
+  };
+  const key = JSON.stringify([setting.inline ?? null, setting.path ?? null, setting.url ?? null]);
+  if (cached === null || cached.key !== key) {
+    const reading = resolveAnswerLayouts(setting);
+    cached = { key, layouts: { default: reading.default, offered: reading.offered } };
+  }
+  return cached.layouts;
 }
