@@ -89,6 +89,8 @@ const CANARY = {
   dbError: 'w5-canary-database-error-text',
 } as const;
 const FAIL_MARKER = 'w5-refuse-the-answering-turn';
+/** A question carrying this is answered 300 ms late each turn, so a reader can leave mid-run. */
+const SLOW_MARKER = 'w5-answer-slowly';
 
 // --- The shared state the stubs read and write --------------------------------
 
@@ -304,7 +306,8 @@ const MCP_ORIGIN = `http://127.0.0.1:${(mcp.address() as AddressInfo).port}`;
 //
 // A request that offers tools and carries no tool result yet is answered with
 // the two calls. A request that carries a tool result, for a question with the
-// failure marker, is refused with a 400. Anything else gets a plain answer.
+// failure marker, is refused with a 400. Anything else gets a plain answer. A
+// question with the slow marker is answered 300 ms late, every turn.
 
 const ANSWER = 'One figure was retrieved.';
 const model = http.createServer((req, res) => {
@@ -313,41 +316,45 @@ const model = http.createServer((req, res) => {
   req.on('end', () => {
     const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
     const messages = (body.messages ?? []) as Array<{ role?: string; content?: unknown }>;
-    const afterTools = messages.some((m) => m.role === 'tool');
-    const failing = JSON.stringify(messages).includes(FAIL_MARKER);
-    if (failing && afterTools) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: { message: 'fixture refusal of the answering turn', type: 'invalid_request_error' } }));
-      return;
+    if (JSON.stringify(messages).includes(SLOW_MARKER)) setTimeout(answer, 300);
+    else answer();
+    function answer() {
+      const afterTools = messages.some((m) => m.role === 'tool');
+      const failing = JSON.stringify(messages).includes(FAIL_MARKER);
+      if (failing && afterTools) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'fixture refusal of the answering turn', type: 'invalid_request_error' } }));
+        return;
+      }
+      const pickTools = Array.isArray(body.tools) && body.tools.length > 0 && !afterTools;
+      const usage = { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 };
+      if (body.stream === true) {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        const frame = (payload: Record<string, unknown>) =>
+          `data: ${JSON.stringify({ id: 'chatcmpl-r6-w5', object: 'chat.completion.chunk', created: 1, model: 'fake/model', ...payload })}\n\n`;
+        res.write(frame({ choices: [{ index: 0, delta: { content: ANSWER }, finish_reason: null }] }));
+        res.write(frame({ choices: [], usage }));
+        res.end('data: [DONE]\n\n');
+        return;
+      }
+      const toolCalls = [
+        { id: 'call-socrata', type: 'function', function: { name: 'socrata__get_data', arguments: JSON.stringify({ type: 'query', dataset_id: 'aaaa-1111', limit: 1 }) } },
+        { id: 'call-dc', type: 'function', function: { name: 'data_commons__search_indicators', arguments: JSON.stringify({ query: 'sidewalk repairs' }) } },
+      ];
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        id: 'chatcmpl-r6-w5',
+        object: 'chat.completion',
+        created: 1,
+        model: 'fake/model',
+        choices: [{
+          index: 0,
+          message: { role: 'assistant', content: pickTools ? null : ANSWER, ...(pickTools ? { tool_calls: toolCalls } : {}) },
+          finish_reason: pickTools ? 'tool_calls' : 'stop',
+        }],
+        usage,
+      }));
     }
-    const pickTools = Array.isArray(body.tools) && body.tools.length > 0 && !afterTools;
-    const usage = { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 };
-    if (body.stream === true) {
-      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
-      const frame = (payload: Record<string, unknown>) =>
-        `data: ${JSON.stringify({ id: 'chatcmpl-r6-w5', object: 'chat.completion.chunk', created: 1, model: 'fake/model', ...payload })}\n\n`;
-      res.write(frame({ choices: [{ index: 0, delta: { content: ANSWER }, finish_reason: null }] }));
-      res.write(frame({ choices: [], usage }));
-      res.end('data: [DONE]\n\n');
-      return;
-    }
-    const toolCalls = [
-      { id: 'call-socrata', type: 'function', function: { name: 'socrata__get_data', arguments: JSON.stringify({ type: 'query', dataset_id: 'aaaa-1111', limit: 1 }) } },
-      { id: 'call-dc', type: 'function', function: { name: 'data_commons__search_indicators', arguments: JSON.stringify({ query: 'sidewalk repairs' }) } },
-    ];
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      id: 'chatcmpl-r6-w5',
-      object: 'chat.completion',
-      created: 1,
-      model: 'fake/model',
-      choices: [{
-        index: 0,
-        message: { role: 'assistant', content: pickTools ? null : ANSWER, ...(pickTools ? { tool_calls: toolCalls } : {}) },
-        finish_reason: pickTools ? 'tool_calls' : 'stop',
-      }],
-      usage,
-    }));
   });
 });
 await new Promise<void>((resolve) => model.listen(0, '127.0.0.1', () => resolve()));
@@ -397,8 +404,8 @@ const SIGNED_IN = { user: { id: CANARY.accountId, dbId: CANARY.dbId, name: 'Cana
 const post = (route: string, body: unknown) =>
   new Request(`http://localhost${route}`, { method: 'POST', body: JSON.stringify(body) }) as never;
 
-function request(surface: Surface, opts: { fail?: boolean; bothPanels?: boolean; refuse?: 'invalid' } = {}): () => Promise<Response> {
-  const query = opts.fail ? `${CANARY.question} ${FAIL_MARKER}` : CANARY.question;
+function request(surface: Surface, opts: { fail?: boolean; bothPanels?: boolean; refuse?: 'invalid'; slow?: boolean } = {}): () => Promise<Response> {
+  const query = `${CANARY.question}${opts.fail ? ` ${FAIL_MARKER}` : ''}${opts.slow ? ` ${SLOW_MARKER}` : ''}`;
   const invalid = opts.refuse === 'invalid';
   switch (surface) {
     case 'compare-stream':
@@ -590,6 +597,66 @@ const HUNG_SETTLED: Array<number | null> = [];
   W5.insertMode = 'ok';
 }
 
+// The reader leaves mid-run: it reads the first chunk and cancels the stream.
+// The run goes on (or stops at its next write) without anyone to send to; its
+// last `writer.close()` then meets a stream the reader cancelled. Measured at
+// the base (641a82f), with no counter at all: compare-stream left eight
+// rejections unhandled (its callbacks' un-awaited writes, and the final
+// `trace` write, which threw before `writer.close()` was reached), and
+// query-notebook's `writer.close()` rejected ("Invalid state: WritableStream
+// is closed") out of a run nothing awaits.
+interface CancelDrive { inserts: number; registered: number; settledAfterMs: number | null; unhandled: string[]; firstChunk: number }
+const CANCELLED: Partial<Record<Surface, CancelDrive>> = {};
+for (const surface of ['compare-stream', 'query-notebook'] as const) {
+  W5.events = [];
+  W5.registered = [];
+  W5.inserts = [];
+  W5.insertMode = 'ok';
+  W5.afterMode = 'record';
+  W5.session = SIGNED_IN;
+  W5.limited = false;
+  const unhandledBefore = UNHANDLED.length;
+  const methods = ['log', 'info', 'warn', 'error', 'debug'] as const;
+  const saved = methods.map((m) => console[m]);
+  for (const m of methods) console[m] = () => {};
+  try {
+    const response = await request(surface, { slow: true })();
+    const reader = response.body!.getReader();
+    const first = await reader.read();
+    await reader.cancel();
+    // The run ends on its own clock: wait for the registration it made, then
+    // for the bound and a margin.
+    const startedAt = Date.now();
+    let settledAfterMs: number | null = null;
+    for (;;) {
+      if (W5.registered.length > 0) break;
+      if (Date.now() - startedAt > 5_000) break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    if (W5.registered.length > 0) {
+      let timer: NodeJS.Timeout | undefined;
+      const outcome = await Promise.race([
+        Promise.all(W5.registered.map((p) => Promise.resolve(p))).then(() => 'settled' as const, () => 'settled' as const),
+        new Promise<'pending'>((resolve) => { timer = setTimeout(() => resolve('pending'), BOUND_MS + 3_000); }),
+      ]);
+      clearTimeout(timer);
+      if (outcome === 'settled') settledAfterMs = Date.now() - startedAt;
+    }
+    // Long enough for a run that writes nothing to have ended, and for any
+    // rejection left unhandled to be reported.
+    await new Promise((resolve) => setTimeout(resolve, 2_500));
+    CANCELLED[surface] = {
+      inserts: W5.inserts.length,
+      registered: W5.registered.length,
+      settledAfterMs,
+      unhandled: UNHANDLED.slice(unhandledBefore),
+      firstChunk: first.value?.length ?? 0,
+    };
+  } finally {
+    methods.forEach((m, i) => { console[m] = saved[i]; });
+  }
+}
+
 // --- Premises: the shapes that let the row's assertions fail ---------------------
 
 /** Every object in a body: SSE `data:` lines, or one JSON document. */
@@ -732,6 +799,27 @@ for (const surface of SURFACES) {
     assert.equal(usageLines.length, 1, `expected one [usage] line:\n${d.lines.join('\n')}`);
     assert.ok(usageLines[0].includes(facts), `the line is not the error's class facts (${facts}): ${usageLines[0]}`);
     for (const line of d.lines) assertNoCanary('a log line', line);
+  });
+}
+
+// --- (d) A reader that leaves mid-run: the row is still attempted, and nothing is left unhandled
+
+for (const surface of ['compare-stream', 'query-notebook'] as const) {
+  test(`criterion 2(d) ${surface}: the reader cancels mid-stream, and the row is still attempted once`, () => {
+    const d = CANCELLED[surface]!;
+    assert.ok(d.firstChunk > 0, 'premise: the reader received a chunk before cancelling');
+    assert.equal(d.registered, 1, `after() received ${d.registered} promises`);
+    assert.equal(d.inserts, 1, `the write was attempted ${d.inserts} times after the reader left`);
+  });
+
+  test(`criterion 2(d) ${surface}: the registered promise settles within the bound`, () => {
+    const d = CANCELLED[surface]!;
+    assert.ok(d.settledAfterMs !== null, 'the registered promise did not settle');
+    assert.ok(d.settledAfterMs <= BOUND_MS + 2_000, `it settled after ${d.settledAfterMs} ms`);
+  });
+
+  test(`criterion 2(d) ${surface}: no rejection is left unhandled when the reader leaves`, () => {
+    assert.deepEqual(CANCELLED[surface]!.unhandled, []);
   });
 }
 

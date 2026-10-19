@@ -3,7 +3,9 @@
 // THE RULE (D9, and the contract's table). A run is counted as one row of
 // `usage_counts`, keyed on eight columns, every one from a closed set:
 //   day              the UTC date when the run ends (never the server's local date)
-//   environment      `hostingEnvironment()`: VERCEL_ENV, or `local` off Vercel
+//   environment      `hostingEnvironment()` read through a closed set
+//                    (`USAGE_ENVIRONMENTS`): production, preview, development, or
+//                    local off Vercel; any other value is recorded as `other`
 //   surface          the route: `compare-stream`, `query-notebook` or `compare`
 //   signed_in        whether the session carries an account id
 //   model            the model's declared id
@@ -80,6 +82,7 @@ interface UsageRunInput {
 }
 interface UsageModule {
   USAGE_WRITE_TIMEOUT_MS: number;
+  USAGE_ENVIRONMENTS: readonly string[];
   usageRow(input: UsageRunInput): Record<string, unknown>;
 }
 
@@ -221,10 +224,17 @@ test('criterion 1: signed_in is whether the session carries an account id, and n
   assert.equal(usageRow(input()).signedIn, true);
 });
 
-test('criterion 1: environment is hostingEnvironment(): VERCEL_ENV, or local off Vercel', async () => {
-  const { usageRow } = await loadCount();
+test('criterion 1: environment is hostingEnvironment() through the closed set: VERCEL_ENV, local off Vercel, other for anything else', async () => {
+  const { usageRow, USAGE_ENVIRONMENTS } = await loadCount();
+  assert.deepEqual([...USAGE_ENVIRONMENTS], ['production', 'preview', 'development', 'local', 'other']);
   try {
-    for (const [value, expected] of [[undefined, 'local'], ['production', 'production'], ['preview', 'preview'], ['development', 'development'], ['', 'local']] as const) {
+    for (const [value, expected] of [
+      [undefined, 'local'], ['production', 'production'], ['preview', 'preview'], ['development', 'development'], ['', 'local'],
+      // hostingEnvironment() passes any [a-z]{1,16} through, for the sandbox name; the count does not.
+      ['staging', 'other'], ['customenv', 'other'],
+      // hostingEnvironment() reads this as `local`, so the count does too.
+      ['Preview-2', 'local'],
+    ] as const) {
       if (value === undefined) delete process.env.VERCEL_ENV;
       else process.env.VERCEL_ENV = value;
       assert.equal(usageRow(input()).environment, expected, `VERCEL_ENV=${String(value)}`);
@@ -246,7 +256,7 @@ test('criterion 1: every column takes its value from a closed set', async () => 
   const idList = (v: unknown) => typeof v === 'string' && (v === '' || v.split(',').every((id) => SOURCE_IDS.has(id)));
   const VALUE_SETS: Record<string, (v: unknown) => boolean> = {
     day: (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v),
-    environment: (v) => v === 'local' || v === 'production' || v === 'preview' || v === 'development',
+    environment: (v) => v === 'local' || v === 'production' || v === 'preview' || v === 'development' || v === 'other',
     surface: (v) => v === 'compare-stream' || v === 'query-notebook' || v === 'compare',
     signedIn: (v) => typeof v === 'boolean',
     model: (v) => v === 'vendor/model-fixture-1',

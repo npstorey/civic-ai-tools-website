@@ -18,6 +18,10 @@
 // added later with no words fails here, and so do words left for a column
 // that is gone.
 //
+// THE ENVIRONMENTS come from `USAGE_ENVIRONMENTS` in `count.ts`, the one
+// constant the column's values are drawn from: the test-version sentence
+// renders for each value but `local`, which is every row off Vercel.
+//
 // THE WORDING CHECK, from the owner's research on reader-facing text: an
 // average under 15 words a sentence, none over 21, and "cannot" over "can't".
 //
@@ -31,7 +35,23 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getTableColumns } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
+import * as nodeModule from 'node:module';
 import * as schema from '../db/schema.ts';
+
+// `count.ts` imports `next/server` bare, which `node --test` resolves only by
+// its file name.
+type NextResolve = (specifier: string, context?: unknown) => { url: string };
+const { registerHooks } = nodeModule as unknown as {
+  registerHooks(hooks: { resolve?: (specifier: string, context: unknown, nextResolve: NextResolve) => { url: string } }): void;
+};
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    return nextResolve(specifier === 'next/server' ? 'next/server.js' : specifier, context);
+  },
+});
+
+/** The usage module, by a specifier typed string so this file type-checks before it exists. */
+const COUNT_MODULE: string = './count.ts';
 
 type Segment = string | { link: string; text: string } | { code: string };
 interface Statement { id: string; parts: Segment[]; traces: string[]; items?: Segment[][]; after?: Segment[] }
@@ -152,5 +172,26 @@ test('criterion 4: the wording check: under 15 words a sentence on average, none
     assert.ok(average < 15, `average ${average.toFixed(1)} words a sentence (${counts.join(', ')}):\n${rendered}`);
     assert.ok(Math.max(...counts) <= 21, `a sentence of ${Math.max(...counts)} words:\n${rendered}`);
     assert.doesNotMatch(rendered, /can't|can’t/i);
+  }
+});
+
+test('criterion 4: the test-version sentence renders for every environment in USAGE_ENVIRONMENTS but local', async () => {
+  let environments: readonly string[] | undefined;
+  try {
+    environments = ((await import(COUNT_MODULE)) as { USAGE_ENVIRONMENTS?: readonly string[] }).USAGE_ENVIRONMENTS;
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ERR_MODULE_NOT_FOUND') assert.fail('no module at src/lib/usage/count.ts');
+    throw error;
+  }
+  assert.ok(environments && environments.length > 0, 'count.ts exports no USAGE_ENVIRONMENTS');
+  assert.ok(environments.includes('local'), 'premise: the set holds local');
+  for (const environment of environments) {
+    // `local` is VERCEL_ENV unset; `other` is a value the platform could set
+    // that the count does not name.
+    const vercel = environment === 'local' ? undefined : environment === 'other' ? 'staging' : environment;
+    const found = usageStatement(render({ DATABASE_URL: DATABASE, VERCEL_ENV: vercel }));
+    assert.ok(found, `no usage-count statement (${environment})`);
+    const says = /test versions of this site/.test(text(found.statement.parts));
+    assert.equal(says, environment !== 'local', `${environment}: the test-version sentence ${says ? 'renders' : 'does not render'}`);
   }
 });
