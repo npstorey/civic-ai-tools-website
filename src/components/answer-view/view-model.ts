@@ -13,6 +13,7 @@
 import type { ClosingRow, ProgressGroup, ProgressLogEntry, StepCall, StepView } from '../../lib/answer-view/steps.ts';
 import type { DeliberativeTraceLine, NotebookOutput } from './buildChatEvidenceView.ts';
 import type { SkillDisclosure } from '../../lib/evidence/skill-disclosure.ts';
+import type { NotebookProvenanceState } from '../../lib/notebook-author/notebook-provenance-reading.ts';
 
 // --- The order -------------------------------------------------------------------
 
@@ -226,8 +227,12 @@ export interface DisclosurePart {
   answerNote?: string;
   /** G · Summary. */
   summary?: SummarySection;
-  /** The signers, before publication. */
-  signers?: { executedAt: string | null; signingKeyId: string | null };
+  /** The signers, before publication; `provenance` is the notebook's own reading, which the production method states. */
+  signers?: {
+    executedAt: string | null;
+    signingKeyId: string | null;
+    provenance: { state: NotebookProvenanceState; label: string; detail: string | null };
+  };
 }
 
 /** The whole view. A part a surface does not have is null. */

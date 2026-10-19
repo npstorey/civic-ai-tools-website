@@ -1320,10 +1320,12 @@ test('W3 P2 (5) the instrument fails on a site-written label that prints an expo
 // --- W3 P2 (6): #115, one answer display across the surfaces --------------------
 //
 // The record's answer renders through the run surfaces' answer component. For
-// a record carrying an executed notebook with a rendering cell, the answer is
-// that cell's outputs, as `adapt-notebook.ts` takes them; otherwise it is the
-// record's `output`. The fixture's `output` differs from the cell's, so a page
-// that rendered the wrong one fails.
+// a record carrying an executed notebook whose rendering cell's text is
+// byte-equal to its signed `output`, the answer is that cell's outputs, as
+// `adapt-notebook.ts` takes them; otherwise it is the record's `output` (the
+// W3 fix, ruling 1). A fixture answering with its `output` carries an `output`
+// that differs from any cell it has, so a page that rendered the wrong one
+// fails; the differing executed case is the W3 fix (2) test.
 
 const { default: ChatNotebookOutput } = (await import('@/components/notebook/ChatNotebookOutput')) as unknown as {
   default: ComponentType<Record<string, unknown>>;

@@ -602,7 +602,7 @@ function Disclosure({ disclosure, answer, answerElement, extras, level }: {
           </Section>
         )}
 
-        {signers && <ChatSignersSection executedAt={signers.executedAt} signingKeyId={signers.signingKeyId} />}
+        {signers && <ChatSignersSection executedAt={signers.executedAt} signingKeyId={signers.signingKeyId} provenance={signers.provenance} />}
 
         {extras}
       </div>
