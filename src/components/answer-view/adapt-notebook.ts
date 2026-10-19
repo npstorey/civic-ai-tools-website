@@ -79,6 +79,11 @@ function answerContent(outputs: NotebookOutput[] | null, synthesisMarkdown: stri
   return synthesisMarkdown ? { kind: 'markdown', markdown: synthesisMarkdown } : { kind: 'none' };
 }
 
+/** RED-COMMIT STUB (W3 fix): typed so the red commit type-checks; the fix commit defines it. */
+export function renderingCellText(_outputs: NotebookOutput[] | null): string { // eslint-disable-line @typescript-eslint/no-unused-vars
+  return '';
+}
+
 function flatten(value: string | string[] | undefined): string {
   if (!value) return '';
   return Array.isArray(value) ? value.join('') : value;
