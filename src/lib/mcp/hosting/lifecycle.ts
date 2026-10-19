@@ -76,6 +76,7 @@ import { BRIDGE_PACKAGE_JSON, BRIDGE_READY_LINE, BRIDGE_SOURCE, bridgeConfig } f
 import { bridgeToken } from './token.ts';
 import { pinLockfileKey, pinPackageJson, type NpmLockfile } from './install-manifests.ts';
 import { BRIDGE_LOCKFILE, PIN_LOCKFILES } from './lockfiles.generated.ts';
+import { hostingEnvironment } from '../../hosting-environment.ts';
 
 /** The prefix of every hosted source's sandbox name. */
 export const HOSTED_SANDBOX_NAME_PREFIX = 'civic-src-';
@@ -125,12 +126,11 @@ export class HostedSourceUnavailableError extends Error {
 
 /**
  * The deployment environment a sandbox name carries: `VERCEL_ENV` (set by the
- * platform: `production`, `preview` or `development`), or `local` off it.
+ * platform: `production`, `preview` or `development`), or `local` off it. It
+ * lives in a leaf module (`src/lib/hosting-environment.ts`, R6 W5) so the usage
+ * counter can read it without loading this module and the sandbox SDK.
  */
-export function hostingEnvironment(): string {
-  const raw = process.env.VERCEL_ENV?.trim().toLowerCase() ?? '';
-  return /^[a-z]{1,16}$/.test(raw) ? raw : 'local';
-}
+export { hostingEnvironment };
 
 /**
  * The sandbox name for a source at a pinned version: the prefix, the
