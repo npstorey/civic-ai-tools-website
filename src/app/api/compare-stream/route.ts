@@ -6,6 +6,7 @@ import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import { consentInForce } from '@/lib/sources/consent-gate';
+import { createInLoopRouting, directorySet, entersInLoop, sourceRoutingMode } from '@/lib/mcp/routing-mode';
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import { encodeSSE, errorLogFacts, panelsForRun, startSseKeepAlive, streamErrorPayload, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
@@ -264,10 +265,22 @@ export async function POST(request: NextRequest) {
     // (R6 W2, D3 = A), never from the request.
     const configured = readMcpEnvFromProcess();
     const selection = consent.selection;
-    const composition = await composeSystemPrompt({ portal, configured, selection });
+    // How the sources reach the model (#644 W1, D9), read once per request. In
+    // loop, the first request carries the directory and `load_source` only, and
+    // no source's guidance is fetched until the model loads it; otherwise the
+    // composition below, exactly as before the setting existed.
+    const routingMode = sourceRoutingMode();
+    const directory = routingMode === 'in-loop' ? directorySet(configured, consent) : [];
+    const inLoop = entersInLoop(routingMode, directory)
+      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, selection })
+      : undefined;
+    const composition = inLoop
+      ? { prompt: inLoop.firstSystemPrompt, assertedDate: inLoop.assertedDate, sourcesOffered: inLoop.sourcesOffered, components: inLoop.components() }
+      : await composeSystemPrompt({ portal, configured, selection });
     // Under the lock, one section is appended saying the portal-general
-    // guidance does not apply here (#436, D7); unlocked, the prompt is unchanged.
-    const systemPromptWithMcp = withPortalLockGuidance(composition.prompt, lockedPortal, configured, selection);
+    // guidance does not apply here (#436, D7); unlocked, the prompt is
+    // unchanged. In loop, the session's first prompt already carries it.
+    const systemPromptWithMcp = inLoop ? inLoop.firstSystemPrompt : withPortalLockGuidance(composition.prompt, lockedPortal, configured, selection);
     const systemPromptHash = hash(systemPromptWithMcp);
     // #411, ruling D3: the HASH, not the text. This span goes inline into the
     // bytes an instance signs, and `skill.text` put the whole composed prompt
@@ -288,7 +301,7 @@ export async function POST(request: NextRequest) {
     // `mcpTools` itself when unlocked; under the lock the same schemas with
     // text that stops inviting other portals (#436, D7). Only the sources this
     // instance configures (sprint 238, D2), narrowed by the selection.
-    const offeredTools = offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection);
+    const offeredTools = inLoop ? inLoop.firstTools : offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection);
 
     // What this run states about itself (#599 W4, ADR-0033): the date its
     // prompt asserted (#475), the servers its configuration had (#495), the
@@ -392,14 +405,14 @@ Be honest if you don't have access to current or real-time data.`;
           // portal on exactly the calls that had just been given one. Told the
           // run's selection (R6 W1), so a call to a source it leaves out is
           // refused before any request, as the prompt and the tools left it out.
-          (name, args) => callMcpTool(name, args, { selection }),
+          inLoop ? inLoop.executeToolCall : (name, args) => callMcpTool(name, args, { selection }),
           systemPromptWithMcp,
           callbacks,
           // Non-throwing: a call to a tool no configured server hosts is refused
           // by the transport as one failed call, not thrown out of the loop here.
           // The same configuration and selection as the transport, so a refused
           // call's span names no source.
-          { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: (name) => routedSourceId(name, configured, selection) },
+          { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: inLoop ? inLoop.resolveToolSource : (name) => routedSourceId(name, configured, selection) },
           { portal, toolTimeoutMs: MCP_TOOL_TIMEOUT_MS },
           // The loop core refuses a call naming another portal as a rejected
           // call (#436, D7); undefined on an unlocked instance.

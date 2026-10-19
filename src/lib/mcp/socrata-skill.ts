@@ -498,6 +498,34 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput = {}):
   };
 }
 
+/** The composing package's own component, as every composition states it
+ *  last: its name and its installed version. */
+export function routerComponent(): CompositionComponent {
+  return { id: routerPackage.name, version: routerPackage.version };
+}
+
+/** The inputs of an in-loop directory (#644 W1). */
+export interface ComposeDirectoryPromptInput {
+  /** The instance's configuration, read once per run. */
+  configured: McpRegistryEnv;
+  /** The directory set's source ids: the sources the run may load. */
+  directory: readonly string[];
+  /** The run's clock. The directory states this instant's UTC date. */
+  now?: Date;
+}
+
+/**
+ * The directory: an in-loop run's first system prompt (#644 W1, ADR-0037).
+ * The package's `directoryPrompt` over the directory set: the intro, the
+ * heading, the paragraph that names `load_source`, and one line per source
+ * from its alias, description and freshness. It is the manifest's own text:
+ * no source is asked for anything, so listing a source contacts nothing.
+ */
+export function composeDirectoryPrompt(input: ComposeDirectoryPromptInput): string {
+  const { configured, directory, now = new Date() } = input;
+  return civicRouter.directoryPrompt({ configured, today: now.toISOString().split('T')[0], selection: [...directory] });
+}
+
 /**
  * The composed system prompt for the sources this instance offers
  * (`offeredSkillSources`: `['socrata', 'data-commons']`, plus
