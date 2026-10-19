@@ -93,28 +93,58 @@ export interface ToolCallRecord {
   reason?: string;
   failed?: boolean;
   failureKind?: ToolFailureKind;
-  /** RED STUB (#644 W1): a load's outcome. */
+  /**
+   * How a `load_source` call ended (#644 W1; harness 0.10.0's `LOAD_OUTCOMES`),
+   * set by the loop on a load call only. A load is never `failed`: the
+   * instance's own step answered it, whatever the outcome.
+   */
   loadOutcome?: LoadOutcome;
 }
 
-/** RED STUB (#644 W1): what a load answers. */
+/** What a load answers (#644 W1). */
 export interface LoadStepResult {
   outcome: LoadOutcome;
+  /** The tool message the model receives: one line of plain text, no JSON. */
   text: string;
+  /** The next request's system prompt, when `outcome` is `loaded`. */
   systemPrompt?: string;
+  /** The next request's tools, when `outcome` is `loaded`. */
   tools?: ChatCompletionTool[];
 }
 
-/** RED STUB (#644 W1). */
+/** What the loop tells a load about where it was made. */
 export interface LoadStepContext {
+  /** The tool-calling round the load was made in, from 1. */
   iteration: number;
 }
 
-/** RED STUB (#644 W1): the option is accepted and not read. */
+/**
+ * The in-loop load step (#644 W1, ADR-0037). A call named `toolName` is the
+ * instance's own step, not a source's tool: the loop hands its `alias` to
+ * `load` instead of to `executeToolCall`, outside the per-call bound, and
+ * applies what `load` answers to the next request.
+ */
 export interface LoadStep {
+  /** The tool name the loop intercepts: `load_source`. */
   toolName: string;
+  /** Answer a load. `alias` is the call's `alias` argument when it is a
+   *  string, and `undefined` otherwise (an argument set that did not parse
+   *  included). Expected not to throw; a throw is recorded `unavailable`. */
   load(alias: string | undefined, context: LoadStepContext): Promise<LoadStepResult>;
 }
+
+/** The operation type a load call is recorded with: the value the harness
+ *  reads a load span by (`tool.operation_type`). */
+export const LOAD_SOURCE_OPERATION_TYPE = 'load_source';
+
+/**
+ * What the model is told when a load step threw (`LoadStep.load` is expected
+ * not to). One line, no JSON, the same shape as a decline: the source cannot
+ * be used for this question.
+ */
+const LOAD_FAILED_TEXT =
+  'That source could not be loaded for this question, so nothing was loaded. Do not call load_source for it again. ' +
+  'In your answer, say what could not be checked without it.';
 
 /**
  * What the loop reports while it runs. Deliberately structural rather than
@@ -220,7 +250,16 @@ export interface ToolLoopOptions {
   onDelta?: (delta: string) => void;
   onEvent?: (event: LoopEvent) => void;
   trace?: TraceContext;
-  /** RED STUB (#644 W1): not read. */
+  /**
+   * The in-loop load step (#644 W1). Omitted, every call goes to
+   * `executeToolCall` and every request carries `systemPrompt` and `tools`,
+   * as before in-loop routing existed. Given, a call named
+   * `loadStep.toolName` is answered by `loadStep.load`, recorded as a tool
+   * call with operation type `load_source` and its outcome, spanned with
+   * `tool.load_outcome` and never `error`, and a `loaded` answer replaces the
+   * system message and the tools array from the next request on. Each
+   * `llm_inference` span then states its own request's system prompt hash.
+   */
   loadStep?: LoadStep;
   /** Label for this loop's operator log lines. */
   logContext?: string;
@@ -770,6 +809,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
     onDelta,
     onEvent,
     trace,
+    loadStep,
     logContext = 'model-loop',
   } = options;
 
@@ -782,6 +822,15 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
     messages.push({ role: 'system', content: systemPrompt });
   }
   messages.push({ role: 'user', content: prompt });
+
+  // What the next request carries. Under a load step a `loaded` answer
+  // replaces both (#644 W1); otherwise they are `systemPrompt` and `tools` on
+  // every request, as they always were.
+  let requestTools = tools;
+  const replaceSystemPrompt = (text: string) => {
+    if (messages[0]?.role === 'system') messages[0] = { role: 'system', content: text };
+    else messages.unshift({ role: 'system', content: text });
+  };
 
   // First call — check if tools are needed (non-streaming, to see tool_calls)
   let llmSpanId = trace?.builder.startSpan('llm_inference', trace.parentSpanId, {
@@ -858,6 +907,57 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         }
       } catch {
         argumentsMalformed = true;
+      }
+
+      /**
+       * THE LOAD STEP (#644 W1). A `load_source` call is the instance's own
+       * step: it is answered here, never by `executeToolCall` and never under
+       * the per-call bound, and no source sees it. It is still a tool call
+       * like any other in the record, at its position in `toolCalls` (a call
+       * is paired to its span by index downstream), with a span the harness
+       * reads by its operation type: `tool.load_outcome`, never `error`, and
+       * no source attribute, since none answered it.
+       */
+      if (loadStep && name === loadStep.toolName) {
+        const alias = !argumentsMalformed && typeof args.alias === 'string' ? args.alias : undefined;
+        const loadEntry: ToolCallRecord = {
+          name,
+          args,
+          operationType: LOAD_SOURCE_OPERATION_TYPE,
+          reason: generateToolReason(args, name),
+        };
+        toolCalls.push(loadEntry);
+        const loadPriorCalls = toolCalls.slice(0, -1);
+        emit({ type: 'tool_start', iteration: currentIteration, call: loadEntry, priorCalls: loadPriorCalls });
+        const loadSpanId = trace?.builder.startSpan('mcp_tool_call', trace.parentSpanId, {
+          'tool.name': name,
+          'tool.operation_type': LOAD_SOURCE_OPERATION_TYPE,
+          'tool.arguments': JSON.stringify(args),
+        });
+        const loadStartTime = Date.now();
+        let answer: LoadStepResult;
+        try {
+          answer = await loadStep.load(alias, { iteration: currentIteration });
+        } catch {
+          answer = { outcome: 'unavailable', text: LOAD_FAILED_TEXT };
+        }
+        const loadDuration = Date.now() - loadStartTime;
+        loadEntry.duration_ms = loadDuration;
+        loadEntry.loadOutcome = answer.outcome;
+        if (loadSpanId) {
+          trace!.builder.endSpan(loadSpanId, {
+            'tool.load_outcome': answer.outcome,
+            'tool.duration_ms': loadDuration,
+          });
+        }
+        emit({ type: 'tool_complete', iteration: currentIteration, call: loadEntry, priorCalls: loadPriorCalls, durationMs: loadDuration });
+        emit({ type: 'tool_result', iteration: currentIteration, call: loadEntry });
+        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: answer.text });
+        if (answer.outcome === 'loaded') {
+          if (answer.systemPrompt !== undefined) replaceSystemPrompt(answer.systemPrompt);
+          if (answer.tools !== undefined) requestTools = answer.tools;
+        }
+        continue;
       }
 
       /**
@@ -1090,7 +1190,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
     response = await client.chat.completions.create({
       model: endpointModel,
       messages,
-      tools,
+      tools: requestTools,
       tool_choice: 'auto',
       ...modelRequestParameters(requestSettings, maxTokens),
     });

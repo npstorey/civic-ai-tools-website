@@ -405,7 +405,9 @@ Be honest if you don't have access to current or real-time data.`;
           // portal on exactly the calls that had just been given one. Told the
           // run's selection (R6 W1), so a call to a source it leaves out is
           // refused before any request, as the prompt and the tools left it out.
-          inLoop ? inLoop.executeToolCall : (name, args) => callMcpTool(name, args, { selection }),
+          // In loop (#644 W1), the session: its transport, bound to the loaded
+          // set, and its load step.
+          inLoop ?? ((name, args) => callMcpTool(name, args, { selection })),
           systemPromptWithMcp,
           callbacks,
           // Non-throwing: a call to a tool no configured server hosts is refused

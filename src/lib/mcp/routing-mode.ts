@@ -42,11 +42,13 @@
  */
 
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
-import { civicRouter, type SourceOffered, type SourceSelection } from '@typedstandards/civic-typed-router';
+import { civicRouter, LOAD_SOURCE_TOOL_NAME, type SourceOffered, type SourceSelection } from '@typedstandards/civic-typed-router';
 import type { McpRegistryEnv } from './registry.ts';
 import { routedSourceId } from './registry.ts';
-import { composeDirectoryPrompt, routerComponent, withPortalLockGuidance, type CompositionComponent } from './socrata-skill.ts';
-import { loadSourceTool } from './tools.ts';
+import { composeDirectoryPrompt, composeInLoopSystemPrompt, routerComponent, withPortalLockGuidance, type CompositionComponent } from './socrata-skill.ts';
+import { loadSourceTool, mcpToolsFor, offeredMcpTools } from './tools.ts';
+import { sourceIdForToolName } from './operation-types.ts';
+import { classifyStreamError } from '../streaming.ts';
 import { callMcpTool, type McpToolCallOptions } from './client.ts';
 import type { LoadStep } from '../model-loop/run-tool-loop.ts';
 
@@ -131,6 +133,51 @@ export function entersInLoop(mode: SourceRoutingMode, directory: readonly Direct
 
 // --- An in-loop run -----------------------------------------------------------------
 
+/**
+ * What the model is told a load did (#644 W1, D1 = A): one line of plain text
+ * with no `{` in it, since a JSON object in a tool message reached two models
+ * as that object alone (R5; the quote test of 2026-10-19, S1). A loaded
+ * source's guidance never travels here: it arrives in the next request's
+ * system prompt. The alias is named only when it is one the directory lists;
+ * an alias that names no source is text the model chose, and is not repeated.
+ */
+export const LOAD_RESULT_TEXT = {
+  loaded: (alias: string) =>
+    `Loaded ${alias}. Its tools are added for your next turn, and its guidance now appears in the system prompt.`,
+  alreadyLoaded: (alias: string) =>
+    `${alias} is already loaded. Its tools and its guidance are unchanged.`,
+  // Design §1.6, "On decline": the source is unavailable for this run, the
+  // model does not ask again, and the answer says what could not be checked.
+  declined: (alias: string) =>
+    `${alias} is unavailable for this question, so nothing was loaded. Do not call load_source for it again. ` +
+    'In your answer, say what could not be checked without it.',
+  notOffered:
+    'No source in the directory has that alias, so nothing was loaded. Call load_source with an alias the directory lists.',
+} as const;
+
+/**
+ * A call to a tool of a source the run lists in its directory but has not
+ * loaded. The dispatch refused it before any request (`SourceNotOfferedError`,
+ * R6 W1), so it keeps that refusal's kind: `code` is `not_offered`, the record
+ * says `failureKind: 'not_offered'`, and the reader sees R6's copy. Only the
+ * model's text differs: `sourceNotLoaded` sends `describeToolFailureForLlm` to
+ * R8's variant, which says the source is not loaded and names `load_source`,
+ * since R6's ("do not call its tools again") is wrong for a source the model
+ * can still load.
+ */
+export class SourceNotLoadedError extends Error {
+  readonly code = 'not_offered' as const;
+  readonly sourceNotLoaded = true as const;
+  /** The name the model called. */
+  readonly calledName: string;
+
+  constructor(calledName: string) {
+    super(`Tool "${calledName}" belongs to a data source this run has not loaded, so the call was not sent.`);
+    this.name = 'SourceNotLoadedError';
+    this.calledName = calledName;
+  }
+}
+
 /** The transport an in-loop run calls a source's tool through: the MCP
  *  client's, told the loaded set as it stands at each call. */
 export type InLoopToolTransport = (name: string, args: Record<string, unknown>, options: McpToolCallOptions) => Promise<string>;
@@ -162,15 +209,20 @@ export interface InLoopRouting {
   readonly firstSystemPrompt: string;
   /** The first request's tools: `load_source` alone. */
   readonly firstTools: ChatCompletionTool[];
+  /** The loop's load step (`ToolLoopOptions.loadStep`). */
+  readonly loadStep: LoadStep;
   /** The tool transport: a source's tool is sent only once that source is
-   *  loaded; otherwise the dispatch refuses it `not_offered`. */
+   *  loaded; a tool of a listed source that is not loaded is refused
+   *  `not_offered` as `SourceNotLoadedError`. */
   executeToolCall(name: string, args: Record<string, unknown>): Promise<string>;
   /** The source a span names for a call, by the loaded set as it stands. */
   resolveToolSource(name: string): string | undefined;
   /** The source ids loaded so far, in manifest order. */
   loaded(): string[];
-  /** RED STUB (#644 W1). */
-  readonly loadStep: LoadStep;
+  /** The system prompt the next request carries. */
+  systemPrompt(): string;
+  /** The tools the next request carries. */
+  tools(): ChatCompletionTool[];
   /** The date the run's prompts state, `YYYY-MM-DD`. */
   readonly assertedDate: string;
   /** Every manifest source's offered-reason over the run's selection, as an
@@ -184,31 +236,90 @@ export interface InLoopRouting {
 
 /**
  * The options an in-loop run is given (#644 W1): the directory as its first
- * system prompt, `load_source` as its one tool, and a transport bound to what
- * the model has loaded.
+ * system prompt, `load_source` as its one tool, the load step, and a
+ * transport bound to what the model has loaded.
+ *
+ * A LOAD (`loadStep.load`):
+ *   - an alias naming no source of the directory set (unknown, Off, or not
+ *     configured) is `not-offered`: nothing is loaded and the reader is not
+ *     asked;
+ *   - an Ask-first source is `declined` until W2 adds the pause;
+ *   - an On source is `loaded`: the next request's system prompt is the
+ *     in-loop prompt over the loaded set, then the lock section, and its
+ *     tools are `load_source` and the loaded sources' tools; a second load
+ *     recomposes over the union; a repeated load of a loaded source
+ *     recomposes nothing and is `loaded`.
+ * Nothing in a load contacts a source but the composition itself: loading
+ * Data Commons or Boston asks that server for its instructions, as composing
+ * it does under all-sources. A hosted source is never woken by a load.
  */
 export async function createInLoopRouting(input: InLoopRoutingInput): Promise<InLoopRouting> {
-  const { lockedPortal, configured, directory, selection, now = new Date() } = input;
+  const { portal, lockedPortal, configured, directory, selection, now = new Date() } = input;
   const callTool = input.callTool ?? callMcpTool;
   const directoryIds = directory.map((entry) => entry.sourceId);
   // The lock section stays the consumer's and follows the router's text, on
   // every request, over the directory set (the router's flag).
   const withLock = (prompt: string) => withPortalLockGuidance(prompt, lockedPortal, configured, directoryIds);
+  const loadTool = loadSourceTool(configured, directoryIds);
   const loadedIds: string[] = [];
   const loadedNow = (): string[] => directoryIds.filter((id) => loadedIds.includes(id));
 
+  let current: { systemPrompt: string; tools: ChatCompletionTool[]; components: CompositionComponent[] } = {
+    systemPrompt: withLock(composeDirectoryPrompt({ configured, directory: directoryIds, now })),
+    tools: [loadTool],
+    components: [routerComponent()],
+  };
+  const first = current;
+
+  const loadStep: LoadStep = {
+    toolName: LOAD_SOURCE_TOOL_NAME,
+    async load(alias) {
+      const entry = alias === undefined ? undefined : directory.find((candidate) => candidate.alias === alias);
+      if (!entry) return { outcome: 'not-offered', text: LOAD_RESULT_TEXT.notOffered };
+      if (entry.state !== 'on') return { outcome: 'declined', text: LOAD_RESULT_TEXT.declined(entry.alias) };
+      if (loadedIds.includes(entry.sourceId)) {
+        return { outcome: 'loaded', text: LOAD_RESULT_TEXT.alreadyLoaded(entry.alias), systemPrompt: current.systemPrompt, tools: current.tools };
+      }
+      // Composed over the candidate set first, committed only once composed.
+      const candidate = directoryIds.filter((id) => loadedIds.includes(id) || id === entry.sourceId);
+      const composed = await composeInLoopSystemPrompt({ portal, configured, directory: directoryIds, loaded: candidate, now });
+      loadedIds.push(entry.sourceId);
+      current = {
+        systemPrompt: withLock(composed.prompt),
+        tools: [loadTool, ...offeredMcpTools(mcpToolsFor(lockedPortal), configured, loadedNow())],
+        components: composed.components,
+      };
+      return { outcome: 'loaded', text: LOAD_RESULT_TEXT.loaded(entry.alias), systemPrompt: current.systemPrompt, tools: current.tools };
+    },
+  };
+
+  const listed = new Set(directoryIds);
   return {
     directory,
-    firstSystemPrompt: withLock(composeDirectoryPrompt({ configured, directory: directoryIds, now })),
-    firstTools: [loadSourceTool(configured, directoryIds)],
-    executeToolCall: (name, args) => callTool(name, args, { selection: loadedNow() }),
+    firstSystemPrompt: first.systemPrompt,
+    firstTools: first.tools,
+    loadStep,
+    async executeToolCall(name, args) {
+      try {
+        return await callTool(name, args, { selection: loadedNow() });
+      } catch (error) {
+        // A listed source the model has not loaded: R6's refusal, with R8's
+        // model text. A source the run does not list keeps R6's text.
+        const sourceId = sourceIdForToolName(name);
+        if (classifyStreamError(error) === 'not_offered' && sourceId !== undefined && listed.has(sourceId)) {
+          throw new SourceNotLoadedError(name);
+        }
+        throw error;
+      }
+    },
     resolveToolSource: (name) => routedSourceId(name, configured, loadedNow()),
     loaded: loadedNow,
-    loadStep: { toolName: 'load_source', load: async () => ({ outcome: 'not-offered', text: 'No load step.' }) },
+    systemPrompt: () => current.systemPrompt,
+    tools: () => current.tools,
     assertedDate: now.toISOString().split('T')[0],
     sourcesOffered: civicRouter
       .sourcesOffered(configured, selection)
       .map(({ sourceId, alias, reason }) => ({ sourceId, alias, reason })),
-    components: () => [routerComponent()],
+    components: () => current.components,
   };
 }

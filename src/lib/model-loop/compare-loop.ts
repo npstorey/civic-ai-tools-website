@@ -175,6 +175,9 @@ export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
     lockedPortal,
     toolTimeoutMs: COMPARE_MCP_TOOL_TIMEOUT_MS,
     executeToolCall: callTool,
+    // In loop (#644 W1): the load step; this route holds no stream, so an
+    // Ask-first source is declined with no hold.
+    ...(inLoop ? { loadStep: inLoop.loadStep } : {}),
   };
 }
 

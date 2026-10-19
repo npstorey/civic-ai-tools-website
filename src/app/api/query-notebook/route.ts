@@ -703,7 +703,8 @@ async function runPhaseA(args: {
       // timer this file armed per tool call was never cleared. Told the run's
       // selection (R6 W1), so a call to a source it leaves out is refused
       // before any request.
-      inLoop ? inLoop.executeToolCall : (name, args) => callMcpTool(name, args, { selection }),
+      // In loop (#644 W1), the session: its transport and its load step.
+      inLoop ?? ((name, args) => callMcpTool(name, args, { selection })),
       systemPrompt,
       callbacks,
       // Non-throwing: a call to a tool no configured server hosts is refused by
