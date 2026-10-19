@@ -52,7 +52,7 @@
  */
 
 import type OpenAI from 'openai';
-import { CIVIC_MANIFEST, type SourceSelection } from '@typedstandards/civic-typed-router';
+import { CIVIC_MANIFEST, isOfferedReason, type OfferedReason, type SourceSelection } from '@typedstandards/civic-typed-router';
 import type { ModelRequestSettings } from '../model-catalog.ts';
 import { mcpTools, offeredMcpTools } from '../mcp/tools.ts';
 import { callMcpTool } from '../mcp/client.ts';
@@ -356,7 +356,7 @@ function statedOfferedSet(pkg: ReplayOfferedSetSource): { from: 'sourcesOffered'
   if (composition && typeof composition === 'object' && Array.isArray(composition.sourcesOffered)) {
     const ids = (composition.sourcesOffered as Array<{ sourceId?: unknown; reason?: unknown } | null>)
       .filter((entry) => entry !== null && typeof entry === 'object' && typeof entry.sourceId === 'string'
-        && (entry.reason === 'configured' || entry.reason === 'selected'))
+        && typeof entry.reason === 'string' && isOfferedReason(entry.reason as OfferedReason))
       .map((entry) => entry!.sourceId as string);
     return { from: 'sourcesOffered', ids: [...new Set(ids)] };
   }
