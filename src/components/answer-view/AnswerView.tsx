@@ -610,6 +610,13 @@ function Disclosure({ disclosure, answer, answerElement, extras, level }: {
   );
 }
 
+// --- The layout (LAYOUT-WEB W4 P1): a typed stub in the red commit ----------------
+
+/** Hands the view an instance's layouts. The stub ignores them; the fix places the parts by them. */
+export function AnswerLayoutsProvider({ children }: { value: unknown; children?: ReactNode }) {
+  return <>{children}</>;
+}
+
 // --- The view -----------------------------------------------------------------------
 
 export interface AnswerViewProps {

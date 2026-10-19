@@ -34,6 +34,8 @@ export type QuerySurfacePresentation = 'comparison' | 'answer-first';
  */
 export const MODE_STORAGE_KEY = 'civicaitools.notebookMode';
 export const COMPARISON_STORAGE_KEY = 'civicaitools.showComparison';
+/** LAYOUT-WEB W4 P1: the reader's layout choice. A typed stub in the red commit; the fix names the key. */
+export const LAYOUT_STORAGE_KEY: string = '';
 
 /** Parse a stored response-mode choice; anything unrecognized is "no choice". */
 export function parseStoredMode(raw: string | null): QueryMode | null {

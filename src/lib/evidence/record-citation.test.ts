@@ -48,7 +48,7 @@ test('record citation: the plain-text and deliberative formats, word for word', 
   );
   assert.equal(
     deliberative?.text,
-    'Record: Noise complaints by borough [Verified: May 19, 2026] ' +
+    'Record: Noise complaints by borough [Published: May 19, 2026] ' +
       'https://records.example.test/records/noise-complaints-by-borough-abc123',
   );
 });

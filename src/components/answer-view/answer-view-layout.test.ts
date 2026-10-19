@@ -139,6 +139,9 @@ const { default: ChatNotebookOutput } = (await import('@/components/notebook/Cha
 const { EvidenceOriginProvider } = (await import('@/components/EvidenceOriginProvider')) as unknown as {
   EvidenceOriginProvider: ComponentType<{ value: Record<string, string | null>; children?: ReactNode }>;
 };
+const { AnswerLayoutsProvider } = (await import('@/components/answer-view/AnswerView')) as unknown as {
+  AnswerLayoutsProvider: ComponentType<{ value: unknown; children?: ReactNode }>;
+};
 const { handleComparisonEvent } = (await import('@/hooks/useStreamingComparison')) as unknown as {
   handleComparisonEvent: (event: Record<string, unknown>, set: (update: unknown) => void) => void;
 };
@@ -172,10 +175,12 @@ const SECTION_6 = {
 
 // --- Providers -------------------------------------------------------------------
 
-function withProviders(element: ReactNode, instance: string | null = INSTANCE): string {
+function withProviders(element: ReactNode, instance: string | null = INSTANCE, layouts?: unknown): string {
+  // LAYOUT-WEB W4 P1: with `layouts`, the instance's layouts reach the view through its provider.
+  const laidOut = layouts === undefined ? element : createElement(AnswerLayoutsProvider, { value: layouts }, element);
   const origin = createElement(EvidenceOriginProvider, {
     value: { origin: instance ? `https://${instance}` : null, host: instance, platformTitle: null },
-  }, element);
+  }, laidOut);
   const Session = SessionProvider as unknown as ComponentType<{ session: null; children?: ReactNode }>;
   return renderToStaticMarkup(createElement(Session, { session: null }, origin));
 }
@@ -320,7 +325,7 @@ function comparisonState(answer: string): ComparisonState {
   return state as unknown as ComparisonState;
 }
 
-function renderComparison(state: ComparisonState, options: { answerFirst?: boolean; instance?: string | null } = {}): string {
+function renderComparison(state: ComparisonState, options: { answerFirst?: boolean; instance?: string | null; layouts?: unknown } = {}): string {
   return withProviders(createElement(ComparisonDisplay, {
     withoutMcp: null,
     withMcp: null,
@@ -334,7 +339,7 @@ function renderComparison(state: ComparisonState, options: { answerFirst?: boole
     model: MODEL,
     evidenceTrace: state.evidenceTrace,
     answerFirst: options.answerFirst ?? true,
-  }), options.instance === undefined ? INSTANCE : options.instance);
+  }), options.instance === undefined ? INSTANCE : options.instance, options.layouts);
 }
 
 const COMPARISON_STATE = comparisonState(COMPARISON_ANSWER);
@@ -432,8 +437,8 @@ async function stateAfter(events: Array<Record<string, unknown>>): Promise<Recor
   return hookCell.state;
 }
 
-function renderRun(state: Record<string, unknown>, instance: string | null = INSTANCE): string {
-  return withProviders(createElement(NotebookOutput, { state, prompt: QUESTION, model: MODEL, portal: PORTAL }), instance);
+function renderRun(state: Record<string, unknown>, instance: string | null = INSTANCE, layouts?: unknown): string {
+  return withProviders(createElement(NotebookOutput, { state, prompt: QUESTION, model: MODEL, portal: PORTAL }), instance, layouts);
 }
 
 const RUN_STATE = await stateAfter(runEvents(RUN_NOTEBOOK));
@@ -889,3 +894,235 @@ test('W3 fix (4) a mixed set keeps today’s line: markdown beside an error, and
     assert.deepEqual(authorLines(html).filter((l) => l.key === 'answer').map((l) => l.text), [SECTION_6.answer, SECTION_6.answer], `${name}: the model’s line, over the answer and over F`);
   }
 });
+
+// --- LAYOUT-WEB W4 P1: the layout, the toggle, the page's line -----------------------
+//
+// The view places its seven parts by a layout (`src/lib/answer-layout/`). Each
+// surface is rendered through the component its page mounts, with no layout
+// setting (the built-ins, `answer-first` the default) and with the instance's
+// layouts handed to the view's provider: `envelope-order` as the default, and
+// two fixture layouts. The toggle's choice is read from the session in the
+// browser only (the server reads none), so a chosen layout is driven here as
+// the instance's default; the choice itself is pinned in
+// `src/lib/answer-layout/index.test.ts`.
+//
+// THE INSTRUMENT. `viewChildren` splits the view's root into its top-level
+// elements and names the part each belongs to. Every part carries content of
+// its own (the fixtures' markers), so a part dropped, doubled or changed shows
+// as a different list or a different element: the elements under a second
+// layout must be the default's, byte for byte, in another order.
+
+const { ANSWER_FIRST, ENVELOPE_ORDER, BUILT_IN_LAYOUTS } = await import('@/lib/answer-layout');
+type Layout = typeof ANSWER_FIRST;
+
+/** An instance whose default is `layout`, offering it beside the built-ins. */
+const instanceWith = (layout: Layout) => ({
+  default: layout,
+  offered: [layout, ...BUILT_IN_LAYOUTS.filter((l) => l.name !== layout.name)],
+});
+
+const VIEW_ROOT = '<div style="max-width:900px;margin:0 auto">';
+
+/** The part a top-level element of the view belongs to. */
+function partOfChild(markup: string): string {
+  if (/^<div data-part="(status-row|refused-requests)"/.test(markup)) return 'status';
+  if (markup.startsWith('<div style="margin-bottom:24px">') || markup.startsWith('<h2')) return 'answer';
+  if (markup.startsWith('<div data-part="citation"')) return 'citation';
+  if (markup.startsWith('<div data-part="steps"')) return 'steps';
+  if (markup.startsWith('<div data-part="sources"')) return 'sources';
+  if (markup.startsWith('<details data-part="disclosure"')) return 'disclosure';
+  if (markup.startsWith('<div data-part="actions"')) return 'actions';
+  if (markup.startsWith('<div data-part="layout-foot"')) return 'foot';
+  assert.fail(`the view holds an element no part accounts for: ${markup.slice(0, 120)}`);
+}
+
+/** The view's top-level elements, in order. */
+function viewChildren(html: string): Array<{ part: string; markup: string }> {
+  const root = html.lastIndexOf(VIEW_ROOT, at(html, 'data-part="status-row"'));
+  assert.ok(root >= 0, 'no view root before the status row');
+  const close = elementEnd(html, root, 'div') - '</div>'.length;
+  const children: Array<{ part: string; markup: string }> = [];
+  for (let i = root + VIEW_ROOT.length; i < close;) {
+    const tag = /^<(\w+)\b/.exec(html.slice(i));
+    assert.ok(tag !== null, `the view holds text of its own at ${i}: ${html.slice(i, i + 80)}`);
+    const end = elementEnd(html, i, tag[1]);
+    children.push({ part: partOfChild(html.slice(i, end)), markup: html.slice(i, end) });
+    i = end;
+  }
+  return children;
+}
+
+/** The parts, in order, one entry per run of elements that belong to one part. */
+const sequence = (children: Array<{ part: string }>) =>
+  children.map((c) => c.part).filter((p, i, all) => i === 0 || all[i - 1] !== p);
+
+/** The elements other than the foot, sorted: what a reorder must leave unchanged. */
+const elements = (children: Array<{ part: string; markup: string }>) =>
+  children.filter((c) => c.part !== 'foot').map((c) => c.markup).sort();
+
+const ANSWER_FIRST_SEQUENCE = ['status', 'answer', 'citation', 'steps', 'sources', 'disclosure', 'actions', 'foot'];
+const ENVELOPE_ORDER_SEQUENCE = ['status', 'disclosure', 'steps', 'answer', 'sources', 'citation', 'actions', 'foot'];
+
+/** The view without its foot (the layout's line and the toggle). */
+function withoutLayoutFoot(html: string): string {
+  const start = html.indexOf('<div data-part="layout-foot"');
+  if (start < 0) return html;
+  return html.slice(0, start) + html.slice(elementEnd(html, start, 'div'));
+}
+
+/** The disclosure's section headings, in order. */
+const sectionTitles = (html: string) => {
+  const d = requireDisclosure(html);
+  return [...html.slice(d.start, d.end).matchAll(/<h3\b[^>]*>([^<]*)<\/h3>/g)].map((m) => m[1]).filter((t) => / · /.test(t));
+};
+
+const W4_SURFACES: Array<[string, (layouts?: unknown) => string]> = [
+  ['the comparison', (layouts) => renderComparison(COMPARISON_STATE, { layouts })],
+  ['the executed run', (layouts) => renderRun(RUN_STATE, INSTANCE, layouts)],
+];
+
+const FIXTURE_OMITS_CITATION: Layout = {
+  ...ENVELOPE_ORDER,
+  name: 'fixture-omits-citation',
+  order: ENVELOPE_ORDER.order.filter((n) => n !== 'citation'),
+};
+const FIXTURE_UNKNOWN_PART: Layout = {
+  ...ENVELOPE_ORDER,
+  name: 'fixture-unknown-part',
+  order: ['status', 'TIMELINE-w4p1', ...ENVELOPE_ORDER.order.slice(1)],
+  disclosure: { ...ENVELOPE_ORDER.disclosure, order: ['A', 'APPENDIX-w4p1', ...ENVELOPE_ORDER.disclosure.order.slice(1)] },
+};
+
+for (const [name, renderWith] of W4_SURFACES) {
+  test(`W4 P1 (4) ${name}: with no setting, the parts render in the built-in default's order, then the foot`, () => {
+    assert.deepEqual(sequence(viewChildren(renderWith())), ANSWER_FIRST_SEQUENCE);
+  });
+
+  test(`W4 P1 (4) ${name}: with envelope-order chosen, the order changes and every part is still present, byte for byte`, () => {
+    const byDefault = viewChildren(renderWith());
+    const envelope = viewChildren(renderWith(instanceWith(ENVELOPE_ORDER)));
+    assert.deepEqual(sequence(envelope), ENVELOPE_ORDER_SEQUENCE);
+    assert.deepEqual(elements(envelope), elements(byDefault), 'the same elements, reordered: none dropped, doubled or changed');
+  });
+
+  test(`W4 P1 (4) ${name}: rules 2 to 4 hold under both built-ins`, () => {
+    const renders = [renderWith(), renderWith(instanceWith(ENVELOPE_ORDER))];
+    const [first, second] = renders.map((html) => ({
+      html,
+      sections: sectionTitles(html),
+      authors: authorLines(html).map((l) => `${l.key}: ${l.text}`).sort(),
+    }));
+    // Rule 2: the disclosure holds the same sections, in the same order, and the answer is placed twice.
+    assert.ok(first.sections.length >= 3, `premise: the disclosure holds its sections (${first.sections.join(', ')})`);
+    assert.deepEqual(second.sections, first.sections, 'the disclosure’s sections');
+    for (const { html } of [first, second]) {
+      assert.equal(occurrences(html, '<div data-part="answer"').length, 2, 'the answer, first and as F');
+      // Rule 3: the status row's reading and the refused-request line sit outside the disclosure.
+      const d = requireDisclosure(html);
+      for (const marker of ['data-part="status-row"', 'data-part="refused-requests"']) {
+        const i = at(html, marker);
+        assert.ok(i < d.start || i > d.end, `${marker} sits outside the disclosure`);
+      }
+    }
+    // Rule 4: every author line, word for word, as many times.
+    assert.ok(first.authors.length >= 5, 'premise: the run carries its author lines');
+    assert.deepEqual(second.authors, first.authors, 'the author lines');
+  });
+
+  test(`W4 P1 (5) ${name}: the foot line names the layout and its version under each built-in, outside the disclosure`, () => {
+    for (const layout of [ANSWER_FIRST, ENVELOPE_ORDER]) {
+      const html = renderWith(instanceWith(layout));
+      const line = `Shown under layout ${layout.name} v${layout.version}`;
+      assert.equal(occurrences(html, line).length, 1, `"${line}" once`);
+      const children = viewChildren(html);
+      assert.equal(children.at(-1)?.part, 'foot', 'the foot closes the view');
+      assert.ok(children.at(-1)?.markup.includes(`<span data-part="layout-line">${line}</span>`), 'the line sits in the foot');
+      const d = requireDisclosure(html);
+      assert.ok(at(html, line) > d.end, 'outside the disclosure');
+    }
+    assert.ok(renderWith().includes('Shown under layout answer-first v1'), 'with no setting, the default’s line');
+  });
+
+  test(`W4 P1 (8) ${name}: a layout that omits a part renders it at its default place, every part present`, () => {
+    const byDefault = viewChildren(renderWith());
+    const omits = viewChildren(renderWith(instanceWith(FIXTURE_OMITS_CITATION)));
+    // The citation's default place is directly after the answer.
+    assert.deepEqual(sequence(omits), ['status', 'disclosure', 'steps', 'answer', 'citation', 'sources', 'actions', 'foot']);
+    assert.deepEqual(elements(omits), elements(byDefault), 'the same elements: none dropped');
+  });
+
+  test(`W4 P1 (8) ${name}: a layout naming an unknown part renders the seven parts and nothing else`, () => {
+    const envelope = renderWith(instanceWith(ENVELOPE_ORDER));
+    const unknown = renderWith(instanceWith(FIXTURE_UNKNOWN_PART));
+    assert.deepEqual(sequence(viewChildren(unknown)), ENVELOPE_ORDER_SEQUENCE);
+    assert.equal(withoutLayoutFoot(unknown), withoutLayoutFoot(envelope), 'the markup is envelope-order’s, but for the foot');
+    assert.doesNotMatch(unknown, /TIMELINE-w4p1|APPENDIX-w4p1/, 'an unknown name renders nothing');
+  });
+}
+
+test('W4 P1 (4) the toggle sits in the foot, offers the instance’s layouts, and marks the default chosen', () => {
+  for (const [name, renderWith] of W4_SURFACES) {
+    const foot = viewChildren(renderWith()).at(-1)?.markup ?? '';
+    const options = [...foot.matchAll(/<option value="([^"]+)"( selected="")?>([^<]*)<\/option>/g)];
+    assert.deepEqual(options.map((m) => [m[1], m[3]]), [['answer-first@1', 'answer-first v1'], ['envelope-order@1', 'envelope-order v1']], `${name}: the built-ins, the default first`);
+    assert.deepEqual(options.filter((m) => m[2] !== undefined).map((m) => m[1]), ['answer-first@1'], `${name}: the default is the one chosen`);
+    const configured = viewChildren(renderWith(instanceWith(ENVELOPE_ORDER))).at(-1)?.markup ?? '';
+    assert.match(configured, /<option value="envelope-order@1" selected="">/, `${name}: an instance’s default is the one chosen`);
+  }
+});
+
+// --- W4 P1 (10): the run's citation preview states no date the run did not record ------
+//
+// An executed reading whose notebook carries no execution stamp: the preview's
+// "[Executed: …]" states no date, and the plain text no year. At the base it
+// stated the moment the page rendered.
+
+test('W4 P1 (10) an executed reading with no execution stamp: the citation preview states no date and no year', () => {
+  const html = renderNotebook(withoutExecutionStamp(notebookWith([markdownOutput(RUN_ANSWER)], 'executed')));
+  const text = citationText(html);
+  assert.ok(text.includes('[Executed]'), `the preview still states the notebook’s reading: ${text}`);
+  assert.doesNotMatch(text, MONTHS, `the preview states a date the run did not record: ${text}`);
+  assert.doesNotMatch(text, /\b(19|20)\d\d\b/, `the preview states a year the run did not record: ${text}`);
+  assert.ok(citationText(RUN).includes('[Executed: October 18, 2026]'), 'premise: a stamped run states its own date');
+});
+
+// --- W4 P1 (11): nothing moves without a setting -----------------------------------------
+//
+// With no setting, each surface's markup, without the foot, equals the base's.
+// THE GOLDENS WERE NOT WRITTEN BY HAND: each is this block's output on the base
+// (website main 641a82f), the base tree running this block with
+// `W4P1_UNCHANGED_OUT` set, where `withoutLayoutFoot` removes nothing. Rendered
+// in UTC, so a time the markup states reads the same on every host.
+
+const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
+
+function inUtc<T>(fn: () => T): T {
+  const before = process.env.TZ;
+  process.env.TZ = 'UTC';
+  try {
+    return fn();
+  } finally {
+    if (before === undefined) delete process.env.TZ;
+    else process.env.TZ = before;
+  }
+}
+
+for (const [name, file, renderIt] of [
+  ['the comparison', 'w4p1-unchanged-comparison.golden.txt', () => renderComparison(COMPARISON_STATE)],
+  ['the executed run', 'w4p1-unchanged-executed-run.golden.txt', () => renderRun(RUN_STATE)],
+] as const) {
+  test(`W4 P1 (11) ${name}: with no setting, the markup without the foot equals the base’s`, () => {
+    const actual = withoutLayoutFoot(inUtc(renderIt));
+    if (UNCHANGED_OUT !== undefined) {
+      fs.writeFileSync(path.join(UNCHANGED_OUT, file), actual);
+      return;
+    }
+    const goldenPath = path.join(HERE, file);
+    assert.ok(fs.existsSync(goldenPath), `no golden at ${goldenPath}; it is captured on the base, never written by hand`);
+    const golden = fs.readFileSync(goldenPath, 'utf8');
+    if (actual === golden) return;
+    let i = 0;
+    while (i < golden.length && golden[i] === actual[i]) i++;
+    assert.fail(`${name} differs from the base at character ${i}:\n  base: …${golden.slice(Math.max(0, i - 60), i + 80)}…\n  head: …${actual.slice(Math.max(0, i - 60), i + 80)}…`);
+  });
+}
