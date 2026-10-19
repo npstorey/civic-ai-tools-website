@@ -53,3 +53,59 @@ export function parseSourceRouting(raw: string | undefined, warn: (line: string)
 export function sourceRoutingMode(): SourceRoutingMode {
   return parseSourceRouting(process.env.SOURCE_ROUTING);
 }
+
+// --- RED STUB (#644 W1 criterion 3): the base behaviour, typed ------------------
+
+import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import type { SourceSelection } from '@typedstandards/civic-typed-router';
+import { civicRouter } from '@typedstandards/civic-typed-router';
+import type { McpRegistryEnv } from './registry.ts';
+import { composeSystemPrompt, withPortalLockGuidance } from './socrata-skill.ts';
+import { mcpToolsFor, offeredMcpTools } from './tools.ts';
+import { callMcpTool } from './client.ts';
+
+export interface DirectoryEntry {
+  sourceId: string;
+  alias: string;
+  state: 'on' | 'ask-first';
+}
+
+export interface DirectoryConsent {
+  enforced: boolean;
+  states: Readonly<Record<string, string>>;
+}
+
+export function directorySet(configured: McpRegistryEnv, consent: DirectoryConsent): DirectoryEntry[] {
+  return civicRouter.manifest
+    .filter((entry) => civicRouter.offeredSkillSources(configured).includes(entry.sourceId))
+    .map((entry) => ({ sourceId: entry.sourceId, alias: entry.alias, state: consent.states[entry.sourceId] === 'on' ? 'on' as const : 'ask-first' as const }));
+}
+
+export function entersInLoop(_mode: SourceRoutingMode, _directory: readonly DirectoryEntry[]): boolean {
+  return false;
+}
+
+export interface InLoopRoutingInput {
+  portal?: string;
+  lockedPortal?: string;
+  configured: McpRegistryEnv;
+  directory: readonly DirectoryEntry[];
+  selection: SourceSelection;
+  now?: Date;
+}
+
+export interface InLoopRouting {
+  readonly firstSystemPrompt: string;
+  readonly firstTools: ChatCompletionTool[];
+  executeToolCall(name: string, args: Record<string, unknown>): Promise<string>;
+}
+
+export async function createInLoopRouting(input: InLoopRoutingInput): Promise<InLoopRouting> {
+  const { portal, lockedPortal, configured, selection, now } = input;
+  const composition = await composeSystemPrompt({ portal, configured, selection, now });
+  return {
+    firstSystemPrompt: withPortalLockGuidance(composition.prompt, lockedPortal, configured, selection),
+    firstTools: offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection),
+    executeToolCall: (name, args) => callMcpTool(name, args, { selection }),
+  };
+}

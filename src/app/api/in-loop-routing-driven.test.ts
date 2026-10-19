@@ -1,0 +1,340 @@
+// #644 W1 — in-loop routing at the routes.
+//
+// WHAT IS DRIVEN. The REAL `/api/compare-stream`, `/api/query-notebook` and
+// `/api/compare` handlers, through the real prompt composer, the real MCP
+// client, the real loop core and the real trace builder, as
+// `a-run-records-its-inputs-driven.test.ts` drives them: `module.registerHooks()`
+// resolves the `@/` alias and stubs the four modules that need a request
+// scope, a sign-in provider or a sandbox. The model is a loopback server that
+// records each request and answers by what it is asked; the three sources are
+// one loopback MCP server on three paths. `SOURCE_ROUTING` is set per drive,
+// before the request, because the routes read it at request time.
+//
+// Criterion 2: with `SOURCE_ROUTING` unset, `all-sources`, or a third value,
+// every request the model receives is byte-identical, and a third value logs
+// one line naming the variable and its two values and never the value. The
+// in-loop drive's first request differs from them, so the comparison can fail.
+//
+// Criterion 3, at each route: the first in-loop request carries the
+// directory and one tool, `load_source`.
+//
+// No live endpoint, no credential: every key is a placeholder and every
+// address is loopback.
+//
+// Run with: npm test
+//   (or: node --test --experimental-strip-types src/app/api/in-loop-routing-driven.test.ts)
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import * as nodeModule from 'node:module';
+import type { AddressInfo } from 'node:net';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+// `module.registerHooks()` is Node 22.15+ but not in the pinned `@types/node`.
+interface ResolveResult { url: string; format?: string | null; shortCircuit?: boolean }
+interface LoadResult { format: string; source?: string; shortCircuit?: boolean }
+type NextResolve = (specifier: string, context?: unknown) => ResolveResult;
+type NextLoad = (url: string, context?: unknown) => LoadResult;
+const { registerHooks } = nodeModule as unknown as {
+  registerHooks(hooks: {
+    resolve?: (specifier: string, context: unknown, nextResolve: NextResolve) => ResolveResult;
+    load?: (url: string, context: unknown, nextLoad: NextLoad) => LoadResult;
+  }): void;
+};
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const SRC = path.resolve(HERE, '..', '..');
+
+const PORTAL = 'data.example.org';
+const QUESTION = 'How many potholes were reported in 2025?';
+const ANSWER = 'Two figures were retrieved.';
+const DATA_COMMONS_INSTRUCTIONS = 'Fixture Data Commons instructions: name places by DCID.';
+const SENTINEL = 'value-SENTINEL-DO-NOT-LEAK';
+
+// --- The outbound recorder: loopback only -----------------------------------
+
+const realFetch = globalThis.fetch;
+globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+  if (url.hostname !== '127.0.0.1') throw new TypeError('fetch failed');
+  return realFetch(input, init);
+}) as typeof fetch;
+
+// --- Module hooks ------------------------------------------------------------
+
+const STUB_PREFIX = 'file:///civic-r8-w1-stub/';
+const DRIVER_URL = pathToFileURL(path.join(SRC, 'lib/sandbox/driver.ts')).href;
+const STUB_SOURCE: Record<string, string> = {
+  'next/headers': `export async function headers() { return new Headers({ 'x-forwarded-for': '203.0.113.48' }); }`,
+  'next-auth': `export async function getServerSession() { return null; }`,
+  '@/lib/auth': `export const authOptions = {};`,
+  '@/lib/sandbox': `
+     import { NotebookExecutionError } from ${JSON.stringify(DRIVER_URL)};
+     export { NotebookExecutionError };
+     export async function executeNotebook(notebook) {
+       return { notebook, sandboxId: 'fixture-sandbox', executionDuration_ms: 1, pythonVersion: '3.13.0', libraries: {} };
+     }`,
+};
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (Object.prototype.hasOwnProperty.call(STUB_SOURCE, specifier)) {
+      return { url: `${STUB_PREFIX}${encodeURIComponent(specifier)}.mjs`, format: 'module', shortCircuit: true };
+    }
+    if (specifier === 'next/server') return nextResolve('next/server.js', context);
+    if (specifier.startsWith('@/')) {
+      const base = path.join(SRC, specifier.slice(2));
+      for (const candidate of [base, `${base}.ts`, `${base}.tsx`, path.join(base, 'index.ts')]) {
+        try {
+          if (fs.statSync(candidate).isFile()) return { url: pathToFileURL(candidate).href, shortCircuit: true };
+        } catch { /* next extension */ }
+      }
+      throw new Error(`R8 W1 test hook: cannot resolve ${specifier}`);
+    }
+    return nextResolve(specifier, context);
+  },
+  load(url, context, nextLoad) {
+    if (url.startsWith(STUB_PREFIX)) {
+      const key = decodeURIComponent(url.slice(STUB_PREFIX.length).replace(/\.mjs$/, ''));
+      return { format: 'module', source: STUB_SOURCE[key], shortCircuit: true };
+    }
+    return nextLoad(url, context);
+  },
+});
+
+// --- The loopback MCP sources ------------------------------------------------
+
+const ONE_ROW = JSON.stringify({ data: [{ count: '512' }], total_rows: 1 });
+const MCP_CALLS: Array<{ path: string; tool?: string }> = [];
+const mcp = http.createServer(async (req, res) => {
+  let body = '';
+  for await (const chunk of req) body += chunk;
+  const msg = body ? (JSON.parse(body) as { id?: unknown; method?: string; params?: { name?: string } }) : {};
+  if (msg.id === undefined) { res.writeHead(202); res.end(); return; }
+  const reply = (payload: Record<string, unknown>) => JSON.stringify({ jsonrpc: '2.0', id: msg.id, ...payload });
+  const route = req.url ?? '';
+  if (msg.method === 'initialize') {
+    const instructions = route.startsWith('/dc/') ? { instructions: DATA_COMMONS_INSTRUCTIONS } : {};
+    res.writeHead(200, { 'content-type': 'application/json', 'mcp-session-id': 'civic-r8-w1' });
+    res.end(reply({ result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'civic-r8-w1-fixture', version: '0' }, ...instructions } }));
+    return;
+  }
+  if (msg.method === 'prompts/get') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(reply({ error: { code: -32603, message: 'fixture: no skill guidance here' } }));
+    return;
+  }
+  if (msg.method === 'tools/call') MCP_CALLS.push({ path: route, tool: msg.params?.name });
+  res.writeHead(200, { 'content-type': 'text/event-stream' });
+  res.end(`event: message\ndata: ${reply({ result: { content: [{ type: 'text', text: ONE_ROW }] } })}\n\n`);
+});
+await new Promise<void>((resolve) => mcp.listen(0, '127.0.0.1', () => resolve()));
+mcp.unref();
+const MCP_ORIGIN = `http://127.0.0.1:${(mcp.address() as AddressInfo).port}`;
+
+// --- The loopback model --------------------------------------------------------
+//
+// All-sources: the first turn calls a Socrata tool and a Boston tool, the
+// next answers. In-loop (the request offers `load_source`): the first turn
+// loads Socrata; the second calls the Socrata tool, a tool of Boston (in the
+// directory, never loaded) and loads an alias no source of the directory has;
+// the third answers.
+
+const MODEL_REQUESTS: Array<{ raw: string; body: Record<string, unknown> }> = [];
+type Call = { id: string; type: 'function'; function: { name: string; arguments: string } };
+const call = (id: string, name: string, args: Record<string, unknown>): Call =>
+  ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } });
+
+function turnFor(body: Record<string, unknown>): Call[] | null {
+  const tools = (body.tools ?? []) as Array<{ function: { name: string } }>;
+  if (tools.length === 0) return null;
+  const messages = (body.messages ?? []) as Array<{ role?: string }>;
+  const assistantTurns = messages.filter((m) => m.role === 'assistant').length;
+  const inLoop = tools.some((t) => t.function.name === 'load_source');
+  if (!inLoop) {
+    return assistantTurns === 0
+      ? [
+          call('call-socrata', 'socrata__get_data', { type: 'query', dataset_id: 'aaaa-1111', limit: 1 }),
+          call('call-boston', 'boston__ckan__query_data', { resource_id: 'r-1', limit: 1 }),
+        ]
+      : null;
+  }
+  if (assistantTurns === 0) return [call('call-load-socrata', 'load_source', { alias: 'socrata' })];
+  if (assistantTurns === 1) {
+    return [
+      call('call-socrata', 'socrata__get_data', { type: 'query', dataset_id: 'aaaa-1111', limit: 1 }),
+      call('call-boston', 'boston__ckan__query_data', { resource_id: 'r-1', limit: 1 }),
+      call('call-load-unknown', 'load_source', { alias: 'nyc_charter' }),
+    ];
+  }
+  return null;
+}
+
+const model = http.createServer((req, res) => {
+  const chunks: Buffer[] = [];
+  req.on('data', (c: Buffer) => chunks.push(c));
+  req.on('end', () => {
+    const raw = Buffer.concat(chunks).toString('utf8');
+    const body = JSON.parse(raw) as Record<string, unknown>;
+    MODEL_REQUESTS.push({ raw, body });
+    const usage = { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 };
+    if (body.stream === true) {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      const frame = (payload: Record<string, unknown>) =>
+        `data: ${JSON.stringify({ id: 'chatcmpl-r8-w1', object: 'chat.completion.chunk', created: 1, model: 'fake/model', ...payload })}\n\n`;
+      res.write(frame({ choices: [{ index: 0, delta: { content: ANSWER }, finish_reason: null }] }));
+      res.write(frame({ choices: [], usage }));
+      res.end('data: [DONE]\n\n');
+      return;
+    }
+    const toolCalls = turnFor(body);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      id: 'chatcmpl-r8-w1',
+      object: 'chat.completion',
+      created: 1,
+      model: 'fake/model',
+      choices: [{
+        index: 0,
+        message: { role: 'assistant', content: toolCalls ? null : ANSWER, ...(toolCalls ? { tool_calls: toolCalls } : {}) },
+        finish_reason: toolCalls ? 'tool_calls' : 'stop',
+      }],
+      usage,
+    }));
+  });
+});
+await new Promise<void>((resolve) => model.listen(0, '127.0.0.1', () => resolve()));
+model.unref();
+const MODEL_ORIGIN = `http://127.0.0.1:${(model.address() as AddressInfo).port}`;
+
+// --- Environment, before any app module loads ----------------------------------
+
+for (const name of [
+  'DATA_COMMONS_API_KEY', 'SITE_PORTAL_LOCKED', 'SITE_DEFAULT_PORTAL', 'MODEL_API_KEY', 'OPENAI_API_KEY',
+  'MODEL_API_KIND', 'MODEL_API_AUTH', 'KV_REST_API_URL', 'KV_REST_API_TOKEN', 'EXECUTOR_DRIVER', 'NYC_CHARTER_HOSTING',
+  'SOURCE_ROUTING',
+]) {
+  delete process.env[name];
+}
+process.env.RATE_LIMIT_SECRET = 'fixture';
+process.env.SOCRATA_MCP_URL = `${MCP_ORIGIN}/socrata/mcp`;
+process.env.DATA_COMMONS_MCP_URL = `${MCP_ORIGIN}/dc/mcp`;
+process.env.BOSTON_OPENCONTEXT_MCP_URL = `${MCP_ORIGIN}/boston/mcp`;
+process.env.OPENROUTER_API_KEY = 'placeholder-model-key-r8-w1';
+process.env.MODEL_API_BASE_URL = `${MODEL_ORIGIN}/v1`;
+process.env.MODEL_CATALOG = JSON.stringify([
+  {
+    id: 'fixture-fast', name: 'Fixture Model', provider: 'Example Provider', supports_tools: true,
+    endpointModel: 'example-fixture-deployment', model: 'vendor/model-fixture-1', default: true, evaluator: 1,
+  },
+]);
+const { REFERENCE_IDENTITY_ENV } = await import('../../lib/evidence/reference-identity-fixture.ts');
+for (const [name, value] of Object.entries(REFERENCE_IDENTITY_ENV)) process.env[name] ??= value;
+process.env.PUBLISHER_KEY_ID = 'platform:test-suite-kid';
+
+const { _resetDefaultModelClientForTests } = await import('../../lib/model-client.ts');
+_resetDefaultModelClientForTests();
+const router = await import('@typedstandards/civic-typed-router');
+const { readMcpEnvFromProcess } = await import('../../lib/mcp/registry.ts');
+
+// --- The drives -------------------------------------------------------------------
+
+interface Drive { name: string; body: string; requests: Array<{ raw: string; body: Record<string, unknown> }>; warnings: string[] }
+
+const post = (route: string, body: unknown) =>
+  new Request(`http://localhost${route}`, { method: 'POST', body: JSON.stringify(body) }) as never;
+
+async function drive(name: string, routing: string | undefined, run: () => Promise<Response>): Promise<Drive> {
+  if (routing === undefined) delete process.env.SOURCE_ROUTING;
+  else process.env.SOURCE_ROUTING = routing;
+  const realWarn = console.warn;
+  const warnings: string[] = [];
+  console.warn = (...args: unknown[]) => { warnings.push(args.map(String).join(' ')); };
+  const from = MODEL_REQUESTS.length;
+  try {
+    const response = await run();
+    const body = await response.text();
+    return { name, body, requests: MODEL_REQUESTS.slice(from), warnings };
+  } finally {
+    console.warn = realWarn;
+    delete process.env.SOURCE_ROUTING;
+  }
+}
+
+const compareStreamRoute = await import('./compare-stream/route.ts');
+const notebookRoute = await import('./query-notebook/route.ts');
+const compareRoute = await import('./compare/route.ts');
+const streamBody = { query: QUESTION, model: 'fixture-fast', portal: PORTAL, mcpOnly: true };
+const runCompareStream = () => compareStreamRoute.POST(post('/api/compare-stream', streamBody));
+
+const UNSET = await drive('compare-stream, unset', undefined, runCompareStream);
+const ALL_SOURCES = await drive('compare-stream, all-sources', 'all-sources', runCompareStream);
+const THIRD_VALUE = await drive('compare-stream, a third value', SENTINEL, runCompareStream);
+const IN_LOOP = await drive('compare-stream, in-loop', 'in-loop', runCompareStream);
+const NOTEBOOK_IN_LOOP = await drive('query-notebook, in-loop', 'in-loop', () =>
+  notebookRoute.POST(post('/api/query-notebook', { query: QUESTION, portal: PORTAL })));
+const COMPARE_IN_LOOP = await drive('compare, in-loop', 'in-loop', () =>
+  compareRoute.POST(post('/api/compare', { query: QUESTION, model: 'fixture-fast', portal: PORTAL })));
+
+// --- Readers -------------------------------------------------------------------------
+
+type Json = Record<string, unknown>;
+
+/** The requests of a drive that offered tools: the MCP half's turns. */
+function mcpRequests(d: Drive): Array<{ raw: string; body: Json }> {
+  const offered = d.requests.filter((r) => Array.isArray(r.body.tools) && (r.body.tools as unknown[]).length > 0);
+  assert.ok(offered.length > 0, `${d.name}: premise — no model request offered any tool:\n${d.body.slice(0, 600)}`);
+  return offered;
+}
+
+function toolNames(request: { body: Json }): string[] {
+  return ((request.body.tools ?? []) as Array<{ function: { name: string } }>).map((t) => t.function.name);
+}
+
+function systemText(request: { body: Json }): string {
+  const messages = (request.body.messages ?? []) as Array<{ role?: string; content?: unknown }>;
+  const system = messages.find((m) => m.role === 'system');
+  assert.ok(system && typeof system.content === 'string', 'premise — the MCP request carries no system message');
+  return system!.content as string;
+}
+
+const configured = readMcpEnvFromProcess();
+const DIRECTORY_IDS = ['socrata', 'data-commons', 'boston-opencontext'];
+const today = () => new Date().toISOString().slice(0, 10);
+
+// --- Criterion 2 ------------------------------------------------------------------------
+
+test('criterion 2: unset, all-sources and a third value send every request byte for byte alike', () => {
+  const unset = UNSET.requests.map((r) => r.raw);
+  assert.ok(unset.length >= 2, 'premise — the all-sources drive made a tool turn and an answer turn');
+  assert.deepEqual(ALL_SOURCES.requests.map((r) => r.raw), unset);
+  assert.deepEqual(THIRD_VALUE.requests.map((r) => r.raw), unset);
+});
+
+test('criterion 2: the comparison can fail — the in-loop drive\'s first request differs', () => {
+  assert.notEqual(mcpRequests(IN_LOOP)[0].raw, mcpRequests(UNSET)[0].raw);
+});
+
+test('criterion 2: a third value logs one line naming the variable and both values, never the value; the others log none', () => {
+  const routingLines = (d: Drive) => d.warnings.filter((w) => w.includes('SOURCE_ROUTING'));
+  assert.deepEqual(routingLines(UNSET), []);
+  assert.deepEqual(routingLines(ALL_SOURCES), []);
+  const lines = routingLines(THIRD_VALUE);
+  assert.equal(lines.length, 1, `logged: ${JSON.stringify(lines)}`);
+  assert.match(lines[0], /all-sources/);
+  assert.match(lines[0], /in-loop/);
+  assert.ok(!THIRD_VALUE.warnings.some((w) => w.includes(SENTINEL)), 'the value reached the log');
+});
+
+// --- Criterion 3 ------------------------------------------------------------------------
+
+for (const d of [IN_LOOP, NOTEBOOK_IN_LOOP, COMPARE_IN_LOOP]) {
+  test(`criterion 3, ${d.name}: the first request carries the directory and one tool, load_source`, () => {
+    const first = mcpRequests(d)[0];
+    assert.deepEqual(toolNames(first), ['load_source']);
+    assert.equal(systemText(first), router.civicRouter.directoryPrompt({ configured, today: today(), selection: DIRECTORY_IDS }));
+  });
+}
