@@ -1,7 +1,28 @@
 // The harness pin — @typedstandards/civic-typed-harness must be a version
 // that carries the signed-surface fixes named below (Wave N9 #384, family F2,
 // C4; Wave N10 #409, criterion 6; Wave N12 #470, criteria 7-9; sprint R2 #599
-// W4).
+// W4; sprint R6 #632 W2; sprint R8 #644 W1).
+//
+// WHAT THE PIN PROTECTS, PART SIX — 0.10.0, and why the range moved to it
+// (#644 W1, hub ADR-0033's amendment 2). Two things this instance's packager
+// now relies on, each in bytes it signs, on new records of an in-loop run
+// only (`SOURCE_ROUTING=in-loop`):
+//
+//   1. The composition block's `routing: { method, version }` and
+//      `definitionHash`, after `flowsStatement`, each only when passed, read
+//      from the root-span attributes `analysis.routing` (JSON text of exactly
+//      the two strings) and `analysis.definition_hash`, and refused in any
+//      other shape. Below 0.10.0 neither attribute is read, so a record could
+//      not state how its run's sources were chosen.
+//   2. The load span: a tool span whose `tool.operation_type` is
+//      `load_source` states `tool.load_outcome` as `civic:loadOutcome`, mints
+//      no server agent and no data-response entity, and `buildDataSources`
+//      skips its call in place. A load span with no outcome, or another
+//      value, is refused (`LoadSpanError`). Below 0.10.0 such a span was
+//      attributed to an `unknown` source agent.
+//
+// 0.10.0 changed no dependency, so this repository's core pins stay. A record
+// packaged without either input, and with no load span, has the same bytes.
 //
 // WHAT THE PIN PROTECTS, PART FIVE — 0.9.0, and why the range moved to it
 // (#632 W2, hub ADR-0033's 2026-10-18 amendment). Two things this instance's
@@ -229,30 +250,33 @@ const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 
 const HARNESS = '@typedstandards/civic-typed-harness';
 const HARNESS_DIR = path.join(REPO_ROOT, 'node_modules', ...HARNESS.split('/'));
 
-/** The lowest version carrying ALL FIVE sets of fixes this file names: the
+/** The lowest version carrying ALL SIX sets of fixes this file names: the
  *  0.3.1 graph-builder fixes, the 0.4.0 data-source fix, the 0.5.0
- *  configured-server fixes, 0.7.0's record fields, and 0.9.0's two reasons
- *  and flows-statement reference above. */
-const FLOOR = '0.9.0';
+ *  configured-server fixes, 0.7.0's record fields, 0.9.0's two reasons and
+ *  flows-statement reference, and 0.10.0's routing statement and load span
+ *  above. */
+const FLOOR = '0.10.0';
 /** Exclusive ceiling: under semver a 0.x MINOR bump is a breaking change, so
- *  the pin admits later 0.9.x PATCHES (a fix that is still this behaviour) and
- *  refuses 0.10.0, which would be a contract this test has not read. The
- *  assertion is therefore a RANGE (`>=0.9.0 <0.10.0`) rather than equality to
- *  `0.9.0`: pinning the exact string would turn red on a patch release that
+ *  the pin admits later 0.10.x PATCHES (a fix that is still this behaviour)
+ *  and refuses 0.11.0, which would be a contract this test has not read. The
+ *  assertion is therefore a RANGE (`>=0.10.0 <0.11.0`) rather than equality to
+ *  `0.10.0`: pinning the exact string would turn red on a patch release that
  *  changed nothing this file cares about, which is a criterion that fails for
  *  the wrong reason.
  *
  *  MOVED DELIBERATELY, NOT DRIFTED. The pair was `>=0.3.1 <0.4.0` until Wave
  *  N10 P4, `>=0.4.0 <0.5.0` until Wave N12 W5, `>=0.5.0 <0.6.0` until
  *  sprint R2 W4, which read 0.6.0's and 0.7.0's entries together (0.6.0
- *  changed no harness source; it raised the core floors), and `>=0.7.0
+ *  changed no harness source; it raised the core floors), `>=0.7.0
  *  <0.8.0` until sprint R6 W2, which read 0.8.0's and 0.9.0's together (0.8.0,
- *  again, changed no harness source and raised the core floors). Each ceiling did its
+ *  again, changed no harness source and raised the core floors), and `>=0.9.0
+ *  <0.10.0` until sprint R8 W1, which read 0.10.0's entry (no dependency
+ *  change, so the core floors stay). Each ceiling did its
  *  job: it held the next minor out until someone read the new contract and
  *  said what changed. Both numbers move together, in one commit, with the
  *  paragraph above rewritten — a floor raised without its ceiling would
  *  silently readmit the next unread minor. */
-const CEILING = '0.10.0';
+const CEILING = '0.11.0';
 
 type Semver = [number, number, number];
 
@@ -287,7 +311,7 @@ function readJson(file: string): Record<string, unknown> {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
 }
 
-test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.9.0 <0.10.0 (it carries all five sets of signed-surface fixes)', () => {
+test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.10.0 <0.11.0 (it carries all six sets of signed-surface fixes)', () => {
   const pkgJson = path.join(HARNESS_DIR, 'package.json');
   assert.ok(fs.existsSync(pkgJson), `${HARNESS} is not installed at ${pkgJson} — run npm ci`);
 
@@ -297,7 +321,9 @@ test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.9.0 <0.10.0 (
   const installed = parseSemver(version as string, `installed ${HARNESS}`);
   assert.ok(
     compareSemver(installed, parseSemver(FLOOR, 'floor')) >= 0,
-    `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release that states the reader's ` +
+    `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release that states how a run's ` +
+      'sources were chosen (`routing`, `definitionHash`) and what each `load_source` call did ' +
+      '(`civic:loadOutcome`; hub ADR-0033 amendment 2; #644). 0.9.0 is the floor that states the reader\'s ' +
       'own states as reasons (`reader-off`, `not-consented`) and refers to the flows statement in force ' +
       '(hub ADR-0033, amended 2026-10-18; #632). 0.7.0 is the floor that attributes every call ' +
       'to its own source, states no temperature or tool list it was not given, prefers the servers the run ' +
@@ -364,12 +390,16 @@ test('harness pin: exactly one copy of each core — no nested @typedstandards/p
   // verify-core's to `^0.14.0`, the range produce-core 0.9.0 declares. The
   // lockfile moved exactly the four entries and nested no copy; the assertion
   // below measures that rather than trusting the ranges.
+  //
+  // RE-READ AT 0.10.0 (sprint R8 W1). 0.10.0 still declares produce-core
+  // `^0.9.0` and nothing else, so neither core pin moves. The lockfile moved
+  // exactly the harness and router entries and nested no copy.
   const nested = path.join(HARNESS_DIR, 'node_modules', '@typedstandards', 'produce-core');
   assert.equal(
     fs.existsSync(nested),
     false,
     `a second produce-core is nested at ${nested}; the harness's dependency range must admit the ` +
-      "root copy (0.9.0 declares '^0.9.0'), so npm install resolves one.",
+      "root copy (0.10.0 declares '^0.9.0'), so npm install resolves one.",
   );
   const PRODUCE_DIR = path.join(REPO_ROOT, 'node_modules', '@typedstandards', 'produce-core');
   for (const owner of [HARNESS_DIR, PRODUCE_DIR]) {
@@ -378,7 +408,7 @@ test('harness pin: exactly one copy of each core — no nested @typedstandards/p
       fs.existsSync(nestedVerify),
       false,
       `a second verify-core is nested at ${nestedVerify}; this repository's verify-core range must admit ` +
-        "the one produce-core declares (0.9.0 declares '^0.14.0'), so npm install resolves one.",
+        "the one produce-core declares (produce-core 0.9.0 declares '^0.14.0'), so npm install resolves one.",
     );
   }
 });
