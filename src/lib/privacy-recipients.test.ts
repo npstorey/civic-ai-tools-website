@@ -351,3 +351,56 @@ test('R6 W2 criterion 3: a statement naming a recipient the guard\'s source does
   const fixture = { recipients: [{ key: 'Model endpoint' }, { key: 'Fixture recipient no row lists' }], sources: [] };
   assert.deepEqual(recipientDrift(source, statementKeys(fixture)).unmatched, ['Fixture recipient no row lists']);
 });
+
+// --- R6 W2: the held statements' words, pinned (the ORCH's plain-language round) ---
+//
+// Each statement is rendered as the page renders it (a link as its text, a
+// code segment as its text) and compared with the agreed words exactly.
+
+type Segment = string | { link: string; text: string } | { code: string };
+const rendered = (parts: Segment[]) => parts.map((p) => (typeof p === 'string' ? p : 'link' in p ? p.text : p.code)).join('');
+
+function heldStatements(env: Record<string, string>): Record<string, string> {
+  const names = ['VERCEL_ENV', 'NYC_CHARTER_HOSTING'];
+  const saved = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  try {
+    for (const name of names) delete process.env[name];
+    Object.assign(process.env, env);
+    const build = (facts as Record<string, unknown>).buildPrivacySections as (analytics: null) => Array<{ statements: Array<{ id: string; parts: Segment[] }> }>;
+    return Object.fromEntries(build(null).flatMap((s) => s.statements).filter((st) => st.id.startsWith('held-')).map((st) => [st.id, rendered(st.parts)]));
+  } finally {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+}
+
+test('R6 W2: the held statements read in short sentences, with the agreed words', () => {
+  const LOGS = (facts as Record<string, unknown>).LOGS_STATEMENT as string;
+  const on = heldStatements({ VERCEL_ENV: 'production', NYC_CHARTER_HOSTING: 'sandbox' });
+  assert.equal(
+    on['held-function-logs-vercel'],
+    "This site runs on Vercel. Vercel keeps the logs the site's code writes for each request. " +
+      'Each log line also holds basic facts about the request, such as its address on this site and its status. ' +
+      "Vercel says it keeps these logs for 1 hour, 1 day, 3 days or 30 days, depending on the operator's plan (its runtime logs page, read 2026-10-19). " +
+      'This site cannot read which plan applies. ' + LOGS +
+      ' Your question travels in the body of a request, not in its address. ' +
+      'So this site reads these facts as: Vercel keeps facts about requests, not your question. ' +
+      "That is this site's reading, not a claim Vercel makes. " +
+      'Some pages put what you type after a ? in the address. Whether Vercel keeps that part has not been checked.',
+  );
+  assert.equal(
+    on['held-sandbox-platform-nyc-charter'],
+    'The data source NYC Charter, Laws and Rules MCP Server runs in a Vercel Sandbox that this site keeps between uses. ' +
+      "When the sandbox stops, Vercel keeps a copy of its files for up to 30 days (Vercel's sandbox page, read 2026-10-19, and this site's sandbox settings). " +
+      "Vercel's sandbox pages do not say what else it keeps of what runs there. " +
+      "The program this site runs beside the source writes no searches or queries to the sandbox's logs. " +
+      "What the source's own software writes there has not been checked.",
+  );
+  const off = heldStatements({});
+  assert.equal(
+    off['held-function-logs-operator'],
+    "This site's own logs are kept by whoever runs its server. " + LOGS + " How long they are kept is the operator's to state.",
+  );
+});
