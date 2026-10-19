@@ -336,6 +336,8 @@ export async function POST(request: NextRequest) {
         query: body.query,
         portal,
         lockedPortal,
+        configured,
+        selection,
         model,
         emit,
         trace,
@@ -537,6 +539,10 @@ async function runPhaseA(args: {
   portal?: string;
   /** The one Socrata portal a locked instance serves (#436), or absent when unlocked. */
   lockedPortal?: string;
+  /** The run's configuration and selection, as its prompt and tools were
+   *  composed with; the transport and the span's source read the same. */
+  configured: ReturnType<typeof readMcpEnvFromProcess>;
+  selection: typeof DEFAULT_SOURCE_SELECTION;
   model: ModelIdentity;
   emit: (event: NotebookEvent) => Promise<void>;
   trace: TraceBuilder;
@@ -545,7 +551,7 @@ async function runPhaseA(args: {
   /** The tools the run offers the model, as the root span records them. */
   tools: ReturnType<typeof offeredMcpTools>;
 }): Promise<CompletionResult> {
-  const { query, portal, lockedPortal, model, emit, trace, systemPrompt, systemPromptHash, tools } = args;
+  const { query, portal, lockedPortal, configured, selection, model, emit, trace, systemPrompt, systemPromptHash, tools } = args;
   return new Promise<CompletionResult>((resolve, reject) => {
     let completionResult: CompletionResult | null = null;
     const sentToolCalls = new Set<string>();
@@ -623,13 +629,16 @@ async function runPhaseA(args: {
       // Just the transport. Portal injection and the timeout race are the loop
       // core's now (#359, #352): performed here they ran after the core had
       // recorded the call and stringified its arguments onto the span, and the
-      // timer this file armed per tool call was never cleared.
-      callMcpTool,
+      // timer this file armed per tool call was never cleared. Told the run's
+      // selection (R6 W1), so a call to a source it leaves out is refused
+      // before any request.
+      (name, args) => callMcpTool(name, args, { selection }),
       systemPrompt,
       callbacks,
       // Non-throwing: a call to a tool no configured server hosts is refused by
-      // the transport as one failed call, not thrown out of the loop here.
-      { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: (name) => routedSourceId(name) },
+      // the transport as one failed call, not thrown out of the loop here. The
+      // same configuration and selection as the transport.
+      { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: (name) => routedSourceId(name, configured, selection) },
       { portal, toolTimeoutMs: MCP_TOOL_TIMEOUT_MS },
       // Refused as a rejected call when it names another portal (#436, D7).
       lockedPortal,

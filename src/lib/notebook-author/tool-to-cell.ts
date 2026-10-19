@@ -30,15 +30,17 @@ function byUpstreamName<T extends { name?: string }>(call: T): T {
  * Why a tool call returned no data, as a closed set (#321).
  *
  * Deliberately narrower than `StreamErrorKind` (src/lib/streaming.ts), which
- * classifies whole-query failures across ten kinds — six of them (this app's
+ * classifies whole-query failures across eleven kinds — six of them (this app's
  * own rate limit, the model credential kinds, notebook execution) cannot
  * describe a single tool call and would be nonsense in this position. These
- * four are the ones a caller can actually derive from a failed tool call AND
+ * five are the ones a caller can actually derive from a failed tool call AND
  * that change what a notebook reader should conclude:
  *
  *   - `timeout`         — the source was reached but did not answer in time.
  *   - `unavailable`     — the source could not be reached at all.
  *   - `not_configured`  — this instance has no live source for that request.
+ *   - `not_offered`     — the source is configured here, but this run was not
+ *                         offered it, so nothing was sent (R6 W1).
  *   - `unknown`         — it failed and we cannot honestly say more.
  *
  * `unknown` is a real member, not a placeholder: claiming a specific cause we
@@ -48,7 +50,7 @@ function byUpstreamName<T extends { name?: string }>(call: T): T {
  * has no branch for it — so such a call lands in `unknown` rather than being
  * asserted as a refusal.
  */
-export const TOOL_FAILURE_KINDS = ['timeout', 'unavailable', 'not_configured', 'unknown'] as const;
+export const TOOL_FAILURE_KINDS = ['timeout', 'unavailable', 'not_configured', 'not_offered', 'unknown'] as const;
 
 export type ToolFailureKind = (typeof TOOL_FAILURE_KINDS)[number];
 
@@ -787,6 +789,9 @@ export const FAILURE_REASON: Record<ToolFailureKind, string> = {
   timeout: 'The data source did not respond in time, so the request returned no data.',
   unavailable: 'The data source could not be reached, so the request returned no data.',
   not_configured: 'No live data source was configured for this request, so it returned no data.',
+  // Not an empty result: nothing was asked. Not "turned off": on a replay the
+  // reader turned nothing off (R6 W1).
+  not_offered: 'This question did not use this data source, so nothing was sent to it.',
   unknown: 'The request could not be completed, so it returned no data.',
 };
 
@@ -938,8 +943,13 @@ function renderFailedToolCell(
     `The original analysis tried to ${describeAttempt(call, ctx)}. ` +
       `${describeToolFailure(call.failureKind)}`,
     '',
-    'No code cell is generated for it — a request that returned no data cannot be ' +
-      'reproduced. The steps below rest only on the requests that did return data.',
+    // A `not_offered` call was never sent, so it did not "return no data" (R6
+    // W1, the G5 string review); every other kind keeps the sentence it had.
+    call.failureKind === 'not_offered'
+      ? 'No code cell is generated for it — a request that was not sent cannot be ' +
+        'reproduced. The steps below rest only on the requests that did return data.'
+      : 'No code cell is generated for it — a request that returned no data cannot be ' +
+        'reproduced. The steps below rest only on the requests that did return data.',
   ].join('\n');
   return {
     // Markdown only. No executable cell, by construction rather than by a

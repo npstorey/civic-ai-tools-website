@@ -131,9 +131,15 @@ export interface ErrorEvent extends StreamEvent {
 // place error-to-copy mapping lives, consumed by every SSE-consuming hook.
 
 /**
- * The ten kinds every streaming failure classifies into. Single-sourced as
+ * The eleven kinds every streaming failure classifies into. Single-sourced as
  * an array rather than a bare union so the round-trip test can enumerate them
- * (#154): an eleventh kind is covered by that test the moment it is added here.
+ * (#154): a twelfth kind is covered by that test the moment it is added here.
+ *
+ * `not_offered` (R6 W1) is set explicitly by the dispatch, never derived from
+ * message text: `SourceNotOfferedError` (`./mcp/registry.ts`) carries it as
+ * its `code`, which the first branch of `classifyStreamError` reads. It is a
+ * call to a configured data source the run was not offered, refused before
+ * anything was sent.
  *
  * `notebook_execution` (#271) is set explicitly by the server — never derived
  * from message-shape matching below — because its reader-facing copy carries
@@ -157,12 +163,13 @@ export const STREAM_ERROR_KINDS = [
   'mcp_unavailable',
   'connection',
   'notebook_execution',
+  'not_offered',
   'generic',
 ] as const;
 
 export type StreamErrorKind = (typeof STREAM_ERROR_KINDS)[number];
 
-/** True for a value that is one of the ten kinds (an unknown code is not). */
+/** True for a value that is one of the eleven kinds (an unknown code is not). */
 export function isStreamErrorKind(value: unknown): value is StreamErrorKind {
   return typeof value === 'string' && (STREAM_ERROR_KINDS as readonly string[]).includes(value);
 }
@@ -305,6 +312,11 @@ const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
   // `notebookExecutionErrorMessage()` instead, so a reader can actually trace
   // the failure back to its server log line (#271).
   notebook_execution: 'The notebook could not finish running. Please try again.',
+  // R6 W1: a call to a data source the run was not offered. It arises on a
+  // replay whose record was not offered that source, and on a run given a
+  // selection; on neither did the reader turn anything off, so the copy says
+  // only what is true of both. It reports no empty result: nothing was asked.
+  not_offered: 'This question did not use that data source, so nothing was sent to it.',
   generic: 'Something went wrong while running this query. Please try again in a moment.',
 };
 
@@ -798,6 +810,18 @@ export const SOURCE_REFUSAL_FOR_LLM =
   ' server names, or system details.';
 
 /**
+ * What the model is told when the dispatch refused a call to a data source
+ * the run was not offered (R6 W1). Fixed: it names no tool and no source, and
+ * holds no word of any error.
+ */
+export const NOT_OFFERED_FOR_LLM =
+  'That data source was not used for this question, so this request was not sent to it. Do not call its tools again,' +
+  ' and do not estimate, guess, or fabricate any values in place of what it would have returned.' +
+  ' Answer from the data sources whose tools you were given. If they cannot answer the question, tell the user in plain' +
+  ' language that this question did not use this data source, and do not include any raw error text, status codes,' +
+  ' server names, or system details.';
+
+/**
  * What the model is told when the loop core refused a call because it named a
  * portal other than the one Socrata portal a locked instance serves (#436, ruling D7). The
  * call was never sent. The locked portal is this instance's own configuration,
@@ -870,6 +894,12 @@ export function describeToolFailureForLlm(_toolName: string, input: unknown): st
       return tellUser(
         'This server has no live data source configured, so no data can be retrieved. Suggest contacting whoever operates this instance.',
       );
+    case 'not_offered':
+      // R6 W1: the dispatch refused a call to a data source this run was not
+      // offered, before anything was sent. Its own copy, not the preamble's
+      // "returned no data" and not the branch above's "no data can be
+      // retrieved": the other sources the run was given can still answer.
+      return NOT_OFFERED_FOR_LLM;
     default:
       return isSourceRefusal(input)
         ? SOURCE_REFUSAL_FOR_LLM

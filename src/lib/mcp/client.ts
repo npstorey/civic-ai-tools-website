@@ -4,10 +4,12 @@ import {
   McpConfigurationError,
   readMcpEnvFromProcess,
   routeToolCall,
+  withSelection,
   type HostedMcpServer,
   type McpRegistry,
   type McpServerConfig,
 } from './registry.ts';
+import type { SourceSelection } from '@typedstandards/civic-typed-router';
 import { McpErrorEnvelope, throwIfErrorResult } from './tool-call-failure.ts';
 import { errorLogFacts } from '../streaming.ts';
 
@@ -71,7 +73,11 @@ const MCP_TIMEOUT_MS = 45_000; // 45-second timeout for MCP server requests
 // string or throw, and `getServerInstructions` returns text or null, whichever
 // era answers (D3). Nothing outside this file reads the era.
 
-const registry: McpRegistry = buildMcpRegistry(readMcpEnvFromProcess());
+// The process-wide registry, built once from the configuration as read at
+// module load. A run's selection (R6 W1) narrows its offered set per call
+// (`callMcpTool`'s options) and never replaces it.
+const configured = readMcpEnvFromProcess();
+const registry: McpRegistry = buildMcpRegistry(configured);
 
 /** The modern protocol versions this client implements, most preferred first. */
 const MODERN_PROTOCOL_VERSIONS: readonly string[] = ['2026-07-28'];
@@ -749,14 +755,29 @@ async function inEra<T>(server: McpServerConfig, send: (era: Era) => Promise<T>)
   }
 }
 
+/** Per-call options for `callMcpTool`. */
+export interface McpToolCallOptions {
+  /**
+   * The source ids the run selects (#599 D3). A call to a tool of a configured
+   * source the selection leaves out is refused before any request,
+   * `SourceNotOfferedError` (R6 W1). Absent, every source the configuration
+   * offers, as before the selection reached the dispatch.
+   */
+  selection?: SourceSelection;
+}
+
 /**
  * Call a tool by the name the model called, in either spelling. The server is
  * always called by its OWN name, the upstream one: `socrata__get_data` and
  * `get_data` send the same bytes (#599 W3; the exchange tests and
  * `fixtures/legacy-exchange-at-base.json` hold the wire).
  */
-export async function callMcpTool(name: string, args: Record<string, unknown>): Promise<string> {
-  const { server: routed, upstreamName } = routeToolCall(registry, name);
+export async function callMcpTool(
+  name: string,
+  args: Record<string, unknown>,
+  options: McpToolCallOptions = {},
+): Promise<string> {
+  const { server: routed, upstreamName } = routeToolCall(withSelection(registry, configured, options.selection), name);
   // A hosted source (#617 P3, seam c1) is replaced, for this call only, by a
   // config whose address is its sandbox's address now and whose headers carry
   // its bridge token; everything below runs on that copy unchanged. The module

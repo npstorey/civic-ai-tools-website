@@ -90,6 +90,10 @@ export function describeQueryOutcome(
     const elapsed = entry.duration_ms !== undefined
       ? ` The attempt took ${entry.duration_ms.toLocaleString()}ms.`
       : '';
+    // A `not_offered` call was never sent (R6 W1), so it is not stated as a
+    // request that did not complete: its reason alone, by the G5 string
+    // review. Still `failed`, so the refused-request count includes it.
+    if (kind === 'not_offered') return { kind: 'failed', text: `${FAILURE_REASON[kind]}${elapsed}` };
     return { kind: 'failed', text: `This request did not complete. ${FAILURE_REASON[kind]}${elapsed}` };
   }
   if (entry.resultRows !== undefined) {

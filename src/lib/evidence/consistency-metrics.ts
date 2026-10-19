@@ -49,12 +49,30 @@ export interface ReplayToolCall {
   failureKind?: string;
 }
 
+/**
+ * The sources a replay was offered, as the replay route states it (#632 D8 =
+ * A; `replayOfferedSet` in `../model-loop/replay-loop.ts` computes it). An
+ * unsigned field of the response: displayed beside the runs, never part of a
+ * signed run and never read by `computeConsistencyMetrics`.
+ */
+export interface ReplayOfferedSet {
+  /** Where the record states its set: its composition block, its server
+   *  list, or nowhere (the replay then offers the full vocabulary). */
+  from: 'sourcesOffered' | 'mcpServers' | 'none';
+  /** The source ids whose tools the replay's tools array carries, in manifest order. */
+  sources: string[];
+  /** Source ids the record was offered that this instance cannot route. */
+  lacking: string[];
+}
+
 /** One replay run, as `/api/records/[slug]/replay` returns it. */
 export interface ReplayResult {
   toolCalls: ReplayToolCall[];
   output: string;
   tokenUsage: { promptTokens: number; completionTokens: number; totalTokens: number };
   durationMs: number;
+  /** Absent from a response made before R6 W1. */
+  offeredSet?: ReplayOfferedSet;
 }
 
 export interface ConsistencyMetrics {
