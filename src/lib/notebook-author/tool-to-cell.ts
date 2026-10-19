@@ -791,7 +791,7 @@ export const FAILURE_REASON: Record<ToolFailureKind, string> = {
   not_configured: 'No live data source was configured for this request, so it returned no data.',
   // Not an empty result: nothing was asked. Not "turned off": on a replay the
   // reader turned nothing off (R6 W1).
-  not_offered: 'This data source was not used for this question, so nothing was sent to it.',
+  not_offered: 'This question did not use this data source, so nothing was sent to it.',
   unknown: 'The request could not be completed, so it returned no data.',
 };
 
@@ -943,8 +943,13 @@ function renderFailedToolCell(
     `The original analysis tried to ${describeAttempt(call, ctx)}. ` +
       `${describeToolFailure(call.failureKind)}`,
     '',
-    'No code cell is generated for it — a request that returned no data cannot be ' +
-      'reproduced. The steps below rest only on the requests that did return data.',
+    // A `not_offered` call was never sent, so it did not "return no data" (R6
+    // W1, the G5 string review); every other kind keeps the sentence it had.
+    call.failureKind === 'not_offered'
+      ? 'No code cell is generated for it — a request that was not sent cannot be ' +
+        'reproduced. The steps below rest only on the requests that did return data.'
+      : 'No code cell is generated for it — a request that returned no data cannot be ' +
+        'reproduced. The steps below rest only on the requests that did return data.',
   ].join('\n');
   return {
     // Markdown only. No executable cell, by construction rather than by a

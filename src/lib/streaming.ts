@@ -316,7 +316,7 @@ const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
   // replay whose record was not offered that source, and on a run given a
   // selection; on neither did the reader turn anything off, so the copy says
   // only what is true of both. It reports no empty result: nothing was asked.
-  not_offered: 'That data source was not used for this question, so nothing was sent to it.',
+  not_offered: 'This question did not use that data source, so nothing was sent to it.',
   generic: 'Something went wrong while running this query. Please try again in a moment.',
 };
 
@@ -818,7 +818,7 @@ export const NOT_OFFERED_FOR_LLM =
   'That data source was not used for this question, so this request was not sent to it. Do not call its tools again,' +
   ' and do not estimate, guess, or fabricate any values in place of what it would have returned.' +
   ' Answer from the data sources whose tools you were given. If they cannot answer the question, tell the user in plain' +
-  ' language that this data source was not used for this question, and do not include any raw error text, status codes,' +
+  ' language that this question did not use this data source, and do not include any raw error text, status codes,' +
   ' server names, or system details.';
 
 /**
