@@ -37,7 +37,8 @@ interface ChatCitationPreviewProps {
   /**
    * Whether the run this cites is one that executes (LAYOUT-WEB W3 P1 fix 1).
    * Default true: the executed run states "[Executed: <date>]", and a year,
-   * from `executedAt`. False for a run that never executes in a sandbox (the
+   * from `executedAt`; with no `executedAt` it states "[Executed]" and no year
+   * (LAYOUT-WEB W4 P1, ruling D3). False for a run that never executes in a sandbox (the
    * comparison): the preview then states no execution and no date at all,
    * since the only date at hand would be the moment the page rendered, which
    * the run did not record. The record it becomes is dated at publish.
@@ -87,9 +88,11 @@ export default function ChatCitationPreview({ prompt, executedAt, structuredSumm
   const siteOrigin = useEvidenceSiteOrigin();
 
   const creatorName = session?.user?.name || 'Anonymous';
-  const date = executedAt ? new Date(executedAt) : new Date();
-  const year = date.getFullYear();
-  const dateStr = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  // The run's own stamp, or no date at all (LAYOUT-WEB W4 P1, ruling D3): a run
+  // that recorded no `executedAt` is not dated by the moment the page rendered.
+  const date = executedAt ? new Date(executedAt) : null;
+  const year = date?.getFullYear() ?? null;
+  const dateStr = date?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) ?? null;
   // Phase 2a2 item 3: prefer the analysis description from the structured
   // summary when present (it's an LLM-authored one-clause; cleaner than the
   // prompt's first sentence). Otherwise fall back to the prompt-derived
@@ -105,15 +108,17 @@ export default function ChatCitationPreview({ prompt, executedAt, structuredSumm
   const citations = [
     {
       label: 'Plain text',
-      text: statesExecution
+      text: statesExecution && year !== null
         ? `${creatorName} (${year}). "${title}." ${brandLabel(brandName)}. ${placeholderUrl}. Published: (date assigned at publish).${headlineSuffix}`
         : `${creatorName}. "${title}." ${brandLabel(brandName)}. ${placeholderUrl}. Published: (date assigned at publish).${headlineSuffix}`,
     },
     {
       label: 'For deliberative process reference',
-      text: statesExecution
-        ? `Record: ${title} [Executed: ${dateStr}] ${placeholderUrl}${headlineSuffix}`
-        : `Record: ${title} ${placeholderUrl}${headlineSuffix}`,
+      text: !statesExecution
+        ? `Record: ${title} ${placeholderUrl}${headlineSuffix}`
+        : dateStr !== null
+          ? `Record: ${title} [Executed: ${dateStr}] ${placeholderUrl}${headlineSuffix}`
+          : `Record: ${title} [Executed] ${placeholderUrl}${headlineSuffix}`,
     },
   ];
 
