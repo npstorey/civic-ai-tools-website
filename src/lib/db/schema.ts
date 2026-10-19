@@ -7,6 +7,9 @@ import {
   pgEnum,
   jsonb,
   index,
+  date,
+  integer,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 
 // --- Enums ---
@@ -403,3 +406,28 @@ export const sourceConsents = pgTable('source_consents', {
   consentedAt: timestamp('consented_at', { withTimezone: true }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
 });
+
+// How the site is used (#632 W5, D9): one row per day and combination of the
+// eight key columns, holding how many runs ended with that combination. Every
+// value comes from a closed set (`src/lib/usage/count.ts`): no account, no
+// network address and no question text reaches a column. Written only, by
+// `src/lib/usage/count.ts`; nothing in the app reads it
+// (`src/lib/usage/one-writer.test.ts`). The key is named explicitly: drizzle's
+// default name for a key over eight columns is longer than Postgres's 63-byte
+// identifier limit, and a truncated name would differ from the snapshot's.
+export const usageCounts = pgTable('usage_counts', {
+  day: date('day', { mode: 'string' }).notNull(),
+  environment: text('environment').notNull(),
+  surface: text('surface').notNull(),
+  signedIn: boolean('signed_in').notNull(),
+  model: text('model').notNull(),
+  outcome: text('outcome').notNull(),
+  sourcesOffered: text('sources_offered').notNull(),
+  sourcesUsed: text('sources_used').notNull(),
+  count: integer('count').notNull(),
+}, (table) => [
+  primaryKey({
+    name: 'usage_counts_pkey',
+    columns: [table.day, table.environment, table.surface, table.signedIn, table.model, table.outcome, table.sourcesOffered, table.sourcesUsed],
+  }),
+]);

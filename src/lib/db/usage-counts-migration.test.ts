@@ -89,7 +89,9 @@ test('criterion 5: 0018 creates usage_counts by hand with IF NOT EXISTS, every c
 
 test('criterion 5: the key is written inline, named usage_counts_pkey (at most 63 bytes), over the eight key columns in order', () => {
   const sql = readSql();
-  assert.doesNotMatch(sql, /ALTER TABLE/i, 'a constraint is added by ALTER TABLE, which has no IF NOT EXISTS form');
+  // The statements, not the header: the header says why there is no ALTER TABLE.
+  const statements = sql.split('\n').filter((l) => !l.trimStart().startsWith('--')).join('\n');
+  assert.doesNotMatch(statements, /ALTER TABLE/i, 'a constraint is added by ALTER TABLE, which has no IF NOT EXISTS form');
   const keys = [...sql.matchAll(/CONSTRAINT "([^"]+)" PRIMARY KEY\s*\(([^)]*)\)/g)];
   assert.equal(keys.length, 1, `the file does not hold exactly one named primary key:\n${sql}`);
   const [, name, list] = keys[0];
