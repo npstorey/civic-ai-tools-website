@@ -19,6 +19,17 @@
 // sentence. GREEN there, and kept: the `timeout` outcome with its lead-in and
 // `kind: 'failed'`.
 //
+// THE NOTEBOOK'S FOLLOW-ON SENTENCE (the G5 string review, second round). The
+// executed generator closes a failed call's cell with "a request that returned
+// no data cannot be reproduced", which is untrue of a call that was never
+// sent. For `not_offered` only it reads "a request that was not sent cannot
+// be reproduced"; every other kind keeps today's sentence. The census at
+// 1c549a4: `renderFailedToolCell` (tool-to-cell.ts) is the one writer. The
+// skeleton (`notebook.ts`, `rejectedNote`) writes neither sentence; it shares
+// only `describeToolFailure`, and that is pinned here too. RED at 1c549a4: the
+// not_offered sentence. GREEN there, and kept: the timeout sentence and the
+// skeleton's absence of both.
+//
 // Run with: npm test
 
 import { test } from 'node:test';
@@ -43,7 +54,8 @@ process.env.PUBLISHER_KEY_ID = 'platform:test-suite-kid';
 process.env.EVIDENCE_KEY_ID = 'platform:test-suite-kid';
 for (const [name, value] of Object.entries(REFERENCE_IDENTITY_ENV)) process.env[name] ??= value;
 
-const { FAILURE_REASON } = await import('../notebook-author/tool-to-cell.ts');
+const { FAILURE_REASON, renderFetchToolCell } = await import('../notebook-author/tool-to-cell.ts');
+const { generateNotebook } = await import('../notebook.ts');
 const { friendlyStreamError, describeToolFailureForLlm } = await import('../streaming.ts');
 const { SourceNotOfferedError, readMcpEnvFromProcess } = await import('../mcp/registry.ts');
 const { describeQueryOutcome } = await import('./query-step.ts');
@@ -140,4 +152,45 @@ test('G5: the entry the real loop and packager write for a call outside the sele
   assert.equal(ENTRY.failureKind, 'not_offered');
   assert.equal(typeof ENTRY.duration_ms, 'number', 'the loop measured an elapsed for the refused call');
   assert.equal(describeQueryOutcome(ENTRY).text, `${NOTEBOOK_REASON} The attempt took ${ENTRY.duration_ms!.toLocaleString()}ms.`);
+});
+
+// --- The notebook's follow-on sentence ---------------------------------------------
+
+const NOT_SENT_FOLLOW_ON =
+  'No code cell is generated for it — a request that was not sent cannot be reproduced. The steps below rest only on the requests that did return data.';
+const NO_DATA_FOLLOW_ON =
+  'No code cell is generated for it — a request that returned no data cannot be reproduced. The steps below rest only on the requests that did return data.';
+const NOTEBOOK_CALL = { name: 'data_commons__search_indicators', args: { query: 'median household income' }, operationType: 'search', failed: true };
+
+function executedCell(failureKind: 'not_offered' | 'timeout'): string {
+  const out = renderFetchToolCell({ ...NOTEBOOK_CALL, failureKind }, { dataFrameIndex: 1, defaultPortal: 'data.cityofnewyork.us' });
+  assert.ok(out, 'a failed call renders a cell');
+  return out.cells.map((cell) => cell.source.join('')).join('\n');
+}
+
+function skeletonText(failureKind: 'not_offered' | 'timeout'): string {
+  return generateNotebook('What was the median household income in the Bronx?', null, [{ ...NOTEBOOK_CALL, failureKind }], 'An answer.', { origin: null, host: null, platformTitle: null })
+    .cells.map((cell) => cell.source.join(''))
+    .join('\n');
+}
+
+test('G5: the executed notebook says a not_offered request was not sent, and states its reason', () => {
+  const md = executedCell('not_offered');
+  assert.ok(md.includes(NOT_SENT_FOLLOW_ON), `the not_offered cell does not say the request was not sent:\n${md}`);
+  assert.ok(!md.includes(NO_DATA_FOLLOW_ON), 'the not_offered cell says the request returned no data');
+  assert.ok(md.includes(NOTEBOOK_REASON), 'the not_offered cell does not state its reason');
+});
+
+test('G5: every other kind keeps "a request that returned no data cannot be reproduced" (green at 1c549a4)', () => {
+  const md = executedCell('timeout');
+  assert.ok(md.includes(NO_DATA_FOLLOW_ON), `the timeout cell lost its sentence:\n${md}`);
+  assert.ok(!md.includes(NOT_SENT_FOLLOW_ON));
+});
+
+test('G5: the skeleton notebook writes neither follow-on sentence, and states the same reason (green at 1c549a4)', () => {
+  for (const kind of ['not_offered', 'timeout'] as const) {
+    const text = skeletonText(kind);
+    assert.ok(!text.includes('cannot be reproduced'), `${kind}: the skeleton now writes a follow-on sentence of its own; pin it here`);
+    assert.ok(text.includes(FAILURE_REASON[kind]), `${kind}: the skeleton does not state the reason the executed notebook states`);
+  }
 });
