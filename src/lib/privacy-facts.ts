@@ -264,15 +264,23 @@ export const HOST_PREFIXED_COOKIE = 'next-auth.csrf-token';
  * Drizzle column key; the page test fails when a column of `users` has no
  * entry here, or an entry here names no column.
  */
+export const ACCOUNT_COLUMNS: Readonly<Record<string, string>> = {
+  id: 'an internal account number',
+  githubId: 'the account key your sign-in provider gives this site',
+  displayName: 'the name that provider gives',
+  githubProfileUrl: 'a link to your profile with that provider (for a single sign-on provider, its address)',
+  createdAt: 'when the account was first created',
+};
+
 /**
  * The words that state each column of the usage table (src/lib/db/schema.ts;
  * R6 W5, #632 ruling B = A), keyed by the schema's column keys. This module
  * does not name the table: it is written by one module and read by none
- * (`src/lib/usage/one-writer.test.ts`). `src/lib/usage/usage-privacy-statement.test.ts` requires these
- * keys to equal the table's columns in both directions and every phrase to
- * render, so a column added with no words fails there. The `environment`
- * column's phrase renders only on the hosting platform: off it every row reads
- * `local`.
+ * (`src/lib/usage/one-writer.test.ts`).
+ * `src/lib/usage/usage-privacy-statement.test.ts` requires these keys to equal
+ * the table's columns in both directions and every phrase to render, so a
+ * column added with no words fails there. The `environment` column's phrase
+ * renders only on the hosting platform: off it every row reads `local`.
  */
 export const USAGE_COUNT_COLUMNS: Readonly<Record<string, string>> = {
   count: 'a number of questions',
@@ -284,14 +292,6 @@ export const USAGE_COUNT_COLUMNS: Readonly<Record<string, string>> = {
   sourcesUsed: 'which were used',
   outcome: 'whether an answer came back',
   environment: 'marked as test counts',
-};
-
-export const ACCOUNT_COLUMNS: Readonly<Record<string, string>> = {
-  id: 'an internal account number',
-  githubId: 'the account key your sign-in provider gives this site',
-  displayName: 'the name that provider gives',
-  githubProfileUrl: 'a link to your profile with that provider (for a single sign-on provider, its address)',
-  createdAt: 'when the account was first created',
 };
 
 /** A vendor page this page quotes from: its address, the date it was read (UTC), and the sentence read there. */
