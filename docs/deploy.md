@@ -2086,6 +2086,9 @@ session, anonymous or signed in, keeps it in the cookie
 holds a format version, the statement's base version, and per source its
 state, the calendar date it was given and that source's own version; never an
 account id, a network address or anything else that identifies a reader.
+Only the consent endpoint below writes either store. In this release nothing
+on the site's pages calls it, so no reader's visit writes a consent row or
+cookie until the consent card ships (#632 W3).
 
 **The consent endpoint: `/api/sources/consent`.** `GET` reports the consent
 in force and the current flows version, and sets no cookie. `PUT` with
@@ -2093,7 +2096,7 @@ in force and the current flows version, and sets no cookie. `PUT` with
 stores the states; it answers 400 naming any id this instance does not
 configure, and 409 with the current version when `flowsVersion` is stale, so
 the surface reads the statement again. `DELETE` revokes: the row is deleted,
-or the cookie expired, and the next question is asked again. This is the only
+or the cookie expired; once the gate is on, the next question is asked again. This is the only
 boundary that accepts source ids: once the gate is on, a question's run takes
 its selection — configured sources that are On — from the store, never from
 the request, and a configured source with no stored state (one added after the

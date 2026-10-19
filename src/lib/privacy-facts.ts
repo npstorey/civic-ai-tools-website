@@ -16,8 +16,9 @@
  * settings with the model service (#516 G0-7), what the hosting platform
  * records per request, and any legal position. `OPERATOR_STATES` says these
  * are the operator's to state, and the page carries no placeholder for them.
- * Consent and its change log (design §4.7 items 10 and 12) do not exist yet,
- * so the page says nothing about them.
+ * Consent (design §4.7 item 10) is built but switched off until the consent
+ * card ships (#632 W3), and its change log (item 12, docs/flows-changelog.md)
+ * is linked from the page then, so the page says nothing about either yet.
  *
  * THE RECIPIENTS ARE GUARDED IN BOTH DIRECTIONS. `RECIPIENT_STATEMENTS` is
  * keyed by the first cell of each row of the deploy guide's outbound-kinds
@@ -811,14 +812,16 @@ export const PLATFORM_HELD_RECIPIENTS: Readonly<Record<PlatformHeldKind, Platfor
           ? statement(
               'held-function-logs-vercel',
               [
-                "This site runs on Vercel, which keeps the logs the site's code writes for each request, with basic facts about the request such as its address on this site and its status. " +
-                  "Vercel says it keeps them for 1 hour, 1 day, 3 days or 30 days, depending on the operator's plan, which this site cannot read (its ",
+                "This site runs on Vercel. Vercel keeps the logs the site's code writes for each request. " +
+                  'Each log line also holds basic facts about the request, such as its address on this site and its status. ' +
+                  "Vercel says it keeps these logs for 1 hour, 1 day, 3 days or 30 days, depending on the operator's plan (its ",
                 { link: VERCEL_RUNTIME_LOGS_PAGE, text: 'runtime logs' },
-                ` page, read ${PLATFORM_READ_DATE}). ${LOGS_STATEMENT} ` +
-                  'Your question is sent in the body of a request, not in its address, so this site reads those two facts as: Vercel keeps facts about requests, not your question. ' +
-                  "That is this site's reading, not a claim Vercel makes. Whether Vercel keeps the part of an address after the ",
+                ` page, read ${PLATFORM_READ_DATE}). This site cannot read which plan applies. ${LOGS_STATEMENT} ` +
+                  'Your question travels in the body of a request, not in its address. ' +
+                  'So this site reads these facts as: Vercel keeps facts about requests, not your question. ' +
+                  "That is this site's reading, not a claim Vercel makes. Some pages put what you type after a ",
                 { code: '?' },
-                ', which some pages use for what you type, has not been checked.',
+                ' in the address. Whether Vercel keeps that part has not been checked.',
               ],
               ['env:VERCEL_ENV', c('PLATFORM_HELD_RECIPIENTS'), c('LOGS_STATEMENT'), 'const:src/lib/flows/statement.ts#PLATFORM_HELD_KINDS'],
             )
@@ -844,10 +847,12 @@ export const PLATFORM_HELD_RECIPIENTS: Readonly<Record<PlatformHeldKind, Platfor
         statement(
           `held-sandbox-platform-${server.sourceId}`,
           [
-            `The data source ${server.label} runs in a Vercel Sandbox that this site keeps between uses, so Vercel keeps a copy of the sandbox's files when it stops, for up to 30 days (Vercel's `,
+            `The data source ${server.label} runs in a Vercel Sandbox that this site keeps between uses. ` +
+              "When the sandbox stops, Vercel keeps a copy of its files for up to 30 days (Vercel's ",
             { link: VERCEL_SANDBOX_CONCEPTS_PAGE, text: 'sandbox' },
-            ` page, read ${PLATFORM_READ_DATE}, and this site's sandbox settings). Vercel's sandbox pages do not say what else it keeps of what runs in a sandbox. ` +
-              "The program this site runs beside the source writes no searches or queries to the sandbox's logs; what the source's own software writes there has not been checked.",
+            ` page, read ${PLATFORM_READ_DATE}, and this site's sandbox settings). Vercel's sandbox pages do not say what else it keeps of what runs there. ` +
+              "The program this site runs beside the source writes no searches or queries to the sandbox's logs. " +
+              "What the source's own software writes there has not been checked.",
           ],
           [
             'env:NYC_CHARTER_HOSTING',
