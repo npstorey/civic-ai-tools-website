@@ -33,7 +33,8 @@
  * reorders the parts and the disclosure's sections by name; a part it does not
  * name renders at its default place, and a name the view does not know renders
  * nothing, so no part is dropped (layout rule 2). The layout is the instance's
- * (`AnswerLayoutsProvider`; the built-ins when none is mounted), or the one the
+ * (`AnswerLayoutsProvider.tsx`, mounted in the root layout; the built-ins
+ * when none is mounted), or the one the
  * reader chose for the session with the toggle at the foot of the view, beside
  * the line that names the layout (rule 5). Both sit outside the disclosure.
  * The server, and a reader who has not chosen, render the instance's default.
@@ -48,7 +49,7 @@
  * drift; the same component renders it on every surface, so one answer
  * renders the same markup on each.
  */
-import { Fragment, createContext, useCallback, useContext, type ReactNode } from 'react';
+import { Fragment, useCallback, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ProgressLog from '@/components/ProgressLog';
@@ -62,9 +63,9 @@ import SkillSection from '@/components/evidence/SkillSection';
 import { carriesSkillText } from '@/lib/evidence/skill-disclosure';
 import { UNPLACED_CALLS_LINE, type StepViewCall } from '@/lib/answer-view/steps';
 import { useSessionChoice } from '@/hooks/useSessionChoice';
+import { useAnswerLayouts } from '@/components/answer-view/AnswerLayoutsProvider';
 import { LAYOUT_STORAGE_KEY } from '@/lib/query-presentation';
 import {
-  BUILT_IN_INSTANCE_LAYOUTS,
   disclosureOrder,
   layoutId,
   layoutLine,
@@ -665,18 +666,6 @@ function Disclosure({ disclosure, answer, answerElement, extras, recordSections,
 // --- The layout: the instance's, and the reader's choice --------------------------
 
 /**
- * The instance's layouts (LAYOUT-WEB W4 P1). With no provider, the built-ins:
- * `answer-first`, whose order is the order every surface rendered before
- * layouts existed, and `envelope-order`.
- */
-const AnswerLayoutsContext = createContext<InstanceLayouts>(BUILT_IN_INSTANCE_LAYOUTS);
-
-/** Hands the view an instance's layouts, as its setting resolved them. */
-export function AnswerLayoutsProvider({ value, children }: { value: InstanceLayouts; children?: ReactNode }) {
-  return <AnswerLayoutsContext.Provider value={value}>{children}</AnswerLayoutsContext.Provider>;
-}
-
-/**
  * The layout this view renders with: the reader's choice for the session when
  * the instance offers it, else the instance's default. The server, and a
  * reader who has not chosen, read no choice (`useSessionChoice`), so the
@@ -744,7 +733,7 @@ export interface AnswerViewProps {
 export default function AnswerView({
   model, actions, notices, disclosureExtras, recordSections, citationBlock, afterDisclosure, sectionHeading = 'h3',
 }: AnswerViewProps) {
-  const layouts = useContext(AnswerLayoutsContext);
+  const layouts = useAnswerLayouts();
   const [layout, choose] = useChosenLayout(layouts);
   // Built once, placed twice: first, and again as F inside the disclosure.
   const answerElement = <AnswerBody answer={model.answer} />;

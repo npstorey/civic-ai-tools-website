@@ -39,7 +39,7 @@ import {
   unknownPartNames,
   type LayoutPayload,
 } from './index.ts';
-import { AnswerLayoutConfigurationError, checkLayout, resolveAnswerLayouts } from './reading.ts';
+import { AnswerLayoutConfigurationError, checkLayout, instanceAnswerLayouts, resolveAnswerLayouts } from './reading.ts';
 import { COMPARISON_STORAGE_KEY, LAYOUT_STORAGE_KEY, MODE_STORAGE_KEY } from '../query-presentation.ts';
 import { DISCLOSURE_LABEL, PART_ORDER } from '../../components/answer-view/view-model.ts';
 
@@ -354,4 +354,45 @@ test('W4 P1 item 4: a stored choice counts only when the instance offers it; oth
 test('W4 P1 (5) the foot line, word for word', () => {
   assert.equal(layoutLine(ANSWER_FIRST), 'Shown under layout answer-first v1');
   assert.equal(layoutLine(ENVELOPE_ORDER), 'Shown under layout envelope-order v1');
+});
+
+// --- fix 1 (F1, F5): the environment binding ------------------------------------------------
+//
+// `instanceAnswerLayouts()` is what the root layout calls for every page. It is
+// driven here against the process environment, set and restored per case.
+
+function withLayoutEnv<T>(values: Record<string, string | undefined>, fn: () => T): T {
+  const names = ['ANSWER_LAYOUT', 'ANSWER_LAYOUT_PATH', 'ANSWER_LAYOUT_URL'];
+  const saved = names.map((n) => [n, process.env[n]] as const);
+  for (const n of names) {
+    if (values[n] === undefined) delete process.env[n];
+    else process.env[n] = values[n];
+  }
+  try {
+    return fn();
+  } finally {
+    for (const [n, v] of saved) {
+      if (v === undefined) delete process.env[n];
+      else process.env[n] = v;
+    }
+  }
+}
+
+test('W4 P1 fix 1 (F1) the instance’s layouts come from the three settings: none, inline, and the URL form', () => {
+  assert.deepEqual(withLayoutEnv({}, instanceAnswerLayouts), BUILT_IN_INSTANCE_LAYOUTS, 'none: the built-ins');
+  const custom = withLayoutEnv({ ANSWER_LAYOUT: JSON.stringify(VALID) }, instanceAnswerLayouts);
+  assert.deepEqual(custom.default, VALID, 'inline: the configured layout is the default');
+  assert.deepEqual(custom.offered.map(layoutId), ['fixture-valid@1', 'answer-first@1', 'envelope-order@1']);
+  assert.throws(() => withLayoutEnv({ ANSWER_LAYOUT_URL: 'https://x.test/p' }, instanceAnswerLayouts), /ANSWER_LAYOUT_URL is set/);
+  assert.deepEqual(withLayoutEnv({}, instanceAnswerLayouts), BUILT_IN_INSTANCE_LAYOUTS, 'unset again: the built-ins, not a kept value');
+});
+
+test('W4 P1 fix 1 (F5) a malformed setting refuses every read with the builder’s message, never the built-ins', () => {
+  for (let i = 0; i < 2; i++) {
+    assert.throws(
+      () => withLayoutEnv({ ANSWER_LAYOUT: JSON.stringify(withField('version', 0)) }, instanceAnswerLayouts),
+      (err: Error) => err instanceof AnswerLayoutConfigurationError && err.message === 'ANSWER_LAYOUT: buildLayoutNode: version must be an integer of at least 1',
+      `read ${i + 1}`,
+    );
+  }
 });

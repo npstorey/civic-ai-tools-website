@@ -19,10 +19,14 @@
 // A document that is not JSON, or that the builder refuses: refused, naming the
 // form and carrying the builder's message.
 //
-// THIS MODULE READS NO ENVIRONMENT. `resolveAnswerLayouts` takes the three
-// values as a caller read them, so the call site that binds them to the
-// process's environment is where the variables are declared (ENV_SPEC in
-// `scripts/preflight-env.mjs`) and delivered; this phase builds no such site.
+// THE ENVIRONMENT IS READ IN ONE PLACE: `instanceAnswerLayouts()`, by literal
+// name, which the root layout calls for every page (`src/app/layout.tsx`).
+// `resolveAnswerLayouts` takes the three values as given, so it is driven with
+// any values without touching the process's environment. The three are
+// declared in ENV_SPEC (`scripts/preflight-env.mjs`) as read at build and at
+// run time: the home page is prerendered, so it bakes what `next build` saw,
+// and a malformed setting fails the build there; request-time pages read the
+// running server's, and a malformed setting refuses each of them.
 //
 // Relative, extension-carrying imports (the convention of src/lib since #345).
 
@@ -165,4 +169,9 @@ export function resolveAnswerLayouts(
 
   const others = BUILT_IN_LAYOUTS.filter((l) => layoutId(l) !== layoutId(configured));
   return { default: configured, offered: [configured, ...others], unknownParts };
+}
+
+/** This instance's layouts, from its environment. A TYPED STUB in this red commit: it reads nothing. */
+export function instanceAnswerLayouts(): InstanceLayouts {
+  return BUILT_IN_INSTANCE_LAYOUTS;
 }

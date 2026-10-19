@@ -139,7 +139,7 @@ const { default: ChatNotebookOutput } = (await import('@/components/notebook/Cha
 const { EvidenceOriginProvider } = (await import('@/components/EvidenceOriginProvider')) as unknown as {
   EvidenceOriginProvider: ComponentType<{ value: Record<string, string | null>; children?: ReactNode }>;
 };
-const { AnswerLayoutsProvider } = (await import('@/components/answer-view/AnswerView')) as unknown as {
+const { AnswerLayoutsProvider } = (await import('@/components/answer-view/AnswerLayoutsProvider')) as unknown as {
   AnswerLayoutsProvider: ComponentType<{ value: unknown; children?: ReactNode }>;
 };
 const { handleComparisonEvent } = (await import('@/hooks/useStreamingComparison')) as unknown as {
@@ -1059,6 +1059,26 @@ for (const [name, renderWith] of W4_SURFACES) {
     assert.doesNotMatch(unknown, /TIMELINE-w4p1|APPENDIX-w4p1/, 'an unknown name renders nothing');
   });
 }
+
+// --- fix 1 (F7): which payload fields take effect in this release ---------------------
+//
+// `disclosure.label` and `disclosure.openByDefault` change the markup; the
+// steps' two fields are accepted and change nothing, as docs/deploy.md says.
+
+test('W4 P1 fix 1 (F7) disclosure.label and disclosure.openByDefault take effect; steps.placement and steps.openByDefault do not', () => {
+  const byDefault = renderRun(RUN_STATE);
+  const fields: Layout = {
+    ...ANSWER_FIRST,
+    name: 'fixture-fields',
+    disclosure: { ...ANSWER_FIRST.disclosure, label: 'LABEL-w4p1fix1', openByDefault: true },
+  };
+  const html = renderRun(RUN_STATE, INSTANCE, instanceWith(fields));
+  assert.match(html, /<details data-part="disclosure" open=""[^>]*><summary[^>]*>LABEL-w4p1fix1<\/summary>/, 'the label, and open');
+  assert.doesNotMatch(byDefault, /<details data-part="disclosure" open=""/, 'premise: closed by default');
+  const steps: Layout = { ...ANSWER_FIRST, name: 'fixture-steps', steps: { placement: 'SIDEWAYS-w4p1fix1', openByDefault: false } };
+  const stepsHtml = renderRun(RUN_STATE, INSTANCE, instanceWith(steps));
+  assert.equal(withoutLayoutFoot(stepsHtml), withoutLayoutFoot(byDefault), 'the steps fields change nothing yet');
+});
 
 test('W4 P1 (4) the toggle sits in the foot, offers the instance’s layouts, and marks the default chosen', () => {
   for (const [name, renderWith] of W4_SURFACES) {

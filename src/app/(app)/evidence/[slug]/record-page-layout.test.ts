@@ -438,7 +438,7 @@ const { default: EvidencePage } = (await import('./page.tsx')) as unknown as {
   default: (props: { params: Promise<{ slug: string }> }) => Promise<ReactElement>;
 };
 
-const { AnswerLayoutsProvider } = (await import('@/components/answer-view/AnswerView')) as unknown as {
+const { AnswerLayoutsProvider } = (await import('@/components/answer-view/AnswerLayoutsProvider')) as unknown as {
   AnswerLayoutsProvider: ComponentType<{ value: unknown; children?: ReactNode }>;
 };
 
@@ -1822,6 +1822,14 @@ test('W4 P1 (8) the record’s own sections are placed by name: one moved first,
   };
   const titles = sectionTitles(await renderWithInstance(AGF, INSTANCE, instanceWith(layout)));
   assert.deepEqual(titles, ['Verification Status', ...ENVELOPE, ...AFTER_ENVELOPE.filter((t) => t !== 'Verification Status')]);
+});
+
+test('W4 P1 fix 1 (F7) appliesTo and rendererVersion change nothing yet: a layout for another profile still applies to the record', async () => {
+  const other: Layout = { ...ENVELOPE_ORDER, name: 'fixture-other-profile', appliesTo: ['OTHERPROFILE-w4p1fix1'], rendererVersion: 'OTHER-RENDERER-w4p1fix1' };
+  const envelope = await renderWithInstance(AGF, INSTANCE, instanceWith(ENVELOPE_ORDER));
+  const html = await renderWithInstance(AGF, INSTANCE, instanceWith(other));
+  assert.deepEqual(sequence(viewChildren(html)), RECORD_ENVELOPE_ORDER, 'the layout applies, whatever the record’s profile');
+  assert.equal(withoutLayoutFoot(html), withoutLayoutFoot(envelope), 'and nothing else moves');
 });
 
 test('W4 P1 the server markup is the instance’s default: its line, and the toggle with the default chosen', async () => {
