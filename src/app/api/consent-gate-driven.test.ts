@@ -19,6 +19,11 @@
 // request either loopback server receives, and every call to the rate limiter,
 // counted per drive. A refused request must read zero on all of them.
 //
+// THE GATE IS STUBBED ON. W2 ships it dormant (`CONSENT_GATE_ENFORCED =
+// false`, `src/lib/sources/consent-enforced.ts`) until W3 ships the consent
+// card; this suite is the gate's own, so `@/lib/sources/consent-enforced` is
+// stubbed to `true`. The dormant gate is `consent-gate-dormant-driven.test.ts`.
+//
 // STUBS, and why: `next/headers`, `next-auth`, `@/lib/auth` (a session set per
 // drive); `@/lib/rate-limit` (counts its calls); `@/lib/sandbox` (the notebook
 // executor returns the notebook it was given); `@/lib/sources/consent-store`
@@ -90,6 +95,10 @@ const STUB_SOURCE: Record<string, string> = {
     export async function readConsentRow(userId) { return rows().get(userId) ?? null; }
     export async function writeConsentRow(userId, row) { rows().set(userId, { userId, ...row, consentedAt: new Date(), updatedAt: new Date() }); }
     export async function deleteConsentRow(userId) { rows().delete(userId); }`,
+  // The gate ships dormant (`CONSENT_GATE_ENFORCED = false`) until W3 ships the
+  // consent card; this suite drives the gate itself, so it turns it on. The
+  // dormant gate, as shipped, is driven in `consent-gate-dormant-driven.test.ts`.
+  '@/lib/sources/consent-enforced': `export const CONSENT_GATE_ENFORCED = true;`,
   '@/lib/evidence/sealed-access': `export async function canReadRecord() { return true; }`,
   '@/lib/storage': `export async function getPackage(key) { return globalThis.__r6w2Gate.packages[key] ?? null; }`,
   '@/lib/db': `

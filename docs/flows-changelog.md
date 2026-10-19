@@ -5,9 +5,10 @@ recipient by role and host, what each receives, and what each holder says it
 keeps. Each instance serves its own at `/api/flows`, derived from its
 configuration when asked (see the deployment guide's
 [Consent and the flows statement](deploy.md#consent-and-the-flows-statement)).
-A reader's consent refers to the statement it was given against, so this log
-records, with dates, each change to what the statement can say (design §4.7
-item 12).
+A reader's consent will refer to the statement it was given against, once
+the consent gate is on with the consent card (#632 W3; until then it is off,
+and no reader is asked), so this log records, with dates, each change to what
+the statement can say (design §4.7 item 12).
 
 **How to read the versions.** Each entry gives the statement's base `version`
 (a SHA-256 over the instance-level recipients and their postures) and each
@@ -28,21 +29,29 @@ configuration and fails when they differ from the code.
 
 The statement is first published (#632 W2).
 
-**Configuration** (the reference instance's shape; credential values are
-placeholders, which no version reads): `SOCRATA_MCP_URL=https://socrata-mcp.civicaitools.org`,
-`NYC_CHARTER_HOSTING=sandbox`, `VERCEL_ENV=production`, GitHub sign-in
-(`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`), `EXECUTOR_DRIVER=vercel-sandbox`;
-the model endpoint, Data Commons address and analytics unset (their defaults:
-the model service at `openrouter.ai`, Google's Data Commons endpoint, no
-analytics).
+**Configuration:** the reference instance's configuration as its privacy page
+stated it on 2026-10-19: the model service at `openrouter.ai`, Plausible
+analytics loaded from `plausible.io`, notebooks in a Vercel Sandbox, GitHub
+sign-in, Socrata at `socrata-mcp.civicaitools.org`, Data Commons at Google's
+endpoint, and NYC Charter hosted. As variables:
+`SOCRATA_MCP_URL=https://socrata-mcp.civicaitools.org`,
+`NYC_CHARTER_HOSTING=sandbox`, `VERCEL_ENV` set (the site runs on Vercel),
+`GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` set,
+`EXECUTOR_DRIVER=vercel-sandbox`, `NEXT_PUBLIC_ANALYTICS_SERVICE=plausible` and
+`NEXT_PUBLIC_ANALYTICS_ID` set; `MODEL_API_BASE_URL` unset or at
+`openrouter.ai`, and `DATA_COMMONS_MCP_URL` unset or at Google's endpoint.
+Where a variable is only "set", the statement reads its presence and not its
+value (the sign-in pair, the analytics id, `VERCEL_ENV`), so the versions
+below hold for any value of it.
 
-**Base `version`:** `c65c8692eb7199ab8fbee00169593e2d208b38ec4e9dd5964a613057570af877`
+**Base `version`:** `2489d0dda25a79b3286c380379c6d2c8202e66a77fe5b4f493f558a7ce190f9c`
 
 | Recipient | Where | What the holder says it keeps |
 |---|---|---|
 | The model endpoint | `openrouter.ai` | as the operator states (correction g) |
 | The hosting platform's function logs | Vercel | metadata: this site's reading of Vercel's runtime logs page (kept 1 hour to 30 days, by the operator's plan) and of this site's tested guarantee that its logs carry no question, query or answer |
 | Sign-in | `github.com` | metadata, as long as the account is active (GitHub's privacy statement, read 2026-10-19) |
+| Analytics | `plausible.io` | metadata (Plausible's data policy, read 2026-10-18) |
 | The notebook executor | Vercel Sandbox | not stated (Vercel's Sandbox pages, read 2026-10-19) |
 
 | Source | Its `version` | Where it runs | What its holders say they keep |

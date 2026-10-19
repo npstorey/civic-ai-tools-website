@@ -167,11 +167,6 @@ process.env.DATA_COMMONS_MCP_URL = `${MCP_ORIGIN}/dc/mcp`;
 process.env.NYC_CHARTER_HOSTING = 'sandbox';
 
 const { startScriptedModelServer } = await import('../../lib/model-loop/test-harness.ts');
-// R6 W2 (#632, C6): a replay is gated on the replayer's own consent, and the
-// replayer's On states narrow it (W1's `replayerSelection`, which W2 supplies
-// from the consent store). Each replay below carries a consent with every
-// configured source On, as a replayer who had answered the card would.
-const { consentCookieForTests } = await import('../../lib/sources/consent-fixture.ts');
 const { mcpTools } = await import('../../lib/mcp/tools.ts');
 const { buildSystemPrompt } = await import('../../lib/mcp/socrata-skill.ts');
 const { canonicalizeToolCall } = await import('../../lib/evidence/tool-call-identity.ts');
@@ -244,7 +239,7 @@ async function replay(slug: string, replies: Array<Record<string, unknown>> = [A
   const outboundBefore = OUTBOUND.length;
   try {
     const response = await replayRoute.POST(
-      new Request(`http://localhost/api/evidence/${slug}/replay`, { method: 'POST', headers: { 'content-type': 'application/json', cookie: consentCookieForTests() }, body: JSON.stringify({ modelApiKey: 'placeholder-model-key-r6-w1-replay' }) }),
+      new Request(`http://localhost/api/evidence/${slug}/replay`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ modelApiKey: 'placeholder-model-key-r6-w1-replay' }) }),
       { params: Promise.resolve({ slug }) },
     );
     const body = (await response.json()) as Replayed['body'];
@@ -317,24 +312,16 @@ test('criterion 3 (c): a datHere record with named mcpServers entries replays wi
   assert.deepEqual(C.toolNames.filter((n) => !n.startsWith('socrata__')), [], 'the replay offered a source the record did not name');
 });
 
-// R6 W2: a record that states no set is not narrowed by the RECORD, so it
-// replays with the full vocabulary as far as the REPLAYER allows: since W2 every
-// replay carries the replayer's On states, which only configured sources can be
-// (`replayOfferedSet`, `from: 'none'` with a replayer selection, as W1 wrote it).
-// Boston is unset here, so the full vocabulary less Boston's tools.
-const ON_HERE = ALL_TOOL_NAMES.filter((n) => !n.startsWith('boston__'));
-
-test('criterion 3 (d): a record stating no set replays with the full vocabulary the replayer has On, from none', () => {
-  assert.ok(ON_HERE.length < ALL_TOOL_NAMES.length, 'premise: Boston has tools in the vocabulary and is unset here');
-  assert.deepEqual(D.toolNames, ON_HERE, 'a record stating no set did not replay with every tool its replayer has On');
-  // `sources` is the source ids whose tools the replay offered: every manifest
-  // source the replayer has On, which on this instance is every configured one.
-  assert.deepEqual(D.body.offeredSet, { from: 'none', sources: ['socrata', 'data-commons', 'nyc-charter'], lacking: [] });
+test('criterion 3 (d): a record stating no set replays with the full vocabulary, from none', () => {
+  assert.deepEqual(D.toolNames, ALL_TOOL_NAMES, 'a record stating no set did not replay with the full vocabulary');
+  // `sources` is the source ids whose tools the replay offered: under the full
+  // vocabulary, every manifest source, Boston's included though it is unset.
+  assert.deepEqual(D.body.offeredSet, { from: 'none', sources: ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter'], lacking: [] });
 });
 
 test('criterion 3 (e): a server list of nameless entries counts as no set', () => {
-  assert.deepEqual(E.toolNames, ON_HERE, 'nameless mcpServers entries narrowed the replay');
-  assert.deepEqual(E.body.offeredSet, { from: 'none', sources: ['socrata', 'data-commons', 'nyc-charter'], lacking: [] });
+  assert.deepEqual(E.toolNames, ALL_TOOL_NAMES, 'nameless mcpServers entries narrowed the replay');
+  assert.deepEqual(E.body.offeredSet, { from: 'none', sources: ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter'], lacking: [] });
 });
 
 test('criterion 3 (f): a record whose set is empty replays with no source tool, never the full vocabulary', () => {

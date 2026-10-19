@@ -31,7 +31,6 @@ import { modelAccessPhrase, modelIdentity, type ModelIdentity } from '@/lib/mode
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import type { SourceSelection } from '@typedstandards/civic-typed-router';
 import { consentInForce } from '@/lib/sources/consent-gate';
-import { recordSourcesOffered } from '@/lib/sources/consent';
 import {
   queryWithMcpStreaming,
   type CompletionResult,
@@ -267,6 +266,9 @@ export async function POST(request: NextRequest) {
   // row over the cookie), and before the rate limiter reads or spends
   // anything. None in force, or the re-ask rule says re-ask: the typed
   // `consent_required`, 403, carrying the flows version to show.
+  // DORMANT until W3 ships the consent card (`CONSENT_GATE_ENFORCED`,
+  // `src/lib/sources/consent-enforced.ts`): the gate then refuses nothing, and
+  // the selection, the reasons and the record are what they were before W2.
   const consent = await consentInForce(request, session);
   if (!consent.ok) {
     return new Response(JSON.stringify(consent.payload), { status: 403, headers: { 'Content-Type': 'application/json' } });
@@ -326,7 +328,7 @@ export async function POST(request: NextRequest) {
       mcpServers: configuredMcpServers(configured),
       toolDefinitions: offeredTools,
       // The router's `not-selected` as the reader's state (D2 = A).
-      sourcesOffered: recordSourcesOffered(composition.sourcesOffered, consent.states),
+      sourcesOffered: consent.recordReasons(composition.sourcesOffered),
       components: composition.components,
       // The flows statement in force (D2 = A).
       flowsStatement: consent.reference,

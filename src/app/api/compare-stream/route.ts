@@ -6,7 +6,6 @@ import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import { consentInForce } from '@/lib/sources/consent-gate';
-import { recordSourcesOffered } from '@/lib/sources/consent';
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import { encodeSSE, errorLogFacts, panelsForRun, startSseKeepAlive, streamErrorPayload, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
@@ -206,6 +205,9 @@ export async function POST(request: NextRequest) {
     // anything. None in force, or the re-ask rule says re-ask: the typed
     // `consent_required` on the channel this route's configuration refusals
     // use, an error event per panel, carrying the flows version to show.
+    // DORMANT until W3 ships the consent card (`CONSENT_GATE_ENFORCED`,
+    // `src/lib/sources/consent-enforced.ts`): the gate then refuses nothing, and
+    // the selection, the reasons and the record are what they were before W2.
     const consent = await consentInForce(request, session);
     if (!consent.ok) {
       const encoder = new TextEncoder();
@@ -298,7 +300,7 @@ export async function POST(request: NextRequest) {
       toolDefinitions: offeredTools,
       // The router's `not-selected` is recorded as the reader's own state:
       // `reader-off` or `not-consented` (D2 = A).
-      sourcesOffered: recordSourcesOffered(composition.sourcesOffered, consent.states),
+      sourcesOffered: consent.recordReasons(composition.sourcesOffered),
       components: composition.components,
       // The flows statement in force: its url, hash and date (D2 = A).
       flowsStatement: consent.reference,

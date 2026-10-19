@@ -16,8 +16,16 @@
  * The selection is derived from the store, never read from the request
  * (D3 = A): the consent write (`/api/sources/consent`) is the only boundary
  * that accepts source ids.
+ *
+ * DORMANT UNTIL W3 (`CONSENT_GATE_ENFORCED`, `./consent-enforced.ts`). Off,
+ * the gate reads no store and builds no statement, and answers what each route
+ * did before W2: the selection `DEFAULT_SOURCE_SELECTION` (every offered
+ * source), the router's reasons unmapped, and no flows statement reference.
  */
+import type { SourceSelection } from '@typedstandards/civic-typed-router';
 import { readConsentRow } from '@/lib/sources/consent-store';
+import { CONSENT_GATE_ENFORCED } from '@/lib/sources/consent-enforced';
+import { DEFAULT_SOURCE_SELECTION } from '@/lib/mcp/socrata-skill';
 import { buildFlowsStatement, flowsStatementReference, statementHash, type FlowsStatement, type FlowsStatementReference } from '@/lib/flows/statement';
 import { friendlyStreamError } from '@/lib/streaming';
 import {
@@ -26,6 +34,7 @@ import {
   flatStates,
   readConsentCookie,
   reaskOf,
+  recordSourcesOffered,
   selectionFromStates,
   type Reask,
   type SourceState,
@@ -44,15 +53,22 @@ export interface ConsentRefusalPayload {
   reask: Reask;
 }
 
+type OfferedEntry = { sourceId: string; alias: string; reason: string };
+
 export type ConsentDecision =
   | {
       ok: true;
-      store: 'row' | 'cookie';
-      statement: FlowsStatement;
-      reference: FlowsStatementReference;
-      /** configured ∩ On: what the composition, the tools and the dispatch are given. */
-      selection: string[];
-      /** Every stored state, for the record's reasons (stale ids are harmless there). */
+      /** False while the gate is dormant: the route runs as it did before W2. */
+      enforced: boolean;
+      /** configured ∩ On, what the composition, the tools and the dispatch are given; `DEFAULT_SOURCE_SELECTION` while dormant. */
+      selection: SourceSelection;
+      /** The record's reasons from the router's: mapped from the stored states (D2 = A); unchanged while dormant. */
+      recordReasons: (offered: readonly OfferedEntry[]) => OfferedEntry[];
+      /** The flows statement in force, for `analysis.flows_statement`; absent while dormant. */
+      reference?: FlowsStatementReference;
+      store?: 'row' | 'cookie';
+      statement?: FlowsStatement;
+      /** Every stored state (stale ids are harmless where it is read); empty while dormant. */
       states: Record<string, SourceState>;
     }
   | { ok: false; store: 'row' | 'cookie'; statement: FlowsStatement; payload: ConsentRefusalPayload };
@@ -67,6 +83,9 @@ function refusal(store: 'row' | 'cookie', statement: FlowsStatement, reask: Reas
 }
 
 export async function consentInForce(request: Request, session: ConsentSession | null | undefined): Promise<ConsentDecision> {
+  if (!CONSENT_GATE_ENFORCED) {
+    return { ok: true, enforced: false, selection: DEFAULT_SOURCE_SELECTION, recordReasons: (offered) => [...offered], states: {} };
+  }
   const statement = await buildFlowsStatement();
   const configured = statement.sources.map((source) => source.sourceId);
   const dbId = session?.user?.dbId;
@@ -89,10 +108,12 @@ export async function consentInForce(request: Request, session: ConsentSession |
   }
   return {
     ok: true,
+    enforced: true,
     store,
     statement,
     reference: flowsStatementReference(statement, request),
     selection: selectionFromStates(configured, states),
+    recordReasons: (offered) => recordSourcesOffered(offered, states),
     states,
   };
 }

@@ -299,14 +299,10 @@ const { pkg } = buildEvidencePackage({
 } as never);
 globals.__s548Package = pkg;
 
-// R6 W2 (#632): every route that sends a question refuses one with no consent in force; this
-// suite's requests carry a consent (every configured source On), as a browser that had answered
-// the consent card would. Nothing it asserts changes.
-const { consentCookieForTests } = await import('./sources/consent-fixture.ts');
 function post(route: string, body: unknown): Request {
   return new Request(`http://localhost${route}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', cookie: consentCookieForTests() },
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
 }

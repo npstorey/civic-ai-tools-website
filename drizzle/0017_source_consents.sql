@@ -30,7 +30,9 @@
 --
 -- ORDERING IS SAFE IN BOTH DIRECTIONS. Applied BEFORE the deploy, it leaves an
 -- empty table nothing reads. Applied AFTER, every signed-in session with a
--- `dbId` fails its consent read, so apply it first.
+-- `dbId` fails its consent read at `/api/sources/consent` (and, once the
+-- consent gate is on with W3's consent card, every question), so apply it
+-- first.
 --
 -- VERIFY AFTER APPLYING — do not skip, and do not trust a tool's exit status:
 --

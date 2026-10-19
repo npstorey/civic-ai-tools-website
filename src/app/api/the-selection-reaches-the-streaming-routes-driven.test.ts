@@ -14,12 +14,11 @@
 // trace each route emits is read off its own stream: `trace` on
 // `/api/compare-stream`, `publish_inputs` on `/api/query-notebook`.
 //
-// THE ONE CHANGED INPUT. Since W2 the routes take their selection from the
-// reader's consent (configured ∩ On, #632 D3 = A), so each request carries a
-// consent cookie with Socrata On and Data Commons Off: the route under test
-// runs its own code with the selection `['socrata']`. (Until W2 this suite
-// stubbed `DEFAULT_SOURCE_SELECTION` to that value; the routes no longer read
-// it.)
+// THE ONE CHANGED INPUT. `DEFAULT_SOURCE_SELECTION` is the value every route
+// passes until W2 (`undefined`). The stub of `@/lib/mcp/socrata-skill`
+// re-exports the real module and replaces only that constant with
+// `['socrata']`, so the route under test runs its own code with a selection,
+// the way W2 will hand it one.
 //
 // STUBS, and why: `next/headers`, `next-auth`, `@/lib/auth` (no request scope
 // or sign-in provider outside Next); `@/lib/rate-limit` (no counter store);
@@ -54,6 +53,7 @@ const { registerHooks } = nodeModule as unknown as {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(HERE, '..', '..');
+const REAL_SKILL = pathToFileURL(path.join(SRC, 'lib', 'mcp', 'socrata-skill.ts')).href;
 
 const DC_TOOL = 'data_commons__search_indicators';
 const DC_ARGS = { query: 'median household income', places: ['Bronx County'] };
@@ -70,6 +70,10 @@ const STUB_SOURCE: Record<string, string> = {
     export function isRateLimited() { return false; }
     export async function incrementRateLimit() {}
     export function getMissingRateLimitSecretError() { return null; }`,
+  // The real module, with the one constant every route reads replaced.
+  '@/lib/mcp/socrata-skill': `
+    export * from ${JSON.stringify(REAL_SKILL)};
+    export const DEFAULT_SOURCE_SELECTION = ['socrata'];`,
   '@/lib/sandbox': `
     export class NotebookExecutionError extends Error {}
     export async function executeNotebook(notebook) {
@@ -154,7 +158,6 @@ process.env.SOCRATA_MCP_URL = `${MCP_ORIGIN}/socrata`;
 process.env.DATA_COMMONS_MCP_URL = `${MCP_ORIGIN}/dc/mcp`;
 
 const { startScriptedModelServer } = await import('../../lib/model-loop/test-harness.ts');
-const { consentCookieForTests } = await import('../../lib/sources/consent-fixture.ts');
 const { _resetDefaultModelClientForTests } = await import('../../lib/model-client.ts');
 const { getDefaultModel } = await import('@/lib/model-resolver');
 const { RUN_RECORD_ATTRIBUTE } = await import('../../lib/evidence/trace.ts');
@@ -199,8 +202,7 @@ async function drive(route: { POST: (request: Request) => Promise<Response> }, u
   _resetDefaultModelClientForTests();
   const before = toolCallsTo('/dc/mcp');
   try {
-    const cookie = consentCookieForTests({ socrata: 'on', 'data-commons': 'off' });
-    const response = await route.POST(new Request(url, { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify(body) }));
+    const response = await route.POST(new Request(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
     const text = await drain(response);
     const events = text
       .split('\n')
@@ -239,9 +241,7 @@ for (const [route, run] of DRIVES) {
     assert.ok(!offered.some((name) => name?.startsWith('data_commons__')), 'premise: the selection did not reach the tools array');
     assert.ok(toolSpan, 'the trace carries no span for the Data Commons call');
     const stated = JSON.parse(attr(root, RUN_RECORD_ATTRIBUTE.sourcesOffered)?.stringValue ?? '[]') as Array<{ sourceId: string; reason: string }>;
-    // W1 recorded the router's `not-selected` here; since W2 the record states
-    // the reader's own state for it (D2 = A): Off is `reader-off`.
-    assert.equal(stated.find((s) => s.sourceId === 'data-commons')?.reason, 'reader-off', 'the record states Data Commons as turned off by the reader');
+    assert.equal(stated.find((s) => s.sourceId === 'data-commons')?.reason, 'not-selected', 'the record states Data Commons as not selected (criterion 2, green at the base)');
   });
 
   test(`criterion 1 (${route}): the call outside the selection is sent to no source`, () => {

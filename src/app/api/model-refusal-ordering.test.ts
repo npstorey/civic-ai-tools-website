@@ -338,7 +338,10 @@ test('R6 W2: every gated route asks for the consent in force exactly once, after
   }
 });
 
-test('R6 W2: no query route passes DEFAULT_SOURCE_SELECTION any more — the selection comes from the consent store (D3)', () => {
+// The gate answers the selection: configured ∩ On from the consent store
+// when enforced (D3), and `DEFAULT_SOURCE_SELECTION` while it is dormant, so a
+// route reads it from the gate and never sets one of its own.
+test('R6 W2: no query route sets its own selection — it comes from the consent gate (D3)', () => {
   for (const route of QUERY_ROUTES) {
     const source = routeSource(route);
     assert.ok(!/const selection = DEFAULT_SOURCE_SELECTION/.test(source), `${route} still runs every offered source`);

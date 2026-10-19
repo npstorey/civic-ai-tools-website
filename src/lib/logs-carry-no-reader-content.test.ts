@@ -395,10 +395,6 @@ const STREAM_FAILURE_LOG = await captureConsole(async () => {
 // --- Leg 4: the notebook route, driven to all three branches of its catch -----
 
 const { startScriptedModelServer } = await import('./model-loop/test-harness.ts');
-// R6 W2 (#632): every route that sends a question refuses one with no consent in force; this
-// suite's requests carry a consent (every configured source On), as a browser that had answered
-// the consent card would. Nothing it asserts changes.
-const { consentCookieForTests } = await import('./sources/consent-fixture.ts');
 const scripted = await startScriptedModelServer([{ content: 'Twelve complaints were recorded.' }]);
 process.env.MODEL_API_BASE_URL = scripted.url;
 _resetDefaultModelClientForTests();
@@ -419,7 +415,6 @@ async function driveNotebookRoute(mode: 'notebook-execution' | 'other-error' | '
   const log = await captureConsole(async () => {
     const response = await POST(new Request('http://localhost/api/query-notebook', {
       method: 'POST',
-      headers: { cookie: consentCookieForTests() },
       body: JSON.stringify({ query: `How many complaints mention ${CANARY}?`, portal: PORTAL }),
     }) as never);
     sse = await response.text();

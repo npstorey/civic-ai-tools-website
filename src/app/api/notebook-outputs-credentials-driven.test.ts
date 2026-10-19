@@ -385,13 +385,8 @@ interface WireEvent { type: string; [key: string]: unknown }
 const notebookRoute = (await import('./query-notebook/route.ts')) as unknown as { POST: (request: Request) => Promise<Response> };
 const recordsRoute = (await import('./records/route.ts')) as unknown as { POST: (request: Request) => Promise<Response> };
 
-// R6 W2 (#632): every route that sends a question refuses one with no consent in force; this
-// suite's requests carry a consent (every configured source On), as a browser that had answered
-// the consent card would. Nothing it asserts changes.
-const { consentCookieForTests } = await import('../../lib/sources/consent-fixture.ts');
 const response = await notebookRoute.POST(new Request('http://localhost/api/query-notebook', {
   method: 'POST',
-  headers: { cookie: consentCookieForTests() },
   body: JSON.stringify({ query: 'How many noise complaints were there last week?', portal: 'data.example.org' }),
 }));
 const STATUS = response.status;

@@ -2032,22 +2032,33 @@ It is written with `CREATE TABLE IF NOT EXISTS` and its foreign key inline,
 by hand, so the owner-run `psql` application and a fork's `drizzle-kit
 migrate` are both safe on a database that already has it (the file's header
 says why). Apply it **before** the deploy that reads it: after, every
-signed-in session with an account row fails its consent read. Verify with
+signed-in session with an account row fails its consent read (on the consent
+endpoint now, and on every question once the gate is on). Verify with
 `\d source_consents`, never the tool's exit status alone
 ([`docs/db-migrations.md`](db-migrations.md)).
 
 ## Consent and the flows statement
 
-Before a reader's first question this site asks once whether it may send the
-question onward, and stores the answer; nothing is sent anywhere before it,
-the model endpoint included (design §4.4; #632 W2). The server enforces this:
-the four routes that send a question — `/api/compare-stream`, `/api/compare`,
-`/api/query-notebook` and `/api/evidence/<slug>/replay` (with its
-`/api/records/<slug>/replay` alias) — refuse a question with no consent in
-force, after their own configuration refusals and before the rate limiter
-counts anything. `/api/compare-stream` answers with an `error` event per
-panel whose `code` is `consent_required`; the other three answer HTTP 403
-with `{ error, code: "consent_required", flowsVersion, reask }`.
+**Not enforced in this release.** The consent gate described below is built
+and turns on with the consent card, the surface that asks a reader (#632 W3).
+Until then it is switched off in code (`CONSENT_GATE_ENFORCED` in
+`src/lib/sources/consent-enforced.ts`, a constant and not a setting), no
+reader is asked for consent, and every question is answered and recorded
+exactly as before. What is live now: the flows statement at `/api/flows`, the
+consent endpoint and its two stores, and the privacy page's statements of
+what the hosting and sandbox platforms hold.
+
+**What the gate will do.** Once it is on, this site asks a reader once,
+before the first question, whether it may send the question onward, and
+stores the answer; nothing is sent anywhere before it, the model endpoint
+included (design §4.4). The server enforces it: the four routes that send a
+question — `/api/compare-stream`, `/api/compare`, `/api/query-notebook` and
+`/api/evidence/<slug>/replay` (with its `/api/records/<slug>/replay` alias) —
+refuse a question with no consent in force, after their own configuration
+refusals and before the rate limiter counts anything. `/api/compare-stream`
+answers with an `error` event per panel whose `code` is `consent_required`;
+the other three answer HTTP 403 with
+`{ error, code: "consent_required", flowsVersion, reask }`.
 
 **What a reader consents to: `/api/flows`.** `GET /api/flows` serves the
 flows statement, derived when asked from this instance's configuration, the
@@ -2059,8 +2070,8 @@ with the page and the date it was read, or "not stated"; then each configured
 source with its hosting variant, publisher, freshness and posture. It calls no
 source. Its body is RFC 8785 canonical JSON, and its SHA-256 is the
 statement's hash: the **flows version** a consent refers to, and the `hash` a
-record's `composition.flowsStatement` carries beside the address and the
-statement's `date` (the latest read date it carries, never the day it is
+record's `composition.flowsStatement` will carry, once the gate is on, beside
+the address and the statement's `date` (the latest read date it carries, never the day it is
 served). The statement also carries a base `version` over the instance-level
 recipients, and each source a `version` of its own.
 [`docs/flows-changelog.md`](flows-changelog.md) is the dated log of what the
@@ -2083,13 +2094,14 @@ stores the states; it answers 400 naming any id this instance does not
 configure, and 409 with the current version when `flowsVersion` is stale, so
 the surface reads the statement again. `DELETE` revokes: the row is deleted,
 or the cookie expired, and the next question is asked again. This is the only
-boundary that accepts source ids: a question's run takes its selection —
-configured sources that are On — from the store, never from the request. A
-configured source with no stored state (one added after the reader consented)
-is Ask first, and is not offered.
+boundary that accepts source ids: once the gate is on, a question's run takes
+its selection — configured sources that are On — from the store, never from
+the request, and a configured source with no stored state (one added after the
+reader consented) is Ask first, and is not offered.
 
-**What re-asks.** A signed-in reader's row keeps the statement it was given
-against, and each question compares it with the statement in force. A
+**What re-asks** (once the gate is on). A signed-in reader's row keeps the
+statement it was given against, and each question compares it with the
+statement in force. A
 recipient added, a posture that keeps more (none, then metadata, then content,
 or a longer stated retention), or a changed arrangement (a recipient's host,
 where it runs, what it receives or who holds its logs) re-asks everyone; the
@@ -2102,8 +2114,11 @@ versions only, so any change to a version it holds re-asks. In this version a
 re-ask is `consent_required` for the whole question, naming what is re-asked
 (`reask: { base, sources }`); a source is never silently dropped.
 
-The router's `not-selected` reason is recorded as the reader's own state on
-new records: `reader-off` for Off, `not-consented` for Ask first or no state.
+Once the gate is on, a record states the reader's own state for each
+source: `selected` for On, `reader-off` for Off, `not-consented` for Ask first
+or no state, and the flows statement in force (`composition.flowsStatement`).
+While it is off, records carry the reasons they carried before
+(`configured`, `not-configured`) and no flows statement.
 
 ## Behind a load balancer
 

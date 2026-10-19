@@ -353,12 +353,8 @@ function eventsOf(body: string): Json[] {
   });
 }
 
-// R6 W2 (#632): every route that sends a question refuses one with no consent in force; this
-// suite's requests carry a consent (every configured source On), as a browser that had answered
-// the consent card would. Nothing it asserts changes.
-const { consentCookieForTests } = await import('../../lib/sources/consent-fixture.ts');
 const post = (route: string, body: unknown) =>
-  new Request(`http://localhost${route}`, { method: 'POST', headers: { cookie: consentCookieForTests() }, body: JSON.stringify(body) }) as never;
+  new Request(`http://localhost${route}`, { method: 'POST', body: JSON.stringify(body) }) as never;
 
 const compareStreamRoute = await import('./compare-stream/route.ts');
 const notebookRoute = await import('./query-notebook/route.ts');

@@ -20,7 +20,11 @@ import { buildFlowsStatementFor } from './statement.ts';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const LOG = fs.readFileSync(path.resolve(HERE, '..', '..', '..', 'docs', 'flows-changelog.md'), 'utf8');
 
-/** The configuration the first entry names; credential values are placeholders no version reads. */
+/**
+ * The configuration the first entry names: the reference instance's, as its
+ * privacy page stated it on 2026-10-19. The sign-in pair, the analytics id and
+ * `VERCEL_ENV` are read for their presence only, so placeholders stand in.
+ */
 const FIRST_ENTRY_ENV: Record<string, string> = {
   SOCRATA_MCP_URL: 'https://socrata-mcp.civicaitools.org',
   NYC_CHARTER_HOSTING: 'sandbox',
@@ -28,9 +32,18 @@ const FIRST_ENTRY_ENV: Record<string, string> = {
   GITHUB_CLIENT_ID: 'placeholder-client-id',
   GITHUB_CLIENT_SECRET: 'placeholder-client-value',
   EXECUTOR_DRIVER: 'vercel-sandbox',
+  NEXT_PUBLIC_ANALYTICS_SERVICE: 'plausible',
+  NEXT_PUBLIC_ANALYTICS_ID: 'placeholder-analytics-id',
 };
+/**
+ * What `resolveAnalytics` (`src/lib/analytics.tsx`) answers for the analytics
+ * pair above. The statement reads only its `service`; the `.tsx` module is not
+ * loadable under the test runner, so the resolved value is passed here, and
+ * the second assertion below shows the id does not reach the versions.
+ */
+const ANALYTICS = { service: 'plausible' as const, id: 'placeholder-analytics-id' };
 const CLEARED = [
-  'MODEL_API_BASE_URL', 'MODEL_API_KIND', 'OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'OIDC_PROVIDER_NAME',
+  'MODEL_API_BASE_URL', 'MODEL_API_KIND', 'NEXT_PUBLIC_GA_MEASUREMENT_ID', 'OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'OIDC_PROVIDER_NAME',
   'DATA_COMMONS_MCP_URL', 'DATA_COMMONS_API_KEY', 'BOSTON_OPENCONTEXT_MCP_URL',
 ];
 
@@ -40,7 +53,9 @@ test('the first entry\'s base version and source versions are the code\'s under 
   try {
     for (const name of CLEARED) delete process.env[name];
     Object.assign(process.env, FIRST_ENTRY_ENV);
-    const statement = buildFlowsStatementFor(null);
+    const statement = buildFlowsStatementFor(ANALYTICS);
+    assert.equal(buildFlowsStatementFor({ ...ANALYTICS, id: 'another-id' }).version, statement.version, 'the analytics id reaches the base version');
+    assert.ok(statement.recipients.some((r) => r.id === 'analytics:plausible'), 'premise: the entry\'s configuration has Plausible analytics');
     const entry = LOG.slice(LOG.indexOf('## 2026-10-19'));
     assert.ok(entry.startsWith('## 2026-10-19'), 'the log has no 2026-10-19 entry');
     assert.ok(entry.includes(`**Base \`version\`:** \`${statement.version}\``), `the entry's base version is not ${statement.version}`);
