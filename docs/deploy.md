@@ -1250,7 +1250,7 @@ the keys they had.
 |---|---|---|
 | `NYC_CHARTER_HOSTING` | `src/lib/mcp/registry.ts` (`readMcpEnvFromProcess`) | `sandbox` offers the source; anything else leaves it off |
 | `SOURCE_BRIDGE_SECRET` | `src/lib/mcp/hosting/token.ts` | the instance secret each sandbox's token derives from |
-| `VERCEL_ENV` | `src/lib/mcp/hosting/lifecycle.ts` (`hostingEnvironment`) | the environment in the sandbox's name; `local` when unset |
+| `VERCEL_ENV` | `src/lib/hosting-environment.ts` (`hostingEnvironment`, which `lifecycle.ts` re-exports) | the environment in the sandbox's name, and the usage table's `environment` column; `local` when unset |
 | `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID` | `src/lib/sandbox/vercel-sandbox.ts` (`resolveSandboxAuthParams`) | off-platform sandbox authentication, all three or none; on the platform, OIDC |
 | `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` | `src/lib/sandbox/vercel-sandbox.ts` (`proxyAwareSandboxFetch`) | the sandbox API calls leave through the instance's proxy, as the executor's do |
 
