@@ -53,8 +53,10 @@ test('criterion 2: 0017 creates source_consents by hand with IF NOT EXISTS, ever
 
 test('criterion 2: the journal holds 0017 at idx 17, and its snapshot chains from 0016\'s', () => {
   const journal = JSON.parse(fs.readFileSync(path.join(DRIZZLE, 'meta', '_journal.json'), 'utf8')) as { entries: Array<{ idx: number; tag: string }> };
-  const last = journal.entries.at(-1);
-  assert.deepEqual(last && { idx: last.idx, tag: last.tag }, { idx: 17, tag: '0017_source_consents' });
+  // Found by its tag, not as the journal's last entry: `0018_usage_counts`
+  // (R6 W5) follows it, and later migrations will follow that.
+  const entry = journal.entries.find((e) => e.tag === '0017_source_consents');
+  assert.deepEqual(entry && { idx: entry.idx, tag: entry.tag }, { idx: 17, tag: '0017_source_consents' });
   const snapshotFile = path.join(DRIZZLE, 'meta', '0017_snapshot.json');
   assert.ok(fs.existsSync(snapshotFile), 'no 0017 snapshot');
   const prev = JSON.parse(fs.readFileSync(path.join(DRIZZLE, 'meta', '0016_snapshot.json'), 'utf8')) as { id: string };
