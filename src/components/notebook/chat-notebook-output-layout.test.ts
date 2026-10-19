@@ -282,7 +282,8 @@ const SECTION_CONTENT: Array<[string, string]> = [
   ['F · Rendered answer', ANSWER_MARKER],
   ['G · Summary', 'SUMMARYFINDING-p1'],
   ['Signed by', 'fixture-key'],
-  ['Production method', 'Executed in signed sandbox'],
+  // The W3 fix (F2): the notebook's own reading, in the reader's spelling.
+  ['Production method', 'Executed in a signed sandbox'],
   ['Attestations', 'None yet'],
 ];
 const heading = (title: string) => `>${title}</h3>`;

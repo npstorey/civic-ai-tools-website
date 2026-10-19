@@ -27,8 +27,9 @@
 //   - `@/lib/evidence/sealed-access`: the viewer is the record's creator, so a
 //     sealed fixture renders rather than 404s;
 //   - `next/headers`: a request host;
-//   - `globalThis.fetch`: answers the one blob URL the blob fixture names, and
-//     refuses everything else, so no test reaches a network.
+//   - `globalThis.fetch`: answers the blob URLs the blob fixtures name (one
+//     whose bytes verify, and the W3 fix's two that do not), counts each
+//     request, and refuses everything else, so no test reaches a network.
 // The packages are rendered as stored: no field is rewritten for the render.
 //
 // A CLAIM CHECKED IN NODE, NOT IN A BROWSER. This reads the server-rendered
@@ -190,10 +191,17 @@ const OLD_OUTPUT_BYTES = Buffer.from(OLD_OUTPUT_TEXT, 'utf8');
 const OLD_OUTPUT_HASH = createHash('sha256').update(OLD_OUTPUT_BYTES).digest('hex');
 const OLD_OUTPUT_URL = `https://blobs.example.test/evidence-refs/${OLD_OUTPUT_HASH}.md`;
 
+/** The bytes each blob URL a fixture names answers with (the W3 fix adds two that do not verify). */
+const BLOB_BYTES = new Map<string, Buffer>([[OLD_OUTPUT_URL, OLD_OUTPUT_BYTES]]);
+/** How many times each blob URL was requested, so a test can count the page's fetches. */
+const BLOB_REQUESTS = new Map<string, number>();
+
 globals.fetch = async (input: unknown) => {
   const url = String(input instanceof URL ? input.href : (input as { url?: string }).url ?? input);
-  if (url === OLD_OUTPUT_URL) {
-    return new Response(OLD_OUTPUT_BYTES, { status: 200, headers: { 'Content-Type': 'text/markdown' } });
+  const bytes = BLOB_BYTES.get(url);
+  if (bytes !== undefined) {
+    BLOB_REQUESTS.set(url, (BLOB_REQUESTS.get(url) ?? 0) + 1);
+    return new Response(new Uint8Array(bytes), { status: 200, headers: { 'Content-Type': 'text/markdown' } });
   }
   throw new Error(`layout test: no network (${url})`);
 };
@@ -1312,10 +1320,12 @@ test('W3 P2 (5) the instrument fails on a site-written label that prints an expo
 // --- W3 P2 (6): #115, one answer display across the surfaces --------------------
 //
 // The record's answer renders through the run surfaces' answer component. For
-// a record carrying an executed notebook with a rendering cell, the answer is
-// that cell's outputs, as `adapt-notebook.ts` takes them; otherwise it is the
-// record's `output`. The fixture's `output` differs from the cell's, so a page
-// that rendered the wrong one fails.
+// a record carrying an executed notebook whose rendering cell's text is
+// byte-equal to its signed `output`, the answer is that cell's outputs, as
+// `adapt-notebook.ts` takes them; otherwise it is the record's `output` (the
+// W3 fix, ruling 1). A fixture answering with its `output` carries an `output`
+// that differs from any cell it has, so a page that rendered the wrong one
+// fails; the differing executed case is the W3 fix (2) test.
 
 const { default: ChatNotebookOutput } = (await import('@/components/notebook/ChatNotebookOutput')) as unknown as {
   default: ComponentType<Record<string, unknown>>;
@@ -1355,19 +1365,30 @@ function recordCarrying(notebook: unknown, output: string): Case {
 const CELL_ANSWER = 'CELLANSWER-w3p2: **42** complaints in [the portal](https://data.example.test/), and:\n\n| a | b |\n|---|---|\n| 1 | 2 |';
 const CELL_TABLE = { output_type: 'execute_result', metadata: {}, data: { 'text/html': '<table><tr><td>CELLTABLE-w3p2</td></tr></table>' } };
 
-test('W3 P2 (6) one notebook renders byte-identical answer markup on the executed run and on the record that carries it', async () => {
+// Rewritten by the W3 fix (ruling 1). This test pinned that a record carrying
+// an executed synthesis cell rendered the cell and never its differing
+// `output`. Ruling 1 reverses that for the differing case (the W3 fix (2)
+// test below), so the record here carries an `output` byte-equal to the cell's
+// markdown, which is the case in which the record answers from the cell.
+test('W3 P2 (6) one notebook renders byte-identical answer markup on the executed run and on the record that carries it, when the cell’s text is the record’s output', async () => {
   for (const [name, outputs] of [
     ['one markdown output', [markdownOutput(CELL_ANSWER)]],
     ['a markdown output and a table the cell computed', [markdownOutput(CELL_ANSWER), CELL_TABLE]],
   ] as const) {
     const notebook = executedNotebook([...outputs]);
     const run = requirePart(renderRun(notebook), 'answer').markup;
-    const recordHtml = await renderWithInstance(recordCarrying(notebook, 'OUTPUTFIELD-w3p2: not the cell’s answer.'), INSTANCE);
+    const recordHtml = await renderWithInstance(recordCarrying(notebook, CELL_ANSWER), INSTANCE);
     const record = requirePart(recordHtml, 'answer').markup;
     assert.ok(run.includes('CELLANSWER-w3p2'), `${name}: premise: the run’s answer part carries the cell’s answer`);
     assert.equal(record, run, `${name}: the record’s answer part is the executed run’s, byte for byte`);
-    assert.equal(recordHtml.includes('OUTPUTFIELD-w3p2'), false, `${name}: the record’s output field is not rendered as the answer`);
   }
+  const table = await renderWithInstance(recordCarrying(executedNotebook([markdownOutput(CELL_ANSWER), CELL_TABLE]), CELL_ANSWER), INSTANCE);
+  assert.ok(requirePart(table, 'answer').markup.includes('CELLTABLE-w3p2'), 'the table is answered from the cell');
+  assert.deepEqual(
+    authorLines(table).filter((l) => l.key === 'answer' || l.key === 'computed').map((l) => l.key),
+    ['answer', 'computed', 'answer', 'computed'],
+    'both of §6’s lines, over the answer and over F',
+  );
 });
 
 test('W3 P2 (6) a record with no rendering cell renders its output through the same answer component', async () => {
@@ -1382,7 +1403,8 @@ test('W3 P2 (6) an answer over 2000 characters is not truncated, on the executed
   const text = (markup: string) => unescapeHtml(markup.replace(/<[^>]*>/g, ''));
   const cases: Array<[string, string]> = [
     ['the executed run', renderRun(executedNotebook([markdownOutput(long)]))],
-    ['a record carrying the notebook', await renderWithInstance(recordCarrying(executedNotebook([markdownOutput(long)]), 'OUTPUTFIELD-w3p2'), INSTANCE)],
+    // The W3 fix (ruling 1): the cell answers only when its text is the record's output.
+    ['a record carrying the notebook', await renderWithInstance(recordCarrying(executedNotebook([markdownOutput(long)]), long), INSTANCE)],
     ['a record answering with its output', await renderWithInstance(recordCarrying(notebook('skeleton', 'SKELETON-w3p2'), long), INSTANCE)],
   ];
   for (const [name, html] of cases) {
@@ -1479,4 +1501,143 @@ test('W3 P2 fix 1 (3) a multi-turn record over 2000 characters renders its whole
     assert.ok(a.startsWith('<div data-part="answer" class="response-markdown">'), 'rendered by the answer component');
     assert.equal(words(a), words(TRANSCRIPT), 'the transcript is rendered whole');
   }
+});
+
+// --- The W3 fix ------------------------------------------------------------------
+//
+// (1) The blob note says "verified" only after the bytes verify. The page
+// fetches the output blob once and checks those bytes with verify-core's own
+// check; the bytes it renders are the bytes it checked. Bytes that do not verify
+// are not shown: the answer states, in the site's words and under no author
+// line, that the stored copy does not match the record's reference.
+//   The two fixtures that do not verify can each fail one check only: the first
+//   has the reference's size and a different SHA-256, so a size check alone
+//   passes it; the second has the SHA-256 of its own bytes and a different size,
+//   so a hash check alone passes it.
+// (2) Ruling 1: a record answers from its executed synthesis cell only when the
+// cell's text is byte-equal to its signed `output`; otherwise from `output`,
+// under the model's line, and the cell stays in E.
+// (4) The record's `none` carries no author line, in the answer or in F.
+
+const OUTPUT_DOES_NOT_MATCH = 'The answer is not shown: the stored copy of this record’s output does not match the record’s reference to it. The package hash below identifies the record for audit.';
+
+function blobCase(slug: string, url: string, bytes: Buffer, ref: { hash: string; size: number }): Case {
+  BLOB_BYTES.set(url, bytes);
+  const pkg = structuredClone(OLD_PACKAGE) as Omit<typeof OLD_PACKAGE, 'output'> & { output: unknown };
+  pkg.output = { ref: `blob:sha256:${ref.hash}`, url, contentType: 'text/markdown', size: ref.size };
+  return { ...OLD, record: { ...OLD.record, slug }, pkg };
+}
+
+const HASH_MISMATCH_TEXT = 'UNVERIFIEDHASH-w3fix';
+const HASH_MISMATCH_BYTES = Buffer.from(HASH_MISMATCH_TEXT.padEnd(OLD_OUTPUT_BYTES.length, '.'), 'utf8');
+const SIZE_MISMATCH_BYTES = Buffer.from('UNVERIFIEDSIZE-w3fix: these bytes are their own hash’s.', 'utf8');
+const NOT_VERIFYING: Array<[string, string, Case]> = [
+  ['the reference’s size, a different SHA-256', HASH_MISMATCH_TEXT, blobCase(
+    'hash-mismatch-w3fix', 'https://blobs.example.test/evidence-refs/hash-mismatch-w3fix.md', HASH_MISMATCH_BYTES,
+    { hash: OLD_OUTPUT_HASH, size: OLD_OUTPUT_BYTES.length },
+  )],
+  ['the SHA-256 of its own bytes, a different size', 'UNVERIFIEDSIZE-w3fix', blobCase(
+    'size-mismatch-w3fix', 'https://blobs.example.test/evidence-refs/size-mismatch-w3fix.md', SIZE_MISMATCH_BYTES,
+    { hash: createHash('sha256').update(SIZE_MISMATCH_BYTES).digest('hex'), size: SIZE_MISMATCH_BYTES.length + 7 },
+  )],
+];
+
+/**
+ * The page without its citation part. The citation block's deliberative-process
+ * format reads "[Verified: <the record's date>]" on every record, blob or not
+ * (`src/lib/evidence/record-citation.ts`, outside this fix); it names no check
+ * of the output blob, so the word is read everywhere else.
+ */
+function outsideCitation(html: string): string {
+  const citation = partOf(html, 'citation');
+  assert.ok(citation !== null && citation.markup.includes('[Verified: '), 'premise: the citation block is where the format’s word sits');
+  return html.slice(0, citation.start) + html.slice(citation.end);
+}
+
+const answerParts = (html: string) => occurrences(html, '<div data-part="answer"').map((s) => html.slice(s, elementEnd(html, s, 'div')));
+const plain = (markup: string) => unescapeHtml(markup.replace(/<!-- -->/g, '').replace(/<[^>]*>/g, ''));
+
+test('W3 fix (1) fixtures: the two blobs that do not verify each fail one check only', () => {
+  assert.equal(HASH_MISMATCH_BYTES.length, OLD_OUTPUT_BYTES.length, 'the first has the reference’s size');
+  assert.notEqual(createHash('sha256').update(HASH_MISMATCH_BYTES).digest('hex'), OLD_OUTPUT_HASH, 'and a different SHA-256');
+  const second = NOT_VERIFYING[1][2].pkg as { output: { ref: string; size: number } };
+  assert.equal(second.output.ref, `blob:sha256:${createHash('sha256').update(SIZE_MISMATCH_BYTES).digest('hex')}`, 'the second carries its bytes’ own SHA-256');
+  assert.notEqual(second.output.size, SIZE_MISMATCH_BYTES.length, 'and a different size');
+});
+
+test('W3 fix (1) bytes whose SHA-256 and size match: one fetch, the note says verified, and the answer renders those bytes under the model’s line', async () => {
+  BLOB_REQUESTS.clear();
+  const html = await renderWithInstance(OLD, INSTANCE);
+  assert.equal(BLOB_REQUESTS.get(OLD_OUTPUT_URL), 1, 'the page fetches the blob once');
+  assert.ok(html.includes(`Output stored as blob (verified) · ${OLD_OUTPUT_BYTES.length.toLocaleString()} bytes`), 'the note says verified');
+  const answers = answerParts(html);
+  assert.equal(answers.length, 2, 'the answer, first and as F');
+  for (const a of answers) assert.ok(plain(a).includes(`${OLD_ANSWER}: 17 permits`), 'the answer renders the verified bytes');
+  assert.deepEqual(authorLines(html).filter((l) => l.key === 'answer').map((l) => l.text), [W3P2.answer(OLD_PACKAGE), W3P2.answer(OLD_PACKAGE)], 'under the model’s line, over the answer and over F');
+});
+
+for (const [name, marker, c] of NOT_VERIFYING) {
+  test(`W3 fix (1) bytes that do not verify (${name}): "verified" nowhere, the bytes not shown, the site’s sentence under no author line`, async () => {
+    BLOB_REQUESTS.clear();
+    const url = (c.pkg as { output: { url: string } }).output.url;
+    const html = await renderWithInstance(c, INSTANCE);
+    assert.equal(BLOB_REQUESTS.get(url), 1, 'premise: the page fetched the bytes, once');
+    assert.match(outsideCitation(await renderWithInstance(OLD, INSTANCE)), /\bverified\b/i, 'premise: the instrument sees the word on a blob that verifies');
+    assert.doesNotMatch(html, /\(verified\)/i, 'the blob note’s "(verified)" appears nowhere on the page');
+    assert.doesNotMatch(outsideCitation(html), /\bverified\b/i, '"verified" appears nowhere on the page outside the citation block');
+    assert.equal(html.includes(marker), false, 'the bytes that did not verify are not rendered');
+    const answers = answerParts(html);
+    assert.equal(answers.length, 2, 'the answer part is placed first and as F');
+    for (const a of answers) assert.ok(plain(a).includes(OUTPUT_DOES_NOT_MATCH), 'the answer states that the stored copy does not match');
+    assert.deepEqual(authorLines(html).filter((l) => l.key === 'answer' || l.key === 'computed'), [], 'no line names the model over the site’s words');
+    assert.ok(authorLines(html).some((l) => l.key === 'question'), 'premise: the other author lines stay');
+  });
+}
+
+test('W3 fix (1) read from the source: the page checks the blob with verify-core’s verifyBlobRef and computes no hash of its own', () => {
+  const source = fs.readFileSync(path.join(HERE, 'page.tsx'), 'utf8');
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  assert.match(code, /import\s*\{[^}]*\bverifyBlobRef\b[^}]*\}\s*from\s*'@\/lib\/evidence\/blob-ref'/, 'the page imports verifyBlobRef through the site’s blob-ref module');
+  assert.match(code, /\bverifyBlobRef\(/, 'and calls it');
+  assert.doesNotMatch(code, /createHash|sha256Hex|node:crypto|subtle\.digest/, 'the page computes no hash itself');
+  assert.doesNotMatch(code, /\bfetchBlobRefText\(/, 'nor fetches the blob as text a second time');
+});
+
+const CELL_MARK = 'CELLMARK-w3fix: the cell’s text, which differs from the output.';
+const OUTPUT_MARK = 'OUTPUTMARK-w3fix: the record’s signed output.';
+
+test('W3 fix (2) a record whose executed synthesis cell differs from its output: the answer and F render the output under the model’s line, and the cell stays in E', async () => {
+  for (const [name, outputs] of [
+    ['one markdown output', [markdownOutput(CELL_MARK)]],
+    ['a markdown output and a table the cell computed', [markdownOutput(CELL_MARK), CELL_TABLE]],
+  ] as const) {
+    const c = recordCarrying(executedNotebook([...outputs]), OUTPUT_MARK);
+    const html = await renderWithInstance(c, INSTANCE);
+    const answers = answerParts(html);
+    assert.equal(answers.length, 2, `${name}: the answer, first and as F`);
+    for (const a of answers) {
+      assert.ok(plain(a).includes('OUTPUTMARK-w3fix'), `${name}: the answer renders the signed output`);
+      assert.equal(a.includes('CELLMARK-w3fix'), false, `${name}: and not the cell’s text`);
+      assert.equal(a.includes('CELLTABLE-w3p2'), false, `${name}: nor the cell’s table`);
+    }
+    assert.deepEqual(
+      authorLines(html).filter((l) => l.key === 'answer' || l.key === 'computed').map((l) => l.text),
+      [W3P2.answer(c.pkg as typeof AGF_PACKAGE), W3P2.answer(c.pkg as typeof AGF_PACKAGE)],
+      `${name}: the model’s line alone, over the answer and over F`,
+    );
+    const d = requireDisclosure(html);
+    const e = sectionBody(html, 'E · Answer notebook', d.end);
+    assert.ok(e.includes('Preview cells (1 code, 2 total)'), `${name}: E renders the notebook, its synthesis cell counted`);
+  }
+});
+
+test('W3 fix (4) the record’s none: the site’s sentence, and no "written by the model" line in the answer or in F', async () => {
+  const pkg = structuredClone(OLD_PACKAGE) as Partial<typeof OLD_PACKAGE>;
+  delete pkg.output;
+  const html = await renderWithInstance({ ...OLD, record: { ...OLD.record, slug: 'none-record-w3fix' }, pkg }, INSTANCE);
+  const answers = answerParts(html);
+  assert.equal(answers.length, 2, 'the answer part is placed first and as F');
+  for (const a of answers) assert.ok(plain(a).includes('No synthesis was produced for this analysis.'), 'the answer part renders the site’s sentence');
+  assert.doesNotMatch(html, /Answer, written by the model/, 'no line names the model over it');
+  assert.ok(authorLines(html).some((l) => l.key === 'question'), 'premise: the other author lines stay');
 });

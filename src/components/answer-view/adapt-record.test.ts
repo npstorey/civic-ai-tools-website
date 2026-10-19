@@ -25,16 +25,19 @@
 //     paragraph, or what the person typed (`PublishEvidenceDialog.tsx`), and
 //     records none of the four. No line: an author is not guessed.
 //
-// THE FIXTURES CAN FAIL. Each package's `output` differs from its notebook's
-// rendering cell, so an adapter that read the wrong one shows it; each author
-// line is computed from §6's words with the fixture's instance and model.
+// THE FIXTURES CAN FAIL. A package whose answer comes from its `output`
+// carries an `output` that differs from its notebook's rendering cell, so an
+// adapter that read the wrong one shows it; a package whose answer comes from
+// the cell carries an `output` byte-equal to the cell's text (the W3 fix,
+// ruling 1: the record answers from the cell only then). Each author line is
+// computed from §6's words with the fixture's instance and model.
 //
 // Run with: npm test
 //   (or: node --test --experimental-strip-types src/components/answer-view/adapt-record.test.ts)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { adaptNotebook } from './adapt-notebook.ts';
+import { adaptNotebook, renderingCellText } from './adapt-notebook.ts';
 import { formatModelName } from '../../lib/models.ts';
 
 /**
@@ -124,17 +127,21 @@ function runAnswer(nb: unknown) {
 
 // --- Criterion (6): the answer -----------------------------------------------------
 
-test('W3 P2 (6) a record carrying an executed notebook with a rendering cell answers with that cell’s outputs, as adapt-notebook takes them', () => {
+// Rewritten by the W3 fix (ruling 1): the record answers from its executed
+// synthesis cell only when the cell's text is byte-equal to its signed
+// `output`, so this test's records carry an `output` equal to the cell's
+// markdown. The differing case is the W3 fix (2) test below.
+test('W3 P2 (6) a record carrying an executed notebook whose rendering cell’s text equals its output answers with that cell’s outputs, as adapt-notebook takes them', () => {
   for (const [name, outputs] of [
     ['one markdown output', [markdown(CELL_ANSWER)]],
     ['a markdown output and a table', [markdown(CELL_ANSWER), TABLE]],
   ] as const) {
     const nb = notebook('executed', [...outputs]);
-    const model = adapter()(input(pkg({}, nb)));
-    assert.notDeepEqual(model.answer?.content, { kind: 'markdown', markdown: OUTPUT }, `${name}: the answer is the cell’s, not the record’s output`);
+    const model = adapter()(input(pkg({ output: CELL_ANSWER }, nb)));
     assert.deepEqual(model.answer, runAnswer(nb), `${name}: the record’s answer part is the executed run’s, for the same notebook`);
   }
-  const table = adapter()(input(pkg({}, notebook('executed', [markdown(CELL_ANSWER), TABLE]))));
+  const table = adapter()(input(pkg({ output: CELL_ANSWER }, notebook('executed', [markdown(CELL_ANSWER), TABLE]))));
+  assert.equal(table.answer.content.kind, 'cell-outputs', 'premise: the table is answered from the cell, both outputs');
   assert.deepEqual(table.answer.authors.map((a: { text: string }) => a.text), [SECTION_6.answer, SECTION_6.computed], 'a table the cell computed names both authors');
 });
 
@@ -158,7 +165,8 @@ test('W3 P2 (6) an answer over 2000 characters reaches the model whole, from the
   assert.ok(long.length > 4000, 'premise: the answer is over 2000 characters, twice over');
   const fromOutput = adapter()(input(pkg({ output: long })));
   assert.equal(fromOutput.answer.content.markdown, long);
-  const fromCell = adapter()(input(pkg({}, notebook('executed', [markdown(long)]))));
+  // The W3 fix (ruling 1): the cell answers only when its text equals the output.
+  const fromCell = adapter()(input(pkg({ output: long }, notebook('executed', [markdown(long)]))));
   assert.equal(fromCell.answer.content.markdown, long);
 });
 
@@ -297,4 +305,100 @@ test('W3 P2 fix 1 (3) a multi-turn record’s transcript reaches the model whole
     extensions: { 'org.civicaitools.multi-turn': { version: '0.1.0', turns: [{ index: 0, role: 'user', content: 'x' }] } },
   })));
   assert.deepEqual(model.answer.content, { kind: 'markdown', markdown: transcript });
+});
+
+// --- The W3 fix ------------------------------------------------------------------
+//
+// (1) The blob note says "verified" only after the bytes verify: the page hands
+// the adapter `outputVerified` only when verify-core's check passed on the bytes
+// it renders, and `outputMismatch` when it did not. A blob whose bytes do not
+// verify is answered in the site's own words, under no author line, as an
+// unfetched one is.
+// (2) Ruling 1: the record answers from its executed synthesis cell only when
+// the cell's text (`renderingCellText`) is byte-equal to its signed `output`;
+// otherwise from `output`, and the cell stays in E.
+// (4) Nothing the site or the sandbox wrote sits under the model's line: the
+// record's `none` carries no author line.
+
+const OUTPUT_DOES_NOT_MATCH = 'The answer is not shown: the stored copy of this record’s output does not match the record’s reference to it. The package hash below identifies the record for audit.';
+const BLOB_REF = { ref: `blob:sha256:${'a'.repeat(64)}`, url: 'https://blobs.example.test/x.md', contentType: 'text/markdown', size: 1234 };
+
+function blobInput(resolutionFields: Record<string, unknown>, resolvedOutput: string) {
+  const stored = pkg({ output: BLOB_REF });
+  return {
+    stored,
+    resolution: { pkg: { ...stored, output: resolvedOutput }, outputIsBlob: true, outputBlobRef: BLOB_REF, skillTextIsBlob: false, skillTextBlobRef: null, ...resolutionFields },
+    row: ROW,
+    instance: INSTANCE,
+  };
+}
+
+test('W3 fix (1) the blob note says verified only when the page states the bytes verified', () => {
+  const verified = adapter()(blobInput({ outputVerified: true }, 'VERIFIEDTEXT-w3fix'));
+  assert.equal(verified.disclosure.answerNote, 'Output stored as blob (verified) · 1,234 bytes', 'premise: a verified blob carries the note');
+  assert.deepEqual(verified.answer.content, { kind: 'markdown', markdown: 'VERIFIEDTEXT-w3fix' });
+  assert.deepEqual(verified.answer.authors, [{ key: 'answer', text: SECTION_6.answer }], 'the verified bytes render under the model’s line');
+
+  const unstated = adapter()(blobInput({}, 'UNSTATED-w3fix'));
+  assert.equal(unstated.disclosure.answerNote, undefined, 'a blob the page did not state as verified is not called verified');
+});
+
+test('W3 fix (1) a blob whose bytes do not verify: the site’s sentence under no author line, no note, and not the bytes', () => {
+  const model = adapter()(blobInput({ outputMismatch: true }, ''));
+  assert.deepEqual(model.answer.content, { kind: 'unavailable', text: OUTPUT_DOES_NOT_MATCH }, 'the answer states, in the site’s words, that the stored copy does not match');
+  assert.deepEqual(model.answer.authors, [], 'no line names the model over the site’s words');
+  assert.equal(model.disclosure.answerNote, undefined, 'the note is not shown');
+  assert.equal(model.disclosure.answerAgain, true, 'F says so too');
+});
+
+test('W3 fix (2) renderingCellText: the rendering cell’s text/markdown outputs, flattened and joined in order', () => {
+  const error = { output_type: 'error', ename: 'ValueError', evalue: 'x', traceback: [] };
+  const stream = { output_type: 'stream', name: 'stdout', text: 'STREAM-w3fix' };
+  const cases: Array<[string, unknown[] | null, string]> = [
+    ['one markdown output', [markdown(CELL_ANSWER)], CELL_ANSWER],
+    ['a markdown output held as lines', [{ output_type: 'display_data', metadata: {}, data: { 'text/markdown': ['A-w3fix ', 'B-w3fix'] } }], 'A-w3fix B-w3fix'],
+    ['a markdown output and a table', [markdown(CELL_ANSWER), TABLE], CELL_ANSWER],
+    ['two markdown outputs, in order', [markdown('FIRST-w3fix'), TABLE, { output_type: 'execute_result', metadata: {}, data: { 'text/markdown': 'SECOND-w3fix' } }], 'FIRST-w3fixSECOND-w3fix'],
+    ['a markdown output beside a text/plain one', [{ output_type: 'display_data', metadata: {}, data: { 'text/markdown': 'MD-w3fix', 'text/plain': 'PLAIN-w3fix' } }], 'MD-w3fix'],
+    ['a table only', [TABLE], ''],
+    ['errors only', [error], ''],
+    ['a stream only', [stream], ''],
+    ['no outputs', [], ''],
+    ['no rendering cell', null, ''],
+  ];
+  for (const [name, outputs, text] of cases) {
+    assert.equal(renderingCellText(outputs as never), text, name);
+  }
+});
+
+test('W3 fix (2) a record whose executed synthesis cell differs from its output answers with the output, under the model’s line; the cell stays in E', () => {
+  const OUTPUT_MARK = 'OUTPUTMARK-w3fix: the record’s signed output.';
+  const CELL_MARK = 'CELLMARK-w3fix: the cell’s different text.';
+  const error = { output_type: 'error', ename: 'ValueError', evalue: 'ERRMARK-w3fix', traceback: [] };
+  for (const [name, outputs] of [
+    ['one markdown output', [markdown(CELL_MARK)]],
+    ['a markdown output and a table', [markdown(CELL_MARK), TABLE]],
+    ['a table and no markdown', [TABLE]],
+    ['errors only', [error]],
+  ] as const) {
+    const nb = notebook('executed', [...outputs]);
+    const model = adapter()(input(pkg({ output: OUTPUT_MARK }, nb)));
+    assert.deepEqual(model.answer.content, { kind: 'markdown', markdown: OUTPUT_MARK }, `${name}: the answer is the signed output`);
+    assert.deepEqual(model.answer.authors, [{ key: 'answer', text: SECTION_6.answer }], `${name}: under the model’s line alone`);
+    assert.equal(model.disclosure.answerAgain, true, `${name}: and again as F`);
+    assert.deepEqual(model.disclosure.recordNotebook.notebook, nb, `${name}: E carries the notebook as stored, its cell with it`);
+  }
+});
+
+test('W3 fix (2) all six production records’ shape: one display_data with text/markdown and text/plain, equal to output, answers from the cell', () => {
+  const md = 'SIXSHAPE-w3fix: the answer, in markdown.';
+  const nb = notebook('executed', [{ output_type: 'display_data', metadata: {}, data: { 'text/markdown': md, 'text/plain': '<IPython.core.display.Markdown object>' } }]);
+  const model = adapter()(input(pkg({ output: md }, nb)));
+  assert.deepEqual(model.answer, runAnswer(nb), 'the record’s answer is the executed run’s');
+});
+
+test('W3 fix (4) the record’s none: no author line', () => {
+  const model = adapter()(input(pkg({ output: undefined })));
+  assert.deepEqual(model.answer.content, { kind: 'none' }, 'premise: an output that is not text answers none');
+  assert.deepEqual(model.answer.authors, [], 'no line names the model over the site’s words');
 });

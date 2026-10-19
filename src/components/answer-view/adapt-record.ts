@@ -14,8 +14,10 @@
 //      unrecorded-outcomes sentence (D2), the request list read against the
 //      trace once (D1, #430);
 //   2. the answer, through the component every surface uses: for a record
-//      carrying an executed notebook with a rendering cell, that cell's outputs
-//      as `adapt-notebook.ts` takes them; otherwise the record's `output` (#115);
+//      carrying an executed notebook whose rendering cell's text is byte-equal
+//      to the record's signed `output`, that cell's outputs as
+//      `adapt-notebook.ts` takes them; otherwise the record's `output` (#115;
+//      the W3 fix, ruling 1: the record shows what it signed);
 //   3. the citation: the page's `CitationBlock`, under this instance's line;
 //   4. the steps: one per signed `queries[]` entry (`buildRecordStepView`);
 //   5. no sources line (see `record-page-layout.test.ts`'s W3 P2 header);
@@ -39,7 +41,7 @@
 // Relative, extension-carrying imports, so the module runs under `node --test`
 // with no loader, as the two run adapters beside it do.
 
-import { adaptNotebook } from './adapt-notebook.ts';
+import { adaptNotebook, renderingCellText } from './adapt-notebook.ts';
 import { AUTHOR, type AnswerPart, type AnswerViewModel, type EnvironmentItem, type RecordTraceEntry, type StatusFact, type StepsPart } from './view-model.ts';
 import { buildChatEvidenceView } from './buildChatEvidenceView.ts';
 import { buildRecordStepView, stepsAuthorLine } from '../../lib/answer-view/steps.ts';
@@ -71,6 +73,17 @@ export interface ResolvedPackageData {
   outputBlobRef: BlobRef | null;
   /** The output is a blob the page could not fetch: `pkg.output` holds a placeholder, not the model's words. */
   outputUnavailable?: boolean;
+  /**
+   * The output is a blob whose fetched bytes verify-core's check (`verifyBlobRef`)
+   * found to match the record's reference, and `pkg.output` holds those bytes.
+   * The blob note says "verified" only when this is true.
+   */
+  outputVerified?: boolean;
+  /**
+   * The output is a blob whose fetched bytes did not verify against the
+   * record's reference: `pkg.output` holds a placeholder, and the bytes are not shown.
+   */
+  outputMismatch?: boolean;
   skillTextIsBlob: boolean;
   skillTextBlobRef: BlobRef | null;
 }
@@ -102,6 +115,14 @@ export interface RecordAdapterInput {
 export const OUTPUT_UNAVAILABLE =
   'The answer is not shown: the stored copy of this record’s output could not be fetched. The package hash below identifies the record for audit.';
 
+/**
+ * The answer part's words when the output blob was fetched and its bytes do
+ * not match the record's reference. The site wrote them, so they sit under no
+ * author line, as `OUTPUT_UNAVAILABLE` does.
+ */
+export const OUTPUT_DOES_NOT_MATCH =
+  'The answer is not shown: the stored copy of this record’s output does not match the record’s reference to it. The package hash below identifies the record for audit.';
+
 /** The spec section the status row links an A-G-format record to. */
 export const DATHERE_SPEC_URL =
   'https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/typed-standards-specification.md#87-content-profile-dathere';
@@ -132,15 +153,31 @@ export function mcpServerHosts(servers: Array<{ url: string }> | undefined): str
 }
 
 /**
- * The answer. A record carrying an executed notebook with a rendering cell
- * that holds outputs answers with that cell's outputs, taken by the executed
- * run's own adapter so the two cannot differ; any other record answers with
- * its `output`, under the model's line.
+ * The answer: what the record signed (the W3 fix, ruling 1).
+ *   - An output blob the page could not fetch, or whose bytes did not verify,
+ *     is not shown: the site says so, under no author line.
+ *   - A record carrying an executed notebook whose rendering cell holds outputs
+ *     answers with that cell's outputs, taken by the executed run's own adapter
+ *     so the two cannot differ, ONLY when the cell's text (`renderingCellText`)
+ *     is byte-equal to the signed `output`. Otherwise a later divergence would
+ *     put unsigned text in the answer's place; the cell stays in E.
+ *   - Any other record answers with its `output`, under the model's line; a
+ *     record with no output text answers `none`, the site's sentence, under no
+ *     line (design §6).
  */
-function recordAnswer(pkg: EvidencePackage, notebook: unknown, modelName: string, outputUnavailable: boolean): AnswerPart {
+function recordAnswer(pkg: EvidencePackage, notebook: unknown, modelName: string, resolution: ResolvedPackageData | null): AnswerPart {
+  if (resolution?.outputUnavailable === true) {
+    return { content: { kind: 'unavailable', text: OUTPUT_UNAVAILABLE }, authors: [], streaming: false };
+  }
+  if (resolution?.outputMismatch === true) {
+    return { content: { kind: 'unavailable', text: OUTPUT_DOES_NOT_MATCH }, authors: [], streaming: false };
+  }
+  if (typeof pkg.output !== 'string') {
+    return { content: { kind: 'none' }, authors: [], streaming: false };
+  }
   if (notebook !== undefined && readNotebookProvenanceOfNotebook(notebook).state === 'executed') {
     const outputs = buildChatEvidenceView({ notebook: notebook as Notebook, prompt: '', model: '', portal: '', toolCalls: [] }).renderingCellOutputs;
-    if (outputs !== null && outputs.length > 0) {
+    if (outputs !== null && outputs.length > 0 && renderingCellText(outputs) === pkg.output) {
       return adaptNotebook({
         notebook: notebook as Notebook,
         prompt: '',
@@ -152,11 +189,8 @@ function recordAnswer(pkg: EvidencePackage, notebook: unknown, modelName: string
       }).answer;
     }
   }
-  if (outputUnavailable) {
-    return { content: { kind: 'unavailable', text: OUTPUT_UNAVAILABLE }, authors: [], streaming: false };
-  }
   return {
-    content: typeof pkg.output === 'string' ? { kind: 'markdown', markdown: pkg.output } : { kind: 'none' },
+    content: { kind: 'markdown', markdown: pkg.output },
     authors: [{ key: 'answer', text: AUTHOR.answer(modelName) }],
     streaming: false,
   };
@@ -270,7 +304,7 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
       refused: describeRefusedRequests(pkg.queries, fromTrace.refused),
       unrecorded: describeUnrecordedOutcomes(pkg),
     },
-    answer: recordAnswer(pkg, notebook, modelName, input.resolution?.outputUnavailable === true),
+    answer: recordAnswer(pkg, notebook, modelName, input.resolution),
     citation: null,
     recordCitation,
     steps,
@@ -287,8 +321,9 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
         ? { recordNotebook: { notebook, slug: row.slug, assertion: reproductionAssertionFor(notebook), bundleHref: isDatHere ? bundleHref : null } }
         : {}),
       answerAgain: true,
-      // Not for a blob the page could not fetch: it was not read, so not verified.
-      ...(input.resolution?.outputIsBlob && input.resolution.outputBlobRef && !input.resolution.outputUnavailable
+      // "Verified" only after verify-core's check passed on the bytes the page
+      // renders (the W3 fix); no note for a blob that was not fetched or did not verify.
+      ...(input.resolution?.outputIsBlob && input.resolution.outputBlobRef && input.resolution.outputVerified === true
         ? { answerNote: `Output stored as blob (verified) · ${input.resolution.outputBlobRef.size.toLocaleString()} bytes` }
         : {}),
       // G: the package's summary, else the row's, under no author line.

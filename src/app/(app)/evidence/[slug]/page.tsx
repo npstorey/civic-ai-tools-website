@@ -34,7 +34,7 @@ import ProvenanceGraphSection from '@/components/evidence/ProvenanceGraphSection
 // builders in lib so the SHAPE is unit-testable — including what it omits
 // (#256: no publication date is stored, so none is asserted).
 import { buildEvidenceJsonLd, buildEvidenceCitationTags } from '@/lib/evidence/page-metadata';
-import { isBlobRef, fetchBlobRefText, type BlobRef } from '@/lib/evidence/blob-ref';
+import { isBlobRef, verifyBlobRef, type BlobRef } from '@/lib/evidence/blob-ref';
 // The key the notebook sits under in a package (#403), imported from its
 // client-safe declaration rather than restated here: every producer writes
 // under that binding, and a local copy of the string is a reader that can look
@@ -46,9 +46,38 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
+/** An output blob, fetched once and checked: its text only when its bytes verified. */
+type OutputBlobResolution =
+  | { state: 'verified'; text: string }
+  | { state: 'unavailable' }
+  | { state: 'mismatch' };
+
+/** Fetch an output blob ONCE, then check THOSE bytes against the record's
+ *  reference with verify-core's own check (`verifyBlobRef`, size then
+ *  SHA-256), handed the bytes already held rather than a second fetch, so the
+ *  bytes that are checked are the bytes that are rendered (the W3 fix). The
+ *  request is the one `fetchBlobRefText` makes (a plain GET, 15 s), read as
+ *  bytes rather than text, because the check reads bytes. A blob that cannot
+ *  be fetched is `unavailable`; one whose bytes do not verify, for any of the
+ *  check's reasons, is `mismatch`, and its bytes are not returned. */
+async function resolveOutputBlob(ref: BlobRef): Promise<OutputBlobResolution> {
+  let bytes: Uint8Array;
+  try {
+    const response = await fetch(ref.url, { signal: AbortSignal.timeout(15_000) });
+    if (!response.ok) return { state: 'unavailable' };
+    bytes = new Uint8Array(await response.arrayBuffer());
+  } catch {
+    return { state: 'unavailable' };
+  }
+  const held = bytes;
+  const check = await verifyBlobRef(ref, { fetch: async () => new Response(new Uint8Array(held)) });
+  if (!check.ok) return { state: 'mismatch' };
+  return { state: 'verified', text: new TextDecoder().decode(held) };
+}
+
 /** Server-side resolution for blob-referenced fields in an evidence package.
- *  `output` is eagerly fetched so the answer (rendered first and again as
- *  section F) can treat it as a string. `skillMetadata.skillText` is handed through as a
+ *  `output` is eagerly fetched and checked (`resolveOutputBlob`) so the answer
+ *  (rendered first and again as section F) can treat it as a string. `skillMetadata.skillText` is handed through as a
  *  reference when it's a BlobRef — the skill section expands on click and
  *  fetches lazily, so there's no point paying the latency up front. The
  *  result's shape (`ResolvedPackageData`) is the record adapter's input. */
@@ -56,14 +85,20 @@ async function resolvePackageForRender(pkg: EvidencePackage): Promise<ResolvedPa
   const outputIsBlob = isBlobRef(pkg.output);
   const outputBlobRef = outputIsBlob ? (pkg.output as BlobRef) : null;
   let resolvedOutput: string;
-  // An output blob that cannot be fetched is said so by the record adapter, in
-  // the site's words under no author line (`OUTPUT_UNAVAILABLE`); the empty
-  // string here is never rendered as the answer.
+  // An output blob that cannot be fetched, or whose bytes do not verify, is
+  // said so by the record adapter, in the site's words under no author line
+  // (`OUTPUT_UNAVAILABLE`, `OUTPUT_DOES_NOT_MATCH`); the empty string here is
+  // never rendered as the answer, and bytes that did not verify reach no part
+  // of the page.
   let outputUnavailable = false;
-  if (outputIsBlob) {
-    const fetched = await fetchBlobRefText(pkg.output as BlobRef);
-    outputUnavailable = fetched === null;
-    resolvedOutput = fetched ?? '';
+  let outputVerified = false;
+  let outputMismatch = false;
+  if (outputBlobRef !== null) {
+    const blob = await resolveOutputBlob(outputBlobRef);
+    outputUnavailable = blob.state === 'unavailable';
+    outputMismatch = blob.state === 'mismatch';
+    outputVerified = blob.state === 'verified';
+    resolvedOutput = blob.state === 'verified' ? blob.text : '';
   } else {
     resolvedOutput = pkg.output as string;
   }
@@ -90,6 +125,8 @@ async function resolvePackageForRender(pkg: EvidencePackage): Promise<ResolvedPa
     outputIsBlob,
     outputBlobRef,
     outputUnavailable,
+    outputVerified,
+    outputMismatch,
     skillTextIsBlob,
     skillTextBlobRef,
   };

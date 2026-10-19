@@ -10,13 +10,15 @@
 //      `describeRefusedRequests`' line;
 //   2. the answer: the rendering cell's outputs (one markdown output is a
 //      markdown answer, rendered by the same component as the comparison's),
-//      else the legacy synthesis section, else nothing;
+//      else the legacy synthesis section, else nothing; under the model's line
+//      unless the site or the sandbox wrote it (`answerIsNotTheModels`);
 //   3. the citation preview;
 //   4. the steps: one per Phase A iteration (`buildRunStepView`), then the B,
 //      C and D rows (`buildClosingRows`) — only when the run recorded steps;
 //   5. the sources line: `buildProvenanceLine` under the hosts the answered
 //      calls named (`coverPortals`, answered calls only);
-//   6. the disclosure: A-G and the signers, as before.
+//   6. the disclosure: A-G and the signers, as before; the signers' production
+//      method states the notebook's own reading (the W3 fix, F2).
 //
 // Relative, extension-carrying imports, so the module runs under `node --test`
 // with no loader; `buildChatEvidenceView.ts` beside it is the precedent.
@@ -79,6 +81,37 @@ function answerContent(outputs: NotebookOutput[] | null, synthesisMarkdown: stri
   return synthesisMarkdown ? { kind: 'markdown', markdown: synthesisMarkdown } : { kind: 'none' };
 }
 
+/**
+ * The rendering cell's text: its `text/markdown` outputs (on a `display_data`
+ * or `execute_result` output, as `answerContent` reads one), each flattened,
+ * joined in order. A cell with no markdown output — a table only, errors only,
+ * a stream, no outputs, or no rendering cell — has text `''`.
+ *
+ * The record adapter compares this with the record's signed `output` (the W3
+ * fix, ruling 1): the record answers from its executed cell only when the two
+ * are byte-equal.
+ */
+export function renderingCellText(outputs: NotebookOutput[] | null): string {
+  if (outputs === null) return '';
+  return outputs
+    .filter((o) => o.output_type === 'display_data' || o.output_type === 'execute_result')
+    .map((o) => flatten(o.data?.['text/markdown']))
+    .join('');
+}
+
+/**
+ * Whether the answer is text the site or the sandbox wrote, not the model: the
+ * site's sentence for no synthesis (`none`) or for a cell with no outputs, or a
+ * cell whose only outputs are the sandbox's errors. Design §6: nothing the site
+ * wrote sits under a label that names the model, and §6 has no words for the
+ * sandbox's error. A mixed set (markdown beside an error, a stream) keeps the
+ * model's line.
+ */
+function answerIsNotTheModels(content: AnswerContent): boolean {
+  if (content.kind === 'none') return true;
+  return content.kind === 'cell-outputs' && content.outputs.every((o) => o.output_type === 'error');
+}
+
 function flatten(value: string | string[] | undefined): string {
   if (!value) return '';
   return Array.isArray(value) ? value.join('') : value;
@@ -134,7 +167,10 @@ export function adaptNotebook(input: NotebookAdapterInput): AnswerViewModel {
   );
 
   const content = answerContent(view.renderingCellOutputs, view.synthesisMarkdown);
-  const authors: AnswerViewModel['answer']['authors'] = [{ key: 'answer', text: AUTHOR.answer(modelName) }];
+  // The W3 fix (F3): no author line over what the site or the sandbox wrote.
+  const authors: AnswerViewModel['answer']['authors'] = answerIsNotTheModels(content)
+    ? []
+    : [{ key: 'answer', text: AUTHOR.answer(modelName) }];
   // A part with two authors names both (§6): the tables and figures a cell
   // computed — said only of a notebook whose own reading is that it ran.
   if (content.kind === 'cell-outputs' && reading.state === 'executed' && computesTablesOrFigures(content.outputs)) {
@@ -178,7 +214,9 @@ export function adaptNotebook(input: NotebookAdapterInput): AnswerViewModel {
     citation: {
       prompt: view.prompt,
       executedAt: view.executedAt,
-      statesExecution: true,
+      // The preview states "Executed" and a date only for a notebook whose own
+      // reading is that it ran (the W3 fix, criterion 3).
+      statesExecution: reading.state === 'executed',
       structuredSummary: view.structuredSummary,
       author: AUTHOR.citation(input.instance),
     },
@@ -199,7 +237,12 @@ export function adaptNotebook(input: NotebookAdapterInput): AnswerViewModel {
       notebook: { notebook: view.notebook, scopeSentence: reproductionScopeSentence(readReproductionClaim(view.notebook.cells)) },
       answerAgain: true,
       summary,
-      signers: { executedAt: view.executedAt, signingKeyId: view.signingKeyId },
+      // The production method states the notebook's own reading, as the status row does (the W3 fix, F2).
+      signers: {
+        executedAt: view.executedAt,
+        signingKeyId: view.signingKeyId,
+        provenance: { state: reading.state, label: reading.label, detail: reading.detail ?? null },
+      },
     },
   };
 }

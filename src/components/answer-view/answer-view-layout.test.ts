@@ -588,15 +588,12 @@ function before(html: string, needle: string, surface: string): void {
 }
 
 test('W3 P1 (4) every honest-provenance sentence the run states renders outside the disclosure, in the reader’s spelling', async () => {
-  // The sandbox sentence's two spellings: the reader's ("a signed sandbox"),
-  // which the status row now states, and the run's older one, which the
-  // signers' "Production method" still states inside the disclosure.
+  // The sandbox sentence in the reader's spelling ("a signed sandbox"), which
+  // the status row states. Tightened by the W3 fix: the signers' "Production
+  // method" now states the notebook's own reading too, so the run's older
+  // spelling is nowhere on the run.
   before(RUN, 'Executed in a signed sandbox', 'the executed run');
-  const d = requireDisclosure(RUN);
-  for (const i of occurrences(RUN, 'Executed in signed sandbox')) {
-    assert.ok(i > d.start && i < d.end, 'the older spelling appears only inside the disclosure, in the signers');
-  }
-  assert.ok(!part(RUN, 'status-row').markup.includes('Executed in signed sandbox'), 'the status row no longer states the older spelling');
+  assert.equal(occurrences(RUN, 'Executed in signed sandbox').length, 0, 'the older spelling is nowhere on the run');
   before(RUN, '1 of 4 requests did not complete.', 'the executed run');
   before(RUN, 'This request did not complete.', 'the executed run');
   for (const [provenance, sentence] of [['skeleton', 'Analysis notebook (not executed)'], [null, 'Whether this notebook ran is not stated']] as const) {
@@ -781,4 +778,114 @@ test('W3 P1 (9) the live view: no text the site writes names a tool by its expos
   const text = readerFacing(html);
   const i = text.indexOf('__');
   assert.equal(i, -1, `the live view prints an exposed name: …${text.slice(Math.max(0, i - 80), i + 40)}…`);
+});
+
+// --- The W3 fix -----------------------------------------------------------------
+//
+// (3) F2: the signers' production method states the notebook's own reading
+// (`readNotebookProvenanceOfNotebook`: its label, then its detail), as the
+// status row does. A notebook that did not run, or does not say, renders no
+// sentence that claims execution. The two not-run fixtures carry no execution
+// stamp, as a notebook that was not executed does not, so each reading's words
+// can only come from that reading.
+// (4) F3: an answer the site or the sandbox wrote — the run's `none`, a cell
+// with no outputs, a cell whose only outputs are errors — sits under no
+// "written by the model" line, in the answer or in F. A mixed set keeps today's.
+
+const { NOTEBOOK_PROVENANCE_SIGNALS } = await import('@/lib/evidence/trust-signal');
+
+function renderNotebook(notebook: Record<string, unknown>): string {
+  return withProviders(createElement(ChatNotebookOutput, { notebook, prompt: QUESTION, model: MODEL, portal: PORTAL, toolCalls: [] }));
+}
+
+function withoutExecutionStamp(notebook: Record<string, unknown>): Record<string, unknown> {
+  const extensions = (notebook.metadata as { extensions: Record<string, unknown> }).extensions;
+  delete extensions['org.civicaitools.execution'];
+  return notebook;
+}
+
+const plainText = (markup: string) => unescape(markup.replace(/<!-- -->/g, '').replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ');
+
+/** The text between the signers' "Production method" heading and the next heading. */
+function productionMethod(html: string): string {
+  const from = at(html, '>Production method</h3>');
+  const to = html.lastIndexOf('<h3', at(html, '>Attestations</h3>', from));
+  return plainText(html.slice(from + 1, to));
+}
+
+/** Sentences that claim the notebook ran: the executed reading's words, and the run's older ones. */
+const EXECUTION_CLAIMS = [
+  NOTEBOOK_PROVENANCE_SIGNALS.executed.label,
+  NOTEBOOK_PROVENANCE_SIGNALS.executed.detail as string,
+  'Executed in signed sandbox',
+  'real cell execution',
+  'authored, executed',
+  'Executed:',
+  'execution metadata',
+  'Execution captured',
+];
+
+const PROVENANCE_CASES: Array<[string, Record<string, unknown>]> = [
+  ['executed', notebookWith([markdownOutput(RUN_ANSWER)], 'executed')],
+  ['not executed', withoutExecutionStamp(notebookWith([markdownOutput(RUN_ANSWER)], 'skeleton'))],
+  ['provenance not stated', withoutExecutionStamp(notebookWith([markdownOutput(RUN_ANSWER)], null))],
+];
+
+test('W3 fix (3) the signers’ production method states the notebook’s own reading: its label, then its detail', () => {
+  for (const [name, notebook] of PROVENANCE_CASES) {
+    const reading = readNotebookProvenanceOfNotebook(notebook);
+    const method = productionMethod(renderNotebook(notebook));
+    const label = method.indexOf(reading.label);
+    assert.ok(label >= 0, `${name}: the production method states "${reading.label}": ${method}`);
+    assert.ok(method.indexOf(reading.detail as string, label) > label, `${name}: and under it "${reading.detail}"`);
+    for (const other of PROVENANCE_CASES.filter(([n]) => n !== name)) {
+      const words = readNotebookProvenanceOfNotebook(other[1]);
+      assert.equal(method.includes(words.label), false, `${name}: and not another reading’s "${words.label}"`);
+    }
+    assert.ok(method.includes('The signed envelope is created at publish time.'), `${name}: the sentence true under every reading stays`);
+  }
+});
+
+test('W3 fix (3) a notebook that did not run, or does not say, renders no sentence that claims execution', () => {
+  const executed = plainText(renderNotebook(PROVENANCE_CASES[0][1]));
+  // The run's two older phrases are retired by this fix, so the premise reads the others.
+  for (const claim of EXECUTION_CLAIMS.filter((c) => c !== 'Executed in signed sandbox' && c !== 'authored, executed')) {
+    assert.ok(executed.includes(claim), `premise: the instrument sees "${claim}" on the executed notebook’s run`);
+  }
+  for (const [name, notebook] of PROVENANCE_CASES.slice(1)) {
+    const text = plainText(renderNotebook(notebook));
+    for (const claim of EXECUTION_CLAIMS) assert.equal(text.includes(claim), false, `${name}: the run states "${claim}"`);
+  }
+});
+
+const errorOutput = { output_type: 'error', ename: 'ValueError', evalue: 'ERRMARK-w3fix', traceback: ['TRACEMARK-w3fix'] };
+
+test('W3 fix (4) the run’s none, a cell with no outputs, and a cell whose only outputs are errors: each renders its own text, under no "written by the model" line', () => {
+  const none = notebookWith([], 'executed');
+  (none.cells as unknown[]).splice(1, 1, { cell_type: 'markdown', metadata: {}, source: ['# No rendering cell, no synthesis section\n'] });
+  const cases: Array<[string, Record<string, unknown>, string]> = [
+    ['the run’s none', none, 'No synthesis was produced for this analysis.'],
+    ['an executed cell with no outputs', notebookWith([], 'executed'), 'The synthesis cell did not produce any outputs.'],
+    ['a cell whose only outputs are errors', notebookWith([errorOutput, { ...errorOutput, evalue: 'ERRMARK2-w3fix' }], 'executed'), 'ValueError: ERRMARK-w3fix'],
+  ];
+  for (const [name, notebook, fallback] of cases) {
+    const html = renderNotebook(notebook);
+    const answers = occurrences(html, '<div data-part="answer"').map((s) => html.slice(s, elementEnd(html, s, 'div')));
+    assert.equal(answers.length, 2, `${name}: the answer part is placed first and as F`);
+    for (const a of answers) assert.ok(plainText(a).includes(fallback), `${name}: the answer part renders "${fallback}"`);
+    assert.doesNotMatch(html, /Answer, written by the model/, `${name}: no line names the model as the answer’s author`);
+    assert.deepEqual(authorLines(html).filter((l) => l.key === 'answer' || l.key === 'computed'), [], `${name}: no answer author line`);
+    assert.ok(authorLines(html).some((l) => l.key === 'question'), `${name}: premise: the other author lines stay`);
+  }
+});
+
+test('W3 fix (4) a mixed set keeps today’s line: markdown beside an error, and a stream output', () => {
+  const stream = { output_type: 'stream', name: 'stdout', text: 'STREAMMARK-w3fix' };
+  for (const [name, outputs] of [
+    ['markdown beside an error', [markdownOutput(RUN_ANSWER), errorOutput]],
+    ['a stream output', [stream]],
+  ] as const) {
+    const html = renderNotebook(notebookWith([...outputs], 'executed'));
+    assert.deepEqual(authorLines(html).filter((l) => l.key === 'answer').map((l) => l.text), [SECTION_6.answer, SECTION_6.answer], `${name}: the model’s line, over the answer and over F`);
+  }
 });

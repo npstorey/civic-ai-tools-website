@@ -1,6 +1,7 @@
 'use client';
 
 import { toDisplayHost, useEvidenceSiteOrigin } from '@/components/EvidenceOriginProvider';
+import type { NotebookProvenanceState } from '@/lib/notebook-author/notebook-provenance-reading';
 
 /**
  * Phase 2a1 — Signers + attestations placeholder beneath the A-G output.
@@ -17,8 +18,10 @@ import { toDisplayHost, useEvidenceSiteOrigin } from '@/components/EvidenceOrigi
  *   - Signed by — pre-publish: dashed border + italic copy + key id
  *     "will sign at publish time." Post-publish (detail page), the
  *     equivalent renders a solid-border "signed Ed25519ph at <date>" row.
- *   - Production method — captureMethod-discipline labeling ("Executed in
- *     signed sandbox"; per ADR-0004 § captureMethod label).
+ *   - Production method — the notebook's own reading of whether it ran
+ *     (`readNotebookProvenanceOfNotebook`: its label, then its detail), the
+ *     words the status row and the record page use (LAYOUT-WEB W3 fix, F2).
+ *     A sentence beside it is said only under a reading it is true for.
  *   - Attestations — placeholder framing ("none yet"); attestations attach
  *     after publish.
  *
@@ -33,6 +36,8 @@ interface ChatSignersSectionProps {
    *  Surfaced in the pre-publish signer copy so the reader knows which key
    *  the eventual signature will be anchored under. */
   signingKeyId?: string | null;
+  /** The notebook's own reading of whether it ran: the production method states it. */
+  provenance: { state: NotebookProvenanceState; label: string; detail: string | null };
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -52,9 +57,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function PlatformPendingSignerRow({
   signingKeyId,
   executedAt,
+  executed,
 }: {
   signingKeyId: string | null;
   executedAt: string | null;
+  /** The notebook's own reading is that it ran: only then is there execution metadata to speak of. */
+  executed: boolean;
 }) {
   // Instance identity (#227 class): this row names WHO will sign at publish
   // time — the platform signer, which is publisher identity (site-config.ts's
@@ -109,9 +117,12 @@ function PlatformPendingSignerRow({
           (Ed25519ph; key id <code style={{
             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
             background: 'transparent', padding: '0 2px',
-          }}>{keyIdLabel}</code>). The notebook execution
-          metadata (executedAt, environment, sandboxId) is captured now but
-          is not yet cryptographically signed.
+          }}>{keyIdLabel}</code>).{executed && (
+            <>
+              {' '}The notebook execution metadata (executedAt, environment,
+              sandboxId) is captured now but is not yet cryptographically signed.
+            </>
+          )}
         </div>
         {executedAtLabel && (
           <div style={{
@@ -157,12 +168,13 @@ function EmptyTierRow({ tier }: { tier: 'publisher' | 'host' }) {
   );
 }
 
-export default function ChatSignersSection({ executedAt, signingKeyId }: ChatSignersSectionProps) {
+export default function ChatSignersSection({ executedAt, signingKeyId, provenance }: ChatSignersSectionProps) {
+  const executed = provenance.state === 'executed';
   return (
     <>
       <Section title="Signed by">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <PlatformPendingSignerRow signingKeyId={signingKeyId ?? null} executedAt={executedAt} />
+          <PlatformPendingSignerRow signingKeyId={signingKeyId ?? null} executedAt={executedAt} executed={executed} />
           <EmptyTierRow tier="publisher" />
           <EmptyTierRow tier="host" />
         </div>
@@ -187,11 +199,13 @@ export default function ChatSignersSection({ executedAt, signingKeyId }: ChatSig
             fontSize: '11px', fontWeight: 700,
           }}>↻</span>
           <div>
-            <div style={{ fontWeight: 500 }}>Executed in signed sandbox</div>
+            <div style={{ fontWeight: 500 }}>{provenance.label}</div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Notebook authored, executed, and stamped by the publisher
-              pipeline; outputs derive from real cell execution against live
-              upstream data. The signed envelope is created at publish time.
+              {provenance.detail !== null && <>{provenance.detail}{' '}</>}
+              {/* True only of a notebook that ran. */}
+              {executed && <>Outputs derive from real cell execution against live upstream data.{' '}</>}
+              {/* True under every reading. */}
+              The signed envelope is created at publish time.
             </div>
           </div>
         </div>
