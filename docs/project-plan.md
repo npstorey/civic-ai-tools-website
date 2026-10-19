@@ -231,7 +231,7 @@ Reading the body:
   injects into Socrata calls included — plus `operationType`, `reason`,
   `duration_ms` and `resultSummary` where each can be derived.
 - A call that **failed** carries `"failed": true` and a `failureKind` (`timeout`,
-  `unavailable`, `not_configured` or `unknown`) in place of a `resultSummary`. A
+  `unavailable`, `not_configured`, `not_offered` or `unknown`) in place of a `resultSummary`. A
   failed call and a zero-row one are otherwise indistinguishable (#321), and one
   failed call does not fail the comparison.
 

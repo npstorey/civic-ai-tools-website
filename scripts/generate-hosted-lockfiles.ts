@@ -1,9 +1,9 @@
 // Generate the lockfiles a hosted source's sandbox installs from (#617 P4,
-// criterion L): one for each hosted manifest entry's pinned package, one for
+// criterion L): one for each npm-package hosting variant's pinned package, one for
 // the bridge's packages. Writes `src/lib/mcp/hosting/lockfiles.generated.ts`.
 //
-// WHEN TO RUN IT. Whenever a hosted source's pin moves (the router manifest's
-// `hosting.version`, through a router bump) or `BRIDGE_PACKAGES` moves
+// WHEN TO RUN IT. Whenever a hosted source's pin moves (the `version` of an
+// npm-package hosting variant in the router manifest, through a router bump) or `BRIDGE_PACKAGES` moves
 // (`src/lib/mcp/hosting/bridge-source.ts`). `lockfiles.test.ts` fails until it
 // has been re-run, because each lockfile's root must equal the pin it was
 // resolved for. Commit the generated module with the move.
