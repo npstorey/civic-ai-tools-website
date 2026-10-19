@@ -473,7 +473,9 @@ export default async function EvidencePage({ params }: PageProps) {
             A-G, then the parts W1 placed after the envelope — then Status
             History and the actions. Everything a layout must not hide (rule 3)
             sits outside the disclosure: the banners above, the status row and
-            the refused-request lines, and the verify action in Actions. */}
+            the refused-request lines, and the verify action in Actions. The
+            parts W1 placed after the envelope go to the view by name, so a
+            layout's `disclosure.order` can place each (LAYOUT-WEB W4 P1). */}
         <AnswerView
           model={viewModel}
           sectionHeading="h2"
@@ -489,52 +491,51 @@ export default async function EvidencePage({ params }: PageProps) {
               origin={requestOrigin}
             />
           }
-          disclosureExtras={
-            <>
-              {/* Provenance Graph (W3C PROV-O) */}
-              {renderPkg?.provenance && (
-                <Section title="Provenance Graph">
-                  <ProvenanceGraphSection provenance={renderPkg.provenance} slug={slug} />
+          recordSections={{
+            // Provenance Graph (W3C PROV-O)
+            'provenance-graph': renderPkg?.provenance && (
+              <Section title="Provenance Graph">
+                <ProvenanceGraphSection provenance={renderPkg.provenance} slug={slug} />
+              </Section>
+            ),
+
+            // Unknown extensions — graceful fallback for other adopters' artifacts
+            'additional-artifacts': (() => {
+              if (!renderPkg?.extensions) return null;
+              const unknown = Object.keys(renderPkg.extensions).filter(k => k !== NOTEBOOK_EXTENSION_KEY);
+              if (unknown.length === 0) return null;
+              return (
+                <Section title="Additional Artifacts">
+                  <div style={{
+                    padding: '12px 16px', border: '1px solid var(--border-color)',
+                    borderRadius: '6px', backgroundColor: 'white',
+                    fontSize: '13px', color: 'var(--text-secondary)',
+                  }}>
+                    <p style={{ margin: '0 0 6px' }}>
+                      This record package contains artifacts from other extensions:
+                    </p>
+                    <ul style={{ margin: 0, paddingLeft: '20px', fontFamily: 'monospace', fontSize: '12px' }}>
+                      {unknown.map(k => <li key={k}>{k}</li>)}
+                    </ul>
+                    <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                      Download the full package to inspect them.
+                    </p>
+                  </div>
                 </Section>
-              )}
+              );
+            })(),
 
-              {/* Unknown extensions — graceful fallback for other adopters' artifacts */}
-              {(() => {
-                if (!renderPkg?.extensions) return null;
-                const unknown = Object.keys(renderPkg.extensions).filter(k => k !== NOTEBOOK_EXTENSION_KEY);
-                if (unknown.length === 0) return null;
-                return (
-                  <Section title="Additional Artifacts">
-                    <div style={{
-                      padding: '12px 16px', border: '1px solid var(--border-color)',
-                      borderRadius: '6px', backgroundColor: 'white',
-                      fontSize: '13px', color: 'var(--text-secondary)',
-                    }}>
-                      <p style={{ margin: '0 0 6px' }}>
-                        This record package contains artifacts from other extensions:
-                      </p>
-                      <ul style={{ margin: 0, paddingLeft: '20px', fontFamily: 'monospace', fontSize: '12px' }}>
-                        {unknown.map(k => <li key={k}>{k}</li>)}
-                      </ul>
-                      <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-                        Download the full package to inspect them.
-                      </p>
-                    </div>
-                  </Section>
-                );
-              })()}
+            // Adversarial evaluations (civic-ai-tools#72) — signed
+            // attestation/evaluates/v1 nodes targeting this content node,
+            // emitted by the publication gate (or future third-party
+            // evaluators). Renders nothing when no evaluations exist.
+            evaluations: evaluationViews.length > 0 && (
+              <Section title="Adversarial evaluations">
+                <EvaluationAttestationsSection views={evaluationViews} />
+              </Section>
+            ),
 
-              {/* Adversarial evaluations (civic-ai-tools#72) — signed
-                  attestation/evaluates/v1 nodes targeting this content node,
-                  emitted by the publication gate (or future third-party
-                  evaluators). Renders nothing when no evaluations exist. */}
-              {evaluationViews.length > 0 && (
-                <Section title="Adversarial evaluations">
-                  <EvaluationAttestationsSection views={evaluationViews} />
-                </Section>
-              )}
-
-              {/* Attestations */}
+            attestations: (
               <Section title="Attestations">
                 <AttestationSection
                   slug={slug}
@@ -542,8 +543,9 @@ export default async function EvidencePage({ params }: PageProps) {
                   promptVisibility={record.promptVisibility}
                 />
               </Section>
+            ),
 
-              {/* Verification Status */}
+            verification: (
               <Section title="Verification Status">
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
                   <StatusBadge status={record.verificationStatus} />
@@ -567,8 +569,8 @@ export default async function EvidencePage({ params }: PageProps) {
                   )}
                 </div>
               </Section>
-            </>
-          }
+            ),
+          }}
           afterDisclosure={
             <>
               {/* Status History — shown when the record has a withdrawal/reinstatement

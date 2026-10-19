@@ -361,6 +361,17 @@ export const ENV_SPEC = [
   // and prerendered pages bake what the layout resolved. The routes and the
   // loop read it at request time and enforce it whatever a page rendered.
   { name: 'SITE_PORTAL_LOCKED', readBy: 'build-and-runtime', tier: 'optional', purpose: "Serve ONE Socrata portal: '1'/'true' makes SITE_DEFAULT_PORTAL the only Socrata portal the query routes and the model's socrata__get_data/socrata__fetch calls (or get_data/fetch, the bare names) use; a request or call naming another is refused. Data Commons and Boston OpenContext stay outside it. Off by default", hasFallback: true },
+  // The answer view's layout (LAYOUT-WEB W4 P1). No coded fallback is needed:
+  // absent, every surface renders the built-in `answer-first`. Read at both
+  // times for the reason SITE_DEFAULT_PORTAL is: the root layout resolves it
+  // for every answer view, and the prerendered home page bakes what the layout
+  // resolved, so a malformed value fails `next build`; request-time pages read
+  // the running server's and refuse under a malformed one. The two document
+  // forms are one setting, so setting both is refused; the URL form is
+  // refused until it is built.
+  { name: 'ANSWER_LAYOUT', readBy: 'build-and-runtime', tier: 'optional', purpose: "The answer view's default layout as a JSON document, the seven content/layout/v1 payload fields (spec 8.14.1) — absent, the built-in answer-first; malformed, the build fails and every page refuses; setting it and ANSWER_LAYOUT_PATH both is refused", hasFallback: true },
+  { name: 'ANSWER_LAYOUT_PATH', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Path to a file holding the same layout document — the file-delivered form of ANSWER_LAYOUT; the file must be readable where next build runs as well as by the server', hasFallback: true },
+  { name: 'ANSWER_LAYOUT_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: "A published layout node's package URL — not read yet: set, it is refused, so the instance never renders with a layout other than the one it names", hasFallback: true },
 
   // --- Record publish + verify (the demo centerpiece: publish → badge) ---
   { name: 'DATABASE_URL', tier: 'required', purpose: 'Record DB — publish + dashboard + detail page' },

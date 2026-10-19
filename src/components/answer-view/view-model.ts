@@ -14,14 +14,20 @@ import type { ClosingRow, ProgressGroup, ProgressLogEntry, StepCall, StepView } 
 import type { DeliberativeTraceLine, NotebookOutput } from './buildChatEvidenceView.ts';
 import type { SkillDisclosure } from '../../lib/evidence/skill-disclosure.ts';
 import type { NotebookProvenanceState } from '../../lib/notebook-author/notebook-provenance-reading.ts';
+import { PAGE_PART_VIEWS, type PagePartView } from '../../lib/answer-layout/index.ts';
 
 // --- The order -------------------------------------------------------------------
 
-/** The seven parts, in the order a reader meets them (design §4.1). */
-export const PART_ORDER = ['status-row', 'answer', 'citation', 'steps', 'sources', 'disclosure', 'actions'] as const;
-export type PartName = (typeof PART_ORDER)[number];
+/**
+ * The seven parts, in their default places: the order a reader meets them
+ * (design §4.1) when the layout is `answer-first`. Since LAYOUT-WEB W4 P1 the
+ * view places them by the layout (`src/lib/answer-layout/`), whose part table
+ * this is.
+ */
+export const PART_ORDER: readonly PagePartView[] = PAGE_PART_VIEWS;
+export type PartName = PagePartView;
 
-/** The one disclosure's label (LAYOUT-W1, kept). */
+/** The one disclosure's label (LAYOUT-W1, kept): both built-in layouts carry it. */
 export const DISCLOSURE_LABEL = 'Learn more about how this analysis was produced';
 
 // --- Who wrote each part (design §6) ------------------------------------------------

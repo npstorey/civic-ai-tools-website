@@ -6,7 +6,10 @@
  * (`CitationBlock`), and the Cite button in Actions opens a modal
  * (`CitePopover` in `EvidenceActions.tsx`). Both call this, so the two cannot
  * state different text for the same record. The formats are the ones the
- * modal wrote before this builder existed, word for word.
+ * modal wrote before this builder existed, word for word, with one word since
+ * changed: the deliberative format dates the record "[Published: <date>]", the
+ * word the plain text uses for the same date (LAYOUT-WEB W4 P1). It read
+ * "[Verified: <date>]", which named no check the record had passed.
  *
  * THE DATE IS THE UTC DATE. The block is rendered on the server and hydrated in
  * the browser, and the modal is rendered in the browser only. A date formatted
@@ -59,7 +62,7 @@ export function buildRecordCitations(input: RecordCitationInput): RecordCitation
     },
     {
       label: 'For deliberative process reference',
-      text: `Record: ${title} [Verified: ${dateStr}] ${url}`,
+      text: `Record: ${title} [Published: ${dateStr}] ${url}`,
     },
   ];
 }

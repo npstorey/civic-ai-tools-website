@@ -28,6 +28,17 @@
  * A part the surface does not have is not rendered. The record page sets its
  * sections at `h2`, under its own `h1` (`sectionHeading`).
  *
+ * THE LAYOUT (LAYOUT-WEB W4 P1). The order above is the parts' default places,
+ * and the `answer-first` layout's order. A layout (`src/lib/answer-layout/`)
+ * reorders the parts and the disclosure's sections by name; a part it does not
+ * name renders at its default place, and a name the view does not know renders
+ * nothing, so no part is dropped (layout rule 2). The layout is the instance's
+ * (`AnswerLayoutsProvider.tsx`, mounted in the root layout; the built-ins
+ * when none is mounted), or the one the
+ * reader chose for the session with the toggle at the foot of the view, beside
+ * the line that names the layout (rule 5). Both sit outside the disclosure.
+ * The server, and a reader who has not chosen, render the instance's default.
+ *
  * WHO WROTE EACH PART. Every author line comes from the model (`AUTHOR` in
  * `view-model.ts`, design §6) and is rendered with `data-author`; this file
  * places the lines and never writes one. An honest-provenance sentence the
@@ -38,7 +49,7 @@
  * drift; the same component renders it on every surface, so one answer
  * renders the same markup on each.
  */
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useCallback, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ProgressLog from '@/components/ProgressLog';
@@ -51,8 +62,23 @@ import SkillSection from '@/components/evidence/SkillSection';
 // one decision every `SkillSection` site asks.
 import { carriesSkillText } from '@/lib/evidence/skill-disclosure';
 import { UNPLACED_CALLS_LINE, type StepViewCall } from '@/lib/answer-view/steps';
+import { useSessionChoice } from '@/hooks/useSessionChoice';
+import { useAnswerLayouts } from '@/components/answer-view/AnswerLayoutsProvider';
+import { LAYOUT_STORAGE_KEY } from '@/lib/query-presentation';
 import {
-  DISCLOSURE_LABEL,
+  disclosureOrder,
+  layoutId,
+  layoutLine,
+  pageOrder,
+  parseStoredLayoutChoice,
+  selectLayout,
+  type DisclosureSectionView,
+  type InstanceLayouts,
+  type LayoutPayload,
+  type PagePartView,
+  type RecordSectionView,
+} from '@/lib/answer-layout';
+import {
   type AnswerPart,
   type AnswerViewModel,
   type DisclosurePart,
@@ -276,55 +302,54 @@ export function StepsPartView({ steps }: { steps: StepsPart }) {
 
 // --- 6. The disclosure --------------------------------------------------------------
 
-function Disclosure({ disclosure, answer, answerElement, extras, level }: {
+function Disclosure({ disclosure, answer, answerElement, extras, recordSections, layout, level }: {
   disclosure: DisclosurePart;
   answer: AnswerPart;
   answerElement: ReactNode;
   extras?: ReactNode;
+  recordSections?: Partial<Record<RecordSectionView, ReactNode>>;
+  layout: LayoutPayload;
   level: HeadingLevel;
 }) {
   const { question, instructions, recordInstructions, environment, trace, recordTrace, notebook, recordNotebook, summary, signers } = disclosure;
   const promptLines = instructions?.text ? instructions.text.split(/\r?\n/).length : 0;
-  return (
-    <details data-part="disclosure" style={{ marginTop: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '8px' }}>
-      <summary style={{
-        cursor: 'pointer', fontSize: '14px', fontWeight: 500,
-        color: 'var(--accent)', padding: '8px 0',
-      }}>
-        {DISCLOSURE_LABEL}
-      </summary>
-      <div style={{ marginTop: '16px' }}>
-        {question && (
-          <Section level={level} title="A · Initial prompt" author={<AuthorLine part="question" text={question.author} />}>
-            {question.prompt !== null ? (
+  // Each section by the view's name; the layout's `disclosure.order` places
+  // them (`disclosureOrder`), and a section it does not name sits at its
+  // default place, so none is dropped (layout rule 2).
+  const sections: Record<DisclosureSectionView, ReactNode> = {
+    question: question && (
+      <Section level={level} title="A · Initial prompt" author={<AuthorLine part="question" text={question.author} />}>
+        {question.prompt !== null ? (
+          <div style={{
+            padding: '16px 20px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
+            borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
+            fontSize: '15px', lineHeight: 1.6, color: 'var(--text-primary)',
+            whiteSpace: 'pre-wrap',
+          }}>
+            {question.prompt}
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              Prompt visibility was hash-only; verbatim text not captured.
+            </div>
+            {/* The hash identifies the prompt that was used (W1 ruling D7). */}
+            {question.hash && (
               <div style={{
-                padding: '16px 20px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
-                borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
-                fontSize: '15px', lineHeight: 1.6, color: 'var(--text-primary)',
-                whiteSpace: 'pre-wrap',
+                marginTop: '4px', fontSize: '12px', color: 'var(--text-muted)',
+                fontFamily: 'monospace', wordBreak: 'break-all',
               }}>
-                {question.prompt}
+                Prompt hash: {question.hash}
               </div>
-            ) : (
-              <>
-                <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                  Prompt visibility was hash-only; verbatim text not captured.
-                </div>
-                {/* The hash identifies the prompt that was used (W1 ruling D7). */}
-                {question.hash && (
-                  <div style={{
-                    marginTop: '4px', fontSize: '12px', color: 'var(--text-muted)',
-                    fontFamily: 'monospace', wordBreak: 'break-all',
-                  }}>
-                    Prompt hash: {question.hash}
-                  </div>
-                )}
-              </>
             )}
-          </Section>
+          </>
         )}
+      </Section>
+    ),
 
-        {/* B on a record: the skill prompt it carries, inline or as a blob it fetches on click. */}
+    // B on a record: the skill prompt it carries, inline or as a blob it fetches on click.
+    instructions: (
+      <>
         {recordInstructions && carriesSkillText(recordInstructions.disclosure) && (
           <Section level={level} title="B · System prompts" author={<AuthorLine part="instructions" text={recordInstructions.author} />}>
             {(() => {
@@ -339,7 +364,6 @@ function Disclosure({ disclosure, answer, answerElement, extras, level }: {
             })()}
           </Section>
         )}
-
         {instructions && (
           <Section level={level} title="B · System prompts" author={<AuthorLine part="instructions" text={instructions.author} />}>
             <div style={{
@@ -401,36 +425,40 @@ function Disclosure({ disclosure, answer, answerElement, extras, level }: {
             </div>
           </Section>
         )}
+      </>
+    ),
 
-        {environment && (
-          <Section level={level} title="C · Model + environment">
-            <div style={{
-              display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-              gap: '12px',
+    environment: environment && (
+      <Section level={level} title="C · Model + environment">
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+          gap: '12px',
+        }}>
+          {environment.map((item) => (
+            <div data-part="c-item" key={item.label} style={{
+              padding: '10px 14px', border: '1px solid var(--border-color)',
+              borderRadius: '4px',
             }}>
-              {environment.map((item) => (
-                <div data-part="c-item" key={item.label} style={{
-                  padding: '10px 14px', border: '1px solid var(--border-color)',
-                  borderRadius: '4px',
-                }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '2px' }}>
-                    {item.label}
-                  </div>
-                  <div style={{
-                    fontSize: item.mono ? '12px' : '14px',
-                    color: item.mono ? 'var(--text-muted)' : 'var(--text-primary)',
-                    fontWeight: 500,
-                    fontFamily: item.mono ? 'monospace' : 'inherit',
-                  }}>
-                    {item.value}
-                  </div>
-                </div>
-              ))}
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '2px' }}>
+                {item.label}
+              </div>
+              <div style={{
+                fontSize: item.mono ? '12px' : '14px',
+                color: item.mono ? 'var(--text-muted)' : 'var(--text-primary)',
+                fontWeight: 500,
+                fontFamily: item.mono ? 'monospace' : 'inherit',
+              }}>
+                {item.value}
+              </div>
             </div>
-          </Section>
-        )}
+          ))}
+        </div>
+      </Section>
+    ),
 
-        {/* D on a record: each call's signed fields, raw (W1 ruling D6). */}
+    // D on a record: each call's signed fields, raw (W1 ruling D6).
+    trace: (
+      <>
         {recordTrace && (
           <Section level={level} title="D · Deliberative trace">
             <details>
@@ -477,7 +505,6 @@ function Disclosure({ disclosure, answer, answerElement, extras, level }: {
             </details>
           </Section>
         )}
-
         {trace && (
           <Section level={level} title="D · Deliberative trace">
             {trace.length === 0 ? (
@@ -518,8 +545,12 @@ function Disclosure({ disclosure, answer, answerElement, extras, level }: {
             )}
           </Section>
         )}
+      </>
+    ),
 
-        {/* E on a record: the claim about re-running it, the bundle (A-G format only), the notebook. */}
+    // E on a record: the claim about re-running it, the bundle (A-G format only), the notebook.
+    notebook: (
+      <>
         {recordNotebook && (
           <Section level={level} title="E · Answer notebook">
             {(recordNotebook.assertion !== null || recordNotebook.bundleHref !== null) && (
@@ -539,7 +570,6 @@ function Disclosure({ disclosure, answer, answerElement, extras, level }: {
             <NotebookSection notebook={recordNotebook.notebook} slug={recordNotebook.slug} />
           </Section>
         )}
-
         {notebook && (
           <Section level={level} title="E · Answer notebook">
             <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--text-secondary)' }}>
@@ -550,63 +580,133 @@ function Disclosure({ disclosure, answer, answerElement, extras, level }: {
             <NotebookSection notebook={notebook.notebook} slug="unpublished-chat-notebook" />
           </Section>
         )}
+      </>
+    ),
 
-        {disclosure.answerAgain && answer.content.kind !== 'absent' && (
-          <Section level={level} title="F · Rendered answer" author={<AnswerAuthors answer={answer} />}>
-            {answerElement}
-            {disclosure.answerNote !== undefined && (
-              <div style={{
-                marginTop: '10px', fontSize: '11px', color: 'var(--text-muted)',
-                fontFamily: 'monospace',
-              }}>
-                {disclosure.answerNote}
+    'answer-again': disclosure.answerAgain && answer.content.kind !== 'absent' && (
+      <Section level={level} title="F · Rendered answer" author={<AnswerAuthors answer={answer} />}>
+        {answerElement}
+        {disclosure.answerNote !== undefined && (
+          <div style={{
+            marginTop: '10px', fontSize: '11px', color: 'var(--text-muted)',
+            fontFamily: 'monospace',
+          }}>
+            {disclosure.answerNote}
+          </div>
+        )}
+      </Section>
+    ),
+
+    summary: summary && (
+      <Section
+        level={level}
+        title="G · Summary"
+        author={summary.kind === 'pending' ? undefined : <AuthorLine part="summary" text={summary.author} />}
+      >
+        <div style={{
+          padding: '12px 16px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
+          borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
+          fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)',
+        }}>
+          {summary.kind === 'structured' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Analysis:
+                </span>{' '}
+                {summary.analysisDescription}
               </div>
-            )}
-          </Section>
-        )}
-
-        {summary && (
-          <Section
-            level={level}
-            title="G · Summary"
-            author={summary.kind === 'pending' ? undefined : <AuthorLine part="summary" text={summary.author} />}
-          >
-            <div style={{
-              padding: '12px 16px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
-              borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
-              fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)',
-            }}>
-              {summary.kind === 'structured' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div>
-                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                      Analysis:
-                    </span>{' '}
-                    {summary.analysisDescription}
-                  </div>
-                  <div>
-                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                      Headline finding:
-                    </span>{' '}
-                    {summary.headlineFinding}
-                  </div>
-                </div>
-              ) : summary.kind === 'derived' || summary.kind === 'stated' ? (
-                summary.text
-              ) : (
-                <em style={{ color: 'var(--text-muted)' }}>
-                  Summary will be generated at publish time.
-                </em>
-              )}
+              <div>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Headline finding:
+                </span>{' '}
+                {summary.headlineFinding}
+              </div>
             </div>
-          </Section>
-        )}
+          ) : summary.kind === 'derived' || summary.kind === 'stated' ? (
+            summary.text
+          ) : (
+            <em style={{ color: 'var(--text-muted)' }}>
+              Summary will be generated at publish time.
+            </em>
+          )}
+        </div>
+      </Section>
+    ),
 
-        {signers && <ChatSignersSection executedAt={signers.executedAt} signingKeyId={signers.signingKeyId} provenance={signers.provenance} />}
+    signers: signers && <ChatSignersSection executedAt={signers.executedAt} signingKeyId={signers.signingKeyId} provenance={signers.provenance} />,
 
-        {extras}
+    'provenance-graph': recordSections?.['provenance-graph'],
+    'additional-artifacts': recordSections?.['additional-artifacts'],
+    evaluations: recordSections?.evaluations,
+    attestations: recordSections?.attestations,
+    verification: recordSections?.verification,
+
+    'surface-extras': extras,
+  };
+  return (
+    <details
+      data-part="disclosure"
+      {...(layout.disclosure.openByDefault ? { open: true } : {})}
+      style={{ marginTop: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '8px' }}
+    >
+      <summary style={{
+        cursor: 'pointer', fontSize: '14px', fontWeight: 500,
+        color: 'var(--accent)', padding: '8px 0',
+      }}>
+        {layout.disclosure.label}
+      </summary>
+      <div style={{ marginTop: '16px' }}>
+        {disclosureOrder(layout).order.map((name) => <Fragment key={name}>{sections[name]}</Fragment>)}
       </div>
     </details>
+  );
+}
+
+// --- The layout: the instance's, and the reader's choice --------------------------
+
+/**
+ * The layout this view renders with: the reader's choice for the session when
+ * the instance offers it, else the instance's default. The server, and a
+ * reader who has not chosen, read no choice (`useSessionChoice`), so the
+ * server's markup is always the default's.
+ */
+function useChosenLayout(layouts: InstanceLayouts): [LayoutPayload, (id: string) => void] {
+  const parse = useCallback((raw: string | null) => parseStoredLayoutChoice(raw, layouts.offered), [layouts]);
+  const [chosen, setChosen] = useSessionChoice(LAYOUT_STORAGE_KEY, parse);
+  const choose = useCallback((id: string) => {
+    setChosen(id);
+    // The storage event never fires in the tab that wrote the value; another
+    // view on this page re-reads the choice from this one.
+    if (typeof window !== 'undefined') window.dispatchEvent(new StorageEvent('storage', { key: LAYOUT_STORAGE_KEY }));
+  }, [setChosen]);
+  return [selectLayout(layouts, chosen), choose];
+}
+
+/** Rule 5: the line that names the layout, and beside it the reader's choice. Outside the disclosure. */
+function LayoutFoot({ layout, layouts, onChoose }: { layout: LayoutPayload; layouts: InstanceLayouts; onChoose: (id: string) => void }) {
+  return (
+    <div data-part="layout-foot" style={{
+      marginTop: '16px', display: 'flex', flexWrap: 'wrap', gap: '4px 12px',
+      alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)',
+    }}>
+      <span data-part="layout-line">{layoutLine(layout)}</span>
+      {layouts.offered.length > 1 && (
+        <label style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+          Show under layout
+          <select
+            data-part="layout-toggle"
+            value={layoutId(layout)}
+            onChange={(e) => onChoose(e.target.value)}
+            style={{ fontSize: '12px' }}
+          >
+            {layouts.offered.map((l) => (
+              <option key={layoutId(l)} value={layoutId(l)}>{`${l.name} v${l.version}`}</option>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
   );
 }
 
@@ -618,85 +718,111 @@ export interface AnswerViewProps {
   actions?: ReactNode;
   /** What the surface adds outside the disclosure, after the sources line. */
   notices?: ReactNode;
-  /** What the surface adds inside the disclosure, after the signers. */
+  /** What the surface adds inside the disclosure, at its end. */
   disclosureExtras?: ReactNode;
+  /** The record's sections after the envelope, by name, so a layout can place each (`disclosure.order`). */
+  recordSections?: Partial<Record<RecordSectionView, ReactNode>>;
   /** The record's own citation block, placed in the citation part under `model.recordCitation`'s line. */
   citationBlock?: ReactNode;
-  /** What the surface places between the disclosure and the actions (a record's Status History). */
+  /** What the surface places directly after the disclosure (a record's Status History). */
   afterDisclosure?: ReactNode;
   /** The level of the disclosure's section headings. */
   sectionHeading?: HeadingLevel;
 }
 
 export default function AnswerView({
-  model, actions, notices, disclosureExtras, citationBlock, afterDisclosure, sectionHeading = 'h3',
+  model, actions, notices, disclosureExtras, recordSections, citationBlock, afterDisclosure, sectionHeading = 'h3',
 }: AnswerViewProps) {
+  const layouts = useAnswerLayouts();
+  const [layout, choose] = useChosenLayout(layouts);
   // Built once, placed twice: first, and again as F inside the disclosure.
   const answerElement = <AnswerBody answer={model.answer} />;
+  // Each part by the view's name. What a surface adds travels with the part it
+  // belongs to: the heading over the answer with the answer, the notices with
+  // the sources line, Status History with the disclosure.
+  const parts: Record<PagePartView, ReactNode> = {
+    'status-row': model.status !== null && <StatusRow status={model.status} />,
+
+    answer: (
+      <>
+        {model.title && (
+          <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '20px', lineHeight: 1.3 }}>
+            {model.title}
+          </h2>
+        )}
+
+        {model.answer.content.kind !== 'absent' && (
+          <div style={{ marginBottom: '24px' }}>
+            <AnswerAuthors answer={model.answer} />
+            {answerElement}
+          </div>
+        )}
+      </>
+    ),
+
+    citation: model.citation !== null ? (
+      <div data-part="citation">
+        <AuthorLine part="citation" text={model.citation.author} />
+        <ChatCitationPreview
+          prompt={model.citation.prompt}
+          executedAt={model.citation.executedAt}
+          structuredSummary={model.citation.structuredSummary}
+          statesExecution={model.citation.statesExecution}
+        />
+      </div>
+    ) : model.recordCitation !== undefined && citationBlock !== undefined ? (
+      <div data-part="citation">
+        <AuthorLine part="citation" text={model.recordCitation.author} />
+        {citationBlock}
+      </div>
+    ) : null,
+
+    steps: model.steps !== null && <StepsPartView steps={model.steps} />,
+
+    sources: (
+      <>
+        {model.sources !== null && (
+          <div data-part="sources" style={{
+            borderLeft: '3px solid var(--success)', backgroundColor: 'rgba(0, 183, 3, 0.05)',
+            padding: '6px 10px', marginTop: '16px', fontSize: '13px',
+            color: 'var(--text-secondary)', borderRadius: '0 4px 4px 0',
+          }}>
+            <AuthorLine part="sources" text={model.sources.author} />
+            <ReactMarkdown components={SOURCES_COMPONENTS}>{model.sources.line}</ReactMarkdown>
+          </div>
+        )}
+
+        {notices}
+      </>
+    ),
+
+    disclosure: (
+      <>
+        <Disclosure
+          disclosure={model.disclosure}
+          answer={model.answer}
+          answerElement={answerElement}
+          extras={disclosureExtras}
+          recordSections={recordSections}
+          layout={layout}
+          level={sectionHeading}
+        />
+
+        {afterDisclosure}
+      </>
+    ),
+
+    actions: actions !== undefined && actions !== null && (
+      <div data-part="actions" style={{ marginTop: '16px' }}>
+        {actions}
+      </div>
+    ),
+  };
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-      {model.status !== null && <StatusRow status={model.status} />}
+      {pageOrder(layout).order.map((name) => <Fragment key={name}>{parts[name]}</Fragment>)}
 
-      {model.title && (
-        <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '20px', lineHeight: 1.3 }}>
-          {model.title}
-        </h2>
-      )}
-
-      {model.answer.content.kind !== 'absent' && (
-        <div style={{ marginBottom: '24px' }}>
-          <AnswerAuthors answer={model.answer} />
-          {answerElement}
-        </div>
-      )}
-
-      {model.citation !== null ? (
-        <div data-part="citation">
-          <AuthorLine part="citation" text={model.citation.author} />
-          <ChatCitationPreview
-            prompt={model.citation.prompt}
-            executedAt={model.citation.executedAt}
-            structuredSummary={model.citation.structuredSummary}
-            statesExecution={model.citation.statesExecution}
-          />
-        </div>
-      ) : model.recordCitation !== undefined && citationBlock !== undefined ? (
-        <div data-part="citation">
-          <AuthorLine part="citation" text={model.recordCitation.author} />
-          {citationBlock}
-        </div>
-      ) : null}
-
-      {model.steps !== null && <StepsPartView steps={model.steps} />}
-
-      {model.sources !== null && (
-        <div data-part="sources" style={{
-          borderLeft: '3px solid var(--success)', backgroundColor: 'rgba(0, 183, 3, 0.05)',
-          padding: '6px 10px', marginTop: '16px', fontSize: '13px',
-          color: 'var(--text-secondary)', borderRadius: '0 4px 4px 0',
-        }}>
-          <AuthorLine part="sources" text={model.sources.author} />
-          <ReactMarkdown components={SOURCES_COMPONENTS}>{model.sources.line}</ReactMarkdown>
-        </div>
-      )}
-
-      {notices}
-
-      <Disclosure
-        disclosure={model.disclosure}
-        answer={model.answer}
-        answerElement={answerElement}
-        extras={disclosureExtras}
-        level={sectionHeading}
-      />
-
-      {afterDisclosure}
-
-      {actions !== undefined && actions !== null && (
-        <div data-part="actions" style={{ marginTop: '16px' }}>
-          {actions}
-        </div>
-      )}
+      <LayoutFoot layout={layout} layouts={layouts} onChoose={choose} />
     </div>
   );
 }

@@ -438,14 +438,20 @@ const { default: EvidencePage } = (await import('./page.tsx')) as unknown as {
   default: (props: { params: Promise<{ slug: string }> }) => Promise<ReactElement>;
 };
 
-async function render(c: Case): Promise<string> {
+const { AnswerLayoutsProvider } = (await import('@/components/answer-view/AnswerLayoutsProvider')) as unknown as {
+  AnswerLayoutsProvider: ComponentType<{ value: unknown; children?: ReactNode }>;
+};
+
+/** The page as a reader meets it; with `layouts` (LAYOUT-WEB W4 P1), under the instance's layouts. */
+async function render(c: Case, layouts?: unknown): Promise<string> {
   globals.__p2Rows = [[c.record], [CREATOR]];
   // As stored: a fresh copy per render, so nothing one render does reaches the next.
   globals.__p2Package = c.pkg === null ? null : structuredClone(c.pkg);
   globals.__p2Lifecycle = c.lifecycle;
   globals.__p2Evaluations = c.evaluations;
   globals.__p2Headers = { host: HOST, 'x-forwarded-proto': 'https' };
-  const element = await EvidencePage({ params: Promise.resolve({ slug: c.record.slug }) });
+  const page = await EvidencePage({ params: Promise.resolve({ slug: c.record.slug }) });
+  const element = layouts === undefined ? page : createElement(AnswerLayoutsProvider, { value: layouts }, page);
   const Session = SessionProvider as unknown as ComponentType<{ session: null; children?: ReactNode }>;
   return renderToStaticMarkup(createElement(Session, { session: null }, element));
 }
@@ -703,7 +709,7 @@ test('P2 (3) read from the source: the block and the Cite modal both write their
       /import \{[^}]*\bbuildRecordCitations\b[^}]*\} from '@\/lib\/evidence\/record-citation'/,
       `${name} imports the builder from the one module that owns it`,
     );
-    assert.doesNotMatch(source, /Record Package\.|\[Verified: /, `${name} writes no citation format of its own`);
+    assert.doesNotMatch(source, /Record Package\.|\[(Verified|Published): /, `${name} writes no citation format of its own`);
   }
   assert.match(PAGE_SOURCE, /<CitationBlock\b/, 'the page renders the block');
 });
@@ -931,12 +937,12 @@ test('W2 P2 (4) section D renders the same markup as on the base, its labels nor
 const INSTANCE = 'records-instance.example.test';
 const INSTANCE_ENV = ['PUBLISHER_PUBLICATION_HOST', 'PUBLISHER_SITE_ORIGIN', 'EVIDENCE_PUBLICATION_HOST', 'EVIDENCE_SITE_ORIGIN'];
 
-async function renderWithInstance(c: Case, instance: string | null): Promise<string> {
+async function renderWithInstance(c: Case, instance: string | null, layouts?: unknown): Promise<string> {
   const saved = INSTANCE_ENV.map((name) => [name, process.env[name]] as const);
   for (const name of INSTANCE_ENV) delete process.env[name];
   if (instance !== null) process.env.PUBLISHER_PUBLICATION_HOST = instance;
   try {
-    return await render(c);
+    return await render(c, layouts);
   } finally {
     for (const [name, value] of saved) {
       if (value === undefined) delete process.env[name];
@@ -1544,13 +1550,15 @@ const NOT_VERIFYING: Array<[string, string, Case]> = [
 
 /**
  * The page without its citation part. The citation block's deliberative-process
- * format reads "[Verified: <the record's date>]" on every record, blob or not
- * (`src/lib/evidence/record-citation.ts`, outside this fix); it names no check
- * of the output blob, so the word is read everywhere else.
+ * format read "[Verified: <the record's date>]" on every record, blob or not,
+ * naming no check of the output blob, so the word was read everywhere else.
+ * Since LAYOUT-WEB W4 P1 (ruling D1) it reads "[Published: <date>]", which the
+ * premise below reads; the citation's own text is pinned in
+ * `src/lib/evidence/record-citation.test.ts` and by W4 P1 (9) below.
  */
 function outsideCitation(html: string): string {
   const citation = partOf(html, 'citation');
-  assert.ok(citation !== null && citation.markup.includes('[Verified: '), 'premise: the citation block is where the format’s word sits');
+  assert.ok(citation !== null && citation.markup.includes('[Published: '), 'premise: the citation block is where the format’s date word sits');
   return html.slice(0, citation.start) + html.slice(citation.end);
 }
 
@@ -1641,3 +1649,254 @@ test('W3 fix (4) the record’s none: the site’s sentence, and no "written by 
   assert.doesNotMatch(html, /Answer, written by the model/, 'no line names the model over it');
   assert.ok(authorLines(html).some((l) => l.key === 'question'), 'premise: the other author lines stay');
 });
+
+// --- LAYOUT-WEB W4 P1: the layout, the toggle, the page's line -----------------------
+//
+// The record page renders the answer view; the view places its parts by a
+// layout (`src/lib/answer-layout/`). Each record is rendered with no layout
+// setting (the built-ins, `answer-first` the default) and with the instance's
+// layouts handed to the view's provider: `envelope-order` as the default, and
+// fixture layouts. The reader's choice is read from the session in the
+// browser only; the server renders the instance's default, which is what a
+// chosen layout is driven as here.
+//
+// THE INSTRUMENT. `viewChildren` splits the view's root into its top-level
+// elements and names the part each belongs to (Status History travels with the
+// disclosure, which it follows). Every part carries the fixture's own content,
+// so a part dropped, doubled or changed shows as a different list or element.
+
+const { ANSWER_FIRST, ENVELOPE_ORDER, BUILT_IN_LAYOUTS } = await import('@/lib/answer-layout');
+type Layout = typeof ANSWER_FIRST;
+
+const instanceWith = (layout: Layout) => ({
+  default: layout,
+  offered: [layout, ...BUILT_IN_LAYOUTS.filter((l) => l.name !== layout.name)],
+});
+
+const VIEW_ROOT = '<div style="max-width:900px;margin:0 auto">';
+
+function partOfChild(markup: string): string {
+  if (/^<div data-part="(status-row|refused-requests)"/.test(markup)) return 'status';
+  if (markup.startsWith('<div style="margin-bottom:24px">') || markup.startsWith('<h2')) return 'answer';
+  if (markup.startsWith('<div data-part="citation"')) return 'citation';
+  if (markup.startsWith('<div data-part="steps"')) return 'steps';
+  if (markup.startsWith('<div data-part="sources"')) return 'sources';
+  if (markup.startsWith('<details data-part="disclosure"')) return 'disclosure';
+  if (markup.startsWith('<section') && markup.includes(heading('Status History'))) return 'disclosure';
+  if (markup.startsWith('<div data-part="actions"')) return 'actions';
+  if (markup.startsWith('<div data-part="layout-foot"')) return 'foot';
+  assert.fail(`the view holds an element no part accounts for: ${markup.slice(0, 120)}`);
+}
+
+function viewChildren(html: string): Array<{ part: string; markup: string }> {
+  const root = html.lastIndexOf(VIEW_ROOT, at(html, 'data-part="status-row"'));
+  assert.ok(root >= 0, 'no view root before the status row');
+  const close = elementEnd(html, root, 'div') - '</div>'.length;
+  const children: Array<{ part: string; markup: string }> = [];
+  for (let i = root + VIEW_ROOT.length; i < close;) {
+    const tag = /^<(\w+)\b/.exec(html.slice(i));
+    assert.ok(tag !== null, `the view holds text of its own at ${i}: ${html.slice(i, i + 80)}`);
+    const end = elementEnd(html, i, tag[1]);
+    children.push({ part: partOfChild(html.slice(i, end)), markup: html.slice(i, end) });
+    i = end;
+  }
+  return children;
+}
+
+const sequence = (children: Array<{ part: string }>) =>
+  children.map((c) => c.part).filter((p, i, all) => i === 0 || all[i - 1] !== p);
+const elements = (children: Array<{ part: string; markup: string }>) =>
+  children.filter((c) => c.part !== 'foot').map((c) => c.markup).sort();
+
+function withoutLayoutFoot(html: string): string {
+  const start = html.indexOf('<div data-part="layout-foot"');
+  if (start < 0) return html;
+  return html.slice(0, start) + html.slice(elementEnd(html, start, 'div'));
+}
+
+/** The disclosure's section headings, in order. */
+function sectionTitles(html: string): string[] {
+  const d = requireDisclosure(html);
+  return [...html.slice(d.start, d.end).matchAll(/<h2\b[^>]*>([^<]*)<\/h2>/g)].map((m) => m[1]);
+}
+
+// A record has no sources line: the part is empty, so it is absent from both sequences.
+const RECORD_ANSWER_FIRST = ['status', 'answer', 'citation', 'steps', 'disclosure', 'actions', 'foot'];
+const RECORD_ENVELOPE_ORDER = ['status', 'disclosure', 'steps', 'answer', 'citation', 'actions', 'foot'];
+
+const W4_RECORDS: Array<[string, Case]> = [['A-G record', AGF], ['legacy record', OLD]];
+
+for (const [name, c] of W4_RECORDS) {
+  test(`W4 P1 (4) ${name}: with no setting, the parts render in the built-in default's order, then the foot`, async () => {
+    assert.deepEqual(sequence(viewChildren(await renderWithInstance(c, INSTANCE))), RECORD_ANSWER_FIRST);
+  });
+
+  test(`W4 P1 (4) ${name}: with envelope-order chosen, the order changes and every part is still present, byte for byte`, async () => {
+    const byDefault = viewChildren(await renderWithInstance(c, INSTANCE));
+    const envelope = viewChildren(await renderWithInstance(c, INSTANCE, instanceWith(ENVELOPE_ORDER)));
+    assert.deepEqual(sequence(envelope), RECORD_ENVELOPE_ORDER);
+    assert.deepEqual(elements(envelope), elements(byDefault), 'the same elements, reordered: none dropped, doubled or changed');
+  });
+
+  test(`W4 P1 (4) ${name}: rules 1 to 4 hold under both built-ins`, async () => {
+    const stored = JSON.stringify(c.pkg);
+    const renders: string[] = [];
+    for (const layouts of [undefined, instanceWith(ENVELOPE_ORDER)]) {
+      renders.push(await renderWithInstance(c, INSTANCE, layouts));
+      // Rule 1: the package the page read is the stored one, unchanged; the hash it states is the record's.
+      assert.equal(JSON.stringify(globals.__p2Package), stored, 'the package the page read is unchanged');
+    }
+    for (const html of renders) assert.equal(occurrences(html, `Package hash: ${c.record.basePackageHash}`).length, 1, 'the record’s hash, once');
+    // Rule 2: the disclosure holds the same sections, in the same order, and the answer is placed twice.
+    const [first, second] = renders;
+    assert.ok(sectionTitles(first).length >= 10, `premise: the disclosure holds its sections (${sectionTitles(first).join(', ')})`);
+    assert.deepEqual(sectionTitles(second), sectionTitles(first), 'the disclosure’s sections');
+    for (const html of renders) {
+      assert.equal(occurrences(html, '<div data-part="answer"').length, 2, 'the answer, first and as F');
+      // Rule 3: the banners, the status row's reading and the refused-request lines sit outside the disclosure.
+      const d = requireDisclosure(html);
+      const sentences = c === AGF
+        ? ['Executed in a signed sandbox', '1 of 3 requests did not complete.']
+        : ['Whether this notebook ran is not stated', 'This record was withdrawn by the author on'];
+      for (const marker of ['data-part="status-row"', ...sentences]) {
+        const i = at(html, marker);
+        assert.ok(i < d.start || i > d.end, `${marker} sits outside the disclosure`);
+      }
+    }
+    // Rule 4: every author line, word for word, as many times.
+    const authors = (html: string) => authorLines(html).map((l) => `${l.key}: ${l.text}`).sort();
+    assert.ok(authors(first).length >= 4, 'premise: the record carries its author lines');
+    assert.deepEqual(authors(second), authors(first), 'the author lines');
+  });
+
+  test(`W4 P1 (5) ${name}: the foot line names the layout and its version under each built-in, outside the disclosure`, async () => {
+    for (const layout of [ANSWER_FIRST, ENVELOPE_ORDER]) {
+      const html = await renderWithInstance(c, INSTANCE, instanceWith(layout));
+      const line = `Shown under layout ${layout.name} v${layout.version}`;
+      assert.equal(occurrences(html, line).length, 1, `"${line}" once`);
+      const children = viewChildren(html);
+      assert.equal(children.at(-1)?.part, 'foot', 'the foot closes the view');
+      assert.ok(at(html, line) > requireDisclosure(html).end, 'outside the disclosure');
+      assert.ok(at(html, line) < at(html, 'Package hash: '), 'above the package hash, the page’s last line');
+    }
+    assert.ok((await renderWithInstance(c, INSTANCE)).includes('Shown under layout answer-first v1'), 'with no setting, the default’s line');
+  });
+}
+
+test('W4 P1 (4) rule 3 under envelope-order: the unsigned and sealed banners still render before the disclosure', async () => {
+  const html = await renderWithInstance(SKELETON, INSTANCE, instanceWith(ENVELOPE_ORDER));
+  assert.equal(sequence(viewChildren(html))[1], 'disclosure', 'premise: the disclosure comes second under envelope-order');
+  for (const banner of ['Unsigned package — no cryptographic commitment', 'Sealed — not published', 'Analysis notebook (not executed)']) {
+    before(html, banner);
+  }
+});
+
+const FIXTURE_OMITS_CITATION: Layout = { ...ENVELOPE_ORDER, name: 'fixture-omits-citation', order: ENVELOPE_ORDER.order.filter((n) => n !== 'citation') };
+const FIXTURE_UNKNOWN_PART: Layout = {
+  ...ENVELOPE_ORDER,
+  name: 'fixture-unknown-part',
+  order: ['status', 'TIMELINE-w4p1', ...ENVELOPE_ORDER.order.slice(1)],
+  disclosure: { ...ENVELOPE_ORDER.disclosure, order: ['A', 'APPENDIX-w4p1', ...ENVELOPE_ORDER.disclosure.order.slice(1)] },
+};
+
+test('W4 P1 (8) a record under a layout that omits a part renders it at its default place, every part present', async () => {
+  const byDefault = viewChildren(await renderWithInstance(AGF, INSTANCE));
+  const omits = viewChildren(await renderWithInstance(AGF, INSTANCE, instanceWith(FIXTURE_OMITS_CITATION)));
+  assert.deepEqual(sequence(omits), ['status', 'disclosure', 'steps', 'answer', 'citation', 'actions', 'foot'], 'the citation directly after the answer, its default place');
+  assert.deepEqual(elements(omits), elements(byDefault), 'the same elements: none dropped');
+});
+
+test('W4 P1 (8) a record under a layout naming an unknown part renders the seven parts and nothing else', async () => {
+  const envelope = await renderWithInstance(AGF, INSTANCE, instanceWith(ENVELOPE_ORDER));
+  const unknown = await renderWithInstance(AGF, INSTANCE, instanceWith(FIXTURE_UNKNOWN_PART));
+  assert.deepEqual(sequence(viewChildren(unknown)), RECORD_ENVELOPE_ORDER);
+  assert.equal(withoutLayoutFoot(unknown), withoutLayoutFoot(envelope), 'the markup is envelope-order’s, but for the foot');
+  assert.doesNotMatch(unknown, /TIMELINE-w4p1|APPENDIX-w4p1/, 'an unknown name renders nothing');
+});
+
+test('W4 P1 (8) the record’s own sections are placed by name: one moved first, one omitted and kept at its default place', async () => {
+  const layout: Layout = {
+    ...ANSWER_FIRST,
+    name: 'fixture-record-sections',
+    disclosure: { ...ANSWER_FIRST.disclosure, order: ['verification', 'A', 'B', 'C', 'D', 'E', 'G', 'signers'] },
+  };
+  const titles = sectionTitles(await renderWithInstance(AGF, INSTANCE, instanceWith(layout)));
+  assert.deepEqual(titles, ['Verification Status', ...ENVELOPE, ...AFTER_ENVELOPE.filter((t) => t !== 'Verification Status')]);
+});
+
+test('W4 P1 fix 1 (F7) appliesTo and rendererVersion change nothing yet: a layout for another profile still applies to the record', async () => {
+  const other: Layout = { ...ENVELOPE_ORDER, name: 'fixture-other-profile', appliesTo: ['OTHERPROFILE-w4p1fix1'], rendererVersion: 'OTHER-RENDERER-w4p1fix1' };
+  const envelope = await renderWithInstance(AGF, INSTANCE, instanceWith(ENVELOPE_ORDER));
+  const html = await renderWithInstance(AGF, INSTANCE, instanceWith(other));
+  assert.deepEqual(sequence(viewChildren(html)), RECORD_ENVELOPE_ORDER, 'the layout applies, whatever the record’s profile');
+  assert.equal(withoutLayoutFoot(html), withoutLayoutFoot(envelope), 'and nothing else moves');
+});
+
+test('W4 P1 the server markup is the instance’s default: its line, and the toggle with the default chosen', async () => {
+  const foot = viewChildren(await renderWithInstance(AGF, INSTANCE)).at(-1)?.markup ?? '';
+  assert.ok(foot.includes('<span data-part="layout-line">Shown under layout answer-first v1</span>'), foot);
+  const options = [...foot.matchAll(/<option value="([^"]+)"( selected="")?>([^<]*)<\/option>/g)];
+  assert.deepEqual(options.map((m) => [m[1], m[2] !== undefined]), [['answer-first@1', true], ['envelope-order@1', false]]);
+});
+
+// --- W4 P1 (9): the record citation's word ---------------------------------------------
+//
+// Ruling D1: the deliberative-process citation dates the record with the word
+// the plain text beside it uses for the same date. At the base it read
+// "[Verified: <date>]", which names no check the record passed.
+
+test('W4 P1 (9) the citation block reads "Record: <title> [Published: <date>] <url>", and says "Verified" nowhere', () => {
+  const citation = partOf(HTML.agf, 'citation');
+  assert.ok(citation !== null, 'premise: the record renders its citation block');
+  const expected = `Record: ${AGF.record.title} [Published: May 2, 2026] https://${HOST}/records/${AGF.record.slug}`;
+  assert.ok(citation.markup.includes(escaped(expected)), `the block carries "${expected}"`);
+  assert.ok(citation.markup.includes(escaped('Published: May 2, 2026.')), 'premise: the plain text uses the same word for the same date');
+  assert.doesNotMatch(citation.markup, /Verified/, 'the block says "Verified"');
+});
+
+// --- W4 P1 (11): nothing moves without a setting -----------------------------------------
+//
+// With no setting, each record's page, without the view's foot, equals the
+// base's. THE GOLDENS WERE NOT WRITTEN BY HAND: each is this block's output on
+// the base (website main 641a82f), the base tree running this block with
+// `W4P1_UNCHANGED_OUT` set, where `withoutLayoutFoot` removes nothing.
+// Rendered in UTC, so a date the page states reads the same on every host.
+// ONE CHANGE IS RULED, AND APPLIED TO THE BASE BY NAME: this phase's (9)
+// changes the citation block's "[Verified: " to "[Published: " (ruling D1).
+// The comparison makes that one substitution in the base's markup, after
+// checking it occurs exactly once, and compares everything else as captured.
+
+const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
+
+async function inUtc<T>(fn: () => Promise<T>): Promise<T> {
+  const before = process.env.TZ;
+  process.env.TZ = 'UTC';
+  try {
+    return await fn();
+  } finally {
+    if (before === undefined) delete process.env.TZ;
+    else process.env.TZ = before;
+  }
+}
+
+for (const [name, file, c] of [
+  ['the A-G record', 'w4p1-unchanged-record-agf.golden.txt', AGF],
+  ['the legacy record', 'w4p1-unchanged-record-legacy.golden.txt', OLD],
+] as const) {
+  test(`W4 P1 (11) ${name}: with no setting, the page without the view's foot equals the base’s`, async () => {
+    const actual = withoutLayoutFoot(await inUtc(() => renderWithInstance(c, INSTANCE)));
+    if (UNCHANGED_OUT !== undefined) {
+      fs.writeFileSync(path.join(UNCHANGED_OUT, file), actual);
+      return;
+    }
+    const goldenPath = path.join(HERE, file);
+    assert.ok(fs.existsSync(goldenPath), `no golden at ${goldenPath}; it is captured on the base, never written by hand`);
+    const captured = fs.readFileSync(goldenPath, 'utf8');
+    assert.equal(occurrences(captured, '[Verified: ').length, 1, 'premise: the base’s citation block carries the word ruling D1 changes, once');
+    const golden = captured.replace('[Verified: ', '[Published: ');
+    if (actual === golden) return;
+    let i = 0;
+    while (i < golden.length && golden[i] === actual[i]) i++;
+    assert.fail(`${name} differs from the base at character ${i}:\n  base: …${golden.slice(Math.max(0, i - 60), i + 80)}…\n  head: …${actual.slice(Math.max(0, i - 60), i + 80)}…`);
+  });
+}

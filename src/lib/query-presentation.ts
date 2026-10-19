@@ -34,6 +34,12 @@ export type QuerySurfacePresentation = 'comparison' | 'answer-first';
  */
 export const MODE_STORAGE_KEY = 'civicaitools.notebookMode';
 export const COMPARISON_STORAGE_KEY = 'civicaitools.showComparison';
+/**
+ * The reader's layout choice (LAYOUT-WEB W4 P1): the answer view's toggle
+ * writes the chosen layout's name and version (`<name>@<version>`) here, and
+ * every surface the view renders reads it, the record page included.
+ */
+export const LAYOUT_STORAGE_KEY = 'civicaitools.answerLayout';
 
 /** Parse a stored response-mode choice; anything unrecognized is "no choice". */
 export function parseStoredMode(raw: string | null): QueryMode | null {
