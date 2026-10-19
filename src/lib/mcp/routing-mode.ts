@@ -48,6 +48,7 @@ import { routedSourceId } from './registry.ts';
 import { composeDirectoryPrompt, routerComponent, withPortalLockGuidance, type CompositionComponent } from './socrata-skill.ts';
 import { loadSourceTool } from './tools.ts';
 import { callMcpTool, type McpToolCallOptions } from './client.ts';
+import type { LoadStep } from '../model-loop/run-tool-loop.ts';
 
 /** The values `SOURCE_ROUTING` takes, the default first. */
 export const SOURCE_ROUTING_MODES = ['all-sources', 'in-loop'] as const;
@@ -168,6 +169,8 @@ export interface InLoopRouting {
   resolveToolSource(name: string): string | undefined;
   /** The source ids loaded so far, in manifest order. */
   loaded(): string[];
+  /** RED STUB (#644 W1). */
+  readonly loadStep: LoadStep;
   /** The date the run's prompts state, `YYYY-MM-DD`. */
   readonly assertedDate: string;
   /** Every manifest source's offered-reason over the run's selection, as an
@@ -201,6 +204,7 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
     executeToolCall: (name, args) => callTool(name, args, { selection: loadedNow() }),
     resolveToolSource: (name) => routedSourceId(name, configured, loadedNow()),
     loaded: loadedNow,
+    loadStep: { toolName: 'load_source', load: async () => ({ outcome: 'not-offered', text: 'No load step.' }) },
     assertedDate: now.toISOString().split('T')[0],
     sourcesOffered: civicRouter
       .sourcesOffered(configured, selection)

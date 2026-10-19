@@ -56,6 +56,7 @@ import { hash as traceHash } from '../evidence/trace.ts';
 import { deriveOperationType, isTool, toolSpanNames, upstreamToolName } from '../mcp/operation-types.ts';
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
 import { PortalLockedCallError, portalOutsideLock } from '../portal-lock.ts';
+import type { LoadOutcome } from '@typedstandards/civic-typed-harness';
 
 export interface TraceContext {
   builder: TraceBuilder;
@@ -92,6 +93,27 @@ export interface ToolCallRecord {
   reason?: string;
   failed?: boolean;
   failureKind?: ToolFailureKind;
+  /** RED STUB (#644 W1): a load's outcome. */
+  loadOutcome?: LoadOutcome;
+}
+
+/** RED STUB (#644 W1): what a load answers. */
+export interface LoadStepResult {
+  outcome: LoadOutcome;
+  text: string;
+  systemPrompt?: string;
+  tools?: ChatCompletionTool[];
+}
+
+/** RED STUB (#644 W1). */
+export interface LoadStepContext {
+  iteration: number;
+}
+
+/** RED STUB (#644 W1): the option is accepted and not read. */
+export interface LoadStep {
+  toolName: string;
+  load(alias: string | undefined, context: LoadStepContext): Promise<LoadStepResult>;
 }
 
 /**
@@ -198,6 +220,8 @@ export interface ToolLoopOptions {
   onDelta?: (delta: string) => void;
   onEvent?: (event: LoopEvent) => void;
   trace?: TraceContext;
+  /** RED STUB (#644 W1): not read. */
+  loadStep?: LoadStep;
   /** Label for this loop's operator log lines. */
   logContext?: string;
 }

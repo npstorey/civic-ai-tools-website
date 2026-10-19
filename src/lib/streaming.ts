@@ -831,6 +831,9 @@ export const NOT_OFFERED_FOR_LLM =
   ' language that this question did not use this data source, and do not include any raw error text, status codes,' +
   ' server names, or system details.';
 
+/** RED STUB (#644 W1): R6's text. */
+export const NOT_LOADED_FOR_LLM = NOT_OFFERED_FOR_LLM;
+
 /**
  * What the model is told when the loop core refused a call because it named a
  * portal other than the one Socrata portal a locked instance serves (#436, ruling D7). The
@@ -1362,6 +1365,7 @@ export function formatToolResult(
   args: Record<string, unknown>,
   resultSummary?: { rows: number; columns: number },
   name?: string,
+  _loadOutcome?: string,
 ): string | null {
   const type = resolveOperationType({ name, args }) ?? (args.type as string | undefined);
   const datasetId = args.dataset_id as string | undefined;
@@ -1773,7 +1777,7 @@ function describeRejectedAttempt(reason: string | undefined): string {
 
 // Build a narrative summary telling the analytical story of what the AI did
 export function buildNarrativeSummary(
-  toolsCalled: { name?: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string; failed?: boolean }[],
+  toolsCalled: { name?: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string; failed?: boolean; loadOutcome?: string }[],
 ): string {
   if (toolsCalled.length === 0) return '';
 

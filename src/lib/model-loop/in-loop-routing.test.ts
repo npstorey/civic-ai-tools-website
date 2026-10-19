@@ -16,6 +16,24 @@
 // gate is dormant every configured source is listed and loads as On (G0
 // correction 1), and a test fails if that path ever yields an Ask-first source.
 //
+// Criterion 4, the load step: the loop intercepts `load_source` before the
+// transport. A load of an On source answers one plain line and sets the next
+// request's system prompt to the router's in-loop prompt over the loaded set
+// (then the lock section) and its tools to `[load_source, ...that set's
+// tools]`; a second load recomposes over the union; a repeat recomposes
+// nothing. An Ask-first source is declined; an alias naming no source of the
+// directory set is `not-offered`. A tool of a source in the directory that is
+// not loaded is refused `not_offered`, with R6's reader copy and R8's model
+// variant naming `load_source`. Each load is a tool call at its position,
+// with a span carrying its outcome and never `error`.
+//
+// THE FIXTURE IS SHAPED SO IT CAN FAIL (CLAUDE.md, "a criterion demonstrated
+// on a fixture shaped so it cannot fail"): the run loads two of the three
+// sources, so the loaded set is a strict subset of the directory; the refused
+// call is to Boston, which no successful call touches; and one not-offered
+// load names an alias holding a `{`, so a result text that echoed its alias
+// would carry one.
+//
 // Run with: npm test
 //   (or: node --test --experimental-strip-types src/lib/model-loop/in-loop-routing.test.ts)
 
@@ -68,6 +86,9 @@ process.env.BOSTON_OPENCONTEXT_MCP_URL = `${MCP_ORIGIN}/boston/mcp`;
 const { civicRouter } = await import('@typedstandards/civic-typed-router');
 const { readMcpEnvFromProcess } = await import('../mcp/registry.ts');
 const { CROSS_SOURCE_PREAMBLE, SOCRATA_SKILL_FALLBACK } = await import('../mcp/socrata-skill.ts');
+const { DATA_COMMONS_PUBLICATION_HOST } = await import('../mcp/data-commons-skill.ts');
+const { NOT_LOADED_FOR_LLM, friendlyStreamError } = await import('../streaming.ts');
+const { TraceBuilder, CIVICAITOOLS_TRACE_CONFIG, hash } = await import('../evidence/trace.ts');
 const { createInLoopRouting, directorySet, entersInLoop } = await import('../mcp/routing-mode.ts');
 const { runToolLoop } = await import('./run-tool-loop.ts');
 const { startScriptedModelServer } = await import('./test-harness.ts');
@@ -97,9 +118,11 @@ function systemOf(request: Json): string {
 async function drive(
   session: Awaited<ReturnType<typeof createInLoopRouting>>,
   replies: Parameters<typeof startScriptedModelServer>[0],
-): Promise<{ requests: Json[]; result: Awaited<ReturnType<typeof runToolLoop>> }> {
+): Promise<{ requests: Json[]; result: Awaited<ReturnType<typeof runToolLoop>>; trace: ReturnType<InstanceType<typeof TraceBuilder>['finalize']> }> {
   const scripted = await startScriptedModelServer(replies);
   process.env.MODEL_API_BASE_URL = scripted.url;
+  const builder = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);
+  builder.startRoot('analysis', {});
   try {
     const result = await runToolLoop({
       client: createModelClient({ apiKey: 'placeholder-model-key-r8-w1' }),
@@ -109,8 +132,11 @@ async function drive(
       systemPrompt: session.firstSystemPrompt,
       tools: session.firstTools,
       executeToolCall: session.executeToolCall,
+      loadStep: session.loadStep,
+      trace: { builder, parentSpanId: builder.rootSpanId, systemPromptHash: hash(session.firstSystemPrompt), resolveToolSource: session.resolveToolSource },
     });
-    return { requests: scripted.requests, result };
+    builder.endRoot();
+    return { requests: scripted.requests, result, trace: builder.finalize() };
   } finally {
     delete process.env.MODEL_API_BASE_URL;
     await new Promise<void>((resolve) => scripted.server.close(() => resolve()));
@@ -190,4 +216,172 @@ test('criterion 3: in-loop is never entered with an empty directory set', () => 
   assert.equal(entersInLoop('in-loop', all), true);
   assert.equal(entersInLoop('in-loop', allOff), false);
   assert.equal(entersInLoop('all-sources', all), false);
+});
+
+// --- Criterion 4: the load step ------------------------------------------------------
+
+/** The in-loop prompt the router composes for `loaded`, from the answers the
+ *  loopback sources give: independent of the app's composition code. */
+async function expectedInLoopPrompt(loaded: string[], lockedPortal?: string): Promise<string> {
+  const prompt = await civicRouter.aliasedInLoopSystemPrompt({
+    portal: undefined,
+    configured,
+    today: TODAY,
+    publicationHost: DATA_COMMONS_PUBLICATION_HOST,
+    fetchPrompt: async (): Promise<string> => { throw new Error('refused'); },
+    fetchInstructions: async (sourceId: string) => (sourceId === 'data-commons' ? DATA_COMMONS_INSTRUCTIONS : null),
+    selection: ALL_IDS,
+    loaded,
+  });
+  return lockedPortal ? `${prompt}\n\n---\n\n${civicRouter.aliasedPortalLockGuidance(lockedPortal, configured, ALL_IDS)}` : prompt;
+}
+
+/** The tools a request after loading `loaded` carries, from the package alone. */
+function expectedTools(loaded: string[]): unknown[] {
+  return [
+    civicRouter.aliasedLoadSourceTool({ configured, selection: ALL_IDS }),
+    ...civicRouter.aliasedOfferedMcpTools(civicRouter.aliasedMcpTools, configured, loaded),
+  ];
+}
+
+type Span = { name: string; spanId: string; attributes: Array<{ key: string; value: { stringValue?: string; intValue?: string; boolValue?: boolean } }> };
+function spansOf(trace: unknown): Span[] {
+  return (trace as { resourceSpans: Array<{ scopeSpans: Array<{ spans: Span[] }> }> }).resourceSpans[0].scopeSpans[0].spans;
+}
+function attrs(span: Span): Record<string, string | boolean | undefined> {
+  return Object.fromEntries(span.attributes.map((a) => [a.key, a.value.stringValue ?? a.value.intValue ?? a.value.boolValue]));
+}
+function toolMessages(request: Json): Array<{ tool_call_id: string; content: string }> {
+  return ((request.messages ?? []) as Array<{ role?: string; tool_call_id?: string; content?: string }>)
+    .filter((m) => m.role === 'tool')
+    .map((m) => ({ tool_call_id: m.tool_call_id ?? '', content: m.content ?? '' }));
+}
+
+const LOAD_RUN_SCRIPT = [
+  { toolCalls: [{ id: 'load-socrata', name: 'load_source', args: { alias: 'socrata' } }] },
+  {
+    toolCalls: [
+      { id: 'get-socrata', name: 'socrata__get_data', args: { type: 'query', dataset_id: 'aaaa-1111', limit: 1 } },
+      { id: 'query-boston', name: 'boston__ckan__query_data', args: { resource_id: 'r-1', limit: 1 } },
+      { id: 'load-charter', name: 'load_source', args: { alias: 'nyc_charter' } },
+      { id: 'load-brace', name: 'load_source', args: { alias: '{"alias":"socrata"}' } },
+    ],
+  },
+  { toolCalls: [{ id: 'load-dc', name: 'load_source', args: { alias: 'data_commons' } }] },
+  { toolCalls: [{ id: 'load-socrata-again', name: 'load_source', args: { alias: 'socrata' } }] },
+  { content: 'There were 512 potholes reported (dataset aaaa-1111); Boston could not be checked.' },
+];
+
+const loadRun = await (async () => {
+  const directory = directorySet(configured, { enforced: false, states: {} });
+  const session = await createInLoopRouting({ configured, directory, selection: undefined, now: NOW });
+  const mcpFrom = MCP_REQUESTS.length;
+  const run = await drive(session, LOAD_RUN_SCRIPT);
+  return { ...run, session, mcp: MCP_REQUESTS.slice(mcpFrom) };
+})();
+
+test('criterion 4: after a load, the next request\'s system prompt is the router\'s in-loop prompt over the loaded set, byte for byte', async () => {
+  assert.equal(systemOf(loadRun.requests[1]), await expectedInLoopPrompt(['socrata']));
+  // A second load recomposes over the union; a repeat recomposes nothing.
+  assert.equal(systemOf(loadRun.requests[3]), await expectedInLoopPrompt(['socrata', 'data-commons']));
+  assert.equal(systemOf(loadRun.requests[4]), systemOf(loadRun.requests[3]));
+});
+
+test('criterion 4: after a load, the next request\'s tools are load_source and the loaded sources\' tools', () => {
+  assert.equal(JSON.stringify(loadRun.requests[1].tools), JSON.stringify(expectedTools(['socrata'])));
+  assert.equal(JSON.stringify(loadRun.requests[3].tools), JSON.stringify(expectedTools(['socrata', 'data-commons'])));
+  assert.equal(JSON.stringify(loadRun.requests[4].tools), JSON.stringify(loadRun.requests[3].tools));
+  assert.ok(!toolNames(loadRun.requests[4]).some((n) => n.startsWith('boston__')), 'a tool of an unloaded source was offered');
+  assert.deepEqual(loadRun.session.loaded(), ['socrata', 'data-commons']);
+});
+
+test('criterion 4: under the lock, the lock section follows the in-loop prompt', async () => {
+  const directory = directorySet(configured, { enforced: false, states: {} });
+  const session = await createInLoopRouting({ configured, directory, selection: undefined, lockedPortal: 'data.example.org', now: NOW });
+  const loaded = await session.loadStep.load('socrata', { iteration: 1 });
+  assert.equal(loaded.outcome, 'loaded');
+  assert.equal(loaded.systemPrompt, await expectedInLoopPrompt(['socrata'], 'data.example.org'));
+});
+
+test('criterion 4: no load\'s tool message contains a brace, and each is one line', () => {
+  const loads = new Set(['load-socrata', 'load-charter', 'load-brace', 'load-dc', 'load-socrata-again']);
+  const last = loadRun.requests[loadRun.requests.length - 1];
+  const messages = toolMessages(last).filter((m) => loads.has(m.tool_call_id));
+  assert.equal(messages.length, 5, 'premise: the five load results reached the model');
+  // They are the load step's own lines, each naming what it loaded.
+  const byId = Object.fromEntries(messages.map((m) => [m.tool_call_id, m.content]));
+  assert.match(byId['load-socrata'], /\bsocrata\b/);
+  assert.match(byId['load-dc'], /\bdata_commons\b/);
+  for (const { tool_call_id, content } of messages) {
+    assert.ok(content.length > 0, `${tool_call_id}: empty`);
+    assert.ok(!content.includes('{'), `${tool_call_id} carries a brace: ${content}`);
+    assert.ok(!content.includes('\n'), `${tool_call_id} is more than one line`);
+  }
+});
+
+test('criterion 4: a tool of a source in the directory that is not loaded is refused not_offered, with R6\'s reader copy and R8\'s model variant', () => {
+  const boston = loadRun.result.toolCalls.find((c) => c.name === 'boston__ckan__query_data');
+  assert.equal(boston?.failed, true);
+  assert.equal(boston?.failureKind, 'not_offered');
+  const message = toolMessages(loadRun.requests[2]).find((m) => m.tool_call_id === 'query-boston')?.content;
+  assert.equal(message, NOT_LOADED_FOR_LLM);
+  assert.match(NOT_LOADED_FOR_LLM, /load_source/);
+  assert.match(NOT_LOADED_FOR_LLM, /not loaded/);
+  assert.equal(friendlyStreamError({ code: 'not_offered' }), 'This question did not use that data source, so nothing was sent to it.');
+  // Nothing was sent to Boston; the Socrata call, made after its load, was.
+  assert.deepEqual(loadRun.mcp.filter((r) => r.method === 'tools/call').map((r) => [r.path, r.tool]), [['/socrata/mcp', 'get_data']]);
+  const socrata = loadRun.result.toolCalls.find((c) => c.name === 'socrata__get_data');
+  assert.equal(socrata?.failed, undefined);
+});
+
+test('criterion 4: each load is a tool call at its position, with its outcome; loaded and not-offered are driven', () => {
+  assert.deepEqual(
+    loadRun.result.toolCalls.map((c) => [c.name, c.operationType, c.loadOutcome ?? null]),
+    [
+      ['load_source', 'load_source', 'loaded'],
+      ['socrata__get_data', 'query', null],
+      ['boston__ckan__query_data', 'query', null],
+      ['load_source', 'load_source', 'not-offered'],
+      ['load_source', 'load_source', 'not-offered'],
+      ['load_source', 'load_source', 'loaded'],
+      ['load_source', 'load_source', 'loaded'],
+    ],
+  );
+});
+
+test('criterion 4: each load span carries its outcome, names no source, and is never marked an error', () => {
+  const toolSpans = spansOf(loadRun.trace).filter((s) => s.name === 'mcp_tool_call');
+  assert.equal(toolSpans.length, loadRun.result.toolCalls.length, 'a tool call has no span, or a span no call');
+  const loads = toolSpans.map(attrs).filter((a) => a['tool.operation_type'] === 'load_source');
+  assert.deepEqual(loads.map((a) => a['tool.load_outcome']), ['loaded', 'not-offered', 'not-offered', 'loaded', 'loaded']);
+  for (const a of loads) {
+    assert.equal(a.error, undefined, 'a load span is marked an error');
+    for (const key of ['mcp.source', 'mcp.alias', 'mcp.server.id', 'tool.upstream_name']) {
+      assert.equal(a[key], undefined, `a load span names a source: ${key}`);
+    }
+  }
+});
+
+test('criterion 4: an Ask-first source is declined, its span says so, and nothing is loaded or sent', async () => {
+  const directory = directorySet(configured, { enforced: true, states: { socrata: 'on', 'boston-opencontext': 'ask-first' } });
+  const session = await createInLoopRouting({ configured, directory, selection: ['socrata'], now: NOW });
+  const mcpFrom = MCP_REQUESTS.length;
+  const run = await drive(session, [
+    { toolCalls: [{ id: 'load-boston', name: 'load_source', args: { alias: 'boston' } }] },
+    { content: 'Boston could not be checked for this question.' },
+  ]);
+  const text = toolMessages(run.requests[1]).find((m) => m.tool_call_id === 'load-boston')?.content ?? '';
+  assert.ok(!text.includes('{') && !text.includes('\n'), `the declined text: ${text}`);
+  assert.match(text, /unavailable for this question/);
+  assert.match(text, /Do not call load_source for it again/);
+  assert.match(text, /say what could not be checked/);
+  assert.deepEqual(run.result.toolCalls.map((c) => [c.name, c.loadOutcome ?? null, c.failed ?? null]), [['load_source', 'declined', null]]);
+  const span = spansOf(run.trace).filter((s) => s.name === 'mcp_tool_call').map(attrs)[0];
+  assert.equal(span['tool.load_outcome'], 'declined');
+  assert.equal(span.error, undefined);
+  // The next request is the first one's prompt and tools: nothing was loaded.
+  assert.equal(systemOf(run.requests[1]), session.firstSystemPrompt);
+  assert.deepEqual(toolNames(run.requests[1]), ['load_source']);
+  assert.deepEqual(session.loaded(), []);
+  assert.deepEqual(MCP_REQUESTS.slice(mcpFrom), [], 'a declined load contacted a source');
 });

@@ -75,6 +75,8 @@ export interface PhaseAToolCall {
   failed?: boolean;
   /** Why it failed, when `failed` is true. Absent is read as `unknown`. */
   failureKind?: ToolFailureKind;
+  /** RED STUB (#644 W1). */
+  loadOutcome?: string;
 }
 
 /** Python-literal rendering for the JSON-safe values we get from MCP tool args. */
