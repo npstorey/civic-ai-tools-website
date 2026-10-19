@@ -100,6 +100,6 @@ test('the section gives the order of applying, the read-back, the reversal, and 
   assert.match(USAGE, /drizzle\/0018_usage_counts\.sql/);
   assert.match(USAGE, /\\d usage_counts/, 'no read-back');
   assert.match(USAGE, /DROP TABLE IF EXISTS usage_counts/, 'no reversal');
-  assert.match(USAGE, /before the deploy/i, 'no order of applying');
+  assert.match(USAGE, /\*{0,2}before\*{0,2} the deploy/i, 'no order of applying');
   assert.match(USAGE, /`\/api\/compare`/, 'the section does not name the one path where an answered call is not counted');
 });
