@@ -385,3 +385,17 @@ test('criterion 4: an Ask-first source is declined, its span says so, and nothin
   assert.deepEqual(session.loaded(), []);
   assert.deepEqual(MCP_REQUESTS.slice(mcpFrom), [], 'a declined load contacted a source');
 });
+
+// --- Criterion 5: each request's prompt hash ------------------------------------------
+
+test('criterion 5: under in-loop, each llm_inference span states its own request\'s system prompt hash', () => {
+  const inference = spansOf(loadRun.trace).filter((s) => s.name === 'llm_inference')
+    .map(attrs)
+    .sort((x, y) => Number(x['gen_ai.inference_index']) - Number(y['gen_ai.inference_index']));
+  assert.equal(inference.length, loadRun.requests.length, 'premise: one inference span per request');
+  inference.forEach((a, i) => {
+    assert.equal(a['gen_ai.system_prompt_hash'], hash(systemOf(loadRun.requests[i])), `request ${i}`);
+  });
+  // The prompts did change across the run, so the hashes can differ.
+  assert.notEqual(inference[0]['gen_ai.system_prompt_hash'], inference[1]['gen_ai.system_prompt_hash']);
+});
