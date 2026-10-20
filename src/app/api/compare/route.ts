@@ -146,9 +146,9 @@ export async function POST(request: NextRequest) {
     // `consent_required`, 403, carrying the flows version to show.
     // This route writes no trace, so the selection is all it takes from the
     // consent: no flows statement attribute (G0 finding 3).
-    // DORMANT until W3 ships the consent card (`CONSENT_GATE_ENFORCED`,
-    // `src/lib/sources/consent-enforced.ts`): the gate then refuses nothing, and
-    // the selection, the reasons and the record are what they were before W2.
+    // ENFORCED since W3 (`CONSENT_GATE_ENFORCED`, `src/lib/sources/consent-enforced.ts`):
+    // a consent in force with no source On is refused here too, with the
+    // typed `no_sources_on`, before the model or any source is called.
     const consent = await consentInForce(request, session);
     if (!consent.ok) {
       return NextResponse.json(consent.payload, { status: 403 });

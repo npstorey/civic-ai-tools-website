@@ -2047,7 +2047,7 @@ by hand, so the owner-run `psql` application and a fork's `drizzle-kit
 migrate` are both safe on a database that already has it (the file's header
 says why). Apply it **before** the deploy that reads it: after, every
 signed-in session with an account row fails its consent read (on the consent
-endpoint now, and on every question once the gate is on). Verify with
+endpoint and on every question). Verify with
 `\d source_consents`, never the tool's exit status alone
 ([`docs/db-migrations.md`](db-migrations.md)).
 
