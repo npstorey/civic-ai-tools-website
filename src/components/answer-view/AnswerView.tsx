@@ -68,7 +68,6 @@ import { LAYOUT_STORAGE_KEY } from '@/lib/query-presentation';
 import {
   disclosureOrder,
   layoutId,
-  layoutLine,
   pageOrder,
   parseStoredLayoutChoice,
   selectLayout,
@@ -78,6 +77,7 @@ import {
   type PagePartView,
   type RecordSectionView,
 } from '@/lib/answer-layout';
+import { layoutFootLine, type PublishedLayout } from '@/lib/answer-layout/published-line';
 import {
   type AnswerPart,
   type AnswerViewModel,
@@ -684,13 +684,13 @@ function useChosenLayout(layouts: InstanceLayouts): [LayoutPayload, (id: string)
 }
 
 /** Rule 5: the line that names the layout, and beside it the reader's choice. Outside the disclosure. */
-function LayoutFoot({ layout, layouts, onChoose }: { layout: LayoutPayload; layouts: InstanceLayouts; onChoose: (id: string) => void }) {
+function LayoutFoot({ layout, layouts, onChoose, published }: { layout: LayoutPayload; layouts: InstanceLayouts; onChoose: (id: string) => void; published?: PublishedLayout }) {
   return (
     <div data-part="layout-foot" style={{
       marginTop: '16px', display: 'flex', flexWrap: 'wrap', gap: '4px 12px',
       alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)',
     }}>
-      <span data-part="layout-line">{layoutLine(layout)}</span>
+      <span data-part="layout-line">{layoutFootLine(layout, published)}</span>
       {layouts.offered.length > 1 && (
         <label style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
           Show under layout
@@ -822,7 +822,7 @@ export default function AnswerView({
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>
       {pageOrder(layout).order.map((name) => <Fragment key={name}>{parts[name]}</Fragment>)}
 
-      <LayoutFoot layout={layout} layouts={layouts} onChoose={choose} />
+      <LayoutFoot layout={layout} layouts={layouts} onChoose={choose} published={model.publishedLayout} />
     </div>
   );
 }

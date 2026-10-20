@@ -13,7 +13,10 @@ import { getBrandName } from '@/lib/brand-config';
 import { eq } from 'drizzle-orm';
 import { getPackage } from '@/lib/storage';
 import type { EvidencePackage } from '@/lib/evidence/packager';
-import { resolveLifecycle } from '@/lib/evidence/lifecycle';
+import { resolveRecordAttestations } from '@/lib/evidence/lifecycle';
+// The layout the record was published under (LAYOUT-WEB W4 P2), looked up
+// among the layout nodes this site holds, for the view's foot line.
+import { publishedLayoutFor } from '@/lib/answer-layout/held';
 // The answer view (LAYOUT-WEB W3 P2, design §4.2 option A): the record
 // adapter builds the view's model from the package and its row, and the view
 // lays out the parts every surface shares, in one order, each under the line
@@ -300,6 +303,16 @@ export default async function EvidencePage({ params }: PageProps) {
   // record has them: the spec link beside the status row, and the notebook
   // bundle download, which the bundle route refuses for any other profile
   // (`api/evidence/[slug]/bundle/route.ts`).
+  //
+  // Lifecycle (spec §8.10) — dual-read the signed attestation chain when
+  // present, else the legacy withdrawn/reinstated columns (§8.10.4). The banner
+  // and Status History below render from the resolved status + history rather
+  // than the raw columns, so post-PR3 records surface their signed chain while
+  // pre-PR3 records keep rendering from their columns. From the same verified
+  // rows, the layout node the record's publication attestation names
+  // (LAYOUT-WEB W4 P2), which the view's foot line compares with the layout
+  // it shows.
+  const { lifecycle, publishedLayoutNodeId } = await resolveRecordAttestations(record, renderPkg?.signer?.identifier);
   const viewModel = adaptRecord({
     stored: pkg,
     resolution,
@@ -310,14 +323,9 @@ export default async function EvidencePage({ params }: PageProps) {
       captureMethod: record.captureMethod,
     },
     instance: getInstanceAttribution().host,
+    publishedLayout: await publishedLayoutFor(publishedLayoutNodeId),
   });
 
-  // Lifecycle (spec §8.10) — dual-read the signed attestation chain when
-  // present, else the legacy withdrawn/reinstated columns (§8.10.4). The banner
-  // and Status History below render from the resolved status + history rather
-  // than the raw columns, so post-PR3 records surface their signed chain while
-  // pre-PR3 records keep rendering from their columns.
-  const lifecycle = await resolveLifecycle(record, renderPkg?.signer?.identifier);
   // Adversarial evaluations targeting this content node (civic-ai-tools#72).
   const evaluationViews = record.basePackageHash
     ? await loadEvaluationViews(record.basePackageHash)

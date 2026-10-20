@@ -88,7 +88,7 @@ const STUB_SOURCE: Record<string, string> = {
     };
     export const db = { select() { return chain; } };`,
   '@/lib/storage': `export async function getPackage() { return globalThis.__p2Package ?? null; }`,
-  '@/lib/evidence/lifecycle': `export async function resolveLifecycle() { return globalThis.__p2Lifecycle; }`,
+  '@/lib/evidence/lifecycle': `export async function resolveRecordAttestations() { return { lifecycle: globalThis.__p2Lifecycle, publishedLayoutNodeId: globalThis.__p2PublishedLayoutNodeId ?? null }; }`,
   '@/lib/evidence/adversarial-eval': `export async function loadEvaluationViews() { return globalThis.__p2Evaluations ?? []; }`,
   '@/lib/evidence/sealed-access': `export async function sessionUserIsCreator() { return true; }`,
   'next/headers': `
