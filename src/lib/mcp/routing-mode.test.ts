@@ -14,11 +14,20 @@
 // in `src/app/api/in-loop-routing-driven.test.ts`, beside the in-loop request
 // that differs from it.
 //
+// Criterion 7, the guide: `docs/deploy.md` has an "In-loop routing" section
+// before "Tool names across sources", and its table is the quote test's
+// twenty rows, byte for byte. The file the rows come from (`summary.md` of run
+// `2026-10-19-quote-184845`, sha256 1701fd27…) is not in this repository, so
+// the table is pinned here by the hash of its 22 lines (the header, the
+// separator and the 20 rows), taken from that file.
+//
 // Run with: npm test
 //   (or: node --test --experimental-strip-types src/lib/mcp/routing-mode.test.ts)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { evaluateEnv, renderReport, ENV_SPEC } from '../../../scripts/preflight-env.mjs';
 import { parseSourceRouting, sourceRoutingMode, SOURCE_ROUTING_MODES } from './routing-mode.ts';
 
@@ -99,4 +108,42 @@ test('the mode: sourceRoutingMode reads SOURCE_ROUTING at call time, and its log
     if (saved === undefined) delete process.env.SOURCE_ROUTING;
     else process.env.SOURCE_ROUTING = saved;
   }
+});
+
+// --- Criterion 7: the guide -----------------------------------------------------------
+
+/** sha256 of lines 5-26 of the quote test's `summary.md` (sha256 1701fd27…),
+ *  joined by newlines: its table's header, separator and twenty rows. */
+const QUOTE_TEST_TABLE_SHA256 = '1661cf45b79f71bde29c16440b94be7ed22486550667493edece1f2389d0eb4a';
+
+function guideSection(): string {
+  const guide = readFileSync(new URL('../../../docs/deploy.md', import.meta.url), 'utf8');
+  const start = guide.indexOf('\n## In-loop routing\n');
+  assert.notEqual(start, -1, 'docs/deploy.md has no "## In-loop routing" section');
+  const next = guide.indexOf('\n## ', start + 1);
+  assert.equal(guide.slice(next, next + '\n## Tool names across sources\n'.length), '\n## Tool names across sources\n', 'the section is not directly before "Tool names across sources"');
+  return guide.slice(start + 1, next);
+}
+
+test('the guide: an "In-loop routing" section sits before "Tool names across sources"', () => {
+  const section = guideSection();
+  assert.match(section, /`SOURCE_ROUTING` sets how a question's data sources reach the model\./);
+  assert.match(section, /run `2026-10-19-quote-184845`/);
+});
+
+test('the guide: its table is the quote test\'s twenty rows, byte for byte', () => {
+  const lines = guideSection().split('\n');
+  const start = lines.findIndex((line) => line.startsWith('| Model | Shape |'));
+  assert.notEqual(start, -1, 'the section has no quote-test table');
+  const table = lines.slice(start, start + 22);
+  assert.equal(table.filter((line) => line.startsWith('| ')).length, 21, 'the table does not have a header and twenty rows');
+  assert.equal(lines[start + 22], '', 'the table does not end after twenty rows');
+  assert.equal(createHash('sha256').update(table.join('\n'), 'utf8').digest('hex'), QUOTE_TEST_TABLE_SHA256);
+});
+
+test('the guide: the environment reference row points to the section', () => {
+  const guide = readFileSync(new URL('../../../docs/deploy.md', import.meta.url), 'utf8');
+  const row = guide.split('\n').find((line) => line.startsWith('| `SOURCE_ROUTING` |'));
+  assert.ok(row, 'the environment reference has no SOURCE_ROUTING row');
+  assert.ok(row!.includes('(#in-loop-routing)'), 'the row does not link the section');
 });
