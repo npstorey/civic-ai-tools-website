@@ -11,10 +11,11 @@
 import type { FlowsKeptBy } from '@/lib/flows/statement';
 import { keepsText } from '@/lib/sources/source-name';
 
-export default function KeptByLine({ keptBy }: { keptBy: FlowsKeptBy }) {
+export default function KeptByLine({ keptBy, retention = false }: { keptBy: FlowsKeptBy; retention?: boolean }) {
   return (
     <>
       {keepsText(keptBy)}
+      {retention && keptBy.retention ? `, for ${keptBy.retention.replace(/\.$/, '')}` : ''}
       {keptBy.statementUrl && (
         <>
           {' ('}
@@ -28,14 +29,14 @@ export default function KeptByLine({ keptBy }: { keptBy: FlowsKeptBy }) {
   );
 }
 
-/** Several holders' lines, separated as one sentence. */
-export function KeptByLines({ keptBy }: { keptBy: readonly FlowsKeptBy[] }) {
+/** Several holders' lines, separated as one sentence; `retention` adds how long each says it keeps it. */
+export function KeptByLines({ keptBy, retention = false }: { keptBy: readonly FlowsKeptBy[]; retention?: boolean }) {
   return (
     <>
       {keptBy.map((k, i) => (
         <span key={`${k.holder}-${i}`}>
           {i > 0 ? '; ' : ''}
-          <KeptByLine keptBy={k} />
+          <KeptByLine keptBy={k} retention={retention} />
         </span>
       ))}
     </>

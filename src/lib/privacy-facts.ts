@@ -1336,6 +1336,7 @@ function sourceRow(source: FlowsStatement['sources'][number]): Statement {
   keptBy.forEach((line, i) => {
     if (i > 0) parts.push('; ');
     parts.push(keepsText(line));
+    if (line.retention) parts.push(`, for ${line.retention.replace(/\.$/, '')}`);
     if (line.statementUrl) parts.push(' (', { link: line.statementUrl, text: 'its statement' }, line.readOn ? `, read ${line.readOn})` : ')');
   });
   parts.push(`. How current its data is: ${source.freshness}`);

@@ -74,7 +74,7 @@ export default function SourcesPanel() {
                 Published by {source.publisher}. Runs at {sourceWhere(source)}.
               </div>
               <div>
-                Who holds its logs: <KeptByLines keptBy={source.recipients.flatMap((r) => r.keptBy)} />.
+                Who holds its logs: <KeptByLines keptBy={source.recipients.flatMap((r) => r.keptBy)} retention />.
               </div>
               <div>How current its data is: {source.freshness}</div>
               <div role="radiogroup" aria-label={`${name}: On, Ask first or Off`} style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
