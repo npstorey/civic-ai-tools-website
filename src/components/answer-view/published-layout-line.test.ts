@@ -9,8 +9,10 @@
 // renders the record page before the toggle reads the session. The held
 // fixture node is built from `envelope-order` and signed by a throwaway
 // Ed25519 key generated for this run (a fixture); a second is built from
-// `answer-first`, the shown layout's. A held set is handed in as data, since
-// the repository commits no node at this head.
+// `answer-first`, the shown layout's, and a third from `answer-first` at v2.
+// A held set is handed in as data: the repository commits one node
+// (`770ed52e…`, under the instance's key), and these tests use their own
+// fixtures, signed by the test key, rather than it.
 //
 // Each case differs from the one that shows the line in one property: the
 // node the attestation names, the attestation's signature verdict, its signer

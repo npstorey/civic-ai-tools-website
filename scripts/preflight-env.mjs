@@ -367,11 +367,13 @@ export const ENV_SPEC = [
   // for every answer view, and the prerendered home page bakes what the layout
   // resolved, so a malformed value fails `next build`; request-time pages read
   // the running server's and refuse under a malformed one. The two document
-  // forms are one setting, so setting both is refused; the URL form is
-  // refused until it is built.
+  // forms are one setting, so setting both is refused, as is setting the URL
+  // beside either. The URL form (W4 P2) names a published layout node: it is
+  // read once per server process and verified, and a node that fails is
+  // refused with the verifier's status. The `docs/deploy.md` row has the detail.
   { name: 'ANSWER_LAYOUT', readBy: 'build-and-runtime', tier: 'optional', purpose: "The answer view's default layout as a JSON document, the seven content/layout/v1 payload fields (spec 8.14.1) — absent, the built-in answer-first; malformed, the build fails and every page refuses; setting it and ANSWER_LAYOUT_PATH both is refused", hasFallback: true },
   { name: 'ANSWER_LAYOUT_PATH', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Path to a file holding the same layout document — the file-delivered form of ANSWER_LAYOUT; the file must be readable where next build runs as well as by the server', hasFallback: true },
-  { name: 'ANSWER_LAYOUT_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: "A published layout node's package URL — not read yet: set, it is refused, so the instance never renders with a layout other than the one it names", hasFallback: true },
+  { name: 'ANSWER_LAYOUT_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: "The URL of a published layout node document — read once per server process and verified; a node that fails is refused with the verifier's status, never replaced by the built-in (the docs/deploy.md row has the detail)", hasFallback: true },
   // How a question's sources reach the model (#644 W1, D9): a closed set, as
   // NYC_CHARTER_HOSTING's is. The running app treats a value outside it as
   // unset (`all-sources`) and logs one line naming the variable; the

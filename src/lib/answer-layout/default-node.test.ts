@@ -7,9 +7,10 @@
 // nothing at all fails here rather than passing every "none".
 //
 // Keys are throwaway Ed25519 keys generated for this run (fixtures). The
-// committed nodes are handed in as data (the repository commits none at this
-// head); the URL node is served by an injected fetcher, with the fixture
-// registry handed in as the instance's.
+// committed nodes are handed in as data: the repository commits one node
+// (`770ed52e…`, under the instance's key), and these tests use their own
+// fixtures rather than it. The URL node is served by an injected fetcher,
+// with the fixture registry handed in as the instance's.
 //
 // Run with: npm test (or node --test --experimental-strip-types src/lib/answer-layout/default-node.test.ts)
 
