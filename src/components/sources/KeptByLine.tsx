@@ -15,7 +15,7 @@ export default function KeptByLine({ keptBy, retention = false }: { keptBy: Flow
   return (
     <>
       {keepsText(keptBy)}
-      {retention && keptBy.retention ? `, for ${keptBy.retention.replace(/\.$/, '')}` : ''}
+      {retention && keptBy.retention ? ` (how long: ${keptBy.retention.charAt(0).toLowerCase()}${keptBy.retention.slice(1).replace(/\.$/, '')})` : ''}
       {keptBy.statementUrl && (
         <>
           {' ('}
