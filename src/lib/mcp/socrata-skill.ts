@@ -415,15 +415,45 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput = {}):
   const { portal, configured = readMcpEnvFromProcess(), selection, now = new Date() } = input;
   const today = now.toISOString().split('T')[0];
 
-  const prompts = new Map<string, FetchOutcome>();
-  const instructions = new Map<string, FetchOutcome>();
-  const promptKey = (name: string, args: Record<string, string>) => JSON.stringify([name, args]);
-
+  const fetches = recordingFetchers();
   const prompt = await civicRouter.aliasedBuildSystemPrompt({
     portal,
     configured,
     today,
     publicationHost: DATA_COMMONS_PUBLICATION_HOST,
+    fetchPrompt: fetches.fetchPrompt,
+    fetchInstructions: fetches.fetchInstructions,
+    selection,
+  });
+
+  return {
+    prompt,
+    assertedDate: today,
+    sourcesOffered: civicRouter
+      .sourcesOffered(configured, selection)
+      .map(({ sourceId, alias, reason }) => ({ sourceId, alias, reason })),
+    components: await componentsOf(prompt, civicRouter.offeredSkillSources(configured, selection), fetches, portal, configured),
+  };
+}
+
+/** A composition's fetchers, keeping each answer so its blocks can be
+ *  recomposed and hashed without a second fetch. */
+interface RecordingFetchers {
+  fetchPrompt: (name: string, args: Record<string, string>) => Promise<string>;
+  fetchInstructions: (sourceId: string) => Promise<string | null>;
+  prompts: Map<string, FetchOutcome>;
+  instructions: Map<string, FetchOutcome>;
+}
+
+const promptKey = (name: string, args: Record<string, string>) => JSON.stringify([name, args]);
+
+/** This module's fetchers, wrapped so each answer is kept. */
+function recordingFetchers(): RecordingFetchers {
+  const prompts = new Map<string, FetchOutcome>();
+  const instructions = new Map<string, FetchOutcome>();
+  return {
+    prompts,
+    instructions,
     fetchPrompt: async (name, args) => {
       try {
         const text = await fetchSkillGuidance(name, args);
@@ -444,10 +474,24 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput = {}):
         throw error;
       }
     },
-    selection,
-  });
+  };
+}
 
-  const offered = new Set(civicRouter.offeredSkillSources(configured, selection));
+/**
+ * The components of a composed `prompt`: one per source in `composed`, in
+ * manifest order, then the router's. Each source's block is recomposed from
+ * the kept answers by the same manifest entry the router called (no second
+ * fetch) and hashed when the prompt carries it verbatim; a block the prompt
+ * does not carry is stated with no hash.
+ */
+async function componentsOf(
+  prompt: string,
+  composed: readonly string[],
+  fetches: RecordingFetchers,
+  portal: string | undefined,
+  configured: McpRegistryEnv,
+): Promise<CompositionComponent[]> {
+  const offered = new Set(composed);
   const components: CompositionComponent[] = [];
   for (const entry of civicRouter.manifest) {
     if (!offered.has(entry.sourceId)) continue;
@@ -468,8 +512,8 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput = {}):
         {
           portal,
           publicationHost: DATA_COMMONS_PUBLICATION_HOST,
-          fetchPrompt: async (name, args) => replay(prompts.get(promptKey(name, args))) as string,
-          fetchInstructions: async (sourceId) => replay(instructions.get(sourceId)),
+          fetchPrompt: async (name, args) => replay(fetches.prompts.get(promptKey(name, args))) as string,
+          fetchInstructions: async (sourceId) => replay(fetches.instructions.get(sourceId)),
         },
         VIEW,
       );
@@ -487,15 +531,86 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput = {}):
     });
   }
   components.push({ id: routerPackage.name, version: routerPackage.version });
+  return components;
+}
 
-  return {
-    prompt,
-    assertedDate: today,
-    sourcesOffered: civicRouter
-      .sourcesOffered(configured, selection)
-      .map(({ sourceId, alias, reason }) => ({ sourceId, alias, reason })),
-    components,
-  };
+/** The composing package's own component, as every composition states it
+ *  last: its name and its installed version. */
+export function routerComponent(): CompositionComponent {
+  return { id: routerPackage.name, version: routerPackage.version };
+}
+
+/** The inputs of an in-loop directory (#644 W1). */
+export interface ComposeDirectoryPromptInput {
+  /** The instance's configuration, read once per run. */
+  configured: McpRegistryEnv;
+  /** The directory set's source ids: the sources the run may load. */
+  directory: readonly string[];
+  /** The run's clock. The directory states this instant's UTC date. */
+  now?: Date;
+}
+
+/**
+ * The directory: an in-loop run's first system prompt (#644 W1, ADR-0037).
+ * The package's `directoryPrompt` over the directory set: the intro, the
+ * heading, the paragraph that names `load_source`, and one line per source
+ * from its alias, description and freshness. It is the manifest's own text:
+ * no source is asked for anything, so listing a source contacts nothing.
+ */
+export function composeDirectoryPrompt(input: ComposeDirectoryPromptInput): string {
+  const { configured, directory, now = new Date() } = input;
+  return civicRouter.directoryPrompt({ configured, today: now.toISOString().split('T')[0], selection: [...directory] });
+}
+
+/** The inputs of one in-loop request's composition (#644 W1). */
+export interface ComposeInLoopSystemPromptInput {
+  /** The run's Socrata portal, if any. */
+  portal?: string;
+  /** The instance's configuration, read once per run. */
+  configured: McpRegistryEnv;
+  /** The directory set's source ids. */
+  directory: readonly string[];
+  /** The source ids the model has loaded. One outside the directory set is
+   *  not composed. */
+  loaded: readonly string[];
+  /** The run's clock: the same instant as the directory's. */
+  now?: Date;
+}
+
+/**
+ * An in-loop request's system prompt and what a record states about it
+ * (#644 W1, ADR-0037): the package's `aliasedInLoopSystemPrompt`, which is the
+ * directory over the directory set, the router's block separator, and the
+ * aliased composition over the loaded sources without its intro. The fetchers
+ * are this module's, as `composeSystemPrompt`'s are, so loading Data Commons
+ * or Boston asks that server for its instructions as composing it does under
+ * all-sources, and the Socrata guidance comes through the same cache.
+ *
+ * `components` is the loaded sources' components, then the router's; each
+ * block is hashed as found in THIS prompt, as `composeSystemPrompt` hashes the
+ * blocks of its own (G0 correction 3). The lock section is not part of
+ * `prompt`: the caller appends it.
+ */
+export async function composeInLoopSystemPrompt(
+  input: ComposeInLoopSystemPromptInput,
+): Promise<{ prompt: string; components: CompositionComponent[] }> {
+  const { portal, configured, directory, loaded, now = new Date() } = input;
+  const fetches = recordingFetchers();
+  const prompt = await civicRouter.aliasedInLoopSystemPrompt({
+    portal,
+    configured,
+    today: now.toISOString().split('T')[0],
+    publicationHost: DATA_COMMONS_PUBLICATION_HOST,
+    fetchPrompt: fetches.fetchPrompt,
+    fetchInstructions: fetches.fetchInstructions,
+    selection: [...directory],
+    loaded: [...loaded],
+  });
+  // The loaded set intersected with the directory set first (the router's
+  // flag): the prompt composes nothing outside the directory, so neither do
+  // the components.
+  const composed = directory.filter((id) => loaded.includes(id));
+  return { prompt, components: await componentsOf(prompt, composed, fetches, portal, configured) };
 }
 
 /**

@@ -706,6 +706,11 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       // The flows statement in force for the run (R6 W2, D2 = A): its url,
       // hash and date, read from the root span; absent, the key is absent.
       flowsStatement: run.flowsStatement,
+      // How an in-loop run's sources were chosen, and its harness definition's
+      // hash (#644 W1, harness 0.10.0), read from the root span; each absent,
+      // and its key absent, for a run that recorded none (every all-sources run).
+      routing: run.routing,
+      definitionHash: run.definitionHash,
       extensions: input.extensions,
     },
     { host: requirePublicationHost() },

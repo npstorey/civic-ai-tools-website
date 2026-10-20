@@ -31,6 +31,7 @@ import { modelAccessPhrase, modelIdentity, type ModelIdentity } from '@/lib/mode
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import type { SourceSelection } from '@typedstandards/civic-typed-router';
 import { consentInForce } from '@/lib/sources/consent-gate';
+import { afterLoopAttributes, createInLoopRouting, directorySet, entersInLoop, sourceRoutingMode, type InLoopRouting } from '@/lib/mcp/routing-mode';
 import {
   queryWithMcpStreaming,
   type CompletionResult,
@@ -291,13 +292,23 @@ export async function POST(request: NextRequest) {
   // Under the lock one section is appended (#436, D7); unlocked, unchanged.
   const configured = readMcpEnvFromProcess();
   const selection = consent.selection;
-  const composition = await composeSystemPrompt({ portal, configured, selection });
-  const systemPrompt = withPortalLockGuidance(composition.prompt, lockedPortal, configured, selection);
+  // How the sources reach the model (#644 W1, D9), read once per request. In
+  // loop, the first request carries the directory and `load_source` only;
+  // otherwise the composition below, exactly as before the setting existed.
+  const routingMode = sourceRoutingMode();
+  const directory = routingMode === 'in-loop' ? directorySet(configured, consent) : [];
+  const inLoop = entersInLoop(routingMode, directory)
+    ? await createInLoopRouting({ portal, lockedPortal, configured, directory, selection })
+    : undefined;
+  const composition = inLoop
+    ? { prompt: inLoop.firstSystemPrompt, assertedDate: inLoop.assertedDate, sourcesOffered: inLoop.sourcesOffered, components: inLoop.components() }
+    : await composeSystemPrompt({ portal, configured, selection });
+  const systemPrompt = inLoop ? inLoop.firstSystemPrompt : withPortalLockGuidance(composition.prompt, lockedPortal, configured, selection);
   const systemPromptHash = traceHash(systemPrompt);
   // `mcpTools` itself when unlocked; the locked text otherwise (#436, D7).
   // Only the sources this instance configures (sprint 238, D2), narrowed by
-  // the selection.
-  const offeredTools = offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection);
+  // the selection. In loop, `load_source` alone.
+  const offeredTools = inLoop ? inLoop.firstTools : offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection);
 
   const encoder = new TextEncoder();
   const stream = new TransformStream();
@@ -309,6 +320,20 @@ export async function POST(request: NextRequest) {
   // comment line every interval keeps a load balancer from closing the
   // connection as idle (see SSE_KEEPALIVE_INTERVAL_MS). Stopped before close.
   const stopKeepAlive = startSseKeepAlive(writer);
+
+  // What this run states about itself (#599 W4, ADR-0033), as one function
+  // so the root's start and an in-loop run's end state the same facts.
+  const runRecord = () => runRecordAttributes({
+    assertedDate: composition.assertedDate,
+    mcpServers: configuredMcpServers(configured),
+    toolDefinitions: offeredTools,
+    // The router's `not-selected` as the reader's state (D2 = A).
+    sourcesOffered: consent.recordReasons(composition.sourcesOffered),
+    components: composition.components,
+    // The flows statement in force (D2 = A).
+    flowsStatement: consent.reference,
+    ...(inLoop ? inLoop.record() : {}),
+  });
 
   const trace = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);
   trace.startRoot('executed_notebook', {
@@ -324,16 +349,11 @@ export async function POST(request: NextRequest) {
     // tools it offered, each source's offered-reason and the prompt's
     // components. All are known before the root starts, so they are written
     // with it; the packager reads them back from the trace at publish.
-    ...runRecordAttributes({
-      assertedDate: composition.assertedDate,
-      mcpServers: configuredMcpServers(configured),
-      toolDefinitions: offeredTools,
-      // The router's `not-selected` as the reader's state (D2 = A).
-      sourcesOffered: consent.recordReasons(composition.sourcesOffered),
-      components: composition.components,
-      // The flows statement in force (D2 = A).
-      flowsStatement: consent.reference,
-    }),
+    // In loop (#644 W1, G0 correction 2), the tools, the components, the
+    // routing statement and the definition hash are known only after the
+    // loop: they are left out here and written once, at the success
+    // `endRoot` below, since `endSpan` appends and never replaces.
+    ...(inLoop ? afterLoopAttributes(runRecord(), false) : runRecord()),
   });
 
   // What the usage count reads when the run ends (R6 W5, D9): `complete` once
@@ -374,6 +394,7 @@ export async function POST(request: NextRequest) {
         systemPromptHash,
         tools: offeredTools,
         usageCalls,
+        inLoop,
       });
 
       await emit({ type: 'phase', name: 'B', message: 'Synthesizing notebook…' });
@@ -449,8 +470,8 @@ export async function POST(request: NextRequest) {
       // trace + usage + answer so the publish dialog can build a package from
       // the EXECUTED session (same pattern as /api/compare-stream's final
       // `trace` event). Emitted only on success — a failed pipeline has
-      // nothing publishable.
-      trace.endRoot();
+      // nothing publishable. In loop, the four after-loop facts, once.
+      trace.endRoot(inLoop ? afterLoopAttributes(runRecord(), true) : undefined);
       await emit({
         type: 'publish_inputs',
         trace: trace.finalize() as unknown as Record<string, unknown>,
@@ -602,8 +623,10 @@ async function runPhaseA(args: {
   tools: ReturnType<typeof offeredMcpTools>;
   /** Where each call's end is recorded for the usage count (R6 W5): its name and whether it failed. */
   usageCalls: Array<{ name: string; failed?: boolean }>;
+  /** What an in-loop run is given (#644 W1); absent under all-sources. */
+  inLoop?: InLoopRouting;
 }): Promise<CompletionResult> {
-  const { query, portal, lockedPortal, configured, selection, model, emit: emitToStream, trace, systemPrompt, systemPromptHash, tools, usageCalls } = args;
+  const { query, portal, lockedPortal, configured, selection, model, emit: emitToStream, trace, systemPrompt, systemPromptHash, tools, usageCalls, inLoop } = args;
   // The callbacks below do not await their writes, so a write that fails
   // after the reader has cancelled the stream must not reject unhandled (R6 W5).
   const emit = (event: NotebookEvent): Promise<void> =>
@@ -689,13 +712,14 @@ async function runPhaseA(args: {
       // timer this file armed per tool call was never cleared. Told the run's
       // selection (R6 W1), so a call to a source it leaves out is refused
       // before any request.
-      (name, args) => callMcpTool(name, args, { selection }),
+      // In loop (#644 W1), the session: its transport and its load step.
+      inLoop ?? ((name, args) => callMcpTool(name, args, { selection })),
       systemPrompt,
       callbacks,
       // Non-throwing: a call to a tool no configured server hosts is refused by
       // the transport as one failed call, not thrown out of the loop here. The
       // same configuration and selection as the transport.
-      { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: (name) => routedSourceId(name, configured, selection) },
+      { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: inLoop ? inLoop.resolveToolSource : (name) => routedSourceId(name, configured, selection) },
       { portal, toolTimeoutMs: MCP_TOOL_TIMEOUT_MS },
       // Refused as a rejected call when it names another portal (#436, D7).
       lockedPortal,

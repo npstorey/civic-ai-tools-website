@@ -832,6 +832,27 @@ export const NOT_OFFERED_FOR_LLM =
   ' server names, or system details.';
 
 /**
+ * What the model is told when the dispatch refused a call to a tool of a
+ * source the in-loop run lists in its directory but has not loaded (#644 W1).
+ * The refusal is R6's `not_offered` and the reader's copy is R6's; only this
+ * text differs, because R6's ("do not call its tools again") is wrong for a
+ * source the model can still load. Fixed: it names `load_source` and no tool,
+ * no source and no word of any error.
+ */
+export const NOT_LOADED_FOR_LLM =
+  'That data source is not loaded, so this request was not sent to it. To use its tools, first call load_source with its' +
+  ' alias from the directory; its tools are added for the turn after that. Do not estimate, guess, or fabricate any values' +
+  ' in place of what it would have returned, and do not include any raw error text, status codes, server names, or system' +
+  ' details in your answer.';
+
+/** Whether a `not_offered` refusal is for a listed source that is not loaded:
+ *  the marker `SourceNotLoadedError` (`./mcp/routing-mode.ts`) carries, read
+ *  by structure, never by words. */
+function isSourceNotLoaded(input: unknown): boolean {
+  return input !== null && typeof input === 'object' && (input as { sourceNotLoaded?: unknown }).sourceNotLoaded === true;
+}
+
+/**
  * What the model is told when the loop core refused a call because it named a
  * portal other than the one Socrata portal a locked instance serves (#436, ruling D7). The
  * call was never sent. The locked portal is this instance's own configuration,
@@ -909,7 +930,9 @@ export function describeToolFailureForLlm(_toolName: string, input: unknown): st
       // offered, before anything was sent. Its own copy, not the preamble's
       // "returned no data" and not the branch above's "no data can be
       // retrieved": the other sources the run was given can still answer.
-      return NOT_OFFERED_FOR_LLM;
+      // R8 W1: a source the in-loop run lists but has not loaded can still be
+      // loaded, so its text says so and names `load_source`.
+      return isSourceNotLoaded(input) ? NOT_LOADED_FOR_LLM : NOT_OFFERED_FOR_LLM;
     default:
       return isSourceRefusal(input)
         ? SOURCE_REFUSAL_FOR_LLM
@@ -986,6 +1009,19 @@ export function searchSubject(toolName?: string): SearchSubject {
 /** Reader-facing copy for a call whose tool name the record does not carry. */
 export const UNNAMED_STEP_LABEL = 'Unnamed step';
 
+/**
+ * The source a `load_source` call named, in the reader's words (#644 W1): the
+ * manifest entry's display name without "MCP Server", as a record's
+ * `dataSources[]` names it. `undefined` for an alias no source has, which is
+ * text the model chose and is never repeated to a reader.
+ */
+function loadedSourceName(args: Record<string, unknown>): string | undefined {
+  const alias = args.alias;
+  if (typeof alias !== 'string') return undefined;
+  const entry = civicRouter.manifest.find((candidate) => candidate.alias === alias);
+  return entry ? entry.displayName.replace(/ MCP Server$/, '') : undefined;
+}
+
 // Format tool call arguments into human-readable progress messages
 export function formatToolProgress(
   name: string,
@@ -1019,6 +1055,11 @@ export function formatToolProgress(
     }
     case 'metrics':
       return `Fetching metrics for ${datasetName}`;
+    case 'load_source': {
+      // The instance's own step (#644 W1): no source is asked for data.
+      const source = loadedSourceName(args);
+      return source ? `Loading the ${source} source` : 'Loading a data source';
+    }
     default:
       // `fetch` derives to no operation type by design (see
       // mcp/operation-types.ts): the identifier's shape decides, server-side,
@@ -1362,6 +1403,8 @@ export function formatToolResult(
   args: Record<string, unknown>,
   resultSummary?: { rows: number; columns: number },
   name?: string,
+  /** A load's outcome (#644 W1), on a `load_source` call only. */
+  loadOutcome?: string,
 ): string | null {
   const type = resolveOperationType({ name, args }) ?? (args.type as string | undefined);
   const datasetId = args.dataset_id as string | undefined;
@@ -1387,6 +1430,25 @@ export function formatToolResult(
       return `Loaded metadata for ${datasetName}`;
     case 'metrics':
       return `Loaded metrics for ${datasetName}`;
+    case 'load_source': {
+      // A load's outcome, in the reader's words (#644 W1); with none
+      // recorded, nothing is said about how it ended.
+      const source = loadedSourceName(args);
+      switch (loadOutcome) {
+        case 'loaded':
+          return source ? `Loaded the ${source} source` : 'Loaded a data source';
+        case 'declined':
+          return source
+            ? `The ${source} source is set to Ask first, so it was not used for this question`
+            : 'A source set to Ask first was not used for this question';
+        case 'not-offered':
+          return 'No source was loaded: the request named none this question can use';
+        case undefined:
+          return null;
+        default:
+          return source ? `The ${source} source was not loaded` : 'No source was loaded';
+      }
+    }
     default:
       // `fetch`: a `record:` identifier answers with data rows, which the
       // loop's `summarizeToolResult` counts; a `dataset:` identifier answers
@@ -1434,6 +1496,10 @@ export function generateToolReason(args: Record<string, unknown>, name?: string)
       return `to query ${datasetName}`;
     case 'metrics':
       return `to check ${datasetName} statistics`;
+    case 'load_source': {
+      const source = loadedSourceName(args);
+      return source ? `to load the ${source} source` : 'to load a data source';
+    }
     default:
       if (isTool(name, 'fetch')) return id ? `to look up ${id}` : 'to look up one item';
       // A tool whose operation neither its name nor its arguments state: the
@@ -1598,6 +1664,8 @@ export function getEducationalAnnotation(phase: string, operationType?: string, 
       }
       case 'metrics':
         return 'Checking dataset statistics — how many records exist and how often the data is updated.';
+      case 'load_source':
+        return "The AI is loading a data source it chose from this site's list, so it can use that source's tools next.";
       default:
         return null;
     }
@@ -1665,6 +1733,10 @@ export function buildBreadcrumbLabel(
     }
     case 'metrics':
       return 'Get stats';
+    case 'load_source': {
+      const source = loadedSourceName(tool.args);
+      return source ? `Load ${truncate(source, 22)}` : 'Load a source';
+    }
     default: {
       if (isTool(tool.name, 'fetch')) {
         const id = tool.args.id as string | undefined;
@@ -1679,7 +1751,7 @@ export function buildBreadcrumbLabel(
 
 // Describe a tool call in past-tense narrative form
 function describeToolNarrative(
-  tool: { name?: string; args: Record<string, unknown>; operationType?: string },
+  tool: { name?: string; args: Record<string, unknown>; operationType?: string; loadOutcome?: string },
   index: number,
   allTools: { name?: string; args: Record<string, unknown>; operationType?: string }[],
 ): string {
@@ -1741,6 +1813,24 @@ function describeToolNarrative(
     }
     case 'metrics':
       return 'checked dataset statistics';
+    case 'load_source': {
+      // How the load ended, when the record says (#644 W1); a record that does
+      // not is narrated as the request it was.
+      const source = loadedSourceName(tool.args);
+      const named = source ? `the ${source} source` : 'a data source';
+      switch (tool.loadOutcome) {
+        case 'loaded':
+          return `loaded ${named}`;
+        case 'declined':
+          return source ? `did not use ${named}, which is set to Ask first` : 'did not use a source set to Ask first';
+        case 'not-offered':
+          return 'asked for a source this question cannot use';
+        case undefined:
+          return `asked to load ${named}`;
+        default:
+          return `did not load ${named}`;
+      }
+    }
     default: {
       if (isTool(tool.name, 'fetch')) {
         const id = tool.args.id as string | undefined;
@@ -1773,7 +1863,7 @@ function describeRejectedAttempt(reason: string | undefined): string {
 
 // Build a narrative summary telling the analytical story of what the AI did
 export function buildNarrativeSummary(
-  toolsCalled: { name?: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string; failed?: boolean }[],
+  toolsCalled: { name?: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string; failed?: boolean; loadOutcome?: string }[],
 ): string {
   if (toolsCalled.length === 0) return '';
 

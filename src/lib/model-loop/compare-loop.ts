@@ -42,6 +42,7 @@ import type { SourceSelection } from '@typedstandards/civic-typed-router';
 import type { McpRegistryEnv } from '../mcp/registry.ts';
 import { mcpToolsFor, offeredMcpTools } from '../mcp/tools.ts';
 import { callMcpTool } from '../mcp/client.ts';
+import type { InLoopRouting } from '../mcp/routing-mode.ts';
 import type { ToolCallRecord, ToolLoopOptions, ToolLoopResult } from './run-tool-loop.ts';
 
 /**
@@ -125,6 +126,14 @@ export interface CompareLoopInputs {
    * configuration at all.
    */
   callTool?: CompareToolTransport;
+  /**
+   * What an in-loop run is given (#644 W1), when the route runs in loop: its
+   * first tools (`load_source` alone) and its transport replace the
+   * all-sources ones, and the route passes its first system prompt as
+   * `systemPrompt`. Absent, every option below is what it was before the
+   * setting existed.
+   */
+  inLoop?: InLoopRouting;
 }
 
 /**
@@ -133,10 +142,11 @@ export interface CompareLoopInputs {
  * route supplies only what it read off the request.
  */
 export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
-  const { client, endpointModel, requestSettings, prompt, systemPrompt, portal, lockedPortal, configured, selection } = inputs;
+  const { client, endpointModel, requestSettings, prompt, systemPrompt, portal, lockedPortal, configured, selection, inLoop } = inputs;
   // With no selection, the client itself, as before the selection reached the
   // dispatch; with one, the same client told the selection.
   const callTool = inputs.callTool
+    ?? inLoop?.executeToolCall
     ?? (selection === undefined ? callMcpTool : (name: string, args: Record<string, unknown>) => callMcpTool(name, args, { selection }));
 
   return {
@@ -148,7 +158,7 @@ export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
     // The same schemas either way; under the lock their text stops inviting
     // other portals (#436). Only the sources this instance configures
     // (sprint 238, D2), narrowed by the selection (#599 D3).
-    tools: offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection),
+    tools: inLoop ? inLoop.firstTools : offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection),
     maxIterations: COMPARE_MAX_ITERATIONS,
     maxTokens: COMPARE_MAX_TOKENS,
     // No cumulative token budget: this caller has never had one, and the cap
@@ -165,6 +175,9 @@ export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
     lockedPortal,
     toolTimeoutMs: COMPARE_MCP_TOOL_TIMEOUT_MS,
     executeToolCall: callTool,
+    // In loop (#644 W1): the load step; this route holds no stream, so an
+    // Ask-first source is declined with no hold.
+    ...(inLoop ? { loadStep: inLoop.loadStep } : {}),
   };
 }
 

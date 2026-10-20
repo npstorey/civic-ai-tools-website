@@ -73,6 +73,17 @@ export function offeredMcpTools(
   return civicRouter.aliasedOfferedMcpTools(tools, configured, selection);
 }
 
+/**
+ * The first-step tool of an in-loop run (#644 W1, ADR-0037): `load_source`,
+ * one required argument `alias` whose enum is the directory set's aliases in
+ * manifest order. The package's own schema and text; a new object on every
+ * call. Its name is reserved: the package refuses a manifest whose alias or
+ * tool is named `load_source`, so no source's tool can share it.
+ */
+export function loadSourceTool(configured: McpRegistryEnv, directory: readonly string[]): ChatCompletionTool {
+  return civicRouter.aliasedLoadSourceTool({ configured, selection: [...directory] }) as unknown as ChatCompletionTool;
+}
+
 // Model definitions moved to src/lib/model-catalog.ts (civic-ai-tools-website#30
 // P2). `ModelDefinition`, the offered list, its pricing and its display names
 // were four tables in three files describing the same ids; they are now one

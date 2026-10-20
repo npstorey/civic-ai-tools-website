@@ -75,6 +75,12 @@ export interface PhaseAToolCall {
   failed?: boolean;
   /** Why it failed, when `failed` is true. Absent is read as `unknown`. */
   failureKind?: ToolFailureKind;
+  /**
+   * How a `load_source` call ended (#644 W1), on a load call only: the
+   * instance's own step, stated as a note and never as a step or a
+   * discovery call (`renderDiscoverySummaryCell`).
+   */
+  loadOutcome?: string;
 }
 
 /** Python-literal rendering for the JSON-safe values we get from MCP tool args. */
@@ -1100,8 +1106,13 @@ export function renderDiscoverySummaryCell(
   calls: readonly PhaseAToolCall[],
   defaultPortal: string = '',
 ): NotebookCell | null {
-  const discoveryCalls = calls.filter(c => renderFetchToolCell(c, { dataFrameIndex: 0, defaultPortal }) === null);
-  if (discoveryCalls.length === 0) return null;
+  // A load (#644 W1) is not a step (`isAnalysisStep`), so it renders no cell
+  // of its own, and it is not a discovery call either: it asked no source for
+  // anything. It is stated in a note of its own below; a run with no load
+  // renders exactly the cell it rendered before loads existed.
+  const loads = calls.filter(isLoadCall);
+  const discoveryCalls = calls.filter(c => !isLoadCall(c) && renderFetchToolCell(c, { dataFrameIndex: 0, defaultPortal }) === null);
+  if (discoveryCalls.length === 0) return loads.length === 0 ? null : markdownCell(loadNoteLines(loads).join('\n'));
   // The second sentence is a claim about the cells BELOW this one, so it is
   // conditional on there being any. Until #384 P4 it was unconditional, and a
   // notebook whose every fetch was rejected — or one whose only data-reading
@@ -1123,5 +1134,41 @@ export function renderDiscoverySummaryCell(
     const reason = call.reason ? ` — ${call.reason}` : '';
     lines.push(`- \`${call.name}\`${opType}${reason}`);
   }
+  if (loads.length > 0) lines.push('', ...loadNoteLines(loads));
   return markdownCell(lines.join('\n'));
+}
+
+/** Whether a call is an in-loop load (#644 W1): by its name, in either
+ *  spelling, or by the operation type the loop recorded for it. */
+function isLoadCall(call: PhaseAToolCall): boolean {
+  return call.operationType === 'load_source' || upstreamToolName(call.name) === 'load_source';
+}
+
+/**
+ * The note an in-loop run's loads are stated in: each load by the alias it
+ * named and how it ended. An alias no manifest source has is text the model
+ * chose, so it is described, never repeated.
+ */
+function loadNoteLines(loads: readonly PhaseAToolCall[]): string[] {
+  const lines = [
+    '### Sources loaded',
+    '',
+    "The analysis loaded data sources from this site's directory before calling their tools. " +
+      'A load sends no data request, so nothing is re-run for it here.',
+    '',
+  ];
+  for (const load of loads) {
+    const alias = typeof load.args.alias === 'string' ? load.args.alias : undefined;
+    const known = alias !== undefined && CIVIC_MANIFEST.some((entry) => entry.alias === alias);
+    if (!known) {
+      lines.push('- a request that named no source of the directory: nothing loaded');
+      continue;
+    }
+    const outcome =
+      load.loadOutcome === 'loaded' ? 'loaded'
+        : load.loadOutcome === 'declined' ? 'not used, set to Ask first'
+          : load.loadOutcome === undefined ? 'requested' : 'not loaded';
+    lines.push(`- \`${alias}\`: ${outcome}`);
+  }
+  return lines;
 }

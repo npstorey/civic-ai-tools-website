@@ -62,6 +62,7 @@ import { buildSystemPrompt } from '../mcp/socrata-skill.ts';
 import { sourceIdForToolName } from '../mcp/operation-types.ts';
 import { CIVIC_SOURCE_REGISTRY } from '../evidence/data-sources.ts';
 import type { ToolLoopOptions } from './run-tool-loop.ts';
+import { createInLoopRouting, directorySet, type InLoopRouting } from '../mcp/routing-mode.ts';
 
 /** Tool-calling rounds before the loop stops and asks for an answer. */
 export const REPLAY_MAX_ITERATIONS = 20;
@@ -118,6 +119,14 @@ export interface ReplayLoopInputs {
   selection?: SourceSelection;
   /** The configuration `selection` is read against; absent, read here. */
   configured?: McpRegistryEnv;
+  /**
+   * What an in-loop replay is given (#644 W1, C2): its first tools
+   * (`load_source` alone), its transport and its load step replace the
+   * narrowed ones, and `systemPrompt` is its directory. Supplied by
+   * `replayLoopOptionsForPackage` for a record whose `routing.method` is
+   * `in-loop`; absent, every option is what it was before in-loop routing.
+   */
+  inLoop?: InLoopRouting;
   /**
    * The per-tool-call timeout, in milliseconds. Overridable for ONE reason
    * (#357): a case that drives a transport which genuinely never settles
@@ -304,11 +313,15 @@ export function replayLoopOptions(inputs: ReplayLoopInputs): ToolLoopOptions {
   // Narrowed, the dispatch follows the same set as the tools array: a call the
   // replaying model makes to a tool outside it is refused `not_offered` before
   // any request (R6 W1).
+  const { inLoop } = inputs;
   const callTool = inputs.callTool
+    ?? inLoop?.executeToolCall
     ?? (selection === undefined ? callMcpTool : (name: string, args: Record<string, unknown>) => callMcpTool(name, args, { selection }));
-  const tools = selection === undefined
-    ? mcpTools
-    : offeredMcpTools(mcpTools, inputs.configured ?? readMcpEnvFromProcess(), selection);
+  const tools = inLoop
+    ? inLoop.firstTools
+    : selection === undefined
+      ? mcpTools
+      : offeredMcpTools(mcpTools, inputs.configured ?? readMcpEnvFromProcess(), selection);
 
   return {
     client,
@@ -333,6 +346,8 @@ export function replayLoopOptions(inputs: ReplayLoopInputs): ToolLoopOptions {
     // call rather than holding the replay open.
     toolTimeoutMs,
     executeToolCall: callTool,
+    // In loop (#644 W1): the load step. A replay holds no stream.
+    ...(inLoop ? { loadStep: inLoop.loadStep } : {}),
   };
 }
 
@@ -348,6 +363,17 @@ const ENVIRONMENT_EXTENSION = 'org.civicaitools.environment';
 /** The field of a stored package its offered set is read from. */
 export interface ReplayOfferedSetSource {
   extensions?: Record<string, unknown>;
+}
+
+/** The method a record's composition block states its sources were chosen
+ *  by (`routing.method`, harness 0.10.0), or `undefined` for a record that
+ *  states none: every record made before in-loop routing, and every
+ *  all-sources record. */
+export function recordRoutingMethod(pkg: ReplayOfferedSetSource): string | undefined {
+  const composition = pkg.extensions?.[COMPOSITION_EXTENSION] as { routing?: unknown } | undefined;
+  const routing = composition && typeof composition === 'object' ? composition.routing : undefined;
+  const method = routing && typeof routing === 'object' ? (routing as { method?: unknown }).method : undefined;
+  return typeof method === 'string' ? method : undefined;
 }
 
 /** The set the record states, or `null` when it states none. */
@@ -525,6 +551,28 @@ export async function replayLoopOptionsForPackage(
     // published — but for THIS portal, or for none.
     const systemPrompt = await composeSystemPrompt(portal);
     return replayLoopOptions({ ...loopInputs, systemPrompt, portal });
+  }
+
+  // A record of an in-loop run (#644 W1, C2) replays in loop over the same
+  // narrowed set: the directory over it, `load_source`, and the load step, so
+  // the replaying model chooses what to load as the recorded one did. The
+  // replayer's consent has already narrowed the set to its On sources (C6),
+  // so every source listed loads. An empty set is not run in loop: it replays
+  // as below, with no source tool.
+  if (recordRoutingMethod(pkg) === 'in-loop' && offered.sources.length > 0) {
+    const directory = directorySet(configured, { enforced: false, states: {} })
+      .filter((entry) => offered.sources.includes(entry.sourceId));
+    if (directory.length > 0) {
+      const transport = loopInputs.callTool;
+      const inLoop = await createInLoopRouting({
+        portal,
+        configured,
+        directory,
+        selection: offered.sources,
+        ...(transport ? { callTool: (name: string, args: Record<string, unknown>) => transport(name, args) } : {}),
+      });
+      return replayLoopOptions({ ...loopInputs, systemPrompt: inLoop.firstSystemPrompt, portal, configured, selection: offered.sources, inLoop });
+    }
   }
 
   // Narrowed: the prompt, the tools array and the transport all read the same

@@ -24,6 +24,13 @@
 // item 3), measured across the move by W2's byte check on a package and the
 // composition, both with the switch unset and set.
 //
+// RE-READ AT 0.5.0 (#644 W1 step 1). The router pin moved to 0.5.0, whose
+// new functions (the directory, `load_source`, the in-loop composition and
+// the harness definition) this composition calls none of. The prompt and
+// tools hashes below are unchanged; the router's own component moves again,
+// to 0.5.0, measured by W1's byte check with `SOURCE_ROUTING` unset and set
+// to `all-sources`.
+//
 // Run with: npm test
 //   (or: node --test --experimental-strip-types src/lib/mcp/charter-off-is-byte-identical.test.ts)
 
@@ -138,7 +145,7 @@ const ROUTER_VERSION = (JSON.parse(readFileSync(path.join(process.cwd(), 'node_m
 test('premise: the three sources are configured and the switch is unset', () => {
   assert.equal(Object.hasOwn(configured, 'nycCharterHosting'), false);
   assert.deepEqual(withPortal.sourcesOffered.slice(0, 3).map((s) => s.reason), ['configured', 'configured', 'configured']);
-  assert.equal(ROUTER_VERSION, '0.4.0', 'premise: the installed router is the pin this criterion is for');
+  assert.equal(ROUTER_VERSION, '0.5.0', 'premise: the installed router is the pin this criterion is for');
 });
 
 test('criterion P: the composed prompt is byte-identical to 3e9717b\'s, with and without a portal', () => {
@@ -159,5 +166,5 @@ test('criterion P: the composition moves exactly the two named facts', () => {
   const base = AT_BASE.components;
   assert.deepEqual(observed.components.slice(0, -1), base.slice(0, -1), 'a source\'s component moved');
   assert.deepEqual(base.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.2.0' });
-  assert.deepEqual(observed.components.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.4.0' });
+  assert.deepEqual(observed.components.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.5.0' });
 });

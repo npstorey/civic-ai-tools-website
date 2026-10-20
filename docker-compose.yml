@@ -436,6 +436,8 @@ services:
       ANSWER_LAYOUT:
       ANSWER_LAYOUT_PATH:
       ANSWER_LAYOUT_URL:
+      # How a question's sources reach the model: all-sources (unset) or in-loop.
+      SOURCE_ROUTING:
       DIRECTORY_DATA_URL:
       ROADMAP_RAW_URL:
       ROADMAP_GITHUB_URL:

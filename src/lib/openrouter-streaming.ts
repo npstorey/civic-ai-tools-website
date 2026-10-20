@@ -2,7 +2,7 @@ import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/reso
 import { getModelClient, classifyModelError, includeStreamUsage, getModelApiKind } from './model-client.ts';
 import { modelRequestParameters, type ModelIdentity } from './model-catalog.ts';
 import { formatToolProgress, formatToolResult, classifyStreamError, errorLogFacts, streamErrorPayload, type PanelType, type ProgressPhase, type StreamErrorCode, type StreamErrorKind } from './streaming.ts';
-import { runToolLoop, type LoopEvent, type ToolCallRecord, type TraceContext } from './model-loop/run-tool-loop.ts';
+import { runToolLoop, type LoadStep, type LoopEvent, type ToolCallRecord, type TraceContext } from './model-loop/run-tool-loop.ts';
 import { describeQueryOutcome } from './evidence/query-step.ts';
 import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 
@@ -205,7 +205,7 @@ function reportLoopEvent(panel: PanelType, event: LoopEvent, callbacks: StreamCa
       return;
     }
     case 'tool_result': {
-      const resultMessage = formatToolResult(event.call.args, event.call.resultSummary, event.call.name);
+      const resultMessage = formatToolResult(event.call.args, event.call.resultSummary, event.call.name, event.call.loadOutcome);
       if (resultMessage) {
         callbacks.onProgress(panel, resultMessage, {
           phase: 'tool_result',
@@ -325,11 +325,21 @@ export interface ToolCallOptions {
   toolTimeoutMs?: number;
 }
 
+/**
+ * How a tool call is answered: the transport, or, for an in-loop run (#644
+ * W1), the transport beside the load step that answers `load_source`
+ * (`InLoopRouting` from `./mcp/routing-mode.ts` is one). Both are handed to
+ * the loop core as they are.
+ */
+export type McpToolTransport =
+  | ((name: string, args: Record<string, unknown>) => Promise<string>)
+  | { executeToolCall: (name: string, args: Record<string, unknown>) => Promise<string>; loadStep: LoadStep };
+
 export async function queryWithMcpStreaming(
   query: string,
   model: ModelIdentity,
   tools: ChatCompletionTool[],
-  executeToolCall: (name: string, args: Record<string, unknown>) => Promise<string>,
+  transport: McpToolTransport,
   systemPrompt: string | undefined,
   callbacks: StreamCallbacks,
   trace?: TraceContext,
@@ -343,6 +353,9 @@ export async function queryWithMcpStreaming(
 ): Promise<void> {
   const startTime = Date.now();
   const panel: PanelType = 'withMcp';
+  const { executeToolCall, loadStep } = typeof transport === 'function'
+    ? { executeToolCall: transport, loadStep: undefined }
+    : transport;
 
   try {
     callbacks.onProgress(panel, 'Reading your question...', { phase: 'analyze' });
@@ -363,6 +376,9 @@ export async function queryWithMcpStreaming(
       portal: toolCallOptions?.portal,
       lockedPortal,
       toolTimeoutMs: toolCallOptions?.toolTimeoutMs,
+      // In loop (#644 W1): `load_source` is answered by the load step, before
+      // and outside the transport. Undefined under all-sources.
+      loadStep,
       maxIterations: MAX_ITERATIONS,
       maxTokens: MAX_TOKENS_PER_RESPONSE,
       maxCumulativeTokens: MAX_TOKENS_PER_REQUEST,

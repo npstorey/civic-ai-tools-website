@@ -127,6 +127,14 @@ const TOOL_OPERATION_TYPES: Record<string, string> = {
   // No kind is true of any of them, so each derives `undefined` and a record
   // states `unknown`, the honest absence `fetch` takes; the copy names the
   // tool ("Calling get_section...").
+  //
+  // `load_source`, the in-loop first-step tool (#644 W1, ADR-0037), is the
+  // instance's own step: no source answers it and it reads no data. Its
+  // operation type is its own name, the value the harness reads a load span
+  // by (`tool.operation_type`, harness 0.10.0), and every renderer that
+  // switches on the type has a case for it, so none narrates a load as a
+  // data request. The router reserves the name, so no source's tool has it.
+  load_source: 'load_source',
 };
 
 /**

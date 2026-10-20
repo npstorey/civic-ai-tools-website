@@ -372,6 +372,11 @@ export const ENV_SPEC = [
   { name: 'ANSWER_LAYOUT', readBy: 'build-and-runtime', tier: 'optional', purpose: "The answer view's default layout as a JSON document, the seven content/layout/v1 payload fields (spec 8.14.1) — absent, the built-in answer-first; malformed, the build fails and every page refuses; setting it and ANSWER_LAYOUT_PATH both is refused", hasFallback: true },
   { name: 'ANSWER_LAYOUT_PATH', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Path to a file holding the same layout document — the file-delivered form of ANSWER_LAYOUT; the file must be readable where next build runs as well as by the server', hasFallback: true },
   { name: 'ANSWER_LAYOUT_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: "A published layout node's package URL — not read yet: set, it is refused, so the instance never renders with a layout other than the one it names", hasFallback: true },
+  // How a question's sources reach the model (#644 W1, D9): a closed set, as
+  // NYC_CHARTER_HOSTING's is. The running app treats a value outside it as
+  // unset (`all-sources`) and logs one line naming the variable; the
+  // preflight refuses it, naming both values (`src/lib/mcp/routing-mode.ts`).
+  { name: 'SOURCE_ROUTING', tier: 'optional', purpose: "How a question's data sources reach the model: 'all-sources' (the default) sends every offered source's guidance and tools on the first request; 'in-loop' sends a directory and one tool, load_source, and a source's guidance and tools after the model loads it. Any other value is refused", allowedValues: ['all-sources', 'in-loop'], hasFallback: true },
 
   // --- Record publish + verify (the demo centerpiece: publish → badge) ---
   { name: 'DATABASE_URL', tier: 'required', purpose: 'Record DB — publish + dashboard + detail page' },

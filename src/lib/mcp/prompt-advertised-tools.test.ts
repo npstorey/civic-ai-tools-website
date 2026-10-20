@@ -81,6 +81,18 @@
  * `src/lib/mcp/`; their text is no longer in this repository. The guard reads
  * them through the website's exports, so it reads exactly what the app hands
  * the model, and a change to the package's text (a version bump) fails here.
+ *
+ * THE IN-LOOP DIRECTORY (#644 W1). Under `SOURCE_ROUTING=in-loop` the first
+ * request's system prompt is the router's directory, and every later one
+ * begins with it: a new text that reaches the model. It joins the corpus as
+ * composed over every source this codebase has (`composeDirectoryPrompt`).
+ * Its paragraph names `load_source`, which `mcpTools` does not hold: an
+ * in-loop run is given it beside the loaded sources' tools
+ * (`loadSourceTool`), so the callable set below holds it too. A run under
+ * `all-sources` sends neither the directory nor the tool. The directory's
+ * backticked names are a fifth position no anchor above reads, so a separate
+ * test holds each one to being an alias the directory lists or a tool an
+ * in-loop run can call.
  */
 
 import { test } from 'node:test';
@@ -92,8 +104,23 @@ import {
 } from './socrata-skill.ts';
 import { DATA_COMMONS_SKILL } from './data-commons-skill.ts';
 import { BOSTON_OPENCONTEXT_SKILL } from './boston-skill.ts';
-import { mcpTools } from './tools.ts';
+import { loadSourceTool, mcpTools } from './tools.ts';
 import { buildMcpRegistry } from './registry.ts';
+import { composeDirectoryPrompt } from './socrata-skill.ts';
+import { civicRouter } from '@typedstandards/civic-typed-router';
+
+/** Every source configured, so the directory lists every source this
+ *  codebase has: a question about names, not about one instance's env. */
+const EVERY_SOURCE = {
+  socrataUrl: 'https://socrata.invalid',
+  dataCommonsUrl: 'https://data-commons.invalid',
+  bostonOpencontextUrl: 'https://boston.invalid',
+  nycCharterHosting: 'sandbox' as const,
+};
+const EVERY_SOURCE_ID = civicRouter.manifest.map((entry) => entry.sourceId);
+
+/** The in-loop directory over every source (#644 W1). */
+const IN_LOOP_DIRECTORY = composeDirectoryPrompt({ configured: EVERY_SOURCE, directory: EVERY_SOURCE_ID });
 
 /**
  * Every constant `composeSkillPrompt` can compose into the system prompt, each
@@ -107,6 +134,7 @@ const PROMPT_REACHING_CONSTANTS: Record<string, string> = {
   SOCRATA_SKILL_FALLBACK,
   DATA_COMMONS_SKILL,
   BOSTON_OPENCONTEXT_SKILL,
+  IN_LOOP_DIRECTORY,
   ...Object.fromEntries(
     portalsWithGuidance().map((portal) => [
       `getSkillForPortal('${portal}')`,
@@ -133,10 +161,11 @@ function portalsWithGuidance(): string[] {
 /** A lowercase identifier — the shape every tool name in this codebase has. */
 const TOOL_NAME_SHAPE = /^[a-z][a-z0-9_]*$/;
 
-/** The tool names the model is actually given schemas for. */
+/** The tool names the model is actually given schemas for: every source's,
+ *  and, under in-loop routing, `load_source` (#644 W1). */
 function callableToolNames(): Set<string> {
   return new Set(
-    mcpTools
+    [...mcpTools, loadSourceTool(EVERY_SOURCE, EVERY_SOURCE_ID)]
       .filter((tool): tool is Extract<typeof tool, { type: 'function' }> => tool.type === 'function')
       .map((tool) => tool.function.name),
   );
@@ -303,4 +332,16 @@ test('#323: the extractor recognises each anchor it claims to', () => {
     'gamma_one',
     'gamma_two',
   ]);
+});
+
+test('#644 W1: every name the in-loop directory backticks is an alias it lists or a tool an in-loop run can call', () => {
+  const aliases = new Set(civicRouter.manifest.map((entry) => entry.alias));
+  const callable = callableToolNames();
+  const named = [...IN_LOOP_DIRECTORY.matchAll(/`([a-z][a-z0-9_]*)`/g)].map((m) => m[1]);
+  // The paragraph names `load_source` and each line names its alias: if the
+  // directory stops naming them, this test has stopped measuring.
+  assert.ok(named.includes('load_source'), 'the directory names no load_source');
+  assert.ok(named.filter((n) => aliases.has(n)).length === aliases.size, 'the directory does not list every alias');
+  const neither = named.filter((n) => !aliases.has(n) && !callable.has(n));
+  assert.deepEqual(neither, [], `the directory names ${JSON.stringify(neither)}, which is neither a listed alias nor a tool an in-loop run can call`);
 });

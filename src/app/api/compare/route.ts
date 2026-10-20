@@ -6,6 +6,7 @@ import { runToolLoop } from '@/lib/model-loop/run-tool-loop';
 import { compareLoopOptions, compareCompletionResult } from '@/lib/model-loop/compare-loop';
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import { consentInForce } from '@/lib/sources/consent-gate';
+import { createInLoopRouting, directorySet, entersInLoop, sourceRoutingMode } from '@/lib/mcp/routing-mode';
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { getMissingModelCredentialError, getModelClient, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
@@ -178,8 +179,20 @@ export async function POST(request: NextRequest) {
     // the composition but the prompt.
     const configured = readMcpEnvFromProcess();
     const selection = consent.selection;
-    const composition = await composeSystemPrompt({ portal, configured, selection });
-    const systemPromptWithMcp = withPortalLockGuidance(composition.prompt, lockedPortal, configured, selection);
+    // The mode (#644 W1, C2): in loop, the first request carries the
+    // directory and `load_source` only. This route writes no trace and holds
+    // no stream, so a load of an Ask-first source is declined with no hold.
+    const routingMode = sourceRoutingMode();
+    const directory = routingMode === 'in-loop' ? directorySet(configured, consent) : [];
+    const inLoop = entersInLoop(routingMode, directory)
+      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, selection })
+      : undefined;
+    // In loop, no source's guidance is composed for the first request; the
+    // offered reasons the usage count reads are the session's, as composed (C4).
+    const composition = inLoop
+      ? { prompt: inLoop.firstSystemPrompt, sourcesOffered: inLoop.sourcesOffered }
+      : await composeSystemPrompt({ portal, configured, selection });
+    const systemPromptWithMcp = inLoop ? inLoop.firstSystemPrompt : withPortalLockGuidance(composition.prompt, lockedPortal, configured, selection);
 
     // System prompt for the non-MCP query (to make it fair)
     const systemPromptWithoutMcp = `You are a helpful assistant.
@@ -221,6 +234,7 @@ Be honest if you don't have access to current or real-time data.`;
           requestSettings: model.requestSettings,
           prompt: query,
           systemPrompt: systemPromptWithMcp,
+          inLoop,
           portal,
           lockedPortal,
           configured,
