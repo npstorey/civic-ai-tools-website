@@ -31,7 +31,7 @@ import { modelAccessPhrase, modelIdentity, type ModelIdentity } from '@/lib/mode
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import type { SourceSelection } from '@typedstandards/civic-typed-router';
 import { consentInForce } from '@/lib/sources/consent-gate';
-import { createInLoopRouting, directorySet, entersInLoop, sourceRoutingMode, type InLoopRouting } from '@/lib/mcp/routing-mode';
+import { afterLoopAttributes, createInLoopRouting, directorySet, entersInLoop, sourceRoutingMode, type InLoopRouting } from '@/lib/mcp/routing-mode';
 import {
   queryWithMcpStreaming,
   type CompletionResult,
@@ -321,6 +321,20 @@ export async function POST(request: NextRequest) {
   // connection as idle (see SSE_KEEPALIVE_INTERVAL_MS). Stopped before close.
   const stopKeepAlive = startSseKeepAlive(writer);
 
+  // What this run states about itself (#599 W4, ADR-0033), as one function
+  // so the root's start and an in-loop run's end state the same facts.
+  const runRecord = () => runRecordAttributes({
+    assertedDate: composition.assertedDate,
+    mcpServers: configuredMcpServers(configured),
+    toolDefinitions: offeredTools,
+    // The router's `not-selected` as the reader's state (D2 = A).
+    sourcesOffered: consent.recordReasons(composition.sourcesOffered),
+    components: composition.components,
+    // The flows statement in force (D2 = A).
+    flowsStatement: consent.reference,
+    ...(inLoop ? inLoop.record() : {}),
+  });
+
   const trace = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);
   trace.startRoot('executed_notebook', {
     'analysis.prompt_hash': traceHash(body.query),
@@ -335,16 +349,11 @@ export async function POST(request: NextRequest) {
     // tools it offered, each source's offered-reason and the prompt's
     // components. All are known before the root starts, so they are written
     // with it; the packager reads them back from the trace at publish.
-    ...runRecordAttributes({
-      assertedDate: composition.assertedDate,
-      mcpServers: configuredMcpServers(configured),
-      toolDefinitions: offeredTools,
-      // The router's `not-selected` as the reader's state (D2 = A).
-      sourcesOffered: consent.recordReasons(composition.sourcesOffered),
-      components: composition.components,
-      // The flows statement in force (D2 = A).
-      flowsStatement: consent.reference,
-    }),
+    // In loop (#644 W1, G0 correction 2), the tools, the components, the
+    // routing statement and the definition hash are known only after the
+    // loop: they are left out here and written once, at the success
+    // `endRoot` below, since `endSpan` appends and never replaces.
+    ...(inLoop ? afterLoopAttributes(runRecord(), false) : runRecord()),
   });
 
   // What the usage count reads when the run ends (R6 W5, D9): `complete` once
@@ -461,8 +470,8 @@ export async function POST(request: NextRequest) {
       // trace + usage + answer so the publish dialog can build a package from
       // the EXECUTED session (same pattern as /api/compare-stream's final
       // `trace` event). Emitted only on success — a failed pipeline has
-      // nothing publishable.
-      trace.endRoot();
+      // nothing publishable. In loop, the four after-loop facts, once.
+      trace.endRoot(inLoop ? afterLoopAttributes(runRecord(), true) : undefined);
       await emit({
         type: 'publish_inputs',
         trace: trace.finalize() as unknown as Record<string, unknown>,

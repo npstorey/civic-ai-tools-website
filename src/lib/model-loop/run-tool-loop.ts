@@ -133,6 +133,15 @@ export interface LoadStep {
   load(alias: string | undefined, context: LoadStepContext): Promise<LoadStepResult>;
 }
 
+/** The hash of the system message `messages` opens with, as the
+ *  `gen_ai.system_prompt_hash` attribute, or nothing when it opens with none. */
+function systemPromptHashAttribute(messages: ChatCompletionMessageParam[]): Record<string, string> {
+  const first = messages[0];
+  return first?.role === 'system' && typeof first.content === 'string'
+    ? { 'gen_ai.system_prompt_hash': traceHash(first.content) }
+    : {};
+}
+
 /** The operation type a load call is recorded with: the value the harness
  *  reads a load span by (`tool.operation_type`). */
 export const LOAD_SOURCE_OPERATION_TYPE = 'load_source';
@@ -1181,9 +1190,13 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
 
     emit({ type: 'thinking', iteration: currentIteration });
 
+    // Under a load step a request's system prompt can differ from the one
+    // before it, so each span states its own request's (#644 W1). Without
+    // one, only the first span states it, as before.
     llmSpanId = trace?.builder.startSpan('llm_inference', trace.parentSpanId, {
       'gen_ai.system': getGenAiSystem(),
       'gen_ai.request.model': declaredModel,
+      ...(loadStep ? systemPromptHashAttribute(messages) : {}),
       'gen_ai.inference_index': currentIteration,
       ...reasoningEffortAttributes(requestSettings),
     });

@@ -51,6 +51,7 @@ import { sourceIdForToolName } from './operation-types.ts';
 import { classifyStreamError } from '../streaming.ts';
 import { callMcpTool, type McpToolCallOptions } from './client.ts';
 import type { LoadStep } from '../model-loop/run-tool-loop.ts';
+import { IN_LOOP_RUN_RECORD_ATTRIBUTE, RUN_RECORD_ATTRIBUTE } from '../evidence/trace.ts';
 
 /** The values `SOURCE_ROUTING` takes, the default first. */
 export const SOURCE_ROUTING_MODES = ['all-sources', 'in-loop'] as const;
@@ -232,6 +233,18 @@ export interface InLoopRouting {
   /** The components of the prompt as it stands: the loaded sources', then
    *  the router's. */
   components(): CompositionComponent[];
+  /** What the run's record states after the loop (C5): the final request's
+   *  tools, the final prompt's components, the routing statement, and the
+   *  harness definition's hash over the loaded set. */
+  record(): InLoopRecord;
+}
+
+/** The four root-span facts an in-loop run computes after its loop (C5). */
+export interface InLoopRecord {
+  toolDefinitions: ChatCompletionTool[];
+  components: CompositionComponent[];
+  routing: { method: 'in-loop'; version: string };
+  definitionHash: string;
 }
 
 /**
@@ -321,5 +334,33 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
       .sourcesOffered(configured, selection)
       .map(({ sourceId, alias, reason }) => ({ sourceId, alias, reason })),
     components: () => current.components,
+    record: () => ({
+      toolDefinitions: current.tools,
+      components: current.components,
+      routing: { method: 'in-loop', version: routerComponent().version as string },
+      // The loaded set, intersected with the directory set first and passed as
+      // the selection, so the definition's `sources` match its components (the
+      // router's flags); the model chose them.
+      definitionHash: civicRouter.harnessDefinition({
+        configured,
+        selection: loadedNow(),
+        chosenBy: 'model',
+        components: current.components,
+      }).hash,
+    }),
   };
+}
+
+/** The root-span attributes an in-loop run writes after its loop, by name. */
+export const AFTER_LOOP_RUN_ATTRIBUTES: readonly string[] = [
+  RUN_RECORD_ATTRIBUTE.toolDefinitions,
+  RUN_RECORD_ATTRIBUTE.components,
+  IN_LOOP_RUN_RECORD_ATTRIBUTE.routing,
+  IN_LOOP_RUN_RECORD_ATTRIBUTE.definitionHash,
+];
+
+/** `attributes` with only (`keep: true`) or without (`keep: false`) the
+ *  after-loop attributes, in their order. */
+export function afterLoopAttributes(attributes: Record<string, string>, keep: boolean): Record<string, string> {
+  return Object.fromEntries(Object.entries(attributes).filter(([key]) => AFTER_LOOP_RUN_ATTRIBUTES.includes(key) === keep));
 }

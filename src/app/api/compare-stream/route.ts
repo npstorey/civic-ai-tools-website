@@ -293,10 +293,17 @@ export async function POST(request: NextRequest) {
     // the routing attributes stay (they name the servers, not the prose), and
     // nothing else here carries the text. Records published before this keep
     // theirs: their bytes are signed and this changes no byte of them.
-    trace.endSpan(skillFetchSpanId, {
-      'skill.text_hash': systemPromptHash,
-      ...skillRoutingTraceAttributes(configured),
-    });
+    //
+    // In loop (#644 W1, C5) the prompt the run ends with is composed as the
+    // model loads sources, so the span stays open through the loop and ends
+    // after it with the final prompt's hash: the hash a record states as
+    // `skillMetadata.systemPromptHash`.
+    const endSkillFetch = (promptHash: string) =>
+      trace.endSpan(skillFetchSpanId, {
+        'skill.text_hash': promptHash,
+        ...skillRoutingTraceAttributes(configured),
+      });
+    if (!inLoop) endSkillFetch(systemPromptHash);
 
     // `mcpTools` itself when unlocked; under the lock the same schemas with
     // text that stops inviting other portals (#436, D7). Only the sources this
@@ -308,7 +315,10 @@ export async function POST(request: NextRequest) {
     // tools it offered, each source's offered-reason and the prompt's
     // components. Written onto the root span when it ends; the packager reads
     // them back from the trace at publish, in preference to its own state.
-    const runRecord = runRecordAttributes({
+    // In loop (#644 W1, C5) the tools, the components, the routing statement
+    // and the definition hash are the run's last state, read after the loop;
+    // the servers and the offered reasons stay as composed (C4).
+    const runRecord = () => runRecordAttributes({
       assertedDate: composition.assertedDate,
       mcpServers: configuredMcpServers(configured),
       toolDefinitions: offeredTools,
@@ -318,6 +328,7 @@ export async function POST(request: NextRequest) {
       components: composition.components,
       // The flows statement in force: its url, hash and date (D2 = A).
       flowsStatement: consent.reference,
+      ...(inLoop ? inLoop.record() : {}),
     });
 
     const systemPromptWithoutMcp = `You are a helpful assistant.
@@ -434,7 +445,8 @@ Be honest if you don't have access to current or real-time data.`;
       } finally {
         try {
           // Finalize trace and send as final SSE event
-          trace.endRoot(runRecord);
+          if (inLoop) endSkillFetch(hash(inLoop.systemPrompt()));
+          trace.endRoot(runRecord());
           const traceJson = trace.finalize();
           stopKeepAlive();
           await writeEvent({ type: 'trace' as StreamEvent['type'], panel: 'withMcp', data: traceJson });

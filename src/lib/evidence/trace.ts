@@ -27,7 +27,8 @@ export {
 // --- What a run records about itself (#599 W4, ADR-0033 §D and §E) ----------
 //
 // The query routes write five facts onto the trace's ROOT span at run time,
-// and a sixth when the run had a flows statement in force (R6 W2, #632 D2 = A),
+// a sixth when the run had a flows statement in force (R6 W2, #632 D2 = A),
+// and two more on an in-loop run only (#644 W1, harness 0.10.0),
 // and the packager reads them back with the harness's `extractRunAttributes`
 // at publish (#495: a fact read at packaging is packaging-time state). Each is
 // JSON text except the date. The names are the harness's: `extractRunAttributes`
@@ -53,6 +54,22 @@ export const RUN_RECORD_ATTRIBUTE = {
   flowsStatement: 'analysis.flows_statement',
 } as const;
 
+/**
+ * The two root-span attributes an in-loop run adds (#644 W1; ADR-0033's
+ * amendment 2, harness 0.10.0), after the six. Kept beside
+ * `RUN_RECORD_ATTRIBUTE` rather than in it: `run-record-attributes.test.ts`
+ * pins that object to exactly six names.
+ */
+export const IN_LOOP_RUN_RECORD_ATTRIBUTE = {
+  /** JSON `{ method, version }`, exactly those keys: how the run's sources
+   *  were chosen and the router's version. Written on an in-loop run only, so
+   *  an all-sources record's bytes do not move. */
+  routing: 'analysis.routing',
+  /** The router's harness definition hash, lowercase hex SHA-256, a plain
+   *  string. In-loop runs only. */
+  definitionHash: 'analysis.definition_hash',
+} as const;
+
 /** What a run states about itself, before encoding. */
 export interface RunRecordInput {
   assertedDate: string;
@@ -62,11 +79,16 @@ export interface RunRecordInput {
   components: ReadonlyArray<{ id: string; version?: string; guidanceHash?: string; guidanceOrigin?: string }>;
   /** The flows statement in force (`flowsStatementReference`); omitted when there is none. */
   flowsStatement?: { url: string; hash: string; date: string };
+  /** How the run's sources were chosen (#644 W1); omitted under all-sources. */
+  routing?: { method: string; version: string };
+  /** The harness definition's hash (#644 W1); omitted under all-sources. */
+  definitionHash?: string;
 }
 
-/** The root-span attributes for a run, ready for `startRoot` or `endRoot`: five, and the sixth when passed. */
+/** The root-span attributes for a run, ready for `startRoot` or `endRoot`:
+ *  five, and each of the last three only when passed, in the harness's order. */
 export function runRecordAttributes(run: RunRecordInput): Record<string, string> {
-  const { flowsStatement } = run;
+  const { flowsStatement, routing, definitionHash } = run;
   return {
     [RUN_RECORD_ATTRIBUTE.assertedDate]: run.assertedDate,
     [RUN_RECORD_ATTRIBUTE.mcpServers]: JSON.stringify(run.mcpServers),
@@ -77,5 +99,8 @@ export function runRecordAttributes(run: RunRecordInput): Record<string, string>
     ...(flowsStatement
       ? { [RUN_RECORD_ATTRIBUTE.flowsStatement]: JSON.stringify({ url: flowsStatement.url, hash: flowsStatement.hash, date: flowsStatement.date }) }
       : {}),
+    // Exactly the two keys, in the harness's order (#644 W1).
+    ...(routing ? { [IN_LOOP_RUN_RECORD_ATTRIBUTE.routing]: JSON.stringify({ method: routing.method, version: routing.version }) } : {}),
+    ...(definitionHash !== undefined ? { [IN_LOOP_RUN_RECORD_ATTRIBUTE.definitionHash]: definitionHash } : {}),
   };
 }

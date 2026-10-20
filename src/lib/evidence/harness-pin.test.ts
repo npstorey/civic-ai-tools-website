@@ -24,6 +24,16 @@
 // 0.10.0 changed no dependency, so this repository's core pins stay. A record
 // packaged without either input, and with no load span, has the same bytes.
 //
+// Where each is driven through this repository's packager:
+//   - 1 — `src/app/api/in-loop-routing-driven.test.ts` (an in-loop run's
+//     record states both after `flowsStatement`; an all-sources record
+//     states neither);
+//   - 2 — the same file (one load span `loaded` and one `not-offered`,
+//     `civic:loadOutcome` on each activity, `dataSources[]` from the data
+//     calls only), and through the loop core in
+//     `src/lib/model-loop/in-loop-routing.test.ts` (each load span's
+//     outcome, never `error`, no source attribute).
+//
 // WHAT THE PIN PROTECTS, PART FIVE — 0.9.0, and why the range moved to it
 // (#632 W2, hub ADR-0033's 2026-10-18 amendment). Two things this instance's
 // packager now relies on, each in bytes it signs, on new records only:
