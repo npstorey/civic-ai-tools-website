@@ -11,10 +11,11 @@ import { getMissingModelCredentialError, getModelClient, classifyModelError, Mod
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
 import { errorLogFacts, streamErrorPayload } from '@/lib/streaming';
-import { getMissingMcpRoutingError, readMcpEnvFromProcess } from '@/lib/mcp/registry';
+import { getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId } from '@/lib/mcp/registry';
 import { resolveRunPortal } from '@/lib/site-config';
 import { PORTAL_LOCK_NOT_CONFIGURED_MESSAGE } from '@/lib/portal-lock';
 import { headers } from 'next/headers';
+import { startUsageCount, type UsageOutcome } from '@/lib/usage/count';
 
 interface CompareRequest {
   query: string;
@@ -23,6 +24,9 @@ interface CompareRequest {
 }
 
 export async function POST(request: NextRequest) {
+  // Set once the run starts (R6 W5): the `try` below also covers the body
+  // parse and the refusals, which are not counted.
+  let endUsage: ((outcome: UsageOutcome) => void) | null = null;
   try {
     const body: CompareRequest = await request.json();
     const { query, model: modelId, portal: rawPortal } = body;
@@ -190,19 +194,42 @@ Be honest if you don't have access to current or real-time data.`;
     // until the loop became one implementation. Everything the loop is GIVEN,
     // this caller's own caps included, lives in `compareLoopOptions`; nothing
     // about how it runs is decided here.
+    //
+    // The run starts here. Its usage count is registered with `after()` now and
+    // written once the response is built (`src/lib/usage/count.ts`). The calls
+    // it counts as used are the ones the loop reported answered (`onEvent`,
+    // the core's own report, beside the factory's options): a call that
+    // answers after the no-MCP half has already failed is not among them,
+    // because the row is written when the error response is built.
+    const usageCalls: Array<{ name: string; failed?: boolean }> = [];
+    const usage = startUsageCount();
+    endUsage = (outcome) => usage.end({
+      surface: 'compare',
+      session,
+      model,
+      outcome,
+      sourcesOffered: composition.sourcesOffered,
+      toolCalls: usageCalls,
+      resolveSource: (name) => routedSourceId(name, configured, selection),
+    });
     const [withoutMcpResult, withMcpResult] = await Promise.all([
       queryWithoutMcp(query, model, systemPromptWithoutMcp),
-      runToolLoop(compareLoopOptions({
-        client: getModelClient(),
-        endpointModel: model.endpointModel,
-        requestSettings: model.requestSettings,
-        prompt: query,
-        systemPrompt: systemPromptWithMcp,
-        portal,
-        lockedPortal,
-        configured,
-        selection,
-      })),
+      runToolLoop({
+        ...compareLoopOptions({
+          client: getModelClient(),
+          endpointModel: model.endpointModel,
+          requestSettings: model.requestSettings,
+          prompt: query,
+          systemPrompt: systemPromptWithMcp,
+          portal,
+          lockedPortal,
+          configured,
+          selection,
+        }),
+        onEvent: (event) => {
+          if (event.type === 'tool_complete') usageCalls.push(event.call);
+        },
+      }),
     ]);
 
     // Same four fields, same order, as before the migration. `tools_called[]`
@@ -211,38 +238,48 @@ Be honest if you don't have access to current or real-time data.`;
     // `failed`/`failureKind`, and `tokens_used` is the run's cumulative total
     // rather than its last call's. Both are documented in
     // `docs/project-plan.md`.
-    return NextResponse.json({
+    const response = NextResponse.json({
       withoutMcp: withoutMcpResult,
       withMcp: compareCompletionResult(withMcpResult),
     });
+    endUsage('complete');
+    return response;
   } catch (error) {
-    console.error('Compare API error:', errorLogFacts(error));
-    // Distinguish an upstream auth rejection (configured but refused key)
-    // from other failures so the operator gets a typed, actionable response.
-    const code = classifyModelError(error);
-    if (code) {
-      // website#30 P4: `model_rate_limited` joins the two credential codes here,
-      // so an upstream rate limit is no longer reported as an unclassified 500.
-      //
-      // What the body says depends on whose message it is. A
-      // `ModelConfigurationError` is THIS app's own typed, operator-actionable
-      // text and names the variable to fix — it stays, verbatim. Anything else
-      // classified here came from the endpoint, so the body carries the calm
-      // reader-facing copy instead: the same #154 rule the streaming path
-      // follows, applied to this JSON path, which is what keeps upstream status
-      // codes and server names out of an API response.
-      const message =
-        error instanceof ModelConfigurationError
-          ? error.message
-          : streamErrorPayload(code).message;
-      return NextResponse.json(
-        { error: message, code },
-        { status: code === 'model_not_configured' ? 503 : 502 }
-      );
-    }
+    const response = compareErrorResponse(error);
+    // Only a run that started is counted; the refusals above returned before it.
+    endUsage?.('error');
+    return response;
+  }
+}
+
+/** The response for a failure the `try` above caught. */
+function compareErrorResponse(error: unknown): Response {
+  console.error('Compare API error:', errorLogFacts(error));
+  // Distinguish an upstream auth rejection (configured but refused key)
+  // from other failures so the operator gets a typed, actionable response.
+  const code = classifyModelError(error);
+  if (code) {
+    // website#30 P4: `model_rate_limited` joins the two credential codes here,
+    // so an upstream rate limit is no longer reported as an unclassified 500.
+    //
+    // What the body says depends on whose message it is. A
+    // `ModelConfigurationError` is THIS app's own typed, operator-actionable
+    // text and names the variable to fix — it stays, verbatim. Anything else
+    // classified here came from the endpoint, so the body carries the calm
+    // reader-facing copy instead: the same #154 rule the streaming path
+    // follows, applied to this JSON path, which is what keeps upstream status
+    // codes and server names out of an API response.
+    const message =
+      error instanceof ModelConfigurationError
+        ? error.message
+        : streamErrorPayload(code).message;
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
+      { error: message, code },
+      { status: code === 'model_not_configured' ? 503 : 502 }
     );
   }
+  return NextResponse.json(
+    { error: error instanceof Error ? error.message : 'Internal server error' },
+    { status: 500 }
+  );
 }

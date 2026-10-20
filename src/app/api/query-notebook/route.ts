@@ -50,6 +50,7 @@ import {
 import { buildNotebookExtension } from '@/lib/notebook-author/notebook-extension';
 import { executeNotebook, NotebookExecutionError } from '@/lib/sandbox';
 import { notebookRouteRefusal } from '@/lib/notebook-availability';
+import { startUsageCount, type UsageOutcome } from '@/lib/usage/count';
 
 interface QueryNotebookRequest {
   query: string;
@@ -335,6 +336,15 @@ export async function POST(request: NextRequest) {
     }),
   });
 
+  // What the usage count reads when the run ends (R6 W5, D9): `complete` once
+  // `publish_inputs` is sent, `error` otherwise; and each call Phase A's loop
+  // reported ended, with whether it failed. The run starts here, every refusal
+  // behind it, so its count is registered with `after()` now, while the request
+  // is open, and written once the stream has closed (`src/lib/usage/count.ts`).
+  let usageOutcome: UsageOutcome = 'error';
+  const usageCalls: Array<{ name: string; failed?: boolean }> = [];
+  const usage = startUsageCount();
+
   const runPipeline = async () => {
     const pipelineStart = Date.now();
     try {
@@ -363,6 +373,7 @@ export async function POST(request: NextRequest) {
         systemPrompt,
         systemPromptHash,
         tools: offeredTools,
+        usageCalls,
       });
 
       await emit({ type: 'phase', name: 'B', message: 'Synthesizing notebook…' });
@@ -450,6 +461,7 @@ export async function POST(request: NextRequest) {
         answer: phaseAResult.content,
         duration_ms: Date.now() - pipelineStart,
       });
+      usageOutcome = 'complete';
     } catch (err) {
       if (err instanceof NotebookExecutionError) {
         // THE TRACEBACK GOES TO THE READER; THE LOG KEEPS THE STRUCTURE (#516,
@@ -490,7 +502,7 @@ export async function POST(request: NextRequest) {
           correlationId,
           exitCode: err.exitCode,
           ...(traceback !== undefined ? { traceback } : {}),
-        });
+        }).catch(() => { /* the reader cancelled the stream */ });
       } else {
         const message = err instanceof Error ? err.message : 'Unknown error';
         // Phase A attaches the classified kind to its rejection (#154). Guarded
@@ -524,12 +536,31 @@ export async function POST(request: NextRequest) {
           errorClass: errorClassOf(err),
           ...(code ? { code } : {}),
         });
-        await emit({ type: 'error', message, ...(code ? { code } : {}) });
+        // A reader who cancelled the stream is why some runs land here (the
+        // next write after the cancel throws, and the run stops there, as it
+        // always has); the error event then has no one to reach either.
+        await emit({ type: 'error', message, ...(code ? { code } : {}) }).catch(() => { /* the reader cancelled the stream */ });
       }
     } finally {
-      trace.endRoot();
-      stopKeepAlive();
-      await writer.close();
+      try {
+        trace.endRoot();
+        stopKeepAlive();
+        // A stream the reader cancelled rejects its close. Until R6 W5 that
+        // rejection left this run, which nothing awaits, unhandled (measured
+        // at 641a82f); the count is written either way.
+        await writer.close().catch(() => {});
+      } finally {
+        // The response has ended: only now does the count's write start.
+        usage.end({
+          surface: 'query-notebook',
+          session,
+          model,
+          outcome: usageOutcome,
+          sourcesOffered: composition.sourcesOffered,
+          toolCalls: usageCalls,
+          resolveSource: (name) => routedSourceId(name, configured, selection),
+        });
+      }
     }
   };
 
@@ -569,8 +600,14 @@ async function runPhaseA(args: {
   systemPromptHash: string;
   /** The tools the run offers the model, as the root span records them. */
   tools: ReturnType<typeof offeredMcpTools>;
+  /** Where each call's end is recorded for the usage count (R6 W5): its name and whether it failed. */
+  usageCalls: Array<{ name: string; failed?: boolean }>;
 }): Promise<CompletionResult> {
-  const { query, portal, lockedPortal, configured, selection, model, emit, trace, systemPrompt, systemPromptHash, tools } = args;
+  const { query, portal, lockedPortal, configured, selection, model, emit: emitToStream, trace, systemPrompt, systemPromptHash, tools, usageCalls } = args;
+  // The callbacks below do not await their writes, so a write that fails
+  // after the reader has cancelled the stream must not reject unhandled (R6 W5).
+  const emit = (event: NotebookEvent): Promise<void> =>
+    emitToStream(event).catch(() => { /* the reader cancelled the stream */ });
   return new Promise<CompletionResult>((resolve, reject) => {
     let completionResult: CompletionResult | null = null;
     const sentToolCalls = new Set<string>();
@@ -581,6 +618,7 @@ async function runPhaseA(args: {
     const callbacks: StreamCallbacks = {
       onProgress: (panel, message, opts) => {
         if (panel !== 'withMcp') return;
+        if (opts?.phase === 'tool_complete' && opts.toolName) usageCalls.push({ name: opts.toolName, failed: opts.failed });
         // Every tool-phase line the loop reports, not only the start (#384
         // P8, F2): this used to forward `tool_start` alone, so a call's end
         // — and a rejection, which only an end event can carry — never

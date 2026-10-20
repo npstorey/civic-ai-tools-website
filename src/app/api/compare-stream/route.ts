@@ -16,6 +16,7 @@ import { configuredMcpServers, getMissingMcpRoutingError, readMcpEnvFromProcess,
 import { resolveRunPortal } from '@/lib/site-config';
 import { PORTAL_LOCK_NOT_CONFIGURED_MESSAGE } from '@/lib/portal-lock';
 import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG, runRecordAttributes } from '@/lib/evidence/trace';
+import { startUsageCount, type UsageOutcome } from '@/lib/usage/count';
 
 const SSE_HEADERS = {
   'Content-Type': 'text/event-stream',
@@ -316,27 +317,46 @@ Be honest if you don't have access to current or real-time data.`;
     const stream = new TransformStream();
     const writer = stream.writable.getWriter();
 
-    // Helper to write SSE events
+    // Helper to write SSE events. A write after the reader has cancelled the
+    // stream fails, and that is not the run's failure: the callbacks below do
+    // not await their writes, so a rejection here was unhandled, eight of them
+    // on one cancelled run (measured at 641a82f, R6 W5), and the final `trace`
+    // write threw before `writer.close()` was reached. It resolves either way.
     const writeEvent = async (event: StreamEvent) => {
-      await writer.write(encoder.encode(encodeSSE(event)));
+      try {
+        await writer.write(encoder.encode(encodeSSE(event)));
+      } catch {
+        // The reader cancelled the stream; there is no one left to send to.
+      }
     };
     // A model turn that picks a tool is not streamed, and a tool call can run
     // 45 s; a comment line every interval keeps a load balancer from closing
     // the connection as idle (see SSE_KEEPALIVE_INTERVAL_MS). Stopped before close.
     const stopKeepAlive = startSseKeepAlive(writer);
 
+    // What the usage count reads when the run ends (R6 W5, D9): the withMcp
+    // panel's last callback, `error` until one says `complete`; and each call
+    // that panel's loop reported ended, with whether it failed.
+    let usageOutcome: UsageOutcome = 'error';
+    const usageCalls: Array<{ name: string; failed?: boolean }> = [];
+
     // Create callbacks for streaming
     const callbacks: StreamCallbacks = {
       onProgress: (panel: PanelType, message: string, opts?: ProgressOpts) => {
+        if (panel === 'withMcp' && opts?.phase === 'tool_complete' && opts.toolName) {
+          usageCalls.push({ name: opts.toolName, failed: opts.failed });
+        }
         writeEvent({ type: 'progress', panel, message, ...opts } as StreamEvent & { message: string });
       },
       onToken: (panel: PanelType, content: string) => {
         writeEvent({ type: 'token', panel, content } as StreamEvent & { content: string });
       },
       onComplete: (panel: PanelType, result) => {
+        if (panel === 'withMcp') usageOutcome = 'complete';
         writeEvent({ type: 'complete', panel, data: result });
       },
       onError: (panel: PanelType, message: string, code?: StreamErrorCode) => {
+        if (panel === 'withMcp') usageOutcome = 'error';
         writeEvent({
           type: 'error',
           panel,
@@ -345,6 +365,11 @@ Be honest if you don't have access to current or real-time data.`;
         } as StreamEvent & { message: string; code?: StreamErrorCode });
       },
     };
+
+    // The run starts here: every refusal is behind it. Its count is registered
+    // with `after()` now, while the request is open, and written once the
+    // stream has closed (`src/lib/usage/count.ts`).
+    const usage = startUsageCount();
 
     // Run queries (both in parallel, or MCP-only when mcpOnly flag is set)
     const runQueries = async () => {
@@ -392,12 +417,27 @@ Be honest if you don't have access to current or real-time data.`;
       } catch (error) {
         console.error('Stream error:', errorLogFacts(error));
       } finally {
-        // Finalize trace and send as final SSE event
-        trace.endRoot(runRecord);
-        const traceJson = trace.finalize();
-        stopKeepAlive();
-        await writeEvent({ type: 'trace' as StreamEvent['type'], panel: 'withMcp', data: traceJson });
-        await writer.close();
+        try {
+          // Finalize trace and send as final SSE event
+          trace.endRoot(runRecord);
+          const traceJson = trace.finalize();
+          stopKeepAlive();
+          await writeEvent({ type: 'trace' as StreamEvent['type'], panel: 'withMcp', data: traceJson });
+          // A stream the reader cancelled rejects its close; there is nothing
+          // left to close it for, and the count is written either way.
+          await writer.close().catch(() => {});
+        } finally {
+          // The response has ended: only now does the count's write start.
+          usage.end({
+            surface: 'compare-stream',
+            session,
+            model,
+            outcome: usageOutcome,
+            sourcesOffered: composition.sourcesOffered,
+            toolCalls: usageCalls,
+            resolveSource: (name) => routedSourceId(name, configured, selection),
+          });
+        }
       }
     };
 

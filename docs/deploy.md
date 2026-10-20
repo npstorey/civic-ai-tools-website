@@ -1250,7 +1250,7 @@ the keys they had.
 |---|---|---|
 | `NYC_CHARTER_HOSTING` | `src/lib/mcp/registry.ts` (`readMcpEnvFromProcess`) | `sandbox` offers the source; anything else leaves it off |
 | `SOURCE_BRIDGE_SECRET` | `src/lib/mcp/hosting/token.ts` | the instance secret each sandbox's token derives from |
-| `VERCEL_ENV` | `src/lib/mcp/hosting/lifecycle.ts` (`hostingEnvironment`) | the environment in the sandbox's name; `local` when unset |
+| `VERCEL_ENV` | `src/lib/hosting-environment.ts` (`hostingEnvironment`, which `lifecycle.ts` re-exports) | the environment in the sandbox's name, and the usage table's `environment` column; `local` when unset |
 | `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID` | `src/lib/sandbox/vercel-sandbox.ts` (`resolveSandboxAuthParams`) | off-platform sandbox authentication, all three or none; on the platform, OIDC |
 | `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` | `src/lib/sandbox/vercel-sandbox.ts` (`proxyAwareSandboxFetch`) | the sandbox API calls leave through the instance's proxy, as the executor's do |
 
@@ -2037,6 +2037,48 @@ signed-in session with an account row fails its consent read (on the consent
 endpoint now, and on every question once the gate is on). Verify with
 `\d source_consents`, never the tool's exit status alone
 ([`docs/db-migrations.md`](db-migrations.md)).
+
+### The usage table: `0018`
+
+[`0018_usage_counts.sql`](../drizzle/0018_usage_counts.sql) creates
+`usage_counts`, the usage counter: how many questions the site answered,
+per day and per kind of run. Each run a query route starts adds one to the
+row for its combination of the eight key columns; every column is
+`NOT NULL`, and the primary key `usage_counts_pkey` covers the first eight.
+
+| Column | Type | Holds |
+|---|---|---|
+| `day` | `date` | the UTC date when the run ended |
+| `environment` | `text` | where the run was counted: `production`, `preview` or `development` (the platform's `VERCEL_ENV`), `local` off the platform, `other` for any other value the platform sets |
+| `surface` | `text` | the route: `compare-stream`, `query-notebook` or `compare` |
+| `signed_in` | `boolean` | whether the reader was signed in |
+| `model` | `text` | the model's declared id, from this instance's catalog |
+| `outcome` | `text` | `complete` or `error` |
+| `sources_offered` | `text` | the source ids the run was offered, sorted and comma-joined, `''` for none |
+| `sources_used` | `text` | the source ids with at least one call that answered, in the same form; a refused or failed call is not use |
+| `count` | `integer` | how many runs ended with this combination |
+
+Nothing in it identifies a reader: every value comes from a closed set
+(`src/lib/usage/count.ts`), and no account, network address or question text
+reaches a column. A request refused before its run (validation,
+configuration, consent, the rate limit) is not counted. Nothing in the app
+reads the table; it is written only, after each answer has been sent, so a
+write that fails (logged as `[usage] write failed` with the error's class)
+never changes the answer. On `/api/compare`, a call that answers after the
+run's no-data half has already failed is not counted as used.
+
+The `environment` column keeps each environment's rows apart. An instance
+whose previews share production's `DATABASE_URL` gets their rows in the same
+table, marked `preview`; a read of production's use takes the
+`production` rows only.
+
+It is written with `CREATE TABLE IF NOT EXISTS` and its key inline, by hand,
+for the same two application paths as `0017`. Apply it **before** the deploy
+that writes it: after, each run's write fails and is logged, and the answer is
+unchanged, but those runs go uncounted. Verify with `\d usage_counts`: nine
+columns, every one not null, and `usage_counts_pkey` over the eight key
+columns in the table's order. To reverse it, run
+`DROP TABLE IF EXISTS usage_counts`, which loses the counts only.
 
 ## Consent and the flows statement
 
