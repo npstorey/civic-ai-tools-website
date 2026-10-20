@@ -220,13 +220,17 @@ test('criterion 1: for a session without a dbId, the panel shows the date given 
   panel.unmount();
 });
 
-test('criterion 15 (Q7): for a session with a dbId, the footer links to the dashboard\'s Sources tab, where the revoke is', async () => {
+// Amendment 1, correction 3 (Q7, chosen): the panel withdraws in place for
+// every session, and a session whose consent is on its account also gets the
+// link to the dashboard's Sources tab, which withdraws too. Stage A asserted
+// no in-place withdraw for such a session; the ruling replaced that.
+test('criterion 15 (Q7): for a session with a dbId, the footer links to the dashboard\'s Sources tab, and the panel withdraws in place too', async () => {
   SIGNED_IN_DB();
   sessions.rows.clear();
   const { panel } = await panelWith(Object.fromEntries(CONFIGURED.map((id) => [id, 'on'])));
   const links = panel.elements().filter((el) => el.type === 'a' && typeof el.props.href === 'string' && /^\/dashboard\b/.test(el.props.href as string) && /sources/i.test(el.props.href as string));
   assert.equal(links.length, 1, `the panel does not link to the dashboard's Sources tab: ${panel.text().slice(0, 400)}`);
-  assert.equal(panel.elements().filter((el) => el.type === 'button' && /withdraw/i.test(textOf(el))).length, 0, 'the panel withdraws in place for a session whose consent is on its account');
+  assert.equal(panel.elements().filter((el) => el.type === 'button' && /withdraw/i.test(textOf(el))).length, 1, 'the panel does not withdraw in place for a session whose consent is on its account');
   panel.unmount();
   ANON();
 });

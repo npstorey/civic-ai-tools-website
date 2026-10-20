@@ -411,3 +411,69 @@ for (const surface of SURFACES) {
     }
   });
 }
+
+// --- Amendment 1, correction 2 (Q2): the card returns at the next question --------------------
+
+test('criterion 15 (Q2): after Not now, the next question in the same session shows the card again, and sends nothing', async () => {
+  ANON();
+  const net = answers();
+  const page = await mount(h(Home));
+  await askOnQueryForm(page);
+  assertCardShown(page, 'the home page');
+  await page.click(page.button('Not now'));
+  const box = one(page, 'question box', (el) => el.type === 'textarea' && el.props['aria-label'] === 'Ask a question about open data');
+  await page.type(box, 'How many 311 complaints were there in Brooklyn in 2024?');
+  await page.submit(one(page, 'form', (el) => el.type === 'form'));
+  assert.deepEqual(queryRequests(net.sent), [], 'the next question after Not now was sent without asking');
+  assertCardShown(page, 'the next question after Not now');
+  page.unmount();
+});
+
+// --- Flag 9: /explore mounts the Sources panel beside its input ------------------------------
+
+test('flag 9 (/explore): the Sources panel is beside the live question input, with its rows and its control', async () => {
+  ANON();
+  answers();
+  const page = await mount(h(McpFlowDiagram));
+  await page.click(page.button('Try your own'));
+  const rows = page.elements().filter((el) => typeof el.props['data-source'] === 'string');
+  assert.ok(rows.length >= 1, `/explore shows no Sources panel: ${page.text().slice(0, 300)}`);
+  assert.ok(page.elements().some((el) => el.props.role === 'radiogroup'), '/explore\'s panel has no control');
+  page.unmount();
+});
+
+// --- Stage-A ruling (a): a direct path, covered by the route's refusal ------------------------
+//
+// QuerySurface's continue, re-run and retry start a run without the form, so
+// the guard does not see them. The route refuses before any model or source
+// call, the hook reports it, and the card answers: shown here on /ask's Retry.
+
+test('criterion 2 (/ask, a direct path): Retry on a refused consent shows the card, and after Allow sends one request', async () => {
+  SIGNED_IN_DB();
+  sessions.rows.clear();
+  const net = installFetch(ORIGIN, {
+    '/api/models': () => new Response(JSON.stringify({ models: [{ id: 'fixture/model', name: 'Fixture model' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    '/api/flows': () => flowsRoute.GET(),
+    '/api/sources/consent': (request: Request) => (consentRoute[request.method] as (r: Request) => Promise<Response>)(request),
+    '/api/query-notebook': async (request: Request) => {
+      const decision = await consentInForce(request, sessions.server);
+      if (!decision.ok) return new Response(JSON.stringify(decision.payload), { status: 403, headers: { 'Content-Type': 'application/json' } });
+      // Served, and the run fails: the notebook view offers Retry.
+      return sse([{ type: 'error', message: 'The notebook could not finish running. Please try again.', code: 'generic' }]);
+    },
+  });
+  const page = await mount(h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode: 'notebook' }));
+  await askOnQueryForm(page);
+  await page.click(page.button('Allow'));
+  assert.equal(queryRequests(net.sent).length, 1, 'premise: after Allow the question was sent');
+  assert.equal(page.buttons('Retry').length, 1, `premise: the failed run offers Retry: ${page.text().slice(0, 300)}`);
+  // The consent goes (the account's row is deleted elsewhere), and the reader retries.
+  sessions.rows.clear();
+  await page.click(page.button('Retry'));
+  assert.equal(queryRequests(net.sent).length, 2, 'premise: Retry sent the question, past the form');
+  assert.ok(!page.text().includes(BARE_REFUSAL), 'the refused retry shows the bare refusal sentence');
+  assertCardShown(page, '/ask, after a refused retry,');
+  await page.click(page.button('Allow'));
+  assert.equal(queryRequests(net.sent).length, 3, 'after Allow the question was not sent exactly once more');
+  page.unmount();
+});

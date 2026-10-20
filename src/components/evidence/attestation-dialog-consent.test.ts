@@ -20,6 +20,13 @@
 // WHAT MAKES IT ABLE TO FAIL. At the base the dialog shows the refusal's
 // `error` text (`AttestationDialog.tsx:178-180`) and no card.
 //
+// THE TWO PATHS (stage-A ruling (a)). The dialog guards its Run: with no
+// consent in force the card asks before any replay is sent. A 403 still
+// reaches it when the dialog read the consent as in force and the route did
+// not (a re-ask, or the cookie gone): to drive that path, the status read is
+// answered "in force" while the request carries no consent, so the REAL gate
+// refuses it.
+//
 // THE RUN COUNT. The dialog offers 3, 5 or 10 runs. "Allow, then one replay
 // request" is read as: after Allow, the replay test the reader asked for runs
 // (its runs, each one request), beginning with one request; before Allow, the
@@ -67,19 +74,30 @@ const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
 const { consentInForce } = await load('lib/sources/consent-gate.ts');
 const { friendlyStreamError } = await load('lib/streaming.ts');
+const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.ts');
 const BARE_REFUSAL: string = friendlyStreamError({ code: 'consent_required' });
 
 const REPLAY_PATH = `/api/records/${SLUG}/replay`;
+
+/** When set, the status read says a consent is in force, whatever the request carries. */
+let statusSaysInForce = false;
 
 function answers() {
   return installFetch(ORIGIN, {
     '/api/models': () => new Response(JSON.stringify({ models: [{ id: 'fixture/model', name: 'Fixture model' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
     '/api/flows': () => flowsRoute.GET(),
-    '/api/sources/consent': (request: Request) => (consentRoute[request.method] as (r: Request) => Promise<Response>)(request),
+    '/api/sources/consent': async (request: Request) => {
+      if (statusSaysInForce && request.method === 'GET') {
+        const statement = await buildFlowsStatement();
+        const states = Object.fromEntries(statement.sources.map((s: { sourceId: string }) => [s.sourceId, { state: 'on', since: '2026-10-19' }]));
+        return new Response(JSON.stringify({ inForce: true, store: 'cookie', flowsVersion: statementHash(statement), states }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return (consentRoute[request.method] as (r: Request) => Promise<Response>)(request);
+    },
     [REPLAY_PATH]: async (request: Request) => {
       const decision = await consentInForce(request, sessions.server);
       if (!decision.ok) return new Response(JSON.stringify(decision.payload), { status: 403, headers: { 'Content-Type': 'application/json' } });
-      return new Response(JSON.stringify({ toolCalls: [], output: 'An answer.', tokenUsage: { promptTokens: 1, completionTokens: 1 }, durationMs: 1, offeredSet: { from: 'sourcesOffered', sources: ['socrata'], lacking: [] } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ toolCalls: [], output: 'An answer.', tokenUsage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }, durationMs: 1, offeredSet: { from: 'sourcesOffered', sources: ['socrata'], lacking: [] } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     },
   });
 }
@@ -91,7 +109,8 @@ function one(surface: Surface, what: string, pick: (el: HostElement) => boolean)
 }
 
 /** Open the dialog, type a key, choose the consistency tab, and run the test. */
-async function runConsistency(): Promise<{ dialog: Surface; net: ReturnType<typeof answers> }> {
+async function runConsistency(readAsInForce = true): Promise<{ dialog: Surface; net: ReturnType<typeof answers> }> {
+  statusSaysInForce = readAsInForce;
   sessions.server = { user: { id: 'gh-fixture-replayer' } };
   sessions.client = { status: 'authenticated', data: { user: { name: 'Fixture' } } };
   const net = answers();
@@ -133,6 +152,15 @@ test('criterion 7: Allow stores the consent, then runs the replay test it was as
   assert.ok(after.length >= 1, 'after Allow no replay was sent');
   assert.ok(net.sent.indexOf(writes[0]) < net.sent.indexOf(after[0]), 'a replay was sent before the consent was written');
   assert.equal(after.length, 5, `the dialog ran ${after.length} replays after Allow, not the 5 it was asked for`);
-  assert.ok(dialog.text().includes('All runs complete'), `the replay test did not finish: ${dialog.text().slice(0, 500)}`);
+  assert.ok(dialog.text().includes('All runs complete'), `the replay test did not finish: ${dialog.text().slice(-700)}`);
+  dialog.unmount();
+});
+
+test('criterion 7 (the guard): with no consent in force, Run shows the card before any replay is sent', async () => {
+  const { dialog, net } = await runConsistency(false);
+  assert.equal(replays(net).length, 0, 'the dialog sent a replay before the reader answered the card');
+  assert.ok(dialog.buttons('Allow').length === 1 && dialog.buttons('Not now').length === 1, `the dialog shows no consent card: ${dialog.text().slice(0, 500)}`);
+  await dialog.click(dialog.button('Allow'));
+  assert.equal(replays(net).length, 5, 'after Allow the dialog did not run the five replays it was asked for');
   dialog.unmount();
 });

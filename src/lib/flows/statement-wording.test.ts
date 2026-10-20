@@ -108,13 +108,30 @@ test('criterion 12: the sandbox line is two: this site\'s setting, and Vercel\'s
   const charter = STATEMENT.sources.find((s) => s.sourceId === 'nyc-charter');
   assert.ok(charter, 'premise: Charter is hosted under the first entry\'s configuration');
   const basis = charter!.recipients.flatMap((r) => r.keptBy).flatMap((k) => k.basis ?? []);
-  assert.ok(!basis.some((line) => /persistent/.test(line) && /30 days/.test(line)), `one line still holds this site's setting and Vercel's statement: ${basis.find((l) => /persistent/.test(l))}`);
+  // The defect was one sentence holding both: this site's setting and Vercel's statement.
+  assert.ok(!basis.some((line) => /persistent/.test(line) && /vercel\.com/.test(line)), `one line still holds this site's setting and Vercel's statement: ${basis.find((l) => /persistent/.test(l))}`);
   const setting = basis.filter((line) => /persistent/.test(line) && /snapshot/.test(line));
   assert.equal(setting.length, 1, 'no line states this site\'s sandbox setting');
   assert.ok(setting[0].includes('src/lib/mcp/hosting/lifecycle.ts'), 'the setting is not read from lifecycle.ts');
   const vercel = basis.filter((line) => /https:\/\/vercel\.com\/docs\/vercel-sandbox\S*/.test(line) && /\b\d{4}-\d{2}-\d{2}\b/.test(line) && /["“][^"”]+["”]/.test(line));
   assert.equal(vercel.length, 1, `no line quotes Vercel's statement with its page and read date: ${JSON.stringify(basis)}`);
   assert.match(vercel[0], /30 days/, 'Vercel\'s quoted statement does not say how long it keeps a snapshot');
+});
+
+// Flag 3 (the ORCH's ruling): the statement cites lifecycle.ts's figure without
+// importing it (the module does not export it, and it is read-only to W3), so
+// the figure is read from that file's text and compared with the statement's.
+test('criterion 12 (flag 3): the setting\'s figure is lifecycle.ts\'s SNAPSHOT_EXPIRATION_MS, read from the file', () => {
+  const lifecycle = fs.readFileSync(path.join(REPO, 'src', 'lib', 'mcp', 'hosting', 'lifecycle.ts'), 'utf8');
+  const m = /const SNAPSHOT_EXPIRATION_MS = ([0-9_ *]+);/.exec(lifecycle);
+  assert.ok(m, 'premise: lifecycle.ts declares SNAPSHOT_EXPIRATION_MS as a product of literals');
+  const ms = m![1].split('*').map((f) => Number(f.trim().replace(/_/g, ''))).reduce((a, b) => a * b, 1);
+  const days = ms / (24 * 60 * 60 * 1000);
+  const charter = STATEMENT.sources.find((s) => s.sourceId === 'nyc-charter');
+  const setting = charter!.recipients.flatMap((r) => r.keptBy).flatMap((k) => k.basis ?? []).find((line) => /this site's setting/.test(line));
+  assert.ok(setting, 'premise: the statement states this site\'s setting');
+  const stated = /expire (\d+) days after its last use/.exec(setting!)?.[1];
+  assert.equal(Number(stated), days, `the statement says ${stated} days; lifecycle.ts sets ${days}`);
 });
 
 // --- None of it re-asks (criterion 12; green at the base, and must stay green) ------------------
