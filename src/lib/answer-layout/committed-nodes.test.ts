@@ -5,8 +5,8 @@
 // site may not) and its seven fields must equal `answer-first`'s, the layout
 // the instance renders by default: the script builds the node from that
 // built-in and nothing else. At the head of W4 P2 the directory holds no node
-// (none is committed under a test key), so the per-file assertions run over
-// the owner's file from G4b on; the module agreement below runs now.
+// (none is committed under a test key), so the per-file assertions run from
+// the first node the script commits on; the module agreement below runs now.
 //
 // Reading 6: `committed-nodes.ts` is the script's output form over exactly the
 // node files on disk, so a node file that no import names (it would never
