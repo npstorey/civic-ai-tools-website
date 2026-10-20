@@ -240,7 +240,7 @@ test('criterion 4 (full): each source\'s row gives its name, publisher, where it
     assert.ok(row, `no row for ${source.sourceId}`);
     assert.ok(row!.text.includes(READER_NAME[source.sourceId]), `${source.sourceId}'s row does not name it ${READER_NAME[source.sourceId]}`);
     assert.ok(row!.text.includes(source.publisher), `${source.sourceId}'s row does not name its publisher (${source.publisher})`);
-    assert.ok(/runs at/i.test(row!.text), `${source.sourceId}'s row does not say where it runs`);
+    assert.ok(/, running at [^.]/.test(row!.text), `${source.sourceId}'s row does not say where it runs (", running at")`);
     assert.ok(row!.text.includes(source.freshness), `${source.sourceId}'s row does not say how current its data is`);
     for (const k of source.recipients.flatMap((r) => r.keptBy)) {
       assert.ok(row!.text.includes(k.holder), `${source.sourceId}'s row does not name ${k.holder}`);
@@ -313,4 +313,169 @@ test('criterion 13: the operator items the held statements now cover give way to
 test('criterion 12: which plan this site\'s hosting account is on joins what is the operator\'s to state', () => {
   const items = facts.OPERATOR_STATES_ITEMS as string[];
   assert.ok(items.some((i) => /which plan this site's hosting account is on/i.test(i) && /logs/i.test(i)), `no plan item: ${JSON.stringify(items)}`);
+});
+
+// --- R6 PL (D1 = A, D2 = A): what each source is, and whose connector reaches it ----------------
+//
+// The owner's rulings (R6 PL, 2026-10-20). Each source's row reads "<name>:
+// <what-line as stored> This site reaches it through an MCP server, a
+// connector that <publisher> publishes, running at <where>. Who holds its
+// logs: …", the publisher's name a link to the connector's repository; the
+// what-line is printed as stored, so a proper noun keeps its capital and a
+// common word stays lower-case. The strings are written out here from the
+// ruling, with `<where>` as the `full` configuration gives it (`sourceWhere`).
+// The segments carry only the address; the page adds `target` and `rel`
+// (`page.tsx`), so the link is read from the rendered page.
+//
+// THE FALLBACK AND THE CASE (criterion 3) are driven through `sourceRow` on
+// synthetic statement sources, two of them with map entries the test adds to
+// `SOURCE_DESCRIPTIONS` and removes after it.
+//
+// THE TRACES (criterion 6). The derived guard (`privacy-page.test.ts`) fails
+// only on untraced text, an empty trace list, an undeclared `env:` or a
+// `const:` that names no export, and C5 above matches rows by id: neither
+// sees a row that stopped tracing the map or the reach sentence. The check
+// below does, and is shown red on a page with either trace removed.
+//
+// WHAT MAKES IT ABLE TO FAIL. At the base each row reads "<name>, published
+// by X, runs at Y.", with no what-line, no link and neither trace.
+
+const sourceNameModule = (await import(pathToFileURL(path.join(SRC, 'lib', 'sources', 'source-name.ts')).href)) as Mod;
+const PL_CONFIGURED = ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter'];
+
+/** D1 = A, each what-line as stored (and as the privacy page prints it). */
+const RULED_WHAT_STORED: Record<string, string> = {
+  socrata: 'an open-data portal platform from Tyler Technologies. Many cities and states publish their data on its portals.',
+  'data-commons': 'public statistics from government agencies and international organizations, gathered by Google.',
+  'boston-opencontext': "the City of Boston's open data, from data.boston.gov.",
+  'nyc-charter': "the text of New York City's Charter, Administrative Code and Rules.",
+};
+/** D2 = A: the publisher as the row prints it, and the connector's repository. */
+const RULED_PUBLISHER: Record<string, { text: string; link: string }> = {
+  socrata: { text: 'npstorey', link: 'https://github.com/npstorey/socrata-mcp-server' },
+  'data-commons': { text: 'Google', link: 'https://github.com/datacommonsorg/agent-toolkit' },
+  'boston-opencontext': { text: 'the City of Boston', link: 'https://github.com/CityOfBoston/OpenContext' },
+  'nyc-charter': { text: 'BetaNYC', link: 'https://github.com/BetaNYC/nyc-charter-laws-rules' },
+};
+const reachSentence = (publisher: string, where: string) => `This site reaches it through an MCP server, a connector that ${publisher} publishes, running at ${where}.`;
+const reachUnstated = (where: string) => `This site reaches it through an MCP server, a connector whose publisher is not stated, running at ${where}.`;
+
+type PlSegment = string | { link: string; text: string } | { code: string };
+const partsText = (parts: PlSegment[]) => parts.map((p) => (typeof p === 'string' ? p : 'link' in p ? p.text : p.code)).join('');
+
+/** Every `<a>` in some markup, with its address, target, rel and text. */
+function anchors(html: string): Array<{ href: string; target: string | null; rel: string | null; text: string }> {
+  return [...html.matchAll(/<a([^>]*)>(.*?)<\/a>/g)].map((m) => ({
+    href: /\shref="([^"]*)"/.exec(m[1])?.[1].replace(/&amp;/g, '&') ?? '',
+    target: /\starget="([^"]*)"/.exec(m[1])?.[1] ?? null,
+    rel: /\srel="([^"]*)"/.exec(m[1])?.[1] ?? null,
+    text: text(m[2]),
+  }));
+}
+
+test('PL criterion 1 (full): each source\'s row reads "<name>: <what-line> <reach sentence>" up to "Who holds its logs", the publisher linked to its connector', () => {
+  const { html, statement } = RENDERED.full;
+  assert.deepEqual((statement.sources as Array<{ sourceId: string }>).map((s) => s.sourceId), PL_CONFIGURED, 'premise: the full configuration has the four sources');
+  const sections = withEnv(CONFIGS.full, () => facts.buildPrivacySections(null)) as Array<{ heading: string; statements: Array<{ id: string; parts: PlSegment[] }> }>;
+  const each = sections.find((s) => s.heading === 'Each data source');
+  assert.ok(each, 'premise: the page has "Each data source"');
+  for (const source of statement.sources as Array<{ sourceId: string }>) {
+    const id = source.sourceId;
+    const where: string = sourceNameModule.sourceWhere(source);
+    const expected = `${READER_NAME[id]}: ${RULED_WHAT_STORED[id]} ${reachSentence(RULED_PUBLISHER[id].text, where)} Who holds its logs: `;
+    const row = each!.statements.find((st) => st.id === `${SOURCE_ROW}${id}`);
+    assert.ok(row, `no row for ${id}`);
+    assert.ok(partsText(row!.parts).startsWith(expected), `${id}'s row does not start "${expected}": ${partsText(row!.parts).slice(0, 300)}`);
+    const rendered = statements(html).find((s) => s.id === `${SOURCE_ROW}${id}`);
+    assert.ok(rendered, `the page renders no row for ${id}`);
+    assert.ok(rendered!.text.startsWith(expected.trimEnd()), `${id}'s rendered row does not start "${expected.trimEnd()}": ${rendered!.text.slice(0, 300)}`);
+    const links = anchors(rendered!.html).filter((a) => a.href === RULED_PUBLISHER[id].link);
+    assert.equal(links.length, 1, `${id}'s rendered row does not link ${RULED_PUBLISHER[id].link} once`);
+    assert.equal(links[0].text, RULED_PUBLISHER[id].text, `${id}'s link does not read the publisher's name`);
+    assert.equal(links[0].target, '_blank', `${id}'s link does not open a new tab`);
+    assert.equal(links[0].rel, 'noopener noreferrer', `${id}'s link's rel is not "noopener noreferrer"`);
+  }
+});
+
+for (const name of Object.keys(CONFIGS)) {
+  test(`PL criterion 1 (${name}): the privacy page renders neither "Published by" nor ", published by"`, () => {
+    const page = text(RENDERED[name].html);
+    for (const old of ['Published by', ', published by']) {
+      const at = page.indexOf(old);
+      assert.ok(at < 0, `${name}: the page renders "${old}": …${page.slice(Math.max(0, at - 80), at + 80)}…`);
+    }
+  });
+}
+
+/** Criterion 3's synthetic sources: two with no map entry, two whose entries the test adds. */
+const FIXTURE_SOURCES = [
+  { sourceId: 'fixture-unmapped', name: 'Fixture Unmapped', publisher: 'Fixture Publisher', host: 'unmapped.fixture.example' },
+  { sourceId: 'fixture-unstated', name: 'Fixture Unstated', publisher: 'not stated', host: 'unstated.fixture.example' },
+  { sourceId: 'fixture-proper', name: 'Fixture Proper', publisher: 'Fixture Proper Org', host: 'proper.fixture.example' },
+  { sourceId: 'fixture-lower', name: 'Fixture Lower', publisher: 'Fixture Lower Org', host: 'lower.fixture.example' },
+];
+const FIXTURE_ENTRIES: Record<string, { what: string; publisher: string; link: string }> = {
+  'fixture-proper': { what: "New York State's fixture records, from a fixture portal.", publisher: 'Fixture Proper Org', link: 'https://proper.fixture.example/connector' },
+  'fixture-lower': { what: 'an example fixture platform, for the case test.', publisher: 'Fixture Lower Org', link: 'https://lower.fixture.example/connector' },
+};
+
+test('PL criterion 3 (privacy page): no map entry reads the reach sentence unlinked with no what-line; a stored what-line prints as stored', () => {
+  assert.equal(typeof facts.sourceRow, 'function', 'privacy-facts exports no sourceRow to drive a synthetic source through');
+  const map = copy?.SOURCE_DESCRIPTIONS as Record<string, unknown> | undefined;
+  assert.ok(map && typeof map === 'object', `${COPY} exports no SOURCE_DESCRIPTIONS`);
+  const base = (RENDERED.full.statement.sources as Mod[])[0];
+  for (const [id, entry] of Object.entries(FIXTURE_ENTRIES)) map![id] = entry;
+  try {
+    const expected: Record<string, string> = {
+      'fixture-unmapped': `Fixture Unmapped: ${reachSentence('Fixture Publisher', 'unmapped.fixture.example')} Who holds its logs: `,
+      'fixture-unstated': `Fixture Unstated: ${reachUnstated('unstated.fixture.example')} Who holds its logs: `,
+      'fixture-proper': `Fixture Proper: New York State's fixture records, from a fixture portal. ${reachSentence('Fixture Proper Org', 'proper.fixture.example')} Who holds its logs: `,
+      'fixture-lower': `Fixture Lower: an example fixture platform, for the case test. ${reachSentence('Fixture Lower Org', 'lower.fixture.example')} Who holds its logs: `,
+    };
+    for (const f of FIXTURE_SOURCES) {
+      const row = facts.sourceRow({ ...base, sourceId: f.sourceId, displayName: `${f.name} MCP Server`, publisher: f.publisher, host: f.host }) as { parts: PlSegment[] };
+      assert.ok(partsText(row.parts).startsWith(expected[f.sourceId]), `${f.sourceId}: expected the row to start "${expected[f.sourceId]}": ${partsText(row.parts).slice(0, 300)}`);
+      const named = row.parts.filter((p) => typeof p === 'object' && 'link' in p && p.text === f.publisher) as Array<{ link: string }>;
+      const entry = FIXTURE_ENTRIES[f.sourceId];
+      if (entry) {
+        assert.equal(named.length, 1, `${f.sourceId}: the mapped publisher is not a link segment once`);
+        assert.equal(named[0].link, entry.link, `${f.sourceId}: the link is not the entry's`);
+      } else {
+        assert.equal(named.length, 0, `${f.sourceId}: an unmapped publisher is linked`);
+      }
+    }
+  } finally {
+    for (const id of Object.keys(FIXTURE_ENTRIES)) delete map![id];
+  }
+});
+
+const MAP_TRACE = 'const:src/lib/sources/copy.ts#SOURCE_DESCRIPTIONS';
+const REACH_TRACE = 'const:src/lib/sources/copy.ts#REACH_SENTENCE';
+
+/** Each mapped source's row that does not carry both the map's and the reach sentence's trace, by row and trace. */
+function missingRowTraces(html: string, mapped: string[]): string[] {
+  const missing: string[] = [];
+  for (const id of mapped) {
+    const row = statements(html).find((s) => s.id === `${SOURCE_ROW}${id}`);
+    if (!row) {
+      missing.push(`${SOURCE_ROW}${id}: no row`);
+      continue;
+    }
+    for (const trace of [MAP_TRACE, REACH_TRACE]) if (!row.traces.includes(trace)) missing.push(`${SOURCE_ROW}${id}: ${trace}`);
+  }
+  return missing;
+}
+
+test('PL criterion 6: each mapped source\'s row traces the map and the reach sentence, and the check is red with either trace removed', () => {
+  const { html, statement } = RENDERED.full;
+  const map = copy?.SOURCE_DESCRIPTIONS as Record<string, unknown> | undefined;
+  assert.ok(map && typeof map === 'object', `${COPY} exports no SOURCE_DESCRIPTIONS`);
+  const mapped = (statement.sources as Array<{ sourceId: string }>).map((s) => s.sourceId).filter((id) => Object.hasOwn(map!, id));
+  assert.deepEqual(mapped, PL_CONFIGURED, 'premise: the four configured sources are mapped');
+  assert.deepEqual(missingRowTraces(html, mapped), [], 'a mapped row does not carry both traces');
+  for (const trace of [MAP_TRACE, REACH_TRACE]) {
+    const removed = html.replace(new RegExp(`(data-statement="${SOURCE_ROW}data-commons"[^>]*data-trace="[^"]*?) ?${trace.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}`), '$1');
+    assert.notEqual(removed, html, `premise: the fixture removed ${trace} from Data Commons' row`);
+    assert.deepEqual(missingRowTraces(removed, mapped), [`${SOURCE_ROW}data-commons: ${trace}`], `the check does not report ${trace} removed`);
+  }
 });
