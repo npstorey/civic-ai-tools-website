@@ -119,7 +119,8 @@ const same = (a: LayoutPayload, b: LayoutPayload) => JSON.stringify(a) === JSON.
  */
 export function resolveAnswerLayouts(
   setting: AnswerLayoutSetting,
-  options: { readFile?: (path: string) => string; warn?: (line: string) => void } = {},
+  // RED STUB (LAYOUT-WEB W4 P2): `urlReading` and `committed` are typed and not read yet.
+  options: { readFile?: (path: string) => string; warn?: (line: string) => void; urlReading?: unknown; committed?: readonly unknown[] } = {},
 ): AnswerLayoutReading {
   const inline = present(setting.inline);
   const path = present(setting.path);

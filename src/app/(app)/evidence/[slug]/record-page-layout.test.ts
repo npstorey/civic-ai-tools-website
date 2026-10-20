@@ -1839,6 +1839,22 @@ test('W4 P1 the server markup is the instance’s default: its line, and the tog
   assert.deepEqual(options.map((m) => [m[1], m[2] !== undefined]), [['answer-first@1', true], ['envelope-order@1', false]]);
 });
 
+test('W4 P2 the server markup with a publication attestation naming a node: the page looks it up among the nodes it holds', async () => {
+  // The page reads the id from `resolveRecordAttestations` (stubbed above) and
+  // looks it up among the nodes this site holds: at this head none is
+  // committed and no URL is set, so any id is one the site does not hold.
+  globals.__p2PublishedLayoutNodeId = '9'.repeat(64);
+  let named: string;
+  try {
+    named = viewChildren(await renderWithInstance(AGF, INSTANCE)).at(-1)?.markup ?? '';
+  } finally {
+    delete globals.__p2PublishedLayoutNodeId;
+  }
+  assert.ok(named.includes('<span data-part="layout-line">Shown under layout answer-first v1. This site does not hold the layout this record was published under.</span>'), named);
+  const none = viewChildren(await renderWithInstance(AGF, INSTANCE)).at(-1)?.markup ?? '';
+  assert.ok(none.includes('<span data-part="layout-line">Shown under layout answer-first v1</span>'), 'no id named: W4 P1’s line');
+});
+
 // --- W4 P1 (9): the record citation's word ---------------------------------------------
 //
 // Ruling D1: the deliberative-process citation dates the record with the word

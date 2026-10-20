@@ -64,6 +64,7 @@ import { reproductionAssertionFor } from '../../lib/notebook-author/reproduction
 import type { EvidencePackage } from '../../lib/evidence/packager.ts';
 import type { BlobRef } from '../../lib/evidence/blob-ref.ts';
 import type { Notebook } from '../../lib/notebook-author/cells.ts';
+import type { PublishedLayout } from '../../lib/answer-layout/published-line.ts';
 
 /** What the page resolved before rendering (`resolvePackageForRender`). */
 export interface ResolvedPackageData {
@@ -105,6 +106,8 @@ export interface RecordAdapterInput {
   row: RecordRowInput;
   /** The instance's declared host (`getInstanceAttribution().host`), or null. */
   instance: string | null;
+  /** RED STUB (LAYOUT-WEB W4 P2): typed, not read yet. */
+  publishedLayout?: PublishedLayout;
 }
 
 /**

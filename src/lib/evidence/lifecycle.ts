@@ -101,6 +101,14 @@ export async function resolveLifecycle(
   });
 }
 
+/** RED STUB (LAYOUT-WEB W4 P2): the lifecycle, and no layout node read yet. */
+export async function resolveRecordAttestations(
+  record: LifecycleRecordColumns,
+  targetSignerIdentifier?: string,
+): Promise<{ lifecycle: LifecycleResolution; publishedLayoutNodeId: string | null }> {
+  return { lifecycle: await resolveLifecycle(record, targetSignerIdentifier), publishedLayoutNodeId: null };
+}
+
 /**
  * Fetch one attestation's signed envelope, verify it independently, and build
  * the view. Rendered fields are sourced from the SIGNED node JSON when it can
