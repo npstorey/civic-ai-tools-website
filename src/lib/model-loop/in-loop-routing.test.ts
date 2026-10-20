@@ -34,6 +34,13 @@
 // load names an alias holding a `{`, so a result text that echoed its alias
 // would carry one.
 //
+// Criterion 6, replay (C2): a record whose composition states `routing.method`
+// `in-loop` replays in loop over the record's offered set, so its first
+// request is the directory over that set and `load_source`; a record with no
+// `routing` replays as today. The record's offered set is a strict subset of
+// what this instance configures, so a replay over the instance's set would
+// fail the assertion.
+//
 // Run with: npm test
 //   (or: node --test --experimental-strip-types src/lib/model-loop/in-loop-routing.test.ts)
 
@@ -91,6 +98,8 @@ const { NOT_LOADED_FOR_LLM, friendlyStreamError } = await import('../streaming.t
 const { TraceBuilder, CIVICAITOOLS_TRACE_CONFIG, hash } = await import('../evidence/trace.ts');
 const { createInLoopRouting, directorySet, entersInLoop } = await import('../mcp/routing-mode.ts');
 const { runToolLoop } = await import('./run-tool-loop.ts');
+const { replayLoopOptionsForPackage } = await import('./replay-loop.ts');
+const { buildSystemPrompt } = await import('../mcp/socrata-skill.ts');
 const { startScriptedModelServer } = await import('./test-harness.ts');
 const { createModelClient } = await import('../model-client.ts');
 
@@ -398,4 +407,66 @@ test('criterion 5: under in-loop, each llm_inference span states its own request
   });
   // The prompts did change across the run, so the hashes can differ.
   assert.notEqual(inference[0]['gen_ai.system_prompt_hash'], inference[1]['gen_ai.system_prompt_hash']);
+});
+
+// --- Criterion 6: replay ------------------------------------------------------------
+
+/** A stored package's two fields replay reads, for a record offered Socrata
+ *  and Data Commons (Boston, configured here, was not offered to it). */
+function recordStating(routing?: { method: string; version: string }) {
+  return {
+    queries: [],
+    dataSources: [],
+    extensions: {
+      'org.civicaitools.composition': {
+        assertedDate: TODAY,
+        sourcesOffered: [
+          { sourceId: 'socrata', alias: 'socrata', reason: 'configured' },
+          { sourceId: 'data-commons', alias: 'data_commons', reason: 'configured' },
+          { sourceId: 'boston-opencontext', alias: 'boston', reason: 'not-configured' },
+          { sourceId: 'nyc-charter', alias: 'nyc_charter', reason: 'not-configured' },
+        ],
+        components: [{ id: '@typedstandards/civic-typed-router', version: '0.5.0' }],
+        ...(routing ? { routing, definitionHash: '0'.repeat(64) } : {}),
+      },
+    },
+  };
+}
+
+async function replayFirstRequest(pkg: ReturnType<typeof recordStating>): Promise<Json> {
+  const scripted = await startScriptedModelServer([{ content: 'No data was needed to answer this.' }]);
+  process.env.MODEL_API_BASE_URL = scripted.url;
+  try {
+    const options = await replayLoopOptionsForPackage({
+      pkg,
+      client: createModelClient({ apiKey: 'placeholder-model-key-r8-w1' }),
+      endpointModel: 'fake/model',
+      requestSettings: undefined,
+      prompt: PROMPT,
+    });
+    await runToolLoop(options);
+    return scripted.requests[0];
+  } finally {
+    delete process.env.MODEL_API_BASE_URL;
+    await new Promise<void>((resolve) => scripted.server.close(() => resolve()));
+  }
+}
+
+test('criterion 6: a replay of an in-loop record sends the directory first, over the record\'s offered set', async () => {
+  const first = await replayFirstRequest(recordStating({ method: 'in-loop', version: '0.5.0' }));
+  assert.deepEqual(toolNames(first), ['load_source']);
+  const tool = (first.tools as ToolSchema[])[0];
+  assert.deepEqual(tool.function.parameters?.properties?.alias?.enum, ['socrata', 'data_commons']);
+  const today = new Date().toISOString().slice(0, 10);
+  assert.equal(systemOf(first), civicRouter.directoryPrompt({ configured, today, selection: ['socrata', 'data-commons'] }));
+});
+
+test('criterion 6: a replay of a record with no routing sends today\'s request', async () => {
+  const first = await replayFirstRequest(recordStating());
+  assert.ok(!toolNames(first).includes('load_source'), 'a record with no routing was replayed in loop');
+  assert.deepEqual(
+    toolNames(first),
+    civicRouter.aliasedOfferedMcpTools(civicRouter.aliasedMcpTools, configured, ['socrata', 'data-commons']).map((t) => t.function.name),
+  );
+  assert.equal(systemOf(first), await buildSystemPrompt(undefined, configured, ['socrata', 'data-commons']));
 });
