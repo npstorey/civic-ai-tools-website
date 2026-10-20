@@ -118,6 +118,10 @@ registerHooks({
   },
 });
 
+// R6 W3 (#632): the consent gate is on, so each gated request carries a consent
+// in force, built by the real encoder (`consentCookieForTests`).
+const { consentCookieForTests } = (await import('../../lib/sources/consent-cookie-for-tests.ts')) as typeof import('../../lib/sources/consent-cookie-for-tests.ts');
+
 // --- The loopback MCP sources ------------------------------------------------
 
 const ONE_ROW = JSON.stringify({ data: [{ count: '512' }], total_rows: 1 });
@@ -261,7 +265,7 @@ const verify = await import('@typedstandards/verify-core');
 interface Drive { name: string; body: string; requests: Array<{ raw: string; body: Record<string, unknown> }>; warnings: string[]; mcpCalls: Array<{ path: string; tool?: string }> }
 
 const post = (route: string, body: unknown) =>
-  new Request(`http://localhost${route}`, { method: 'POST', body: JSON.stringify(body) }) as never;
+  new Request(`http://localhost${route}`, { method: 'POST', headers: { cookie: consentCookieForTests() }, body: JSON.stringify(body) }) as never;
 
 async function drive(name: string, routing: string | undefined, run: () => Promise<Response>): Promise<Drive> {
   if (routing === undefined) delete process.env.SOURCE_ROUTING;
@@ -442,7 +446,10 @@ test('criterion 5, compare-stream: the root span states routing, the definition 
   const definition = router.civicRouter.harnessDefinition({ configured, selection: ['socrata'], chosenBy: 'model', components });
   assert.equal(root['analysis.definition_hash'], definition.hash);
   // As composed (C4): the directory set's reasons, not recomputed after loads.
-  assert.deepEqual(JSON.parse(root['analysis.sources_offered'] ?? 'null').map((s: { reason: string }) => s.reason), ['configured', 'configured', 'configured', 'not-configured']);
+  // R6 W3 (#632, contract item 10): with the gate on and every source On, the
+  // record states the router's `selected` where it stated `configured` before
+  // W3 — the signed-byte move the gate record names.
+  assert.deepEqual(JSON.parse(root['analysis.sources_offered'] ?? 'null').map((s: { reason: string }) => s.reason), ['selected', 'selected', 'selected', 'not-configured']);
   // skill.text_hash is the final prompt's.
   const skill = spans(traceOf(IN_LOOP)).find((s) => s.name === 'skill_fetch');
   assert.equal(Object.fromEntries(attrPairs(skill!))['skill.text_hash'], sha(systemText(last)));
