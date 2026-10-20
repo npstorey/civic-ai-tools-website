@@ -20,7 +20,7 @@
  */
 
 import type { CSSProperties } from 'react';
-import { ASK_FIRST_MEANS, PANEL_HEADING, PANEL_LEAD, PANEL_NO_CONSENT } from '@/lib/sources/copy';
+import { ASK_FIRST_MEANS, PANEL_HEADING, PANEL_LEAD, PANEL_NO_CONSENT, PANEL_PRIVACY_LINK } from '@/lib/sources/copy';
 import { readerSourceName, sourceWhere } from '@/lib/sources/source-name';
 import { currentStates, useSourceConsent, type SourceStateValue } from './useSourceConsent';
 import { KeptByLines } from './KeptByLine';
@@ -52,7 +52,8 @@ export default function SourcesPanel() {
   const status = consent.status;
   const inForce = status?.inForce === true;
   const ids = statement?.sources.map((s) => s.sourceId) ?? [];
-  const states = inForce ? currentStates(status, ids) : Object.fromEntries(ids.map((id) => [id, status?.defaults?.[id] ?? 'ask-first']));
+  // The states Allow writes (T7): the stored ones on a re-ask too, the defaults with nothing stored.
+  const states = currentStates(status, ids);
   const onAccount = status?.store === 'row';
 
   return (
@@ -64,7 +65,7 @@ export default function SourcesPanel() {
       {onAccount && inForce && <ConsentNotices />}
       <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
         {(statement?.sources ?? []).map((source) => {
-          const name = readerSourceName(source.displayName);
+          const name = readerSourceName(source);
           const state = states[source.sourceId] ?? 'ask-first';
           const since = status?.states?.[source.sourceId]?.since;
           return (
@@ -102,7 +103,7 @@ export default function SourcesPanel() {
       </ul>
       <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', marginTop: '4px' }}>
         <p style={{ margin: '0 0 6px' }}>
-          <a href="/privacy">Where a question goes, in full</a>
+          <a href="/privacy">{PANEL_PRIVACY_LINK}</a>
           {onAccount ? (
             <>
               {' · '}

@@ -230,12 +230,15 @@ test('criterion 4: the guard reports a source row removed from the page, and a r
 
 // --- Criterion 4: each source's row, from the flows statement ------------------------------
 
+/** T13 (#632 G7): each source's one reader name, written out. */
+const READER_NAME: Record<string, string> = { socrata: 'Socrata', 'data-commons': 'Data Commons', 'boston-opencontext': 'Boston OpenContext', 'nyc-charter': 'NYC Charter, Laws and Rules' };
+
 test('criterion 4 (full): each source\'s row gives its name, publisher, where it runs, what its holders say they keep, and its freshness', () => {
   const { html, statement } = RENDERED.full;
   for (const source of statement.sources as Array<{ sourceId: string; displayName: string; publisher: string; freshness: string; recipients: Array<{ keptBy: Array<{ holder: string; keeps: string }> }> }>) {
     const row = statements(html).find((s) => s.id === `${SOURCE_ROW}${source.sourceId}`);
     assert.ok(row, `no row for ${source.sourceId}`);
-    assert.ok(row!.text.includes(source.displayName.replace(/ MCP Server$/, '')), `${source.sourceId}'s row does not name it`);
+    assert.ok(row!.text.includes(READER_NAME[source.sourceId]), `${source.sourceId}'s row does not name it ${READER_NAME[source.sourceId]}`);
     assert.ok(row!.text.includes(source.publisher), `${source.sourceId}'s row does not name its publisher (${source.publisher})`);
     assert.ok(/runs at/i.test(row!.text), `${source.sourceId}'s row does not say where it runs`);
     assert.ok(row!.text.includes(source.freshness), `${source.sourceId}'s row does not say how current its data is`);

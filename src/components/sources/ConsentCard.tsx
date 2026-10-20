@@ -3,7 +3,7 @@
 /**
  * The first-consent card (R6 W3, #632 anchor W3 item 2; design §4.4): shown
  * before the first question on a fresh session, and whenever a route answers
- * `consent_required`. The owner's text (a candidate until R6 G7,
+ * `consent_required`. The owner's text (ruled at R6 G7, 2026-10-20,
  * `@/lib/sources/copy`) with the recipient list derived from the flows
  * statement this instance serves: each recipient with what its holder says
  * it keeps, the page it said so on and the date that page was read, or "not
@@ -20,13 +20,14 @@
 import { useState, type CSSProperties } from 'react';
 import type { FlowsRecipient } from '@/lib/flows/statement';
 import {
+  CARD_AFTER_ALLOW_WITH_ACCOUNTS,
+  CARD_AFTER_ALLOW_WITHOUT_ACCOUNTS,
   CARD_ANALYTICS,
   CARD_COOKIE_WITH_ACCOUNTS,
   CARD_COOKIE_WITHOUT_ACCOUNTS,
   CONSENT_CARD,
   ENDPOINT_NO_TRAINING,
-  WITHDRAW_WITH_ACCOUNTS,
-  WITHDRAW_WITHOUT_ACCOUNTS,
+  KEPT_FOR_OPERATOR,
 } from '@/lib/sources/copy';
 import { readerSourceName, recipientWhere, roleLabel } from '@/lib/sources/source-name';
 import { useSourceConsent } from './useSourceConsent';
@@ -62,7 +63,8 @@ function RecipientLine({ recipient, label }: { recipient: FlowsRecipient; label:
     <li data-recipient={recipient.id} style={{ marginBottom: '4px' }}>
       <strong style={{ fontWeight: 600 }}>{label}</strong>
       {` (${where}): `}
-      {operator ? ENDPOINT_NO_TRAINING : only ? "what it keeps is for this site's operator to state." : <KeptByLines keptBy={recipient.keptBy} />}
+      {/* S2 = A: the operator's statement follows the clause, it does not replace it. */}
+      {operator ? `${KEPT_FOR_OPERATOR}. ${ENDPOINT_NO_TRAINING}` : only ? `${KEPT_FOR_OPERATOR}.` : <KeptByLines keptBy={recipient.keptBy} />}
     </li>
   );
 }
@@ -107,15 +109,15 @@ export default function ConsentCard({ onAllow, onNotNow }: ConsentCardProps) {
             <RecipientLine key={r.id} recipient={r} label={roleLabel(r.role)} />
           ))}
           {statement.sources.flatMap((source) =>
-            source.recipients.map((r) => <RecipientLine key={r.id} recipient={r} label={readerSourceName(source.displayName)} />),
+            source.recipients.map((r) => <RecipientLine key={r.id} recipient={r} label={readerSourceName(source)} />),
           )}
         </ul>
       ) : (
         <p style={{ margin: '0 0 8px', color: 'var(--text-secondary)' }}>Reading where a question can go…</p>
       )}
       <p style={{ margin: '0 0 8px' }}>
-        {CONSENT_CARD.afterList[0]} {accounts ? WITHDRAW_WITH_ACCOUNTS : WITHDRAW_WITHOUT_ACCOUNTS}{' '}
-        <a href="/privacy">{CONSENT_CARD.afterList[1]}</a>
+        {accounts ? CARD_AFTER_ALLOW_WITH_ACCOUNTS : CARD_AFTER_ALLOW_WITHOUT_ACCOUNTS}{' '}
+        <a href="/privacy">{CONSENT_CARD.afterList[0]}</a>
       </p>
       <p style={{ margin: '0 0 12px' }}>
         <LocalOnlyOffer statement={statement} />

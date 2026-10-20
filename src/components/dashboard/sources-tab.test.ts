@@ -114,11 +114,14 @@ async function sourcesTab(): Promise<{ tab: Surface; net: ReturnType<typeof answ
   return { tab, net, statement };
 }
 
-test('criterion 3: the Sources tab shows every source\'s state, the date given, and the flows version with its date', async () => {
+/** T13 (#632 G7): each source's one reader name, written out. */
+const READER_NAME: Record<string, string> = { socrata: 'Socrata', 'data-commons': 'Data Commons', 'boston-opencontext': 'Boston OpenContext', 'nyc-charter': 'NYC Charter, Laws and Rules' };
+
+test('criterion 3: the Sources tab shows every source\'s state, the date given, and the base version with its statement\'s date', async () => {
   const { tab, statement } = await sourcesTab();
   const text = tab.text();
   for (const [i, source] of (statement.sources as Array<{ sourceId: string; displayName: string }>).entries()) {
-    const name = source.displayName.replace(/ MCP Server$/, '');
+    const name = READER_NAME[source.sourceId];
     const rows = tab.elements().filter((el: HostElement) => el.props['data-source'] === source.sourceId);
     assert.equal(rows.length, 1, `the tab has no row for ${source.sourceId}`);
     const row = textOf(rows[0]);
@@ -126,7 +129,9 @@ test('criterion 3: the Sources tab shows every source\'s state, the date given, 
     assert.ok(row.includes(i === 0 ? 'On' : 'Off'), `${source.sourceId}'s row does not show its state: ${row}`);
   }
   assert.ok(text.includes(new Date().toISOString().slice(0, 10)), 'the tab does not show the date the consent was given');
-  assert.ok(text.includes(statementHash(statement).slice(0, 12)), 'the tab does not show the flows version the consent refers to');
+  // S3 (#632 G7): the base version the consent refers to, not the statement hash.
+  assert.ok(text.includes(statement.version.slice(0, 12)), 'the tab does not show the base version the consent refers to');
+  assert.ok(!text.includes(statementHash(statement).slice(0, 12)), 'the tab shows the statement hash');
   assert.ok(text.includes(statement.date), 'the tab does not show the flows statement\'s date');
   tab.unmount();
 });

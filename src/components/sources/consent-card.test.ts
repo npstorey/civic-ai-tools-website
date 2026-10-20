@@ -1,6 +1,6 @@
 // R6 W3 (#632), criteria 2, 5 and 11: the first-consent card, rendered.
 //
-// THE CARD (anchor W3 item 2). The owner's text (a candidate until R6 G7, in
+// THE CARD (anchor W3 item 2). The owner's text (ruled at R6 G7, 2026-10-20, in
 // `src/lib/sources/copy.ts`) with the recipient list derived from the flows
 // statement: each recipient with its kept-by line — what its holder says it
 // keeps, with the statement's address and the date it was read, or "not
@@ -127,12 +127,15 @@ for (const [name, env] of CONFIGURATIONS) {
   });
 }
 
+/** T13 (#632 G7): each source's one reader name, written out. */
+const READER_NAME: Record<string, string> = { socrata: 'Socrata', 'data-commons': 'Data Commons', 'boston-opencontext': 'Boston OpenContext', 'nyc-charter': 'NYC Charter, Laws and Rules' };
+
 test('criterion 11: the card names each source without " MCP Server"', async () => {
   await under({ NYC_CHARTER_HOSTING: 'sandbox' }, async () => {
     const shown = await card();
     const statement = await buildFlowsStatement();
     for (const source of statement.sources as Array<{ sourceId: string; displayName: string }>) {
-      const name = source.displayName.replace(/ MCP Server$/, '');
+      const name = READER_NAME[source.sourceId];
       assert.ok(shown.text().includes(name), `the card does not name ${source.sourceId} as ${name}`);
     }
     assert.ok(!shown.text().includes('MCP Server'), `the card says "MCP Server": ${shown.text().slice(0, 400)}`);

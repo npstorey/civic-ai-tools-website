@@ -191,16 +191,18 @@ test('correction 5: "on your account" and "your dashboard" render only with a da
   const cookieWith = need('CARD_COOKIE_WITH_ACCOUNTS');
   const cookieWithout = need('CARD_COOKIE_WITHOUT_ACCOUNTS');
   const withdrawWith = need('WITHDRAW_WITH_ACCOUNTS');
-  const withdrawWithout = need('WITHDRAW_WITHOUT_ACCOUNTS');
+  // T3 (#632 G7): the card states where to withdraw in its own sentence after the list; the privacy page keeps its own.
+  const afterWith = need('CARD_AFTER_ALLOW_WITH_ACCOUNTS');
+  const afterWithout = need('CARD_AFTER_ALLOW_WITHOUT_ACCOUNTS');
   await under({ DATABASE_URL: 'fixture' }, async () => {
     const shown = await card();
-    assert.ok(shown.text().includes(cookieWith) && shown.text().includes(withdrawWith), 'with a database, the card does not say the answer can be kept on an account');
+    assert.ok(shown.text().includes(cookieWith) && shown.text().includes(afterWith), 'with a database, the card does not say the answer can be kept on an account');
     shown.unmount();
     assert.ok(privacyText().text.includes(withdrawWith));
   });
   await under({}, async () => {
     const shown = await card();
-    assert.ok(shown.text().includes(cookieWithout) && shown.text().includes(withdrawWithout), 'with no database, the card lacks its no-account sentences');
+    assert.ok(shown.text().includes(cookieWithout) && shown.text().includes(afterWithout), 'with no database, the card lacks its no-account sentences');
     assert.ok(!/on your account|your dashboard/i.test(shown.text()), 'with no database, the card speaks of an account or a dashboard');
     shown.unmount();
     assert.ok(!/on your account|your dashboard/i.test(privacyText().text), 'with no database, the privacy page speaks of an account or a dashboard');

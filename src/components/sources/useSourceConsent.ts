@@ -41,6 +41,8 @@ export interface ConsentStatus {
   consentedAt?: string;
   updatedAt?: string;
   consentedFlowsVersion?: string;
+  /** The base version of the statement the consent refers to (S3): the stored statement's for a row, the current one's for a cookie in force. */
+  consentedBaseVersion?: string;
   consentedFlowsDate?: string;
   notices?: ConsentNotice[];
 }
@@ -113,9 +115,19 @@ function configured(): string[] {
   return snapshot.statement?.sources.map((s) => s.sourceId) ?? [];
 }
 
-/** The states a reader has: the stored ones; a configured source with none is Ask first (D6). */
+/**
+ * The states a reader has, as the panel shows them and Allow writes them
+ * (T7, so the card's "the sources the panel shows as On" is what Allow turns
+ * on): with nothing stored, the defaults a first consent gives (each
+ * configured source's manifest `consentDefault`, D6); otherwise each
+ * source's stored state, and Ask first for a configured source with none,
+ * whether the consent is in force or asked again.
+ */
 export function currentStates(status: ConsentStatus | null, ids: string[]): Record<string, SourceStateValue> {
-  const stored = status?.states ?? {};
+  const stored = status?.states;
+  if (!stored || Object.keys(stored).length === 0) {
+    return Object.fromEntries(ids.map((id) => [id, status?.defaults?.[id] ?? 'ask-first']));
+  }
   return Object.fromEntries(ids.map((id) => [id, stored[id]?.state ?? 'ask-first']));
 }
 
@@ -144,17 +156,15 @@ async function write(method: 'PUT' | 'PATCH' | 'DELETE', body?: unknown): Promis
 /**
  * Allow: a first consent stores each configured source's default (D6, the
  * manifest's `consentDefault`); a consent asked again keeps the reader's own
- * states, and a source with none is Ask first. On a 409 the statement is read
+ * states, and a source with none is Ask first: `currentStates`, the states
+ * the panel shows. On a 409 the statement is read
  * again and the answer is false, so the card asks again.
  */
 export async function allowConsent(): Promise<boolean> {
   if (!snapshot.loaded) await refreshConsent();
   const status = snapshot.status;
   if (!status) return false;
-  const ids = configured();
-  const states = status.states && Object.keys(status.states).length > 0
-    ? currentStates(status, ids)
-    : Object.fromEntries(ids.map((id) => [id, status.defaults?.[id] ?? 'ask-first']));
+  const states = currentStates(status, configured());
   return write('PUT', { states, flowsVersion: status.flowsVersion });
 }
 

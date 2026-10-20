@@ -25,7 +25,10 @@ import {
  *
  *   GET     the consent in force: `{ inForce, store, flowsVersion, defaults,
  *           states?, consentedAt?, updatedAt?, consentedFlowsVersion?,
- *           consentedFlowsDate?, notices?, reask?, accounts }`. `accounts`
+ *           consentedBaseVersion?, consentedFlowsDate?, notices?, reask?,
+ *           accounts }`. `consentedBaseVersion` is the base version of the
+ *           statement the consent refers to (S3): the stored statement's for
+ *           a row, the current statement's for a cookie in force. `accounts`
  *           says whether this instance keeps consents on accounts (a
  *           database), so a surface says "on your account" only where true. `defaults` are the
  *           states a first consent gives (each configured source's manifest
@@ -92,6 +95,7 @@ export async function GET(request: Request): Promise<Response> {
       consentedAt: row.consentedAt,
       updatedAt: row.updatedAt,
       consentedFlowsVersion: row.flowsHash,
+      consentedBaseVersion: row.flowsStatement.version,
       consentedFlowsDate: row.flowsStatement.date,
       notices: inForce ? noticesOf(row.flowsStatement, statement) : [],
       ...(inForce ? {} : { reask }),
@@ -108,7 +112,7 @@ export async function GET(request: Request): Promise<Response> {
     defaults,
     accounts: accounts(),
     states,
-    ...(verdict.inForce ? { consentedFlowsVersion: hash, consentedFlowsDate: statement.date } : { reask: verdict.reask as Reask }),
+    ...(verdict.inForce ? { consentedFlowsVersion: hash, consentedBaseVersion: statement.version, consentedFlowsDate: statement.date } : { reask: verdict.reask as Reask }),
   }, 200);
 }
 

@@ -45,6 +45,7 @@
  * silently.
  */
 import type { FlowsKeptBy, FlowsRecipient, FlowsSource, FlowsStatement } from '../flows/statement.ts';
+import { readerSourceName } from './source-name.ts';
 
 // --- The states ------------------------------------------------------------------
 
@@ -323,18 +324,13 @@ export interface ConsentNotice {
 
 const ROLE_WORDS: Readonly<Record<string, string>> = {
   'model-endpoint': 'The model endpoint',
-  'function-logs': "The hosting platform's logs",
+  'function-logs': "This site's hosting logs",
   'sign-in': 'The sign-in provider',
   analytics: 'The analytics service',
   'notebook-executor': 'The notebook runner',
   source: 'A data source',
   'sandbox-platform': "The sandbox a data source runs in",
 };
-
-/** A source's name as a reader reads it: the manifest's name without " MCP Server". */
-function sourceName(source: Pick<FlowsSource, 'displayName'> | undefined, fallback: string): string {
-  return source ? source.displayName.replace(/ MCP Server$/, '') : fallback;
-}
 
 /**
  * The `notify` changes between the statement a row holds and the one in force
@@ -356,15 +352,17 @@ export function noticesOf(previous: FlowsStatement, current: FlowsStatement): Co
     .filter((c) => c.effect === 'notify')
     .map((c): ConsentNotice => {
       const source = c.sourceId ? previous.sources.find((s) => s.sourceId === c.sourceId) : undefined;
+      // A source by its one reader name (T13); one the statement lacks, by its id.
+      const name = source ? readerSourceName(source) : c.sourceId ?? 'A data source';
       switch (c.rule) {
         case 'recipient-removed':
-          return { rule: c.rule, text: `${label(c.recipient)} no longer receives anything from this site.` };
+          return { rule: c.rule, text: `${label(c.recipient)}: removed from the recipients.` };
         case 'posture-better':
-          return { rule: c.rule, text: `${label(c.recipient)} now says it keeps less.` };
+          return { rule: c.rule, text: `${label(c.recipient)}: its holder now says it keeps less.` };
         case 'source-removed':
-          return { rule: c.rule, text: `${sourceName(source, c.sourceId ?? 'A data source')} is no longer offered on this site.` };
+          return { rule: c.rule, text: `${name} is no longer offered on this site.` };
         default:
-          return { rule: c.rule, text: `${sourceName(source, c.sourceId ?? 'A data source')} now says it keeps less.` };
+          return { rule: c.rule, text: `${name} now says it keeps less.` };
       }
     });
 }

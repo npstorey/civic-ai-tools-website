@@ -21,8 +21,8 @@
  * (`SITE_OPERATOR_STATES_NO_TRAINING`, #632 D3 = A), and then in those words.
  *
  * CONSENT (#632 W3; design §4.7 items 3, 7, 10, 11 and 12). The consent
- * sections are the owner's text (`src/lib/sources/copy.ts`, a candidate until
- * R6 G7), the consent cookie by name, one row per configured source derived
+ * sections are the owner's text (`src/lib/sources/copy.ts`, ruled at R6 G7
+ * on 2026-10-20), the consent cookie by name, one row per configured source derived
  * from the flows statement `/api/flows` serves, and the dated change log
  * (`docs/flows-changelog.md`) linked in the instance's repository.
  *
@@ -634,7 +634,7 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
         statement(
           `recipient-source-${sourceId}`,
           [
-            `The data source ${entry.displayName}, at `,
+            `The data source ${readerSourceName(entry)}, at `,
             { code: hostOf(address) },
             ', receives the searches and queries the AI model writes to answer your question. These can include words from your question. ',
             `How current its data is: ${entry.freshness}`,
@@ -787,7 +787,7 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
       statement(
         `recipient-hosted-${server.sourceId}`,
         [
-          `The data source ${server.label} runs in a Vercel Sandbox this site starts, running version ${server.hosting.version} of its publisher's software. `,
+          `The data source ${readerSourceName(server)} runs in a Vercel Sandbox this site starts, running version ${server.hosting.version} of its publisher's software. `,
           `How current its data is: ${CIVIC_MANIFEST.find((entry) => entry.sourceId === server.sourceId)?.freshness ?? ''}`,
         ],
         ['env:NYC_CHARTER_HOSTING', 'const:@typedstandards/civic-typed-router#CIVIC_MANIFEST'],
@@ -799,7 +799,7 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
       statement(
         `recipient-hosted-exchange-${server.sourceId}`,
         [
-          `The searches and queries the AI model writes for ${server.label}, which can include words from your question, reach it inside that sandbox.`,
+          `The searches and queries the AI model writes for ${readerSourceName(server)}, which can include words from your question, reach it inside that sandbox.`,
         ],
         ['env:NYC_CHARTER_HOSTING', 'const:@typedstandards/civic-typed-router#CIVIC_MANIFEST'],
       ),
@@ -910,7 +910,7 @@ export const PLATFORM_HELD_RECIPIENTS: Readonly<Record<PlatformHeldKind, Platfor
         statement(
           `held-sandbox-platform-${server.sourceId}`,
           [
-            `The data source ${server.label} runs in a Vercel Sandbox that this site keeps between uses. ` +
+            `The data source ${readerSourceName(server)} runs in a Vercel Sandbox that this site keeps between uses. ` +
               `When the sandbox stops, it keeps a copy of its files, which this site sets to expire ${HOSTED_SNAPSHOT_EXPIRATION_DAYS} days after its last use. ` +
               'Vercel says snapshots expire 30 days after their last use by default (its ',
             { link: VERCEL_SANDBOX_SNAPSHOTS, text: 'sandbox snapshots' },
@@ -1332,7 +1332,7 @@ export const FLOWS_CHANGELOG_PATH = 'docs/flows-changelog.md';
 /** One source's row: who publishes it, where it runs, what its holders say they keep, and how current its data is. */
 function sourceRow(source: FlowsStatement['sources'][number]): Statement {
   const keptBy = source.recipients.flatMap((r) => r.keptBy);
-  const parts: Segment[] = [`${readerSourceName(source.displayName)}, published by ${source.publisher}, runs at ${sourceWhere(source)}. Who holds its logs: `];
+  const parts: Segment[] = [`${readerSourceName(source)}, published by ${source.publisher}, runs at ${sourceWhere(source)}. Who holds its logs: `];
   keptBy.forEach((line, i) => {
     if (i > 0) parts.push('; ');
     parts.push(keepsText(line));
@@ -1371,7 +1371,7 @@ function consentSections(analytics: AnalyticsConfig | null): PrivacySection[] {
   at(each).push(...buildFlowsStatementFor(analytics).sources.map(sourceRow));
   if (repo !== null) {
     at(changes).push(
-      statement('consent-changelog', ['The log: ', { link: `${repo.replace(/\/$/, '')}/blob/main/${FLOWS_CHANGELOG_PATH}`, text: FLOWS_CHANGELOG_PATH }, '.'], ['env:SITE_BRAND_REPO_URL', c('FLOWS_CHANGELOG_PATH')]),
+      statement('consent-changelog', ['The log: ', { link: `${repo.replace(/\/$/, '')}/blob/HEAD/${FLOWS_CHANGELOG_PATH}`, text: FLOWS_CHANGELOG_PATH }, '.'], ['env:SITE_BRAND_REPO_URL', c('FLOWS_CHANGELOG_PATH')]),
     );
   }
   if (operatorStatesNoTraining()) {

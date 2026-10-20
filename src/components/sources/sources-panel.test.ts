@@ -6,7 +6,7 @@
 // stated"; D11), where it runs, who holds its logs and what they say they
 // keep, how current its data is, and the three-state control (On, Ask first,
 // Off). An Ask first row says what Ask first means in R6, in literal words:
-// the source is left out until it is turned On (Q1). A footer carries the
+// nothing is sent to the source until it is turned On (Q1, T6). A footer carries the
 // privacy page and the deployment guide's address (D10), or says the site
 // names no guide. For a session without a `dbId` the panel shows the date the
 // consent was given and a control that withdraws it in place; for a session
@@ -21,9 +21,9 @@
 // states nothing about what it keeps. The states are written first through
 // the real consent endpoint, as the panel itself would write them.
 //
-// NAMES (criterion 11). Each name is the manifest's `displayName` with a
-// trailing " MCP Server" removed (`src/lib/sources/source-name.test.ts` tests
-// the function); here, the rendered panel carries no "MCP Server".
+// NAMES (criterion 11, T13). Each name is the source's one reader name, the
+// record page's (`src/lib/sources/source-name.test.ts` pins the two equal);
+// here, the rendered panel carries no "MCP Server".
 //
 // WHAT MAKES IT ABLE TO FAIL. At the base there is no panel.
 //
@@ -114,7 +114,9 @@ const SIGNED_IN_DB = () => {
 
 const STATE_LABEL: Record<string, string> = { on: 'On', 'ask-first': 'Ask first', off: 'Off' };
 const CONFIGURED = ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter'];
-const readerName = (displayName: string) => displayName.replace(/ MCP Server$/, '');
+/** T13 (#632 G7): each source's one reader name, written out. */
+const READER_NAME: Record<string, string> = { socrata: 'Socrata', 'data-commons': 'Data Commons', 'boston-opencontext': 'Boston OpenContext', 'nyc-charter': 'NYC Charter, Laws and Rules' };
+const readerName = (sourceId: string) => READER_NAME[sourceId];
 
 /** Each source's row: the one element carrying `data-source="<id>"`. */
 function rowOf(panel: Surface, sourceId: string): HostElement {
@@ -144,7 +146,7 @@ for (const state of ['on', 'ask-first', 'off']) {
     for (const entry of CIVIC_MANIFEST.filter((e) => CONFIGURED.includes(e.sourceId))) {
       const row = rowOf(panel, entry.sourceId);
       const text = textOf(row);
-      assert.ok(text.includes(readerName(entry.displayName)), `${entry.sourceId}'s row does not name it: ${text}`);
+      assert.ok(text.includes(readerName(entry.sourceId)), `${entry.sourceId}'s row does not name it: ${text}`);
       assert.ok(text.includes(entry.publisher ?? 'not stated'), `${entry.sourceId}'s row does not name its publisher: ${text}`);
       assert.ok(/runs at/i.test(text), `${entry.sourceId}'s row has no "runs at" line: ${text}`);
       assert.ok(text.includes(entry.freshness), `${entry.sourceId}'s row does not say how current its data is: ${text}`);
@@ -155,7 +157,7 @@ for (const state of ['on', 'ask-first', 'off']) {
       // The control: a radio group named for the source, its three choices native radios, the stored one checked.
       const groups = [...within(row)].filter((el) => el.props.role === 'radiogroup');
       assert.equal(groups.length, 1, `${entry.sourceId}'s row has no radio group`);
-      assert.ok(String(groups[0].props['aria-label'] ?? '').includes(readerName(entry.displayName)), `${entry.sourceId}'s control is not named for it`);
+      assert.ok(String(groups[0].props['aria-label'] ?? '').includes(readerName(entry.sourceId)), `${entry.sourceId}'s control is not named for it`);
       const radios = [...within(groups[0])].filter((el) => el.type === 'input' && el.props.type === 'radio');
       assert.equal(radios.length, 3, `${entry.sourceId}'s control does not offer three native radio choices`);
       assert.equal(new Set(radios.map((r) => r.props.name)).size, 1, `${entry.sourceId}'s radios are not one group (arrow keys move within a group of one name)`);
@@ -194,11 +196,11 @@ test('criterion 1: choosing a state writes it through the consent endpoint, keyb
 
 // --- Criterion 15 (Q1): what Ask first means, in literal words -----------------------------------
 
-test('criterion 15 (Q1): an Ask first row says, in literal words, that the source is left out until it is turned On', async () => {
+test('criterion 15 (Q1, T6): an Ask first row says, in literal words, that nothing is sent to the source until it is turned On', async () => {
   ANON();
   const { panel } = await panelWith({ socrata: 'on', 'data-commons': 'ask-first', 'boston-opencontext': 'on', 'nyc-charter': 'on' });
   assert.ok(copy && typeof copy.ASK_FIRST_MEANS === 'string', `${COPY} exports no ASK_FIRST_MEANS`);
-  assert.match(copy!.ASK_FIRST_MEANS, /left out/i);
+  assert.match(copy!.ASK_FIRST_MEANS, /nothing is sent to this source/i);
   assert.match(copy!.ASK_FIRST_MEANS, /until[^.]*\bOn\b/);
   assert.ok(textOf(rowOf(panel, 'data-commons')).includes(copy!.ASK_FIRST_MEANS), 'the Ask first row does not say what Ask first means');
   assert.ok(!textOf(rowOf(panel, 'socrata')).includes(copy!.ASK_FIRST_MEANS), 'an On row says what Ask first means');
@@ -268,7 +270,7 @@ test('criterion 11: the panel shows each source\'s name without " MCP Server"', 
   const { panel } = await panelWith(null);
   assert.ok(!panel.text().includes('MCP Server'), `the panel says "MCP Server": ${panel.text().slice(0, 400)}`);
   for (const entry of CIVIC_MANIFEST.filter((e) => CONFIGURED.includes(e.sourceId))) {
-    assert.ok(panel.text().includes(readerName(entry.displayName)), `the panel does not name ${entry.sourceId} as ${readerName(entry.displayName)}`);
+    assert.ok(panel.text().includes(readerName(entry.sourceId)), `the panel does not name ${entry.sourceId} as ${readerName(entry.sourceId)}`);
   }
   panel.unmount();
 });
