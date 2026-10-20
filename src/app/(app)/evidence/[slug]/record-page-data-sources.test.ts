@@ -64,7 +64,7 @@ const STUB_SOURCE: Record<string, string> = {
     };
     export const db = { select() { return chain; } };`,
   '@/lib/storage': `export async function getPackage() { return globalThis.__wfPackage ?? null; }`,
-  '@/lib/evidence/lifecycle': `export async function resolveLifecycle() { return { status: 'active', source: 'legacy-columns', chain: [] }; }`,
+  '@/lib/evidence/lifecycle': `export async function resolveRecordAttestations() { return { lifecycle: { status: 'active', source: 'legacy-columns', chain: [] }, publishedLayoutNodeId: null }; }`,
   '@/lib/evidence/adversarial-eval': `export async function loadEvaluationViews() { return []; }`,
   '@/lib/evidence/sealed-access': `export async function sessionUserIsCreator() { return true; }`,
   'next/headers': `

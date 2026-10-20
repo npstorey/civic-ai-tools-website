@@ -237,14 +237,12 @@ test('W4 P1 item 3: a configured layout is the default and is offered first, bes
   assert.deepEqual(builtIn.default, ENVELOPE_ORDER);
 });
 
-test('W4 P1 item 3: the URL form is refused, never ignored, and names the forms that work', () => {
-  for (const setting of [{ url: 'https://records.example.test/api/records/x/package' }, { url: 'https://x.test/p', inline: JSON.stringify(VALID) }]) {
-    assert.throws(() => resolveAnswerLayouts(setting), (err: Error) =>
-      err instanceof AnswerLayoutConfigurationError &&
-      /ANSWER_LAYOUT_URL is set, and this version does not read it/.test(err.message) &&
-      /arrives with LAYOUT-WEB W4 P2/.test(err.message) &&
-      /ANSWER_LAYOUT or ANSWER_LAYOUT_PATH/.test(err.message));
-  }
+test('W4 P1 item 3, as W4 P2 reads it: the URL form is never ignored; unread, or beside a document form, it is refused', () => {
+  // W4 P2 replaces W4 P1's refusal of every URL: the node is read (node-reading.test.ts).
+  assert.throws(() => resolveAnswerLayouts({ url: 'https://records.example.test/api/records/x/package' }), (err: Error) =>
+    err instanceof AnswerLayoutConfigurationError && /ANSWER_LAYOUT_URL is set to a URL this server has not read/.test(err.message));
+  assert.throws(() => resolveAnswerLayouts({ url: 'https://x.test/p', inline: JSON.stringify(VALID) }), (err: Error) =>
+    err instanceof AnswerLayoutConfigurationError && /ANSWER_LAYOUT_URL is set beside ANSWER_LAYOUT/.test(err.message));
 });
 
 test('W4 P1 item 3: both document forms set, a document that is not JSON, and a built-in’s name with other fields are refused', () => {

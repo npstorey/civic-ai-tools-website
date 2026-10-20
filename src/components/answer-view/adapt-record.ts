@@ -64,6 +64,7 @@ import { reproductionAssertionFor } from '../../lib/notebook-author/reproduction
 import type { EvidencePackage } from '../../lib/evidence/packager.ts';
 import type { BlobRef } from '../../lib/evidence/blob-ref.ts';
 import type { Notebook } from '../../lib/notebook-author/cells.ts';
+import type { PublishedLayout } from '../../lib/answer-layout/published-line.ts';
 
 /** What the page resolved before rendering (`resolvePackageForRender`). */
 export interface ResolvedPackageData {
@@ -105,6 +106,8 @@ export interface RecordAdapterInput {
   row: RecordRowInput;
   /** The instance's declared host (`getInstanceAttribution().host`), or null. */
   instance: string | null;
+  /** LAYOUT-WEB W4 P2: the layout the record's publication attestation names, as the page looked it up. */
+  publishedLayout?: PublishedLayout;
 }
 
 /**
@@ -227,6 +230,7 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
       steps: null,
       sources: null,
       disclosure: { answerAgain: false, summary: { kind: 'stated', author: null, text: row.summary } },
+      ...(input.publishedLayout !== undefined ? { publishedLayout: input.publishedLayout } : {}),
     };
   }
 
@@ -329,5 +333,6 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
       // G: the package's summary, else the row's, under no author line.
       summary: { kind: 'stated', author: null, text: pkg.summary ?? row.summary },
     },
+    ...(input.publishedLayout !== undefined ? { publishedLayout: input.publishedLayout } : {}),
   };
 }

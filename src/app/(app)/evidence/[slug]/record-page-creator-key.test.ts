@@ -70,7 +70,7 @@ const STUB_SOURCE = {
   '@/lib/db': 'const chain = { from() { return chain; }, where() { return chain; }, orderBy() { return chain; }, async limit() { return (globalThis.__rows ?? []).shift() ?? []; } };\n' +
     'export const db = { select() { return chain; } };',
   '@/lib/storage': 'export async function getPackage() { return globalThis.__pkg ?? null; }',
-  '@/lib/evidence/lifecycle': "export async function resolveLifecycle() { return { status: 'active', source: 'legacy-columns', chain: [] }; }",
+  '@/lib/evidence/lifecycle': "export async function resolveRecordAttestations() { return { lifecycle: { status: 'active', source: 'legacy-columns', chain: [] }, publishedLayoutNodeId: null }; }",
   '@/lib/evidence/adversarial-eval': 'export async function loadEvaluationViews() { return []; }',
   '@/lib/evidence/sealed-access': 'export async function sessionUserIsCreator() { return globalThis.__viewerIsCreator === true; }',
   'next/headers': "export async function headers() { const h = { host: 'records.example.test', 'x-forwarded-proto': 'https' }; return { get(name) { return h[name] ?? null; } }; }",

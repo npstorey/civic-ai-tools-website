@@ -88,7 +88,7 @@ const STUB_SOURCE: Record<string, string> = {
     };
     export const db = { select() { return chain; } };`,
   '@/lib/storage': `export async function getPackage() { return globalThis.__p2Package ?? null; }`,
-  '@/lib/evidence/lifecycle': `export async function resolveLifecycle() { return globalThis.__p2Lifecycle; }`,
+  '@/lib/evidence/lifecycle': `export async function resolveRecordAttestations() { return { lifecycle: globalThis.__p2Lifecycle, publishedLayoutNodeId: globalThis.__p2PublishedLayoutNodeId ?? null }; }`,
   '@/lib/evidence/adversarial-eval': `export async function loadEvaluationViews() { return globalThis.__p2Evaluations ?? []; }`,
   '@/lib/evidence/sealed-access': `export async function sessionUserIsCreator() { return true; }`,
   'next/headers': `
@@ -1837,6 +1837,22 @@ test('W4 P1 the server markup is the instance’s default: its line, and the tog
   assert.ok(foot.includes('<span data-part="layout-line">Shown under layout answer-first v1</span>'), foot);
   const options = [...foot.matchAll(/<option value="([^"]+)"( selected="")?>([^<]*)<\/option>/g)];
   assert.deepEqual(options.map((m) => [m[1], m[2] !== undefined]), [['answer-first@1', true], ['envelope-order@1', false]]);
+});
+
+test('W4 P2 the server markup with a publication attestation naming a node: the page looks it up among the nodes it holds', async () => {
+  // The page reads the id from `resolveRecordAttestations` (stubbed above) and
+  // looks it up among the nodes this site holds: at this head none is
+  // committed and no URL is set, so any id is one the site does not hold.
+  globals.__p2PublishedLayoutNodeId = '9'.repeat(64);
+  let named: string;
+  try {
+    named = viewChildren(await renderWithInstance(AGF, INSTANCE)).at(-1)?.markup ?? '';
+  } finally {
+    delete globals.__p2PublishedLayoutNodeId;
+  }
+  assert.ok(named.includes('<span data-part="layout-line">Shown under layout answer-first v1. This site does not hold the layout this record was published under.</span>'), named);
+  const none = viewChildren(await renderWithInstance(AGF, INSTANCE)).at(-1)?.markup ?? '';
+  assert.ok(none.includes('<span data-part="layout-line">Shown under layout answer-first v1</span>'), 'no id named: W4 P1’s line');
 });
 
 // --- W4 P1 (9): the record citation's word ---------------------------------------------

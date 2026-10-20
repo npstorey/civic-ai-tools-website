@@ -33,6 +33,7 @@ import {
   ATTESTATION_LOCATED_AT,
   type AttestationNode,
 } from './attestation.ts';
+import { defaultLayoutNodeId } from '../answer-layout/default-node.ts';
 
 // Publication host label on `attestation/publishes/v1` nodes — resolved from
 // instance config (ADR-0020; `PUBLISHER_PUBLICATION_HOST` / derived from
@@ -115,12 +116,18 @@ export async function emitPublicationPair(
   input: PublicationPairInput,
 ): Promise<PublicationPairResult> {
   const signer = getActiveSigner();
+  // The instance's default layout node, when it has one (LAYOUT-WEB W4 P2,
+  // spec §8.10.1): the layout its pages render by default, named on the
+  // publishes attestation and in its row's payload. With none, nothing is
+  // passed, and the attestation is byte-identical to one built before W4 P2.
+  const layoutNodeId = await defaultLayoutNodeId();
 
   const publishes = buildAttestationNode({
     type: ATTESTATION_PUBLISHES,
     targetNodeId: input.targetNodeId,
     signer,
     publicationHost: requirePublicationHost(),
+    ...(layoutNodeId !== undefined ? { layoutNodeId } : {}),
   });
 
   const locatedAt = buildAttestationNode({
@@ -154,6 +161,9 @@ export async function emitPublicationPair(
       payload: {
         publicationHost: publishesArtifacts.node.publicationHost,
         releasedAt: publishesArtifacts.node.releasedAt,
+        ...(publishesArtifacts.node.layoutNodeId !== undefined
+          ? { layoutNodeId: publishesArtifacts.node.layoutNodeId }
+          : {}),
       },
       creatorId: input.creatorId,
     },

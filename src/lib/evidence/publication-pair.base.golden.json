@@ -1,0 +1,8 @@
+{
+  "capturedAt": "website main 9aa52eb (the base of W4 P2), by src/lib/evidence/publication.test.ts's driver",
+  "publishesNode": "{\"metadata\":{\"schemaVersion\":\"0.1.0\",\"packageId\":\"00000000-0000-4000-8000-000000000000\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"signingKeyId\":\"fixture:w4p2-publication\"},\"type\":\"attestation/publishes/v1\",\"signer\":{\"bindingTier\":\"platform\",\"identifier\":\"platform:w4p2-fixture\",\"displayName\":\"W4 P2 Fixture Platform\"},\"targetNodeId\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"contentCanonicalization\":\"https://typedstandards.org/canonicalization/legacy-json/v1\",\"publicationHost\":\"w4p2-fixture.invalid\",\"releasedAt\":\"2026-10-20T12:00:00.000Z\",\"contentHash\":{\"sha256\":\"8cd3cb3e107889fdeff0ffed59fa23d378b12d8d49e6e98c101713043e86ba29\"}}",
+  "publishesPayload": {
+    "publicationHost": "w4p2-fixture.invalid",
+    "releasedAt": "2026-10-20T12:00:00.000Z"
+  }
+}

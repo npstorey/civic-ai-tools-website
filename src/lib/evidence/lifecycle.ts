@@ -24,8 +24,8 @@ import {
   resolveLifecycleFromChain,
   resolveLifecycleFromLegacyColumns,
   type LifecycleResolution,
-  type LifecycleAttestationView,
 } from './verify.ts';
+import { publishedLayoutNodeId, type RecordAttestationView } from './published-layout.ts';
 
 /** The lifecycle-relevant columns this resolver reads from an evidence row. */
 export interface LifecycleRecordColumns {
@@ -37,6 +37,13 @@ export interface LifecycleRecordColumns {
 }
 
 type AttestationRow = typeof attestationNodes.$inferSelect;
+
+/** A record's lifecycle, and the layout node its publication attestation names (or null). */
+export interface RecordAttestations {
+  lifecycle: LifecycleResolution;
+  /** LAYOUT-WEB W4 P2: from a verified, signer-matched publishes attestation only (`published-layout.ts`). */
+  publishedLayoutNodeId: string | null;
+}
 
 /**
  * Resolve a content node's lifecycle.
@@ -51,6 +58,17 @@ export async function resolveLifecycle(
   record: LifecycleRecordColumns,
   targetSignerIdentifier?: string,
 ): Promise<LifecycleResolution> {
+  return (await resolveRecordAttestations(record, targetSignerIdentifier)).lifecycle;
+}
+
+/**
+ * `resolveLifecycle`, and from the same rows and the same verified views, the
+ * layout node id the record's publication attestation names (LAYOUT-WEB W4 P2).
+ */
+export async function resolveRecordAttestations(
+  record: LifecycleRecordColumns,
+  targetSignerIdentifier?: string,
+): Promise<RecordAttestations> {
   const targetNodeId = record.basePackageHash;
 
   if (targetNodeId) {
@@ -88,17 +106,18 @@ export async function resolveLifecycle(
       const views = await Promise.all(
         rows.map((row) => buildAttestationView(row, resolvedSigner)),
       );
-      return resolveLifecycleFromChain(views);
+      return { lifecycle: resolveLifecycleFromChain(views), publishedLayoutNodeId: publishedLayoutNodeId(views) };
     }
   }
 
   // §8.10.4 backwards-compat: no attestation envelopes → legacy DB columns.
-  return resolveLifecycleFromLegacyColumns({
+  const lifecycle = resolveLifecycleFromLegacyColumns({
     withdrawnAt: record.withdrawnAt?.toISOString() ?? null,
     withdrawnReason: record.withdrawnReason,
     reinstatedAt: record.reinstatedAt?.toISOString() ?? null,
     reinstatedReason: record.reinstatedReason,
   });
+  return { lifecycle, publishedLayoutNodeId: null };
 }
 
 /**
@@ -110,7 +129,7 @@ export async function resolveLifecycle(
 async function buildAttestationView(
   row: AttestationRow,
   resolvedSigner: string,
-): Promise<LifecycleAttestationView> {
+): Promise<RecordAttestationView> {
   const node = (await getPackage(row.storageKey).catch(() => null)) as Record<
     string,
     unknown
@@ -146,6 +165,11 @@ async function buildAttestationView(
     undefined;
   const createdAt =
     pickString(metadata.createdAt) ?? row.createdAt.toISOString();
+  // LAYOUT-WEB W4 P2: the layout a publication attestation names.
+  const layoutNodeId =
+    row.type === 'attestation/publishes/v1'
+      ? pickString(node?.layoutNodeId) ?? pickString(payload.layoutNodeId)
+      : undefined;
 
   return {
     nodeId: row.nodeId,
@@ -160,6 +184,7 @@ async function buildAttestationView(
     hasTimestamp: !!row.rfc3161Timestamp,
     hasRekor: !!row.rekorEntryId,
     signerMatchesTarget: !!signer && signer.identifier === resolvedSigner,
+    ...(layoutNodeId !== undefined ? { layoutNodeId } : {}),
   };
 }
 
