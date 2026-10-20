@@ -11,5 +11,8 @@
 // sibling `<nodeId>.proofs.json` files are not imported: nothing on the site
 // reads them; they are for verifiers outside it.
 
+import node0 from '../../../public/.well-known/layouts/770ed52e2abfc0c7d4626953c9f715c11a50e63bd911fa2bed56b77a76fe0ee7.json' with { type: 'json' };
+
 export const COMMITTED_LAYOUT_DOCUMENTS: readonly unknown[] = [
+  node0,
 ];
