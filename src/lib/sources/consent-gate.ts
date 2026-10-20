@@ -17,10 +17,18 @@
  * (D3 = A): the consent write (`/api/sources/consent`) is the only boundary
  * that accepts source ids.
  *
- * DORMANT UNTIL W3 (`CONSENT_GATE_ENFORCED`, `./consent-enforced.ts`). Off,
- * the gate reads no store and builds no statement, and answers what each route
- * did before W2: the selection `DEFAULT_SOURCE_SELECTION` (every offered
- * source), the router's reasons unmapped, and no flows statement reference.
+ * NO SOURCE ON (R6 W3). A consent in force whose selection is empty — the
+ * instance configures sources, and the reader has every one Off or Ask
+ * first — is refused `no_sources_on`, before the model or any source is
+ * called: a run over an empty selection would send the model a prompt with
+ * nothing to answer from. The refusal travels on each route's existing
+ * `!consent.ok` branch; its copy points to the panel that turns a source On.
+ *
+ * THE SWITCH (`CONSENT_GATE_ENFORCED`, `./consent-enforced.ts`), on since W3.
+ * Off, the gate reads no store and builds no statement, and answers what each
+ * route did before W2: the selection `DEFAULT_SOURCE_SELECTION` (every
+ * offered source), the router's reasons unmapped, and no flows statement
+ * reference.
  */
 import type { SourceSelection } from '@typedstandards/civic-typed-router';
 import { readConsentRow } from '@/lib/sources/consent-store';
@@ -47,9 +55,11 @@ export interface ConsentSession {
 
 export interface ConsentRefusalPayload {
   error: string;
-  code: 'consent_required';
+  /** No consent in force (or a re-ask), or a consent in force with no source On. */
+  code: 'consent_required' | 'no_sources_on';
   /** The flows statement's hash: the version the surface shows and the consent write echoes. */
   flowsVersion: string;
+  /** What is re-asked; for `no_sources_on`, nothing. */
   reask: Reask;
 }
 
@@ -73,12 +83,12 @@ export type ConsentDecision =
     }
   | { ok: false; store: 'row' | 'cookie'; statement: FlowsStatement; payload: ConsentRefusalPayload };
 
-function refusal(store: 'row' | 'cookie', statement: FlowsStatement, reask: Reask): ConsentDecision {
+function refusal(store: 'row' | 'cookie', statement: FlowsStatement, reask: Reask, code: ConsentRefusalPayload['code'] = 'consent_required'): ConsentDecision {
   return {
     ok: false,
     store,
     statement,
-    payload: { error: friendlyStreamError({ code: 'consent_required' }), code: 'consent_required', flowsVersion: statementHash(statement), reask },
+    payload: { error: friendlyStreamError({ code }), code, flowsVersion: statementHash(statement), reask },
   };
 }
 
@@ -106,13 +116,15 @@ export async function consentInForce(request: Request, session: ConsentSession |
     if (!verdict.inForce) return refusal(store, statement, verdict.reask);
     states = flatStates(cookie.states);
   }
+  const selection = selectionFromStates(configured, states);
+  if (configured.length > 0 && selection.length === 0) return refusal(store, statement, { base: false, sources: [] }, 'no_sources_on');
   return {
     ok: true,
     enforced: true,
     store,
     statement,
     reference: flowsStatementReference(statement, request),
-    selection: selectionFromStates(configured, states),
+    selection,
     recordReasons: (offered) => recordSourcesOffered(offered, states),
     states,
   };

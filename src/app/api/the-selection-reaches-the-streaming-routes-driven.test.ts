@@ -14,11 +14,13 @@
 // trace each route emits is read off its own stream: `trace` on
 // `/api/compare-stream`, `publish_inputs` on `/api/query-notebook`.
 //
-// THE ONE CHANGED INPUT. `DEFAULT_SOURCE_SELECTION` is the value every route
-// passes until W2 (`undefined`). The stub of `@/lib/mcp/socrata-skill`
+// THE ONE CHANGED INPUT. Since R6 W3 the consent gate is on and the run's
+// selection is the reader's consent: each request carries a consent with Data
+// Commons Off, so the selection is `['socrata']`. (Before W3,
+// `DEFAULT_SOURCE_SELECTION` was the value every route passed, `undefined`.) The stub of `@/lib/mcp/socrata-skill`
 // re-exports the real module and replaces only that constant with
-// `['socrata']`, so the route under test runs its own code with a selection,
-// the way W2 will hand it one.
+// `['socrata']`; with the gate on it is no longer read, and the consent hands
+// the route the same selection.
 //
 // STUBS, and why: `next/headers`, `next-auth`, `@/lib/auth` (no request scope
 // or sign-in provider outside Next); `@/lib/rate-limit` (no counter store);
@@ -118,6 +120,10 @@ registerHooks({
   },
 });
 
+// R6 W3 (#632): the consent gate is on, so each gated request carries a consent
+// in force, built by the real encoder (`consentCookieForTests`).
+const { consentCookieForTests } = (await import('../../lib/sources/consent-cookie-for-tests.ts')) as typeof import('../../lib/sources/consent-cookie-for-tests.ts');
+
 // --- The loopback data sources --------------------------------------------------
 
 const RECEIVED: Array<{ path: string; method: string }> = [];
@@ -202,7 +208,7 @@ async function drive(route: { POST: (request: Request) => Promise<Response> }, u
   _resetDefaultModelClientForTests();
   const before = toolCallsTo('/dc/mcp');
   try {
-    const response = await route.POST(new Request(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
+    const response = await route.POST(new Request(url, { method: 'POST', headers: { 'content-type': 'application/json', cookie: consentCookieForTests({ 'data-commons': 'off' }) }, body: JSON.stringify(body) }));
     const text = await drain(response);
     const events = text
       .split('\n')
@@ -241,7 +247,9 @@ for (const [route, run] of DRIVES) {
     assert.ok(!offered.some((name) => name?.startsWith('data_commons__')), 'premise: the selection did not reach the tools array');
     assert.ok(toolSpan, 'the trace carries no span for the Data Commons call');
     const stated = JSON.parse(attr(root, RUN_RECORD_ATTRIBUTE.sourcesOffered)?.stringValue ?? '[]') as Array<{ sourceId: string; reason: string }>;
-    assert.equal(stated.find((s) => s.sourceId === 'data-commons')?.reason, 'not-selected', 'the record states Data Commons as not selected (criterion 2, green at the base)');
+    // R6 W3 (#632, D2 = A): the selection is now the reader's consent, so the
+    // router's `not-selected` is recorded as the reader's own state, Off.
+    assert.equal(stated.find((s) => s.sourceId === 'data-commons')?.reason, 'reader-off', 'the record states Data Commons as the reader set it, Off');
   });
 
   test(`criterion 1 (${route}): the call outside the selection is sent to no source`, () => {

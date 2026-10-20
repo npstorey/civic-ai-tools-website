@@ -135,6 +135,10 @@ registerHooks({
   },
 });
 
+// R6 W3 (#632): the consent gate is on, so each gated request carries a consent
+// in force, built by the real encoder (`consentCookieForTests`).
+const { consentCookieForTests } = (await import('../../lib/sources/consent-cookie-for-tests.ts')) as typeof import('../../lib/sources/consent-cookie-for-tests.ts');
+
 // A usable model endpoint and a primary data source, so both routes pass their
 // configuration guards. Nothing is ever sent to either: the loop is a stub.
 process.env.MODEL_API_KEY = 'fixture-not-a-key';
@@ -252,7 +256,7 @@ function mockIntervals(): void {
 function post(route: string, body: unknown): Request {
   return new Request(`http://localhost${route}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', cookie: consentCookieForTests() },
     body: JSON.stringify(body),
   });
 }

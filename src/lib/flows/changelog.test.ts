@@ -43,7 +43,7 @@ const FIRST_ENTRY_ENV: Record<string, string> = {
  */
 const ANALYTICS = { service: 'plausible' as const, id: 'placeholder-analytics-id' };
 const CLEARED = [
-  'MODEL_API_BASE_URL', 'MODEL_API_KIND', 'NEXT_PUBLIC_GA_MEASUREMENT_ID', 'OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'OIDC_PROVIDER_NAME',
+  'MODEL_API_BASE_URL', 'MODEL_API_KIND', 'SITE_DEPLOYMENT_GUIDE_URL', 'SITE_OPERATOR_STATES_NO_TRAINING', 'NEXT_PUBLIC_GA_MEASUREMENT_ID', 'OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'OIDC_PROVIDER_NAME',
   'DATA_COMMONS_MCP_URL', 'DATA_COMMONS_API_KEY', 'BOSTON_OPENCONTEXT_MCP_URL',
 ];
 
@@ -63,7 +63,11 @@ test('the first entry\'s base version and source versions are the code\'s under 
     for (const source of statement.sources) {
       assert.ok(entry.includes(`| \`${source.sourceId}\` | \`${source.version}\` |`), `the entry's ${source.sourceId} version is not ${source.version}`);
     }
-    assert.equal(statement.date, '2026-10-19');
+    // The content date moved with W3's re-read of Vercel's snapshots page
+    // (2026-10-20); the newest entry states it, and no version moved with it.
+    const newest = LOG.slice(LOG.indexOf('\n## ') + 1);
+    assert.ok(newest.startsWith('## 2026-10-20'), 'the newest entry is not 2026-10-20');
+    assert.ok(newest.includes(`**\`date\`:** ${statement.date}`), `the newest entry does not state the statement's date ${statement.date}`);
   } finally {
     for (const [name, value] of Object.entries(saved)) {
       if (value === undefined) delete process.env[name];

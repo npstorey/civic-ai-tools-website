@@ -124,6 +124,10 @@ registerHooks({
   },
 });
 
+// R6 W3 (#632): the consent gate is on, so each gated request carries a consent
+// in force, built by the real encoder (`consentCookieForTests`).
+const { consentCookieForTests } = (await import('../../lib/sources/consent-cookie-for-tests.ts')) as typeof import('../../lib/sources/consent-cookie-for-tests.ts');
+
 // --- The loopback MCP sources ------------------------------------------------
 
 const ONE_ROW = JSON.stringify({ data: [{ count: '512' }], total_rows: 1 });
@@ -245,7 +249,7 @@ async function drive(name: string, run: () => Promise<Response>): Promise<Drive>
 }
 
 const post = (route: string, body: unknown) =>
-  new Request(`http://localhost${route}`, { method: 'POST', body: JSON.stringify(body) }) as never;
+  new Request(`http://localhost${route}`, { method: 'POST', headers: { cookie: consentCookieForTests() }, body: JSON.stringify(body) }) as never;
 
 const compareStreamRoute = await import('./compare-stream/route.ts');
 const notebookRoute = await import('./query-notebook/route.ts');
@@ -349,10 +353,13 @@ for (const d of [COMPARE_STREAM, NOTEBOOK]) {
       { url: RUN_DATA_COMMONS, name: 'data-commons' },
       { url: RUN_BOSTON, name: 'boston-opencontext' },
     ]);
+    // R6 W3 (#632): the gate is on, so a run with every source On records the
+    // router's `selected` where it recorded `configured` before W3 (the
+    // signed-byte move the gate record names).
     assert.deepEqual(JSON.parse(root['analysis.sources_offered'] ?? 'null'), [
-      { sourceId: 'socrata', alias: 'socrata', reason: 'configured' },
-      { sourceId: 'data-commons', alias: 'data_commons', reason: 'configured' },
-      { sourceId: 'boston-opencontext', alias: 'boston', reason: 'configured' },
+      { sourceId: 'socrata', alias: 'socrata', reason: 'selected' },
+      { sourceId: 'data-commons', alias: 'data_commons', reason: 'selected' },
+      { sourceId: 'boston-opencontext', alias: 'boston', reason: 'selected' },
       // Router 0.3.0's hosted source, with NYC_CHARTER_HOSTING unset: the row
       // the anchor names for the pin (#617 P3). No component and no server
       // entry come with it.

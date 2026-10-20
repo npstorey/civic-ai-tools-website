@@ -168,6 +168,10 @@ registerHooks({
   },
 });
 
+// R6 W3 (#632): the consent gate is on, so each gated request carries a consent
+// in force, built by the real encoder (`consentCookieForTests`).
+const { consentCookieForTests } = (await import('./sources/consent-cookie-for-tests.ts')) as typeof import('./sources/consent-cookie-for-tests.ts');
+
 const globals = globalThis as unknown as Record<string, unknown>;
 
 // --- Console capture ----------------------------------------------------------
@@ -297,7 +301,7 @@ process.env.MODEL_CATALOG = JSON.stringify([
 function post(route: string, body: unknown, raw?: string): Request {
   return new Request(`http://localhost${route}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', cookie: consentCookieForTests() },
     body: raw ?? JSON.stringify(body),
   });
 }

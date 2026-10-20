@@ -74,9 +74,9 @@ export async function POST(
   // or cookie (D12). None in force: the typed `consent_required`, 403. In
   // force, the replayer's selection narrows the record's offered set and the
   // loop alike (W1's `replayerSelection`).
-  // DORMANT until W3 ships the consent card (`CONSENT_GATE_ENFORCED`,
-  // `src/lib/sources/consent-enforced.ts`): the gate then refuses nothing, and
-  // the selection, the reasons and the record are what they were before W2.
+  // ENFORCED since W3 (`CONSENT_GATE_ENFORCED`, `src/lib/sources/consent-enforced.ts`):
+  // a consent in force with no source On is refused here too, with the
+  // typed `no_sources_on`, before the model or any source is called.
   const consent = await consentInForce(request, session);
   if (!consent.ok) {
     return NextResponse.json(consent.payload, { status: 403 });

@@ -15,7 +15,8 @@
  */
 import { useCallback, useRef, useState } from 'react';
 import { connectSSE } from '@/lib/sse-client';
-import { friendlyStreamError, notebookExecutionErrorMessage, reasonWithoutIdentifier } from '@/lib/streaming';
+import { classifyStreamError, friendlyStreamError, notebookExecutionErrorMessage, reasonWithoutIdentifier } from '@/lib/streaming';
+import { reportConsentRefusal } from '@/components/sources/useSourceConsent';
 import type { Notebook } from '@/lib/notebook-author';
 import type { NotebookPhase } from '@/components/notebook/NotebookProgress';
 import type { PhaseAToolCall } from '@/lib/notebook-author';
@@ -396,6 +397,13 @@ export function useNotebookStream() {
       });
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
+      // R6 W3 (#632): the route's 403 `consent_required` arrives as an
+      // `SSEError` whose body carries the code; the consent card answers it.
+      if (classifyStreamError(err) === 'consent_required') {
+        reportConsentRefusal();
+        setState((prev) => ({ ...prev, error: null, isLoading: false, completedAt: Date.now() }));
+        return;
+      }
       // friendlyStreamError maps SSEError 429, MCP timeout/down, and connection
       // drops to calm copy — the raw error/server text never reaches the UI.
       setState((prev) => ({ ...prev, error: friendlyStreamError(err), isLoading: false, completedAt: Date.now() }));

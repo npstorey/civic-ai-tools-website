@@ -178,8 +178,16 @@ const STUB_SOURCE: Record<string, string> = {
     export async function executeNotebook(notebook) {
       return { notebook, sandboxId: 'fixture-sandbox', executionDuration_ms: 1, pythonVersion: '3.13.0', libraries: {} };
     }`,
+  // R6 W3 (#632): the gate is on, and the canary session carries a dbId, so
+  // its consent is the account's row: one in force, every source On, against
+  // the statement in force at the moment it is read.
   '@/lib/sources/consent-store': `
-    export async function readConsentRow() { return null; }
+    import { buildFlowsStatement, statementHash } from '@/lib/flows/statement';
+    export async function readConsentRow(userId) {
+      const statement = await buildFlowsStatement();
+      const states = Object.fromEntries(statement.sources.map((s) => [s.sourceId, { state: 'on', since: '2026-10-20' }]));
+      return { userId, states, flowsHash: statementHash(statement), flowsStatement: statement, consentedAt: new Date(), updatedAt: new Date() };
+    }
     export async function writeConsentRow() {}
     export async function deleteConsentRow() {}`,
   'next/server': `
@@ -271,6 +279,10 @@ registerHooks({
     return nextLoad(loadUrl, context);
   },
 });
+
+// R6 W3 (#632): the consent gate is on, so each gated request carries a consent
+// in force, built by the real encoder (`consentCookieForTests`).
+const { consentCookieForTests } = (await import('../../lib/sources/consent-cookie-for-tests.ts')) as typeof import('../../lib/sources/consent-cookie-for-tests.ts');
 
 // --- The loopback MCP sources: Socrata on /socrata/mcp, Data Commons on /dc/mcp
 
@@ -402,7 +414,7 @@ type Surface = 'compare-stream' | 'query-notebook' | 'compare';
 const SIGNED_IN = { user: { id: CANARY.accountId, dbId: CANARY.dbId, name: 'Canary Reader' }, expires: '2026-11-18T00:00:00.000Z' };
 
 const post = (route: string, body: unknown) =>
-  new Request(`http://localhost${route}`, { method: 'POST', body: JSON.stringify(body) }) as never;
+  new Request(`http://localhost${route}`, { method: 'POST', headers: { cookie: consentCookieForTests() }, body: JSON.stringify(body) }) as never;
 
 function request(surface: Surface, opts: { fail?: boolean; bothPanels?: boolean; refuse?: 'invalid'; slow?: boolean } = {}): () => Promise<Response> {
   const query = `${CANARY.question}${opts.fail ? ` ${FAIL_MARKER}` : ''}${opts.slow ? ` ${SLOW_MARKER}` : ''}`;

@@ -1,20 +1,18 @@
 /**
- * Whether the first-consent gate is enforced (#632 W2, the owner's ruling).
+ * Whether the first-consent gate is enforced (#632; W2 shipped it off, W3
+ * turns it on).
  *
- * OFF until W3 ships the consent card. The gate (`./consent-gate.ts`) refuses
- * a question with no consent in force, and in W2 no surface can give one: the
- * card that asks, and the panel that sets each source, are W3's, and W3 waits
- * on the owner's texts. Enforced now, every question on every surface — the
- * home comparison, `/explore`, `/ask` and replay — would be refused. So W2
- * ships the gate dormant: every gated route behaves exactly as before W2 (no
- * refusal, no selection, the router's reasons recorded as it gives them, no
- * flows statement on the record, replay with no replayer selection), while the
- * consent endpoint, its store, `/api/flows`, the re-ask classifier and the
- * privacy page's statements are live. W3 turns this on in the same change as
- * the card.
+ * ON since W3, which ships the surfaces that ask: the consent card on every
+ * surface that sends a question (the home page, `/explore`, `/ask` and
+ * replay's dialog), the Sources panel beside the question box, and the
+ * dashboard's Sources tab. The gate (`./consent-gate.ts`) refuses a question
+ * with no consent in force, or with no source On, before anything leaves
+ * this server, and the surface answers the refusal with the card or the
+ * panel. W2 shipped it off, on the owner's ruling, because no surface could
+ * yet give a consent.
  *
  * A code constant, never an environment variable: whether readers are asked
  * is a property of the release, not of one instance's configuration.
- * `./consent-enforced.test.ts` pins it, so it cannot flip by accident.
+ * `./consent-enforced.test.ts` pins it, so it cannot be turned off by accident.
  */
-export const CONSENT_GATE_ENFORCED: boolean = false;
+export const CONSENT_GATE_ENFORCED: boolean = true;

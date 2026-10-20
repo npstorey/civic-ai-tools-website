@@ -207,9 +207,9 @@ export async function POST(request: NextRequest) {
     // anything. None in force, or the re-ask rule says re-ask: the typed
     // `consent_required` on the channel this route's configuration refusals
     // use, an error event per panel, carrying the flows version to show.
-    // DORMANT until W3 ships the consent card (`CONSENT_GATE_ENFORCED`,
-    // `src/lib/sources/consent-enforced.ts`): the gate then refuses nothing, and
-    // the selection, the reasons and the record are what they were before W2.
+    // ENFORCED since W3 (`CONSENT_GATE_ENFORCED`, `src/lib/sources/consent-enforced.ts`):
+    // a consent in force with no source On is refused here too, with the
+    // typed `no_sources_on`, before the model or any source is called.
     const consent = await consentInForce(request, session);
     if (!consent.ok) {
       const encoder = new TextEncoder();

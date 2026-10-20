@@ -18,7 +18,9 @@
  * THE COOKIE carries a format version, the flows statement's base version
  * and, per source, its state, the calendar date it was given and that
  * source's own version: hashes and states, never an identifier. Host-only,
- * `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, and a session cookie.
+ * `HttpOnly`, `SameSite=Lax`, `Path=/`, and a session cookie; `Secure` when
+ * the request reached the site over https (`isSecureRequest`, R6 W3), so an
+ * instance served over plain http can keep it at all.
  *
  * THE RE-ASK RULE (D5 = A, design §4.4). A signed-in reader's row keeps the
  * statement snapshot, and `classifyFlowsChange` compares it with the statement
@@ -43,6 +45,7 @@
  * silently.
  */
 import type { FlowsKeptBy, FlowsRecipient, FlowsSource, FlowsStatement } from '../flows/statement.ts';
+import { readerSourceName } from './source-name.ts';
 
 // --- The states ------------------------------------------------------------------
 
@@ -81,16 +84,37 @@ export interface ConsentCookie {
   states: Record<string, StoredSourceState>;
 }
 
-/** The flags every consent cookie header carries: host-only (no `Domain`) and a session cookie (no `Max-Age`). */
-const COOKIE_FLAGS = 'Path=/; Secure; HttpOnly; SameSite=Lax';
-
-export function consentCookieHeader(value: string): string {
-  return `${CONSENT_COOKIE_NAME}=${value}; ${COOKIE_FLAGS}`;
+/**
+ * Whether a request reached the site over https: its own URL's scheme, or the
+ * platform's `x-forwarded-proto` (the first value, when a chain of proxies
+ * appends several). A browser keeps a `Secure` cookie only from a secure
+ * origin, so the consent cookie carries `Secure` exactly when this is true:
+ * over plain http on any host but `localhost`, a `Secure` cookie would never
+ * be kept, and the reader's consent would never stick (R6 W3, G0 premise 4).
+ */
+export function isSecureRequest(request: Request): boolean {
+  const forwarded = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase();
+  if (forwarded) return forwarded === 'https';
+  try {
+    return new URL(request.url).protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
-/** Revoke: the same cookie, expired. */
-export function clearConsentCookieHeader(): string {
-  return `${CONSENT_COOKIE_NAME}=; ${COOKIE_FLAGS}; Max-Age=0`;
+/** The flags a consent cookie header carries: host-only (no `Domain`), a session cookie (no `Max-Age`), and `Secure` over https. */
+function cookieFlags(secure: boolean): string {
+  return `Path=/; ${secure ? 'Secure; ' : ''}HttpOnly; SameSite=Lax`;
+}
+
+/** The consent cookie's `Set-Cookie` value. `secure` is `isSecureRequest(request)`; it defaults to true. */
+export function consentCookieHeader(value: string, secure = true): string {
+  return `${CONSENT_COOKIE_NAME}=${value}; ${cookieFlags(secure)}`;
+}
+
+/** Revoke: the same cookie, expired, with the same flags the write set. */
+export function clearConsentCookieHeader(secure = true): string {
+  return `${CONSENT_COOKIE_NAME}=; ${cookieFlags(secure)}; Max-Age=0`;
 }
 
 export function encodeConsentCookie(cookie: ConsentCookie): string {
@@ -287,3 +311,58 @@ export function flatStates(states: Readonly<Record<string, { state: SourceState 
   return Object.fromEntries(Object.entries(states).map(([id, entry]) => [id, entry.state]));
 }
 
+
+// --- The notice (D2 = A) ------------------------------------------------------------------
+
+/** One change a reader whose consent is kept on the account is told about, and asked nothing for. */
+export interface ConsentNotice {
+  /** The classifier's rule: `recipient-removed`, `posture-better`, `source-removed` or `source-posture-better`. */
+  rule: string;
+  /** What changed, in reader language. */
+  text: string;
+}
+
+const ROLE_WORDS: Readonly<Record<string, string>> = {
+  'model-endpoint': 'The model endpoint',
+  'function-logs': "This site's hosting logs",
+  'sign-in': 'The sign-in provider',
+  analytics: 'The analytics service',
+  'notebook-executor': 'The notebook runner',
+  source: 'A data source',
+  'sandbox-platform': "The sandbox a data source runs in",
+};
+
+/**
+ * The `notify` changes between the statement a row holds and the one in force
+ * (D2 = A, design §4.4), each as one line. A re-ask change is never a notice:
+ * it is the card. The cookie keeps hashes only, so a cookie reader has none.
+ */
+export function noticesOf(previous: FlowsStatement, current: FlowsStatement): ConsentNotice[] {
+  const { changes } = classifyFlowsChange(previous, current);
+  const recipientOf = (id: string | undefined) =>
+    [...previous.recipients, ...previous.sources.flatMap((s) => s.recipients)].find((r) => r.id === id);
+  const label = (id: string | undefined) => {
+    const r = recipientOf(id);
+    if (!r) return 'A recipient';
+    const role = ROLE_WORDS[r.role] ?? 'A recipient';
+    const where = r.host ?? r.runsAt;
+    return where ? `${role} (${where})` : role;
+  };
+  return changes
+    .filter((c) => c.effect === 'notify')
+    .map((c): ConsentNotice => {
+      const source = c.sourceId ? previous.sources.find((s) => s.sourceId === c.sourceId) : undefined;
+      // A source by its one reader name (T13); one the statement lacks, by its id.
+      const name = source ? readerSourceName(source) : c.sourceId ?? 'A data source';
+      switch (c.rule) {
+        case 'recipient-removed':
+          return { rule: c.rule, text: `${label(c.recipient)}: removed from the recipients.` };
+        case 'posture-better':
+          return { rule: c.rule, text: `${label(c.recipient)}: its holder now says it keeps less.` };
+        case 'source-removed':
+          return { rule: c.rule, text: `${name} is no longer offered on this site.` };
+        default:
+          return { rule: c.rule, text: `${name} now says it keeps less.` };
+      }
+    });
+}

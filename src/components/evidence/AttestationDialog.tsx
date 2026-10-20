@@ -24,6 +24,15 @@ import {
 // A source's reader-facing name (the manifest's display name without its
 // "MCP Server" suffix), for the line naming a source the replays ran without.
 import { displayNameForSource } from '@/lib/evidence/data-sources';
+// The replayer's own consent (R6 W3, #632 criterion 7): a replay sends the
+// record's question to the model endpoint and calls live sources, so the
+// replay route is gated (C6), and this dialog answers its refusal with the
+// same consent card the query surfaces show.
+import ConsentCard from '@/components/sources/ConsentCard';
+import { useSourceConsent } from '@/components/sources/useSourceConsent';
+
+/** A replay the route refused for want of consent: the card answers it, not an error line. */
+class ConsentRequired extends Error {}
 
 // --- Types ---
 
@@ -95,6 +104,10 @@ export default function AttestationDialog({
   // Submit state
   const [submitting, setSubmitting] = useState(false);
 
+  // The replayer's consent (R6 W3): read when the dialog opens.
+  const { guard: guardQuestion, refresh: refreshConsent } = useSourceConsent({ load: open });
+  const [consentNeeded, setConsentNeeded] = useState(false);
+
   const canReplay = promptVisibility === 'full_text';
   // `analysisModel` is a DECLARED identity read out of a signed package, while
   // these are catalog ids. Under the built-in catalog the two namespaces
@@ -156,7 +169,7 @@ export default function AttestationDialog({
 
   // --- Consistency Test ---
 
-  const runConsistencyTest = useCallback(async () => {
+  const runReplays = useCallback(async () => {
     if (!apiKey) return;
     setConsistencyStatus('running');
     setCompletedRuns([]);
@@ -177,6 +190,7 @@ export default function AttestationDialog({
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+          if (err.code === 'consent_required') throw new ConsentRequired();
           throw new Error(err.error || `Replay ${i + 1} failed`);
         }
         const result: ReplayResult = await res.json();
@@ -190,10 +204,25 @@ export default function AttestationDialog({
       setConsistencyStatus('done');
       setConsistencyProgress('All runs complete');
     } catch (err) {
+      if (err instanceof ConsentRequired) {
+        // Nothing to report as a failure: the card asks, and Allow runs the test again.
+        setConsistencyStatus('idle');
+        setConsistencyProgress('');
+        setCompletedRuns([]);
+        setConsentNeeded(true);
+        void refreshConsent();
+        return;
+      }
       setConsistencyStatus('error');
       setConsistencyProgress(err instanceof Error ? err.message : 'Consistency test failed');
     }
-  }, [apiKey, numRuns, slug]);
+  }, [apiKey, numRuns, slug, refreshConsent]);
+
+  // The guard (stage-A ruling (a)): with no consent in force the card asks
+  // before any replay is sent.
+  const runConsistencyTest = useCallback(() => {
+    void guardQuestion(() => { void runReplays(); }, () => setConsentNeeded(true));
+  }, [guardQuestion, runReplays]);
 
   // --- Adversarial Evaluation ---
 
@@ -425,6 +454,18 @@ export default function AttestationDialog({
             onSubmit={submitAttestation}
             submitting={submitting}
           />
+        )}
+
+        {tab === 'consistency' && canReplay && consentNeeded && (
+          <div style={{ marginBottom: '16px' }}>
+            <ConsentCard
+              onAllow={() => {
+                setConsentNeeded(false);
+                runConsistencyTest();
+              }}
+              onNotNow={() => setConsentNeeded(false)}
+            />
+          </div>
         )}
 
         {tab === 'consistency' && (

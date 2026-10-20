@@ -128,6 +128,10 @@ registerHooks({
   },
 });
 
+// R6 W3 (#632): the consent gate is on, so each gated request carries a consent
+// in force, built by the real encoder (`consentCookieForTests`).
+const { consentCookieForTests } = (await import('../../lib/sources/consent-cookie-for-tests.ts')) as typeof import('../../lib/sources/consent-cookie-for-tests.ts');
+
 // --- The loopback MCP sources ------------------------------------------------
 
 const ONE_ROW = JSON.stringify({ data: [{ count: '512' }], total_rows: 1 });
@@ -241,7 +245,7 @@ const { readMcpEnvFromProcess, routedSourceId } = await import('../../lib/mcp/re
 // --- The drives -------------------------------------------------------------------
 
 const post = (route: string, body: unknown) =>
-  new Request(`http://localhost${route}`, { method: 'POST', body: JSON.stringify(body) }) as never;
+  new Request(`http://localhost${route}`, { method: 'POST', headers: { cookie: consentCookieForTests() }, body: JSON.stringify(body) }) as never;
 
 interface Drive { name: string; row: Record<string, unknown>; mcpCalls: Array<{ path: string; tool?: string }> }
 

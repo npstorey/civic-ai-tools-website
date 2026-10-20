@@ -6,7 +6,8 @@ import { createTraceCapture } from '@/lib/bpmn/capture-trace';
 import { mapEventToNodes } from '@/lib/bpmn/node-mapping';
 import type { ToolFailureKind } from '@/lib/notebook-author/tool-to-cell';
 import type { TraceEvent, PreRecordedTrace } from '@/lib/bpmn/traces';
-import { friendlyStreamError, type ProgressPhase } from '@/lib/streaming';
+import { classifyStreamError, friendlyStreamError, type ProgressPhase } from '@/lib/streaming';
+import { reportConsentRefusal } from '@/components/sources/useSourceConsent';
 import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
 import { generateGroupLabel } from '@/hooks/useStreamingComparison';
 import {
@@ -437,9 +438,17 @@ export function useLiveTrace(): UseLiveTraceReturn {
           // selects operator-actionable copy; otherwise the message text is
           // classified as before.
           receivedErrorRef.current = true;
+          clearTimers();
+          // R6 W3 (#632): a question the consent gate refused is the consent
+          // card's to answer: the input comes back and the card is shown.
+          if (classifyStreamError(eventData) === 'consent_required') {
+            reportConsentRefusal();
+            setError(null);
+            setStatus('idle');
+            return;
+          }
           setError(friendlyStreamError(eventData));
           setStatus('error');
-          clearTimers();
         }
       },
       onComplete: () => {

@@ -8,7 +8,8 @@ import { useState, useCallback, useRef } from 'react';
 import { createTraceCapture } from '../lib/bpmn/capture-trace.ts';
 import { connectSSE } from '../lib/sse-client.ts';
 import { isComparisonRunComplete } from '../lib/query-presentation.ts';
-import { friendlyStreamError, type ProgressPhase, type CompleteEvent } from '../lib/streaming.ts';
+import { classifyStreamError, friendlyStreamError, type ProgressPhase, type CompleteEvent } from '../lib/streaming.ts';
+import { reportConsentRefusal } from '../components/sources/useSourceConsent.ts';
 // The steps — the per-call type, the grouping of progress events into steps
 // and their labels — live in one pure module, shared with the other readers
 // of a run's steps. This hook keeps the React state and calls it.
@@ -288,6 +289,13 @@ export function handleComparisonEvent(
       break;
 
     case 'error':
+      // R6 W3 (#632): a question the consent gate refused is the consent
+      // card's to answer, never an error line; the form shows the card.
+      if (classifyStreamError(event) === 'consent_required') {
+        reportConsentRefusal();
+        setState(prev => ({ ...prev, isLoading: false, [panel]: { ...prev[panel], isComplete: true, progress: null, ...closeStepsOnError(prev[panel]) } }));
+        break;
+      }
       setState(prev => ({
         ...prev,
         [panel]: {

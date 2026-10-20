@@ -392,8 +392,11 @@ test('R6 W2: the held statements read in short sentences, with the agreed words'
   );
   assert.equal(
     on['held-sandbox-platform-nyc-charter'],
-    'The data source NYC Charter, Laws and Rules MCP Server runs in a Vercel Sandbox that this site keeps between uses. ' +
-      "When the sandbox stops, Vercel keeps a copy of its files for up to 30 days (Vercel's sandbox page, read 2026-10-19, and this site's sandbox settings). " +
+    // T13 (#632 G7): a source by its one reader name, without " MCP Server".
+    'The data source NYC Charter, Laws and Rules runs in a Vercel Sandbox that this site keeps between uses. ' +
+      // R6 W3: this site's own setting, then Vercel's statement, from its snapshots page.
+      'When the sandbox stops, it keeps a copy of its files, which this site sets to expire 30 days after its last use. ' +
+      'Vercel says snapshots expire 30 days after their last use by default (its sandbox snapshots page, read 2026-10-20). ' +
       "Vercel's sandbox pages do not say what else it keeps of what runs there. " +
       "The program this site runs beside the source writes no searches or queries to the sandbox's logs. " +
       "What the source's own software writes there has not been checked.",
