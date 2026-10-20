@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { normalizeVisibility } from '@/lib/evidence/visibility';
 import { sealedRecordPublishAffordance } from '@/lib/evidence/seal-only';
+import SourcesTab from './SourcesTab';
 
 // --- Types ---
 
@@ -56,7 +57,11 @@ interface TokenRow {
   lastUsedAt: string | null;
 }
 
+export type DashboardTab = 'evidence' | 'evaluations' | 'activity' | 'tokens' | 'sources';
+
 interface DashboardTabsProps {
+  /** The tab shown first: `/dashboard?tab=sources` opens the Sources tab (R6 W3, Q7). */
+  initialTab?: DashboardTab;
   myEvidence: EvidenceRow[];
   myEvaluations: EvaluationRow[];
   activity: ActivityRow[];
@@ -145,8 +150,8 @@ function EmptyState({ message, cta }: { message: string; cta?: { text: string; h
 
 // --- Main component ---
 
-export default function DashboardTabs({ myEvidence, myEvaluations, activity, tokens, signingConfigured = true, sealOnly = false }: DashboardTabsProps) {
-  const [activeTab, setActiveTab] = useState<'evidence' | 'evaluations' | 'activity' | 'tokens'>('evidence');
+export default function DashboardTabs({ initialTab = 'evidence', myEvidence, myEvaluations, activity, tokens, signingConfigured = true, sealOnly = false }: DashboardTabsProps) {
+  const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab);
 
   return (
     <>
@@ -163,12 +168,16 @@ export default function DashboardTabs({ myEvidence, myEvaluations, activity, tok
         <button onClick={() => setActiveTab('tokens')} style={tabStyle(activeTab === 'tokens')}>
           Tokens ({tokens.length})
         </button>
+        <button onClick={() => setActiveTab('sources')} style={tabStyle(activeTab === 'sources')}>
+          Sources
+        </button>
       </div>
 
       {activeTab === 'evidence' && <MyEvidenceTab rows={myEvidence} signingConfigured={signingConfigured} sealOnly={sealOnly} />}
       {activeTab === 'evaluations' && <MyEvaluationsTab rows={myEvaluations} />}
       {activeTab === 'activity' && <ActivityTab rows={activity} />}
       {activeTab === 'tokens' && <TokensTab rows={tokens} />}
+      {activeTab === 'sources' && <SourcesTab />}
     </>
   );
 }

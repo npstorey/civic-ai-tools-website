@@ -16,7 +16,12 @@ import {
   type QueryMode,
 } from '@/lib/query-presentation';
 import { parseModelsResponse, type Model } from '@/lib/model-list';
-import { MODELS_LOAD_ERROR } from '@/lib/streaming';
+import { friendlyStreamError, MODELS_LOAD_ERROR } from '@/lib/streaming';
+import { NOT_NOW_LINE } from '@/lib/sources/copy';
+import ConsentCard from '@/components/sources/ConsentCard';
+import SourcesPanel from '@/components/sources/SourcesPanel';
+import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
+import { useSourceConsent } from '@/components/sources/useSourceConsent';
 import RateLimitBanner from './RateLimitBanner';
 import { useDefaultPortalArg, usePortalLocked } from '@/components/DefaultPortalProvider';
 import { useNotebooksOffered } from '@/components/NotebookModeProvider';
@@ -199,18 +204,60 @@ export default function QueryForm({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [modelOpen, portalOpen]);
 
+  // The consent card and the Sources panel (R6 W3, #632; stage-A ruling (a)).
+  // Both of this form's submit paths go through the guard: with no consent in
+  // force the card is shown and nothing is sent; after Allow the question is
+  // sent; Not now sends nothing and holds the form for that question (a new
+  // question asks again, Q2); with no source On the reader is told so; while
+  // the panel's write is in flight the submit is held. A refusal a route
+  // answers (`consent_required`, reported by the streaming hooks) shows the
+  // card too, and Allow sends the last question again: that covers the
+  // surface's own direct paths (continue, re-run, retry), which do not come
+  // through this form.
+  const consent = useSourceConsent();
+  const [cardOpen, setCardOpen] = useState(false);
+  const [declinedQuery, setDeclinedQuery] = useState<string | null>(null);
+  const [noneOn, setNoneOn] = useState(false);
+  const pendingRef = useRef<(() => void) | null>(null);
+  const lastSentRef = useRef<(() => void) | null>(null);
+  const [refusalsSeen, setRefusalsSeen] = useState(consent.refusals);
+  const [resendOnAllow, setResendOnAllow] = useState(false);
+  if (consent.refusals !== refusalsSeen) {
+    // The "adjust state when a value changes" render-time pattern.
+    setRefusalsSeen(consent.refusals);
+    if (consent.refusals > refusalsSeen) {
+      // Allow then sends the last question again (read in the handler, not here).
+      setResendOnAllow(true);
+      setCardOpen(true);
+    }
+  }
+
   // No model chosen yet means `/api/models` has not answered (a few hundred ms
   // on first paint) or could not answer at all. Either way there is no id to
   // send: the routes require one, and this form no longer has a hardcoded id to
   // guess with. The `modelsError` message above says so when the failure is
   // durable.
-  const canSubmit = query.trim().length > 0 && model !== '' && !isLoading;
+  const declined = declinedQuery !== null && query.trim() === declinedQuery;
+  const canSubmit = query.trim().length > 0 && model !== '' && !isLoading && !declined && !consent.writing;
+
+  const ask = () => {
+    const args = [query.trim(), model, portal, mode] as const;
+    const run = () => {
+      lastSentRef.current = () => onSubmit(...args);
+      onSubmit(...args);
+    };
+    setNoneOn(false);
+    void consent.guard(run, () => {
+      pendingRef.current = run;
+      setCardOpen(true);
+    }).then((result) => {
+      if (result === 'none-on') setNoneOn(true);
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (canSubmit) {
-      onSubmit(query.trim(), model, portal, mode);
-    }
+    if (canSubmit) ask();
   };
 
   const handleExampleClick = (example: ExampleQuery) => {
@@ -241,6 +288,7 @@ export default function QueryForm({
   });
 
   return (
+    <>
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {/* Chat-style textarea with inline send button */}
       <div className="ui-field" style={{ position: 'relative' }}>
@@ -253,9 +301,7 @@ export default function QueryForm({
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
-              if (canSubmit) {
-                onSubmit(query.trim(), model, portal, mode);
-              }
+              if (canSubmit) ask();
             }
           }}
           placeholder="What data is available about child care in NYC?"
@@ -770,5 +816,42 @@ export default function QueryForm({
         </div>
       )}
     </form>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+      {cardOpen && (
+        <ConsentCard
+          onAllow={() => {
+            setCardOpen(false);
+            setDeclinedQuery(null);
+            const run = pendingRef.current ?? (resendOnAllow ? lastSentRef.current : null);
+            pendingRef.current = null;
+            setResendOnAllow(false);
+            if (run) void consent.guard(run, () => setCardOpen(true));
+          }}
+          onNotNow={() => {
+            setCardOpen(false);
+            pendingRef.current = null;
+            setResendOnAllow(false);
+            setDeclinedQuery(query.trim());
+          }}
+        />
+      )}
+      {declined && !cardOpen && (
+        <p role="status" style={{ margin: 0, fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+          {NOT_NOW_LINE} <LocalOnlyOffer statement={consent.statement} />
+        </p>
+      )}
+      {noneOn && !cardOpen && (
+        <p role="status" style={{ margin: 0, fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+          {friendlyStreamError({ code: 'no_sources_on' })}
+        </p>
+      )}
+      <details>
+        <summary style={{ cursor: 'pointer', fontSize: '13px', color: 'var(--text-secondary)' }}>Data sources this site can use</summary>
+        <div style={{ marginTop: '8px' }}>
+          <SourcesPanel />
+        </div>
+      </details>
+    </div>
+    </>
   );
 }

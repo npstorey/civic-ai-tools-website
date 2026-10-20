@@ -1,10 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { PreRecordedTrace } from '@/lib/bpmn/traces';
 import type { PlaybackSpeed, ReplayState } from '@/lib/bpmn/animation';
 import type { LiveTraceStatus, SlowQueryMessage } from '@/hooks/useLiveTrace';
-import { MODELS_LOAD_ERROR } from '@/lib/streaming';
+import { friendlyStreamError, MODELS_LOAD_ERROR } from '@/lib/streaming';
+import { NOT_NOW_LINE } from '@/lib/sources/copy';
+import ConsentCard from '@/components/sources/ConsentCard';
+import SourcesPanel from '@/components/sources/SourcesPanel';
+import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
+import { useSourceConsent } from '@/components/sources/useSourceConsent';
 
 export type DiagramMode = 'examples' | 'live';
 
@@ -125,11 +130,42 @@ export default function TraceControls({
   // Speed controls are relevant during active playback or when replay is available
   const showExampleSpeed = replayState.isPlaying || replayState.isPaused || replayState.isComplete;
 
+  // The consent card and the Sources panel (R6 W3, #632; stage-A rulings
+  // (a) and flag 9): the live question goes through the same guard as the
+  // query form's, and a refusal the route answers shows the card here.
+  const consent = useSourceConsent();
+  const [cardOpen, setCardOpen] = useState(false);
+  const [declinedQuery, setDeclinedQuery] = useState<string | null>(null);
+  const [noneOn, setNoneOn] = useState(false);
+  const pendingRef = useRef<(() => void) | null>(null);
+  const lastSentRef = useRef<(() => void) | null>(null);
+  const [refusalsSeen, setRefusalsSeen] = useState(consent.refusals);
+  const [resendOnAllow, setResendOnAllow] = useState(false);
+  if (consent.refusals !== refusalsSeen) {
+    setRefusalsSeen(consent.refusals);
+    if (consent.refusals > refusalsSeen) {
+      // Allow then sends the last question again (read in the handler, not here).
+      setResendOnAllow(true);
+      setCardOpen(true);
+    }
+  }
+  const declined = declinedQuery !== null && liveQuery.trim() === declinedQuery;
+
   const handleLiveSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (liveQuery.trim()) {
-      onLiveStart(liveQuery.trim());
-    }
+    const query = liveQuery.trim();
+    if (!query || declined || consent.writing) return;
+    const run = () => {
+      lastSentRef.current = () => onLiveStart(query);
+      onLiveStart(query);
+    };
+    setNoneOn(false);
+    void consent.guard(run, () => {
+      pendingRef.current = run;
+      setCardOpen(true);
+    }).then((result) => {
+      if (result === 'none-on') setNoneOn(true);
+    });
   };
 
   return (
@@ -297,7 +333,7 @@ export default function TraceControls({
               />
               <button
                 type="submit"
-                disabled={!liveQuery.trim() || modelsUnavailable}
+                disabled={!liveQuery.trim() || modelsUnavailable || declined || consent.writing}
                 className="ui-button ui-button-primary"
                 style={{
                   padding: '8px 20px',
@@ -309,6 +345,43 @@ export default function TraceControls({
                 Run
               </button>
             </form>
+          )}
+
+          {cardOpen && (liveStatus === 'idle' || liveStatus === 'error' || liveStatus === 'cancelled') && (
+            <ConsentCard
+              onAllow={() => {
+                setCardOpen(false);
+                setDeclinedQuery(null);
+                const run = pendingRef.current ?? (resendOnAllow ? lastSentRef.current : null);
+                pendingRef.current = null;
+                setResendOnAllow(false);
+                if (run) void consent.guard(run, () => setCardOpen(true));
+              }}
+              onNotNow={() => {
+                setCardOpen(false);
+                pendingRef.current = null;
+                setResendOnAllow(false);
+                setDeclinedQuery(liveQuery.trim());
+              }}
+            />
+          )}
+          {declined && !cardOpen && (
+            <div role="status" style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+              {NOT_NOW_LINE} <LocalOnlyOffer statement={consent.statement} />
+            </div>
+          )}
+          {noneOn && !cardOpen && (
+            <div role="status" style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+              {friendlyStreamError({ code: 'no_sources_on' })}
+            </div>
+          )}
+          {(liveStatus === 'idle' || liveStatus === 'error' || liveStatus === 'cancelled') && !isReplayingCapture && (
+            <details>
+              <summary style={{ cursor: 'pointer', fontSize: '12px', color: 'var(--text-secondary)' }}>Data sources this site can use</summary>
+              <div style={{ marginTop: '8px' }}>
+                <SourcesPanel />
+              </div>
+            </details>
           )}
 
           {/* Model-catalog load failure (website#30 P7): disclosed in place

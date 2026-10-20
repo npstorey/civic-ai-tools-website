@@ -18,7 +18,14 @@ export const metadata: Metadata = {
   description: 'Manage your records and evaluations.',
 };
 
-export default async function DashboardPage() {
+interface DashboardPageProps {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  // `?tab=sources` opens the Sources tab: the Sources panel links here (R6 W3, Q7).
+  const tab = (await searchParams)?.tab;
+  const initialTab = tab === 'sources' ? 'sources' : 'evidence';
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     redirect('/');
@@ -157,6 +164,7 @@ export default async function DashboardPage() {
       </p>
 
       <DashboardTabs
+        initialTab={initialTab}
         myEvidence={myEvidenceData}
         myEvaluations={myEvaluationsData}
         activity={activityData}

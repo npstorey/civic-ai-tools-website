@@ -127,7 +127,8 @@ const REACT_STUB = `
   export function useSyncExternalStore(subscribe, getSnapshot) {
     const c = cell();
     const r = G.current;
-    if (!c.subscribed) { c.subscribed = true; subscribe(() => r.schedule()); }
+    // The unsubscribe is the cell's cleanup, so it runs when the component unmounts.
+    if (!c.subscribed) { c.subscribed = true; c.cleanup = subscribe(() => r.schedule()); }
     return getSnapshot();
   }
   export function useId() { const c = cell(); if (!('value' in c)) c.value = ':w3r' + (G.current.ids++) + ':'; return c.value; }
@@ -479,7 +480,7 @@ export async function mount(element: ReactElement): Promise<Surface> {
   const elements = () => [...hostElementsIn(host)];
   const settle = async () => {
     let idle = 0;
-    for (let i = 0; i < 400 && idle < 3; i += 1) {
+    for (let i = 0; i < 1000 && idle < 8; i += 1) {
       await new Promise((resolve) => setImmediate(resolve));
       idle = !scheduled && pendingRequests === 0 ? idle + 1 : 0;
     }
