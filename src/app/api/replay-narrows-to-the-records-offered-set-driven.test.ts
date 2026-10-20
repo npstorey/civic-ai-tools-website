@@ -122,6 +122,10 @@ registerHooks({
   },
 });
 
+// R6 W3 (#632): the consent gate is on, so each gated request carries a consent
+// in force, built by the real encoder (`consentCookieForTests`).
+const { consentCookieForTests } = (await import('../../lib/sources/consent-cookie-for-tests.ts')) as typeof import('../../lib/sources/consent-cookie-for-tests.ts');
+
 // --- Request census and the loopback data sources -------------------------------
 
 const realFetch = globalThis.fetch;
@@ -239,7 +243,7 @@ async function replay(slug: string, replies: Array<Record<string, unknown>> = [A
   const outboundBefore = OUTBOUND.length;
   try {
     const response = await replayRoute.POST(
-      new Request(`http://localhost/api/evidence/${slug}/replay`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ modelApiKey: 'placeholder-model-key-r6-w1-replay' }) }),
+      new Request(`http://localhost/api/evidence/${slug}/replay`, { method: 'POST', headers: { 'content-type': 'application/json', cookie: consentCookieForTests() }, body: JSON.stringify({ modelApiKey: 'placeholder-model-key-r6-w1-replay' }) }),
       { params: Promise.resolve({ slug }) },
     );
     const body = (await response.json()) as Replayed['body'];
@@ -312,16 +316,22 @@ test('criterion 3 (c): a datHere record with named mcpServers entries replays wi
   assert.deepEqual(C.toolNames.filter((n) => !n.startsWith('socrata__')), [], 'the replay offered a source the record did not name');
 });
 
-test('criterion 3 (d): a record stating no set replays with the full vocabulary, from none', () => {
-  assert.deepEqual(D.toolNames, ALL_TOOL_NAMES, 'a record stating no set did not replay with the full vocabulary');
-  // `sources` is the source ids whose tools the replay offered: under the full
-  // vocabulary, every manifest source, Boston's included though it is unset.
-  assert.deepEqual(D.body.offeredSet, { from: 'none', sources: ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter'], lacking: [] });
+// R6 W3 (#632): the gate is on, so the replayer's own consent narrows every
+// replay (C6), the full vocabulary included: a source this instance does not
+// configure (Boston here) has no state in the replayer's consent and is not
+// offered. Before W3 the dormant gate passed no replayer selection, and the
+// full vocabulary was every manifest source.
+const CONSENTED_TOOL_NAMES = ALL_TOOL_NAMES.filter((name) => !name.startsWith('boston__'));
+const CONSENTED_SOURCES = ['socrata', 'data-commons', 'nyc-charter'];
+
+test('criterion 3 (d): a record stating no set replays with the full vocabulary the replayer consented to, from none', () => {
+  assert.deepEqual(D.toolNames, CONSENTED_TOOL_NAMES, 'a record stating no set did not replay with the full vocabulary');
+  assert.deepEqual(D.body.offeredSet, { from: 'none', sources: CONSENTED_SOURCES, lacking: [] });
 });
 
 test('criterion 3 (e): a server list of nameless entries counts as no set', () => {
-  assert.deepEqual(E.toolNames, ALL_TOOL_NAMES, 'nameless mcpServers entries narrowed the replay');
-  assert.deepEqual(E.body.offeredSet, { from: 'none', sources: ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter'], lacking: [] });
+  assert.deepEqual(E.toolNames, CONSENTED_TOOL_NAMES, 'nameless mcpServers entries narrowed the replay');
+  assert.deepEqual(E.body.offeredSet, { from: 'none', sources: CONSENTED_SOURCES, lacking: [] });
 });
 
 test('criterion 3 (f): a record whose set is empty replays with no source tool, never the full vocabulary', () => {

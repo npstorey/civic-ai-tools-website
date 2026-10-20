@@ -212,6 +212,10 @@ registerHooks({
   },
 });
 
+// R6 W3 (#632): the consent gate is on, so each gated request carries a consent
+// in force, built by the real encoder (`consentCookieForTests`).
+const { consentCookieForTests } = (await import('./sources/consent-cookie-for-tests.ts')) as typeof import('./sources/consent-cookie-for-tests.ts');
+
 const globals = globalThis as unknown as Record<string, unknown>;
 globals.__civicP1NotebookStderr =
   `Traceback (most recent call last):\n  File "nb.py", line 3\n    df = fetch("${CANARY}")\nKeyError: '${CANARY}'`;
@@ -415,6 +419,7 @@ async function driveNotebookRoute(mode: 'notebook-execution' | 'other-error' | '
   const log = await captureConsole(async () => {
     const response = await POST(new Request('http://localhost/api/query-notebook', {
       method: 'POST',
+      headers: { cookie: consentCookieForTests() },
       body: JSON.stringify({ query: `How many complaints mention ${CANARY}?`, portal: PORTAL }),
     }) as never);
     sse = await response.text();

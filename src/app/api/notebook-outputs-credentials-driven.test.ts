@@ -255,6 +255,10 @@ registerHooks({
   },
 });
 
+// R6 W3 (#632): the consent gate is on, so each gated request carries a consent
+// in force, built by the real encoder (`consentCookieForTests`).
+const { consentCookieForTests } = (await import('../../lib/sources/consent-cookie-for-tests.ts')) as typeof import('../../lib/sources/consent-cookie-for-tests.ts');
+
 interface P9Globals { ip: string; stored: string[] }
 const P9: P9Globals = { ip: '203.0.113.91', stored: [] };
 (globalThis as unknown as { __p9: P9Globals }).__p9 = P9;
@@ -387,6 +391,7 @@ const recordsRoute = (await import('./records/route.ts')) as unknown as { POST: 
 
 const response = await notebookRoute.POST(new Request('http://localhost/api/query-notebook', {
   method: 'POST',
+  headers: { cookie: consentCookieForTests() },
   body: JSON.stringify({ query: 'How many noise complaints were there last week?', portal: 'data.example.org' }),
 }));
 const STATUS = response.status;

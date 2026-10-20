@@ -135,6 +135,10 @@ registerHooks({
   },
 });
 
+// R6 W3 (#632): the consent gate is on, so each gated request carries a consent
+// in force, built by the real encoder (`consentCookieForTests`).
+const { consentCookieForTests } = (await import('../../lib/sources/consent-cookie-for-tests.ts')) as typeof import('../../lib/sources/consent-cookie-for-tests.ts');
+
 // The configuration the route needs to get past its own guards when nothing
 // refuses: a model key against the built-in endpoint and catalog, and a
 // data-source endpoint that is never contacted (the skill fetch and the model
@@ -155,7 +159,7 @@ const { POST } = (await import('./query-notebook/route.ts')) as {
 function request(body: string = JSON.stringify({ query: 'How many noise complaints last week?' })): Request {
   return new Request('http://localhost/api/query-notebook', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', cookie: consentCookieForTests() },
     body,
   });
 }

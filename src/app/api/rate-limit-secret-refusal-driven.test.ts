@@ -151,6 +151,10 @@ registerHooks({
   },
 });
 
+// R6 W3 (#632): the consent gate is on, so each gated request carries a consent
+// in force, built by the real encoder (`consentCookieForTests`).
+const { consentCookieForTests } = (await import('../../lib/sources/consent-cookie-for-tests.ts')) as typeof import('../../lib/sources/consent-cookie-for-tests.ts');
+
 // --- Loopback: a model endpoint that counts and refuses ---------------------------
 
 let modelRequests = 0;
@@ -226,7 +230,7 @@ const QUESTION = 'How many noise complaints were filed last year?';
 function post(route: string, body: unknown): Request {
   return new Request(`http://localhost${route}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', cookie: consentCookieForTests() },
     body: JSON.stringify(body),
   });
 }

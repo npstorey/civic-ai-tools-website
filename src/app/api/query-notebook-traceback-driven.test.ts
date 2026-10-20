@@ -227,6 +227,10 @@ registerHooks({
   },
 });
 
+// R6 W3 (#632): the consent gate is on, so each gated request carries a consent
+// in force, built by the real encoder (`consentCookieForTests`).
+const { consentCookieForTests } = (await import('../../lib/sources/consent-cookie-for-tests.ts')) as typeof import('../../lib/sources/consent-cookie-for-tests.ts');
+
 // --- What nbconvert writes, measured --------------------------------------------
 
 /**
@@ -478,6 +482,7 @@ async function drive(driver: 'container' | 'lambda' | 'vercel-sandbox'): Promise
   const log = await captureConsole(async () => {
     const response = await POST(new Request('http://localhost/api/query-notebook', {
       method: 'POST',
+      headers: { cookie: consentCookieForTests() },
       body: JSON.stringify({ query: 'How many noise complaints were there last week?', portal: 'data.example.org' }),
     }));
     status = response.status;

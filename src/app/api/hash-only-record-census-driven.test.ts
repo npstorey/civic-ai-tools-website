@@ -213,6 +213,10 @@ registerHooks({
   },
 });
 
+// R6 W3 (#632): the consent gate is on, so each gated request carries a consent
+// in force, built by the real encoder (`consentCookieForTests`).
+const { consentCookieForTests } = (await import('../../lib/sources/consent-cookie-for-tests.ts')) as typeof import('../../lib/sources/consent-cookie-for-tests.ts');
+
 const { mountPublishDialog, fire } = await import('../../components/publish-dialog-test-harness.ts');
 
 interface P10Globals { stored: string[]; rows: Array<Record<string, unknown>>; session: unknown }
@@ -354,7 +358,7 @@ function eventsOf(body: string): Json[] {
 }
 
 const post = (route: string, body: unknown) =>
-  new Request(`http://localhost${route}`, { method: 'POST', body: JSON.stringify(body) }) as never;
+  new Request(`http://localhost${route}`, { method: 'POST', headers: { cookie: consentCookieForTests() }, body: JSON.stringify(body) }) as never;
 
 const compareStreamRoute = await import('./compare-stream/route.ts');
 const notebookRoute = await import('./query-notebook/route.ts');

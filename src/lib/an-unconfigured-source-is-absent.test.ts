@@ -141,6 +141,10 @@ registerHooks({
   },
 });
 
+// R6 W3 (#632): the consent gate is on, so each gated request carries a consent
+// in force, built by the real encoder (`consentCookieForTests`).
+const { consentCookieForTests } = (await import('./sources/consent-cookie-for-tests.ts')) as typeof import('./sources/consent-cookie-for-tests.ts');
+
 // --- The loopback MCP sources: Socrata on /socrata/mcp, Data Commons on /dc/mcp
 
 const ONE_ROW = JSON.stringify({ data: [{ count: '4812' }], total_rows: 1 });
@@ -286,7 +290,7 @@ async function drive(name: string, run: () => Promise<Response>): Promise<Drive>
 }
 
 const post = (route: string, body: unknown) =>
-  new Request(`http://localhost${route}`, { method: 'POST', body: JSON.stringify(body) }) as never;
+  new Request(`http://localhost${route}`, { method: 'POST', headers: { cookie: consentCookieForTests() }, body: JSON.stringify(body) }) as never;
 
 const notebookRoute = await import('../app/api/query-notebook/route.ts');
 const compareStreamRoute = await import('../app/api/compare-stream/route.ts');
