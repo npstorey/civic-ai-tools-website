@@ -54,12 +54,15 @@ const BUTTON: CSSProperties = {
 };
 
 function RecipientLine({ recipient, label }: { recipient: FlowsRecipient; label: string }) {
+  const where = recipientWhere(recipient);
   const operator = recipient.role === 'model-endpoint' ? recipient.keptBy.find((k) => k.operatorStatement) : undefined;
+  // A holder named by the same host the line already names is not named twice.
+  const only = recipient.keptBy.length === 1 && recipient.keptBy[0].holder === where && recipient.keptBy[0].keeps === 'operator-states';
   return (
     <li data-recipient={recipient.id} style={{ marginBottom: '4px' }}>
       <strong style={{ fontWeight: 600 }}>{label}</strong>
-      {` (${recipientWhere(recipient)}): `}
-      {operator ? `${operator.holder}: ${ENDPOINT_NO_TRAINING}` : <KeptByLines keptBy={recipient.keptBy} />}
+      {` (${where}): `}
+      {operator ? ENDPOINT_NO_TRAINING : only ? "what it keeps is for this site's operator to state." : <KeptByLines keptBy={recipient.keptBy} />}
     </li>
   );
 }
