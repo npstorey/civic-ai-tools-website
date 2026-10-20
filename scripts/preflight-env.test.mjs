@@ -1547,3 +1547,16 @@ test('#617 P3: the hosted-source variables are not applicable where the sandbox 
   for (const name of HOSTED_SOURCE_ONLY) assert.ok(result.notApplicable.includes(name), `${name} is applicable under the container driver`);
   assert.deepEqual(result.valueErrors, [], 'a not-applicable variable was validated');
 });
+
+// LAYOUT-WEB W4 P3 (F2): since W4 P2 the URL form of the answer layout is read
+// and verified, so the preflight, which prints this purpose to the operator,
+// says so and no longer calls the URL form refused or unread.
+test('W4 P3 (F2) ANSWER_LAYOUT_URL: the purpose says the node is read once and verified, not that the URL form is refused or not read', () => {
+  const entry = ENV_SPEC.find((s) => s.name === 'ANSWER_LAYOUT_URL');
+  assert.ok(entry, 'ANSWER_LAYOUT_URL is declared');
+  assert.doesNotMatch(entry.purpose, /not read|set, it is refused/i);
+  assert.match(entry.purpose, /read once per server process and verified/);
+  assert.match(entry.purpose, /refused with the verifier's status/);
+  const source = readFileSync(new URL('./preflight-env.mjs', import.meta.url), 'utf8').replace(/\n\s*\/\/\s*/g, ' ');
+  assert.doesNotMatch(source, /URL form is refused until it is built/, 'the comment above the rows');
+});

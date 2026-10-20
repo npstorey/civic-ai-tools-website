@@ -131,3 +131,48 @@ test('W4 P2 (10) with the URL set, the URL node’s id is named; with its fetch 
   assert.equal(reading.ok, false);
   assert.throws(() => resolveAnswerLayouts({ url: down }, { committed: [] }), /ANSWER_LAYOUT_URL: the layout node was refused \(fetch_failed\)/, 'the pages refuse, from the same kept reading');
 });
+
+// --- W4 P3 (F4): the naming path applies the pages' reading, the twin check included ----
+//
+// A URL node that reuses a held name and version with other fields verifies,
+// and every page refuses it (`checkNoTwins`). It must not be named either. Each
+// twin below differs from its control in its name only, which is what makes it
+// a twin; both are signed by one fixture key the handed-in registry trusts.
+
+const URL_KID = 'fixture:w4p3-url';
+const URL_REGISTRY = { keys: [{ kid: URL_KID, publicKey: OTHER.pub, signerIdentity: SIGNER, status: 'active' as const, activatedAt: '2026-01-01T00:00:00.000Z', deprecatedAt: null, revokedAt: null }] };
+
+/** A URL node of `layout`, and the deps that serve it: an injected fetcher and the fixture registry. */
+function served(layout: LayoutPayload) {
+  const { node, nodeId } = buildLayoutNode({ ...layout, packageId: 'w4p3-url', createdAt: '2026-10-20T00:00:00.000Z', signingKeyId: URL_KID, signer: SIGNER });
+  const doc = buildLayoutNodeDocument(node, nodeId, signEnvelopeHash(nodeId, OTHER.priv, URL_KID), 'https://w4p3-fixture.invalid/r.json');
+  return { nodeId, urlDeps: { fetch: (async () => new Response(JSON.stringify(doc))) as never, registry: URL_REGISTRY } };
+}
+
+test('W4 P3 (F4) a verified URL node that reuses a built-in’s name and version with other fields names nothing, and the pages refuse it', async () => {
+  const good = committed();
+  const control = served({ ...structuredClone(ENVELOPE_ORDER), name: 'w4p3-url-layout' });
+  const twin = served({ ...structuredClone(ENVELOPE_ORDER), name: 'answer-first' });
+  const controlUrl = 'https://layouts.w4p3-fixture.invalid/control.json';
+  const twinUrl = 'https://layouts.w4p3-fixture.invalid/twin.json';
+
+  assert.equal(await defaultLayoutNodeId({ ...ENV, ANSWER_LAYOUT_URL: controlUrl }, { committed: [good.node], urlDeps: control.urlDeps }), control.nodeId, 'the control: a URL node that is not a twin is named');
+  assert.doesNotThrow(() => resolveAnswerLayouts({ url: controlUrl }, { committed: [good.node] }), 'and the pages render with it');
+
+  const reading = await readLayoutUrlOnce(twinUrl, twin.urlDeps);
+  assert.equal(reading.ok, true, 'the twin verifies: what refuses it is the twin rule, not its signature');
+  assert.equal(await defaultLayoutNodeId({ ...ENV, ANSWER_LAYOUT_URL: twinUrl }, { committed: [good.node], urlDeps: twin.urlDeps }), undefined, 'the twin is not named, and nothing throws');
+  assert.throws(() => resolveAnswerLayouts({ url: twinUrl }, { committed: [good.node] }), /the layout is named answer-first v1, a built-in's name and version, with different fields/, 'the pages refuse it, as they did');
+});
+
+test('W4 P3 (F4) a verified URL node that reuses a committed node’s name and version with other fields names nothing', async () => {
+  const held = committed({ ...structuredClone(ENVELOPE_ORDER), name: 'w4p3-held' }, INSTANCE.priv, KID, 'w4p3-held');
+  const control = served({ ...structuredClone(ANSWER_FIRST), name: 'w4p3-url-own' });
+  const twin = served({ ...structuredClone(ANSWER_FIRST), name: 'w4p3-held' });
+  const controlUrl = 'https://layouts.w4p3-fixture.invalid/own-control.json';
+  const twinUrl = 'https://layouts.w4p3-fixture.invalid/held-twin.json';
+
+  assert.equal(await defaultLayoutNodeId({ ...ENV, ANSWER_LAYOUT_URL: controlUrl }, { committed: [held.node], urlDeps: control.urlDeps }), control.nodeId, 'the control is named');
+  assert.equal(await defaultLayoutNodeId({ ...ENV, ANSWER_LAYOUT_URL: twinUrl }, { committed: [held.node], urlDeps: twin.urlDeps }), undefined, 'the twin of the committed node is not named');
+  assert.throws(() => resolveAnswerLayouts({ url: twinUrl }, { committed: [held.node] }), /the layout is named w4p3-held v1, the name and version of the committed layout node/, 'the pages refuse it');
+});
