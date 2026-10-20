@@ -13,12 +13,18 @@
  *
  * WHAT IT DOES NOT SAY. Anything the app cannot read: how long the operator or
  * any service named here keeps what it receives, the operator's account
- * settings with the model service (#516 G0-7), what the hosting platform
- * records per request, and any legal position. `OPERATOR_STATES` says these
- * are the operator's to state, and the page carries no placeholder for them.
- * Consent (design §4.7 item 10) is built but switched off until the consent
- * card ships (#632 W3), and its change log (item 12, docs/flows-changelog.md)
- * is linked from the page then, so the page says nothing about either yet.
+ * settings with the model service (#516 G0-7), which plan the hosting
+ * account is on, and any legal position. `OPERATOR_STATES` says these are the
+ * operator's to state, and the page carries no placeholder for them. The
+ * operator's account settings with the model service are stated only as the
+ * operator's own statement, when the operator supplies one
+ * (`SITE_OPERATOR_STATES_NO_TRAINING`, #632 D3 = A), and then in those words.
+ *
+ * CONSENT (#632 W3; design §4.7 items 3, 7, 10, 11 and 12). The consent
+ * sections are the owner's text (`src/lib/sources/copy.ts`, a candidate until
+ * R6 G7), the consent cookie by name, one row per configured source derived
+ * from the flows statement `/api/flows` serves, and the dated change log
+ * (`docs/flows-changelog.md`) linked in the instance's repository.
  *
  * THE RECIPIENTS ARE GUARDED IN BOTH DIRECTIONS. `RECIPIENT_STATEMENTS` is
  * keyed by the first cell of each row of the deploy guide's outbound-kinds
@@ -42,7 +48,36 @@
 import { getTableColumns } from 'drizzle-orm';
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import type { AnalyticsConfig, AnalyticsService } from './analytics.tsx';
-import type { PlatformHeldKind } from './flows/statement.ts';
+import {
+  buildFlowsStatementFor,
+  deploymentGuideUrl,
+  operatorStatesNoTraining,
+  type FlowsStatement,
+  type PlatformHeldKind,
+} from './flows/statement.ts';
+import {
+  HOSTED_SNAPSHOT_EXPIRATION_DAYS,
+  SANDBOX_SNAPSHOTS_READ_DATE,
+  SANDBOX_SNAPSHOTS_SENTENCE,
+  VERCEL_SANDBOX_SNAPSHOTS,
+} from './flows/sandbox-snapshots.ts';
+import { CONSENT_COOKIE_NAME } from './sources/consent.ts';
+import {
+  COOKIE_HOLDS,
+  GUIDE_LINK_TEXT,
+  GUIDE_SENTENCE,
+  KEPT_WITH_ACCOUNTS,
+  KEPT_WITHOUT_ACCOUNTS,
+  NO_GUIDE_SENTENCE,
+  NOTIFY_WITH_ACCOUNTS,
+  NOTIFY_WITHOUT_ACCOUNTS,
+  PRIVACY_CONSENT_SECTIONS,
+  PRIVACY_ENDPOINT_HEADING,
+  PRIVACY_ENDPOINT_SENTENCES,
+  WITHDRAW_WITH_ACCOUNTS,
+  WITHDRAW_WITHOUT_ACCOUNTS,
+} from './sources/copy.ts';
+import { keepsText, readerSourceName, sourceWhere } from './sources/source-name.ts';
 import { users } from './db/schema.ts';
 import { buildProviders, normalizeIssuer, OIDC_PROVIDER_ID } from './auth-providers.ts';
 import { toSignInOptions } from './auth-provider-options.ts';
@@ -144,8 +179,10 @@ export const OPERATOR_STATES = "This site cannot read the following, so they are
 export const OPERATOR_STATES_ITEMS: readonly string[] = [
   'how long the operator and each service named on this page keep what they receive',
   "the operator's account settings with the AI model service, including whether that service may keep or learn from what it receives",
-  'what the hosting platform records about each visit, such as network addresses',
-  'what the hosting platform keeps of each notebook run and each data source this site runs on it, including their error messages',
+  // R6 W3: what the hosting and sandbox platforms hold is stated above, each
+  // in its holder's own words with its page (`PLATFORM_HELD_RECIPIENTS`); the
+  // one fact about it the site still cannot read is the plan.
+  "which plan this site's hosting account is on, which sets how long its logs are kept",
   'any legal position',
 ];
 
@@ -190,6 +227,8 @@ export const ALSO_KEPT_ITEMS: readonly string[] = [
   'the name a program gives itself when you approve it to sign in for you from another device, such as a command-line tool',
   'the name you give each API token (a key a program uses to publish for you), with what it is allowed to do and when it was last used',
   'the text you write when you withdraw or reinstate a record, or add a review to one',
+  // R6 W3: the consent row (`source_consents`, `drizzle/0017_source_consents.sql`).
+  'your consent to send questions onward: each source\'s state (On, Ask first or Off), the flows statement it refers to, and the dates you gave it and last changed it',
 ];
 
 /**
@@ -863,6 +902,8 @@ export const PLATFORM_HELD_RECIPIENTS: Readonly<Record<PlatformHeldKind, Platfor
         read: PLATFORM_READ_DATE,
         sentence: 'With persistence enabled (the default), the filesystem is automatically snapshotted on stop and restored when the sandbox resumes.',
       },
+      // R6 W3: the page that states how long a snapshot is kept.
+      { url: VERCEL_SANDBOX_SNAPSHOTS, read: SANDBOX_SNAPSHOTS_READ_DATE, sentence: SANDBOX_SNAPSHOTS_SENTENCE },
     ],
     statements: ({ mcp }) =>
       Object.values(buildMcpRegistry(mcp).hosted).map((server) =>
@@ -870,9 +911,10 @@ export const PLATFORM_HELD_RECIPIENTS: Readonly<Record<PlatformHeldKind, Platfor
           `held-sandbox-platform-${server.sourceId}`,
           [
             `The data source ${server.label} runs in a Vercel Sandbox that this site keeps between uses. ` +
-              "When the sandbox stops, Vercel keeps a copy of its files for up to 30 days (Vercel's ",
-            { link: VERCEL_SANDBOX_CONCEPTS_PAGE, text: 'sandbox' },
-            ` page, read ${PLATFORM_READ_DATE}, and this site's sandbox settings). Vercel's sandbox pages do not say what else it keeps of what runs there. ` +
+              `When the sandbox stops, it keeps a copy of its files, which this site sets to expire ${HOSTED_SNAPSHOT_EXPIRATION_DAYS} days after its last use. ` +
+              'Vercel says snapshots expire 30 days after their last use by default (its ',
+            { link: VERCEL_SANDBOX_SNAPSHOTS, text: 'sandbox snapshots' },
+            ` page, read ${SANDBOX_SNAPSHOTS_READ_DATE}). Vercel's sandbox pages do not say what else it keeps of what runs there. ` +
               "The program this site runs beside the source writes no searches or queries to the sandbox's logs. " +
               "What the source's own software writes there has not been checked.",
           ],
@@ -881,6 +923,7 @@ export const PLATFORM_HELD_RECIPIENTS: Readonly<Record<PlatformHeldKind, Platfor
             c('PLATFORM_HELD_RECIPIENTS'),
             'const:src/lib/flows/statement.ts#PLATFORM_HELD_KINDS',
             'const:src/lib/mcp/hosting/lifecycle.ts#wakeHostedSource',
+            'const:src/lib/flows/sandbox-snapshots.ts#HOSTED_SNAPSHOT_EXPIRATION_DAYS',
             'const:src/lib/mcp/hosting/bridge-source.ts#BRIDGE_SOURCE',
           ],
         ),
@@ -1113,6 +1156,7 @@ function whatIsStored(): Statement[] {
           'const:src/lib/db/schema.ts#deviceCodes',
           'const:src/lib/db/schema.ts#apiTokens',
           'const:src/lib/db/schema.ts#attestationNodes',
+          'const:src/lib/db/schema.ts#sourceConsents',
           'const:src/lib/evidence/attestation.ts#buildAttestationNode',
           'const:src/lib/evidence/expert-attestation.ts#buildExpertAttestationPayload',
         ],
@@ -1275,6 +1319,70 @@ function cannotTell(): Statement[] {
   ];
 }
 
+// --- Consent (R6 W3) ---------------------------------------------------------------
+
+const COPY = 'src/lib/sources/copy.ts';
+const k = (name: string): Trace => `const:${COPY}#${name}`;
+const COOKIE_NAME_TRACE: Trace = 'const:src/lib/sources/consent.ts#CONSENT_COOKIE_NAME';
+const FLOWS_TRACE: Trace = 'const:src/lib/flows/statement.ts#buildFlowsStatementFor';
+
+/** The change log, as the repository serves it. */
+export const FLOWS_CHANGELOG_PATH = 'docs/flows-changelog.md';
+
+/** One source's row: who publishes it, where it runs, what its holders say they keep, and how current its data is. */
+function sourceRow(source: FlowsStatement['sources'][number]): Statement {
+  const keptBy = source.recipients.flatMap((r) => r.keptBy);
+  const parts: Segment[] = [`${readerSourceName(source.displayName)}, published by ${source.publisher}, runs at ${sourceWhere(source)}. Who holds its logs: `];
+  keptBy.forEach((line, i) => {
+    if (i > 0) parts.push('; ');
+    parts.push(keepsText(line));
+    if (line.statementUrl) parts.push(' (', { link: line.statementUrl, text: 'its statement' }, line.readOn ? `, read ${line.readOn})` : ')');
+  });
+  parts.push(`. How current its data is: ${source.freshness}`);
+  return statement(`source-row-${source.sourceId}`, parts, [FLOWS_TRACE, 'env:SOCRATA_MCP_URL', 'env:BOSTON_OPENCONTEXT_MCP_URL', 'env:NYC_CHARTER_HOSTING']);
+}
+
+function consentSections(analytics: AnalyticsConfig | null): PrivacySection[] {
+  const accounts = Boolean(process.env.DATABASE_URL);
+  const guide = deploymentGuideUrl();
+  const repo = getBrandRepoUrl();
+  const [how, again, keep, each, changes] = PRIVACY_CONSENT_SECTIONS;
+  const sections = PRIVACY_CONSENT_SECTIONS.map((section, i): PrivacySection => ({
+    id: `consent-${i + 1}`,
+    heading: section.heading,
+    statements: [statement(`consent-${i + 1}`, [section.sentences.join(' ')], [k('PRIVACY_CONSENT_SECTIONS')])],
+  }));
+  const at = (section: typeof how) => sections[PRIVACY_CONSENT_SECTIONS.indexOf(section)].statements;
+
+  at(how).push(
+    statement('consent-kept', [accounts ? KEPT_WITH_ACCOUNTS : KEPT_WITHOUT_ACCOUNTS], ['env:DATABASE_URL', k(accounts ? 'KEPT_WITH_ACCOUNTS' : 'KEPT_WITHOUT_ACCOUNTS')]),
+    statement('consent-cookie', ['The consent cookie is named ', { code: CONSENT_COOKIE_NAME }, `. ${COOKIE_HOLDS}`], [COOKIE_NAME_TRACE, k('COOKIE_HOLDS')]),
+    statement('consent-withdraw', [accounts ? WITHDRAW_WITH_ACCOUNTS : WITHDRAW_WITHOUT_ACCOUNTS], ['env:DATABASE_URL', k(accounts ? 'WITHDRAW_WITH_ACCOUNTS' : 'WITHDRAW_WITHOUT_ACCOUNTS')]),
+  );
+  at(again).push(
+    statement('consent-notify', [accounts ? NOTIFY_WITH_ACCOUNTS : NOTIFY_WITHOUT_ACCOUNTS], ['env:DATABASE_URL', k(accounts ? 'NOTIFY_WITH_ACCOUNTS' : 'NOTIFY_WITHOUT_ACCOUNTS')]),
+  );
+  at(keep).push(
+    guide
+      ? statement('consent-guide', [GUIDE_SENTENCE.replace(` ${GUIDE_LINK_TEXT} explains how.`, ' '), { link: guide, text: GUIDE_LINK_TEXT }, ' explains how.'], ['env:SITE_DEPLOYMENT_GUIDE_URL', k('GUIDE_SENTENCE')])
+      : statement('consent-guide', [NO_GUIDE_SENTENCE], ['env:SITE_DEPLOYMENT_GUIDE_URL', k('NO_GUIDE_SENTENCE')]),
+  );
+  at(each).push(...buildFlowsStatementFor(analytics).sources.map(sourceRow));
+  if (repo !== null) {
+    at(changes).push(
+      statement('consent-changelog', ['The log: ', { link: `${repo.replace(/\/$/, '')}/blob/main/${FLOWS_CHANGELOG_PATH}`, text: FLOWS_CHANGELOG_PATH }, '.'], ['env:SITE_BRAND_REPO_URL', c('FLOWS_CHANGELOG_PATH')]),
+    );
+  }
+  if (operatorStatesNoTraining()) {
+    sections.splice(PRIVACY_CONSENT_SECTIONS.indexOf(changes), 0, {
+      id: 'consent-endpoint',
+      heading: PRIVACY_ENDPOINT_HEADING,
+      statements: [statement('consent-endpoint', [PRIVACY_ENDPOINT_SENTENCES.join(' ')], ['env:SITE_OPERATOR_STATES_NO_TRAINING', k('PRIVACY_ENDPOINT_SENTENCES')])],
+    });
+  }
+  return sections;
+}
+
 /**
  * Every section of the page, for this instance as configured now. `analytics`
  * is passed in rather than read: it is a build-time value the caller reads by
@@ -1285,6 +1393,7 @@ export function buildPrivacySections(analytics: AnalyticsConfig | null): Privacy
     { id: 'basis', heading: 'How this page is written', statements: [statement('basis', [PAGE_BASIS], [c('PAGE_BASIS')])] },
     { id: 'who', heading: 'Who runs this site', statements: whoRunsThis() },
     { id: 'use', heading: 'Using the site', statements: signInAndLimits() },
+    ...consentSections(analytics),
     { id: 'links', heading: 'What connects your activity to you', statements: whatLinksActivity() },
     { id: 'stored', heading: 'What the site keeps', statements: whatIsStored() },
     { id: 'recipients', heading: 'Who receives what', statements: recipients(analytics) },

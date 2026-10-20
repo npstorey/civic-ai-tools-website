@@ -676,7 +676,10 @@ const S3_KEY_PAIR = ['S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
 const SANDBOX_ONLY = ['SANDBOX_SNAPSHOT_ID', 'VERCEL_TOKEN', 'VERCEL_TEAM_ID', 'VERCEL_PROJECT_ID'];
 /** The hosted-source variables (#617 P3): scoped with the sandbox auth triple,
  *  which the host authenticates with, so not applicable where it is. */
-const HOSTED_SOURCE_ONLY = ['NYC_CHARTER_HOSTING', 'SOURCE_BRIDGE_SECRET', 'VERCEL_ENV'];
+// `VERCEL_ENV` left this list in R6 W3 (#632 criterion 14): the usage table's
+// `environment` column reads it on every instance with a database, so it is
+// applicable under every executor (`preflight-env-w3.test.mjs`).
+const HOSTED_SOURCE_ONLY = ['NYC_CHARTER_HOSTING', 'SOURCE_BRIDGE_SECRET'];
 
 function tierOf(rows, name) {
   return rows.find((r) => r.name === name)?.tier;
@@ -995,8 +998,9 @@ test('the self-hosted profile passes with no platform-specific variables set', (
 
   const report = renderReport(result);
   assert.match(report, /PROFILE: db=node-postgres {2}blob=s3 {2}executor=container/);
-  // Five, plus the three hosted-source variables (#617 P3).
-  assert.match(report, /8 variable\(s\) not applicable to this profile/);
+  // Five, plus the two hosted-source variables (#617 P3; VERCEL_ENV is
+  // applicable everywhere since R6 W3).
+  assert.match(report, /7 variable\(s\) not applicable to this profile/);
   for (const name of ['BLOB_READ_WRITE_TOKEN', ...SANDBOX_ONLY, ...HOSTED_SOURCE_ONLY]) {
     assert.ok(!report.includes(name), `${name} is never mentioned to a self-hosted instance`);
   }

@@ -431,6 +431,13 @@ services:
       SITE_SPONSOR_NAME:
       SITE_SPONSOR_URL:
       SITE_SPONSOR_PREFIX:
+      # The consent surfaces (#632 W3): the deployment guide's address, and the
+      # operator's own statement about the model endpoint (each a fork's own).
+      SITE_DEPLOYMENT_GUIDE_URL:
+      SITE_OPERATOR_STATES_NO_TRAINING:
+      # The hosting platform's environment name: a hosted source's sandbox name,
+      # and the usage table's environment column. Unset off the platform.
+      VERCEL_ENV:
       SITE_DEFAULT_PORTAL:
       SITE_PORTAL_LOCKED:
       ANSWER_LAYOUT:

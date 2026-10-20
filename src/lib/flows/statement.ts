@@ -53,6 +53,13 @@ import { buildProviders, normalizeIssuer, OIDC_PROVIDER_ID } from '../auth-provi
 import { toSignInOptions } from '../auth-provider-options.ts';
 import { resolveAppOrigin } from '../host-routing.ts';
 import { getModelApiBaseUrl } from '../model-client.ts';
+import { NO_GUIDE_SENTENCE } from '../sources/copy.ts';
+import {
+  HOSTED_SNAPSHOT_EXPIRATION_DAYS,
+  SANDBOX_SNAPSHOTS_READ_DATE,
+  SANDBOX_SNAPSHOTS_SENTENCE,
+  VERCEL_SANDBOX_SNAPSHOTS,
+} from './sandbox-snapshots.ts';
 import { ANALYTICS_RECIPIENTS, hostOf } from '../privacy-facts.ts';
 import { resolveExecutorDriverName } from '../sandbox/execute.ts';
 import {
@@ -81,6 +88,12 @@ export interface FlowsKeptBy {
   readOn?: string;
   /** What this line rests on besides the holder's statement, each fact with its trace. */
   basis?: string[];
+  /**
+   * What this instance's operator states about the holder, when the operator
+   * supplies a statement (D3 = A: `SITE_OPERATOR_STATES_NO_TRAINING`, the
+   * model endpoint only). Not a posture: no version reads it.
+   */
+  operatorStatement?: string;
 }
 
 export interface FlowsRecipient {
@@ -123,7 +136,9 @@ export interface FlowsSource {
 export interface FlowsLinks {
   /** The privacy page, on whichever host serves the statement. */
   privacy: string;
-  /** Present until the deployment guide has a public address (D10, W3). */
+  /** The deployment guide's public address, from `SITE_DEPLOYMENT_GUIDE_URL` (D10 = A). */
+  deploymentGuide?: string;
+  /** When no guide is named: Text 3's no-guide sentence (`NO_GUIDE_SENTENCE`). */
   deploymentGuideOmitted?: string;
 }
 
@@ -168,6 +183,7 @@ const held = (kind: PlatformHeldKind) => `held:${kind}`;
 
 const VERCEL_RUNTIME_LOGS = 'https://vercel.com/docs/logs/runtime';
 const VERCEL_SANDBOX = 'https://vercel.com/docs/vercel-sandbox';
+
 const GITHUB_PRIVACY = 'https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement';
 const TYLER_PRIVACY = 'https://www.tylertech.com/privacy';
 const AWS_LAMBDA_LOGS = 'https://docs.aws.amazon.com/lambda/latest/dg/monitoring-cloudwatchlogs.html';
@@ -206,14 +222,19 @@ function functionLogs(onVercel: boolean): FlowsRecipient {
   };
 }
 
-/** The sandbox platform's posture: Vercel Sandbox, whose pages say nothing about what it keeps. */
-function sandboxPlatform(basis: string[]): FlowsKeptBy {
-  return { holder: 'Vercel', keeps: 'not-stated', statementUrl: VERCEL_SANDBOX, readOn: FLOWS_READ_DATE, basis };
+/** The sandbox platform's posture: Vercel Sandbox, whose pages say nothing about what it keeps of what runs there. */
+function sandboxPlatform(basis: string[], statementUrl = VERCEL_SANDBOX, readOn = FLOWS_READ_DATE): FlowsKeptBy {
+  return { holder: 'Vercel', keeps: 'not-stated', statementUrl, readOn, basis };
 }
 
-/** Measured from the hosted source's lifecycle and bridge (the stage-B report states each). */
+/**
+ * Measured from the hosted source's lifecycle and bridge. Two lines for the
+ * snapshot (R6 W3): this site's own setting, then Vercel's own statement,
+ * quoted with its page and the date it was read.
+ */
 const HOSTED_SANDBOX_MEASURED = [
-  'measured: the sandbox is created persistent, and the platform keeps its last filesystem snapshot for up to 30 days (src/lib/mcp/hosting/lifecycle.ts, persistent: true, keepLastSnapshots 1, snapshotExpiration 30 days)',
+  `this site's setting: the sandbox is created persistent, keeps its last snapshot, and sets each snapshot to expire ${HOSTED_SNAPSHOT_EXPIRATION_DAYS} days after its last use (src/lib/mcp/hosting/lifecycle.ts:96 SNAPSHOT_EXPIRATION_MS, and :322-329 persistent: true, snapshotExpiration, keepLastSnapshots 1)`,
+  `Vercel's statement: "${SANDBOX_SNAPSHOTS_SENTENCE}" (${VERCEL_SANDBOX_SNAPSHOTS}, read ${SANDBOX_SNAPSHOTS_READ_DATE})`,
   "measured: the bridge's own log lines carry error kinds, versions and process ids, never a tool's arguments, and it writes no file per request (src/lib/mcp/hosting/bridge-source.ts)",
   "not measured: what the source's own server writes to its error output, which reaches the sandbox's command log (bridge-source.ts, stderr: 'inherit')",
 ];
@@ -239,7 +260,7 @@ export const INSTANCE_ROLE_POSTURES: Readonly<Record<string, (host: string | und
     readOn: FLOWS_READ_DATE,
     basis: ["its privacy statement gives a retention rule for personal information and says nothing about what it keeps of a portal's data requests"],
   }),
-  'sandbox-platform': () => sandboxPlatform(HOSTED_SANDBOX_MEASURED),
+  'sandbox-platform': () => sandboxPlatform(HOSTED_SANDBOX_MEASURED, VERCEL_SANDBOX_SNAPSHOTS, SANDBOX_SNAPSHOTS_READ_DATE),
 };
 
 /** What a source's server receives. */
@@ -376,6 +397,21 @@ function notebookExecutor(): FlowsRecipient | null {
   return { ...base, runsAt: "the operator's own server", keptBy: [{ holder: "this site's operator", keeps: 'operator-states' }] };
 }
 
+/** The operator's no-training statement is supplied (D3 = A): `SITE_OPERATOR_STATES_NO_TRAINING` set to `1` or `true`. */
+export function operatorStatesNoTraining(): boolean {
+  const value = process.env.SITE_OPERATOR_STATES_NO_TRAINING?.trim().toLowerCase();
+  return value === '1' || value === 'true';
+}
+
+/** The deployment guide's public address (D10 = A), or null when unset. */
+export function deploymentGuideUrl(): string | null {
+  const value = process.env.SITE_DEPLOYMENT_GUIDE_URL?.trim();
+  return value ? value : null;
+}
+
+/** The operator's statement about the model endpoint, as the card and the privacy page say it. */
+export const OPERATOR_NO_TRAINING_STATEMENT = 'the endpoint is set to send questions only to providers that do not train on them';
+
 /**
  * The statement in force under this process's configuration. Async only for
  * the analytics module, which is loaded when analytics is configured.
@@ -394,20 +430,22 @@ export function buildFlowsStatementFor(analytics: AnalyticsConfig | null): Flows
       role: 'model-endpoint',
       host: hostOf(getModelApiBaseUrl()),
       receives: 'your question, and the data the sources return for it',
-      keptBy: [{ holder: hostOf(getModelApiBaseUrl()), keeps: 'operator-states' }],
+      keptBy: [{
+        holder: hostOf(getModelApiBaseUrl()),
+        keeps: 'operator-states',
+        ...(operatorStatesNoTraining() ? { operatorStatement: OPERATOR_NO_TRAINING_STATEMENT } : {}),
+      }],
     },
     functionLogs(typeof process.env.VERCEL_ENV === 'string' && process.env.VERCEL_ENV.trim() !== ''),
     ...signInRecipients(),
     ...(analytics ? [analyticsRecipient(analytics.service)] : []),
     ...(executor ? [executor] : []),
   ];
+  const guide = deploymentGuideUrl();
   return assembleFlowsStatement({
     recipients,
     sources: sourceRows(readMcpEnvFromProcess()),
-    links: {
-      privacy: '/privacy',
-      deploymentGuideOmitted: 'This instance names no public address for its deployment guide yet.',
-    },
+    links: guide ? { privacy: '/privacy', deploymentGuide: guide } : { privacy: '/privacy', deploymentGuideOmitted: NO_GUIDE_SENTENCE },
   });
 }
 

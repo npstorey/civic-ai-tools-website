@@ -1578,6 +1578,18 @@ branding set above they only change what `/directory` and `/roadmap` fetch
 and link to, and unlike the `PUBLISHER_*` set they are never emitted inside
 a signed record package.
 
+### Consent surfaces (optional)
+
+Two settings the consent card, the Sources panel, the dashboard's Sources tab,
+`/api/flows` and the privacy page read (#632 W3; see
+[Consent and the flows statement](#consent-and-the-flows-statement)). Both
+are this instance's own: a fork fills in its own, or leaves them unset.
+
+| Variable | Meaning | Unset |
+| --- | --- | --- |
+| `SITE_DEPLOYMENT_GUIDE_URL` | The public address of the guide a reader follows to run this whole system on their own computer, with their own model and data sources. Each consent surface links it after the local-only offer, and `/api/flows` carries it as `links.deploymentGuide`. | Each surface says "This site does not name a deployment guide.", and `/api/flows` carries that sentence as `links.deploymentGuideOmitted`. The preflight lists it absent under OPTIONAL and refuses nothing. |
+| `SITE_OPERATOR_STATES_NO_TRAINING` | `1` or `true`: this operator states that the model endpoint is set to send questions only to providers that do not train on them. The card's endpoint row and the privacy page's "The model endpoint" section then say so, as the operator's statement, and say the site cannot read that setting. It covers training only, never retention. Set it only if your endpoint account is set that way. | Nothing is said about the endpoint's providers: the card's endpoint row stays as derived ("for this site's operator to state"), and the privacy page has no "The model endpoint" section. |
+
 ### Analytics (optional)
 
 Two variables choose a page-analytics service. Both are read at build.
@@ -2083,26 +2095,38 @@ columns in the table's order. To reverse it, run
 
 ## Consent and the flows statement
 
-**Not enforced in this release.** The consent gate described below is built
-and turns on with the consent card, the surface that asks a reader (#632 W3).
-Until then it is switched off in code (`CONSENT_GATE_ENFORCED` in
-`src/lib/sources/consent-enforced.ts`, a constant and not a setting), no
-reader is asked for consent, and every question is answered and recorded
-exactly as before. What is live now: the flows statement at `/api/flows`, the
-consent endpoint and its two stores, and the privacy page's statements of
-what the hosting and sandbox platforms hold.
+**Enforced since #632 W3.** The gate is on (`CONSENT_GATE_ENFORCED` in
+`src/lib/sources/consent-enforced.ts`, a constant and not a setting), and
+every surface that sends a question asks the reader first: the home page,
+`/explore` and `/ask` show the consent card before the first question, and
+replay's dialog shows it when the replay route refuses. W2 shipped the gate
+off, because no surface could yet ask.
 
-**What the gate will do.** Once it is on, this site asks a reader once,
-before the first question, whether it may send the question onward, and
-stores the answer; nothing is sent anywhere before it, the model endpoint
-included (design §4.4). The server enforces it: the four routes that send a
-question — `/api/compare-stream`, `/api/compare`, `/api/query-notebook` and
+**What the gate does.** This site asks a reader once, before the first
+question, whether it may send the question onward, and stores the answer;
+nothing is sent anywhere before it, the model endpoint included (design
+§4.4). The server enforces it: the four routes that send a question —
+`/api/compare-stream`, `/api/compare`, `/api/query-notebook` and
 `/api/evidence/<slug>/replay` (with its `/api/records/<slug>/replay` alias) —
 refuse a question with no consent in force, after their own configuration
 refusals and before the rate limiter counts anything. `/api/compare-stream`
 answers with an `error` event per panel whose `code` is `consent_required`;
 the other three answer HTTP 403 with
-`{ error, code: "consent_required", flowsVersion, reask }`.
+`{ error, code: "consent_required", flowsVersion, reask }`. A consent in
+force whose reader has no source On (every configured source Off or Ask
+first) is refused the same way with `code: "no_sources_on"`, before the
+model is called, and its reader text points to the Sources panel.
+
+**The surfaces.** The consent card lists every recipient from `/api/flows`
+with what it says it keeps; **Allow** stores each configured source's
+manifest default (`consentDefault`, On for every source today) and sends the
+question, **Not now** sends nothing. The Sources panel, beside the question
+box on the home page, `/ask` and `/explore`, sets each source On, Ask first
+or Off and withdraws the consent; for a signed-in account kept in the
+database it also links the dashboard's Sources tab, which shows the states,
+the dates and the flows version, and withdraws too. The two settings these
+surfaces read are in the environment reference
+([Consent surfaces](#consent-surfaces-optional)).
 
 **What a reader consents to: `/api/flows`.** `GET /api/flows` serves the
 flows statement, derived when asked from this instance's configuration, the
@@ -2114,7 +2138,7 @@ with the page and the date it was read, or "not stated"; then each configured
 source with its hosting variant, publisher, freshness and posture. It calls no
 source. Its body is RFC 8785 canonical JSON, and its SHA-256 is the
 statement's hash: the **flows version** a consent refers to, and the `hash` a
-record's `composition.flowsStatement` will carry, once the gate is on, beside
+record's `composition.flowsStatement` carries, beside
 the address and the statement's `date` (the latest read date it carries, never the day it is
 served). The statement also carries a base `version` over the instance-level
 recipients, and each source a `version` of its own.
@@ -2125,28 +2149,35 @@ statement has said.
 (the session's `dbId`) keeps its consent in the `source_consents` table
 (`0017_source_consents.sql`, above) and reads the row only. Any other
 session, anonymous or signed in, keeps it in the cookie
-`civic-source-consent`: host-only, `Secure`, `HttpOnly`, `SameSite=Lax`,
-`Path=/`, and a session cookie (it ends with the browser session). The cookie
+`civic-source-consent`: host-only, `HttpOnly`, `SameSite=Lax`, `Path=/`, and
+a session cookie (it ends with the browser session). It is `Secure` when the
+request reached the site over https: the request's own scheme, or the
+`x-forwarded-proto` header a platform or load balancer sets (its first
+value). Over plain `http` it is left out, on `localhost` and on any other
+host, because a browser keeps a `Secure` cookie only from a secure origin;
+with it, a reader's consent on a plain-http instance would never stick and
+every question there would be refused. The write and the revoke set it the
+same way. The cookie
 holds a format version, the statement's base version, and per source its
 state, the calendar date it was given and that source's own version; never an
 account id, a network address or anything else that identifies a reader.
-Only the consent endpoint below writes either store. In this release nothing
-on the site's pages calls it, so no reader's visit writes a consent row or
-cookie until the consent card ships (#632 W3).
+Only the consent endpoint below writes either store; the consent card, the
+Sources panel and the dashboard's Sources tab call it.
 
 **The consent endpoint: `/api/sources/consent`.** `GET` reports the consent
 in force and the current flows version, and sets no cookie. `PUT` with
 `{ states: { <source id>: "on" | "ask-first" | "off" }, flowsVersion }`
 stores the states; it answers 400 naming any id this instance does not
 configure, and 409 with the current version when `flowsVersion` is stale, so
-the surface reads the statement again. `DELETE` revokes: the row is deleted,
-or the cookie expired; once the gate is on, the next question is asked again. This is the only
-boundary that accepts source ids: once the gate is on, a question's run takes
+the surface reads the statement again. `PATCH` with `{ flowsVersion }` dismisses
+a row's notices (below). `DELETE` revokes: the row is deleted, or the cookie
+expired, and the next question is asked again. This is the only
+boundary that accepts source ids: a question's run takes
 its selection — configured sources that are On — from the store, never from
 the request, and a configured source with no stored state (one added after the
 reader consented) is Ask first, and is not offered.
 
-**What re-asks** (once the gate is on). A signed-in reader's row keeps the
+**What re-asks.** A signed-in reader's row keeps the
 statement it was given against, and each question compares it with the
 statement in force. A
 recipient added, a posture that keeps more (none, then metadata, then content,
@@ -2155,17 +2186,24 @@ where it runs, what it receives or who holds its logs) re-asks everyone; the
 same change to one source's own row, or a change of that source's hosting
 variant, re-asks for that source. A recipient or source removed, or a posture
 that keeps less, notifies and does not re-ask; a newly configured source
-re-asks nothing. A change to or from a posture that cannot be ranked ("not
+re-asks nothing. A notice is shown to a reader whose consent is kept on an
+account: `GET /api/sources/consent` returns the row's `notices` (one line per
+change since the statement the row holds, dated by the row's `updatedAt`),
+the Sources panel and the dashboard's Sources tab show them, and dismissing
+(`PATCH`) saves the statement in force on the row. Changes are not announced
+ahead; they take effect when deployed, and the dated change log records
+them. A change to or from a posture that cannot be ranked ("not
 stated", "as the operator states") re-asks. The anonymous cookie holds the
 versions only, so any change to a version it holds re-asks. In this version a
 re-ask is `consent_required` for the whole question, naming what is re-asked
 (`reask: { base, sources }`); a source is never silently dropped.
 
-Once the gate is on, a record states the reader's own state for each
-source: `selected` for On, `reader-off` for Off, `not-consented` for Ask first
-or no state, and the flows statement in force (`composition.flowsStatement`).
-While it is off, records carry the reasons they carried before
-(`configured`, `not-configured`) and no flows statement.
+A record states the reader's own state for each source: `selected` for On,
+`reader-off` for Off, `not-consented` for Ask first or no state, and the
+flows statement in force (`composition.flowsStatement`). Records published
+while the gate was off (before #632 W3) carry the reasons they carried then
+(`configured`, `not-configured`) and no flows statement: on new records
+`configured` became `selected`.
 
 ## Behind a load balancer
 

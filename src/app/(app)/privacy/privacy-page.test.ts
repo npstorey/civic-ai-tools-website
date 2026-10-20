@@ -629,12 +629,14 @@ test('the page lists the device-client names, API token names and attestation te
   assert.ok(JSON.stringify(payload).includes('WF-REVIEW-CANARY'), "a review's body does not reach its signed payload");
 });
 
-test("the operator's-to-state list names what the hosting platform keeps of notebook and data-source runs", () => {
+// R6 W3 (#632, criterion 13): what the hosting platform keeps of each data
+// source it runs is no longer the operator's to state; the held statement
+// says it, in Vercel's words with its page. Before W3 this test pinned the
+// operator item; it now pins that the held statement has taken its place.
+test("what the platform keeps of a hosted data source is stated by the held statement, not listed as the operator's to state", () => {
   const items = facts.OPERATOR_STATES_ITEMS as string[];
-  assert.ok(
-    items.some((item) => /notebook run/.test(item) && /data source/.test(item) && /hosting platform/.test(item)),
-    "the operator's-to-state list does not name the platform's keeping of notebook and data-source runs",
-  );
+  assert.ok(!items.some((item) => /notebook run/.test(item) && /data source/.test(item)), "the operator's-to-state list still names the platform's keeping of data-source runs");
+  assert.ok(statementOf(RENDERED.full, 'held-sandbox-platform-nyc-charter'), 'full: the held statement for the hosted source is not on the page');
 });
 
 test("the sealed-record sentence says the record's fingerprint can still be looked up", () => {

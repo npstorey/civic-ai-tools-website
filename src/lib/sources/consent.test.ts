@@ -328,12 +328,14 @@ test('criterion 7: the deployment guide names the cookie, the table, both routes
   for (const needle of [`\`${name}\``, '`source_consents`', '`/api/flows`', '`/api/sources/consent`', 're-ask', '`0017_source_consents.sql`', 'docs/flows-changelog.md']) {
     assert.ok(section.includes(needle), `the guide's consent section does not name ${needle}`);
   }
-  // The dormant gate (the ORCH's round on the guide's tense): what writes a
-  // store today, and when a revoke re-asks.
+  // What writes a store, and when a revoke re-asks. Before R6 W3 these said
+  // the gate was dormant; since W3 (#632) it is on and the surfaces call the
+  // endpoint, so the guide says that.
   const flat = section.replace(/\s+/g, ' ');
   for (const sentence of [
-    'Only the consent endpoint below writes either store. In this release nothing on the site\'s pages calls it, so no reader\'s visit writes a consent row or cookie until the consent card ships (#632 W3).',
-    '`DELETE` revokes: the row is deleted, or the cookie expired; once the gate is on, the next question is asked again.',
+    'Only the consent endpoint below writes either store; the consent card, the Sources panel and the dashboard\'s Sources tab call it.',
+    '`DELETE` revokes: the row is deleted, or the cookie expired, and the next question is asked again.',
+    '**Enforced since #632 W3.**',
   ]) {
     assert.ok(flat.includes(sentence), `the guide's consent section does not say: ${sentence}`);
   }

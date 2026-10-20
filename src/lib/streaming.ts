@@ -131,7 +131,7 @@ export interface ErrorEvent extends StreamEvent {
 // place error-to-copy mapping lives, consumed by every SSE-consuming hook.
 
 /**
- * The twelve kinds every streaming failure classifies into. Single-sourced as
+ * The thirteen kinds every streaming failure classifies into. Single-sourced as
  * an array rather than a bare union so the round-trip test can enumerate them
  * (#154): a thirteenth kind is covered by that test the moment it is added here.
  *
@@ -139,6 +139,11 @@ export interface ErrorEvent extends StreamEvent {
  * (`./sources/consent-gate.ts`), never derived from text: a question this site
  * refused before sending it anywhere, because no consent was in force. The
  * surface turns it into the consent card (W3).
+ *
+ * `no_sources_on` (R6 W3) is set explicitly by the consent gate too: a
+ * consent is in force, but the reader has no source On (every configured
+ * source is Off or Ask first), so the question was refused before the model
+ * or any source was called. Its copy points to the panel that satisfies it.
  *
  * `not_offered` (R6 W1) is set explicitly by the dispatch, never derived from
  * message text: `SourceNotOfferedError` (`./mcp/registry.ts`) carries it as
@@ -170,12 +175,13 @@ export const STREAM_ERROR_KINDS = [
   'notebook_execution',
   'not_offered',
   'consent_required',
+  'no_sources_on',
   'generic',
 ] as const;
 
 export type StreamErrorKind = (typeof STREAM_ERROR_KINDS)[number];
 
-/** True for a value that is one of the twelve kinds (an unknown code is not). */
+/** True for a value that is one of the thirteen kinds (an unknown code is not). */
 export function isStreamErrorKind(value: unknown): value is StreamErrorKind {
   return typeof value === 'string' && (STREAM_ERROR_KINDS as readonly string[]).includes(value);
 }
@@ -207,6 +213,17 @@ export function classifyStreamError(input: unknown): StreamErrorKind {
     // would silently downgrade the kinds whose reader-facing copy was written
     // for readers rather than for the matchers below.
     if (isStreamErrorKind(code)) return code;
+  }
+  // An `SSEError` (`./sse-client.ts`) carries a route's JSON refusal body in
+  // its `data`: a typed refusal answered as JSON (a 403 `consent_required`, a
+  // 503 configuration refusal) is classified by that body's code, exactly as
+  // the same refusal sent as a stream event is (R6 W3). Without this branch
+  // every typed JSON refusal read `generic` on the client.
+  if (input !== null && typeof input === 'object' && 'data' in input) {
+    const data = (input as { data?: unknown }).data;
+    if (data !== null && typeof data === 'object' && isStreamErrorKind((data as { code?: unknown }).code)) {
+      return (data as { code: StreamErrorKind }).code;
+    }
   }
 
   const status =
@@ -327,6 +344,9 @@ const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
   // the model service included (design §4.4). The surface shows the consent
   // card in its place (W3); this copy is what a surface without one says.
   consent_required: 'This site asks for your consent before it sends your question anywhere, so nothing has been sent yet.',
+  // R6 W3: a consent is in force, and every source is Off or Ask first, so
+  // nothing was sent. The panel beside the question box is what turns one On.
+  no_sources_on: 'Every data source is set to Off or Ask first, so nothing was sent. Turn a source On in the panel beside the question box, then ask again.',
   generic: 'Something went wrong while running this query. Please try again in a moment.',
 };
 

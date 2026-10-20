@@ -574,7 +574,10 @@ export const ENV_SPEC = [
   // profile that does not deliver that auth cannot run a hosted source.
   { name: 'NYC_CHARTER_HOSTING', tier: 'optional', purpose: "NYC Charter, Laws and Rules — opt-in: 'sandbox' runs the pinned package in a Vercel Sandbox this instance creates and offers its tools; unset, the source is not offered (no tools, no guidance, no request). Any other value is refused", allowedValues: ['sandbox'], onlyWhen: { executor: 'vercel-sandbox' } },
   { name: 'SOURCE_BRIDGE_SECRET', tier: 'optional', purpose: "Instance secret each hosted source's bridge token derives from (HMAC-SHA256 of the sandbox name) — required when NYC_CHARTER_HOSTING is sandbox; set it from a pipe, never on a command line. Rotating it means deleting each hosted source's sandbox", requiredWhenValue: { NYC_CHARTER_HOSTING: 'sandbox' }, onlyWhen: { executor: 'vercel-sandbox' } },
-  { name: 'VERCEL_ENV', tier: 'optional', purpose: "Set by the hosting platform (production, preview or development) — a hosted source's sandbox is named per environment, so two environments holding different SOURCE_BRIDGE_SECRET values never share one; unset off the platform, the name says local", hasFallback: true, onlyWhen: { executor: 'vercel-sandbox' } },
+  // Two readers (R6 W5, then W3 #632 criterion 14): a hosted source's sandbox
+  // name, and the usage table's `environment` column, which every instance
+  // with a database writes. So it is not scoped to the sandbox executor.
+  { name: 'VERCEL_ENV', tier: 'optional', purpose: "Set by the hosting platform (production, preview or development) — read for two things: a hosted source's sandbox name, per environment, so two environments holding different bridge secrets never share one; and the usage table's environment column, on every instance with a database. Unset off the platform, both say local", hasFallback: true },
 
   // --- Instance identity (ADR-0020: config-not-code; #258: REQUIRED for
   //     signing, never defaulted; see docs/instance-setup.md and
@@ -675,6 +678,15 @@ export const ENV_SPEC = [
   // four baked all four markers into the HTML of eight static routes.
   // src/lib/brand-config.ts (repo URL) and src/lib/site-config.ts (sponsor).
   { name: 'SITE_BRAND_REPO_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Footer "GitHub" link — this instance\'s own source repository (unset: no repo link)' },
+  // The consent surfaces (#632 W3). The deployment guide's public address
+  // (D10 = A): the consent card, the Sources panel, the dashboard's Sources
+  // tab, `/api/flows` and the privacy page link it; unset, each says this site
+  // names no guide. The operator's statement about the model endpoint (D3 =
+  // A): a fork fills in its own, and only an operator whose endpoint account
+  // is set to send questions only to providers that do not train on them sets
+  // it. Read by the server (`src/lib/flows/statement.ts`).
+  { name: 'SITE_DEPLOYMENT_GUIDE_URL', tier: 'optional', purpose: "The deployment guide's public address, linked from the consent card, the Sources panel, the dashboard's Sources tab, /api/flows and the privacy page (unset: each says this site names no guide)" },
+  { name: 'SITE_OPERATOR_STATES_NO_TRAINING', tier: 'optional', purpose: "'1' or 'true' states, as this operator's own statement, that the model endpoint is set to send questions only to providers that do not train on them; the consent card and the privacy page then say so, in those words, and that the site cannot read the setting. A fork fills in its own: set it only if your endpoint account is set that way (unset: nothing is said)", allowedValues: ['1', 'true'] },
   { name: 'SITE_SPONSOR_NAME', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Sponsor acknowledgment in the footer and on /about, "{prefix} {name}." (unset: no sponsor line)' },
   { name: 'SITE_SPONSOR_URL', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Where the sponsor\'s name links (unset: the name renders unlinked; inert without SITE_SPONSOR_NAME)' },
   { name: 'SITE_SPONSOR_PREFIX', readBy: 'build-and-runtime', tier: 'optional', purpose: 'Wording in front of the sponsor\'s name (default "Fiscally sponsored by"; inert without SITE_SPONSOR_NAME)', hasFallback: true },
