@@ -6,7 +6,10 @@
 //   - `ANSWER_LAYOUT_URL` set: the node read from that URL, its id computed from
 //     the fetched bytes. The pages and this function share one reading
 //     (`readLayoutUrlOnce`). When that reading failed, the pages refuse and
-//     this names no node.
+//     this names no node. When it succeeded, the node is named only when the
+//     pages' own reading accepts it (`resolveAnswerLayouts`, its refusal of a
+//     layout that reuses a held name and version with other fields
+//     included), so a node every page refuses is never named (W4 P3, F4).
 //   - nothing set: a committed node whose seven fields equal `answer-first`'s
 //     and which this instance's own key signed;
 //   - `ANSWER_LAYOUT` or `ANSWER_LAYOUT_PATH` set: none.
@@ -35,6 +38,7 @@ import { ANSWER_FIRST } from './index.ts';
 import { sameLayout } from './layout-check.ts';
 import { committedLayoutNodes, type CommittedLayoutNode } from './held.ts';
 import { readLayoutUrlOnce, type NodeReadingDeps } from './node-reading.ts';
+import { resolveAnswerLayouts } from './reading.ts';
 import { errorLogFacts } from '../streaming.ts';
 
 /**
@@ -100,7 +104,12 @@ export async function defaultLayoutNodeId(env: EnvRecord = process.env, sources:
       // Both forms set is refused by the pages; nothing is named for it.
       if (documentForm) return undefined;
       const reading = await readLayoutUrlOnce(url, sources.urlDeps);
-      return reading.ok ? reading.nodeId : undefined;
+      if (!reading.ok) return undefined;
+      // The pages' reading, on the same kept result: it throws on a node the
+      // pages refuse, and the catch below names none. Its unknown-part line is
+      // the pages' to log, not this function's.
+      resolveAnswerLayouts({ url }, { urlReading: reading, committed: sources.committed, warn: () => {} });
+      return reading.nodeId;
     }
     if (documentForm) return undefined;
 

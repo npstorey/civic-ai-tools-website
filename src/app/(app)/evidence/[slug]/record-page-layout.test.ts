@@ -1841,8 +1841,9 @@ test('W4 P1 the server markup is the instance’s default: its line, and the tog
 
 test('W4 P2 the server markup with a publication attestation naming a node: the page looks it up among the nodes it holds', async () => {
   // The page reads the id from `resolveRecordAttestations` (stubbed above) and
-  // looks it up among the nodes this site holds: at this head none is
-  // committed and no URL is set, so any id is one the site does not hold.
+  // looks it up among the nodes this site holds: the one committed node
+  // (`770ed52e…`), and no URL node, since none is set here. This test's id is
+  // its own fixture, not the committed node's, so it is one the site does not hold.
   globals.__p2PublishedLayoutNodeId = '9'.repeat(64);
   let named: string;
   try {

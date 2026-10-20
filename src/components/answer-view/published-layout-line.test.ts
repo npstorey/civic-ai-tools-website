@@ -9,8 +9,10 @@
 // renders the record page before the toggle reads the session. The held
 // fixture node is built from `envelope-order` and signed by a throwaway
 // Ed25519 key generated for this run (a fixture); a second is built from
-// `answer-first`, the shown layout's. A held set is handed in as data, since
-// the repository commits no node at this head.
+// `answer-first`, the shown layout's, and a third from `answer-first` at v2.
+// A held set is handed in as data: the repository commits one node
+// (`770ed52e…`, under the instance's key), and these tests use their own
+// fixtures, signed by the test key, rather than it.
 //
 // Each case differs from the one that shows the line in one property: the
 // node the attestation names, the attestation's signature verdict, its signer
@@ -110,7 +112,11 @@ function heldNode(layout: typeof ANSWER_FIRST) {
 
 const ENVELOPE_NODE = heldNode(ENVELOPE_ORDER);
 const ANSWER_FIRST_NODE = heldNode(ANSWER_FIRST);
-const HELD = [ANSWER_FIRST_NODE, ENVELOPE_NODE];
+// W4 P3 (F1): `answer-first` at another version. It differs from the v1 node
+// in its version only, so a comparison of names alone cannot tell the two apart.
+const ANSWER_FIRST_V2 = { ...ANSWER_FIRST, version: 2 };
+const ANSWER_FIRST_V2_NODE = heldNode(ANSWER_FIRST_V2);
+const HELD = [ANSWER_FIRST_NODE, ANSWER_FIRST_V2_NODE, ENVELOPE_NODE];
 const NOT_HELD_ID = '9'.repeat(64);
 
 /** The record's publication attestation view, as `lifecycle.ts` builds it: verified and signer-matched unless a case says otherwise. */
@@ -163,4 +169,25 @@ test('W4 P2 reading 9: the line compares against the layout shown, not the insta
   const shownEnvelope = { default: ENVELOPE_ORDER, offered: [ENVELOPE_ORDER, ANSWER_FIRST] };
   assert.equal(footLine([publishesView(ENVELOPE_NODE.nodeId)], shownEnvelope), 'Shown under layout envelope-order v1');
   assert.equal(footLine([publishesView(ANSWER_FIRST_NODE.nodeId)], shownEnvelope), 'Published under layout answer-first v1; shown under layout envelope-order v1');
+});
+
+// --- W4 P3 (F1): the version half of the comparison ------------------------------------
+//
+// The cases above hold layouts that differ by name, so a comparison of names
+// alone passes them all. These hold one name at two versions: shown under v2,
+// a record published under v1 shows the line, and one published under v2 does not.
+
+/** The instance with `answer-first` v2 configured: the default, offered first, beside the two built-ins. */
+const SHOWN_V2 = { default: ANSWER_FIRST_V2, offered: [ANSWER_FIRST_V2, ANSWER_FIRST, ENVELOPE_ORDER] };
+
+test('W4 P3 (F1) an attestation naming answer-first v1, shown under answer-first v2, shows the line: the version alone differs', () => {
+  assert.deepEqual({ ...ANSWER_FIRST_V2_NODE.layout, version: 1 }, ANSWER_FIRST_NODE.layout, 'the two nodes differ in their version only');
+  assert.notEqual(ANSWER_FIRST_V2_NODE.nodeId, ANSWER_FIRST_NODE.nodeId);
+  assert.equal(footLine([publishesView(ANSWER_FIRST_NODE.nodeId)], SHOWN_V2), 'Published under layout answer-first v1; shown under layout answer-first v2');
+  assert.equal(footLine([publishesView(ANSWER_FIRST_V2_NODE.nodeId)]), 'Published under layout answer-first v2; shown under layout answer-first v1', 'and the other way round');
+});
+
+test('W4 P3 (F1) one naming answer-first v2, shown under answer-first v2, shows W4 P1’s line', () => {
+  assert.equal(footLine([publishesView(ANSWER_FIRST_NODE.nodeId)], SHOWN_V2), 'Published under layout answer-first v1; shown under layout answer-first v2');
+  assert.equal(footLine([publishesView(ANSWER_FIRST_V2_NODE.nodeId)], SHOWN_V2), 'Shown under layout answer-first v2');
 });

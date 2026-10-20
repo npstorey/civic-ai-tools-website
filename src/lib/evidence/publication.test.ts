@@ -174,3 +174,53 @@ test('W4 P2 (3) a committed node under another key id names nothing, and the byt
     g.__w4p2Committed.splice(0);
   }
 });
+
+// --- W4 P3 (F4): the publish route with a URL node the pages refuse as a twin ----------
+//
+// The URL node is read once per process: the case reads it first through
+// `readLayoutUrlOnce` with an injected fetcher and a fixture registry, and the
+// publish route's own call then finds that reading kept. The twin differs from
+// the control in its name only, which makes it reuse `answer-first` v1 with
+// other fields.
+
+const { readLayoutUrlOnce } = await import('@/lib/answer-layout/node-reading');
+const { ENVELOPE_ORDER } = await import('@/lib/answer-layout');
+
+const URL_KEY = crypto.generateKeyPairSync('ed25519');
+const URL_KID = 'fixture:w4p3-publication-url';
+const URL_REGISTRY = {
+  keys: [{
+    kid: URL_KID, publicKey: URL_KEY.publicKey.export({ format: 'der', type: 'spki' }).toString('base64'), signerIdentity: SIGNER,
+    status: 'active' as const, activatedAt: '2026-01-01T00:00:00.000Z', deprecatedAt: null, revokedAt: null,
+  }],
+};
+
+/** Reads a URL node of `name` (envelope-order's other fields) into this process's kept reading for `url`; returns its node id. */
+async function readUrlNode(url: string, name: string): Promise<string> {
+  const { node, nodeId } = buildLayoutNode({ ...structuredClone(ENVELOPE_ORDER), name, packageId: 'w4p3-url', createdAt: '2026-10-20T00:00:00.000Z', signingKeyId: URL_KID, signer: SIGNER });
+  const doc = buildLayoutNodeDocument(node, nodeId, signEnvelopeHash(nodeId, URL_KEY.privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64'), URL_KID), 'https://w4p3-fixture.invalid/r.json');
+  const reading = await readLayoutUrlOnce(url, { fetch: (async () => new Response(JSON.stringify(doc))) as never, registry: URL_REGISTRY });
+  assert.equal(reading.ok, true, `${name}: the URL node verifies`);
+  return nodeId;
+}
+
+test('W4 P3 (F4) ANSWER_LAYOUT_URL naming a twin: the publish route names no node, and the publishes node’s bytes equal the base’s', async () => {
+  const controlUrl = 'https://layouts.w4p3-fixture.invalid/publication-control.json';
+  const twinUrl = 'https://layouts.w4p3-fixture.invalid/publication-twin.json';
+  const controlId = await readUrlNode(controlUrl, 'w4p3-url-layout');
+  await readUrlNode(twinUrl, 'answer-first');
+  try {
+    process.env.ANSWER_LAYOUT_URL = controlUrl;
+    const control = await publishOnce();
+    assert.equal(JSON.parse(control.publishesNode).layoutNodeId, controlId, 'the control: a URL node that is not a twin is named');
+
+    process.env.ANSWER_LAYOUT_URL = twinUrl;
+    const { publishesNode, publishesRow } = await publishOnce();
+    assert.equal('layoutNodeId' in JSON.parse(publishesNode), false, 'the twin is not named');
+    const golden = JSON.parse(fs.readFileSync(GOLDEN, 'utf8')) as { publishesNode: string; publishesPayload: unknown };
+    assert.equal(publishesNode, golden.publishesNode, 'byte for byte, the node the base built');
+    assert.deepEqual(publishesRow.payload, golden.publishesPayload);
+  } finally {
+    delete process.env.ANSWER_LAYOUT_URL;
+  }
+});
