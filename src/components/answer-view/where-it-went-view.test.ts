@@ -263,7 +263,7 @@ function assertLists(flat: string, reached: readonly ShownRow[], notReached: rea
 
 interface FlowsFixture {
   reached: Array<{ kind: string; name: string; sourceId?: string; calls?: number; model?: string; service?: string; recipients: Array<{ role: string; place: string; got: string; keptBy: string[] }> }>;
-  notReached: Array<{ sourceId: string; name: string; reason: string }>;
+  notReached: Array<{ sourceId: string; name: string; whyNotSent: string }>;
   statement: { kind: string };
 }
 
@@ -286,8 +286,8 @@ const RUN_FLOWS: FlowsFixture = {
     },
   ],
   notReached: [
-    { sourceId: 'socrata', name: 'Socrata', reason: 'Off.' },
-    { sourceId: 'boston-opencontext', name: 'Boston OpenContext', reason: 'Ask first: allowed when asked, but not used for this question.' },
+    { sourceId: 'socrata', name: 'Socrata', whyNotSent: 'Off.' },
+    { sourceId: 'boston-opencontext', name: 'Boston OpenContext', whyNotSent: 'Ask first: allowed when asked, but not used for this question.' },
   ],
   statement: { kind: 'in-force' },
 };
@@ -311,7 +311,7 @@ function assertRunLists(flat: string, flows: FlowsFixture, label: string) {
         ...row.recipients.flatMap((r) => [r.role, r.place, r.got, ...r.keptBy]),
       ],
     })),
-    flows.notReached.flatMap((row) => [row.name, row.reason]),
+    flows.notReached.flatMap((row) => [row.name, row.whyNotSent]),
     label,
   );
 }

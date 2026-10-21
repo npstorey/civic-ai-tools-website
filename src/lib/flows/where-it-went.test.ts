@@ -23,7 +23,9 @@
 //     `roleLabel`, `place` by `recipientWhere`, `keptBy` by `keepsText`;
 //     `got` is the statement recipient's `receives`, present on the run side
 //     and on a record whose reference matches, and ABSENT (no key) otherwise;
-//   - `notReached`: every other stated source, `{ sourceId, name, reason }`;
+//   - `notReached`: every other stated source, `{ sourceId, name, whyNotSent }`
+//     (not `reason`, which this repository reserves for a recorded call's
+//     phrase: `src/components/reason-phrase-readers.test.ts`);
 //   - `statement`: `{ kind: 'in-force' }`, `{ kind: 'reference', date, url }`
 //     or `{ kind: 'none' }`.
 //
@@ -74,7 +76,7 @@ type ReachedRow =
   | { kind: 'model'; name: string; model: string | null; service: string | null; recipients: RecipientRow[] }
   | { kind: 'source'; sourceId: string; name: string; calls: number; recipients: RecipientRow[] }
   | { kind: 'notebook'; name: string; recipients: RecipientRow[] };
-interface NotReachedRow { sourceId: string; name: string; reason: string }
+interface NotReachedRow { sourceId: string; name: string; whyNotSent: string }
 type WhichStatement = { kind: 'in-force' } | { kind: 'reference'; date: string; url: string } | { kind: 'none' };
 interface WhereModel { reached: ReachedRow[]; notReached: NotReachedRow[]; statement: WhichStatement }
 
@@ -147,7 +149,7 @@ function nameOf(sourceId: string, alias: string): string {
 }
 
 const offered = (sourceId: string, reason: string, alias = MANIFEST_ALIAS[sourceId] ?? sourceId.replace(/-/g, '_')): Offered => ({ sourceId, alias, reason });
-const notReached = (o: Offered, reason: string): NotReachedRow => ({ sourceId: o.sourceId, name: nameOf(o.sourceId, o.alias), reason });
+const notReached = (o: Offered, whyNotSent: string): NotReachedRow => ({ sourceId: o.sourceId, name: nameOf(o.sourceId, o.alias), whyNotSent });
 
 // --- The run statements -------------------------------------------------------------
 
@@ -546,9 +548,9 @@ function differingStatement(): FlowsStatement {
 }
 
 const D887C1_NOT_REACHED = [
-  { sourceId: 'data-commons', name: 'Data Commons', reason: REASON.off },
-  { sourceId: 'boston-opencontext', name: 'Boston OpenContext', reason: REASON.notSetUp },
-  { sourceId: 'nyc-charter', name: 'NYC Charter, Laws and Rules', reason: REASON.onNotUsed },
+  { sourceId: 'data-commons', name: 'Data Commons', whyNotSent: REASON.off },
+  { sourceId: 'boston-opencontext', name: 'Boston OpenContext', whyNotSent: REASON.notSetUp },
+  { sourceId: 'nyc-charter', name: 'NYC Charter, Laws and Rules', whyNotSent: REASON.onNotUsed },
 ];
 
 test('criterion 3 premises: the saved records hold what the contract names', () => {
@@ -588,8 +590,8 @@ test('criterion 3: 397939, no reference: its host from mcpServers, "not recorded
   const expected = {
     reached: [unmatchedModel, recordSource('data-commons', 2, 'api.datacommons.org'), unmatchedNotebook],
     notReached: [
-      { sourceId: 'socrata', name: 'Socrata', reason: REASON.onNotUsed },
-      { sourceId: 'boston-opencontext', name: 'Boston OpenContext', reason: REASON.notSetUp },
+      { sourceId: 'socrata', name: 'Socrata', whyNotSent: REASON.onNotUsed },
+      { sourceId: 'boston-opencontext', name: 'Boston OpenContext', whyNotSent: REASON.notSetUp },
     ],
     statement: { kind: 'none' },
   };
@@ -601,8 +603,8 @@ test('criterion 3: 2f32d9, no reference: its host from mcpServers and "not recor
   assert.deepEqual(fromPackage(R2F32D9, SERVED_78), {
     reached: [unmatchedModel, recordSource('socrata', 2, 'socrata-mcp.civicaitools.org'), unmatchedNotebook],
     notReached: [
-      { sourceId: 'data-commons', name: 'Data Commons', reason: REASON.onNotUsed },
-      { sourceId: 'boston-opencontext', name: 'Boston OpenContext', reason: REASON.notSetUp },
+      { sourceId: 'data-commons', name: 'Data Commons', whyNotSent: REASON.onNotUsed },
+      { sourceId: 'boston-opencontext', name: 'Boston OpenContext', whyNotSent: REASON.notSetUp },
     ],
     statement: { kind: 'none' },
   });
@@ -650,7 +652,7 @@ test('criterion 3: a package the real packager builds from a run with a referenc
   assert.deepEqual(composition?.flowsStatement, reference, 'premise: the package carries the run\'s reference');
   assert.deepEqual((pkg.extensions as Record<string, Record<string, unknown>> | undefined)?.['org.civicaitools.environment']?.mcpServers, [{ url: 'https://socrata.record-w4.example/mcp', name: 'socrata' }], 'premise: the package carries the run\'s servers');
 
-  const notReachedDc = [{ sourceId: 'data-commons', name: 'Data Commons', reason: REASON.off }];
+  const notReachedDc = [{ sourceId: 'data-commons', name: 'Data Commons', whyNotSent: REASON.off }];
   assert.deepEqual(fromPackage(pkg, RUN_STATEMENT), {
     reached: [modelRow(RUN_STATEMENT), sourceRow(RUN_STATEMENT, 'socrata', 1)],
     notReached: notReachedDc,
@@ -704,7 +706,73 @@ test('criterion 3: a record with no reference whose reached source is a pkg: ent
       { kind: 'model', name: roleLabel('model-endpoint'), model: MODEL, service: SERVICE, recipients: [recorded(roleLabel('model-endpoint'), NOT_RECORDED)] },
       { kind: 'source', sourceId: 'nyc-charter', name: 'NYC Charter, Laws and Rules', calls: 1, recipients: [recorded(roleLabel('sandbox-platform'), "this site's sandbox")] },
     ],
-    notReached: [{ sourceId: 'socrata', name: 'Socrata', reason: REASON.onNotUsed }],
+    notReached: [{ sourceId: 'socrata', name: 'Socrata', whyNotSent: REASON.onNotUsed }],
+    statement: { kind: 'none' },
+  });
+});
+
+test('criterion 3 (ruling F3): a record that is not datHere reads its servers from the trace root, else its places read "not recorded"', () => {
+  const charter = CIVIC_MANIFEST.find((e) => e.sourceId === 'nyc-charter');
+  const pin = charter?.hostings.find((v) => v.kind === 'npm-package');
+  assert.ok(pin?.kind === 'npm-package', 'premise: the manifest holds a hosted nyc-charter entry');
+  const servers = [{ url: 'https://socrata.root-w4.example/mcp', name: 'socrata' }, { url: hostedServerPurl(pin), name: 'nyc-charter' }];
+  const b = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);
+  b.startRoot('analysis', runRecordAttributes({
+    assertedDate: '2026-10-21',
+    mcpServers: servers,
+    toolDefinitions: [],
+    sourcesOffered: [offered('socrata', 'selected'), offered('data-commons', 'reader-off'), offered('nyc-charter', 'selected')],
+    components: [],
+  }));
+  b.endSpan(b.startSpan('llm_inference', b.rootSpanId, { 'gen_ai.system': SERVICE, 'gen_ai.request.model': MODEL }));
+  b.endSpan(b.startSpan('mcp_tool_call', b.rootSpanId, {
+    'tool.name': 'nyc_charter__search', 'tool.operation_type': 'query', 'tool.arguments': JSON.stringify({ query: 'rent' }), 'mcp.source': 'nyc-charter',
+  }), { 'tool.duration_ms': 9 });
+  b.endSpan(b.startSpan('mcp_tool_call', b.rootSpanId, {
+    'tool.name': 'socrata__get_data', 'tool.operation_type': 'query', 'tool.arguments': JSON.stringify({ type: 'query', dataset_id: 'erm2-nwe9' }), 'mcp.source': 'socrata',
+  }), { 'tool.duration_ms': 9 });
+  b.endRoot();
+  const { pkg } = buildEvidencePackage({
+    trace: b.finalize() as unknown as Record<string, unknown>,
+    prompt: 'PROMPT-w4: rent rules and complaints?',
+    output: 'OUTPUT-w4',
+    toolCalls: [
+      { name: 'nyc_charter__search', args: { query: 'rent' }, resultSummary: { rows: 1, columns: 1 } },
+      { name: 'socrata__get_data', args: { type: 'query', dataset_id: 'erm2-nwe9' }, resultSummary: { rows: 1, columns: 1 } },
+    ],
+    model: MODEL,
+    tokenUsage: { promptTokens: 10, completionTokens: 5 },
+    promptVisibility: 'hash_only',
+    title: 'R6 W4 criterion 3, trace root',
+    summary: 'R6 W4 criterion 3, trace root.',
+  });
+  const extensions = (pkg.extensions ?? {}) as Record<string, Record<string, unknown>>;
+  assert.equal(extensions['org.civicaitools.environment'], undefined, 'premise: a package that is not datHere carries no environment block');
+
+  const model = { kind: 'model', name: roleLabel('model-endpoint'), model: MODEL, service: SERVICE, recipients: [recorded(roleLabel('model-endpoint'), NOT_RECORDED)] } as const;
+  const notReachedDc = [{ sourceId: 'data-commons', name: 'Data Commons', whyNotSent: REASON.off }];
+  assert.deepEqual(fromPackage(pkg, RUN_STATEMENT), {
+    reached: [
+      model,
+      { kind: 'source', sourceId: 'nyc-charter', name: 'NYC Charter, Laws and Rules', calls: 1, recipients: [recorded(roleLabel('sandbox-platform'), "this site's sandbox")] },
+      recordSource('socrata', 1, 'socrata.root-w4.example'),
+    ],
+    notReached: notReachedDc,
+    statement: { kind: 'none' },
+  });
+
+  // The same package with the root's list removed: no list anywhere, so each place reads "not recorded".
+  const bare = structuredClone(pkg) as unknown as { trace: { resourceSpans: Array<{ scopeSpans: Array<{ spans: Array<{ parentSpanId?: string; attributes: Array<{ key: string }> }> }> }> } };
+  const root = bare.trace.resourceSpans[0].scopeSpans[0].spans.find((s) => s.parentSpanId === undefined);
+  assert.ok(root && root.attributes.some((a) => a.key === 'analysis.mcp_servers'), 'premise: the root span carries the list');
+  root.attributes = root.attributes.filter((a) => a.key !== 'analysis.mcp_servers');
+  assert.deepEqual(fromPackage(bare, RUN_STATEMENT), {
+    reached: [
+      model,
+      { kind: 'source', sourceId: 'nyc-charter', name: 'NYC Charter, Laws and Rules', calls: 1, recipients: [recorded(roleLabel('source'), NOT_RECORDED)] },
+      recordSource('socrata', 1, NOT_RECORDED),
+    ],
+    notReached: notReachedDc,
     statement: { kind: 'none' },
   });
 });
