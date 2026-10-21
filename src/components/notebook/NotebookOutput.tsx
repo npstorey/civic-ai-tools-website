@@ -174,6 +174,7 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
             composedSystemPrompt={state.composedSystemPrompt}
             composedSystemPromptHash={state.composedSystemPromptHash}
             signingKeyId={state.signingKeyId}
+            flows={state.flows}
             actions={canPublish ? (
             /* #112 publish affordance — mirrors the chat flow's entry point. */
             <div

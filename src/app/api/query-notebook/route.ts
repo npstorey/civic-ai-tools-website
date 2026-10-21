@@ -26,7 +26,8 @@ import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
 import { configuredMcpServers, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId } from '@/lib/mcp/registry';
 import { getDefaultModel, resolveModel, ModelNotOfferedError } from '@/lib/model-resolver';
-import { ModelConfigurationError, getMissingModelCredentialError, getModelApiKind } from '@/lib/model-client';
+import { ModelConfigurationError, getGenAiSystem, getMissingModelCredentialError, getModelApiKind } from '@/lib/model-client';
+import { whereItWentFromCalls, type WhereItWentModel } from '@/lib/flows/where-it-went';
 import { modelAccessPhrase, modelIdentity, type ModelIdentity } from '@/lib/model-catalog';
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import type { SourceSelection } from '@typedstandards/civic-typed-router';
@@ -61,7 +62,8 @@ interface QueryNotebookRequest {
 }
 
 type NotebookEvent =
-  | { type: 'phase'; name: 'A' | 'B' | 'C' | 'D' | 'complete'; message: string }
+  // R6 W4 (§6): the `complete` phase carries where the question went.
+  | { type: 'phase'; name: 'A' | 'B' | 'C' | 'D' | 'complete'; message: string; flows?: WhereItWentModel }
   | { type: 'phase_a_progress'; message: string; phase?: string; iteration?: number; toolName?: string; operationType?: string; failed?: boolean; failureKind?: PhaseAToolCall['failureKind']; pause?: ConsentPausePayload }
   | { type: 'phase_a_tool_call'; name: string; operationType?: string; reason?: string; resultSummary?: { rows: number; columns: number }; args?: Record<string, unknown>; duration_ms?: number; failed?: boolean; failureKind?: PhaseAToolCall['failureKind'] }
   | { type: 'phase_a_answer'; content: string }
@@ -312,6 +314,9 @@ export async function POST(request: NextRequest) {
   // Only the sources this instance configures (sprint 238, D2), narrowed by
   // the selection. In loop, `load_source` alone.
   const offeredTools = inLoop ? inLoop.firstTools : offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection);
+  // Which source a call went to: the resolver the loop tags each span with,
+  // and the one "Where this question went" reads the run's calls through (R6 W4).
+  const resolveToolSource = inLoop ? inLoop.resolveToolSource : (name: string) => routedSourceId(name, configured, selection);
 
   const encoder = new TextEncoder();
   const stream = new TransformStream();
@@ -398,6 +403,7 @@ export async function POST(request: NextRequest) {
         tools: offeredTools,
         usageCalls,
         inLoop,
+        resolveToolSource,
       });
 
       await emit({ type: 'phase', name: 'B', message: 'Synthesizing notebook…' });
@@ -467,7 +473,18 @@ export async function POST(request: NextRequest) {
         // for a consumer holding the event rather than the document.
         validation,
       });
-      await emit({ type: 'phase', name: 'complete', message: 'Done.' });
+      // R6 W4 (§6): where the question went, from Phase A's calls (its
+      // `onComplete` result) and the statement in force; the notebook ran.
+      const flows = whereItWentFromCalls({
+        toolCalls: phaseAResult.tools_called ?? [],
+        resolveSource: resolveToolSource,
+        sourcesOffered: consent.recordReasons(composition.sourcesOffered),
+        statement: consent.statement,
+        model: model.declared,
+        service: getGenAiSystem(),
+        executed: true,
+      });
+      await emit({ type: 'phase', name: 'complete', message: 'Done.', flows });
 
       // #112 publish-path parity: end the root span and ship the finalized
       // trace + usage + answer so the publish dialog can build a package from
@@ -628,8 +645,10 @@ async function runPhaseA(args: {
   usageCalls: Array<{ name: string; failed?: boolean }>;
   /** What an in-loop run is given (#644 W1); absent under all-sources. */
   inLoop?: InLoopRouting;
+  /** Which source a call went to, for each call's span (R6 W4: the same resolver the route reads the calls through). */
+  resolveToolSource: (name: string) => string | undefined;
 }): Promise<CompletionResult> {
-  const { query, portal, lockedPortal, configured, selection, model, emit: emitToStream, trace, systemPrompt, systemPromptHash, tools, usageCalls, inLoop } = args;
+  const { query, portal, lockedPortal, model, emit: emitToStream, trace, systemPrompt, systemPromptHash, tools, usageCalls, inLoop, selection, resolveToolSource } = args;
   // The callbacks below do not await their writes, so a write that fails
   // after the reader has cancelled the stream must not reject unhandled (R6 W5).
   const emit = (event: NotebookEvent): Promise<void> =>
@@ -727,7 +746,7 @@ async function runPhaseA(args: {
       // Non-throwing: a call to a tool no configured server hosts is refused by
       // the transport as one failed call, not thrown out of the loop here. The
       // same configuration and selection as the transport.
-      { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: inLoop ? inLoop.resolveToolSource : (name) => routedSourceId(name, configured, selection) },
+      { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource },
       { portal, toolTimeoutMs: MCP_TOOL_TIMEOUT_MS },
       // Refused as a rejected call when it names another portal (#436, D7).
       lockedPortal,

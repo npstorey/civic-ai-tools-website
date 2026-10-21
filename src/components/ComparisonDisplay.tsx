@@ -8,6 +8,7 @@ import ResponsePanel from './ResponsePanel';
 // with its source of truth in #374, and the same shape here kept `name`
 // required after the record admitted its absence.
 import type { ProgressLogEntry, ProgressGroup, EvidenceTrace, ToolCall } from '@/hooks/useStreamingComparison';
+import type { WhereItWentModel } from '@/lib/flows/where-it-went';
 
 interface ResponseData {
   content: string;
@@ -31,6 +32,8 @@ interface StreamingPanelState {
   completion_tokens?: number;
   token_limit_exceeded?: boolean;
   tools_called?: ToolCall[];
+  /** R6 W4: the completion's `flows`, forwarded to the with-data panel. */
+  flows?: WhereItWentModel;
   error?: string;
 }
 
@@ -130,6 +133,7 @@ export default function ComparisonDisplay({
       completion_tokens={isStreaming ? streamingWithMcp?.completion_tokens : undefined}
       token_limit_exceeded={isStreaming ? streamingWithMcp?.token_limit_exceeded : undefined}
       tools_called={isStreaming ? streamingWithMcp?.tools_called : withMcp?.tools_called}
+      flows={isStreaming ? streamingWithMcp?.flows : undefined}
       isLoading={isLoading && !isStreaming}
       variant="with-mcp"
       error={isStreaming ? streamingWithMcp?.error : undefined}

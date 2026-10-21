@@ -7,6 +7,7 @@ import { PortalLockedCallError } from './portal-lock.ts';
 import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 import type { FlowsLinks, FlowsSource } from './flows/statement.ts';
 import { readerSourceName } from './sources/source-name.ts';
+import type { WhereItWentModel } from './flows/where-it-went.ts';
 export type StreamEventType = 'progress' | 'token' | 'complete' | 'error' | 'trace';
 export type PanelType = 'withMcp' | 'withoutMcp';
 
@@ -117,6 +118,12 @@ export interface CompleteEvent extends StreamEvent {
       failed?: boolean;
       failureKind?: ToolFailureKind;
     }[];
+    /**
+     * R6 W4 (C3): where the question went, built by the route from the run's
+     * tool-call records and the statement in force. Shown by the answer view;
+     * no publish body and no package carries it. Absent on the without-data panel.
+     */
+    flows?: WhereItWentModel;
   };
 }
 
