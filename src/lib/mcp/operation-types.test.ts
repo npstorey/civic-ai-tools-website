@@ -270,3 +270,26 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
     );
   }
 });
+
+// R8 W3 criterion 4 (b): `args.type` is an operation type only for `get_data`
+// (#323), so the pass-through is kept to it. NYS Open Legislation's
+// `get_updates` carries a `type` (processed, published) that names the date its
+// feed is keyed on; before the narrowing it was recorded as that string.
+test('R8 W3 criterion 4 (b): get_updates with a type derives nothing; get_data with each type is unchanged', () => {
+  for (const type of ['processed', 'published']) {
+    for (const name of ['nys_legislation__get_updates', 'get_updates']) {
+      assert.equal(deriveOperationType(name, { type, from: '2026-01-01', to: '2026-01-31' }), undefined, `${name} with type ${type}`);
+    }
+  }
+  for (const type of ['catalog', 'metadata', 'query', 'metrics']) {
+    assert.equal(deriveOperationType('socrata__get_data', { type }), type);
+    assert.equal(deriveOperationType('get_data', { type }), type);
+  }
+  // The map still answers first: State legislation's search keeps `search`
+  // whatever its `type`.
+  for (const type of ['bills', 'laws', 'agendas', 'calendars', 'transcripts', 'hearings']) {
+    assert.equal(deriveOperationType('nys_legislation__search', { type, term: 'x' }), 'search');
+  }
+  // A name no source offers, carrying a string `type`, records nothing either.
+  assert.equal(deriveOperationType('no_such_tool', { type: 'query' }), undefined);
+});

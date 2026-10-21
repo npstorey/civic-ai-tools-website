@@ -149,3 +149,43 @@ test('b2: a search breadcrumb with no query names the source when the name is gi
   assert.equal(buildBreadcrumbLabel({ name: 'socrata__search', args: {} }), 'Search catalog');
   assert.equal(buildBreadcrumbLabel({ args: {}, operationType: 'search' }), 'Search');
 });
+
+// R8 W3 criterion 4 (c): NYS Open Legislation's `search` derives `search`
+// too (by upstream name), so without its own subject a bill search reads
+// "Searching the catalog for datasets…". Its query argument is `term`, not
+// `query`, so the "about …" clause does not render; the lines are asserted
+// with the arguments the server takes.
+const NYS_SEARCH = 'nys_legislation__search';
+const NYS_ARGS = { type: 'bills', term: QUERY };
+
+function nysLines(): Array<[string, string]> {
+  return [
+    ['formatToolProgress', formatToolProgress(NYS_SEARCH, NYS_ARGS)],
+    ['formatToolResult (3 rows)', formatToolResult(NYS_ARGS, { rows: 3, columns: 1 }, NYS_SEARCH) ?? ''],
+    ['formatToolResult (1 row)', formatToolResult(NYS_ARGS, { rows: 1, columns: 1 }, NYS_SEARCH) ?? ''],
+    ['generateToolReason', generateToolReason(NYS_ARGS, NYS_SEARCH)],
+    ['generateToolReason (no query)', generateToolReason({}, NYS_SEARCH)],
+    ['buildNarrativeSummary', buildNarrativeSummary([{ name: NYS_SEARCH, args: NYS_ARGS }])],
+    ['buildBreadcrumbLabel (no query)', buildBreadcrumbLabel({ name: NYS_SEARCH, args: {} })],
+    ['searchSubject', JSON.stringify(searchSubject(NYS_SEARCH))],
+  ];
+}
+
+test('R8 W3 criterion 4 (c): a State legislation search\'s lines say neither "catalog" nor "dataset"', () => {
+  for (const [fn, line] of nysLines()) {
+    assert.doesNotMatch(line, FALSE_SUBJECT, `${fn}: ${line}`);
+  }
+});
+
+test('R8 W3 criterion 4 (c): every line that resolves a search subject names State legislation\'s', () => {
+  assert.deepEqual(
+    { singular: searchSubject(NYS_SEARCH).singular, plural: searchSubject(NYS_SEARCH).plural },
+    { singular: 'bill, law or other legislative record', plural: 'bills, laws and other legislative records' },
+  );
+  for (const [fn, line] of nysLines()) {
+    if (fn.startsWith('searchSubject')) continue;
+    assert.match(line, /legislative record/, `${fn} names no legislative record: ${line}`);
+  }
+  // A bare `search` is still Socrata's: State legislation's needs the exposed name.
+  assert.equal(searchSubject('search').singular, 'dataset');
+});
