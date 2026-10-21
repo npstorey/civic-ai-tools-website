@@ -684,7 +684,7 @@ function presentOrUndefined(raw: string | undefined): string | undefined {
  * infrastructure, so it keeps its coded default.
  */
 export function readMcpEnvFromProcess(): McpRegistryEnv {
-  // The package's reader over exactly these five variables, each read by name
+  // The package's reader over exactly these eight variables, each read by name
   // here so the environment this module reads stays visible
   // (`scripts/env-reads-declared.test.mjs`); `process.env` is never handed over
   // whole.
@@ -693,9 +693,12 @@ export function readMcpEnvFromProcess(): McpRegistryEnv {
     DATA_COMMONS_MCP_URL: process.env.DATA_COMMONS_MCP_URL,
     DATA_COMMONS_API_KEY: process.env.DATA_COMMONS_API_KEY,
     BOSTON_OPENCONTEXT_MCP_URL: process.env.BOSTON_OPENCONTEXT_MCP_URL,
-    // The switch that offers the hosted NYC Charter source (#617 D7): only
-    // `sandbox` turns it on; it names no address.
+    // The switches that offer the hosted sources (#617 D7; router 0.6.0, R8
+    // W3): only `sandbox` turns one on; none names an address.
     NYC_CHARTER_HOSTING: process.env.NYC_CHARTER_HOSTING,
+    NYC_CHECKBOOK_HOSTING: process.env.NYC_CHECKBOOK_HOSTING,
+    NYC_RECORD_HOSTING: process.env.NYC_RECORD_HOSTING,
+    NYS_LEGISLATION_HOSTING: process.env.NYS_LEGISLATION_HOSTING,
   });
 }
 

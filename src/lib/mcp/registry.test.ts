@@ -173,13 +173,30 @@ test('#258 C4: with no socrataUrl the registry omits the Socrata server and name
   // The other sources are unaffected.
   assert.equal(resolveServerForTool(registry, 'search_indicators')!.sourceId, 'data-commons');
   assert.equal(resolveServerForTool(registry, 'ckan__query_data')!.sourceId, 'boston-opencontext');
-  // A registry with every source on has nothing unconfigured. With the hosted
-  // source's switch unset (router 0.3.0, #617 P3), its five tools are refused
-  // naming the switch, and nothing else is.
-  assert.deepEqual(buildMcpRegistry({ ...TEST_ENV, nycCharterHosting: 'sandbox' }).unconfiguredTools, {});
+  // A registry with every source on has nothing unconfigured. With a hosted
+  // source's switch unset (router 0.3.0, #617 P3; router 0.6.0's three more,
+  // R8 W3), its tools are refused naming its own switch, and nothing else is.
+  const switchedTools = (sourceIds: readonly string[]) => Object.fromEntries(
+    civicRouter.manifest
+      .filter((e) => sourceIds.includes(e.sourceId))
+      .flatMap((e) => e.toolNames.map((t) => [`${e.alias}__${t}`, e.configuration.addressVariable])),
+  );
+  assert.deepEqual(
+    buildMcpRegistry({ ...TEST_ENV, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nycRecordHosting: 'sandbox', nysLegislationHosting: 'sandbox' }).unconfiguredTools,
+    {},
+  );
+  assert.deepEqual(
+    buildMcpRegistry({ ...TEST_ENV, nycCharterHosting: 'sandbox' }).unconfiguredTools,
+    switchedTools(['nyc-checkbook', 'nyc-record', 'nys-legislation']),
+  );
   assert.deepEqual(
     buildMcpRegistry(TEST_ENV).unconfiguredTools,
-    Object.fromEntries(civicRouter.manifest.find((e) => e.sourceId === 'nyc-charter')!.toolNames.map((t) => [`nyc_charter__${t}`, 'NYC_CHARTER_HOSTING'])),
+    switchedTools(['nyc-charter', 'nyc-checkbook', 'nyc-record', 'nys-legislation']),
+  );
+  assert.equal(
+    Object.values(buildMcpRegistry(TEST_ENV).unconfiguredTools).filter((v) => v === 'NYC_CHARTER_HOSTING').length,
+    5,
+    "Charter's five tools name its switch, as before the bump",
   );
 });
 
