@@ -26,7 +26,10 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { BRIDGE_PACKAGES, BRIDGE_PACKAGE_JSON, BRIDGE_READY_LINE, BRIDGE_SOURCE, bridgeConfig } from './bridge-source.ts';
+import { BRIDGE_PACKAGES, BRIDGE_PACKAGE_JSON, BRIDGE_READY_LINE, BRIDGE_SOURCE, bridgeConfig as baseBridgeConfig } from './bridge-source.ts';
+
+/** `bridgeConfig` typed wide, so the R8 W3 red commit (which adds `childEnv`) type-checks. */
+const bridgeConfig = baseBridgeConfig as unknown as (config: Record<string, unknown>) => string;
 
 test('the bridge parses as an ES module', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'r7-p3-bridge-'));
@@ -65,9 +68,44 @@ test('one fixed command: the package\'s one bin at the pinned version, and nothi
   assert.deepEqual(Object.keys(config).sort(), ['package', 'pinDir', 'port', 'version']);
 });
 
-test('toward the child: legacy mode, and the SDK\'s default environment, so never the token', () => {
+// R8 W3 (the owner's ruling of 2026-10-21, 16:03:34Z): the child is given the
+// SDK's default environment and, on top of it, only the variables the config
+// names (`childEnv`): a keyed variant's key variable, never the token. The
+// function that builds it is driven below, out of the bridge's own text.
+test('toward the child: legacy mode, and the SDK\'s default environment plus the config\'s allowlist, so never the token', () => {
   assert.match(BRIDGE_SOURCE, /versionNegotiation: \{ mode: 'legacy' \}/);
-  assert.match(BRIDGE_SOURCE, /env: getDefaultEnvironment\(\)/, 'the child is not given the default environment only');
+  assert.match(BRIDGE_SOURCE, /env: childEnvironment\(\)/, 'the child is not given the allowlisted environment');
+  assert.doesNotMatch(BRIDGE_SOURCE, /env: process\.env|\.\.\.process\.env/, 'the child is handed the bridge\'s whole environment');
+});
+
+/** The bridge's `childEnvironment`, cut out of its text and run on a config and an environment. */
+function childEnvironmentOf(config: Record<string, unknown>, env: Record<string, string>, base: Record<string, string>): Record<string, string> {
+  const start = BRIDGE_SOURCE.indexOf('// CHILD_ENVIRONMENT_START');
+  const end = BRIDGE_SOURCE.indexOf('// CHILD_ENVIRONMENT_END');
+  assert.ok(start > 0 && end > start, 'the bridge holds no childEnvironment block');
+  const body = BRIDGE_SOURCE.slice(start, end);
+  const run = new Function('config', 'process', 'getDefaultEnvironment', `${body}\nreturn childEnvironment();`) as (c: unknown, p: unknown, g: () => Record<string, string>) => Record<string, string>;
+  return run(config, { env }, () => ({ ...base }));
+}
+
+const SDK_DEFAULT = { HOME: '/home/fixture', PATH: '/usr/bin' };
+const BRIDGE_ENV = { ...SDK_DEFAULT, SOURCE_BRIDGE_TOKEN: 'token-'.padEnd(40, 'x'), NYS_LEGISLATION_API_KEY: 'placeholder-not-a-key', OTHER: 'not-for-the-child' };
+
+test('R8 W3: a variant with no key variable passes exactly the SDK\'s default environment, as at the base', () => {
+  const config = JSON.parse(bridgeConfig({ package: '@betanyc/nyc-charter-laws-rules', version: '0.3.1', pinDir: '/x', port: 8080 }));
+  assert.deepEqual(childEnvironmentOf(config, BRIDGE_ENV, SDK_DEFAULT), SDK_DEFAULT);
+});
+
+test('R8 W3: a keyed variant\'s child gets its key variable from the bridge\'s environment, and the token never', () => {
+  const config = JSON.parse(bridgeConfig({ package: '@betanyc/nys-openlegislation-mcp', version: '2.4.0', pinDir: '/x', port: 8080, childEnv: ['NYS_LEGISLATION_API_KEY'] }));
+  assert.deepEqual(config.childEnv, ['NYS_LEGISLATION_API_KEY']);
+  assert.deepEqual(childEnvironmentOf(config, BRIDGE_ENV, SDK_DEFAULT), { ...SDK_DEFAULT, NYS_LEGISLATION_API_KEY: 'placeholder-not-a-key' });
+  // A config naming the token, written by hand, still does not hand it on.
+  assert.deepEqual(childEnvironmentOf({ childEnv: ['SOURCE_BRIDGE_TOKEN', 'NYS_LEGISLATION_API_KEY'] }, BRIDGE_ENV, SDK_DEFAULT), { ...SDK_DEFAULT, NYS_LEGISLATION_API_KEY: 'placeholder-not-a-key' });
+  // A named variable the bridge does not hold is absent, not empty.
+  assert.deepEqual(childEnvironmentOf(config, SDK_DEFAULT, SDK_DEFAULT), SDK_DEFAULT);
+  // And the config refuses to name the token at all.
+  assert.throws(() => bridgeConfig({ package: 'p', version: '1.0.0', pinDir: '/x', port: 8080, childEnv: ['SOURCE_BRIDGE_TOKEN'] }), /SOURCE_BRIDGE_TOKEN/);
 });
 
 test('toward the website: the official handler, the token checked in constant time before any path', () => {
