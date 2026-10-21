@@ -294,6 +294,12 @@ const EXCEPTIONS: readonly Exception[] = [
     hits: 7,
     why: "The October 2026 model evaluation's record of San Francisco's portal move (the old host redirecting to the new one) and the reference answer read from the new host; it reports what the portals did, and nothing runs from it.",
   },
+  {
+    path: 'docs/deploy.md',
+    classification: 'server-endpoint',
+    hits: 2,
+    why: "The deployment guide naming NYC City Record's one upstream host, in the hosted-sources table and in its switch's row (R8 W3): the host that server queries and its sandbox may reach, the same for every instance, never a portal a run chooses.",
+  },
   // The installed router package (#599 W2): the model-facing text that left
   // src/lib/mcp/{socrata-skill,tools,boston-skill,registry}.ts, where it was
   // 21 + 11 + 3 + 2 = 37 hits. 36 of them are here and one stayed in
