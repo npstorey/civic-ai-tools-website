@@ -16,7 +16,10 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { ENV_SPEC, evaluateEnv, renderReport } from './preflight-env.mjs';
+
+const GUIDE = readFileSync(new URL('../docs/deploy.md', import.meta.url), 'utf8');
 
 const REQUIRED = ENV_SPEC.filter((s) => s.tier === 'required').map((s) => s.name);
 const envWithAllRequired = () => Object.fromEntries(REQUIRED.map((name) => [name, 'present']));
@@ -67,4 +70,22 @@ test('R8 W3 criterion 3 (c): the new rows are not applicable where the sandbox a
     assert.ok(result.notApplicable.includes(name), `${name} is applicable under the container driver`);
   }
   assert.deepEqual(result.valueErrors, [], 'a not-applicable variable was validated');
+});
+
+// R8 W3 criterion 5: the guide's environment reference has a row for each new
+// switch and for the key, beside Charter's, and the hosted-sources section a
+// table of the sources.
+test('R8 W3 criterion 5: the guide has a row per new switch and one for the key, and a table of the hosted sources', () => {
+  const rowAt = (name) => GUIDE.split('\n').findIndex((line) => line.startsWith(`| \`${name}\` | `) && line.length > 200);
+  const charter = rowAt('NYC_CHARTER_HOSTING');
+  assert.ok(charter > 0, 'premise: Charter\'s row is in the environment reference');
+  for (const name of ['NYC_CHECKBOOK_HOSTING', 'NYC_RECORD_HOSTING', 'NYS_LEGISLATION_HOSTING', KEY]) {
+    const at = rowAt(name);
+    assert.ok(at > 0, `the environment reference has no row for ${name}`);
+    assert.ok(Math.abs(at - charter) <= 6, `${name}'s row is not next to Charter's`);
+  }
+  const section = GUIDE.slice(GUIDE.indexOf('### Hosted sources'), GUIDE.indexOf('**What runs where.**'));
+  for (const host of ['www.checkbooknyc.com', 'data.cityofnewyork.us', 'legislation.nysenate.gov']) {
+    assert.ok(section.includes(host), `the hosted-sources table does not name ${host}`);
+  }
 });

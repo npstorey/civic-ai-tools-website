@@ -119,3 +119,85 @@ for (const { sourceId, env } of NEW_SOURCES) {
     });
   });
 }
+
+// --- Criterion 5 (b): the upstream host, a recipient of its own -------------------
+
+/** The lifecycle row's first cell, as W3 renames it (four places, one commit). */
+const LIFECYCLE_KEY = "Hosted source (`<SOURCE>_HOSTING=sandbox`): its sandbox's lifecycle";
+const UPSTREAM_RECEIVES = 'the requests the connector makes for data, which can include words from your question';
+/** Each new source's one outbound host and its one manifest-stated holder. */
+const UPSTREAM: Record<string, { host: string; holder: string }> = {
+  'nyc-checkbook': { host: 'www.checkbooknyc.com', holder: 'Office of the New York City Comptroller' },
+  'nyc-record': { host: 'data.cityofnewyork.us', holder: 'City of New York' },
+  'nys-legislation': { host: 'legislation.nysenate.gov', holder: 'New York State Senate' },
+};
+
+interface FlowsRecipientLike { id: string; key: string; role: string; host?: string; runsAt?: string; receives: string; keptBy: Array<{ holder: string; keeps: string; statementUrl?: string; readOn?: string }> }
+interface FlowsSourceLike { sourceId: string; host?: string; recipients: FlowsRecipientLike[] }
+const { CIVIC_MANIFEST } = await import('@typedstandards/civic-typed-router');
+
+for (const { sourceId, env } of NEW_SOURCES) {
+  const { host, holder } = UPSTREAM[sourceId];
+  test(`R8 W3 criterion 5 (b) (${sourceId}): /api/flows names ${host} as a recipient of its own, after the sandbox`, async () => {
+    await under(env, async () => {
+      const statement = await buildFlowsStatement();
+      const row = (statement.sources as FlowsSourceLike[]).find((s) => s.sourceId === sourceId);
+      assert.ok(row, `premise: no flows source for ${sourceId}`);
+      assert.equal(row!.host, undefined, 'the row carries a host: an upstream host is never the source\'s host');
+      assert.deepEqual(row!.recipients.map((r) => r.id), [`source:${sourceId}`, `source:${sourceId}:${host}`]);
+      const [sandbox, upstream] = row!.recipients;
+      assert.equal(sandbox.host, undefined, 'the sandbox recipient carries a host');
+      assert.equal(sandbox.runsAt, 'instance-sandbox');
+      assert.equal(sandbox.role, 'sandbox-platform');
+      assert.deepEqual(sandbox.keptBy.map((k) => k.holder), ['Vercel'], 'the sandbox recipient keeps more than the instance-stated row');
+      const entry = CIVIC_MANIFEST.find((e) => e.sourceId === sourceId)!;
+      const variant = entry.hostings.find((v) => v.kind === 'npm-package')!;
+      const stated = variant.logging.filter((p) => p.statedBy === 'manifest') as Array<{ holder: string; keeps: string; statementUrl: string; readOn: string }>;
+      assert.deepEqual(stated.map((p) => p.holder), [holder], `premise: ${sourceId} states one upstream holder`);
+      assert.deepEqual(upstream, {
+        id: `source:${sourceId}:${host}`,
+        key: LIFECYCLE_KEY,
+        role: 'source',
+        host,
+        receives: UPSTREAM_RECEIVES,
+        keptBy: stated.map((p) => ({ holder: p.holder, keeps: p.keeps, statementUrl: p.statementUrl, readOn: p.readOn })),
+      });
+    });
+  });
+
+  test(`R8 W3 criterion 5 (b) (${sourceId}): the card shows "<source> (${host}): …", and the row still runs at this site's sandbox`, async () => {
+    await under(env, async () => {
+      const Card = (await load('components/sources/ConsentCard.tsx')).default as ComponentType<Record<string, unknown>>;
+      const card = await surface(Card, { onAllow: () => undefined, onNotNow: () => undefined });
+      const line = card.elements().find((el) => el.props['data-recipient'] === `source:${sourceId}:${host}`);
+      assert.ok(line, `the card has no line for ${host}`);
+      const text = textOf(line!);
+      card.unmount();
+      const name = (await load('lib/sources/source-name.ts')).readerSourceName({ sourceId, displayName: CIVIC_MANIFEST.find((e) => e.sourceId === sourceId)!.displayName });
+      assert.ok(text.startsWith(`${name} (${host}): `), `the card line reads: ${text}`);
+      assert.ok(text.includes(holder), `the card line does not name ${holder}: ${text}`);
+      const panel = await surface(Panel);
+      const row = panel.elements().find((el) => el.props['data-source'] === sourceId);
+      const rowText = textOf(row!);
+      panel.unmount();
+      assert.ok(rowText.includes("running at this site's sandbox."), `the row no longer says where the server runs: ${rowText}`);
+      assert.ok(!rowText.includes(`running at ${host}`), `the row names the upstream host as where the server runs: ${rowText}`);
+      // Each holder once, in the panel row and in the privacy row.
+      assert.equal(rowText.split(holder).length - 1, 1, `the panel row names ${holder} other than once: ${rowText}`);
+      const source = ((await buildFlowsStatement()).sources as Array<{ sourceId: string }>).find((s) => s.sourceId === sourceId)!;
+      const privacy = (facts.sourceRow(source).parts as Array<string | { text?: string }>).map((p) => (typeof p === 'string' ? p : p.text ?? '')).join('');
+      assert.equal(privacy.split(holder).length - 1, 1, `the privacy row names ${holder} other than once: ${privacy}`);
+      assert.equal(privacy.split('Vercel').length - 1, 1, `the privacy row names Vercel other than once: ${privacy}`);
+    });
+  });
+}
+
+test('R8 W3 criterion 5 (b): NYC Charter\'s flows entry is byte-identical to the base\'s', async () => {
+  // Captured at 2cb2a5e under the change log's configuration (render-flows.ts's), the
+  // entry's JSON hashed: Charter's outbound is empty, so it gains no recipient.
+  await under({ SOCRATA_MCP_URL: 'https://socrata-mcp.civicaitools.org', NYC_CHARTER_HOSTING: 'sandbox', VERCEL_ENV: 'production', EXECUTOR_DRIVER: 'vercel-sandbox' }, async () => {
+    const charter = ((await buildFlowsStatement()).sources as Array<{ sourceId: string }>).find((s) => s.sourceId === 'nyc-charter');
+    const { createHash } = await import('node:crypto');
+    assert.equal(createHash('sha256').update(JSON.stringify(charter)).digest('hex'), '5ad4b9c3e333f4f62e5a014cc8a57960fbaa1eaebfb644d17540e294e7d17064');
+  });
+});
