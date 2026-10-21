@@ -265,3 +265,46 @@ test('Every tool appears in exactly one server (no accidental overlap)', () => {
   // 3 Socrata + 2 Data Commons + 6 Boston OpenContext = 11
   assert.equal(allTools.size, 11, 'registry should host exactly 11 tools across three sources');
 });
+
+// R8 W3 criterion 1: router 0.6.0's three hosted entries, each offered by its
+// own switch, read by name in `readMcpEnvFromProcess`. Set alone (State
+// legislation with a placeholder key, never a real one), a switch puts exactly
+// its own source in the hosted map and offers exactly its own tools beside the
+// addressed sources'; red at the pin commit, where the reader passes Charter's
+// switch only and no switch reaches the router.
+const HOSTING_VARIABLES = ['NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYC_RECORD_HOSTING', 'NYS_LEGISLATION_HOSTING', 'NYS_LEGISLATION_API_KEY'] as const;
+const NEW_HOSTED = [
+  { sourceId: 'nyc-checkbook', variable: 'NYC_CHECKBOOK_HOSTING' },
+  { sourceId: 'nyc-record', variable: 'NYC_RECORD_HOSTING' },
+  { sourceId: 'nys-legislation', variable: 'NYS_LEGISLATION_HOSTING' },
+] as const;
+
+test('R8 W3 criterion 1: each new switch, set alone, puts its source in the hosted map and offers its tools', async () => {
+  const { offeredMcpTools, mcpTools } = await import('./tools.ts');
+  const saved = Object.fromEntries(HOSTING_VARIABLES.map((name) => [name, process.env[name]]));
+  try {
+    for (const { sourceId, variable } of NEW_HOSTED) {
+      for (const name of HOSTING_VARIABLES) delete process.env[name];
+      process.env[variable] = 'sandbox';
+      if (sourceId === 'nys-legislation') process.env.NYS_LEGISLATION_API_KEY = 'placeholder-not-a-key-r8-w3';
+      const configured = readMcpEnvFromProcess();
+      const registry = buildMcpRegistry(configured);
+      const entry = civicRouter.manifest.find((candidate) => candidate.sourceId === sourceId)!;
+      assert.deepEqual(Object.keys(registry.hosted), [sourceId], `${variable}=sandbox hosts ${sourceId} and nothing else`);
+      assert.deepEqual(registry.hosted[sourceId].tools, [...entry.toolNames], `${sourceId} hosts its manifest tools`);
+      const offered = offeredMcpTools(mcpTools, configured).map((tool) => (tool as { function: { name: string } }).function.name);
+      for (const tool of entry.toolNames) {
+        assert.ok(offered.includes(`${entry.alias}__${tool}`), `${entry.alias}__${tool} is offered while ${variable} is set`);
+      }
+      for (const other of NEW_HOSTED.filter((candidate) => candidate.sourceId !== sourceId)) {
+        const otherAlias = civicRouter.manifest.find((candidate) => candidate.sourceId === other.sourceId)!.alias;
+        assert.ok(!offered.some((name) => name.startsWith(`${otherAlias}__`)), `${otherAlias}'s tools are not offered while only ${variable} is set`);
+      }
+    }
+  } finally {
+    for (const name of HOSTING_VARIABLES) {
+      if (saved[name] === undefined) delete process.env[name];
+      else process.env[name] = saved[name];
+    }
+  }
+});
