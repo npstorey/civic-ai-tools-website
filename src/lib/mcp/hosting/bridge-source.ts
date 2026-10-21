@@ -24,8 +24,9 @@
  * the version the config pins, and the bridge refuses to start on any other
  * installed version; nothing in a request reaches the spawn. Every path needs
  * the token, compared in constant time. The child gets the SDK's default
- * environment only, so it never sees the token. A child that exits is
- * restarted.
+ * environment and, on top of it, only the variables its config names
+ * (`childEnv`: a keyed source's key variable, R8 W3, the owner's ruling of
+ * 2026-10-21), so it never sees the token. A child that exits is restarted.
  */
 
 /** The bridge's own packages, pinned exactly. 2.3.0 is the newest release of
@@ -43,16 +44,25 @@ export const BRIDGE_PACKAGE_JSON = JSON.stringify(
 );
 
 /** What the bridge reads at start: the package it may run, the pinned
- *  version, where that package is installed, and the port to listen on. */
+ *  version, where that package is installed, the port to listen on, and the
+ *  variables of its own environment its child may receive beyond the SDK's
+ *  default (`childEnv`, names only; absent for a source that takes no key). */
 export interface BridgeConfig {
   package: string;
   version: string;
   pinDir: string;
   port: number;
+  childEnv?: string[];
 }
 
-/** The bridge's config file, as text. */
+/** The variable the bridge reads its token from; never on a child's list. */
+const BRIDGE_TOKEN_NAME = 'SOURCE_BRIDGE_TOKEN';
+
+/** The bridge's config file, as text. A list naming the token is refused. */
 export function bridgeConfig(config: BridgeConfig): string {
+  if (config.childEnv?.includes(BRIDGE_TOKEN_NAME)) {
+    throw new Error(`bridgeConfig: ${BRIDGE_TOKEN_NAME} is never passed to the child`);
+  }
   return JSON.stringify(config, null, 2);
 }
 
@@ -72,7 +82,9 @@ export const BRIDGE_SOURCE: string = String.raw`// The source bridge: one publis
 //   reaches the spawn.
 // - Every path requires the token (SOURCE_BRIDGE_TOKEN, from the sandbox's
 //   environment at creation), compared in constant time. The child is not
-//   given the token: it receives the SDK's default environment only.
+//   given the token: it receives the SDK's default environment, plus the
+//   variables bridge-config.json names in childEnv (a keyed source's key),
+//   taken from this process's environment, and nothing else.
 // - The child is restarted when it exits.
 import http from 'node:http';
 import { createHash, timingSafeEqual } from 'node:crypto';
@@ -113,11 +125,22 @@ const authorized = (req) => {
 // the bound).
 const errorClassOf = (error) => (error instanceof Error ? error.constructor.name : typeof error);
 
+// CHILD_ENVIRONMENT_START
+const CHILD_ENV_NAMES = (Array.isArray(config.childEnv) ? config.childEnv : []).filter((name) => typeof name === 'string' && name !== 'SOURCE_BRIDGE_TOKEN');
+function childEnvironment() {
+  const env = getDefaultEnvironment();
+  for (const name of CHILD_ENV_NAMES) {
+    if (typeof process.env[name] === 'string') env[name] = process.env[name];
+  }
+  return env;
+}
+// CHILD_ENVIRONMENT_END
+
 let child = null;
 let starting = null;
 let restarts = 0;
 async function startChild() {
-  const transport = new StdioClientTransport({ command: process.execPath, args: [ENTRY], env: getDefaultEnvironment(), stderr: 'inherit' });
+  const transport = new StdioClientTransport({ command: process.execPath, args: [ENTRY], env: childEnvironment(), stderr: 'inherit' });
   const client = new Client({ name: 'civic-source-bridge', version: '1' }, { versionNegotiation: { mode: 'legacy' } });
   await client.connect(transport);
   const { tools } = await client.listTools();

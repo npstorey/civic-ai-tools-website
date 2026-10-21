@@ -34,7 +34,7 @@ import {
   type DispatchMap,
   type HostingVariant,
   type ManifestEntry,
-  type McpRegistryEnv,
+  type McpRegistryEnv as RouterMcpRegistryEnv,
   type NpmPackageVariant,
   type SourceHosting,
   type SourceSelection,
@@ -176,8 +176,47 @@ export interface McpRegistry {
  * falls back to Google's public endpoint. `bostonOpencontextUrl` is absent when
  * `BOSTON_OPENCONTEXT_MCP_URL` is unset: the source is optional and has no
  * coded default (sprint 238, ruling D2).
+ *
+ * One field is the site's own (R8 W3): `hostedKeyMissing`, present only while a
+ * keyed hosted source's switch is on and its key is not set, mapping that
+ * source's id to the key's variable (`HOSTED_SOURCE_KEY_VARIABLE`). Such a
+ * source's switch never reaches the package's fields, so it is not configured
+ * on every reading the package makes; this field only lets the per-call refusal
+ * name the key rather than the switch. The package reads none of it, and no
+ * record states it.
  */
-export type { McpRegistryEnv };
+export type McpRegistryEnv = RouterMcpRegistryEnv & {
+  readonly hostedKeyMissing?: Readonly<Record<string, string>>;
+};
+
+/**
+ * The variable a keyed hosted variant's key is read from, by source id (R8 W3).
+ * The router carries where a variant sends a key (`keyIn`, router 0.6.0) and
+ * names no variable; the site names it here, for exactly the variants that
+ * carry `keyIn` (`hosted-sandbox-arguments.test.ts` holds the two lists equal).
+ * The key goes into that source's sandbox environment at creation, beside the
+ * bridge token (`./hosting/lifecycle.ts`), and is never logged, hashed or
+ * recorded.
+ */
+export const HOSTED_SOURCE_KEY_VARIABLE: Readonly<Record<string, string>> = {
+  'nys-legislation': 'NYS_LEGISLATION_API_KEY',
+};
+
+/**
+ * A keyed hosted source's key, read by name from the process environment, as
+ * `{ <variable>: <value> }`: `{}` for a source that takes no key, and `null`
+ * for one that takes a key this instance does not set. Each variable is read
+ * by name (`scripts/env-reads-declared.test.mjs`); the value only ever goes
+ * into the sandbox's environment.
+ */
+export function hostedSourceKeyEnv(sourceId: string): Record<string, string> | null {
+  if (!Object.hasOwn(HOSTED_SOURCE_KEY_VARIABLE, sourceId)) return {};
+  const value = sourceId === 'nys-legislation' ? presentOrUndefined(process.env.NYS_LEGISLATION_API_KEY) : undefined;
+  return value === undefined ? null : { [HOSTED_SOURCE_KEY_VARIABLE[sourceId]]: value };
+}
+
+/** Sources whose missing key this process has logged, so the line is printed once. */
+const loggedMissingKeys = new Set<string>();
 
 // The routing lists, in the package's order (copies: `McpServerConfig.tools`
 // is a mutable array, the package's are read-only).
@@ -362,8 +401,11 @@ export function buildMcpRegistry(env: McpRegistryEnv, selection?: SourceSelectio
   }
   for (const [sourceId, { variable, alias, tools }] of Object.entries(OPTIONAL_SOURCES)) {
     if (servers[sourceId] || hosted[sourceId]) continue;
+    // A keyed source whose switch is on and whose key is not set names the
+    // key, the one thing the operator has left to set (R8 W3).
+    const missing = env.hostedKeyMissing && Object.hasOwn(env.hostedKeyMissing, sourceId) ? env.hostedKeyMissing[sourceId] : undefined;
     for (const tool of tools) {
-      unconfiguredTools[exposedToolName(alias, tool)] = variable;
+      unconfiguredTools[exposedToolName(alias, tool)] = missing ?? variable;
     }
   }
 
@@ -688,7 +730,7 @@ export function readMcpEnvFromProcess(): McpRegistryEnv {
   // here so the environment this module reads stays visible
   // (`scripts/env-reads-declared.test.mjs`); `process.env` is never handed over
   // whole.
-  return readMcpEnv({
+  const variables: Record<string, string | undefined> = {
     SOCRATA_MCP_URL: process.env.SOCRATA_MCP_URL,
     DATA_COMMONS_MCP_URL: process.env.DATA_COMMONS_MCP_URL,
     DATA_COMMONS_API_KEY: process.env.DATA_COMMONS_API_KEY,
@@ -699,7 +741,31 @@ export function readMcpEnvFromProcess(): McpRegistryEnv {
     NYC_CHECKBOOK_HOSTING: process.env.NYC_CHECKBOOK_HOSTING,
     NYC_RECORD_HOSTING: process.env.NYC_RECORD_HOSTING,
     NYS_LEGISLATION_HOSTING: process.env.NYS_LEGISLATION_HOSTING,
-  });
+  };
+  const read = readMcpEnv(variables);
+  // A keyed source whose switch is on and whose key is not set is NOT
+  // CONFIGURED (R8 W3): its switch is withheld from the package's reader, so the
+  // router, the registry and the flows statement, which all read this
+  // function, see it off; the per-call refusal names the key, and one log line
+  // says so. It is never woken without its key, so a keyless wake never waits
+  // out the wake's deadline.
+  const hostedKeyMissing: Record<string, string> = {};
+  for (const entry of CIVIC_MANIFEST) {
+    const variant = npmPackageVariantInForce(entry, read);
+    if (variant?.keyIn === undefined) continue;
+    if (hostedSourceKeyEnv(entry.sourceId) !== null) continue;
+    const keyVariable = HOSTED_SOURCE_KEY_VARIABLE[entry.sourceId];
+    hostedKeyMissing[entry.sourceId] = keyVariable;
+    variables[entry.configuration.addressVariable] = undefined;
+    if (!loggedMissingKeys.has(entry.sourceId)) {
+      loggedMissingKeys.add(entry.sourceId);
+      console.warn(
+        `[hosting:${entry.sourceId}] ${entry.configuration.addressVariable} is sandbox but ${keyVariable} is missing or empty in the server environment, so the source is not configured. Set it and restart the server.`,
+      );
+    }
+  }
+  if (Object.keys(hostedKeyMissing).length === 0) return read;
+  return { ...readMcpEnv(variables), hostedKeyMissing };
 }
 
 /**
