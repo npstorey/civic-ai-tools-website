@@ -66,6 +66,7 @@ import { UNPLACED_CALLS_LINE, type StepViewCall } from '@/lib/answer-view/steps'
 import { secondsText } from '@/lib/evidence/query-step';
 import { useSessionChoice } from '@/hooks/useSessionChoice';
 import { useAnswerLayouts } from '@/components/answer-view/AnswerLayoutsProvider';
+import WhereItWent from '@/components/answer-view/WhereItWent';
 import { LAYOUT_STORAGE_KEY } from '@/lib/query-presentation';
 import {
   disclosureOrder,
@@ -828,6 +829,9 @@ export default function AnswerView({
         {notices}
       </>
     ),
+
+    // R6 W4: rendered only when the surface has the model; absent, not empty, otherwise.
+    'where-it-went': model.whereItWent !== undefined && <WhereItWent model={model.whereItWent} />,
 
     disclosure: (
       <>

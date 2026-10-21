@@ -302,3 +302,21 @@ export const REACH_SENTENCE = {
   unstated: 'This site reaches it through an MCP server, a connector whose publisher is not stated, running at ',
   end: '.',
 } as const;
+
+/**
+ * Why a source was not sent this question (R6 W4, §2; W4-D2 and W4-D3, the
+ * owner's approval of the eight, word for word). In order of precedence: the
+ * source's last load first (the first four, then "On, not used" for any
+ * other `loaded` load), then its stated reason. Read by
+ * `src/lib/flows/where-it-went.ts`.
+ */
+export const WHERE_IT_WENT_REASONS = {
+  allowedNotUsed: 'Ask first: allowed when asked, but not used for this question.',
+  declined: 'Ask first: not allowed for this question.',
+  noAnswer: 'Ask first: no answer arrived in time, so it was not used.',
+  unavailable: 'Unavailable. This site could not load it for this question.',
+  onNotUsed: 'On, not used for this question.',
+  off: 'Off.',
+  notAsked: 'Ask first: not asked for this question.',
+  notSetUp: 'Not set up on this site.',
+} as const;

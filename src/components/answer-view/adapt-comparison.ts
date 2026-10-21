@@ -30,6 +30,7 @@ import { coverPortals } from '../../lib/notebook-author/cover-portals.ts';
 import { formatModelName } from '../../lib/models.ts';
 import { readerSourceName } from '../../lib/sources/source-name.ts';
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
+import type { WhereItWentModel } from '../../lib/flows/where-it-went.ts';
 
 /** What the with-data panel hands its adapter. */
 export interface ComparisonAdapterInput {
@@ -52,6 +53,8 @@ export interface ComparisonAdapterInput {
   evidenceTrace?: Record<string, unknown> | null;
   /** The instance's declared host (`useInstanceAttribution().host`), or null. */
   instance: string | null;
+  /** R6 W4: where the question went, from the completion's `flows`; absent, no section. */
+  flows?: WhereItWentModel | null;
 }
 
 // --- Reading the trace ------------------------------------------------------------
@@ -234,5 +237,6 @@ export function adaptComparison(input: ComparisonAdapterInput): AnswerViewModel 
       ...(environment.length > 0 ? { environment } : {}),
       answerAgain: true,
     },
+    ...(input.flows ? { whereItWent: input.flows } : {}),
   };
 }

@@ -24,6 +24,9 @@ import { publishedLayoutFor } from '@/lib/answer-layout/held';
 // History and Actions around the view.
 import AnswerView from '@/components/answer-view/AnswerView';
 import { adaptRecord, type ResolvedPackageData } from '@/components/answer-view/adapt-record';
+// R6 W4 (D1): the flows statement this site serves, built here at render and
+// handed to the adapter, which compares its hash with the record's reference.
+import { buildFlowsStatement } from '@/lib/flows/statement';
 import { sessionUserIsCreator } from '@/lib/evidence/sealed-access';
 import { fromDbValue } from '@/lib/evidence/visibility';
 import { loadEvaluationViews } from '@/lib/evidence/adversarial-eval';
@@ -324,6 +327,8 @@ export default async function EvidencePage({ params }: PageProps) {
     },
     instance: getInstanceAttribution().host,
     publishedLayout: await publishedLayoutFor(publishedLayoutNodeId),
+    // A statement that cannot be built reads as no match: "not recorded", never a guess.
+    servedStatement: await buildFlowsStatement().catch(() => null),
   });
 
   // Adversarial evaluations targeting this content node (civic-ai-tools#72).

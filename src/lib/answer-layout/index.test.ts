@@ -320,7 +320,7 @@ test('W4 P1 item 7: a part a layout does not name renders directly after the par
   assert.deepEqual(pageOrder(ENVELOPE_ORDER).order, ['status-row', 'disclosure', 'steps', 'answer', 'sources', 'where-it-went', 'citation', 'actions']);
 });
 
-test('W4 P1 item 7: an eighth part needs one row and no layout change; the built-ins stay valid', () => {
+test('W4 P1 item 7: a part appended to the table needs one row and no layout change; the built-ins stay valid', () => {
   const eighth = [...PAGE_PARTS, { name: 'routing', view: 'routing' }] as const;
   assert.equal(BUILT_IN_LAYOUTS.length, 2, 'premise: the two built-ins');
   for (const layout of BUILT_IN_LAYOUTS) {
