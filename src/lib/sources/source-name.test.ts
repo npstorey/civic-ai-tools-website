@@ -231,3 +231,38 @@ test('PL criterion 6: source-name.ts imports only types from ../flows/statement.
   const fromCopy = importsOf(ENTRY, real).filter((f) => f.resolved === 'src/lib/sources/copy.ts' && !f.typeOnly).flatMap((f) => f.names);
   for (const name of ['SOURCE_DESCRIPTIONS', 'REACH_SENTENCE']) assert.ok(fromCopy.includes(name), `source-name.ts does not read ${name} from ./copy.ts`);
 });
+
+// R8 W3 criterion 7: the three what-lines the owner approved (21:11:34Z,
+// relayed 23:46:16Z), each stored byte for byte as it reads mid-sentence, and
+// each entry's publisher and link. Red before the three entries are added.
+const W3_ENTRIES: Record<string, { what: string; publisher: string; link: string }> = {
+  'nyc-checkbook': {
+    what: "New York City's spending, contracts, budget figures and payroll, as the City Comptroller publishes them on Checkbook NYC.",
+    publisher: 'BetaNYC',
+    link: 'https://github.com/BetaNYC/nyc-checkbook-mcp',
+  },
+  'nyc-record': {
+    what: "notices in The City Record, New York City's official journal: procurement, public hearings and other agency notices.",
+    publisher: 'BetaNYC',
+    link: 'https://github.com/BetaNYC/nyc-record-mcp',
+  },
+  'nys-legislation': {
+    what: "New York State's bills and the votes on them, and the State's laws, from the State Senate's Open Legislation service.",
+    publisher: 'BetaNYC',
+    link: 'https://github.com/BetaNYC/nys-openlegislation-mcp',
+  },
+};
+
+test('R8 W3 criterion 7: the three new entries are stored byte for byte as approved', () => {
+  const map = copyExports.SOURCE_DESCRIPTIONS as Record<string, EntryLike> | undefined;
+  for (const [sourceId, expected] of Object.entries(W3_ENTRIES)) {
+    const entry = map?.[sourceId];
+    assert.ok(entry, `${sourceId} has no map entry`);
+    assert.equal(Buffer.from(entry!.what, 'utf8').toString('hex'), Buffer.from(expected.what, 'utf8').toString('hex'), `${sourceId}'s what-line is not the approved one, byte for byte`);
+    assert.equal(entry!.publisher, expected.publisher);
+    assert.equal(entry!.link, expected.link);
+  }
+  // Record's stored form starts lower-case: the panel upper-cases it, the
+  // privacy page prints it as stored.
+  assert.ok(W3_ENTRIES['nyc-record'].what.startsWith('notices in The City Record'));
+});
