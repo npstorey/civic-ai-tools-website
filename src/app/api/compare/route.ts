@@ -8,7 +8,8 @@ import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-s
 import { consentInForce } from '@/lib/sources/consent-gate';
 import { createInLoopRouting, directorySet, entersInLoop, sourceRoutingMode } from '@/lib/mcp/routing-mode';
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
-import { getMissingModelCredentialError, getModelClient, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
+import { getGenAiSystem, getMissingModelCredentialError, getModelClient, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
+import { whereItWentFromCalls } from '@/lib/flows/where-it-went';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
 import { errorLogFacts, streamErrorPayload } from '@/lib/streaming';
@@ -252,9 +253,22 @@ Be honest if you don't have access to current or real-time data.`;
     // `failed`/`failureKind`, and `tokens_used` is the run's cumulative total
     // rather than its last call's. Both are documented in
     // `docs/project-plan.md`.
+    //
+    // R6 W4 (§6): `withMcp.flows`, where the question went. This route writes
+    // no trace, so it is read from the run's calls, each call's source by the
+    // resolver the run's calls are routed by, and the reasons the record would
+    // state (`recordReasons`, never the router's `not-selected`).
+    const flows = whereItWentFromCalls({
+      toolCalls: withMcpResult.toolCalls,
+      resolveSource: inLoop ? inLoop.resolveToolSource : (name) => routedSourceId(name, configured, selection),
+      sourcesOffered: consent.recordReasons(composition.sourcesOffered),
+      statement: consent.statement,
+      model: model.endpointModel,
+      service: getGenAiSystem(),
+    });
     const response = NextResponse.json({
       withoutMcp: withoutMcpResult,
-      withMcp: compareCompletionResult(withMcpResult),
+      withMcp: { ...compareCompletionResult(withMcpResult), flows },
     });
     endUsage('complete');
     return response;

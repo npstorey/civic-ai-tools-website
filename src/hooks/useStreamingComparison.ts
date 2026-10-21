@@ -9,6 +9,7 @@ import { createTraceCapture } from '../lib/bpmn/capture-trace.ts';
 import { connectSSE } from '../lib/sse-client.ts';
 import { isComparisonRunComplete } from '../lib/query-presentation.ts';
 import { classifyStreamError, friendlyStreamError, type ProgressPhase, type CompleteEvent } from '../lib/streaming.ts';
+import type { WhereItWentModel } from '../lib/flows/where-it-went.ts';
 import { reportConsentRefusal } from '../components/sources/useSourceConsent.ts';
 // The steps — the per-call type, the grouping of progress events into steps
 // and their labels — live in one pure module, shared with the other readers
@@ -43,6 +44,8 @@ interface PanelState {
   completion_tokens?: number;
   token_limit_exceeded?: boolean;
   tools_called?: ToolCall[];
+  /** R6 W4: where the question went, from the completion's `flows`. */
+  flows?: WhereItWentModel;
   error?: string;
 }
 
@@ -261,6 +264,7 @@ export function handleComparisonEvent(
             completion_tokens: data.completion_tokens,
             token_limit_exceeded: data.token_limit_exceeded,
             tools_called: data.tools_called,
+            flows: data.flows,
             isComplete: true,
             progress: null,
             // Every step closes and is labelled again from all its entries.
