@@ -137,7 +137,7 @@ const T3_CARD_DB = "After you allow, you can set each source to On, Ask first or
 const T3_CARD_NO_DB = 'After you allow, you can set each source to On, Ask first or Off in the panel beside the question box, and withdraw consent there.';
 const T3_TEXT1 = 'After you allow, you can set each data source to On, Ask first or Off beside the question box.';
 const T4_EACH = [
-  "Each source's row gives who publishes it, where it runs, who holds its logs and what they say they keep, and how current its data is.",
+  "Each source's row gives who publishes its connector, where it runs, who holds its logs and what they say they keep, and how current its data is.",
   "Where we read the holder's own page, the logs line gives that page and the date we read it.",
 ];
 const T4_KEEP = [
@@ -566,7 +566,7 @@ for (const db of [true, false]) {
       for (const id of CONFIGURED) {
         const row = eachSection.statements.find((st) => st.id === `source-row-${id}`);
         assert.ok(row, `premise: the privacy page has a row for ${id}`);
-        assert.ok(statementText(row!).startsWith(`${NAME[id]}, published by`), `the privacy page's row for ${id} is not named "${NAME[id]}": ${statementText(row!).slice(0, 80)}`);
+        assert.ok(statementText(row!).startsWith(`${NAME[id]}: `), `the privacy page's row for ${id} is not named "${NAME[id]}": ${statementText(row!).slice(0, 80)}`);
       }
       for (const s of sections) assertNoneReplaced(sectionRead(s), `the privacy page's "${s.heading}"`);
     });

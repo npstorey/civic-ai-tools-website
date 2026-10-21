@@ -5,14 +5,15 @@
  * one place, so they cannot say different things.
  *
  * Pure: no store, no request, no network. It reads the flows statement's
- * shape (`../flows/statement.ts`, types only) and one phrase from the consent
- * texts (`./copy.ts`). It does not read the evidence registry
+ * shape (`../flows/statement.ts`, types only), and from the consent texts
+ * (`./copy.ts`) one phrase, the map of what each source is and whose
+ * connector reaches it, and the reach sentence's words. It does not read the evidence registry
  * (`../evidence/data-sources.ts`): that would bring the registry and the
  * harness into the client bundle through the panel and the card. The two
  * agree instead by test (`./source-name.test.ts`).
  */
 import type { FlowsKeptBy, FlowsRecipient, FlowsSource } from '../flows/statement.ts';
-import { KEPT_FOR_OPERATOR } from './copy.ts';
+import { KEPT_FOR_OPERATOR, REACH_SENTENCE, SOURCE_DESCRIPTIONS } from './copy.ts';
 
 const SUFFIX = ' MCP Server';
 
@@ -98,4 +99,32 @@ export function keepsText(k: Pick<FlowsKeptBy, 'holder' | 'keeps'>): string {
 /** The page and date a kept-by line rests on, when it rests on one: "(statement, read 2026-10-19)". */
 export function readOnText(k: Pick<FlowsKeptBy, 'readOn'>): string {
   return k.readOn ? `read ${k.readOn}` : '';
+}
+
+/** A piece of a row line: text, or a link with its text. */
+export type RowSegment = string | { link: string; text: string };
+
+/** What a source's row says of it (R6 PL): the what-line as stored, or null, and the reach sentence. */
+export interface SourceRowLines {
+  what: string | null;
+  reach: RowSegment[];
+}
+
+/**
+ * What a source is and whose connector reaches it, from a statement source
+ * (D1 = A, D2 = A). With an entry in `SOURCE_DESCRIPTIONS`: its what-line as
+ * stored (each surface decides the case) and the reach sentence, the
+ * publisher's name a link to the connector's repository. Without one: no
+ * what-line, and the reach sentence with the statement's `publisher`,
+ * unlinked, or saying the publisher is not stated. The map is read on every
+ * call. Every surface that prints a source's publisher calls this.
+ */
+export function sourceRowLines(source: Pick<FlowsSource, 'sourceId' | 'publisher' | 'host' | 'variant'>): SourceRowLines {
+  const where = sourceWhere(source);
+  const entry = Object.prototype.hasOwnProperty.call(SOURCE_DESCRIPTIONS, source.sourceId) ? SOURCE_DESCRIPTIONS[source.sourceId] : undefined;
+  if (entry !== undefined) {
+    return { what: entry.what, reach: [REACH_SENTENCE.before, { link: entry.link, text: entry.publisher }, `${REACH_SENTENCE.after}${where}${REACH_SENTENCE.end}`] };
+  }
+  if (source.publisher === 'not stated') return { what: null, reach: [`${REACH_SENTENCE.unstated}${where}${REACH_SENTENCE.end}`] };
+  return { what: null, reach: [`${REACH_SENTENCE.before}${source.publisher}${REACH_SENTENCE.after}${where}${REACH_SENTENCE.end}`] };
 }

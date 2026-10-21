@@ -3,9 +3,10 @@
 /**
  * The Sources panel (R6 W3, #632 anchor W3 item 1), beside the question box
  * on the home page, `/ask` and `/explore`. One row per configured source, in
- * manifest order: its name, its publisher, where it runs, who holds its logs
- * and what they say they keep, how current its data is, and the three-state
- * control. An Ask first row says what Ask first means in R6, in literal
+ * manifest order: its name, what the source is, whose connector reaches it
+ * (the publisher's name linking to the connector's repository) and where it
+ * runs, who holds its logs and what they say they keep, how current its data
+ * is, and the three-state control (R6 PL). An Ask first row says what Ask first means in R6, in literal
  * words (Q1). A footer carries the privacy page, the deployment guide's
  * address or the sentence that says this site names none (D10), the date the
  * consent was given and the control that withdraws it in place, for every
@@ -21,7 +22,7 @@
 
 import type { CSSProperties } from 'react';
 import { ASK_FIRST_MEANS, PANEL_HEADING, PANEL_LEAD, PANEL_NO_CONSENT, PANEL_PRIVACY_LINK } from '@/lib/sources/copy';
-import { readerSourceName, sourceWhere } from '@/lib/sources/source-name';
+import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
 import { currentStates, useSourceConsent, type SourceStateValue } from './useSourceConsent';
 import { KeptByLines } from './KeptByLine';
 import LocalOnlyOffer from './LocalOnlyOffer';
@@ -68,11 +69,21 @@ export default function SourcesPanel() {
           const name = readerSourceName(source);
           const state = states[source.sourceId] ?? 'ask-first';
           const since = status?.states?.[source.sourceId]?.since;
+          const lines = sourceRowLines(source);
           return (
             <li key={source.sourceId} data-source={source.sourceId} style={{ padding: '8px 0', borderTop: '1px solid var(--border-color)' }}>
               <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{name}</div>
+              {lines.what !== null && <div>{lines.what.charAt(0).toUpperCase() + lines.what.slice(1)}</div>}
               <div>
-                Published by {source.publisher}. Runs at {sourceWhere(source)}.
+                {lines.reach.map((part, i) =>
+                  typeof part === 'string' ? (
+                    part
+                  ) : (
+                    <a key={i} href={part.link} target="_blank" rel="noopener noreferrer">
+                      {part.text}
+                    </a>
+                  ),
+                )}
               </div>
               <div>
                 Who holds its logs: <KeptByLines keptBy={source.recipients.flatMap((r) => r.keptBy)} retention />.

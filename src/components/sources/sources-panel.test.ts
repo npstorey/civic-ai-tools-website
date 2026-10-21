@@ -148,7 +148,7 @@ for (const state of ['on', 'ask-first', 'off']) {
       const text = textOf(row);
       assert.ok(text.includes(readerName(entry.sourceId)), `${entry.sourceId}'s row does not name it: ${text}`);
       assert.ok(text.includes(entry.publisher ?? 'not stated'), `${entry.sourceId}'s row does not name its publisher: ${text}`);
-      assert.ok(/runs at/i.test(text), `${entry.sourceId}'s row has no "runs at" line: ${text}`);
+      assert.ok(/, running at [^.]/.test(text), `${entry.sourceId}'s row does not say where it runs (", running at"): ${text}`);
       assert.ok(text.includes(entry.freshness), `${entry.sourceId}'s row does not say how current its data is: ${text}`);
       const source = statement.sources.find((s: { sourceId: string }) => s.sourceId === entry.sourceId);
       for (const keptBy of source.recipients.flatMap((r: { keptBy: Array<{ holder: string }> }) => r.keptBy)) {
@@ -175,7 +175,7 @@ test('criterion 1: Charter\'s sandbox row says it runs in this site\'s sandbox, 
   ANON();
   const { panel } = await panelWith(Object.fromEntries(CONFIGURED.map((id) => [id, 'on'])));
   const text = textOf(rowOf(panel, 'nyc-charter'));
-  assert.ok(/runs at[^.]*sandbox/i.test(text), `Charter's row does not say it runs in this site's sandbox: ${text}`);
+  assert.ok(text.includes(", running at this site's sandbox."), `Charter's row does not say it runs in this site's sandbox: ${text}`);
   assert.ok(text.includes('not stated'), `Charter's sandbox platform does not read "not stated": ${text}`);
   panel.unmount();
 });
@@ -273,4 +273,128 @@ test('criterion 11: the panel shows each source\'s name without " MCP Server"', 
     assert.ok(panel.text().includes(readerName(entry.sourceId)), `the panel does not name ${entry.sourceId} as ${readerName(entry.sourceId)}`);
   }
   panel.unmount();
+});
+
+// --- R6 PL (D1 = A, D2 = A): what each source is, and whose connector reaches it ----------------
+//
+// The owner's rulings (R6 PL, 2026-10-20): each row adds one line saying what
+// the source is, and replaces "Published by X" with "This site reaches it
+// through an MCP server, a connector that X publishes, running at <where>.",
+// X a link to the connector's repository (`target="_blank"`, `rel="noopener
+// noreferrer"`, as `KeptByLine` and `LocalOnlyOffer` render theirs). The
+// panel upper-cases the what-line's first letter; the privacy page prints it
+// as stored. The strings are written out here from the ruling, with `<where>`
+// as this file's configuration gives it (`sourceWhere`).
+//
+// THE FALLBACK AND THE CASE (criterion 3). A source with no map entry gets no
+// what-line and the reach sentence with the statement's `publisher`,
+// unlinked; with "not stated", the sentence says the publisher is not stated.
+// The synthetic sources are served by a stand-in `/api/flows` (the real
+// statement plus the four below), and the two synthetic map entries are added
+// to `SOURCE_DESCRIPTIONS` for the test and removed after it: the panel reads
+// the map when it renders.
+//
+// WHAT MAKES IT ABLE TO FAIL. At the base the row reads "Published by X. Runs
+// at Y.", with no what-line and no link, and `copy.ts` has no map.
+
+const sourceName = await load('lib/sources/source-name.ts');
+
+/** D1 = A, as the panel prints each what-line (first letter upper-cased). */
+const RULED_WHAT: Record<string, string> = {
+  socrata: 'An open-data portal platform from Tyler Technologies. Many cities and states publish their data on its portals.',
+  'data-commons': 'Public statistics from government agencies and international organizations, gathered by Google.',
+  'boston-opencontext': "The City of Boston's open data, from data.boston.gov.",
+  'nyc-charter': "The text of New York City's Charter, Administrative Code and Rules.",
+};
+/** D2 = A: the publisher as the row prints it, and the connector's repository. */
+const RULED_PUBLISHER: Record<string, { text: string; link: string }> = {
+  socrata: { text: 'npstorey', link: 'https://github.com/npstorey/socrata-mcp-server' },
+  'data-commons': { text: 'Google', link: 'https://github.com/datacommonsorg/agent-toolkit' },
+  'boston-opencontext': { text: 'the City of Boston', link: 'https://github.com/CityOfBoston/OpenContext' },
+  'nyc-charter': { text: 'BetaNYC', link: 'https://github.com/BetaNYC/nyc-charter-laws-rules' },
+};
+const reachSentence = (publisher: string, where: string) => `This site reaches it through an MCP server, a connector that ${publisher} publishes, running at ${where}.`;
+const reachUnstated = (where: string) => `This site reaches it through an MCP server, a connector whose publisher is not stated, running at ${where}.`;
+
+for (const id of CONFIGURED) {
+  test(`PL criterion 1 (${id}): the row says what the source is, then whose connector reaches it and where, the publisher linked to its repository`, async () => {
+    ANON();
+    const { panel } = await panelWith(Object.fromEntries(CONFIGURED.map((s) => [s, 'on'])));
+    const statement = await buildFlowsStatement();
+    const source = statement.sources.find((s: { sourceId: string }) => s.sourceId === id);
+    assert.ok(source, `premise: ${id} is configured`);
+    const where: string = sourceName.sourceWhere(source);
+    const row = rowOf(panel, id);
+    const lines = [...within(row)].map((el) => textOf(el));
+    const sentence = reachSentence(RULED_PUBLISHER[id].text, where);
+    assert.ok(lines.includes(RULED_WHAT[id]), `${id}'s row has no line reading "${RULED_WHAT[id]}": ${textOf(row)}`);
+    assert.ok(lines.includes(sentence), `${id}'s row has no line reading "${sentence}": ${textOf(row)}`);
+    assert.ok(textOf(row).startsWith(`${readerName(id)} ${RULED_WHAT[id]} ${sentence} Who holds its logs: `), `${id}'s row does not read name, what-line, reach sentence, logs, in that order: ${textOf(row)}`);
+    const links = [...within(row)].filter((el) => el.type === 'a' && el.props.href === RULED_PUBLISHER[id].link);
+    assert.equal(links.length, 1, `${id}'s row does not link ${RULED_PUBLISHER[id].link} once`);
+    assert.equal(textOf(links[0]), RULED_PUBLISHER[id].text, `${id}'s link does not read the publisher's name`);
+    assert.equal(links[0].props.target, '_blank', `${id}'s link does not open a new tab`);
+    assert.equal(links[0].props.rel, 'noopener noreferrer', `${id}'s link's rel is not "noopener noreferrer"`);
+    panel.unmount();
+  });
+}
+
+test('PL criterion 1: the panel renders neither "Published by" nor ", published by"', async () => {
+  ANON();
+  const { panel } = await panelWith(Object.fromEntries(CONFIGURED.map((s) => [s, 'ask-first'])));
+  for (const old of ['Published by', ', published by']) {
+    const at = panel.text().indexOf(old);
+    assert.ok(at < 0, `the panel renders "${old}": …${panel.text().slice(Math.max(0, at - 80), at + 80)}…`);
+  }
+  panel.unmount();
+});
+
+/** Criterion 3's synthetic sources: two with no map entry, two whose entries the test adds. */
+const FIXTURE_SOURCES = [
+  { sourceId: 'fixture-unmapped', name: 'Fixture Unmapped', publisher: 'Fixture Publisher', host: 'unmapped.fixture.example' },
+  { sourceId: 'fixture-unstated', name: 'Fixture Unstated', publisher: 'not stated', host: 'unstated.fixture.example' },
+  { sourceId: 'fixture-proper', name: 'Fixture Proper', publisher: 'Fixture Proper Org', host: 'proper.fixture.example' },
+  { sourceId: 'fixture-lower', name: 'Fixture Lower', publisher: 'Fixture Lower Org', host: 'lower.fixture.example' },
+];
+const FIXTURE_ENTRIES: Record<string, { what: string; publisher: string; link: string }> = {
+  'fixture-proper': { what: "New York State's fixture records, from a fixture portal.", publisher: 'Fixture Proper Org', link: 'https://proper.fixture.example/connector' },
+  'fixture-lower': { what: 'an example fixture platform, for the case test.', publisher: 'Fixture Lower Org', link: 'https://lower.fixture.example/connector' },
+};
+
+test('PL criterion 3 (panel): no map entry reads the reach sentence unlinked with no what-line; a proper noun stays, "an …" reads "An …"', async () => {
+  ANON();
+  const map = copy?.SOURCE_DESCRIPTIONS as Record<string, unknown> | undefined;
+  assert.ok(map && typeof map === 'object', `${COPY} exports no SOURCE_DESCRIPTIONS`);
+  const statement = await buildFlowsStatement();
+  const synthetic = FIXTURE_SOURCES.map((f) => ({ ...statement.sources[0], sourceId: f.sourceId, displayName: `${f.name} MCP Server`, publisher: f.publisher, host: f.host }));
+  for (const [id, entry] of Object.entries(FIXTURE_ENTRIES)) map![id] = entry;
+  try {
+    const component = Panel();
+    installFetch(ORIGIN, {
+      '/api/flows': () => new Response(JSON.stringify({ ...statement, sources: [...statement.sources, ...synthetic] }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      '/api/sources/consent': (request: Request) => (consentRoute[request.method] as (r: Request) => Promise<Response>)(request),
+    });
+    const panel = await mount(h(component));
+    const expected: Record<string, string> = {
+      'fixture-unmapped': `Fixture Unmapped ${reachSentence('Fixture Publisher', 'unmapped.fixture.example')} Who holds its logs: `,
+      'fixture-unstated': `Fixture Unstated ${reachUnstated('unstated.fixture.example')} Who holds its logs: `,
+      'fixture-proper': `Fixture Proper New York State's fixture records, from a fixture portal. ${reachSentence('Fixture Proper Org', 'proper.fixture.example')} Who holds its logs: `,
+      'fixture-lower': `Fixture Lower An example fixture platform, for the case test. ${reachSentence('Fixture Lower Org', 'lower.fixture.example')} Who holds its logs: `,
+    };
+    for (const f of FIXTURE_SOURCES) {
+      const row = rowOf(panel, f.sourceId);
+      assert.ok(textOf(row).startsWith(expected[f.sourceId]), `${f.sourceId}: expected the row to start "${expected[f.sourceId]}": ${textOf(row)}`);
+      const named = [...within(row)].filter((el) => el.type === 'a' && textOf(el) === f.publisher);
+      const entry = FIXTURE_ENTRIES[f.sourceId];
+      if (entry) {
+        assert.equal(named.length, 1, `${f.sourceId}: the mapped publisher is not linked once`);
+        assert.equal(named[0].props.href, entry.link, `${f.sourceId}: the link is not the entry's`);
+      } else {
+        assert.equal(named.length, 0, `${f.sourceId}: an unmapped publisher is linked`);
+      }
+    }
+    panel.unmount();
+  } finally {
+    for (const id of Object.keys(FIXTURE_ENTRIES)) delete map![id];
+  }
 });

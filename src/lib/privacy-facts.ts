@@ -77,7 +77,7 @@ import {
   WITHDRAW_WITH_ACCOUNTS,
   WITHDRAW_WITHOUT_ACCOUNTS,
 } from './sources/copy.ts';
-import { keepsText, readerSourceName, sourceWhere } from './sources/source-name.ts';
+import { keepsText, readerSourceName, sourceRowLines } from './sources/source-name.ts';
 import { users } from './db/schema.ts';
 import { buildProviders, normalizeIssuer, OIDC_PROVIDER_ID } from './auth-providers.ts';
 import { toSignInOptions } from './auth-provider-options.ts';
@@ -1329,10 +1329,20 @@ const FLOWS_TRACE: Trace = 'const:src/lib/flows/statement.ts#buildFlowsStatement
 /** The change log, as the repository serves it. */
 export const FLOWS_CHANGELOG_PATH = 'docs/flows-changelog.md';
 
-/** One source's row: who publishes it, where it runs, what its holders say they keep, and how current its data is. */
-function sourceRow(source: FlowsStatement['sources'][number]): Statement {
+/**
+ * One source's row (R6 PL): "<name>: <what the source is> This site reaches it
+ * through an MCP server, a connector that <publisher> publishes, running at
+ * <where>.", then what its holders say they keep and how current its data is.
+ * The what-line prints as stored (no case change); the publisher's name links
+ * to the connector's repository. A source with no entry in
+ * `SOURCE_DESCRIPTIONS` gets no what-line and its statement's publisher,
+ * unlinked (`sourceRowLines`). Exported for the tests to drive a synthetic
+ * source.
+ */
+export function sourceRow(source: FlowsStatement['sources'][number]): Statement {
   const keptBy = source.recipients.flatMap((r) => r.keptBy);
-  const parts: Segment[] = [`${readerSourceName(source)}, published by ${source.publisher}, runs at ${sourceWhere(source)}. Who holds its logs: `];
+  const { what, reach } = sourceRowLines(source);
+  const parts: Segment[] = [`${readerSourceName(source)}: ${what === null ? '' : `${what} `}`, ...reach, ' Who holds its logs: '];
   keptBy.forEach((line, i) => {
     if (i > 0) parts.push('; ');
     parts.push(keepsText(line));
@@ -1340,7 +1350,7 @@ function sourceRow(source: FlowsStatement['sources'][number]): Statement {
     if (line.statementUrl) parts.push(' (', { link: line.statementUrl, text: 'its statement' }, line.readOn ? `, read ${line.readOn})` : ')');
   });
   parts.push(`. How current its data is: ${source.freshness}`);
-  return statement(`source-row-${source.sourceId}`, parts, [FLOWS_TRACE, 'env:SOCRATA_MCP_URL', 'env:BOSTON_OPENCONTEXT_MCP_URL', 'env:NYC_CHARTER_HOSTING']);
+  return statement(`source-row-${source.sourceId}`, parts, [FLOWS_TRACE, k('SOURCE_DESCRIPTIONS'), k('REACH_SENTENCE'), 'env:SOCRATA_MCP_URL', 'env:BOSTON_OPENCONTEXT_MCP_URL', 'env:NYC_CHARTER_HOSTING']);
 }
 
 function consentSections(analytics: AnalyticsConfig | null): PrivacySection[] {

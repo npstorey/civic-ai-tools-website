@@ -217,6 +217,12 @@ const EXCEPTIONS: readonly Exception[] = [
     why: "Google Data Commons' hosted MCP endpoint, named in the comment on endpoint normalization; the default itself is the router package's (`dist/civic/env.js` below), overridable through `DATA_COMMONS_MCP_URL`.",
   },
   {
+    path: 'src/lib/sources/copy.ts',
+    classification: 'server-endpoint',
+    hits: 1,
+    why: "Boston OpenContext's what-line on the Sources rows (R6 PL, ruling D1 = A) names the domain that server fronts, so a reader knows whose data it is; it is reader text, and no run reads it.",
+  },
+  {
     path: 'src/lib/notebook-author/helpers/fetch_data_commons.py',
     classification: 'server-endpoint',
     hits: 2,

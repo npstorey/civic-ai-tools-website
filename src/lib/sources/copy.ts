@@ -185,7 +185,7 @@ export const PRIVACY_CONSENT_SECTIONS: readonly PrivacyConsentSection[] = [
   {
     heading: 'Each data source',
     sentences: [
-      "Each source's row gives who publishes it, where it runs, who holds its logs and what they say they keep, and how current its data is.",
+      "Each source's row gives who publishes its connector, where it runs, who holds its logs and what they say they keep, and how current its data is.",
       "Where we read the holder's own page, the logs line gives that page and the date we read it.",
     ],
   },
@@ -197,3 +197,62 @@ export const PRIVACY_CONSENT_SECTIONS: readonly PrivacyConsentSection[] = [
     ],
   },
 ];
+
+// --- The Sources rows: what each source is, and whose connector reaches it (R6 PL) ---
+
+/** What a source's row says beyond the flows statement (D1 = A, D2 = A). */
+export interface SourceDescription {
+  /**
+   * What the source is, stored as it reads inside a sentence: a common word
+   * lower-case ("an …", "public …", "the …"), a proper noun with its capital.
+   * The panel upper-cases the first letter; the privacy page prints it as
+   * stored.
+   */
+  what: string;
+  /** The publisher of the source's connector, as the row prints it. */
+  publisher: string;
+  /** The connector's repository, which the publisher's name links to. */
+  link: string;
+}
+
+/**
+ * One entry per manifest source, keyed by `sourceId`, pinned to the manifest
+ * both ways (`./source-name.test.ts`: the publisher, after a leading "the ",
+ * is the manifest's; the link is the address in the manifest entry's `id`,
+ * Boston's excepted, whose `id` carries its endpoint). Read when a row
+ * renders, never copied.
+ */
+export const SOURCE_DESCRIPTIONS: Readonly<Record<string, SourceDescription>> = {
+  socrata: {
+    what: 'an open-data portal platform from Tyler Technologies. Many cities and states publish their data on its portals.',
+    publisher: 'npstorey',
+    link: 'https://github.com/npstorey/socrata-mcp-server',
+  },
+  'data-commons': {
+    what: 'public statistics from government agencies and international organizations, gathered by Google.',
+    publisher: 'Google',
+    link: 'https://github.com/datacommonsorg/agent-toolkit',
+  },
+  'boston-opencontext': {
+    what: "the City of Boston's open data, from data.boston.gov.",
+    publisher: 'the City of Boston',
+    link: 'https://github.com/CityOfBoston/OpenContext',
+  },
+  'nyc-charter': {
+    what: "the text of New York City's Charter, Administrative Code and Rules.",
+    publisher: 'BetaNYC',
+    link: 'https://github.com/BetaNYC/nyc-charter-laws-rules',
+  },
+};
+
+/**
+ * The reach sentence (D1 = A), in its pieces: `before` + the publisher +
+ * `after` + where it runs + `end`. With no publisher stated, `unstated` + where
+ * it runs + `end`.
+ */
+export const REACH_SENTENCE = {
+  before: 'This site reaches it through an MCP server, a connector that ',
+  after: ' publishes, running at ',
+  unstated: 'This site reaches it through an MCP server, a connector whose publisher is not stated, running at ',
+  end: '.',
+} as const;
