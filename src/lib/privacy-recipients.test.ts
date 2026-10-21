@@ -148,7 +148,7 @@ test('the outbound-kinds table is read, with the rows #617 and #530 added', () =
   for (const expected of [
     'Model endpoint',
     'Notebook execution, `EXECUTOR_DRIVER=lambda`',
-    "Hosted source (`NYC_CHARTER_HOSTING=sandbox`): its sandbox's lifecycle",
+    "Hosted source (`<SOURCE>_HOSTING=sandbox`): its sandbox's lifecycle",
     'Hosted source: the MCP exchange with its bridge',
   ]) {
     assert.ok(kinds.includes(expected), `the parse did not find the row "${expected}"`);

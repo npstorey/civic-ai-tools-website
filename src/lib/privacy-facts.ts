@@ -586,7 +586,7 @@ export const PROXY_EXCEPTIONS: Readonly<Record<string, string>> = {
   'Database, `DB_DRIVER=node-postgres`': 'the connection to the database, which is not a web request',
   'Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox`':
     "the notebook's own requests for data, which leave from the Vercel Sandbox it runs in",
-  "Hosted source (`NYC_CHARTER_HOSTING=sandbox`): its sandbox's lifecycle":
+  "Hosted source (`<SOURCE>_HOSTING=sandbox`): its sandbox's lifecycle":
     "a hosted data source's own requests for its data, which leave from the Vercel Sandbox it runs in",
   'Notebook execution, `EXECUTOR_DRIVER=container`':
     "the site's instructions to run each notebook, which stay on the operator's server (the notebook's own requests for data do go through the proxy)",
@@ -782,7 +782,7 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
         ]
       : [],
 
-  'Hosted source (`NYC_CHARTER_HOSTING=sandbox`): its sandbox\'s lifecycle': ({ mcp }) =>
+  'Hosted source (`<SOURCE>_HOSTING=sandbox`): its sandbox\'s lifecycle': ({ mcp }) =>
     Object.values(buildMcpRegistry(mcp).hosted).map((server) =>
       statement(
         `recipient-hosted-${server.sourceId}`,
