@@ -149,6 +149,52 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
     list_titles: 'returns chapter and title headings: "catalog" reads datasets, "metadata" reads columns',
     get_title: 'returns chapter and title headings: "catalog" reads datasets, "metadata" reads columns',
     get_version: 'returns currency dates and section counts: "metrics" reads dataset statistics',
+    // Router 0.6.0's three hosted sources (R8 W3; the G0 record 6299541942 §2):
+    // 39 of their 41 tools derive nothing, and `get_updates` derives nothing once
+    // the `args.type` pass-through is kept to `get_data`. Each was measured
+    // against each kind's readers and left untyped, because no kind is true of
+    // it as a reader reads it (the reading Charter's four took). NYS Open
+    // Legislation's `search` derives `search` and is not listed.
+    smart_search: "Checkbook NYC: free-text search over its spending, contract, budget and payroll records: \"search\" reads what a source holds on a topic, \"query\" would count them in records analyzed",
+    search_contracts: "Checkbook NYC: filtered contract records: \"query\" would count them in records analyzed and narrate a SoQL-style query",
+    get_contract: "Checkbook NYC: one contract's details: \"query\" would count it in records analyzed, \"metadata\" reads columns",
+    search_spending: "Checkbook NYC: filtered spending (check) records: \"query\" would count them in records analyzed and narrate a SoQL-style query",
+    search_budget: "Checkbook NYC: filtered budget records: \"query\" would count them in records analyzed and narrate a SoQL-style query",
+    search_payroll: "Checkbook NYC: filtered payroll records: \"query\" would count them in records analyzed and narrate a SoQL-style query",
+    search_revenue: "Checkbook NYC: filtered revenue records: \"query\" would count them in records analyzed and narrate a SoQL-style query",
+    get_agency_spending: "Checkbook NYC: one agency's spending for a year: \"query\" would count it in records analyzed, \"metrics\" reads dataset statistics",
+    search_nycedc_contracts: "Checkbook NYC: filtered NYCEDC contract records: \"query\" would count them in records analyzed and narrate a SoQL-style query",
+    search_nycha_contracts: "Checkbook NYC: filtered NYCHA contract records: \"query\" would count them in records analyzed and narrate a SoQL-style query",
+    search_notices: "The City Record: full-text search over notices: \"search\" reads what a source holds on a topic, \"query\" would count them in records analyzed",
+    get_notices_by_agency: "The City Record: one agency's notices: \"query\" would count them in records analyzed, \"catalog\" reads datasets",
+    get_notices_by_type: "The City Record: notices of one type: \"query\" would count them in records analyzed, \"catalog\" reads datasets",
+    get_procurement_notices: "The City Record: recent procurement notices: \"query\" would count them in records analyzed, \"catalog\" reads datasets",
+    get_public_hearings: "The City Record: recent hearings and meetings: \"query\" would count them in records analyzed, \"catalog\" reads datasets",
+    get_open_solicitations: "The City Record: open solicitations: \"query\" would count them in records analyzed, \"catalog\" reads datasets",
+    get_notices_by_date_range: "The City Record: notices in a date range: \"query\" would count them in records analyzed, \"catalog\" reads datasets",
+    search_bills: "NYS Open Legislation: bills matching a keyword: \"search\" reads what a source holds on a topic, \"query\" would count them in records analyzed",
+    get_bill: "NYS Open Legislation: one bill's text and status: \"query\" would count it in records analyzed, \"metadata\" reads columns",
+    list_bills: "NYS Open Legislation: a session's bills: \"catalog\" reads datasets, \"query\" would count them in records analyzed",
+    get_bill_votes: "NYS Open Legislation: one bill's recorded votes: \"query\" would count them in records analyzed, \"metrics\" reads dataset statistics",
+    get_bill_updates: "NYS Open Legislation: a feed of bill changes: \"query\" would count them in records analyzed, \"metadata\" reads columns",
+    list_laws: "NYS Open Legislation: the law bodies it holds: \"catalog\" reads datasets",
+    get_law_tree: "NYS Open Legislation: a law's table of contents: \"catalog\" reads datasets, \"metadata\" reads columns",
+    get_law_section: "NYS Open Legislation: the text of a section of law: \"query\" would count it in records analyzed, \"metadata\" reads columns",
+    list_members: "NYS Open Legislation: a chamber's members: \"query\" would count them in records analyzed, \"catalog\" reads datasets",
+    get_member: "NYS Open Legislation: one legislator's profile: \"query\" would count it in records analyzed, \"metadata\" reads columns",
+    search_members: "NYS Open Legislation: legislators matching a name: \"search\" reads what a source holds on a topic, \"query\" would count them in records analyzed",
+    list_committees: "NYS Open Legislation: a chamber's committees: \"catalog\" reads datasets",
+    get_committee: "NYS Open Legislation: one committee's details: \"metadata\" reads columns",
+    get_committee_meetings: "NYS Open Legislation: one committee's meetings: \"query\" would count them in records analyzed",
+    list_calendars: "NYS Open Legislation: a year's floor calendars: \"catalog\" reads datasets",
+    get_calendar: "NYS Open Legislation: one floor calendar: \"query\" would count it in records analyzed, \"metadata\" reads columns",
+    list_agendas: "NYS Open Legislation: a year's committee agendas: \"catalog\" reads datasets",
+    get_agenda: "NYS Open Legislation: one committee agenda: \"query\" would count it in records analyzed, \"metadata\" reads columns",
+    list_floor_transcripts: "NYS Open Legislation: a year's floor transcripts: \"catalog\" reads datasets",
+    get_floor_transcript: "NYS Open Legislation: one floor transcript's text: \"query\" would count it in records analyzed",
+    list_hearing_transcripts: "NYS Open Legislation: a year's hearing transcripts: \"catalog\" reads datasets",
+    get_hearing_transcript: "NYS Open Legislation: one hearing transcript's text: \"query\" would count it in records analyzed",
+    get_updates: "NYS Open Legislation: changes across its content types; its `type` argument (processed, published) names the date the feed is keyed on, not an operation, so the `args.type` pass-through is kept to get_data (R8 W3)",
   };
 
   // Every source on, so dispatch can be asked about every exposed name.
@@ -157,6 +203,9 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
     dataCommonsUrl: 'https://data-commons.invalid/mcp',
     bostonOpencontextUrl: 'https://opencontext.invalid/mcp',
     nycCharterHosting: 'sandbox',
+    nycCheckbookHosting: 'sandbox',
+    nycRecordHosting: 'sandbox',
+    nysLegislationHosting: 'sandbox',
   };
   const exposedNames = mcpTools.flatMap((t) => (t.type === 'function' ? [t.function.name] : []));
 
@@ -205,7 +254,12 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
   // `search` in the index, and Charter's search is Charter's through dispatch.
   assert.equal(sourceIdForToolName('search'), 'socrata');
   assert.equal(routedSourceId('nyc_charter__search', ALL_ON), 'nyc-charter');
-  assert.equal(routedSourceId('search', { ...ALL_ON, nycCharterHosting: undefined }), 'socrata', 'with Charter unset a bare search is no longer Socrata\'s');
+  // Router 0.6.0 (R8 W3): NYS Open Legislation has a `search` too, so a bare
+  // search is Socrata's only with both other holders unset, and refused as
+  // ambiguous while either is on.
+  assert.equal(routedSourceId('nys_legislation__search', ALL_ON), 'nys-legislation');
+  assert.equal(routedSourceId('search', { ...ALL_ON, nycCharterHosting: undefined, nysLegislationHosting: undefined }), 'socrata', 'with Charter and State legislation unset a bare search is no longer Socrata\'s');
+  assert.equal(routedSourceId('search', { ...ALL_ON, nycCharterHosting: undefined }), undefined, 'with State legislation on a bare search was attributed to one source');
 
   for (const name of Object.keys(UNTYPED_BY_MEASUREMENT)) {
     assert.equal(
@@ -215,4 +269,27 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
         'UNTYPED_BY_MEASUREMENT — a stale exemption is a false statement about the tree.',
     );
   }
+});
+
+// R8 W3 criterion 4 (b): `args.type` is an operation type only for `get_data`
+// (#323), so the pass-through is kept to it. NYS Open Legislation's
+// `get_updates` carries a `type` (processed, published) that names the date its
+// feed is keyed on; before the narrowing it was recorded as that string.
+test('R8 W3 criterion 4 (b): get_updates with a type derives nothing; get_data with each type is unchanged', () => {
+  for (const type of ['processed', 'published']) {
+    for (const name of ['nys_legislation__get_updates', 'get_updates']) {
+      assert.equal(deriveOperationType(name, { type, from: '2026-01-01', to: '2026-01-31' }), undefined, `${name} with type ${type}`);
+    }
+  }
+  for (const type of ['catalog', 'metadata', 'query', 'metrics']) {
+    assert.equal(deriveOperationType('socrata__get_data', { type }), type);
+    assert.equal(deriveOperationType('get_data', { type }), type);
+  }
+  // The map still answers first: State legislation's search keeps `search`
+  // whatever its `type`.
+  for (const type of ['bills', 'laws', 'agendas', 'calendars', 'transcripts', 'hearings']) {
+    assert.equal(deriveOperationType('nys_legislation__search', { type, term: 'x' }), 'search');
+  }
+  // A name no source offers, carrying a string `type`, records nothing either.
+  assert.equal(deriveOperationType('no_such_tool', { type: 'query' }), undefined);
 });

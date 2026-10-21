@@ -1000,7 +1000,7 @@ test('the self-hosted profile passes with no platform-specific variables set', (
   assert.match(report, /PROFILE: db=node-postgres {2}blob=s3 {2}executor=container/);
   // Five, plus the two hosted-source variables (#617 P3; VERCEL_ENV is
   // applicable everywhere since R6 W3).
-  assert.match(report, /7 variable\(s\) not applicable to this profile/);
+  assert.match(report, /11 variable\(s\) not applicable to this profile/);
   for (const name of ['BLOB_READ_WRITE_TOKEN', ...SANDBOX_ONLY, ...HOSTED_SOURCE_ONLY]) {
     assert.ok(!report.includes(name), `${name} is never mentioned to a self-hosted instance`);
   }

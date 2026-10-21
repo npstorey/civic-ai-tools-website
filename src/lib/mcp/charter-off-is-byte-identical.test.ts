@@ -31,6 +31,14 @@
 // to 0.5.0, measured by W1's byte check with `SOURCE_ROUTING` unset and set
 // to `all-sources`.
 //
+// RE-READ AT 0.6.0 (R8 W3 step 1). The router pin moved to 0.6.0, which adds
+// three hosted entries (NYC Checkbook, NYC City Record, NYS Open Legislation),
+// each offered by its own switch. With every switch unset, the prompt and
+// tools hashes below are unchanged; the router's own component moves to
+// 0.6.0, and `sourcesOffered` gains the three entries' not-configured rows
+// (the W3 G0 record, 6299541942 §3), measured by W3's byte check in both
+// routing modes.
+//
 // Run with: npm test
 //   (or: node --test --experimental-strip-types src/lib/mcp/charter-off-is-byte-identical.test.ts)
 
@@ -67,7 +75,7 @@ await new Promise<void>((resolve) => mcp.listen(0, '127.0.0.1', () => resolve())
 mcp.unref();
 const ORIGIN = `http://127.0.0.1:${(mcp.address() as AddressInfo).port}`;
 
-for (const name of ['NYC_CHARTER_HOSTING', 'SITE_PORTAL_LOCKED', 'DATA_COMMONS_API_KEY']) delete process.env[name];
+for (const name of ['NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYC_RECORD_HOSTING', 'NYS_LEGISLATION_HOSTING', 'NYS_LEGISLATION_API_KEY', 'SITE_PORTAL_LOCKED', 'DATA_COMMONS_API_KEY']) delete process.env[name];
 process.env.SOCRATA_MCP_URL = `${ORIGIN}/socrata/mcp`;
 process.env.DATA_COMMONS_MCP_URL = `${ORIGIN}/dc/mcp`;
 process.env.BOSTON_OPENCONTEXT_MCP_URL = `${ORIGIN}/boston/mcp`;
@@ -144,8 +152,11 @@ const ROUTER_VERSION = (JSON.parse(readFileSync(path.join(process.cwd(), 'node_m
 
 test('premise: the three sources are configured and the switch is unset', () => {
   assert.equal(Object.hasOwn(configured, 'nycCharterHosting'), false);
+  for (const key of ['nycCheckbookHosting', 'nycRecordHosting', 'nysLegislationHosting']) {
+    assert.equal(Object.hasOwn(configured, key), false, `premise: ${key} is unset`);
+  }
   assert.deepEqual(withPortal.sourcesOffered.slice(0, 3).map((s) => s.reason), ['configured', 'configured', 'configured']);
-  assert.equal(ROUTER_VERSION, '0.5.0', 'premise: the installed router is the pin this criterion is for');
+  assert.equal(ROUTER_VERSION, '0.6.0', 'premise: the installed router is the pin this criterion is for');
 });
 
 test('criterion P: the composed prompt is byte-identical to 3e9717b\'s, with and without a portal', () => {
@@ -162,9 +173,13 @@ test('criterion P: the composition moves exactly the two named facts', () => {
   assert.deepEqual(observed.sourcesOffered, [
     ...AT_BASE.sourcesOffered,
     { sourceId: 'nyc-charter', alias: 'nyc_charter', reason: 'not-configured' },
+    // Router 0.6.0 (R8 W3): the three new hosted entries, switches unset.
+    { sourceId: 'nyc-checkbook', alias: 'nyc_checkbook', reason: 'not-configured' },
+    { sourceId: 'nyc-record', alias: 'nyc_record', reason: 'not-configured' },
+    { sourceId: 'nys-legislation', alias: 'nys_legislation', reason: 'not-configured' },
   ]);
   const base = AT_BASE.components;
   assert.deepEqual(observed.components.slice(0, -1), base.slice(0, -1), 'a source\'s component moved');
   assert.deepEqual(base.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.2.0' });
-  assert.deepEqual(observed.components.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.5.0' });
+  assert.deepEqual(observed.components.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.6.0' });
 });

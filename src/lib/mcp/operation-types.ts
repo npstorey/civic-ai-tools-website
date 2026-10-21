@@ -148,8 +148,15 @@ export function deriveOperationType(
 ): string | undefined {
   // Keyed on the upstream name, so `socrata__search` and `search` derive the
   // same label (#599 W3).
-  const mapped = TOOL_OPERATION_TYPES[upstreamToolName(toolName)];
+  const upstream = upstreamToolName(toolName);
+  const mapped = TOOL_OPERATION_TYPES[upstream];
   if (mapped) return mapped;
+  // `args.type` is an operation type only for `get_data`, the one tool whose
+  // `type` names one (catalog, metadata, query, metrics; #323). Kept to it
+  // (R8 W3): NYS Open Legislation's `get_updates` carries a `type` naming the
+  // date its feed is keyed on (processed, published), which is no operation,
+  // and a name no source offers records nothing from its arguments.
+  if (upstream !== 'get_data') return undefined;
   const argType = args.type;
   return typeof argType === 'string' ? argType : undefined;
 }

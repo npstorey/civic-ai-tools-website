@@ -6,7 +6,7 @@
  * WHAT A CALL DOES. `wakeHostedSource` asks for the sandbox by its name with
  * `Sandbox.getOrCreate({ resume: true, … })`, under a deadline of its own:
  *   - absent: it is created (1 vCPU, one exposed port, the idle window as its
- *     timeout, the bridge token in its environment), and `onCreate` installs
+ *     timeout, the bridge token, and a keyed source's key, in its environment), and `onCreate` installs
  *     the pinned package and the bridge with `npm ci` from committed lockfiles
  *     (so every sandbox of one pin runs one tree) while the package registry
  *     is the only host it may reach, applies the manifest's outbound list (`[]`: none, so
@@ -68,7 +68,7 @@
  * unset: `client.ts` imports this module only for a hosted call.
  */
 import { Sandbox } from '@vercel/sandbox';
-import type { HostedMcpServer } from '../registry.ts';
+import { HOSTED_SOURCE_KEY_VARIABLE, hostedSourceKeyEnv, type HostedMcpServer } from '../registry.ts';
 import type { SourceHosting } from '@typedstandards/civic-typed-router';
 import { proxyAwareSandboxFetch, resolveSandboxAuthParams } from '../../sandbox/vercel-sandbox.ts';
 import { errorLogFacts } from '../../streaming.ts';
@@ -300,7 +300,7 @@ async function installAndStart(sandbox: Handle, source: HostedMcpServer, ms: num
     { path: `${BRIDGE_DIR}/bridge.mjs`, content: BRIDGE_SOURCE },
     {
       path: `${BRIDGE_DIR}/bridge-config.json`,
-      content: bridgeConfig({ package: hosting.package, version: hosting.version, pinDir: PIN_DIR, port: HOSTED_SOURCE_PORT }),
+      content: bridgeConfig({ package: hosting.package, version: hosting.version, pinDir: PIN_DIR, port: HOSTED_SOURCE_PORT, ...bridgeChildEnv(source) }),
     },
   ]);
   for (const step of plan) {
@@ -324,7 +324,7 @@ async function getOrCreate(source: HostedMcpServer, name: string, token: string,
     ports: [HOSTED_SOURCE_PORT],
     timeout: idleWindowMs,
     networkPolicy: { allow: [...PACKAGE_REGISTRY_HOSTS] },
-    env: { [BRIDGE_TOKEN_VARIABLE]: token },
+    env: { [BRIDGE_TOKEN_VARIABLE]: token, ...sandboxKeyEnv(source) },
     snapshotExpiration: SNAPSHOT_EXPIRATION_MS,
     keepLastSnapshots: { count: 1 },
     resume: true,
@@ -350,6 +350,27 @@ async function getOrCreate(source: HostedMcpServer, name: string, token: string,
   };
   const handle = auth ? await Sandbox.getOrCreate({ ...params, ...auth }) : await Sandbox.getOrCreate(params);
   return { handle, wake };
+}
+
+/**
+ * A keyed source's key (R8 W3), read by name (`hostedSourceKeyEnv`), for its
+ * own sandbox's environment beside the token; fixed at creation, like the
+ * token. A keyed source without its key is not configured and never reaches a
+ * wake (`readMcpEnvFromProcess`); refused here too rather than created keyless.
+ * Defined below `getOrCreate` so the lines `src/lib/flows/statement.ts` cites
+ * in this file stay where they are.
+ */
+function sandboxKeyEnv(source: HostedMcpServer): Record<string, string> {
+  const keyEnv = hostedSourceKeyEnv(source.sourceId);
+  if (keyEnv === null) throw new WakeStepError(`no key is set for ${source.sourceId}`);
+  return keyEnv;
+}
+
+/** A keyed source's bridge hands its child the key's variable, by name, and
+ *  nothing else beyond the SDK's default; every other source's config is the
+ *  base's (R8 W3). */
+function bridgeChildEnv(source: HostedMcpServer): { childEnv?: string[] } {
+  return Object.hasOwn(HOSTED_SOURCE_KEY_VARIABLE, source.sourceId) ? { childEnv: [HOSTED_SOURCE_KEY_VARIABLE[source.sourceId]] } : {};
 }
 
 /** Poll the bridge's `/health` until it answers 200; a 401 fails at once (a rotated secret). */

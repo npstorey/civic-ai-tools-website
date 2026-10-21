@@ -116,6 +116,10 @@ const EVERY_SOURCE = {
   dataCommonsUrl: 'https://data-commons.invalid',
   bostonOpencontextUrl: 'https://boston.invalid',
   nycCharterHosting: 'sandbox' as const,
+  // Router 0.6.0's three hosted sources, each on by its own switch (R8 W3).
+  nycCheckbookHosting: 'sandbox' as const,
+  nycRecordHosting: 'sandbox' as const,
+  nysLegislationHosting: 'sandbox' as const,
 };
 const EVERY_SOURCE_ID = civicRouter.manifest.map((entry) => entry.sourceId);
 

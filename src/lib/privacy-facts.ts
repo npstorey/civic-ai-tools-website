@@ -586,7 +586,7 @@ export const PROXY_EXCEPTIONS: Readonly<Record<string, string>> = {
   'Database, `DB_DRIVER=node-postgres`': 'the connection to the database, which is not a web request',
   'Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox`':
     "the notebook's own requests for data, which leave from the Vercel Sandbox it runs in",
-  "Hosted source (`NYC_CHARTER_HOSTING=sandbox`): its sandbox's lifecycle":
+  "Hosted source (`<SOURCE>_HOSTING=sandbox`): its sandbox's lifecycle":
     "a hosted data source's own requests for its data, which leave from the Vercel Sandbox it runs in",
   'Notebook execution, `EXECUTOR_DRIVER=container`':
     "the site's instructions to run each notebook, which stay on the operator's server (the notebook's own requests for data do go through the proxy)",
@@ -782,15 +782,19 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
         ]
       : [],
 
-  'Hosted source (`NYC_CHARTER_HOSTING=sandbox`): its sandbox\'s lifecycle': ({ mcp }) =>
+  'Hosted source (`<SOURCE>_HOSTING=sandbox`): its sandbox\'s lifecycle': ({ mcp }) =>
     Object.values(buildMcpRegistry(mcp).hosted).map((server) =>
       statement(
         `recipient-hosted-${server.sourceId}`,
         [
           `The data source ${readerSourceName(server)} runs in a Vercel Sandbox this site starts, running version ${server.hosting.version} of its publisher's software. `,
+          // R8 W3: where a keyed source's key travels, from its variant's `keyIn`.
+          ...((keyIn) => (keyIn ? [`This site gives it an access key, which its software sends ${keyIn === 'query' ? 'in the web address' : 'in a header'} of every request it makes to ${server.hosting.outbound.join(' and ')}. `] : []))(
+            CIVIC_MANIFEST.find((entry) => entry.sourceId === server.sourceId)?.hostings.find((variant) => variant.kind === 'npm-package')?.keyIn,
+          ),
           `How current its data is: ${CIVIC_MANIFEST.find((entry) => entry.sourceId === server.sourceId)?.freshness ?? ''}`,
         ],
-        ['env:NYC_CHARTER_HOSTING', 'const:@typedstandards/civic-typed-router#CIVIC_MANIFEST'],
+        [`env:${CIVIC_MANIFEST.find((entry) => entry.sourceId === server.sourceId)?.configuration.addressVariable}`, 'const:@typedstandards/civic-typed-router#CIVIC_MANIFEST', 'const:src/lib/mcp/registry.ts#HOSTED_SOURCE_KEY_VARIABLE'],
       ),
     ),
 
@@ -801,7 +805,7 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
         [
           `The searches and queries the AI model writes for ${readerSourceName(server)}, which can include words from your question, reach it inside that sandbox.`,
         ],
-        ['env:NYC_CHARTER_HOSTING', 'const:@typedstandards/civic-typed-router#CIVIC_MANIFEST'],
+        [`env:${CIVIC_MANIFEST.find((entry) => entry.sourceId === server.sourceId)?.configuration.addressVariable}`, 'const:@typedstandards/civic-typed-router#CIVIC_MANIFEST'],
       ),
     ),
 
@@ -919,7 +923,7 @@ export const PLATFORM_HELD_RECIPIENTS: Readonly<Record<PlatformHeldKind, Platfor
               "What the source's own software writes there has not been checked.",
           ],
           [
-            'env:NYC_CHARTER_HOSTING',
+            `env:${CIVIC_MANIFEST.find((entry) => entry.sourceId === server.sourceId)?.configuration.addressVariable}`,
             c('PLATFORM_HELD_RECIPIENTS'),
             'const:src/lib/flows/statement.ts#PLATFORM_HELD_KINDS',
             'const:src/lib/mcp/hosting/lifecycle.ts#wakeHostedSource',
@@ -1350,7 +1354,7 @@ export function sourceRow(source: FlowsStatement['sources'][number]): Statement 
     if (line.statementUrl) parts.push(' (', { link: line.statementUrl, text: 'its statement' }, line.readOn ? `, read ${line.readOn})` : ')');
   });
   parts.push(`. How current its data is: ${source.freshness}`);
-  return statement(`source-row-${source.sourceId}`, parts, [FLOWS_TRACE, k('SOURCE_DESCRIPTIONS'), k('REACH_SENTENCE'), 'env:SOCRATA_MCP_URL', 'env:BOSTON_OPENCONTEXT_MCP_URL', 'env:NYC_CHARTER_HOSTING']);
+  return statement(`source-row-${source.sourceId}`, parts, [FLOWS_TRACE, k('SOURCE_DESCRIPTIONS'), k('REACH_SENTENCE'), 'env:SOCRATA_MCP_URL', 'env:BOSTON_OPENCONTEXT_MCP_URL', ...CIVIC_MANIFEST.filter((entry) => entry.sourceId === source.sourceId && entry.hostings.some((variant) => variant.kind === 'npm-package')).map((entry): Trace => `env:${entry.configuration.addressVariable}`)]);
 }
 
 function consentSections(analytics: AnalyticsConfig | null): PrivacySection[] {

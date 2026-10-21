@@ -243,6 +243,21 @@ export const SOURCE_DESCRIPTIONS: Readonly<Record<string, SourceDescription>> = 
     publisher: 'BetaNYC',
     link: 'https://github.com/BetaNYC/nyc-charter-laws-rules',
   },
+  'nyc-checkbook': {
+    what: "New York City's spending, contracts, budget figures and payroll, as the City Comptroller publishes them on Checkbook NYC.",
+    publisher: 'BetaNYC',
+    link: 'https://github.com/BetaNYC/nyc-checkbook-mcp',
+  },
+  'nyc-record': {
+    what: "notices in The City Record, New York City's official journal: procurement, public hearings and other agency notices.",
+    publisher: 'BetaNYC',
+    link: 'https://github.com/BetaNYC/nyc-record-mcp',
+  },
+  'nys-legislation': {
+    what: "New York State's bills and the votes on them, and the State's laws, from the State Senate's Open Legislation service.",
+    publisher: 'BetaNYC',
+    link: 'https://github.com/BetaNYC/nys-openlegislation-mcp',
+  },
 };
 
 /**

@@ -167,6 +167,17 @@ const CONFIGS: Record<string, Record<string, string>> = {
     NEXT_PUBLIC_ANALYTICS_SERVICE: 'plausible',
     NEXT_PUBLIC_ANALYTICS_ID: 'pa-fixture',
   },
+  // R8 W3 (criterion 5 (a)): every hosted source on, router 0.6.0's three
+  // beside NYC Charter, State legislation with a placeholder key, never a real
+  // one; every page guard runs over it.
+  'every hosted source': {
+    SOCRATA_MCP_URL: 'https://socrata.example.test',
+    NYC_CHARTER_HOSTING: 'sandbox',
+    NYC_CHECKBOOK_HOSTING: 'sandbox',
+    NYC_RECORD_HOSTING: 'sandbox',
+    NYS_LEGISLATION_HOSTING: 'sandbox',
+    NYS_LEGISLATION_API_KEY: 'placeholder-not-a-key-r8-w3',
+  },
 };
 
 // Every optional part on, so no section is checked only in its absent form.
@@ -294,6 +305,25 @@ for (const name of [...Object.keys(CONFIGS), 'full']) {
     assert.deepEqual(await traceProblems(html), []);
   });
 }
+
+// R8 W3 criterion 5 (a): every per-source statement traces its own source's
+// hosting switch and no other source's (the check is
+// `src/lib/privacy-hosted-switch-trace.ts`, shared with the stubbed-manifest
+// test that shows it red on the base's code).
+test('R8 W3 criterion 5 (a): every per-source statement traces its own source\'s switch and no other source\'s hosting switch', async () => {
+  const check = await import(pathToFileURL(path.join(SRC, 'lib', 'privacy-hosted-switch-trace.ts')).href);
+  const { CIVIC_MANIFEST } = await import('@typedstandards/civic-typed-router');
+  const all = RENDERED['every hosted source'];
+  for (const family of ['recipient-hosted-', 'recipient-hosted-exchange-', 'held-sandbox-platform-']) {
+    const ids = statements(all).map((s) => s.id).filter((id) => check.perSourceStatement(id)?.family === family);
+    assert.deepEqual(ids.map((id) => check.perSourceStatement(id).sourceId).sort(), ['nyc-charter', 'nyc-checkbook', 'nyc-record', 'nys-legislation'], `premise: ${family} states every hosted source`);
+  }
+  for (const name of [...Object.keys(CONFIGS), 'full']) {
+    const found = statements(RENDERED[name]);
+    assert.ok(found.some((s) => s.id === 'source-row-data-commons'), `premise: ${name} renders the remote Data Commons row`);
+    assert.deepEqual(check.switchTraceProblems(found, CIVIC_MANIFEST), [], `${name}: a per-source statement traces a switch not its own`);
+  }
+});
 
 // --- Acceptance 2: exactly the configured analytics service and model host -----
 

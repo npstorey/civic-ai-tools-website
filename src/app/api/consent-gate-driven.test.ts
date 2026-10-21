@@ -484,7 +484,8 @@ test('criterion 4: a stale cookie naming a removed source is ignored, and the re
   const offered = statedOffered(STALE);
   assert.ok(!offered.some((s) => s.sourceId === 'retired-source'), 'the record names a source the instance does not have');
   assert.equal(offered.find((s) => s.sourceId === 'data-commons')?.reason, 'not-consented', 'Ask first is recorded not-consented');
-  assert.deepEqual(offered.map((s) => s.sourceId), ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter']);
+  // Every manifest source, router 0.6.0's three hosted entries included (R8 W3).
+  assert.deepEqual(offered.map((s) => s.sourceId), ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter', 'nyc-checkbook', 'nyc-record', 'nys-legislation']);
 });
 
 test('criterion 4 (D12): a session carrying a dbId, with no row, is refused consent_required even with an anonymous cookie present', () => {

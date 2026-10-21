@@ -449,7 +449,8 @@ test('criterion 5, compare-stream: the root span states routing, the definition 
   // R6 W3 (#632, contract item 10): with the gate on and every source On, the
   // record states the router's `selected` where it stated `configured` before
   // W3 — the signed-byte move the gate record names.
-  assert.deepEqual(JSON.parse(root['analysis.sources_offered'] ?? 'null').map((s: { reason: string }) => s.reason), ['selected', 'selected', 'selected', 'not-configured']);
+  assert.deepEqual(JSON.parse(root['analysis.sources_offered'] ?? 'null').map((s: { reason: string }) => s.reason), ['selected', 'selected', 'selected', 'not-configured', 'not-configured', 'not-configured', 'not-configured']);
+  // Router 0.6.0 (R8 W3): the three new hosted sources, switches unset, are not configured.
   // skill.text_hash is the final prompt's.
   const skill = spans(traceOf(IN_LOOP)).find((s) => s.name === 'skill_fetch');
   assert.equal(Object.fromEntries(attrPairs(skill!))['skill.text_hash'], sha(systemText(last)));

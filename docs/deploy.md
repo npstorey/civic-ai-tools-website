@@ -1065,11 +1065,35 @@ this reproduction into a different error than the one you came to see.
 
 Most data sources are servers the instance calls at a configured address. A
 **hosted source** is one the instance runs itself: a publisher-bundled MCP
-server that speaks stdio only. The reference instance hosts one, NYC Charter,
-Laws and Rules (`@betanyc/nyc-charter-laws-rules` on npm, published by
-BetaNYC), pinned by `@typedstandards/civic-typed-router` at 0.3.1 together
-with the commit the registry states for that version. It is off unless
-`NYC_CHARTER_HOSTING=sandbox`.
+server that speaks stdio only. The router (`@typedstandards/civic-typed-router`
+0.6.x) pins four, each published by BetaNYC, by version together with the
+commit the registry states for that version. Each is off unless its own
+switch is `sandbox`.
+
+| Source | Pinned package | Switch | The one host its sandbox may reach | Key | First creation, then a resume |
+|---|---|---|---|---|---|
+| NYC Charter, Laws and Rules | `@betanyc/nyc-charter-laws-rules` 0.3.1 | `NYC_CHARTER_HOSTING` | none (`deny-all`) | none | 7.7 s with `npm ci`, then 3.8 s (a local process, 2026-10-16 and 17) |
+| NYC Checkbook | `@betanyc/nyc-checkbook-mcp` 1.6.3 | `NYC_CHECKBOOK_HOSTING` | `www.checkbooknyc.com` | none | bridge ready 5.9 s after a first creation (the router's probe, a local process, 2026-10-20); on preview, and a resume: to be timed at R8 G9 |
+| NYC City Record | `@betanyc/nyc-record-mcp` 1.1.0 | `NYC_RECORD_HOSTING` | `data.cityofnewyork.us` | none | bridge ready 5.7 s after a first creation (the same probe); on preview, and a resume: to be timed at R8 G9 |
+| NYS Open Legislation | `@betanyc/nys-openlegislation-mcp` 2.4.0 | `NYS_LEGISLATION_HOSTING` | `legislation.nysenate.gov` | `NYS_LEGISLATION_API_KEY`, sent in the request URL | not yet timed: it needs the key; on preview at R8 G9 |
+
+- **The host that answered 403.** Checkbook NYC's own pages answered HTTP 403
+  to a page read (the router's census, 2026-10-18), so the source's privacy
+  row links the City Comptroller's policy instead, and its publisher warns that
+  the host's firewall blocks bursts of requests. Whether the host serves
+  requests from a sandbox at all is decided by the first call from preview.
+- **Where the key travels.** State legislation's server sends the key in the
+  request URL (the query string) of every call to `legislation.nysenate.gov`.
+  The app puts the key in that one sandbox's environment when it creates the
+  sandbox, beside the bridge token, and the bridge hands the server that one
+  variable beyond the SDK's default environment; no other sandbox gets it.
+  With the switch set and the key unset the source is not configured: it is
+  offered to no run, its calls are refused naming the key, and one log line
+  names the key. No sandbox is created for it.
+- **Fixed at creation.** The key, like the bridge token, is fixed when the
+  sandbox is created, and the preview sandbox is shared across branches (see
+  "One secret per environment, not per branch" below). So a key change means
+  deleting that source's sandbox, by its name, in that environment.
 
 **What runs where.**
 
@@ -1155,7 +1179,8 @@ or wrong token, on every path. The stdio server itself is not given the token.
 **The allowlist.** While the sandbox installs, it may reach only
 `registry.npmjs.org`. Then the manifest's outbound list is applied. For NYC
 Charter that list is empty, so the policy is `deny-all`: the server serves
-the index bundled in its package and reaches no host. **The policy filters
+the index bundled in its package and reaches no host. For each of the other
+three it is the one host in the table above. **The policy filters
 what starts, not what is running.** A process that already holds a
 connection keeps it. So revoking a running source's reach means stopping its
 sandbox, not changing its policy.
@@ -1220,6 +1245,11 @@ openssl rand -hex 32 | vercel env add SOURCE_BRIDGE_SECRET preview
 The secret goes through the pipe and is never shown, typed or written to a
 file. Use a different secret per environment.
 
+Each other source's switch is set the same way (`NYC_CHECKBOOK_HOSTING`,
+`NYC_RECORD_HOSTING`, `NYS_LEGISLATION_HOSTING`). State legislation also needs
+`NYS_LEGISLATION_API_KEY`, piped into `vercel env add` from wherever the key
+is kept, never typed on a command line, and set once for all preview branches.
+
 **What a hosted source's record states.** A record of a run that offered
 a hosted source states it in four places, each derived from the manifest
 entry and none configured:
@@ -1248,7 +1278,8 @@ the keys they had.
 
 | Setting | Read by | What it does |
 |---|---|---|
-| `NYC_CHARTER_HOSTING` | `src/lib/mcp/registry.ts` (`readMcpEnvFromProcess`) | `sandbox` offers the source; anything else leaves it off |
+| `NYC_CHARTER_HOSTING`, `NYC_CHECKBOOK_HOSTING`, `NYC_RECORD_HOSTING`, `NYS_LEGISLATION_HOSTING` | `src/lib/mcp/registry.ts` (`readMcpEnvFromProcess`) | `sandbox` offers that source; anything else leaves it off |
+| `NYS_LEGISLATION_API_KEY` | `src/lib/mcp/registry.ts` (`hostedSourceKeyEnv`) | State legislation's key, into its sandbox at creation; unset with the switch on, the source is not configured |
 | `SOURCE_BRIDGE_SECRET` | `src/lib/mcp/hosting/token.ts` | the instance secret each sandbox's token derives from |
 | `VERCEL_ENV` | `src/lib/hosting-environment.ts` (`hostingEnvironment`, which `lifecycle.ts` re-exports) | the environment in the sandbox's name, and the usage table's `environment` column; `local` when unset |
 | `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID` | `src/lib/sandbox/vercel-sandbox.ts` (`resolveSandboxAuthParams`) | off-platform sandbox authentication, all three or none; on the platform, OIDC |
@@ -1403,7 +1434,11 @@ doesn't):
 | `DATA_COMMONS_MCP_URL` + `DATA_COMMONS_API_KEY` | The Data Commons data source — its tool calls fail without the key (the hosted endpoint mandates it). `DC_API_KEY` is the separate key passed into *executed notebooks* for their own Data Commons requests. **What the address makes a signed record say:** for a run this instance makes, the value as set, or when unset the coded default (Google's public endpoint, in `src/lib/mcp/registry.ts`), is the `data-commons` entry of the datHere `mcpServers` list on every record, and the Data Commons agent's `civic:serverUrl` on a record whose run called a Data Commons tool. The record's `dataSources` entry for Data Commons keeps the packaging library's fixed portal value, that same public endpoint, whatever this is set to. The key is never recorded. |
 | `BOSTON_OPENCONTEXT_MCP_URL` | The Boston OpenContext data source, which is opt-in. There is no coded default: unset (empty or whitespace-only counts as unset), the source is absent from every run — the model is not offered its six `boston__ckan__` tools, the system prompt carries none of its guidance (no Boston OpenContext block, preamble entry, citation instruction or line in the one-portal section), no request is sent to it, and no record lists it. A call to one of its tools anyway, such as a replay of a record that used them, is refused before anything is sent and recorded as a rejected call (`not_configured`). The public endpoint at `data-mcp.boston.gov` refuses every request that carries no bearer token, and this app sends none, so set this only to an OpenContext deployment that answers without one. **What it makes a signed record say:** set, for a run this instance makes, the value as set is the `boston-opencontext` entry of the datHere `mcpServers` list on every record, and the Boston OpenContext agent's `civic:serverUrl` on a record whose run called one of its tools; unset, the list has no `boston-opencontext` entry. |
 | `NYC_CHARTER_HOSTING` | The hosted NYC Charter, Laws and Rules source, which is opt-in ([Hosted sources](#hosted-sources)). Only `sandbox` (trimmed) switches it on: the app runs the pinned package in a Vercel Sandbox it creates and offers the model its five `nyc_charter__` tools. Unset, the source is absent from every run: no tools, no guidance, no request, no sandbox. A call to one of its tools anyway, such as a replay, is refused before anything is sent and recorded as a rejected call (`not_configured`), naming this variable. Any other value leaves it off, and the preflight refuses the value, naming the variable and `sandbox`. Checked by the preflight only under the `vercel-sandbox` executor profile. **What it makes a signed record say, with it unset:** each record's `sourcesOffered` carries `{ "sourceId": "nyc-charter", "alias": "nyc_charter", "reason": "not-configured" }`. **With it set:** `configured`, the package by purl in `mcpServers`, and its pinned version (`0.3.1+b784cb763ec0`) in `components[]` ([Hosted sources](#hosted-sources)). |
-| `SOURCE_BRIDGE_SECRET` | The instance secret each hosted source's bridge token derives from (HMAC-SHA256 of the sandbox's name). Required when `NYC_CHARTER_HOSTING=sandbox`; unread otherwise. Set it through a pipe (`openssl rand -hex 32 \| vercel env add SOURCE_BRIDGE_SECRET <environment>`), never on a command line, and use a different one per environment. It is never logged and appears in no record. Rotating it means deleting each hosted source's sandbox ([Hosted sources](#hosted-sources)). |
+| `NYC_CHECKBOOK_HOSTING` | The hosted NYC Checkbook source, which is opt-in ([Hosted sources](#hosted-sources)). Only `sandbox` (trimmed) switches it on: the app runs the pinned package in a Vercel Sandbox it creates, allowed to reach `www.checkbooknyc.com` only, and offers the model its ten `nyc_checkbook__` tools. Unset, the source is absent from every run: no tools, no guidance, no request, no sandbox. A call to one of its tools anyway is refused before anything is sent and recorded as a rejected call (`not_configured`), naming this variable. Any other value leaves it off, and the preflight refuses the value. Checked by the preflight only under the `vercel-sandbox` executor profile. A reader's first consent takes it as Ask first. **What it makes a signed record say, with it unset:** each record's `sourcesOffered` carries `{ "sourceId": "nyc-checkbook", "alias": "nyc_checkbook", "reason": "not-configured" }`. **With it set:** `configured`, the package by purl in `mcpServers`, and its pinned version (`1.6.3+f013a276e37e`) in `components[]`. |
+| `NYC_RECORD_HOSTING` | The hosted NYC City Record source, which is opt-in ([Hosted sources](#hosted-sources)). Only `sandbox` (trimmed) switches it on: the app runs the pinned package in a Vercel Sandbox it creates, allowed to reach `data.cityofnewyork.us` only, and offers the model its seven `nyc_record__` tools. Unset, the source is absent from every run, and a call to one of its tools is refused naming this variable, as for the other switches. Any other value leaves it off, and the preflight refuses the value. Checked by the preflight only under the `vercel-sandbox` executor profile. A reader's first consent takes it as On. **With it unset:** `sourcesOffered` carries `{ "sourceId": "nyc-record", "alias": "nyc_record", "reason": "not-configured" }`. **With it set:** `configured`, the package by purl in `mcpServers`, and `1.1.0+6c52a5353381` in `components[]`. |
+| `NYS_LEGISLATION_HOSTING` | The hosted NYS Open Legislation source, which is opt-in ([Hosted sources](#hosted-sources)). Only `sandbox` (trimmed) switches it on, and only with `NYS_LEGISLATION_API_KEY` set: the app runs the pinned package in a Vercel Sandbox it creates, allowed to reach `legislation.nysenate.gov` only, and offers the model its 24 `nys_legislation__` tools. Unset, or set with the key unset, the source is absent from every run, and a call to one of its tools is refused naming the switch (or, with the switch set, the key). Any other value leaves it off, and the preflight refuses the value. Checked by the preflight only under the `vercel-sandbox` executor profile. A reader's first consent takes it as Ask first. **With it unset:** `sourcesOffered` carries `{ "sourceId": "nys-legislation", "alias": "nys_legislation", "reason": "not-configured" }`. **With it set and the key set:** `configured`, the package by purl in `mcpServers`, and `2.4.0+cc069c46d52b` in `components[]`. |
+| `NYS_LEGISLATION_API_KEY` | The key State legislation's server sends to the New York State Senate's Open Legislation API (registered at the Senate's page). Required when `NYS_LEGISLATION_HOSTING=sandbox`, and read by the preflight for presence only; unread otherwise. It goes into that one source's sandbox environment when the sandbox is created, beside the bridge token, and the server sends it in the request URL of every call to `legislation.nysenate.gov`. It is never logged, hashed or recorded. With the switch set and the key unset the source is not configured, and one log line names this variable. Set it through a pipe, never on a command line, once for all preview branches (the preview sandbox is shared). Changing it means deleting that source's sandbox ([Hosted sources](#hosted-sources)). |
+| `SOURCE_BRIDGE_SECRET` | The instance secret each hosted source's bridge token derives from (HMAC-SHA256 of the sandbox's name). Required when any hosted source's switch (`NYC_CHARTER_HOSTING`, `NYC_CHECKBOOK_HOSTING`, `NYC_RECORD_HOSTING`, `NYS_LEGISLATION_HOSTING`) is `sandbox`; unread otherwise. Set it through a pipe (`openssl rand -hex 32 \| vercel env add SOURCE_BRIDGE_SECRET <environment>`), never on a command line, and use a different one per environment. It is never logged and appears in no record. Rotating it means deleting each hosted source's sandbox ([Hosted sources](#hosted-sources)). |
 | `CRON_SECRET` | The scheduled blob-GC endpoint rejects every caller with 401 — orphaned uploads are never swept. Set the same value on the app and the scheduler. |
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Durable rate limiting — the counter falls back to per-process memory (resets on restart; not shared across instances). Fine for a single-node instance. |
 | `SANDBOX_SNAPSHOT_ID` | (vercel-sandbox executor only) Prebuilt snapshot — absent, every execution pays a slow fresh boot + pip install. Not read by the container executor. A snapshot built under `@vercel/sandbox` 1.x boots under 3.x: measured on 2026-10-16 with 3.5.1, it booted Python 3.13.1 with the pinned stack importable. |
@@ -2318,7 +2353,7 @@ table's `DB_DRIVER=node-postgres` row).
 | Database, `DB_DRIVER=neon-http` | `fetch` | yes |
 | Database, `DB_DRIVER=node-postgres` | a raw TCP socket (`pg`) | **no** |
 | Notebook execution, `EXECUTOR_DRIVER=vercel-sandbox` | `fetch`, in `@vercel/sandbox`, to `https://vercel.com/api`, through a proxy-aware dispatcher the driver hands the SDK (`src/lib/sandbox/vercel-sandbox.ts`) | yes — see below |
-| Hosted source (`NYC_CHARTER_HOSTING=sandbox`): its sandbox's lifecycle | `fetch`, in `@vercel/sandbox`, to `https://vercel.com/api`, through the same proxy-aware dispatcher the executor uses (`src/lib/mcp/hosting/lifecycle.ts`, reusing `src/lib/sandbox/vercel-sandbox.ts`) | yes |
+| Hosted source (`<SOURCE>_HOSTING=sandbox`): its sandbox's lifecycle | `fetch`, in `@vercel/sandbox`, to `https://vercel.com/api`, through the same proxy-aware dispatcher the executor uses (`src/lib/mcp/hosting/lifecycle.ts`, reusing `src/lib/sandbox/vercel-sandbox.ts`) | yes |
 | Hosted source: the MCP exchange with its bridge | `fetch`, to the sandbox's `*.vercel.run` address (`src/lib/mcp/client.ts`) | yes |
 | Notebook execution, `EXECUTOR_DRIVER=container` | the app: the container-runtime socket on the host. The notebook's own requests: the executor container, on the runtime's default network (`src/lib/sandbox/container.ts`) | the socket: **no** — it is not network traffic. The notebook's requests: yes — see below |
 | Notebook execution, `EXECUTOR_DRIVER=lambda` | the app: the AWS SDK's Lambda client, to `lambda.<region>.amazonaws.com` (`src/lib/sandbox/lambda.ts`). The notebook's own requests: the function, from wherever it runs | the invoke: yes, as the S3 driver's calls do, with the fetch transport's header timeout raised to the session cap. The notebook's requests: the **function's** proxy variables, set on the function — see [The Lambda executor](#the-lambda-executor) |

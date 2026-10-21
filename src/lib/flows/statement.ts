@@ -286,16 +286,38 @@ function keptByFor(logging: readonly LoggingPosture[], host: string | undefined)
 }
 
 function sourceRows(configured: McpRegistryEnv): FlowsSource[] {
+  // R8 W3: a hosted variant's upstream host (its `outbound`) is a recipient of
+  // its own, after the sandbox: keyed by the outbound-kinds row of a hosted
+  // source's own requests (the row's first cell, whose proxy exception reads
+  // "a hosted data source's own requests for its data, which leave from the
+  // Vercel Sandbox it runs in"), holding the variant's manifest-stated log
+  // holders, while the sandbox recipient keeps the instance-stated ones. Its id
+  // is not `source:<id>`, which R6's checks match rows by. A variant with no
+  // outbound host (NYC Charter) gains nothing and keeps every holder on its
+  // sandbox recipient, as before. Every entry with an outbound host states one
+  // host and one manifest holder (router 0.6.0).
+  const upstreamKey = "Hosted source (`<SOURCE>_HOSTING=sandbox`): its sandbox's lifecycle";
+  const upstreamReceives = 'the requests the connector makes for data, which can include words from your question';
   const rows: FlowsSource[] = [];
   for (const entry of CIVIC_MANIFEST) {
     const variant = hostingVariantInForce(entry, configured);
     if (!variant) continue;
     const address = variant.kind === 'remote' ? configuredAddressForSource(configured, entry.sourceId) : undefined;
     const host = address ? hostOf(address) : undefined;
+    const outbound = variant.kind === 'npm-package' ? variant.outbound : [];
+    const sandboxLogging = outbound.length > 0 ? variant.logging.filter((posture) => posture.statedBy === 'instance') : variant.logging;
     const recipient: FlowsRecipient =
       variant.kind === 'npm-package'
-        ? { id: `source:${entry.sourceId}`, key: held('sandbox-platform'), role: 'sandbox-platform', runsAt: 'instance-sandbox', receives: SOURCE_RECEIVES, keptBy: keptByFor(variant.logging, undefined) }
+        ? { id: `source:${entry.sourceId}`, key: held('sandbox-platform'), role: 'sandbox-platform', runsAt: 'instance-sandbox', receives: SOURCE_RECEIVES, keptBy: keptByFor(sandboxLogging, undefined) }
         : { id: `source:${entry.sourceId}`, key: 'MCP servers', role: 'source', ...(host ? { host } : { runsAt: variant.runsAt }), receives: SOURCE_RECEIVES, keptBy: keptByFor(variant.logging, host) };
+    const upstream: FlowsRecipient[] = outbound.map((outboundHost) => ({
+      id: `source:${entry.sourceId}:${outboundHost}`,
+      key: upstreamKey,
+      role: 'source',
+      host: outboundHost,
+      receives: upstreamReceives,
+      keptBy: keptByFor(variant.logging.filter((posture) => posture.statedBy === 'manifest'), undefined),
+    }));
     const summary: FlowsSourceVariant = {
       variant: variant.variant,
       kind: variant.kind,
@@ -309,7 +331,7 @@ function sourceRows(configured: McpRegistryEnv): FlowsSource[] {
       variant: summary,
       ...(host ? { host } : {}),
       freshness: entry.freshness,
-      recipients: [recipient],
+      recipients: [recipient, ...upstream],
     };
     rows.push({ ...row, version: computeSourceVersion(row) });
   }
