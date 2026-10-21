@@ -1004,14 +1004,24 @@ const SEARCH_SUBJECT_BY_SOURCE: Readonly<Record<string, SearchSubject>> = {
     within: "the City's Charter, Administrative Code and Rules",
     crumb: 'Search sections of law',
   },
+  // NYS Open Legislation's `search` (R8 W3) finds bills, laws and the other
+  // records the State Senate's Open Legislation service holds (agendas,
+  // calendars, transcripts, hearings), one content type per call.
+  'nys-legislation': {
+    singular: 'bill, law or other legislative record',
+    plural: 'bills, laws and other legislative records',
+    within: "the State Senate's Open Legislation service",
+    crumb: 'Search legislative records',
+  },
 };
 
 /**
- * What a search-typed tool searches for, in user language. Four registry
+ * What a search-typed tool searches for, in user language. Five registry
  * tools derive to `search`: Socrata's `search` and CKAN's search look for
  * datasets; Data Commons' `search_indicators` looks for statistical
  * indicators (variables and topics, not datasets); NYC Charter, Laws and
- * Rules' `search` looks for sections of law.
+ * Rules' `search` looks for sections of law; NYS Open Legislation's `search`
+ * looks for bills, laws and other legislative records (R8 W3).
  *
  * The source is read from the dispatch map (#617 P4, b2): Charter's `search`
  * and Socrata's share an upstream name, so only the exposed name
