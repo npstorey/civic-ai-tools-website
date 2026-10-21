@@ -81,14 +81,23 @@ const CHARTER_FIVE: readonly string[] = [
   'nyc_charter__get_version',
 ];
 
+/** Router 0.6.0's three hosted entries (R8 W3): NYC Checkbook's 10 tools,
+ *  NYC City Record's 7 and NYS Open Legislation's 24, in manifest order after
+ *  Charter's five, each aliased. The move the W3 G0 record names for the pin;
+ *  the sixteen above are unchanged. */
+const NEW_HOSTED_FORTY_ONE: readonly string[] = (['nyc-checkbook', 'nyc-record', 'nys-legislation'] as const).flatMap((sourceId) => {
+  const entry = CIVIC_MANIFEST.find((candidate) => candidate.sourceId === sourceId)!;
+  return entry.toolNames.map((tool) => `${entry.alias}__${tool}`);
+});
+
 const FULL: McpRegistryEnv = {
   socrataUrl: 'https://socrata.invalid',
   dataCommonsUrl: 'https://data-commons.invalid/mcp',
   bostonOpencontextUrl: 'https://opencontext.invalid/mcp',
 };
 const NO_BOSTON: McpRegistryEnv = { socrataUrl: FULL.socrataUrl, dataCommonsUrl: FULL.dataCommonsUrl };
-/** Every optional source on, the hosted one included. */
-const ALL_ON: McpRegistryEnv = { ...FULL, nycCharterHosting: 'sandbox' };
+/** Every optional source on, the four hosted ones included. */
+const ALL_ON: McpRegistryEnv = { ...FULL, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nycRecordHosting: 'sandbox', nysLegislationHosting: 'sandbox' };
 
 const names = (tools: typeof mcpTools) => tools.map((t) => (t.type === 'function' ? t.function.name : t.type));
 
@@ -96,10 +105,12 @@ const names = (tools: typeof mcpTools) => tools.map((t) => (t.type === 'function
 
 test('the tools array names every tool <alias>__<upstream>, and is the router\'s own aliased array', () => {
   // The vocabulary: the eleven, in their order, then Charter's five at the end
-  // (the router 0.3.0 move, #617 P3).
+  // (the router 0.3.0 move, #617 P3), then router 0.6.0's forty-one (R8 W3).
   assert.deepEqual(names(mcpTools).slice(0, 11).sort(), ELEVEN.map(([, exposed]) => exposed).sort());
-  assert.deepEqual(names(mcpTools).slice(11), [...CHARTER_FIVE]);
-  assert.equal(names(mcpTools).length, 16);
+  assert.deepEqual(names(mcpTools).slice(11, 16), [...CHARTER_FIVE]);
+  assert.equal(NEW_HOSTED_FORTY_ONE.length, 41);
+  assert.deepEqual(names(mcpTools).slice(16), [...NEW_HOSTED_FORTY_ONE]);
+  assert.equal(names(mcpTools).length, 57);
   assert.equal(JSON.stringify(mcpTools), JSON.stringify(civicRouter.aliasedMcpTools));
   for (const lock of [undefined, 'data.cityofnewyork.us']) {
     assert.equal(JSON.stringify(mcpToolsFor(lock)), JSON.stringify(civicRouter.aliasedMcpToolsFor(lock)), `lock ${lock}`);
@@ -126,10 +137,12 @@ test('the withheld tools are named as the model would have been offered them', (
   // are withheld whatever else is configured; with every optional source on,
   // nothing is.
   assert.deepEqual(withheldToolNames(ALL_ON), []);
-  assert.deepEqual(withheldToolNames(FULL), [...CHARTER_FIVE]);
+  // Router 0.6.0 (R8 W3): the three new hosted sources' forty-one likewise,
+  // while their switches are unset.
+  assert.deepEqual(withheldToolNames(FULL), [...CHARTER_FIVE, ...NEW_HOSTED_FORTY_ONE]);
   assert.deepEqual(
     new Set(withheldToolNames(NO_BOSTON)),
-    new Set([...ELEVEN.filter(([, , source]) => source === 'boston-opencontext').map(([, exposed]) => exposed), ...CHARTER_FIVE]),
+    new Set([...ELEVEN.filter(([, , source]) => source === 'boston-opencontext').map(([, exposed]) => exposed), ...CHARTER_FIVE, ...NEW_HOSTED_FORTY_ONE]),
   );
 });
 

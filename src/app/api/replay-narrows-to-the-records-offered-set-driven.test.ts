@@ -321,8 +321,18 @@ test('criterion 3 (c): a datHere record with named mcpServers entries replays wi
 // configure (Boston here) has no state in the replayer's consent and is not
 // offered. Before W3 the dormant gate passed no replayer selection, and the
 // full vocabulary was every manifest source.
-const CONSENTED_TOOL_NAMES = ALL_TOOL_NAMES.filter((name) => !name.startsWith('boston__'));
+//
+// R8 W3: the consented vocabulary is the consented sources' tools, read off
+// the manifest, not the vocabulary less Boston's: router 0.6.0's three hosted
+// sources are not configured in this fixture either, so they hold no state in
+// the replayer's consent and are not offered. Measured: with the gate on
+// (`CONSENT_GATE_ENFORCED`), the replay route always passes the replayer's
+// selection (`consent.selection`, an array), so `replayLoopOptions`' unfiltered
+// branch (`mcpTools`, replay-loop.ts:322-323) is not reached from the route;
+// only a caller that passes no selection reaches it.
 const CONSENTED_SOURCES = ['socrata', 'data-commons', 'nyc-charter'];
+const CONSENTED_ALIASES = CIVIC_MANIFEST.filter((entry) => CONSENTED_SOURCES.includes(entry.sourceId)).map((entry) => `${entry.alias}__`);
+const CONSENTED_TOOL_NAMES = ALL_TOOL_NAMES.filter((name) => CONSENTED_ALIASES.some((prefix) => name.startsWith(prefix)));
 
 test('criterion 3 (d): a record stating no set replays with the full vocabulary the replayer consented to, from none', () => {
   assert.deepEqual(D.toolNames, CONSENTED_TOOL_NAMES, 'a record stating no set did not replay with the full vocabulary');

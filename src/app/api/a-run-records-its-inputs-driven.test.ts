@@ -364,6 +364,11 @@ for (const d of [COMPARE_STREAM, NOTEBOOK]) {
       // the anchor names for the pin (#617 P3). No component and no server
       // entry come with it.
       { sourceId: 'nyc-charter', alias: 'nyc_charter', reason: 'not-configured' },
+      // Router 0.6.0's three hosted sources, their switches unset: the three
+      // rows the R8 W3 G0 record names for the pin (6299541942 §3).
+      { sourceId: 'nyc-checkbook', alias: 'nyc_checkbook', reason: 'not-configured' },
+      { sourceId: 'nyc-record', alias: 'nyc_record', reason: 'not-configured' },
+      { sourceId: 'nys-legislation', alias: 'nys_legislation', reason: 'not-configured' },
     ]);
   });
 

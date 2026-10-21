@@ -331,6 +331,14 @@ const EXCEPTIONS: readonly Exception[] = [
     hits: 1,
     why: "Google Data Commons' hosted MCP endpoint as the package's default address, which `readMcpEnvFromProcess` applies when `DATA_COMMONS_MCP_URL` is unset — a third-party public service every instance reaches at the same address, not one deployment's city, and the trace records it as real configured routing for exactly that reason (#258 A9; moved from registry.ts).",
   },
+  // Router 0.6.0 (R8 W3): NYC City Record's entry names the one host its
+  // server queries, in a header comment and in its variant's outbound list.
+  {
+    path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/nyc-record.js',
+    classification: 'server-endpoint',
+    hits: 2,
+    why: "The one host the NYC City Record server queries (its City Record Online dataset), named in the entry's header comment and as the sandbox's outbound allowance (`outbound`); that server's upstream, every instance's the same, never a portal a run chooses.",
+  },
 ];
 
 /**
