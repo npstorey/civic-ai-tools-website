@@ -177,7 +177,7 @@ test('R8 W3 criterion 4 (c): a State legislation search\'s lines say neither "ca
   }
 });
 
-test('R8 W3 criterion 4 (c): every line that resolves a search subject names State legislation\'s', () => {
+test('R8 W3 criterion 4 (c): every line that gives a search subject names State legislation\'s', () => {
   assert.deepEqual(
     { singular: searchSubject(NYS_SEARCH).singular, plural: searchSubject(NYS_SEARCH).plural },
     { singular: 'bill, law or other legislative record', plural: 'bills, laws and other legislative records' },
