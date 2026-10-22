@@ -20,7 +20,10 @@
 //     each source a call reached (`kind: 'source'`, with its call count) and,
 //     for an executed run, the notebook runner (`kind: 'notebook'`). Each row
 //     holds its recipients: `{ role, place, got?, keptBy }`, `role` by
-//     `roleLabel`, `place` by `recipientWhere`, `keptBy` by `keepsText`;
+//     `roleLabel`, `place` by `recipientWhere`, `keptBy` the statement's own
+//     `FlowsKeptBy` objects (Stage C: the view renders them as the panel
+//     does, through `KeptByLines`), and `upstream: true` on a hosted row's
+//     upstream host (`source:<id>:<host>`, R8 W3's shape);
 //     `got` is the statement recipient's `receives`, present on the run side
 //     and on a record whose reference matches, and ABSENT (no key) otherwise;
 //   - `notReached`: every other stated source, `{ sourceId, name, whyNotSent }`
@@ -57,7 +60,7 @@ import { fileURLToPath } from 'node:url';
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import { TraceBuilder, CIVICAITOOLS_TRACE_CONFIG, runRecordAttributes } from '../evidence/trace.ts';
 import { statementHash, type FlowsRecipient, type FlowsSource, type FlowsStatement } from './statement.ts';
-import { keepsText, readerSourceName, recipientWhere, roleLabel } from '../sources/source-name.ts';
+import { readerSourceName, recipientWhere, roleLabel } from '../sources/source-name.ts';
 import * as copyModule from '../sources/copy.ts';
 import { REFERENCE_IDENTITY_ENV } from '../evidence/reference-identity-fixture.ts';
 import { hostedServerPurl } from '../mcp/registry.ts';
@@ -71,7 +74,7 @@ const { adaptRecord } = await import('../../components/answer-view/adapt-record.
 
 // --- The model's shape, as this test reads it ------------------------------------
 
-interface RecipientRow { role: string; place: string; got?: string; keptBy: string[] }
+interface RecipientRow { role: string; place: string; got?: string; keptBy?: FlowsRecipient['keptBy']; upstream?: true }
 type ReachedRow =
   | { kind: 'model'; name: string; model: string | null; service: string | null; recipients: RecipientRow[] }
   | { kind: 'source'; sourceId: string; name: string; calls: number; recipients: RecipientRow[] }
@@ -218,20 +221,23 @@ const HOSTED_STATEMENT: FlowsStatement = {
 };
 
 /** A statement recipient as the run side shows it. */
-const shown = (r: FlowsRecipient): RecipientRow => ({ role: roleLabel(r.role), place: recipientWhere(r), got: r.receives, keptBy: r.keptBy.map(keepsText) });
+const shown = (r: FlowsRecipient, sourceId?: string): RecipientRow => ({
+  role: roleLabel(r.role), place: recipientWhere(r), got: r.receives, keptBy: r.keptBy,
+  ...(sourceId !== undefined && r.id.startsWith(`source:${sourceId}:`) ? { upstream: true as const } : {}),
+});
 
 function sourceRow(statement: FlowsStatement, sourceId: string, calls: number): ReachedRow {
   const row = statement.sources.find((s) => s.sourceId === sourceId);
   assert.ok(row, `premise: the statement lists ${sourceId}`);
-  return { kind: 'source', sourceId, name: nameOf(sourceId, MANIFEST_ALIAS[sourceId] ?? sourceId), calls, recipients: row.recipients.map(shown) };
+  return { kind: 'source', sourceId, name: nameOf(sourceId, MANIFEST_ALIAS[sourceId] ?? sourceId), calls, recipients: row.recipients.map((r) => shown(r, sourceId)) };
 }
 const modelRow = (statement: FlowsStatement, model = MODEL, service = SERVICE): ReachedRow => ({
   kind: 'model', name: roleLabel('model-endpoint'), model, service,
-  recipients: statement.recipients.filter((r) => r.role === 'model-endpoint').map(shown),
+  recipients: statement.recipients.filter((r) => r.role === 'model-endpoint').map((r) => shown(r)),
 });
 const notebookRow = (statement: FlowsStatement): ReachedRow => ({
   kind: 'notebook', name: roleLabel('notebook-executor'),
-  recipients: statement.recipients.filter((r) => r.role === 'notebook-executor').map(shown),
+  recipients: statement.recipients.filter((r) => r.role === 'notebook-executor').map((r) => shown(r)),
 });
 
 // --- A run: its spans, and the same calls as the JSON route holds them -----------------
@@ -527,7 +533,8 @@ const RECORD_MODEL = 'anthropic/claude-haiku-5.5';
 const RECORD_SERVICE = 'openrouter';
 
 /** The record side with no match: one recipient, its place from the record, no "what it got", "not recorded" kept-by lines. */
-const recorded = (role: string, place: string): RecipientRow => ({ role, place, keptBy: [NOT_RECORDED] });
+/** Stage C: no kept-by lines at all on no match; the view says so once, for every row. */
+const recorded = (role: string, place: string): RecipientRow => ({ role, place });
 const unmatchedModel: ReachedRow = { kind: 'model', name: roleLabel('model-endpoint'), model: RECORD_MODEL, service: RECORD_SERVICE, recipients: [recorded(roleLabel('model-endpoint'), NOT_RECORDED)] };
 const unmatchedNotebook: ReachedRow = { kind: 'notebook', name: roleLabel('notebook-executor'), recipients: [recorded(roleLabel('notebook-executor'), NOT_RECORDED)] };
 const recordSource = (sourceId: string, calls: number, place: string): ReachedRow => ({

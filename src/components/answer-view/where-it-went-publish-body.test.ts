@@ -74,7 +74,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 
 const MARKER = 'FLOWSMARKER-w4';
 const FLOWS = {
-  reached: [{ kind: 'model', name: 'Model endpoint', model: 'fixture/model', service: 'openrouter', recipients: [{ role: 'Model endpoint', place: MARKER, got: MARKER, keptBy: [MARKER] }] }],
+  reached: [{ kind: 'model', name: 'Model endpoint', model: 'fixture/model', service: 'openrouter', recipients: [{ role: 'Model endpoint', place: MARKER, got: MARKER, keptBy: [{ holder: MARKER, keeps: 'operator-states' }] }] }],
   notReached: [{ sourceId: 'data-commons', name: 'Data Commons', whyNotSent: 'Off.' }],
   statement: { kind: 'in-force' },
 };

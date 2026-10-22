@@ -139,6 +139,9 @@ const D887C1 = JSON.parse(fs.readFileSync(path.join(SRC, 'lib/flows/fixtures/rec
 const D887C1_HASH = '78c516db86bf5af90f0f0de1f6c3a614b6ff1c9026b27a25620fbc7c52ecd995';
 const SLUG = 'noise-trends-in-nyc-last-week-d887c1';
 const HEADING = 'Where this question went';
+/** Stage C: the summary, the only closed-state text (d887c1 reached one source). */
+const SUMMARY = 'Where this question went: the model and 1 data source.';
+const RECORD_SENTENCE = 'This record does not say what each one received or keeps.';
 const D1_LINE = 'What each one keeps: where a question can go, as of 20 October 2026.';
 const DISCLOSURE_LABEL = 'Learn more about how this analysis was produced';
 
@@ -189,12 +192,15 @@ test('premise 4: the record page builds the statement it serves and hands it to 
   const end = elementEnd(html, m.index, m[1]);
   const markup = html.slice(m.index, end);
   const flat = unescape(markup.replace(/<!-- -->/g, '').replace(/<[^>]*>/g, ''));
-  assert.ok(flat.startsWith(HEADING), `the section opens with its heading: ${flat.slice(0, 60)}`);
+  assert.match(m[0], /^<details\b/, 'the section is a <details>');
+  assert.doesNotMatch(m[0], /\bopen\b/, 'closed by default');
+  assert.ok(flat.startsWith(SUMMARY), `the section opens with its summary: ${flat.slice(0, 80)}`);
   assert.ok(flat.includes(D1_LINE), `the reference line reads "${D1_LINE}"`);
   assert.match(markup, /<a\b[^>]*href="https:\/\/app\.civicaitools\.org\/api\/flows"[^>]*>where a question can go<\/a>/);
-  assert.ok(flat.includes('not recorded'), 'the kept-by lines read "not recorded"');
-  assert.ok(flat.includes('socrata-mcp.civicaitools.org'), 'Socrata at the record\'s host');
-  for (const reason of ['Off.', 'Not set up on this site.', 'On, not used for this question.']) assert.ok(flat.includes(reason), `"${reason}"`);
+  assert.ok(flat.includes(RECORD_SENTENCE), `the record says "${RECORD_SENTENCE}"`);
+  assert.ok(flat.includes('Socrata (socrata-mcp.civicaitools.org)'), 'Socrata at the record\'s host');
+  // Ruling (b) = (i): the sources not reached are not rendered.
+  for (const reason of ['Not sent to', 'Off.', 'Not set up on this site.', 'On, not used for this question.']) assert.ok(!flat.includes(reason), `"${reason}" is rendered`);
   const details = html.indexOf(`>${DISCLOSURE_LABEL}<`);
   assert.ok(details > end, 'the section sits before the disclosure, outside it');
   assert.ok(html.indexOf('data-part="steps"') < m.index, 'after the steps');
