@@ -139,9 +139,9 @@ const D887C1 = JSON.parse(fs.readFileSync(path.join(SRC, 'lib/flows/fixtures/rec
 const D887C1_HASH = '78c516db86bf5af90f0f0de1f6c3a614b6ff1c9026b27a25620fbc7c52ecd995';
 const SLUG = 'noise-trends-in-nyc-last-week-d887c1';
 const HEADING = 'Where this question went';
-/** Stage C: the summary, the only closed-state text (d887c1 reached one source). */
-const SUMMARY = 'Where this question went: the model and 1 data source.';
-const RECORD_SENTENCE = 'This record does not say what each one received or keeps.';
+/** Stage C: the summary, the only closed-state text (d887c1 reached one source; Stage D names its runner). */
+const SUMMARY = 'Where this question went: the model, the notebook runner and 1 data source.';
+const RECORD_SENTENCE = 'This site cannot show what each one keeps for this record.';
 const D1_LINE = 'What each one keeps: where a question can go, as of 20 October 2026.';
 const DISCLOSURE_LABEL = 'Learn more about how this analysis was produced';
 

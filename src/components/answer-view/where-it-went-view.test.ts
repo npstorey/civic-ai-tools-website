@@ -240,10 +240,22 @@ const { formatModelName } = (await import('@/lib/models')) as unknown as { forma
 
 interface Holder { holder: string; keeps: string; retention?: string; statementUrl?: string; readOn?: string; operatorStatement?: string }
 
-const RECORD_SENTENCE = 'This record does not say what each one received or keeps.';
+// Stage D (the seat's check of Stage C, finding 1): the record holds each call's arguments, so it does say what
+// a source received; only what each keeps is out of this site's reach.
+const RECORD_SENTENCE = 'This site cannot show what each one keeps for this record.';
+const OLD_RECORD_SENTENCE = 'This record does not say what each one received or keeps.';
 
 /** The summary line, for N reached sources. */
-const summaryFor = (n: number) => `${HEADING}: the model and ${n === 0 ? 'no data source' : n === 1 ? '1 data source' : `${n} data sources`}.`;
+/** Stage D (finding 2): the notebook runner is named when the run has one; N stays the source count. */
+const summaryFor = (n: number, runner = false) =>
+  `${HEADING}: the model${runner ? ', the notebook runner and' : ' and'} ${n === 0 ? 'no data source' : n === 1 ? '1 data source' : `${n} data sources`}.`;
+
+/** Stage D (findings 3 and 4): the model row's label. */
+const ENDPOINT_DEFINED = ', the endpoint this site sends questions to';
+function modelLabel(place: string, service: string | null, keptBy: readonly Holder[] | undefined): string {
+  if (place === 'not recorded') return service ? `The model service (${service}, host not recorded)` : 'The model service (not recorded)';
+  return `The model service (${place})${keptBy?.some((k) => k.operatorStatement) ? ENDPOINT_DEFINED : ''}`;
+}
 
 /** What `KeptByLines` renders for these holders, as text: the panel's own line, read through the real component. */
 const keptText = (keptBy: readonly Holder[], retention = true) =>
@@ -256,13 +268,14 @@ const logsLine = (keptBy: readonly Holder[]) => `Who holds its logs: ${keptText(
 function modelLogsLine(keptBy: readonly Holder[], place: string): string {
   const operator = keptBy.find((k) => k.operatorStatement);
   const only = keptBy.length === 1 && keptBy[0].holder === place && keptBy[0].keeps === 'operator-states';
-  return `Who holds its logs: ${operator ? `${KEPT_FOR_OPERATOR}. ${ENDPOINT_NO_TRAINING}` : only ? `${KEPT_FOR_OPERATOR}.` : `${keptText(keptBy, false)}.`}`;
+  // Stage D (finding 5): the label asks who, so the holder is named before the card's clause.
+  return `Who holds its logs: ${operator ? `${operator.holder}; ${KEPT_FOR_OPERATOR}. ${ENDPOINT_NO_TRAINING}` : only ? `${keptBy[0].holder}; ${KEPT_FOR_OPERATOR}.` : `${keptText(keptBy, false)}.`}`;
 }
 
 const callsWords = (n: number) => (n === 1 ? '1 tool call' : `${n} tool calls`);
 
 /** The section's `<details>`: closed by default, its summary the only closed-state text. */
-function assertClosedDetails(html: string, n: number, label: string) {
+function assertClosedDetails(html: string, n: number, label: string, runner = false) {
   const s = part(html, 'where-it-went');
   const open = /^<(\w+)\b([^>]*)>/.exec(s.markup);
   assert.ok(open, `${label}: no opening tag`);
@@ -270,7 +283,7 @@ function assertClosedDetails(html: string, n: number, label: string) {
   assert.doesNotMatch(open[2], /\bopen\b/, `${label}: the section is open by default`);
   const summary = /^<summary\b[^>]*>([\s\S]*?)<\/summary>/.exec(s.markup.slice(open[0].length));
   assert.ok(summary, `${label}: the <details> does not begin with its <summary>`);
-  assert.equal(unescape(summary[1].replace(/<!-- -->/g, '').replace(/<[^>]*>/g, '')), summaryFor(n), `${label}: the summary line`);
+  assert.equal(unescape(summary[1].replace(/<!-- -->/g, '').replace(/<[^>]*>/g, '')), summaryFor(n, runner), `${label}: the summary line`);
 }
 
 /** A reached row as the section must show it: its line first, then each of its texts, before the next row. */
@@ -282,9 +295,10 @@ interface ShownRow { name: string; texts: readonly string[] }
  * of `absent` anywhere in the section.
  */
 function assertRows(flat: string, n: number, reached: readonly ShownRow[], absent: readonly string[], label: string) {
-  assert.ok(flat.startsWith(summaryFor(n)), `${label}: the section opens with its summary: ${flat.slice(0, 80)}`);
+  const runner = reached.some((row) => row.name.startsWith('Notebook runner'));
+  assert.ok(flat.startsWith(summaryFor(n, runner)), `${label}: the section opens with its summary: ${flat.slice(0, 80)}`);
   const starts: number[] = [];
-  let from = summaryFor(n).length;
+  let from = summaryFor(n, runner).length;
   for (const row of reached) {
     const i = flat.indexOf(row.name, from);
     assert.ok(i >= 0, `${label}: the row "${row.name}" is not in order`);
@@ -352,7 +366,7 @@ function assertRunRows(flat: string, flows: FlowsFixture, label: string) {
     flows.reached.map((row) => {
       if (row.kind === 'model') {
         const r = row.recipients[0];
-        return { name: `The model service (${r.place})`, texts: [`The model: ${formatModelName(row.model!)}`, `Receives: ${r.got}`, modelLogsLine(r.keptBy, r.place)] };
+        return { name: modelLabel(r.place, row.service ?? null, r.keptBy), texts: [`The model: ${formatModelName(row.model!)}`, `Receives: ${r.got}`, modelLogsLine(r.keptBy, r.place)] };
       }
       if (row.kind === 'notebook') {
         const r = row.recipients[0];
@@ -361,13 +375,14 @@ function assertRunRows(flat: string, flows: FlowsFixture, label: string) {
       return {
         name: `${row.name}, ${callsWords(row.calls!)}`,
         texts: row.recipients.flatMap((r) => [
-          r.upstream ? `${row.name}, upstream (${r.place})` : `${row.name} (${r.place})`,
+          // Stage D (finding 6): the upstream host is the source's data host, not "upstream".
+          r.upstream ? `The data host for ${row.name} (${r.place})` : `${row.name} (${r.place})`,
           `Receives: ${r.got}`,
           logsLine(r.keptBy),
         ]),
       };
     }),
-    [...flows.notReached.flatMap((row) => [row.name, row.whyNotSent]), 'What it got', 'What it keeps', 'Service: ', 'Data source:', 'Sandbox platform:'],
+    [...flows.notReached.flatMap((row) => [row.name, row.whyNotSent]), 'What it got', 'What it keeps', 'Service: ', 'Data source:', 'Sandbox platform:', 'upstream', ENDPOINT_DEFINED],
     label,
   );
 }
@@ -470,7 +485,7 @@ const SURFACES: Array<[string, (layouts?: unknown) => string, (layouts?: unknown
 for (const [name, withFlows, withoutFlows, flows] of SURFACES) {
   test(`criterion 2, ${name}: the section renders from the completion's flows, after the sources line, under answer-first`, () => {
     const html = withFlows(instanceWith(ANSWER_FIRST));
-    assertClosedDetails(html, flows.reached.filter((r) => r.kind === 'source').length, name);
+    assertClosedDetails(html, flows.reached.filter((r) => r.kind === 'source').length, name, flows.reached.some((r) => r.kind === 'notebook'));
     const s = section(html);
     assertRunRows(s.flat, flows, name);
     const sources = part(html, 'sources');
@@ -483,7 +498,7 @@ for (const [name, withFlows, withoutFlows, flows] of SURFACES) {
 
   test(`criterion 2, ${name}: under envelope-order the section sits after the sources line and before the citation, outside the disclosure`, () => {
     const html = withFlows(instanceWith(ENVELOPE_ORDER));
-    assertClosedDetails(html, flows.reached.filter((r) => r.kind === 'source').length, name);
+    assertClosedDetails(html, flows.reached.filter((r) => r.kind === 'source').length, name, flows.reached.some((r) => r.kind === 'notebook'));
     const s = section(html);
     assertRunRows(s.flat, flows, name);
     const sources = part(html, 'sources');
@@ -555,16 +570,17 @@ const D887C1_NOT_REACHED = ['Data Commons', 'Off.', 'Boston OpenContext', 'Not s
 test('criterion 3: d887c1, passed the statement with its hash: what each receives and the logs lines are the statement\'s, and no link', () => {
   assert.equal(statementHash(SERVED_78), '78c516db86bf5af90f0f0de1f6c3a614b6ff1c9026b27a25620fbc7c52ecd995', 'premise: the saved statement is the one d887c1 references');
   const html = renderRecord(D887C1, SERVED_78, 'noise-trends-in-nyc-last-week-d887c1');
-  assertClosedDetails(html, 1, 'd887c1 matched');
+  assertClosedDetails(html, 1, 'd887c1 matched', true);
   const s = section(html);
   const { model, runner, socrata } = servedLines(SERVED_78);
   assert.ok(model && runner && socrata, 'premise: the statement holds the model endpoint, the runner and Socrata');
   assert.ok(model.keptBy.some((k) => k.operatorStatement), 'premise: the 78c516db statement carries the operator\'s no-training statement');
   assertRows(s.flat, 1, [
-    { name: 'The model service (openrouter.ai)', texts: ['The model: Claude Haiku 5.5', `Receives: ${model.receives}`, modelLogsLine(model.keptBy, 'openrouter.ai')] },
+    { name: `The model service (openrouter.ai)${ENDPOINT_DEFINED}`, texts: ['The model: Claude Haiku 5.5', `Receives: ${model.receives}`, modelLogsLine(model.keptBy, 'openrouter.ai')] },
     { name: 'Socrata, 1 tool call', texts: ['Socrata (socrata-mcp.civicaitools.org)', `Receives: ${socrata.recipients[0].receives}`, logsLine(socrata.recipients[0].keptBy)] },
     { name: 'Notebook runner (Vercel Sandbox)', texts: [`Receives: ${runner.receives}`, logsLine(runner.keptBy)] },
-  ], [...D887C1_NOT_REACHED.filter((t) => t !== 'Socrata'), 'not recorded', RECORD_SENTENCE, D1_LINE], 'd887c1 matched');
+  ], [...D887C1_NOT_REACHED.filter((t) => t !== 'Socrata'), 'not recorded', RECORD_SENTENCE, OLD_RECORD_SENTENCE, D1_LINE], 'd887c1 matched');
+  assert.ok(s.flat.includes('Who holds its logs: openrouter.ai; '), 'the model row names its holder');
   assert.ok(s.flat.includes(ENDPOINT_NO_TRAINING), 'the model row carries the operator\'s statement, as the card does');
   assertNoRetiredWords(s.flat, 'd887c1 matched');
 });
@@ -576,13 +592,13 @@ for (const [label, served] of [
   test(`criterion 3: d887c1, passed ${label}: the record's places, one sentence instead of what each received or keeps, then the reference line`, () => {
     assert.notEqual(statementHash(served), '78c516db86bf5af90f0f0de1f6c3a614b6ff1c9026b27a25620fbc7c52ecd995', 'premise: the hashes differ');
     const html = renderRecord(D887C1, served, 'noise-trends-in-nyc-last-week-d887c1');
-    assertClosedDetails(html, 1, label);
+    assertClosedDetails(html, 1, label, true);
     const s = section(html);
     assertRows(s.flat, 1, [
-      { name: 'The model service (not recorded)', texts: ['The model: Claude Haiku 5.5'] },
+      { name: 'The model service (openrouter, host not recorded)', texts: ['The model: Claude Haiku 5.5'] },
       { name: 'Socrata, 1 tool call', texts: ['Socrata (socrata-mcp.civicaitools.org)'] },
       { name: 'Notebook runner (not recorded)', texts: [RECORD_SENTENCE, D1_LINE] },
-    ], ['Receives:', 'Who holds its logs', 'Data Commons', 'Off.', 'Not set up on this site.', 'On, not used for this question.'], label);
+    ], [OLD_RECORD_SENTENCE, ENDPOINT_DEFINED, 'Receives:', 'Who holds its logs', 'Data Commons', 'Off.', 'Not set up on this site.', 'On, not used for this question.'], label);
     assert.ok(s.flat.indexOf(RECORD_SENTENCE) < s.flat.indexOf(D1_LINE), 'the record sentence, then the reference line');
     assert.equal(s.flat.split(RECORD_SENTENCE).length - 1, 1, 'one sentence for every row');
     assert.equal(s.flat.split('not recorded').length - 1, 2, '"not recorded" only as the two places the record does not hold');
@@ -607,10 +623,10 @@ for (const [label, pkg, name, host, absent] of [
 ] as const) {
   test(`criterion 3: ${label}, no reference: its host from mcpServers, the record sentence, no link`, () => {
     const html = renderRecord(pkg, SERVED_78, label);
-    assertClosedDetails(html, 1, label);
+    assertClosedDetails(html, 1, label, true);
     const s = section(html);
     assertRows(s.flat, 1, [
-      { name: 'The model service (not recorded)', texts: ['The model: Claude Haiku 5.5'] },
+      { name: 'The model service (openrouter, host not recorded)', texts: ['The model: Claude Haiku 5.5'] },
       { name: `${name}, 2 tool calls`, texts: [`${name} (${host})`] },
       { name: 'Notebook runner (not recorded)', texts: [RECORD_SENTENCE] },
     ], [...absent, 'Receives:', 'Who holds its logs', 'On, not used for this question.', 'Not set up on this site.', 'where a question can go'], label);
@@ -622,13 +638,37 @@ for (const [label, pkg, name, host, absent] of [
 test('Stage C: the summary counts the sources reached, never names one: no data source, 1, 2', () => {
   const base = { notReached: [{ sourceId: 'socrata', name: 'Socrata', whyNotSent: 'Off.' }], statement: { kind: 'in-force' } };
   const modelRow = RUN_FLOWS.reached[0];
-  for (const [n, reached] of [[0, [modelRow]], [1, RUN_FLOWS.reached.slice(0, 2)], [2, RUN_FLOWS.reached]] as const) {
-    const html = withProviders(createElement(WhereItWent, { model: { ...base, reached } }));
-    assertClosedDetails(html, n, `${n} sources`);
-    const summary = /<summary\b[^>]*>([\s\S]*?)<\/summary>/.exec(html)?.[1] ?? '';
-    for (const row of reached) if (row.kind === 'source') assert.ok(!summary.includes(row.name), `the summary names ${row.name}`);
-    assert.ok(!summary.includes('Socrata'), 'the summary names a source not reached');
+  const runnerRow = NOTEBOOK_FLOWS.reached.at(-1)!;
+  for (const runner of [false, true]) {
+    for (const [n, sources] of [[0, [modelRow]], [1, RUN_FLOWS.reached.slice(0, 2)], [2, RUN_FLOWS.reached]] as const) {
+      // Stage D (finding 2): with a notebook runner, the closed line names it; N stays the count of sources.
+      const reached = runner ? [...sources, runnerRow] : [...sources];
+      const html = withProviders(createElement(WhereItWent, { model: { ...base, reached } }));
+      assertClosedDetails(html, n, `${n} sources${runner ? ', with the runner' : ''}`, runner);
+      const summary = /<summary\b[^>]*>([\s\S]*?)<\/summary>/.exec(html)?.[1] ?? '';
+      for (const row of reached) if (row.kind === 'source') assert.ok(!summary.includes(row.name), `the summary names ${row.name}`);
+      assert.ok(!summary.includes('Socrata'), 'the summary names a source not reached');
+    }
   }
+});
+
+test('Stage D (finding 3): on no match the model row names the service the record states, or says neither is recorded', () => {
+  const model = (service: string | null) => ({
+    reached: [{ kind: 'model', name: 'Model endpoint', model: MODEL, service, recipients: [{ role: 'Model endpoint', place: 'not recorded' }] }],
+    notReached: [], statement: { kind: 'none' },
+  });
+  const flatOf = (html: string) => section(html).flat;
+  assert.ok(flatOf(withProviders(createElement(WhereItWent, { model: model('openrouter') }))).includes('The model service (openrouter, host not recorded)'));
+  const neither = flatOf(withProviders(createElement(WhereItWent, { model: model(null) })));
+  assert.ok(neither.includes('The model service (not recorded)'), neither);
+});
+
+test('Stage D (finding 4): "the endpoint" is defined in the row label only where the operator\'s sentence uses it', () => {
+  const run = section(withProviders(createElement(WhereItWent, { model: RUN_FLOWS }))).flat;
+  assert.ok(!run.includes(ENDPOINT_NO_TRAINING) && !run.includes(ENDPOINT_DEFINED), 'no operator statement, no definition');
+  const matched = section(renderRecord(D887C1, SERVED_78, 'endpoint-w4')).flat;
+  assert.ok(matched.includes(`The model service (openrouter.ai)${ENDPOINT_DEFINED}`), 'the label defines the endpoint');
+  assert.ok(matched.indexOf(ENDPOINT_DEFINED) < matched.indexOf(ENDPOINT_NO_TRAINING), 'before the sentence that uses it');
 });
 
 test('Stage C: two levels of indentation: the rows, then each row\'s recipients', () => {
