@@ -12,8 +12,8 @@
  *
  * The component also surfaces the last `phase_a_progress` / `phase_a_tool_call`
  * message beneath the active row so users see the Phase A loop iterating
- * (the slowest stage by far) instead of staring at "Discovering datasets…"
- * for a full minute.
+ * (the slowest stage by far) instead of staring at "Finding the data" for a
+ * full minute.
  *
  * LAYOUT-WEB W3 P1 (design §4.3): when the wrapper hands in the run's steps
  * (`steps`, the answer view's steps part), they replace the four fixed rows —
@@ -22,17 +22,19 @@
  * remain for a run that has recorded no step yet.
  */
 import { useEffect, useState, type ReactNode } from 'react';
+import { PHASE_WORDS } from '@/lib/answer-view/steps';
 
 export type NotebookPhase = 'A' | 'B' | 'C' | 'D' | 'complete';
 
 const PHASE_ORDER: NotebookPhase[] = ['A', 'B', 'C', 'D'];
 
+/** The rows' words: the one table the closing rows also read (UX pass row 21). */
 const PHASE_LABELS: Record<NotebookPhase, string> = {
-  A: 'Discovering datasets',
-  B: 'Synthesizing notebook',
-  C: 'Executing in sandbox',
-  D: 'Finalizing',
-  complete: 'Done',
+  A: PHASE_WORDS.A,
+  B: PHASE_WORDS.B,
+  C: PHASE_WORDS.C,
+  D: PHASE_WORDS.D,
+  complete: PHASE_WORDS.complete,
 };
 
 interface NotebookProgressProps {

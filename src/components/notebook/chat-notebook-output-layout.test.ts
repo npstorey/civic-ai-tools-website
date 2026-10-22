@@ -724,8 +724,10 @@ test('W2 P2 fix 1: the step view ends with the B, C and D rows, in order, after 
   const lastRowEnd = elementEnd(view, starts[starts.length - 1], 'div');
   assert.equal(view.slice(lastRowEnd).replace(/<\/div>/g, ''), '', 'the step view ends with the D row');
 
+  // UX pass row 21: each row is its phase in the reader's words, mapped by phase name, not the route's message.
+  const WORDS: Record<string, string> = { B: 'Writing the notebook', C: 'Running it in a sandbox', D: 'Signing the result' };
   reported.forEach((event, i) => {
-    const label = (event.message as string).replace(/…$/, '');
+    const label = WORDS[event.name as string];
     assert.ok(rowText(rows[i]).startsWith(label), `row ${i + 1} is ${event.name}, "${label}" (found "${rowText(rows[i])}")`);
   });
 });
@@ -749,6 +751,6 @@ test('W2 P2 fix 1: a phase the stream did not report has no row, and a duration 
     .filter((e) => !(e.type === 'phase' && (e.name === 'D' || e.name === 'complete')))
     .map((e) => (e.type === 'notebook' ? { ...e, notebook: unstamped } : e));
   const rows = closingRows(stepView(renderRun(await stateAfter(events), W2_INSTANCE)));
-  assert.deepEqual(rows.map((r) => rowText(r)), ['Synthesizing notebook', 'Executing in sandbox']);
+  assert.deepEqual(rows.map((r) => rowText(r)), ['Writing the notebook', 'Running it in a sandbox']);
   assert.ok(rows.every((r) => !r.includes('data-part="closing-fact"')), 'no duration is stated when none was recorded');
 });

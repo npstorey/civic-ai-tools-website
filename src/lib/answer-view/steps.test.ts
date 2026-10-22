@@ -27,6 +27,8 @@ import {
   mapGroupsToToolCalls,
   asStepCall,
   buildClosingRows,
+  PHASE_WORDS,
+  phaseLabel,
   buildRecordStepView,
   buildRunStepView,
   pairCallsToSteps,
@@ -469,9 +471,18 @@ test('W2 P2 fix 1 closing rows: B, C, D in phase order, only those reported, C w
     { phase: 'complete', message: 'Done.' },
   ];
   assert.deepEqual(buildClosingRows(reported, 4200), [
-    { phase: 'B', label: 'Synthesizing notebook' },
-    { phase: 'C', label: 'Executing in sandbox', fact: `Sandbox duration ${(4200 / 1000).toFixed(1)}s` },
+    { phase: 'B', label: 'Writing the notebook' },
+    { phase: 'C', label: 'Running it in a sandbox', fact: `Sandbox duration ${(4200 / 1000).toFixed(1)}s` },
   ], 'no row for A, complete or an unreported D; B before C whatever the order reported');
   assert.deepEqual(buildClosingRows(reported, null).map((r) => r.fact), [undefined, undefined], 'no duration stated when none was recorded');
   assert.deepEqual(buildClosingRows([], 4200), [], 'no rows when no phase was recorded');
+});
+
+test('UX pass row 21: the phase words are mapped by phase name, the route\'s message the fallback for a phase the table lacks', () => {
+  assert.deepEqual({ ...PHASE_WORDS }, { A: 'Finding the data', B: 'Writing the notebook', C: 'Running it in a sandbox', D: 'Signing the result', complete: 'Done' });
+  // The route's messages are unchanged; the label does not read them for a known phase.
+  assert.equal(phaseLabel('B', 'Synthesizing notebook…'), 'Writing the notebook');
+  assert.equal(phaseLabel('D', 'Finalizing…'), 'Signing the result');
+  assert.equal(phaseLabel('E', 'Checking the result…'), 'Checking the result', 'an unknown phase reads its message without the ellipsis, as before');
+  assert.equal(phaseLabel('E', 'Checking the result...'), 'Checking the result');
 });

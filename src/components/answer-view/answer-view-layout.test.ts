@@ -720,9 +720,21 @@ test('W3 P1 item 3: while the run is under way, its progress is the step view: a
   const steps = part(html, 'steps').markup;
   assert.equal(occurrences(steps, 'data-part="step" ').length, 3, 'one step per Phase A iteration');
   const closing = occurrences(steps, '<div data-part="closing-row"').map((s) => steps.slice(s, elementEnd(steps, s, 'div')).replace(/<[^>]*>/g, ''));
-  assert.deepEqual(closing, ['Synthesizing notebook', 'Executing in sandbox'], 'a row for each later phase the run reported');
-  assert.doesNotMatch(html, />Finalizing</, 'no row for a phase not yet reported');
+  assert.deepEqual(closing, ['Writing the notebook', 'Running it in a sandbox'], 'a row for each later phase the run reported');
+  assert.doesNotMatch(html, />Signing the result</, 'no row for a phase not yet reported');
   assert.doesNotMatch(html, /<ul\b/, 'the four fixed phase rows are gone');
+});
+
+// --- UX pass row 21: before any step, the four phase rows read the table's words ------------------
+
+test('UX pass row 21: before any step, the four phase rows read "Finding the data" to "Signing the result", in order', async () => {
+  const started = await stateAfter([{ type: 'phase', name: 'A', message: 'Discovering datasets…' }]);
+  (started as { isLoading: boolean }).isLoading = true;
+  (started as { completedAt: number | null }).completedAt = null;
+  const html = renderRun(started);
+  const list = /<ul\b[^>]*>(.*?)<\/ul>/.exec(html)?.[1] ?? '';
+  const labels = [...list.matchAll(/<li\b.*?<\/li>/g)].map((m) => unescape(m[0].replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim().replace(/ \d+:\d\d$/, ''));
+  assert.deepEqual(labels, ['Finding the data', 'Writing the notebook', 'Running it in a sandbox', 'Signing the result'], `the four rows read: ${labels.join(' | ')}`);
 });
 
 // --- UX pass row 20: the progress panel's title and paragraph, in the reader's words ------------
@@ -1132,7 +1144,10 @@ test('W4 P1 (10) an executed reading with no execution stamp: the citation previ
 // RE-CAPTURED, NOT EDITED, where a later change moved words on purpose: the
 // comparison's golden by this block on the UX pass branch (row 12, the servers
 // row relabelled "Data sources this site could use" and its entry named), its
-// diff from the base's capture confined to that row's two text nodes.
+// diff from the base's capture confined to that row's two text nodes; the
+// executed run's golden by this block on the same branch (row 21, the closing
+// rows' phase words mapped by phase name), its diff confined to those three
+// labels.
 
 const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
 
