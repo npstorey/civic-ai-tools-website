@@ -711,7 +711,9 @@ test('W3 P1 item 2: side by side, the without-data panel keeps its own panel and
 
 // --- Item 3: the four phase rows while running become the step view's rows ---------------
 
-test('W3 P1 item 3: while the run is under way, its progress is the step view: a step per Phase A iteration, then a row per reported later phase', async () => {
+// UX pass row 22 changed what follows the steps while the run is under way:
+// the later phases are a list with their state marks (below), not closing rows.
+test('W3 P1 item 3: while the run is under way, its progress is the step view: a step per Phase A iteration, then the later phases with their marks', async () => {
   const running = await stateAfter(runEvents(RUN_NOTEBOOK, 'C'));
   (running as { isLoading: boolean }).isLoading = true;
   (running as { completedAt: number | null }).completedAt = null;
@@ -719,10 +721,70 @@ test('W3 P1 item 3: while the run is under way, its progress is the step view: a
   assert.ok(html.includes('Working on your answer'), 'premise: the progress panel renders');
   const steps = part(html, 'steps').markup;
   assert.equal(occurrences(steps, 'data-part="step" ').length, 3, 'one step per Phase A iteration');
-  const closing = occurrences(steps, '<div data-part="closing-row"').map((s) => steps.slice(s, elementEnd(steps, s, 'div')).replace(/<[^>]*>/g, ''));
-  assert.deepEqual(closing, ['Writing the notebook', 'Running it in a sandbox'], 'a row for each later phase the run reported');
-  assert.doesNotMatch(html, />Signing the result</, 'no row for a phase not yet reported');
-  assert.doesNotMatch(html, /<ul\b/, 'the four fixed phase rows are gone');
+  assert.equal(occurrences(html, 'data-part="closing-row"').length, 0, 'no closing rows while the run is under way');
+  assert.deepEqual(laterPhases(html).map((r) => r.label), ['Writing the notebook', 'Running it in a sandbox', 'Signing the result'], 'a row for each later phase, reported or not');
+  assert.equal(occurrences(html, 'Finding the data').length, 0, 'the fixed row for Phase A is gone: its steps stand for it');
+});
+
+// --- UX pass row 22: the later phases keep their state marks after the steps appear ------------
+//
+// At the base, once the run had a step, the four glyph rows were replaced by
+// the steps and the later phases appeared only as closing rows: bare text, no
+// mark, no counter, and no row for a phase not yet reported. Now the live
+// panel lists B, C and D under the steps with the glyphs the fixed rows use
+// (a check done, a spinner active with its counter, a circle pending), and
+// renders no closing rows while the run is active; the finished run keeps
+// its closing rows (the executed-run golden).
+
+/** The live panel's later-phase rows: each row's label and the glyph it shows. */
+function laterPhases(html: string): Array<{ label: string; glyph: 'check' | 'spinner' | 'pending' | 'none'; counter: boolean }> {
+  const list = /<ul data-part="later-phases"[^>]*>(.*?)<\/ul>/.exec(html)?.[1] ?? '';
+  return [...list.matchAll(/<li\b.*?<\/li>/g)].map((m) => {
+    const row = m[0];
+    const glyph = row.includes('✓') ? 'check' : /animation:spin/.test(row) ? 'spinner' : /border:2px solid var\(--border-color\)/.test(row) ? 'pending' : 'none';
+    const words = unescape(row.replace(/<[^>]*>/g, ' ').replace('✓', '')).replace(/\s+/g, ' ').trim();
+    const counter = / \d+:\d\d$/.test(words);
+    return { label: words.replace(/ \d+:\d\d$/, ''), glyph, counter };
+  });
+}
+
+const throughPhase = (events: Array<Record<string, unknown>>, last: string) => {
+  const order = ['A', 'B', 'C', 'D', 'complete'];
+  return events.filter((e) => e.type !== 'phase' || order.indexOf(e.name as string) <= order.indexOf(last));
+};
+
+test('UX pass row 22: with steps and phase B active, three later-phase rows: one spinner with its counter, two pending circles', async () => {
+  const running = await stateAfter(throughPhase(runEvents(RUN_NOTEBOOK, 'C'), 'B'));
+  (running as { isLoading: boolean }).isLoading = true;
+  (running as { completedAt: number | null }).completedAt = null;
+  assert.equal(running.phase, 'B', 'premise: phase B is the latest reported');
+  const html = renderRun(running);
+  assert.ok(html.includes('data-part="steps"'), 'premise: the steps box is shown');
+  assert.deepEqual(laterPhases(html), [
+    { label: 'Writing the notebook', glyph: 'spinner', counter: true },
+    { label: 'Running it in a sandbox', glyph: 'pending', counter: false },
+    { label: 'Signing the result', glyph: 'pending', counter: false },
+  ]);
+  assert.equal(occurrences(html, 'data-part="closing-row"').length, 0, 'closing rows render while the run is active');
+});
+
+test('UX pass row 22: with steps and phase complete before the notebook arrives, the three rows show checks', async () => {
+  const events = [...runEvents(RUN_NOTEBOOK, 'C'), { type: 'phase', name: 'D', message: 'Finalizing…' }, { type: 'phase', name: 'complete', message: 'Done.' }];
+  const running = await stateAfter(events);
+  (running as { isLoading: boolean }).isLoading = true;
+  (running as { completedAt: number | null }).completedAt = null;
+  assert.equal(running.phase, 'complete', 'premise: the run reported complete');
+  assert.equal(running.notebook ?? null, null, 'premise: no notebook has arrived');
+  assert.deepEqual(laterPhases(renderRun(running)).map((r) => [r.label, r.glyph]), [
+    ['Writing the notebook', 'check'],
+    ['Running it in a sandbox', 'check'],
+    ['Signing the result', 'check'],
+  ]);
+});
+
+test('UX pass row 22: the finished run keeps its closing rows and shows no later-phase list', () => {
+  assert.equal(occurrences(RUN, 'data-part="closing-row"').length, 3, 'premise: the finished run has its closing rows');
+  assert.equal(laterPhases(RUN).length, 0);
 });
 
 // --- UX pass row 21: before any step, the four phase rows read the table's words ------------------

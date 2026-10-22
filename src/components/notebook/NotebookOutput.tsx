@@ -74,10 +74,12 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const instance = useInstanceAttribution().host;
   // While the run is under way, its steps so far as the answer view's steps
-  // part; the sandbox has recorded no duration yet, so C's row states none.
+  // part, with no closing rows: the progress panel lists the later phases
+  // under the steps with their state marks (UX pass row 22). The finished run
+  // keeps its closing rows (`ChatNotebookOutput`, below).
   const liveSteps = state.notebook
     ? null
-    : notebookSteps(state.steps?.progressGroups, state.toolCalls, state.phaseLog, null, instance);
+    : notebookSteps(state.steps?.progressGroups, state.toolCalls, undefined, null, instance);
 
   // Publishable iff the pipeline completed AND the publish inputs arrived
   // (trace + answer via the `publish_inputs` event). Older cached streams /

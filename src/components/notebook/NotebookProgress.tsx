@@ -16,10 +16,12 @@
  * full minute.
  *
  * LAYOUT-WEB W3 P1 (design §4.3): when the wrapper hands in the run's steps
- * (`steps`, the answer view's steps part), they replace the four fixed rows —
- * a step per Phase A iteration so far, then a row for each later phase the
- * run has reported — and the latest message sits beneath them. The four rows
- * remain for a run that has recorded no step yet.
+ * (`steps`, the answer view's steps part), they replace the fixed row for
+ * Phase A — a step per Phase A iteration so far — and the latest message
+ * sits beneath them. The four rows remain for a run that has recorded no step
+ * yet. UX pass row 22: under the steps, the later phases (B, C, D) keep their
+ * rows, with the same marks and the active phase's counter; the steps part
+ * carries no closing rows while the run is under way.
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { PHASE_WORDS } from '@/lib/answer-view/steps';
@@ -27,6 +29,18 @@ import { PHASE_WORDS } from '@/lib/answer-view/steps';
 export type NotebookPhase = 'A' | 'B' | 'C' | 'D' | 'complete';
 
 const PHASE_ORDER: NotebookPhase[] = ['A', 'B', 'C', 'D'];
+
+const PHASE_LIST = {
+  listStyle: 'none',
+  margin: 0,
+  padding: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '10px',
+} as const;
+
+/** The phases listed under the steps once Phase A has steps of its own (UX pass row 22). */
+const LATER_PHASES: NotebookPhase[] = ['B', 'C', 'D'];
 
 /** The rows' words: the one table the closing rows also read (UX pass row 21). */
 const PHASE_LABELS: Record<NotebookPhase, string> = {
@@ -131,6 +145,57 @@ export default function NotebookProgress({
   const currentPhaseElapsedMs = phaseStartedAt ? now - phaseStartedAt : 0;
   const totalLabel = formatElapsed(totalElapsedMs);
 
+  // One phase's row: its mark, its words, the active phase's counter, and,
+  // in the fixed list only, the latest detail line under the active row (under
+  // the steps it sits beneath them instead).
+  const phaseRow = (p: NotebookPhase, withDetail: boolean) => {
+    const status = statusFor(p, phase);
+    const isActive = status === 'active';
+    return (
+      <li
+        key={p}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
+          opacity: status === 'pending' ? 0.6 : 1,
+        }}
+      >
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: '10px', fontSize: '14px',
+          color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+          fontWeight: isActive ? 500 : 400,
+        }}>
+          <StatusGlyph status={status} />
+          <span>{PHASE_LABELS[p]}</span>
+          {isActive && (
+            <span style={{
+              marginLeft: 'auto',
+              fontSize: '12px',
+              color: 'var(--text-muted)',
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              {formatElapsed(currentPhaseElapsedMs)}
+            </span>
+          )}
+        </span>
+        {withDetail && isActive && detail && (
+          <span
+            style={{
+              fontSize: '12px',
+              color: 'var(--text-muted)',
+              paddingLeft: '26px',
+              fontStyle: 'italic',
+              wordBreak: 'break-word',
+            }}
+          >
+            {detail}
+          </span>
+        )}
+      </li>
+    );
+  };
+
   return (
     <div
       aria-live="polite"
@@ -169,65 +234,13 @@ export default function NotebookProgress({
               {detail}
             </span>
           )}
+          <ul data-part="later-phases" style={PHASE_LIST}>
+            {LATER_PHASES.map((p) => phaseRow(p, false))}
+          </ul>
         </>
       ) : (
-      <ul
-        style={{
-          listStyle: 'none',
-          margin: 0,
-          padding: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '10px',
-        }}
-      >
-        {PHASE_ORDER.map((p) => {
-          const status = statusFor(p, phase);
-          const isActive = status === 'active';
-          return (
-            <li
-              key={p}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '4px',
-                opacity: status === 'pending' ? 0.6 : 1,
-              }}
-            >
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: '10px', fontSize: '14px',
-                color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-                fontWeight: isActive ? 500 : 400,
-              }}>
-                <StatusGlyph status={status} />
-                <span>{PHASE_LABELS[p]}</span>
-                {isActive && (
-                  <span style={{
-                    marginLeft: 'auto',
-                    fontSize: '12px',
-                    color: 'var(--text-muted)',
-                    fontVariantNumeric: 'tabular-nums',
-                  }}>
-                    {formatElapsed(currentPhaseElapsedMs)}
-                  </span>
-                )}
-              </span>
-              {isActive && detail && (
-                <span
-                  style={{
-                    fontSize: '12px',
-                    color: 'var(--text-muted)',
-                    paddingLeft: '26px',
-                    fontStyle: 'italic',
-                    wordBreak: 'break-word',
-                  }}
-                >
-                  {detail}
-                </span>
-              )}
-            </li>
-          );
-        })}
+      <ul style={PHASE_LIST}>
+        {PHASE_ORDER.map((p) => phaseRow(p, true))}
       </ul>
       )}
     </div>
