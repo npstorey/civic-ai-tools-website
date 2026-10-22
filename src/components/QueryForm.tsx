@@ -17,11 +17,12 @@ import {
 } from '@/lib/query-presentation';
 import { parseModelsResponse, type Model } from '@/lib/model-list';
 import { friendlyStreamError, MODELS_LOAD_ERROR } from '@/lib/streaming';
-import { NOT_NOW_LINE } from '@/lib/sources/copy';
+import { JUST_IN_TIME_LINE, NOT_NOW_LINE } from '@/lib/sources/copy';
+import { readerSourceName } from '@/lib/sources/source-name';
 import ConsentCard from '@/components/sources/ConsentCard';
 import SourcesPanel from '@/components/sources/SourcesPanel';
 import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
-import { useSourceConsent } from '@/components/sources/useSourceConsent';
+import { currentStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
 import RateLimitBanner from './RateLimitBanner';
 import { useDefaultPortalArg, usePortalLocked } from '@/components/DefaultPortalProvider';
 import { useNotebooksOffered } from '@/components/NotebookModeProvider';
@@ -106,6 +107,29 @@ const SIGN_IN_ADDS_REST = ` to run the answer as a notebook in a signed sandbox 
  * none. The one that compares two cities is not offered on a locked instance
  * (#436).
  */
+
+/** "A", "A and B", "A, B and C" (or "or"). */
+function joinNames(names: string[], word: 'and' | 'or'): string {
+  return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} ${word} ${names[names.length - 1]}`;
+}
+
+const STATE_WORDS: Record<SourceStateValue, string> = { on: 'On', 'ask-first': 'Ask first', off: 'Off' };
+
+/**
+ * The just-in-time line (UX pass row 11): where this question goes, read from
+ * the states the guard reads, in statement order. The sources not On are
+ * grouped by state, Ask first before Off, each group with its own state.
+ */
+function whereThisQuestionGoes(sources: Array<{ name: string; state: SourceStateValue }>): string {
+  const on = sources.filter((s) => s.state === 'on').map((s) => s.name);
+  const first = `${JUST_IN_TIME_LINE.lead}${on.length > 0 ? joinNames(on, 'and') : JUST_IN_TIME_LINE.noSource}.`;
+  if (on.length === 0) return first;
+  const groups = (['ask-first', 'off'] as const)
+    .map((state) => ({ state, names: sources.filter((s) => s.state === state).map((s) => s.name) }))
+    .filter((g) => g.names.length > 0)
+    .map((g) => `${joinNames(g.names, 'or')}${g.names.length > 1 ? JUST_IN_TIME_LINE.whichAre : JUST_IN_TIME_LINE.whichIs}${STATE_WORDS[g.state]}`);
+  return groups.length === 0 ? first : `${first} ${JUST_IN_TIME_LINE.notTo}${groups.join(JUST_IN_TIME_LINE.orGroup)}.`;
+}
 
 const PORTALS = [
   { id: '', name: 'All portals' },
@@ -251,6 +275,14 @@ export default function QueryForm({
   // through this form.
   const consent = useSourceConsent();
   const [cardOpen, setCardOpen] = useState(false);
+  // The just-in-time line (UX pass row 11), only while a consent is in force,
+  // and the Sources details it opens.
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const statementSources = consent.statement?.sources ?? [];
+  const sourceStates = currentStates(consent.status, statementSources.map((s) => s.sourceId));
+  const goesLine = consent.status?.inForce === true && statementSources.length > 0
+    ? whereThisQuestionGoes(statementSources.map((s) => ({ name: readerSourceName(s), state: sourceStates[s.sourceId] ?? 'ask-first' })))
+    : null;
   const [declinedQuery, setDeclinedQuery] = useState<string | null>(null);
   const [noneOn, setNoneOn] = useState(false);
   const pendingRef = useRef<(() => void) | null>(null);
@@ -388,6 +420,21 @@ export default function QueryForm({
           )}
         </button>
       </div>
+
+      {goesLine !== null && (
+        <p data-part="where-this-question-goes" style={{ margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+          {goesLine}{' '}
+          <a
+            href="#sources-panel-heading"
+            onClick={(e) => {
+              e.preventDefault();
+              setSourcesOpen(true);
+            }}
+          >
+            {JUST_IN_TIME_LINE.change}
+          </a>
+        </p>
+      )}
 
       {/* Example queries on one row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -888,7 +935,7 @@ export default function QueryForm({
           {friendlyStreamError({ code: 'no_sources_on' })}
         </p>
       )}
-      <details>
+      <details open={sourcesOpen} onToggle={(e) => setSourcesOpen(e.currentTarget.open)}>
         <summary style={{ cursor: 'pointer', fontSize: '13px', color: 'var(--text-secondary)' }}>Data sources this site can use</summary>
         <div style={{ marginTop: '8px' }}>
           <SourcesPanel />

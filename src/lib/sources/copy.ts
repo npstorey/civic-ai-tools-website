@@ -60,6 +60,24 @@ export const PANEL_PRIVACY_LINK = 'Where a question can go, in full';
  */
 export const PANEL_STATE_CHANGED = { middle: ' is now ', end: '. This applies from your next question.' } as const;
 
+/**
+ * The just-in-time line under the question box while a consent is in force
+ * (UX pass row 11), in its pieces: `lead` + the On sources (or `noSource`) +
+ * `.`; then, when any source is not On, `notTo` + each group of the others
+ * with `whichAre` / `whichIs` + its state, the groups joined by `orGroup`;
+ * then the link that opens the Sources panel, `change`. The names are read
+ * from the statement (`readerSourceName`), never typed.
+ */
+export const JUST_IN_TIME_LINE = {
+  lead: 'This question goes to the model service and to ',
+  noSource: 'no data source',
+  notTo: 'Not to ',
+  whichAre: ', which are set to ',
+  whichIs: ', which is set to ',
+  orGroup: ', or ',
+  change: 'Change sources',
+} as const;
+
 // --- The dashboard's Sources tab ---
 
 /** The tab when no consent is in force (T9). */
