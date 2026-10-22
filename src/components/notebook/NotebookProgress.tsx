@@ -224,7 +224,7 @@ export default function NotebookProgress({
       </div>
       <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
         This site finds the data, writes the steps as a notebook, runs them in
-        a sandbox, and signs the result. It usually takes 30 to 90 seconds.
+        a sandbox, and checks the result. It usually takes 30 to 90 seconds.
       </p>
       {steps !== undefined ? (
         <>

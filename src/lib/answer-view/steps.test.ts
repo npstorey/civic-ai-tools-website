@@ -479,10 +479,10 @@ test('W2 P2 fix 1 closing rows: B, C, D in phase order, only those reported, C w
 });
 
 test('UX pass row 21: the phase words are mapped by phase name, the route\'s message the fallback for a phase the table lacks', () => {
-  assert.deepEqual({ ...PHASE_WORDS }, { A: 'Finding the data', B: 'Writing the notebook', C: 'Running it in a sandbox', D: 'Signing the result', complete: 'Done' });
+  assert.deepEqual({ ...PHASE_WORDS }, { A: 'Finding the data', B: 'Writing the notebook', C: 'Running it in a sandbox', D: 'Checking the result', complete: 'Done' });
   // The route's messages are unchanged; the label does not read them for a known phase.
   assert.equal(phaseLabel('B', 'Synthesizing notebook…'), 'Writing the notebook');
-  assert.equal(phaseLabel('D', 'Finalizing…'), 'Signing the result');
+  assert.equal(phaseLabel('D', 'Finalizing…'), 'Checking the result');
   assert.equal(phaseLabel('E', 'Checking the result…'), 'Checking the result', 'an unknown phase reads its message without the ellipsis, as before');
   assert.equal(phaseLabel('E', 'Checking the result...'), 'Checking the result');
 });

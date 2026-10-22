@@ -793,7 +793,7 @@ export const PHASE_WORDS: Readonly<Record<string, string>> = {
   A: 'Finding the data',
   B: 'Writing the notebook',
   C: 'Running it in a sandbox',
-  D: 'Signing the result',
+  D: 'Checking the result',
   complete: 'Done',
 };
 

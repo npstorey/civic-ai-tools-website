@@ -722,7 +722,7 @@ test('W3 P1 item 3: while the run is under way, its progress is the step view: a
   const steps = part(html, 'steps').markup;
   assert.equal(occurrences(steps, 'data-part="step" ').length, 3, 'one step per Phase A iteration');
   assert.equal(occurrences(html, 'data-part="closing-row"').length, 0, 'no closing rows while the run is under way');
-  assert.deepEqual(laterPhases(html).map((r) => r.label), ['Writing the notebook', 'Running it in a sandbox', 'Signing the result'], 'a row for each later phase, reported or not');
+  assert.deepEqual(laterPhases(html).map((r) => r.label), ['Writing the notebook', 'Running it in a sandbox', 'Checking the result'], 'a row for each later phase, reported or not');
   assert.equal(occurrences(html, 'Finding the data').length, 0, 'the fixed row for Phase A is gone: its steps stand for it');
 });
 
@@ -763,7 +763,7 @@ test('UX pass row 22: with steps and phase B active, three later-phase rows: one
   assert.deepEqual(laterPhases(html), [
     { label: 'Writing the notebook', glyph: 'spinner', counter: true },
     { label: 'Running it in a sandbox', glyph: 'pending', counter: false },
-    { label: 'Signing the result', glyph: 'pending', counter: false },
+    { label: 'Checking the result', glyph: 'pending', counter: false },
   ]);
   assert.equal(occurrences(html, 'data-part="closing-row"').length, 0, 'closing rows render while the run is active');
 });
@@ -778,7 +778,7 @@ test('UX pass row 22: with steps and phase complete before the notebook arrives,
   assert.deepEqual(laterPhases(renderRun(running)).map((r) => [r.label, r.glyph]), [
     ['Writing the notebook', 'check'],
     ['Running it in a sandbox', 'check'],
-    ['Signing the result', 'check'],
+    ['Checking the result', 'check'],
   ]);
 });
 
@@ -789,14 +789,14 @@ test('UX pass row 22: the finished run keeps its closing rows and shows no later
 
 // --- UX pass row 21: before any step, the four phase rows read the table's words ------------------
 
-test('UX pass row 21: before any step, the four phase rows read "Finding the data" to "Signing the result", in order', async () => {
+test('UX pass row 21: before any step, the four phase rows read "Finding the data" to "Checking the result", in order', async () => {
   const started = await stateAfter([{ type: 'phase', name: 'A', message: 'Discovering datasets…' }]);
   (started as { isLoading: boolean }).isLoading = true;
   (started as { completedAt: number | null }).completedAt = null;
   const html = renderRun(started);
   const list = /<ul\b[^>]*>(.*?)<\/ul>/.exec(html)?.[1] ?? '';
   const labels = [...list.matchAll(/<li\b.*?<\/li>/g)].map((m) => unescape(m[0].replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim().replace(/ \d+:\d\d$/, ''));
-  assert.deepEqual(labels, ['Finding the data', 'Writing the notebook', 'Running it in a sandbox', 'Signing the result'], `the four rows read: ${labels.join(' | ')}`);
+  assert.deepEqual(labels, ['Finding the data', 'Writing the notebook', 'Running it in a sandbox', 'Checking the result'], `the four rows read: ${labels.join(' | ')}`);
 });
 
 // --- UX pass row 20: the progress panel's title and paragraph, in the reader's words ------------
@@ -811,7 +811,7 @@ test('UX pass row 20: the progress panel says what the site is doing, and how lo
   (running as { completedAt: number | null }).completedAt = null;
   const text = unescape(renderRun(running).replace(/<!-- -->/g, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' '));
   assert.ok(text.includes('Working on your answer'), `the panel's title is not the reader's: ${text.slice(0, 300)}`);
-  assert.ok(text.includes('This site finds the data, writes the steps as a notebook, runs them in a sandbox, and signs the result. It usually takes 30 to 90 seconds.'), `the panel's paragraph is not the reader's: ${text.slice(0, 400)}`);
+  assert.ok(text.includes('This site finds the data, writes the steps as a notebook, runs them in a sandbox, and checks the result. It usually takes 30 to 90 seconds.'), `the panel's paragraph is not the reader's: ${text.slice(0, 400)}`);
   assert.ok(!text.includes('Generating reproducible notebook') && !text.includes('four-phase pipeline'), 'the old words are still shown');
 });
 
@@ -1210,7 +1210,8 @@ test('W4 P1 (10) an executed reading with no execution stamp: the citation previ
 // executed run's golden by this block on the same branch (row 21, the closing
 // rows' phase words mapped by phase name), its diff confined to those three
 // labels; and again for row 23 (a duration in seconds), its diff confined to
-// the three duration strings.
+// the three duration strings; and again for the owner's fix to phase D's
+// words ("Checking the result"), its diff that one closing-row label.
 
 const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
 
