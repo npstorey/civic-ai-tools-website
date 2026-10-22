@@ -50,7 +50,7 @@ import type OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 import { getGenAiSystem, includeStreamUsage } from '../model-client.ts';
 import { modelRequestParameters, type ModelRequestSettings } from '../model-catalog.ts';
-import { classifyStreamError, describeToolFailureForLlm, generateToolReason } from '../streaming.ts';
+import { classifyStreamError, describeToolFailureForLlm, generateToolReason, type ConsentPausePayload } from '../streaming.ts';
 import type { TraceBuilder } from '../evidence/trace.ts';
 import { hash as traceHash } from '../evidence/trace.ts';
 import { deriveOperationType, isTool, toolSpanNames, upstreamToolName } from '../mcp/operation-types.ts';
@@ -116,6 +116,12 @@ export interface LoadStepResult {
 export interface LoadStepContext {
   /** The tool-calling round the load was made in, from 1. */
   iteration: number;
+  /**
+   * Report a just-in-time pause (#644 W2): the loop emits it as a
+   * `consent_pause` event, carrying no iteration and nothing of the call. The
+   * pause's key travels on that event only, never onto a span.
+   */
+  reportPause?: (pause: ConsentPausePayload) => void;
 }
 
 /**
@@ -181,7 +187,14 @@ export type LoopEvent =
   | { type: 'thinking'; iteration: number }
   | { type: 'token_budget_exhausted'; cumulativeTokens: number }
   | { type: 'answering_turn'; tokenLimitExceeded: boolean }
-  | { type: 'pass_through' };
+  | { type: 'pass_through' }
+  /**
+   * A load of an Ask-first source paused to ask the reader (#644 W2), or
+   * could not (`pause.holds` false). Emitted from inside the load, after the
+   * pause's store entry is written and before it is polled; it names no
+   * iteration, so every surface shows it as a step of its own.
+   */
+  | { type: 'consent_pause'; pause: ConsentPausePayload };
 
 export interface ToolLoopOptions {
   /** Resolved by the caller, inside the caller's own error handling. */
@@ -926,6 +939,11 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
        * is paired to its span by index downstream), with a span the harness
        * reads by its operation type: `tool.load_outcome`, never `error`, and
        * no source attribute, since none answered it.
+       *
+       * A load of an Ask-first source may pause to ask the reader (#644 W2):
+       * it holds here, outside the per-call bound, for up to a minute, and
+       * the span's duration includes the hold. The pause reaches the reader
+       * as a `consent_pause` event and reaches the span only as the outcome.
        */
       if (loadStep && name === loadStep.toolName) {
         const alias = !argumentsMalformed && typeof args.alias === 'string' ? args.alias : undefined;
@@ -946,7 +964,10 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         const loadStartTime = Date.now();
         let answer: LoadStepResult;
         try {
-          answer = await loadStep.load(alias, { iteration: currentIteration });
+          answer = await loadStep.load(alias, {
+            iteration: currentIteration,
+            reportPause: (pause) => emit({ type: 'consent_pause', pause }),
+          });
         } catch {
           answer = { outcome: 'unavailable', text: LOAD_FAILED_TEXT };
         }

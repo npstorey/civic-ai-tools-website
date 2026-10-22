@@ -227,7 +227,8 @@ async function drive(options: DriveOptions): Promise<Drive> {
           c.at.push({
             t: c.t + plan.afterMs,
             act: async () => {
-              const entry = (await kv.get(name)) as Json;
+              // Read off the map, not through \`get\`, so only the pause's own reads are counted.
+              const entry = JSON.parse(kv.entries.get(name)!.value) as Json;
               await kv.set(name, { ...entry, decision: plan.decision }, { xx: true, keepTtl: true });
             },
           });

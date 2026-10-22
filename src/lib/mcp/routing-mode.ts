@@ -48,42 +48,17 @@ import { routedSourceId } from './registry.ts';
 import { composeDirectoryPrompt, composeInLoopSystemPrompt, routerComponent, withPortalLockGuidance, type CompositionComponent } from './socrata-skill.ts';
 import { loadSourceTool, mcpToolsFor, offeredMcpTools } from './tools.ts';
 import { sourceIdForToolName } from './operation-types.ts';
-import { classifyStreamError } from '../streaming.ts';
+import { classifyStreamError, type ConsentPausePayload } from '../streaming.ts';
 import { callMcpTool, type McpToolCallOptions } from './client.ts';
 import type { LoadStep } from '../model-loop/run-tool-loop.ts';
 import { IN_LOOP_RUN_RECORD_ATTRIBUTE, RUN_RECORD_ATTRIBUTE } from '../evidence/trace.ts';
+import type { SourceRoutingMode } from './source-routing-mode.ts';
 
-/** The values `SOURCE_ROUTING` takes, the default first. */
-export const SOURCE_ROUTING_MODES = ['all-sources', 'in-loop'] as const;
-
-export type SourceRoutingMode = (typeof SOURCE_ROUTING_MODES)[number];
-
-/** The one log line for a value outside the set. Names the variable and the
- *  set, never the value. */
-export const SOURCE_ROUTING_UNKNOWN_VALUE_LINE =
-  `[source-routing] SOURCE_ROUTING is set to a value other than ${SOURCE_ROUTING_MODES.join(' or ')}; running as all-sources`;
-
-function isSourceRoutingMode(value: string): value is SourceRoutingMode {
-  return (SOURCE_ROUTING_MODES as readonly string[]).includes(value);
-}
-
-/**
- * The mode a raw `SOURCE_ROUTING` value selects: trimmed, as the preflight
- * trims; unset, empty or blank is `all-sources`; a value outside the set is
- * `all-sources` and `warn` is called once with the line above.
- */
-export function parseSourceRouting(raw: string | undefined, warn: (line: string) => void = console.warn): SourceRoutingMode {
-  const value = raw?.trim();
-  if (!value) return 'all-sources';
-  if (isSourceRoutingMode(value)) return value;
-  warn(SOURCE_ROUTING_UNKNOWN_VALUE_LINE);
-  return 'all-sources';
-}
-
-/** This instance's mode, read from `SOURCE_ROUTING` at call time. */
-export function sourceRoutingMode(): SourceRoutingMode {
-  return parseSourceRouting(process.env.SOURCE_ROUTING);
-}
+// The mode's reader lives in a leaf module, so a reader of the mode imports
+// nothing else (#644 W2, the seat's ruling): the privacy page reads it there.
+// Re-exported here, so every import of this module stands.
+export { SOURCE_ROUTING_MODES, SOURCE_ROUTING_UNKNOWN_VALUE_LINE, parseSourceRouting, sourceRoutingMode } from './source-routing-mode.ts';
+export type { SourceRoutingMode } from './source-routing-mode.ts';
 
 // --- The directory set ------------------------------------------------------------
 
@@ -92,7 +67,8 @@ export interface DirectoryEntry {
   sourceId: string;
   /** The alias the directory lists it by, and `load_source` names it by. */
   alias: string;
-  /** `on` loads; `ask-first` is declined until W2 adds the pause. */
+  /** `on` loads; `ask-first` asks the reader when the run holds a pause
+   *  (`InLoopRoutingInput.pause`), and is declined when it does not. */
   state: 'on' | 'ask-first';
 }
 
@@ -152,6 +128,12 @@ export const LOAD_RESULT_TEXT = {
   declined: (alias: string) =>
     `${alias} is unavailable for this question, so nothing was loaded. Do not call load_source for it again. ` +
     'In your answer, say what could not be checked without it.',
+  // #644 W2: a pause that ended with no decision, whether the reader was
+  // asked and did not answer in time, or could not be asked (no store, or the
+  // run's holds spent). One sentence, true of both.
+  noAnswer: (alias: string) =>
+    `${alias} is unavailable for this question, because no answer about it arrived in time or the reader could not be asked. ` +
+    'Do not call load_source for it again. In your answer, say what could not be checked without it.',
   notOffered:
     'No source in the directory has that alias, so nothing was loaded. Call load_source with an alias the directory lists.',
 } as const;
@@ -183,6 +165,21 @@ export class SourceNotLoadedError extends Error {
  *  client's, told the loaded set as it stands at each call. */
 export type InLoopToolTransport = (name: string, args: Record<string, unknown>, options: McpToolCallOptions) => Promise<string>;
 
+/** How a pause ended (#644 W2): the reader's decision, or none. */
+export type PauseDecision = 'allow' | 'not-now' | 'no-answer';
+
+/**
+ * The just-in-time pause (#644 W2, D4): what a load of an Ask-first source
+ * asks. `ask` holds until the reader decides or the bound passes, and reports
+ * the pause through `report` (the loop's `consent_pause` event). It is
+ * expected not to throw. Built by `src/lib/sources/decision.ts` and handed in
+ * by the two streaming routes only; the JSON compare route and replay pass
+ * none, so their Ask-first loads are declined with no hold.
+ */
+export interface ConsentPause {
+  ask(sourceId: string, report: (payload: ConsentPausePayload) => void): Promise<PauseDecision>;
+}
+
 export interface InLoopRoutingInput {
   /** The run's Socrata portal, if any. */
   portal?: string;
@@ -199,6 +196,8 @@ export interface InLoopRoutingInput {
   now?: Date;
   /** For tests: the transport. Defaults to the MCP client. */
   callTool?: InLoopToolTransport;
+  /** The pause (#644 W2); absent, an Ask-first source is declined with no hold. */
+  pause?: ConsentPause;
 }
 
 /** What an in-loop run is given, and what it has loaded so far. */
@@ -256,7 +255,11 @@ export interface InLoopRecord {
  *   - an alias naming no source of the directory set (unknown, Off, or not
  *     configured) is `not-offered`: nothing is loaded and the reader is not
  *     asked;
- *   - an Ask-first source is `declined` until W2 adds the pause;
+ *   - an Ask-first source asks the reader when the run holds a pause
+ *     (#644 W2): `loaded` on Allow, as an On source loads; `declined` on Not
+ *     now; `no-answer` when no decision arrived, or the reader could not be
+ *     asked. A second load of the same source asks nothing and repeats the
+ *     first outcome. With no pause it is `declined`, as before W2;
  *   - an On source is `loaded`: the next request's system prompt is the
  *     in-loop prompt over the loaded set, then the lock section, and its
  *     tools are `load_source` and the loaded sources' tools; a second load
@@ -267,7 +270,7 @@ export interface InLoopRecord {
  * it does under all-sources. A hosted source is never woken by a load.
  */
 export async function createInLoopRouting(input: InLoopRoutingInput): Promise<InLoopRouting> {
-  const { portal, lockedPortal, configured, directory, selection, now = new Date() } = input;
+  const { portal, lockedPortal, configured, directory, selection, pause, now = new Date() } = input;
   const callTool = input.callTool ?? callMcpTool;
   const directoryIds = directory.map((entry) => entry.sourceId);
   // The lock section stays the consumer's and follows the router's text, on
@@ -275,6 +278,8 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
   const withLock = (prompt: string) => withPortalLockGuidance(prompt, lockedPortal, configured, directoryIds);
   const loadTool = loadSourceTool(configured, directoryIds);
   const loadedIds: string[] = [];
+  // How each Ask-first source's pause ended, so a second load asks nothing.
+  const asked = new Map<string, PauseDecision>();
   const loadedNow = (): string[] => directoryIds.filter((id) => loadedIds.includes(id));
 
   let current: { systemPrompt: string; tools: ChatCompletionTool[]; components: CompositionComponent[] } = {
@@ -286,10 +291,25 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
 
   const loadStep: LoadStep = {
     toolName: LOAD_SOURCE_TOOL_NAME,
-    async load(alias) {
+    async load(alias, context) {
       const entry = alias === undefined ? undefined : directory.find((candidate) => candidate.alias === alias);
       if (!entry) return { outcome: 'not-offered', text: LOAD_RESULT_TEXT.notOffered };
-      if (entry.state !== 'on') return { outcome: 'declined', text: LOAD_RESULT_TEXT.declined(entry.alias) };
+      if (entry.state !== 'on') {
+        if (!pause) return { outcome: 'declined', text: LOAD_RESULT_TEXT.declined(entry.alias) };
+        let decision = asked.get(entry.sourceId);
+        if (decision === undefined) {
+          try {
+            decision = await pause.ask(entry.sourceId, (payload) => context.reportPause?.(payload));
+          } catch {
+            // Not expected (ruling A): a pause that could not finish heard no answer.
+            decision = 'no-answer';
+          }
+          asked.set(entry.sourceId, decision);
+        }
+        if (decision === 'not-now') return { outcome: 'declined', text: LOAD_RESULT_TEXT.declined(entry.alias) };
+        if (decision === 'no-answer') return { outcome: 'no-answer', text: LOAD_RESULT_TEXT.noAnswer(entry.alias) };
+        // Allow: the source loads as an On source does.
+      }
       if (loadedIds.includes(entry.sourceId)) {
         return { outcome: 'loaded', text: LOAD_RESULT_TEXT.alreadyLoaded(entry.alias), systemPrompt: current.systemPrompt, tools: current.tools };
       }

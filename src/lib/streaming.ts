@@ -5,6 +5,8 @@ import { isSourceRefusal } from './mcp/tool-call-failure.ts';
 import { ambiguousToolNameOf } from './mcp/tool-name-refusal.ts';
 import { PortalLockedCallError } from './portal-lock.ts';
 import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
+import type { FlowsLinks, FlowsSource } from './flows/statement.ts';
+import { readerSourceName } from './sources/source-name.ts';
 export type StreamEventType = 'progress' | 'token' | 'complete' | 'error' | 'trace';
 export type PanelType = 'withMcp' | 'withoutMcp';
 
@@ -14,7 +16,42 @@ export interface StreamEvent {
   data?: unknown;
 }
 
-export type ProgressPhase = 'analyze' | 'tool_start' | 'tool_complete' | 'tool_result' | 'thinking' | 'synthesize';
+export type ProgressPhase = 'analyze' | 'tool_start' | 'tool_complete' | 'tool_result' | 'thinking' | 'synthesize' | 'consent_pause';
+
+/**
+ * A just-in-time pause (#644 W2): a load of a source the reader set to Ask
+ * first, stopped to ask. Carried on a `consent_pause` progress event, which
+ * names no iteration, and nowhere else: no span and no record holds any of it.
+ *
+ *   - `key`: the decision key the reader's answer is posted with (128 random
+ *     bits); present only when the pause holds, since only then was an entry
+ *     written that an answer could reach.
+ *   - `source`: the source's entry in the flows statement in force, as the
+ *     Sources panel's row renders it.
+ *   - `outbound`: the hosts its hosting variant may reach (a hosted source's
+ *     manifest `outbound`); empty for a source reached at an address.
+ *   - `links`: the statement's links: the privacy page, and the deployment
+ *     guide's address or the sentence that says this site names none.
+ *   - `expiresAt`: when the hold ends, ISO 8601.
+ *   - `holds`: false when the run could not stop to ask (no store, a store
+ *     that failed, or the run's holds spent); the load is then `no-answer`.
+ */
+export interface ConsentPausePayload {
+  key?: string;
+  source: FlowsSource;
+  outbound: string[];
+  links: FlowsLinks;
+  expiresAt: string;
+  holds: boolean;
+}
+
+/** The progress line a pause is shown with: the source by its reader name, and whether the question waits. */
+export function formatConsentPause(pause: Pick<ConsentPausePayload, 'source' | 'holds'>): string {
+  const name = readerSourceName(pause.source);
+  return pause.holds
+    ? `Waiting for your answer about ${name}, which is set to Ask first`
+    : `${name} is set to Ask first, and this question cannot stop to ask you`;
+}
 
 export interface ProgressEvent extends StreamEvent {
   type: 'progress';
@@ -44,6 +81,8 @@ export interface ProgressEvent extends StreamEvent {
    */
   failed?: boolean;
   failureKind?: ToolFailureKind;
+  /** The pause, on a `consent_pause` event only (#644 W2). */
+  pause?: ConsentPausePayload;
 }
 
 export interface TokenEvent extends StreamEvent {
@@ -1473,6 +1512,15 @@ export function formatToolResult(
             : 'A source set to Ask first was not used for this question';
         case 'not-offered':
           return 'No source was loaded: the request named none this question can use';
+        // #644 W2: true whether the reader did not decide in time or could
+        // not be asked; the record cannot tell the two apart.
+        case 'no-answer':
+          return source
+            ? `No answer about the ${source} source arrived in time, so it was not used for this question`
+            : 'No answer about a source set to Ask first arrived in time, so it was not used for this question';
+        // The load step threw, which it is not expected to do.
+        case 'unavailable':
+          return source ? `This site could not load the ${source} source for this question` : 'This site could not load a data source for this question';
         case undefined:
           return null;
         default:
@@ -1855,6 +1903,10 @@ function describeToolNarrative(
           return source ? `did not use ${named}, which is set to Ask first` : 'did not use a source set to Ask first';
         case 'not-offered':
           return 'asked for a source this question cannot use';
+        case 'no-answer':
+          return `did not use ${named}, because no answer about it arrived in time`;
+        case 'unavailable':
+          return `could not load ${named}`;
         case undefined:
           return `asked to load ${named}`;
         default:
