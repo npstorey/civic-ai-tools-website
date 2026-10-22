@@ -138,7 +138,7 @@ async function sourcesTab(): Promise<Surface> {
 }
 
 for (const { name, env } of CONFIGS) {
-  test(`criterion 3 (${name}): for a row, the GET returns the base version and the Sources tab reads ${BASE_VERSION.slice(0, 12)}, not the hash`, async () => {
+  test(`criterion 3 (${name}): for a row, the GET returns the base version and the Sources tab reads ${BASE_VERSION.slice(0, 8)}, not the hash`, async () => {
     await under(env, async () => {
       SIGNED_IN_DB();
       sessions.rows.clear();
@@ -146,15 +146,15 @@ for (const { name, env } of CONFIGS) {
       const statement = await buildFlowsStatement();
       // S1 and S2 move the hash, never the base version.
       assert.equal(statement.version, BASE_VERSION, 'premise: the base version is the change log\'s under this configuration');
-      assert.notEqual(statementHash(statement).slice(0, 12), BASE_VERSION.slice(0, 12), 'premise: the hash and the base version differ');
+      assert.notEqual(statementHash(statement).slice(0, 8), BASE_VERSION.slice(0, 8), 'premise: the hash and the base version differ');
       await put(statement);
       const body = await getConsent();
       assert.equal(body.inForce, true, 'premise: the consent is in force');
       assert.equal(body.consentedBaseVersion, BASE_VERSION, `the GET does not return the base version the row's statement has: ${JSON.stringify(body).slice(0, 300)}`);
       const tab = await sourcesTab();
       const text = tab.text();
-      assert.ok(text.includes(BASE_VERSION.slice(0, 12)), `the Sources tab does not show ${BASE_VERSION.slice(0, 12)}: ${text.slice(0, 500)}`);
-      assert.ok(!text.includes(statementHash(statement).slice(0, 12)), `the Sources tab still shows the statement hash ${statementHash(statement).slice(0, 12)}`);
+      assert.ok(text.includes(BASE_VERSION.slice(0, 8)), `the Sources tab does not show ${BASE_VERSION.slice(0, 8)}: ${text.slice(0, 500)}`);
+      assert.ok(!text.includes(statementHash(statement).slice(0, 8)), `the Sources tab still shows the statement hash ${statementHash(statement).slice(0, 8)}`);
       tab.unmount();
     });
   });
@@ -196,8 +196,8 @@ test('criterion 3: for a row held against an earlier statement still in force, t
     assert.equal(body.inForce, true, 'premise: a removed recipient asks nothing');
     assert.equal(body.consentedBaseVersion, held.version, `the GET does not return the stored statement's base version: ${String(body.consentedBaseVersion)}`);
     const tab = await sourcesTab();
-    assert.ok(tab.text().includes(held.version.slice(0, 12)), `the Sources tab does not show the stored statement's base version ${held.version.slice(0, 12)}: ${tab.text().slice(0, 500)}`);
-    assert.ok(!tab.text().includes(statement.version.slice(0, 12)), 'the Sources tab shows the current statement\'s base version for a row held against another');
+    assert.ok(tab.text().includes(held.version.slice(0, 8)), `the Sources tab does not show the stored statement's base version ${held.version.slice(0, 8)}: ${tab.text().slice(0, 500)}`);
+    assert.ok(!tab.text().includes(statement.version.slice(0, 8)), 'the Sources tab shows the current statement\'s base version for a row held against another');
     tab.unmount();
   });
 });

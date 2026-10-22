@@ -117,6 +117,14 @@ async function sourcesTab(): Promise<{ tab: Surface; net: ReturnType<typeof answ
 /** T13 (#632 G7): each source's one reader name, written out. */
 const READER_NAME: Record<string, string> = { socrata: 'Socrata', 'data-commons': 'Data Commons', 'boston-opencontext': 'Boston OpenContext', 'nyc-charter': 'NYC Charter, Laws and Rules' };
 
+
+/** An ISO date (or timestamp) as the Sources tab writes it, in words: "2026-10-20" → "20 October 2026" (UX pass row 14). */
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const inWords = (iso: string): string => {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return `${d} ${MONTHS[m - 1]} ${y}`;
+};
+
 test('criterion 3: the Sources tab shows every source\'s state, the date given, and the base version with its statement\'s date', async () => {
   const { tab, statement } = await sourcesTab();
   const text = tab.text();
@@ -128,11 +136,12 @@ test('criterion 3: the Sources tab shows every source\'s state, the date given, 
     assert.ok(row.includes(name), `${source.sourceId}'s row does not name it`);
     assert.ok(row.includes(i === 0 ? 'On' : 'Off'), `${source.sourceId}'s row does not show its state: ${row}`);
   }
-  assert.ok(text.includes(new Date().toISOString().slice(0, 10)), 'the tab does not show the date the consent was given');
+  // UX pass row 14(a): both dates in words, and the base version's first 8 hex.
+  assert.ok(text.includes(`Given on ${inWords(new Date().toISOString())}.`), `the tab does not show the date the consent was given, in words: ${text.slice(0, 400)}`);
   // S3 (#632 G7): the base version the consent refers to, not the statement hash.
-  assert.ok(text.includes(statement.version.slice(0, 12)), 'the tab does not show the base version the consent refers to');
-  assert.ok(!text.includes(statementHash(statement).slice(0, 12)), 'the tab shows the statement hash');
-  assert.ok(text.includes(statement.date), 'the tab does not show the flows statement\'s date');
+  assert.ok(text.includes(`(version ${statement.version.slice(0, 8)})`), 'the tab does not show the base version the consent refers to');
+  assert.ok(!text.includes(statementHash(statement).slice(0, 8)), 'the tab shows the statement hash');
+  assert.ok(text.includes(`as it stood on ${inWords(statement.date)}`), 'the tab does not show the flows statement\'s date, in words');
   tab.unmount();
 });
 

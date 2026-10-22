@@ -156,7 +156,15 @@ const T10 = "A dated log of every change to where a question can go is kept with
 const T11 = (holder: string) => `${holder}: what it keeps is for this site's operator to state`;
 const T11_ENDPOINT = "what it keeps is for this site's operator to state.";
 const T12_PANEL_LINK = 'Where a question can go, in full';
-const T12_TAB = (version: string, date: string) => `It refers to the statement of where a question can go, version ${version}, dated ${date}.`;
+// UX pass row 14(a), 2026-10-22: the version sentence in words, the date in words and the version's first 8 hex.
+const T12_TAB = (version: string, date: string) => `It refers to the statement of where a question can go as it stood on ${inWords(date)} (version ${version.slice(0, 8)}).`;
+/** An ISO date (or timestamp) as the Sources tab writes it, in words: "2026-10-20" → "20 October 2026" (UX pass row 14). */
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const inWords = (iso: string): string => {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return `${d} ${MONTHS[m - 1]} ${y}`;
+};
+
 const T12_LOGS = "This site's hosting logs";
 const T12_REMOVED = (label: string) => `${label}: removed from the recipients.`;
 const T12_LESS = (label: string) => `${label}: its holder now says it keeps less.`;
@@ -465,7 +473,7 @@ test('criterion 1, the Sources tab with notices: the same lines, and T12\'s vers
     answers();
     const tab = await sourcesTab();
     assert.deepEqual([...noticeLines(tab)].sort(), [...expectedNotices(statement)].sort(), 'the tab\'s notice lines are not as ruled');
-    assert.ok(tab.text().includes(T12_TAB(held.version.slice(0, 12), held.date)), `the tab does not read "${T12_TAB(held.version.slice(0, 12), held.date)}": ${tab.text().slice(0, 600)}`);
+    assert.ok(tab.text().includes(T12_TAB(held.version, held.date)), `the tab does not read "${T12_TAB(held.version, held.date)}": ${tab.text().slice(0, 600)}`);
     assertRowNames(tab, 'the Sources tab', CONFIGURED);
     assertNoneReplaced(readWithLinks(tab), 'the Sources tab (with notices)');
     tab.unmount();
@@ -480,7 +488,7 @@ test('criterion 1, the Sources tab in force: T12\'s version sentence and T13\'s 
     await putStates({ socrata: 'on', 'data-commons': 'off', 'nyc-charter': 'ask-first' });
     const statement = await buildFlowsStatement();
     const tab = await sourcesTab();
-    assert.ok(tab.text().includes(T12_TAB(statement.version.slice(0, 12), statement.date)), `the tab does not read "${T12_TAB(statement.version.slice(0, 12), statement.date)}": ${tab.text().slice(0, 600)}`);
+    assert.ok(tab.text().includes(T12_TAB(statement.version, statement.date)), `the tab does not read "${T12_TAB(statement.version, statement.date)}": ${tab.text().slice(0, 600)}`);
     assertRowNames(tab, 'the Sources tab', CONFIGURED);
     assertNoneReplaced(readWithLinks(tab), 'the Sources tab (in force)');
     tab.unmount();
