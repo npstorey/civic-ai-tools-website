@@ -52,6 +52,14 @@ export const PANEL_NO_CONSENT = 'This site asks before your next question. You c
 /** The panel's link to the privacy page (T12). */
 export const PANEL_PRIVACY_LINK = 'Where a question can go, in full';
 
+/**
+ * After a successful state change, under that source's control, as a status
+ * line (UX pass row 5): the source's reader name + `middle` + the state's label
+ * + `end`, e.g. "NYS Open Legislation is now Off. This applies from your next
+ * question." The row's "Set <State> since <date>." follows on the same line.
+ */
+export const PANEL_STATE_CHANGED = { middle: ' is now ', end: '. This applies from your next question.' } as const;
+
 // --- The dashboard's Sources tab ---
 
 /** The tab when no consent is in force (T9). */
