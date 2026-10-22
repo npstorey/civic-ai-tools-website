@@ -716,13 +716,29 @@ test('W3 P1 item 3: while the run is under way, its progress is the step view: a
   (running as { isLoading: boolean }).isLoading = true;
   (running as { completedAt: number | null }).completedAt = null;
   const html = renderRun(running);
-  assert.ok(html.includes('Generating reproducible notebook'), 'premise: the progress panel renders');
+  assert.ok(html.includes('Working on your answer'), 'premise: the progress panel renders');
   const steps = part(html, 'steps').markup;
   assert.equal(occurrences(steps, 'data-part="step" ').length, 3, 'one step per Phase A iteration');
   const closing = occurrences(steps, '<div data-part="closing-row"').map((s) => steps.slice(s, elementEnd(steps, s, 'div')).replace(/<[^>]*>/g, ''));
   assert.deepEqual(closing, ['Synthesizing notebook', 'Executing in sandbox'], 'a row for each later phase the run reported');
   assert.doesNotMatch(html, />Finalizing</, 'no row for a phase not yet reported');
   assert.doesNotMatch(html, /<ul\b/, 'the four fixed phase rows are gone');
+});
+
+// --- UX pass row 20: the progress panel's title and paragraph, in the reader's words ------------
+//
+// At the base: "Generating reproducible notebook" over "The four-phase pipeline
+// discovers data, writes a Jupyter notebook, runs it in a sandbox, and stamps
+// execution metadata. Typically takes 30 to 90 seconds."
+
+test('UX pass row 20: the progress panel says what the site is doing, and how long it takes, in the reader\'s words', async () => {
+  const running = await stateAfter(runEvents(RUN_NOTEBOOK, 'C'));
+  (running as { isLoading: boolean }).isLoading = true;
+  (running as { completedAt: number | null }).completedAt = null;
+  const text = unescape(renderRun(running).replace(/<!-- -->/g, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' '));
+  assert.ok(text.includes('Working on your answer'), `the panel's title is not the reader's: ${text.slice(0, 300)}`);
+  assert.ok(text.includes('This site finds the data, writes the steps as a notebook, runs them in a sandbox, and signs the result. It usually takes 30 to 90 seconds.'), `the panel's paragraph is not the reader's: ${text.slice(0, 400)}`);
+  assert.ok(!text.includes('Generating reproducible notebook') && !text.includes('four-phase pipeline'), 'the old words are still shown');
 });
 
 // --- Fix 1 (1): the comparison's citation states no execution ---------------------
@@ -778,7 +794,7 @@ test('W3 P1 (9) the live view: no text the site writes names a tool by its expos
   assert.equal((running.toolCalls as Array<{ name: string }>).at(-1)?.name, 'nyc_charter__get_section', 'premise: the last captured call is aliased');
   assert.equal((running.toolCalls as Array<{ operationType?: string }>).at(-1)?.operationType, undefined, 'premise: and has no operation type');
   const html = renderRun(running);
-  assert.ok(html.includes('Generating reproducible notebook') && html.includes('data-part="steps"'), 'premise: the live view renders, with its steps');
+  assert.ok(html.includes('Working on your answer') && html.includes('data-part="steps"'), 'premise: the live view renders, with its steps');
   assert.ok(typeof running.detail === 'string' && html.includes(unescape(running.detail as string).slice(0, 8)), 'premise: the detail line renders');
   const text = readerFacing(html);
   const i = text.indexOf('__');

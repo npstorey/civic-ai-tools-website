@@ -145,8 +145,9 @@ export default function NotebookProgress({
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        {/* UX pass row 20: the reader's words, the time it takes last. */}
         <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>
-          Generating reproducible notebook
+          Working on your answer
         </h3>
         <span
           style={{ fontSize: '13px', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}
@@ -155,9 +156,8 @@ export default function NotebookProgress({
         </span>
       </div>
       <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
-        The four-phase pipeline discovers data, writes a Jupyter notebook,
-        runs it in a sandbox, and stamps execution metadata. Typically takes
-        30 to 90 seconds.
+        This site finds the data, writes the steps as a notebook, runs them in
+        a sandbox, and signs the result. It usually takes 30 to 90 seconds.
       </p>
       {steps !== undefined ? (
         <>
