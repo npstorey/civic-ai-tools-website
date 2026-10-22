@@ -178,6 +178,49 @@ const CONFIGS: Record<string, Record<string, string>> = {
     NYS_LEGISLATION_HOSTING: 'sandbox',
     NYS_LEGISLATION_API_KEY: 'placeholder-not-a-key-r8-w3',
   },
+  // R8 W2 (criterion 6 [D]): the consent pause's store statements, on each
+  // branch, and the all-sources page that states none of them; sign-in set as
+  // `FULL` sets it. Every page guard runs over them.
+  'pause, code': {
+    SOURCE_ROUTING: 'in-loop',
+    KV_REST_API_URL: 'https://kv.example.test',
+    KV_REST_API_TOKEN: 'fixture',
+    GITHUB_CLIENT_ID: 'fixture',
+    GITHUB_CLIENT_SECRET: 'fixture',
+    OIDC_ISSUER: 'https://sso.example.test',
+    OIDC_CLIENT_ID: 'fixture',
+    OIDC_CLIENT_SECRET: 'fixture',
+    OIDC_PROVIDER_NAME: 'Fixture SSO',
+    SIGN_IN_ALLOWLIST: 'fixture',
+    DATABASE_URL: 'fixture',
+  },
+  'pause, no code': {
+    SOURCE_ROUTING: 'in-loop',
+    KV_REST_API_URL: 'https://kv.example.test',
+    KV_REST_API_TOKEN: 'fixture',
+    GITHUB_CLIENT_ID: 'fixture',
+    GITHUB_CLIENT_SECRET: 'fixture',
+    OIDC_ISSUER: 'https://sso.example.test',
+    OIDC_CLIENT_ID: 'fixture',
+    OIDC_CLIENT_SECRET: 'fixture',
+    OIDC_PROVIDER_NAME: 'Fixture SSO',
+    SIGN_IN_ALLOWLIST: 'fixture',
+  },
+  'pause, memory': {
+    SOURCE_ROUTING: 'in-loop',
+  },
+  'pause, all-sources': {
+    KV_REST_API_URL: 'https://kv.example.test',
+    KV_REST_API_TOKEN: 'fixture',
+    GITHUB_CLIENT_ID: 'fixture',
+    GITHUB_CLIENT_SECRET: 'fixture',
+    OIDC_ISSUER: 'https://sso.example.test',
+    OIDC_CLIENT_ID: 'fixture',
+    OIDC_CLIENT_SECRET: 'fixture',
+    OIDC_PROVIDER_NAME: 'Fixture SSO',
+    SIGN_IN_ALLOWLIST: 'fixture',
+    DATABASE_URL: 'fixture',
+  },
 };
 
 // Every optional part on, so no section is checked only in its absent form.
