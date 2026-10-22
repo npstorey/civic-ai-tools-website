@@ -486,3 +486,76 @@ test('UX pass row 21: the phase words are mapped by phase name, the route\'s mes
   assert.equal(phaseLabel('E', 'Checking the result…'), 'Checking the result', 'an unknown phase reads its message without the ellipsis, as before');
   assert.equal(phaseLabel('E', 'Checking the result...'), 'Checking the result');
 });
+
+// --- R8 W2 (#644): the load label, every derivable type, and the pause step ---------------
+//
+// Consent 1 (LAYOUT-WEB's G4c record, #619 comment 6298590738): one
+// `OPERATION_WORDS` entry, `load_source: 'Loading a data source'`, with two
+// tests. Test 1: a `load_source` step reads it, where the base read the open
+// step's "Gathering data". Test 2: every type `deriveOperationType` can
+// return, driven through `generateGroupLabel` on an entry that carries args,
+// reads a label of its own; red at the base on `load_source` only.
+
+/** The derivable set, as LAYOUT-WEB-D and the G0 record state it: the map's values and `get_data`'s `type` enum. */
+const DERIVABLE = ['search', 'metadata', 'query', 'load_source', 'catalog', 'metrics'];
+
+test('R8 W2 (LAYOUT-WEB-D test 1): a load_source step reads "Loading a data source"', () => {
+  const label = generateGroupLabel([start({ message: 'Loading the Socrata source', toolName: 'load_source', operationType: 'load_source', args: { alias: 'socrata' } })]);
+  assert.equal(label, 'Loading a data source');
+});
+
+test('R8 W2 (LAYOUT-WEB-D test 2): every derivable operation type, on an entry with args, reads a label other than the open step\'s', () => {
+  const open = DERIVABLE.filter((type) => generateGroupLabel([start({ toolName: 'any_tool', operationType: type, args: {} })]) === OPEN_STEP_LABEL);
+  assert.deepEqual(open, [], `these types read "${OPEN_STEP_LABEL}": ${open.join(', ')}`);
+});
+
+test('R8 W2 (LAYOUT-WEB-D test 2): the derivable set is exported from operation-types.ts, the map\'s values and get_data\'s type enum', async () => {
+  const ops = (await import('../mcp/operation-types.ts')) as Record<string, unknown>;
+  const exported = ops.DERIVABLE_OPERATION_TYPES as readonly string[] | undefined;
+  assert.ok(Array.isArray(exported), 'operation-types.ts exports no DERIVABLE_OPERATION_TYPES');
+  assert.deepEqual([...exported!].sort(), [...DERIVABLE].sort());
+  for (const type of exported!) {
+    assert.notEqual(generateGroupLabel([start({ toolName: 'any_tool', operationType: type, args: {} })]), OPEN_STEP_LABEL, type);
+  }
+});
+
+const PAUSE = {
+  key: 'ab'.repeat(16),
+  source: { sourceId: 'boston-opencontext', displayName: 'Boston OpenContext MCP Server', publisher: 'not stated', variant: { variant: 'remote', kind: 'remote' as const, runsAt: 'other' as const }, freshness: 'Varies', recipients: [], version: '0'.repeat(64) },
+  outbound: [],
+  links: { privacy: '/privacy', deploymentGuideOmitted: 'This site does not name a deployment guide.' },
+  expiresAt: '2026-10-21T12:01:00.000Z',
+  holds: true,
+};
+
+test('R8 W2: a consent_pause event is a step of its own: no iteration, its pause kept, and the load it paused stays open', () => {
+  const log = run([
+    { message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, toolName: 'load_source', operationType: 'load_source', args: { alias: 'boston' } },
+    { message: 'Waiting for your answer', phase: 'consent_pause', pause: PAUSE } as StepProgressEvent,
+  ]);
+  const entry = log.progressLog.at(-1) as ProgressLogEntry & { pause?: unknown };
+  assert.equal(entry.phase, 'consent_pause');
+  assert.equal(entry.iteration, undefined);
+  assert.deepEqual(entry.pause, PAUSE, 'the pause did not reach the entry');
+  assert.equal(log.progressLog[0].isComplete, undefined, 'the pause marked the load it paused done');
+  assert.equal(log.progressGroups.length, 1);
+  assert.equal(log.progressGroups[0].entries.length, 1, 'the pause joined the load\'s step');
+});
+
+test('R8 W2: the next line of the run marks the pause done', () => {
+  const log = run([
+    { message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, toolName: 'load_source', operationType: 'load_source', args: { alias: 'boston' } },
+    { message: 'Waiting for your answer', phase: 'consent_pause', pause: PAUSE } as StepProgressEvent,
+    { message: 'Loading the Boston OpenContext source', phase: 'tool_complete', iteration: 1, duration_ms: 4000, toolName: 'load_source', operationType: 'load_source' },
+  ]);
+  const pause = log.progressLog.find((e) => e.phase === 'consent_pause');
+  assert.equal(pause?.isComplete, true);
+});
+
+test('R8 W2: with no pause, every entry is what it was: no pause key appears', () => {
+  const log = run([
+    { message: 'Reading your question...', phase: 'analyze' },
+    { message: 'Querying', phase: 'tool_start', iteration: 1, toolName: 'socrata__get_data', operationType: 'query', args: { type: 'query' } },
+  ]);
+  for (const entry of log.progressLog) assert.equal(Object.hasOwn(entry, 'pause'), false);
+});
