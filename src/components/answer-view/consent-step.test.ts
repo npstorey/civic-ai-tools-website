@@ -173,7 +173,10 @@ test('criterion 3 (a): the hosts it would reach, the privacy page, and the guide
   const card = await mountCard();
   const element = cardOf(card);
   const text = textOf(element);
-  assert.ok(text.includes('It would reach: boston.fixture.example.'), text);
+  // Fix round 1, item 3: an addressed source with no outbound hosts has no reach line; its address is the row's
+  // "running at" line already, and the card does not say it twice.
+  assert.ok(!text.includes('It would reach'), `the card repeats the address as a reach line: ${text}`);
+  assert.ok(text.includes('running at boston.fixture.example'), `premise: the card does not say where the source runs: ${text}`);
   const privacy = [...within(element)].filter((el) => el.type === 'a' && el.props.href === '/privacy');
   assert.equal(privacy.length, 1, 'the card does not link the privacy page once');
   assert.equal(textOf(privacy[0]), copy.PANEL_PRIVACY_LINK);
@@ -192,6 +195,31 @@ test('criterion 3 (a): Allow and Not now, one button each, equal in size and sty
   const allow = card.button('Allow');
   const notNow = card.button('Not now');
   assert.deepEqual(allow.props.style, notNow.props.style, 'the two buttons are styled differently');
+  card.unmount();
+});
+
+// --- Fix round 1, item 3: the decision first, in words that say what each choice sends ---------
+
+/** The two halves, equal: what each sends (the research's "sends"; T7's "turns on"). */
+const CHOICES = 'Allow: this question is sent to it, and it is turned On for later questions. Not now: nothing is sent to it for this question.';
+
+test('item 3: the card says what Allow and Not now each send, in two equal halves', async () => {
+  const card = await mountCard();
+  const text = textOf(cardOf(card));
+  assert.ok(text.includes(CHOICES), `the card's choices: ${text}`);
+  assert.ok(!text.includes('may use it'), `the card keeps the old Allow half: ${text}`);
+  card.unmount();
+});
+
+test('item 3: the decision comes before the explanation: Allow precedes "Who holds its logs"', async () => {
+  const card = await mountCard();
+  const inCard = [...within(cardOf(card))];
+  const allowAt = inCard.findIndex((el) => el.type === 'button' && textOf(el) === 'Allow');
+  const logsAt = inCard.findIndex((el) => el.type !== 'a' && textOf(el).startsWith('Who holds its logs'));
+  assert.ok(allowAt >= 0 && logsAt >= 0, `premise: Allow at ${allowAt}, "Who holds its logs" at ${logsAt}`);
+  assert.ok(allowAt < logsAt, `Allow (element ${allowAt}) comes after "Who holds its logs" (element ${logsAt}): ${textOf(cardOf(card))}`);
+  const text = textOf(cardOf(card));
+  assert.ok(text.indexOf('Allow Not now') < text.indexOf('Who holds its logs'), `the buttons read after the explanation: ${text}`);
   card.unmount();
 });
 
