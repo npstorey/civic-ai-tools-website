@@ -19,8 +19,15 @@
 // `KEEPTTL` on a missing key creates one with none, so a decision written
 // either way fails this leg.
 //
+// R6-WEB-D'S CONDITIONS 2 AND 3 (its consent of 2026-10-22 to the cookie
+// guard's second setter): on Allow the stored consent is exactly what `PUT
+// /api/sources/consent` stores for the same one-source change, shown by
+// driving both writers from one starting consent on the cookie branch and
+// the row branch; Not now and `no-answer` write no consent at all, counted.
+//
 // WHAT IS DRIVEN. The route's real `POST` and the real `decision.ts`, the
-// real consent cookie and the real flows statement. STUBS: `next-auth` and
+// real consent cookie and the real flows statement; for conditions 2 and 3
+// the consent route's real `PUT` beside them. STUBS: `next-auth` and
 // `@/lib/auth` (a session per case); `@vercel/kv` (the fake store, so no
 // request leaves); `src/lib/sources/consent-store.ts` (an in-memory row per
 // account), by its resolved path, since `decision.ts` imports it relatively.
@@ -54,9 +61,9 @@ const SRC = path.resolve(HERE, '..', '..', '..', '..', '..');
 const CONSENT_STORE_FILE = path.join(SRC, 'lib', 'sources', 'consent-store.ts');
 
 interface Row { userId: string; states: Record<string, { state: string; since: string }>; flowsHash: string; flowsStatement: unknown; consentedAt: Date; updatedAt: Date }
-interface Globals { __w2Decision: { session: unknown; rows: Map<string, Row> }; __w2DecisionKv: FakeDecisionKv }
+interface Globals { __w2Decision: { session: unknown; rows: Map<string, Row>; writes: number }; __w2DecisionKv: FakeDecisionKv }
 const globals = globalThis as unknown as Globals;
-globals.__w2Decision = { session: null, rows: new Map() };
+globals.__w2Decision = { session: null, rows: new Map(), writes: 0 };
 
 const STUB_PREFIX = 'file:///r8-w2-decision-route-stub/';
 const STUB_SOURCE: Record<string, string> = {
@@ -67,6 +74,7 @@ const STUB_SOURCE: Record<string, string> = {
     const rows = () => globalThis.__w2Decision.rows;
     export async function readConsentRow(userId) { return rows().get(userId) ?? null; }
     export async function writeConsentRow(userId, row) {
+      globalThis.__w2Decision.writes += 1;
       const prior = rows().get(userId);
       const now = row.now ?? new Date();
       rows().set(userId, { userId, states: row.states, flowsHash: row.flowsHash, flowsStatement: row.flowsStatement, consentedAt: prior?.consentedAt ?? now, updatedAt: now });
@@ -128,6 +136,10 @@ globals.__w2DecisionKv = kv;
 const ROUTE: string = pathToFileURL(path.join(HERE, 'route.ts')).href;
 const DECISION: string = pathToFileURL(path.join(SRC, 'lib', 'sources', 'decision.ts')).href;
 const route = (await import(ROUTE).catch(() => null)) as Mod | null;
+/** R6's consent route, the writer the decision's Allow must match (R6-WEB-D's condition 2). */
+const CONSENT_ROUTE: string = pathToFileURL(path.join(HERE, '..', 'route.ts')).href;
+const consentRoute = (await import(CONSENT_ROUTE)) as Mod;
+const { readMcpEnvFromProcess } = (await import(pathToFileURL(path.join(SRC, 'lib', 'mcp', 'registry.ts')).href)) as Mod;
 const decision = (await import(DECISION).catch(() => null)) as Mod | null;
 const { buildFlowsStatement, statementHash } = (await import(pathToFileURL(path.join(SRC, 'lib', 'flows', 'statement.ts')).href)) as Mod;
 const { consentCookieForTests } = (await import(pathToFileURL(path.join(SRC, 'lib', 'sources', 'consent-cookie-for-tests.ts')).href)) as Mod;
@@ -173,6 +185,7 @@ beforeEach(() => {
   kv.failGet = false;
   kv.failSet = false;
   globals.__w2Decision.rows.clear();
+  globals.__w2Decision.writes = 0;
   process.env.RATE_LIMIT_SECRET = 'fixture-w2-secret';
 });
 
@@ -353,4 +366,104 @@ test('criterion 2: a decision on an entry that expires between the read and the 
     kv.get = get;
     clock -= 601_000;
   }
+});
+
+// --- R6-WEB-D's conditions 2 and 3 (the cookie guard's second setter) ------------------------
+
+/** `PUT /api/sources/consent`, as the panel sends it. */
+async function put(states: Record<string, string>, flowsVersion: string, options: { session?: unknown; cookie?: string } = {}): Promise<Response> {
+  globals.__w2Decision.session = options.session ?? null;
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (options.cookie) headers.cookie = options.cookie;
+  return consentRoute.PUT(new Request('https://site.fixture.example/api/sources/consent', { method: 'PUT', headers, body: JSON.stringify({ states, flowsVersion }) }));
+}
+
+/** A `Set-Cookie` header split into its decoded consent and its attributes, the way a browser keeps them. */
+function cookieParts(setCookie: string | null): { decoded: unknown; attributes: string } {
+  assert.ok(setCookie, 'no cookie was set');
+  const [pair, ...rest] = setCookie!.split(';');
+  const decoded = consent.readConsentCookie(new Request('https://x.example/', { headers: { cookie: pair } }));
+  assert.ok(decoded, 'the cookie set does not decode');
+  return { decoded, attributes: rest.map((a) => a.trim()).join('; ') };
+}
+
+test('R6-WEB-D condition 2, the cookie branch: Allow sets the cookie PUT /api/sources/consent sets for the same one-source change', async () => {
+  const statement = await buildFlowsStatement();
+  const hash = statementHash(statement);
+  const cookie = consentCookieForTests({ socrata: 'on', 'data-commons': 'ask-first' }, statement);
+
+  const byPut = await put({ socrata: 'on', 'data-commons': 'on' }, hash, { cookie });
+  assert.equal(byPut.status, 200, `PUT answered ${byPut.status}: ${await byPut.text()}`);
+  const key = await mint('data-commons');
+  const byAllow = await post({ key, decision: 'allow' }, { cookie });
+  assert.equal(byAllow.status, 200);
+
+  const expected = cookieParts(byPut.headers.get('set-cookie'));
+  const actual = cookieParts(byAllow.headers.get('set-cookie'));
+  assert.deepEqual(actual.decoded, expected.decoded, 'Allow stored a consent PUT would not have stored');
+  assert.equal(actual.attributes, expected.attributes, 'Allow set the cookie with other attributes than PUT');
+  assert.equal(globals.__w2Decision.writes, 0, 'a cookie-branch writer wrote a row');
+});
+
+test('R6-WEB-D condition 2, the row branch: Allow writes the row PUT /api/sources/consent writes for the same one-source change', async () => {
+  const statement = await buildFlowsStatement();
+  const hash = statementHash(statement);
+  const starting = (): Row => ({
+    userId: DB_A,
+    states: { socrata: { state: 'on', since: '2026-10-01' }, 'data-commons': { state: 'ask-first', since: '2026-10-02' } },
+    flowsHash: hash,
+    flowsStatement: statement,
+    consentedAt: new Date('2026-10-01T00:00:00Z'),
+    updatedAt: new Date('2026-10-02T00:00:00Z'),
+  });
+  const written = (row: Row) => ({ states: row.states, flowsHash: row.flowsHash, flowsStatement: row.flowsStatement });
+
+  globals.__w2Decision.rows.set(DB_A, starting());
+  const byPut = await put({ socrata: 'on', 'data-commons': 'on' }, hash, { session: signedIn(DB_A) });
+  assert.equal(byPut.status, 200, `PUT answered ${byPut.status}: ${await byPut.text()}`);
+  assert.equal(byPut.headers.get('set-cookie'), null);
+  const expected = written(globals.__w2Decision.rows.get(DB_A)!);
+  assert.equal(globals.__w2Decision.writes, 1);
+
+  globals.__w2Decision.rows.set(DB_A, starting());
+  globals.__w2Decision.writes = 0;
+  const key = await mint('data-commons', DB_A);
+  const byAllow = await post({ key, decision: 'allow' }, { session: signedIn(DB_A) });
+  assert.equal(byAllow.status, 200);
+  assert.equal(byAllow.headers.get('set-cookie'), null);
+  assert.equal(globals.__w2Decision.writes, 1, 'Allow wrote the row other than once');
+  assert.deepEqual(written(globals.__w2Decision.rows.get(DB_A)!), expected, 'Allow wrote a row PUT would not have written');
+});
+
+test('R6-WEB-D condition 3: Not now writes no consent on either branch, and a no-answer pause writes none', async () => {
+  const statement = await buildFlowsStatement();
+  const hash = statementHash(statement);
+  const cookie = consentCookieForTests({ socrata: 'on', 'data-commons': 'ask-first' }, statement);
+
+  const notNowCookie = await post({ key: await mint('data-commons'), decision: 'not-now' }, { cookie });
+  assert.equal(notNowCookie.status, 200);
+  assert.equal(notNowCookie.headers.get('set-cookie'), null, 'Not now set a cookie');
+  assert.equal(globals.__w2Decision.writes, 0, 'Not now on the cookie branch wrote a row');
+
+  globals.__w2Decision.rows.set(DB_A, { userId: DB_A, states: { 'data-commons': { state: 'ask-first', since: '2026-10-02' } }, flowsHash: hash, flowsStatement: statement, consentedAt: new Date('2026-10-01T00:00:00Z'), updatedAt: new Date('2026-10-02T00:00:00Z') });
+  const notNowRow = await post({ key: await mint('data-commons', DB_A), decision: 'not-now' }, { session: signedIn(DB_A) });
+  assert.equal(notNowRow.status, 200);
+  assert.equal(notNowRow.headers.get('set-cookie'), null);
+  assert.equal(globals.__w2Decision.writes, 0, 'Not now on the row branch wrote the row');
+
+  // A pause nobody answers: the real pause on the fake store and a driven clock, held to its bound.
+  const { decision: d } = need();
+  const pause = d.createConsentPause({
+    store: kv,
+    statement,
+    configured: readMcpEnvFromProcess(),
+    dbId: DB_A,
+    secret: 'fixture-w2-secret',
+    now: () => clock,
+    sleep: async (ms: number) => { clock += ms; },
+  });
+  const outcome = await pause.ask('data-commons', () => {});
+  assert.equal(outcome, 'no-answer');
+  assert.equal(globals.__w2Decision.writes, 0, 'a no-answer pause wrote the row');
+  assert.ok(kv.calls.every((c) => c.key.startsWith(d.DECISION_KEY_PREFIX)), 'the pause wrote a store key other than its entry');
 });
