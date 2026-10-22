@@ -70,7 +70,32 @@ interface QueryFormProps {
     restored: boolean;
     onChange: (restored: boolean) => void;
   };
+  /**
+   * Whether Advanced options is offered to a signed-out reader (UX pass row 7,
+   * the owner's ruling of 2026-10-22). Default 'always': every mount as before.
+   * The public home page passes 'hidden-signed-out': signed out, on an instance
+   * that offers sign-in, the toggle is not rendered and `SIGN_IN_ADDS` stands
+   * in its place. Signed in, nothing changes.
+   */
+  advancedOptions?: 'always' | 'hidden-signed-out';
 }
+
+/**
+ * What signing in adds, as one line in Advanced options' place (UX pass row
+ * 7): the executed-sandbox mode, publishing, and the signed-in daily count. It
+ * names no models: `/api/models` reads no session, so the model list is the
+ * same signed in or out.
+ *
+ * THE COUNT is stated as the privacy page states it on the reference
+ * deployment ("Using the site": "signed in, 20"), not read from its source.
+ * That source (`dailyLimits` in `src/lib/privacy-facts.ts`, from
+ * `AUTHENTICATED_RATE_LIMIT` / `APP_TIER_RATE_LIMIT`) is server-only and
+ * unexported, and this form renders under a client page with no server
+ * ancestor to thread it from. An instance whose signed-in limit is not 20
+ * states a wrong number here until it is threaded through a provider.
+ */
+const SIGNED_IN_DAILY_QUESTIONS = 20;
+const SIGN_IN_ADDS_REST = ` to run the answer as a notebook in a signed sandbox and publish it as a record. Signed in, you can ask ${SIGNED_IN_DAILY_QUESTIONS} questions a day.`;
 
 /*
  * The suggested questions under the box live in `src/lib/query-presentation.ts`
@@ -97,6 +122,7 @@ export default function QueryForm({
   queryCount = 0,
   defaultMode = 'standard',
   comparisonControl,
+  advancedOptions = 'always',
 }: QueryFormProps) {
   // This instance's configured default portal as a wire value, '' when none
   // (#407) — server-resolved, threaded through the root layout.
@@ -138,6 +164,15 @@ export default function QueryForm({
   // can name one at all — derived from the instance's configuration (Q63).
   const signInAffordance = resolveSignInAffordance(useSignInOptions());
   const [mode, updateMode] = useStoredMode(notebookAffordance === 'toggle', defaultMode);
+  // UX pass row 7: on a mount that asks for it, a signed-out reader on an
+  // instance that offers sign-in sees what signing in adds instead of the
+  // toggle. With no sign-in to offer, the toggle stays: there is nothing to
+  // sign in to, and the model and portal choices are theirs to make.
+  const signInOffered = signInHref !== null || signInAffordance.kind !== 'none';
+  const hideAdvanced = advancedOptions === 'hidden-signed-out' && !isAuthenticated && signInOffered;
+  // The provider is named only where sign-in starts in place, as the sandbox
+  // box below names it (#229 P1); a split topology links to the app host.
+  const signInAdds = `${signInHref === null && signInAffordance.kind === 'provider' ? `Sign in with ${signInAffordance.option.name}` : 'Sign in'}${SIGN_IN_ADDS_REST}`;
   const [models, setModels] = useState<Model[]>([]);
   const [modelsError, setModelsError] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
@@ -393,6 +428,11 @@ export default function QueryForm({
 
       {/* Secondary info row: advanced options + rate limit (after first query) */}
       <div style={{ display: 'flex', justifyContent: queryCount > 0 ? 'space-between' : 'center', alignItems: 'center', flexWrap: 'wrap', gap: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
+        {hideAdvanced ? (
+          <p style={{ margin: 0, padding: '4px 0', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center' }}>
+            {signInAdds}
+          </p>
+        ) : (
         <button
           type="button"
           onClick={() => setAdvancedOpen(!advancedOpen)}
@@ -407,6 +447,7 @@ export default function QueryForm({
         >
           <span style={{ fontSize: '16px' }}>&#9881;</span> Advanced options {advancedOpen ? '\u25B4' : '\u25BE'}
         </button>
+        )}
         {queryCount > 0 && <RateLimitBanner refreshTrigger={queryCount} />}
       </div>
 
@@ -426,7 +467,7 @@ export default function QueryForm({
       )}
 
       {/* Advanced options expanded section */}
-      {advancedOpen && (
+      {advancedOpen && !hideAdvanced && (
         <div>
           {/* Response mode — signed-in-only per Phase 2a1. Anonymous users
               see a sign-in prompt instead of the toggle; the executed-sandbox

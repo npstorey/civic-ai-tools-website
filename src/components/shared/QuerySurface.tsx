@@ -69,6 +69,12 @@ interface QuerySurfaceProps {
    * is session-sticky and wins over this default.
    */
   defaultMode?: QueryMode;
+  /**
+   * Whether the form offers Advanced options to a signed-out reader (UX pass
+   * row 7). Default 'always', every mount as before; the public home page
+   * passes 'hidden-signed-out'. Handed to `QueryForm` unchanged.
+   */
+  advancedOptions?: 'always' | 'hidden-signed-out';
 }
 
 export default function QuerySurface({
@@ -76,6 +82,7 @@ export default function QuerySurface({
   showLocalSetupFootnote = true,
   presentation = 'comparison',
   defaultMode = 'standard',
+  advancedOptions = 'always',
 }: QuerySurfaceProps) {
   const [queryCount, setQueryCount] = useState(0);
   const [usedModel, setUsedModel] = useState<string>('');
@@ -187,6 +194,7 @@ export default function QuerySurface({
             isLoading={streaming.isLoading}
             queryCount={queryCount}
             defaultMode={defaultMode}
+            advancedOptions={advancedOptions}
             comparisonControl={
               answerFirstConfigured
                 ? {

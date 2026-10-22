@@ -109,7 +109,8 @@ test('#547 C3: both mounts render the same form, and /ask keeps its notebook def
   const home = read('src/app/(marketing)/page.tsx');
   at(ask, '<QuerySurface', 'ask/page.tsx');
   at(ask, 'defaultMode="notebook"', 'ask/page.tsx');
-  at(home, '<QuerySurface>', '(marketing)/page.tsx');
+  // The home page passes one prop of its own (UX pass row 7: Advanced options, signed out); the form is the same.
+  at(home, '<QuerySurface advancedOptions="hidden-signed-out">', '(marketing)/page.tsx');
   const surface = read('src/components/shared/QuerySurface.tsx');
   at(surface, '<QueryForm', 'QuerySurface.tsx');
 });
