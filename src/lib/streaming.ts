@@ -1513,11 +1513,12 @@ export function formatToolResult(
         case 'not-offered':
           return 'No source was loaded: the request named none this question can use';
         // #644 W2: true whether the reader did not decide in time or could
-        // not be asked; the record cannot tell the two apart.
+        // not be asked; the record cannot tell the two apart, so the line
+        // names both.
         case 'no-answer':
           return source
-            ? `No answer about the ${source} source arrived in time, so it was not used for this question`
-            : 'No answer about a source set to Ask first arrived in time, so it was not used for this question';
+            ? `The ${source} source was not used: this site could not ask you, or no answer arrived in time`
+            : 'A source set to Ask first was not used: this site could not ask you, or no answer arrived in time';
         // The load step threw, which it is not expected to do.
         case 'unavailable':
           return source ? `This site could not load the ${source} source for this question` : 'This site could not load a data source for this question';
@@ -1904,7 +1905,7 @@ function describeToolNarrative(
         case 'not-offered':
           return 'asked for a source this question cannot use';
         case 'no-answer':
-          return `did not use ${named}, because no answer about it arrived in time`;
+          return `did not use ${named}, because this site could not ask you or no answer arrived in time`;
         case 'unavailable':
           return `asked to load ${named}, which this site could not load`;
         case undefined:
