@@ -38,3 +38,26 @@ test('UX pass row 12: the comparison names each configured server a source names
   const row = environment.find((i) => i.label === 'Data sources this site could use');
   assert.equal(row?.value, 'Socrata (socrata-mcp.civicaitools.org), Data Commons (api.datacommons.org), mcp.unknown.example');
 });
+
+// The owner's fix (pre-merge): a hosted source is recorded by the purl of the
+// package it ran, whose URL has no host. The row used to drop it while its
+// label claimed every source this site could use; it is now named as the
+// record page names it, by reader name and pinned version, and an entry no
+// source names reads as stored. Production's six configured servers are the
+// fixture: two addressed, four hosted.
+test('owner fix: the comparison names a hosted source by name and pinned version instead of dropping it', () => {
+  const environment = model([
+    { url: 'https://socrata-mcp.civicaitools.org', name: 'socrata' },
+    { url: 'https://api.datacommons.org/mcp', name: 'data-commons' },
+    { url: 'pkg:npm/%40betanyc/nyc-charter-laws-rules@0.3.1', name: 'nyc-charter' },
+    { url: 'pkg:npm/%40betanyc/nyc-checkbook-mcp@1.6.3', name: 'nyc-checkbook' },
+    { url: 'pkg:npm/%40betanyc/nyc-record-mcp@1.1.0', name: 'nyc-record' },
+    { url: 'pkg:npm/%40betanyc/nys-openlegislation-mcp@2.4.0', name: 'nys-legislation' },
+    { url: 'pkg:npm/%40example/unknown-source@0.1.0' },
+  ]).disclosure.environment ?? [];
+  const row = environment.find((i) => i.label === 'Data sources this site could use');
+  assert.equal(
+    row?.value,
+    'Socrata (socrata-mcp.civicaitools.org), Data Commons (api.datacommons.org), NYC Charter, Laws and Rules (0.3.1), NYC Checkbook (1.6.3), NYC City Record (1.1.0), NYS Open Legislation (2.4.0), pkg:npm/%40example/unknown-source@0.1.0',
+  );
+});

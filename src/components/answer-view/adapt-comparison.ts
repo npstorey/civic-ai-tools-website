@@ -99,7 +99,10 @@ export function systemPromptHashOfTrace(trace: unknown): string | null {
 /**
  * The MCP servers the run's configuration had, as the run recorded them on
  * its root span (`analysis.mcp_servers`, ADR-0033), in order, one per host,
- * or none. An entry whose URL has no host is left out, not guessed at.
+ * or none. An entry whose URL has no host (a hosted source's purl) or does not
+ * parse is kept, once per address, as the record page keeps it: the row's
+ * label says these are the sources this site could use, so none is dropped
+ * (the owner's fix to UX pass row 12). `readerServerName` states it.
  */
 export function mcpServersOfTrace(trace: unknown): Array<{ url: string; name?: string }> {
   for (const span of spansOf(trace)) {
@@ -118,22 +121,24 @@ export function mcpServersOfTrace(trace: unknown): Array<{ url: string; name?: s
       const url = (server as { url?: unknown } | null)?.url;
       const name = (server as { name?: unknown } | null)?.name;
       if (typeof url !== 'string') continue;
-      try {
-        const host = new URL(url).host;
-        if (host && !hosts.includes(host)) {
-          hosts.push(host);
-          out.push(typeof name === 'string' ? { url, name } : { url });
-        }
-      } catch { /* not a URL: left out */ }
+      let host = '';
+      try { host = new URL(url).host; } catch { /* not a URL: kept by its address */ }
+      const key = host || url;
+      if (!hosts.includes(key)) {
+        hosts.push(key);
+        out.push(typeof name === 'string' ? { url, name } : { url });
+      }
     }
     return out;
   }
   return [];
 }
 
-/** The hosts of `mcpServersOfTrace`, in order. */
+/** The hosts of `mcpServersOfTrace`, in order; an entry with no host is left out. */
 export function mcpServerHostsOfTrace(trace: unknown): string[] {
-  return mcpServersOfTrace(trace).map((s) => new URL(s.url).host);
+  return mcpServersOfTrace(trace).flatMap((s) => {
+    try { const host = new URL(s.url).host; return host ? [host] : []; } catch { return []; }
+  });
 }
 
 // --- The servers row, in the reader's words (UX pass row 12) ----------------------
