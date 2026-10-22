@@ -2956,7 +2956,7 @@ the failure mode changes.
 
 Any other value runs as `all-sources`, and the server logs one line naming the variable and its two values. The preflight refuses such a value and names both.
 
-The directory follows the reader's settings ("Consent and the flows statement"). A source set to Off is not listed. Loading a source set to Ask first sends nothing to it until the reader answers: the two streaming routes stop to ask ([The consent pause](#the-consent-pause)), and the JSON route and replay record `declined`. While the consent gate is off, every configured source counts as On.
+The directory follows the reader's settings ("Consent and the flows statement"). A source set to Off is not listed. Loading a source set to Ask first sends nothing to it until the reader answers: the two streaming routes stop to ask ([The consent pause](#the-consent-pause)), and the JSON route records `declined`. Replay asks no reader and loads every source it offers, so no pause and no `declined` arise there. While the consent gate is off, every configured source counts as On.
 
 The `load_source` result is one line of plain text with no JSON in it. A loaded source's guidance never travels in a tool result. It arrives in the next request's system prompt. Listing a source in the directory contacts nothing. Loading Socrata asks its server for its guidance, and loading Data Commons or Boston OpenContext asks that server for its instructions, as composing the prompt does under `all-sources`.
 
@@ -3003,7 +3003,7 @@ When the model loads a source the reader set to Ask first, a run on `/api/compar
 - **The hold.** The run reads the entry every 500 ms for at most 60 seconds, and holds at most 120 seconds per run and once per source. The card posts the answer to `POST /api/sources/consent/decision` as `{ key, decision }`. `allow` turns that one source On in the reader's consent (the account's row, or the session cookie), and the load goes on as an On source's does. `not-now` changes nothing, and the load records `declined`. No answer in time records `no-answer`.
 - **The decision route** answers 404 for a key the store does not hold, 409 for one already answered, 403 for a key minted under another account, and 503 when the store fails or `RATE_LIMIT_SECRET` is unset. An anonymous reader's key is the only check.
 - **With no store**, because either variable is unset or a store write fails, the run does not stop: the event says so (`holds: false`), the load records `no-answer` at once, and the card says the source can be turned On in the panel for the next question. There is no in-memory fallback: a pause and its answer can reach different server instances.
-- **Who never stops.** `/api/compare`, the JSON route, holds no stream, and replay asks no reader: an Ask-first load there records `declined`.
+- **Who never stops.** `/api/compare`, the JSON route, holds no stream: an Ask-first load there records `declined`. Replay asks no reader and loads every source it offers, so no pause and no `declined` arise there.
 - **The record.** The key, the reader code and the answer reach no span and no record. A record states the load's outcome, and the load span's duration includes the time the run waited.
 
 ## Tool names across sources
