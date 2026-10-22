@@ -99,7 +99,7 @@ export interface DecisionEntry {
 /** The two commands the pause and the decision route send. */
 export interface DecisionStore {
   get(key: string): Promise<unknown>;
-  set(key: string, value: DecisionEntry, options?: { ex: number; nx: true } | { xx: true; keepTtl: true }): Promise<unknown>;
+  set(key: string, value: DecisionEntry, options: { ex: number; nx: true } | { xx: true; keepTtl: true }): Promise<unknown>;
 }
 
 /** The store, on the pair the rate limiter reads, or null when either is unset. Never a memory store. */
@@ -339,7 +339,7 @@ export async function answerConsentDecision(
   }
   let written: unknown;
   try {
-    written = await store.set(name, { ...entry, decision });
+    written = await store.set(name, { ...entry, decision }, { xx: true, keepTtl: true });
   } catch {
     return unsaved();
   }
