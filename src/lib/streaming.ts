@@ -1906,7 +1906,7 @@ function describeToolNarrative(
         case 'no-answer':
           return `did not use ${named}, because no answer about it arrived in time`;
         case 'unavailable':
-          return `could not load ${named}`;
+          return `asked to load ${named}, which this site could not load`;
         case undefined:
           return `asked to load ${named}`;
         default:

@@ -36,7 +36,7 @@ const RESULT = {
 };
 const NARRATIVE = {
   noAnswer: 'did not use the Boston OpenContext source, because no answer about it arrived in time',
-  unavailable: 'could not load the Boston OpenContext source',
+  unavailable: 'asked to load the Boston OpenContext source, which this site could not load',
 };
 const NOTE = {
   noAnswer: '- `boston`: not used, no answer arrived in time',
