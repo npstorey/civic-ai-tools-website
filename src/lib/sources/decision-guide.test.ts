@@ -76,3 +76,20 @@ test('criterion 6 [D]: the store\'s outbound row keeps its first and third cells
   assert.match(cells[1], /`src\/lib\/sources\/decision\.ts`/, 'the row does not name decision.ts');
   assert.equal(cells[2].replace(/\s*\|\s*$/, ''), 'yes');
 });
+
+// Fix round 1, item 4: replay asks no reader, and its directory lists only the
+// sources it offers, every one of which loads (`replay-loop.ts`, the in-loop
+// branch of `replayLoopOptionsForPackage`), so it never meets an Ask-first
+// load. `/api/compare` keeps its `declined`.
+const REPLAY_CORRECTED = 'Replay asks no reader and loads every source it offers, so no pause and no `declined` arise there.';
+
+test('item 4: the guide no longer says replay records `declined`, and says what replay does', () => {
+  assert.ok(!GUIDE.includes('replay asks no reader: an Ask-first load there records `declined`'), 'the guide still says replay records `declined` (the pause section)');
+  assert.ok(!GUIDE.includes('the JSON route and replay record `declined`'), 'the guide still says replay records `declined` (In-loop routing)');
+  assert.doesNotMatch(GUIDE, /\breplay\b[^.]*\brecords? `declined`/i, 'a sentence of the guide says replay records `declined`');
+  const inLoop = section('## In-loop routing');
+  const pause = section('### The consent pause');
+  assert.ok(inLoop.slice(0, inLoop.indexOf('\n### ')).includes(REPLAY_CORRECTED), '"In-loop routing" does not say what replay does');
+  assert.ok(pause.includes(REPLAY_CORRECTED), 'the pause section does not say what replay does');
+  assert.match(pause, /`\/api\/compare`[^.]*holds no stream: an Ask-first load there records `declined`\./, 'the pause section no longer says /api/compare records `declined`');
+});
