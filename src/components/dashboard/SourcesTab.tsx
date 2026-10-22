@@ -18,6 +18,20 @@ import { currentStates, useSourceConsent } from '@/components/sources/useSourceC
 
 const LABEL: Record<string, string> = { on: 'On', 'ask-first': 'Ask first', off: 'Off' };
 
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/**
+ * A stored date in words, "20 October 2026" (UX pass row 14(a)), read from the
+ * value's first ten characters as written (an ISO date or timestamp, UTC), so
+ * no time zone moves it a day. Anything else is returned as stored.
+ */
+function dateInWords(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return value;
+  const month = MONTHS[Number(match[2]) - 1];
+  return month ? `${Number(match[3])} ${month} ${match[1]}` : value;
+}
+
 export default function SourcesTab() {
   const consent = useSourceConsent();
   const status = consent.status;
@@ -38,8 +52,9 @@ export default function SourcesTab() {
         <>
           <ConsentNotices />
           <p style={{ margin: '0 0 8px' }}>
-            Given {status?.consentedAt ? String(status.consentedAt).slice(0, 10) : 'on a date not recorded'}.
-            {' '}It refers to the statement of where a question can go, version {status?.consentedBaseVersion?.slice(0, 12) ?? 'not recorded'}, dated {status?.consentedFlowsDate ?? 'not recorded'}.
+            {/* One string per sentence, so the markup carries no separators between its parts. */}
+            {`Given on ${status?.consentedAt ? dateInWords(String(status.consentedAt)) : 'a date not recorded'}.`}
+            {` It refers to the statement of where a question can go as it stood on ${status?.consentedFlowsDate ? dateInWords(status.consentedFlowsDate) : 'a date not recorded'} (version ${status?.consentedBaseVersion?.slice(0, 8) ?? 'not recorded'}).`}
           </p>
           <ul style={{ listStyle: 'none', margin: '0 0 12px', padding: 0 }}>
             {(statement?.sources ?? []).map((source) => (

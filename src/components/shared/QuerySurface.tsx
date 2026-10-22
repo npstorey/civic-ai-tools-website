@@ -69,6 +69,12 @@ interface QuerySurfaceProps {
    * is session-sticky and wins over this default.
    */
   defaultMode?: QueryMode;
+  /**
+   * Whether the form offers Advanced options to a signed-out reader (UX pass
+   * row 7). Default 'always', every mount as before; the public home page
+   * passes 'hidden-signed-out'. Handed to `QueryForm` unchanged.
+   */
+  advancedOptions?: 'always' | 'hidden-signed-out';
 }
 
 export default function QuerySurface({
@@ -76,6 +82,7 @@ export default function QuerySurface({
   showLocalSetupFootnote = true,
   presentation = 'comparison',
   defaultMode = 'standard',
+  advancedOptions = 'always',
 }: QuerySurfaceProps) {
   const [queryCount, setQueryCount] = useState(0);
   const [usedModel, setUsedModel] = useState<string>('');
@@ -187,6 +194,7 @@ export default function QuerySurface({
             isLoading={streaming.isLoading}
             queryCount={queryCount}
             defaultMode={defaultMode}
+            advancedOptions={advancedOptions}
             comparisonControl={
               answerFirstConfigured
                 ? {
@@ -272,7 +280,8 @@ export default function QuerySurface({
 
       {lastMode === 'notebook' && (notebook.state.isLoading || notebook.state.notebook || notebook.state.error) && (
         <div ref={resultsRef} className="max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
-          <h2 style={{ marginBottom: '16px' }}>Executed-sandbox response</h2>
+          {/* UX pass row 19: the reader's words for the mode, as the record page says it. */}
+          <h2 style={{ marginBottom: '16px' }}>Answer, executed in a signed sandbox</h2>
           <NotebookOutput
             state={notebook.state}
             prompt={lastQuery}

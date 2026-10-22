@@ -47,10 +47,39 @@ export const PANEL_HEADING = 'Data sources';
 export const PANEL_LEAD = 'Set each data source to On, Ask first or Off. Your choice applies from your next question.';
 
 /** The panel before a consent is given: the states it would give are shown, and nothing is stored yet. */
-export const PANEL_NO_CONSENT = 'This site asks before your next question. You can change these after you allow.';
+export const PANEL_NO_CONSENT = 'Allow uses these settings. After you allow, you can change each one here.';
 
 /** The panel's link to the privacy page (T12). */
 export const PANEL_PRIVACY_LINK = 'Where a question can go, in full';
+
+/**
+ * After a successful state change, under that source's control, as a status
+ * line (UX pass row 5): the source's reader name + `middle` + the state's label
+ * + `end`, e.g. "NYS Open Legislation is now Off. This applies from your next
+ * question." The row's "Set <State> since <date>." follows on the same line.
+ */
+export const PANEL_STATE_CHANGED = { middle: ' is now ', end: '. This applies from your next question.' } as const;
+
+/**
+ * The just-in-time line under the question box while a consent is in force
+ * (UX pass row 11), in its pieces: `lead` (`leadNotebook` when the form is in
+ * notebook mode) + the On sources (or `noSource`) +
+ * `.`; then, when any source is not On, `notTo` + each group of the others
+ * with `whichAre` / `whichIs` + its state, the groups joined by `orGroup`;
+ * then the link that opens the Sources panel, `change`. The names are read
+ * from the statement (`readerSourceName`), never typed.
+ */
+export const JUST_IN_TIME_LINE = {
+  lead: 'This question goes to the model service and to ',
+  /** In notebook mode: the notebook sent to run carries the question's text, so the runner is named too. */
+  leadNotebook: 'This question goes to the model service, the notebook runner and to ',
+  noSource: 'no data source',
+  notTo: 'Not to ',
+  whichAre: ', which are set to ',
+  whichIs: ', which is set to ',
+  orGroup: ', or ',
+  change: 'Change sources',
+} as const;
 
 // --- The dashboard's Sources tab ---
 

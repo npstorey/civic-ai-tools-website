@@ -254,7 +254,7 @@ for (const [label, slug, pkg] of [
     const html = await render(slug, pkg);
     const items = cItems(html);
     assert.ok(items.has('Content profile'), 'premise: section C rendered its items');
-    const line = items.get('Data sources');
+    const line = items.get('Data sources used'); // UX pass row 12: the row's label in the reader's words
     assert.notEqual(line, '—', 'the line reads "—": the record states no data source');
     assert.notEqual(line, 'Nyc Charter', 'the line reads the harness\'s capitalised fallback for an unknown id');
     assert.equal(line, escaped(READER_NAME), 'the line does not name the source in the reader\'s language');

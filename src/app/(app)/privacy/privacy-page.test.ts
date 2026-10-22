@@ -733,3 +733,45 @@ test('the footer, which the root layout renders on both surfaces, links to /priv
   assert.ok(footer.length > 0, 'src/app/layout.tsx has no <footer>');
   assert.match(footer, /href="\/privacy"/, 'the footer does not link to /privacy');
 });
+
+// --- UX pass row 6 (b): the order, the jump list, the page's own statement ------------------------
+//
+// The consent sections ("How consent works", "When we ask again", "What
+// recipients keep") come first; "How this page is written" sits just above
+// "What this page cannot tell you", and says in two sentences what the page
+// is; under the title, a jump list of every heading, in page order, each a
+// link to its section. The jump list is a traced element like every other:
+// its words are the headings `buildPrivacySections` returns. The statements'
+// ids and traces do not change. At the base the page opened with "How this
+// page is written", had no jump list, and the statement was three sentences.
+
+const NEW_BASIS = "What this site does with what you send it. Every line is read from the site's own settings or its code when the page is served, or from a named page with the date it was read.";
+const h2s = (html: string) => [...html.matchAll(/<h2[^>]*>(.*?)<\/h2>/g)].map((m) => text(m[1]));
+const sectionIds = (html: string) => [...html.matchAll(/<section[^>]*id="([^"]+)"/g)].map((m) => m[1]);
+
+for (const name of [...Object.keys(CONFIGS), 'full']) {
+  test(`UX pass row 6 (${name}): consent first, "How this page is written" above "What this page cannot tell you"`, () => {
+    const shown = h2s(RENDERED[name]);
+    assert.deepEqual(shown.slice(0, 3), ['How consent works', 'When we ask again', 'What recipients keep'], `${name}: the page opens with ${shown.slice(0, 3).join(' · ')}`);
+    assert.equal(shown.at(-1), 'What this page cannot tell you');
+    assert.equal(shown.at(-2), 'How this page is written', `${name}: the order ends ${shown.slice(-3).join(' · ')}`);
+  });
+
+  test(`UX pass row 6 (${name}): a jump list under the title links every heading, in page order`, () => {
+    const html = RENDERED[name];
+    const nav = /<nav[^>]*>(.*?)<\/nav>/.exec(html);
+    assert.ok(nav, `${name}: no jump list`);
+    assert.ok(html.indexOf('<nav') > html.indexOf('</h1>') && html.indexOf('<nav') < html.indexOf('<h2'), `${name}: the jump list is not between the title and the first heading`);
+    const links = [...nav![1].matchAll(/<a href="#([^"]+)"[^>]*>(.*?)<\/a>/g)].map((m) => [m[1], text(m[2])]);
+    const ids = sectionIds(html);
+    assert.deepEqual(links.map(([, label]) => label), h2s(html), `${name}: the jump list is not the headings in page order`);
+    assert.deepEqual(links.map(([id]) => id), ids, `${name}: a jump-list link does not reach its section`);
+  });
+
+  test(`UX pass row 6 (${name}): "How this page is written" says what the page is, in two sentences, with its id and trace`, () => {
+    const basis = statements(RENDERED[name]).find((s) => s.id === 'basis');
+    assert.ok(basis, 'premise: the basis statement renders');
+    assert.equal(basis!.text, NEW_BASIS);
+    assert.deepEqual(basis!.traces, ['const:src/lib/privacy-facts.ts#PAGE_BASIS']);
+  });
+}

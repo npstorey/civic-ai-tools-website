@@ -246,9 +246,9 @@ test('W3 P2 a record whose package cannot be loaded keeps the row’s parts: the
   assert.deepEqual(model.status.facts.map((f: { text: string }) => f.text), ['Typed Standards §8.7', 'Download notebook (.ipynb)']);
 });
 
-// --- R7 P4 a2, carried: C's "MCP servers" expression ---------------------------------
+// --- R7 P4 a2, carried: C's servers expression (UX pass row 12: relabelled, named) ---------
 
-test('R7 P4 a2 carried: C’s MCP servers line is each entry’s host, or its raw value when the URL has no host or does not parse', () => {
+test('R7 P4 a2 carried: C’s servers line is, for an entry no source names, its host, or its raw value when the URL has no host or does not parse', () => {
   const PURL = 'pkg:npm/%40example/hosted-source@0.1.0';
   assert.equal(new URL(PURL).host, '', 'premise: the purl parses with an empty host');
   const model = adapter()(input(pkg({
@@ -258,8 +258,28 @@ test('R7 P4 a2 carried: C’s MCP servers line is each entry’s host, or its ra
       },
     },
   })));
-  const item = model.disclosure.environment.find((i: { label: string }) => i.label === 'MCP servers');
+  const item = model.disclosure.environment.find((i: { label: string }) => i.label === 'Data sources this site could use');
   assert.equal(item?.value, `mcp.example.test, ${PURL}, not a url`);
+});
+
+test('UX pass row 12: an entry a manifest source names reads as its reader name, with its host or its pinned version', () => {
+  const model = adapter()(input(pkg({
+    extensions: {
+      'org.civicaitools.environment': {
+        mcpServers: [
+          { url: 'https://socrata-mcp.civicaitools.org', name: 'socrata' },
+          { url: 'https://api.datacommons.org/mcp', name: 'data-commons' },
+          { url: 'pkg:npm/%40betanyc/nyc-checkbook-mcp@1.6.3', name: 'nyc-checkbook' },
+          { url: 'pkg:npm/%40example/unknown-source@0.1.0', name: 'not-a-manifest-source' },
+        ],
+      },
+    },
+  })));
+  const labels = model.disclosure.environment.map((i: { label: string }) => i.label);
+  assert.ok(!labels.includes('MCP servers'), 'the row is still labelled in implementation language');
+  assert.ok(labels.includes('Data sources used') && !labels.includes('Data sources'), `the used-sources row is not relabelled: ${labels.join(' | ')}`);
+  const item = model.disclosure.environment.find((i: { label: string }) => i.label === 'Data sources this site could use');
+  assert.equal(item?.value, 'Socrata (socrata-mcp.civicaitools.org), Data Commons (api.datacommons.org), NYC Checkbook (1.6.3), pkg:npm/%40example/unknown-source@0.1.0');
 });
 
 // --- The model crosses the client boundary --------------------------------------------

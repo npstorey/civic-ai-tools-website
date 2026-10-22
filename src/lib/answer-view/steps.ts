@@ -25,7 +25,7 @@ import {
   reasonWithoutIdentifier,
   searchSubject,
 } from '../streaming.ts';
-import { describeQueryOutcome } from '../evidence/query-step.ts';
+import { describeQueryOutcome, secondsText } from '../evidence/query-step.ts';
 // Type-only: erased at compile time. The kind vocabulary is declared once,
 // beside the table that turns it into reader-facing copy.
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
@@ -784,11 +784,30 @@ export interface ClosingRow {
 export const CLOSING_PHASES: readonly string[] = ['B', 'C', 'D'];
 
 /**
+ * Each phase in the reader's words (UX pass row 21), by the phase name the
+ * route sends. The one table: `NotebookProgress`'s rows and the closing rows
+ * below both read it. The route's own messages ("Synthesizing notebook…") are
+ * unchanged, and are what a phase this table lacks still reads as.
+ */
+export const PHASE_WORDS: Readonly<Record<string, string>> = {
+  A: 'Finding the data',
+  B: 'Writing the notebook',
+  C: 'Running it in a sandbox',
+  D: 'Checking the result',
+  complete: 'Done',
+};
+
+/** A phase's label: the table's words, else the route's message without its trailing ellipsis. */
+export function phaseLabel(phase: string, message: string): string {
+  return Object.hasOwn(PHASE_WORDS, phase) ? PHASE_WORDS[phase] : message.replace(/\s*(…|\.\.\.)$/, '');
+}
+
+/**
  * The closing rows, in phase order, one per closing phase the stream reported.
  *
- *   - The label is the phase message the route sent, without its trailing
- *     ellipsis (it reported a phase starting; the row reads it as a stage of
- *     the run) — the same words as `NotebookProgress`'s four rows.
+ *   - The label is the phase's words from `PHASE_WORDS` (UX pass row 21), the
+ *     same words as `NotebookProgress`'s four rows; for a phase the table
+ *     lacks, the message the route sent, without its trailing ellipsis.
  *   - C states the sandbox duration the executed notebook recorded
  *     (`org.civicaitools.execution.executionDuration_ms`, the figure section
  *     C states as "Sandbox duration"), when it recorded one. Not the
@@ -803,9 +822,9 @@ export function buildClosingRows(reported: readonly ReportedPhase[], sandboxDura
   for (const phase of CLOSING_PHASES) {
     const event = reported.find((r) => r.phase === phase);
     if (event === undefined) continue;
-    const label = event.message.replace(/\s*(…|\.\.\.)$/, '');
+    const label = phaseLabel(phase, event.message);
     const fact = phase === 'C' && sandboxDurationMs !== null
-      ? `Sandbox duration ${(sandboxDurationMs / 1000).toFixed(1)}s`
+      ? `Sandbox duration ${secondsText(sandboxDurationMs)}`
       : undefined;
     rows.push({ phase, label, ...(fact !== undefined ? { fact } : {}) });
   }

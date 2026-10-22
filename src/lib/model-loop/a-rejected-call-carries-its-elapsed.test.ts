@@ -375,7 +375,8 @@ test('A5: the shared outcome formatter states the rejected entry’s elapsed in 
   );
   assert.match(
     outcome.text,
-    /took [\d,]+ms/,
+    // UX pass row 23: in seconds, one decimal, or "under 0.1 s" for an elapsed that would round to zero.
+    /took (\d+\.\d s|under 0\.1 s)\./,
     'the elapsed is a real measurement and is disclosed — but in words, because a bare number ' +
       'beside "did not complete" reads as how long the call took to succeed',
   );

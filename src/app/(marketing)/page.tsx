@@ -7,7 +7,8 @@ import PositioningBand from '@/components/home/PositioningBand';
 export default function Home() {
   return (
     <>
-      <QuerySurface>
+      {/* Signed out, Advanced options gives way to what signing in adds (UX pass row 7). */}
+      <QuerySurface advancedOptions="hidden-signed-out">
         {/* Hero Section */}
         <div style={{ textAlign: 'center', marginBottom: '24px', paddingTop: '40px' }}>
           <h1 style={{ marginBottom: '8px' }}>

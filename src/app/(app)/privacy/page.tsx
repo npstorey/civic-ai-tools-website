@@ -1,7 +1,7 @@
 import { prose, sectionHeading, sectionSpacing } from '@/styles/page-styles';
 import { pageTitle } from '@/lib/brand-config';
 import { resolveAnalytics } from '@/lib/analytics';
-import { buildPrivacySections, type Segment, type Statement } from '@/lib/privacy-facts';
+import { buildPrivacySections, type PrivacySection, type Segment, type Statement } from '@/lib/privacy-facts';
 
 /**
  * `/privacy` (#516 P7): what this instance does with what a reader sends,
@@ -19,6 +19,12 @@ import { buildPrivacySections, type Segment, type Statement } from '@/lib/privac
  * and the constants it states. A statement with a list renders as one element
  * holding its lead, the list and any text after it, so the traces cover every
  * item. The page renders no other text but headings (`privacy-page.test.ts`).
+ *
+ * THE ORDER (UX pass row 6): the consent sections first, the page's own
+ * statement ("How this page is written") just above "What this page cannot
+ * tell you", everything else as `buildPrivacySections` returns it. Under the
+ * title, a jump list of the headings in that order, one traced element whose
+ * words are the headings that function returns.
  */
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +47,19 @@ function renderSegment(segment: Segment, key: number) {
       {segment.code}
     </code>
   );
+}
+
+/** The consent sections a reader came for, first (UX pass row 6), by their ids. */
+const FIRST = ['consent-1', 'consent-2', 'consent-3'];
+
+/** The sections in reading order: FIRST, then the rest, with the page's own statement moved to just above the page's limits. */
+function inReadingOrder(sections: PrivacySection[]): PrivacySection[] {
+  const first = FIRST.flatMap((id) => sections.filter((s) => s.id === id));
+  const basis = sections.filter((s) => s.id === 'basis');
+  const rest = sections.filter((s) => !FIRST.includes(s.id) && s.id !== 'basis');
+  const limits = rest.findIndex((s) => s.id === 'limits');
+  const at = limits === -1 ? rest.length : limits;
+  return [...first, ...rest.slice(0, at), ...basis, ...rest.slice(at)];
 }
 
 function StatementLine({ statement }: { statement: Statement }) {
@@ -73,11 +92,23 @@ export default function PrivacyPage() {
     NEXT_PUBLIC_ANALYTICS_ID: process.env.NEXT_PUBLIC_ANALYTICS_ID,
     NEXT_PUBLIC_GA_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
   });
-  const sections = buildPrivacySections(analytics);
+  const sections = inReadingOrder(buildPrivacySections(analytics));
 
   return (
     <div style={{ maxWidth: '760px', margin: '0 auto', padding: '48px 24px' }}>
       <h1 style={{ marginBottom: '32px' }}>Privacy</h1>
+      {/* The jump list (UX pass row 6): traced like every statement, to the function that names the headings. */}
+      <nav aria-label="Sections of this page" style={{ marginBottom: '40px' }}>
+        <div data-statement="jump-list" data-trace="const:src/lib/privacy-facts.ts#buildPrivacySections const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS">
+          <ul style={{ ...prose, paddingLeft: '20px', margin: 0 }}>
+            {sections.map((section) => (
+              <li key={section.id}>
+                <a href={`#${section.id}`}>{section.heading}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </nav>
       {sections.map((section) => (
         <section key={section.id} id={section.id} style={{ ...sectionSpacing, marginBottom: '40px' }}>
           <h2 style={sectionHeading}>{section.heading}</h2>

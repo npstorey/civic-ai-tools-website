@@ -42,6 +42,7 @@
 // with no loader, as the two run adapters beside it do.
 
 import { adaptNotebook, renderingCellText } from './adapt-notebook.ts';
+import { readerServerName, SERVERS_LABEL, USED_SOURCES_LABEL } from './adapt-comparison.ts';
 import { AUTHOR, type AnswerPart, type AnswerViewModel, type EnvironmentItem, type RecordTraceEntry, type StatusFact, type StepsPart } from './view-model.ts';
 import { buildChatEvidenceView } from './buildChatEvidenceView.ts';
 import { buildRecordStepView, stepsAuthorLine } from '../../lib/answer-view/steps.ts';
@@ -143,16 +144,14 @@ function environmentExtension(pkg: EvidencePackage): {
 }
 
 /**
- * C's "MCP servers" value (R7 P4, ruling a2): each entry's host, or its raw
- * value when the URL parses with an empty host (a hosted source's purl) or does
- * not parse. Carried from the page unchanged.
+ * C's servers value (R7 P4, ruling a2; UX pass row 12): each entry as a reader
+ * reads it (`readerServerName`): a manifest source by its reader name with its
+ * host or pinned version, anything else as stored, its host, or its raw value
+ * when the URL parses with an empty host (a hosted source's purl) or does not
+ * parse.
  */
-export function mcpServerHosts(servers: Array<{ url: string }> | undefined): string | undefined {
-  return servers
-    ?.map((s) => {
-      try { return new URL(s.url).host || s.url; } catch { return s.url; }
-    })
-    .join(', ');
+export function mcpServerHosts(servers: Array<{ url: string; name?: string }> | undefined): string | undefined {
+  return servers?.map(readerServerName).join(', ');
 }
 
 /**
@@ -269,9 +268,9 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
     ...(env?.modelVersion && env.modelVersion !== pkg.cost.model ? [{ label: 'Model version', value: env.modelVersion }] : []),
     ...(env?.temperature !== undefined ? [{ label: 'Temperature', value: String(env.temperature) }] : []),
     ...(env?.host ? [{ label: 'Publishing host', value: env.host }] : []),
-    ...(envMcpHosts ? [{ label: 'MCP servers', value: envMcpHosts }] : []),
+    ...(envMcpHosts ? [{ label: SERVERS_LABEL, value: envMcpHosts }] : []),
     { label: 'Content profile', value: row.contentProfile ?? 'default' },
-    { label: 'Data sources', value: dataSourcesSummary ?? '—' },
+    { label: USED_SOURCES_LABEL, value: dataSourcesSummary ?? '—' },
     // A hash-only skill prompt (#411) has no section B; this is where its hash is disclosed.
     ...(skillHash ? [{ label: 'Skill hash', value: skillHash.slice(0, 12), mono: true }] : []),
     { label: 'Prompt tokens', value: pkg.cost.promptTokens?.toLocaleString() || '—' },

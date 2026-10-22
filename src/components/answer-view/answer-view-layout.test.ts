@@ -711,18 +711,108 @@ test('W3 P1 item 2: side by side, the without-data panel keeps its own panel and
 
 // --- Item 3: the four phase rows while running become the step view's rows ---------------
 
-test('W3 P1 item 3: while the run is under way, its progress is the step view: a step per Phase A iteration, then a row per reported later phase', async () => {
+// UX pass row 22 changed what follows the steps while the run is under way:
+// the later phases are a list with their state marks (below), not closing rows.
+test('W3 P1 item 3: while the run is under way, its progress is the step view: a step per Phase A iteration, then the later phases with their marks', async () => {
   const running = await stateAfter(runEvents(RUN_NOTEBOOK, 'C'));
   (running as { isLoading: boolean }).isLoading = true;
   (running as { completedAt: number | null }).completedAt = null;
   const html = renderRun(running);
-  assert.ok(html.includes('Generating reproducible notebook'), 'premise: the progress panel renders');
+  assert.ok(html.includes('Working on your answer'), 'premise: the progress panel renders');
   const steps = part(html, 'steps').markup;
   assert.equal(occurrences(steps, 'data-part="step" ').length, 3, 'one step per Phase A iteration');
-  const closing = occurrences(steps, '<div data-part="closing-row"').map((s) => steps.slice(s, elementEnd(steps, s, 'div')).replace(/<[^>]*>/g, ''));
-  assert.deepEqual(closing, ['Synthesizing notebook', 'Executing in sandbox'], 'a row for each later phase the run reported');
-  assert.doesNotMatch(html, />Finalizing</, 'no row for a phase not yet reported');
-  assert.doesNotMatch(html, /<ul\b/, 'the four fixed phase rows are gone');
+  assert.equal(occurrences(html, 'data-part="closing-row"').length, 0, 'no closing rows while the run is under way');
+  assert.deepEqual(laterPhases(html).map((r) => r.label), ['Writing the notebook', 'Running it in a sandbox', 'Checking the result'], 'a row for each later phase, reported or not');
+  assert.equal(occurrences(html, 'Finding the data').length, 0, 'the fixed row for Phase A is gone: its steps stand for it');
+});
+
+// --- UX pass row 22: the later phases keep their state marks after the steps appear ------------
+//
+// At the base, once the run had a step, the four glyph rows were replaced by
+// the steps and the later phases appeared only as closing rows: bare text, no
+// mark, no counter, and no row for a phase not yet reported. Now the live
+// panel lists B, C and D under the steps with the glyphs the fixed rows use
+// (a check done, a spinner active with its counter, a circle pending), and
+// renders no closing rows while the run is active; the finished run keeps
+// its closing rows (the executed-run golden).
+
+/** The live panel's later-phase rows: each row's label and the glyph it shows. */
+function laterPhases(html: string): Array<{ label: string; glyph: 'check' | 'spinner' | 'pending' | 'none'; counter: boolean }> {
+  const list = /<ul data-part="later-phases"[^>]*>(.*?)<\/ul>/.exec(html)?.[1] ?? '';
+  return [...list.matchAll(/<li\b.*?<\/li>/g)].map((m) => {
+    const row = m[0];
+    const glyph = row.includes('✓') ? 'check' : /animation:spin/.test(row) ? 'spinner' : /border:2px solid var\(--border-color\)/.test(row) ? 'pending' : 'none';
+    const words = unescape(row.replace(/<[^>]*>/g, ' ').replace('✓', '')).replace(/\s+/g, ' ').trim();
+    const counter = / \d+:\d\d$/.test(words);
+    return { label: words.replace(/ \d+:\d\d$/, ''), glyph, counter };
+  });
+}
+
+const throughPhase = (events: Array<Record<string, unknown>>, last: string) => {
+  const order = ['A', 'B', 'C', 'D', 'complete'];
+  return events.filter((e) => e.type !== 'phase' || order.indexOf(e.name as string) <= order.indexOf(last));
+};
+
+test('UX pass row 22: with steps and phase B active, three later-phase rows: one spinner with its counter, two pending circles', async () => {
+  const running = await stateAfter(throughPhase(runEvents(RUN_NOTEBOOK, 'C'), 'B'));
+  (running as { isLoading: boolean }).isLoading = true;
+  (running as { completedAt: number | null }).completedAt = null;
+  assert.equal(running.phase, 'B', 'premise: phase B is the latest reported');
+  const html = renderRun(running);
+  assert.ok(html.includes('data-part="steps"'), 'premise: the steps box is shown');
+  assert.deepEqual(laterPhases(html), [
+    { label: 'Writing the notebook', glyph: 'spinner', counter: true },
+    { label: 'Running it in a sandbox', glyph: 'pending', counter: false },
+    { label: 'Checking the result', glyph: 'pending', counter: false },
+  ]);
+  assert.equal(occurrences(html, 'data-part="closing-row"').length, 0, 'closing rows render while the run is active');
+});
+
+test('UX pass row 22: with steps and phase complete before the notebook arrives, the three rows show checks', async () => {
+  const events = [...runEvents(RUN_NOTEBOOK, 'C'), { type: 'phase', name: 'D', message: 'Finalizing…' }, { type: 'phase', name: 'complete', message: 'Done.' }];
+  const running = await stateAfter(events);
+  (running as { isLoading: boolean }).isLoading = true;
+  (running as { completedAt: number | null }).completedAt = null;
+  assert.equal(running.phase, 'complete', 'premise: the run reported complete');
+  assert.equal(running.notebook ?? null, null, 'premise: no notebook has arrived');
+  assert.deepEqual(laterPhases(renderRun(running)).map((r) => [r.label, r.glyph]), [
+    ['Writing the notebook', 'check'],
+    ['Running it in a sandbox', 'check'],
+    ['Checking the result', 'check'],
+  ]);
+});
+
+test('UX pass row 22: the finished run keeps its closing rows and shows no later-phase list', () => {
+  assert.equal(occurrences(RUN, 'data-part="closing-row"').length, 3, 'premise: the finished run has its closing rows');
+  assert.equal(laterPhases(RUN).length, 0);
+});
+
+// --- UX pass row 21: before any step, the four phase rows read the table's words ------------------
+
+test('UX pass row 21: before any step, the four phase rows read "Finding the data" to "Checking the result", in order', async () => {
+  const started = await stateAfter([{ type: 'phase', name: 'A', message: 'Discovering datasets…' }]);
+  (started as { isLoading: boolean }).isLoading = true;
+  (started as { completedAt: number | null }).completedAt = null;
+  const html = renderRun(started);
+  const list = /<ul\b[^>]*>(.*?)<\/ul>/.exec(html)?.[1] ?? '';
+  const labels = [...list.matchAll(/<li\b.*?<\/li>/g)].map((m) => unescape(m[0].replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim().replace(/ \d+:\d\d$/, ''));
+  assert.deepEqual(labels, ['Finding the data', 'Writing the notebook', 'Running it in a sandbox', 'Checking the result'], `the four rows read: ${labels.join(' | ')}`);
+});
+
+// --- UX pass row 20: the progress panel's title and paragraph, in the reader's words ------------
+//
+// At the base: "Generating reproducible notebook" over "The four-phase pipeline
+// discovers data, writes a Jupyter notebook, runs it in a sandbox, and stamps
+// execution metadata. Typically takes 30 to 90 seconds."
+
+test('UX pass row 20: the progress panel says what the site is doing, and how long it takes, in the reader\'s words', async () => {
+  const running = await stateAfter(runEvents(RUN_NOTEBOOK, 'C'));
+  (running as { isLoading: boolean }).isLoading = true;
+  (running as { completedAt: number | null }).completedAt = null;
+  const text = unescape(renderRun(running).replace(/<!-- -->/g, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' '));
+  assert.ok(text.includes('Working on your answer'), `the panel's title is not the reader's: ${text.slice(0, 300)}`);
+  assert.ok(text.includes('This site finds the data, writes the steps as a notebook, runs them in a sandbox, and checks the result. It usually takes 30 to 90 seconds.'), `the panel's paragraph is not the reader's: ${text.slice(0, 400)}`);
+  assert.ok(!text.includes('Generating reproducible notebook') && !text.includes('four-phase pipeline'), 'the old words are still shown');
 });
 
 // --- Fix 1 (1): the comparison's citation states no execution ---------------------
@@ -778,7 +868,7 @@ test('W3 P1 (9) the live view: no text the site writes names a tool by its expos
   assert.equal((running.toolCalls as Array<{ name: string }>).at(-1)?.name, 'nyc_charter__get_section', 'premise: the last captured call is aliased');
   assert.equal((running.toolCalls as Array<{ operationType?: string }>).at(-1)?.operationType, undefined, 'premise: and has no operation type');
   const html = renderRun(running);
-  assert.ok(html.includes('Generating reproducible notebook') && html.includes('data-part="steps"'), 'premise: the live view renders, with its steps');
+  assert.ok(html.includes('Working on your answer') && html.includes('data-part="steps"'), 'premise: the live view renders, with its steps');
   assert.ok(typeof running.detail === 'string' && html.includes(unescape(running.detail as string).slice(0, 8)), 'premise: the detail line renders');
   const text = readerFacing(html);
   const i = text.indexOf('__');
@@ -1113,6 +1203,15 @@ test('W4 P1 (10) an executed reading with no execution stamp: the citation previ
 // (website main 641a82f), the base tree running this block with
 // `W4P1_UNCHANGED_OUT` set, where `withoutLayoutFoot` removes nothing. Rendered
 // in UTC, so a time the markup states reads the same on every host.
+// RE-CAPTURED, NOT EDITED, where a later change moved words on purpose: the
+// comparison's golden by this block on the UX pass branch (row 12, the servers
+// row relabelled "Data sources this site could use" and its entry named), its
+// diff from the base's capture confined to that row's two text nodes; the
+// executed run's golden by this block on the same branch (row 21, the closing
+// rows' phase words mapped by phase name), its diff confined to those three
+// labels; and again for row 23 (a duration in seconds), its diff confined to
+// the three duration strings; and again for the owner's fix to phase D's
+// words ("Checking the result"), its diff that one closing-row label.
 
 const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
 
@@ -1146,3 +1245,42 @@ for (const [name, file, renderIt] of [
     assert.fail(`${name} differs from the base at character ${i}:\n  base: …${golden.slice(Math.max(0, i - 60), i + 80)}…\n  head: …${actual.slice(Math.max(0, i - 60), i + 80)}…`);
   });
 }
+
+// --- UX pass row 24: one reason line per distinct reason within a step ------------------------
+//
+// At the base each call printed its sentence, so a step whose calls shared a
+// reason printed it once per call. Within a step, consecutive calls with the
+// same sentence now print it once, with ", N calls" when N > 1; every call's
+// outcome line stays, one row per call. A sentence that recurs after a
+// different one starts a new run: only consecutive calls are joined.
+
+const { StepsPartView } = (await import('@/components/answer-view/AnswerView')) as unknown as { StepsPartView: ComponentType<{ steps: unknown }> };
+
+test('UX pass row 24: consecutive calls sharing a reason print it once, with a count; every outcome stays', () => {
+  const call = (sentence: string | undefined, outcome: string) => ({ ...(sentence !== undefined ? { sentence } : {}), outcome, failed: false });
+  const steps = {
+    kind: 'step-view',
+    author: null,
+    closing: [],
+    view: {
+      unplaced: [],
+      steps: [{
+        label: 'Querying',
+        calls: [
+          call('to query 311 Service Requests', 'Returned 1 row × 1 column · 0.3 s'),
+          call('to query 311 Service Requests', 'Returned 2 rows × 1 column · 0.4 s'),
+          call('to query 311 Service Requests', 'Returned 3 rows × 1 column · 0.5 s'),
+          call('to read the columns of 311 Service Requests', 'No result summary was recorded for this request.'),
+          call('to query 311 Service Requests', 'Returned 4 rows × 1 column · 0.6 s'),
+          call(undefined, 'No result summary was recorded for this request.'),
+        ],
+      }],
+    },
+  };
+  const html = withProviders(createElement(StepsPartView, { steps }));
+  const sentences = [...html.matchAll(/data-part="step-sentence"[^>]*>(.*?)<\/div>/g)].map((m) => unescape(m[1].replace(/<!-- -->/g, '')));
+  assert.deepEqual(sentences, ['to query 311 Service Requests, 3 calls', 'to read the columns of 311 Service Requests', 'to query 311 Service Requests'], `the reason lines read: ${sentences.join(' | ')}`);
+  const outcomes = [...html.matchAll(/data-part="step-outcome"[^>]*>(.*?)<\/div>/g)].map((m) => unescape(m[1]));
+  assert.equal(outcomes.length, 6, 'one outcome line per call');
+  assert.equal(occurrences(html, 'data-part="step-call"').length, 6, 'one row per call');
+});

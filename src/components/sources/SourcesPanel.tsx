@@ -20,8 +20,8 @@
  * control and the question form's submit are held (the guard's `held`).
  */
 
-import type { CSSProperties } from 'react';
-import { ASK_FIRST_MEANS, PANEL_HEADING, PANEL_LEAD, PANEL_NO_CONSENT, PANEL_PRIVACY_LINK } from '@/lib/sources/copy';
+import { useState, type CSSProperties } from 'react';
+import { ASK_FIRST_MEANS, PANEL_HEADING, PANEL_LEAD, PANEL_NO_CONSENT, PANEL_PRIVACY_LINK, PANEL_STATE_CHANGED } from '@/lib/sources/copy';
 import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
 import { currentStates, useSourceConsent, type SourceStateValue } from './useSourceConsent';
 import { KeptByLines } from './KeptByLine';
@@ -56,6 +56,9 @@ export default function SourcesPanel() {
   // The states Allow writes (T7): the stored ones on a re-ask too, the defaults with nothing stored.
   const states = currentStates(status, ids);
   const onAccount = status?.store === 'row';
+  // The last change whose write succeeded (UX pass row 5): its row says so in a
+  // status line. Cleared when another change starts; never set by a failed write.
+  const [confirmed, setConfirmed] = useState<{ sourceId: string; state: SourceStateValue } | null>(null);
 
   return (
     <section aria-labelledby="sources-panel-heading" style={PANEL}>
@@ -99,14 +102,25 @@ export default function SourcesPanel() {
                       checked={state === choice.value}
                       disabled={!inForce || consent.writing}
                       onChange={() => {
-                        void consent.setState(source.sourceId, choice.value);
+                        setConfirmed(null);
+                        void consent.setState(source.sourceId, choice.value).then((ok) => {
+                          if (ok) setConfirmed({ sourceId: source.sourceId, state: choice.value });
+                        });
                       }}
                     />
                     {choice.label}
                   </label>
                 ))}
               </div>
-              {inForce && since ? <div>Set {STATES.find((c) => c.value === state)?.label} since {since}.</div> : null}
+              {(() => {
+                const label = STATES.find((c) => c.value === state)?.label;
+                const sinceLine = inForce && since ? `Set ${label} since ${since}.` : null;
+                if (inForce && confirmed?.sourceId === source.sourceId && confirmed.state === state) {
+                  const changed = `${name}${PANEL_STATE_CHANGED.middle}${label}${PANEL_STATE_CHANGED.end}`;
+                  return <div role="status">{sinceLine ? `${changed} ${sinceLine}` : changed}</div>;
+                }
+                return sinceLine ? <div>{sinceLine}</div> : null;
+              })()}
               {state === 'ask-first' && <div>{ASK_FIRST_MEANS}</div>}
             </li>
           );

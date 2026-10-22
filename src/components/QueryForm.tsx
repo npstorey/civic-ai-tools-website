@@ -17,11 +17,12 @@ import {
 } from '@/lib/query-presentation';
 import { parseModelsResponse, type Model } from '@/lib/model-list';
 import { friendlyStreamError, MODELS_LOAD_ERROR } from '@/lib/streaming';
-import { NOT_NOW_LINE } from '@/lib/sources/copy';
+import { JUST_IN_TIME_LINE, NOT_NOW_LINE } from '@/lib/sources/copy';
+import { readerSourceName } from '@/lib/sources/source-name';
 import ConsentCard from '@/components/sources/ConsentCard';
 import SourcesPanel from '@/components/sources/SourcesPanel';
 import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
-import { useSourceConsent } from '@/components/sources/useSourceConsent';
+import { currentStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
 import RateLimitBanner from './RateLimitBanner';
 import { useDefaultPortalArg, usePortalLocked } from '@/components/DefaultPortalProvider';
 import { useNotebooksOffered } from '@/components/NotebookModeProvider';
@@ -70,7 +71,32 @@ interface QueryFormProps {
     restored: boolean;
     onChange: (restored: boolean) => void;
   };
+  /**
+   * Whether Advanced options is offered to a signed-out reader (UX pass row 7,
+   * the owner's ruling of 2026-10-22). Default 'always': every mount as before.
+   * The public home page passes 'hidden-signed-out': signed out, on an instance
+   * that offers sign-in, the toggle is not rendered and `SIGN_IN_ADDS` stands
+   * in its place. Signed in, nothing changes.
+   */
+  advancedOptions?: 'always' | 'hidden-signed-out';
 }
+
+/**
+ * What signing in adds, as one line in Advanced options' place (UX pass row
+ * 7): the executed-sandbox mode, publishing, and the signed-in daily count. It
+ * names no models: `/api/models` reads no session, so the model list is the
+ * same signed in or out.
+ *
+ * THE COUNT is stated as the privacy page states it on the reference
+ * deployment ("Using the site": "signed in, 20"), not read from its source.
+ * That source (`dailyLimits` in `src/lib/privacy-facts.ts`, from
+ * `AUTHENTICATED_RATE_LIMIT` / `APP_TIER_RATE_LIMIT`) is server-only and
+ * unexported, and this form renders under a client page with no server
+ * ancestor to thread it from. An instance whose signed-in limit is not 20
+ * states a wrong number here until it is threaded through a provider.
+ */
+const SIGNED_IN_DAILY_QUESTIONS = 20;
+const SIGN_IN_ADDS_REST = ` to run the answer as a notebook in a signed sandbox and publish it as a record. Signed in, you can ask ${SIGNED_IN_DAILY_QUESTIONS} questions a day.`;
 
 /*
  * The suggested questions under the box live in `src/lib/query-presentation.ts`
@@ -81,6 +107,31 @@ interface QueryFormProps {
  * none. The one that compares two cities is not offered on a locked instance
  * (#436).
  */
+
+/** "A", "A and B", "A, B and C" (or "or"). */
+function joinNames(names: string[], word: 'and' | 'or'): string {
+  return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} ${word} ${names[names.length - 1]}`;
+}
+
+const STATE_WORDS: Record<SourceStateValue, string> = { on: 'On', 'ask-first': 'Ask first', off: 'Off' };
+
+/**
+ * The just-in-time line (UX pass row 11): where this question goes, read from
+ * the states the guard reads, in statement order. The sources not On are
+ * grouped by state, Ask first before Off, each group with its own state. In
+ * notebook mode the notebook runner is named: the notebook sent to run carries
+ * the question's text (the privacy page's executor statements).
+ */
+function whereThisQuestionGoes(sources: Array<{ name: string; state: SourceStateValue }>, notebook: boolean): string {
+  const on = sources.filter((s) => s.state === 'on').map((s) => s.name);
+  const first = `${notebook ? JUST_IN_TIME_LINE.leadNotebook : JUST_IN_TIME_LINE.lead}${on.length > 0 ? joinNames(on, 'and') : JUST_IN_TIME_LINE.noSource}.`;
+  if (on.length === 0) return first;
+  const groups = (['ask-first', 'off'] as const)
+    .map((state) => ({ state, names: sources.filter((s) => s.state === state).map((s) => s.name) }))
+    .filter((g) => g.names.length > 0)
+    .map((g) => `${joinNames(g.names, 'or')}${g.names.length > 1 ? JUST_IN_TIME_LINE.whichAre : JUST_IN_TIME_LINE.whichIs}${STATE_WORDS[g.state]}`);
+  return groups.length === 0 ? first : `${first} ${JUST_IN_TIME_LINE.notTo}${groups.join(JUST_IN_TIME_LINE.orGroup)}.`;
+}
 
 const PORTALS = [
   { id: '', name: 'All portals' },
@@ -97,6 +148,7 @@ export default function QueryForm({
   queryCount = 0,
   defaultMode = 'standard',
   comparisonControl,
+  advancedOptions = 'always',
 }: QueryFormProps) {
   // This instance's configured default portal as a wire value, '' when none
   // (#407) — server-resolved, threaded through the root layout.
@@ -138,6 +190,15 @@ export default function QueryForm({
   // can name one at all — derived from the instance's configuration (Q63).
   const signInAffordance = resolveSignInAffordance(useSignInOptions());
   const [mode, updateMode] = useStoredMode(notebookAffordance === 'toggle', defaultMode);
+  // UX pass row 7: on a mount that asks for it, a signed-out reader on an
+  // instance that offers sign-in sees what signing in adds instead of the
+  // toggle. With no sign-in to offer, the toggle stays: there is nothing to
+  // sign in to, and the model and portal choices are theirs to make.
+  const signInOffered = signInHref !== null || signInAffordance.kind !== 'none';
+  const hideAdvanced = advancedOptions === 'hidden-signed-out' && !isAuthenticated && signInOffered;
+  // The provider is named only where sign-in starts in place, as the sandbox
+  // box below names it (#229 P1); a split topology links to the app host.
+  const signInAdds = `${signInHref === null && signInAffordance.kind === 'provider' ? `Sign in with ${signInAffordance.option.name}` : 'Sign in'}${SIGN_IN_ADDS_REST}`;
   const [models, setModels] = useState<Model[]>([]);
   const [modelsError, setModelsError] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
@@ -216,6 +277,14 @@ export default function QueryForm({
   // through this form.
   const consent = useSourceConsent();
   const [cardOpen, setCardOpen] = useState(false);
+  // The just-in-time line (UX pass row 11), only while a consent is in force,
+  // and the Sources details it opens.
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const statementSources = consent.statement?.sources ?? [];
+  const sourceStates = currentStates(consent.status, statementSources.map((s) => s.sourceId));
+  const goesLine = consent.status?.inForce === true && statementSources.length > 0
+    ? whereThisQuestionGoes(statementSources.map((s) => ({ name: readerSourceName(s), state: sourceStates[s.sourceId] ?? 'ask-first' })), mode === 'notebook')
+    : null;
   const [declinedQuery, setDeclinedQuery] = useState<string | null>(null);
   const [noneOn, setNoneOn] = useState(false);
   const pendingRef = useRef<(() => void) | null>(null);
@@ -330,9 +399,11 @@ export default function QueryForm({
             height: '32px',
             borderRadius: '6px',
             border: 'none',
-            backgroundColor: query.trim() && !isLoading ? 'var(--accent)' : 'var(--border-color)',
+            // Keyed on the condition that disables the button (UX pass row 3),
+            // so a disabled arrow, as after Not now, never looks live.
+            backgroundColor: canSubmit ? 'var(--accent)' : 'var(--border-color)',
             color: 'white',
-            cursor: query.trim() && !isLoading ? 'pointer' : 'not-allowed',
+            cursor: canSubmit ? 'pointer' : 'not-allowed',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -351,6 +422,21 @@ export default function QueryForm({
           )}
         </button>
       </div>
+
+      {goesLine !== null && (
+        <p data-part="where-this-question-goes" style={{ margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+          {goesLine}{' '}
+          <a
+            href="#sources-panel-heading"
+            onClick={(e) => {
+              e.preventDefault();
+              setSourcesOpen(true);
+            }}
+          >
+            {JUST_IN_TIME_LINE.change}
+          </a>
+        </p>
+      )}
 
       {/* Example queries on one row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -391,6 +477,11 @@ export default function QueryForm({
 
       {/* Secondary info row: advanced options + rate limit (after first query) */}
       <div style={{ display: 'flex', justifyContent: queryCount > 0 ? 'space-between' : 'center', alignItems: 'center', flexWrap: 'wrap', gap: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
+        {hideAdvanced ? (
+          <p style={{ margin: 0, padding: '4px 0', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center' }}>
+            {signInAdds}
+          </p>
+        ) : (
         <button
           type="button"
           onClick={() => setAdvancedOpen(!advancedOpen)}
@@ -405,6 +496,7 @@ export default function QueryForm({
         >
           <span style={{ fontSize: '16px' }}>&#9881;</span> Advanced options {advancedOpen ? '\u25B4' : '\u25BE'}
         </button>
+        )}
         {queryCount > 0 && <RateLimitBanner refreshTrigger={queryCount} />}
       </div>
 
@@ -424,7 +516,7 @@ export default function QueryForm({
       )}
 
       {/* Advanced options expanded section */}
-      {advancedOpen && (
+      {advancedOpen && !hideAdvanced && (
         <div>
           {/* Response mode — signed-in-only per Phase 2a1. Anonymous users
               see a sign-in prompt instead of the toggle; the executed-sandbox
@@ -845,7 +937,7 @@ export default function QueryForm({
           {friendlyStreamError({ code: 'no_sources_on' })}
         </p>
       )}
-      <details>
+      <details open={sourcesOpen} onToggle={(e) => setSourcesOpen(e.currentTarget.open)}>
         <summary style={{ cursor: 'pointer', fontSize: '13px', color: 'var(--text-secondary)' }}>Data sources this site can use</summary>
         <div style={{ marginTop: '8px' }}>
           <SourcesPanel />

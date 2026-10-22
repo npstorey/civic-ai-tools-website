@@ -724,8 +724,10 @@ test('W2 P2 fix 1: the step view ends with the B, C and D rows, in order, after 
   const lastRowEnd = elementEnd(view, starts[starts.length - 1], 'div');
   assert.equal(view.slice(lastRowEnd).replace(/<\/div>/g, ''), '', 'the step view ends with the D row');
 
+  // UX pass row 21: each row is its phase in the reader's words, mapped by phase name, not the route's message.
+  const WORDS: Record<string, string> = { B: 'Writing the notebook', C: 'Running it in a sandbox', D: 'Checking the result' };
   reported.forEach((event, i) => {
-    const label = (event.message as string).replace(/…$/, '');
+    const label = WORDS[event.name as string];
     assert.ok(rowText(rows[i]).startsWith(label), `row ${i + 1} is ${event.name}, "${label}" (found "${rowText(rows[i])}")`);
   });
 });
@@ -737,8 +739,9 @@ test('W2 P2 fix 1: C states the sandbox duration the notebook recorded; B and D 
   const recorded = EXECUTION_EXTENSION.executionDuration_ms as number;
   const event = W2_EVENTS.find((e) => e.type === 'notebook')!.executionDuration_ms as number;
   assert.notEqual(recorded, event, 'premise: the stamp and the event disagree, so the row can be seen reading one');
-  assert.ok(rowText(c).endsWith(`Sandbox duration ${(recorded / 1000).toFixed(1)}s`), `C states the recorded duration (found "${rowText(c)}")`);
-  assert.ok(!rowText(c).includes(`${(event / 1000).toFixed(1)}s`), 'C does not state the wall time of the event');
+  // UX pass row 23: seconds with a space.
+  assert.ok(rowText(c).endsWith(`Sandbox duration ${(recorded / 1000).toFixed(1)} s`), `C states the recorded duration (found "${rowText(c)}")`);
+  assert.ok(!rowText(c).includes(`${(event / 1000).toFixed(1)} s`), 'C does not state the wall time of the event');
   for (const row of [b, d]) assert.equal(occurrences(row, 'data-part="closing-fact"').length, 0, `no fact on "${rowText(row)}"`);
 });
 
@@ -749,6 +752,6 @@ test('W2 P2 fix 1: a phase the stream did not report has no row, and a duration 
     .filter((e) => !(e.type === 'phase' && (e.name === 'D' || e.name === 'complete')))
     .map((e) => (e.type === 'notebook' ? { ...e, notebook: unstamped } : e));
   const rows = closingRows(stepView(renderRun(await stateAfter(events), W2_INSTANCE)));
-  assert.deepEqual(rows.map((r) => rowText(r)), ['Synthesizing notebook', 'Executing in sandbox']);
+  assert.deepEqual(rows.map((r) => rowText(r)), ['Writing the notebook', 'Running it in a sandbox']);
   assert.ok(rows.every((r) => !r.includes('data-part="closing-fact"')), 'no duration is stated when none was recorded');
 });
