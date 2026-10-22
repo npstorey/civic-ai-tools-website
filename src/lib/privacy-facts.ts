@@ -151,9 +151,8 @@ function present(raw: string | undefined): string | null {
 
 /** How every statement below was produced. */
 export const PAGE_BASIS =
-  "Every statement on this page is read from this site's configuration or its code when the page is served, " +
-  'or from a named page, with the date it was read. ' +
-  'Where the site cannot know something, this page says so instead of guessing.';
+  'What this site does with what you send it. ' +
+  "Every line is read from the site's own settings when the page is served, or from a named page with the date it was read.";
 
 /** Why questions are limited per day (design §4.7 item 2). */
 export const LIMIT_REASON =
