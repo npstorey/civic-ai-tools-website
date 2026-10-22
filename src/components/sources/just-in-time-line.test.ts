@@ -140,3 +140,44 @@ test('row 11: the link after the line opens the Sources panel', async () => {
   assert.equal(details()[0].props.open, true, 'the link did not open the Sources panel');
   page.unmount();
 });
+
+// --- The owner's fix (pre-merge): in notebook mode the line names the notebook runner ------------
+//
+// Under the sandbox driver the notebook sent to run carries the question's
+// text (the privacy page's executor statements say so), so when the form's
+// mode is the notebook the line names the runner too. Standard mode is as
+// above. Driven on `/ask`'s mount, signed in (the mode needs sign-in), with
+// the mode set by the mount's default and, for standard, by the stored choice.
+
+const QuerySurface = (await load('components/shared/QuerySurface.tsx')).default as ComponentType<Record<string, unknown>>;
+
+async function askWith(states: Record<string, string>, defaultMode: 'notebook' | 'standard'): Promise<Surface> {
+  sessions.server = { user: { id: 'gh-fixture-account' } };
+  sessions.client = { status: 'authenticated', data: { user: { name: 'Fixture' } } };
+  answers();
+  const statement = await buildFlowsStatement();
+  const response = await fetch('/api/sources/consent', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ states, flowsVersion: statementHash(statement) }) });
+  assert.equal(response.status, 200, 'premise: the consent was written');
+  return mount(h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode }));
+}
+
+const MIX = { socrata: 'on', 'data-commons': 'on', 'boston-opencontext': 'ask-first', 'nyc-charter': 'ask-first' };
+
+test('owner fix: in notebook mode the line names the notebook runner', async () => {
+  const page = await askWith(MIX, 'notebook');
+  const mode = page.elements().filter((el) => el.props.role === 'radio' && el.props['aria-checked'] === true).map((el) => textOf(el));
+  assert.deepEqual(lineOf(page), ['This question goes to the model service, the notebook runner and to Socrata and Data Commons. Not to Boston OpenContext or NYC Charter, Laws and Rules, which are set to Ask first. Change sources'], `mode shown: ${mode.join(',')}`);
+  page.unmount();
+});
+
+test('owner fix: in notebook mode with none On, the runner is still named', async () => {
+  const page = await askWith({ socrata: 'off', 'data-commons': 'off', 'boston-opencontext': 'off', 'nyc-charter': 'ask-first' }, 'notebook');
+  assert.deepEqual(lineOf(page), ['This question goes to the model service, the notebook runner and to no data source. Change sources']);
+  page.unmount();
+});
+
+test('owner fix: in standard mode, signed in, the line is as before', async () => {
+  const page = await askWith(MIX, 'standard');
+  assert.deepEqual(lineOf(page), ['This question goes to the model service and to Socrata and Data Commons. Not to Boston OpenContext or NYC Charter, Laws and Rules, which are set to Ask first. Change sources']);
+  page.unmount();
+});

@@ -118,11 +118,13 @@ const STATE_WORDS: Record<SourceStateValue, string> = { on: 'On', 'ask-first': '
 /**
  * The just-in-time line (UX pass row 11): where this question goes, read from
  * the states the guard reads, in statement order. The sources not On are
- * grouped by state, Ask first before Off, each group with its own state.
+ * grouped by state, Ask first before Off, each group with its own state. In
+ * notebook mode the notebook runner is named: the notebook sent to run carries
+ * the question's text (the privacy page's executor statements).
  */
-function whereThisQuestionGoes(sources: Array<{ name: string; state: SourceStateValue }>): string {
+function whereThisQuestionGoes(sources: Array<{ name: string; state: SourceStateValue }>, notebook: boolean): string {
   const on = sources.filter((s) => s.state === 'on').map((s) => s.name);
-  const first = `${JUST_IN_TIME_LINE.lead}${on.length > 0 ? joinNames(on, 'and') : JUST_IN_TIME_LINE.noSource}.`;
+  const first = `${notebook ? JUST_IN_TIME_LINE.leadNotebook : JUST_IN_TIME_LINE.lead}${on.length > 0 ? joinNames(on, 'and') : JUST_IN_TIME_LINE.noSource}.`;
   if (on.length === 0) return first;
   const groups = (['ask-first', 'off'] as const)
     .map((state) => ({ state, names: sources.filter((s) => s.state === state).map((s) => s.name) }))
@@ -281,7 +283,7 @@ export default function QueryForm({
   const statementSources = consent.statement?.sources ?? [];
   const sourceStates = currentStates(consent.status, statementSources.map((s) => s.sourceId));
   const goesLine = consent.status?.inForce === true && statementSources.length > 0
-    ? whereThisQuestionGoes(statementSources.map((s) => ({ name: readerSourceName(s), state: sourceStates[s.sourceId] ?? 'ask-first' })))
+    ? whereThisQuestionGoes(statementSources.map((s) => ({ name: readerSourceName(s), state: sourceStates[s.sourceId] ?? 'ask-first' })), mode === 'notebook')
     : null;
   const [declinedQuery, setDeclinedQuery] = useState<string | null>(null);
   const [noneOn, setNoneOn] = useState(false);
