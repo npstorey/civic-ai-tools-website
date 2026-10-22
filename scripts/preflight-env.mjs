@@ -554,8 +554,8 @@ export const ENV_SPEC = [
   // an in-process memory store when either is absent — the instance runs, the
   // counter just stops being durable across instances and deploys. Absence is a
   // soft note so a single-node instance with no managed KV can pass preflight.
-  { name: 'KV_REST_API_URL', tier: 'required', purpose: 'Durable rate-limit counter (Upstash/Vercel KV)', hasFallback: true },
-  { name: 'KV_REST_API_TOKEN', tier: 'required', purpose: 'Durable rate-limit counter (Upstash/Vercel KV)', hasFallback: true },
+  { name: 'KV_REST_API_URL', tier: 'required', purpose: 'Durable rate-limit counter (Upstash/Vercel KV); needed by the consent pause, which does not hold without it', hasFallback: true },
+  { name: 'KV_REST_API_TOKEN', tier: 'required', purpose: 'Durable rate-limit counter (Upstash/Vercel KV); needed by the consent pause, which does not hold without it', hasFallback: true },
 
   // --- Secondary MCP sources (not on the storyboard-3 critical path) ---
   { name: 'DATA_COMMONS_MCP_URL', tier: 'recommended', purpose: 'Data Commons MCP endpoint', hasFallback: true },

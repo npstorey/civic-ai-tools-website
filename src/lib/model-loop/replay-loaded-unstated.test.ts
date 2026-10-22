@@ -83,13 +83,13 @@ test('[B]: what replay offers does not change', () => {
   assert.deepEqual(offered.sources, ['socrata']);
 });
 
-test('[B]: a record with no trace, or a trace held elsewhere, names nothing; nor does one that states no set', () => {
+test('[B]: a record with no trace, or a trace held elsewhere, names nothing; nor does one that states no set (the field is absent)', () => {
   const none = replayOfferedSet({ extensions: PACKAGE.extensions }, configured) as { loadedUnstated?: string[] };
-  assert.deepEqual(none.loadedUnstated, []);
+  assert.equal(Object.hasOwn(none, 'loadedUnstated'), false);
   const BLOB = { ...PACKAGE, trace: { $blobRef: 'sha256:00' } };
   const blob = replayOfferedSet(BLOB, configured) as { loadedUnstated?: string[] };
-  assert.deepEqual(blob.loadedUnstated, []);
+  assert.equal(Object.hasOwn(blob, 'loadedUnstated'), false);
   const UNSTATED = { trace: PACKAGE.trace, extensions: {} };
   const unstated = replayOfferedSet(UNSTATED, configured) as { loadedUnstated?: string[] };
-  assert.deepEqual(unstated.loadedUnstated, [], 'a record that states no set replays every source, so it leaves none out');
+  assert.equal(Object.hasOwn(unstated, 'loadedUnstated'), false, 'a record that states no set replays every source, so it leaves none out');
 });

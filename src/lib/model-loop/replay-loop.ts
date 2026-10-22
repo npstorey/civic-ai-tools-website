@@ -363,6 +363,43 @@ const ENVIRONMENT_EXTENSION = 'org.civicaitools.environment';
 /** The field of a stored package its offered set is read from. */
 export interface ReplayOfferedSetSource {
   extensions?: Record<string, unknown>;
+  /** The package's trace, inline or a reference (#644 W2): its load spans say what the run loaded. */
+  trace?: unknown;
+}
+
+/**
+ * The offered set, and one field more (#644 W2 [B]): `loadedUnstated`, the
+ * sources the record's trace shows loaded that its stated set leaves out, in
+ * manifest order. After the pause, a source set to Ask first and allowed when
+ * asked is loaded and stated `not-consented` (C4), so a replay runs without
+ * it; `lacking`'s sentence ("This site does not offer it") would be false for
+ * it. Unsigned, as the offered set is (#632 D8): the replay route returns it
+ * inside `offeredSet`, and no signed run carries it. It changes nothing a
+ * replay offers. Absent when there is no such source, so every offered set
+ * that names none reads as it did before.
+ */
+export type ReplayOfferedSetWithLoads = ReplayOfferedSet & { loadedUnstated?: string[] };
+
+/** The sources the record's inline trace shows loaded (a load span whose outcome is `loaded`), in manifest order. */
+function loadedInTrace(trace: unknown): string[] {
+  const resourceSpans = trace && typeof trace === 'object' ? (trace as { resourceSpans?: unknown }).resourceSpans : undefined;
+  if (!Array.isArray(resourceSpans)) return [];
+  const aliases = new Set<string>();
+  for (const resource of resourceSpans as Array<{ scopeSpans?: Array<{ spans?: Array<{ attributes?: Array<{ key?: string; value?: { stringValue?: string } }> }> }> }>) {
+    for (const scope of resource?.scopeSpans ?? []) {
+      for (const span of scope?.spans ?? []) {
+        const attrs = Object.fromEntries((span?.attributes ?? []).map((a) => [a?.key, a?.value?.stringValue]));
+        if (attrs['tool.operation_type'] !== 'load_source' || attrs['tool.load_outcome'] !== 'loaded') continue;
+        try {
+          const alias = (JSON.parse(String(attrs['tool.arguments'])) as { alias?: unknown }).alias;
+          if (typeof alias === 'string') aliases.add(alias);
+        } catch {
+          /* a span whose arguments do not parse names no source */
+        }
+      }
+    }
+  }
+  return CIVIC_MANIFEST.filter((entry) => aliases.has(entry.alias)).map((entry) => entry.sourceId);
 }
 
 /** The method a record's composition block states its sources were chosen
@@ -430,7 +467,7 @@ export function replayOfferedSet(
   pkg: ReplayOfferedSetSource,
   configured: McpRegistryEnv = readMcpEnvFromProcess(),
   replayerSelection?: SourceSelection,
-): ReplayOfferedSet {
+): ReplayOfferedSetWithLoads {
   const manifestIds = CIVIC_MANIFEST.map((entry) => entry.sourceId);
   const registry = buildMcpRegistry(configured);
   const routable = (id: string) => Object.hasOwn(registry.servers, id) || Object.hasOwn(registry.hosted, id);
@@ -441,9 +478,11 @@ export function replayOfferedSet(
       from: 'none',
       sources: replayerSelection === undefined ? manifestIds : manifestIds.filter((id) => routable(id) && replayerOn(id)),
       lacking: [],
+      // No stated set: the replay is offered every source, so it leaves none out.
     };
   }
   const named = new Set(stated.ids);
+  const loadedUnstated = loadedInTrace(pkg.trace).filter((id) => !named.has(id));
   return {
     from: stated.from,
     sources: manifestIds.filter((id) => named.has(id) && routable(id) && replayerOn(id)),
@@ -451,6 +490,7 @@ export function replayOfferedSet(
       ...manifestIds.filter((id) => named.has(id) && !routable(id)),
       ...stated.ids.filter((id) => !manifestIds.includes(id)),
     ],
+    ...(loadedUnstated.length > 0 ? { loadedUnstated } : {}),
   };
 }
 
