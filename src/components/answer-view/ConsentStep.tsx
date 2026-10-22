@@ -9,13 +9,17 @@
  * scrolled can answer there. Never a part of its own, never inside the
  * disclosure.
  *
- * WHAT IT SAYS, in the Sources panel's own form (R6 PL): the source by its
- * reader name, never a tool's exposed name; what it is and whose connector
- * reaches it, running where (`sourceRowLines`); who holds its logs, as
- * `KeptByLines` renders them, each with its date or "not stated"; the hosts
- * it would reach; the privacy page, and the deployment guide or the sentence
- * that says this site names none (R6's D10). Then Allow and Not now, equal in
- * size and style, what each does, and how long the question waits.
+ * WHAT IT SAYS, decision first (fix round 1, item 3), so it is read in
+ * well under a minute: the source by its reader name, never a tool's exposed
+ * name, and that the AI asked; what Allow and Not now each send, that the
+ * choice can be changed, how long the question waits, and the two buttons,
+ * equal in size and style. Then, in the Sources panel's own form (R6 PL),
+ * what the source is and whose connector reaches it, running where
+ * (`sourceRowLines`); who holds its logs, as `KeptByLines` renders them, each
+ * with its date or "not stated"; the hosts its variant would reach beyond its
+ * address, when it names any; the privacy page, and the deployment guide or
+ * the sentence that says this site names none (R6's D10). The outcome, once
+ * there is one, is last.
  *
  * Every fact comes from the pause the server sent (`ConsentPausePayload`):
  * the flows statement's entry for the source, as the panel renders it, and
@@ -40,10 +44,10 @@ export const CONSENT_STEP_TEXT = {
   asked: 'The AI asked to use it for this question. Nothing has been sent to it yet.',
   cannotAsk: 'This question cannot stop to ask you, so it was not used.',
   nextQuestion: 'You can turn it On in the panel for your next question.',
-  choices: 'Allow: the question may use it, and it stays On for later questions. Not now: nothing is sent to it.',
+  choices: 'Allow: this question is sent to it, and it is turned On for later questions. Not now: nothing is sent to it for this question.',
   change: 'You can change this in the panel at any time.',
   wait: 'The question waits up to a minute for your answer.',
-  reach: (hosts: readonly string[]) => (hosts.length > 0 ? `It would reach: ${hosts.join(', ')}.` : 'It would reach no host beyond where it runs.'),
+  reach: (hosts: readonly string[]) => `It would reach: ${hosts.join(', ')}.`,
   allowed: 'You chose Allow. It is On now.',
   declined: 'You chose Not now. Nothing is sent to it for this question.',
   ended: 'The question went on without your answer, so it did not use this source.',
@@ -76,12 +80,6 @@ const BUTTON: CSSProperties = {
   cursor: 'pointer',
 };
 
-/** The hosts a source would reach: its variant's outbound hosts, else the address it is reached at. */
-function hostsOf(pause: ConsentPausePayload): string[] {
-  if (pause.outbound.length > 0) return pause.outbound;
-  return pause.source.host ? [pause.source.host] : [];
-}
-
 export default function ConsentStep({ pause, ended = false }: { pause: ConsentPausePayload; ended?: boolean }) {
   const consent = useSourceConsent({ load: false });
   const slot = pause.key !== undefined && consent.pause?.payload.key === pause.key ? consent.pause : null;
@@ -111,6 +109,22 @@ export default function ConsentStep({ pause, ended = false }: { pause: ConsentPa
     <div data-part="consent-step" data-consent-source={source.sourceId} role="group" aria-label={CONSENT_STEP_TEXT.heading(name)} style={CARD}>
       <p style={{ margin: '0 0 4px', fontWeight: 600, color: 'var(--text-primary)' }}>{CONSENT_STEP_TEXT.heading(name)}</p>
       <p style={{ margin: '0 0 6px' }}>{pause.holds ? CONSENT_STEP_TEXT.asked : CONSENT_STEP_TEXT.cannotAsk}</p>
+      {!pause.holds && <p style={{ margin: '0 0 6px' }}>{CONSENT_STEP_TEXT.nextQuestion}</p>}
+      {waiting && key !== undefined && (
+        <>
+          <p style={{ margin: '0' }}>{CONSENT_STEP_TEXT.choices}</p>
+          <p style={{ margin: '2px 0 0' }}>{CONSENT_STEP_TEXT.change}</p>
+          <p style={{ margin: '2px 0 0' }}>{CONSENT_STEP_TEXT.wait}</p>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', margin: '8px 0 10px' }}>
+            <button type="button" style={BUTTON} disabled={slot?.deciding === true} onClick={() => { void decideConsentPause(key, 'allow'); }}>
+              Allow
+            </button>
+            <button type="button" style={BUTTON} disabled={slot?.deciding === true} onClick={() => { void decideConsentPause(key, 'not-now'); }}>
+              Not now
+            </button>
+          </div>
+        </>
+      )}
       {lines.what !== null && <div>{lines.what.charAt(0).toUpperCase() + lines.what.slice(1)}</div>}
       <div>
         {lines.reach.map((part, i) =>
@@ -126,29 +140,14 @@ export default function ConsentStep({ pause, ended = false }: { pause: ConsentPa
       <div>
         Who holds its logs: <KeptByLines keptBy={source.recipients.flatMap((r) => r.keptBy)} retention />.
       </div>
-      <div>{CONSENT_STEP_TEXT.reach(hostsOf(pause))}</div>
+      {/* An addressed source's address is the "running at" line above; this line names only the hosts beyond it. */}
+      {pause.outbound.length > 0 && <div>{CONSENT_STEP_TEXT.reach(pause.outbound)}</div>}
       <div>
         <a href={pause.links.privacy}>{PANEL_PRIVACY_LINK}</a>
       </div>
       <div>
         <LocalOnlyOffer statement={linksOnly} />
       </div>
-      {!pause.holds && <p style={{ margin: '6px 0 0' }}>{CONSENT_STEP_TEXT.nextQuestion}</p>}
-      {waiting && key !== undefined && (
-        <>
-          <p style={{ margin: '6px 0 0' }}>{CONSENT_STEP_TEXT.choices}</p>
-          <p style={{ margin: '2px 0 0' }}>{CONSENT_STEP_TEXT.change}</p>
-          <p style={{ margin: '2px 0 0' }}>{CONSENT_STEP_TEXT.wait}</p>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '8px' }}>
-            <button type="button" style={BUTTON} disabled={slot?.deciding === true} onClick={() => { void decideConsentPause(key, 'allow'); }}>
-              Allow
-            </button>
-            <button type="button" style={BUTTON} disabled={slot?.deciding === true} onClick={() => { void decideConsentPause(key, 'not-now'); }}>
-              Not now
-            </button>
-          </div>
-        </>
-      )}
       {outcome !== null && (
         <p data-part="consent-outcome" style={{ margin: '6px 0 0', fontWeight: 600, color: 'var(--text-primary)' }}>
           {outcome}
