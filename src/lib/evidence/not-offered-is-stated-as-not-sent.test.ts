@@ -127,7 +127,7 @@ test('G5: a not_offered outcome is stated without the lead-in, still as failed; 
   const notOffered = describeQueryOutcome({ failed: true, failureKind: 'not_offered' });
   assert.deepEqual(notOffered, { kind: 'failed', text: NOTEBOOK_REASON });
   const withElapsed = describeQueryOutcome({ failed: true, failureKind: 'not_offered', duration_ms: 3 });
-  assert.deepEqual(withElapsed, { kind: 'failed', text: `${NOTEBOOK_REASON} The attempt took 3ms.` });
+  assert.deepEqual(withElapsed, { kind: 'failed', text: `${NOTEBOOK_REASON} The attempt took under 0.1 s.` }); // UX pass row 23: seconds
   assert.deepEqual(describeQueryOutcome({ failed: true, failureKind: 'timeout' }), { kind: 'failed', text: TIMEOUT_OUTCOME }, 'green at f814606: the other kinds keep the lead-in');
   for (const failureKind of ['unavailable', 'not_configured', 'unknown', undefined]) {
     assert.ok(describeQueryOutcome({ failed: true, failureKind }).text.startsWith(`${LEAD_IN} `), `${failureKind}: the lead-in moved`);
@@ -142,16 +142,17 @@ test('G5: the record page\'s step and the live run\'s step card word a not_offer
   const live = buildRunStepView([{ iteration: 1, label: OPEN_STEP_LABEL, entries: [entry], isComplete: true } as never], [call]);
   const recordOutcome = record.steps[0]?.calls[0]?.outcome;
   const liveOutcome = [...live.steps.flatMap((s) => s.calls), ...live.unplaced][0]?.outcome;
-  assert.equal(recordOutcome, `${NOTEBOOK_REASON} The attempt took 0ms.`, 'the record page\'s step');
+  assert.equal(recordOutcome, `${NOTEBOOK_REASON} The attempt took under 0.1 s.`, 'the record page\'s step');
   assert.equal(liveOutcome, recordOutcome, 'the live step card words the call differently from the record page');
 });
 
-test('G5: the entry the real loop and packager write for a call outside the selection reads without the lead-in', () => {
+test('G5: the entry the real loop and packager write for a call outside the selection reads without the lead-in', async () => {
   assert.deepEqual(OUTBOUND.filter((u) => !u.startsWith(`${new URL(scripted.url).host}/`)), [], 'premise: nothing was sent to a data source');
   assert.equal(ENTRY.failed, true);
   assert.equal(ENTRY.failureKind, 'not_offered');
   assert.equal(typeof ENTRY.duration_ms, 'number', 'the loop measured an elapsed for the refused call');
-  assert.equal(describeQueryOutcome(ENTRY).text, `${NOTEBOOK_REASON} The attempt took ${ENTRY.duration_ms!.toLocaleString()}ms.`);
+  const { secondsText } = await import('./query-step.ts');
+  assert.equal(describeQueryOutcome(ENTRY).text, `${NOTEBOOK_REASON} The attempt took ${secondsText(ENTRY.duration_ms!)}.`);
 });
 
 // --- The notebook's follow-on sentence ---------------------------------------------

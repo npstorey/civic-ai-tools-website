@@ -727,7 +727,7 @@ test('P2 (4) a call that carries datasetId and portal shows both, beside its too
   assert.equal(cards.length, 3, 'one card per call');
   const [returned, refused, unrecorded] = cards;
   for (const [card, dataset, args, outcome] of [
-    [returned, 'aaaa-1111', escaped("created_date > '2026-10-01'"), 'Returned 12 rows × 3 columns · 410ms'],
+    [returned, 'aaaa-1111', escaped("created_date > '2026-10-01'"), 'Returned 12 rows × 3 columns · 0.4 s'],
     [refused, 'bbbb-2222', 'REFUSEDARG-p2', 'This request did not complete.'],
   ] as const) {
     assert.ok(card.includes('get_data (query)'), 'the tool and operation type');
@@ -743,8 +743,8 @@ test('P2 (4) a call that carries datasetId and portal shows both, beside its too
 });
 
 // LAYOUT-W1 P3: a signed `duration_ms` is shown on every card, once. The outcome
-// sentence states it for a returned call (" · 410ms") and a failed one ("The
-// attempt took 1,200ms."); for a call whose outcome is unrecorded it states none,
+// sentence states it for a returned call (" · 0.4 s") and a failed one ("The
+// attempt took 1.2 s."; seconds since UX pass row 23); for a call whose outcome is unrecorded it states none,
 // so the card shows the raw field as a "Duration" label beside Dataset/Portal.
 // No label on a returned or failed card: beside "did not complete" a bare number
 // reads as how long the call took to succeed (#413).
@@ -753,18 +753,18 @@ const cardText = (card: string) => card.replace(/<[^>]*>/g, '');
 test('P3 a call with no stated outcome shows its signed duration; a returned or failed call states it once, in its outcome', () => {
   const [returned, failed, unrecorded] = callCards(HTML.agf);
   assert.ok(cardText(unrecorded).includes('No result summary was recorded for this request.'), 'the A-G unrecorded card is unrecorded');
-  assert.ok(cardText(unrecorded).includes('Duration 95ms'), 'the A-G unrecorded card shows Duration 95ms');
+  assert.ok(cardText(unrecorded).includes('Duration 0.1 s'), 'the A-G unrecorded card shows Duration 0.1 s');
 
-  assert.ok(cardText(returned).includes('Returned 12 rows × 3 columns · 410ms'), 'the returned card states its duration in its outcome');
+  assert.ok(cardText(returned).includes('Returned 12 rows × 3 columns · 0.4 s'), 'the returned card states its duration in its outcome');
   assert.doesNotMatch(returned, /Duration/, 'no Duration label on a returned card');
 
-  assert.equal(occurrences(cardText(failed), '1,200ms').length, 1, 'the failed card states its duration once');
-  assert.ok(cardText(failed).includes('The attempt took 1,200ms.'), 'in the outcome sentence\'s words');
+  assert.equal(occurrences(cardText(failed), '1.2 s').length, 1, 'the failed card states its duration once');
+  assert.ok(cardText(failed).includes('The attempt took 1.2 s.'), 'in the outcome sentence\'s words');
   assert.doesNotMatch(failed, /Duration|1200/, 'no Duration label and no bare number on a failed card');
 
   const [withDuration, withoutDuration] = callCards(HTML.old);
   assert.ok(cardText(withDuration).includes('No result summary was recorded for this request.'), 'the old-format card is unrecorded');
-  assert.ok(cardText(withDuration).includes('Duration 222ms'), 'the old-format unrecorded card shows Duration 222ms');
+  assert.ok(cardText(withDuration).includes('Duration 0.2 s'), 'the old-format unrecorded card shows Duration 0.2 s');
   assert.doesNotMatch(withoutDuration, /Duration/, 'an entry with no duration_ms shows no Duration label');
 });
 
@@ -876,6 +876,9 @@ test('P2 fixtures: the old-format records are ones the bundle route refuses', ()
 // THE GOLDEN WAS NOT WRITTEN BY HAND. It is this block's output on the base
 // (website main 662099b): the base tree, extracted with `git archive`, ran this
 // file with `SECTION_D_ACTUAL_OUT` set, and the markup it wrote is the golden.
+// RE-CAPTURED the same way on the UX pass branch (row 23: a duration in
+// seconds, "· 0.4 s", "The attempt took 1.2 s."); its diff from the base's
+// capture is the four duration strings.
 //
 // THE ONE INTENDED DIFFERENCE is each call's label, which W2 P2 moves from the
 // signed `tool` (`socrata__get_data`) to the upstream name. The label's text is
@@ -1888,7 +1891,8 @@ test('W4 P1 (9) the citation block reads "Record: <title> [Published: <date>] <u
 // from the base's capture is those two labels (the legacy record has only the
 // second), plus the one change W4 P1 ruled and used to apply to the base by
 // name: its (9) changed the citation block's "[Verified: " to "[Published: "
-// (ruling D1), which the re-capture now carries as rendered.
+// (ruling D1), which the re-capture now carries as rendered. Re-captured again
+// for row 23 (a duration in seconds): that diff is the duration strings alone.
 
 const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
 

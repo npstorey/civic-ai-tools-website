@@ -472,7 +472,7 @@ test('W2 P2 fix 1 closing rows: B, C, D in phase order, only those reported, C w
   ];
   assert.deepEqual(buildClosingRows(reported, 4200), [
     { phase: 'B', label: 'Writing the notebook' },
-    { phase: 'C', label: 'Running it in a sandbox', fact: `Sandbox duration ${(4200 / 1000).toFixed(1)}s` },
+    { phase: 'C', label: 'Running it in a sandbox', fact: 'Sandbox duration 4.2 s' },
   ], 'no row for A, complete or an unreported D; B before C whatever the order reported');
   assert.deepEqual(buildClosingRows(reported, null).map((r) => r.fact), [undefined, undefined], 'no duration stated when none was recorded');
   assert.deepEqual(buildClosingRows([], 4200), [], 'no rows when no phase was recorded');

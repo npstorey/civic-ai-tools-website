@@ -1209,7 +1209,8 @@ test('W4 P1 (10) an executed reading with no execution stamp: the citation previ
 // diff from the base's capture confined to that row's two text nodes; the
 // executed run's golden by this block on the same branch (row 21, the closing
 // rows' phase words mapped by phase name), its diff confined to those three
-// labels.
+// labels; and again for row 23 (a duration in seconds), its diff confined to
+// the three duration strings.
 
 const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
 

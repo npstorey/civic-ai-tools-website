@@ -739,8 +739,9 @@ test('W2 P2 fix 1: C states the sandbox duration the notebook recorded; B and D 
   const recorded = EXECUTION_EXTENSION.executionDuration_ms as number;
   const event = W2_EVENTS.find((e) => e.type === 'notebook')!.executionDuration_ms as number;
   assert.notEqual(recorded, event, 'premise: the stamp and the event disagree, so the row can be seen reading one');
-  assert.ok(rowText(c).endsWith(`Sandbox duration ${(recorded / 1000).toFixed(1)}s`), `C states the recorded duration (found "${rowText(c)}")`);
-  assert.ok(!rowText(c).includes(`${(event / 1000).toFixed(1)}s`), 'C does not state the wall time of the event');
+  // UX pass row 23: seconds with a space.
+  assert.ok(rowText(c).endsWith(`Sandbox duration ${(recorded / 1000).toFixed(1)} s`), `C states the recorded duration (found "${rowText(c)}")`);
+  assert.ok(!rowText(c).includes(`${(event / 1000).toFixed(1)} s`), 'C does not state the wall time of the event');
   for (const row of [b, d]) assert.equal(occurrences(row, 'data-part="closing-fact"').length, 0, `no fact on "${rowText(row)}"`);
 });
 

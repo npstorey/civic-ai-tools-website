@@ -62,6 +62,7 @@ import SkillSection from '@/components/evidence/SkillSection';
 // one decision every `SkillSection` site asks.
 import { carriesSkillText } from '@/lib/evidence/skill-disclosure';
 import { UNPLACED_CALLS_LINE, type StepViewCall } from '@/lib/answer-view/steps';
+import { secondsText } from '@/lib/evidence/query-step';
 import { useSessionChoice } from '@/hooks/useSessionChoice';
 import { useAnswerLayouts } from '@/components/answer-view/AnswerLayoutsProvider';
 import { LAYOUT_STORAGE_KEY } from '@/lib/query-presentation';
@@ -484,7 +485,7 @@ function Disclosure({ disclosure, answer, answerElement, extras, recordSections,
                         {[
                           q.datasetId ? <span key="dataset">Dataset <code>{q.datasetId}</code></span> : null,
                           q.portal ? <span key="portal">Portal <code>{q.portal}</code></span> : null,
-                          q.durationMs !== undefined ? <span key="duration">Duration <code>{q.durationMs}ms</code></span> : null,
+                          q.durationMs !== undefined ? <span key="duration">Duration <code>{secondsText(q.durationMs)}</code></span> : null,
                         ]
                           .filter((part) => part !== null)
                           .flatMap((part, j) => (j === 0 ? [part] : [<span key={`sep-${j}`}>{' · '}</span>, part]))}

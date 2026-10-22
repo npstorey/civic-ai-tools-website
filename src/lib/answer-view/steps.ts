@@ -25,7 +25,7 @@ import {
   reasonWithoutIdentifier,
   searchSubject,
 } from '../streaming.ts';
-import { describeQueryOutcome } from '../evidence/query-step.ts';
+import { describeQueryOutcome, secondsText } from '../evidence/query-step.ts';
 // Type-only: erased at compile time. The kind vocabulary is declared once,
 // beside the table that turns it into reader-facing copy.
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
@@ -824,7 +824,7 @@ export function buildClosingRows(reported: readonly ReportedPhase[], sandboxDura
     if (event === undefined) continue;
     const label = phaseLabel(phase, event.message);
     const fact = phase === 'C' && sandboxDurationMs !== null
-      ? `Sandbox duration ${(sandboxDurationMs / 1000).toFixed(1)}s`
+      ? `Sandbox duration ${secondsText(sandboxDurationMs)}`
       : undefined;
     rows.push({ phase, label, ...(fact !== undefined ? { fact } : {}) });
   }

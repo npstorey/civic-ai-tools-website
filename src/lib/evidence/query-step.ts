@@ -42,6 +42,17 @@ import {
 } from '../notebook-author/tool-to-cell.ts';
 import { jcs } from './canonicalization.ts';
 
+/**
+ * A measured duration as a reader reads it (UX pass row 23): seconds, one
+ * decimal, a space before the unit, "16.8 s", "0.3 s". A measurement that
+ * would round to "0.0 s" reads as no time at all, so under 0.05 s it is
+ * "under 0.1 s". The one helper for every duration a step or a closing row
+ * states; the record's `duration_ms` is unchanged.
+ */
+export function secondsText(ms: number): string {
+  return ms < 50 ? 'under 0.1 s' : `${(ms / 1000).toFixed(1)} s`;
+}
+
 export interface QueryOutcome {
   kind: 'failed' | 'returned' | 'unrecorded';
   /** The reader-facing line for that state. */
@@ -88,7 +99,7 @@ export function describeQueryOutcome(
     // so it is disclosed, in its own sentence, after the cause. An entry that
     // carries none says nothing: absence stays absence and is never a zero.
     const elapsed = entry.duration_ms !== undefined
-      ? ` The attempt took ${entry.duration_ms.toLocaleString()}ms.`
+      ? ` The attempt took ${secondsText(entry.duration_ms)}.`
       : '';
     // A `not_offered` call was never sent (R6 W1), so it is not stated as a
     // request that did not complete: its reason alone, by the G5 string
@@ -101,7 +112,7 @@ export function describeQueryOutcome(
     const columns = entry.resultColumns !== undefined
       ? ` × ${entry.resultColumns} ${entry.resultColumns === 1 ? 'column' : 'columns'}`
       : '';
-    const duration = entry.duration_ms !== undefined ? ` · ${entry.duration_ms}ms` : '';
+    const duration = entry.duration_ms !== undefined ? ` · ${secondsText(entry.duration_ms)}` : '';
     return { kind: 'returned', text: `Returned ${rows}${columns}${duration}` };
   }
   if (context.refusedInTrace === true) {
@@ -111,7 +122,7 @@ export function describeQueryOutcome(
     // on an old span are never quoted or classified (seat's rider 1). An
     // elapsed the entry carries is disclosed as on the entry-marked path.
     const elapsed = entry.duration_ms !== undefined
-      ? ` The attempt took ${entry.duration_ms.toLocaleString()}ms.`
+      ? ` The attempt took ${secondsText(entry.duration_ms)}.`
       : '';
     return {
       kind: 'failed',

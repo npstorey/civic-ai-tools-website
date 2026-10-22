@@ -213,3 +213,27 @@ test('D2: the line counts exactly the entries describeQueryOutcome states as fai
   assert.equal(failed, 2, 'the fixture holds two failed entries by the per-call formatter');
   assert.equal(describeRefusedRequests(entries), `${failed} of ${entries.length} requests did not complete.`);
 });
+
+// --- UX pass row 23: a duration in a reader's sentence is in seconds ------------------------------
+//
+// At the base: "Returned 13 rows × 2 columns · 16837ms" and "The attempt took
+// 16,837ms." One helper, one decimal and a space: "16.8 s", "0.3 s" under a
+// second. A measured elapsed under 0.05 s would round to "0.0 s", which reads
+// as no time at all; it is stated as "under 0.1 s" (absence is never a zero,
+// and neither is a measurement).
+
+test('UX pass row 23: the returned line and both elapsed sentences state seconds, one decimal, with a space', async () => {
+  const describe = await loadDescribeQueryOutcome();
+  assert.equal(describe({ ...BASE_ENTRY, resultRows: 13, resultColumns: 2, duration_ms: 16837 }).text, 'Returned 13 rows × 2 columns · 16.8 s');
+  assert.equal(describe({ ...BASE_ENTRY, resultRows: 7, resultColumns: 1, duration_ms: 300 }).text, 'Returned 7 rows × 1 column · 0.3 s');
+  assert.ok(describe({ ...BASE_ENTRY, failed: true, failureKind: 'timeout', duration_ms: 16837 }).text.endsWith(' The attempt took 16.8 s.'));
+  const { describeQueryOutcome } = (await import('./query-step.ts')) as unknown as { describeQueryOutcome: (entry: object, context: { refusedInTrace: boolean }) => { text: string } };
+  assert.ok(describeQueryOutcome({ duration_ms: 16837 }, { refusedInTrace: true }).text.endsWith(' The attempt took 16.8 s.'));
+  assert.ok(describe({ ...BASE_ENTRY, failed: true, failureKind: 'timeout', duration_ms: 3 }).text.endsWith(' The attempt took under 0.1 s.'));
+});
+
+test('UX pass row 23: the one helper', async () => {
+  const { secondsText } = (await import('./query-step.ts')) as unknown as { secondsText: (ms: number) => string };
+  assert.equal(typeof secondsText, 'function', 'query-step.ts exports no secondsText');
+  assert.deepEqual([16837, 12300, 4200, 300, 95, 50, 49, 0].map(secondsText), ['16.8 s', '12.3 s', '4.2 s', '0.3 s', '0.1 s', '0.1 s', 'under 0.1 s', 'under 0.1 s']);
+});
