@@ -145,7 +145,7 @@ const T4_KEEP = [
   'Where it says so on a page, we give that page and the date we read it.',
 ];
 const T5 = 'Nothing was sent. Edit this question or write a new one, and you will be asked again before it is sent.';
-const T6 = 'Ask first: nothing is sent to this source until you turn it On, here or when the site asks you during a question. If you choose Allow then, it stays On for later questions.';
+const T6 = 'Ask first: nothing is sent to this source until you turn it On.';
 const T7 = '"Allow" turns on the sources the panel shows as On and sends your question. "Not now" sends nothing.';
 const T8_DB = 'We keep your answer for this browser session in a cookie, or on your account if signed in.';
 const T8_NO_DB = 'We keep your answer for this browser session in a cookie.';

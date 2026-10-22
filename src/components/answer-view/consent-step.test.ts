@@ -111,6 +111,8 @@ function answers() {
   decisions = [];
   return installFetch(ORIGIN, {
     '/api/sources/consent/decision': async (request: Request) => {
+      // The consent read asks this route for the instance's mode (fix round 1, item 1); a card shows only in-loop.
+      if (request.method === 'GET') return new Response(JSON.stringify({ routing: 'in-loop' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       decisions.push({ body: await request.text() });
       return new Response(JSON.stringify(answerStatus === 200 ? { decision: 'allow', sourceId: SOURCE.sourceId } : { error: 'x' }), { status: answerStatus, headers: { 'Content-Type': 'application/json' } });
     },
