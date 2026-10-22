@@ -68,6 +68,8 @@ export interface ConsentSnapshot {
   failed: boolean;
   /** The pause waiting for the reader's answer, or answered, in the run going on (R8 W2). */
   pause: PendingPause | null;
+  /** This instance's `SOURCE_ROUTING` mode, from the decision route's GET; `null` until read, and on any failure. */
+  routing: 'in-loop' | 'all-sources' | null;
 }
 
 /** A pause the hooks reported, and what has happened to it since. */
@@ -83,7 +85,7 @@ export interface PendingPause {
   ended: boolean;
 }
 
-const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pause: null };
+const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pause: null, routing: null };
 
 let snapshot: ConsentSnapshot = EMPTY;
 const listeners = new Set<() => void>();
@@ -110,18 +112,31 @@ function subscribe(listener: () => void): () => void {
 const getSnapshot = () => snapshot;
 const getServerSnapshot = () => EMPTY;
 
-/** Read the status and the statement again. Concurrent callers share one read. */
+/** The instance's mode, or `null` for anything but an answer naming one; a failure here fails no other read. */
+async function readRouting(): Promise<ConsentSnapshot['routing']> {
+  try {
+    const response = await fetch('/api/sources/consent/decision', { method: 'GET', headers: { Accept: 'application/json' } });
+    if (!response.ok) return null;
+    const routing = ((await response.json()) as { routing?: unknown } | null)?.routing;
+    return routing === 'in-loop' || routing === 'all-sources' ? routing : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Read the status, the statement and the instance's mode again. Concurrent callers share one read. */
 export function refreshConsent(): Promise<void> {
   if (inflight) return inflight;
   inflight = (async () => {
     try {
-      const [status, statement] = await Promise.all([
+      const [status, statement, routing] = await Promise.all([
         fetch('/api/sources/consent', { method: 'GET', headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)),
         fetch('/api/flows', { method: 'GET', headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)),
+        readRouting(),
       ]);
-      set({ loaded: true, status: status as ConsentStatus | null, statement: statement as FlowsStatement | null });
+      set({ loaded: true, status: status as ConsentStatus | null, statement: statement as FlowsStatement | null, routing });
     } catch {
-      set({ loaded: true, status: null, statement: null });
+      set({ loaded: true, status: null, statement: null, routing: null });
     } finally {
       inflight = null;
     }

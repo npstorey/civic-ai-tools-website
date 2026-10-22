@@ -40,7 +40,9 @@ export const NO_GUIDE_SENTENCE = 'This site does not name a deployment guide.';
 // --- The Sources panel ---
 
 /** What Ask first means in R6, in literal words (Q1): the pause is R8's. */
-export const ASK_FIRST_MEANS = 'Ask first: nothing is sent to this source until you turn it On, here or when the site asks you during a question. If you choose Allow then, it stays On for later questions.';
+export const ASK_FIRST_MEANS = 'Ask first: nothing is sent to this source until you turn it On.';
+/** The same, where a question can stop to ask (`SOURCE_ROUTING=in-loop`, R8 W2): the owner's card F; the panel renders it only there. */
+export const ASK_FIRST_MEANS_WITH_PAUSE = 'Ask first: nothing is sent to this source until you turn it On, here or when the site asks you during a question. If you choose Allow then, it stays On for later questions.';
 
 /** The panel's heading, and its lead sentence. */
 export const PANEL_HEADING = 'Data sources';
