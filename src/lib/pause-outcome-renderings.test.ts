@@ -10,9 +10,10 @@
 // The branches each sentence must be true on:
 //   - `no-answer`: the reader did not decide in 60 s; a poll read failed;
 //     the run's 120 s of holds were spent; there is no store, or its write
-//     failed. The record cannot tell them apart, so the words are those
-//     true of all: no answer arrived in time (the harness's own definition of
-//     the outcome, and R6 W4's words for it).
+//     failed. The record cannot tell them apart, so each line is one
+//     sentence true of all: this site could not ask, or no answer arrived in
+//     time (fix round 1, item 2; the model's text, `routing-mode.ts`, says
+//     the same).
 //   - `unavailable`: the load step threw, which it is not expected to do.
 //   - `declined` keeps its words, which are true after Not now.
 //
@@ -28,18 +29,18 @@ const LOAD = 'load_source';
 
 /** The sentences W2 states, as rendered. */
 const RESULT = {
-  noAnswer: 'No answer about the Boston OpenContext source arrived in time, so it was not used for this question',
-  noAnswerUnnamed: 'No answer about a source set to Ask first arrived in time, so it was not used for this question',
+  noAnswer: 'The Boston OpenContext source was not used: this site could not ask you, or no answer arrived in time',
+  noAnswerUnnamed: 'A source set to Ask first was not used: this site could not ask you, or no answer arrived in time',
   unavailable: 'This site could not load the Boston OpenContext source for this question',
   unavailableUnnamed: 'This site could not load a data source for this question',
   declined: 'The Boston OpenContext source is set to Ask first, so it was not used for this question',
 };
 const NARRATIVE = {
-  noAnswer: 'did not use the Boston OpenContext source, because no answer about it arrived in time',
+  noAnswer: 'did not use the Boston OpenContext source, because this site could not ask you or no answer arrived in time',
   unavailable: 'asked to load the Boston OpenContext source, which this site could not load',
 };
 const NOTE = {
-  noAnswer: '- `boston`: not used, no answer arrived in time',
+  noAnswer: '- `boston`: not used, could not be asked or no answer arrived in time',
   unavailable: '- `boston`: could not be loaded',
   declined: '- `boston`: not used, set to Ask first',
 };
@@ -88,4 +89,57 @@ test('criterion 5 (the rider): loaded, declined, no answer, unavailable and not 
     assert.doesNotMatch(String(line), /empty|no (rows|records|data) (were|was) returned|returned no/i, `reads as empty data: ${line}`);
     assert.doesNotMatch(String(line), /\{/, `carries a brace: ${line}`);
   }
+});
+
+// --- Fix round 1, item 2: one sentence, true on both branches --------------------------------
+
+/** The lines W2 first shipped for `no-answer`, true only where the reader was asked. */
+const OLD_NO_ANSWER = [
+  'No answer about the Boston OpenContext source arrived in time, so it was not used for this question',
+  'No answer about a source set to Ask first arrived in time, so it was not used for this question',
+  'did not use the Boston OpenContext source, because no answer about it arrived in time',
+  '- `boston`: not used, no answer arrived in time',
+];
+
+/**
+ * Two branches of `no-answer`, as the record holds them. (a) The pause held:
+ * the reader was asked, and the hold ran out before an answer arrived.
+ * (b) The pause did not hold (`holds: false`: no store, a failed write, or
+ * the run's holds spent): the reader was never asked. The load span carries
+ * the outcome alone (`tool.load_outcome`; contract v9 criterion 7 pins its
+ * attributes to the base's five), so both record the same call, and every
+ * surface must read the same line for both. That line is therefore true of
+ * both: it names the ask that could not happen and the answer that did not
+ * arrive.
+ */
+const BRANCHES: Array<{ branch: string; call: PhaseAToolCall }> = [
+  { branch: '(a) asked, and the hold ran out', call: { name: LOAD, args: { alias: 'boston' }, operationType: 'load_source', loadOutcome: 'no-answer' } },
+  { branch: '(b) holds: false, never asked', call: { name: LOAD, args: { alias: 'boston' }, operationType: 'load_source', loadOutcome: 'no-answer' } },
+];
+
+function notebookText(call: PhaseAToolCall): string {
+  const cell = renderDiscoverySummaryCell([call]);
+  return Array.isArray(cell?.source) ? cell!.source.join('') : String(cell?.source ?? '');
+}
+
+function assertBothClauses(surface: string, branch: string, line: string): void {
+  assert.match(line, /could not/, `${surface}, ${branch}: no "could not" clause: ${line}`);
+  assert.match(line, /arrived in time/, `${surface}, ${branch}: no "arrived in time" clause: ${line}`);
+  for (const old of OLD_NO_ANSWER) assert.ok(!line.includes(old), `${surface}, ${branch}: the old line "${old}" is still there: ${line}`);
+}
+
+test('item 2: on both branches, the result line, the narrative and the notebook line say the site could not ask or no answer arrived in time', () => {
+  const rendered = BRANCHES.map(({ branch, call }) => {
+    const result = String(formatToolResult(call.args, undefined, LOAD, call.loadOutcome));
+    const unnamed = String(formatToolResult({ alias: '{"x":1}' }, undefined, LOAD, call.loadOutcome));
+    const narrative = buildNarrativeSummary([call]);
+    const note = notebookText(call);
+    assertBothClauses('the result line', branch, result);
+    assertBothClauses('the result line, alias unknown', branch, unnamed);
+    assertBothClauses('the narrative', branch, narrative);
+    assertBothClauses('the notebook', branch, note);
+    return { result, unnamed, narrative, note };
+  });
+  // The record is the same on both branches, so the reader reads the same line.
+  assert.deepEqual(rendered[0], rendered[1]);
 });
