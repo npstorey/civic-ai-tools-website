@@ -55,7 +55,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { kv } from '@vercel/kv';
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
-import { getMissingRateLimitSecretError } from '../rate-limit.ts';
+import { getMissingRateLimitSecretError, RATE_LIMIT_SECRET_VARIABLE } from '../rate-limit.ts';
 import { buildFlowsStatement, type FlowsLinks, type FlowsSource, type FlowsStatement } from '../flows/statement.ts';
 import { hostingVariantInForce, type McpRegistryEnv } from '../mcp/registry.ts';
 import { readConsentRow, writeConsentRow } from './consent-store.ts';
@@ -293,7 +293,8 @@ export async function answerConsentDecision(
   // The streaming routes' own refusal, before any key is read [D].
   const secretError = getMissingRateLimitSecretError();
   if (secretError) {
-    console.error('[consent-decision]', secretError.message);
+    // The variable's name, never an error's text (errors-out-of-logs.test.ts).
+    console.error(`[consent-decision] ${RATE_LIMIT_SECRET_VARIABLE} is not set; the answer was refused before any key was read`);
     return json({ error: secretError.message, code: secretError.code }, 503);
   }
   let body: unknown;
