@@ -1113,6 +1113,10 @@ test('W4 P1 (10) an executed reading with no execution stamp: the citation previ
 // (website main 641a82f), the base tree running this block with
 // `W4P1_UNCHANGED_OUT` set, where `withoutLayoutFoot` removes nothing. Rendered
 // in UTC, so a time the markup states reads the same on every host.
+// RE-CAPTURED, NOT EDITED, where a later change moved words on purpose: the
+// comparison's golden by this block on the UX pass branch (row 12, the servers
+// row relabelled "Data sources this site could use" and its entry named), its
+// diff from the base's capture confined to that row's two text nodes.
 
 const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
 

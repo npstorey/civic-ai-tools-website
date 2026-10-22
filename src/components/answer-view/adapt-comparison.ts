@@ -28,6 +28,8 @@ import { buildProvenanceLine } from '../../lib/streaming.ts';
 import { describeRefusedRequests } from '../../lib/evidence/query-step.ts';
 import { coverPortals } from '../../lib/notebook-author/cover-portals.ts';
 import { formatModelName } from '../../lib/models.ts';
+import { readerSourceName } from '../../lib/sources/source-name.ts';
+import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 
 /** What the with-data panel hands its adapter. */
 export interface ComparisonAdapterInput {
@@ -95,11 +97,11 @@ export function systemPromptHashOfTrace(trace: unknown): string | null {
 }
 
 /**
- * The hosts of the MCP servers the run's configuration had, as the run
- * recorded them on its root span (`analysis.mcp_servers`, ADR-0033), in order,
+ * The MCP servers the run's configuration had, as the run recorded them on
+ * its root span (`analysis.mcp_servers`, ADR-0033), in order, one per host,
  * or none. An entry whose URL has no host is left out, not guessed at.
  */
-export function mcpServerHostsOfTrace(trace: unknown): string[] {
+export function mcpServersOfTrace(trace: unknown): Array<{ url: string; name?: string }> {
   for (const span of spansOf(trace)) {
     const recorded = stringAttribute(span, 'analysis.mcp_servers');
     if (recorded === undefined) continue;
@@ -111,17 +113,58 @@ export function mcpServerHostsOfTrace(trace: unknown): string[] {
     }
     if (!Array.isArray(servers)) return [];
     const hosts: string[] = [];
+    const out: Array<{ url: string; name?: string }> = [];
     for (const server of servers) {
       const url = (server as { url?: unknown } | null)?.url;
+      const name = (server as { name?: unknown } | null)?.name;
       if (typeof url !== 'string') continue;
       try {
         const host = new URL(url).host;
-        if (host && !hosts.includes(host)) hosts.push(host);
+        if (host && !hosts.includes(host)) {
+          hosts.push(host);
+          out.push(typeof name === 'string' ? { url, name } : { url });
+        }
       } catch { /* not a URL: left out */ }
     }
-    return hosts;
+    return out;
   }
   return [];
+}
+
+/** The hosts of `mcpServersOfTrace`, in order. */
+export function mcpServerHostsOfTrace(trace: unknown): string[] {
+  return mcpServersOfTrace(trace).map((s) => new URL(s.url).host);
+}
+
+// --- The servers row, in the reader's words (UX pass row 12) ----------------------
+
+/** Section C's label for the servers a run's configuration had, and for the sources it used. */
+export const SERVERS_LABEL = 'Data sources this site could use';
+export const USED_SOURCES_LABEL = 'Data sources used';
+
+/**
+ * One configured server as a reader reads it: when its recorded `name` is a
+ * manifest source's id, that source's reader name (`readerSourceName`, the
+ * name the Sources panel and the record page give it) with its host, or, for a
+ * package it ran (a purl, whose URL has no host), the version it pinned:
+ * "Socrata (socrata-mcp.civicaitools.org)", "NYC Checkbook (1.6.3)". A server
+ * no source names reads as stored: its host, or its raw value when the URL
+ * has no host or does not parse. Rendering only; the record is unchanged.
+ */
+export function readerServerName(server: { url: string; name?: string }): string {
+  let host = '';
+  try { host = new URL(server.url).host; } catch { /* not a URL */ }
+  const source = server.name ? CIVIC_MANIFEST.find((e) => e.sourceId === server.name) : undefined;
+  if (!source) return host || server.url;
+  const name = readerSourceName(source);
+  if (host) return `${name} (${host})`;
+  const pinned = /^pkg:[^@]+@([^@/?#]+)$/.exec(server.url)?.[1];
+  return pinned ? `${name} (${decodeURIComponent(pinned)})` : name;
+}
+
+/** The servers row's value: each server as `readerServerName` reads it, in order. */
+export function readerServerList(servers: ReadonlyArray<{ url: string; name?: string }>): string {
+  return servers.map(readerServerName).join(', ');
 }
 
 // --- The model --------------------------------------------------------------------
@@ -153,11 +196,11 @@ export function adaptComparison(input: ComparisonAdapterInput): AnswerViewModel 
   const line = calls.length > 0 ? buildProvenanceLine(calls) : null;
 
   const hash = input.evidenceTrace ? systemPromptHashOfTrace(input.evidenceTrace) : null;
-  const servers = input.evidenceTrace ? mcpServerHostsOfTrace(input.evidenceTrace) : [];
+  const servers = input.evidenceTrace ? mcpServersOfTrace(input.evidenceTrace) : [];
   const environment: EnvironmentItem[] = [
     ...(input.model ? [{ label: 'Model', value: formatModelName(input.model) }] : []),
     ...(input.portal ? [{ label: 'Data portal', value: input.portal !== '__all__' ? input.portal : 'all portals' }] : []),
-    ...(servers.length > 0 ? [{ label: 'MCP servers', value: servers.join(', ') }] : []),
+    ...(servers.length > 0 ? [{ label: SERVERS_LABEL, value: readerServerList(servers) }] : []),
   ];
 
   return {
