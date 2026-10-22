@@ -47,7 +47,7 @@ export const PANEL_HEADING = 'Data sources';
 export const PANEL_LEAD = 'Set each data source to On, Ask first or Off. Your choice applies from your next question.';
 
 /** The panel before a consent is given: the states it would give are shown, and nothing is stored yet. */
-export const PANEL_NO_CONSENT = 'This site asks before your next question. You can change these after you allow.';
+export const PANEL_NO_CONSENT = 'Allow uses these settings. After you allow, you can change each one here.';
 
 /** The panel's link to the privacy page (T12). */
 export const PANEL_PRIVACY_LINK = 'Where a question can go, in full';

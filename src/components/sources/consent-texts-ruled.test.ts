@@ -149,7 +149,8 @@ const T6 = 'Ask first: nothing is sent to this source until you turn it On.';
 const T7 = '"Allow" turns on the sources the panel shows as On and sends your question. "Not now" sends nothing.';
 const T8_DB = 'We keep your answer for this browser session in a cookie, or on your account if signed in.';
 const T8_NO_DB = 'We keep your answer for this browser session in a cookie.';
-const T9_PANEL = 'This site asks before your next question. You can change these after you allow.';
+// UX pass row 2(a), 2026-10-22: the panel's lead before consent says what the reader sees.
+const T9_PANEL = 'Allow uses these settings. After you allow, you can change each one here.';
 const T9_TAB = 'This site asks before your next question.';
 const T10 = "A dated log of every change to where a question can go is kept with the site's code.";
 const T11 = (holder: string) => `${holder}: what it keeps is for this site's operator to state`;
