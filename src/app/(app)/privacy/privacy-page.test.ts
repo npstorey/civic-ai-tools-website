@@ -745,7 +745,7 @@ test('the footer, which the root layout renders on both surfaces, links to /priv
 // ids and traces do not change. At the base the page opened with "How this
 // page is written", had no jump list, and the statement was three sentences.
 
-const NEW_BASIS = "What this site does with what you send it. Every line is read from the site's own settings when the page is served, or from a named page with the date it was read.";
+const NEW_BASIS = "What this site does with what you send it. Every line is read from the site's own settings or its code when the page is served, or from a named page with the date it was read.";
 const h2s = (html: string) => [...html.matchAll(/<h2[^>]*>(.*?)<\/h2>/g)].map((m) => text(m[1]));
 const sectionIds = (html: string) => [...html.matchAll(/<section[^>]*id="([^"]+)"/g)].map((m) => m[1]);
 
