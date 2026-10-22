@@ -34,8 +34,10 @@ import {
   asStepCall,
   buildClosingRows,
   buildRunStepView,
+  CONSENT_PAUSE_PHASE,
   stepsAuthorLine,
   type ProgressGroup,
+  type ProgressLogEntry,
   type ReportedPhase,
 } from '../../lib/answer-view/steps.ts';
 import { buildProvenanceLine } from '../../lib/streaming.ts';
@@ -133,12 +135,15 @@ export function notebookSteps(
   closingPhases: ReportedPhase[] | undefined,
   sandboxDurationMs: number | null,
   instance: string | null,
+  /** The run's flat progress log (#644 W2): a load paused to ask the reader is a consent step there. */
+  progressLog?: ProgressLogEntry[],
 ): StepsPart | null {
   if (stepGroups === undefined) return null;
   const view = buildRunStepView(stepGroups, toolCalls.map(asStepCall));
   const closing = buildClosingRows(closingPhases ?? [], sandboxDurationMs);
-  if (view.steps.length === 0 && view.unplaced.length === 0 && closing.length === 0) return null;
-  return { kind: 'step-view', author: stepsAuthorLine(instance), view, closing };
+  const consent = (progressLog ?? []).filter((entry) => entry.phase === CONSENT_PAUSE_PHASE && entry.pause !== undefined);
+  if (view.steps.length === 0 && view.unplaced.length === 0 && closing.length === 0 && consent.length === 0) return null;
+  return { kind: 'step-view', author: stepsAuthorLine(instance), view, closing, ...(consent.length > 0 ? { consent } : {}) };
 }
 
 export function adaptNotebook(input: NotebookAdapterInput): AnswerViewModel {

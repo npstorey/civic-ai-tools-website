@@ -24,6 +24,7 @@ import {
   getDatasetName,
   reasonWithoutIdentifier,
   searchSubject,
+  type ConsentPausePayload,
 } from '../streaming.ts';
 import { describeQueryOutcome, secondsText } from '../evidence/query-step.ts';
 // Type-only: erased at compile time. The kind vocabulary is declared once,
@@ -103,7 +104,16 @@ export interface ProgressLogEntry {
    */
   failed?: boolean;
   failureKind?: ToolFailureKind;
+  /**
+   * The consent step (#644 W2): on an entry of phase `consent_pause` only,
+   * the pause it shows. Such an entry has no iteration, so it is a step of
+   * its own, never part of the load it paused.
+   */
+  pause?: ConsentPausePayload;
 }
+
+/** The phase of a consent step's entry (#644 W2): a load paused to ask the reader. */
+export const CONSENT_PAUSE_PHASE = 'consent_pause';
 
 /** One step: the entries of one loop iteration, and the label they earn. */
 export interface ProgressGroup {
@@ -228,6 +238,8 @@ const OPERATION_WORDS: Readonly<Record<string, string>> = {
   metadata: 'Understanding dataset structure',
   query: 'Querying data',
   metrics: 'Checking dataset statistics',
+  // R8 W2 (consent 1, LAYOUT-WEB's G4c record): the in-loop load step.
+  load_source: 'Loading a data source',
 };
 
 /**
@@ -305,6 +317,8 @@ export interface StepProgressEvent {
   operationType?: string;
   failed?: boolean;
   failureKind?: ToolFailureKind;
+  /** On a `consent_pause` event only (#644 W2). */
+  pause?: ConsentPausePayload;
 }
 
 /** The sum of a step's recorded call durations, or nothing when none is recorded. */
@@ -327,6 +341,9 @@ function totalToolDuration(entries: ProgressLogEntry[]): number | undefined {
  *   - `thinking` closes the iteration's step: its label from
  *     `generateGroupLabel`, read against the earlier iterations' entries, and
  *     its total duration;
+ *   - `consent_pause` (#644 W2) is a standalone entry carrying its pause, and
+ *     leaves the load it paused open; the next event of any other phase marks
+ *     it done;
  *   - anything else is a standalone entry, and marks the entry before it done.
  */
 export function applyProgressEvent(log: StepLog, event: StepProgressEvent, now: number): StepLog {
@@ -336,9 +353,18 @@ export function applyProgressEvent(log: StepLog, event: StepProgressEvent, now: 
     ...(event.failed !== undefined ? { failed: event.failed } : {}),
     ...(event.failureKind !== undefined ? { failureKind: event.failureKind } : {}),
   };
-  const newLog = [...log.progressLog];
+  // A consent step still open is over once the run says anything else (#644 W2).
+  const newLog = phase === CONSENT_PAUSE_PHASE
+    ? [...log.progressLog]
+    : log.progressLog.map((e) => (e.phase === CONSENT_PAUSE_PHASE && !e.isComplete ? { ...e, isComplete: true } : e));
   const newGroups = log.progressGroups.map(g => ({ ...g, entries: [...g.entries] }));
   const entry: ProgressLogEntry = { message, timestamp: now, duration_ms, phase, iteration, args, toolName, operationType, ...failure };
+
+  if (phase === CONSENT_PAUSE_PHASE) {
+    // A step of its own: the load it paused stays open while the reader decides.
+    newLog.push({ ...entry, ...(event.pause !== undefined ? { pause: event.pause } : {}) });
+    return { progressLog: newLog, progressGroups: newGroups };
+  }
 
   if (phase === 'tool_complete' && iteration !== undefined) {
     // The end event's outcome travels onto the start entry it pairs to.

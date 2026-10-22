@@ -9,6 +9,7 @@ import { mapGroupsToToolCalls } from '@/lib/answer-view/steps';
 import { getEducationalAnnotation, buildNarrativeSummary, buildStatsSummary, buildBreadcrumbLabel, generateQueryIntentLabel, isQueryCall } from '@/lib/streaming';
 import ToolCallCard from './ToolCallCard';
 import NarrationExplainer from './NarrationExplainer';
+import ConsentStep from './answer-view/ConsentStep';
 
 interface ProgressLogProps {
   groups: ProgressGroup[];
@@ -644,6 +645,13 @@ export default function ProgressLog({
           isLast={idx === groups.length - 1 && isActive}
         />
       ))}
+
+      {/* A load paused to ask the reader (#644 W2): its consent step, after the steps so far */}
+      {standaloneEntries.map((entry, idx) =>
+        entry.phase === 'consent_pause' && entry.pause ? (
+          <ConsentStep key={`c-${idx}`} pause={entry.pause} ended={entry.isComplete === true} />
+        ) : null,
+      )}
 
       {/* Synthesize / post-group entries */}
       {synthesizeEntries.map((entry, idx) => (

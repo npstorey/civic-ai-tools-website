@@ -27,6 +27,7 @@ import { currentStates, useSourceConsent, type SourceStateValue } from './useSou
 import { KeptByLines } from './KeptByLine';
 import LocalOnlyOffer from './LocalOnlyOffer';
 import ConsentNotices from './ConsentNotices';
+import ConsentStep from '../answer-view/ConsentStep';
 
 const STATES: Array<{ value: SourceStateValue; label: string }> = [
   { value: 'on', label: 'On' },
@@ -122,6 +123,8 @@ export default function SourcesPanel() {
                 return sinceLine ? <div>{sinceLine}</div> : null;
               })()}
               {state === 'ask-first' && <div>{ASK_FIRST_MEANS}</div>}
+              {/* R8 W2 (#644): a question is waiting for an answer about this source; the run's own card is the same. */}
+              {consent.pause && !consent.pause.ended && consent.pause.payload.source.sourceId === source.sourceId ? <ConsentStep pause={consent.pause.payload} /> : null}
             </li>
           );
         })}

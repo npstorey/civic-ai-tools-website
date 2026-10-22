@@ -15,8 +15,8 @@
  */
 import { useCallback, useRef, useState } from 'react';
 import { connectSSE } from '@/lib/sse-client';
-import { classifyStreamError, friendlyStreamError, notebookExecutionErrorMessage, reasonWithoutIdentifier } from '@/lib/streaming';
-import { reportConsentRefusal } from '@/components/sources/useSourceConsent';
+import { classifyStreamError, friendlyStreamError, notebookExecutionErrorMessage, reasonWithoutIdentifier, type ConsentPausePayload } from '@/lib/streaming';
+import { reportConsentPause, reportConsentRefusal } from '@/components/sources/useSourceConsent';
 import type { Notebook } from '@/lib/notebook-author';
 import type { NotebookPhase } from '@/components/notebook/NotebookProgress';
 import type { PhaseAToolCall } from '@/lib/notebook-author';
@@ -212,6 +212,10 @@ export function useNotebookStream() {
           if (message) {
             const phase = raw.phase as string | undefined;
             const iteration = raw.iteration as number | undefined;
+            // R8 W2 (#644): a pause also goes to the Sources panel's bus, and
+            // any later line of the run ends a pause still waiting there.
+            const pause = phase === 'consent_pause' ? (raw.pause as ConsentPausePayload | undefined) : undefined;
+            reportConsentPause(pause ?? null);
             setState((prev) => ({
               ...prev,
               // The line joins its iteration's step, as the comparison's do.
@@ -223,6 +227,7 @@ export function useNotebookStream() {
                 operationType,
                 failed,
                 failureKind,
+                pause,
               }, Date.now()),
               detail: message,
               detailTool: toolName

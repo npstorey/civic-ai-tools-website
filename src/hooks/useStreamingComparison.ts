@@ -8,8 +8,8 @@ import { useState, useCallback, useRef } from 'react';
 import { createTraceCapture } from '../lib/bpmn/capture-trace.ts';
 import { connectSSE } from '../lib/sse-client.ts';
 import { isComparisonRunComplete } from '../lib/query-presentation.ts';
-import { classifyStreamError, friendlyStreamError, type ProgressPhase, type CompleteEvent } from '../lib/streaming.ts';
-import { reportConsentRefusal } from '../components/sources/useSourceConsent.ts';
+import { classifyStreamError, friendlyStreamError, type ConsentPausePayload, type ProgressPhase, type CompleteEvent } from '../lib/streaming.ts';
+import { reportConsentPause, reportConsentRefusal } from '../components/sources/useSourceConsent.ts';
 // The steps — the per-call type, the grouping of progress events into steps
 // and their labels — live in one pure module, shared with the other readers
 // of a run's steps. This hook keeps the React state and calls it.
@@ -205,6 +205,9 @@ export function handleComparisonEvent(
 
   switch (type) {
     case 'progress':
+      // R8 W2 (#644): a pause also goes to the Sources panel's bus, and any
+      // later line of the run ends a pause still waiting there.
+      if (panel === 'withMcp') reportConsentPause(event.phase === 'consent_pause' ? (event.pause as ConsentPausePayload | undefined) : null);
       setState(prev => {
         const message = event.message as string;
         const steps = applyProgressEvent(
@@ -220,6 +223,7 @@ export function handleComparisonEvent(
             // The rejection the wire carried, if any (#384 P8, F2); absent stays absent.
             failed: event.failed as boolean | undefined,
             failureKind: event.failureKind as ToolFailureKind | undefined,
+            pause: event.pause as ConsentPausePayload | undefined,
           },
           Date.now(),
         );

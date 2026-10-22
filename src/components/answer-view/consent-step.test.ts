@@ -157,10 +157,11 @@ test('criterion 3 (a): the card names the source by its reader name, never a too
 
 test('criterion 3 (a): each posture row reads as KeptByLines renders it: dated, "not stated", and stated by the operator', async () => {
   const card = await mountCard();
-  const text = textOf(cardOf(card));
+  // Tags read as spaces in the harness's text; a reader sees none beside a bracket or a comma.
+  const text = textOf(cardOf(card)).replace(/\(\s+/g, '(').replace(/\s+([,);.])/g, '$1');
   assert.ok(text.includes('Fixture Host A says it keeps facts about each request (how long: 30 days) (its statement, read 2026-10-18)'), text);
   assert.ok(text.includes('Fixture Host B: not stated (its statement, read 2026-10-19)'), text);
-  assert.ok(text.includes(`This site's operator: ${copy.KEPT_FOR_OPERATOR}`), text);
+  assert.ok(text.includes(`This site's operator: ${copy.KEPT_FOR_OPERATOR}.`), text);
   const links = [...within(cardOf(card))].filter((el) => el.type === 'a').map((el) => el.props.href);
   assert.ok(links.includes('https://a.fixture.example/privacy') && links.includes('https://b.fixture.example/privacy'), `the statements are not linked: ${links.join(', ')}`);
   card.unmount();
