@@ -1,20 +1,35 @@
 /**
  * "Where this question went" (R6 W4, #632): the answer view's part that says
- * who a run or a record sent something to, and why each other source got
- * nothing. It renders the model `src/lib/flows/where-it-went.ts` builds and
- * decides no fact of its own (design P1: it discloses, it does not validate).
+ * who a run or a record sent something to. It renders the model
+ * `src/lib/flows/where-it-went.ts` builds and decides no fact of its own
+ * (design P1: it discloses, it does not validate).
  *
- * Under "Sent to", each reached row: its name, then each recipient's place,
- * what it got (on a run and on a matched record only) and what each holder
- * keeps. Under a record's reference (D1), one line, in the owner's words,
- * links "where a question can go" to the statement the record names. Under
- * "Not sent to", each other source with its reason.
+ * STAGE C (the owner's G8 review; ruling (b) = (i)). A disclosure, closed by
+ * default, as the view's other disclosure is: its summary, "Where this question
+ * went: the model and N data source(s).", is the only text shown closed, and
+ * counts the sources reached without naming one. Open, two levels: each
+ * reached row, then its recipients, in the words the site already uses:
+ *   - the model row: "The model service (<host>)", then "The model: <name>"
+ *     (`formatModelName`, the name the answer prints);
+ *   - a source's recipient labelled by the source's name as the consent card
+ *     labels it, "<name> (<place>)", an upstream host "<name>, upstream
+ *     (<host>)"; the row reads "<name>, N tool call(s)";
+ *   - "Receives: <receives>", the statement's words in its own tense;
+ *   - "Who holds its logs: " and the panel's kept-by lines with how long
+ *     (`KeptByLines`), the model row by the consent card's rule
+ *     (`KEPT_FOR_OPERATOR`, then the operator's statement when it is made).
+ * A record with no matching statement says once that it does not say what
+ * each one received or keeps, then (D1) links "where a question can go". The
+ * sources not reached are not rendered (ruling (i)); the model keeps them.
  *
- * Type-only imports: this is part of the client view, and the builder reads
- * the statement module, which is server-only.
+ * The builder is imported for its types only: it reads the statement module,
+ * which is server-only.
  */
-import type { CSSProperties } from 'react';
-import type { WhereItWentModel, WhereReachedRow } from '../../lib/flows/where-it-went.ts';
+import type { CSSProperties, ReactNode } from 'react';
+import type { WhereItWentModel, WhereReachedRow, WhereRecipientRow } from '../../lib/flows/where-it-went.ts';
+import { KeptByLines } from '@/components/sources/KeptByLine';
+import { ENDPOINT_NO_TRAINING, KEPT_FOR_OPERATOR } from '@/lib/sources/copy';
+import { formatModelName } from '@/lib/models';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -26,49 +41,95 @@ function dateWords(date: string): string {
   return month ? `${Number(m[3])} ${month} ${m[1]}` : date;
 }
 
-const callsWords = (n: number) => (n === 1 ? '1 call' : `${n} calls`);
+const toolCalls = (n: number) => (n === 1 ? '1 tool call' : `${n} tool calls`);
+const dataSources = (n: number) => (n === 0 ? 'no data source' : n === 1 ? '1 data source' : `${n} data sources`);
 
-const LIST: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 };
-const LABEL: CSSProperties = { fontWeight: 600, color: 'var(--text-primary)', marginTop: '10px', marginBottom: '4px' };
+/** Shown on a record whose statement this site does not serve, once, under the rows. */
+const RECORD_DOES_NOT_SAY = 'This record does not say what each one received or keeps.';
+
+const ROWS: CSSProperties = { margin: '8px 0 0', paddingLeft: '18px' };
+const RECIPIENTS: CSSProperties = { margin: '2px 0 0', paddingLeft: '18px' };
+
+/** The model row's holders, by the consent card's rule (`ConsentCard.tsx`, `RecipientLine`). */
+function ModelLogs({ recipient }: { recipient: WhereRecipientRow }) {
+  const keptBy = recipient.keptBy ?? [];
+  const operator = keptBy.find((k) => k.operatorStatement);
+  // A holder named by the same host the line already names is not named twice.
+  const only = keptBy.length === 1 && keptBy[0].holder === recipient.place && keptBy[0].keeps === 'operator-states';
+  if (operator) return <>{`${KEPT_FOR_OPERATOR}. ${ENDPOINT_NO_TRAINING}`}</>;
+  if (only) return <>{`${KEPT_FOR_OPERATOR}.`}</>;
+  return <><KeptByLines keptBy={keptBy} />.</>;
+}
+
+/** What a recipient receives and who holds its logs; nothing when the record does not say. */
+function Facts({ recipient, logs }: { recipient: WhereRecipientRow; logs: ReactNode }) {
+  return (
+    <>
+      {recipient.got !== undefined && <div>{`Receives: ${recipient.got}`}</div>}
+      {recipient.keptBy !== undefined && <div>Who holds its logs: {logs}</div>}
+    </>
+  );
+}
+
+const logsOf = (recipient: WhereRecipientRow) => <><KeptByLines keptBy={recipient.keptBy ?? []} retention />.</>;
 
 function ReachedRow({ row }: { row: WhereReachedRow }) {
-  return (
-    <li data-part="where-it-went-row" style={{ marginBottom: '10px' }}>
-      <div>
-        <strong style={{ color: 'var(--text-primary)' }}>{row.name}</strong>
-        {row.kind === 'source' && <span>{`, ${callsWords(row.calls)}`}</span>}
-      </div>
-      {row.kind === 'model' && (row.model !== null || row.service !== null) && (
-        <div>
-          {row.model !== null && <span>{`Model: ${row.model}. `}</span>}
-          {row.service !== null && <span>{`Service: ${row.service}.`}</span>}
-        </div>
-      )}
-      {row.recipients.map((r, i) => (
-        <div key={i} style={{ marginTop: '4px', paddingLeft: '12px' }}>
-          <div>{`${r.role}: ${r.place}`}</div>
-          {r.got !== undefined && <div>{`What it got: ${r.got}`}</div>}
-          <div>What it keeps:</div>
-          <ul style={{ ...LIST, paddingLeft: '12px' }}>
-            {r.keptBy.map((line, j) => <li key={j}>{line}</li>)}
+  if (row.kind === 'model') {
+    const [recipient] = row.recipients;
+    return (
+      <li data-part="where-it-went-row" style={{ marginBottom: '8px' }}>
+        <strong style={{ color: 'var(--text-primary)' }}>{`The model service (${recipient?.place ?? 'not recorded'})`}</strong>
+        <ul style={RECIPIENTS}>
+          <li>
+            {row.model !== null && <div>{`The model: ${formatModelName(row.model)}`}</div>}
+            {recipient && <Facts recipient={recipient} logs={<ModelLogs recipient={recipient} />} />}
+          </li>
+        </ul>
+      </li>
+    );
+  }
+  if (row.kind === 'notebook') {
+    const [recipient] = row.recipients;
+    return (
+      <li data-part="where-it-went-row" style={{ marginBottom: '8px' }}>
+        <strong style={{ color: 'var(--text-primary)' }}>{`${row.name} (${recipient?.place ?? 'not recorded'})`}</strong>
+        {recipient && (recipient.got !== undefined || recipient.keptBy !== undefined) && (
+          <ul style={RECIPIENTS}>
+            <li><Facts recipient={recipient} logs={logsOf(recipient)} /></li>
           </ul>
-        </div>
-      ))}
+        )}
+      </li>
+    );
+  }
+  return (
+    <li data-part="where-it-went-row" style={{ marginBottom: '8px' }}>
+      <strong style={{ color: 'var(--text-primary)' }}>{`${row.name}, ${toolCalls(row.calls)}`}</strong>
+      <ul style={RECIPIENTS}>
+        {row.recipients.map((r, i) => (
+          <li key={i}>
+            <div>{r.upstream ? `${row.name}, upstream (${r.place})` : `${row.name} (${r.place})`}</div>
+            <Facts recipient={r} logs={logsOf(r)} />
+          </li>
+        ))}
+      </ul>
     </li>
   );
 }
 
 export default function WhereItWent({ model }: { model: WhereItWentModel }) {
+  const sources = model.reached.filter((row) => row.kind === 'source').length;
   return (
-    <div data-part="where-it-went" style={{
+    <details data-part="where-it-went" style={{
       borderLeft: '3px solid var(--border-color)', padding: '6px 10px', marginTop: '16px',
       fontSize: '13px', color: 'var(--text-secondary)', borderRadius: '0 4px 4px 0',
     }}>
-      <h3 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 6px' }}>Where this question went</h3>
-      <div style={LABEL}>Sent to</div>
-      <ul style={LIST}>
+      <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--text-primary)' }}>
+        {`Where this question went: the model and ${dataSources(sources)}.`}
+      </summary>
+      <ul style={ROWS}>
         {model.reached.map((row, i) => <ReachedRow key={i} row={row} />)}
       </ul>
+      {model.statement.kind !== 'in-force' && <p style={{ margin: '6px 0' }}>{RECORD_DOES_NOT_SAY}</p>}
       {model.statement.kind === 'reference' && (
         <p style={{ margin: '6px 0' }}>
           What each one keeps:{' '}
@@ -76,19 +137,6 @@ export default function WhereItWent({ model }: { model: WhereItWentModel }) {
           {`, as of ${dateWords(model.statement.date)}.`}
         </p>
       )}
-      {model.notReached.length > 0 && (
-        <>
-          <div style={LABEL}>Not sent to</div>
-          <ul style={LIST}>
-            {model.notReached.map((row) => (
-              <li key={row.sourceId}>
-                <strong style={{ color: 'var(--text-primary)' }}>{row.name}</strong>
-                {`: ${row.whyNotSent}`}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </div>
+    </details>
   );
 }

@@ -32,24 +32,30 @@
  * THE STATEMENT. On a run, the statement the consent gate built for it. On a
  * record whose reference has the served statement's hash, that statement.
  * Either way every recipient the statement's row carries is shown, with its
- * place, what it got and its kept-by lines. Otherwise (D1, and the seat's
- * correction) the recipients and places come from the record: one per row, no
- * "what it got", and kept-by lines that read "not recorded".
+ * place, what it receives and its holders. Otherwise (D1, the seat's
+ * correction, and Stage C) the recipients and places come from the record: one
+ * per row, and nothing it received or keeps; the view says that once.
  */
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
-import { statementHash, type FlowsRecipient, type FlowsStatement } from './statement.ts';
-import { keepsText, readerSourceName, recipientWhere, roleLabel } from '../sources/source-name.ts';
+import { statementHash, type FlowsKeptBy, type FlowsRecipient, type FlowsStatement } from './statement.ts';
+import { readerSourceName, recipientWhere, roleLabel } from '../sources/source-name.ts';
 import { WHERE_IT_WENT_REASONS } from '../sources/copy.ts';
 import { NOTEBOOK_EXTENSION_KEY, readNotebookProvenanceOfNotebook } from '../notebook-author/notebook-provenance-reading.ts';
 
 // --- The model ------------------------------------------------------------------------
 
-/** One recipient of a reached row. `got` is present on a run and on a matched record only. */
+/**
+ * One recipient of a reached row. `got` (what it receives) and `keptBy` (the
+ * statement's own holders, which the view renders as the panel does) are
+ * present on a run and on a matched record only. `upstream` marks a hosted
+ * row's upstream host (`source:<id>:<host>`, R8 W3).
+ */
 export interface WhereRecipientRow {
   role: string;
   place: string;
   got?: string;
-  keptBy: string[];
+  keptBy?: FlowsKeptBy[];
+  upstream?: true;
 }
 
 export type WhereReachedRow =
@@ -118,19 +124,21 @@ function nameOf(sourceId: string, alias: string | undefined): string {
   return entry ? readerSourceName({ sourceId, displayName: entry.displayName }) : alias ?? sourceId;
 }
 
-const shown = (r: FlowsRecipient): WhereRecipientRow => ({
+const shown = (r: FlowsRecipient, sourceId?: string): WhereRecipientRow => ({
   role: roleLabel(r.role),
   place: recipientWhere(r),
   got: r.receives,
-  keptBy: r.keptBy.map(keepsText),
+  keptBy: r.keptBy,
+  ...(sourceId !== undefined && r.id.startsWith(`source:${sourceId}:`) ? { upstream: true as const } : {}),
 });
 
-const recorded = (role: string, place: string): WhereRecipientRow => ({ role, place, keptBy: [NOT_RECORDED] });
+/** The record's facts only: a role and a place, nothing it received or keeps (the view says so once). */
+const recorded = (role: string, place: string): WhereRecipientRow => ({ role, place });
 
 /** A base recipient (the model endpoint, the notebook runner) from the statement, or "not recorded". */
 function baseRecipients(side: Side, role: FlowsRecipient['role']): WhereRecipientRow[] {
   if (side.kind === 'statement') {
-    const rows = side.statement.recipients.filter((r) => r.role === role).map(shown);
+    const rows = side.statement.recipients.filter((r) => r.role === role).map((r) => shown(r));
     if (rows.length > 0) return rows;
   }
   return [recorded(roleLabel(role), NOT_RECORDED)];
@@ -148,7 +156,7 @@ function hostOfAddress(url: string): string {
 function sourceRecipients(side: Side, sourceId: string): WhereRecipientRow[] {
   if (side.kind === 'statement') {
     const row = side.statement.sources.find((s) => s.sourceId === sourceId);
-    if (row && row.recipients.length > 0) return row.recipients.map(shown);
+    if (row && row.recipients.length > 0) return row.recipients.map((r) => shown(r, sourceId));
     return [recorded(roleLabel('source'), NOT_RECORDED)];
   }
   // The record's facts: one recipient, at the address the run's servers name.
