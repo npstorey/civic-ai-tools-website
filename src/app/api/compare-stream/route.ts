@@ -10,7 +10,8 @@ import { createInLoopRouting, directorySet, entersInLoop, sourceRoutingMode } fr
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import { encodeSSE, errorLogFacts, panelsForRun, startSseKeepAlive, streamErrorPayload, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
-import { getMissingModelCredentialError, ModelConfigurationError } from '@/lib/model-client';
+import { getGenAiSystem, getMissingModelCredentialError, ModelConfigurationError } from '@/lib/model-client';
+import { whereItWentFromCalls } from '@/lib/flows/where-it-went';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
 import { configuredMcpServers, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId, skillRoutingTraceAttributes } from '@/lib/mcp/registry';
@@ -310,6 +311,10 @@ export async function POST(request: NextRequest) {
     // instance configures (sprint 238, D2), narrowed by the selection.
     const offeredTools = inLoop ? inLoop.firstTools : offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection);
 
+    // Which source a call went to: the resolver the loop tags each span with,
+    // and the one "Where this question went" reads the run's calls through (R6 W4).
+    const resolveToolSource = inLoop ? inLoop.resolveToolSource : (name: string) => routedSourceId(name, configured, selection);
+
     // What this run states about itself (#599 W4, ADR-0033): the date its
     // prompt asserted (#475), the servers its configuration had (#495), the
     // tools it offered, each source's offered-reason and the prompt's
@@ -377,7 +382,22 @@ Be honest if you don't have access to current or real-time data.`;
       },
       onComplete: (panel: PanelType, result) => {
         if (panel === 'withMcp') usageOutcome = 'complete';
-        writeEvent({ type: 'complete', panel, data: result });
+        // R6 W4 (§6): the with-data panel's completion carries where the
+        // question went, from the run's calls and the statement in force.
+        const data = panel === 'withMcp'
+          ? {
+              ...result,
+              flows: whereItWentFromCalls({
+                toolCalls: result.tools_called ?? [],
+                resolveSource: resolveToolSource,
+                sourcesOffered: consent.recordReasons(composition.sourcesOffered),
+                statement: consent.statement,
+                model: model.declared,
+                service: getGenAiSystem(),
+              }),
+            }
+          : result;
+        writeEvent({ type: 'complete', panel, data });
       },
       onError: (panel: PanelType, message: string, code?: StreamErrorCode) => {
         if (panel === 'withMcp') usageOutcome = 'error';
@@ -425,7 +445,7 @@ Be honest if you don't have access to current or real-time data.`;
           // by the transport as one failed call, not thrown out of the loop here.
           // The same configuration and selection as the transport, so a refused
           // call's span names no source.
-          { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource: inLoop ? inLoop.resolveToolSource : (name) => routedSourceId(name, configured, selection) },
+          { builder: trace, parentSpanId: trace.rootSpanId, systemPromptHash, resolveToolSource },
           { portal, toolTimeoutMs: MCP_TOOL_TIMEOUT_MS },
           // The loop core refuses a call naming another portal as a rejected
           // call (#436, D7); undefined on an unlocked instance.

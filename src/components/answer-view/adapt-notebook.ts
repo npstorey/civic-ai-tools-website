@@ -44,6 +44,7 @@ import { coverPortals } from '../../lib/notebook-author/cover-portals.ts';
 import { readReproductionClaim, reproductionScopeSentence } from '../../lib/notebook-author/reproduction-claim.ts';
 import { readNotebookProvenanceOfNotebook } from '../../lib/notebook-author/notebook-provenance-reading.ts';
 import { formatModelName } from '../../lib/models.ts';
+import type { WhereItWentModel } from '../../lib/flows/where-it-went.ts';
 import type { Notebook } from '../../lib/notebook-author/cells.ts';
 // Type-only: erased at compile time.
 import type { CapturedToolCall } from '@/hooks/useNotebookStream';
@@ -67,6 +68,8 @@ export interface NotebookAdapterInput {
   instance: string | null;
   /** The server-resolved Socrata MCP endpoint (`useSocrataMcpUrl()`), or null. */
   socrataMcpUrl: string | null;
+  /** R6 W4: where the question went, from the run's `complete` event; absent, no section. */
+  flows?: WhereItWentModel | null;
 }
 
 /** A rendering cell's outputs that are ONE markdown block are a markdown answer. */
@@ -244,5 +247,6 @@ export function adaptNotebook(input: NotebookAdapterInput): AnswerViewModel {
         provenance: { state: reading.state, label: reading.label, detail: reading.detail ?? null },
       },
     },
+    ...(input.flows ? { whereItWent: input.flows } : {}),
   };
 }

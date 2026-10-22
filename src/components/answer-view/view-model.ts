@@ -16,6 +16,7 @@ import type { SkillDisclosure } from '../../lib/evidence/skill-disclosure.ts';
 import type { NotebookProvenanceState } from '../../lib/notebook-author/notebook-provenance-reading.ts';
 import { PAGE_PART_VIEWS, type PagePartView } from '../../lib/answer-layout/index.ts';
 import type { PublishedLayout } from '../../lib/answer-layout/published-line.ts';
+import type { WhereItWentModel } from '../../lib/flows/where-it-went.ts';
 
 // --- The order -------------------------------------------------------------------
 
@@ -256,4 +257,6 @@ export interface AnswerViewModel {
   disclosure: DisclosurePart;
   /** The record: the layout its publication attestation names (LAYOUT-WEB W4 P2), for the foot line. */
   publishedLayout?: PublishedLayout;
+  /** R6 W4: where the question went. Absent: the run carried no `flows`, or the record has no trace. */
+  whereItWent?: WhereItWentModel;
 }

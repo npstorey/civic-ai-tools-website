@@ -90,6 +90,8 @@ export const PAGE_PARTS = [
   { name: 'citation', view: 'citation' },
   { name: 'steps', view: 'steps' },
   { name: 'sources', view: 'sources' },
+  // R6 W4: "Where this question went". No layout names it; it renders after the sources line.
+  { name: null, view: 'where-it-went' },
   { name: 'disclosure', view: 'disclosure' },
   { name: 'actions', view: 'actions' },
 ] as const;

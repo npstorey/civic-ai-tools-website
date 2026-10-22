@@ -271,6 +271,7 @@ test('W4 P1 reading 1: the name map, page parts and disclosure sections, in thei
     ['citation', 'citation'],
     ['steps', 'steps'],
     ['sources', 'sources'],
+    [null, 'where-it-went'],
     ['disclosure', 'disclosure'],
     ['actions', 'actions'],
   ]);
@@ -290,14 +291,14 @@ test('W4 P1 reading 1: the name map, page parts and disclosure sections, in thei
     ['verification', 'verification'],
     [null, 'surface-extras'],
   ]);
-  assert.deepEqual([...PART_ORDER], ['status-row', 'answer', 'citation', 'steps', 'sources', 'disclosure', 'actions'], 'the view’s part order is the table’s');
+  assert.deepEqual([...PART_ORDER], ['status-row', 'answer', 'citation', 'steps', 'sources', 'where-it-went', 'disclosure', 'actions'], 'the view’s part order is the table’s');
 });
 
 // --- item 7: the placement rule -----------------------------------------------------------------
 
 test('W4 P1 item 7: under answer-first, every part and every section sits at its default place', () => {
   assert.deepEqual(pageOrder(ANSWER_FIRST), {
-    order: ['status-row', 'answer', 'citation', 'steps', 'sources', 'disclosure', 'actions'],
+    order: ['status-row', 'answer', 'citation', 'steps', 'sources', 'where-it-went', 'disclosure', 'actions'],
     unknown: [],
   });
   assert.deepEqual(disclosureOrder(ANSWER_FIRST), {
@@ -316,16 +317,16 @@ test('W4 P1 item 7: a part a layout does not name renders directly after the par
   assert.deepEqual(placeParts(table, []).order, ['A', 'B', 'C', 'X'], 'nothing named: the default places');
   assert.deepEqual(placeParts(table, ['c', 'c', 'b']).order, ['A', 'C', 'X', 'B'], 'a repeated name keeps its first place');
   assert.deepEqual(placeParts(table, ['X', 'zz', 'c', 'zz']), { order: ['A', 'B', 'C', 'X'], unknown: ['X', 'zz'] }, 'an unknown name, and the unnameable part’s view name, render nothing');
-  assert.deepEqual(pageOrder(ENVELOPE_ORDER).order, ['status-row', 'disclosure', 'steps', 'answer', 'sources', 'citation', 'actions']);
+  assert.deepEqual(pageOrder(ENVELOPE_ORDER).order, ['status-row', 'disclosure', 'steps', 'answer', 'sources', 'where-it-went', 'citation', 'actions']);
 });
 
-test('W4 P1 item 7: an eighth part needs one row and no layout change; the built-ins stay valid', () => {
+test('W4 P1 item 7: a part appended to the table needs one row and no layout change; the built-ins stay valid', () => {
   const eighth = [...PAGE_PARTS, { name: 'routing', view: 'routing' }] as const;
   assert.equal(BUILT_IN_LAYOUTS.length, 2, 'premise: the two built-ins');
   for (const layout of BUILT_IN_LAYOUTS) {
     const placed = placeParts(eighth, layout.order);
     assert.equal(placed.order.at(-1), 'routing', `${layout.name}: the new part renders at its default place`);
-    assert.equal(placed.order.length, 8, `${layout.name}: every part present`);
+    assert.equal(placed.order.length, 9, `${layout.name}: every part present`);
   }
 });
 
