@@ -330,9 +330,11 @@ export default function QueryForm({
             height: '32px',
             borderRadius: '6px',
             border: 'none',
-            backgroundColor: query.trim() && !isLoading ? 'var(--accent)' : 'var(--border-color)',
+            // Keyed on the condition that disables the button (UX pass row 3),
+            // so a disabled arrow, as after Not now, never looks live.
+            backgroundColor: canSubmit ? 'var(--accent)' : 'var(--border-color)',
             color: 'white',
-            cursor: query.trim() && !isLoading ? 'pointer' : 'not-allowed',
+            cursor: canSubmit ? 'pointer' : 'not-allowed',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
