@@ -1244,3 +1244,42 @@ for (const [name, file, renderIt] of [
     assert.fail(`${name} differs from the base at character ${i}:\n  base: …${golden.slice(Math.max(0, i - 60), i + 80)}…\n  head: …${actual.slice(Math.max(0, i - 60), i + 80)}…`);
   });
 }
+
+// --- UX pass row 24: one reason line per distinct reason within a step ------------------------
+//
+// At the base each call printed its sentence, so a step whose calls shared a
+// reason printed it once per call. Within a step, consecutive calls with the
+// same sentence now print it once, with ", N calls" when N > 1; every call's
+// outcome line stays, one row per call. A sentence that recurs after a
+// different one starts a new run: only consecutive calls are joined.
+
+const { StepsPartView } = (await import('@/components/answer-view/AnswerView')) as unknown as { StepsPartView: ComponentType<{ steps: unknown }> };
+
+test('UX pass row 24: consecutive calls sharing a reason print it once, with a count; every outcome stays', () => {
+  const call = (sentence: string | undefined, outcome: string) => ({ ...(sentence !== undefined ? { sentence } : {}), outcome, failed: false });
+  const steps = {
+    kind: 'step-view',
+    author: null,
+    closing: [],
+    view: {
+      unplaced: [],
+      steps: [{
+        label: 'Querying',
+        calls: [
+          call('to query 311 Service Requests', 'Returned 1 row × 1 column · 0.3 s'),
+          call('to query 311 Service Requests', 'Returned 2 rows × 1 column · 0.4 s'),
+          call('to query 311 Service Requests', 'Returned 3 rows × 1 column · 0.5 s'),
+          call('to read the columns of 311 Service Requests', 'No result summary was recorded for this request.'),
+          call('to query 311 Service Requests', 'Returned 4 rows × 1 column · 0.6 s'),
+          call(undefined, 'No result summary was recorded for this request.'),
+        ],
+      }],
+    },
+  };
+  const html = withProviders(createElement(StepsPartView, { steps }));
+  const sentences = [...html.matchAll(/data-part="step-sentence"[^>]*>(.*?)<\/div>/g)].map((m) => unescape(m[1].replace(/<!-- -->/g, '')));
+  assert.deepEqual(sentences, ['to query 311 Service Requests, 3 calls', 'to read the columns of 311 Service Requests', 'to query 311 Service Requests'], `the reason lines read: ${sentences.join(' | ')}`);
+  const outcomes = [...html.matchAll(/data-part="step-outcome"[^>]*>(.*?)<\/div>/g)].map((m) => unescape(m[1]));
+  assert.equal(outcomes.length, 6, 'one outcome line per call');
+  assert.equal(occurrences(html, 'data-part="step-call"').length, 6, 'one row per call');
+});

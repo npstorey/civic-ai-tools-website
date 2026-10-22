@@ -234,16 +234,42 @@ function AnswerAuthors({ answer }: { answer: AnswerPart }) {
 
 // --- 4. The steps -------------------------------------------------------------------
 
-/** One call in the step view: the site's sentence for it, and its outcome. */
-function StepCallRow({ call }: { call: StepViewCall }) {
+/**
+ * One call in the step view: the site's sentence for it, and its outcome.
+ * `line` is the reason line to print above the outcome, which may be none:
+ * within a step a reason shared by consecutive calls is printed once
+ * (`reasonLines`).
+ */
+function StepCallRow({ call, line }: { call: StepViewCall; line?: string | null }) {
+  // `line` absent: the call's own sentence; null: no line (a shared reason printed above).
+  const sentence = line === undefined ? call.sentence : line ?? undefined;
   return (
     <div data-part="step-call" style={{ marginTop: '6px', paddingLeft: '20px', fontSize: '13px', lineHeight: 1.5 }}>
-      {call.sentence !== undefined && (
-        <div data-part="step-sentence" style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>{call.sentence}</div>
+      {sentence !== undefined && (
+        <div data-part="step-sentence" style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>{sentence}</div>
       )}
       <div data-part="step-outcome" style={{ fontSize: '12px', color: call.failed ? 'var(--error)' : 'var(--text-muted)' }}>{call.outcome}</div>
     </div>
   );
+}
+
+/**
+ * The reason line each call of a step prints (UX pass row 24): a run of
+ * consecutive calls sharing one sentence prints it once, on its first call,
+ * with ", N calls" when N > 1; the run's other calls print none. A call with
+ * no sentence prints none and ends a run. Every call keeps its outcome row.
+ * Render-time only: the step view model is unchanged.
+ */
+function reasonLines(calls: StepViewCall[]): Array<string | null> {
+  const lines: Array<string | null> = calls.map(() => null);
+  for (let i = 0; i < calls.length; ) {
+    const sentence = calls[i].sentence;
+    let j = i + 1;
+    if (sentence !== undefined) while (j < calls.length && calls[j].sentence === sentence) j++;
+    if (sentence !== undefined) lines[i] = j - i > 1 ? `${sentence}, ${j - i} calls` : sentence;
+    i = j;
+  }
+  return lines;
 }
 
 /** The steps part, under its one author line. Also rendered by the executed run while it is under way. */
@@ -274,7 +300,10 @@ export function StepsPartView({ steps }: { steps: StepsPart }) {
                   <span style={{ color: 'var(--accent)', marginRight: '6px' }}>Step {i + 1}</span>
                   <span data-part="step-label">{step.label}</span>
                 </div>
-                {step.calls.map((call, j) => <StepCallRow key={j} call={call} />)}
+                {(() => {
+                  const lines = reasonLines(step.calls);
+                  return step.calls.map((call, j) => <StepCallRow key={j} call={call} line={lines[j]} />);
+                })()}
               </div>
             ))}
           </div>
