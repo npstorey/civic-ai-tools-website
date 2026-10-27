@@ -79,7 +79,7 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
   // keeps its closing rows (`ChatNotebookOutput`, below).
   const liveSteps = state.notebook
     ? null
-    : notebookSteps(state.steps?.progressGroups, state.toolCalls, undefined, null, instance);
+    : notebookSteps(state.steps?.progressGroups, state.toolCalls, undefined, null, instance, state.steps?.progressLog);
 
   // Publishable iff the pipeline completed AND the publish inputs arrived
   // (trace + answer via the `publish_inputs` event). Older cached streams /

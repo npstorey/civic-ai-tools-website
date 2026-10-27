@@ -162,6 +162,20 @@ export function deriveOperationType(
 }
 
 /**
+ * Every operation type `deriveOperationType` can return (#644 W2, LAYOUT-WEB-D's
+ * test 2): the name map's values, and the values `get_data`'s `type` argument
+ * takes, read from the router's own schema for it (the one tool whose `type`
+ * names an operation, above). A type a step label has no words for would read
+ * as an open step; `steps.test.ts` drives each one through the label.
+ */
+export const DERIVABLE_OPERATION_TYPES: readonly string[] = (() => {
+  const getData = civicRouter.mcpTools.find((tool) => tool.function.name === 'get_data');
+  const typeProperty = (getData?.function.parameters as { properties?: { type?: { enum?: unknown } } } | undefined)?.properties?.type;
+  const argTypes = Array.isArray(typeProperty?.enum) ? typeProperty.enum.filter((v): v is string => typeof v === 'string') : [];
+  return [...new Set([...Object.values(TOOL_OPERATION_TYPES), ...argTypes])];
+})();
+
+/**
  * Static tool-name → source-id map. Used as a fallback when the trace does
  * not carry an `mcp.source` attribute (pre-M9.1 packages, tests without a
  * full trace). The authoritative runtime mapping lives in `./registry.ts`;

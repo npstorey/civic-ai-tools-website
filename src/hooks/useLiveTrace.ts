@@ -7,7 +7,7 @@ import { mapEventToNodes } from '@/lib/bpmn/node-mapping';
 import type { ToolFailureKind } from '@/lib/notebook-author/tool-to-cell';
 import type { TraceEvent, PreRecordedTrace } from '@/lib/bpmn/traces';
 import { classifyStreamError, friendlyStreamError, type ProgressPhase } from '@/lib/streaming';
-import { reportConsentRefusal } from '@/components/sources/useSourceConsent';
+import { reportConsentPause, reportConsentRefusal } from '@/components/sources/useSourceConsent';
 import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
 import { generateGroupLabel } from '@/hooks/useStreamingComparison';
 import {
@@ -347,6 +347,17 @@ export function useLiveTrace(): UseLiveTraceReturn {
         if (type === 'progress') {
           const phase = eventData.phase as ProgressPhase | undefined;
           if (!phase) return;
+
+          // R8 W2 (#644): a load paused to ask the reader. Its own branch: the
+          // pause's key goes into the run's steps and the panel's bus only,
+          // never through the trace capture or the shared fold below.
+          if (phase === 'consent_pause') {
+            const pause = eventData.pause as ProgressLogEntry['pause'];
+            if (!pause) return;
+            setProgressLog(prev => [...prev, { message: eventData.message as string, timestamp: Date.now(), phase, pause }]);
+            reportConsentPause(pause);
+            return;
+          }
 
           const message = eventData.message as string;
           const iteration = eventData.iteration as number | undefined;

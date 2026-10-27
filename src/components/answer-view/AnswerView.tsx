@@ -53,6 +53,7 @@ import { Fragment, useCallback, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ProgressLog from '@/components/ProgressLog';
+import ConsentStep from '@/components/answer-view/ConsentStep';
 import NotebookSection from '@/components/evidence/NotebookSection';
 import ChatSignersSection from '@/components/notebook/ChatSignersSection';
 import ChatCitationPreview from '@/components/notebook/ChatCitationPreview';
@@ -307,6 +308,8 @@ export function StepsPartView({ steps }: { steps: StepsPart }) {
               </div>
             ))}
           </div>
+          {/* A load paused to ask the reader (#644 W2): its consent step, after the steps so far */}
+          {steps.consent?.map((entry, i) => (entry.pause ? <ConsentStep key={`c-${i}`} pause={entry.pause} ended={entry.isComplete === true} /> : null))}
           {steps.view.unplaced.length > 0 && (
             <div data-part="steps-unplaced" style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
               <p style={{ margin: 0 }}>{UNPLACED_CALLS_LINE}</p>

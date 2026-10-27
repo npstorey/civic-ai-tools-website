@@ -1,7 +1,7 @@
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 import { getModelClient, classifyModelError, includeStreamUsage, getModelApiKind } from './model-client.ts';
 import { modelRequestParameters, type ModelIdentity } from './model-catalog.ts';
-import { formatToolProgress, formatToolResult, classifyStreamError, errorLogFacts, streamErrorPayload, type PanelType, type ProgressPhase, type StreamErrorCode, type StreamErrorKind } from './streaming.ts';
+import { formatConsentPause, formatToolProgress, formatToolResult, classifyStreamError, errorLogFacts, streamErrorPayload, type ConsentPausePayload, type PanelType, type ProgressPhase, type StreamErrorCode, type StreamErrorKind } from './streaming.ts';
 import { runToolLoop, type LoadStep, type LoopEvent, type ToolCallRecord, type TraceContext } from './model-loop/run-tool-loop.ts';
 import { describeQueryOutcome } from './evidence/query-step.ts';
 import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
@@ -36,6 +36,8 @@ export interface ProgressOpts {
    */
   failed?: boolean;
   failureKind?: ToolFailureKind;
+  /** The pause, on the `consent_pause` phase only (#644 W2). No iteration travels with it. */
+  pause?: ConsentPausePayload;
 }
 
 export interface StreamCallbacks {
@@ -236,6 +238,11 @@ function reportLoopEvent(panel: PanelType, event: LoopEvent, callbacks: StreamCa
       return;
     case 'pass_through':
       callbacks.onProgress(panel, 'Synthesizing findings into response...', { phase: 'synthesize' });
+      return;
+    case 'consent_pause':
+      // #644 W2: a step of its own, with no iteration, so every surface
+      // shows it outside the load's group. The key travels in `pause` only.
+      callbacks.onProgress(panel, formatConsentPause(event.pause), { phase: 'consent_pause', pause: event.pause });
       return;
   }
 }

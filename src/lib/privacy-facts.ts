@@ -91,6 +91,7 @@ import { timestampAuthorityUrl, transparencyLogUrl } from './evidence/signing.ts
 import { isSigningConfigured } from './evidence/unsigned-tier.ts';
 import { ORPHAN_GRACE_MS } from './evidence/blob-gc.ts';
 import { buildMcpRegistry, configuredAddressForSource, readMcpEnvFromProcess } from './mcp/registry.ts';
+import { sourceRoutingMode } from './mcp/source-routing-mode.ts';
 import { COMPARISON_STORAGE_KEY, LAYOUT_STORAGE_KEY, MODE_STORAGE_KEY } from './query-presentation.ts';
 import { isOutboundProxyConfigured } from './outbound-proxy.ts';
 
@@ -720,14 +721,45 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
     ];
   },
 
-  'Rate-limit counter, `KV_REST_API_URL` set': () =>
-    process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN
+  'Rate-limit counter, `KV_REST_API_URL` set': () => {
+    // R8 W2 [D]: the consent pause keeps its entry in the same store, and
+    // pauses only under `SOURCE_ROUTING=in-loop`, read here at render through
+    // the loop's own reader. A reader code exists only where a session can
+    // carry a `dbId`: sign-in offered and `DATABASE_URL` set (`auth.ts`).
+    const pauses = sourceRoutingMode() === 'in-loop';
+    const codes = toSignInOptions(buildProviders()).length > 0 && Boolean(process.env.DATABASE_URL);
+    return process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN
       ? [
           statement(
             'recipient-counter-store',
             ['The daily question counts, kept under the codes described above, are stored in a key-value store, a simple database of named values.'],
             ['env:KV_REST_API_URL', 'env:KV_REST_API_TOKEN'],
           ),
+          ...(pauses
+            ? [
+                statement(
+                  'recipient-pause-store',
+                  [
+                    'A question can stop to ask about a data source set to Ask first. ' +
+                      'When it does, the site keeps a short entry in the same key-value store. ' +
+                      'The entry holds the source it asked about, and your answer once you give it. ' +
+                      (codes
+                        ? 'Signed in, it also holds a code. The site makes the code from your account and a secret only the operator holds. ' +
+                          'Not signed in, it holds no code for you. '
+                        : 'It holds no code for you. ') +
+                      'The site sets the entry to expire 10 minutes after it is made.',
+                  ],
+                  [
+                    'env:KV_REST_API_URL',
+                    'env:KV_REST_API_TOKEN',
+                    'env:SOURCE_ROUTING',
+                    'env:DATABASE_URL',
+                    ...SIGN_IN_TRACES,
+                    'const:src/lib/sources/decision.ts#DECISION_ENTRY_TTL_SECONDS',
+                  ],
+                ),
+              ]
+            : []),
         ]
       : [
           statement(
@@ -735,7 +767,21 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
             ["The daily question counts, kept under the codes described above, are held in the server's memory only."],
             ['env:KV_REST_API_URL', 'env:KV_REST_API_TOKEN'],
           ),
-        ],
+          ...(pauses
+            ? [
+                statement(
+                  'recipient-pause-memory',
+                  [
+                    'A question may need a data source set to Ask first. ' +
+                      'Then the site cannot stop to ask you, because it has no store to keep your answer in. ' +
+                      'The source is not used for that question. You can turn it On in the panel for your next question.',
+                  ],
+                  ['env:KV_REST_API_URL', 'env:KV_REST_API_TOKEN', 'env:SOURCE_ROUTING'],
+                ),
+              ]
+            : []),
+        ];
+  },
 
   'Sign-in provider (GitHub / OIDC) discovery, token and userinfo calls': () =>
     toSignInOptions(buildProviders()).map((option) => {

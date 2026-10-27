@@ -31,13 +31,14 @@ import { modelAccessPhrase, modelIdentity, type ModelIdentity } from '@/lib/mode
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import type { SourceSelection } from '@typedstandards/civic-typed-router';
 import { consentInForce } from '@/lib/sources/consent-gate';
+import { streamingRoutePause } from '@/lib/sources/decision';
 import { afterLoopAttributes, createInLoopRouting, directorySet, entersInLoop, sourceRoutingMode, type InLoopRouting } from '@/lib/mcp/routing-mode';
 import {
   queryWithMcpStreaming,
   type CompletionResult,
   type StreamCallbacks,
 } from '@/lib/openrouter-streaming';
-import { errorClassOf, isStreamErrorKind, notebookExecutionErrorMessage, notebookFailureFacts, notebookTracebackForReader, startSseKeepAlive, streamErrorPayload, withoutCredentialsIn, type StreamErrorCode } from '@/lib/streaming';
+import { errorClassOf, isStreamErrorKind, notebookExecutionErrorMessage, notebookFailureFacts, notebookTracebackForReader, startSseKeepAlive, streamErrorPayload, withoutCredentialsIn, type ConsentPausePayload, type StreamErrorCode } from '@/lib/streaming';
 import { TraceBuilder, hash as traceHash, CIVICAITOOLS_TRACE_CONFIG, runRecordAttributes } from '@/lib/evidence/trace';
 import { getConfiguredKeyId } from '@/lib/evidence/signing';
 import { resolveRunPortal } from '@/lib/site-config';
@@ -61,7 +62,7 @@ interface QueryNotebookRequest {
 
 type NotebookEvent =
   | { type: 'phase'; name: 'A' | 'B' | 'C' | 'D' | 'complete'; message: string }
-  | { type: 'phase_a_progress'; message: string; phase?: string; iteration?: number; toolName?: string; operationType?: string; failed?: boolean; failureKind?: PhaseAToolCall['failureKind'] }
+  | { type: 'phase_a_progress'; message: string; phase?: string; iteration?: number; toolName?: string; operationType?: string; failed?: boolean; failureKind?: PhaseAToolCall['failureKind']; pause?: ConsentPausePayload }
   | { type: 'phase_a_tool_call'; name: string; operationType?: string; reason?: string; resultSummary?: { rows: number; columns: number }; args?: Record<string, unknown>; duration_ms?: number; failed?: boolean; failureKind?: PhaseAToolCall['failureKind'] }
   | { type: 'phase_a_answer'; content: string }
   // `signingKeyId` is null when this instance has declared no PUBLISHER_KEY_ID:
@@ -297,8 +298,10 @@ export async function POST(request: NextRequest) {
   // otherwise the composition below, exactly as before the setting existed.
   const routingMode = sourceRoutingMode();
   const directory = routingMode === 'in-loop' ? directorySet(configured, consent) : [];
+  // An Ask-first load pauses to ask the reader (#644 W2): this route holds a
+  // stream, so it hands the run a pause.
   const inLoop = entersInLoop(routingMode, directory)
-    ? await createInLoopRouting({ portal, lockedPortal, configured, directory, selection })
+    ? await createInLoopRouting({ portal, lockedPortal, configured, directory, selection, pause: streamingRoutePause(consent, session, configured) })
     : undefined;
   const composition = inLoop
     ? { prompt: inLoop.firstSystemPrompt, assertedDate: inLoop.assertedDate, sourcesOffered: inLoop.sourcesOffered, components: inLoop.components() }
@@ -649,6 +652,11 @@ async function runPhaseA(args: {
         // recorded has to be carried here by name: the tool and its
         // operation type, absent when the loop derived none, and the
         // rejection, absent when the call was answered.
+        // A pause (#644 W2): forwarded with its fields, and no iteration.
+        if (opts?.phase === 'consent_pause' && opts.pause) {
+          void emit({ type: 'phase_a_progress', message, phase: opts.phase, pause: opts.pause });
+          return;
+        }
         if (opts?.phase === 'tool_start' || opts?.phase === 'tool_complete' || opts?.phase === 'tool_result') {
           void emit({
             type: 'phase_a_progress',

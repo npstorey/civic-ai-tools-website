@@ -1167,7 +1167,10 @@ function loadNoteLines(loads: readonly PhaseAToolCall[]): string[] {
     const outcome =
       load.loadOutcome === 'loaded' ? 'loaded'
         : load.loadOutcome === 'declined' ? 'not used, set to Ask first'
-          : load.loadOutcome === undefined ? 'requested' : 'not loaded';
+          // #644 W2: no decision arrived, whether asked or not; and a load that threw.
+          : load.loadOutcome === 'no-answer' ? 'not used, could not be asked or no answer arrived in time'
+            : load.loadOutcome === 'unavailable' ? 'could not be loaded'
+              : load.loadOutcome === undefined ? 'requested' : 'not loaded';
     lines.push(`- \`${alias}\`: ${outcome}`);
   }
   return lines;

@@ -138,6 +138,8 @@ export type StepsPart =
       author: string | null;
       view: StepView;
       closing: ClosingRow[];
+      /** A load paused to ask the reader (#644 W2): its consent steps, while the run is going. */
+      consent?: ProgressLogEntry[];
     };
 
 /** Part 5: the sources line — the provenance line, under the hosts the rows came from. */

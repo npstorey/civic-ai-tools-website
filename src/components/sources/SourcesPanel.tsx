@@ -21,12 +21,13 @@
  */
 
 import { useState, type CSSProperties } from 'react';
-import { ASK_FIRST_MEANS, PANEL_HEADING, PANEL_LEAD, PANEL_NO_CONSENT, PANEL_PRIVACY_LINK, PANEL_STATE_CHANGED } from '@/lib/sources/copy';
+import { ASK_FIRST_MEANS, ASK_FIRST_MEANS_WITH_PAUSE, PANEL_HEADING, PANEL_LEAD, PANEL_NO_CONSENT, PANEL_PRIVACY_LINK, PANEL_STATE_CHANGED } from '@/lib/sources/copy';
 import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
 import { currentStates, useSourceConsent, type SourceStateValue } from './useSourceConsent';
 import { KeptByLines } from './KeptByLine';
 import LocalOnlyOffer from './LocalOnlyOffer';
 import ConsentNotices from './ConsentNotices';
+import ConsentStep from '../answer-view/ConsentStep';
 
 const STATES: Array<{ value: SourceStateValue; label: string }> = [
   { value: 'on', label: 'On' },
@@ -121,7 +122,9 @@ export default function SourcesPanel() {
                 }
                 return sinceLine ? <div>{sinceLine}</div> : null;
               })()}
-              {state === 'ask-first' && <div>{ASK_FIRST_MEANS}</div>}
+              {state === 'ask-first' && <div>{consent.routing === 'in-loop' ? ASK_FIRST_MEANS_WITH_PAUSE : ASK_FIRST_MEANS}</div>}
+              {/* R8 W2 (#644): a question is waiting for an answer about this source; the run's own card is the same. */}
+              {consent.pause && !consent.pause.ended && consent.pause.payload.source.sourceId === source.sourceId ? <ConsentStep pause={consent.pause.payload} /> : null}
             </li>
           );
         })}

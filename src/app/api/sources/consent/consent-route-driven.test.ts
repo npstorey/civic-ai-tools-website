@@ -298,12 +298,15 @@ test('D12: with a dbId the row is read and a cookie ignored — a cookie alone i
 
 // --- Only the consent write sets the cookie (criterion 2) ------------------------------------------
 
-test('criterion 2: no module but the consent endpoint sets the consent cookie', () => {
+test('criterion 2: no module but the consent endpoints sets the consent cookie, and only the consent route clears it', () => {
   consentExport('consentCookieHeader');
   const tracked = execFileSync('git', ['ls-files', 'src'], { cwd: REPO, encoding: 'utf8' }).split('\n').filter((f) => /\.(ts|tsx|mjs|js)$/.test(f) && !/\.test\./.test(f));
-  const setters = tracked.filter((file) => {
-    const text = fs.readFileSync(path.join(REPO, file), 'utf8');
-    return /consentCookieHeader\(|clearConsentCookieHeader\(/.test(text) && file !== 'src/lib/sources/consent.ts';
-  });
-  assert.deepEqual(setters, ['src/app/api/sources/consent/route.ts']);
+  const callers = (call: RegExp) => tracked.filter((file) => call.test(fs.readFileSync(path.join(REPO, file), 'utf8')) && file !== 'src/lib/sources/consent.ts');
+  // R8 W2 (#644): the decision route is a second consent write. Allow moves one
+  // source to On through the same store and the same cookie, so `decision.ts`
+  // may set the cookie, through `consentCookieHeader` only; it never clears it
+  // (R6-WEB-D's consent of 2026-10-22, condition 1; its conditions 2 and 3 are
+  // tests in `decision/decision-route-driven.test.ts`).
+  assert.deepEqual(callers(/consentCookieHeader\(/), ['src/app/api/sources/consent/route.ts', 'src/lib/sources/decision.ts']);
+  assert.deepEqual(callers(/clearConsentCookieHeader\(/), ['src/app/api/sources/consent/route.ts']);
 });

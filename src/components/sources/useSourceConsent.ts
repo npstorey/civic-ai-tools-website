@@ -22,11 +22,20 @@
  * race the guard could not see) is reported here by the streaming hooks
  * (`reportConsentRefusal`); every subscribed surface sees `refusals` move and
  * shows the card, and resubmits after Allow.
+ *
+ * THE PAUSE (R8 W2, #644). A load of an Ask-first source that stops to ask
+ * the reader is reported here by the streaming hooks (`reportConsentPause`),
+ * so the Sources panel's row for that source shows the same card the run's
+ * steps show, and an answer given in either is seen by both: the slot holds
+ * the pause, the decision once one is posted (`decideConsentPause`, to
+ * `/api/sources/consent/decision`), and whether the run has moved on. Only a
+ * pause that holds is kept; one that could not ask has nothing to answer.
  */
 
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import type { FlowsStatement } from '../../lib/flows/statement.ts';
 import type { ConsentNotice } from '../../lib/sources/consent.ts';
+import type { ConsentPausePayload } from '../../lib/streaming.ts';
 
 export type SourceStateValue = 'on' | 'ask-first' | 'off';
 
@@ -57,9 +66,26 @@ export interface ConsentSnapshot {
   refusals: number;
   /** The last write failed: reader-facing, never a raw error. */
   failed: boolean;
+  /** The pause waiting for the reader's answer, or answered, in the run going on (R8 W2). */
+  pause: PendingPause | null;
+  /** This instance's `SOURCE_ROUTING` mode, from the decision route's GET; `null` until read, and on any failure. */
+  routing: 'in-loop' | 'all-sources' | null;
 }
 
-const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false };
+/** A pause the hooks reported, and what has happened to it since. */
+export interface PendingPause {
+  payload: ConsentPausePayload;
+  /** An answer is being posted. */
+  deciding: boolean;
+  /** The answer the decision route accepted. */
+  decision?: 'allow' | 'not-now';
+  /** Why the route did not accept one: the question no longer waits, it was answered already, or anything else. */
+  failure?: 'gone' | 'decided' | 'other';
+  /** The run has moved on, or the hold's time is up. */
+  ended: boolean;
+}
+
+const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pause: null, routing: null };
 
 let snapshot: ConsentSnapshot = EMPTY;
 const listeners = new Set<() => void>();
@@ -78,6 +104,7 @@ function subscribe(listener: () => void): () => void {
     if (listeners.size === 0) {
       snapshot = EMPTY;
       inflight = null;
+      clearPauseTimer();
     }
   };
 }
@@ -85,18 +112,31 @@ function subscribe(listener: () => void): () => void {
 const getSnapshot = () => snapshot;
 const getServerSnapshot = () => EMPTY;
 
-/** Read the status and the statement again. Concurrent callers share one read. */
+/** The instance's mode, or `null` for anything but an answer naming one; a failure here fails no other read. */
+async function readRouting(): Promise<ConsentSnapshot['routing']> {
+  try {
+    const response = await fetch('/api/sources/consent/decision', { method: 'GET', headers: { Accept: 'application/json' } });
+    if (!response.ok) return null;
+    const routing = ((await response.json()) as { routing?: unknown } | null)?.routing;
+    return routing === 'in-loop' || routing === 'all-sources' ? routing : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Read the status, the statement and the instance's mode again. Concurrent callers share one read. */
 export function refreshConsent(): Promise<void> {
   if (inflight) return inflight;
   inflight = (async () => {
     try {
-      const [status, statement] = await Promise.all([
+      const [status, statement, routing] = await Promise.all([
         fetch('/api/sources/consent', { method: 'GET', headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)),
         fetch('/api/flows', { method: 'GET', headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)),
+        readRouting(),
       ]);
-      set({ loaded: true, status: status as ConsentStatus | null, statement: statement as FlowsStatement | null });
+      set({ loaded: true, status: status as ConsentStatus | null, statement: statement as FlowsStatement | null, routing });
     } catch {
-      set({ loaded: true, status: null, statement: null });
+      set({ loaded: true, status: null, statement: null, routing: null });
     } finally {
       inflight = null;
     }
@@ -108,6 +148,69 @@ export function refreshConsent(): Promise<void> {
 export function reportConsentRefusal(): void {
   set({ refusals: snapshot.refusals + 1, status: snapshot.status ? { ...snapshot.status, inForce: false } : null });
   void refreshConsent();
+}
+
+// --- The pause (R8 W2) -----------------------------------------------------------
+
+let pauseTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearPauseTimer(): void {
+  if (pauseTimer !== null) clearTimeout(pauseTimer);
+  pauseTimer = null;
+}
+
+function updatePause(key: string, change: Partial<PendingPause>): void {
+  const current = snapshot.pause;
+  if (!current || current.payload.key !== key) return;
+  set({ pause: { ...current, ...change } });
+}
+
+/**
+ * A pause the run reported, or `null` for any other line of the same run: a
+ * pause that holds takes the slot; a later line, or a pause that does not
+ * hold, ends a pause still in it.
+ * Nothing changes, and nothing re-renders, when there is no pause to end.
+ */
+export function reportConsentPause(payload: ConsentPausePayload | null | undefined): void {
+  // Any other line, or a pause that could not ask: the run has moved past the one in the slot.
+  if (!payload || !payload.holds || typeof payload.key !== 'string') {
+    if (snapshot.pause && !snapshot.pause.ended) {
+      clearPauseTimer();
+      set({ pause: { ...snapshot.pause, ended: true } });
+    }
+    return;
+  }
+  const key = payload.key;
+  clearPauseTimer();
+  set({ pause: { payload, deciding: false, ended: false } });
+  // The hold's end: the question no longer waits, whatever the stream says next.
+  const wait = Date.parse(payload.expiresAt) - Date.now();
+  if (Number.isFinite(wait)) {
+    pauseTimer = setTimeout(() => updatePause(key, { ended: true }), Math.max(0, wait));
+    (pauseTimer as { unref?: () => void }).unref?.();
+  }
+}
+
+/** Post the reader's answer to a pause, and keep what the route said. Allow also reads the consent again, so the panel shows the source On. */
+export async function decideConsentPause(key: string, decision: 'allow' | 'not-now'): Promise<void> {
+  updatePause(key, { deciding: true });
+  let status = 0;
+  try {
+    const response = await fetch('/api/sources/consent/decision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, decision }),
+    });
+    status = response.status;
+  } catch {
+    status = 0;
+  }
+  if (status === 200) {
+    updatePause(key, { deciding: false, decision });
+    if (decision === 'allow') void refreshConsent();
+    return;
+  }
+  updatePause(key, { deciding: false, failure: status === 404 ? 'gone' : status === 409 ? 'decided' : 'other' });
 }
 
 /** The configured sources, in the statement's (manifest) order. */

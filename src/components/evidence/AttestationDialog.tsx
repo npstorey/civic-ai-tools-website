@@ -641,6 +641,13 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
   // = A): the replays ran without them, which the score above cannot show.
   // Displayed only; no signed run carries it.
   const lacking = [...new Set(completedRuns.flatMap((r) => r.offeredSet?.lacking ?? []))].map((id) => displayNameForSource(id));
+  // Sources the record shows loaded but does not list among those offered,
+  // which its stated set leaves out (#644 W2 [B]): the replays ran without
+  // them too, and `lacking`'s "This site does not offer it" would be false.
+  // Displayed only; no signed run carries it.
+  const loadedUnstated = [...new Set(completedRuns.flatMap((r) => (r.offeredSet as { loadedUnstated?: string[] } | undefined)?.loadedUnstated ?? []))]
+    .filter((id) => !completedRuns.some((r) => r.offeredSet?.lacking.includes(id)))
+    .map((id) => displayNameForSource(id));
   return (
     <>
       <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
@@ -754,6 +761,11 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
           {lacking.length > 0 && (
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>
               {`The original analysis could use ${lacking.length === 1 ? lacking[0] : `${lacking.slice(0, -1).join(', ')} and ${lacking[lacking.length - 1]}`}. This site does not offer ${lacking.length === 1 ? 'it' : 'them'}, so these replays ran without ${lacking.length === 1 ? 'it' : 'them'}.`}
+            </p>
+          )}
+          {loadedUnstated.length > 0 && (
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>
+              {`The record shows ${loadedUnstated.length === 1 ? loadedUnstated[0] : `${loadedUnstated.slice(0, -1).join(', ')} and ${loadedUnstated[loadedUnstated.length - 1]}`} loaded but does not list ${loadedUnstated.length === 1 ? 'it' : 'them'} among the sources offered, so these replays ran without ${loadedUnstated.length === 1 ? 'it' : 'them'}.`}
             </p>
           )}
 

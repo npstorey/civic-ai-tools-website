@@ -6,6 +6,7 @@ import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import { consentInForce } from '@/lib/sources/consent-gate';
+import { streamingRoutePause } from '@/lib/sources/decision';
 import { createInLoopRouting, directorySet, entersInLoop, sourceRoutingMode } from '@/lib/mcp/routing-mode';
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
@@ -271,8 +272,10 @@ export async function POST(request: NextRequest) {
     // composition below, exactly as before the setting existed.
     const routingMode = sourceRoutingMode();
     const directory = routingMode === 'in-loop' ? directorySet(configured, consent) : [];
+    // An Ask-first load pauses to ask the reader (#644 W2): this route holds
+    // a stream, so it hands the run a pause; the JSON route and replay do not.
     const inLoop = entersInLoop(routingMode, directory)
-      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, selection })
+      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, selection, pause: streamingRoutePause(consent, session, configured) })
       : undefined;
     const composition = inLoop
       ? { prompt: inLoop.firstSystemPrompt, assertedDate: inLoop.assertedDate, sourcesOffered: inLoop.sourcesOffered, components: inLoop.components() }
