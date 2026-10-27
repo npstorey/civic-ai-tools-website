@@ -161,8 +161,9 @@ const DEFAULT_PORTS: Record<string, number> = { 'http:': 80, 'https:': 443 };
  * library's own seam (`src/lib/signin-proxy.ts`) and something has to make the
  * same decision there. undici does not export the one it makes, so this is a
  * deliberate port of it — `EnvHttpProxyAgent#shouldProxy` and `#parseNoProxy`
- * at undici 6.28.0, the version this repository pins — and every property it
- * carries is one of undici's, not one chosen here:
+ * at undici 6.28.0, re-read unchanged at 6.29.1, the version this repository
+ * pins — and every property it carries is one of undici's, not one chosen
+ * here:
  *
  *   - the host is taken with its port stripped and lower-cased, and an IPv6
  *     literal keeps its brackets, which is why `DEFAULT_NO_PROXY_HOSTS` spells

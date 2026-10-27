@@ -47,10 +47,12 @@ const UNRESOLVABLE = 'proxy-probe.invalid';
 
 /**
  * The undici release `shouldProxyDestination` (`src/lib/outbound-proxy.ts`)
- * was ported from, line for line. See the test beside the NO_PROXY agreement
+ * was ported from, line for line, or last re-read against: ported at 6.28.0,
+ * re-read at 6.29.1, where `lib/dispatcher/env-http-proxy-agent.js` is
+ * byte-identical to 6.28.0's. See the test beside the NO_PROXY agreement
  * table for what changing this costs.
  */
-const PORTED_FROM_UNDICI = '6.28.0';
+const PORTED_FROM_UNDICI = '6.29.1';
 const TARGET = `http://${UNRESOLVABLE}/tsr`;
 const SAMPLE_HASH = 'acdb56712cc0e735589e39d485dcd2c3d34a611b6752ab2f8b703e13008a3004';
 
@@ -1142,7 +1144,7 @@ import { EnvHttpProxyAgent } from 'undici';
 // under test has first been shown to carry a proxy-aware dispatcher whose
 // routing sends that host to the proxy.
 
-/** The SDK's own nested undici (7.29.0 at 1.10.2 and at 3.5.1), resolved the
+/** The SDK's own nested undici (7.29.0 at 1.10.2, 7.30.1 at 3.5.1), resolved the
  *  way the SDK resolves it — so "the SDK's agent" is identified by class, not
  *  by name. */
 const SdkUndici = createRequire(new URL('../node_modules/@vercel/sandbox/package.json', import.meta.url))('undici');

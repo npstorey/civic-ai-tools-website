@@ -15,10 +15,10 @@ const standalone = process.env.BUILD_STANDALONE === '1';
 
 const nextConfig: NextConfig = {
   ...(standalone ? { output: 'standalone' as const } : {}),
-  // `next dev` writes a block of agent rules into the root CLAUDE.md (or an
-  // AGENTS.md) on every start unless this is `false`; the root CLAUDE.md is
-  // this repository's own, tracked and reviewed, and a generated block in it
-  // is an uncommitted change on every dev run.
+  // `next dev` writes a block of agent rules on every start unless this is
+  // `false`: through 16.3 into the root CLAUDE.md, which is this repository's
+  // own, tracked and reviewed; from 16.4 into a root AGENTS.md it creates.
+  // Either is an uncommitted change on every dev run.
   agentRules: false,
   images: {
     remotePatterns: [
