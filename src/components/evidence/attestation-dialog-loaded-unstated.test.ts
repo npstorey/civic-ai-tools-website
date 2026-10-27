@@ -1,5 +1,5 @@
 // #644 W2 [B], R6-WEB-D's conditions (A): the consistency dialog names a
-// source the original analysis loaded after it was allowed when asked, in
+// source the record shows loaded but does not list among those offered, in
 // words of its own, beside `lacking`'s line; and the attestation it signs does
 // not move.
 //
@@ -62,8 +62,8 @@ const ATTESTATIONS_PATH = `/api/records/${SLUG}/attestations`;
 
 /** The sentence `lacking` has carried since R6 W1, for one source. */
 const LACKING = (name: string) => `The original analysis could use ${name}. This site does not offer it, so these replays ran without it.`;
-/** The new sentence, for one source. */
-const LOADED_UNSTATED = (name: string) => `The original analysis also loaded ${name} after it was allowed when asked. The record does not list it as offered, so these replays ran without it.`;
+/** The new sentence, for one source: what the record shows, and nothing the record does not carry (card B, ruled 2026-10-27). */
+const LOADED_UNSTATED = (name: string) => `The record shows ${name} loaded but does not list it among the sources offered, so these replays ran without it.`;
 
 let offeredSet: Record<string, unknown> = {};
 let posted: string[] = [];
@@ -115,7 +115,7 @@ async function runConsistency(set: Record<string, unknown>): Promise<Surface> {
 const BOTH = { from: 'sourcesOffered', sources: ['socrata'], lacking: ['nyc-charter'], loadedUnstated: ['boston-opencontext'] };
 const LACKING_ONLY = { from: 'sourcesOffered', sources: ['socrata'], lacking: ['nyc-charter'] };
 
-test('[B]: a source loaded after it was allowed when asked gets its own sentence; lacking keeps its own; neither names the other\'s source', async () => {
+test('[B]: a source the record shows loaded but not offered gets its own sentence; lacking keeps its own; neither names the other\'s source', async () => {
   const dialog = await runConsistency(BOTH);
   const text = dialog.text();
   const charter = displayNameForSource('nyc-charter');
@@ -123,7 +123,7 @@ test('[B]: a source loaded after it was allowed when asked gets its own sentence
   assert.ok(text.includes(LACKING(charter)), `lacking's sentence is not shown for ${charter}: ${text.slice(-800)}`);
   assert.ok(text.includes(LOADED_UNSTATED(boston)), `the new sentence is not shown for ${boston}: ${text.slice(-800)}`);
   const lackingLine = text.slice(text.indexOf('The original analysis could use'), text.indexOf('ran without it.', text.indexOf('The original analysis could use')));
-  const loadedLine = text.slice(text.indexOf('The original analysis also loaded'), text.indexOf('ran without it.', text.indexOf('The original analysis also loaded')));
+  const loadedLine = text.slice(text.indexOf('The record shows'), text.indexOf('ran without it.', text.indexOf('The record shows')));
   assert.ok(!lackingLine.includes(boston), 'lacking\'s sentence names the allowed source');
   assert.ok(!loadedLine.includes(charter), 'the new sentence names the source this site does not offer');
   dialog.unmount();
@@ -131,7 +131,7 @@ test('[B]: a source loaded after it was allowed when asked gets its own sentence
 
 test('[B]: with lacking alone the dialog reads as before: no new sentence', async () => {
   const dialog = await runConsistency(LACKING_ONLY);
-  assert.ok(!dialog.text().includes('The original analysis also loaded'), 'the new sentence appears with no field');
+  assert.ok(!dialog.text().includes('The record shows'), 'the new sentence appears with no field');
   dialog.unmount();
 });
 

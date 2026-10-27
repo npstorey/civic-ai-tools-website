@@ -641,7 +641,7 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
   // = A): the replays ran without them, which the score above cannot show.
   // Displayed only; no signed run carries it.
   const lacking = [...new Set(completedRuns.flatMap((r) => r.offeredSet?.lacking ?? []))].map((id) => displayNameForSource(id));
-  // Sources the original analysis loaded after they were allowed when asked,
+  // Sources the record shows loaded but does not list among those offered,
   // which its stated set leaves out (#644 W2 [B]): the replays ran without
   // them too, and `lacking`'s "This site does not offer it" would be false.
   // Displayed only; no signed run carries it.
@@ -765,7 +765,7 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
           )}
           {loadedUnstated.length > 0 && (
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>
-              {`The original analysis also loaded ${loadedUnstated.length === 1 ? loadedUnstated[0] : `${loadedUnstated.slice(0, -1).join(', ')} and ${loadedUnstated[loadedUnstated.length - 1]}`} after ${loadedUnstated.length === 1 ? 'it was' : 'they were'} allowed when asked. The record does not list ${loadedUnstated.length === 1 ? 'it' : 'them'} as offered, so these replays ran without ${loadedUnstated.length === 1 ? 'it' : 'them'}.`}
+              {`The record shows ${loadedUnstated.length === 1 ? loadedUnstated[0] : `${loadedUnstated.slice(0, -1).join(', ')} and ${loadedUnstated[loadedUnstated.length - 1]}`} loaded but does not list ${loadedUnstated.length === 1 ? 'it' : 'them'} among the sources offered, so these replays ran without ${loadedUnstated.length === 1 ? 'it' : 'them'}.`}
             </p>
           )}
 
