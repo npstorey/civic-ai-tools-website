@@ -118,13 +118,21 @@ const src = (id: string) => {
 };
 const A = 'boston-opencontext';
 const B = 'data-commons';
-const KEY_A = 'aaaaaaaa0123456789abcdef4b1d2c3e'; // gitleaks:allow
-const KEY_B = 'bbbbbbbb0123456789abcdef4b1d2c3e'; // gitleaks:allow
+// A key per pause per test, as the server mints one per pause: the surface harness can leave a
+// subscription on the bus after a surface unmounts (measured: two listeners left after (c)), so the
+// bus is not always emptied between tests, and a key reused across tests would find an earlier entry.
+let run = 0;
+let KEY_A = '';
+let KEY_B = '';
+const keyOf = (prefix: string) => `${prefix}${String(run).padStart(8, '0')}89abcdef4b1d2c3e`;
 const pauseOf = (id: string, key: string) => ({ key, source: src(id), outbound: [], links: statement.links, expiresAt: new Date(Date.now() + 60_000).toISOString(), holds: true });
 
 function answers() {
   streams = [];
   decisions = [];
+  run += 1;
+  KEY_A = keyOf('aaaaaaaa');
+  KEY_B = keyOf('bbbbbbbb');
   return installFetch(ORIGIN, {
     '/api/models': () => new Response(JSON.stringify({ models: [{ id: 'fixture/model', name: 'Fixture model' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
     '/api/flows': () => flowsRoute.GET(),
