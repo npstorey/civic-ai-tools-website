@@ -192,12 +192,12 @@ export async function PATCH(request: Request): Promise<Response> {
   return json({ inForce: true, store: 'row', flowsVersion: hash, states: row.states, notices: [] }, 200);
 }
 
-export async function DELETE(request?: Request): Promise<Response> {
+export async function DELETE(request: Request): Promise<Response> {
   const session = await sessionOf();
   const dbId = session?.user?.dbId;
   if (dbId) {
     await deleteConsentRow(dbId);
     return json({ inForce: false, store: 'row' }, 200);
   }
-  return json({ inForce: false, store: 'cookie' }, 200, clearConsentCookieHeader(request ? isSecureRequest(request) : true));
+  return json({ inForce: false, store: 'cookie' }, 200, clearConsentCookieHeader(isSecureRequest(request)));
 }
