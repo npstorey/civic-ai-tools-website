@@ -36,7 +36,7 @@ import { PANEL_PRIVACY_LINK } from '@/lib/sources/copy';
 import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
 import { KeptByLines } from '@/components/sources/KeptByLine';
 import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
-import { decideConsentPause, useSourceConsent } from '@/components/sources/useSourceConsent';
+import { decideConsentPause, pauseEntry, useSourceConsent } from '@/components/sources/useSourceConsent';
 
 /** The card's own sentences, each checked against the consent-wording research. */
 export const CONSENT_STEP_TEXT = {
@@ -82,7 +82,8 @@ const BUTTON: CSSProperties = {
 
 export default function ConsentStep({ pause, ended = false }: { pause: ConsentPausePayload; ended?: boolean }) {
   const consent = useSourceConsent({ load: false });
-  const slot = pause.key !== undefined && consent.pause?.payload.key === pause.key ? consent.pause : null;
+  // This card's own entry on the bus, by its key: a later pause in the run never takes its answer (fix round 2, item 1).
+  const slot = pauseEntry(consent.pauses, pause.key);
   const source = pause.source;
   const name = readerSourceName(source);
   const lines = sourceRowLines(source);

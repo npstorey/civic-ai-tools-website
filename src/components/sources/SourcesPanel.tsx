@@ -124,7 +124,11 @@ export default function SourcesPanel() {
               })()}
               {state === 'ask-first' && <div>{consent.routing === 'in-loop' ? ASK_FIRST_MEANS_WITH_PAUSE : ASK_FIRST_MEANS}</div>}
               {/* R8 W2 (#644): a question is waiting for an answer about this source; the run's own card is the same. */}
-              {consent.pause && !consent.pause.ended && consent.pause.payload.source.sourceId === source.sourceId ? <ConsentStep pause={consent.pause.payload} /> : null}
+              {(() => {
+                // At most one entry is open at a time: a later pause ends every other (`reportConsentPause`).
+                const open = Object.values(consent.pauses).find((p) => !p.ended && p.payload.source.sourceId === source.sourceId);
+                return open ? <ConsentStep pause={open.payload} /> : null;
+              })()}
             </li>
           );
         })}

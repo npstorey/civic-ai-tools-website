@@ -23,13 +23,19 @@
  * (`reportConsentRefusal`); every subscribed surface sees `refusals` move and
  * shows the card, and resubmits after Allow.
  *
- * THE PAUSE (R8 W2, #644). A load of an Ask-first source that stops to ask
+ * THE PAUSES (R8 W2, #644). A load of an Ask-first source that stops to ask
  * the reader is reported here by the streaming hooks (`reportConsentPause`),
  * so the Sources panel's row for that source shows the same card the run's
- * steps show, and an answer given in either is seen by both: the slot holds
- * the pause, the decision once one is posted (`decideConsentPause`, to
- * `/api/sources/consent/decision`), and whether the run has moved on. Only a
- * pause that holds is kept; one that could not ask has nothing to answer.
+ * steps show, and an answer given in either is seen by both. `pauses` keeps
+ * every pause the run reported, by its key (fix round 2, item 1): each entry
+ * holds its own pause, the decision once one is posted (`decideConsentPause`,
+ * to `/api/sources/consent/decision`), and whether the run has moved past it,
+ * with its own expiry timer. A later line of the run, or a later pause, ends
+ * the entries still open and never clears an answer already recorded, so a
+ * card answered before a second source paused keeps its own outcome. Entries
+ * are kept until the last surface leaves the page: a run holds once per
+ * source. Only a pause that holds is kept; one that could not ask has nothing
+ * to answer.
  */
 
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
@@ -66,8 +72,8 @@ export interface ConsentSnapshot {
   refusals: number;
   /** The last write failed: reader-facing, never a raw error. */
   failed: boolean;
-  /** The pause waiting for the reader's answer, or answered, in the run going on (R8 W2). */
-  pause: PendingPause | null;
+  /** Every pause the run reported, waiting for the reader's answer or answered, by its key (R8 W2). */
+  pauses: Record<string, PendingPause>;
   /** This instance's `SOURCE_ROUTING` mode, from the decision route's GET; `null` until read, and on any failure. */
   routing: 'in-loop' | 'all-sources' | null;
 }
@@ -85,7 +91,7 @@ export interface PendingPause {
   ended: boolean;
 }
 
-const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pause: null, routing: null };
+const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pauses: {}, routing: null };
 
 let snapshot: ConsentSnapshot = EMPTY;
 const listeners = new Set<() => void>();
@@ -104,7 +110,7 @@ function subscribe(listener: () => void): () => void {
     if (listeners.size === 0) {
       snapshot = EMPTY;
       inflight = null;
-      clearPauseTimer();
+      clearPauseTimers();
     }
   };
 }
@@ -152,42 +158,72 @@ export function reportConsentRefusal(): void {
 
 // --- The pause (R8 W2) -----------------------------------------------------------
 
-let pauseTimer: ReturnType<typeof setTimeout> | null = null;
+/** Each entry's own expiry timer, by key. */
+const pauseTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-function clearPauseTimer(): void {
-  if (pauseTimer !== null) clearTimeout(pauseTimer);
-  pauseTimer = null;
+function clearPauseTimer(key: string): void {
+  const timer = pauseTimers.get(key);
+  if (timer !== undefined) clearTimeout(timer);
+  pauseTimers.delete(key);
+}
+
+function clearPauseTimers(): void {
+  for (const timer of pauseTimers.values()) clearTimeout(timer);
+  pauseTimers.clear();
+}
+
+/** The entry for `key`, if the run reported one: an own property only, never one an object inherits. */
+export function pauseEntry(pauses: Record<string, PendingPause>, key: string | undefined): PendingPause | null {
+  return key !== undefined && Object.prototype.hasOwnProperty.call(pauses, key) ? pauses[key] : null;
 }
 
 function updatePause(key: string, change: Partial<PendingPause>): void {
-  const current = snapshot.pause;
-  if (!current || current.payload.key !== key) return;
-  set({ pause: { ...current, ...change } });
+  const current = pauseEntry(snapshot.pauses, key);
+  if (!current) return;
+  set({ pauses: { ...snapshot.pauses, [key]: { ...current, ...change } } });
+}
+
+/** End every entry still open but `except`; the answers they hold stay. Returns the map, or `null` when none was open. */
+function endOpen(pauses: Record<string, PendingPause>, except?: string): Record<string, PendingPause> | null {
+  let next: Record<string, PendingPause> | null = null;
+  for (const [key, entry] of Object.entries(pauses)) {
+    if (key === except || entry.ended) continue;
+    clearPauseTimer(key);
+    next = next ?? { ...pauses };
+    next[key] = { ...entry, ended: true };
+  }
+  return next;
 }
 
 /**
  * A pause the run reported, or `null` for any other line of the same run: a
- * pause that holds takes the slot; a later line, or a pause that does not
- * hold, ends a pause still in it.
- * Nothing changes, and nothing re-renders, when there is no pause to end.
+ * pause that holds adds its entry, and ends every other entry still open; a
+ * later line, or a pause that does not hold, ends every entry still open. An
+ * entry ended keeps its decision or failure. A pause reported again under a
+ * key already held keeps what its entry recorded.
+ * Nothing changes, and nothing re-renders, when there is no entry to end.
  */
 export function reportConsentPause(payload: ConsentPausePayload | null | undefined): void {
-  // Any other line, or a pause that could not ask: the run has moved past the one in the slot.
+  // Any other line, or a pause that could not ask: the run has moved past every entry still open.
   if (!payload || !payload.holds || typeof payload.key !== 'string') {
-    if (snapshot.pause && !snapshot.pause.ended) {
-      clearPauseTimer();
-      set({ pause: { ...snapshot.pause, ended: true } });
-    }
+    const ended = endOpen(snapshot.pauses);
+    if (ended) set({ pauses: ended });
     return;
   }
   const key = payload.key;
-  clearPauseTimer();
-  set({ pause: { payload, deciding: false, ended: false } });
+  const prior = pauseEntry(snapshot.pauses, key);
+  const others = endOpen(snapshot.pauses, key) ?? snapshot.pauses;
+  clearPauseTimer(key);
+  set({ pauses: { ...others, [key]: prior ? { ...prior, payload, ended: false } : { payload, deciding: false, ended: false } } });
   // The hold's end: the question no longer waits, whatever the stream says next.
   const wait = Date.parse(payload.expiresAt) - Date.now();
   if (Number.isFinite(wait)) {
-    pauseTimer = setTimeout(() => updatePause(key, { ended: true }), Math.max(0, wait));
-    (pauseTimer as { unref?: () => void }).unref?.();
+    const timer = setTimeout(() => {
+      pauseTimers.delete(key);
+      updatePause(key, { ended: true });
+    }, Math.max(0, wait));
+    (timer as { unref?: () => void }).unref?.();
+    pauseTimers.set(key, timer);
   }
 }
 
