@@ -13,7 +13,8 @@
 // that LOOKS declarative but is really a pattern matched against generated
 // route strings; nothing in the build validates it.
 //
-// The installed Next (16.3.0) consumes these keys in two places:
+// The installed Next (16.4.3; first read at 16.3.0, the key side re-read
+// unchanged at 16.4.3) consumes these keys in two places:
 //
 //   1. Webpack builds — next/dist/build/collect-build-traces.js
 //      ("apply-include-excludes" span): each key is compiled with
@@ -28,7 +29,7 @@
 //
 //   2. Turbopack builds (this repo's default builder) — the matching lives in
 //      the native binary; its source is crates/next-api/src/nft.rs at the
-//      installed version's tag (v16.3.0). Keys are compiled with
+//      installed version's tag (v16.4.3). Keys are compiled with
 //      `Glob::new(key, GlobOptions { contains: true, .. })` and tested against
 //      a DIFFERENT string shape: `app{originalName}` for includes (e.g.
 //      'app/api/query-notebook/route' — groups and the trailing segment are

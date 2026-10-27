@@ -35,8 +35,9 @@ RE-READ on a bump, not merely re-run"** and the comment beneath it (`CLAUDE.md:2
 was written). Read it there. This file loads when `package.json` or `package-lock.json` is opened,
 where a bump is written, and adds only what that passage does not carry:
 
-- **The pin is exact.** `undici` is pinned in `package.json` at `6.28.0`, not a range, which is
-  what makes "ported from 6.28.0" a statement about the installed tree.
+- **The pin is exact.** `undici` is pinned in `package.json` at `6.29.1`, not a range, which is
+  what makes `PORTED_FROM_UNDICI` (ported at 6.28.0, re-read at 6.29.1) a statement about the
+  installed tree.
 - **The table has twelve cases and a two-way control.** The agreement test, *"the sign-in path and
   the fetch path exempt exactly the same destinations"* in `scripts/outbound-proxy.test.mjs`, fails
   if the table stops carrying both outcomes: without a case that proxies and a case that is exempt,
