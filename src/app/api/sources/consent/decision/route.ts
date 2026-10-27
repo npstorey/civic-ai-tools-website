@@ -12,10 +12,14 @@ import { sourceRoutingMode } from '@/lib/mcp/source-routing-mode';
  *         200 `{ decision, sourceId }` on each decision; `allow` also moves
  *         that one source to On in the reader's consent (the row, or the
  *         cookie set on this response). 400 for a body it cannot read; 404
- *         for a key the store does not hold or no longer holds; 409 for a key
- *         already decided; 403 for a key minted under another account; 503
- *         when the store fails, or with `RATE_LIMIT_SECRET` unset (the
- *         streaming routes' refusal, before any key is read).
+ *         for a key the store does not hold or no longer holds; 403 for a key
+ *         minted under another account, checked before 409 for a key already
+ *         decided; 503 when the store fails, or with `RATE_LIMIT_SECRET`
+ *         unset (the streaming routes' refusal, before any key is read).
+ *         The decision is written before the consent is moved, so a refused
+ *         write moves nothing. 200 `{ decision: 'allow', sourceId, moved:
+ *         false }` when the decision was saved but the consent could not be
+ *         moved; `moved` is absent otherwise.
  *   GET   `{ routing }`, this instance's `SOURCE_ROUTING` mode (`in-loop` or
  *         `all-sources`), uncached: the Sources panel says a question may
  *         stop to ask only where one can (fix round 1, item 1). Read through

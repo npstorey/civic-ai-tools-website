@@ -49,6 +49,8 @@ export const CONSENT_STEP_TEXT = {
   wait: 'The question waits up to a minute for your answer.',
   reach: (hosts: readonly string[]) => `It would reach: ${hosts.join(', ')}.`,
   allowed: 'You chose Allow. It is On now.',
+  /** Allow was saved, and the question uses the source, but its consent could not be turned On (fix round 2, item 2). */
+  allowedNotMoved: 'You chose Allow. This question is sent to it, but it could not be turned On for later questions. You can turn it On in the panel.',
   declined: 'You chose Not now. Nothing is sent to it for this question.',
   ended: 'The question went on without your answer, so it did not use this source.',
   gone: 'This question is no longer waiting for an answer.',
@@ -91,7 +93,7 @@ export default function ConsentStep({ pause, ended = false }: { pause: ConsentPa
   const linksOnly: FlowsStatement = { version: '', date: '', recipients: [], sources: [], links: pause.links };
 
   const outcome = slot?.decision === 'allow'
-    ? CONSENT_STEP_TEXT.allowed
+    ? (slot.moved === false ? CONSENT_STEP_TEXT.allowedNotMoved : CONSENT_STEP_TEXT.allowed)
     : slot?.decision === 'not-now'
       ? CONSENT_STEP_TEXT.declined
       : slot?.failure === 'gone'

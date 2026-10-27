@@ -85,6 +85,8 @@ export interface PendingPause {
   deciding: boolean;
   /** The answer the decision route accepted. */
   decision?: 'allow' | 'not-now';
+  /** `false` when the route saved Allow but could not turn the source On (fix round 2, item 2); absent otherwise. */
+  moved?: false;
   /** Why the route did not accept one: the question no longer waits, it was answered already, or anything else. */
   failure?: 'gone' | 'decided' | 'other';
   /** The run has moved on, or the hold's time is up. */
@@ -231,6 +233,7 @@ export function reportConsentPause(payload: ConsentPausePayload | null | undefin
 export async function decideConsentPause(key: string, decision: 'allow' | 'not-now'): Promise<void> {
   updatePause(key, { deciding: true });
   let status = 0;
+  let moved: boolean | undefined;
   try {
     const response = await fetch('/api/sources/consent/decision', {
       method: 'POST',
@@ -238,11 +241,15 @@ export async function decideConsentPause(key: string, decision: 'allow' | 'not-n
       body: JSON.stringify({ key, decision }),
     });
     status = response.status;
+    if (status === 200) {
+      const body = (await response.json().catch(() => null)) as { moved?: unknown } | null;
+      if (body?.moved === false) moved = false;
+    }
   } catch {
     status = 0;
   }
   if (status === 200) {
-    updatePause(key, { deciding: false, decision });
+    updatePause(key, { deciding: false, decision, ...(moved === false ? { moved: false as const } : {}) });
     if (decision === 'allow') void refreshConsent();
     return;
   }

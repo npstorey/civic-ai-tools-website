@@ -40,14 +40,20 @@
  * streaming routes refuse without it, so a run that reaches a pause has it.
  *
  * THE DECISION (`answerConsentDecision`, `POST /api/sources/consent/decision`).
- * `allow` moves that one source to On through R6's store, from its exported
- * pieces, as `PUT /api/sources/consent` composes them: the row (kept with its
- * `flowsHash` and `flowsStatement`) for a session with a `dbId`, else the
- * cookie (kept with its `flows` and every other source's entry). `not-now`
- * moves nothing. The decision is written with `XX KEEPTTL`: a plain `SET`
- * would clear the entry's expiry, and `KEEPTTL` alone would re-create an entry
- * that had expired, so neither the privacy page's "expire 10 minutes after it
- * is made" nor a 404 for an expired key would hold.
+ * A key minted under another account is refused (403) before a decided key
+ * (409), so a stranger learns nothing from the status. The decision is
+ * written first, and only once it is written does `allow` move that one
+ * source to On (fix round 2, item 2): a write that fails or finds no entry
+ * leaves the consent as it was. The move goes through R6's store, from its
+ * exported pieces, as `PUT /api/sources/consent` composes them: the row (kept
+ * with its `flowsHash` and `flowsStatement`) for a session with a `dbId`,
+ * else the cookie (kept with its `flows` and every other source's entry). A
+ * move that fails after the decision was written answers 200 with
+ * `moved: false`: the run goes on with the source, and the consent did not
+ * change. `not-now` moves nothing. The decision is written with `XX KEEPTTL`:
+ * a plain `SET` would clear the entry's expiry, and `KEEPTTL` alone would
+ * re-create an entry that had expired, so neither the privacy page's "expire
+ * 10 minutes after it is made" nor a 404 for an expired key would hold.
  *
  * NONE OF IT IS SIGNED. The key, the reader code and the decision reach no
  * span and no record (the rider); only the load's outcome does, as before.
@@ -321,7 +327,7 @@ export async function answerConsentDecision(
     return unsaved();
   }
   if (!isEntry(entry)) return unknown();
-  if (entry.decision !== undefined) return json({ error: 'An answer was already given for this question.', code: 'decision_made' }, 409);
+  // Whose key it is, before whether it was decided: a stranger learns nothing from the status.
   if (entry.reader !== undefined) {
     const dbId = session?.user?.dbId;
     const secret = readPauseSecret();
@@ -329,15 +335,9 @@ export async function answerConsentDecision(
       return json({ error: 'This answer can only be given from the account that asked the question.', code: 'decision_not_yours' }, 403);
     }
   }
+  if (entry.decision !== undefined) return json({ error: 'An answer was already given for this question.', code: 'decision_made' }, 409);
 
-  let setCookie: string | undefined;
-  if (decision === 'allow') {
-    try {
-      setCookie = await moveSourceOn(request, session, entry.sourceId);
-    } catch {
-      return unsaved();
-    }
-  }
+  // The decision first: a refused write leaves the consent as it was.
   let written: unknown;
   try {
     written = await store.set(name, { ...entry, decision }, { xx: true, keepTtl: true });
@@ -345,5 +345,15 @@ export async function answerConsentDecision(
     return unsaved();
   }
   if (written === null) return unknown();
+  if (decision !== 'allow') return json({ decision, sourceId: entry.sourceId }, 200);
+
+  let setCookie: string | undefined;
+  try {
+    setCookie = await moveSourceOn(request, session, entry.sourceId);
+  } catch {
+    // The run polls the decision, which is saved; only the consent did not move. No error's text (errors-out-of-logs.test.ts).
+    console.error('[consent-decision] the decision was saved, but the consent could not be moved');
+    return json({ decision, sourceId: entry.sourceId, moved: false }, 200);
+  }
   return json({ decision, sourceId: entry.sourceId }, 200, setCookie);
 }
