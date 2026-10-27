@@ -15,12 +15,12 @@
  *     for the record with no host and for the endpoint's definition (Stage D);
  *   - a source's recipient labelled by the source's name as the consent card
  *     labels it, "<name> (<place>)", an upstream host "The data host for
- *     <name> (<host>)" (Stage D); the row reads "<name>, N tool call(s)";
+ *     <name> (<host>)" (Stage D); the row reads "<name>: N tool call(s)" (Stage E);
  *   - "Receives: <receives>", the statement's words in its own tense;
  *   - "Who holds its logs: " and the panel's kept-by lines with how long
- *     (`KeptByLines`), the model row by the consent card's rule with its
- *     holder named first (Stage D: "<holder>; " then `KEPT_FOR_OPERATOR`, then
- *     the operator's statement when it is made).
+ *     (`KeptByLines`); the model row's lines the same way without how long,
+ *     "<holder>: <clause>." (Stages D and E), then the operator's statement
+ *     when it is made.
  * A record with no matching statement says once that this site cannot show
  * what each one keeps for it, then (D1) links "where a question can go". The
  * sources not reached are not rendered (ruling (i)); the model keeps them.
@@ -31,7 +31,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { WhereItWentModel, WhereReachedRow, WhereRecipientRow } from '../../lib/flows/where-it-went.ts';
 import { KeptByLines } from '@/components/sources/KeptByLine';
-import { ENDPOINT_NO_TRAINING, KEPT_FOR_OPERATOR } from '@/lib/sources/copy';
+import { ENDPOINT_NO_TRAINING } from '@/lib/sources/copy';
 import { formatModelName } from '@/lib/models';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -43,6 +43,9 @@ function dateWords(date: string): string {
   const month = MONTHS[Number(m[2]) - 1];
   return month ? `${Number(m[3])} ${month} ${m[1]}` : date;
 }
+
+/** A model service's reader name, by the id a record states (`gen_ai.system`); an id not here prints as the record names it. */
+const SERVICE_READER_NAME: Readonly<Record<string, string>> = { openrouter: 'OpenRouter' };
 
 /** The builder's place for a recipient the record holds no place for (`NOT_RECORDED` in where-it-went.ts). */
 const NOT_RECORDED_PLACE = 'not recorded';
@@ -60,18 +63,15 @@ const ROWS: CSSProperties = { margin: '8px 0 0', paddingLeft: '18px' };
 const RECIPIENTS: CSSProperties = { margin: '2px 0 0', paddingLeft: '18px' };
 
 /**
- * The model row's holders, by the consent card's rule (`ConsentCard.tsx`, `RecipientLine`), with one
- * change (Stage D, the seat's finding 5): this line's label asks who, so the holder is named before the
- * card's clause. The card itself, `KEPT_FOR_OPERATOR` and `ENDPOINT_NO_TRAINING` are unchanged.
+ * The model row's holders. The label asks who, so every holder is named (Stage D), in the shape every
+ * other holder line in the section has, "<holder>: <clause>." (Stage E): the same `KeptByLines` the
+ * source and runner rows use, without how long. When the operator makes its no-training statement, the
+ * consent card's sentence follows (`ENDPOINT_NO_TRAINING`, unedited, as is the card).
  */
 function ModelLogs({ recipient }: { recipient: WhereRecipientRow }) {
   const keptBy = recipient.keptBy ?? [];
-  const operator = keptBy.find((k) => k.operatorStatement);
-  // A holder named by the same host the line already names is not named twice.
-  const only = keptBy.length === 1 && keptBy[0].holder === recipient.place && keptBy[0].keeps === 'operator-states';
-  if (operator) return <>{`${operator.holder}; ${KEPT_FOR_OPERATOR}. ${ENDPOINT_NO_TRAINING}`}</>;
-  if (only) return <>{`${keptBy[0].holder}; ${KEPT_FOR_OPERATOR}.`}</>;
-  return <><KeptByLines keptBy={keptBy} />.</>;
+  const operator = keptBy.some((k) => k.operatorStatement);
+  return <><KeptByLines keptBy={keptBy} />.{operator ? ` ${ENDPOINT_NO_TRAINING}` : ''}</>;
 }
 
 /**
@@ -79,12 +79,16 @@ function ModelLogs({ recipient }: { recipient: WhereRecipientRow }) {
  *   - Where the place is known: "The model service (<host>)", and, only when the operator's no-training
  *     sentence renders below it, ", the endpoint this site sends questions to", which defines the term
  *     that sentence uses (`ENDPOINT_NO_TRAINING` itself is the card's and is not edited).
- *   - Where the record holds no host: the service the record names (`gen_ai.system`, contract :25), "The
- *     model service (<service>, host not recorded)"; with no service either, "(not recorded)".
+ *   - Where the record holds no host: the service the record names (`gen_ai.system`, contract :25), by
+ *     its reader name where the site has one (Stage E), "The model service (OpenRouter, host not
+ *     recorded)", any other id as the record names it; never a host guessed from it. With no service
+ *     either, "(not recorded)".
  */
 function modelServiceLabel(service: string | null, recipient: WhereRecipientRow | undefined): string {
   const place = recipient?.place ?? NOT_RECORDED_PLACE;
-  if (place === NOT_RECORDED_PLACE) return service ? `The model service (${service}, host not recorded)` : `The model service (${NOT_RECORDED_PLACE})`;
+  if (place === NOT_RECORDED_PLACE) {
+    return service ? `The model service (${SERVICE_READER_NAME[service] ?? service}, host not recorded)` : `The model service (${NOT_RECORDED_PLACE})`;
+  }
   const definesEndpoint = recipient?.keptBy?.some((k) => k.operatorStatement) === true;
   return `The model service (${place})${definesEndpoint ? ', the endpoint this site sends questions to' : ''}`;
 }
@@ -131,7 +135,8 @@ function ReachedRow({ row }: { row: WhereReachedRow }) {
   }
   return (
     <li data-part="where-it-went-row" style={{ marginBottom: '8px' }}>
-      <strong style={{ color: 'var(--text-primary)' }}>{`${row.name}, ${toolCalls(row.calls)}`}</strong>
+      {/* Stage E: the section's own separator, so a comma-bearing name reads as one name. */}
+      <strong style={{ color: 'var(--text-primary)' }}>{`${row.name}: ${toolCalls(row.calls)}`}</strong>
       <ul style={RECIPIENTS}>
         {row.recipients.map((r, i) => (
           <li key={i}>
