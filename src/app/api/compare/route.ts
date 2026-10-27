@@ -263,7 +263,7 @@ Be honest if you don't have access to current or real-time data.`;
       resolveSource: inLoop ? inLoop.resolveToolSource : (name) => routedSourceId(name, configured, selection),
       sourcesOffered: consent.recordReasons(composition.sourcesOffered),
       statement: consent.statement,
-      model: model.endpointModel,
+      model: model.declared,
       service: getGenAiSystem(),
     });
     const response = NextResponse.json({

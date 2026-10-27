@@ -26,8 +26,15 @@
 //   - Criterion 5: the package carries no `flows` key, and the trace event
 //     carries no model of the section.
 //
+//   - R6 cold read F2: the three routes driven again under an azure-shaped
+//     catalog whose declared `model` is not its `endpointModel`; each
+//     section's model row names the declared model, the one the record names.
+//     The two streaming routes are the control that the fixture tells the
+//     two strings apart.
+//
 // At `2051cb5` (before the wiring) no completion carries `flows`, so each
-// route's test fails at its first assertion.
+// route's test fails at its first assertion. At `b1ef02f` the JSON route
+// names the deployment, so its F2 test fails at the model string.
 //
 // Run with: npm test
 
@@ -253,6 +260,32 @@ const STREAM = await drive(compareStream.POST, 'http://localhost/api/compare-str
 const NOTEBOOK = await drive(notebook.POST, 'http://localhost/api/query-notebook', { query: QUESTION });
 const COMPARE = await drive(compare.POST, 'http://localhost/api/compare', { query: QUESTION, model: MODEL_ID });
 
+// --- The same three drives under a catalog whose declared model is not its deployment ----
+//
+// R6 cold read F2. Under `azure-openai` a catalog entry's `model` (the declared
+// identity, the one the record names) differs from its `endpointModel` (the
+// deployment name sent on the wire). Configured the way
+// `src/lib/model-identity.test.ts` configures one; obviously fake names, a
+// loopback endpoint. Driven here, before any test runs, and the environment is
+// put back before the tests above read anything, so the default-catalog drives
+// and their tests are unchanged.
+const AZURE_DEPLOYMENT = 'example-deployment-alias-cr';
+const AZURE_DECLARED = 'vendor/model-cr';
+const { _resetModelCatalogForTests } = await import('../../lib/model-resolver.ts');
+process.env.MODEL_API_KIND = 'azure-openai';
+process.env.MODEL_API_VERSION = '2099-01-01-preview';
+process.env.MODEL_CATALOG = JSON.stringify([{
+  id: 'fast', name: 'Fast', provider: 'Example Vendor', supports_tools: true,
+  endpointModel: AZURE_DEPLOYMENT, model: AZURE_DECLARED, default: true, evaluator: 1,
+}]);
+_resetModelCatalogForTests();
+const AZURE_STREAM = await drive(compareStream.POST, 'http://localhost/api/compare-stream', { query: QUESTION, model: 'fast', mcpOnly: true });
+const AZURE_NOTEBOOK = await drive(notebook.POST, 'http://localhost/api/query-notebook', { query: QUESTION });
+const AZURE_COMPARE = await drive(compare.POST, 'http://localhost/api/compare', { query: QUESTION, model: 'fast' });
+for (const name of ['MODEL_API_KIND', 'MODEL_API_VERSION', 'MODEL_CATALOG']) delete process.env[name];
+_resetModelCatalogForTests();
+_resetDefaultModelClientForTests();
+
 const streamFlows = (d: Drive) => (d.events.find((e) => e.type === 'complete' && e.panel === 'withMcp')?.data as Record<string, unknown> | undefined)?.flows;
 const notebookFlows = (d: Drive) => d.events.find((e) => e.type === 'phase' && e.name === 'complete')?.flows;
 const compareFlows = (d: Drive) => (d.json?.withMcp as Record<string, unknown> | undefined)?.flows;
@@ -344,5 +377,23 @@ for (const [label, d, flowsOf, traceOf] of [
       const text = JSON.stringify(value);
       assert.ok(!text.includes('"flows":') && !text.includes('whyNotSent') && !text.includes('Where this question went'), `the ${what} carries the section's model`);
     }
+  });
+}
+
+// --- R6 cold read F2: the section's model is the declared model, on every route ------------
+
+for (const [label, d, flowsOf] of [
+  ['compare-stream', AZURE_STREAM, streamFlows],
+  ['query-notebook', AZURE_NOTEBOOK, notebookFlows],
+  ['compare', AZURE_COMPARE, compareFlows],
+] as const) {
+  test(`F2 (${label}): under a catalog whose declared model is not its deployment, the section names the declared model`, () => {
+    assert.notEqual(AZURE_DECLARED, AZURE_DEPLOYMENT, 'premise: the fixture can tell the two apart');
+    assert.ok(d.status === 200, `premise: ${label} was served (${d.status}): ${JSON.stringify(d.json ?? d.events.find((e) => e.type === 'error') ?? {}).slice(0, 300)}`);
+    const flows = flowsOf(d) as Model | undefined;
+    assert.ok(flows, `${label}: the completion carries no flows`);
+    const row = flows.reached[0] as { kind: string; model?: string | null };
+    assert.equal(row.kind, 'model', `${label}: the first row is the model endpoint`);
+    assert.equal(row.model, AZURE_DECLARED, `${label}: the section names ${JSON.stringify(row.model)}, not the declared model the record names`);
   });
 }
