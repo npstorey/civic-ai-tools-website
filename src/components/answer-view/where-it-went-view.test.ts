@@ -235,7 +235,7 @@ function assertNoRetiredWords(flat: string, label: string) {
 const { KeptByLines } = (await import('@/components/sources/KeptByLine')) as unknown as {
   KeptByLines: ComponentType<{ keptBy: readonly Holder[]; retention?: boolean }>;
 };
-const { KEPT_FOR_OPERATOR, ENDPOINT_NO_TRAINING } = (await import('@/lib/sources/copy')) as unknown as { KEPT_FOR_OPERATOR: string; ENDPOINT_NO_TRAINING: string };
+const { ENDPOINT_NO_TRAINING } = (await import('@/lib/sources/copy')) as unknown as { ENDPOINT_NO_TRAINING: string };
 const { formatModelName } = (await import('@/lib/models')) as unknown as { formatModelName: (m: string) => string };
 
 interface Holder { holder: string; keeps: string; retention?: string; statementUrl?: string; readOn?: string; operatorStatement?: string }
@@ -252,8 +252,10 @@ const summaryFor = (n: number, runner = false) =>
 
 /** Stage D (findings 3 and 4): the model row's label. */
 const ENDPOINT_DEFINED = ', the endpoint this site sends questions to';
+/** Stage E (the seat's re-check, finding 2): a service the site has a reader name for prints it; any other id as the record names it. */
+const SERVICE_READER_NAME: Readonly<Record<string, string>> = { openrouter: 'OpenRouter' };
 function modelLabel(place: string, service: string | null, keptBy: readonly Holder[] | undefined): string {
-  if (place === 'not recorded') return service ? `The model service (${service}, host not recorded)` : 'The model service (not recorded)';
+  if (place === 'not recorded') return service ? `The model service (${SERVICE_READER_NAME[service] ?? service}, host not recorded)` : 'The model service (not recorded)';
   return `The model service (${place})${keptBy?.some((k) => k.operatorStatement) ? ENDPOINT_DEFINED : ''}`;
 }
 
@@ -264,15 +266,20 @@ const keptText = (keptBy: readonly Holder[], retention = true) =>
 /** The panel's line: "Who holds its logs: " and the holders' lines, then a full stop. */
 const logsLine = (keptBy: readonly Holder[]) => `Who holds its logs: ${keptText(keptBy)}.`;
 
-/** The model row's line, by the consent card's rule (`ConsentCard.tsx` `RecipientLine`). */
-function modelLogsLine(keptBy: readonly Holder[], place: string): string {
+/**
+ * The model row's line. Stage D named the holder; Stage E (the seat's re-check, finding 1) gives it the
+ * shape every other holder line has, "<holder>: <clause>.", through the same `KeptByLines`, then the
+ * operator's no-training sentence when it is made. `place` is unused since: no branch drops the holder.
+ */
+function modelLogsLine(keptBy: readonly Holder[], _place: string): string {
+  void _place;
   const operator = keptBy.find((k) => k.operatorStatement);
-  const only = keptBy.length === 1 && keptBy[0].holder === place && keptBy[0].keeps === 'operator-states';
-  // Stage D (finding 5): the label asks who, so the holder is named before the card's clause.
-  return `Who holds its logs: ${operator ? `${operator.holder}; ${KEPT_FOR_OPERATOR}. ${ENDPOINT_NO_TRAINING}` : only ? `${keptBy[0].holder}; ${KEPT_FOR_OPERATOR}.` : `${keptText(keptBy, false)}.`}`;
+  return `Who holds its logs: ${keptText(keptBy, false)}.${operator ? ` ${ENDPOINT_NO_TRAINING}` : ''}`;
 }
 
 const callsWords = (n: number) => (n === 1 ? '1 tool call' : `${n} tool calls`);
+/** Stage E (finding 3): "<source>: N tool call(s)", the section's own separator, so a comma-bearing name reads as one name. */
+const rowLine = (name: string, n: number) => `${name}: ${callsWords(n)}`;
 
 /** The section's `<details>`: closed by default, its summary the only closed-state text. */
 function assertClosedDetails(html: string, n: number, label: string, runner = false) {
@@ -373,7 +380,7 @@ function assertRunRows(flat: string, flows: FlowsFixture, label: string) {
         return { name: `Notebook runner (${r.place})`, texts: [`Receives: ${r.got}`, logsLine(r.keptBy)] };
       }
       return {
-        name: `${row.name}, ${callsWords(row.calls!)}`,
+        name: rowLine(row.name, row.calls!),
         texts: row.recipients.flatMap((r) => [
           // Stage D (finding 6): the upstream host is the source's data host, not "upstream".
           r.upstream ? `The data host for ${row.name} (${r.place})` : `${row.name} (${r.place})`,
@@ -382,7 +389,7 @@ function assertRunRows(flat: string, flows: FlowsFixture, label: string) {
         ]),
       };
     }),
-    [...flows.notReached.flatMap((row) => [row.name, row.whyNotSent]), 'What it got', 'What it keeps', 'Service: ', 'Data source:', 'Sandbox platform:', 'upstream', ENDPOINT_DEFINED],
+    [...flows.notReached.flatMap((row) => [row.name, row.whyNotSent]), 'What it got', 'What it keeps', 'Service: ', 'Data source:', 'Sandbox platform:', 'upstream', ENDPOINT_DEFINED, ', 1 tool call', ', 2 tool calls'],
     label,
   );
 }
@@ -577,10 +584,11 @@ test('criterion 3: d887c1, passed the statement with its hash: what each receive
   assert.ok(model.keptBy.some((k) => k.operatorStatement), 'premise: the 78c516db statement carries the operator\'s no-training statement');
   assertRows(s.flat, 1, [
     { name: `The model service (openrouter.ai)${ENDPOINT_DEFINED}`, texts: ['The model: Claude Haiku 5.5', `Receives: ${model.receives}`, modelLogsLine(model.keptBy, 'openrouter.ai')] },
-    { name: 'Socrata, 1 tool call', texts: ['Socrata (socrata-mcp.civicaitools.org)', `Receives: ${socrata.recipients[0].receives}`, logsLine(socrata.recipients[0].keptBy)] },
+    { name: rowLine('Socrata', 1), texts: ['Socrata (socrata-mcp.civicaitools.org)', `Receives: ${socrata.recipients[0].receives}`, logsLine(socrata.recipients[0].keptBy)] },
     { name: 'Notebook runner (Vercel Sandbox)', texts: [`Receives: ${runner.receives}`, logsLine(runner.keptBy)] },
   ], [...D887C1_NOT_REACHED.filter((t) => t !== 'Socrata'), 'not recorded', RECORD_SENTENCE, OLD_RECORD_SENTENCE, D1_LINE], 'd887c1 matched');
-  assert.ok(s.flat.includes('Who holds its logs: openrouter.ai; '), 'the model row names its holder');
+  assert.ok(s.flat.includes("Who holds its logs: openrouter.ai: what it keeps is for this site's operator to state."), 'the model row names its holder, holder then colon, as the other rows do');
+  assert.ok(!s.flat.includes('openrouter.ai; '), 'no semicolon after the holder');
   assert.ok(s.flat.includes(ENDPOINT_NO_TRAINING), 'the model row carries the operator\'s statement, as the card does');
   assertNoRetiredWords(s.flat, 'd887c1 matched');
 });
@@ -595,8 +603,8 @@ for (const [label, served] of [
     assertClosedDetails(html, 1, label, true);
     const s = section(html);
     assertRows(s.flat, 1, [
-      { name: 'The model service (openrouter, host not recorded)', texts: ['The model: Claude Haiku 5.5'] },
-      { name: 'Socrata, 1 tool call', texts: ['Socrata (socrata-mcp.civicaitools.org)'] },
+      { name: 'The model service (OpenRouter, host not recorded)', texts: ['The model: Claude Haiku 5.5'] },
+      { name: rowLine('Socrata', 1), texts: ['Socrata (socrata-mcp.civicaitools.org)'] },
       { name: 'Notebook runner (not recorded)', texts: [RECORD_SENTENCE, D1_LINE] },
     ], [OLD_RECORD_SENTENCE, ENDPOINT_DEFINED, 'Receives:', 'Who holds its logs', 'Data Commons', 'Off.', 'Not set up on this site.', 'On, not used for this question.'], label);
     assert.ok(s.flat.indexOf(RECORD_SENTENCE) < s.flat.indexOf(D1_LINE), 'the record sentence, then the reference line');
@@ -626,8 +634,8 @@ for (const [label, pkg, name, host, absent] of [
     assertClosedDetails(html, 1, label, true);
     const s = section(html);
     assertRows(s.flat, 1, [
-      { name: 'The model service (openrouter, host not recorded)', texts: ['The model: Claude Haiku 5.5'] },
-      { name: `${name}, 2 tool calls`, texts: [`${name} (${host})`] },
+      { name: 'The model service (OpenRouter, host not recorded)', texts: ['The model: Claude Haiku 5.5'] },
+      { name: rowLine(name, 2), texts: [`${name} (${host})`] },
       { name: 'Notebook runner (not recorded)', texts: [RECORD_SENTENCE] },
     ], [...absent, 'Receives:', 'Who holds its logs', 'On, not used for this question.', 'Not set up on this site.', 'where a question can go'], label);
     assert.ok(!s.markup.includes('/api/flows'), 'no link to a statement');
@@ -652,13 +660,17 @@ test('Stage C: the summary counts the sources reached, never names one: no data 
   }
 });
 
-test('Stage D (finding 3): on no match the model row names the service the record states, or says neither is recorded', () => {
+test('Stage D (finding 3) and Stage E (finding 2): on no match the model row names the service the record states, by its reader name where the site has one, or says neither is recorded', () => {
   const model = (service: string | null) => ({
     reached: [{ kind: 'model', name: 'Model endpoint', model: MODEL, service, recipients: [{ role: 'Model endpoint', place: 'not recorded' }] }],
     notReached: [], statement: { kind: 'none' },
   });
   const flatOf = (html: string) => section(html).flat;
-  assert.ok(flatOf(withProviders(createElement(WhereItWent, { model: model('openrouter') }))).includes('The model service (openrouter, host not recorded)'));
+  const named = flatOf(withProviders(createElement(WhereItWent, { model: model('openrouter') })));
+  assert.ok(named.includes('The model service (OpenRouter, host not recorded)'), named);
+  assert.ok(!named.includes('openrouter.ai'), 'no host guessed from the service');
+  const other = flatOf(withProviders(createElement(WhereItWent, { model: model('az.ai.openai') })));
+  assert.ok(other.includes('The model service (az.ai.openai, host not recorded)'), `any other id as the record names it: ${other}`);
   const neither = flatOf(withProviders(createElement(WhereItWent, { model: model(null) })));
   assert.ok(neither.includes('The model service (not recorded)'), neither);
 });
