@@ -61,9 +61,9 @@ const SRC = path.resolve(HERE, '..', '..', '..', '..', '..');
 const CONSENT_STORE_FILE = path.join(SRC, 'lib', 'sources', 'consent-store.ts');
 
 interface Row { userId: string; states: Record<string, { state: string; since: string }>; flowsHash: string; flowsStatement: unknown; consentedAt: Date; updatedAt: Date }
-interface Globals { __w2Decision: { session: unknown; rows: Map<string, Row>; writes: number }; __w2DecisionKv: FakeDecisionKv }
+interface Globals { __w2Decision: { session: unknown; rows: Map<string, Row>; writes: number; failWrite: boolean }; __w2DecisionKv: FakeDecisionKv }
 const globals = globalThis as unknown as Globals;
-globals.__w2Decision = { session: null, rows: new Map(), writes: 0 };
+globals.__w2Decision = { session: null, rows: new Map(), writes: 0, failWrite: false };
 
 const STUB_PREFIX = 'file:///r8-w2-decision-route-stub/';
 const STUB_SOURCE: Record<string, string> = {
@@ -74,6 +74,7 @@ const STUB_SOURCE: Record<string, string> = {
     const rows = () => globalThis.__w2Decision.rows;
     export async function readConsentRow(userId) { return rows().get(userId) ?? null; }
     export async function writeConsentRow(userId, row) {
+      if (globalThis.__w2Decision.failWrite) throw new Error('fake row store: the write was refused');
       globalThis.__w2Decision.writes += 1;
       const prior = rows().get(userId);
       const now = row.now ?? new Date();
@@ -186,6 +187,7 @@ beforeEach(() => {
   kv.failSet = false;
   globals.__w2Decision.rows.clear();
   globals.__w2Decision.writes = 0;
+  globals.__w2Decision.failWrite = false;
   process.env.RATE_LIMIT_SECRET = 'fixture-w2-secret';
 });
 
@@ -466,4 +468,101 @@ test('R6-WEB-D condition 3: Not now writes no consent on either branch, and a no
   assert.equal(outcome, 'no-answer');
   assert.equal(globals.__w2Decision.writes, 0, 'a no-answer pause wrote the row');
   assert.ok(kv.calls.every((c) => c.key.startsWith(d.DECISION_KEY_PREFIX)), 'the pause wrote a store key other than its entry');
+});
+
+// --- Fix round 2, item 2 (F2 of the G10 cold read): the decision is written first, and 403 before 409 ---
+//
+// The row branch, driven where the cold read drove it: a decision write that
+// throws, an entry that expires between the read and the write, and a move
+// that throws after the decision was written. A refusal leaves the consent as
+// it was; a written decision is answered 200, with `moved: false` when the
+// consent could not be moved. A key minted under another account is refused
+// as not the requester's whether or not it was decided.
+
+/** A row for DB_A with Data Commons Ask first, as the cold read's legs start. */
+async function askFirstRow(): Promise<Row> {
+  const statement = await buildFlowsStatement();
+  return {
+    userId: DB_A,
+    states: { socrata: { state: 'on', since: '2026-10-01' }, 'data-commons': { state: 'ask-first', since: '2026-10-02' } },
+    flowsHash: statementHash(statement),
+    flowsStatement: statement,
+    consentedAt: new Date('2026-10-01T00:00:00Z'),
+    updatedAt: new Date('2026-10-02T00:00:00Z'),
+  };
+}
+
+test('item 2 (a): the row branch, the decision write throws: 503, the row is not moved, the entry stays undecided', async () => {
+  const { decision: d } = need();
+  globals.__w2Decision.rows.set(DB_A, await askFirstRow());
+  const key = await mint('data-commons', DB_A);
+  kv.failSet = true;
+  const response = await post({ key, decision: 'allow' }, { session: signedIn(DB_A) });
+  kv.failSet = false;
+  assert.equal(response.status, 503);
+  assert.equal(((await response.json()) as Json).code, 'decision_store_unavailable');
+  const row = globals.__w2Decision.rows.get(DB_A)!;
+  assert.equal(row.states['data-commons'].state, 'ask-first', `row data-commons: ${row.states['data-commons'].state}, writes ${globals.__w2Decision.writes}`);
+  assert.equal(globals.__w2Decision.writes, 0, `writes ${globals.__w2Decision.writes}`);
+  assert.equal(((await kv.get(`${d.DECISION_KEY_PREFIX}${key}`)) as Json).decision, undefined, 'the entry was decided');
+});
+
+test('item 2 (b): the row branch, the entry expires between the read and the write: 404, the row is not moved', async () => {
+  globals.__w2Decision.rows.set(DB_A, await askFirstRow());
+  const key = await mint('data-commons', DB_A);
+  const get = kv.get.bind(kv);
+  kv.get = async (k: string) => {
+    const value = await get(k);
+    clock += 601_000;
+    return value;
+  };
+  try {
+    const response = await post({ key, decision: 'allow' }, { session: signedIn(DB_A) });
+    assert.equal(response.status, 404);
+    assert.equal(((await response.json()) as Json).code, 'decision_unknown');
+    const row = globals.__w2Decision.rows.get(DB_A)!;
+    assert.equal(row.states['data-commons'].state, 'ask-first', `row ${row.states['data-commons'].state}, writes ${globals.__w2Decision.writes}`);
+    assert.equal(globals.__w2Decision.writes, 0, `writes ${globals.__w2Decision.writes}`);
+  } finally {
+    kv.get = get;
+    clock -= 601_000;
+  }
+});
+
+test('item 2 (c): the move throws after the decision was written: 200 with moved: false, the entry decided, the row unchanged, one log line with no error text', async () => {
+  const { decision: d } = need();
+  const prior = await askFirstRow();
+  globals.__w2Decision.rows.set(DB_A, prior);
+  const key = await mint('data-commons', DB_A);
+  globals.__w2Decision.failWrite = true;
+  const logged: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => { logged.push(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')); };
+  let response: Response;
+  try {
+    response = await post({ key, decision: 'allow' }, { session: signedIn(DB_A) });
+  } finally {
+    console.error = original;
+    globals.__w2Decision.failWrite = false;
+  }
+  assert.equal(response.status, 200, `status ${response.status}: ${await response.clone().text()}`);
+  assert.deepEqual(await response.json(), { decision: 'allow', sourceId: 'data-commons', moved: false });
+  assert.equal(response.headers.get('set-cookie'), null);
+  assert.equal(((await kv.get(`${d.DECISION_KEY_PREFIX}${key}`)) as Json).decision, 'allow', 'the entry the run polls was not decided');
+  assert.equal(globals.__w2Decision.rows.get(DB_A), prior, 'the row changed');
+  assert.equal(logged.length, 1, `log lines: ${JSON.stringify(logged)}`);
+  assert.match(logged[0], /^\[consent-decision\] /);
+  assert.ok(!logged[0].includes('refused'), `the log line carries the error's text: ${logged[0]}`);
+});
+
+test('item 2 (d): a key minted under another account and already decided is refused as not the requester\'s (403), not as decided', async () => {
+  const key = await mint('data-commons', DB_A);
+  assert.equal((await post({ key, decision: 'not-now' }, { session: signedIn(DB_A) })).status, 200, 'premise: the owner decided the key');
+  const stranger = await post({ key, decision: 'allow' }, { session: signedIn(DB_B) });
+  assert.equal(stranger.status, 403);
+  assert.equal(((await stranger.json()) as Json).code, 'decision_not_yours');
+  const anonymous = await post({ key, decision: 'allow' });
+  assert.equal(anonymous.status, 403);
+  // Its own reader still learns that it was decided.
+  assert.equal((await post({ key, decision: 'allow' }, { session: signedIn(DB_A) })).status, 409);
 });

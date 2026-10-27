@@ -36,7 +36,7 @@ import { PANEL_PRIVACY_LINK } from '@/lib/sources/copy';
 import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
 import { KeptByLines } from '@/components/sources/KeptByLine';
 import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
-import { decideConsentPause, useSourceConsent } from '@/components/sources/useSourceConsent';
+import { decideConsentPause, pauseEntry, useSourceConsent } from '@/components/sources/useSourceConsent';
 
 /** The card's own sentences, each checked against the consent-wording research. */
 export const CONSENT_STEP_TEXT = {
@@ -49,6 +49,8 @@ export const CONSENT_STEP_TEXT = {
   wait: 'The question waits up to a minute for your answer.',
   reach: (hosts: readonly string[]) => `It would reach: ${hosts.join(', ')}.`,
   allowed: 'You chose Allow. It is On now.',
+  /** Allow was saved, and the question uses the source, but its consent could not be turned On (fix round 2, item 2). */
+  allowedNotMoved: 'You chose Allow. This question is sent to it, but it could not be turned On for later questions. You can turn it On in the panel.',
   declined: 'You chose Not now. Nothing is sent to it for this question.',
   ended: 'The question went on without your answer, so it did not use this source.',
   gone: 'This question is no longer waiting for an answer.',
@@ -82,7 +84,8 @@ const BUTTON: CSSProperties = {
 
 export default function ConsentStep({ pause, ended = false }: { pause: ConsentPausePayload; ended?: boolean }) {
   const consent = useSourceConsent({ load: false });
-  const slot = pause.key !== undefined && consent.pause?.payload.key === pause.key ? consent.pause : null;
+  // This card's own entry on the bus, by its key: a later pause in the run never takes its answer (fix round 2, item 1).
+  const slot = pauseEntry(consent.pauses, pause.key);
   const source = pause.source;
   const name = readerSourceName(source);
   const lines = sourceRowLines(source);
@@ -90,7 +93,7 @@ export default function ConsentStep({ pause, ended = false }: { pause: ConsentPa
   const linksOnly: FlowsStatement = { version: '', date: '', recipients: [], sources: [], links: pause.links };
 
   const outcome = slot?.decision === 'allow'
-    ? CONSENT_STEP_TEXT.allowed
+    ? (slot.moved === false ? CONSENT_STEP_TEXT.allowedNotMoved : CONSENT_STEP_TEXT.allowed)
     : slot?.decision === 'not-now'
       ? CONSENT_STEP_TEXT.declined
       : slot?.failure === 'gone'
