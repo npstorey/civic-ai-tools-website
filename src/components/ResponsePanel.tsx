@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import ProgressLog from './ProgressLog';
 import McpResponseDisplay from './shared/McpResponseDisplay';
 import type { ProgressLogEntry, ProgressGroup, ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
+import type { WhereItWentModel } from '@/lib/flows/where-it-went';
 
 interface ResponsePanelProps {
   title: string;
@@ -16,6 +17,8 @@ interface ResponsePanelProps {
   completion_tokens?: number;
   token_limit_exceeded?: boolean;
   tools_called?: ToolCall[];
+  /** R6 W4: where the question went, forwarded unchanged to the with-data display. */
+  flows?: WhereItWentModel;
   isLoading?: boolean;
   variant: 'without-mcp' | 'with-mcp';
   /** Friendly error copy for this panel (already mapped via friendlyStreamError). */
@@ -43,6 +46,7 @@ export default function ResponsePanel({
   completion_tokens,
   token_limit_exceeded,
   tools_called,
+  flows,
   isLoading,
   variant,
   error,
@@ -155,6 +159,7 @@ export default function ResponsePanel({
           progressLog={progressLog}
           progressGroups={progressGroups}
           toolsCalled={tools_called}
+          flows={flows}
           duration_ms={duration_ms}
           tokens_used={tokens_used}
           prompt_tokens={prompt_tokens}

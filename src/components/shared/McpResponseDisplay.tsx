@@ -9,6 +9,7 @@ import { AUTHOR } from '@/components/answer-view/view-model';
 import { buildNarrativeSummary, buildStatsSummary, getPortalCity, isQueryCall } from '@/lib/streaming';
 import { generateNotebook, downloadNotebook } from '@/lib/notebook';
 import type { ProgressLogEntry, ProgressGroup, ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
+import type { WhereItWentModel } from '@/lib/flows/where-it-went';
 import { useSession, signIn } from 'next-auth/react';
 import { useHostLinks } from '@/components/HostLinksProvider';
 import { useSignInOptions } from '@/components/SignInOptionsProvider';
@@ -43,6 +44,8 @@ interface McpResponseDisplayProps {
   progressLog?: ProgressLogEntry[];
   progressGroups?: ProgressGroup[];
   toolsCalled?: ToolCall[];
+  /** R6 W4: where the question went, forwarded unchanged to the comparison adapter. */
+  flows?: WhereItWentModel;
   duration_ms?: number;
   tokens_used?: number;
   prompt_tokens?: number;
@@ -337,6 +340,7 @@ export default function McpResponseDisplay({
   progressLog = [],
   progressGroups = [],
   toolsCalled = [],
+  flows,
   duration_ms,
   tokens_used,
   prompt_tokens,
@@ -714,6 +718,7 @@ export default function McpResponseDisplay({
               portal,
               evidenceTrace,
               instance: attributionHost,
+              flows,
             })}
             notices={showIncompleteBanner ? incompleteBanner : undefined}
             disclosureExtras={toolsCalled.length > 0 ? <SkillPromptDisclosure /> : undefined}

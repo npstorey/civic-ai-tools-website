@@ -27,6 +27,7 @@ import { useInstanceAttribution } from '@/components/EvidenceOriginProvider';
 import type { Notebook } from '@/lib/notebook-author';
 import type { CapturedToolCall } from '@/hooks/useNotebookStream';
 import type { ProgressGroup, ReportedPhase } from '@/lib/answer-view/steps';
+import type { WhereItWentModel } from '@/lib/flows/where-it-went';
 
 interface ChatNotebookOutputProps {
   notebook: Notebook;
@@ -48,6 +49,8 @@ interface ChatNotebookOutputProps {
   signingKeyId?: string | null;
   /** Optional title over the answer. */
   title?: string;
+  /** R6 W4: where the question went; the spread below carries it to the adapter. */
+  flows?: WhereItWentModel;
   /** The wrapper's controls (the Publish button), placed by the view after the disclosure. */
   actions?: ReactNode;
 }

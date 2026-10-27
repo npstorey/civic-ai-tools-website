@@ -66,6 +66,8 @@ import type { EvidencePackage } from '../../lib/evidence/packager.ts';
 import type { BlobRef } from '../../lib/evidence/blob-ref.ts';
 import type { Notebook } from '../../lib/notebook-author/cells.ts';
 import type { PublishedLayout } from '../../lib/answer-layout/published-line.ts';
+import type { FlowsStatement } from '../../lib/flows/statement.ts';
+import { whereItWentFromPackage } from '../../lib/flows/where-it-went.ts';
 
 /** What the page resolved before rendering (`resolvePackageForRender`). */
 export interface ResolvedPackageData {
@@ -109,6 +111,12 @@ export interface RecordAdapterInput {
   instance: string | null;
   /** LAYOUT-WEB W4 P2: the layout the record's publication attestation names, as the page looked it up. */
   publishedLayout?: PublishedLayout;
+  /**
+   * R6 W4 (D1): the flows statement this site serves, built by the page at
+   * render; null when it could not be built. A record whose reference has its
+   * hash reads its kept-by lines from it; any other record says "not recorded".
+   */
+  servedStatement?: FlowsStatement | null;
 }
 
 /**
@@ -237,6 +245,8 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
   // reading leaves every entry as its own fields say. Read by the refused line,
   // the steps and D, so the three cannot disagree.
   const fromTrace = readRefusalsFromTrace(pkg);
+  // R6 W4: where the question went, from the trace alone; null for a package with no trace.
+  const whereItWent = whereItWentFromPackage(pkg, input.servedStatement ?? null);
   const modelName = formatModelName(pkg.cost.model);
 
   const stepView = buildRecordStepView(pkg.queries, fromTrace.refused);
@@ -333,5 +343,6 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
       summary: { kind: 'stated', author: null, text: pkg.summary ?? row.summary },
     },
     ...(input.publishedLayout !== undefined ? { publishedLayout: input.publishedLayout } : {}),
+    ...(whereItWent !== null ? { whereItWent } : {}),
   };
 }

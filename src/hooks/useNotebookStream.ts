@@ -20,6 +20,7 @@ import { reportConsentPause, reportConsentRefusal } from '@/components/sources/u
 import type { Notebook } from '@/lib/notebook-author';
 import type { NotebookPhase } from '@/components/notebook/NotebookProgress';
 import type { PhaseAToolCall } from '@/lib/notebook-author';
+import type { WhereItWentModel } from '@/lib/flows/where-it-went';
 // The run's steps, folded the way the comparison folds its own (LAYOUT-WEB W2
 // P2): one group per Phase A iteration, from the progress lines.
 import {
@@ -118,6 +119,8 @@ export interface NotebookStreamState {
    * name it; absent reads as null.
    */
   errorTraceback?: { text: string; correlationId: string } | null;
+  /** R6 W4: where the question went, from the `complete` phase's `flows`; absent until then. */
+  flows?: WhereItWentModel;
 }
 
 const NO_STEPS: StepLog = { progressLog: [], progressGroups: [] };
@@ -187,6 +190,7 @@ export function useNotebookStream() {
               detail: null,
               detailTool: null,
               completedAt: Date.now(),
+              ...(raw.flows !== undefined ? { flows: raw.flows as WhereItWentModel } : {}),
             }));
           } else {
             setState((prev) => ({
