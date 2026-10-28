@@ -32,7 +32,7 @@ import { modelAccessPhrase, modelIdentity, type ModelIdentity } from '@/lib/mode
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import type { SourceSelection } from '@typedstandards/civic-typed-router';
 import { consentInForce } from '@/lib/sources/consent-gate';
-import { streamingRoutePause } from '@/lib/sources/decision';
+import { decisionStoreFromEnv, streamingRoutePause } from '@/lib/sources/decision';
 import { afterLoopAttributes, createInLoopRouting, directorySet, entersInLoop, sourceRoutingMode, type InLoopRouting } from '@/lib/mcp/routing-mode';
 import {
   queryWithMcpStreaming,
@@ -273,8 +273,14 @@ export async function POST(request: NextRequest) {
   // `consent_required`, 403, carrying the flows version to show.
   // ENFORCED since W3 (`CONSENT_GATE_ENFORCED`, `src/lib/sources/consent-enforced.ts`):
   // a consent in force with no source On is refused here too, with the
-  // typed `no_sources_on`, before the model or any source is called.
-  const consent = await consentInForce(request, session);
+  // typed `no_sources_on`, before the model or any source is called —
+  // unless this run can ask (R9 P1a, #681): under in-loop routing with the
+  // decision store set, a run whose sources are Ask first goes on, and the
+  // loop asks the reader before it loads one. So the mode is read here,
+  // once per request, before the gate: the gate and the directory below
+  // read the same value.
+  const routingMode = sourceRoutingMode();
+  const consent = await consentInForce(request, session, { routing: routingMode, store: decisionStoreFromEnv() !== null });
   if (!consent.ok) {
     return new Response(JSON.stringify(consent.payload), { status: 403, headers: { 'Content-Type': 'application/json' } });
   }
@@ -295,10 +301,10 @@ export async function POST(request: NextRequest) {
   // Under the lock one section is appended (#436, D7); unlocked, unchanged.
   const configured = readMcpEnvFromProcess();
   const selection = consent.selection;
-  // How the sources reach the model (#644 W1, D9), read once per request. In
-  // loop, the first request carries the directory and `load_source` only;
-  // otherwise the composition below, exactly as before the setting existed.
-  const routingMode = sourceRoutingMode();
+  // How the sources reach the model (#644 W1, D9), read once per request,
+  // before the gate (above). In loop, the first request carries the directory
+  // and `load_source` only; otherwise the composition below, exactly as
+  // before the setting existed.
   const directory = routingMode === 'in-loop' ? directorySet(configured, consent) : [];
   // An Ask-first load pauses to ask the reader (#644 W2): this route holds a
   // stream, so it hands the run a pause.

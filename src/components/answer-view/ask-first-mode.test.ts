@@ -11,7 +11,7 @@
 //
 // HOW THE PANEL LEARNS THE MODE. The panel is a client component with no
 // props, mounted from files W2 does not edit, so the decision route answers
-// a `GET` with `{ routing }`, read through the leaf module
+// a `GET` with `{ routing }` (and `store`, R9 P1a), read through the leaf module
 // `src/lib/mcp/source-routing-mode.ts`, and `useSourceConsent.ts` reads it
 // beside the status and the statement.
 //
@@ -44,7 +44,8 @@ import {
 
 registerSurfaceHooks({ ...CONSENT_SURFACE_STUBS });
 
-for (const name of ['DATA_COMMONS_MCP_URL', 'NYC_CHARTER_HOSTING', 'SITE_DEPLOYMENT_GUIDE_URL', 'APP_HOST', 'NEXTAUTH_URL', 'SOURCE_ROUTING']) delete process.env[name];
+// The store pair unset: the GET's `store` (R9 P1a, #681) reads false here.
+for (const name of ['DATA_COMMONS_MCP_URL', 'NYC_CHARTER_HOSTING', 'SITE_DEPLOYMENT_GUIDE_URL', 'APP_HOST', 'NEXTAUTH_URL', 'SOURCE_ROUTING', 'KV_REST_API_URL', 'KV_REST_API_TOKEN']) delete process.env[name];
 process.env.SOCRATA_MCP_URL = 'https://socrata.fixture.example';
 process.env.BOSTON_OPENCONTEXT_MCP_URL = 'https://boston.fixture.example/mcp';
 process.env.EXECUTOR_DRIVER = 'vercel-sandbox';
@@ -102,7 +103,7 @@ async function askRoute(value: string | undefined): Promise<{ status: number; bo
 test('item 1: the decision route\'s GET answers in-loop under SOURCE_ROUTING=in-loop, with no-store', async () => {
   const answer = await askRoute('in-loop');
   assert.equal(answer.status, 200);
-  assert.deepEqual(answer.body, { routing: 'in-loop' });
+  assert.deepEqual(answer.body, { routing: 'in-loop', store: false });
   assert.equal(answer.cache, 'no-store');
   assert.deepEqual(answer.warned, []);
 });
@@ -111,7 +112,7 @@ test('item 1: the decision route\'s GET answers all-sources with the variable un
   for (const value of [undefined, '', 'sideways']) {
     const answer = await askRoute(value);
     assert.equal(answer.status, 200, `SOURCE_ROUTING=${JSON.stringify(value)}`);
-    assert.deepEqual(answer.body, { routing: 'all-sources' }, `SOURCE_ROUTING=${JSON.stringify(value)}`);
+    assert.deepEqual(answer.body, { routing: 'all-sources', store: false }, `SOURCE_ROUTING=${JSON.stringify(value)}`);
     assert.equal(answer.cache, 'no-store', `SOURCE_ROUTING=${JSON.stringify(value)}`);
     // parseSourceRouting's rule: a value outside the set is logged once, by name, never by value.
     assert.equal(answer.warned.length, value === 'sideways' ? 1 : 0, `SOURCE_ROUTING=${JSON.stringify(value)}: ${JSON.stringify(answer.warned)}`);

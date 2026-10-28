@@ -2,7 +2,7 @@
  * The first-consent gate (#632 W2; D3, D12, C6): what the four gated routes
  * ask before anything leaves this server.
  *
- * `consentInForce(request, session)` reads the consent in force — the row
+ * `consentInForce(request, session, ask?)` reads the consent in force — the row
  * when the session carries a `dbId`, else the cookie, anonymous or signed in
  * ("row, or cookie", D12 = A) — against the flows statement in force, and
  * answers either the run's selection (configured ∩ On; a configured source
@@ -17,11 +17,22 @@
  * (D3 = A): the consent write (`/api/sources/consent`) is the only boundary
  * that accepts source ids.
  *
- * NO SOURCE ON (R6 W3). A consent in force whose selection is empty — the
- * instance configures sources, and the reader has every one Off or Ask
- * first — is refused `no_sources_on`, before the model or any source is
- * called: a run over an empty selection would send the model a prompt with
- * nothing to answer from. The refusal travels on each route's existing
+ * NO SOURCE ON (R6 W3; R9 P1a, #681). A consent in force whose selection is
+ * empty — the instance configures sources, and the reader has none On — is
+ * refused `no_sources_on`, before the model or any source is called, when
+ * the run could reach no source: every configured source Off, or the run
+ * cannot ask the reader about an Ask-first one. A run can ask only when its
+ * route holds a pause and says so in `ask`: the instance routes `in-loop`
+ * and the decision store pair is set (`decisionStoreFromEnv`). The two
+ * streaming routes pass `ask`; the JSON compare route and replay hold no
+ * pause and pass nothing, so for them an empty selection is refused in every
+ * mode. Under `all-sources` a run over an empty selection would send the
+ * model a prompt with nothing to answer from; in-loop with no store, every
+ * Ask-first load would record `no-answer` at once. When the run can ask and
+ * a configured source is not Off (Ask first, or no stored state, D6), the
+ * gate answers `ok` with the empty selection, the route's directory lists
+ * the Ask-first sources (`directorySet`), and the loop asks the reader
+ * before it loads one. The refusal travels on each route's existing
  * `!consent.ok` branch; its copy points to the panel that turns a source On.
  *
  * THE SWITCH (`CONSENT_GATE_ENFORCED`, `./consent-enforced.ts`), on since W3.
@@ -31,6 +42,7 @@
  * reference.
  */
 import type { SourceSelection } from '@typedstandards/civic-typed-router';
+import type { SourceRoutingMode } from '@/lib/mcp/source-routing-mode';
 import { readConsentRow } from '@/lib/sources/consent-store';
 import { CONSENT_GATE_ENFORCED } from '@/lib/sources/consent-enforced';
 import { DEFAULT_SOURCE_SELECTION } from '@/lib/mcp/socrata-skill';
@@ -65,12 +77,28 @@ export interface ConsentRefusalPayload {
 
 type OfferedEntry = { sourceId: string; alias: string; reason: string };
 
+/**
+ * What a route that holds a pause tells the gate (R9 P1a, #681): this
+ * instance's routing mode and whether the decision store pair is set. Read
+ * by the route before the gate, from `sourceRoutingMode()` and
+ * `decisionStoreFromEnv() !== null`; the gate reads neither itself.
+ */
+export interface ConsentAsk {
+  routing: SourceRoutingMode;
+  store: boolean;
+}
+
+/** Whether a run can ask the reader about an Ask-first source: in loop, with the store set. */
+function canAsk(ask: ConsentAsk | undefined): boolean {
+  return ask !== undefined && ask.routing === 'in-loop' && ask.store;
+}
+
 export type ConsentDecision =
   | {
       ok: true;
       /** False while the gate is dormant: the route runs as it did before W2. */
       enforced: boolean;
-      /** configured ∩ On, what the composition, the tools and the dispatch are given; `DEFAULT_SOURCE_SELECTION` while dormant. */
+      /** configured ∩ On, what the composition, the tools and the dispatch are given; `DEFAULT_SOURCE_SELECTION` while dormant. Empty only for a run that can ask (`ConsentAsk`) with an Ask-first source configured. */
       selection: SourceSelection;
       /** The record's reasons from the router's: mapped from the stored states (D2 = A); unchanged while dormant. */
       recordReasons: (offered: readonly OfferedEntry[]) => OfferedEntry[];
@@ -92,7 +120,7 @@ function refusal(store: 'row' | 'cookie', statement: FlowsStatement, reask: Reas
   };
 }
 
-export async function consentInForce(request: Request, session: ConsentSession | null | undefined): Promise<ConsentDecision> {
+export async function consentInForce(request: Request, session: ConsentSession | null | undefined, ask?: ConsentAsk): Promise<ConsentDecision> {
   if (!CONSENT_GATE_ENFORCED) {
     return { ok: true, enforced: false, selection: DEFAULT_SOURCE_SELECTION, recordReasons: (offered) => [...offered], states: {} };
   }
@@ -117,7 +145,11 @@ export async function consentInForce(request: Request, session: ConsentSession |
     states = flatStates(cookie.states);
   }
   const selection = selectionFromStates(configured, states);
-  if (configured.length > 0 && selection.length === 0) return refusal(store, statement, { base: false, sources: [] }, 'no_sources_on');
+  // No source On: refused unless the run can ask and a configured source is
+  // not Off (a source with no stored state is Ask first, D6), as the
+  // directory set reads the same states.
+  const reachable = canAsk(ask) && configured.some((id) => !(Object.hasOwn(states, id) && states[id] === 'off'));
+  if (configured.length > 0 && selection.length === 0 && !reachable) return refusal(store, statement, { base: false, sources: [] }, 'no_sources_on');
   return {
     ok: true,
     enforced: true,
