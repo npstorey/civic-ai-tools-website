@@ -566,3 +566,47 @@ test('item 2 (d): a key minted under another account and already decided is refu
   // Its own reader still learns that it was decided.
   assert.equal((await post({ key, decision: 'allow' }, { session: signedIn(DB_A) })).status, 409);
 });
+
+// --- R9 P1a (#681): the GET says whether this instance can ask ------------------------------
+//
+// `{ routing, store }`: the mode, and whether the store pair the pause writes
+// to is set (both of `KV_REST_API_URL` and `KV_REST_API_TOKEN`). The client
+// guard reads the two to refuse a question with no source On only where the
+// run could reach no source. The flag is read from the variables' presence:
+// the GET reads no key and makes no store call.
+
+async function getAnswer(env: { routing?: string; url?: string; token?: string }): Promise<{ status: number; body: Json; cache: string | null }> {
+  const { route: r } = need();
+  const prior = { routing: process.env.SOURCE_ROUTING, url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN };
+  const put = (name: string, value: string | undefined) => { if (value === undefined) delete process.env[name]; else process.env[name] = value; };
+  put('SOURCE_ROUTING', env.routing);
+  put('KV_REST_API_URL', env.url);
+  put('KV_REST_API_TOKEN', env.token);
+  try {
+    const response = (await r.GET(new Request('https://site.fixture.example/api/sources/consent/decision', { method: 'GET' }))) as Response;
+    return { status: response.status, body: (await response.json()) as Json, cache: response.headers.get('cache-control') };
+  } finally {
+    put('SOURCE_ROUTING', prior.routing);
+    put('KV_REST_API_URL', prior.url);
+    put('KV_REST_API_TOKEN', prior.token);
+  }
+}
+
+test('R9 P1a criterion 3: the GET answers { routing, store }, store a boolean, true only with both of the pair set; no store call is made', async () => {
+  const cases: Array<[string, { routing?: string; url?: string; token?: string }, Json]> = [
+    ['in-loop, the pair set', { routing: 'in-loop', url: 'https://kv.fixture.example', token: 'fixture-kv-token' }, { routing: 'in-loop', store: true }],
+    ['in-loop, the pair unset', { routing: 'in-loop' }, { routing: 'in-loop', store: false }],
+    ['in-loop, the URL alone', { routing: 'in-loop', url: 'https://kv.fixture.example' }, { routing: 'in-loop', store: false }],
+    ['in-loop, the token alone', { routing: 'in-loop', token: 'fixture-kv-token' }, { routing: 'in-loop', store: false }],
+    ['all-sources (unset), the pair set', { url: 'https://kv.fixture.example', token: 'fixture-kv-token' }, { routing: 'all-sources', store: true }],
+    ['all-sources (unset), the pair unset', {}, { routing: 'all-sources', store: false }],
+  ];
+  for (const [what, env, expected] of cases) {
+    const answer = await getAnswer(env);
+    assert.equal(answer.status, 200, what);
+    assert.equal(typeof answer.body.store, 'boolean', `${what}: store is ${JSON.stringify(answer.body.store)}`);
+    assert.deepEqual(answer.body, expected, what);
+    assert.equal(answer.cache, 'no-store', what);
+  }
+  assert.deepEqual(kv.calls, [], 'the GET reached the store');
+});
