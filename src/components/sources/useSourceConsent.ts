@@ -14,9 +14,15 @@
  *
  * THE GUARD (stage-A ruling (a)). `guard(run, ask)` runs the question at once
  * when a consent is in force with a source On; with no consent it calls
- * `ask` (the surface shows the card); with every source Off or Ask first it
- * answers `none-on` (the surface says so, in `no_sources_on`'s words); while
- * a panel write is in flight it answers `held` and runs nothing.
+ * `ask` (the surface shows the card); while a panel write is in flight it
+ * answers `held` and runs nothing. With no source On it applies the consent
+ * gate's rule (R9 P1a, #681): it answers `none-on` (the surface says so, in
+ * `no_sources_on`'s words) when every source is Off, or when the decision
+ * route's `GET` says this site cannot ask (`all-sources`, or no store); under
+ * `in-loop` with the store it runs the question, and the run asks the reader.
+ * When the `GET` could not be read it runs the question too: the server's
+ * gate is authoritative, and its refusal reaches the surface as any route
+ * refusal does.
  *
  * THE BUS. A refusal a route answers (`consent_required`, after a re-ask or a
  * race the guard could not see) is reported here by the streaming hooks
@@ -76,6 +82,8 @@ export interface ConsentSnapshot {
   pauses: Record<string, PendingPause>;
   /** This instance's `SOURCE_ROUTING` mode, from the decision route's GET; `null` until read, and on any failure. */
   routing: 'in-loop' | 'all-sources' | null;
+  /** Whether this instance's decision store pair is set, from the same GET (R9 P1a); `null` until read, and on any failure. */
+  store: boolean | null;
 }
 
 /** A pause the hooks reported, and what has happened to it since. */
@@ -93,7 +101,7 @@ export interface PendingPause {
   ended: boolean;
 }
 
-const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pauses: {}, routing: null };
+const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pauses: {}, routing: null, store: null };
 
 let snapshot: ConsentSnapshot = EMPTY;
 const listeners = new Set<() => void>();
@@ -120,15 +128,17 @@ function subscribe(listener: () => void): () => void {
 const getSnapshot = () => snapshot;
 const getServerSnapshot = () => EMPTY;
 
-/** The instance's mode, or `null` for anything but an answer naming one; a failure here fails no other read. */
-async function readRouting(): Promise<ConsentSnapshot['routing']> {
+/** The instance's mode and store flag, each `null` for anything but an answer naming one; a failure here fails no other read. */
+async function readRouting(): Promise<Pick<ConsentSnapshot, 'routing' | 'store'>> {
   try {
     const response = await fetch('/api/sources/consent/decision', { method: 'GET', headers: { Accept: 'application/json' } });
-    if (!response.ok) return null;
-    const routing = ((await response.json()) as { routing?: unknown } | null)?.routing;
-    return routing === 'in-loop' || routing === 'all-sources' ? routing : null;
+    if (!response.ok) return { routing: null, store: null };
+    const body = (await response.json()) as { routing?: unknown; store?: unknown } | null;
+    const routing = body?.routing === 'in-loop' || body?.routing === 'all-sources' ? body.routing : null;
+    const store = typeof body?.store === 'boolean' ? body.store : null;
+    return { routing, store };
   } catch {
-    return null;
+    return { routing: null, store: null };
   }
 }
 
@@ -137,14 +147,14 @@ export function refreshConsent(): Promise<void> {
   if (inflight) return inflight;
   inflight = (async () => {
     try {
-      const [status, statement, routing] = await Promise.all([
+      const [status, statement, { routing, store }] = await Promise.all([
         fetch('/api/sources/consent', { method: 'GET', headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)),
         fetch('/api/flows', { method: 'GET', headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)),
         readRouting(),
       ]);
-      set({ loaded: true, status: status as ConsentStatus | null, statement: statement as FlowsStatement | null, routing });
+      set({ loaded: true, status: status as ConsentStatus | null, statement: statement as FlowsStatement | null, routing, store });
     } catch {
-      set({ loaded: true, status: null, statement: null, routing: null });
+      set({ loaded: true, status: null, statement: null, routing: null, store: null });
     } finally {
       inflight = null;
     }
@@ -343,7 +353,15 @@ export async function guardQuestion(run: () => void, ask: () => void): Promise<G
     return 'asked';
   }
   const ids = configured();
-  if (ids.length > 0 && !ids.some((id) => status.states?.[id]?.state === 'on')) return 'none-on';
+  if (ids.length > 0 && !ids.some((id) => status.states?.[id]?.state === 'on')) {
+    // No source On (R9 P1a, #681): the gate's rule. Every source Off reaches
+    // nothing in any mode. Otherwise a source is Ask first (a source with no
+    // stored state is too), which a run reaches only where the site can ask:
+    // refused when the GET said it cannot, run when it said it can or could
+    // not be read.
+    if (ids.every((id) => status.states?.[id]?.state === 'off')) return 'none-on';
+    if (snapshot.routing === 'all-sources' || snapshot.store === false) return 'none-on';
+  }
   run();
   return 'ran';
 }
