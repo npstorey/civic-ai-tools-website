@@ -27,6 +27,65 @@ the statement's **hash** (the SHA-256 of the bytes `/api/flows` serves) under
 that configuration when the entry moves the hash but no version: such a
 change re-asks no one.
 
+## 2026-10-21 — three more hosted sources (#644 W3)
+
+The statement gains three sources: NYC Checkbook, NYC City Record and NYS
+Open Legislation, each a server this site runs in its own sandbox and each
+offered by its own switch (#656, merged 2026-10-21). That evening the
+reference instance turned the three switches on in production: the redeploy
+`dpl_3VS66T1g6TYb5Wx4ACLX7ofhB6rA` of commit `bfa7c87`, created 22:52:46Z
+(#644, the R8 G9 record, part 2).
+
+- Each new source has two recipients. The first is its sandbox, as NYC
+  Charter's is: role `sandbox-platform`, with the sandbox platform's posture.
+  The second is new to this log: the one upstream host its sandbox may reach,
+  as a recipient of its own (role `source`, id `source:<id>:<host>`). It
+  receives "the requests the connector makes for data, which can include
+  words from your question", and its holder is the one the source's manifest
+  entry states (router 0.6.0). NYC Charter reaches no upstream host and gains
+  nothing.
+- The base version does not move, so a consent given against the 2026-10-20
+  entry stays in force. Each new source is new to every consent given before
+  it: an existing consent takes it as Ask first (`source-added`,
+  `src/lib/sources/consent.ts`), and a first consent takes the source's
+  default (Ask first for NYC Checkbook and NYS Open Legislation, On for NYC
+  City Record).
+- The new holders' statements were read on 2026-10-19 and the sandbox
+  platform's on 2026-10-20, so the statement's `date` does not move.
+- With `NYS_LEGISLATION_HOSTING` set and `NYS_LEGISLATION_API_KEY` unset,
+  State legislation is not configured and the statement has no row for it.
+
+**Configuration:** the 2026-10-20 entry's, with the three switches and State
+legislation's key set. As variables:
+`SOCRATA_MCP_URL=https://socrata-mcp.civicaitools.org`,
+`NYC_CHARTER_HOSTING=sandbox`, `NYC_CHECKBOOK_HOSTING=sandbox`,
+`NYC_RECORD_HOSTING=sandbox`, `NYS_LEGISLATION_HOSTING=sandbox`,
+`NYS_LEGISLATION_API_KEY` set, `VERCEL_ENV` set, `GITHUB_CLIENT_ID` and
+`GITHUB_CLIENT_SECRET` set, `EXECUTOR_DRIVER=vercel-sandbox`,
+`NEXT_PUBLIC_ANALYTICS_SERVICE=plausible` and `NEXT_PUBLIC_ANALYTICS_ID` set;
+`MODEL_API_BASE_URL` unset or at `openrouter.ai`, `DATA_COMMONS_MCP_URL`
+unset or at Google's endpoint, and `SITE_DEPLOYMENT_GUIDE_URL` and
+`SITE_OPERATOR_STATES_NO_TRAINING` unset. The key is read for its presence
+only, like the sign-in pair, the analytics id and `VERCEL_ENV`, so the
+versions below hold for any value of it. `SOURCE_BRIDGE_SECRET`, which every
+hosted source needs to run, is not read by the statement. The statement
+production served after the redeploy (read 2026-10-21 at 22:55Z) carries the
+versions below; it differs from this configuration's only in the two
+settings left unset here, which move no version.
+
+**Base `version`:** `2489d0dda25a79b3286c380379c6d2c8202e66a77fe5b4f493f558a7ce190f9c` (unchanged)
+
+| Source | Its `version` | Where it runs | What its holders say they keep |
+|---|---|---|---|
+| `socrata` | `fe99ec852eb7bfa3c95ce0db20cf5d2c7411b79b1e61c5ddbad3c19190a61629` | `socrata-mcp.civicaitools.org` | unchanged |
+| `data-commons` | `a0d757284510792921c7889ed537e75ebbc9890a1f96c71b0fe393bc46ceb334` | Google's hosted endpoint, the default address | unchanged |
+| `nyc-charter` | `e381ddafc6d461ef1fdb913270aaac637d51801909613f6d7dc495fbcf6c7e61` | this site's sandbox | unchanged |
+| `nyc-checkbook` | `bb350a722fbf9a740096edbb561d00182bd4c9841d3254336a61ebfadeb17ec4` | this site's sandbox (`@betanyc/nyc-checkbook-mcp` 1.6.3), which may reach `www.checkbooknyc.com` | the sandbox platform (Vercel): not stated (read 2026-10-20); for `www.checkbooknyc.com`, the Office of the New York City Comptroller: not stated (read 2026-10-19) |
+| `nyc-record` | `d1f97a2e2eb4d52cd31119f384047a96c19fa60b3a386999d13b1bb58bf36f43` | this site's sandbox (`@betanyc/nyc-record-mcp` 1.1.0), which may reach `data.cityofnewyork.us` | the sandbox platform (Vercel): not stated (read 2026-10-20); for `data.cityofnewyork.us`, the City of New York: not stated (read 2026-10-19) |
+| `nys-legislation` | `83b334e65e930c58f4adca15b11fe59e04e212c978fbd60d1b645693d587adf8` | this site's sandbox (`@betanyc/nys-openlegislation-mcp` 2.4.0), which may reach `legislation.nysenate.gov` | the sandbox platform (Vercel): not stated (read 2026-10-20); for `legislation.nysenate.gov`, the New York State Senate: not stated (read 2026-10-19) |
+
+**`date`:** 2026-10-20 (unchanged).
+
 ## 2026-10-20 — the consent surfaces (#632 W3)
 
 The wording changes; no version moves, so no reader is asked again by this
