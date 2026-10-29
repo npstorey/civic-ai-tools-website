@@ -300,6 +300,12 @@ const EXCEPTIONS: readonly Exception[] = [
     hits: 2,
     why: "The deployment guide naming NYC City Record's one upstream host, in the hosted-sources table and in its switch's row (R8 W3): the host that server queries and its sandbox may reach, the same for every instance, never a portal a run chooses.",
   },
+  {
+    path: 'docs/flows-changelog.md',
+    classification: 'server-endpoint',
+    hits: 2,
+    why: "The flows change log's 2026-10-21 entry naming NYC City Record's one upstream host, twice in that source's row (R8 G9 leg 4): the host that server queries and its sandbox may reach, the same for every instance, never a portal a run chooses.",
+  },
   // The installed router package (#599 W2): the model-facing text that left
   // src/lib/mcp/{socrata-skill,tools,boston-skill,registry}.ts, where it was
   // 21 + 11 + 3 + 2 = 37 hits. 36 of them are here and one stayed in
