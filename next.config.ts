@@ -20,6 +20,19 @@ const nextConfig: NextConfig = {
   // own, tracked and reviewed; from 16.4 into a root AGENTS.md it creates.
   // Either is an uncommitted change on every dev run.
   agentRules: false,
+  // Next 16.4 defaults `experimental.agentUpgrade` to 'security': once an
+  // advisory exists against the installed Next, the first upgrade reminder
+  // stops a `next build` or `next dev` that a coding agent runs, with
+  // instructions to report the upgrade (Next's own agentUpgrade doc). Builds
+  // here run in agent worktrees mid-phase, so `false` turns the reminder off
+  // and an advisory never stops a phase with no code change. Advisories are
+  // watched instead: this repository's Dependabot alerts and security updates
+  // (on since 2026-10-27, beside the weekly version updates in
+  // `.github/dependabot.yml`) and the dependency census. An upgrade is then a
+  // change of its own, not a stop in the middle of another.
+  experimental: {
+    agentUpgrade: false,
+  },
   images: {
     remotePatterns: [
       {
