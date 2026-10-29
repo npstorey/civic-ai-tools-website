@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # .nvmrc pins 22; the script decompresses the commondataio registry
+      # .nvmrc pins 24; the script decompresses the commondataio registry
       # with node:zlib's zstd, which Node 20 does not have.
       - uses: actions/setup-node@v4
         with:
