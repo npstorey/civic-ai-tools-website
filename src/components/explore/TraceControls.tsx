@@ -10,6 +10,7 @@ import ConsentCard from '@/components/sources/ConsentCard';
 import SourcesPanel from '@/components/sources/SourcesPanel';
 import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
 import { useSourceConsent } from '@/components/sources/useSourceConsent';
+import { ConsentPausePrompt } from '@/components/answer-view/ConsentStep';
 
 export type DiagramMode = 'examples' | 'live';
 
@@ -444,6 +445,9 @@ export default function TraceControls({
                   Cancel
                 </button>
               </div>
+
+              {/* R9 P1 (#672): a run's open question, under the running question, with its two answers. */}
+              <ConsentPausePrompt />
 
               {/* Elapsed + indeterminate progress */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

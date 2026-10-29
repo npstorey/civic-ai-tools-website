@@ -15,6 +15,17 @@
  *   3. it reads the entry every `CONSENT_PAUSE_POLL_MS` for at most
  *      `CONSENT_PAUSE_BOUND_MS`, and answers `allow`, `not-now` or
  *      `no-answer`.
+ * The event also carries `entryExpiresAt`, the hold's start plus the entry's
+ * life (R9 P1, #669 D2): the card keeps its buttons until then, since an
+ * answer the entry still takes moves the source On for later questions.
+ *
+ * A READER WHO IS GONE (R9 P1, #668). When the reader's stream is dropped
+ * (the request's signal aborts, or the response stream is cancelled:
+ * `readerGone`), the hold ends `no-answer` at its next check rather than
+ * polling to its bound for nobody, so an answer posted afterwards cannot
+ * send the run on to the source. The entry is left as it is, its expiry
+ * unmoved, for the reader's card; the bound, the entry's life and every value
+ * the loop records are the same as for any hold that ends unanswered.
  * A run holds at most `CONSENT_PAUSE_RUN_BUDGET_MS` in all; the load step
  * holds once per source. Nothing here contacts a source or wakes a sandbox.
  *
@@ -176,6 +187,27 @@ export interface ConsentPauseInput {
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
   newKey?: () => string;
+  /** The reader's stream is gone (`readerGone`): a hold ends `no-answer` at its next check. */
+  gone?: AbortSignal;
+}
+
+/**
+ * Whether the reader of a streaming response is still there: `signal` aborts
+ * when the request's own signal does, or when the response stream is
+ * cancelled (its writer's `closed` rejects). `watch` is called once the
+ * route has its writer. Nothing here writes, reads the store or ends the run.
+ */
+export function readerGone(request: Request): { signal: AbortSignal; watch: (writer: WritableStreamDefaultWriter<unknown>) => void } {
+  const gone = new AbortController();
+  const end = () => { if (!gone.signal.aborted) gone.abort(); };
+  const own = request.signal as AbortSignal | undefined;
+  if (own?.aborted) end();
+  else own?.addEventListener('abort', end, { once: true });
+  return {
+    signal: gone.signal,
+    // A close of our own resolves `closed`; only a cancelled stream rejects it.
+    watch: (writer) => { writer.closed.catch(end); },
+  };
 }
 
 /** One run's pause: at most one hold per call to `ask`, and `CONSENT_PAUSE_RUN_BUDGET_MS` of holds in all. */
@@ -183,6 +215,17 @@ export function createConsentPause(input: ConsentPauseInput): ConsentPause {
   const now = input.now ?? (() => Date.now());
   const sleep = input.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const newKey = input.newKey ?? newDecisionKey;
+  const gone = input.gone;
+  // The wait between reads, cut short when the reader goes.
+  const pauseFor = (ms: number) => {
+    if (!gone) return sleep(ms);
+    if (gone.aborted) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const done = () => { gone.removeEventListener('abort', done); resolve(); };
+      gone.addEventListener('abort', done, { once: true });
+      void sleep(ms).then(done);
+    });
+  };
   const secret = input.secret ?? readPauseSecret();
   let spentMs = 0;
 
@@ -203,6 +246,8 @@ export function createConsentPause(input: ConsentPauseInput): ConsentPause {
       };
       const budget = CONSENT_PAUSE_RUN_BUDGET_MS - spentMs;
       if (!facts || !input.store || budget <= 0) return notHeld();
+      // Nobody is left to answer: no entry is written for them.
+      if (gone?.aborted) return notHeld();
 
       const key = newKey();
       const name = `${DECISION_KEY_PREFIX}${key}`;
@@ -215,12 +260,20 @@ export function createConsentPause(input: ConsentPauseInput): ConsentPause {
 
       const holdMs = Math.min(CONSENT_PAUSE_BOUND_MS, budget);
       const start = now();
-      send({ key, ...facts, expiresAt: new Date(start + holdMs).toISOString(), holds: true });
+      send({
+        key,
+        ...facts,
+        expiresAt: new Date(start + holdMs).toISOString(),
+        // The entry's end, from the same start (the seat's note 1); the store's own expiry is not moved.
+        entryExpiresAt: new Date(start + DECISION_ENTRY_TTL_SECONDS * 1000).toISOString(),
+        holds: true,
+      });
       try {
         for (;;) {
           const elapsed = now() - start;
-          if (elapsed >= holdMs) return 'no-answer';
-          await sleep(Math.min(CONSENT_PAUSE_POLL_MS, holdMs - elapsed));
+          if (elapsed >= holdMs || gone?.aborted) return 'no-answer';
+          await pauseFor(Math.min(CONSENT_PAUSE_POLL_MS, holdMs - elapsed));
+          if (gone?.aborted) return 'no-answer';
           let value: unknown;
           try {
             value = await input.store.get(name);
@@ -249,10 +302,11 @@ export function streamingRoutePause(
   consent: { statement?: FlowsStatement },
   session: DecisionSession | null | undefined,
   configured: McpRegistryEnv,
+  gone?: AbortSignal,
 ): ConsentPause | undefined {
   if (!consent.statement) return undefined;
   const dbId = session?.user?.dbId;
-  return createConsentPause({ store: decisionStoreFromEnv(), statement: consent.statement, configured, ...(dbId ? { dbId } : {}) });
+  return createConsentPause({ store: decisionStoreFromEnv(), statement: consent.statement, configured, ...(dbId ? { dbId } : {}), ...(gone ? { gone } : {}) });
 }
 
 // --- The decision ------------------------------------------------------------------------

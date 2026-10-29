@@ -7,7 +7,7 @@ import { mapEventToNodes } from '@/lib/bpmn/node-mapping';
 import type { ToolFailureKind } from '@/lib/notebook-author/tool-to-cell';
 import type { TraceEvent, PreRecordedTrace } from '@/lib/bpmn/traces';
 import { classifyStreamError, friendlyStreamError, type ProgressPhase } from '@/lib/streaming';
-import { reportConsentPause, reportConsentRefusal } from '@/components/sources/useSourceConsent';
+import { cancelConsentPauses, reportConsentPause, reportConsentRefusal } from '@/components/sources/useSourceConsent';
 import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
 import { generateGroupLabel } from '@/hooks/useStreamingComparison';
 import {
@@ -106,6 +106,8 @@ export function useLiveTrace(): UseLiveTraceReturn {
 
   const cancel = useCallback(() => {
     if (abortRef.current) abortRef.current.abort();
+    // R9 P1 (#668): a hold the run was in ends with it, so no card offers an answer the run asked for.
+    cancelConsentPauses();
     clearTimers();
     setElapsedMs(Date.now() - startTimeRef.current);
     setStatus('cancelled');
@@ -358,6 +360,8 @@ export function useLiveTrace(): UseLiveTraceReturn {
             reportConsentPause(pause);
             return;
           }
+          // Any other line of the run: it has moved past a hold still open, as on the other surfaces (R9 P1).
+          reportConsentPause(null);
 
           const message = eventData.message as string;
           const iteration = eventData.iteration as number | undefined;

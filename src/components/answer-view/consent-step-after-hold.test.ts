@@ -300,6 +300,27 @@ test('criterion 2: a 409 after the hold (answered elsewhere) says an answer was 
   assert.deepEqual(labels(card), []);
 });
 
+// --- The row shows the latest pause about its source -----------------------------------------------
+
+test('criterion 2, the row: an earlier question\'s pause, unanswered and alive, never comes back in the row once a later pause about the same source is answered', async () => {
+  const { page, tick } = await pausedOnClock();
+  await tick(60_000);
+  assert.equal(rowCards(page).length, 1, 'premise: the row shows the earlier pause after its hold');
+  // A later question pauses on the same source; the reader answers it in the row while the run waits.
+  const key = nextKey();
+  assert.equal(await kv.set(`consent-decision:${key}`, { sourceId: 'boston-opencontext' }, { ex: 600, nx: true }), 'OK', 'premise: the entry was written');
+  bus.reportConsentPause(pauseAt(key, Date.now()));
+  await page.settle();
+  const row = rowCards(page);
+  assert.equal(row.length, 1, `the row shows ${row.length} cards: ${summary(page)}`);
+  assert.ok(row[0].text.includes(WAIT), `the row does not show the later pause: ${row[0].text}`);
+  await page.click(buttonOf(row[0], 'Allow'));
+  await page.settle();
+  bus.reportConsentPause(null);
+  await page.settle();
+  assert.equal(rowCards(page).length, 0, `the row brought back the earlier pause after the later one was answered: ${summary(page)}`);
+});
+
 // --- The run's moved-on state never hides the buttons (note 4) -----------------------------------
 
 interface Held { response: Response; push: (event: Json) => void; close: () => void }

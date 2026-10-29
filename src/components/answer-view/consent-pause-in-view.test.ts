@@ -244,11 +244,13 @@ function assertPrompt(prompt: HostElement, where: string): void {
   assert.deepEqual(buttons[0].props.style, buttons[1].props.style, `${where}: the prompt's two buttons are styled differently`);
 }
 
-/** Document order: `a` comes before `b` in the page's elements. */
+/** Document order: `a` comes before `b` in the page's elements (each read from the last render). */
 function before(surface: Surface, a: HostElement, b: HostElement): boolean {
   const all = surface.elements();
   return all.indexOf(a) >= 0 && all.indexOf(a) < all.indexOf(b);
 }
+/** The question box as the last render has it (an element read before a re-render is not in it). */
+const questionBox = (surface: Surface) => surface.elements().find((el) => el.type === 'textarea' && el.props['aria-label'] === 'Ask a question about open data')!;
 
 /** The one scroll made since `from`: on the run's step card for Boston, with these options. */
 function assertScrolledToCard(surface: Surface, from: number, behavior: 'smooth' | 'auto', where: string): void {
@@ -285,7 +287,8 @@ function rowCopy(surface: Surface): string {
   assert.ok(row, 'premise: no Boston row');
   let text = textOf(row!);
   for (const card of [...within(row!.props.children)].filter((el) => el.props['data-part'] === 'consent-step')) text = text.replace(textOf(card), '');
-  return text;
+  // The space the harness's text puts between the row's last line and the card goes with the card.
+  return text.trimEnd();
 }
 
 // --- Criterion 1: the home page ----------------------------------------------------------------------
@@ -297,7 +300,7 @@ for (const reduced of [false, true]) {
     reducedMotion = reduced;
     await consentWith({ 'boston-opencontext': 'ask-first' });
     const p = await mountPage(h(Home));
-    const box = await askOnQueryForm(p);
+    await askOnQueryForm(p);
     const stream = streams[0];
     assert.ok(stream, 'premise: the question was sent');
     await settle(p, SCROLL_WAIT);
@@ -315,7 +318,7 @@ for (const reduced of [false, true]) {
     const prompt = onePrompt(p, 'the home page');
     assertPrompt(prompt, 'the home page');
     // Near the question box: after it in the page, and before the run's steps.
-    assert.ok(before(p, box, prompt), 'the prompt comes before the question box');
+    assert.ok(before(p, questionBox(p), prompt), 'the prompt comes before the question box');
     assert.ok(before(p, prompt, stepCards(p)[0]), 'the prompt comes after the run\'s step card');
     // The Sources panel row's own copy is byte-identical (the card is the only addition).
     assert.equal(rowCopy(p), rowBefore, 'the row\'s copy changed when the pause arrived');
@@ -337,7 +340,7 @@ test('criterion 1, /ask (the executed run): a holding pause scrolls the step car
   answers();
   await consentWith({ 'boston-opencontext': 'ask-first' });
   const p = await mountPage(h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode: 'notebook' }));
-  const box = await askOnQueryForm(p);
+  await askOnQueryForm(p);
   const stream = streams[0];
   assert.ok(stream, 'premise: the question was sent');
   await settle(p, SCROLL_WAIT);
@@ -351,7 +354,7 @@ test('criterion 1, /ask (the executed run): a holding pause scrolls the step car
   assertScrolledToCard(p, from, 'smooth', '/ask');
   const prompt = onePrompt(p, '/ask');
   assertPrompt(prompt, '/ask');
-  assert.ok(before(p, box, prompt) && before(p, prompt, stepCards(p)[0]), '/ask: the prompt is not between the question box and the run\'s steps');
+  assert.ok(before(p, questionBox(p), prompt) && before(p, prompt, stepCards(p)[0]), '/ask: the prompt is not between the question box and the run\'s steps');
   stream.push({ type: 'phase_a_progress', ...LOAD_DONE });
   await settle(p);
   assert.equal(prompts(p).length, 0, `the prompt stays after the run moved past the pause: ${summary(p)}`);

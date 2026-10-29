@@ -20,6 +20,7 @@ import QueryForm from '@/components/QueryForm';
 import { useDefaultPortalArg } from '@/components/DefaultPortalProvider';
 import ComparisonDisplay from '@/components/ComparisonDisplay';
 import NotebookOutput from '@/components/notebook/NotebookOutput';
+import { ConsentPausePrompt, preferredScrollBehavior } from '@/components/answer-view/ConsentStep';
 import { useStreamingComparison } from '@/hooks/useStreamingComparison';
 import { useNotebookStream } from '@/hooks/useNotebookStream';
 import { useSessionChoice } from '@/hooks/useSessionChoice';
@@ -136,9 +137,10 @@ export default function QuerySurface({
     setLastPortal(effectivePortal);
     setLastMode(mode);
 
-    // Scroll to results after a brief delay to let the loading state render
+    // Scroll to results after a brief delay to let the loading state render.
+    // At once, not smoothly, when the reader asked for reduced motion (R9 P1).
     setTimeout(() => {
-      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      resultsRef.current?.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
     }, 100);
 
     if (mode === 'notebook') {
@@ -155,7 +157,7 @@ export default function QuerySurface({
 
   const handleContinue = (continuationPrompt: string) => {
     setTimeout(() => {
-      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      resultsRef.current?.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
     }, 100);
     streaming.startComparison(continuationPrompt, usedModel, lastPortal, {
       mcpOnly: shouldRunMcpOnly(presentation, comparisonRestored),
@@ -171,7 +173,7 @@ export default function QuerySurface({
     if (!lastQuery) return;
     setComparisonChoice('on');
     setTimeout(() => {
-      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      resultsRef.current?.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
     }, 100);
     streaming.startComparison(lastQuery, usedModel, lastPortal, { mcpOnly: false });
     setQueryCount((c) => c + 1);
@@ -229,6 +231,8 @@ export default function QuerySurface({
         streaming.withoutMcp.isComplete || streaming.withMcp.isComplete || streaming.error) && (
         <div ref={resultsRef} className="max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
           <h2 style={{ marginBottom: '16px' }}>Results</h2>
+          {/* R9 P1 (#672): where the submit scroll leaves the reader, a run's open question, with its two answers. */}
+          <ConsentPausePrompt />
           <ComparisonDisplay
             withoutMcp={null}
             withMcp={null}
@@ -282,6 +286,8 @@ export default function QuerySurface({
         <div ref={resultsRef} className="max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
           {/* UX pass row 19: the reader's words for the mode, as the record page says it. */}
           <h2 style={{ marginBottom: '16px' }}>Answer, executed in a signed sandbox</h2>
+          {/* R9 P1 (#672): the run's open question, as above. */}
+          <ConsentPausePrompt />
           <NotebookOutput
             state={notebook.state}
             prompt={lastQuery}

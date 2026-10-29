@@ -122,12 +122,17 @@ export default function SourcesPanel() {
                 }
                 return sinceLine ? <div>{sinceLine}</div> : null;
               })()}
-              {state === 'ask-first' && <div>{consent.routing === 'in-loop' ? ASK_FIRST_MEANS_WITH_PAUSE : ASK_FIRST_MEANS}</div>}
+              {/* A question stops to ask only in loop and with the decision store (R9 P1, #666): the pause words only then. */}
+              {state === 'ask-first' && <div>{consent.routing === 'in-loop' && consent.store === true ? ASK_FIRST_MEANS_WITH_PAUSE : ASK_FIRST_MEANS}</div>}
               {/* R8 W2 (#644): a question is waiting for an answer about this source; the run's own card is the same. */}
               {(() => {
-                // At most one entry is open at a time: a later pause ends every other (`reportConsentPause`).
-                const open = Object.values(consent.pauses).find((p) => !p.ended && p.payload.source.sourceId === source.sourceId);
-                return open ? <ConsentStep pause={open.payload} /> : null;
+                // R9 P1 (#669 D2): the latest pause about this source, for its entry's life, not only its hold's:
+                // unanswered, or answered after the hold (its confirmation stays here). An answer given during the
+                // hold leaves with the hold. An earlier question's pause never comes back in its place.
+                const latest = Object.values(consent.pauses).reverse().find((p) => p.payload.source.sourceId === source.sourceId);
+                const shown = latest && !latest.expired
+                  && (!latest.holdEnded || latest.afterHold === true || (latest.decision === undefined && latest.failure === undefined));
+                return latest && shown ? <ConsentStep pause={latest.payload} place="row" /> : null;
               })()}
             </li>
           );

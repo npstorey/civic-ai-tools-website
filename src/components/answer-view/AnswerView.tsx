@@ -310,7 +310,7 @@ export function StepsPartView({ steps }: { steps: StepsPart }) {
             ))}
           </div>
           {/* A load paused to ask the reader (#644 W2): its consent step, after the steps so far */}
-          {steps.consent?.map((entry, i) => (entry.pause ? <ConsentStep key={`c-${i}`} pause={entry.pause} ended={entry.isComplete === true} /> : null))}
+          {steps.consent?.map((entry, i) => (entry.pause ? <ConsentStep key={`c-${i}`} pause={entry.pause} runMovedOn={entry.isComplete === true} /> : null))}
           {steps.view.unplaced.length > 0 && (
             <div data-part="steps-unplaced" style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
               <p style={{ margin: 0 }}>{UNPLACED_CALLS_LINE}</p>
