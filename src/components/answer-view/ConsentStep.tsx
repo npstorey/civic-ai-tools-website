@@ -74,12 +74,12 @@ export const CONSENT_STEP_TEXT = {
   gone: 'This question is no longer waiting for an answer.',
   decided: 'An answer was already given for this question.',
   failed: 'Your answer could not be saved. You can set this source in the panel.',
-  // After the hold (R9 P1, #669 D2): hypotheses until the research check passes them.
-  stillAnswer: 'You can still answer for your next question.',
+  // After the hold (R9 P1, #669 D2): as the research check and the seat ruled them.
+  stillAnswer: 'You can still answer for later questions.',
   afterChoices: 'Allow: it is turned On for later questions. Not now: nothing changes.',
-  allowedAfter: 'You chose Allow. It is On for your next question.',
+  allowedAfter: 'You chose Allow. It is On for later questions.',
   allowedAfterNotMoved: 'You chose Allow, but it could not be turned On. You can turn it On in the panel.',
-  declinedAfter: 'You chose Not now. Nothing has changed.',
+  declinedAfter: 'You chose Not now. It is still set to Ask first.',
 } as const;
 
 /** How every scroll the question surface makes moves: at once when the reader asked for reduced motion. */

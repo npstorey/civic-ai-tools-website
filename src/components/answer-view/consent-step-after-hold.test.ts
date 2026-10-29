@@ -96,13 +96,13 @@ const consentRoute = await load('app/api/sources/consent/route.ts');
 const decisionRoute = await load('app/api/sources/consent/decision/route.ts');
 const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.ts');
 
-// --- The words, as the card must render them (hypotheses until the research check) --------
+// --- The words, as the card must render them (as ruled after the research check) ----------
 
 const ENDED = 'The question went on without your answer, so it did not use this source.';
-const STILL = 'You can still answer for your next question.';
+const STILL = 'You can still answer for later questions.';
 const AFTER_CHOICES = 'Allow: it is turned On for later questions. Not now: nothing changes.';
-const ALLOWED_AFTER = 'You chose Allow. It is On for your next question.';
-const DECLINED_AFTER = 'You chose Not now. Nothing has changed.';
+const ALLOWED_AFTER = 'You chose Allow. It is On for later questions.';
+const DECLINED_AFTER = 'You chose Not now. It is still set to Ask first.';
 const GONE = 'This question is no longer waiting for an answer.';
 const DECIDED = 'An answer was already given for this question.';
 const WAIT = 'The question waits up to a minute for your answer.';
@@ -234,7 +234,7 @@ test('criterion 2: after the hold\'s end the card says the run went on without t
   assert.deepEqual(card.buttons[0].props.style, card.buttons[1].props.style, 'the two buttons are styled differently after the hold');
 });
 
-test('criterion 2: Allow after the hold posts to the decision route (200), the card says it applies to the next question, and the panel shows the source On', async () => {
+test('criterion 2: Allow after the hold posts to the decision route (200), the card says it applies to later questions, and the panel shows the source On', async () => {
   const { page, key, tick } = await pausedOnClock();
   await tick(60_000);
   await tick(240_000);
@@ -250,7 +250,7 @@ test('criterion 2: Allow after the hold posts to the decision route (200), the c
   assert.ok(row.every((c) => c.outcome === ALLOWED_AFTER && c.buttons.length === 0), `the row's card after Allow: ${summary(page)}`);
 });
 
-test('criterion 2: Not now after the hold says nothing has changed, and the source stays Ask first', async () => {
+test('criterion 2: Not now after the hold says it is still set to Ask first, and the source stays Ask first', async () => {
   const { page, key, tick } = await pausedOnClock();
   await tick(120_000);
   await page.click(buttonOf(stepsCard(page), 'Not now'));
