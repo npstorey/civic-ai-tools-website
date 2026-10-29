@@ -26,7 +26,7 @@ jobs:
     name: build / test / lint / typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Node version comes from the repo's own constraint: package.json
       # `engines.node` is ">=22" and .nvmrc pins 24, the major the hosted
@@ -144,7 +144,7 @@ jobs:
     name: container image build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The default target (runner), not `--target builder`: it is what
       # `docker compose up --build` builds, and it additionally exercises the
@@ -450,7 +450,7 @@ jobs:
     name: executor image build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -510,7 +510,7 @@ jobs:
     name: lambda executor image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
