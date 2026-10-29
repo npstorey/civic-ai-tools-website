@@ -121,6 +121,21 @@ Each cost a real mistake; the incident sits in an HTML comment beside it. Path-s
   worker pool. CI's `build` job is the real gate.
   <!-- Blamed on Google Fonts egress for two days. Not a network problem — since #246 fonts are
        self-hosted (src/fonts/). Same restriction behind the socket-binding failures in #249. -->
+- **`npm run typecheck` follows the bundler that built last.** It reads the route types the build emits
+  into `.next/types`, so it is read after the build the gate uses (`npm run build`, Turbopack, as CI
+  runs it), never after a `npm run build -- --webpack` left in place.
+  <!-- R6's close (#665, F1 of its cold read): from `066ce57` (2026-10-20) the consent route's `DELETE`
+       took an optional request. On main, `npm run build -- --webpack` and the `npm run typecheck` after
+       it were red while CI's Turbopack build and its typecheck stayed green, so every required check
+       was evidence about the Turbopack path only. A gate record that says "build, then typecheck" names
+       which build; a cold read runs the webpack build and the typecheck after it once, since CI never
+       does. -->
+- **A route handler's `request` parameter is never optional.** Next's generated route type refuses
+  `DELETE(request?: Request)`, and only the webpack build and the typecheck after it say so: pass a
+  `Request`, even to a handler that reads nothing from it.
+  <!-- Same incident: `DELETE(request?: Request)` passed every required check from `066ce57` until #665
+       (merged `7c04e65`, 2026-10-27) made it `DELETE(request: Request)` and read the revoke's `Secure`
+       flag from that request. -->
 - **Touching `.env*` stalls a background agent.** Any read of a `.env*` file trips the global
   secret-read guard, and a subagent that hits it hangs to the 600s watchdog instead of failing fast.
   Ask the owner to run env edits in their own terminal.
