@@ -23,7 +23,7 @@ jobs:
     env:
       BRANCH: automation/portal-registries
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # .nvmrc pins 24; the script decompresses the commondataio registry
       # with node:zlib's zstd, which Node 20 does not have.

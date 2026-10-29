@@ -52,7 +52,7 @@ jobs:
     name: standalone build + asset check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Same Node source of truth as ci.yml: .nvmrc pins 24, matching the
       # container base image; package.json engines stays ">=22".
