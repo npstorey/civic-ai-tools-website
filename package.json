@@ -15,7 +15,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types 'src/**/*.test.ts' 'scripts/**/*.test.mjs'",
+    "test": "node --test --test-reporter=tap --test-reporter-destination=stdout --experimental-strip-types 'src/**/*.test.ts' 'scripts/**/*.test.mjs'",
     "sandbox:build-snapshot": "node --experimental-strip-types scripts/build-sandbox-snapshot.ts",
     "update-portals": "node scripts/update-portals.mjs",
     "db:generate": "drizzle-kit generate",
