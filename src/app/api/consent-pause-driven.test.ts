@@ -29,6 +29,14 @@
 // in model text. The load span carries the base's five attributes. The census
 // is shown catching a planted key in the trace and the package first.
 //
+// R9 P1 (#669 D2, the seat's note 1): the wire's pause also carries
+// `entryExpiresAt`, and the census above is re-run over a payload that has it.
+// (#668, note 3), measured first and then built: a reader who drops the
+// stream mid-hold (the request's signal aborted, or the response body
+// cancelled, each on its own) ends the hold `no-answer` at the next poll; an
+// Allow posted afterwards finds the entry (200, left for the reader's card)
+// and the run does not go on to the source.
+//
 // No live endpoint, no credential: every key is a placeholder and every
 // address is loopback.
 //
@@ -149,10 +157,13 @@ registerHooks({
 // --- The loopback MCP sources ------------------------------------------------------------
 
 const ONE_ROW = JSON.stringify({ data: [{ count: '77' }], total_rows: 1 });
+/** Every request the sources were sent, as `<path> <method>` (R9 P1's dropped-stream legs count them). */
+const MCP_CALLS: string[] = [];
 const mcp = http.createServer(async (req, res) => {
   let body = '';
   for await (const chunk of req) body += chunk;
   const msg = body ? (JSON.parse(body) as { id?: unknown; method?: string }) : {};
+  MCP_CALLS.push(`${req.url ?? ''} ${msg.method ?? ''}`);
   if (msg.id === undefined) { res.writeHead(202); res.end(); return; }
   const reply = (payload: Record<string, unknown>) => JSON.stringify({ jsonrpc: '2.0', id: msg.id, ...payload });
   if (msg.method === 'initialize') {
@@ -186,7 +197,10 @@ function turnFor(body: Json): Call[] | null {
   return null;
 }
 
+/** How many requests the model endpoint was sent. */
+let MODEL_REQUESTS = 0;
 const model = http.createServer((req, res) => {
+  MODEL_REQUESTS += 1;
   const chunks: Buffer[] = [];
   req.on('data', (c: Buffer) => chunks.push(c));
   req.on('end', () => {
@@ -392,6 +406,9 @@ test('step 3: compare-stream carries consent_pause as a progress event with no i
   assert.ok(typeof event.message === 'string' && (event.message as string).length > 0, 'the pause event carries no reader line');
   assert.ok(!String(event.message).includes(String(pause.key)), 'the reader line carries the key');
   assert.equal(Object.hasOwn(event, 'args'), false, 'the pause event carries args');
+  // R9 P1 (note 1): the entry's end, from the hold's own start: the hold's end plus the difference of the two bounds.
+  assert.equal(typeof pause.entryExpiresAt, 'string', 'the pause event carries no entryExpiresAt');
+  assert.equal(Date.parse(String(pause.entryExpiresAt)) - Date.parse(String(pause.expiresAt)), 540_000, `expiresAt ${String(pause.expiresAt)}, entryExpiresAt ${String(pause.entryExpiresAt)}`);
 });
 
 test('step 2: the decision posted with the event\'s key is answered 200, and the load records loaded', () => {
@@ -533,4 +550,91 @@ test('criterion 1: replay passes no hold, and a replayed load emits no consent_p
   assert.deepEqual(events.filter((e) => e.type === 'consent_pause'), []);
   assert.deepEqual(result.toolCalls.filter((c) => c.operationType === 'load_source').map((c) => c.loadOutcome), ['loaded']);
   assert.deepEqual(kv.calls.filter((c) => c.key.startsWith('consent-decision:')), []);
+});
+
+// --- R9 P1 (#668, note 3): the reader drops the stream mid-hold ------------------------------
+
+interface Dropped { key: string; readsAtDrop: number; readsAfter: number; allowStatus: number; bostonCalls: number; rest: Drive | null }
+
+/**
+ * Start a held run, read to its pause, then drop the stream the way `how`
+ * says: `signal` aborts the request's signal and goes on reading the body
+ * (so the run's trace can be read to its end), `cancel` cancels the body and
+ * aborts nothing. Waits, counts the hold's reads of the store, posts Allow
+ * with the pause's key, waits again, and counts the calls to Boston.
+ */
+async function dropMidHold(route: 'compare-stream' | 'query-notebook', how: 'signal' | 'cancel'): Promise<Dropped> {
+  await setRow(BOSTON_ASK_FIRST);
+  const controller = new AbortController();
+  process.env.SOURCE_ROUTING = 'in-loop';
+  let response: Response;
+  try {
+    const body = route === 'compare-stream' ? streamBody : { query: QUESTION, portal: 'data.example.org' };
+    const req = new Request(`http://localhost/api/${route}`, { method: 'POST', body: JSON.stringify(body), signal: controller.signal });
+    response = (await (route === 'compare-stream' ? compareStreamRoute : notebookRoute).POST(req as never)) as Response;
+  } finally {
+    delete process.env.SOURCE_ROUTING;
+  }
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  let key: string | null = null;
+  while (key === null) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    text += decoder.decode(value, { stream: true });
+    key = /"key":"([0-9a-f]{32})"/.exec(text)?.[1] ?? null;
+  }
+  assert.ok(key, `premise: the run did not pause:\n${text.slice(0, 600)}`);
+  const name = `consent-decision:${key}`;
+  const reads = () => kv.calls.filter((c) => c.op === 'get' && c.key === name).length;
+  const bostonBefore = MCP_CALLS.filter((c) => c.startsWith('/boston/mcp tools/call')).length;
+  // Let the hold poll first, so a hold that never polled could not pass.
+  await new Promise((resolve) => setTimeout(resolve, 1_200));
+  assert.ok(reads() >= 1, 'premise: the hold never read the store');
+  if (how === 'signal') controller.abort();
+  else await reader.cancel();
+  // One poll may already be in flight when the stream goes.
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  const readsAtDrop = reads();
+  await new Promise((resolve) => setTimeout(resolve, 1_500));
+  const readsAfter = reads();
+  const allowStatus = await postDecision(key!, 'allow');
+  // Read what is left of the stream (the signal leg's body was never cancelled), or wait as long.
+  let rest: Drive | null = null;
+  if (how === 'signal') {
+    const tail = await readAnswering(new Response(new ReadableStream({ async pull(c) { const { value, done } = await reader.read(); if (done) c.close(); else c.enqueue(value); } })), null, () => undefined);
+    rest = { events: tail.events, body: text + tail.body, decided: [] };
+  } else {
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+  }
+  const bostonCalls = MCP_CALLS.filter((c) => c.startsWith('/boston/mcp tools/call')).length - bostonBefore;
+  return { key: key!, readsAtDrop, readsAfter, allowStatus, bostonCalls, rest };
+}
+
+for (const how of ['signal', 'cancel'] as const) {
+  test(`R9 P1 (#668): compare-stream, the stream dropped mid-hold (${how === 'signal' ? 'the request\'s signal aborted' : 'the response body cancelled'}): the hold stops polling, and an Allow posted afterwards is saved but the run does not go on to the source`, async () => {
+    const modelBefore = MODEL_REQUESTS;
+    const d = await dropMidHold('compare-stream', how);
+    assert.equal(d.readsAfter, d.readsAtDrop, `the hold kept reading the store after the stream was dropped: ${d.readsAtDrop} reads at the drop, ${d.readsAfter} 1.5 s later`);
+    // The entry is left for the reader's card (D2): the answer is saved, and moves the source On for later questions.
+    assert.equal(d.allowStatus, 200, 'the entry was not left for the reader');
+    assert.equal(d.bostonCalls, 0, `the run went on to the source after the stream was dropped (${d.bostonCalls} call(s) to Boston)`);
+    assert.ok(MODEL_REQUESTS > modelBefore, 'premise: the model was never asked');
+    if (d.rest) {
+      // The record says what it says for any hold that ended unanswered: no-answer, and the base's five attributes.
+      const trace = traceOf(d.rest);
+      const loads = loadSpanAttributes(trace);
+      assert.deepEqual(loads.map((a) => a['tool.load_outcome']), ['no-answer']);
+      assert.deepEqual(Object.keys(loads[0]).sort(), ['tool.arguments', 'tool.duration_ms', 'tool.load_outcome', 'tool.name', 'tool.operation_type']);
+      assert.ok(!JSON.stringify(trace).includes(d.key), 'the key reached the trace');
+    }
+  });
+}
+
+test('R9 P1 (#668): query-notebook, the request\'s signal aborted mid-hold: the hold stops polling, and an Allow posted afterwards does not reach the source', async () => {
+  const d = await dropMidHold('query-notebook', 'signal');
+  assert.equal(d.readsAfter, d.readsAtDrop, `the hold kept reading the store after the stream was dropped: ${d.readsAtDrop} reads at the drop, ${d.readsAfter} 1.5 s later`);
+  assert.equal(d.allowStatus, 200, 'the entry was not left for the reader');
+  assert.equal(d.bostonCalls, 0, `the run went on to the source after the stream was dropped (${d.bostonCalls} call(s) to Boston)`);
 });

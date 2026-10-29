@@ -15,6 +15,12 @@
 // `src/lib/mcp/source-routing-mode.ts`, and `useSourceConsent.ts` reads it
 // beside the status and the statement.
 //
+// R9 P1 (#666, its second half): the row reads card F's words only where a
+// question can stop: the mode is `in-loop` AND the decision store pair is set
+// (the `GET`'s `store`). Under `in-loop` with no store a question cannot stop
+// to ask (every Ask-first load records `no-answer`), so the row reads the
+// words true on every instance; under `all-sources` the store does not matter.
+//
 // WHAT IS DRIVEN. The decision route's real `GET`, under each value of the
 // variable; and the real Sources panel on R6's surface harness
 // (`src/components/sources/surface-test-harness.ts`), whose request for the
@@ -67,13 +73,20 @@ const F_RULED = 'Ask first: nothing is sent to this source until you turn it On,
 /** The words true on every instance (R6's T6, `consent-texts-ruled.test.ts`). */
 const T6 = 'Ask first: nothing is sent to this source until you turn it On.';
 
-/** `SOURCE_ROUTING` set to `value` (or unset) for the length of `run`, and every warning the server logs meanwhile. */
-async function withRouting<T>(value: string | undefined, run: () => Promise<T>): Promise<{ result: T; warned: string[] }> {
+/**
+ * `SOURCE_ROUTING` set to `value` (or unset) for the length of `run`, and every warning the server logs meanwhile;
+ * with `store`, the decision store pair set to fixture values too (R9 P1), else left unset.
+ */
+async function withRouting<T>(value: string | undefined, run: () => Promise<T>, store = false): Promise<{ result: T; warned: string[] }> {
   const prior = process.env.SOURCE_ROUTING;
   const warn = console.warn;
   const warned: string[] = [];
   if (value === undefined) delete process.env.SOURCE_ROUTING;
   else process.env.SOURCE_ROUTING = value;
+  if (store) {
+    process.env.KV_REST_API_URL = 'https://kv.fixture.example';
+    process.env.KV_REST_API_TOKEN = 'fixture-kv-token';
+  }
   console.warn = (...args: unknown[]) => { warned.push(args.map(String).join(' ')); };
   try {
     return { result: await run(), warned };
@@ -81,6 +94,8 @@ async function withRouting<T>(value: string | undefined, run: () => Promise<T>):
     console.warn = warn;
     if (prior === undefined) delete process.env.SOURCE_ROUTING;
     else process.env.SOURCE_ROUTING = prior;
+    delete process.env.KV_REST_API_URL;
+    delete process.env.KV_REST_API_TOKEN;
   }
 }
 
@@ -129,12 +144,14 @@ test('item 1: ASK_FIRST_MEANS_WITH_PAUSE is card F\'s ruled words, and ASK_FIRST
 
 // --- The panel ---------------------------------------------------------------------------------
 
-/** How the test answers the panel's read of the mode. */
-type ModeAnswer = { label: string; routing?: string; reply?: () => Response };
+/** How the test answers the panel's read of the mode; `store` sets the decision store pair for the route's GET (R9 P1). */
+type ModeAnswer = { label: string; routing?: string; store?: boolean; reply?: () => Response };
 
-const ANSWERS: Record<'inLoop' | 'allSources' | 'unset' | 'unmatched' | 'noMode', ModeAnswer> = {
-  inLoop: { label: 'the route, under in-loop', routing: 'in-loop' },
+const ANSWERS: Record<'inLoop' | 'inLoopNoStore' | 'allSources' | 'allSourcesStore' | 'unset' | 'unmatched' | 'noMode', ModeAnswer> = {
+  inLoop: { label: 'the route, under in-loop with the store pair set', routing: 'in-loop', store: true },
+  inLoopNoStore: { label: 'the route, under in-loop with the store pair unset', routing: 'in-loop', store: false },
   allSources: { label: 'the route, under all-sources', routing: 'all-sources' },
+  allSourcesStore: { label: 'the route, under all-sources with the store pair set', routing: 'all-sources', store: true },
   unset: { label: 'the route, with the variable unset', routing: undefined },
   // The harness's own reply to a request it has no answer for.
   unmatched: { label: 'the harness\'s unmatched reply (599)', reply: () => new Response(JSON.stringify({ error: 'no answer for /api/sources/consent/decision' }), { status: 599 }) },
@@ -150,7 +167,7 @@ async function panelUnder(answer: ModeAnswer): Promise<{ panel: Surface; row: ()
     '/api/sources/consent/decision': async (request: Request) => {
       assert.equal(request.method, 'GET', 'the panel posted a decision');
       if (answer.reply) return answer.reply();
-      return (await withRouting(answer.routing, () => getRoute()(request))).result;
+      return (await withRouting(answer.routing, () => getRoute()(request), answer.store === true)).result;
     },
     '/api/flows': () => flowsRoute.GET(),
     '/api/sources/consent': (request: Request) => (consentRoute[request.method] as (r: Request) => Promise<Response>)(request),
@@ -174,7 +191,13 @@ test('item 1: the panel on an in-loop instance: the Ask first row reads card F\'
   panel.unmount();
 });
 
-for (const key of ['allSources', 'unset', 'unmatched', 'noMode'] as const) {
+test('R9 P1 (#666): the route\'s GET under in-loop says whether the store pair is set, and nothing else', async () => {
+  const set = await withRouting('in-loop', async () => (await getRoute()(new Request(`${ORIGIN}/api/sources/consent/decision`, { method: 'GET' }))).json(), true);
+  assert.deepEqual(set.result, { routing: 'in-loop', store: true });
+  assert.deepEqual((await askRoute('in-loop')).body, { routing: 'in-loop', store: false });
+});
+
+for (const key of ['inLoopNoStore', 'allSources', 'allSourcesStore', 'unset', 'unmatched', 'noMode'] as const) {
   test(`item 1: the panel when the mode reads not in-loop (${ANSWERS[key].label}): the Ask first row reads the bare line and promises no ask`, async () => {
     const { panel, row } = await panelUnder(ANSWERS[key]);
     assert.ok(row().includes(T6), `the Ask first row: ${row()}`);

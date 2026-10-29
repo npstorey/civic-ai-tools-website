@@ -305,6 +305,12 @@ test('criterion 3 (c): while a decision is pending, the panel\'s row for that so
   assert.ok(!socrata.some((el) => el.props['data-part'] === 'consent-step'), 'another source\'s row shows the card');
   bus.reportConsentPause(null);
   await panel.settle();
-  assert.ok(![...within(rowOf('boston-opencontext'))].some((el) => el.props['data-part'] === 'consent-step'), 'the row keeps the card after the run moved on');
+  // R9 P1 (#669 D2): the run moving on ends the hold, not the entry. The row keeps the card, with
+  // the after-hold words and both buttons, for the entry's life (consent-step-after-hold.test.ts).
+  const after = [...within(rowOf('boston-opencontext'))];
+  const cardAfter = after.find((el) => el.props['data-part'] === 'consent-step');
+  assert.ok(cardAfter, 'the row lost the card when the run moved on, while the entry lives');
+  assert.ok(textOf(cardAfter!).includes('The question went on without your answer'), `the row's card after the run moved on: ${textOf(cardAfter!)}`);
+  assert.deepEqual([...within(cardAfter!.props.children)].filter((el) => el.type === 'button').map((el) => textOf(el)), ['Allow', 'Not now'], 'the row\'s card lost its buttons when the run moved on');
   panel.unmount();
 });
