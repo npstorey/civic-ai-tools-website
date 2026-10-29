@@ -54,8 +54,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Same Node source of truth as ci.yml: .nvmrc pins 22, matching
-      # package.json engines and the container base image.
+      # Same Node source of truth as ci.yml: .nvmrc pins 24, matching the
+      # container base image; package.json engines stays ">=22".
       - uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'

@@ -43,7 +43,7 @@ so the same code runs on a managed platform or on your own hardware
 
 ## Quick start (local development)
 
-Node.js ≥ 22 (`.nvmrc` pins 22).
+Node.js ≥ 22 (`.nvmrc` pins 24, the major the hosted production runtime uses).
 
 ```bash
 git clone https://github.com/npstorey/civic-ai-tools-website.git

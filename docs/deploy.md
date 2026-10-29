@@ -501,7 +501,7 @@ edit:
 
 | Image | Build argument | Default | What it names |
 | --- | --- | --- | --- |
-| Application (`Dockerfile`) | `NODE_IMAGE` | `node:22-bookworm-slim` | The base of the dependency, build and runtime stages |
+| Application (`Dockerfile`) | `NODE_IMAGE` | `node:24-bookworm-slim` | The base of the dependency, build and runtime stages |
 | Application | `DOCKER_CLI_IMAGE` | `docker:29-cli` | The image the `docker` binary is copied from; not pulled at `RUNTIME_BASE=runtime-without-docker-cli` |
 | Application | `NPM_CONFIG_REGISTRY` | Unset: npm uses registry.npmjs.org | The registry `npm ci` installs from, in the dependency stage |
 | Notebook (`docker/executor/Dockerfile`) | `PYTHON_IMAGE` | `python:3.13-slim-bookworm` | The base of both targets |
@@ -509,7 +509,7 @@ edit:
 
 ```bash
 docker build \
-  --build-arg NODE_IMAGE=registry.example.internal/library/node:22-bookworm-slim \
+  --build-arg NODE_IMAGE=registry.example.internal/library/node:24-bookworm-slim \
   --build-arg DOCKER_CLI_IMAGE=registry.example.internal/library/docker:29-cli \
   --build-arg NPM_CONFIG_REGISTRY=https://registry.example.internal/npm/ \
   -t civic-app:dev .
