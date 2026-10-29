@@ -27,7 +27,7 @@ jobs:
 
       # .nvmrc pins 24; the script decompresses the commondataio registry
       # with node:zlib's zstd, which Node 20 does not have.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: '.nvmrc'
 
