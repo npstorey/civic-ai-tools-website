@@ -9,7 +9,11 @@
 //   - a consent in force whose selection is empty — every configured source
 //     Off or Ask first — is refused `no_sources_on` before the model or any
 //     source is called, so the prompt composed over an empty selection is
-//     never sent (criterion 9; #644 comment 6274954918, 5(b));
+//     never sent (criterion 9; #644 comment 6274954918, 5(b)), when the run
+//     cannot ask: all-sources routing (`SOURCE_ROUTING` unset, as every drive
+//     here runs), or in-loop without the decision store, or every source
+//     Off. Since R9 P1a (#681) an in-loop run with the store set and an
+//     Ask-first source goes on and asks (`all-ask-first-driven.test.ts`);
 //   - a record packaged through the real packager from a consented run states
 //     each source's reason from the reader's state — `selected` for On,
 //     `reader-off` for Off, `not-consented` for Ask first — and carries
