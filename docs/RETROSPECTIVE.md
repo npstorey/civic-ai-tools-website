@@ -6,6 +6,103 @@ Reverse-chronological session retros for the civic-ai-tools-website project.
 
 ---
 
+## 2026-10-27 — Sprint R8 (#644), the website waves: the model chooses its sources, and asks first — and a card that rendered below the fold (three waves, two fix rounds, four merges)
+
+**Scope.** The website half of Sprint R8. The hub half (ORCH R8-HUB) published router 0.5.0, harness 0.10.0 and
+router 0.6.0, and the website waves built on them:
+- **W1, in-loop routing.** `SOURCE_ROUTING=in-loop` makes the first request carry a short directory and one tool,
+  `load_source`. A loaded source's guidance and tools arrive on the next request, the load is recorded on the call,
+  and replay follows the record's routing. `all-sources`, the default, sends what every run sent before.
+- **W3, hosted sources two to four.** NYC Checkbook, NYC City Record and NYS Open Legislation, each behind its own
+  hosting switch, with the legislation key passed to the server through the bridge.
+- **W2, the just-in-time pause.** An Ask-first source pauses the loop: the `consent_pause` event and a server-side
+  hold of at most 60 s, the decision route, the card on the three feeds and the panel row, the privacy texts, the
+  guide, and a byte census of where the decision key travels. Each pause ends `loaded`, `declined` or `no-answer`
+  on the call.
+
+**Phases** (in merge order; each SHA read back from `git log`):
+- W1 `f54d6c1` (#649), 2026-10-20.
+- W3 `bfa7c87` (#656), 2026-10-21.
+- W2 `3e0c964` (#659), 2026-10-27. Fix round 1, the seat's wording check, was folded into the branch before its
+  push. It added one rule that outlives the round: a text true only on some instances renders only there.
+- G10: the cold read of merged W2, on Fable 5.1.
+- Fix round 2 `21f7f0b` (#670), 2026-10-27: G10's F1 and F2.
+
+**Merges and tags.** Four merges, each a merge commit whose second parent is the head the seat's GO named, run by
+the owner through the seat's merge kit. `-merged` tags: `rollback/r8-w1-merged`, `rollback/r8-w3-merged`,
+`rollback/r8-w2-merged`, `rollback/r8-w2-fix2-merged`. Pre tags: `rollback/pre-r8-w1` (`043aa01`, the contract's
+cut, before R6's W5 merged under it), `rollback/pre-r8-w3` (`2cb2a5e`) and `rollback/pre-r8-w2` (`bfa7c87`).
+Fix round 2 was cut at a merge, so its pre tag is the previous merged tag, `rollback/r6-cr-merged` (`7c04e65`).
+
+**Test totals:** `# fail 0` at every merged head. W1's merge-ref run had 2970 tests, W3's head 3212, W2's merge
+3388 (the cold read's run), and fix round 2's head 3457.
+
+**Owner legs:**
+- W1: `SOURCE_ROUTING=in-loop` scoped to one preview branch, two reads, then removed.
+- W3: the legislation key, on every preview branch and once on production. The bridge secret got its first preview
+  entry. The three hosting switches went on, on preview and then on production, with one read per source. The
+  production set script stopped partway (below), and the owner finished it by hand.
+- W2: two preview reads (allow, not now) against the real store, then `SOURCE_ROUTING=in-loop` on production from
+  2026-10-27 16:45Z, and one production no-answer read that ran the 60 s hold to its bound. All three signed
+  outcomes were then measured.
+- Every merge, and the production rollback of 2026-10-27 (below).
+
+### What the cold read found
+
+G10 read W2's merged diff against #644: 17 criteria met, 4 met with a defect, 0 unmet. It found six things:
+- F1 (medium): the bus held one pending-pause slot, so when a second Ask-first source paused in the same run, the
+  first card stopped saying the reader had allowed it, while the record said `loaded`. Production's defaults have
+  two Ask-first sources, so this is the default shape, and the cold read found it by driving two pauses.
+- F2 (low): the account branch moved the consent On before the decision was written.
+- F3 (low, as reported): an Allow with no account row and no cookie answers 200 and moves nothing.
+- F4 (low): the mode `GET` reported routing alone, so under in-loop routing with no decision store the panel
+  promised an ask the site cannot make.
+- F5 (low): on the executed run the consent step vanished when the notebook arrived.
+- F6 (as reported): after Cancel on `/explore`, the card kept its buttons until the hold expired.
+
+The owner ruled F1 and F2 into fix round 2. That round keeps every pause by key, writes the decision before the
+consent moves, and answers 403 before 409.
+
+**What the follow-ons carry.** #666 (F4), #667 (F5), #668 (F6), and #669 (the pause's lifetime: whether a question
+waits longer than 60 s, or the card outlives the run). Filed later: #672 (the card below the fold) and #681 (below).
+
+### The lesson: measure a reader-facing distance on the real page
+
+On the evening of 2026-10-27, the owner asked a question on production at `21f7f0b` and saw no consent card.
+Production was rolled back in the Vercel dashboard to `7c04e65`, reversibly, and every website merge was held. A
+fresh reviewer read #670's diff and found nothing that hides the card. The owner then opened the `21f7f0b`
+deployment at its own address: the card rendered and the decision worked, but Allow and Not now sat far below the
+fold. That distance was what read as "no card". The build stood as merged. The rollback ended when the next merge
+(`b2868ab`, #671) deployed.
+
+No test and no read had measured where the card sat on the page: #672 records the distance from the question box
+to the first card as not measured, and the owner's report as the measurement. The run waits at most 60 s, so a
+reader who does not scroll loses the source for that question. A distance a reader has to cover is
+a property of the real page at a real width, not of the component, and it is measured there (#672).
+
+### Also earned
+
+- **The gate was reconciled with the states and never with the mode (#681).** On production after the sprint, a
+  signed-in question with every source Ask first was refused `no_sources_on` before the model could ask. R6's rule,
+  written before the pause existed, refused an empty selection in the server gate and the client guard, and neither
+  read the routing mode. W1 and W2 reconciled the directory with the states, and W2's suites drove holds with every
+  source Ask first, but only below the gate. No cold read sent a request with no source On. When a wave adds a way
+  for a run to proceed, a cold read drives the request that an older refusal stands in front of. Fixed in R9 P1a
+  (#683).
+- **A value placed in the sandbox is not a value the server reads.** W3's key went into the sandbox environment,
+  but the bridge spawned the server with the SDK's default environment, so the key never reached it. The zone grew
+  by ruling to include the bridge, and the preview read was the first to show the key arriving.
+- **A script's stop message counts what it already did.** The production set script added the three switches,
+  then stopped on `vercel inspect`, whose fields 54.20.1 prints on stderr, and said "nothing was changed on
+  Vercel". The id is now read from both streams by shape, and a stop after a write names the write.
+- **The drift note.** The typecheck's verdict follows the bundler that built last, and a route handler's `request`
+  parameter is never optional (R6's close, #665). Proposed at R8-WEB-C's closeout, it lands in `CLAUDE.md` with this
+  entry.
+- **Carried, not fixed:** the surface harness leaves two bus subscriptions behind after `unmount()`, so a suite
+  that pauses mints a key per test.
+
+---
+
 ## 2026-10-18 — Wave R3 (#516): the rest of minimization — and a privacy page that tested its own promises (eleven gated phases, three lanes)
 
 **Scope.** This wave finished the minimization part of the MCP sources design:

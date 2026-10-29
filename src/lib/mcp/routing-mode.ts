@@ -33,12 +33,15 @@
  * stored state is Ask first (D6), and an Off source is not listed.
  *
  * AN EMPTY DIRECTORY SET IS NEVER RUN IN-LOOP (the router's flag: the tool's
- * enum would be `[]`). It arises only once the gate is enforced and every
- * source is Off, and the run then takes the all-sources path over the same
- * empty selection: the all-Off prompt is decided for that path (R6's W3), and
- * an in-loop instance sends exactly what an all-sources one does for that
- * reader. The record of such a run states no `routing`, as an all-sources
- * run's does not.
+ * enum would be `[]`). `entersInLoop` checks it, and a run with an empty set
+ * takes the all-sources path; its record states no `routing`, as an
+ * all-sources run's does not. Under the enforced gate a run the gate lets
+ * through does not arrive here with one: every configured source Off is
+ * refused `no_sources_on` before this module is reached (R6's W3), and since
+ * R9 P1a (#681) the gate answers `ok` with an empty selection only to a run
+ * that can ask (in-loop, the decision store set) with a configured source not
+ * Off, which this set lists as Ask first (`consentInForce`,
+ * `src/lib/sources/consent-gate.ts`).
  */
 
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';

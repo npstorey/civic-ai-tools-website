@@ -20,7 +20,7 @@
 # values Next.js reads at build and inlines — those arrive as named build
 # args, declared on the builder stage below and nowhere else.
 
-ARG NODE_IMAGE=node:22-bookworm-slim
+ARG NODE_IMAGE=node:24-bookworm-slim
 # Static docker CLI, copied into the runtime layer for EXECUTOR_DRIVER=container.
 ARG DOCKER_CLI_IMAGE=docker:29-cli
 # WHICH RUNTIME BASE `runner` IS BUILT FROM, and with it whether this image

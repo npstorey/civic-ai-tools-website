@@ -24,8 +24,9 @@ Ground rules:
   report as flags for later phases — do not fix them.
 - **Follow CLAUDE.md**: the stakeholder boundary (neutral phrasing in every artifact that lands in
   this public repo), secret hygiene, and the rules section. Read `.claude/rules/` entries for the
-  paths you are touching. `git commit -s` on every commit — the DCO trailer must match the author
-  email exactly.
+  paths you are touching. Every commit is signed (`-S`): its message, written to a file, ends with
+  the `Signed-off-by` line matching the author exactly (the DCO trailer) and the model's
+  `Co-Authored-By` line, committed with `git commit -S -F <file>`, never `-s`.
 - **Never bypass a guard.** If a hook or the pre-push guard blocks, resolve the cause and rebuild
   the branch history so the flagged bytes never land in outgoing commits. Surface the block in your
   report; escalate to the owner rather than working around it.
