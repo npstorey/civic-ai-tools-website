@@ -289,7 +289,7 @@ test('criterion 1 (home, signed out): before a consent a change is kept, not wri
 
 const LEAD_END = ' Set them now, or change them after you allow.';
 
-test('criterion 2: the lead before a consent counts the six defaults, follows a change, and is the in-force lead after Allow', async () => {
+test('criterion 2: the lead before a consent counts the six defaults and follows a change (the in-force lead after Allow is read in criterion 1)', async () => {
   configure('six');
   ANON();
   answers();
@@ -372,13 +372,15 @@ for (const config of ['three', 'six'] as const) {
 /**
  * The words, measured at the base (79c9934) with this file's configurations
  * and no consent: 344 at the three sources and 647 at the six, every line of
- * every row shown; one row 91 to 110 words. Collapsed, a row keeps its name,
- * what-line, control and the summary (and the Ask first line on an Ask first
- * row).
+ * every row shown; one row 91 to 110 words. Closed, a row keeps its name,
+ * what-line, control and summary (and the Ask first line on an Ask first
+ * row), so the closed panel is held to at most half the base's words; an
+ * opened row to the "about 150 words" #661 names, from below and above.
+ * Measured at the head: 125 and 241 closed; rows opened 95 to 114.
  */
 const BOUNDS = {
-  three: { panelClosed: [120, 200], rowOpen: [80, 160] },
-  six: { panelClosed: [200, 340], rowOpen: [80, 160] },
+  three: { panelClosed: [100, 172], rowOpen: [80, 160] },
+  six: { panelClosed: [180, 323], rowOpen: [80, 160] },
 } as const;
 
 for (const config of ['three', 'six'] as const) {

@@ -50,6 +50,16 @@
  * is taken. Between the two, the card keeps its buttons, and an answer
  * applies to the reader's next question (`afterHold`). Cancel
  * (`cancelConsentPauses`, #668) ends every hold still open, entry and all.
+ *
+ * BEFORE A CONSENT (R9 P2, #661). The panel's radios take a choice before a
+ * consent is given, and the choice is kept here, in `pending`, not written:
+ * nothing leaves the page before the reader answers the card. A read of the
+ * status (on mount, after a write, after a refusal) leaves `pending` as it
+ * is. Allow writes `panelStates`, the states the panel shows: the reader's
+ * where they set one, `currentStates` elsewhere, so the card's "turns on the
+ * sources the panel shows as On" is true of the panel. A write that succeeds
+ * empties `pending`. With a consent in force a choice is written at once, as
+ * before, and `pending` is not read.
  */
 
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
@@ -92,6 +102,8 @@ export interface ConsentSnapshot {
   routing: 'in-loop' | 'all-sources' | null;
   /** Whether this instance's decision store pair is set, from the same GET (R9 P1a); `null` until read, and on any failure. */
   store: boolean | null;
+  /** The states the reader set in the panel before a consent, by source id: kept on the page, written by Allow (R9 P2). */
+  pending: Record<string, SourceStateValue>;
 }
 
 /** A pause the hooks reported, and what has happened to it since. */
@@ -113,7 +125,7 @@ export interface PendingPause {
   afterHold?: true;
 }
 
-const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pauses: {}, routing: null, store: null };
+const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pauses: {}, routing: null, store: null, pending: {} };
 
 let snapshot: ConsentSnapshot = EMPTY;
 const listeners = new Set<() => void>();
@@ -324,6 +336,23 @@ export function currentStates(status: ConsentStatus | null, ids: string[]): Reco
   return Object.fromEntries(ids.map((id) => [id, stored[id]?.state ?? 'ask-first']));
 }
 
+/**
+ * The states the panel shows and Allow writes (R9 P2): with a consent in
+ * force, `currentStates`; before one, the reader's pending state for each
+ * configured source that has one, and `currentStates` for the rest.
+ */
+export function panelStates(
+  snapshot: Pick<ConsentSnapshot, 'status' | 'pending'>,
+  ids: string[],
+): Record<string, SourceStateValue> {
+  const states = currentStates(snapshot.status, ids);
+  if (snapshot.status?.inForce === true) return states;
+  for (const id of ids) {
+    if (Object.prototype.hasOwnProperty.call(snapshot.pending, id)) states[id] = snapshot.pending[id];
+  }
+  return states;
+}
+
 async function write(method: 'PUT' | 'PATCH' | 'DELETE', body?: unknown): Promise<boolean> {
   set({ writing: true, failed: false });
   try {
@@ -337,6 +366,8 @@ async function write(method: 'PUT' | 'PATCH' | 'DELETE', body?: unknown): Promis
       set({ failed: response.status !== 409 });
       return false;
     }
+    // Written: the store now holds what the panel shows, and nothing is pending.
+    set({ pending: {} });
     return true;
   } catch {
     set({ failed: true });
@@ -347,24 +378,34 @@ async function write(method: 'PUT' | 'PATCH' | 'DELETE', body?: unknown): Promis
 }
 
 /**
- * Allow: a first consent stores each configured source's default (D6, the
- * manifest's `consentDefault`); a consent asked again keeps the reader's own
- * states, and a source with none is Ask first: `currentStates`, the states
- * the panel shows. On a 409 the statement is read
- * again and the answer is false, so the card asks again.
+ * Allow: the states the panel shows (`panelStates`, R9 P2): each state the
+ * reader set before the consent, and elsewhere what `currentStates` gives —
+ * a first consent each configured source's default (D6, the manifest's
+ * `consentDefault`), a consent asked again the reader's stored states, and
+ * Ask first for a source with none. On a 409 the statement is read again,
+ * the reader's states stay pending, and the answer is false, so the card
+ * asks again.
  */
 export async function allowConsent(): Promise<boolean> {
   if (!snapshot.loaded) await refreshConsent();
   const status = snapshot.status;
   if (!status) return false;
-  const states = currentStates(status, configured());
+  const states = panelStates({ status, pending: snapshot.pending }, configured());
   return write('PUT', { states, flowsVersion: status.flowsVersion });
 }
 
-/** One source's state, written with every other state as it is. */
+/**
+ * One source's state. With a consent in force it is written with every other
+ * state as it is; before one it is kept in `pending`, and nothing is written
+ * (R9 P2), and the answer is true: a caller that confirms a write reads
+ * whether a consent was in force when the choice was made.
+ */
 export async function setSourceState(sourceId: string, state: SourceStateValue): Promise<boolean> {
   const status = snapshot.status;
-  if (!status?.inForce) return false;
+  if (!status?.inForce) {
+    set({ pending: { ...snapshot.pending, [sourceId]: state } });
+    return true;
+  }
   const states = { ...currentStates(status, configured()), [sourceId]: state };
   set({ status: { ...status, states: Object.fromEntries(Object.entries(states).map(([id, s]) => [id, { state: s, since: status.states?.[id]?.state === s ? status.states[id].since : '' }])) } });
   return write('PUT', { states, flowsVersion: status.flowsVersion });

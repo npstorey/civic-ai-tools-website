@@ -15,15 +15,26 @@
  *
  * THE CONTROL is a radio group per source, named for it, of three native
  * radios: arrow keys move within it, the checked choice is what a screen
- * reader announces, and the group's label names the source. A choice is
- * written through the consent endpoint; while the write is in flight every
- * control and the question form's submit are held (the guard's `held`).
+ * reader announces, and the group's label names the source. With a consent
+ * in force a choice is written through the consent endpoint; while the write
+ * is in flight every control and the question form's submit are held (the
+ * guard's `held`).
+ *
+ * BEFORE A CONSENT (R9 P2, #661) the radios take a choice too, and the store
+ * keeps it on the page (`pending`) until Allow writes it with the rest of
+ * what the panel shows (`panelStates`). The lead counts those states; no "is
+ * now" line is shown, because nothing has been written.
+ *
+ * EACH ROW (R9 P2, design principle 8) shows its name, what the source is and
+ * its control; the reach, logs and currency lines open under "More about
+ * this source". The state lines (since when, what Ask first means) and a
+ * waiting question stay in view.
  */
 
 import { useState, type CSSProperties } from 'react';
-import { ASK_FIRST_MEANS, ASK_FIRST_MEANS_WITH_PAUSE, PANEL_HEADING, PANEL_LEAD, PANEL_NO_CONSENT, PANEL_PRIVACY_LINK, PANEL_STATE_CHANGED } from '@/lib/sources/copy';
+import { ASK_FIRST_MEANS, ASK_FIRST_MEANS_WITH_PAUSE, PANEL_HEADING, PANEL_LEAD, PANEL_PRIVACY_LINK, PANEL_ROW_MORE, PANEL_STATE_CHANGED, panelLeadBeforeConsent } from '@/lib/sources/copy';
 import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
-import { currentStates, useSourceConsent, type SourceStateValue } from './useSourceConsent';
+import { panelStates, useSourceConsent, type SourceStateValue } from './useSourceConsent';
 import { KeptByLines } from './KeptByLine';
 import LocalOnlyOffer from './LocalOnlyOffer';
 import ConsentNotices from './ConsentNotices';
@@ -54,8 +65,12 @@ export default function SourcesPanel() {
   const status = consent.status;
   const inForce = status?.inForce === true;
   const ids = statement?.sources.map((s) => s.sourceId) ?? [];
-  // The states Allow writes (T7): the stored ones on a re-ask too, the defaults with nothing stored.
-  const states = currentStates(status, ids);
+  // The states Allow writes (T7): the reader's own before a consent (R9 P2), else the stored ones on a re-ask too,
+  // the defaults with nothing stored.
+  const states = panelStates(consent, ids);
+  const count = (state: SourceStateValue) => ids.filter((id) => states[id] === state).length;
+  // Before a consent the lead counts what Allow will use; with no source to count there is none.
+  const lead = inForce ? PANEL_LEAD : panelLeadBeforeConsent({ on: count('on'), askFirst: count('ask-first'), off: count('off') });
   const onAccount = status?.store === 'row';
   // The last change whose write succeeded (UX pass row 5): its row says so in a
   // status line. Cleared when another change starts; never set by a failed write.
@@ -66,7 +81,7 @@ export default function SourcesPanel() {
       <h2 id="sources-panel-heading" style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 4px', color: 'var(--text-primary)' }}>
         {PANEL_HEADING}
       </h2>
-      <p style={{ margin: '0 0 8px' }}>{inForce ? PANEL_LEAD : PANEL_NO_CONSENT}</p>
+      {lead !== '' && <p style={{ margin: '0 0 8px' }}>{lead}</p>}
       {onAccount && inForce && <ConsentNotices />}
       <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
         {(statement?.sources ?? []).map((source) => {
@@ -78,21 +93,6 @@ export default function SourcesPanel() {
             <li key={source.sourceId} data-source={source.sourceId} style={{ padding: '8px 0', borderTop: '1px solid var(--border-color)' }}>
               <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{name}</div>
               {lines.what !== null && <div>{lines.what.charAt(0).toUpperCase() + lines.what.slice(1)}</div>}
-              <div>
-                {lines.reach.map((part, i) =>
-                  typeof part === 'string' ? (
-                    part
-                  ) : (
-                    <a key={i} href={part.link} target="_blank" rel="noopener noreferrer">
-                      {part.text}
-                    </a>
-                  ),
-                )}
-              </div>
-              <div>
-                Who holds its logs: <KeptByLines keptBy={source.recipients.flatMap((r) => r.keptBy)} retention />.
-              </div>
-              <div>How current its data is: {source.freshness}</div>
               <div role="radiogroup" aria-label={`${name}: On, Ask first or Off`} style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
                 {STATES.map((choice) => (
                   <label key={choice.value} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--text-primary)' }}>
@@ -101,11 +101,13 @@ export default function SourcesPanel() {
                       name={`source-state-${source.sourceId}`}
                       value={choice.value}
                       checked={state === choice.value}
-                      disabled={!inForce || consent.writing}
+                      disabled={consent.writing}
                       onChange={() => {
                         setConfirmed(null);
+                        // Before a consent the choice is kept, not written: nothing to confirm (R9 P2).
+                        const writes = inForce;
                         void consent.setState(source.sourceId, choice.value).then((ok) => {
-                          if (ok) setConfirmed({ sourceId: source.sourceId, state: choice.value });
+                          if (ok && writes) setConfirmed({ sourceId: source.sourceId, state: choice.value });
                         });
                       }}
                     />
@@ -124,6 +126,25 @@ export default function SourcesPanel() {
               })()}
               {/* A question stops to ask only in loop and with the decision store (R9 P1, #666): the pause words only then. */}
               {state === 'ask-first' && <div>{consent.routing === 'in-loop' && consent.store === true ? ASK_FIRST_MEANS_WITH_PAUSE : ASK_FIRST_MEANS}</div>}
+              {/* R9 P2 (#661): the row's detail, closed by default (design principle 8). */}
+              <details style={{ marginTop: '4px' }}>
+                <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}>{PANEL_ROW_MORE}</summary>
+                <div>
+                  {lines.reach.map((part, i) =>
+                    typeof part === 'string' ? (
+                      part
+                    ) : (
+                      <a key={i} href={part.link} target="_blank" rel="noopener noreferrer">
+                        {part.text}
+                      </a>
+                    ),
+                  )}
+                </div>
+                <div>
+                  Who holds its logs: <KeptByLines keptBy={source.recipients.flatMap((r) => r.keptBy)} retention />.
+                </div>
+                <div>How current its data is: {source.freshness}</div>
+              </details>
               {/* R8 W2 (#644): a question is waiting for an answer about this source; the run's own card is the same. */}
               {(() => {
                 // R9 P1 (#669 D2): the latest pause about this source, for its entry's life, not only its hold's:
