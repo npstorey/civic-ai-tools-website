@@ -291,6 +291,31 @@ Each cost a real mistake; the incident sits in an HTML comment beside it. Path-s
        That last one is the shape of the hazard: a property that holds for a reason other than the
        one it appears to hold for is the property a bump silently takes away. -->
 
+- **A dependency bump starts with three reads, before any claim tied to a version.** At its G0 —
+  before a contract says "one fix" or "no code changes", or a comment moves to the new version —
+  list every lockfile copy of the package (`packages` keys ending `/<name>`; `npm audit` names a
+  package once while covering every copy), `git grep` the old version string outside the lockfile,
+  and `grep -l package.json .claude/rules/*.md` and read what that loads. A path-scoped rule loads
+  when a matching file is opened with Read or Edit; a `sed` and an `npm install` open nothing.
+  <!-- IMPL WEB-DEPS's G0, 2026-10-27 (#671, merged b2868ab). Its contract, written from the audit
+       summary, named one fix per package and no code changes, and both failed on contact: the
+       audit's one undici entry also covered the copy nested under @vercel/sandbox (7.29.0), so the
+       top-level pin alone left `npm audit --omit=dev` at one high; the old version strings sat in
+       six comments tying a statement to the installed version; and the manifest edit, by `sed` and
+       `npm install`, never loaded `.claude/rules/outbound-proxy.md`, which carries undici's re-read. -->
+
+- **A Dependabot PR passes the same gates as any PR and merges only on the seat's GO, never on the
+  bot's green alone.** Its checks measure what CI runs, and a major's breakage can sit where CI does
+  not look, or in a ruling no check reads (which runtime the Node types follow). A major ruled out
+  sits in `.github/dependabot.yml`'s `ignore` list with its lift condition beside it.
+  <!-- The batch of 2026-10-27 (civic-ai-tools#284): twenty PRs in three repositories, opened the
+       evening the configuration merged. typedstandards' ESLint 10 PR was green while its web app's
+       lint, which that CI does not run, crashed under it (the crashing plugin sits under this
+       repository's required lint); the hub's @types/node 26 PR was green against a Node 22
+       runtime; both closed by ruling. Here, canonicalize 5 (#678) was green and merged only after
+       200 tracked documents across the three repositories canonicalized byte-equal under both
+       versions. -->
+
 - **Nothing is piped into `grep -q` where pipefail is on.** grep exits at its first match, the
   producer dies of SIGPIPE (or gets EPIPE where SIGPIPE is ignored) on its next write, and pipefail
   makes the pipeline false — so a line that IS in the output reads as absent, and the reading built
