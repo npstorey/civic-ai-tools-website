@@ -11,6 +11,7 @@ import { modelIdentityForValue } from '@/lib/model-resolver';
 import { hash } from '@/lib/evidence/trace';
 import { signPackage, getRfc3161Timestamp, publishToRekor, getActiveSigner, type SignerIdentity } from '@/lib/evidence/signing';
 import { captureVocabForProfile, isContentProfileConsistent } from '@/lib/evidence/profiles';
+import { CIVICAITOOLS_V1_PRODUCER_PROFILE } from '@typedstandards/civic-typed-harness';
 import { type BlobRef } from '@/lib/evidence/blob-ref';
 import { resolveRequestUser, hasPublishScope } from '@/lib/api-auth';
 import { MISSING_PUBLISH_SCOPE_ERROR } from '@/lib/publish-scope';
@@ -161,8 +162,10 @@ interface PublishRequest {
    *  `org.civicaitools.environment` extension. */
   contentProfile?: ContentProfile;
   /** Producer Profile label per ADR-0006 (spec §8.1.1). Optional; when
-   *  omitted the packager auto-derives it for the datHere content profile.
-   *  Must stay consistent with contentProfile (validated below). */
+   *  omitted on a `chat-flow-stream` publish the route sets
+   *  `ai-assisted-analysis/civicaitools-v1` (hub ADR-0038), and otherwise the
+   *  packager auto-derives it for the datHere content profile. Must stay
+   *  consistent with contentProfile (validated below). */
   producerProfile?: string;
   /** Node type per ADR-0009 (spec §8.1.1, §8.12). Optional; defaults to
    *  `content/analysis/v1`. This endpoint accepts only that value — other
@@ -238,6 +241,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // R10 P5 (hub ADR-0038 §1): every record this site's own runs publish
+    // (`chat-flow-stream`, which this site's publish dialog sends on both its
+    // paths) declares the Producer Profile subtype
+    // `ai-assisted-analysis/civicaitools-v1`, full-text (`datHere`) and
+    // hash-only (`default`) alike. Set here, server-side, in the one place
+    // P1b's system prompt is, so the dialog sends none. A posted
+    // producerProfile (the documented programmatic path) passes through
+    // unchanged and is checked below, and another capture method
+    // gets what it got before: the packager's auto-derivation for datHere,
+    // none otherwise. Records already published keep their bytes.
+    const producerProfile = body.producerProfile
+      ?? (body.captureMethod === 'chat-flow-stream' ? CIVICAITOOLS_V1_PRODUCER_PROFILE : undefined);
+
     // Validate producerProfile consistency (ADR-0006 §2 as amended by hub
     // ADR-0038 §3, spec §8.1.1). When a producerProfile is supplied, the
     // content profile (absent is 'default') MUST be one its subtype's row in
@@ -247,8 +263,8 @@ export async function POST(request: NextRequest) {
     // 'ai-assisted-analysis/datHere'. The same predicate is verify check #16,
     // so the route refuses exactly what a verifier would report inconsistent.
     // When omitted, the packager auto-derives a consistent value for datHere.
-    if (body.producerProfile) {
-      if (!isContentProfileConsistent(body.producerProfile, body.contentProfile ?? 'default')) {
+    if (producerProfile) {
+      if (!isContentProfileConsistent(producerProfile, body.contentProfile ?? 'default')) {
         return NextResponse.json(
           {
             error:
@@ -307,7 +323,7 @@ export async function POST(request: NextRequest) {
     // Producer Profile (spec §8.6), resolved via the shared hardcoded
     // PROFILE_CAPTURE_VOCAB table. Resolve once here, never re-derive
     // downstream.
-    const captureVocab = captureVocabForProfile(body.producerProfile, body.contentProfile);
+    const captureVocab = captureVocabForProfile(producerProfile, body.contentProfile);
     if (!body.captureMethod || !captureVocab || !captureVocab.includes(body.captureMethod)) {
       return NextResponse.json(
         {
@@ -411,8 +427,9 @@ export async function POST(request: NextRequest) {
       summary: body.summary,
       captureMethod: body.captureMethod,
       contentProfile: body.contentProfile,
-      // ADR-0006: pass through; the packager auto-derives for datHere when omitted.
-      producerProfile: body.producerProfile,
+      // ADR-0006: as posted, or this site's subtype for its own runs (above);
+      // the packager auto-derives for datHere when it is still omitted.
+      producerProfile,
       // ADR-0009: default-fill the standard content type + the envelope-side
       // signer identity (the active platform signing key) for every publish.
       type: body.type ?? DEFAULT_CONTENT_TYPE,
