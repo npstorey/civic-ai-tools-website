@@ -21,7 +21,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import {
   CONSENT_SURFACE_STUBS,
   SRC,
@@ -31,6 +31,7 @@ import {
   registerSurfaceHooks,
   sessions,
   textOf,
+  type HostElement,
   type Surface,
 } from './surface-test-harness.ts';
 
@@ -131,7 +132,10 @@ test('row 11: with no consent in force there is no line', async () => {
 
 test('row 11: the link after the line opens the Sources panel', async () => {
   const page = await homeWith({ socrata: 'on', 'data-commons': 'on', 'boston-opencontext': 'on', 'nyc-charter': 'on' });
-  const details = () => page.elements().filter((el) => el.type === 'details');
+  // The form's Sources drawer, by its own summary: since R9 P2 each panel row holds a `<details>` of its own.
+  const ownSummary = (el: HostElement): ReactNode => (Array.isArray(el.props.children) ? el.props.children : [el.props.children])
+    .find((c) => (c as { type?: unknown } | null)?.type === 'summary');
+  const details = () => page.elements().filter((el) => el.type === 'details' && textOf(ownSummary(el)) === 'Data sources this site can use');
   assert.equal(details().length, 1, 'premise: one Sources details');
   assert.notEqual(details()[0].props.open, true, 'premise: the panel starts closed');
   const link = page.elements().filter((el) => el.type === 'a' && textOf(el) === 'Change sources');

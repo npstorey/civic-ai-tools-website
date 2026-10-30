@@ -149,8 +149,9 @@ const T6 = 'Ask first: nothing is sent to this source until you turn it On.';
 const T7 = '"Allow" turns on the sources the panel shows as On and sends your question. "Not now" sends nothing.';
 const T8_DB = 'We keep your answer for this browser session in a cookie, or on your account if signed in.';
 const T8_NO_DB = 'We keep your answer for this browser session in a cookie.';
-// UX pass row 2(a), 2026-10-22: the panel's lead before consent says what the reader sees.
-const T9_PANEL = 'Allow uses these settings. After you allow, you can change each one here.';
+// R9 P2 (#661, D3 = A of the UX pass): the panel's lead before consent counts the states Allow will use, at the
+// reference configuration's three sources, all On by default. It replaces row 2(a)'s "Allow uses these settings."
+const T9_PANEL = 'These are the settings Allow will use: three sources On. Set them now, or change them after you allow.';
 const T9_TAB = 'This site asks before your next question.';
 const T10 = "A dated log of every change to where a question can go is kept with the site's code.";
 const T11 = (holder: string) => `${holder}: what it keeps is for this site's operator to state`;
@@ -179,6 +180,7 @@ const REPLACED = [
   'left out of your questions', 'We keep your choice', 'You have not answered yet', 'no consent in force',
   'every change to these statements', ": for this site's operator to state", "The hosting platform's logs",
   'flows statement version', 'Where a question goes, in full', '/blob/main/docs/flows-changelog.md',
+  'Allow uses these settings',
 ];
 /** T13: nowhere on those surfaces, and nowhere on the privacy page. */
 const NAMES_REPLACED = ['Google Data Commons', ' MCP Server'];

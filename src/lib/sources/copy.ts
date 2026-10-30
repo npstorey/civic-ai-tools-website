@@ -48,8 +48,38 @@ export const ASK_FIRST_MEANS_WITH_PAUSE = 'Ask first: nothing is sent to this so
 export const PANEL_HEADING = 'Data sources';
 export const PANEL_LEAD = 'Set each data source to On, Ask first or Off. Your choice applies from your next question.';
 
-/** The panel before a consent is given: the states it would give are shown, and nothing is stored yet. */
-export const PANEL_NO_CONSENT = 'Allow uses these settings. After you allow, you can change each one here.';
+/**
+ * The panel's lead before a consent is given (R9 P2, #661): the states Allow
+ * will write, counted, then what the reader can do. `lead` + the groups +
+ * `end`, then `after`; each group is a count in words and its state, a group
+ * with none left out, the first group named carrying "source" or "sources",
+ * the groups joined by `join` (`panelLeadBeforeConsent`). The counts are the
+ * states the panel shows: the defaults, the reader's changes, or the stored
+ * states on a re-ask. It replaces "Allow uses these settings. After you allow,
+ * you can change each one here." (UX pass row 2(a)).
+ */
+export const PANEL_BEFORE_CONSENT = {
+  lead: 'These are the settings Allow will use: ',
+  join: ', ',
+  end: '.',
+  after: 'Set them now, or change them after you allow.',
+} as const;
+
+const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'] as const;
+
+/** The lead before a consent, for these counts; empty when there is no source to count. */
+export function panelLeadBeforeConsent(counts: { on: number; askFirst: number; off: number }): string {
+  const groups = ([[counts.on, 'On'], [counts.askFirst, 'Ask first'], [counts.off, 'Off']] as const).filter(([n]) => n > 0);
+  if (groups.length === 0) return '';
+  const named = groups.map(([n, state], i) => {
+    const count = n < COUNT_WORDS.length ? COUNT_WORDS[n] : String(n);
+    return i === 0 ? `${count} ${n === 1 ? 'source' : 'sources'} ${state}` : `${count} ${state}`;
+  });
+  return `${PANEL_BEFORE_CONSENT.lead}${named.join(PANEL_BEFORE_CONSENT.join)}${PANEL_BEFORE_CONSENT.end} ${PANEL_BEFORE_CONSENT.after}`;
+}
+
+/** Each row's drawer (R9 P2, design principle 8): its summary; the reach, logs and currency lines open under it. */
+export const PANEL_ROW_MORE = 'More about this source';
 
 /** The panel's link to the privacy page (T12). */
 export const PANEL_PRIVACY_LINK = 'Where a question can go, in full';
