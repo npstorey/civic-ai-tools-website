@@ -40,18 +40,13 @@ export function useTraceReplay(
     setState(initialReplayState);
   }, [clearTimeouts]);
 
-  // Reset when trace changes
-  useEffect(() => {
-    reset();
-    if (trace && autoPlay) {
-      const t = setTimeout(() => {
-        playingRef.current = true;
-        scheduleEvents(0);
-      }, 500);
-      return () => clearTimeout(t);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trace?.id]);
+  // Reset when trace changes: the state here, during render; the timers and
+  // refs in the effect below scheduleEvents.
+  const [stateTraceId, setStateTraceId] = useState(trace?.id);
+  if (trace?.id !== stateTraceId) {
+    setStateTraceId(trace?.id);
+    setState(initialReplayState);
+  }
 
   const scheduleEvents = useCallback((startIndex: number) => {
     if (!trace) return;
@@ -112,6 +107,20 @@ export function useTraceReplay(
       timeoutsRef.current.push(t);
     }
   }, [trace, speed, clearTimeouts]);
+
+  useEffect(() => {
+    clearTimeouts();
+    playingRef.current = false;
+    pausedAtIndexRef.current = -1;
+    if (trace && autoPlay) {
+      const t = setTimeout(() => {
+        playingRef.current = true;
+        scheduleEvents(0);
+      }, 500);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trace?.id]);
 
   const play = useCallback(() => {
     if (!trace) return;

@@ -104,18 +104,22 @@ export default function AttestationSection({ slug, analysisModel, promptVisibili
   const [expertPayloads, setExpertPayloads] = useState<Record<string, AttestationPackageData | null>>({});
   const [loading, setLoading] = useState(true);
 
-  const fetchAttestations = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/records/${slug}/attestations`);
-      if (res.ok) {
-        const data = await res.json();
-        setAttestations(data.attestations || []);
-      }
-    } catch {
-      // Silently fail — attestation list is non-critical
-    } finally {
-      setLoading(false);
-    }
+  // State is set only in the promise callbacks, so the effect below sets none
+  // synchronously (react-hooks/set-state-in-effect).
+  const fetchAttestations = useCallback(() => {
+    fetch(`/api/records/${slug}/attestations`)
+      .then(async (res) => {
+        if (res.ok) {
+          const data = await res.json();
+          setAttestations(data.attestations || []);
+        }
+      })
+      .catch(() => {
+        // Silently fail — attestation list is non-critical
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [slug]);
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, type CSSProperties } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 import Link from 'next/link';
 
 interface EvidenceRecord {
@@ -90,36 +90,45 @@ export default function EvidenceIndex() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Reset page when filters change
-  useEffect(() => {
+  // Reset page when filters change (during render, not in an effect)
+  const filterKey = JSON.stringify([debouncedQuery, status, range, sort, includeWithdrawn]);
+  const [pageFilterKey, setPageFilterKey] = useState(filterKey);
+  if (filterKey !== pageFilterKey) {
+    setPageFilterKey(filterKey);
     setPage(1);
-  }, [debouncedQuery, status, range, sort, includeWithdrawn]);
+  }
 
-  const fetchData = useCallback(async () => {
+  // Loading starts when the request changes (during render); the effect fetches
+  const requestKey = JSON.stringify([debouncedQuery, status, range, sort, includeWithdrawn, page]);
+  const [loadingKey, setLoadingKey] = useState(requestKey);
+  if (requestKey !== loadingKey) {
+    setLoadingKey(requestKey);
     setLoading(true);
-    const params = new URLSearchParams();
-    if (debouncedQuery) params.set('q', debouncedQuery);
-    if (status) params.set('status', status);
-    if (range !== 'all') params.set('range', range);
-    if (sort !== 'newest') params.set('sort', sort);
-    if (includeWithdrawn) params.set('withdrawn', 'include');
-    if (page > 1) params.set('page', String(page));
-
-    try {
-      const res = await fetch(`/api/records/list?${params}`);
-      if (res.ok) {
-        setData(await res.json());
-      }
-    } catch {
-      // Silently fail
-    } finally {
-      setLoading(false);
-    }
-  }, [debouncedQuery, status, range, sort, includeWithdrawn, page]);
+  }
 
   useEffect(() => {
+    const fetchData = async () => {
+      const params = new URLSearchParams();
+      if (debouncedQuery) params.set('q', debouncedQuery);
+      if (status) params.set('status', status);
+      if (range !== 'all') params.set('range', range);
+      if (sort !== 'newest') params.set('sort', sort);
+      if (includeWithdrawn) params.set('withdrawn', 'include');
+      if (page > 1) params.set('page', String(page));
+
+      try {
+        const res = await fetch(`/api/records/list?${params}`);
+        if (res.ok) {
+          setData(await res.json());
+        }
+      } catch {
+        // Silently fail
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchData();
-  }, [fetchData]);
+  }, [debouncedQuery, status, range, sort, includeWithdrawn, page]);
 
   return (
     <>
