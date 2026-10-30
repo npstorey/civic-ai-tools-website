@@ -245,3 +245,90 @@ for (const [label, fields] of [
     assert.equal(isContentProfileConsistent(posted.producerProfile, posted.contentProfile ?? 'default'), false, 'premise: verify-core reads the pair as inconsistent too');
   });
 }
+
+// --- Criterion 2: every record this host's own runs publish declares the subtype ----
+
+const { mountPublishDialog, fire } = await import('../../components/publish-dialog-test-harness.ts');
+
+/** The props `McpResponseDisplay` hands the dialog for a chat-flow answer. */
+const CHAT_PROPS: Json = {
+  queryText: QUESTION,
+  output: ANSWER,
+  toolCalls: TOOL_CALLS,
+  evidenceTrace: { resourceSpans: [] },
+  model: 'openai/gpt-4o',
+  portal: 'data.example.org',
+  promptTokens: 10,
+  completionTokens: 5,
+  duration_ms: 1200,
+};
+const ATTRIBUTION = { origin: 'https://fixture.invalid', host: 'fixture.invalid', platformTitle: 'Fixture Instance' };
+
+interface ThroughDialog { sent: Json | null; pkg: Json | null }
+
+async function publishThroughDialog(promptVisibility: 'full_text' | 'hash_only'): Promise<ThroughDialog> {
+  P5.stored = [];
+  P5.rows = [];
+  DIALOG_REQUESTS = [];
+  const dialog = await mountPublishDialog(CHAT_PROPS, ATTRIBUTION);
+  await dialog.settle();
+  if (promptVisibility === 'hash_only') {
+    fire(dialog.inputLabelled('Hash only'), 'onChange');
+    await dialog.settle();
+  }
+  await fire(dialog.button('Seal'), 'onClick');
+  await dialog.settle();
+  const stored = P5.stored[0];
+  return {
+    sent: DIALOG_REQUESTS.find((r) => r.url === '/api/records')?.body ?? null,
+    pkg: stored ? (JSON.parse(stored) as Json) : null,
+  };
+}
+
+// Published inside the first test that reads them, never at module level:
+// node:test starts a test as it is declared, so a module-level publish would
+// share the storage stand-in with criterion 1's tests.
+let RUNS: { HASH_ONLY: ThroughDialog; FULL_TEXT: ThroughDialog } | null = null;
+async function runs() {
+  RUNS ??= { HASH_ONLY: await publishThroughDialog('hash_only'), FULL_TEXT: await publishThroughDialog('full_text') };
+  return RUNS;
+}
+
+test('2: premise: the dialog published both records, as chat-flow-stream, hash-only as "default" and full-text as "datHere"', async () => {
+  const { HASH_ONLY, FULL_TEXT } = await runs();
+  assert.equal(HASH_ONLY.sent?.captureMethod, 'chat-flow-stream');
+  assert.equal(HASH_ONLY.sent?.promptVisibility, 'hash_only');
+  assert.equal(HASH_ONLY.sent?.contentProfile, 'default');
+  assert.equal(FULL_TEXT.sent?.contentProfile, 'datHere');
+  assert.ok(HASH_ONLY.pkg, 'no package was stored for the hash-only publish');
+  assert.ok(FULL_TEXT.pkg, 'no package was stored for the full-text publish');
+});
+
+test('2: a hash-only publish through the dialog carries producerProfile ai-assisted-analysis/civicaitools-v1', async () => {
+  const { HASH_ONLY } = await runs();
+  assert.equal(HASH_ONLY.pkg?.producerProfile, SUBTYPE, 'the hash-only record does not declare the subtype');
+  assert.equal(contentProfileOf(HASH_ONLY.pkg), 'default', 'the content profile\'s value moved');
+  assert.equal(checkContentProfile(HASH_ONLY.pkg as Json).status, 'ok', 'verify-core check #16 does not read it ok');
+});
+
+test('2: a full-text publish through the dialog carries producerProfile ai-assisted-analysis/civicaitools-v1', async () => {
+  const { FULL_TEXT } = await runs();
+  assert.equal(FULL_TEXT.pkg?.producerProfile, SUBTYPE, 'the full-text record does not declare the subtype');
+  assert.equal(contentProfileOf(FULL_TEXT.pkg), 'datHere', 'the content profile\'s value moved');
+  assert.equal(checkContentProfile(FULL_TEXT.pkg as Json).status, 'ok', 'verify-core check #16 does not read it ok');
+});
+
+test('2: the value is set by the route, not sent by the dialog', async () => {
+  const { HASH_ONLY, FULL_TEXT } = await runs();
+  for (const run of [HASH_ONLY, FULL_TEXT]) {
+    assert.equal(run.sent !== null && 'producerProfile' in run.sent, false, 'the dialog sent a producerProfile');
+  }
+});
+
+for (const [contentProfile, expected] of [['default', undefined], ['datHere', DATHERE_SUBTYPE]] as const) {
+  test(`2: a publish of another capture method keeps what it carried (claude-code-jsonl-readback, ${contentProfile})`, async () => {
+    const result = await post({ captureMethod: 'claude-code-jsonl-readback', contentProfile });
+    assert.equal(result.status, 200, `the route refused it: ${JSON.stringify(result.body)}`);
+    assert.equal(result.pkg?.producerProfile, expected);
+  });
+}
