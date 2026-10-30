@@ -755,3 +755,36 @@ test('W2 P2 fix 1: a phase the stream did not report has no row, and a duration 
   assert.deepEqual(rows.map((r) => rowText(r)), ['Writing the notebook', 'Running it in a sandbox']);
   assert.ok(rows.every((r) => !r.includes('data-part="closing-fact"')), 'no duration is stated when none was recorded');
 });
+
+// --- R10 P1b (#694): B on the finished executed run whose model saw several prompts ---
+//
+// The run's trace (`publish_inputs`) states three prompts by hash, the first
+// the `metadata` event's. B states the last, the hash the record will state;
+// it does not show the first prompt's text under it, and it lists the two
+// earlier prompts by hash.
+
+const FIRST_PROMPT_HASH = 'a'.repeat(64);
+const PROMPT_HASHES = [FIRST_PROMPT_HASH, '3'.repeat(64), '4'.repeat(64)];
+const RUN_TRACE = {
+  resourceSpans: [{ scopeSpans: [{ spans: PROMPT_HASHES.map((hash, i) => ({
+    name: 'llm_inference', spanId: `llm-${i}`,
+    attributes: [{ key: 'gen_ai.system_prompt_hash', value: { stringValue: hash } }],
+  })) }] }],
+};
+
+test('R10 P1b: the finished executed run states the final prompt\'s hash in B and lists the earlier prompts by hash', async () => {
+  const { SYSTEM_PROMPT_TEXT } = (await import('@/lib/sources/copy')) as unknown as { SYSTEM_PROMPT_TEXT: { manyPrompts: (n: number) => string } };
+  const output = createElement(ChatNotebookOutput, {
+    notebook: NOTEBOOK, prompt: 'PROMPTMARKER-p1 How many complaints were filed?', model: 'fixture/model',
+    portal: 'data.example.org', toolCalls: [RETURNED], composedSystemPrompt: 'SYSTEMPROMPTMARKER-p1',
+    composedSystemPromptHash: FIRST_PROMPT_HASH, signingKeyId: 'fixture-key', evidenceTrace: RUN_TRACE,
+  });
+  const Session = SessionProvider as unknown as ComponentType<{ session: null; children?: ReactNode }>;
+  const html = renderToStaticMarkup(createElement(Session, { session: null }, output));
+  const from = at(html, heading('B · System prompts'));
+  const b = html.slice(from, at(html, heading('C · Model + environment'), from)).replace(/<!-- -->/g, '');
+  assert.ok(b.includes('4'.repeat(16)), 'B does not state the final prompt\'s hash');
+  assert.equal(b.includes('SYSTEMPROMPTMARKER-p1'), false, 'the first prompt\'s text is shown under the final prompt\'s hash');
+  assert.ok(b.includes(SYSTEM_PROMPT_TEXT.manyPrompts(3)), 'B does not state how many prompts the model saw');
+  for (const hash of PROMPT_HASHES.slice(0, 2)) assert.ok(b.includes(hash), `B does not list ${hash.slice(0, 8)}`);
+});

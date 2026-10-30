@@ -797,10 +797,61 @@ test('P2 (5) C states the content profile, data sources, skill hash, total token
   assert.equal(old.get('Tool calls'), '2');
   assert.equal(old.get('Blob-stored fields'), 'output');
   assert.equal(agf.has('Blob-stored fields'), false, 'no blob-stored fields when none is a blob');
-  // A hash-only skill prompt: no section B, and its hash is disclosed in C.
+  // A hash-only skill prompt: its hash is disclosed in C. Until R10 P1b it had
+  // no section B; since P1b-e, B renders and says the record carries no text
+  // (asserted below).
   const skeleton = cItems(HTML.skeleton);
   assert.equal(skeleton.get('Skill hash'), '555555555555');
-  assert.equal(occurrences(HTML.skeleton, heading('B · System prompts')).length, 0, 'no B for a hash-only skill prompt');
+  assert.equal(occurrences(HTML.skeleton, heading('B · System prompts')).length, 1, 'B renders once for a hash-only skill prompt (R10 P1b, P1b-e)');
+});
+
+// --- R10 P1b (#694): B on a record that carries no text, and on one whose model saw several prompts ---
+
+const textOfMarkup = (markup: string) => markup.replace(/<!-- -->/g, '').replace(/<[^>]*>/g, '')
+  .replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+/** The skeleton record, its trace stating three prompts, the last the record's, and its composition two components. */
+const EARLIER_PROMPTS = ['1'.repeat(64), '2'.repeat(64)];
+const llmSpan = (hash: string, i: number) => ({
+  name: 'llm_inference', spanId: `llm-${i}`,
+  attributes: [{ key: 'gen_ai.system_prompt_hash', value: { stringValue: hash } }, { key: 'gen_ai.inference_index', value: { intValue: String(i) } }],
+});
+const MANY_PROMPTS: Case = {
+  ...SKELETON,
+  record: { ...SKELETON.record, slug: 'many-prompts-p1b' },
+  pkg: {
+    ...SKELETON_PACKAGE,
+    trace: { resourceSpans: [{ scopeSpans: [{ spans: [...EARLIER_PROMPTS, SKELETON_PACKAGE.skillMetadata.systemPromptHash].map(llmSpan) }] }] },
+    extensions: {
+      ...SKELETON_PACKAGE.extensions,
+      'org.civicaitools.composition': {
+        components: [
+          { id: 'socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server', guidanceHash: '3'.repeat(64) },
+          { id: '@typedstandards/civic-typed-router', version: '0.6.0' },
+        ],
+      },
+    },
+  },
+};
+
+test('R10 P1b, P1b-e: B on a record with no text says so and shows its hash', async () => {
+  const { SYSTEM_PROMPT_TEXT: T } = (await import('@/lib/sources/copy')) as unknown as { SYSTEM_PROMPT_TEXT: Record<string, string> };
+  const d = requireDisclosure(HTML.skeleton);
+  const b = textOfMarkup(sectionBody(HTML.skeleton, 'B · System prompts', d.end));
+  assert.ok(b.includes(T.notCarried), 'B does not say the text was not carried');
+  assert.ok(b.includes(`${T.hashLabel}: ${SKELETON_PACKAGE.skillMetadata.systemPromptHash}`), 'B does not show the hash');
+});
+
+test('R10 P1b: B on a record whose trace states three prompts lists the components and the two earlier prompts by hash', async () => {
+  const { SYSTEM_PROMPT_TEXT } = (await import('@/lib/sources/copy')) as unknown as { SYSTEM_PROMPT_TEXT: { manyPrompts: (n: number) => string; componentsIntro: string } };
+  const html = await render(MANY_PROMPTS);
+  const d = requireDisclosure(html);
+  const b = textOfMarkup(sectionBody(html, 'B · System prompts', d.end));
+  assert.ok(b.includes(SYSTEM_PROMPT_TEXT.manyPrompts(3)), 'B does not state how many prompts the model saw');
+  for (const hash of EARLIER_PROMPTS) assert.ok(b.includes(hash), `B does not list ${hash.slice(0, 8)}`);
+  assert.ok(b.includes(SYSTEM_PROMPT_TEXT.componentsIntro), 'B does not introduce the components');
+  assert.ok(b.includes('@typedstandards/civic-typed-router 0.6.0'), 'B does not list a component with its version');
+  assert.ok(b.includes('3'.repeat(64)), 'B does not list a component\'s guidance hash');
 });
 
 // #617 P4 (ruling a2, the named exception to this file's ownership): a hosted
