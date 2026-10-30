@@ -59,9 +59,8 @@ import ChatSignersSection from '@/components/notebook/ChatSignersSection';
 import ChatCitationPreview from '@/components/notebook/ChatCitationPreview';
 import RenderingCellOutputs from '@/components/notebook/RenderingCellOutputs';
 import SkillSection from '@/components/evidence/SkillSection';
-// What the record can disclose about its composed skill prompt (#411, D3): the
-// one decision every `SkillSection` site asks.
-import { carriesSkillText } from '@/lib/evidence/skill-disclosure';
+// R10 P1b: the prompts a run's model saw before the last, listed under B's hash.
+import PromptHistory from '@/components/evidence/PromptHistory';
 import { UNPLACED_CALLS_LINE, type StepViewCall } from '@/lib/answer-view/steps';
 import { secondsText } from '@/lib/evidence/query-step';
 import { useSessionChoice } from '@/hooks/useSessionChoice';
@@ -381,21 +380,14 @@ function Disclosure({ disclosure, answer, answerElement, extras, recordSections,
       </Section>
     ),
 
-    // B on a record: the skill prompt it carries, inline or as a blob it fetches on click.
+    // B on a record: the skill prompt it carries, inline or as a blob it
+    // fetches on click and checks, or, for a record that carries no text,
+    // that it does not (R10 P1b): `SkillSection` asks `carriesSkillText`.
     instructions: (
       <>
-        {recordInstructions && carriesSkillText(recordInstructions.disclosure) && (
+        {recordInstructions && (
           <Section level={level} title="B · System prompts" author={<AuthorLine part="instructions" text={recordInstructions.author} />}>
-            {(() => {
-              const d = recordInstructions.disclosure;
-              return (
-                <SkillSection
-                  skillText={d.kind === 'inline' ? d.text : undefined}
-                  skillTextRef={d.kind === 'blob' ? d.ref : undefined}
-                  skillHash={d.kind === 'inline' || d.kind === 'blob' ? d.hash : undefined}
-                />
-              );
-            })()}
+            <SkillSection section={recordInstructions} />
           </Section>
         )}
         {instructions && (
@@ -431,6 +423,8 @@ function Disclosure({ disclosure, answer, answerElement, extras, recordSections,
                   </span>
                 </div>
               )}
+              {/* R10 P1b: the prompts the model saw before this one, by hash. */}
+              <PromptHistory earlierHashes={instructions.earlierPromptHashes ?? []} />
               {instructions.text === undefined ? null : instructions.text ? (
                 <details>
                   <summary style={{ cursor: 'pointer', color: 'var(--accent)', fontSize: '13px', padding: '4px 0' }}>

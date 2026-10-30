@@ -32,7 +32,10 @@
 //      and the hash is still disclosed to the reader in section C, as
 //      "Skill hash". The control below builds the inline shape and
 //      shows the decision going the other way, so the assertion is not
-//      vacuous.
+//      vacuous. SINCE R10 P1b (#694, P1b-e) a hash-only record renders B
+//      all the same, saying it carries no text, with its hash and its
+//      composition's components; the decision is still this function's, and
+//      SkillSection is where it is asked (the site case below).
 //
 // WHAT DOES NOT MOVE. Records published BEFORE this change carry their text
 // in signed bytes and keep rendering the section; nothing here or in the
@@ -224,7 +227,7 @@ test('#411: the hash D3 keeps is still in the signed bytes, and still identifies
 
 // --- 3: what the record detail page does with it ----------------------------
 
-test('#411: the page’s own decision for a package built after this change is hash-only — no skill section renders', () => {
+test('#411: the page’s own decision for a package built after this change is hash-only — no skill text renders', () => {
   const disclosure = describeSkillDisclosure(BUILT.skillMetadata);
   assert.equal(disclosure.kind, 'hash-only', `the page would render the skill section from ${disclosure.kind}`);
   assert.equal(carriesSkillText(disclosure), false, 'there is no text for SkillSection to render');
@@ -249,31 +252,28 @@ test('#411 CONTROL: a record published BEFORE this change still renders its sect
 });
 
 test('#411: every SITE that renders SkillSection asks that one decision — derived, and counted per site', () => {
-  // Per RENDER SITE, not per file. A file-level "does this source mention
-  // `carriesSkillText`" check passes while one of two sites still carries its
-  // own longhand condition — measured: that exact mutation left the earlier
-  // version of this case green. The window is the eight lines above each
-  // `<SkillSection`, which is where the enclosing JSX conditional sits on the
-  // record page (one site since LAYOUT-W1, #598: section B, for every record).
-  const WINDOW = 8;
+  // Per RENDER SITE, not per file. R10 P1b (#694, P1b-e) moved the decision
+  // INTO SkillSection: B renders for every record, and SkillSection asks
+  // `carriesSkillText` to choose between the text (inline, or a checked blob)
+  // and the sentence that the record carries none. So a site passes the
+  // record's whole section (`section=`) and decides nothing itself; a site
+  // that passed the three loose props, or wrote its own condition around
+  // them, would be deciding again outside the one function. Before P1b each
+  // site asked `carriesSkillText` in the eight lines above `<SkillSection`.
   const sites: string[] = [];
-  const unguarded: string[] = [];
+  const deciding: string[] = [];
   for (const f of tracked().filter((x) => !x.includes('.test.') && x !== 'src/components/evidence/SkillSection.tsx')) {
     const lines = sourceOf(f).split('\n');
     lines.forEach((line, i) => {
       if (!line.includes('<SkillSection')) return;
       sites.push(`${f}:${i + 1}`);
-      const before = lines.slice(Math.max(0, i - WINDOW), i).join('\n');
-      if (!before.includes('carriesSkillText(')) unguarded.push(`${f}:${i + 1}`);
+      const element = lines.slice(i, i + 4).join('\n');
+      if (!/<SkillSection\s+section=\{[^}]+\}\s*\/>/.test(element)) deciding.push(`${f}:${i + 1}`);
     });
   }
   assert.ok(sites.length > 0, 'no file renders SkillSection — the scan found nothing to hold, which is not a pass');
-  assert.deepEqual(
-    unguarded,
-    [],
-    'a site renders SkillSection behind a condition of its own. Both of the record page\'s sites ' +
-      'asked `skillMetadata?.skillText || resolution?.skillTextIsBlob` longhand before P4; a ' +
-      'condition written out in a page cannot be driven by a test, and "the section quietly ' +
-      'disappeared" is what #411 changed for every record published after it',
-  );
+  assert.deepEqual(deciding, [], 'a site renders SkillSection with props of its own rather than the record\'s section');
+  const section = sourceOf('src/components/evidence/SkillSection.tsx');
+  assert.match(section, /if \(!carriesSkillText\(disclosure\)\)/, 'SkillSection does not ask carriesSkillText');
 });
+
