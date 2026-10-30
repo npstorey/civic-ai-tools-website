@@ -175,6 +175,9 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
             composedSystemPromptHash={state.composedSystemPromptHash}
             signingKeyId={state.signingKeyId}
             flows={state.flows}
+            /* R10 P1: the trace (what chose the sources), and the progress log, whose consent steps the finished run keeps (#667). */
+            evidenceTrace={state.evidenceTrace}
+            progressLog={state.steps?.progressLog}
             actions={canPublish ? (
             /* #112 publish affordance — mirrors the chat flow's entry point. */
             <div

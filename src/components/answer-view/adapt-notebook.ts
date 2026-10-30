@@ -18,7 +18,14 @@
 //   5. the sources line: `buildProvenanceLine` under the hosts the answered
 //      calls named (`coverPortals`, answered calls only);
 //   6. the disclosure: A-G and the signers, as before; the signers' production
-//      method states the notebook's own reading (the W3 fix, F2).
+//      method states the notebook's own reading (the W3 fix, F2). C carries
+//      the run's portal only when it holds one, and, once the run's trace has
+//      arrived (`publish_inputs`), what chose its sources (R10 P1, #682), the
+//      same fact the chooser line opens "Where this question went" with.
+//
+// THE CONSENT STEPS (#667). The finished run's steps carry the run's progress
+// log, as the live view's do, so a load that paused to ask the reader keeps its
+// consent step, and the step reads its outcome from the same bus slot.
 //
 // Relative, extension-carrying imports, so the module runs under `node --test`
 // with no loader; `buildChatEvidenceView.ts` beside it is the precedent.
@@ -47,6 +54,8 @@ import { readReproductionClaim, reproductionScopeSentence } from '../../lib/note
 import { readNotebookProvenanceOfNotebook } from '../../lib/notebook-author/notebook-provenance-reading.ts';
 import { formatModelName } from '../../lib/models.ts';
 import type { WhereItWentModel } from '../../lib/flows/where-it-went.ts';
+import { chooserCardItems, chooserFromTrace, runHoldsPortal } from '../../lib/flows/source-chooser.ts';
+import { RUN_PORTAL_LABEL } from '../../lib/sources/copy.ts';
 import type { Notebook } from '../../lib/notebook-author/cells.ts';
 // Type-only: erased at compile time.
 import type { CapturedToolCall } from '@/hooks/useNotebookStream';
@@ -72,6 +81,10 @@ export interface NotebookAdapterInput {
   socrataMcpUrl: string | null;
   /** R6 W4: where the question went, from the run's `complete` event; absent, no section. */
   flows?: WhereItWentModel | null;
+  /** The run's trace (`publish_inputs`), null or absent until it arrives: what chose the sources is read from it (R10 P1). */
+  evidenceTrace?: Record<string, unknown> | null;
+  /** The run's flat progress log (#644 W2): its consent steps, kept on the finished run (#667). */
+  progressLog?: ProgressLogEntry[];
 }
 
 /** A rendering cell's outputs that are ONE markdown block are a markdown answer. */
@@ -190,11 +203,12 @@ export function adaptNotebook(input: NotebookAdapterInput): AnswerViewModel {
   const line = buildProvenanceLine(calls);
   const sources = line === null ? null : { author: AUTHOR.sources(coverPortals(calls, null).reached), line };
 
-  const portalLabel = view.portal && view.portal !== '__all__' ? view.portal : 'all portals';
   const mcpServers = approximateMcpServers(view.portal, input.socrataMcpUrl);
+  const chooser = input.evidenceTrace ? chooserFromTrace(input.evidenceTrace) : null;
   const environment: EnvironmentItem[] = [
     { label: 'Model', value: formatModelName(view.model) },
-    { label: 'Data portal', value: portalLabel },
+    // Shown only when the run holds a portal (R10 P1): never a word for none.
+    ...(runHoldsPortal(view.portal) ? [{ label: RUN_PORTAL_LABEL, value: view.portal }] : []),
     ...(mcpServers.length > 0 ? [{ label: 'MCP servers', value: mcpServers.join(', ') }] : []),
     ...(view.environment?.python ? [{ label: 'Python runtime', value: view.environment.python }] : []),
     ...(view.environment?.libraries
@@ -204,6 +218,7 @@ export function adaptNotebook(input: NotebookAdapterInput): AnswerViewModel {
     ...(view.executionDurationMs !== null && view.executionDurationMs !== undefined
       ? [{ label: 'Sandbox duration', value: `${(view.executionDurationMs / 1000).toFixed(1)}s` }]
       : []),
+    ...(chooser ? chooserCardItems(chooser) : []),
   ];
 
   const summary: SummarySection = view.structuredSummary
@@ -228,7 +243,7 @@ export function adaptNotebook(input: NotebookAdapterInput): AnswerViewModel {
       structuredSummary: view.structuredSummary,
       author: AUTHOR.citation(input.instance),
     },
-    steps: notebookSteps(input.stepGroups, input.toolCalls, input.closingPhases, view.executionDurationMs, input.instance),
+    steps: notebookSteps(input.stepGroups, input.toolCalls, input.closingPhases, view.executionDurationMs, input.instance, input.progressLog),
     sources,
     disclosure: {
       question: { author: AUTHOR.question(), prompt: view.prompt },
@@ -252,6 +267,6 @@ export function adaptNotebook(input: NotebookAdapterInput): AnswerViewModel {
         provenance: { state: reading.state, label: reading.label, detail: reading.detail ?? null },
       },
     },
-    ...(input.flows ? { whereItWent: input.flows } : {}),
+    ...(input.flows ? { whereItWent: chooser ? { ...input.flows, chooser } : input.flows } : {}),
   };
 }

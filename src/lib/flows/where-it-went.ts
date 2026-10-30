@@ -29,6 +29,12 @@
  * this site answers it. Rows are in order of first contact: the model
  * endpoint, each reached source, then the notebook runner of an executed run.
  *
+ * WHAT CHOSE THE SOURCES (R10 P1, #682). `chooser`, read by
+ * `./source-chooser.ts` from the record's `routing` alone: on a record, here
+ * (`whereItWentFromPackage`); on a run, by the run's adapter from its trace,
+ * which reaches the client after the completion that carries this model, so a
+ * run's model carries none until then (P-f). The routes are unchanged.
+ *
  * THE STATEMENT. On a run, the statement the consent gate built for it. On a
  * record whose reference has the served statement's hash, that statement.
  * Either way every recipient the statement's row carries is shown, with its
@@ -36,11 +42,11 @@
  * correction, and Stage C) the recipients and places come from the record: one
  * per row, and nothing it received or keeps; the view says that once.
  */
-import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import { statementHash, type FlowsKeptBy, type FlowsRecipient, type FlowsStatement } from './statement.ts';
-import { readerSourceName, recipientWhere, roleLabel } from '../sources/source-name.ts';
+import { recipientWhere, roleLabel } from '../sources/source-name.ts';
 import { WHERE_IT_WENT_REASONS } from '../sources/copy.ts';
 import { NOTEBOOK_EXTENSION_KEY, readNotebookProvenanceOfNotebook } from '../notebook-author/notebook-provenance-reading.ts';
+import { aliasOf, attributesOf, chooserFromPackage, sourceReaderName, spansOfTrace, type SourceChooser } from './source-chooser.ts';
 
 // --- The model ------------------------------------------------------------------------
 
@@ -81,6 +87,8 @@ export interface WhereItWentModel {
   reached: WhereReachedRow[];
   notReached: WhereNotReachedRow[];
   statement: WhereStatement;
+  /** What chose the sources (R10 P1): on a record always; on a run once its trace has arrived. Absent: not yet known. */
+  chooser?: SourceChooser;
 }
 
 /** A source as a run or a record states it was offered. */
@@ -119,10 +127,7 @@ interface CoreInput {
   statement: WhereStatement;
 }
 
-function nameOf(sourceId: string, alias: string | undefined): string {
-  const entry = CIVIC_MANIFEST.find((e) => e.sourceId === sourceId);
-  return entry ? readerSourceName({ sourceId, displayName: entry.displayName }) : alias ?? sourceId;
-}
+const nameOf = sourceReaderName;
 
 const shown = (r: FlowsRecipient, sourceId?: string): WhereRecipientRow => ({
   role: roleLabel(r.role),
@@ -243,31 +248,7 @@ const runSide = (statement: FlowsStatement | null | undefined): { side: Side; st
 
 interface SpanLike { name?: unknown; parentSpanId?: unknown; attributes?: unknown }
 
-/** A span's attributes as plain values; anything not in the OTLP shape reads as nothing. */
-function attributesOf(span: SpanLike): Map<string, unknown> {
-  const out = new Map<string, unknown>();
-  if (!Array.isArray(span.attributes)) return out;
-  for (const attr of span.attributes as unknown[]) {
-    if (attr === null || typeof attr !== 'object') continue;
-    const { key, value } = attr as { key?: unknown; value?: unknown };
-    if (typeof key !== 'string' || value === null || typeof value !== 'object') continue;
-    const v = value as Record<string, unknown>;
-    out.set(key, v.stringValue ?? v.boolValue ?? v.intValue ?? v.doubleValue);
-  }
-  return out;
-}
-
 const text = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
-
-function aliasOf(argumentsJson: string | undefined): string | undefined {
-  if (argumentsJson === undefined) return undefined;
-  try {
-    const parsed: unknown = JSON.parse(argumentsJson);
-    return parsed !== null && typeof parsed === 'object' ? text((parsed as { alias?: unknown }).alias) : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 function readSpans(spans: readonly unknown[]): { contacts: Contact[]; model: string | null; service: string | null } {
   const contacts: Contact[] = [];
@@ -343,21 +324,6 @@ export function whereItWentFromCalls(input: {
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
 
-function spansOfTrace(trace: unknown): unknown[] | null {
-  const resourceSpans = asRecord(trace)?.resourceSpans;
-  if (!Array.isArray(resourceSpans)) return null;
-  const spans: unknown[] = [];
-  for (const rs of resourceSpans) {
-    const scopeSpans = asRecord(rs)?.scopeSpans;
-    if (!Array.isArray(scopeSpans)) continue;
-    for (const ss of scopeSpans) {
-      const list = asRecord(ss)?.spans;
-      if (Array.isArray(list)) spans.push(...list);
-    }
-  }
-  return spans;
-}
-
 function serverList(value: unknown): ServerEntry[] | null {
   if (!Array.isArray(value)) return null;
   return value.flatMap((entry): ServerEntry[] => {
@@ -416,11 +382,14 @@ export function whereItWentFromPackage(pkg: unknown, served: FlowsStatement | nu
     : reference && typeof reference.url === 'string' && typeof reference.date === 'string'
       ? { kind: 'reference', date: reference.date, url: reference.url }
       : { kind: 'none' };
-  return build({
-    ...read,
-    sourcesOffered: offeredList(composition?.sourcesOffered),
-    executed,
-    side: matched && served ? { kind: 'statement', statement: served } : { kind: 'record', servers: serversOf(record, spans) },
-    statement,
-  });
+  return {
+    ...build({
+      ...read,
+      sourcesOffered: offeredList(composition?.sourcesOffered),
+      executed,
+      side: matched && served ? { kind: 'statement', statement: served } : { kind: 'record', servers: serversOf(record, spans) },
+      statement,
+    }),
+    chooser: chooserFromPackage(record),
+  };
 }

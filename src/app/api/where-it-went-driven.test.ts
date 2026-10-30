@@ -176,6 +176,7 @@ const { buildEvidencePackage } = await import('../../lib/evidence/packager.ts');
 const { buildFlowsStatement, statementHash } = await import('../../lib/flows/statement.ts');
 const { CONSENT_COOKIE_NAME, encodeConsentCookie } = await import('../../lib/sources/consent.ts');
 const { whereItWentFromPackage } = await import('../../lib/flows/where-it-went.ts');
+const { chooserFromTrace } = await import('../../lib/flows/source-chooser.ts');
 const { WHERE_IT_WENT_REASONS } = await import('../../lib/sources/copy.ts');
 
 type Handler = (request: Request) => Promise<Response>;
@@ -362,7 +363,11 @@ for (const [label, d, flowsOf, traceOf] of [
     const pkg = packageOf(trace, notebookExtension);
     const composition = (pkg.extensions as Record<string, Record<string, unknown>>)['org.civicaitools.composition'];
     assert.equal((composition.flowsStatement as { hash?: string }).hash, statementHash(d.statement), 'premise: the package references the run\'s statement');
-    assert.deepEqual(whereItWentFromPackage(pkg, d.statement), flows, 'the record gives the model the completion carried');
+    // R10 P1: the run's surface adds what chose the sources once the trace arrives (`chooserFromTrace`); the
+    // record reads it from its own `routing`. The two must agree, as every other field does.
+    const chooser = chooserFromTrace(trace);
+    assert.ok(chooser, `premise: ${label}'s trace is readable`);
+    assert.deepEqual(whereItWentFromPackage(pkg, d.statement), { ...flows, chooser }, 'the record gives the model the completion carried, with its trace\'s chooser');
     const other = structuredClone(d.statement);
     other.date = '2026-01-01';
     const unmatched = whereItWentFromPackage(pkg, other);

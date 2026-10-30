@@ -23,8 +23,9 @@
 //   5. no sources line (see `record-page-layout.test.ts`'s W3 P2 header);
 //   6. the disclosure: A-G as W1 placed them — A the question (or its hash),
 //      B the skill prompt when the record carries its text, C the model and
-//      environment, D each call's signed fields raw, E the notebook, F the
-//      answer again, G the summary.
+//      environment (with "Sources chosen by", read from the record's own
+//      `routing`, R10 P1), D each call's signed fields raw, E the notebook, F
+//      the answer again, G the summary.
 //
 // WHO WROTE EACH PART (design §6), only where the record states it:
 //   - the question is the package's `prompt`: "written by the person who asked";
@@ -68,6 +69,7 @@ import type { Notebook } from '../../lib/notebook-author/cells.ts';
 import type { PublishedLayout } from '../../lib/answer-layout/published-line.ts';
 import type { FlowsStatement } from '../../lib/flows/statement.ts';
 import { whereItWentFromPackage } from '../../lib/flows/where-it-went.ts';
+import { chooserCardItems, chooserFromPackage } from '../../lib/flows/source-chooser.ts';
 
 /** What the page resolved before rendering (`resolvePackageForRender`). */
 export interface ResolvedPackageData {
@@ -290,6 +292,8 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
     { label: 'Duration', value: pkg.cost.durationMs ? `${(pkg.cost.durationMs / 1000).toFixed(1)}s` : '—' },
     { label: 'Tool calls', value: String(pkg.queries.length) },
     ...(blobFields.length > 0 ? [{ label: 'Blob-stored fields', value: blobFields.join(', ') }] : []),
+    // R10 P1 (#682): what chose the sources, from the record's `routing`; "not recorded" when it has none.
+    ...chooserCardItems(whereItWent?.chooser ?? chooserFromPackage(pkg)),
   ];
 
   // D · each call's signed fields, raw (W1 ruling D6). #384 F5: what the call

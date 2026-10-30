@@ -522,3 +522,57 @@ test('criterion 5: an all-sources record states neither key, and differs from th
   assert.equal(Object.hasOwn(rootA, 'analysis.routing'), false);
   assert.equal(Object.hasOwn(rootA, 'analysis.definition_hash'), false);
 });
+
+// --- R10 P1 criterion 4 (#682): the record page over a record this packager built ----------------
+//
+// The in-loop run above loads Socrata, asks for no other source, and never
+// asks for Data Commons or Boston OpenContext, both in its directory set; its
+// load of `nyc_charter` names no source of the set (`not-offered`), so NYC
+// Charter is in no group. The all-sources run states no `routing` key.
+
+/** The record adapter and the chooser's lines, by specifiers typed `string`, so the red commit type-checks. */
+const ADAPT_RECORD: string = '../../components/answer-view/adapt-record.ts';
+const SOURCE_CHOOSER: string = '../../lib/flows/source-chooser.ts';
+const COPY: string = '../../lib/sources/copy.ts';
+type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+async function recordView(d: Drive): Promise<Loose> {
+  const { adaptRecord } = (await import(ADAPT_RECORD)) as Loose;
+  const { pkg } = packageOf(d);
+  return adaptRecord({ stored: pkg, resolution: null, row: { slug: 'r10-p1', summary: 'Potholes.', contentProfile: 'datHere', captureMethod: 'chat-flow-stream' }, instance: null, servedStatement: null });
+}
+
+test('R10 P1 P-d: the packaged in-loop record\'s routing.version and its router component\'s version agree', () => {
+  const composition = packageOf(IN_LOOP).pkg.extensions?.['org.civicaitools.composition'] as Json;
+  const router = (composition.components as Array<{ id: string; version?: string }>).find((c) => c.id === '@typedstandards/civic-typed-router');
+  assert.equal((composition.routing as { version: string }).version, router?.version);
+  assert.equal(router?.version, ROUTER_VERSION);
+});
+
+test('R10 P1 criterion 4: adaptRecord over the packaged in-loop record shows the chooser line and the card', async () => {
+  const { SOURCE_CHOOSER_TEXT: T, SOURCE_CHOOSER_CARD: CARD } = (await import(COPY)) as Loose;
+  const { chooserLines } = (await import(SOURCE_CHOOSER)) as Loose;
+  const model = await recordView(IN_LOOP);
+  const composition = packageOf(IN_LOOP).pkg.extensions?.['org.civicaitools.composition'] as Json;
+  const environment = model.disclosure.environment as Array<{ label: string; value: string; mono?: boolean }>;
+  assert.deepEqual(environment.find((i) => i.label === CARD.label), { label: CARD.label, value: CARD.inLoop('@typedstandards/civic-typed-router', ROUTER_VERSION) });
+  assert.deepEqual(environment.find((i) => i.label === CARD.definitionLabel), { label: CARD.definitionLabel, value: (composition.definitionHash as string).slice(0, 12), mono: true });
+  assert.equal(typeof chooserLines, 'function', 'source-chooser.ts exports no chooserLines');
+  assert.deepEqual(chooserLines(model.whereItWent?.chooser), [
+    { text: T.inLoop },
+    { text: `${T.loaded}Socrata.` },
+    { text: `${T.askedNotLoaded}${T.none}.` },
+    { text: `${T.neverAsked}Data Commons${T.separator}Boston OpenContext.` },
+  ]);
+});
+
+test('R10 P1 criterion 4: adaptRecord over the packaged all-sources record shows "not recorded" in both places', async () => {
+  const { SOURCE_CHOOSER_TEXT: T, SOURCE_CHOOSER_CARD: CARD } = (await import(COPY)) as Loose;
+  const { chooserLines } = (await import(SOURCE_CHOOSER)) as Loose;
+  const model = await recordView(UNSET);
+  const environment = model.disclosure.environment as Array<{ label: string; value: string }>;
+  assert.deepEqual(environment.find((i) => i.label === CARD.label), { label: CARD.label, value: CARD.notRecorded });
+  assert.equal(environment.find((i) => i.label === CARD.definitionLabel), undefined);
+  assert.equal(typeof chooserLines, 'function', 'source-chooser.ts exports no chooserLines');
+  assert.deepEqual(chooserLines(model.whereItWent?.chooser), [{ text: T.notRecorded }]);
+});

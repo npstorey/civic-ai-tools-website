@@ -350,3 +350,107 @@ export const WHERE_IT_WENT_REASONS = {
   notAsked: 'Ask first: not asked for this question.',
   notSetUp: 'Not set up on this site.',
 } as const;
+
+/**
+ * What chose a run's sources (R10 P1, #682; the anchor's D7 = A, read
+ * literally). Hypotheses, read against `docs/design-principles.md` and the
+ * consent research (fix round 1 applied the research check's rewrites). The
+ * chooser line opens "Where this question went", and the card "Sources chosen
+ * by" sits in "Model + environment"; both read the record's `routing` (on a
+ * run, the trace's `analysis.routing`) and nothing else decides the method.
+ *   - `inLoop`, then the three groups, each by the sources' reader names: the
+ *     sources loaded; requested and not loaded, one line each with its reason
+ *     in `CHOOSER_REASONS`' words; not requested. An empty group says `none`.
+ *   - `notRecorded`: the record has no `routing` key (every all-sources run,
+ *     and every record published before in-loop routing).
+ *   - `allSources`: only for a record that states the method `all-sources`.
+ *     The research-checked sentence, which replaces D7's draft by the seat's
+ *     ruling (fix round 1, item 7 as amended); no record states that method
+ *     today.
+ *   - `unrecognized`: a method this site has no sentence for, echoed capped
+ *     (`ECHO_LIMIT`). It is never read as either of the two above (a gate
+ *     question).
+ * Read by `src/lib/flows/source-chooser.ts`, which `WhereItWent.tsx` and the
+ * three adapters render through.
+ */
+export const SOURCE_CHOOSER_TEXT = {
+  inLoop: 'The model chose which sources to load, from those this question could use.',
+  loaded: 'Loaded: ',
+  askedNotLoaded: 'Requested, not loaded: ',
+  neverAsked: 'Not requested: ',
+  none: 'none',
+  /** Between two names in a group: a name may itself hold a comma. */
+  separator: '; ',
+  /** Between a source requested and not loaded, and its reason, on the source's own line. */
+  reasonSeparator: ' — ',
+  notRecorded: 'What chose these sources is not recorded.',
+  allSources: 'Every source this question could use was given to the model from the start.',
+  unrecognized: (method: string) => `What chose these sources is recorded as “${method}”, a method this site does not recognize.`,
+} as const;
+
+/** The longest recorded method value the chooser line and the card echo; a longer one is cut, with "…". */
+export const ECHO_LIMIT = 40;
+
+/**
+ * Why a source the model requested was not loaded, by the load's outcome, in
+ * the chooser line only (R10 P1 fix round 1). None of them claims a question
+ * put to the reader: `declined` is also the outcome when no pause could be held
+ * (`routing-mode.ts:301`), and `no-answer` when the reader could not be asked
+ * (`decision.ts`, `notHeld`). `WHERE_IT_WENT_REASONS` above is owner-approved
+ * and unchanged.
+ */
+export const CHOOSER_REASONS = {
+  declined: 'Ask first, so it was not used for this question.',
+  noAnswer: 'Ask first: not used, because this site could not ask, or no answer arrived in time.',
+  unavailable: 'Unavailable. This site could not load it for this question.',
+} as const;
+
+/** The card in "Model + environment" (R10 P1, #682): the same fact as the chooser line. Hypotheses. */
+export const SOURCE_CHOOSER_CARD = {
+  label: 'Sources chosen by',
+  /**
+   * In-loop: the router named by the record's own router component id, then
+   * `routing.version`; with no such component, "router version <version>";
+   * with no version, the model alone. No name is supplied that the record
+   * does not state.
+   */
+  inLoop: (router: string | null, version: string | null) =>
+    version === null
+      ? 'the model'
+      : router !== null
+        ? `the model, from a source list given by ${router} ${version}`
+        : `the model, from a source list given by router version ${version}`,
+  notRecorded: 'not recorded',
+  allSources: 'no choice made: every source this question could use was given to the model from the start',
+  unrecognized: (method: string) => `recorded as “${method}”`,
+  /** The small print: the hash over the run's sources and instructions, its first twelve characters, as "Skill hash" is shown. */
+  definitionLabel: 'Sources and instructions hash',
+} as const;
+
+/** The run's portal, renamed from "Data portal" (R10 P1, #682): shown only when the run holds one. Hypothesis. */
+export const RUN_PORTAL_LABEL = 'Socrata portal';
+
+/**
+ * A load step's label (R10 P1, G0 D1 = A). Open, the load is under way and the
+ * choice already made; closed, the model chose the source. The names are the
+ * sources' reader names (`readerSourceName`, as every other surface names
+ * them), found by each load's own alias in the manifest (`loadAliasReaderName`,
+ * `src/lib/flows/source-chooser.ts`); a load with no alias, or an alias no
+ * source has, is stated without a name, and nothing is read from the message
+ * text. Hypotheses.
+ */
+export const LOAD_STEP_LABEL = {
+  open: (names: readonly string[], count: number) =>
+    names.length === 0
+      ? (count > 1 ? 'Loading sources the model chose' : 'Loading a source the model chose')
+      : `Loading the ${names.length > 1 ? 'sources' : 'source'} the model chose: ${nameList(names)}`,
+  closed: (names: readonly string[], count: number) =>
+    names.length === 0
+      ? (count > 1 ? 'The model chose sources' : 'The model chose a source')
+      : `The model chose ${names.length > 1 ? 'sources' : 'a source'}: ${nameList(names)}`,
+} as const;
+
+/** "A", "A and B", "A, B and C". */
+function nameList(names: readonly string[]): string {
+  return names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}

@@ -499,9 +499,12 @@ test('UX pass row 21: the phase words are mapped by phase name, the route\'s mes
 /** The derivable set, as LAYOUT-WEB-D and the G0 record state it: the map's values and `get_data`'s `type` enum. */
 const DERIVABLE = ['search', 'metadata', 'query', 'load_source', 'catalog', 'metrics'];
 
-test('R8 W2 (LAYOUT-WEB-D test 1): a load_source step reads "Loading a data source"', () => {
+test('R8 W2 (LAYOUT-WEB-D test 1), as R10 P1 moved it: a load_source step reads that the model chose the source, not the open step\'s label', async () => {
+  // R10 P1 (G0 D1 = A) replaced R8 W2's "Loading a data source" with a label that names the source chosen.
+  const { LOAD_STEP_LABEL } = await import('../sources/copy.ts');
   const label = generateGroupLabel([start({ message: 'Loading the Socrata source', toolName: 'load_source', operationType: 'load_source', args: { alias: 'socrata' } })]);
-  assert.equal(label, 'Loading a data source');
+  assert.equal(label, LOAD_STEP_LABEL.closed(['Socrata'], 1));
+  assert.notEqual(label, OPEN_STEP_LABEL);
 });
 
 test('R8 W2 (LAYOUT-WEB-D test 2): every derivable operation type, on an entry with args, reads a label other than the open step\'s', () => {
@@ -558,4 +561,89 @@ test('R8 W2: with no pause, every entry is what it was: no pause key appears', (
     { message: 'Querying', phase: 'tool_start', iteration: 1, toolName: 'socrata__get_data', operationType: 'query', args: { type: 'query' } },
   ]);
   for (const entry of log.progressLog) assert.equal(Object.hasOwn(entry, 'pause'), false);
+});
+
+// --- R10 P1 criterion 6 (G0 D1 = A): a load step's label says the model chose the source -------
+//
+// Live, open and closed: a comparison's stream folds `tool_start` →
+// `tool_complete` → `tool_result` → `thinking` for one `load_source` call
+// carrying Socrata's alias. At the base the open step read "Gathering data"
+// and the closed one "Loading a data source". The names come from each load's
+// alias through `loadAliasReaderName` (fix round 1), never from the message: every message
+// below names a different source than its alias, so a label read from the
+// message text fails. An entry with no `args` (the executed run's live events,
+// P-a) or an alias no source has states the choice without a name.
+
+const LOAD_TOOL = { toolName: 'load_source', operationType: 'load_source' } as const;
+const loadEvents = (alias: string | undefined, iteration = 1, message = 'Loading the NYC Checkbook source'): StepProgressEvent[] => [
+  { message, phase: 'tool_start', iteration, ...LOAD_TOOL, ...(alias !== undefined ? { args: { alias } } : {}) },
+  { message, phase: 'tool_complete', iteration, duration_ms: 12, ...LOAD_TOOL },
+  { message: 'Loaded the NYC Checkbook source', phase: 'tool_result', iteration, ...LOAD_TOOL, ...(alias !== undefined ? { args: { alias } } : {}) },
+];
+
+test('R10 P1 criterion 6, live: one load of Socrata is "choosing" while open and "chose" once closed, by the alias, never the message', async () => {
+  const { LOAD_STEP_LABEL } = await import('../sources/copy.ts');
+  const [open, complete, result] = loadEvents('socrata');
+  const opened = run([open]);
+  assert.equal(opened.progressGroups[0].label, LOAD_STEP_LABEL.open(['Socrata'], 1));
+  const closed = run([complete, result, { message: 'Thinking', phase: 'thinking', iteration: 1 }], opened);
+  assert.equal(closed.progressGroups[0].label, LOAD_STEP_LABEL.closed(['Socrata'], 1));
+});
+
+test('R10 P1 criterion 6, live: two loads in one step name both, in call order', async () => {
+  const { LOAD_STEP_LABEL } = await import('../sources/copy.ts');
+  const [openA] = loadEvents('socrata');
+  const [openB, completeB, resultB] = loadEvents('boston');
+  const opened = run([openA, openB]);
+  assert.equal(opened.progressGroups[0].label, LOAD_STEP_LABEL.open(['Socrata', 'Boston OpenContext'], 2));
+  const closed = run([completeB, resultB, { message: 'Thinking', phase: 'thinking', iteration: 1 }], opened);
+  assert.equal(closed.progressGroups[0].label, LOAD_STEP_LABEL.closed(['Socrata', 'Boston OpenContext'], 2));
+});
+
+test('R10 P1 criterion 6: a load with no args, or an alias no source has, states the choice without a name', async () => {
+  const { LOAD_STEP_LABEL } = await import('../sources/copy.ts');
+  for (const alias of [undefined, 'nowhere_at_all']) {
+    const [open, complete, result] = loadEvents(alias);
+    const opened = run([open]);
+    assert.equal(opened.progressGroups[0].label, LOAD_STEP_LABEL.open([], 1), `alias ${alias}`);
+    const closed = run([complete, result, { message: 'Thinking', phase: 'thinking', iteration: 1 }], opened);
+    assert.equal(closed.progressGroups[0].label, LOAD_STEP_LABEL.closed([], 1), `alias ${alias}`);
+  }
+});
+
+test('R10 P1 criterion 6, the finished executed run: buildRunStepView names the source from the captured call that carries args', async () => {
+  const { LOAD_STEP_LABEL } = await import('../sources/copy.ts');
+  // The executed run's live events carry no args (P-a), so its steps are nameless until the run's calls arrive.
+  const steps = run([...loadEvents(undefined), { message: 'Thinking', phase: 'thinking', iteration: 1 }]);
+  assert.equal(steps.progressGroups[0].label, LOAD_STEP_LABEL.closed([], 1), 'premise: the live step names no source');
+  const view = buildRunStepView(steps.progressGroups, [{ name: 'load_source', operationType: 'load_source', args: { alias: 'socrata' } }]);
+  assert.equal(view.steps[0].label, LOAD_STEP_LABEL.closed(['Socrata'], 1));
+});
+
+test('R10 P1 criterion 6, the record page: buildRecordStepView labels a load step the same way', async () => {
+  const { LOAD_STEP_LABEL } = await import('../sources/copy.ts');
+  const view = buildRecordStepView([
+    { tool: 'load_source', operationType: 'load_source', arguments: { alias: 'socrata' } },
+    { tool: 'load_source', operationType: 'load_source', arguments: { alias: 'nowhere_at_all' } },
+  ]);
+  assert.deepEqual(view.steps.map((s) => s.label), [LOAD_STEP_LABEL.closed(['Socrata'], 1), LOAD_STEP_LABEL.closed([], 1)]);
+});
+
+test('R10 P1 fix round 1 (H): a data_commons load names "Data Commons", the reader name every surface uses, never "Google Data Commons"', async () => {
+  const { LOAD_STEP_LABEL } = await import('../sources/copy.ts');
+  const [open, complete, result] = loadEvents('data_commons');
+  const opened = run([open]);
+  assert.equal(opened.progressGroups[0].label, LOAD_STEP_LABEL.open(['Data Commons'], 1));
+  const closed = run([complete, result, { message: 'Thinking', phase: 'thinking', iteration: 1 }], opened);
+  assert.equal(closed.progressGroups[0].label, LOAD_STEP_LABEL.closed(['Data Commons'], 1));
+  for (const label of [opened.progressGroups[0].label, closed.progressGroups[0].label]) {
+    assert.ok(label.endsWith(': Data Commons'), label);
+    assert.ok(!label.includes('Google Data Commons'), label);
+  }
+  // The open and closed words, as fix round 1 ruled them.
+  assert.equal(LOAD_STEP_LABEL.open(['Socrata'], 1), 'Loading the source the model chose: Socrata');
+  assert.equal(LOAD_STEP_LABEL.open(['Socrata', 'Boston OpenContext'], 2), 'Loading the sources the model chose: Socrata and Boston OpenContext');
+  assert.equal(LOAD_STEP_LABEL.open([], 1), 'Loading a source the model chose');
+  assert.equal(LOAD_STEP_LABEL.open([], 2), 'Loading sources the model chose');
+  assert.equal(LOAD_STEP_LABEL.closed(['Socrata'], 1), 'The model chose a source: Socrata');
 });

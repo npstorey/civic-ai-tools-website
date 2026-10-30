@@ -1211,7 +1211,11 @@ test('W4 P1 (10) an executed reading with no execution stamp: the citation previ
 // rows' phase words mapped by phase name), its diff confined to those three
 // labels; and again for row 23 (a duration in seconds), its diff confined to
 // the three duration strings; and again for the owner's fix to phase D's
-// words ("Checking the result"), its diff that one closing-row label.
+// words ("Checking the result"), its diff that one closing-row label; and again
+// for R10 P1 (#682): both goldens, their diff confined to section C, the
+// "Data portal" label renamed "Socrata portal" and one card inserted after the
+// servers row, "Sources chosen by: not recorded" (the fixture's trace states
+// no routing).
 
 const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
 

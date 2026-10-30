@@ -16,8 +16,14 @@
 //   5. the sources line: `buildProvenanceLine` (the panel's former
 //      provenance line) under the hosts the answered calls named;
 //   6. the disclosure: B (the system prompt's hash, from the trace's
-//      `skill_fetch` span), C (model, portal, and the source hosts the run's
-//      configuration recorded on the trace), and F, the answer again.
+//      `skill_fetch` span), C (model, the run's portal when it holds one, the
+//      source hosts the run's configuration recorded on the trace, and what
+//      chose its sources, R10 P1), and F, the answer again.
+//
+// WHAT CHOSE THE SOURCES (R10 P1, #682). Read from the trace alone
+// (`chooserFromTrace`): the chooser line joins "Where this question went" and
+// the card joins C once the `trace` event has arrived; before it, and on a
+// surface that keeps no trace (`/explore`), neither shows (P-f).
 //
 // Relative, extension-carrying imports, so the module runs under `node --test`
 // with no loader.
@@ -31,6 +37,8 @@ import { formatModelName } from '../../lib/models.ts';
 import { readerSourceName } from '../../lib/sources/source-name.ts';
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import type { WhereItWentModel } from '../../lib/flows/where-it-went.ts';
+import { chooserCardItems, chooserFromTrace, runHoldsPortal } from '../../lib/flows/source-chooser.ts';
+import { RUN_PORTAL_LABEL } from '../../lib/sources/copy.ts';
 
 /** What the with-data panel hands its adapter. */
 export interface ComparisonAdapterInput {
@@ -205,10 +213,13 @@ export function adaptComparison(input: ComparisonAdapterInput): AnswerViewModel 
 
   const hash = input.evidenceTrace ? systemPromptHashOfTrace(input.evidenceTrace) : null;
   const servers = input.evidenceTrace ? mcpServersOfTrace(input.evidenceTrace) : [];
+  const chooser = input.evidenceTrace ? chooserFromTrace(input.evidenceTrace) : null;
   const environment: EnvironmentItem[] = [
     ...(input.model ? [{ label: 'Model', value: formatModelName(input.model) }] : []),
-    ...(input.portal ? [{ label: 'Data portal', value: input.portal !== '__all__' ? input.portal : 'all portals' }] : []),
+    // Shown only when the run holds a portal (R10 P1): never a word for none.
+    ...(runHoldsPortal(input.portal) ? [{ label: RUN_PORTAL_LABEL, value: input.portal }] : []),
     ...(servers.length > 0 ? [{ label: SERVERS_LABEL, value: readerServerList(servers) }] : []),
+    ...(chooser ? chooserCardItems(chooser) : []),
   ];
 
   return {
@@ -237,6 +248,6 @@ export function adaptComparison(input: ComparisonAdapterInput): AnswerViewModel 
       ...(environment.length > 0 ? { environment } : {}),
       answerAgain: true,
     },
-    ...(input.flows ? { whereItWent: input.flows } : {}),
+    ...(input.flows ? { whereItWent: chooser ? { ...input.flows, chooser } : input.flows } : {}),
   };
 }

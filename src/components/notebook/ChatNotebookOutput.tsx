@@ -21,7 +21,7 @@
  */
 import type { ReactNode } from 'react';
 import AnswerView from '@/components/answer-view/AnswerView';
-import { adaptNotebook } from '@/components/answer-view/adapt-notebook';
+import { adaptNotebook, type NotebookAdapterInput } from '@/components/answer-view/adapt-notebook';
 import { useSocrataMcpUrl } from '@/components/McpRoutingProvider';
 import { useInstanceAttribution } from '@/components/EvidenceOriginProvider';
 import type { Notebook } from '@/lib/notebook-author';
@@ -51,6 +51,10 @@ interface ChatNotebookOutputProps {
   title?: string;
   /** R6 W4: where the question went; the spread below carries it to the adapter. */
   flows?: WhereItWentModel;
+  /** The run's trace (`publish_inputs`), null until it arrives: what chose the sources (R10 P1). */
+  evidenceTrace?: NotebookAdapterInput['evidenceTrace'];
+  /** The run's flat progress log: its consent steps stay on the finished run (#667). */
+  progressLog?: NotebookAdapterInput['progressLog'];
   /** The wrapper's controls (the Publish button), placed by the view after the disclosure. */
   actions?: ReactNode;
 }
