@@ -365,3 +365,14 @@ test('criterion 2: the renamed portal card shows only when the run holds a porta
     assert.equal(item(model, 'Data portal'), undefined);
   }
 });
+
+// --- Criterion 4, the all-sources leg: an existing record-page fixture ----------------------------------
+
+test('criterion 4: an all-sources record (record-d887c1) shows "not recorded" in the chooser line and on the card', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(SRC, 'lib/flows/fixtures/record-d887c1.package.json'), 'utf8')) as Json;
+  const composition = (pkg.extensions as Json)['org.civicaitools.composition'] as Json;
+  assert.equal(Object.hasOwn(composition, 'routing'), false, 'premise: the fixture states no routing');
+  const model = adaptRecord({ stored: pkg, resolution: null, row: { ...RECORD_ROW, slug: 'd887c1' }, instance: null, servedStatement: null });
+  assertNotRecorded(sectionOf(model).inside, 'record-d887c1');
+  assert.deepEqual(item(model, CARD.label), { label: CARD.label, value: CARD.notRecorded });
+});
