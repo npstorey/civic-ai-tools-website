@@ -9,7 +9,8 @@
 //   form with its first letter upper-cased (City Record's reads "Notices in The
 //   City Record"), and the privacy page's source row prints it as stored.
 // - Criterion 5 (b): the card names each upstream host as a recipient of its
-//   own, "<source> (<upstream host>): …", after the sandbox line, and each row
+//   own, after the sandbox, on its source's one line (R9 P3: "<source>: runs
+//   in this site's sandbox — …. Reaches <upstream host> — …"), and each row
 //   still ends "running at this site's sandbox." (added with step 5).
 //
 // WHAT MAKES IT ABLE TO FAIL. Before the three map entries the rows carry no
@@ -165,17 +166,22 @@ for (const { sourceId, env } of NEW_SOURCES) {
     });
   });
 
-  test(`R8 W3 criterion 5 (b) (${sourceId}): the card shows "<source> (${host}): …", and the row still runs at this site's sandbox`, async () => {
+  test(`R8 W3 criterion 5 (b) (${sourceId}): the card shows "<source>: … Reaches ${host} — …", and the row still runs at this site's sandbox`, async () => {
     await under(env, async () => {
       const Card = (await load('components/sources/ConsentCard.tsx')).default as ComponentType<Record<string, unknown>>;
       const card = await surface(Card, { onAllow: () => undefined, onNotNow: () => undefined });
       const line = card.elements().find((el) => el.props['data-recipient'] === `source:${sourceId}:${host}`);
       assert.ok(line, `the card has no line for ${host}`);
       const text = textOf(line!);
+      const group = card.elements().find((el) => el.props['data-recipient-group'] === sourceId);
+      const groupText = group ? textOf(group).replace(/\s+:/, ':') : 'none';
       card.unmount();
       const name = (await load('lib/sources/source-name.ts')).readerSourceName({ sourceId, displayName: CIVIC_MANIFEST.find((e) => e.sourceId === sourceId)!.displayName });
-      assert.ok(text.startsWith(`${name} (${host}): `), `the card line reads: ${text}`);
-      assert.ok(text.includes(holder), `the card line does not name ${holder}: ${text}`);
+      // R9 P3 (#660): one line per source groups its recipients; the upstream host is the clause after the sandbox.
+      assert.ok(text.startsWith(`Reaches ${host} \u2014 `), `the card's clause reads: ${text}`);
+      assert.ok(text.includes(holder), `the card's clause does not name ${holder}: ${text}`);
+      // `textOf` reads "<strong>Name</strong>: " as "Name : "; the space is the harness's.
+      assert.ok(groupText.startsWith(`${name}: runs in this site's sandbox \u2014 `) && groupText.includes(text), `the card's line for ${sourceId} reads: ${groupText}`);
       const panel = await surface(Panel);
       const row = panel.elements().find((el) => el.props['data-source'] === sourceId);
       const rowText = textOf(row!);

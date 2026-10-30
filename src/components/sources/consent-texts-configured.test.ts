@@ -191,9 +191,9 @@ test('correction 5: "on your account" and "your dashboard" render only with a da
   const cookieWith = need('CARD_COOKIE_WITH_ACCOUNTS');
   const cookieWithout = need('CARD_COOKIE_WITHOUT_ACCOUNTS');
   const withdrawWith = need('WITHDRAW_WITH_ACCOUNTS');
-  // T3 (#632 G7): the card states where to withdraw in its own sentence after the list; the privacy page keeps its own.
-  const afterWith = need('CARD_AFTER_ALLOW_WITH_ACCOUNTS');
-  const afterWithout = need('CARD_AFTER_ALLOW_WITHOUT_ACCOUNTS');
+  // T3 (#632 G7), T5 of R9 P3: the card states where to withdraw in its own sentences; the privacy page keeps its own.
+  const afterWith = need('CARD_CONTROLS_WITH_ACCOUNTS');
+  const afterWithout = need('CARD_CONTROLS_WITHOUT_ACCOUNTS');
   await under({ DATABASE_URL: 'fixture' }, async () => {
     const shown = await card();
     assert.ok(shown.text().includes(cookieWith) && shown.text().includes(afterWith), 'with a database, the card does not say the answer can be kept on an account');
