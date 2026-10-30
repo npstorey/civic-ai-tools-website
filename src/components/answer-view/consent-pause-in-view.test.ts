@@ -508,3 +508,69 @@ test('criterion 3, /explore on the browser\'s abort path (Amendment 3, the owner
   assert.deepEqual(rowCards(p).map((c) => labels(c)).flat(), [], `the row's card offers an answer after Cancel: ${summary(p)}`);
   assert.equal(decisions.length, 0, 'Cancel posted a decision');
 });
+
+// --- Amendment 4, criterion 3: Cancel whatever the abort sets off, and a stream that ends on its own ------
+
+/**
+ * The owner's Safari read at 734ea6f (desktop /explore, Cancel during a hold) showed the "Connection
+ * lost…" banner and the row's card still offering both answers in the hold's words; Not now there read
+ * the in-hold sentence. Neither headless Chrome nor Playwright's WebKit 26.0 reproduced it. Two shapes
+ * reach exactly that page on 734ea6f, and each is driven here:
+ *   (1) the abort's consequences arrive inside `abort()`, before `cancel()`'s remaining lines: here the
+ *       run's controller throws out of `abort()` after aborting, as an engine whose stream machinery
+ *       throws while erroring the body would, so `cancel()` never reaches the bus or the cancelled state;
+ *   (2) the run's stream ends on its own during the hold, with no abort: the banner is that path's own
+ *       words, and nothing told the bus the hold was over.
+ */
+async function pausedOnExplore(): Promise<{ p: Surface; stream: Held }> {
+  ANON();
+  answers();
+  abortLikeABrowser();
+  await consentWith({ 'boston-opencontext': 'ask-first' });
+  const p = await mountPage(h(McpFlowDiagram));
+  await askOnExplore(p);
+  const stream = streams[0];
+  assert.ok(stream, 'premise: the question was sent');
+  stream.push({ type: 'progress', panel: 'withMcp', ...LOAD_START });
+  stream.push({ type: 'progress', panel: 'withMcp', message: PAUSE_LINE, phase: 'consent_pause', pause: pauseOf(nextKey()) });
+  await settle(p, SCROLL_WAIT);
+  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', 'Not now'], `premise: the step card offers both during the hold: ${summary(p)}`);
+  return { p, stream };
+}
+
+test('criterion 3, /explore, Amendment 4 (1): Cancel during a hold when abort() itself throws: the page reads cancelled, and no card offers an answer', async () => {
+  const { p } = await pausedOnExplore();
+  // The run's controller already exists; its abort aborts, then throws, for the length of the click.
+  const proto = AbortController.prototype as { abort: (reason?: unknown) => void };
+  const nativeAbort = proto.abort;
+  proto.abort = function abort(this: AbortController, reason?: unknown) {
+    nativeAbort.call(this, reason);
+    throw new TypeError('fixture: the body could not be errored');
+  };
+  try {
+    await p.click(p.button('Cancel')).catch(() => { /* the handler threw, as the engine's abort did */ });
+  } finally {
+    proto.abort = nativeAbort;
+  }
+  await settle(p, 200);
+  const text = p.text();
+  assert.ok(!text.includes('Connection lost before the query finished'), `Cancel reads as a lost connection: ${text.slice(0, 400)}`);
+  assert.ok(text.includes('Query was cancelled.'), `the page does not say the query was cancelled: ${text.slice(0, 400)}`);
+  assert.deepEqual([...stepCards(p), ...rowCards(p)].map((c) => labels(c)).flat(), [], `a card offers an answer after Cancel: ${summary(p)}`);
+});
+
+test('criterion 3, /explore, Amendment 4 (2): the stream ends on its own during a hold: the hold is over, so the row\'s card reads the after-hold words, and Not now reads the after-hold sentence', async () => {
+  const { p, stream } = await pausedOnExplore();
+  stream.close();
+  await settle(p, 200);
+  assert.ok(p.text().includes('Connection lost before the query finished'), 'premise: the page does not read as a lost connection');
+  const [row] = rowCards(p);
+  assert.ok(row, `premise: the row shows no card for the pause after the drop: ${summary(p)}`);
+  assert.ok(!textOf(row).includes('The question waits up to a minute for your answer.'), `the row's card still reads as the hold being open: ${textOf(row)}`);
+  assert.ok(textOf(row).includes('The question went on without your answer, so it did not use this source.'), `the row's card after the drop: ${textOf(row)}`);
+  await p.click(buttonsIn(row).find((b) => textOf(b) === 'Not now')!);
+  await settle(p);
+  const after = rowCards(p).map((c) => textOf(c)).join(' ') + ' ' + stepCards(p).map((c) => textOf(c)).join(' ');
+  assert.ok(after.includes('You chose Not now. It is still set to Ask first.'), `Not now after the drop: ${after.slice(-300)}`);
+  assert.ok(!after.includes('You chose Not now. Nothing is sent to it for this question.'), 'Not now after the drop reads the in-hold sentence');
+});
