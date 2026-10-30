@@ -293,8 +293,9 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
     ...(envMcpHosts ? [{ label: SERVERS_LABEL, value: envMcpHosts }] : []),
     { label: 'Content profile', value: row.contentProfile ?? 'default' },
     { label: USED_SOURCES_LABEL, value: dataSourcesSummary ?? '—' },
-    // A hash-only skill prompt (#411) has no section B; this is where its hash is disclosed.
-    ...(skillHash ? [{ label: 'Skill hash', value: skillHash.slice(0, 12), mono: true }] : []),
+    // The system prompt's hash, its first twelve characters, under the label
+    // section B shows it by in full (R10 P1b fix round 1: one value, one name).
+    ...(skillHash ? [{ label: 'System prompt hash', value: skillHash.slice(0, 12), mono: true }] : []),
     { label: 'Prompt tokens', value: pkg.cost.promptTokens?.toLocaleString() || '—' },
     { label: 'Completion tokens', value: pkg.cost.completionTokens?.toLocaleString() || '—' },
     { label: 'Total tokens', value: pkg.cost.totalTokens?.toLocaleString() || '—' },

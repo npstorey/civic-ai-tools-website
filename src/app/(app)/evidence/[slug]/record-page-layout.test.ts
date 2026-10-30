@@ -779,7 +779,7 @@ function cItems(html: string): Map<string, string> {
   return items;
 }
 
-test('P2 (5) C states the content profile, data sources, skill hash, total tokens, tool calls and blob-stored fields', async () => {
+test('P2 (5) C states the content profile, data sources, system prompt hash, total tokens, tool calls and blob-stored fields', async () => {
   const agf = cItems(HTML.agf);
   const old = cItems(HTML.old);
   assert.equal(agf.get('Content profile'), 'datHere');
@@ -791,7 +791,7 @@ test('P2 (5) C states the content profile, data sources, skill hash, total token
     assert.equal(items.get('Data sources used'), expected, 'data sources, as the shared formatter states them');
   }
   assert.notEqual(agf.get('Data sources used'), old.get('Data sources used'), 'each record states its own sources');
-  assert.equal(agf.get('Skill hash'), 'e'.repeat(12));
+  assert.equal(agf.get('System prompt hash'), 'e'.repeat(12));
   assert.equal(agf.get('Total tokens'), (34321).toLocaleString());
   assert.equal(agf.get('Tool calls'), '3');
   assert.equal(old.get('Tool calls'), '2');
@@ -801,7 +801,7 @@ test('P2 (5) C states the content profile, data sources, skill hash, total token
   // no section B; since P1b-e, B renders and says the record carries no text
   // (asserted below).
   const skeleton = cItems(HTML.skeleton);
-  assert.equal(skeleton.get('Skill hash'), '555555555555');
+  assert.equal(skeleton.get('System prompt hash'), '555555555555');
   assert.equal(occurrences(HTML.skeleton, heading('B · System prompts')).length, 1, 'B renders once for a hash-only skill prompt (R10 P1b, P1b-e)');
 });
 
@@ -1959,7 +1959,8 @@ test('W4 P1 (9) the citation block reads "Record: <title> [Published: <date>] <u
 // check's words): both records carry inline skill text, and the diff is
 // section B alone — its intro, the "System prompt hash: <hash>" line and the
 // sentence on what a hash is, the button row's top margin, and the button's
-// "Show full system prompt (N bytes)".
+// "Show full system prompt (N bytes)". And again for fix round 1 item 9: the
+// diff is section C's one label, "Skill hash" renamed "System prompt hash".
 
 const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
 

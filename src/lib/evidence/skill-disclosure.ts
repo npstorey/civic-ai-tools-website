@@ -24,7 +24,7 @@
  *     the reference and fetches the bytes on demand.
  *   - `hash-only` — no text, but `systemPromptHash` identifies the prompt
  *     that was used. This is what a record published after P4 carries. The
- *     hash is still disclosed to the reader, as the "Skill hash" item in the
+ *     hash is still disclosed to the reader, as the "System prompt hash" item in the
  *     record page's section C; the section itself has nothing to render and
  *     renders nothing, rather than a heading over an empty body.
  *   - `none` — the package records neither. Absence stated as absence.

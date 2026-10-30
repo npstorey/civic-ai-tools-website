@@ -234,7 +234,7 @@ test('#411: the page’s own decision for a package built after this change is h
   assert.equal(
     disclosure.kind === 'hash-only' ? disclosure.hash : undefined,
     BUILT.skillMetadata.systemPromptHash,
-    'the hash travels with the decision — it is what section C still shows the reader, as its Skill hash',
+    'the hash travels with the decision — it is what section C still shows the reader, as its System prompt hash',
   );
 });
 
