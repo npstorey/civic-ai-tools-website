@@ -702,6 +702,8 @@ function TokensTab({ rows }: { rows: TokenRow[] }) {
   const [revokeTarget, setRevokeTarget] = useState<TokenRow | null>(null);
   const [revoking, setRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState('');
+  // Read once when the tab opens, not on every render (react-hooks/purity).
+  const [now] = useState(() => Date.now());
 
   const handleRevoke = useCallback(async () => {
     if (!revokeTarget) return;
@@ -736,7 +738,7 @@ function TokensTab({ rows }: { rows: TokenRow[] }) {
     <>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {rows.map((t) => {
-          const expired = new Date(t.expiresAt).getTime() <= Date.now();
+          const expired = new Date(t.expiresAt).getTime() <= now;
           return (
             <div
               key={t.id}
