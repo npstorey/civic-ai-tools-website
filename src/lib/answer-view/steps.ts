@@ -22,13 +22,13 @@ import {
   generateQueryIntentLabel,
   generateToolReason,
   getDatasetName,
-  loadedSourceName,
   reasonWithoutIdentifier,
   searchSubject,
   type ConsentPausePayload,
 } from '../streaming.ts';
 import { describeQueryOutcome, secondsText } from '../evidence/query-step.ts';
 import { LOAD_STEP_LABEL } from '../sources/copy.ts';
+import { loadAliasReaderName } from '../flows/source-chooser.ts';
 // Type-only: erased at compile time. The kind vocabulary is declared once,
 // beside the table that turns it into reader-facing copy.
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
@@ -251,16 +251,18 @@ const isLoadStart = (entry: ProgressLogEntry): boolean =>
   entry.phase === 'tool_start' && entryOperationType(entry) === LOAD_OPERATION;
 
 /**
- * A load step's label (R10 P1, G0 D1 = A): the model is choosing, or chose,
- * the sources its loads named, open or closed. Each name is read from the
- * load's own arguments (`loadedSourceName`, by the alias), never from the
- * message text. A load with no arguments (the executed run's live events
+ * A load step's label (R10 P1, G0 D1 = A): loading the sources the model
+ * chose while open, the model chose them once closed. Each name is the
+ * source's reader name, read from the load's own alias (`loadAliasReaderName`,
+ * `readerSourceName` by the manifest entry), never from the message text; the
+ * progress line's `loadedSourceName` is not read, since it also writes the
+ * recorded reason phrase that signed bytes carry. A load with no arguments (the executed run's live events
  * carry none) or an alias no source has leaves every name out: the step
  * states the choice, without a name.
  */
 function loadStepLabel(entries: ProgressLogEntry[], open: boolean): string {
   const loads = entries.filter(isLoadStart);
-  const named = loads.map((entry) => loadedSourceName(entry.args ?? {}));
+  const named = loads.map((entry) => loadAliasReaderName(entry.args?.alias));
   const names = named.every((name): name is string => name !== undefined) ? [...new Set(named as string[])] : [];
   const count = names.length > 0 ? names.length : loads.length;
   return open ? LOAD_STEP_LABEL.open(names, count) : LOAD_STEP_LABEL.closed(names, count);

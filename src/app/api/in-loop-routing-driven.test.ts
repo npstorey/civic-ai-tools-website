@@ -555,14 +555,14 @@ test('R10 P1 criterion 4: adaptRecord over the packaged in-loop record shows the
   const model = await recordView(IN_LOOP);
   const composition = packageOf(IN_LOOP).pkg.extensions?.['org.civicaitools.composition'] as Json;
   const environment = model.disclosure.environment as Array<{ label: string; value: string; mono?: boolean }>;
-  assert.deepEqual(environment.find((i) => i.label === CARD.label), { label: CARD.label, value: CARD.inLoop(ROUTER_VERSION) });
+  assert.deepEqual(environment.find((i) => i.label === CARD.label), { label: CARD.label, value: CARD.inLoop('@typedstandards/civic-typed-router', ROUTER_VERSION) });
   assert.deepEqual(environment.find((i) => i.label === CARD.definitionLabel), { label: CARD.definitionLabel, value: (composition.definitionHash as string).slice(0, 12), mono: true });
   assert.equal(typeof chooserLines, 'function', 'source-chooser.ts exports no chooserLines');
   assert.deepEqual(chooserLines(model.whereItWent?.chooser), [
-    T.inLoop,
-    `${T.loaded}Socrata.`,
-    `${T.askedNotLoaded}${T.none}.`,
-    `${T.neverAsked}Data Commons${T.separator}Boston OpenContext.`,
+    { text: T.inLoop },
+    { text: `${T.loaded}Socrata.` },
+    { text: `${T.askedNotLoaded}${T.none}.` },
+    { text: `${T.neverAsked}Data Commons${T.separator}Boston OpenContext.` },
   ]);
 });
 
@@ -574,5 +574,5 @@ test('R10 P1 criterion 4: adaptRecord over the packaged all-sources record shows
   assert.deepEqual(environment.find((i) => i.label === CARD.label), { label: CARD.label, value: CARD.notRecorded });
   assert.equal(environment.find((i) => i.label === CARD.definitionLabel), undefined);
   assert.equal(typeof chooserLines, 'function', 'source-chooser.ts exports no chooserLines');
-  assert.deepEqual(chooserLines(model.whereItWent?.chooser), [T.notRecorded]);
+  assert.deepEqual(chooserLines(model.whereItWent?.chooser), [{ text: T.notRecorded }]);
 });

@@ -46,7 +46,7 @@ import { statementHash, type FlowsKeptBy, type FlowsRecipient, type FlowsStateme
 import { recipientWhere, roleLabel } from '../sources/source-name.ts';
 import { WHERE_IT_WENT_REASONS } from '../sources/copy.ts';
 import { NOTEBOOK_EXTENSION_KEY, readNotebookProvenanceOfNotebook } from '../notebook-author/notebook-provenance-reading.ts';
-import { aliasOf, attributesOf, chooserFromPackage, LOAD_END_REASON, sourceReaderName, spansOfTrace, type SourceChooser } from './source-chooser.ts';
+import { aliasOf, attributesOf, chooserFromPackage, sourceReaderName, spansOfTrace, type SourceChooser } from './source-chooser.ts';
 
 // --- The model ------------------------------------------------------------------------
 
@@ -174,9 +174,18 @@ function sourceRecipients(side: Side, sourceId: string): WhereRecipientRow[] {
 /** A source's reason for not being reached (§2): its last load first, then its stated reason. */
 function whyNotSentFor(offered: OfferedSource, lastLoad: string | undefined): string | null {
   const R = WHERE_IT_WENT_REASONS;
-  if (lastLoad === 'loaded') return offered.reason === 'not-consented' ? R.allowedNotUsed : R.onNotUsed;
-  // The three load ends, in the words the chooser line uses (`LOAD_END_REASON`).
-  if (lastLoad !== undefined && Object.hasOwn(LOAD_END_REASON, lastLoad)) return LOAD_END_REASON[lastLoad];
+  switch (lastLoad) {
+    case 'loaded':
+      return offered.reason === 'not-consented' ? R.allowedNotUsed : R.onNotUsed;
+    case 'declined':
+      return R.declined;
+    case 'no-answer':
+      return R.noAnswer;
+    case 'unavailable':
+      return R.unavailable;
+    default:
+      break;
+  }
   switch (offered.reason) {
     case 'selected':
     case 'configured':

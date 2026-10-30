@@ -1096,10 +1096,9 @@ export const UNNAMED_STEP_LABEL = 'Unnamed step';
  * The source a `load_source` call named, in the reader's words (#644 W1): the
  * manifest entry's display name without "MCP Server", as a record's
  * `dataSources[]` names it. `undefined` for an alias no source has, which is
- * text the model chose and is never repeated to a reader. Exported for its
- * second caller, the load step's label (`answer-view/steps.ts`, R10 P1).
+ * text the model chose and is never repeated to a reader.
  */
-export function loadedSourceName(args: Record<string, unknown>): string | undefined {
+function loadedSourceName(args: Record<string, unknown>): string | undefined {
   const alias = args.alias;
   if (typeof alias !== 'string') return undefined;
   const entry = civicRouter.manifest.find((candidate) => candidate.alias === alias);

@@ -102,13 +102,17 @@ const copy = (await import('@/lib/sources/copy')) as unknown as {
     notRecorded: string; allSources: string; unrecognized: (method: string) => string;
   };
   SOURCE_CHOOSER_CARD: {
-    label: string; inLoop: (version: string | null) => string; notRecorded: string; allSources: string;
+    label: string; inLoop: (router: string | null, version: string | null) => string; notRecorded: string; allSources: string;
     unrecognized: (method: string) => string; definitionLabel: string;
   };
   RUN_PORTAL_LABEL: string;
   WHERE_IT_WENT_REASONS: Record<string, string>;
+  CHOOSER_REASONS: { declined: string; noAnswer: string; unavailable: string };
+  ECHO_LIMIT: number;
 };
-const { SOURCE_CHOOSER_TEXT: T, SOURCE_CHOOSER_CARD: CARD, RUN_PORTAL_LABEL, WHERE_IT_WENT_REASONS: R } = copy;
+const { SOURCE_CHOOSER_TEXT: T, SOURCE_CHOOSER_CARD: CARD, RUN_PORTAL_LABEL, CHOOSER_REASONS: CR } = copy;
+/** The router component's id, as the fixtures' `components[]` state it. */
+const ROUTER_ID = '@typedstandards/civic-typed-router';
 
 // --- The run ------------------------------------------------------------------------------
 
@@ -222,7 +226,8 @@ function sectionOf(model: Model): { html: string; inside: string } {
 const IN_LOOP_LINES = [
   T.inLoop,
   `${T.loaded}Socrata.`,
-  `${T.askedNotLoaded}Data Commons${T.reasonSeparator}${R.declined}`,
+  // Fix round 1: the group's line, then one line per source requested and not loaded.
+  `${T.askedNotLoaded.trimEnd()}Data Commons${T.reasonSeparator}${CR.declined}`,
   `${T.neverAsked}Boston OpenContext${T.separator}NYC Checkbook.`,
 ];
 
@@ -326,7 +331,7 @@ const item = (model: Model, label: string) => (model.disclosure?.environment ?? 
 for (const [name, adapt] of ADAPTERS) {
   test(`criterion 2, ${name}, in-loop: "Sources chosen by" states the method in reader words with the router's version, and the hash as small print`, () => {
     const model = adapt(IN_LOOP);
-    assert.deepEqual(item(model, CARD.label), { label: CARD.label, value: CARD.inLoop(ROUTER_VERSION) }, `${name}: ${JSON.stringify(model.disclosure?.environment)}`);
+    assert.deepEqual(item(model, CARD.label), { label: CARD.label, value: CARD.inLoop(ROUTER_ID, ROUTER_VERSION) }, `${name}: ${JSON.stringify(model.disclosure?.environment)}`);
     assert.deepEqual(item(model, CARD.definitionLabel), { label: CARD.definitionLabel, value: DEFINITION_HASH.slice(0, 12), mono: true });
   });
 
@@ -375,4 +380,75 @@ test('criterion 4: an all-sources record (record-d887c1) shows "not recorded" in
   const model = adaptRecord({ stored: pkg, resolution: null, row: { ...RECORD_ROW, slug: 'd887c1' }, instance: null, servedStatement: null });
   assertNotRecorded(sectionOf(model).inside, 'record-d887c1');
   assert.deepEqual(item(model, CARD.label), { label: CARD.label, value: CARD.notRecorded });
+});
+
+// --- R10 P1 fix round 1 ----------------------------------------------------------------------------
+
+test('fix round 1 (6): WHERE_IT_WENT_REASONS is byte-identical to the base, and the chooser line reads its own reasons', async () => {
+  // The base's eight sentences (website main 567a7c2, copy.ts:313-322), owner-approved, unchanged by R10 P1.
+  assert.deepEqual({ ...copy.WHERE_IT_WENT_REASONS }, {
+    allowedNotUsed: 'Ask first: allowed when asked, but not used for this question.',
+    declined: 'Ask first: not allowed for this question.',
+    noAnswer: 'Ask first: no answer arrived in time, so it was not used.',
+    unavailable: 'Unavailable. This site could not load it for this question.',
+    onNotUsed: 'On, not used for this question.',
+    off: 'Off.',
+    notAsked: 'Ask first: not asked for this question.',
+    notSetUp: 'Not set up on this site.',
+  });
+  // The chooser line's no-answer reason states both ways a pause ends with no answer.
+  assert.match(CR.noAnswer, /could not ask/);
+  assert.match(CR.noAnswer, /no answer arrived in time/);
+  const { chooserGroups } = (await import('@/lib/flows/source-chooser')) as unknown as {
+    chooserGroups: (loads: unknown[], offered: unknown[]) => { askedNotLoaded: Array<{ name: string; whyNotSent: string }> };
+  };
+  const groups = chooserGroups(
+    [{ alias: 'data_commons', outcome: 'no-answer' }, { alias: 'boston', outcome: 'declined' }],
+    OFFERED,
+  );
+  assert.deepEqual(groups.askedNotLoaded, [
+    { name: 'Data Commons', whyNotSent: CR.noAnswer },
+    { name: 'Boston OpenContext', whyNotSent: CR.declined },
+  ]);
+  for (const reason of Object.values(copy.WHERE_IT_WENT_REASONS)) {
+    assert.ok(!groups.askedNotLoaded.some((a) => a.whyNotSent === reason), `the chooser line reads WHERE_IT_WENT_REASONS: "${reason}"`);
+  }
+});
+
+test('fix round 1 (5): two sources requested and not loaded sit on lines of their own; an empty group reads "none."', async () => {
+  const { chooserLines } = (await import('@/lib/flows/source-chooser')) as unknown as {
+    chooserLines: (chooser: unknown) => Array<{ text: string; items?: string[] }>;
+  };
+  const groups = { loaded: [], askedNotLoaded: [{ name: 'Data Commons', whyNotSent: CR.noAnswer }, { name: 'Boston OpenContext', whyNotSent: CR.declined }], neverAsked: [] };
+  const lines = chooserLines({ method: 'in-loop', router: ROUTER_ID, version: ROUTER_VERSION, definitionHash: null, groups });
+  assert.deepEqual(lines[2], { text: T.askedNotLoaded.trimEnd(), items: [`Data Commons${T.reasonSeparator}${CR.noAnswer}`, `Boston OpenContext${T.reasonSeparator}${CR.declined}`] });
+  const html = renderToStaticMarkup(createElement(WhereItWent, { model: { reached: [], notReached: [], statement: { kind: 'none' }, chooser: { method: 'in-loop', router: null, version: null, definitionHash: null, groups } } }));
+  const items = [...html.matchAll(/<li>([^<]*)<\/li>/g)].map((m) => unescape(m[1]));
+  assert.ok(items.includes(`Data Commons${T.reasonSeparator}${CR.noAnswer}`) && items.includes(`Boston OpenContext${T.reasonSeparator}${CR.declined}`), `each requested source is a line of its own: ${JSON.stringify(items)}`);
+  const empty = chooserLines({ method: 'in-loop', router: null, version: null, definitionHash: null, groups: { ...groups, askedNotLoaded: [] } });
+  assert.deepEqual(empty[2], { text: `${T.askedNotLoaded}${T.none}.` });
+});
+
+test('fix round 1 (8): a long recorded method is echoed cut to the limit, with "…", in the line and on the card', () => {
+  const long = 'a-method-name-far-longer-than-any-reader-needs-to-see-in-full';
+  const capped = `${long.slice(0, copy.ECHO_LIMIT - 1)}…`;
+  assert.equal(capped.length, copy.ECHO_LIMIT);
+  const routing: Routing = { method: long, version: ROUTER_VERSION };
+  const { inside } = sectionOf(comparison(traceOf(routing)));
+  assert.ok(inside.startsWith(T.unrecognized(capped)), `the line: ${inside.slice(0, 200)}`);
+  assert.ok(!inside.includes(long), 'the line echoes the whole value');
+  assert.deepEqual(item(comparison(traceOf(routing)), CARD.label), { label: CARD.label, value: CARD.unrecognized(capped) });
+  assert.deepEqual(item(record(routing), CARD.label), { label: CARD.label, value: CARD.unrecognized(capped) });
+});
+
+test('fix round 1 (9): the card names the router only by the record\'s own router component; with none, "router version"; with no version, the model alone', () => {
+  const pkg = recordPackage(IN_LOOP);
+  const composition = (pkg.extensions as Json)['org.civicaitools.composition'] as Json;
+  composition.components = [{ id: 'socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server' }];
+  const noRouter = adaptRecord({ stored: pkg, resolution: null, row: RECORD_ROW, instance: null, servedStatement: null });
+  assert.deepEqual(item(noRouter, CARD.label), { label: CARD.label, value: CARD.inLoop(null, ROUTER_VERSION) });
+  assert.equal(CARD.inLoop(null, ROUTER_VERSION), `the model, from a source list given by router version ${ROUTER_VERSION}`);
+  assert.equal(CARD.inLoop(ROUTER_ID, ROUTER_VERSION), `the model, from a source list given by ${ROUTER_ID} ${ROUTER_VERSION}`);
+  const noVersion = record({ method: 'in-loop' } as unknown as Routing);
+  assert.deepEqual(item(noVersion, CARD.label), { label: CARD.label, value: 'the model' });
 });

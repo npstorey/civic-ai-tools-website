@@ -21,12 +21,15 @@
  * THE THREE GROUPS (in-loop only), from the load contacts and the offered set
  * the run recorded (`sourcesOffered`, after the routes' `recordReasons`):
  *   - loaded: the source's last load ended `loaded`;
- *   - asked for and not loaded: its last load ended `declined`, `no-answer` or
- *     `unavailable`, each with its reason in `WHERE_IT_WENT_REASONS`' words.
- *     Those words claim no question put to the reader: `declined` is also the
- *     outcome when no pause could be held, and `no-answer` when the reader
- *     could not be asked;
- *   - never asked for: a source of the directory set with no load. The
+ *   - requested and not loaded: its last load ended `declined`, `no-answer`
+ *     or `unavailable`, each with its reason in `CHOOSER_REASONS`' words, the
+ *     chooser line's own (fix round 1). They claim no question put to the
+ *     reader: `declined` is also the outcome when no pause could be held
+ *     (`routing-mode.ts:301`), and `no-answer` when the reader could not be
+ *     asked (`decision.ts`, `notHeld`), so the no-answer reason states both.
+ *     `WHERE_IT_WENT_REASONS` (owner-approved, rendered by no surface) is not
+ *     read here;
+ *   - not requested: a source of the directory set with no load. The
  *     directory set is the configured sources On or Ask first, which the
  *     recorded reasons mark `configured` (dormant gate), `selected` (On) or
  *     `not-consented` (Ask first, or no stored state). `reader-off` and
@@ -34,10 +37,17 @@
  * A load that named no source of the set (`not-offered`), or recorded no
  * outcome, places nothing. Without readable load spans (a record with no
  * trace) the groups are absent rather than guessed.
+ *
+ * THE ROUTER'S NAME (the card, in-loop). The id of the record's own router
+ * component (`components[]`, or a run's `analysis.components`): the entry
+ * whose id is the router package's name, the package this module reads the
+ * manifest from. With no such entry the card says "router version <version>";
+ * no name is supplied that the record does not state.
  */
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
+import routerPackage from '@typedstandards/civic-typed-router/package.json' with { type: 'json' };
 import { readerSourceName } from '../sources/source-name.ts';
-import { SOURCE_CHOOSER_CARD, SOURCE_CHOOSER_TEXT, WHERE_IT_WENT_REASONS } from '../sources/copy.ts';
+import { CHOOSER_REASONS, ECHO_LIMIT, SOURCE_CHOOSER_CARD, SOURCE_CHOOSER_TEXT } from '../sources/copy.ts';
 
 // --- The model ---------------------------------------------------------------------------
 
@@ -54,7 +64,7 @@ export interface ChooserGroups {
 }
 
 export type SourceChooser =
-  | { method: 'in-loop'; version: string | null; definitionHash: string | null; groups?: ChooserGroups }
+  | { method: 'in-loop'; router: string | null; version: string | null; definitionHash: string | null; groups?: ChooserGroups }
   | { method: 'all-sources' }
   | { method: 'not-recorded' }
   | { method: 'unrecognized'; value: string };
@@ -74,21 +84,41 @@ export interface ChooserLoad {
 
 // --- Shared readers ----------------------------------------------------------------------
 
-/**
- * Why a source asked for was not loaded, by its last load's outcome, in §2's
- * words. Read by this module and by `where-it-went.ts`'s `whyNotSentFor`, so
- * the two cannot word one outcome two ways.
- */
-export const LOAD_END_REASON: Readonly<Record<string, string>> = {
-  declined: WHERE_IT_WENT_REASONS.declined,
-  'no-answer': WHERE_IT_WENT_REASONS.noAnswer,
-  unavailable: WHERE_IT_WENT_REASONS.unavailable,
+/** Why a source the model requested was not loaded, by its last load's outcome, in the chooser line's own words. */
+const LOAD_END_REASON: Readonly<Record<string, string>> = {
+  declined: CHOOSER_REASONS.declined,
+  'no-answer': CHOOSER_REASONS.noAnswer,
+  unavailable: CHOOSER_REASONS.unavailable,
 };
 
 /** A source's reader name, by id; for an id the manifest lacks, the alias the record names, else the id. */
 export function sourceReaderName(sourceId: string, alias: string | undefined): string {
   const entry = CIVIC_MANIFEST.find((e) => e.sourceId === sourceId);
   return entry ? readerSourceName({ sourceId, displayName: entry.displayName }) : alias ?? sourceId;
+}
+
+/**
+ * The reader name of the source a load's alias names (`readerSourceName`, by
+ * the manifest entry with that alias), or nothing for an alias no source has,
+ * which is text the model chose and is never repeated. The load step's label
+ * reads it (R10 P1 fix round 1, H).
+ */
+export function loadAliasReaderName(alias: unknown): string | undefined {
+  if (typeof alias !== 'string') return undefined;
+  const entry = CIVIC_MANIFEST.find((e) => e.alias === alias);
+  return entry ? readerSourceName({ sourceId: entry.sourceId, displayName: entry.displayName }) : undefined;
+}
+
+/** A recorded value echoed to a reader, cut to `ECHO_LIMIT` characters, the last of them "…". */
+export function echoCapped(value: string): string {
+  return value.length > ECHO_LIMIT ? `${value.slice(0, ECHO_LIMIT - 1)}…` : value;
+}
+
+/** The id of the router component a record or a run states, or null when it states none. */
+function routerOf(components: unknown): string | null {
+  if (!Array.isArray(components)) return null;
+  const entry = components.map(asRecord).find((c) => c?.id === routerPackage.name);
+  return text(entry?.id) ?? null;
 }
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
@@ -202,12 +232,14 @@ export function sourceChooser(
   routing: unknown,
   definitionHash: unknown,
   contacts: { loads: readonly ChooserLoad[]; offered: readonly ChooserOffered[] } | null,
+  components?: unknown,
 ): SourceChooser {
   if (routing === undefined) return { method: 'not-recorded' };
   const method = text(asRecord(routing)?.method);
   if (method === 'in-loop') {
     return {
       method: 'in-loop',
+      router: routerOf(components),
       version: text(asRecord(routing)?.version) ?? null,
       definitionHash: text(definitionHash) ?? null,
       ...(contacts ? { groups: chooserGroups(contacts.loads, contacts.offered) } : {}),
@@ -236,7 +268,8 @@ export function chooserFromTrace(trace: unknown): SourceChooser | null {
   const attrs = root ? attributesOf(root) : new Map<string, unknown>();
   const routing = parseJson(text(attrs.get('analysis.routing')));
   const offered = offeredList(parseJson(text(attrs.get('analysis.sources_offered'))));
-  return sourceChooser(routing, attrs.get('analysis.definition_hash'), { loads: loadsOfSpans(spans), offered });
+  const components = parseJson(text(attrs.get('analysis.components')));
+  return sourceChooser(routing, attrs.get('analysis.definition_hash'), { loads: loadsOfSpans(spans), offered }, components);
 }
 
 /**
@@ -253,6 +286,7 @@ export function chooserFromPackage(pkg: unknown): SourceChooser {
     routing,
     composition?.definitionHash,
     spans === null ? null : { loads: loadsOfSpans(spans), offered: offeredList(composition?.sourcesOffered) },
+    composition?.components,
   );
 }
 
@@ -260,28 +294,35 @@ export function chooserFromPackage(pkg: unknown): SourceChooser {
 
 const names = (list: readonly string[]) => (list.length > 0 ? list.join(SOURCE_CHOOSER_TEXT.separator) : SOURCE_CHOOSER_TEXT.none);
 
+/** One line of the chooser, and the lines under it (the sources requested and not loaded, one each). */
+export interface ChooserLine {
+  text: string;
+  items?: string[];
+}
+
 /** The chooser line: its first sentence, then, in-loop, one line per group. */
-export function chooserLines(chooser: SourceChooser): string[] {
+export function chooserLines(chooser: SourceChooser): ChooserLine[] {
   const T = SOURCE_CHOOSER_TEXT;
   switch (chooser.method) {
     case 'not-recorded':
-      return [T.notRecorded];
+      return [{ text: T.notRecorded }];
     case 'all-sources':
-      return [T.allSources];
+      return [{ text: T.allSources }];
     case 'unrecognized':
-      return [T.unrecognized(chooser.value)];
+      return [{ text: T.unrecognized(echoCapped(chooser.value)) }];
     case 'in-loop': {
       const g = chooser.groups;
-      if (!g) return [T.inLoop];
-      const asked = g.askedNotLoaded.length > 0
-        ? g.askedNotLoaded.map((a) => `${a.name}${T.reasonSeparator}${a.whyNotSent}`).join(' ')
-        : `${T.none}.`;
-      return [T.inLoop, `${T.loaded}${names(g.loaded)}.`, `${T.askedNotLoaded}${asked}`, `${T.neverAsked}${names(g.neverAsked)}.`];
+      if (!g) return [{ text: T.inLoop }];
+      // One line per source requested and not loaded, so two reasons never run together.
+      const asked: ChooserLine = g.askedNotLoaded.length > 0
+        ? { text: T.askedNotLoaded.trimEnd(), items: g.askedNotLoaded.map((a) => `${a.name}${T.reasonSeparator}${a.whyNotSent}`) }
+        : { text: `${T.askedNotLoaded}${T.none}.` };
+      return [{ text: T.inLoop }, { text: `${T.loaded}${names(g.loaded)}.` }, asked, { text: `${T.neverAsked}${names(g.neverAsked)}.` }];
     }
   }
 }
 
-/** The card, and in-loop the definition hash's small print, as "Model + environment" items. */
+/** The card, and in-loop the hash's small print, as "Model + environment" items. */
 export function chooserCardItems(chooser: SourceChooser): Array<{ label: string; value: string; mono?: boolean }> {
   const C = SOURCE_CHOOSER_CARD;
   switch (chooser.method) {
@@ -290,10 +331,10 @@ export function chooserCardItems(chooser: SourceChooser): Array<{ label: string;
     case 'all-sources':
       return [{ label: C.label, value: C.allSources }];
     case 'unrecognized':
-      return [{ label: C.label, value: C.unrecognized(chooser.value) }];
+      return [{ label: C.label, value: C.unrecognized(echoCapped(chooser.value)) }];
     case 'in-loop':
       return [
-        { label: C.label, value: C.inLoop(chooser.version) },
+        { label: C.label, value: C.inLoop(chooser.router, chooser.version) },
         ...(chooser.definitionHash ? [{ label: C.definitionLabel, value: chooser.definitionHash.slice(0, 12), mono: true }] : []),
       ];
   }

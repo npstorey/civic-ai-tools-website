@@ -23,11 +23,14 @@
  *     when it is made.
  * A record with no matching statement says once that this site cannot show
  * what each one keeps for it, then (D1) links "where a question can go". The
- * sources not reached are not rendered (ruling (i)); the model keeps them.
+ * rows do not render the sources not reached (ruling (i)); the model keeps
+ * them. The chooser line below does name sources not reached (R10 P1, #682):
+ * that supersedes ruling (i)'s "not rendered" for that line only.
  *
  * WHAT CHOSE THE SOURCES (R10 P1, #682). When the model carries `chooser`,
  * the first line inside the disclosure says what chose the sources
  * (`chooserLines`, `src/lib/flows/source-chooser.ts`): in-loop, then a line per
+ * group, each source requested and not loaded on a line of its own under its
  * group; or "not recorded"; or the all-sources sentence. The summary is
  * unchanged, and stays the only text shown closed (Stage C). With no
  * `chooser` (a run whose trace has not arrived) the line waits; nothing is
@@ -71,15 +74,24 @@ const CANNOT_SHOW_KEEPS = 'This site cannot show what each one keeps for this re
 const ROWS: CSSProperties = { margin: '8px 0 0', paddingLeft: '18px' };
 const CHOOSER_GROUPS: CSSProperties = { margin: '2px 0 0', paddingLeft: '18px' };
 
-/** What chose the sources: its first sentence, then, in-loop, one line per group. */
+/** What chose the sources: its first sentence, then, in-loop, one line per group, and a sub-line per source requested and not loaded. */
 function ChooserLine({ chooser }: { chooser: SourceChooser }) {
   const [first, ...groups] = chooserLines(chooser);
   return (
     <div data-part="where-it-went-chooser" style={{ margin: '8px 0 0' }}>
-      <p style={{ margin: 0, color: 'var(--text-primary)' }}>{first}</p>
+      <p style={{ margin: 0, color: 'var(--text-primary)' }}>{first.text}</p>
       {groups.length > 0 && (
         <ul style={CHOOSER_GROUPS}>
-          {groups.map((line, i) => <li key={i}>{line}</li>)}
+          {groups.map((line, i) => (
+            <li key={i}>
+              {line.text}
+              {line.items !== undefined && (
+                <ul style={CHOOSER_GROUPS}>
+                  {line.items.map((item, j) => <li key={j}>{item}</li>)}
+                </ul>
+              )}
+            </li>
+          ))}
         </ul>
       )}
     </div>

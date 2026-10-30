@@ -569,7 +569,7 @@ test('R8 W2: with no pause, every entry is what it was: no pause key appears', (
 // `tool_complete` → `tool_result` → `thinking` for one `load_source` call
 // carrying Socrata's alias. At the base the open step read "Gathering data"
 // and the closed one "Loading a data source". The names come from each load's
-// alias through `loadedSourceName`, never from the message: every message
+// alias through `loadAliasReaderName` (fix round 1), never from the message: every message
 // below names a different source than its alias, so a label read from the
 // message text fails. An entry with no `args` (the executed run's live events,
 // P-a) or an alias no source has states the choice without a name.
@@ -627,4 +627,23 @@ test('R10 P1 criterion 6, the record page: buildRecordStepView labels a load ste
     { tool: 'load_source', operationType: 'load_source', arguments: { alias: 'nowhere_at_all' } },
   ]);
   assert.deepEqual(view.steps.map((s) => s.label), [LOAD_STEP_LABEL.closed(['Socrata'], 1), LOAD_STEP_LABEL.closed([], 1)]);
+});
+
+test('R10 P1 fix round 1 (H): a data_commons load names "Data Commons", the reader name every surface uses, never "Google Data Commons"', async () => {
+  const { LOAD_STEP_LABEL } = await import('../sources/copy.ts');
+  const [open, complete, result] = loadEvents('data_commons');
+  const opened = run([open]);
+  assert.equal(opened.progressGroups[0].label, LOAD_STEP_LABEL.open(['Data Commons'], 1));
+  const closed = run([complete, result, { message: 'Thinking', phase: 'thinking', iteration: 1 }], opened);
+  assert.equal(closed.progressGroups[0].label, LOAD_STEP_LABEL.closed(['Data Commons'], 1));
+  for (const label of [opened.progressGroups[0].label, closed.progressGroups[0].label]) {
+    assert.ok(label.endsWith(': Data Commons'), label);
+    assert.ok(!label.includes('Google Data Commons'), label);
+  }
+  // The open and closed words, as fix round 1 ruled them.
+  assert.equal(LOAD_STEP_LABEL.open(['Socrata'], 1), 'Loading the source the model chose: Socrata');
+  assert.equal(LOAD_STEP_LABEL.open(['Socrata', 'Boston OpenContext'], 2), 'Loading the sources the model chose: Socrata and Boston OpenContext');
+  assert.equal(LOAD_STEP_LABEL.open([], 1), 'Loading a source the model chose');
+  assert.equal(LOAD_STEP_LABEL.open([], 2), 'Loading sources the model chose');
+  assert.equal(LOAD_STEP_LABEL.closed(['Socrata'], 1), 'The model chose a source: Socrata');
 });
