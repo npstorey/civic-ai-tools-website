@@ -19,6 +19,7 @@ import { configuredMcpServers, getMissingMcpRoutingError, readMcpEnvFromProcess,
 import { resolveRunPortal } from '@/lib/site-config';
 import { PORTAL_LOCK_NOT_CONFIGURED_MESSAGE } from '@/lib/portal-lock';
 import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG, runRecordAttributes } from '@/lib/evidence/trace';
+import { storeRunPrompt } from '@/lib/evidence/prompt-blob';
 import { startUsageCount, type UsageOutcome } from '@/lib/usage/count';
 
 const SSE_HEADERS = {
@@ -478,6 +479,10 @@ Be honest if you don't have access to current or real-time data.`;
         try {
           // Finalize trace and send as final SSE event
           if (inLoop) endSkillFetch(hash(inLoop.systemPrompt()));
+          // R10 P1b (#694): a completed run's final prompt, kept by its hash
+          // for the record to reference (`src/lib/evidence/prompt-blob.ts`).
+          // Before the trace, so a publish finds it; it never throws.
+          if (usageOutcome === 'complete') await storeRunPrompt(inLoop ? inLoop.systemPrompt() : systemPromptWithMcp);
           trace.endRoot(runRecord());
           const traceJson = trace.finalize();
           stopKeepAlive();

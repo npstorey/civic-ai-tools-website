@@ -1,4 +1,4 @@
-import type { BlobListPage, ClientUploadGrantContext, StorageDriver } from './driver';
+import type { BlobListItem, BlobListPage, ClientUploadGrantContext, StorageDriver } from './driver';
 import crypto from 'crypto';
 import { errorLogFacts } from '../streaming.ts';
 
@@ -145,6 +145,41 @@ export async function listBlobs(opts: {
 }): Promise<BlobListPage> {
   const driver = await getDriver();
   return driver.list(opts);
+}
+
+/**
+ * The stored object at exactly `pathname`, or null (R10 P1b, #694). Read by
+ * prefix listing, every page, then matched exactly, so a longer pathname that
+ * shares the prefix is never taken for it. A content-addressed pathname holds
+ * at most one object.
+ */
+export async function findBlob(pathname: string): Promise<BlobListItem | null> {
+  const driver = await getDriver();
+  let cursor: string | undefined;
+  do {
+    const page = await driver.list({ prefix: pathname, cursor, limit: 100 });
+    const hit = page.items.find((item) => item.pathname === pathname);
+    if (hit) return hit;
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+  return null;
+}
+
+/**
+ * Store bytes at an exact pathname (R10 P1b). The driver refuses a pathname it
+ * already holds (Vercel Blob without `allowOverwrite`), so a caller that must
+ * not rewrite a key lists it first (`findBlob`). Returns the public URL.
+ */
+export async function putBlob(pathname: string, body: string, contentType: string): Promise<string> {
+  const driver = await getDriver();
+  const blob = await driver.put(pathname, body, { contentType });
+  return blob.url;
+}
+
+/** A stored object's text by its URL, or null when it cannot be read (R10 P1b). */
+export async function getBlobText(url: string): Promise<string | null> {
+  const driver = await getDriver();
+  return driver.getText(url);
 }
 
 /**

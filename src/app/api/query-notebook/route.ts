@@ -42,6 +42,7 @@ import {
 import { errorClassOf, isStreamErrorKind, notebookExecutionErrorMessage, notebookFailureFacts, notebookTracebackForReader, startSseKeepAlive, streamErrorPayload, withoutCredentialsIn, type ConsentPausePayload, type StreamErrorCode } from '@/lib/streaming';
 import { TraceBuilder, hash as traceHash, CIVICAITOOLS_TRACE_CONFIG, runRecordAttributes } from '@/lib/evidence/trace';
 import { getConfiguredKeyId } from '@/lib/evidence/signing';
+import { storeRunPrompt } from '@/lib/evidence/prompt-blob';
 import { resolveRunPortal } from '@/lib/site-config';
 import { PORTAL_LOCK_NOT_CONFIGURED_MESSAGE } from '@/lib/portal-lock';
 import {
@@ -500,6 +501,10 @@ export async function POST(request: NextRequest) {
       // the EXECUTED session (same pattern as /api/compare-stream's final
       // `trace` event). Emitted only on success — a failed pipeline has
       // nothing publishable. In loop, the four after-loop facts, once.
+      // R10 P1b (#694): the run's final prompt, kept by its hash for the
+      // record to reference (`src/lib/evidence/prompt-blob.ts`). Before
+      // `publish_inputs`, so a publish finds it; it never throws.
+      await storeRunPrompt(inLoop ? inLoop.systemPrompt() : systemPrompt);
       trace.endRoot(inLoop ? afterLoopAttributes(runRecord(), true) : undefined);
       await emit({
         type: 'publish_inputs',
