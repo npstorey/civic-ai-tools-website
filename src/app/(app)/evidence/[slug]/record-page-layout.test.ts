@@ -114,7 +114,7 @@ function candidatesFor(base: string): string[] {
 // LAYOUT-WEB W3 P2 (5): FOR SkillSection.tsx ONLY, `react` is the real module
 // with one change — while `globalThis.__p2OpenSkill` is set, the section's
 // open/closed state starts open, so the render shows B's text as a reader who
-// clicked "View skill guidance" sees it. The real hook is still called, so the
+// clicked "Show full system prompt" sees it. The real hook is still called, so the
 // hook order is the component's own.
 const SKILL_SECTION_FILE = path.join(SRC, 'components', 'evidence', 'SkillSection.tsx');
 const REACT_URL = pathToFileURL(createRequire(import.meta.url).resolve('react')).href;
@@ -1307,7 +1307,7 @@ test('W3 P2 (2) the citation block, the verify action and every banner sit outsi
 // `socrata__get_data`, and so do the answer and one call's raw `where`; one
 // call is shaped like `…b8cc28` (`ckan__get_schema`, operation type `metadata`,
 // a `resource_id` argument). B's text reaches the markup only once a reader
-// opens "View skill guidance" (`SkillSection` is closed on its first render),
+// opens "Show full system prompt" (`SkillSection` is closed on its first render),
 // so the record is rendered as that reader sees it (the hook above). The
 // instrument is shown to fail on a site-written label carrying an alias.
 
@@ -1955,7 +1955,11 @@ test('W4 P1 (9) the citation block reads "Record: <title> [Published: <date>] <u
 // for row 23 (a duration in seconds): that diff is the duration strings alone.
 // Re-captured again for R10 P1 (#682): the diff is one card inserted at the end
 // of section C, "Sources chosen by: not recorded" (neither record states
-// routing).
+// routing). Re-captured again for R10 P1b fix round 1 (#694, the research
+// check's words): both records carry inline skill text, and the diff is
+// section B alone — its intro, the "System prompt hash: <hash>" line and the
+// sentence on what a hash is, the button row's top margin, and the button's
+// "Show full system prompt (N bytes)".
 
 const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
 

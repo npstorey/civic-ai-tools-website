@@ -146,6 +146,7 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
 /** String-typed specifiers, so the red commit type-checks before the modules change. */
 const SKILL_SECTION: string = '@/components/evidence/SkillSection';
 const COPY: string = '@/lib/sources/copy';
+const PROMPT_HISTORY: string = '@/components/evidence/PromptHistory';
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 const { default: SkillSection } = (await import(SKILL_SECTION)) as { default: (props: Loose) => ReactElement };
@@ -257,12 +258,14 @@ test('criterion 2: a record with no text says so, shows its hash, and lists the 
   assert.ok(text.includes(T.componentsIntro), 'the components are not introduced');
   for (const c of COMPONENTS) assert.ok(text.includes(c.id), `component ${c.id} is not listed`);
   assert.ok(text.includes('1.4.0') && text.includes('0.6.0'), 'a version is not listed');
-  assert.ok(text.includes(T.guidanceHashLabel) && text.includes('a'.repeat(64)), 'the guidance hash is not listed');
+  assert.ok(text.includes(`${COMPONENTS[0].id} · ${T.instructionsHashLabel} ${'a'.repeat(64)}`), 'the instructions hash is not listed after its component');
+  assert.equal(text.includes(`data-commons 1.4.0 · ${T.instructionsHashLabel}`), false, 'a component with no instructions hash is given one');
 });
 
 test('criterion 2: a record with neither text nor hash says the text was not carried and shows no hash', () => {
   const text = textOf(renderSection({ author: null, disclosure: { kind: 'none' }, earlierPromptHashes: [], components: [] }));
-  assert.ok(text.includes(T.notCarried));
+  assert.ok(text.includes(T.notCarriedNorHash), 'the no-hash form of the absent-case sentence is not shown');
+  assert.equal(text.includes(T.hashExplained), false, 'what a hash is, with no hash shown');
   assert.equal(text.includes(T.hashLabel), false);
   assert.equal(text.includes(T.componentsIntro), false, 'an empty list is introduced');
 });
@@ -280,4 +283,43 @@ test('many prompts: one prompt states no count', async () => {
   const text = textOf(await openSection(blobSection('good')));
   assert.equal(text.includes(T.manyPrompts(1)), false);
   assert.equal(text.includes(T.manyPrompts(2)), false);
+});
+
+// --- Fix round 1: the hash line in every state, the button and the intro --------------------
+
+test('fix round 1, S2: every state of B with a hash shows "System prompt hash: <hash>", and once what a hash is', async () => {
+  const inline = { author: null, disclosure: { kind: 'inline', text: PROMPT, hash: HASH }, earlierPromptHashes: [], components: [] };
+  const absent = { author: null, disclosure: { kind: 'hash-only', hash: HASH }, earlierPromptHashes: ['1'.repeat(64)], components: COMPONENTS };
+  for (const [name, text] of [
+    ['inline', textOf(renderSection(inline))],
+    ['blob, closed', textOf(renderSection(blobSection('good', ['1'.repeat(64)])))],
+    ['blob, verified', textOf(await openSection(blobSection('good')))],
+    ['blob, mismatch', textOf(await openSection(blobSection('tampered')))],
+    ['absent with a hash', textOf(renderSection(absent))],
+  ] as const) {
+    assert.ok(text.includes(`${T.hashLabel}: ${HASH}`), `${name}: no hash line`);
+    assert.equal(text.split(T.hashExplained).length - 1, 1, `${name}: what a hash is, not stated exactly once`);
+    assert.ok(text.indexOf(`${T.hashLabel}: ${HASH}`) < text.indexOf(T.hashExplained), `${name}: the explanation comes before the first hash`);
+  }
+});
+
+test('fix round 1: the button and the intro, for inline and blob text', async () => {
+  const inline = textOf(renderSection({ author: null, disclosure: { kind: 'inline', text: PROMPT, hash: HASH }, earlierPromptHashes: [], components: [] }));
+  assert.ok(inline.includes(T.introInline));
+  assert.ok(inline.includes(T.showText(BYTES.byteLength)), 'the inline button does not state the text\'s bytes');
+  const blob = textOf(renderSection(blobSection('good')));
+  assert.ok(blob.includes(T.introBlob));
+  assert.ok(blob.includes(T.showText(BYTES.byteLength)), 'the blob button does not state the reference\'s bytes');
+  assert.ok(textOf(await openSection(blobSection('good'))).includes(T.hideText));
+  assert.equal(/skill guidance|stored as blob/i.test(inline + blob), false, 'an internal term reached the reader');
+});
+
+test('fix round 1, S6: the history says the last prompt\'s text is not shown only when the caller says so', async () => {
+  const { default: PromptHistory } = (await import(PROMPT_HISTORY)) as { default: (props: Loose) => ReactElement | null };
+  const hashes = ['1'.repeat(64), '2'.repeat(64)];
+  const shown = textOf(renderToStaticMarkup(PromptHistory({ earlierHashes: hashes })!));
+  const notShown = textOf(renderToStaticMarkup(PromptHistory({ earlierHashes: hashes, textNotShown: true })!));
+  assert.ok(shown.includes(`${T.manyPrompts(3)} ${T.earlierByHash}`));
+  assert.equal(shown.includes(T.textNotShown), false);
+  assert.ok(notShown.includes(`${T.manyPrompts(3)} ${T.textNotShown} ${T.earlierByHash}`));
 });

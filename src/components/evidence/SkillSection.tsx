@@ -41,6 +41,16 @@ function disclosureOfProps({ skillText, skillTextRef, skillHash }: SkillSectionP
 
 const MONO = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace', wordBreak: 'break-all' } as const;
 
+/** S2: the hash line, in every state of B that has a hash, and once after it what a hash is (fix round 1). */
+function PromptHashLine({ hash }: { hash: string }) {
+  return (
+    <div data-part="system-prompt-hash" style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+      <p style={{ margin: 0 }}>{SYSTEM_PROMPT_TEXT.hashLabel}: <code style={MONO}>{hash}</code></p>
+      <p style={{ margin: '4px 0 0' }}>{SYSTEM_PROMPT_TEXT.hashExplained}</p>
+    </div>
+  );
+}
+
 /** P1b-e: a record that carries no text says so, with its hash and its composition's parts where it has them. */
 function SkillTextNotCarried({ hash, components, earlier }: {
   hash: string | undefined;
@@ -52,12 +62,8 @@ function SkillTextNotCarried({ hash, components, earlier }: {
     <div data-part="system-prompt-not-carried" style={{
       padding: '16px 20px', border: '1px solid var(--border-color)', borderRadius: '6px',
     }}>
-      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>{T.notCarried}</p>
-      {hash && (
-        <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-          {T.hashLabel}: <code style={MONO}>{hash}</code>
-        </p>
-      )}
+      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>{hash ? T.notCarried : T.notCarriedNorHash}</p>
+      {hash && <PromptHashLine hash={hash} />}
       {components.length > 0 && (
         <>
           <p style={{ margin: '12px 0 4px', fontSize: '13px', color: 'var(--text-secondary)' }}>{T.componentsIntro}</p>
@@ -66,7 +72,7 @@ function SkillTextNotCarried({ hash, components, earlier }: {
               <li key={`${c.id}-${i}`}>
                 <code style={MONO}>{c.id}</code>
                 {c.version ? ` ${c.version}` : null}
-                {c.guidanceHash ? <>{' · '}{T.guidanceHashLabel} <code style={MONO}>{c.guidanceHash}</code></> : null}
+                {c.guidanceHash ? <>{' · '}{T.instructionsHashLabel} <code style={MONO}>{c.guidanceHash}</code></> : null}
               </li>
             ))}
           </ul>
@@ -98,37 +104,36 @@ export default function SkillSection(props: SkillSectionProps) {
 
   const usingRef = skillTextRef !== undefined;
   const resolvedText = usingRef ? (fetched.status === 'verified' ? fetched.text : '') : (skillText ?? '');
-  const lineCount = resolvedText ? resolvedText.split('\n').length : 0;
-  const charCount = usingRef ? skillTextRef.size : resolvedText.length;
+  // The text's size in bytes, for inline and blob alike: the reference states
+  // the blob's; the inline text's is its UTF-8 length.
+  const byteCount = usingRef ? skillTextRef.size : new TextEncoder().encode(resolvedText).byteLength;
 
   async function handleToggle() {
     const willOpen = !open;
     setOpen(willOpen);
     if (willOpen && usingRef && fetched.status === 'idle') {
       setFetched({ status: 'loading', text: '' });
-      // Never throws; a fetch failure and a hash mismatch each have their own sentence.
+      // Never throws; a fetch failure and a hash mismatch each have their own
+      // sentence. Fetched only from `idle`: after a failure, closing and
+      // opening again does not retry, so S5 says a reload does.
       const blob = await resolveBlobText(skillTextRef);
       setFetched(blob.state === 'verified' ? { status: 'verified', text: blob.text } : { status: blob.state, text: '' });
     }
   }
 
-  const buttonLabel = open
-    ? 'Hide skill guidance'
-    : usingRef
-      ? `View skill guidance (${charCount.toLocaleString()} bytes, stored as blob)`
-      : `View skill guidance (${lineCount} lines, ${charCount.toLocaleString()} chars)`;
+  const buttonLabel = open ? SYSTEM_PROMPT_TEXT.hideText : SYSTEM_PROMPT_TEXT.showText(byteCount);
 
   return (
     <div style={{
       padding: '16px 20px', border: '1px solid var(--border-color)',
       borderRadius: '6px', backgroundColor: 'white',
     }}>
-      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.6 }}>
-        The exact skill guidance text sent to the model as the system prompt for this analysis.
-        {skillHash ? ' This is the source of the skill hash recorded in the package.' : ''}
+      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>
+        {usingRef ? SYSTEM_PROMPT_TEXT.introBlob : SYSTEM_PROMPT_TEXT.introInline}
       </p>
+      {skillHash && <PromptHashLine hash={skillHash} />}
 
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: open ? '16px' : 0, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '12px', marginBottom: open ? '16px' : 0, flexWrap: 'wrap' }}>
         <button
           onClick={handleToggle}
           style={{
