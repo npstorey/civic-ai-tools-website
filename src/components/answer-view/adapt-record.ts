@@ -139,9 +139,12 @@ export const OUTPUT_UNAVAILABLE =
 export const OUTPUT_DOES_NOT_MATCH =
   'The answer is not shown: the stored copy of this record’s output does not match the record’s reference to it. The package hash below identifies the record for audit.';
 
-/** The spec section the status row links an A-G-format record to. */
+/** The spec section the status row links an A-G-format record to: §8.7's heading,
+ *  "8.7 Profile requirements: datHere and scripted-recomputation"
+ *  (typed-standards-specification.md:780 at hub af8faa7). The fragment is
+ *  GitHub's anchor for that heading; `dathere-spec-link.test.ts` holds it. */
 export const DATHERE_SPEC_URL =
-  'https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/typed-standards-specification.md#87-content-profile-dathere';
+  'https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/typed-standards-specification.md#87-profile-requirements-dathere-and-scripted-recomputation';
 
 /** The org.civicaitools.environment extension (spec §8.7.1 requirement 3), or null when absent or malformed. */
 function environmentExtension(pkg: EvidencePackage): {

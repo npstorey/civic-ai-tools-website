@@ -1967,6 +1967,9 @@ test('W4 P1 (9) the citation block reads "Record: <title> [Published: <date>] <u
 // followed by one inserted item, "Content profile", with the raw value as
 // small print. Neither record declares the subtype, so the Verification
 // Status label is unchanged.
+// Re-captured again for R10 P5 fix round 1 item 4: the A-G record's diff is
+// the §8.7 link's fragment alone, `#87-content-profile-dathere` to
+// `#87-profile-requirements-dathere-and-scripted-recomputation`.
 
 const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
 
