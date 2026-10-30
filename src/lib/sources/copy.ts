@@ -454,3 +454,27 @@ export const LOAD_STEP_LABEL = {
 function nameList(names: readonly string[]): string {
   return names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
+
+/**
+ * Section B's words about a record's system prompt (R10 P1b, #694). A record
+ * carries the final request's prompt hash and, since P1b, a BlobRef to its
+ * text; the section shows the text only when its bytes hash to the
+ * reference. Hypotheses, for the research check.
+ */
+export const SYSTEM_PROMPT_TEXT = {
+  /** A record that carries no text (every record published before P1b). */
+  notCarried: 'This record does not carry the text of its system prompt.',
+  /** Before the full hash, where the record states one. */
+  hashLabel: 'System prompt hash',
+  /** Before the composition's components (id, version, guidance hash). */
+  componentsIntro: 'The prompt was composed from these parts:',
+  /** Before a component's guidance hash. */
+  guidanceHashLabel: 'guidance hash',
+  /** The stored text's bytes do not hash to the reference. */
+  mismatch: 'The stored text does not match the hash this record states, so it is not shown.',
+  /** The stored text could not be fetched. */
+  unavailable: 'The stored text could not be fetched, so it is not shown.',
+  /** More than one distinct prompt on the trace's model requests; `count` includes the last. */
+  manyPrompts: (count: number) =>
+    `The model saw ${count} system prompts as it loaded sources. This section shows the last one. The earlier ones, by hash:`,
+} as const;

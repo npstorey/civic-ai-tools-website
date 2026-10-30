@@ -40,7 +40,9 @@ import ProvenanceGraphSection from '@/components/evidence/ProvenanceGraphSection
 // builders in lib so the SHAPE is unit-testable — including what it omits
 // (#256: no publication date is stored, so none is asserted).
 import { buildEvidenceJsonLd, buildEvidenceCitationTags } from '@/lib/evidence/page-metadata';
-import { isBlobRef, verifyBlobRef, type BlobRef } from '@/lib/evidence/blob-ref';
+import { isBlobRef, type BlobRef } from '@/lib/evidence/blob-ref';
+// The W3 fix's fetch-once-then-verify, shared with section B's system prompt (R10 P1b).
+import { resolveBlobText } from '@/lib/evidence/blob-text';
 // The key the notebook sits under in a package (#403), imported from its
 // client-safe declaration rather than restated here: every producer writes
 // under that binding, and a local copy of the string is a reader that can look
@@ -52,37 +54,8 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-/** An output blob, fetched once and checked: its text only when its bytes verified. */
-type OutputBlobResolution =
-  | { state: 'verified'; text: string }
-  | { state: 'unavailable' }
-  | { state: 'mismatch' };
-
-/** Fetch an output blob ONCE, then check THOSE bytes against the record's
- *  reference with verify-core's own check (`verifyBlobRef`, size then
- *  SHA-256), handed the bytes already held rather than a second fetch, so the
- *  bytes that are checked are the bytes that are rendered (the W3 fix). The
- *  request is the one `fetchBlobRefText` makes (a plain GET, 15 s), read as
- *  bytes rather than text, because the check reads bytes. A blob that cannot
- *  be fetched is `unavailable`; one whose bytes do not verify, for any of the
- *  check's reasons, is `mismatch`, and its bytes are not returned. */
-async function resolveOutputBlob(ref: BlobRef): Promise<OutputBlobResolution> {
-  let bytes: Uint8Array;
-  try {
-    const response = await fetch(ref.url, { signal: AbortSignal.timeout(15_000) });
-    if (!response.ok) return { state: 'unavailable' };
-    bytes = new Uint8Array(await response.arrayBuffer());
-  } catch {
-    return { state: 'unavailable' };
-  }
-  const held = bytes;
-  const check = await verifyBlobRef(ref, { fetch: async () => new Response(new Uint8Array(held)) });
-  if (!check.ok) return { state: 'mismatch' };
-  return { state: 'verified', text: new TextDecoder().decode(held) };
-}
-
 /** Server-side resolution for blob-referenced fields in an evidence package.
- *  `output` is eagerly fetched and checked (`resolveOutputBlob`) so the answer
+ *  `output` is eagerly fetched and checked (`resolveBlobText`) so the answer
  *  (rendered first and again as section F) can treat it as a string. `skillMetadata.skillText` is handed through as a
  *  reference when it's a BlobRef — the skill section expands on click and
  *  fetches lazily, so there's no point paying the latency up front. The
@@ -100,7 +73,7 @@ async function resolvePackageForRender(pkg: EvidencePackage): Promise<ResolvedPa
   let outputVerified = false;
   let outputMismatch = false;
   if (outputBlobRef !== null) {
-    const blob = await resolveOutputBlob(outputBlobRef);
+    const blob = await resolveBlobText(outputBlobRef);
     outputUnavailable = blob.state === 'unavailable';
     outputMismatch = blob.state === 'mismatch';
     outputVerified = blob.state === 'verified';

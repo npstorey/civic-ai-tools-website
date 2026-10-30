@@ -1609,13 +1609,22 @@ for (const [name, marker, c] of NOT_VERIFYING) {
   });
 }
 
+// R10 P1b (#694) moved the check out of the page, unchanged, into
+// `src/lib/evidence/blob-text.ts` (`resolveBlobText`), so section B's system
+// prompt is checked by the same code as the output. The test follows it: the
+// page calls the shared helper, and the helper checks with verifyBlobRef.
 test('W3 fix (1) read from the source: the page checks the blob with verify-core’s verifyBlobRef and computes no hash of its own', () => {
-  const source = fs.readFileSync(path.join(HERE, 'page.tsx'), 'utf8');
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-  assert.match(code, /import\s*\{[^}]*\bverifyBlobRef\b[^}]*\}\s*from\s*'@\/lib\/evidence\/blob-ref'/, 'the page imports verifyBlobRef through the site’s blob-ref module');
-  assert.match(code, /\bverifyBlobRef\(/, 'and calls it');
-  assert.doesNotMatch(code, /createHash|sha256Hex|node:crypto|subtle\.digest/, 'the page computes no hash itself');
-  assert.doesNotMatch(code, /\bfetchBlobRefText\(/, 'nor fetches the blob as text a second time');
+  const strip = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  const page = strip(fs.readFileSync(path.join(HERE, 'page.tsx'), 'utf8'));
+  assert.match(page, /import\s*\{[^}]*\bresolveBlobText\b[^}]*\}\s*from\s*'@\/lib\/evidence\/blob-text'/, 'the page imports the shared check');
+  assert.match(page, /\bresolveBlobText\(/, 'and calls it');
+  const helper = strip(fs.readFileSync(path.join(SRC, 'lib', 'evidence', 'blob-text.ts'), 'utf8'));
+  for (const [name, code] of [['page.tsx', page], ['blob-text.ts', helper]] as const) {
+    assert.doesNotMatch(code, /createHash|sha256Hex|node:crypto|subtle\.digest/, `${name} computes no hash itself`);
+    assert.doesNotMatch(code, /\bfetchBlobRefText\(/, `${name} does not fetch the blob as text a second time`);
+  }
+  assert.match(helper, /import\s*\{[^}]*\bverifyBlobRef\b[^}]*\}\s*from\s*'\.\/blob-ref\.ts'/, 'the helper imports verifyBlobRef through the site’s blob-ref module');
+  assert.match(helper, /\bverifyBlobRef\(/, 'and calls it');
 });
 
 const CELL_MARK = 'CELLMARK-w3fix: the cell’s text, which differs from the output.';

@@ -36,7 +36,7 @@ import {
   deliberativeTraceLine,
   type NotebookOutput,
 } from './buildChatEvidenceView.ts';
-import { AUTHOR, CAPTURED_VIA_WEB_CHAT, NOT_YET_PUBLISHED, type AnswerContent, type AnswerViewModel, type EnvironmentItem, type StepsPart, type SummarySection } from './view-model.ts';
+import { AUTHOR, CAPTURED_VIA_WEB_CHAT, NOT_YET_PUBLISHED, type AnswerContent, type AnswerViewModel, type EnvironmentItem, type InstructionsSection, type StepsPart, type SummarySection } from './view-model.ts';
 import {
   asStepCall,
   buildClosingRows,
@@ -56,6 +56,7 @@ import { formatModelName } from '../../lib/models.ts';
 import type { WhereItWentModel } from '../../lib/flows/where-it-went.ts';
 import { chooserCardItems, chooserFromTrace, runHoldsPortal } from '../../lib/flows/source-chooser.ts';
 import { RUN_PORTAL_LABEL } from '../../lib/sources/copy.ts';
+import { earlierSystemPromptHashes, finalSystemPromptHashOfTrace } from '../../lib/evidence/prompt-hashes.ts';
 import type { Notebook } from '../../lib/notebook-author/cells.ts';
 // Type-only: erased at compile time.
 import type { CapturedToolCall } from '@/hooks/useNotebookStream';
@@ -162,6 +163,32 @@ export function notebookSteps(
   return { kind: 'step-view', author: stepsAuthorLine(instance), view, closing, ...(consent.length > 0 ? { consent } : {}) };
 }
 
+/**
+ * Section B on the executed run (R10 P1b, #694, note 2). Until the run's
+ * trace arrives (`publish_inputs`), the `metadata` event's prompt and hash,
+ * which under in-loop routing are the FIRST request's. Once it arrives, the
+ * hash the record will state: the final request's, the last one an
+ * `llm_inference` span states. The view holds only the first prompt's text, so
+ * when the final hash differs from it the text is not shown under it; the
+ * earlier prompts are listed by hash.
+ */
+function notebookInstructions(
+  input: NotebookAdapterInput,
+  firstHash: string | null | undefined,
+  firstText: string | null | undefined,
+): InstructionsSection {
+  const author = AUTHOR.instructions(input.instance);
+  const finalHash = input.evidenceTrace ? finalSystemPromptHashOfTrace(input.evidenceTrace) : null;
+  if (finalHash === null) return { author, hash: firstHash ?? null, text: firstText };
+  const earlier = earlierSystemPromptHashes(input.evidenceTrace, finalHash);
+  return {
+    author,
+    hash: finalHash,
+    text: finalHash === firstHash ? firstText : undefined,
+    ...(earlier.length > 0 ? { earlierPromptHashes: earlier } : {}),
+  };
+}
+
 export function adaptNotebook(input: NotebookAdapterInput): AnswerViewModel {
   const view = buildChatEvidenceView({
     notebook: input.notebook,
@@ -247,11 +274,7 @@ export function adaptNotebook(input: NotebookAdapterInput): AnswerViewModel {
     sources,
     disclosure: {
       question: { author: AUTHOR.question(), prompt: view.prompt },
-      instructions: {
-        author: AUTHOR.instructions(input.instance),
-        hash: view.composedSystemPromptHash,
-        text: view.composedSystemPrompt,
-      },
+      instructions: notebookInstructions(input, view.composedSystemPromptHash, view.composedSystemPrompt),
       environment,
       // Each call's words come from `deliberativeTraceLine`, where a test reads
       // them (#426): the recorded phrase through the shared sanitiser, and the
