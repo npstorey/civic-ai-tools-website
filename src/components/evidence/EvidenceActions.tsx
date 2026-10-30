@@ -198,21 +198,37 @@ export default function EvidenceActions({
   // is rendered calm (a muted "couldn't load" + Retry), never as an integrity
   // failure — our endpoint being unreachable says nothing about the package
   // (P1 disclosure ≠ validation, P3 no false precision).
-  const runVerify = async () => {
-    setVerifyState('loading');
-    try {
-      const res = await fetch(`/api/records/${slug}/verify`);
-      if (!res.ok) throw new Error(`${res.status}`);
-      const data = await res.json();
-      setVerifyResult(data);
-      setVerifyState('done');
-    } catch {
-      setVerifyState('error');
-    }
+  // State is set only in the promise callbacks, so the effect below sets none
+  // synchronously (react-hooks/set-state-in-effect).
+  const loadVerify = () => {
+    fetch(`/api/records/${slug}/verify`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        setVerifyResult(data);
+        setVerifyState('done');
+      })
+      .catch(() => {
+        setVerifyState('error');
+      });
   };
 
+  const runVerify = () => {
+    setVerifyState('loading');
+    loadVerify();
+  };
+
+  // A new slug restarts the check during render, not in the effect.
+  const [verifySlug, setVerifySlug] = useState(slug);
+  if (slug !== verifySlug) {
+    setVerifySlug(slug);
+    setVerifyState('loading');
+  }
+
   useEffect(() => {
-    runVerify();
+    loadVerify();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
