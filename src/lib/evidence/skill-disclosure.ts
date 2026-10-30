@@ -14,20 +14,31 @@
  * cannot see. It lives here so a package built by this repository can be run
  * through the page's own decision.
  *
- * WHAT THE FOUR STATES MEAN, and what a reader gets in each:
+ * WHAT THE FOUR STATES MEAN, and what a reader gets in each. Since R10 P1b
+ * (#694) section B renders for every record: `SkillSection` asks
+ * `carriesSkillText` to choose between the text and the sentence that the
+ * record has none. In every state with a hash, B shows "System prompt hash:"
+ * and the full hash (section C shows its first twelve characters under the
+ * same label), and, when the record's trace states more than one prompt and
+ * the record's hash is the last, the earlier ones by hash.
  *
- *   - `inline` — the package carries the composed prompt verbatim. The
- *     section renders it. Only records published BEFORE P4 reach this state
- *     from this repository's own publish flow; their bytes are signed and
- *     unchanged, so they keep it.
- *   - `blob`  — the package carries a `BlobRef` to it. The section renders
- *     the reference and fetches the bytes on demand.
+ *   - `inline` — the package carries the composed prompt verbatim. B renders
+ *     it behind "Show full system prompt". Only records published BEFORE P4
+ *     reach this state from this repository's own publish flow; their bytes
+ *     are signed and unchanged, so they keep it.
+ *   - `blob`  — the package carries a `BlobRef` to it: since R10 P1b, a
+ *     record of this site's own runs whose prompt was stored and checked at
+ *     publish. B shows the reference, fetches the bytes when the reader asks,
+ *     and renders the text only if they hash to the reference; otherwise it
+ *     says the text did not match, or could not be loaded.
  *   - `hash-only` — no text, but `systemPromptHash` identifies the prompt
- *     that was used. This is what a record published after P4 carries. The
- *     hash is still disclosed to the reader, as the "Skill hash" item in the
- *     record page's section C; the section itself has nothing to render and
- *     renders nothing, rather than a heading over an empty body.
- *   - `none` — the package records neither. Absence stated as absence.
+ *     that was used: records published after P4 and before R10 P1b, and a P1b
+ *     record whose prompt was not stored or did not check at publish. B says
+ *     the record does not include the text, shows the hash, and lists the
+ *     composition's components where the record has them.
+ *   - `none` — the package records neither (the executed-run records before
+ *     R10 P1b, for one). B says the record includes neither the text nor a
+ *     hash, and lists the components where the record has them.
  *
  * The hash travels on the first three states as well, so a caller that wants
  * to show it never has to reach back into `skillMetadata` for it.

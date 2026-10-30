@@ -166,6 +166,21 @@ export interface RecordCitationPart {
 export interface RecordInstructionsSection {
   author: string | null;
   disclosure: SkillDisclosure;
+  /**
+   * R10 P1b (#694): the prompts the model saw before the one the record
+   * states, by hash, in order, read from the trace's `llm_inference` spans;
+   * empty when the trace states one prompt. Absent on a model built before P1b.
+   */
+  earlierPromptHashes?: string[];
+  /** P1b-e: the composition's components, as the record lists them, for the record that carries no text. */
+  components?: RecordPromptComponent[];
+}
+
+/** One component of a record's composition, as section B lists it (R10 P1b, P1b-e). */
+export interface RecordPromptComponent {
+  id: string;
+  version?: string;
+  guidanceHash?: string;
 }
 
 /** One call in the record's section D: its signed fields, raw (W1 ruling D6). */
@@ -199,10 +214,14 @@ export interface InstructionsSection {
   hash: string | null;
   /**
    * The composed prompt itself. `undefined`: this surface never carries the
-   * text (the comparison's trace records the hash only, #411 D3). `null`: it
-   * carries it, and this run's stream did not deliver it.
+   * text (the comparison's trace records the hash only, #411 D3), or it holds
+   * only an earlier prompt's text than the one `hash` names (an executed
+   * in-loop run, R10 P1b). `null`: it carries it, and this run's stream did
+   * not deliver it.
    */
   text?: string | null;
+  /** R10 P1b (#694): the prompts the model saw before the one `hash` names, by hash, in order; absent or empty for one. */
+  earlierPromptHashes?: string[];
 }
 
 /** Section G: the summary. */

@@ -44,7 +44,7 @@
 
 import { adaptNotebook, renderingCellText } from './adapt-notebook.ts';
 import { readerServerName, SERVERS_LABEL, USED_SOURCES_LABEL } from './adapt-comparison.ts';
-import { AUTHOR, type AnswerPart, type AnswerViewModel, type EnvironmentItem, type RecordTraceEntry, type StatusFact, type StepsPart } from './view-model.ts';
+import { AUTHOR, type AnswerPart, type AnswerViewModel, type EnvironmentItem, type RecordInstructionsSection, type RecordPromptComponent, type RecordTraceEntry, type StatusFact, type StepsPart } from './view-model.ts';
 import { buildChatEvidenceView } from './buildChatEvidenceView.ts';
 import { buildRecordStepView, stepsAuthorLine } from '../../lib/answer-view/steps.ts';
 import {
@@ -53,7 +53,8 @@ import {
   describeUnrecordedOutcomes,
   readRefusalsFromTrace,
 } from '../../lib/evidence/query-step.ts';
-import { describeSkillDisclosure, carriesSkillText } from '../../lib/evidence/skill-disclosure.ts';
+import { describeSkillDisclosure } from '../../lib/evidence/skill-disclosure.ts';
+import { earlierSystemPromptHashes } from '../../lib/evidence/prompt-hashes.ts';
 import { formatDataSourcesSummary } from '../../lib/evidence/data-sources.ts';
 import { upstreamToolName } from '../../lib/mcp/operation-types.ts';
 import { formatModelName, estimateCostUsd } from '../../lib/models.ts';
@@ -259,11 +260,20 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
   // B: the skill prompt, asked of the package AS STORED — the page's resolution
   // blanks a BlobRef `skillText`, and the disclosure has to see the reference
   // to answer `blob` rather than `hash-only` (#411, D3).
+  //
+  // R10 P1b (#694): B is built for every record. One that carries no text says
+  // so and lists its composition's components (P1b-e); one whose trace states
+  // more than one prompt lists the earlier ones by hash beside the one the
+  // record states (the ruling on P1b-a).
   const skillDisclosure = describeSkillDisclosure(input.stored?.skillMetadata ?? pkg.skillMetadata);
   const captureMethod = pkg.metadata.captureMethod ?? row.captureMethod;
-  const recordInstructions = carriesSkillText(skillDisclosure)
-    ? { author: captureMethod === 'chat-flow-stream' ? AUTHOR.instructions(instance) : null, disclosure: skillDisclosure }
-    : undefined;
+  const statedPromptHash = skillDisclosure.kind === 'none' ? null : skillDisclosure.hash ?? null;
+  const recordInstructions: RecordInstructionsSection = {
+    author: captureMethod === 'chat-flow-stream' ? AUTHOR.instructions(instance) : null,
+    disclosure: skillDisclosure,
+    earlierPromptHashes: earlierSystemPromptHashes(pkg.trace, statedPromptHash),
+    components: compositionComponents(pkg),
+  };
 
   // C · Model + environment, with what the old format's Resources Used carried
   // (W1 ruling D7), for every format.
@@ -283,8 +293,9 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
     ...(envMcpHosts ? [{ label: SERVERS_LABEL, value: envMcpHosts }] : []),
     { label: 'Content profile', value: row.contentProfile ?? 'default' },
     { label: USED_SOURCES_LABEL, value: dataSourcesSummary ?? '—' },
-    // A hash-only skill prompt (#411) has no section B; this is where its hash is disclosed.
-    ...(skillHash ? [{ label: 'Skill hash', value: skillHash.slice(0, 12), mono: true }] : []),
+    // The system prompt's hash, its first twelve characters, under the label
+    // section B shows it by in full (R10 P1b fix round 1: one value, one name).
+    ...(skillHash ? [{ label: 'System prompt hash', value: skillHash.slice(0, 12), mono: true }] : []),
     { label: 'Prompt tokens', value: pkg.cost.promptTokens?.toLocaleString() || '—' },
     { label: 'Completion tokens', value: pkg.cost.completionTokens?.toLocaleString() || '—' },
     { label: 'Total tokens', value: pkg.cost.totalTokens?.toLocaleString() || '—' },
@@ -349,4 +360,26 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
     ...(input.publishedLayout !== undefined ? { publishedLayout: input.publishedLayout } : {}),
     ...(whereItWent !== null ? { whereItWent } : {}),
   };
+}
+
+/**
+ * The composition's components as the record lists them
+ * (`extensions["org.civicaitools.composition"].components[]`): each one's id,
+ * and its version and guidance hash where it states them (R10 P1b, P1b-e).
+ * An entry with no string id is not listed; nothing is supplied that the
+ * record does not state.
+ */
+function compositionComponents(pkg: EvidencePackage): RecordPromptComponent[] {
+  const composition = (pkg.extensions as Record<string, unknown> | undefined)?.['org.civicaitools.composition'];
+  const components = (composition as { components?: unknown } | null | undefined)?.components;
+  if (!Array.isArray(components)) return [];
+  return components.flatMap((entry): RecordPromptComponent[] => {
+    const c = entry as { id?: unknown; version?: unknown; guidanceHash?: unknown } | null;
+    if (typeof c?.id !== 'string' || c.id.length === 0) return [];
+    return [{
+      id: c.id,
+      ...(typeof c.version === 'string' && c.version.length > 0 ? { version: c.version } : {}),
+      ...(typeof c.guidanceHash === 'string' && c.guidanceHash.length > 0 ? { guidanceHash: c.guidanceHash } : {}),
+    }];
+  });
 }

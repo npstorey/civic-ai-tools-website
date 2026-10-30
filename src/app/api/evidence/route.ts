@@ -15,6 +15,7 @@ import { type BlobRef } from '@/lib/evidence/blob-ref';
 import { resolveRequestUser, hasPublishScope } from '@/lib/api-auth';
 import { MISSING_PUBLISH_SCOPE_ERROR } from '@/lib/publish-scope';
 import { emitPublicationPair } from '@/lib/evidence/publication';
+import { runPromptMetadata } from '@/lib/evidence/prompt-blob';
 import { evaluateSealCommitGate } from '@/lib/evidence/unsigned-tier';
 import {
   evaluateSealOnlyRecordsGate,
@@ -383,6 +384,15 @@ export async function POST(request: NextRequest) {
           ),
         };
 
+    // R10 P1b (#694): the run's system prompt. A publish from this site's own
+    // runs (`chat-flow-stream`) that posts no override gets the final
+    // request's prompt hash from its trace and, when the store holds bytes
+    // that hash to it, a BlobRef built here from the store; nothing the
+    // client posts is trusted for it. A posted override (the documented
+    // programmatic path) passes through unchanged.
+    const skillMetadataOverride = body.skillMetadataOverride
+      ?? (body.captureMethod === 'chat-flow-stream' ? await runPromptMetadata(body.trace) : undefined);
+
     // Build evidence package
     const packageInput: PackageInput = {
       trace: body.trace,
@@ -405,7 +415,7 @@ export async function POST(request: NextRequest) {
       // signer identity (the active platform signing key) for every publish.
       type: body.type ?? DEFAULT_CONTENT_TYPE,
       signer: body.signer ?? getActiveSigner(),
-      skillMetadataOverride: body.skillMetadataOverride,
+      skillMetadataOverride,
       extensions,
     };
 

@@ -565,3 +565,43 @@ export const LOAD_STEP_LABEL = {
 function nameList(names: readonly string[]): string {
   return names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
+
+/**
+ * Section B's words about a record's system prompt (R10 P1b, #694). A record
+ * carries the final request's prompt hash and, since P1b, a BlobRef to its
+ * text; the section shows the text only when its bytes hash to the
+ * reference. Fix round 1 applies the research check
+ * (`p1b-research-check.md`, S1 to S6, the button and the intro).
+ */
+export const SYSTEM_PROMPT_TEXT = {
+  /** S1: a record that carries no text, but states the hash. */
+  notCarried: 'This record does not include the text of the system prompt (the instructions the model was given before the question).',
+  /** S1: a record that carries neither the text nor its hash. */
+  notCarriedNorHash: 'This record does not include the text of the system prompt (the instructions the model was given before the question), or a hash of it.',
+  /** S2: before the full hash, rendered "System prompt hash: <hash>", in every state of B that has one. */
+  hashLabel: 'System prompt hash',
+  /** S2: once, after the first hash B shows. */
+  hashExplained: 'A hash is a fingerprint of the exact text: anyone who has the text can check that it matches. The hash does not reveal the text.',
+  /** S3: before the composition's components, each "<id> <version> · instructions hash <hash>". */
+  componentsIntro: 'The record lists what the prompt was built from, with versions. Where a data source added its own instructions, a hash of them follows.',
+  /** S3: before a component's instructions hash; omitted where it has none. */
+  instructionsHashLabel: 'instructions hash',
+  /** S4: the text found does not hash to the reference. */
+  mismatch: 'The text found does not match the hash this record states, so it is not shown.',
+  /** S5: the text could not be loaded. True of `SkillSection`, which fetches only from its first, idle state. */
+  unavailable: 'The text could not be loaded, so it is not shown. Reloading the page tries again.',
+  /** S6: more than one distinct prompt, and the section's hash is the last; `count` includes the last. */
+  manyPrompts: (count: number) =>
+    `The model was given ${count} system prompts as it loaded data sources. This section describes the last one.`,
+  /** S6, where the view shows no text of the last prompt. */
+  textNotShown: 'Its text is not shown on this page.',
+  /** S6: before the earlier prompts' hashes. */
+  earlierByHash: 'The earlier ones, by hash:',
+  /** The button, for inline and blob text alike. */
+  showText: (bytes: number) => `Show full system prompt (${bytes.toLocaleString()} bytes)`,
+  hideText: 'Hide system prompt',
+  /** The intro beside the button, blob text. */
+  introBlob: 'The text of the system prompt the model was given, kept outside the signed record. It is shown only if it matches the hash this record states.',
+  /** The intro beside the button, inline text. */
+  introInline: 'The text of the system prompt the model was given, as the signed record includes it.',
+} as const;

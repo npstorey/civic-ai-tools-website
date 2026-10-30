@@ -39,6 +39,7 @@ import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import type { WhereItWentModel } from '../../lib/flows/where-it-went.ts';
 import { chooserCardItems, chooserFromTrace, runHoldsPortal } from '../../lib/flows/source-chooser.ts';
 import { RUN_PORTAL_LABEL } from '../../lib/sources/copy.ts';
+import { earlierSystemPromptHashes } from '../../lib/evidence/prompt-hashes.ts';
 
 /** What the with-data panel hands its adapter. */
 export interface ComparisonAdapterInput {
@@ -95,6 +96,12 @@ function stringAttribute(span: SpanShape, key: string): string | undefined {
     if (a?.key === key && typeof a.value?.stringValue === 'string') return a.value.stringValue;
   }
   return undefined;
+}
+
+/** The prompts the model saw before the one `hash` names, from the trace's spans, as section B lists them (R10 P1b); nothing for one. */
+function earlierPrompts(trace: unknown, hash: string): { earlierPromptHashes?: string[] } {
+  const earlier = earlierSystemPromptHashes(trace, hash);
+  return earlier.length > 0 ? { earlierPromptHashes: earlier } : {};
 }
 
 /** The composed system prompt's hash, as the `skill_fetch` span recorded it (`skill.text_hash`), or null. */
@@ -244,7 +251,8 @@ export function adaptComparison(input: ComparisonAdapterInput): AnswerViewModel 
       : null,
     sources: line === null ? null : { author: AUTHOR.sources(coverPortals(calls, null).reached), line },
     disclosure: {
-      ...(hash !== null ? { instructions: { author: AUTHOR.instructions(input.instance), hash } } : {}),
+      // R10 P1b: the earlier prompts by hash, when the run loaded sources in more than one turn.
+      ...(hash !== null ? { instructions: { author: AUTHOR.instructions(input.instance), hash, ...earlierPrompts(input.evidenceTrace, hash) } } : {}),
       ...(environment.length > 0 ? { environment } : {}),
       answerAgain: true,
     },
