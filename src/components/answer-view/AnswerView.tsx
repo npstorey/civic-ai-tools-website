@@ -423,8 +423,8 @@ function Disclosure({ disclosure, answer, answerElement, extras, recordSections,
                   </span>
                 </div>
               )}
-              {/* R10 P1b: the prompts the model saw before this one, by hash. */}
-              <PromptHistory earlierHashes={instructions.earlierPromptHashes ?? []} />
+              {/* R10 P1b: the prompts the model saw before this one, by hash; and, where this view shows no text, that it does not. */}
+              <PromptHistory earlierHashes={instructions.earlierPromptHashes ?? []} textNotShown={!instructions.text} />
               {instructions.text === undefined ? null : instructions.text ? (
                 <details>
                   <summary style={{ cursor: 'pointer', color: 'var(--accent)', fontSize: '13px', padding: '4px 0' }}>

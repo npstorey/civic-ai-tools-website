@@ -773,7 +773,7 @@ const RUN_TRACE = {
 };
 
 test('R10 P1b: the finished executed run states the final prompt\'s hash in B and lists the earlier prompts by hash', async () => {
-  const { SYSTEM_PROMPT_TEXT } = (await import('@/lib/sources/copy')) as unknown as { SYSTEM_PROMPT_TEXT: { manyPrompts: (n: number) => string } };
+  const { SYSTEM_PROMPT_TEXT } = (await import('@/lib/sources/copy')) as unknown as { SYSTEM_PROMPT_TEXT: { manyPrompts: (n: number) => string; textNotShown: string } };
   const output = createElement(ChatNotebookOutput, {
     notebook: NOTEBOOK, prompt: 'PROMPTMARKER-p1 How many complaints were filed?', model: 'fixture/model',
     portal: 'data.example.org', toolCalls: [RETURNED], composedSystemPrompt: 'SYSTEMPROMPTMARKER-p1',
@@ -787,4 +787,6 @@ test('R10 P1b: the finished executed run states the final prompt\'s hash in B an
   assert.equal(b.includes('SYSTEMPROMPTMARKER-p1'), false, 'the first prompt\'s text is shown under the final prompt\'s hash');
   assert.ok(b.includes(SYSTEM_PROMPT_TEXT.manyPrompts(3)), 'B does not state how many prompts the model saw');
   for (const hash of PROMPT_HASHES.slice(0, 2)) assert.ok(b.includes(hash), `B does not list ${hash.slice(0, 8)}`);
+  // Fix round 1 (S6): this view shows no text of the last prompt, and says so.
+  assert.ok(b.includes(`${SYSTEM_PROMPT_TEXT.manyPrompts(3)} ${SYSTEM_PROMPT_TEXT.textNotShown}`), 'B does not say the last prompt\'s text is not shown');
 });
