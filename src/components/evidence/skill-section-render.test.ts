@@ -266,3 +266,18 @@ test('criterion 2: a record with neither text nor hash says the text was not car
   assert.equal(text.includes(T.hashLabel), false);
   assert.equal(text.includes(T.componentsIntro), false, 'an empty list is introduced');
 });
+// --- The many-prompts disclosure --------------------------------------------------------------
+
+test('many prompts: the section states how many prompts the model saw, shows the last, and lists the earlier ones by hash', async () => {
+  const earlier = ['1'.repeat(64), '2'.repeat(64)];
+  const text = textOf(await openSection(blobSection('good', earlier)));
+  assert.ok(text.includes(T.manyPrompts(3)), 'the count is not stated');
+  for (const h of earlier) assert.ok(text.includes(h), `earlier prompt ${h.slice(0, 8)} is not listed`);
+  assert.ok(text.includes(PROMPT), 'the last prompt is not shown');
+});
+
+test('many prompts: one prompt states no count', async () => {
+  const text = textOf(await openSection(blobSection('good')));
+  assert.equal(text.includes(T.manyPrompts(1)), false);
+  assert.equal(text.includes(T.manyPrompts(2)), false);
+});

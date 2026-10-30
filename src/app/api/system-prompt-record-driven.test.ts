@@ -578,3 +578,81 @@ test('the sweep: collectRefsFromPackage keeps a published prompt blob; an unpubl
   assert.equal(STORE.objects.has(keptKey), true, 'the referenced prompt blob was swept');
   assert.ok(stats.deleted >= 1 && stats.skippedReferenced >= 1, JSON.stringify(stats));
 });
+
+// --- The many-prompts disclosure, over the two-turn shape ----------------------------------
+//
+// The ruling (P1b-a = A): when the trace states more than one distinct prompt
+// hash, section B shows the last prompt and lists the earlier ones by hash,
+// read from the spans. Asserted on the models the record page and the
+// finished executed run render from (`SkillSection` and the run's B render
+// them: `src/components/evidence/skill-section-render.test.ts`).
+
+/** String-typed specifiers, so the red commit type-checks before the adapters change. */
+const ADAPT_RECORD: string = '../../components/answer-view/adapt-record.ts';
+const ADAPT_NOTEBOOK: string = '../../components/answer-view/adapt-notebook.ts';
+type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+async function recordModel(d: Drive): Promise<Loose> {
+  const { adaptRecord } = (await import(ADAPT_RECORD)) as Loose;
+  return adaptRecord({
+    stored: PUBLISHED.get(d)!.stored, resolution: null,
+    row: { slug: 'r10-p1b', summary: 'Potholes.', contentProfile: 'datHere', captureMethod: 'chat-flow-stream' },
+    instance: null, servedStatement: null,
+  });
+}
+
+const distinctHashes = (d: Drive) => [...new Set(promptsOf(d))].map((p) => sha(p));
+
+for (const d of [CS_LOOP, NB_LOOP]) {
+  test(`many prompts, the record of the ${d.name} run: B shows the final prompt and lists the two earlier ones by hash`, async () => {
+    const b = (await recordModel(d)).disclosure.recordInstructions;
+    const distinct = distinctHashes(d);
+    assert.equal(distinct.length, 3, 'premise — three distinct prompts');
+    assert.ok(b, 'the record has no section B');
+    assert.equal(b.disclosure.kind, 'blob');
+    assert.equal(b.disclosure.hash, distinct[2]);
+    assert.deepEqual(b.earlierPromptHashes, distinct.slice(0, 2));
+  });
+}
+
+test('many prompts: an all-sources record lists no earlier prompt', async () => {
+  const b = (await recordModel(CS_ALL)).disclosure.recordInstructions;
+  assert.ok(b, 'the record has no section B');
+  assert.deepEqual(b.earlierPromptHashes, []);
+});
+
+function notebookInput(d: Drive, withTrace: boolean): Loose {
+  const metadata = d.events.find((e) => e.type === 'metadata')!;
+  const notebook = d.events.find((e) => e.type === 'notebook')!.notebook;
+  return {
+    notebook, prompt: QUESTION, model: 'fixture-fast', portal: PORTAL, toolCalls: [],
+    composedSystemPrompt: metadata.composedSystemPrompt, composedSystemPromptHash: metadata.composedSystemPromptHash,
+    signingKeyId: null, instance: null, socrataMcpUrl: null,
+    ...(withTrace ? { evidenceTrace: d.events.find((e) => e.type === 'publish_inputs')!.trace } : {}),
+  };
+}
+
+test('many prompts, the finished executed in-loop run: B states the record\'s hash, the final one, and lists the earlier ones', async () => {
+  const { adaptNotebook } = (await import(ADAPT_NOTEBOOK)) as Loose;
+  const distinct = distinctHashes(NB_LOOP);
+  const b = adaptNotebook(notebookInput(NB_LOOP, true)).disclosure.instructions;
+  assert.equal(b.hash, distinct[2], 'the finished view states a hash other than the final prompt\'s');
+  assert.equal(b.hash, skillOf(PUBLISHED.get(NB_LOOP)!.stored).systemPromptHash, 'the view and the record state different hashes');
+  assert.equal(b.text, undefined, 'the first prompt\'s text is shown under the final prompt\'s hash');
+  assert.deepEqual(b.earlierPromptHashes, distinct.slice(0, 2));
+});
+
+test('the executed in-loop run before publish_inputs: B states the metadata event\'s hash, the first prompt\'s (reported)', async () => {
+  const { adaptNotebook } = (await import(ADAPT_NOTEBOOK)) as Loose;
+  const b = adaptNotebook(notebookInput(NB_LOOP, false)).disclosure.instructions;
+  assert.equal(b.hash, distinctHashes(NB_LOOP)[0]);
+  assert.equal(b.text, promptsOf(NB_LOOP)[0]);
+});
+
+test('the finished executed all-sources run: the view\'s hash is the record\'s, its text is that prompt, and no earlier prompt is listed', async () => {
+  const { adaptNotebook } = (await import(ADAPT_NOTEBOOK)) as Loose;
+  const b = adaptNotebook(notebookInput(NB_ALL, true)).disclosure.instructions;
+  assert.equal(b.hash, skillOf(PUBLISHED.get(NB_ALL)!.stored).systemPromptHash);
+  assert.equal(b.text, finalPromptOf(NB_ALL));
+  assert.equal((b.earlierPromptHashes ?? []).length, 0);
+});
