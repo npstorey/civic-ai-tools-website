@@ -296,10 +296,10 @@ const { CONTENT_SHAPE } = (await import('@/lib/sources/copy')) as unknown as {
 };
 
 for (const [rowProfile, pkgProfile, shape, raw, slug] of [
-  ['datHere', 'datHere', 'full record (A to G envelope)', 'datHere', 'shape-dathere'],
-  ['default', 'default', 'plain record', 'default', 'shape-default'],
+  ['datHere', 'datHere', 'all seven parts (A to G) required', 'datHere', 'shape-dathere'],
+  ['default', 'default', 'not all seven parts required', 'default', 'shape-default'],
   // Absent: the shape the specification reads absence as, and small print that does not invent a value.
-  [null, 'default', 'plain record', 'not stated', 'shape-absent'],
+  [null, 'default', 'not all seven parts required', 'not stated', 'shape-absent'],
 ] as const) {
   test(`5: a record whose content profile is ${rowProfile ?? 'absent'}: "Content shape" reads "${shape}", the small print "${raw}" beside it`, async () => {
     const items = cItems(await render(slug, rowProfile, build(pkgProfile, SUBTYPE)));
@@ -310,7 +310,7 @@ for (const [rowProfile, pkgProfile, shape, raw, slug] of [
     assert.ok(CONTENT_SHAPE, 'copy.ts exports no CONTENT_SHAPE');
     assert.deepEqual(
       { label: CONTENT_SHAPE.label, datHere: CONTENT_SHAPE.datHere, default: CONTENT_SHAPE.default },
-      { label: 'Content shape', datHere: 'full record (A to G envelope)', default: 'plain record' },
+      { label: 'Content shape', datHere: 'all seven parts (A to G) required', default: 'not all seven parts required' },
       'the page\'s words are not read from copy.ts',
     );
     const small = items[at + 1];

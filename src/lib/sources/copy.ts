@@ -635,17 +635,18 @@ export const PRODUCER_PROFILE_LABEL = {
  * the record's content profile in the reader's words, on old and new records
  * alike, with the raw value as small print in a separate item. A record with
  * no content profile shows the `default` shape, as the specification reads
- * absence, and its small print says the value is not stated. Hypotheses for
- * the research check, except `label`, which the owner ruled; `datHere` and
- * `default` are the owner's own words and live only here.
+ * absence, and its small print says the value is not stated. `label`,
+ * `datHere` and `default` are the owner's rulings (`datHere` and `default`
+ * ruled 2026-10-30 21:55Z, the research check's wording) and live only here;
+ * `rawLabel` and `notStated` are hypotheses for the research check.
  */
 export const CONTENT_SHAPE = {
   /** The card's label, in place of "Content profile". */
   label: 'Content shape',
   /** `metadata.contentProfile: "datHere"`. */
-  datHere: 'full record (A to G envelope)',
+  datHere: 'all seven parts (A to G) required',
   /** `metadata.contentProfile: "default"`, or absent (spec: absence is treated as `default`). */
-  default: 'plain record',
+  default: 'not all seven parts required',
   /** The small-print item's label: the raw value, by the field's own name. */
   rawLabel: 'Content profile',
   /** The small-print item's value when the record states no content profile
