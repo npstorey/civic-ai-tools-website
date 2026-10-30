@@ -133,6 +133,13 @@ function* within(node: unknown): Generator<HostElement> {
   yield* within((el.props as { children?: unknown }).children);
 }
 
+/** A row's one drawer, "More about this source" (R9 P2). */
+function drawerOf(row: HostElement): HostElement {
+  const drawers = [...within(row)].filter((el) => el.type === 'details');
+  assert.equal(drawers.length, 1, `expected one drawer in the row, found ${drawers.length}: ${textOf(row)}`);
+  return drawers[0];
+}
+
 // --- Criterion 1: one row per source, per state and per hosting kind ------------------------
 
 for (const state of ['on', 'ask-first', 'off']) {
@@ -296,6 +303,11 @@ test('criterion 11: the panel shows each source\'s name without " MCP Server"', 
 //
 // WHAT MAKES IT ABLE TO FAIL. At the base the row reads "Published by X. Runs
 // at Y.", with no what-line and no link, and `copy.ts` has no map.
+//
+// R9 P2 (#661): the row is now name, what-line and control, with the reach,
+// logs and currency lines under "More about this source" (a `<details>`). The
+// order is read in two parts: the row opens with its name and its what-line,
+// and its drawer reads the summary, the reach sentence and the logs line.
 
 const sourceName = await load('lib/sources/source-name.ts');
 
@@ -329,7 +341,8 @@ for (const id of CONFIGURED) {
     const sentence = reachSentence(RULED_PUBLISHER[id].text, where);
     assert.ok(lines.includes(RULED_WHAT[id]), `${id}'s row has no line reading "${RULED_WHAT[id]}": ${textOf(row)}`);
     assert.ok(lines.includes(sentence), `${id}'s row has no line reading "${sentence}": ${textOf(row)}`);
-    assert.ok(textOf(row).startsWith(`${readerName(id)} ${RULED_WHAT[id]} ${sentence} Who holds its logs: `), `${id}'s row does not read name, what-line, reach sentence, logs, in that order: ${textOf(row)}`);
+    assert.ok(textOf(row).startsWith(`${readerName(id)} ${RULED_WHAT[id]} On Ask first Off `), `${id}'s row does not read name, what-line, control, in that order: ${textOf(row)}`);
+    assert.ok(textOf(drawerOf(row)).startsWith(`More about this source ${sentence} Who holds its logs: `), `${id}'s drawer does not read its summary, the reach sentence, logs, in that order: ${textOf(drawerOf(row))}`);
     const links = [...within(row)].filter((el) => el.type === 'a' && el.props.href === RULED_PUBLISHER[id].link);
     assert.equal(links.length, 1, `${id}'s row does not link ${RULED_PUBLISHER[id].link} once`);
     assert.equal(textOf(links[0]), RULED_PUBLISHER[id].text, `${id}'s link does not read the publisher's name`);
@@ -375,15 +388,17 @@ test('PL criterion 3 (panel): no map entry reads the reach sentence unlinked wit
       '/api/sources/consent': (request: Request) => (consentRoute[request.method] as (r: Request) => Promise<Response>)(request),
     });
     const panel = await mount(h(component));
-    const expected: Record<string, string> = {
-      'fixture-unmapped': `Fixture Unmapped ${reachSentence('Fixture Publisher', 'unmapped.fixture.example')} Who holds its logs: `,
-      'fixture-unstated': `Fixture Unstated ${reachUnstated('unstated.fixture.example')} Who holds its logs: `,
-      'fixture-proper': `Fixture Proper New York State's fixture records, from a fixture portal. ${reachSentence('Fixture Proper Org', 'proper.fixture.example')} Who holds its logs: `,
-      'fixture-lower': `Fixture Lower An example fixture platform, for the case test. ${reachSentence('Fixture Lower Org', 'lower.fixture.example')} Who holds its logs: `,
+    // R9 P2: the row opens with its name, its what-line (none without a map entry) and its control; the drawer holds the reach sentence.
+    const expected: Record<string, { row: string; drawer: string }> = {
+      'fixture-unmapped': { row: 'Fixture Unmapped On Ask first Off ', drawer: `More about this source ${reachSentence('Fixture Publisher', 'unmapped.fixture.example')} Who holds its logs: ` },
+      'fixture-unstated': { row: 'Fixture Unstated On Ask first Off ', drawer: `More about this source ${reachUnstated('unstated.fixture.example')} Who holds its logs: ` },
+      'fixture-proper': { row: "Fixture Proper New York State's fixture records, from a fixture portal. On Ask first Off ", drawer: `More about this source ${reachSentence('Fixture Proper Org', 'proper.fixture.example')} Who holds its logs: ` },
+      'fixture-lower': { row: 'Fixture Lower An example fixture platform, for the case test. On Ask first Off ', drawer: `More about this source ${reachSentence('Fixture Lower Org', 'lower.fixture.example')} Who holds its logs: ` },
     };
     for (const f of FIXTURE_SOURCES) {
       const row = rowOf(panel, f.sourceId);
-      assert.ok(textOf(row).startsWith(expected[f.sourceId]), `${f.sourceId}: expected the row to start "${expected[f.sourceId]}": ${textOf(row)}`);
+      assert.ok(textOf(row).startsWith(expected[f.sourceId].row), `${f.sourceId}: expected the row to start "${expected[f.sourceId].row}": ${textOf(row)}`);
+      assert.ok(textOf(drawerOf(row)).startsWith(expected[f.sourceId].drawer), `${f.sourceId}: expected the drawer to start "${expected[f.sourceId].drawer}": ${textOf(drawerOf(row))}`);
       const named = [...within(row)].filter((el) => el.type === 'a' && textOf(el) === f.publisher);
       const entry = FIXTURE_ENTRIES[f.sourceId];
       if (entry) {
