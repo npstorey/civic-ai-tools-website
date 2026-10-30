@@ -22,11 +22,13 @@ import {
   generateQueryIntentLabel,
   generateToolReason,
   getDatasetName,
+  loadedSourceName,
   reasonWithoutIdentifier,
   searchSubject,
   type ConsentPausePayload,
 } from '../streaming.ts';
 import { describeQueryOutcome, secondsText } from '../evidence/query-step.ts';
+import { LOAD_STEP_LABEL } from '../sources/copy.ts';
 // Type-only: erased at compile time. The kind vocabulary is declared once,
 // beside the table that turns it into reader-facing copy.
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
@@ -238,9 +240,37 @@ const OPERATION_WORDS: Readonly<Record<string, string>> = {
   metadata: 'Understanding dataset structure',
   query: 'Querying data',
   metrics: 'Checking dataset statistics',
-  // R8 W2 (consent 1, LAYOUT-WEB's G4c record): the in-loop load step.
-  load_source: 'Loading a data source',
+  // The in-loop load step reads `loadStepLabel` below (R10 P1), which names
+  // the source; it replaced R8 W2's "Loading a data source".
 };
+
+/** The operation type of an in-loop load (`LOAD_SOURCE_OPERATION_TYPE` in the loop core). */
+const LOAD_OPERATION = 'load_source';
+
+const isLoadStart = (entry: ProgressLogEntry): boolean =>
+  entry.phase === 'tool_start' && entryOperationType(entry) === LOAD_OPERATION;
+
+/**
+ * A load step's label (R10 P1, G0 D1 = A): the model is choosing, or chose,
+ * the sources its loads named, open or closed. Each name is read from the
+ * load's own arguments (`loadedSourceName`, by the alias), never from the
+ * message text. A load with no arguments (the executed run's live events
+ * carry none) or an alias no source has leaves every name out: the step
+ * states the choice, without a name.
+ */
+function loadStepLabel(entries: ProgressLogEntry[], open: boolean): string {
+  const loads = entries.filter(isLoadStart);
+  const named = loads.map((entry) => loadedSourceName(entry.args ?? {}));
+  const names = named.every((name): name is string => name !== undefined) ? [...new Set(named as string[])] : [];
+  const count = names.length > 0 ? names.length : loads.length;
+  return open ? LOAD_STEP_LABEL.open(names, count) : LOAD_STEP_LABEL.closed(names, count);
+}
+
+/** The label of a step still open: a load step's own, else `OPEN_STEP_LABEL`. */
+function openStepLabel(entries: ProgressLogEntry[]): string {
+  const first = entries.find((entry) => entry.phase === 'tool_start');
+  return first !== undefined && isLoadStart(first) ? loadStepLabel(entries, true) : OPEN_STEP_LABEL;
+}
 
 /**
  * The value a record carries for an operation its call's name does not state
@@ -268,6 +298,7 @@ export function generateGroupLabel(entries: ProgressLogEntry[], previousEntries?
     // reads "Understanding dataset structure", not "Calling <name>". A type
     // these labels have no words for claims nothing.
     const operationType = entryOperationType(named);
+    if (operationType === LOAD_OPERATION) return loadStepLabel(toolStarts, false);
     if (operationType !== undefined && operationType !== NO_STATED_OPERATION) {
       return OPERATION_WORDS[operationType] ?? OPEN_STEP_LABEL;
     }
@@ -333,8 +364,8 @@ function totalToolDuration(entries: ProgressLogEntry[]): number | undefined {
  * Fold one progress event into the steps. `now` stamps the entry the event
  * becomes (the caller's clock; nothing here reads one).
  *
- *   - `tool_start` opens the iteration's step (labelled `OPEN_STEP_LABEL`) or
- *     joins it;
+ *   - `tool_start` opens the iteration's step (labelled `OPEN_STEP_LABEL`, or,
+ *     for a load, the load step's open label, R10 P1) or joins it;
  *   - `tool_complete` carries its duration and outcome onto the `tool_start`
  *     entry it pairs to, by iteration and message;
  *   - `tool_result` appends the outcome's narration to the step;
@@ -427,6 +458,7 @@ export function applyProgressEvent(log: StepLog, event: StepProgressEvent, now: 
       newGroups.push(group);
     }
     group.entries.push(entry);
+    if (!group.isComplete) group.label = openStepLabel(group.entries);
     newLog.push(entry);
     return { progressLog: newLog, progressGroups: newGroups };
   }
