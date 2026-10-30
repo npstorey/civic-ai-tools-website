@@ -40,6 +40,7 @@ import ProvenanceGraphSection from '@/components/evidence/ProvenanceGraphSection
 // builders in lib so the SHAPE is unit-testable — including what it omits
 // (#256: no publication date is stored, so none is asserted).
 import { buildEvidenceJsonLd, buildEvidenceCitationTags } from '@/lib/evidence/page-metadata';
+import { producerProfileLink } from '@/lib/evidence/producer-profile-label';
 import { isBlobRef, type BlobRef } from '@/lib/evidence/blob-ref';
 // The W3 fix's fetch-once-then-verify, shared with section B's system prompt (R10 P1b).
 import { resolveBlobText } from '@/lib/evidence/blob-text';
@@ -544,9 +545,7 @@ export default async function EvidencePage({ params }: PageProps) {
                       the canonical package object — not a DB column. Absent on
                       pre-v0.1 packages, which simply omit these. */}
                   {renderPkg?.producerProfile && (
-                    <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                      Producer profile: {renderPkg.producerProfile}
-                    </span>
+                    <ProducerProfileLabel producerProfile={renderPkg.producerProfile} />
                   )}
                   {renderPkg?.type && (
                     <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
@@ -639,5 +638,25 @@ export default async function EvidencePage({ params }: PageProps) {
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * The Producer Profile label (R10 P5, hub ADR-0038). The subtype this site
+ * declares reads its display name, linked to its guidance bundle; any other
+ * value prints as before.
+ */
+function ProducerProfileLabel({ producerProfile }: { producerProfile: string }) {
+  const link = producerProfileLink(producerProfile);
+  return (
+    <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+      {link ? (
+        <a href={link.href} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+          {link.text}
+        </a>
+      ) : (
+        <>Producer profile: {producerProfile}</>
+      )}
+    </span>
   );
 }
