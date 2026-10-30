@@ -124,7 +124,19 @@ function exported<T>(name: string): T {
 }
 const fromSpans = (input: Parameters<FromSpans>[0]) => exported<FromSpans>('whereItWentFromSpans')(input);
 const fromCalls = (input: Parameters<FromCalls>[0]) => exported<FromCalls>('whereItWentFromCalls')(input);
-const fromPackage = (pkg: unknown, served: FlowsStatement | null) => exported<FromPackage>('whereItWentFromPackage')(pkg, served);
+/**
+ * A record's model without `chooser` (R10 P1), which every record now carries:
+ * this file pins the rows, and `where-it-went-chooser.test.ts` the chooser.
+ * `fromPackageWithChooser` keeps it, for the one test here that reads it.
+ */
+const fromPackageWithChooser = (pkg: unknown, served: FlowsStatement | null) => exported<FromPackage>('whereItWentFromPackage')(pkg, served);
+const fromPackage = (pkg: unknown, served: FlowsStatement | null) => {
+  const model = fromPackageWithChooser(pkg, served) as (WhereModel & { chooser?: unknown }) | null;
+  if (model === null) return null;
+  const { chooser, ...rows } = model;
+  void chooser;
+  return rows;
+};
 
 // --- The reasons (§2), in their order of precedence --------------------------------
 
@@ -789,7 +801,7 @@ test('criterion 3: the record adapter hands the view the builder\'s model, from 
   const adapt = adaptRecord as unknown as (input: Record<string, unknown>) => Record<string, unknown>;
   for (const served of [SERVED_78, differingStatement()]) {
     const view = adapt({ stored: D887C1, resolution: null, row, instance: 'records.fixture-w4.example', servedStatement: served });
-    assert.deepEqual(view.whereItWent, fromPackage(D887C1, served));
+    assert.deepEqual(view.whereItWent, fromPackageWithChooser(D887C1, served));
   }
   const { trace: _trace, ...traceless } = D887C1;
   void _trace;
@@ -858,5 +870,14 @@ test('criterion 4: the service label is never a place, and no row uses the words
     for (const retired of ['published by', 'tool arguments', 'question text and tool results', 'returned no data', 'flows statement']) {
       assert.ok(!text.includes(retired), `${label}: the model carries "${retired}"`);
     }
+  }
+});
+
+// --- R10 P1 (#682): every record carries what chose its sources -----------------------------
+
+test('R10 P1: each saved record, none of which states routing, carries the chooser "not recorded"', () => {
+  for (const [name, pkg] of [['d887c1', D887C1], ['397939', R397939], ['2f32d9', R2F32D9]] as const) {
+    const model = fromPackageWithChooser(pkg, null) as (WhereModel & { chooser?: unknown }) | null;
+    assert.deepEqual(model?.chooser, { method: 'not-recorded' }, name);
   }
 });

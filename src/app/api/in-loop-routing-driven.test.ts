@@ -532,7 +532,7 @@ test('criterion 5: an all-sources record states neither key, and differs from th
 
 /** The record adapter and the chooser's lines, by specifiers typed `string`, so the red commit type-checks. */
 const ADAPT_RECORD: string = '../../components/answer-view/adapt-record.ts';
-const WHERE_IT_WENT: string = '../../lib/flows/where-it-went.ts';
+const SOURCE_CHOOSER: string = '../../lib/flows/source-chooser.ts';
 const COPY: string = '../../lib/sources/copy.ts';
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -551,13 +551,13 @@ test('R10 P1 P-d: the packaged in-loop record\'s routing.version and its router 
 
 test('R10 P1 criterion 4: adaptRecord over the packaged in-loop record shows the chooser line and the card', async () => {
   const { SOURCE_CHOOSER_TEXT: T, SOURCE_CHOOSER_CARD: CARD } = (await import(COPY)) as Loose;
-  const { chooserLines } = (await import(WHERE_IT_WENT)) as Loose;
+  const { chooserLines } = (await import(SOURCE_CHOOSER)) as Loose;
   const model = await recordView(IN_LOOP);
   const composition = packageOf(IN_LOOP).pkg.extensions?.['org.civicaitools.composition'] as Json;
   const environment = model.disclosure.environment as Array<{ label: string; value: string; mono?: boolean }>;
   assert.deepEqual(environment.find((i) => i.label === CARD.label), { label: CARD.label, value: CARD.inLoop(ROUTER_VERSION) });
   assert.deepEqual(environment.find((i) => i.label === CARD.definitionLabel), { label: CARD.definitionLabel, value: (composition.definitionHash as string).slice(0, 12), mono: true });
-  assert.equal(typeof chooserLines, 'function', 'where-it-went.ts exports no chooserLines');
+  assert.equal(typeof chooserLines, 'function', 'source-chooser.ts exports no chooserLines');
   assert.deepEqual(chooserLines(model.whereItWent?.chooser), [
     T.inLoop,
     `${T.loaded}Socrata.`,
@@ -568,11 +568,11 @@ test('R10 P1 criterion 4: adaptRecord over the packaged in-loop record shows the
 
 test('R10 P1 criterion 4: adaptRecord over the packaged all-sources record shows "not recorded" in both places', async () => {
   const { SOURCE_CHOOSER_TEXT: T, SOURCE_CHOOSER_CARD: CARD } = (await import(COPY)) as Loose;
-  const { chooserLines } = (await import(WHERE_IT_WENT)) as Loose;
+  const { chooserLines } = (await import(SOURCE_CHOOSER)) as Loose;
   const model = await recordView(UNSET);
   const environment = model.disclosure.environment as Array<{ label: string; value: string }>;
   assert.deepEqual(environment.find((i) => i.label === CARD.label), { label: CARD.label, value: CARD.notRecorded });
   assert.equal(environment.find((i) => i.label === CARD.definitionLabel), undefined);
-  assert.equal(typeof chooserLines, 'function', 'where-it-went.ts exports no chooserLines');
+  assert.equal(typeof chooserLines, 'function', 'source-chooser.ts exports no chooserLines');
   assert.deepEqual(chooserLines(model.whereItWent?.chooser), [T.notRecorded]);
 });

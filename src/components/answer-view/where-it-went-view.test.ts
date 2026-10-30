@@ -205,10 +205,17 @@ function disclosure(html: string): { start: number; end: number } {
 const unescape = (text: string) =>
   text.replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
-/** The section: its markup, and its text with tags removed. */
+/**
+ * The section: its markup, and its text with tags removed. The text leaves out
+ * the chooser line (R10 P1, `data-part="where-it-went-chooser"`), which says
+ * "not recorded" of what chose the sources on every record without `routing`;
+ * this file reads the rows, and `where-it-went-chooser.test.ts` reads that line.
+ */
 function section(html: string): { start: number; end: number; markup: string; flat: string } {
   const p = part(html, 'where-it-went');
-  return { ...p, flat: unescape(p.markup.replace(/<!-- -->/g, '').replace(/<[^>]*>/g, '')) };
+  const chooser = /<div\b[^>]*\bdata-part="where-it-went-chooser"[^>]*>/.exec(p.markup);
+  const rows = chooser === null ? p.markup : p.markup.slice(0, chooser.index) + p.markup.slice(elementEnd(p.markup, chooser.index, 'div'));
+  return { ...p, flat: unescape(rows.replace(/<!-- -->/g, '').replace(/<[^>]*>/g, '')) };
 }
 
 const RETIRED = ['published by', 'tool arguments', 'question text and tool results', 'returned no data', 'flows statement'];
@@ -705,4 +712,30 @@ test('criterion 3: a package with no trace renders no section; a traced one rend
   const html = renderRecord(traceless, SERVED_78, 'traceless-w4');
   assert.ok(html.includes('data-part="status-row"'), 'premise: the record rendered');
   assert.ok(!html.includes('data-part="where-it-went"') && !html.includes(HEADING), 'a traceless record renders the section');
+});
+
+// --- R10 P1 (#682): the executed run hands its trace to the section ----------------------------
+//
+// The chooser line is read from the run's trace (`publish_inputs`), which
+// `NotebookOutput` now hands `ChatNotebookOutput` beside `flows`. Driven
+// through the real wrapper: a trace whose root span states the in-loop method
+// opens the section with the chooser line; the same state with the trace not
+// yet arrived opens it with the rows. The words are `where-it-went-chooser.test.ts`'s.
+
+const { SOURCE_CHOOSER_TEXT } = (await import('@/lib/sources/copy')) as unknown as { SOURCE_CHOOSER_TEXT: { inLoop: string; notRecorded: string } };
+
+test('R10 P1: the executed run, through NotebookOutput, opens "Where this question went" with the chooser line read from its trace', () => {
+  const attr = (key: string, value: string) => ({ key, value: { stringValue: value } });
+  const trace = { resourceSpans: [{ scopeSpans: [{ spans: [{ name: 'analysis', spanId: 'r0', attributes: [
+    attr('analysis.routing', JSON.stringify({ method: 'in-loop', version: '0.6.0' })),
+    attr('analysis.sources_offered', JSON.stringify([{ sourceId: 'socrata', alias: 'socrata', reason: 'selected' }])),
+  ] }] }] }] };
+  const opening = (state: Record<string, unknown>) => {
+    const html = renderRun(state, instanceWith(ANSWER_FIRST));
+    const s = part(html, 'where-it-went').markup;
+    return unescape(s.slice(s.indexOf('</summary>') + '</summary>'.length).replace(/<!-- -->/g, '').replace(/<[^>]*>/g, ''));
+  };
+  assert.ok(opening({ ...RUN_WITH, evidenceTrace: trace }).startsWith(SOURCE_CHOOSER_TEXT.inLoop), 'the in-loop trace did not reach the section');
+  const before = opening({ ...RUN_WITH, evidenceTrace: null });
+  for (const line of [SOURCE_CHOOSER_TEXT.inLoop, SOURCE_CHOOSER_TEXT.notRecorded]) assert.ok(!before.includes(line), `before its trace the section says "${line}"`);
 });

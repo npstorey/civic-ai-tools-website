@@ -1893,6 +1893,9 @@ test('W4 P1 (9) the citation block reads "Record: <title> [Published: <date>] <u
 // name: its (9) changed the citation block's "[Verified: " to "[Published: "
 // (ruling D1), which the re-capture now carries as rendered. Re-captured again
 // for row 23 (a duration in seconds): that diff is the duration strings alone.
+// Re-captured again for R10 P1 (#682): the diff is one card inserted at the end
+// of section C, "Sources chosen by: not recorded" (neither record states
+// routing).
 
 const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
 
