@@ -119,13 +119,37 @@ async function resolveSlug(title: string, packageHash: string): Promise<string> 
 
 // ADR-0004: contentProfile values. Orthogonal to captureMethod. Optional
 // at the route layer; absence is equivalent to `'default'`.
+/**
+ * The 400 for a producerProfile / contentProfile pair the §8.1.1 invariant
+ * refuses: the rule `isContentProfileConsistent` applies (verify-core 0.15.0,
+ * `dist/profiles.js`: a row admits what its `admits` lists; a subtype with no
+ * row admits "datHere" when it begins with "ai-assisted-analysis/datHere" and
+ * "default" when it does not), worded as `docs/api/records-publish.md` states
+ * it. The two values received follow it.
+ */
+const INCONSISTENT_PROFILES_ERROR =
+  'producerProfile and contentProfile are inconsistent (spec §8.1.1). contentProfile (absent is "default") must be one the producerProfile subtype admits: "ai-assisted-analysis/datHere" admits "datHere"; "ai-assisted-analysis/civicaitools-v1" admits "datHere" and "default"; any other subtype admits "datHere" if it begins with "ai-assisted-analysis/datHere", and "default" if it does not.';
+
+/** The longest received value an error quotes, after control characters are removed. */
+const RECEIVED_VALUE_MAX = 120;
+
+/**
+ * A value the client sent, quoted back in an error: control characters (C0,
+ * DEL and C1) removed, then bounded to 120 characters. `absent` when it was
+ * not sent. The values are the client's own input.
+ */
+function receivedValue(value: unknown): string {
+  if (value === undefined || value === null) return 'absent';
+  return `"${String(value).replace(/[\u0000-\u001f\u007f-\u009f]/g, '').slice(0, RECEIVED_VALUE_MAX)}"`;
+}
+
 const VALID_CONTENT_PROFILES: readonly ContentProfile[] = [
   'default',
   'datHere',
 ] as const;
 
 interface PublishRequest {
-  /** OTel trace OR a BlobRef. See `docs/api/evidence-publish.md` for the
+  /** OTel trace OR a BlobRef. See `docs/api/records-publish.md` for the
    *  blob-reference contract. */
   trace: Record<string, unknown> | BlobRef;
   prompt: string;
@@ -268,7 +292,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error:
-              'producerProfile and contentProfile are inconsistent: contentProfile must be one the producerProfile subtype admits (spec §8.1.1). ai-assisted-analysis/datHere admits "datHere"; ai-assisted-analysis/civicaitools-v1 admits "datHere" and "default"; any other subtype admits "datHere" iff it begins with "ai-assisted-analysis/datHere".',
+              `${INCONSISTENT_PROFILES_ERROR} Received: producerProfile ${receivedValue(producerProfile)}, contentProfile ${receivedValue(body.contentProfile)}.`,
           },
           { status: 400 },
         );
@@ -547,7 +571,7 @@ export async function POST(request: NextRequest) {
     );
     if (auth.method === 'cookie') {
       // Nudge toward programmatic device-flow tokens for non-browser
-      // clients. See docs/api/evidence-publish.md#authentication.
+      // clients. See docs/api/records-publish.md#authentication.
       response.headers.set('X-Auth-Deprecated', 'cookie');
       // #503: the header above already tells this caller which path it took.
       // The account id was the only thing this line added, and it is the one

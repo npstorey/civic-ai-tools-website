@@ -217,6 +217,10 @@ const contentProfileOf = (pkg: Json | null) => (pkg?.metadata as Json | undefine
 
 // --- Criterion 1: the invariant is read from the subtype's table row ---------------
 
+/** The rule the 400 states (fix round 1, W5), as `docs/api/records-publish.md` and
+ *  verify-core 0.15.0's `isContentProfileConsistent` (`dist/profiles.js`) state it. */
+const RULE = 'producerProfile and contentProfile are inconsistent (spec §8.1.1). contentProfile (absent is "default") must be one the producerProfile subtype admits: "ai-assisted-analysis/datHere" admits "datHere"; "ai-assisted-analysis/civicaitools-v1" admits "datHere" and "default"; any other subtype admits "datHere" if it begins with "ai-assisted-analysis/datHere", and "default" if it does not.';
+
 test('1: a datHere record declaring ai-assisted-analysis/civicaitools-v1 is published (200), and check #16 reads it ok', async () => {
   const result = await post({ contentProfile: 'datHere', producerProfile: SUBTYPE });
   assert.equal(result.status, 200, `the route refused it: ${JSON.stringify(result.body)}`);
@@ -239,7 +243,12 @@ for (const [label, fields] of [
   test(`1: an inconsistent pair is still refused (400): ${label}`, async () => {
     const result = await post(fields);
     assert.equal(result.status, 400, `the route accepted an inconsistent pair: ${JSON.stringify(result.body)}`);
-    assert.match(String(result.body.error), /inconsistent/, 'the 400 is not the consistency refusal');
+    const posted0 = fields as { producerProfile: string; contentProfile?: string };
+    assert.equal(
+      result.body.error,
+      `${RULE} Received: producerProfile "${posted0.producerProfile}", contentProfile ${posted0.contentProfile === undefined ? 'absent' : `"${posted0.contentProfile}"`}.`,
+      'the 400 does not state the rule and the two values received',
+    );
     assert.equal(result.pkg, null, 'a package was stored for a refused publish');
     const posted = fields as { producerProfile: string; contentProfile?: string };
     assert.equal(isContentProfileConsistent(posted.producerProfile, posted.contentProfile ?? 'default'), false, 'premise: verify-core reads the pair as inconsistent too');
@@ -332,3 +341,14 @@ for (const [contentProfile, expected] of [['default', undefined], ['datHere', DA
     assert.equal(result.pkg?.producerProfile, expected);
   });
 }
+
+test('1: the 400 quotes a received value without control characters, bounded to 120 characters', async () => {
+  const long = `${DATHERE_SUBTYPE}\u0007\n\u001b[31m\u0085${'x'.repeat(200)}`;
+  const result = await post({ contentProfile: 'default', producerProfile: long });
+  assert.equal(result.status, 400, `the route accepted an inconsistent pair: ${JSON.stringify(result.body)}`);
+  const quoted = /Received: producerProfile "([^"]*)", contentProfile "default"\.$/.exec(String(result.body.error))?.[1];
+  assert.ok(quoted !== undefined, `the 400 does not quote the values received: ${String(result.body.error)}`);
+  assert.doesNotMatch(quoted, /[\u0000-\u001f\u007f-\u009f]/, 'a control character reached the message');
+  assert.equal(quoted.length, 120, 'the quoted value is not bounded to 120 characters');
+  assert.equal(quoted, `${DATHERE_SUBTYPE}[31m${'x'.repeat(200)}`.slice(0, 120), 'the quoted value is not the received one, control characters removed, then bounded');
+});
