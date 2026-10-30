@@ -320,3 +320,73 @@ export const WHERE_IT_WENT_REASONS = {
   notAsked: 'Ask first: not asked for this question.',
   notSetUp: 'Not set up on this site.',
 } as const;
+
+/**
+ * What chose a run's sources (R10 P1, #682; the anchor's D7 = A, read
+ * literally). Hypotheses, read against `docs/design-principles.md` before the
+ * gate. The chooser line opens "Where this question went", and the card
+ * "Sources chosen by" sits in "Model + environment"; both read the record's
+ * `routing` (on a run, the trace's `analysis.routing`) and nothing else
+ * decides the method.
+ *   - `inLoop`, then the three groups, each by the sources' reader names: the
+ *     sources loaded; asked for and not loaded, each with its reason in
+ *     `WHERE_IT_WENT_REASONS`' words; never asked for. An empty group says
+ *     `none`.
+ *   - `notRecorded`: the record has no `routing` key (every all-sources run,
+ *     and every record published before in-loop routing).
+ *   - `allSources`: only for a record that states the method `all-sources`.
+ *   - `unrecognized`: a method this site has no sentence for. It is never
+ *     read as either of the two above (a gate question).
+ * Read by `src/components/answer-view/WhereItWent.tsx` and the three adapters.
+ */
+export const SOURCE_CHOOSER_TEXT = {
+  inLoop: 'The model chose which sources to use.',
+  loaded: 'Loaded: ',
+  askedNotLoaded: 'Asked for, not loaded: ',
+  neverAsked: 'Not asked for: ',
+  none: 'none',
+  /** Between two names in a group: a name may itself hold a comma. */
+  separator: '; ',
+  /** Between a source asked for and not loaded, and its reason. */
+  reasonSeparator: ' — ',
+  notRecorded: 'What chose these sources is not recorded.',
+  allSources: 'Every configured source was offered from the first request.',
+  unrecognized: (method: string) => `What chose these sources is recorded as “${method}”, which this site does not describe.`,
+} as const;
+
+/** The card in "Model + environment" (R10 P1, #682): the same fact as the chooser line. Hypotheses. */
+export const SOURCE_CHOOSER_CARD = {
+  label: 'Sources chosen by',
+  inLoop: (version: string | null) => (version ? `the model, through the civic router ${version}` : 'the model'),
+  notRecorded: 'not recorded',
+  allSources: 'none chosen: every configured source was offered from the first request',
+  unrecognized: (method: string) => `recorded as “${method}”`,
+  /** The small print: the harness definition's hash, its first twelve characters, as "Skill hash" is shown. */
+  definitionLabel: 'Harness definition',
+} as const;
+
+/** The run's portal, renamed from "Data portal" (R10 P1, #682): shown only when the run holds one. Hypothesis. */
+export const RUN_PORTAL_LABEL = 'Socrata portal';
+
+/**
+ * A load step's label (R10 P1, G0 D1 = A): the model chose the source, while
+ * the step is open and after it closes. The names are the sources' reader
+ * names from each load's alias (`loadedSourceName`); a load with no alias, or
+ * an alias no source has, is stated without a name, and nothing is read from
+ * the message text. Hypotheses.
+ */
+export const LOAD_STEP_LABEL = {
+  open: (names: readonly string[], count: number) =>
+    names.length === 0
+      ? (count > 1 ? 'The model is choosing sources' : 'The model is choosing a source')
+      : `The model is choosing ${names.length > 1 ? 'sources' : 'a source'}: ${nameList(names)}`,
+  closed: (names: readonly string[], count: number) =>
+    names.length === 0
+      ? (count > 1 ? 'The model chose sources' : 'The model chose a source')
+      : `The model chose ${names.length > 1 ? 'sources' : 'a source'}: ${nameList(names)}`,
+} as const;
+
+/** "A", "A and B", "A, B and C". */
+function nameList(names: readonly string[]): string {
+  return names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
