@@ -12,6 +12,12 @@
 // privacy page: "Data Commons", never "Google Data Commons", and never with
 // " MCP Server" (T13).
 //
+// R9 P3 (#680; #660, D2 = A of the UX pass) replaced the card's R6 sentences
+// with its short layer above the buttons and its recipients in a disclosure
+// below them; the card's tests here read R9 P3's words, and one of R6's
+// replaced wordings, "at any time", is allowed back on the card only, where
+// that ruling put it (`RULED_BACK_ON_THE_CARD`).
+//
 // S2 (criterion 2). With the operator's statement set, the card's endpoint
 // row keeps "what it keeps is for this site's operator to state." and gives
 // the statement after it, in that order. The D3 test in
@@ -131,10 +137,25 @@ const { ENDPOINT_NO_TRAINING } = await load('lib/sources/copy.ts');
 
 // --- The ruled texts, written out (#632, amendment 2) ---------------------------------------------
 
-const T1 = 'A data source gets the searches the model writes, which can include words from your question.';
+/** R6's card-only sentences, which R9 P3 (#660) replaced with the short layer below: none renders on the card. */
+const R6_CARD_ONLY = [
+  'A data source gets the searches the model writes, which can include words from your question.',
+  "After you allow, you can set each source to On, Ask first or Off in the panel beside the question box, and withdraw consent there, or on your dashboard's Sources tab if you are signed in.",
+  'After you allow, you can set each source to On, Ask first or Off in the panel beside the question box, and withdraw consent there.',
+  'To answer, this site sends your question to a model endpoint, the service that runs the model.',
+  'Each recipient is listed below with what it says it keeps.',
+];
+/** T2 on the privacy page; the card's own timing sentence is R9 P3's (`CARD_T2`). */
 const T2 = 'Your question is not sent beyond this site before you answer.';
-const T3_CARD_DB = "After you allow, you can set each source to On, Ask first or Off in the panel beside the question box, and withdraw consent there, or on your dashboard's Sources tab if you are signed in.";
-const T3_CARD_NO_DB = 'After you allow, you can set each source to On, Ask first or Off in the panel beside the question box, and withdraw consent there.';
+// R9 P3 (#680; #660): the card's short layer as ruled on 2026-10-30, T1, T2, T5 and T7 of that ruling.
+const CARD_T1 = 'To answer, this site sends your question to a model service, and sends the searches the model writes to the data sources that are On.';
+// Amendment 1: the card's T2 is the privacy page's ruled sentence, so the two say the same.
+const CARD_T2 = T2;
+const CARD_T5_DB = "You can set each source to On, Ask first or Off beside the question box at any time. You can withdraw consent there, or on your dashboard's Sources tab if you are signed in.";
+const CARD_T5_NO_DB = 'You can set each source to On, Ask first or Off beside the question box at any time. You can withdraw consent there.';
+const CARD_T7 = '"Allow" turns on the sources shown as On and sends your question. "Not now" sends nothing.';
+/** R6's replaced wording that R9 P3's ruling puts back on the card, and only there: "at any time" (T5). */
+const RULED_BACK_ON_THE_CARD = ['at any time'];
 const T3_TEXT1 = 'After you allow, you can set each data source to On, Ask first or Off beside the question box.';
 const T4_EACH = [
   "Each source's row gives who publishes its connector, where it runs, who holds its logs and what they say they keep, and how current its data is.",
@@ -192,8 +213,8 @@ const NAME: Record<string, string> = {
   'nyc-charter': 'NYC Charter, Laws and Rules',
 };
 
-function assertNoneReplaced(text: string, where: string): void {
-  for (const old of [...REPLACED, ...NAMES_REPLACED]) {
+function assertNoneReplaced(text: string, where: string, except: readonly string[] = []): void {
+  for (const old of [...REPLACED, ...NAMES_REPLACED].filter((o) => !except.includes(o))) {
     assert.ok(!text.includes(old), `${where} still renders "${old}": …${text.slice(Math.max(0, text.indexOf(old) - 120), text.indexOf(old) + 120)}…`);
   }
 }
@@ -268,58 +289,57 @@ const CARD_CONFIGS: Array<{ name: string; config: Config }> = [
 ];
 
 for (const { name, config } of CARD_CONFIGS) {
-  test(`criterion 1, the card (${name}): T1, T2, T3, T7, T8, T11 and T13 render as ruled, each in its place`, async () => {
+  test(`criterion 1, the card (${name}): R9 P3's T1, T2, T5 and T7 above the buttons, T8 below, T11 and T13 in the disclosure`, async () => {
     await under(config, async () => {
       const statement = await buildFlowsStatement();
       const card = await mountCard();
       const text = card.text();
+      const buttons = text.indexOf('Allow Not now');
+      assert.ok(buttons > 0, `premise: the card has its buttons: ${text.slice(0, 300)}`);
       const recipients = card.elements().filter((el) => typeof el.props['data-recipient'] === 'string');
       assert.ok(recipients.length > 0, `premise: the card lists its recipients: ${text.slice(0, 300)}`);
       const listStart = text.indexOf(textOf(recipients[0]));
-      const lastLine = textOf(recipients[recipients.length - 1]);
-      const listEnd = text.indexOf(lastLine) + lastLine.length;
-      const buttons = text.indexOf('Allow Not now');
-      assert.ok(listStart > 0 && buttons > listEnd, `premise: the card reads list, then buttons: ${text.slice(0, 300)}`);
+      assert.ok(listStart > buttons, `the recipient list is not below the buttons: ${text.slice(0, 300)}`);
 
-      for (const [label, sentence] of [['T1', T1], ['T2', T2]] as const) {
+      for (const [label, sentence] of [['T1', CARD_T1], ['T2', CARD_T2], ['T5', CARD_T5_DB], ['T7', CARD_T7]] as const) {
         const at = text.indexOf(sentence);
-        assert.ok(at >= 0 && at < listStart, `${label} does not render above the recipient list: "${sentence}" in ${text.slice(0, listStart)}`);
+        assert.ok(at >= 0 && at < buttons, `${label} does not render above the buttons: "${sentence}" in ${text.slice(0, buttons)}`);
       }
-      const t3 = text.indexOf(T3_CARD_DB);
-      assert.ok(t3 > listEnd && t3 < buttons, `T3 (with a database) does not render after the list and above the buttons: ${text.slice(listEnd, buttons)}`);
+      assert.ok(text.indexOf(CARD_T1) < text.indexOf(CARD_T2) && text.indexOf(CARD_T5_DB) < text.indexOf(CARD_T7), 'the short layer is out of order');
+      for (const old of R6_CARD_ONLY) assert.ok(!text.includes(old), `the card still renders R6's "${old}"`);
       assert.ok(!text.includes('To withdraw consent, use the panel'), 'the card still adds the privacy page\'s withdraw sentence beside its own');
-      const t7 = text.indexOf(T7);
-      assert.ok(t7 > listEnd && t7 < buttons, `T7 does not render beside the buttons: ${text.slice(listEnd, buttons)}`);
       assert.ok(text.indexOf(T8_DB) > buttons, `T8 (with a database) does not render below the buttons: ${text.slice(buttons)}`);
 
-      // T11: the operator line on Socrata's row.
+      // T11: the operator line on Socrata's line, inside the disclosure.
       const operator = statement.sources.flatMap((s: Mod) => s.recipients.flatMap((r: Mod) => r.keptBy)).find((k: Mod) => k.keeps === 'operator-states');
       assert.ok(operator, 'premise: the reference configuration has an operator-states line on a source');
-      assert.ok(text.includes(T11(operator.holder)), `T11 does not render on the card: "${T11(operator.holder)}"`);
+      assert.ok(text.indexOf(T11(operator.holder)) > buttons, `T11 does not render in the disclosure: "${T11(operator.holder)}"`);
 
       // T13: each source's line is labelled by its one name.
       for (const source of statement.sources as Mod[]) {
-        const line = recipients.find((el) => source.recipients.some((r: Mod) => r.id === el.props['data-recipient']));
+        const line = card.elements().find((el) => el.props['data-recipient-group'] === source.sourceId);
         assert.ok(line, `premise: the card lists ${source.sourceId}`);
-        assert.ok(textOf(line!).startsWith(`${NAME[source.sourceId]} (`), `the card names ${source.sourceId} "${textOf(line!).split(' (')[0]}", not "${NAME[source.sourceId]}"`);
+        // `textOf` reads "<strong>Name</strong>: " as "Name : "; the space is the harness's.
+        const read = textOf(line!).replace(/\s+:/, ':');
+        assert.ok(read.startsWith(`${NAME[source.sourceId]}: `), `the card names ${source.sourceId} "${read.split(': ')[0]}", not "${NAME[source.sourceId]}"`);
       }
-      assertNoneReplaced(readWithLinks(card), `the card (${name})`);
+      assertNoneReplaced(readWithLinks(card), `the card (${name})`, RULED_BACK_ON_THE_CARD);
       card.unmount();
     });
   });
 }
 
-test('criterion 1, the card without a database: T3 and T8 render in their no-account forms', async () => {
+test('criterion 1, the card without a database: T5 and T8 render in their no-account forms', async () => {
   await under({ db: false }, async () => {
     const card = await mountCard();
     const text = card.text();
     const buttons = text.indexOf('Allow Not now');
-    const t3 = text.indexOf(T3_CARD_NO_DB);
-    assert.ok(t3 >= 0 && t3 < buttons, `T3 (without a database) does not render above the buttons: ${text.slice(0, buttons)}`);
-    assert.ok(!text.includes(T3_CARD_DB), 'without a database, the card names the dashboard');
+    const t5 = text.indexOf(CARD_T5_NO_DB);
+    assert.ok(t5 >= 0 && t5 < buttons, `T5 (without a database) does not render above the buttons: ${text.slice(0, buttons)}`);
+    assert.ok(!text.includes(CARD_T5_DB), 'without a database, the card names the dashboard');
     assert.ok(text.indexOf(T8_NO_DB) > buttons, `T8 (without a database) does not render below the buttons: ${text.slice(buttons)}`);
     assert.ok(!text.includes(T8_DB), 'without a database, the card speaks of an account');
-    assertNoneReplaced(readWithLinks(card), 'the card (without a database)');
+    assertNoneReplaced(readWithLinks(card), 'the card (without a database)', RULED_BACK_ON_THE_CARD);
     card.unmount();
   });
 });

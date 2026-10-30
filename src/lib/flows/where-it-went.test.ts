@@ -881,3 +881,19 @@ test('R10 P1: each saved record, none of which states routing, carries the choos
     assert.deepEqual(model?.chooser, { method: 'not-recorded' }, name);
   }
 });
+
+// --- R9 P3 (#680; #660): the model's role label is "Model service" --------------------------------
+
+test('R9 P3: the model row is named "Model service", and so is its recipient line, on the run side and from a record', () => {
+  // Written out, not read from `roleLabel`: the expectations above derive from it, so they move with it.
+  const run = overSpans(COMPARISON);
+  const record = fromPackage(D887C1, SERVED_78);
+  assert.ok(record, 'premise: d887c1 has a trace');
+  for (const [label, model] of [['a comparison', run], ['d887c1', record!]] as const) {
+    const [row] = model.reached;
+    assert.equal(row.kind, 'model', `${label}: premise: the first row is the model's`);
+    assert.equal(row.name, 'Model service', `${label}: the model row's name`);
+    assert.equal(row.recipients[0].role, 'Model service', `${label}: the model's recipient line`);
+    assert.ok(!JSON.stringify(model).includes('Model endpoint'), `${label}: the model still carries "Model endpoint"`);
+  }
+});

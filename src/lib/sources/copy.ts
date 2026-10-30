@@ -126,39 +126,150 @@ export const KEPT_FOR_OPERATOR = "what it keeps is for this site's operator to s
 // --- Text 2: the first-consent card ---
 
 /**
- * The card's text that is the same on every instance, in order: the heading,
- * then the sentences above the recipient list (`beforeList`), then those
- * after it and above the buttons (`afterList`). `sentences` is both, for the
- * tests. The sentence after the list that names where states are set and
- * consent is withdrawn depends on a database (`CARD_AFTER_ALLOW_*`, T3).
- * Under D4 = A the analytics line and the cookie sentence render below the
- * buttons (`CARD_ANALYTICS`, `CARD_COOKIE`).
+ * The card as a decision layer (R9 P3, #660; D2 = A of the UX pass). Above
+ * its two buttons, the short layer, in order: `CONSENT_CARD.lead` (T1, T2),
+ * the reach sentence built from the statement's names (`cardReachSentence`,
+ * T3), the pointer to the disclosure with the statement's recipient count
+ * (`cardPointerSentence`, T4), the local-only offer, where states are set and
+ * consent withdrawn (`CARD_CONTROLS_*`, T5), the privacy page's link
+ * (`CONSENT_CARD.fullStatement`, T6) and the effect of the two answers
+ * (`CONSENT_CARD.effect`, T7). The words were research-checked and ruled on
+ * 2026-10-30 (#680 P3), and the second check's rulings applied (amendment 1:
+ * T2 is the privacy page's sentence, T3 names the sources in a sentence of
+ * their own, T4 points to the summary by its first words, the sandbox
+ * definition). Directly below the buttons, so that opening it cannot move
+ * them: the recipients and what each says it keeps, under a disclosure shut
+ * by default (design principle 8): its summary (`cardRecipientsSummary`, T8), its lead
+ * line (`CONSENT_CARD.disclosureLead`, T11), the base recipients, the sandbox
+ * definition (`CARD_SANDBOX_DEFINITION`) and one line per data source
+ * (`CARD_SOURCE_LINE`). Then, unchanged (D4 = A), the analytics line and the
+ * cookie sentence (`CARD_ANALYTICS`, `CARD_COOKIE_*`). `sentences` lists every
+ * sentence the card renders on every instance, for the tests.
  */
-const CARD_BEFORE_LIST = [
-  'To answer, this site sends your question to a model endpoint, the service that runs the model.',
-  'A data source gets the searches the model writes, which can include words from your question.',
+const CARD_LEAD = [
+  'To answer, this site sends your question to a model service, and sends the searches the model writes to the data sources that are On.',
   'Your question is not sent beyond this site before you answer.',
-  'Each recipient is listed below with what it says it keeps.',
 ] as const;
-const CARD_AFTER_LIST = ['The privacy page has the full statement.'] as const;
+const CARD_FULL_STATEMENT = 'The privacy page has the full statement.';
 
-/** Fact 10's effect: the card beside its buttons, and the privacy page's "How consent works" (T7). */
+/**
+ * Fact 10's effect beside the card's buttons (T7). The privacy page keeps its
+ * own wording (`ALLOW_EFFECT`), which this change leaves as it was.
+ */
+const CARD_EFFECT = '"Allow" turns on the sources shown as On and sends your question. "Not now" sends nothing.';
+
+/** The disclosure's lead line (T11): the scope limit, moved from the short layer. */
+const CARD_DISCLOSURE_LEAD = 'The searches the model writes can include words from your question.';
+
+/** Fact 10's effect as the privacy page's "How consent works" states it (T7 of R6). */
 const ALLOW_EFFECT = '"Allow" turns on the sources the panel shows as On and sends your question. "Not now" sends nothing.';
 
 export const CONSENT_CARD = {
   heading: 'Before your first question',
-  beforeList: CARD_BEFORE_LIST,
-  afterList: CARD_AFTER_LIST,
-  sentences: [...CARD_BEFORE_LIST, ...CARD_AFTER_LIST],
-  /** Fact 10, beside the two buttons. */
-  effect: ALLOW_EFFECT,
+  /** T1 and T2, the first two sentences of the short layer. */
+  lead: CARD_LEAD,
+  /** T6, the link to the privacy page. */
+  fullStatement: CARD_FULL_STATEMENT,
+  /** T7, beside the two buttons. */
+  effect: CARD_EFFECT,
+  /** T11, the disclosure's lead line. */
+  disclosureLead: CARD_DISCLOSURE_LEAD,
+  sentences: [...CARD_LEAD, CARD_FULL_STATEMENT, CARD_EFFECT, CARD_DISCLOSURE_LEAD],
 } as const;
 
-/** The card's sentence after the list (T3): where states are set and consent withdrawn, with a database, and without one. */
-export const CARD_AFTER_ALLOW_WITH_ACCOUNTS =
-  "After you allow, you can set each source to On, Ask first or Off in the panel beside the question box, and withdraw consent there, or on your dashboard's Sources tab if you are signed in.";
-export const CARD_AFTER_ALLOW_WITHOUT_ACCOUNTS =
-  'After you allow, you can set each source to On, Ask first or Off in the panel beside the question box, and withdraw consent there.';
+/** A count as the card writes it: in words up to twelve, then in digits (`COUNT_WORDS`, as the panel's lead). */
+function countWords(n: number): string {
+  return n >= 0 && n < COUNT_WORDS.length ? COUNT_WORDS[n] : String(n);
+}
+
+/**
+ * Names in one list: joined with commas and "and"; when a name holds a comma
+ * of its own ("NYC Charter, Laws and Rules"), with semicolons and "; and", so
+ * the list still reads as the number of names the sentence counts.
+ */
+function joinNames(names: readonly string[]): string {
+  if (names.length <= 1) return names.join('');
+  const comma = names.some((name) => name.includes(','));
+  const separator = comma ? '; ' : ', ';
+  const last = comma ? '; and ' : ' and ';
+  return `${names.slice(0, -1).join(separator)}${last}${names[names.length - 1]}`;
+}
+
+/** T3's fixed words: the model service is always one recipient; the sources are counted, then named, from the statement. */
+export const CARD_REACH = {
+  lead: 'Your question can reach one model service and ',
+  one: 'data source',
+  many: 'data sources',
+  none: 'no data source',
+  /** The names' own sentence: "They are Socrata and Data Commons." (one source: "It is Socrata."). */
+  they: 'They are ',
+  it: 'It is ',
+} as const;
+
+/**
+ * T3, two sentences (amendment 1): "Your question can reach one model service
+ * and six data sources. They are Socrata; Data Commons; …", the count and the
+ * names read from the statement. With no source, the first sentence alone.
+ */
+export function cardReachSentence(names: readonly string[]): string {
+  if (names.length === 0) return `${CARD_REACH.lead}${CARD_REACH.none}.`;
+  const noun = names.length === 1 ? CARD_REACH.one : CARD_REACH.many;
+  const naming = names.length === 1 ? CARD_REACH.it : CARD_REACH.they;
+  return `${CARD_REACH.lead}${countWords(names.length)} ${noun}. ${naming}${joinNames(names)}.`;
+}
+
+/**
+ * T4: the pointer to the disclosure directly below the buttons, with the
+ * statement's recipient count, quoting the summary's first words (amendment 1).
+ */
+export function cardPointerSentence(recipients: number): string {
+  const count = countWords(recipients);
+  return `What each of the ${count} recipients says it keeps is listed below, under "Show the ${count} recipients".`;
+}
+
+/** T8: the disclosure's summary, with the same count. */
+export function cardRecipientsSummary(recipients: number): string {
+  return `Show the ${countWords(recipients)} recipients and what each says it keeps`;
+}
+
+/**
+ * T5: where states are set and consent withdrawn, with a database, and
+ * without one (R9 P3: the controls beside the question box are live before a
+ * consent since R9 P2, so the sentence no longer begins "After you allow").
+ */
+export const CARD_CONTROLS_WITH_ACCOUNTS =
+  "You can set each source to On, Ask first or Off beside the question box at any time. You can withdraw consent there, or on your dashboard's Sources tab if you are signed in.";
+export const CARD_CONTROLS_WITHOUT_ACCOUNTS =
+  'You can set each source to On, Ask first or Off beside the question box at any time. You can withdraw consent there.';
+
+/**
+ * The definition of "sandbox", directly above the per-source lines, rendered
+ * only when a source runs in this site's sandbox. The owner's ruling after the
+ * second research check (amendment 1). The first ruling said the sandbox is
+ * temporary and "deleted after the question", which the hosting module does
+ * not do: a hosted source's sandbox is persistent, one per source and pinned
+ * version, created on first use and reused by later questions; it stops itself
+ * after the idle window (`DEFAULT_IDLE_WINDOW_MS`, 10 minutes, restarted by
+ * each call) and keeps one snapshot that expires 30 days after its last use
+ * (`src/lib/mcp/hosting/lifecycle.ts`, `getOrCreate`). The figures are pinned
+ * to that module by `consent-card-layer.test.ts`.
+ */
+export const CARD_SANDBOX_DEFINITION =
+  'A sandbox is a computer this site creates in the cloud to search a data source. It stops when no one has searched for 10 minutes. This site keeps a saved copy of it for 30 days after its last use.';
+
+/**
+ * One line per data source inside the disclosure: the source's name, then each
+ * of its recipients as "runs in <place>" (a hosted source's sandbox) or
+ * "reaches <host>", then `holders` and what each holder says it keeps. A
+ * sandbox holder already given in full on an earlier source's line is named
+ * again with `asAbove`, so the hosting host's kept-by line is printed once.
+ */
+export const CARD_SOURCE_LINE = {
+  runsIn: 'runs in ',
+  reaches: 'reaches ',
+  holders: ' \u2014 ',
+  asAbove: ', as above',
+} as const;
 
 /** Fact 4 (Q7, amendment 1 correction 3): the privacy page's statement of where to withdraw, with a database, and without one. */
 export const WITHDRAW_WITH_ACCOUNTS = 'To withdraw consent, use the panel beside the question box, or the Sources tab on your dashboard if you are signed in.';

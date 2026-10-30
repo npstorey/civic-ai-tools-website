@@ -64,7 +64,7 @@ export function sourceWhere(source: Pick<FlowsSource, 'host' | 'variant'>): stri
 }
 
 const ROLE: Readonly<Record<FlowsRecipient['role'], string>> = {
-  'model-endpoint': 'Model endpoint',
+  'model-endpoint': 'Model service',
   'function-logs': "This site's hosting logs",
   'sign-in': 'Sign-in',
   analytics: 'Analytics',
