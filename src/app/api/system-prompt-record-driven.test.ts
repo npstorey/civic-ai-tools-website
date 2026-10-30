@@ -590,6 +590,7 @@ test('the sweep: collectRefsFromPackage keeps a published prompt blob; an unpubl
 /** String-typed specifiers, so the red commit type-checks before the adapters change. */
 const ADAPT_RECORD: string = '../../components/answer-view/adapt-record.ts';
 const ADAPT_NOTEBOOK: string = '../../components/answer-view/adapt-notebook.ts';
+const PROMPT_HASHES: string = '../../lib/evidence/prompt-hashes.ts';
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 async function recordModel(d: Drive): Promise<Loose> {
@@ -655,4 +656,35 @@ test('the finished executed all-sources run: the view\'s hash is the record\'s, 
   assert.equal(b.hash, skillOf(PUBLISHED.get(NB_ALL)!.stored).systemPromptHash);
   assert.equal(b.text, finalPromptOf(NB_ALL));
   assert.equal((b.earlierPromptHashes ?? []).length, 0);
+});
+
+// --- The guard on the earlier list (fix round 1, item 7) -----------------------------------
+//
+// The list and the count are shown only when the hash the record states is the
+// trace's last stated `llm_inference` hash. A record stating any other hash —
+// one of the earlier prompts, or one the trace never states — gets neither,
+// never a list labelled "earlier" that is not.
+
+test('the guard: a record whose stated hash is an earlier prompt\'s, not the last, lists no earlier prompts', async () => {
+  const distinct = distinctHashes(CS_LOOP);
+  const stored = structuredClone(PUBLISHED.get(CS_LOOP)!.stored) as Loose;
+  stored.skillMetadata = { ...stored.skillMetadata, systemPromptHash: distinct[1] };
+  delete stored.skillMetadata.skillText;
+  const { adaptRecord } = (await import(ADAPT_RECORD)) as Loose;
+  const b = adaptRecord({
+    stored, resolution: null,
+    row: { slug: 'r10-p1b-guard', summary: 'Potholes.', contentProfile: 'datHere', captureMethod: 'chat-flow-stream' },
+    instance: null, servedStatement: null,
+  }).disclosure.recordInstructions;
+  assert.equal(b.disclosure.hash, distinct[1], 'premise — the record states the second prompt\'s hash');
+  assert.deepEqual(b.earlierPromptHashes, [], 'a list labelled "earlier" is shown beside a hash that is not the last');
+});
+
+test('the guard: a hash the trace never states lists no earlier prompts', async () => {
+  const { earlierSystemPromptHashes } = (await import(PROMPT_HASHES)) as Loose;
+  const trace = CS_LOOP.events.find((e) => e.type === 'trace')!.data;
+  const distinct = distinctHashes(CS_LOOP);
+  assert.deepEqual(earlierSystemPromptHashes(trace, distinct[2]), distinct.slice(0, 2), 'premise — the last hash lists the two earlier ones');
+  assert.deepEqual(earlierSystemPromptHashes(trace, distinct[0]), []);
+  assert.deepEqual(earlierSystemPromptHashes(trace, 'f'.repeat(64)), []);
 });
