@@ -292,15 +292,16 @@ function cItems(html: string): CItem[] {
 }
 
 const { CONTENT_SHAPE } = (await import('@/lib/sources/copy')) as unknown as {
-  CONTENT_SHAPE?: { label: string; datHere: string; default: string; rawLabel: string };
+  CONTENT_SHAPE?: { label: string; datHere: string; default: string; rawLabel: string; notStated: string };
 };
 
 for (const [rowProfile, pkgProfile, shape, raw, slug] of [
   ['datHere', 'datHere', 'full record (A to G envelope)', 'datHere', 'shape-dathere'],
   ['default', 'default', 'plain record', 'default', 'shape-default'],
-  [null, 'default', 'plain record', 'default', 'shape-absent'],
+  // Absent: the shape the specification reads absence as, and small print that does not invent a value.
+  [null, 'default', 'plain record', 'not stated', 'shape-absent'],
 ] as const) {
-  test(`5: a record whose content profile is ${rowProfile ?? 'absent'}: "Content shape" reads "${shape}", the raw value "${raw}" as small print beside it`, async () => {
+  test(`5: a record whose content profile is ${rowProfile ?? 'absent'}: "Content shape" reads "${shape}", the small print "${raw}" beside it`, async () => {
     const items = cItems(await render(slug, rowProfile, build(pkgProfile, SUBTYPE)));
     const at = items.findIndex((item) => item.label === 'Content shape');
     assert.ok(at >= 0, `section C has no "Content shape" card: ${items.map((i) => `${i.label}: ${i.value}`).join(' | ')}`);
@@ -314,7 +315,8 @@ for (const [rowProfile, pkgProfile, shape, raw, slug] of [
     );
     const small = items[at + 1];
     assert.equal(small?.label, CONTENT_SHAPE.rawLabel, 'the raw value is not the next item');
-    assert.equal(small.value, raw, 'the small print is not the raw value');
+    assert.equal(small.value, raw, 'the small print is not the raw value (or "not stated" when the record carries none)');
+    if (rowProfile === null) assert.equal(CONTENT_SHAPE.notStated, raw, 'the absent case\'s words are not read from copy.ts');
     assert.match(small.valueStyle, /font-size:12px/, 'the raw value is not small print');
     assert.match(small.valueStyle, /monospace/, 'the raw value is not set as a value');
     assert.equal(items.filter((item) => item.value === raw && item.label !== CONTENT_SHAPE.rawLabel).length, 0, 'the raw value is still a card of its own');

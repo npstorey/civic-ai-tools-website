@@ -390,17 +390,21 @@ function compositionComponents(pkg: EvidencePackage): RecordPromptComponent[] {
 }
 
 /**
- * Section C's "Content shape" card (R10 P5): `datHere` and `default` (absent
- * reads `default`, as before) in the reader's words, each followed by its raw
- * value as small print in an item of its own, the way the system prompt hash
- * is shown. A value outside the two is shown as it is, with no small print.
+ * Section C's "Content shape" card (R10 P5): `datHere` and `default` in the
+ * reader's words, each followed by its raw value as small print in an item of
+ * its own, the way the system prompt hash is shown. A record with no content
+ * profile (the column is nullable; records before ADR-0004 carry none) shows
+ * the `default` shape, because the specification treats absence as `default`
+ * (§8.7; ADR-0004; `docs/api/records-publish.md`), and its small print reads
+ * "not stated", never a value the record does not carry (Principle 3; fix
+ * round 1, W4). A value outside the two is shown as it is, with no small print.
  */
 function contentShapeItems(contentProfile: string | null | undefined): EnvironmentItem[] {
-  const raw = contentProfile ?? 'default';
-  const shape = raw === 'datHere' ? CONTENT_SHAPE.datHere : raw === 'default' ? CONTENT_SHAPE.default : null;
-  if (shape === null) return [{ label: CONTENT_SHAPE.label, value: raw }];
+  const shapeOf = contentProfile ?? 'default';
+  const shape = shapeOf === 'datHere' ? CONTENT_SHAPE.datHere : shapeOf === 'default' ? CONTENT_SHAPE.default : null;
+  if (shape === null) return [{ label: CONTENT_SHAPE.label, value: shapeOf }];
   return [
     { label: CONTENT_SHAPE.label, value: shape },
-    { label: CONTENT_SHAPE.rawLabel, value: raw, mono: true },
+    { label: CONTENT_SHAPE.rawLabel, value: contentProfile ?? CONTENT_SHAPE.notStated, mono: true },
   ];
 }
