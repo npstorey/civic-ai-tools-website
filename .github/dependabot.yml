@@ -9,6 +9,19 @@ updates:
       minor-and-patch:
         update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
+    ignore:
+      # The major follows the runtime (24: .nvmrc and the Dockerfile's NODE_IMAGE) and moves by hand with it; lift only if that rule is dropped.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # Lift when eslint-plugin-react declares eslint 10 as a peer: under 10 it crashes the lint, a required gate here.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      # 7.0 has no compiler API and @typescript-eslint/parser's peer range stops at <6.1.0: lift when both change (6.0.x still comes as its own PR).
+      - dependency-name: "typescript"
+        versions: [">=7.0.0"]
+      # The npm undici major must equal the runtime's bundled major (7 on Node 24): each major is a measured PR with the agreement-table cases, never a bot bump.
+      - dependency-name: "undici"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
