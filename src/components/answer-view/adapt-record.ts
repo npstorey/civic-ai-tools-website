@@ -71,6 +71,7 @@ import type { PublishedLayout } from '../../lib/answer-layout/published-line.ts'
 import type { FlowsStatement } from '../../lib/flows/statement.ts';
 import { whereItWentFromPackage } from '../../lib/flows/where-it-went.ts';
 import { chooserCardItems, chooserFromPackage } from '../../lib/flows/source-chooser.ts';
+import { CONTENT_SHAPE } from '../../lib/sources/copy.ts';
 
 /** What the page resolved before rendering (`resolvePackageForRender`). */
 export interface ResolvedPackageData {
@@ -291,7 +292,8 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
     ...(env?.temperature !== undefined ? [{ label: 'Temperature', value: String(env.temperature) }] : []),
     ...(env?.host ? [{ label: 'Publishing host', value: env.host }] : []),
     ...(envMcpHosts ? [{ label: SERVERS_LABEL, value: envMcpHosts }] : []),
-    { label: 'Content profile', value: row.contentProfile ?? 'default' },
+    // R10 P5: the content profile in the reader's words, then its raw value as small print.
+    ...contentShapeItems(row.contentProfile),
     { label: USED_SOURCES_LABEL, value: dataSourcesSummary ?? '—' },
     // The system prompt's hash, its first twelve characters, under the label
     // section B shows it by in full (R10 P1b fix round 1: one value, one name).
@@ -382,4 +384,20 @@ function compositionComponents(pkg: EvidencePackage): RecordPromptComponent[] {
       ...(typeof c.guidanceHash === 'string' && c.guidanceHash.length > 0 ? { guidanceHash: c.guidanceHash } : {}),
     }];
   });
+}
+
+/**
+ * Section C's "Content shape" card (R10 P5): `datHere` and `default` (absent
+ * reads `default`, as before) in the reader's words, each followed by its raw
+ * value as small print in an item of its own, the way the system prompt hash
+ * is shown. A value outside the two is shown as it is, with no small print.
+ */
+function contentShapeItems(contentProfile: string | null | undefined): EnvironmentItem[] {
+  const raw = contentProfile ?? 'default';
+  const shape = raw === 'datHere' ? CONTENT_SHAPE.datHere : raw === 'default' ? CONTENT_SHAPE.default : null;
+  if (shape === null) return [{ label: CONTENT_SHAPE.label, value: raw }];
+  return [
+    { label: CONTENT_SHAPE.label, value: shape },
+    { label: CONTENT_SHAPE.rawLabel, value: raw, mono: true },
+  ];
 }

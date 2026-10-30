@@ -1961,6 +1961,12 @@ test('W4 P1 (9) the citation block reads "Record: <title> [Published: <date>] <u
 // sentence on what a hash is, the button row's top margin, and the button's
 // "Show full system prompt (N bytes)". And again for fix round 1 item 9: the
 // diff is section C's one label, "Skill hash" renamed "System prompt hash".
+// Re-captured again for R10 P5 (the owner's ruling on section C): the diff is
+// section C's "Content profile" card, now "Content shape" reading "full record
+// (A to G envelope)" (the A-G record) or "plain record" (the legacy record),
+// followed by one inserted item, "Content profile", with the raw value as
+// small print. Neither record declares the subtype, so the Verification
+// Status label is unchanged.
 
 const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
 
