@@ -10,7 +10,7 @@ import { buildEvidencePackage, type PackageInput, type CaptureMethod, type Conte
 import { modelIdentityForValue } from '@/lib/model-resolver';
 import { hash } from '@/lib/evidence/trace';
 import { signPackage, getRfc3161Timestamp, publishToRekor, getActiveSigner, type SignerIdentity } from '@/lib/evidence/signing';
-import { captureVocabForProfile } from '@/lib/evidence/profiles';
+import { captureVocabForProfile, isContentProfileConsistent } from '@/lib/evidence/profiles';
 import { type BlobRef } from '@/lib/evidence/blob-ref';
 import { resolveRequestUser, hasPublishScope } from '@/lib/api-auth';
 import { MISSING_PUBLISH_SCOPE_ERROR } from '@/lib/publish-scope';
@@ -238,19 +238,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate producerProfile consistency (ADR-0006, spec §8.1.1). When a
-    // producerProfile is supplied it MUST agree with contentProfile:
-    // contentProfile === 'datHere' iff producerProfile begins with
-    // 'ai-assisted-analysis/datHere'. When omitted, the packager
-    // auto-derives a consistent value for the datHere profile.
+    // Validate producerProfile consistency (ADR-0006 §2 as amended by hub
+    // ADR-0038 §3, spec §8.1.1). When a producerProfile is supplied, the
+    // content profile (absent is 'default') MUST be one its subtype's row in
+    // verify-core's table admits: `ai-assisted-analysis/datHere` admits
+    // 'datHere', and `ai-assisted-analysis/civicaitools-v1` admits both. A
+    // subtype with no row reads as before: 'datHere' iff it begins with
+    // 'ai-assisted-analysis/datHere'. The same predicate is verify check #16,
+    // so the route refuses exactly what a verifier would report inconsistent.
+    // When omitted, the packager auto-derives a consistent value for datHere.
     if (body.producerProfile) {
-      const ppIsDatHere = body.producerProfile.startsWith('ai-assisted-analysis/datHere');
-      const cpIsDatHere = body.contentProfile === 'datHere';
-      if (ppIsDatHere !== cpIsDatHere) {
+      if (!isContentProfileConsistent(body.producerProfile, body.contentProfile ?? 'default')) {
         return NextResponse.json(
           {
             error:
-              'producerProfile and contentProfile are inconsistent: contentProfile "datHere" iff producerProfile begins with "ai-assisted-analysis/datHere".',
+              'producerProfile and contentProfile are inconsistent: contentProfile must be one the producerProfile subtype admits (spec §8.1.1). ai-assisted-analysis/datHere admits "datHere"; ai-assisted-analysis/civicaitools-v1 admits "datHere" and "default"; any other subtype admits "datHere" iff it begins with "ai-assisted-analysis/datHere".',
           },
           { status: 400 },
         );
