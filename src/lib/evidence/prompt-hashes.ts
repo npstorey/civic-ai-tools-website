@@ -62,11 +62,14 @@ export function finalSystemPromptHashOfTrace(trace: unknown): string | null {
 
 /**
  * The prompts the model saw before the one a section shows: every distinct
- * stated hash other than `shown`, in order. Empty when the trace states one
+ * stated hash other than `shown`, in order. Only when `shown` IS the trace's
+ * last stated hash (fix round 1, item 7): a section showing any other hash —
+ * an earlier prompt's, or one the trace never states — gets no list, never a
+ * list labelled "earlier" that is not. Empty, too, when the trace states one
  * prompt or none, or when nothing is shown.
  */
 export function earlierSystemPromptHashes(trace: unknown, shown: string | null): string[] {
-  if (shown === null) return [];
+  if (shown === null || shown !== finalSystemPromptHashOfTrace(trace)) return [];
   const distinct = systemPromptHashesOfTrace(trace);
   return distinct.length > 1 ? distinct.filter((hash) => hash !== shown) : [];
 }
