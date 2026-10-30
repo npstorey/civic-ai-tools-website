@@ -468,6 +468,14 @@ export function useLiveTrace(): UseLiveTraceReturn {
       },
       onComplete: () => {
         clearTimers();
+        // R9 P1 (Amendment 3): a browser's abort errors the stream, so this runs before the
+        // re-render that tells statusRef the run was cancelled. A run whose own request was
+        // aborted (Cancel, or a newer run) neither reads as a lost connection nor overwrites
+        // the cancelled state, and a hold it was in ends here too, whichever path ran first.
+        if (abortController.signal.aborted) {
+          if (abortRef.current === abortController) cancelConsentPauses();
+          return;
+        }
         finalizeProgress();
         if (statusRef.current === 'running') {
           // Finalize diagram state

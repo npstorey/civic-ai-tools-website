@@ -41,10 +41,13 @@
  * owns the question box (at the top of the answer area on the home page and
  * `/ask`, under the running question on `/explore`), shows the card's
  * heading, what each choice sends and the same two buttons while a hold is
- * open and unanswered, and, once per pause, brings the run's step card into
- * view (`block: 'nearest'`; `behavior: 'auto'` when the reader asked for
- * reduced motion, as `preferredScrollBehavior` says for every scroll the
- * question surface makes).
+ * open and unanswered. Once per pause, if the prompt is not already in the
+ * viewport (below the sticky header), it brings the PROMPT into view
+ * (`block: 'nearest'`; `behavior: 'auto'` when the reader asked for reduced
+ * motion, as `preferredScrollBehavior` says for every scroll the question
+ * surface makes); when it is in view, nothing moves. The step card is never
+ * the scroll target: at 393 x 852 a scroll to it took the prompt 237 px
+ * above the viewport (the owner's preview read, R9 P1 Amendment 3).
  */
 
 import { useEffect, useRef, type CSSProperties } from 'react';
@@ -91,12 +94,16 @@ export function preferredScrollBehavior(): ScrollBehavior {
   }
 }
 
-/** Bring the run's step card for `sourceId` into view: the last one, never a Sources panel row's. */
-function bringStepCardIntoView(sourceId: string): void {
-  if (typeof document === 'undefined' || !/^[A-Za-z0-9_-]+$/.test(sourceId)) return;
-  const found = document.querySelectorAll?.(`[data-part="consent-step"][data-consent-place="steps"][data-consent-source="${sourceId}"]`);
-  const card = found && found.length > 0 ? found[found.length - 1] : null;
-  card?.scrollIntoView({ block: 'nearest', behavior: preferredScrollBehavior() });
+/** The prompt's place in the viewport: nothing moves when all of it is visible below the sticky header; else it is brought in. */
+function bringPromptIntoView(): void {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return;
+  const prompt = document.querySelector?.('[data-part="consent-pause-prompt"]');
+  if (!prompt) return;
+  const box = prompt.getBoundingClientRect?.();
+  const header = document.querySelector?.('header')?.getBoundingClientRect?.();
+  const top = header && header.bottom > 0 ? header.bottom : 0;
+  if (box && box.top >= top && box.bottom <= window.innerHeight) return;
+  prompt.scrollIntoView({ block: 'nearest', behavior: preferredScrollBehavior() });
 }
 
 const CARD: CSSProperties = {
@@ -136,6 +143,8 @@ const PROMPT: CSSProperties = {
   lineHeight: 1.5,
   color: 'var(--text-secondary)',
   backgroundColor: 'var(--card-background)',
+  // A scroll that brings the prompt in stops below the sticky site header (64-65 px, measured).
+  scrollMarginTop: '80px',
 };
 
 const PROMPT_BUTTON: CSSProperties = { ...BUTTON, flex: '0 0 auto', minWidth: '96px', padding: '6px 12px', fontSize: '13px' };
@@ -144,24 +153,23 @@ const PROMPT_BUTTON: CSSProperties = { ...BUTTON, flex: '0 0 auto', minWidth: '9
  * The compact prompt (R9 P1, #672): while a hold is open and unanswered, the
  * card's heading, what each choice sends, and the same two buttons, posting
  * with the pause's own key. Nothing once the hold ends, an answer is given,
- * or no pause is open. Brings the run's step card into view once per pause.
+ * or no pause is open. Brought into view once per pause, only if it is not.
  */
 export function ConsentPausePrompt() {
   const consent = useSourceConsent({ load: false });
   const open = Object.entries(consent.pauses).reverse().find(([, p]) => p.payload.holds && !p.holdEnded && !p.expired && p.decision === undefined && p.failure === undefined);
   const key = open?.[0];
   const entry = open?.[1];
-  const sourceId = entry?.payload.source.sourceId;
   const scrolled = useRef<string | null>(null);
   useEffect(() => {
-    if (key === undefined || sourceId === undefined || scrolled.current === key) return;
-    // After the card has rendered, as the results scroll waits for the loading state (QuerySurface).
+    if (key === undefined || scrolled.current === key) return;
+    // After the prompt has rendered, as the results scroll waits for the loading state (QuerySurface).
     const timer = setTimeout(() => {
       scrolled.current = key;
-      bringStepCardIntoView(sourceId);
+      bringPromptIntoView();
     }, 100);
     return () => clearTimeout(timer);
-  }, [key, sourceId]);
+  }, [key]);
   if (key === undefined || entry === undefined) return null;
   const heading = CONSENT_STEP_TEXT.heading(readerSourceName(entry.payload.source));
   return (

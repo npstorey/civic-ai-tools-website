@@ -17,6 +17,15 @@
 // the reader is looking at, right after the question box in the page's order.
 // On /explore the question row stays in view, and the prompt sits under it.
 //
+// AMENDMENT 3 (the owner's preview read, the seat's ruling). At 393 x 852 the
+// page's own scroll to the step card took the prompt 237 px above the
+// viewport. Now nothing scrolls when the prompt is already in the viewport
+// (below the sticky header) when the pause arrives; when it is not, the
+// PROMPT is scrolled into view (`block: 'nearest'`), never the card. The
+// harness has no layout, so the prompt's box and the viewport's height are
+// stubbed here, and the assertion reads the scroll target and the no-scroll
+// condition.
+//
 // CRITERION 3 (#668), the client half: on /explore, Cancel during a hold ends
 // the step card and the panel row's card (the server half, a hold that ends
 // when its reader's stream is gone, is `src/app/api/consent-pause-driven.test.ts`).
@@ -70,6 +79,18 @@ const scrolls: Scroll[] = [];
 let page: Surface | null = null;
 let reducedMotion = false;
 const mediaQueries: string[] = [];
+/** The viewport's height, and where the prompt sits in it (Amendment 3): in view unless a test says otherwise. */
+let viewportHeight = 852;
+const IN_VIEW = { top: 120, bottom: 160 };
+let promptBox: { top: number; bottom: number } = IN_VIEW;
+/** What `document` hands back for a rendered element: its scroll, recorded, and its box (the prompt's as stubbed). */
+const nodeFor = (element: HostElement) => ({
+  scrollIntoView: (options: unknown) => { scrolls.push({ element, options }); },
+  getBoundingClientRect: () => {
+    const box = element.props['data-part'] === 'consent-pause-prompt' ? promptBox : { top: 0, bottom: 0 };
+    return { ...box, left: 0, right: 0, width: 0, height: box.bottom - box.top, x: 0, y: box.top };
+  },
+});
 
 /** `[a="b"][c="d"]` → the rendered elements whose props carry every pair. Anything else matches nothing. */
 function select(selector: string): HostElement[] {
@@ -87,6 +108,7 @@ Object.assign(globalThis as Record<string, unknown>, {
     sessionStorage: { getItem: (k: string) => storage.get(k) ?? null, setItem: (k: string, v: string) => { storage.set(k, String(v)); }, removeItem: (k: string) => { storage.delete(k); } },
     location: { href: `${ORIGIN}/`, origin: ORIGIN, pathname: '/' },
     scrollTo() {},
+    get innerHeight() { return viewportHeight; },
     matchMedia: (query: string) => {
       mediaQueries.push(query);
       return { matches: query === '(prefers-reduced-motion: reduce)' && reducedMotion, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} };
@@ -94,10 +116,10 @@ Object.assign(globalThis as Record<string, unknown>, {
   },
   document: {
     ...target,
-    querySelectorAll: (selector: string) => select(selector).map((element) => ({ scrollIntoView: (options: unknown) => { scrolls.push({ element, options }); } })),
+    querySelectorAll: (selector: string) => select(selector).map(nodeFor),
     querySelector: (selector: string) => {
       const [element] = select(selector);
-      return element ? { scrollIntoView: (options: unknown) => { scrolls.push({ element, options }); } } : null;
+      return element ? nodeFor(element) : null;
     },
   },
 });
@@ -124,8 +146,9 @@ function heldStream(): Held {
   const enc = new TextEncoder();
   return {
     response: new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } }),
-    push: (event) => { if (!closed) controller.enqueue(enc.encode(`data: ${JSON.stringify(event)}\n\n`)); },
-    close: () => { if (!closed) { closed = true; controller.close(); } },
+    push: (event) => { if (!closed) { try { controller.enqueue(enc.encode(`data: ${JSON.stringify(event)}\n\n`)); } catch { closed = true; } } },
+    // A stream the reader cancelled (the browser's abort path, below) is closed already.
+    close: () => { if (!closed) { closed = true; try { controller.close(); } catch { /* cancelled by its reader */ } } },
   };
 }
 
@@ -156,6 +179,8 @@ afterEach(() => {
   page = null;
   reducedMotion = false;
   scrolls.length = 0;
+  promptBox = IN_VIEW;
+  viewportHeight = 852;
 });
 async function mountPage(element: ReturnType<typeof h>): Promise<Surface> {
   const p = await mount(element);
@@ -252,15 +277,20 @@ function before(surface: Surface, a: HostElement, b: HostElement): boolean {
 /** The question box as the last render has it (an element read before a re-render is not in it). */
 const questionBox = (surface: Surface) => surface.elements().find((el) => el.type === 'textarea' && el.props['aria-label'] === 'Ask a question about open data')!;
 
-/** The one scroll made since `from`: on the run's step card for Boston, with these options. */
-function assertScrolledToCard(surface: Surface, from: number, behavior: 'smooth' | 'auto', where: string): void {
+const describeScrolls = (made: Scroll[]) => JSON.stringify(made.map((m) => ({ part: m.element.props['data-part'], options: m.options })));
+
+/** Amendment 3: the prompt was already in the viewport when the pause arrived, so the page did not move at all. */
+function assertNoScroll(from: number, where: string): void {
   const made = scrolls.slice(from);
-  assert.equal(made.length, 1, `${where}: expected one scroll to the step card, saw ${made.length}`);
-  const [card] = stepCards(surface);
-  assert.ok(card, `${where}: premise: no step card`);
-  assert.equal(made[0].element.props['data-part'], 'consent-step', `${where}: the scroll went to ${String(made[0].element.type)} ${JSON.stringify(made[0].element.props['data-part'])}`);
-  assert.equal(made[0].element.props['data-consent-source'], 'boston-opencontext');
-  assert.ok(!rowElements(surface).has(made[0].element) && stepCards(surface).some((c) => c.props['data-consent-source'] === made[0].element.props['data-consent-source']), `${where}: the scroll went to a card that is not the run's step card`);
+  assert.equal(made.length, 0, `${where}: the page scrolled while the prompt was in view: ${describeScrolls(made)}`);
+}
+
+/** Amendment 3: the prompt was out of view, so the one scroll made since `from` brought the PROMPT in (never the card). */
+function assertScrolledToPrompt(from: number, behavior: 'smooth' | 'auto', where: string): void {
+  const made = scrolls.slice(from);
+  assert.equal(made.length, 1, `${where}: expected one scroll, to the prompt: ${describeScrolls(made)}`);
+  assert.equal(made[0].element.props['data-part'], 'consent-pause-prompt', `${where}: the scroll went to ${describeScrolls(made)}`);
+  assert.equal((made[0].options as { block?: string }).block, 'nearest', `${where}: the scroll's block`);
   assert.equal((made[0].options as { behavior?: string }).behavior, behavior, `${where}: the scroll's behavior`);
 }
 
@@ -293,11 +323,12 @@ function rowCopy(surface: Surface): string {
 
 // --- Criterion 1: the home page ----------------------------------------------------------------------
 
-for (const reduced of [false, true]) {
-  test(`criterion 1, the home page (a comparison surface)${reduced ? ', reduced motion' : ''}: a holding pause scrolls the step card into view (${reduced ? 'auto' : 'smooth'}) and the compact prompt offers both buttons until a decision`, async () => {
+for (const [reduced, out] of [[false, false], [false, true], [true, true]] as const) {
+  test(`criterion 1, the home page (a comparison surface)${reduced ? ', reduced motion' : ''}: ${out ? `the prompt above the viewport (-237 px at 393 x 852, the owner's read) is scrolled into view (${reduced ? 'auto' : 'smooth'}), never the card` : 'the prompt in the viewport: nothing scrolls'}; the compact prompt offers both buttons until a decision`, async () => {
     ANON();
     answers();
     reducedMotion = reduced;
+    if (out) { viewportHeight = 852; promptBox = { top: -237, bottom: -203 }; }
     await consentWith({ 'boston-opencontext': 'ask-first' });
     const p = await mountPage(h(Home));
     await askOnQueryForm(p);
@@ -313,7 +344,8 @@ for (const reduced of [false, true]) {
     const key = nextKey();
     stream.push({ type: 'progress', panel: 'withMcp', message: PAUSE_LINE, phase: 'consent_pause', pause: pauseOf(key) });
     await settle(p, SCROLL_WAIT);
-    assertScrolledToCard(p, from, reduced ? 'auto' : 'smooth', 'the home page');
+    if (out) assertScrolledToPrompt(from, reduced ? 'auto' : 'smooth', 'the home page');
+    else assertNoScroll(from, 'the home page');
     if (reduced) assert.ok(mediaQueries.includes('(prefers-reduced-motion: reduce)'), 'the reduced-motion query was never read');
     const prompt = onePrompt(p, 'the home page');
     assertPrompt(prompt, 'the home page');
@@ -328,14 +360,14 @@ for (const reduced of [false, true]) {
     assert.deepEqual(decisions, [{ key, decision: 'allow' }], 'the prompt did not post the pause\'s own key');
     assert.equal(prompts(p).length, 0, `the prompt stays after a decision: ${summary(p)}`);
     assert.deepEqual(labels(stepCards(p)[0]), [], 'the step card keeps its buttons after the prompt\'s decision');
-    assert.equal(scrolls.length - from, 1, 'a second scroll for the same pause');
+    assert.equal(scrolls.length - from, out ? 1 : 0, 'a second scroll for the same pause');
     stream.close();
   });
 }
 
 // --- Criterion 1: /ask, notebook mode -------------------------------------------------------------------
 
-test('criterion 1, /ask (the executed run): a holding pause scrolls the step card into view and shows the prompt; a later line of the run (the hold over) takes the prompt away', async () => {
+test('criterion 1, /ask (the executed run): a holding pause shows the prompt, in view, with no scroll; a later line of the run (the hold over) takes the prompt away', async () => {
   SIGNED_IN_DB();
   answers();
   await consentWith({ 'boston-opencontext': 'ask-first' });
@@ -351,7 +383,7 @@ test('criterion 1, /ask (the executed run): a holding pause scrolls the step car
   const from = scrolls.length;
   stream.push({ type: 'phase_a_progress', message: PAUSE_LINE, phase: 'consent_pause', pause: pauseOf(nextKey()) });
   await settle(p, SCROLL_WAIT);
-  assertScrolledToCard(p, from, 'smooth', '/ask');
+  assertNoScroll(from, '/ask');
   const prompt = onePrompt(p, '/ask');
   assertPrompt(prompt, '/ask');
   assert.ok(before(p, questionBox(p), prompt) && before(p, prompt, stepCards(p)[0]), '/ask: the prompt is not between the question box and the run\'s steps');
@@ -381,7 +413,7 @@ test('criterion 1, the home page: the prompt goes when the hold\'s time is up, w
 
 // --- Criterion 1 and 3: /explore -------------------------------------------------------------------------------
 
-test('criterion 1, /explore: a holding pause scrolls the step card into view and the prompt sits under the running question; criterion 3: Cancel ends the step card, the row\'s card and the prompt', async () => {
+test('criterion 1, /explore: a holding pause shows the prompt under the running question, in view, with no scroll; criterion 3: Cancel ends the step card, the row\'s card and the prompt', async () => {
   ANON();
   answers();
   await consentWith({ 'boston-opencontext': 'ask-first' });
@@ -396,7 +428,7 @@ test('criterion 1, /explore: a holding pause scrolls the step card into view and
   const from = scrolls.length;
   stream.push({ type: 'progress', panel: 'withMcp', message: PAUSE_LINE, phase: 'consent_pause', pause: pauseOf(nextKey()) });
   await settle(p, SCROLL_WAIT);
-  assertScrolledToCard(p, from, 'smooth', '/explore');
+  assertNoScroll(from, '/explore');
   const prompt = onePrompt(p, '/explore');
   assertPrompt(prompt, '/explore');
   const cancel = p.button('Cancel');
@@ -413,4 +445,66 @@ test('criterion 1, /explore: a holding pause scrolls the step card into view and
   for (const card of rowCards(p)) assert.deepEqual(labels(card), [], `the row's card keeps its buttons after Cancel: ${summary(p)}`);
   assert.equal(decisions.length, 0, 'Cancel posted a decision');
   stream.close();
+});
+
+// --- Amendment 3, criterion 3: Cancel on the browser's abort path ---------------------------------------
+
+/**
+ * The harness's `fetch` drops the request's signal, so its streams never see
+ * an abort. A browser's does not: aborting the request errors the response
+ * body with an AbortError, and the SSE client's read loop then ends through
+ * its `finally` (`onComplete`) before the promise's rejection is caught. This
+ * wraps the streaming routes' answers so an abort does the same here.
+ */
+function abortLikeABrowser(): void {
+  const inner = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const signal = init?.signal ?? undefined;
+    const path = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, ORIGIN).pathname;
+    if (!signal || !/^\/api\/(compare-stream|query-notebook)$/.test(path)) return inner(input, init);
+    if (signal.aborted) throw new DOMException('The operation was aborted.', 'AbortError');
+    const response = await inner(input, init);
+    const reader = response.body!.getReader();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        signal.addEventListener('abort', () => {
+          try { controller.error(new DOMException('The operation was aborted.', 'AbortError')); } catch { /* already closed */ }
+          void reader.cancel().catch(() => {});
+        }, { once: true });
+      },
+      async pull(controller) {
+        const { value, done } = await reader.read();
+        if (done) controller.close();
+        else controller.enqueue(value);
+      },
+    });
+    return new Response(body, { status: response.status, headers: response.headers });
+  }) as typeof fetch;
+}
+
+test('criterion 3, /explore on the browser\'s abort path (Amendment 3, the owner\'s preview read): Cancel during a hold reads cancelled, not "Connection lost"; the step card and the row lose their buttons; the bus entry has ended', async () => {
+  ANON();
+  answers();
+  abortLikeABrowser();
+  await consentWith({ 'boston-opencontext': 'ask-first' });
+  const p = await mountPage(h(McpFlowDiagram));
+  await askOnExplore(p);
+  const stream = streams[0];
+  assert.ok(stream, 'premise: the question was sent');
+  stream.push({ type: 'progress', panel: 'withMcp', ...LOAD_START });
+  stream.push({ type: 'progress', panel: 'withMcp', message: PAUSE_LINE, phase: 'consent_pause', pause: pauseOf(nextKey()) });
+  await settle(p, SCROLL_WAIT);
+  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', 'Not now'], `premise: the step card offers both during the hold: ${summary(p)}`);
+  await p.click(p.button('Cancel'));
+  await settle(p, 200);
+  const text = p.text();
+  assert.ok(!text.includes('Connection lost before the query finished'), `Cancel reads as a lost connection: ${text.slice(0, 600)}`);
+  assert.ok(text.includes('Query was cancelled.'), `the page does not say the query was cancelled: ${text.slice(0, 600)}`);
+  for (const card of stepCards(p)) {
+    assert.deepEqual(labels(card), [], `a step card keeps its buttons after Cancel: ${summary(p)}`);
+    assert.ok(textOf(card).includes('This question is no longer waiting for an answer.'), `the step card after Cancel: ${textOf(card)}`);
+  }
+  assert.ok(p.elements().some((el) => el.props['data-source'] === 'boston-opencontext'), 'premise: the Sources panel is not shown after Cancel');
+  assert.deepEqual(rowCards(p).map((c) => labels(c)).flat(), [], `the row's card offers an answer after Cancel: ${summary(p)}`);
+  assert.equal(decisions.length, 0, 'Cancel posted a decision');
 });
