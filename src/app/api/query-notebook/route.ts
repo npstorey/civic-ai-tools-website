@@ -32,7 +32,7 @@ import { modelAccessPhrase, modelIdentity, type ModelIdentity } from '@/lib/mode
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import type { SourceSelection } from '@typedstandards/civic-typed-router';
 import { consentInForce } from '@/lib/sources/consent-gate';
-import { decisionStoreFromEnv, streamingRoutePause } from '@/lib/sources/decision';
+import { decisionStoreFromEnv, readerGone, streamingRoutePause } from '@/lib/sources/decision';
 import { afterLoopAttributes, createInLoopRouting, directorySet, entersInLoop, sourceRoutingMode, type InLoopRouting } from '@/lib/mcp/routing-mode';
 import {
   queryWithMcpStreaming,
@@ -308,8 +308,10 @@ export async function POST(request: NextRequest) {
   const directory = routingMode === 'in-loop' ? directorySet(configured, consent) : [];
   // An Ask-first load pauses to ask the reader (#644 W2): this route holds a
   // stream, so it hands the run a pause.
+  // A hold ends when its reader is gone (R9 P1, #668): the request's signal, or a cancelled stream.
+  const presence = readerGone(request);
   const inLoop = entersInLoop(routingMode, directory)
-    ? await createInLoopRouting({ portal, lockedPortal, configured, directory, selection, pause: streamingRoutePause(consent, session, configured) })
+    ? await createInLoopRouting({ portal, lockedPortal, configured, directory, selection, pause: streamingRoutePause(consent, session, configured, presence.signal) })
     : undefined;
   const composition = inLoop
     ? { prompt: inLoop.firstSystemPrompt, assertedDate: inLoop.assertedDate, sourcesOffered: inLoop.sourcesOffered, components: inLoop.components() }
@@ -327,6 +329,7 @@ export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
+  presence.watch(writer);
   const emit = async (event: NotebookEvent): Promise<void> => {
     await writer.write(encoder.encode(encodeNotebookEvent(event)));
   };

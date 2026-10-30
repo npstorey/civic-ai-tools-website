@@ -649,7 +649,7 @@ export default function ProgressLog({
       {/* A load paused to ask the reader (#644 W2): its consent step, after the steps so far */}
       {standaloneEntries.map((entry, idx) =>
         entry.phase === 'consent_pause' && entry.pause ? (
-          <ConsentStep key={`c-${idx}`} pause={entry.pause} ended={entry.isComplete === true} />
+          <ConsentStep key={`c-${idx}`} pause={entry.pause} runMovedOn={entry.isComplete === true} />
         ) : null,
       )}
 

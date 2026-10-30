@@ -36,12 +36,20 @@
  * every pause the run reported, by its key (fix round 2, item 1): each entry
  * holds its own pause, the decision once one is posted (`decideConsentPause`,
  * to `/api/sources/consent/decision`), and whether the run has moved past it,
- * with its own expiry timer. A later line of the run, or a later pause, ends
- * the entries still open and never clears an answer already recorded, so a
- * card answered before a second source paused keeps its own outcome. Entries
- * are kept until the last surface leaves the page: a run holds once per
- * source. Only a pause that holds is kept; one that could not ask has nothing
- * to answer.
+ * with its own timers. A later line of the run, or a later pause, ends the
+ * holds still open and never clears an answer already recorded, so a card
+ * answered before a second source paused keeps its own outcome. Entries are
+ * kept until the last surface leaves the page: a run holds once per source.
+ * Only a pause that holds is kept; one that could not ask has nothing to
+ * answer.
+ *
+ * THE HOLD AND THE ENTRY (R9 P1, #669 D2). Two ends, kept apart: the hold's
+ * (`holdEnded`: its `expiresAt` passed, or the run moved past it), after
+ * which the run goes on without the answer; and the entry's (`expired`: its
+ * `entryExpiresAt` passed, or the run was cancelled), after which no answer
+ * is taken. Between the two, the card keeps its buttons, and an answer
+ * applies to the reader's next question (`afterHold`). Cancel
+ * (`cancelConsentPauses`, #668) ends every hold still open, entry and all.
  */
 
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
@@ -97,8 +105,12 @@ export interface PendingPause {
   moved?: false;
   /** Why the route did not accept one: the question no longer waits, it was answered already, or anything else. */
   failure?: 'gone' | 'decided' | 'other';
-  /** The run has moved on, or the hold's time is up. */
-  ended: boolean;
+  /** The hold is over: its time is up, or the run has moved past it. The entry may still take an answer. */
+  holdEnded: boolean;
+  /** No answer is taken any more: the entry's life is over, or the run was cancelled during its hold. */
+  expired: boolean;
+  /** The answer, or the route's refusal of it, came after the hold had ended: it applies to later questions only. */
+  afterHold?: true;
 }
 
 const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pauses: {}, routing: null, store: null };
@@ -170,18 +182,33 @@ export function reportConsentRefusal(): void {
 
 // --- The pause (R8 W2) -----------------------------------------------------------
 
-/** Each entry's own expiry timer, by key. */
-const pauseTimers = new Map<string, ReturnType<typeof setTimeout>>();
+/** Each entry's own timers, by key: the hold's end, and the entry's end. */
+const holdTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const entryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-function clearPauseTimer(key: string): void {
-  const timer = pauseTimers.get(key);
+function clearTimer(timers: Map<string, ReturnType<typeof setTimeout>>, key: string): void {
+  const timer = timers.get(key);
   if (timer !== undefined) clearTimeout(timer);
-  pauseTimers.delete(key);
+  timers.delete(key);
 }
 
 function clearPauseTimers(): void {
-  for (const timer of pauseTimers.values()) clearTimeout(timer);
-  pauseTimers.clear();
+  for (const timers of [holdTimers, entryTimers]) {
+    for (const timer of timers.values()) clearTimeout(timer);
+    timers.clear();
+  }
+}
+
+/** Run `act` at the instant `at` names (ISO 8601), or at once when it has passed; nothing when it does not parse. */
+function timerAt(timers: Map<string, ReturnType<typeof setTimeout>>, key: string, at: string, act: () => void): void {
+  const wait = Date.parse(at) - Date.now();
+  if (!Number.isFinite(wait)) return;
+  const timer = setTimeout(() => {
+    timers.delete(key);
+    act();
+  }, Math.max(0, wait));
+  (timer as { unref?: () => void }).unref?.();
+  timers.set(key, timer);
 }
 
 /** The entry for `key`, if the run reported one: an own property only, never one an object inherits. */
@@ -195,52 +222,62 @@ function updatePause(key: string, change: Partial<PendingPause>): void {
   set({ pauses: { ...snapshot.pauses, [key]: { ...current, ...change } } });
 }
 
-/** End every entry still open but `except`; the answers they hold stay. Returns the map, or `null` when none was open. */
-function endOpen(pauses: Record<string, PendingPause>, except?: string): Record<string, PendingPause> | null {
+/**
+ * End every hold still open but `except`; the answers the entries hold stay,
+ * and so do the entries themselves, until their own end. With `cancel`, the
+ * entries whose hold was open end too. Returns the map, or `null` when no
+ * hold was open.
+ */
+function endHolds(pauses: Record<string, PendingPause>, except?: string, cancel = false): Record<string, PendingPause> | null {
   let next: Record<string, PendingPause> | null = null;
   for (const [key, entry] of Object.entries(pauses)) {
-    if (key === except || entry.ended) continue;
-    clearPauseTimer(key);
+    if (key === except || entry.holdEnded || entry.expired) continue;
+    clearTimer(holdTimers, key);
+    if (cancel) clearTimer(entryTimers, key);
     next = next ?? { ...pauses };
-    next[key] = { ...entry, ended: true };
+    next[key] = cancel ? { ...entry, expired: true } : { ...entry, holdEnded: true };
   }
   return next;
 }
 
 /**
  * A pause the run reported, or `null` for any other line of the same run: a
- * pause that holds adds its entry, and ends every other entry still open; a
- * later line, or a pause that does not hold, ends every entry still open. An
- * entry ended keeps its decision or failure. A pause reported again under a
- * key already held keeps what its entry recorded.
- * Nothing changes, and nothing re-renders, when there is no entry to end.
+ * pause that holds adds its entry, and ends every other hold still open; a
+ * later line, or a pause that does not hold, ends every hold still open. An
+ * entry whose hold ended keeps its decision or failure, and lives on until
+ * its own end (#669 D2). A pause reported again under a key already held
+ * keeps what its entry recorded.
+ * Nothing changes, and nothing re-renders, when there is no hold to end.
  */
 export function reportConsentPause(payload: ConsentPausePayload | null | undefined): void {
-  // Any other line, or a pause that could not ask: the run has moved past every entry still open.
+  // Any other line, or a pause that could not ask: the run has moved past every hold still open.
   if (!payload || !payload.holds || typeof payload.key !== 'string') {
-    const ended = endOpen(snapshot.pauses);
+    const ended = endHolds(snapshot.pauses);
     if (ended) set({ pauses: ended });
     return;
   }
   const key = payload.key;
   const prior = pauseEntry(snapshot.pauses, key);
-  const others = endOpen(snapshot.pauses, key) ?? snapshot.pauses;
-  clearPauseTimer(key);
-  set({ pauses: { ...others, [key]: prior ? { ...prior, payload, ended: false } : { payload, deciding: false, ended: false } } });
-  // The hold's end: the question no longer waits, whatever the stream says next.
-  const wait = Date.parse(payload.expiresAt) - Date.now();
-  if (Number.isFinite(wait)) {
-    const timer = setTimeout(() => {
-      pauseTimers.delete(key);
-      updatePause(key, { ended: true });
-    }, Math.max(0, wait));
-    (timer as { unref?: () => void }).unref?.();
-    pauseTimers.set(key, timer);
-  }
+  const others = endHolds(snapshot.pauses, key) ?? snapshot.pauses;
+  clearTimer(holdTimers, key);
+  clearTimer(entryTimers, key);
+  set({ pauses: { ...others, [key]: prior ? { ...prior, payload, holdEnded: false, expired: false } : { payload, deciding: false, holdEnded: false, expired: false } } });
+  // The hold's end: the run goes on without the answer, whatever the stream says next.
+  timerAt(holdTimers, key, payload.expiresAt, () => updatePause(key, { holdEnded: true }));
+  // The entry's end: no answer is taken. A pause that names none ends with its hold, as before R9.
+  timerAt(entryTimers, key, payload.entryExpiresAt ?? payload.expiresAt, () => updatePause(key, { holdEnded: true, expired: true }));
+}
+
+/** Cancel (#668): every hold still open ends, and its entry with it, so no card offers an answer the run asked for. */
+export function cancelConsentPauses(): void {
+  const ended = endHolds(snapshot.pauses, undefined, true);
+  if (ended) set({ pauses: ended });
 }
 
 /** Post the reader's answer to a pause, and keep what the route said. Allow also reads the consent again, so the panel shows the source On. */
 export async function decideConsentPause(key: string, decision: 'allow' | 'not-now'): Promise<void> {
+  // Given after the hold: the run went on without it, and it applies to later questions (#669 D2).
+  const afterHold = pauseEntry(snapshot.pauses, key)?.holdEnded === true ? { afterHold: true as const } : {};
   updatePause(key, { deciding: true });
   let status = 0;
   let moved: boolean | undefined;
@@ -259,11 +296,11 @@ export async function decideConsentPause(key: string, decision: 'allow' | 'not-n
     status = 0;
   }
   if (status === 200) {
-    updatePause(key, { deciding: false, decision, ...(moved === false ? { moved: false as const } : {}) });
+    updatePause(key, { deciding: false, decision, ...(moved === false ? { moved: false as const } : {}), ...afterHold });
     if (decision === 'allow') void refreshConsent();
     return;
   }
-  updatePause(key, { deciding: false, failure: status === 404 ? 'gone' : status === 409 ? 'decided' : 'other' });
+  updatePause(key, { deciding: false, failure: status === 404 ? 'gone' : status === 409 ? 'decided' : 'other', ...afterHold });
 }
 
 /** The configured sources, in the statement's (manifest) order. */

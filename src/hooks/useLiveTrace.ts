@@ -7,7 +7,7 @@ import { mapEventToNodes } from '@/lib/bpmn/node-mapping';
 import type { ToolFailureKind } from '@/lib/notebook-author/tool-to-cell';
 import type { TraceEvent, PreRecordedTrace } from '@/lib/bpmn/traces';
 import { classifyStreamError, friendlyStreamError, type ProgressPhase } from '@/lib/streaming';
-import { reportConsentPause, reportConsentRefusal } from '@/components/sources/useSourceConsent';
+import { cancelConsentPauses, reportConsentPause, reportConsentRefusal } from '@/components/sources/useSourceConsent';
 import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
 import { generateGroupLabel } from '@/hooks/useStreamingComparison';
 import {
@@ -69,6 +69,9 @@ export function useLiveTrace(): UseLiveTraceReturn {
   // onComplete's connection-lost fallback can't overwrite the real error when
   // the stream closes immediately after erroring.
   const receivedErrorRef = useRef(false);
+  // R9 P1 (Amendment 4): set by Cancel, synchronously and before the abort, and read by every path
+  // that could write an error or a completion (statusRef lags a render behind). Reset by `start`.
+  const cancelledRef = useRef(false);
 
   // Keep statusRef in sync
   useEffect(() => {
@@ -105,7 +108,10 @@ export function useLiveTrace(): UseLiveTraceReturn {
   }, [clearTimers]);
 
   const cancel = useCallback(() => {
-    if (abortRef.current) abortRef.current.abort();
+    // R9 P1 (#668, Amendment 4): the run is cancelled, and a hold it was in ended, BEFORE the abort,
+    // so nothing the abort sets off (in whatever order an engine runs it) can write over either.
+    cancelledRef.current = true;
+    cancelConsentPauses();
     clearTimers();
     setElapsedMs(Date.now() - startTimeRef.current);
     setStatus('cancelled');
@@ -114,6 +120,11 @@ export function useLiveTrace(): UseLiveTraceReturn {
       const trace = traceCaptureRef.current.exportTrace();
       setCapturedTrace(trace);
       traceCaptureRef.current = null;
+    }
+    try {
+      if (abortRef.current) abortRef.current.abort();
+    } catch {
+      // The run is cancelled whatever the abort's own consequences are.
     }
   }, [clearTimers]);
 
@@ -284,6 +295,7 @@ export function useLiveTrace(): UseLiveTraceReturn {
     eventIndexRef.current = 0;
     receivedCompleteRef.current = false;
     receivedErrorRef.current = false;
+    cancelledRef.current = false;
 
     const abortController = new AbortController();
     abortRef.current = abortController;
@@ -339,6 +351,8 @@ export function useLiveTrace(): UseLiveTraceReturn {
       body: { query, model, portal, mcpOnly: true },
       signal: abortController.signal,
       onEvent: (eventData) => {
+        // Nothing a cancelled run still delivers is read: no pause comes back, no error is written (Amendment 4).
+        if (cancelledRef.current || abortController.signal.aborted) return;
         // Only process withMcp panel events (mcpOnly mode)
         if (eventData.panel !== 'withMcp') return;
 
@@ -358,6 +372,8 @@ export function useLiveTrace(): UseLiveTraceReturn {
             reportConsentPause(pause);
             return;
           }
+          // Any other line of the run: it has moved past a hold still open, as on the other surfaces (R9 P1).
+          reportConsentPause(null);
 
           const message = eventData.message as string;
           const iteration = eventData.iteration as number | undefined;
@@ -463,7 +479,18 @@ export function useLiveTrace(): UseLiveTraceReturn {
         }
       },
       onComplete: () => {
+        // A cancelled run's end writes nothing: Cancel has written it (Amendment 4).
+        if (cancelledRef.current) return;
         clearTimers();
+        // R9 P1 (Amendment 3): a run whose own request was aborted by a newer run neither reads
+        // as a lost connection nor overwrites that run's state.
+        if (abortController.signal.aborted) {
+          if (abortRef.current === abortController) cancelConsentPauses();
+          return;
+        }
+        // The run's stream is over, however it ended: a hold still open is over too (#669 D2),
+        // so its card reads the after-hold words and still takes an answer for later questions.
+        reportConsentPause(null);
         finalizeProgress();
         if (statusRef.current === 'running') {
           // Finalize diagram state
@@ -494,6 +521,8 @@ export function useLiveTrace(): UseLiveTraceReturn {
       },
     }).catch((err) => {
       if (err instanceof Error && err.name === 'AbortError') return;
+      // A cancelled or superseded run's rejection, whatever an engine names it, writes nothing (Amendment 4).
+      if (cancelledRef.current || abortController.signal.aborted) return;
       clearTimers();
       // friendlyStreamError covers SSEError 429, MCP timeout/down, and connection
       // drops with calm copy — never the raw error message.

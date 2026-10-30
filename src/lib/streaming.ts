@@ -34,6 +34,12 @@ export type ProgressPhase = 'analyze' | 'tool_start' | 'tool_complete' | 'tool_r
  *   - `links`: the statement's links: the privacy page, and the deployment
  *     guide's address or the sentence that says this site names none.
  *   - `expiresAt`: when the hold ends, ISO 8601.
+ *   - `entryExpiresAt`: when the entry ends, ISO 8601, on a pause that holds
+ *     only (R9 P1, #669 D2): the hold's start plus the entry's life
+ *     (`DECISION_ENTRY_TTL_SECONDS`), from the clock `expiresAt` is read
+ *     from. Until then an answer is still saved, for the reader's next
+ *     question, so the card keeps its buttons after the hold. A stream event,
+ *     not a record field: no span and no package carries it.
  *   - `holds`: false when the run could not stop to ask (no store, a store
  *     that failed, or the run's holds spent); the load is then `no-answer`.
  */
@@ -43,6 +49,7 @@ export interface ConsentPausePayload {
   outbound: string[];
   links: FlowsLinks;
   expiresAt: string;
+  entryExpiresAt?: string;
   holds: boolean;
 }
 

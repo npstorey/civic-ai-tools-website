@@ -22,6 +22,12 @@
 // says `holds: false` and the load records `no-answer` at once, never
 // `unavailable`.
 //
+// R9 P1 (#669 D2, the seat's note 1): a pause that holds also carries
+// `entryExpiresAt`, the entry's end, from the clock `expiresAt` is read from.
+// (#668, note 3): a hold whose reader's stream is gone ends `no-answer` at the
+// next poll, and leaves the entry, its expiry and every recorded value as they
+// were.
+//
 // Criterion 5, the model's side: after Not now and after no answer, the tool
 // message is the stated text with no `{`, and the next request carries no
 // tool of that source.
@@ -160,6 +166,8 @@ interface DriveOptions {
   dbId?: string;
   toolTimeoutMs?: number;
   kvSetup?: (kv: FakeDecisionKv) => void;
+  /** R9 P1: the reader's stream goes this long after the first pause (its signal aborts). */
+  goneAfterMs?: number;
 }
 
 async function drive(options: DriveOptions): Promise<Drive> {
@@ -180,7 +188,9 @@ async function drive(options: DriveOptions): Promise<Drive> {
   const callToolDuringHolds: number[] = [];
   const pauses: Json[] = [];
   const pausedAt: number[] = [];
+  const gone = new AbortController();
   const pause = d.createConsentPause({
+    gone: gone.signal,
     store: options.store === 'none' ? null : kv,
     statement,
     configured,
@@ -221,6 +231,7 @@ async function drive(options: DriveOptions): Promise<Drive> {
         const payload = e.pause as Json;
         pauses.push(payload);
         pausedAt.push(c.t);
+        if (options.goneAfterMs !== undefined && pauses.length === 1) c.at.push({ t: c.t + options.goneAfterMs, act: () => gone.abort() });
         const plan = options.decide?.[pauses.length - 1];
         if (plan && typeof payload.key === 'string') {
           const name = `${d.DECISION_KEY_PREFIX}${payload.key}`;
@@ -487,6 +498,50 @@ test('criterion 4 [A]: a store whose read throws mid-hold gives no-answer, never
   });
   assert.deepEqual(outcomes(d), ['no-answer']);
   assert.equal(d.pauses[0]?.holds, true);
+});
+
+// --- R9 P1: the entry's end on the event, and a hold whose reader is gone ------------------
+
+test('R9 P1 (note 1): a pause that holds carries entryExpiresAt, 600 s after the hold began, the entry\'s own expiry on the same clock', () => {
+  const d = run(allowRun);
+  const payload = d.pauses[0];
+  assert.equal(payload.entryExpiresAt, new Date(d.pausedAt[0] + 600_000).toISOString(), `entryExpiresAt: ${String(payload.entryExpiresAt)}`);
+  assert.equal(payload.expiresAt, new Date(d.pausedAt[0] + 60_000).toISOString(), 'premise: the hold\'s end moved');
+  const name = `${need().DECISION_KEY_PREFIX}${String(payload.key)}`;
+  // The entry's own expiry, as the store holds it: the same instant, never moved.
+  assert.equal(d.kv.entries.get(name)?.expiresAt, Date.parse(String(payload.entryExpiresAt)), 'the event\'s entryExpiresAt is not the entry\'s expiry');
+});
+
+test('R9 P1 (note 1): a pause that does not hold carries no entryExpiresAt', async () => {
+  const d = await drive({
+    states: { socrata: 'on', 'data-commons': 'off', 'boston-opencontext': 'ask-first' },
+    script: [load('load-boston', 'boston'), ANSWER],
+    store: 'none',
+  });
+  assert.equal(d.pauses[0]?.holds, false, 'premise: the pause holds');
+  assert.equal(Object.hasOwn(d.pauses[0], 'entryExpiresAt'), false, 'a pause with no entry names an entry\'s end');
+});
+
+test('R9 P1 (#668, note 3): a hold whose reader\'s stream is gone ends no-answer at the next poll; the entry, its expiry and the load span are as they were', async () => {
+  const d = await drive({
+    states: { socrata: 'on', 'data-commons': 'off', 'boston-opencontext': 'ask-first' },
+    script: [load('load-boston', 'boston'), ANSWER],
+    goneAfterMs: 5_000,
+  });
+  assert.equal(d.pauses.length, 1, 'premise: the run paused');
+  assert.deepEqual(outcomes(d), ['no-answer']);
+  const name = `${need().DECISION_KEY_PREFIX}${String(d.pauses[0].key)}`;
+  const reads = d.kv.calls.filter((c) => c.op === 'get' && c.key === name).length;
+  // 5 s at 500 ms is ten reads; the hold stops at the next one, not at 60 s (120 reads).
+  assert.ok(reads <= 11, `the hold read the store ${reads} times after its reader was gone at 5 s`);
+  // The entry is left for the reader's card: its source, no decision, its expiry unmoved.
+  const stored = d.kv.entries.get(name);
+  assert.ok(stored, 'the entry was removed');
+  assert.deepEqual(JSON.parse(stored!.value), { sourceId: 'boston-opencontext' });
+  assert.equal(stored!.expiresAt, d.pausedAt[0] + 600_000, 'the entry\'s expiry moved');
+  assert.equal(d.kv.calls.filter((c) => c.op === 'set').length, 1, 'the hold wrote the store again');
+  const [span] = loadSpans(d.trace);
+  assert.deepEqual(Object.keys(span).sort(), ['tool.arguments', 'tool.duration_ms', 'tool.load_outcome', 'tool.name', 'tool.operation_type']);
 });
 
 // --- Criterion 7: the event and the load span carry nothing of the pause ------------------

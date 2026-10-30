@@ -6,7 +6,7 @@ import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool } from '@/lib/mcp/client';
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import { consentInForce } from '@/lib/sources/consent-gate';
-import { decisionStoreFromEnv, streamingRoutePause } from '@/lib/sources/decision';
+import { decisionStoreFromEnv, readerGone, streamingRoutePause } from '@/lib/sources/decision';
 import { createInLoopRouting, directorySet, entersInLoop, sourceRoutingMode } from '@/lib/mcp/routing-mode';
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
@@ -281,8 +281,10 @@ export async function POST(request: NextRequest) {
     const directory = routingMode === 'in-loop' ? directorySet(configured, consent) : [];
     // An Ask-first load pauses to ask the reader (#644 W2): this route holds
     // a stream, so it hands the run a pause; the JSON route and replay do not.
+    // A hold ends when its reader is gone (R9 P1, #668): the request's signal, or a cancelled stream.
+    const presence = readerGone(request);
     const inLoop = entersInLoop(routingMode, directory)
-      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, selection, pause: streamingRoutePause(consent, session, configured) })
+      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, selection, pause: streamingRoutePause(consent, session, configured, presence.signal) })
       : undefined;
     const composition = inLoop
       ? { prompt: inLoop.firstSystemPrompt, assertedDate: inLoop.assertedDate, sourcesOffered: inLoop.sourcesOffered, components: inLoop.components() }
@@ -354,6 +356,7 @@ Be honest if you don't have access to current or real-time data.`;
     const encoder = new TextEncoder();
     const stream = new TransformStream();
     const writer = stream.writable.getWriter();
+    presence.watch(writer);
 
     // Helper to write SSE events. A write after the reader has cancelled the
     // stream fails, and that is not the run's failure: the callbacks below do
