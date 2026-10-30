@@ -14,11 +14,12 @@
  * the pointer to the recipients, the local-only offer, where states are set and
  * consent withdrawn, the privacy page's link, and the two answers' effects. No
  * kept-by line renders above the buttons. The recipients and what each says
- * it keeps sit below, in a disclosure closed by default (design principle 8)
- * whose summary carries the count: the scope line, the base recipients each
- * as a line, the definition of "sandbox" where a source runs in one, and one
- * line per data source grouping its recipients, the sandbox host's kept-by
- * line given in full once.
+ * it keeps sit directly below them, so that opening it cannot move them, in a
+ * disclosure shut by default (design principle 8) whose summary carries the
+ * count; the analytics line and the cookie sentence follow it. Inside: the
+ * scope line, the base recipients each as a line, the definition of "sandbox"
+ * where a source runs in one, and one line per data source grouping its
+ * recipients, the sandbox host's kept-by line given in full once.
  *
  * Every sentence that is true only on some instances renders only there:
  * "on your account" with a database, the analytics line with analytics, the
@@ -207,10 +208,8 @@ export default function ConsentCard({ onAllow, onNotNow }: ConsentCardProps) {
           Not now
         </button>
       </div>
-      {analytics && <p style={{ margin: '0 0 4px', color: 'var(--text-secondary)' }}>{CARD_ANALYTICS}</p>}
-      <p style={{ margin: 0, color: 'var(--text-secondary)' }}>{accounts ? CARD_COOKIE_WITH_ACCOUNTS : CARD_COOKIE_WITHOUT_ACCOUNTS}</p>
       {statement && (
-        <details data-consent-recipients="" style={{ marginTop: '12px' }}>
+        <details data-consent-recipients="" style={{ marginBottom: '12px' }}>
           <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--accent)' }}>{cardRecipientsSummary(count)}</summary>
           <p style={{ margin: '8px 0' }}>{CONSENT_CARD.disclosureLead}</p>
           <ul style={{ margin: '0 0 8px', paddingLeft: '20px' }}>
@@ -226,6 +225,8 @@ export default function ConsentCard({ onAllow, onNotNow }: ConsentCardProps) {
           </ul>
         </details>
       )}
+      {analytics && <p style={{ margin: '0 0 4px', color: 'var(--text-secondary)' }}>{CARD_ANALYTICS}</p>}
+      <p style={{ margin: 0, color: 'var(--text-secondary)' }}>{accounts ? CARD_COOKIE_WITH_ACCOUNTS : CARD_COOKIE_WITHOUT_ACCOUNTS}</p>
     </section>
   );
 }

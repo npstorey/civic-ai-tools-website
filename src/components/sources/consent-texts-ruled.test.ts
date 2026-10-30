@@ -14,9 +14,9 @@
 //
 // R9 P3 (#680; #660, D2 = A of the UX pass) replaced the card's R6 sentences
 // with its short layer above the buttons and its recipients in a disclosure
-// below them; the card's tests here read R9 P3's words, and two of R6's
-// replaced wordings, "Nothing is sent" and "at any time", are allowed back on
-// the card only, where that ruling put them (`RULED_BACK_ON_THE_CARD`).
+// below them; the card's tests here read R9 P3's words, and one of R6's
+// replaced wordings, "at any time", is allowed back on the card only, where
+// that ruling put it (`RULED_BACK_ON_THE_CARD`).
 //
 // S2 (criterion 2). With the operator's statement set, the card's endpoint
 // row keeps "what it keeps is for this site's operator to state." and gives
@@ -149,12 +149,13 @@ const R6_CARD_ONLY = [
 const T2 = 'Your question is not sent beyond this site before you answer.';
 // R9 P3 (#680; #660): the card's short layer as ruled on 2026-10-30, T1, T2, T5 and T7 of that ruling.
 const CARD_T1 = 'To answer, this site sends your question to a model service, and sends the searches the model writes to the data sources that are On.';
-const CARD_T2 = 'Nothing is sent before you answer.';
+// Amendment 1: the card's T2 is the privacy page's ruled sentence, so the two say the same.
+const CARD_T2 = T2;
 const CARD_T5_DB = "You can set each source to On, Ask first or Off beside the question box at any time. You can withdraw consent there, or on your dashboard's Sources tab if you are signed in.";
 const CARD_T5_NO_DB = 'You can set each source to On, Ask first or Off beside the question box at any time. You can withdraw consent there.';
 const CARD_T7 = '"Allow" turns on the sources shown as On and sends your question. "Not now" sends nothing.';
-/** R6's replaced wordings that R9 P3's ruling puts back on the card, and only there: "Nothing is sent" (T2) and "at any time" (T5). */
-const RULED_BACK_ON_THE_CARD = ['Nothing is sent', 'at any time'];
+/** R6's replaced wording that R9 P3's ruling puts back on the card, and only there: "at any time" (T5). */
+const RULED_BACK_ON_THE_CARD = ['at any time'];
 const T3_TEXT1 = 'After you allow, you can set each data source to On, Ask first or Off beside the question box.';
 const T4_EACH = [
   "Each source's row gives who publishes its connector, where it runs, who holds its logs and what they say they keep, and how current its data is.",

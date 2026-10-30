@@ -1,14 +1,16 @@
 // R9 P3 (#680; #660, D2 = A of the UX pass): the first-consent card as a decision layer.
 //
 // CRITERION 1. Above its two buttons the card renders exactly the short layer, in order: the heading,
-// T1, T2, T3 (one model service and the statement's sources, counted and named), T4 (the statement's
-// recipient count), the local-only offer, T5, T6 (the privacy link) and T7. No kept-by line renders
-// above the buttons. Below them: the analytics line where analytics is on, the cookie sentence, then
-// one `<details>`, closed by default (no `open`), whose summary is T8 with the same count. Inside it:
-// the lead line (T11), the base recipients each as a line (the model's labelled "Model service"),
-// the sandbox definition directly above the per-source lines (only where a source runs in this
-// site's sandbox), and one line per data source grouping its recipients, the sandbox host's kept-by
-// line given in full once and named "as above" after. The two buttons keep their size and style.
+// T1, T2, T3 (one model service and the statement's sources, counted, then named in a sentence of
+// their own), T4 (the statement's recipient count, pointing to the summary by its first words), the
+// local-only offer, T5, T6 (the privacy link) and T7. No kept-by line renders above the buttons.
+// Directly below them, one `<details>`, shut by default (no `open`), whose summary is T8 with the
+// same count; then the analytics line where analytics is on, and the cookie sentence (amendment 1:
+// the disclosure below the buttons, so opening it cannot move them). Inside the disclosure: the lead
+// line (T11), the base recipients each as a line (the model's labelled "Model service"), the
+// sandbox definition directly above the per-source lines (only where a source runs in this site's
+// sandbox), and one line per data source grouping its recipients, the sandbox host's kept-by line
+// given in full once and named "as above" after. The two buttons keep their size and style.
 //
 // CRITERION 2 (the parts this file asserts). The flows statement, its base version and its hash, and
 // the privacy page's statements, are byte-identical to the base's (`607d101`), pinned below by
@@ -16,9 +18,10 @@
 // (`consent.ts`) and the privacy page's endpoint heading stay "The model endpoint". "Where this
 // question went" is asserted in `src/lib/flows/where-it-went.test.ts`.
 //
-// THE SANDBOX DEFINITION is a hypothesis for the research check (the ruled sentence said the sandbox
-// is "deleted after the question", which the hosting module does not do); its two figures are pinned
-// here to `src/lib/mcp/hosting/lifecycle.ts`, read as text, so a change to either setting fails.
+// THE SANDBOX DEFINITION is the owner's ruling after the second research check (amendment 1), which
+// replaced the first ruling's "deleted after the question" because the hosting module keeps the
+// sandbox; its two figures are pinned here to `src/lib/mcp/hosting/lifecycle.ts`, read as text, so a
+// change to either setting fails.
 //
 // WHAT IS DRIVEN. The real card on the surface harness (`./surface-test-harness.ts`), reading the
 // REAL `/api/flows` and `/api/sources/consent` handlers, at the reference instance's six sources
@@ -122,21 +125,22 @@ async function card(): Promise<Surface> {
 
 const HEADING = 'Before your first question';
 const T1 = 'To answer, this site sends your question to a model service, and sends the searches the model writes to the data sources that are On.';
-const T2 = 'Nothing is sent before you answer.';
+// Amendment 1 (the owner's rulings after the second research check): T2 is the privacy page's ruled sentence.
+const T2 = 'Your question is not sent beyond this site before you answer.';
 const T3: Record<Config, string> = {
-  six: 'Your question can reach one model service and six data sources: Socrata; Data Commons; NYC Charter, Laws and Rules; NYC Checkbook; NYC City Record; and NYS Open Legislation.',
-  three: 'Your question can reach one model service and three data sources: Socrata; Data Commons; and NYC Charter, Laws and Rules.',
-  two: 'Your question can reach one model service and two data sources: Socrata and Data Commons.',
+  six: 'Your question can reach one model service and six data sources. They are Socrata; Data Commons; NYC Charter, Laws and Rules; NYC Checkbook; NYC City Record; and NYS Open Legislation.',
+  three: 'Your question can reach one model service and three data sources. They are Socrata; Data Commons; and NYC Charter, Laws and Rules.',
+  two: 'Your question can reach one model service and two data sources. They are Socrata and Data Commons.',
 };
 const COUNT: Record<Config, { n: number; words: string }> = { six: { n: 14, words: '14' }, three: { n: 5, words: 'five' }, two: { n: 4, words: 'four' } };
-const T4 = (words: string) => `What each of the ${words} recipients says it keeps is listed under Show recipients.`;
+const T4 = (words: string) => `What each of the ${words} recipients says it keeps is listed below, under "Show the ${words} recipients".`;
 const LOCAL_ONLY = 'You can also run this whole system on your own computer, with your own model and data sources. This site does not name a deployment guide.';
 const T5_NO_DB = 'You can set each source to On, Ask first or Off beside the question box at any time. You can withdraw consent there.';
 const T5_DB = "You can set each source to On, Ask first or Off beside the question box at any time. You can withdraw consent there, or on your dashboard's Sources tab if you are signed in.";
 const T6 = 'The privacy page has the full statement.';
 const T7 = '"Allow" turns on the sources shown as On and sends your question. "Not now" sends nothing.';
 const T8 = (words: string) => `Show the ${words} recipients and what each says it keeps`;
-const T10 = 'A sandbox is a computer this site creates in the cloud to search a data source. It stops 10 minutes after its last search. A saved copy of it expires 30 days after its last use.';
+const T10 = 'A sandbox is a computer this site creates in the cloud to search a data source. It stops when no one has searched for 10 minutes. This site keeps a saved copy of it for 30 days after its last use.';
 const T11 = 'The searches the model writes can include words from your question.';
 const ANALYTICS = 'An analytics service counts page visits. The privacy page names it and says how to object.';
 const COOKIE_NO_DB = 'We keep your answer for this browser session in a cookie.';
@@ -257,10 +261,18 @@ for (const config of ['six', 'three', 'two'] as const) {
         assert.equal(inner.indexOf(groups[0]), at + 2, 'the definition is not directly above the per-source lines');
         assert.ok(inside.indexOf(T10) > inside.indexOf(textOf(inner.find((el) => el.props['data-recipient'] === statement.recipients.at(-1).id)!)), 'the definition is not after the base recipients');
       }
-      // Below the buttons: the analytics line where analytics is on, then the cookie sentence, then the disclosure.
+      // Amendment 1: the disclosure sits directly below the two buttons, so opening it cannot move them;
+      // the analytics line where analytics is on and the cookie sentence follow it.
+      const lastButton = elements.map((el) => el.type).lastIndexOf('button');
+      assert.equal(elements[lastButton + 1], disclosure, 'the disclosure is not the element directly below the two buttons');
+      assert.ok(elements.indexOf(disclosure) > lastButton, 'part of the disclosure renders above the buttons');
+      const summaryAt = below.indexOf(T8(COUNT[config].words));
       const cookie = below.indexOf(COOKIE_NO_DB);
-      assert.ok(cookie > 0 && cookie < below.indexOf(T8(COUNT[config].words)), 'the cookie sentence is not below the buttons, above the disclosure');
-      if (config === 'six') assert.ok(below.indexOf(ANALYTICS) > 0 && below.indexOf(ANALYTICS) < cookie, 'the analytics line is not below the buttons');
+      assert.ok(summaryAt > 0 && cookie > summaryAt, 'the cookie sentence is not below the disclosure');
+      if (config === 'six') {
+        const analytics = below.indexOf(ANALYTICS);
+        assert.ok(analytics > summaryAt && analytics < cookie, 'the analytics line is not between the disclosure and the cookie sentence');
+      }
     } finally {
       surface.unmount();
     }

@@ -133,21 +133,22 @@ export const KEPT_FOR_OPERATOR = "what it keeps is for this site's operator to s
  * (`cardPointerSentence`, T4), the local-only offer, where states are set and
  * consent withdrawn (`CARD_CONTROLS_*`, T5), the privacy page's link
  * (`CONSENT_CARD.fullStatement`, T6) and the effect of the two answers
- * (`CONSENT_CARD.effect`, T7). T1-T8 and T11 were research-checked and
- * ruled on 2026-10-30 (#680 P3); the sandbox definition, the per-source
- * line's words and the semicolon join of names are this phase's, for a
- * second check. Below the buttons, unchanged (D4 = A): the analytics
- * line and the cookie sentence (`CARD_ANALYTICS`, `CARD_COOKIE_*`). Then the
- * recipients and what each says it keeps, under a disclosure closed by default
- * (design principle 8): its summary (`cardRecipientsSummary`, T8), its lead
+ * (`CONSENT_CARD.effect`, T7). The words were research-checked and ruled on
+ * 2026-10-30 (#680 P3), and the second check's rulings applied (amendment 1:
+ * T2 is the privacy page's sentence, T3 names the sources in a sentence of
+ * their own, T4 points to the summary by its first words, the sandbox
+ * definition). Directly below the buttons, so that opening it cannot move
+ * them: the recipients and what each says it keeps, under a disclosure shut
+ * by default (design principle 8): its summary (`cardRecipientsSummary`, T8), its lead
  * line (`CONSENT_CARD.disclosureLead`, T11), the base recipients, the sandbox
  * definition (`CARD_SANDBOX_DEFINITION`) and one line per data source
- * (`CARD_SOURCE_LINE`). `sentences` lists every sentence the card renders on
- * every instance, for the tests.
+ * (`CARD_SOURCE_LINE`). Then, unchanged (D4 = A), the analytics line and the
+ * cookie sentence (`CARD_ANALYTICS`, `CARD_COOKIE_*`). `sentences` lists every
+ * sentence the card renders on every instance, for the tests.
  */
 const CARD_LEAD = [
   'To answer, this site sends your question to a model service, and sends the searches the model writes to the data sources that are On.',
-  'Nothing is sent before you answer.',
+  'Your question is not sent beyond this site before you answer.',
 ] as const;
 const CARD_FULL_STATEMENT = 'The privacy page has the full statement.';
 
@@ -194,24 +195,36 @@ function joinNames(names: readonly string[]): string {
   return `${names.slice(0, -1).join(separator)}${last}${names[names.length - 1]}`;
 }
 
-/** T3's fixed words: the model service is always one recipient; the sources are counted and named from the statement. */
+/** T3's fixed words: the model service is always one recipient; the sources are counted, then named, from the statement. */
 export const CARD_REACH = {
   lead: 'Your question can reach one model service and ',
   one: 'data source',
   many: 'data sources',
   none: 'no data source',
+  /** The names' own sentence: "They are Socrata and Data Commons." (one source: "It is Socrata."). */
+  they: 'They are ',
+  it: 'It is ',
 } as const;
 
-/** T3: "Your question can reach one model service and six data sources: Socrata, …", the names read from the statement. */
+/**
+ * T3, two sentences (amendment 1): "Your question can reach one model service
+ * and six data sources. They are Socrata; Data Commons; …", the count and the
+ * names read from the statement. With no source, the first sentence alone.
+ */
 export function cardReachSentence(names: readonly string[]): string {
   if (names.length === 0) return `${CARD_REACH.lead}${CARD_REACH.none}.`;
   const noun = names.length === 1 ? CARD_REACH.one : CARD_REACH.many;
-  return `${CARD_REACH.lead}${countWords(names.length)} ${noun}: ${joinNames(names)}.`;
+  const naming = names.length === 1 ? CARD_REACH.it : CARD_REACH.they;
+  return `${CARD_REACH.lead}${countWords(names.length)} ${noun}. ${naming}${joinNames(names)}.`;
 }
 
-/** T4: the pointer to the disclosure, with the statement's recipient count, written as T3 writes its count. */
+/**
+ * T4: the pointer to the disclosure directly below the buttons, with the
+ * statement's recipient count, quoting the summary's first words (amendment 1).
+ */
 export function cardPointerSentence(recipients: number): string {
-  return `What each of the ${countWords(recipients)} recipients says it keeps is listed under Show recipients.`;
+  const count = countWords(recipients);
+  return `What each of the ${count} recipients says it keeps is listed below, under "Show the ${count} recipients".`;
 }
 
 /** T8: the disclosure's summary, with the same count. */
@@ -231,10 +244,10 @@ export const CARD_CONTROLS_WITHOUT_ACCOUNTS =
 
 /**
  * The definition of "sandbox", directly above the per-source lines, rendered
- * only when a source runs in this site's sandbox. HYPOTHESIS, for the
- * research check before the gate (R9 P3): the ruled sentence said the sandbox
- * is temporary and "deleted after the question", which the hosting module does
- * not do. A hosted source's sandbox is persistent, one per source and pinned
+ * only when a source runs in this site's sandbox. The owner's ruling after the
+ * second research check (amendment 1). The first ruling said the sandbox is
+ * temporary and "deleted after the question", which the hosting module does
+ * not do: a hosted source's sandbox is persistent, one per source and pinned
  * version, created on first use and reused by later questions; it stops itself
  * after the idle window (`DEFAULT_IDLE_WINDOW_MS`, 10 minutes, restarted by
  * each call) and keeps one snapshot that expires 30 days after its last use
@@ -242,7 +255,7 @@ export const CARD_CONTROLS_WITHOUT_ACCOUNTS =
  * to that module by `consent-card-layer.test.ts`.
  */
 export const CARD_SANDBOX_DEFINITION =
-  'A sandbox is a computer this site creates in the cloud to search a data source. It stops 10 minutes after its last search. A saved copy of it expires 30 days after its last use.';
+  'A sandbox is a computer this site creates in the cloud to search a data source. It stops when no one has searched for 10 minutes. This site keeps a saved copy of it for 30 days after its last use.';
 
 /**
  * One line per data source inside the disclosure: the source's name, then each
