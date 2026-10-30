@@ -1,7 +1,31 @@
 // The harness pin — @typedstandards/civic-typed-harness must be a version
 // that carries the signed-surface fixes named below (Wave N9 #384, family F2,
 // C4; Wave N10 #409, criterion 6; Wave N12 #470, criteria 7-9; sprint R2 #599
-// W4; sprint R6 #632 W2; sprint R8 #644 W1).
+// W4; sprint R6 #632 W2; sprint R8 #644 W1; sprint R10 civic-ai-tools#289 P5).
+//
+// WHAT THE PIN PROTECTS, PART SEVEN — 0.11.0, and why the range moved to it
+// (sprint R10 P5, hub ADR-0038). One thing this instance's publish route now
+// relies on, in bytes it signs, on new records only:
+//
+//   1. `CIVICAITOOLS_V1_PRODUCER_PROFILE`
+//      (`ai-assisted-analysis/civicaitools-v1`), the Producer Profile subtype
+//      this host declares on every record its own runs publish
+//      (`captureMethod: 'chat-flow-stream'`), full-text (`datHere`) and
+//      hash-only (`default`) alike. Below 0.11.0 the constant does not exist.
+//      `deriveProducerProfile` is unchanged: an explicit value wins under
+//      every content profile, which is what lets a hash-only record carry it.
+//
+// 0.11.0 changed no derivation and kept produce-core `^0.9.0`. The subtype's
+// table row (the content profiles it admits and its bundle) is verify-core
+// 0.15.0's, which is why this repository's verify-core pin moves with this
+// one; produce-core 0.9.1, which `^0.9.0` admits, requires verify-core
+// `^0.15.0`, so the lockfile resolves one copy of each core. A record packaged
+// without the constant has the same bytes.
+//
+// Where it is driven through this repository's route and packager:
+// `src/app/api/producer-profile-driven.test.ts` (a hash-only and a full-text
+// publish through the real dialog each carry it; a `datHere` record declaring
+// it returns 200, and an inconsistent pair 400).
 //
 // WHAT THE PIN PROTECTS, PART SIX — 0.10.0, and why the range moved to it
 // (#644 W1, hub ADR-0033's amendment 2). Two things this instance's packager
@@ -260,17 +284,17 @@ const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 
 const HARNESS = '@typedstandards/civic-typed-harness';
 const HARNESS_DIR = path.join(REPO_ROOT, 'node_modules', ...HARNESS.split('/'));
 
-/** The lowest version carrying ALL SIX sets of fixes this file names: the
+/** The lowest version carrying ALL SEVEN sets of fixes this file names: the
  *  0.3.1 graph-builder fixes, the 0.4.0 data-source fix, the 0.5.0
  *  configured-server fixes, 0.7.0's record fields, 0.9.0's two reasons and
- *  flows-statement reference, and 0.10.0's routing statement and load span
- *  above. */
-const FLOOR = '0.10.0';
+ *  flows-statement reference, 0.10.0's routing statement and load span, and
+ *  0.11.0's subtype constant above. */
+const FLOOR = '0.11.0';
 /** Exclusive ceiling: under semver a 0.x MINOR bump is a breaking change, so
- *  the pin admits later 0.10.x PATCHES (a fix that is still this behaviour)
- *  and refuses 0.11.0, which would be a contract this test has not read. The
- *  assertion is therefore a RANGE (`>=0.10.0 <0.11.0`) rather than equality to
- *  `0.10.0`: pinning the exact string would turn red on a patch release that
+ *  the pin admits later 0.11.x PATCHES (a fix that is still this behaviour)
+ *  and refuses 0.12.0, which would be a contract this test has not read. The
+ *  assertion is therefore a RANGE (`>=0.11.0 <0.12.0`) rather than equality to
+ *  `0.11.0`: pinning the exact string would turn red on a patch release that
  *  changed nothing this file cares about, which is a criterion that fails for
  *  the wrong reason.
  *
@@ -281,12 +305,14 @@ const FLOOR = '0.10.0';
  *  <0.8.0` until sprint R6 W2, which read 0.8.0's and 0.9.0's together (0.8.0,
  *  again, changed no harness source and raised the core floors), and `>=0.9.0
  *  <0.10.0` until sprint R8 W1, which read 0.10.0's entry (no dependency
- *  change, so the core floors stay). Each ceiling did its
+ *  change, so the core floors stay), and `>=0.10.0 <0.11.0` until sprint R10
+ *  P5, which read 0.11.0's entry (no derivation change; verify-core moved to
+ *  `^0.15.0` for the subtype's table row). Each ceiling did its
  *  job: it held the next minor out until someone read the new contract and
  *  said what changed. Both numbers move together, in one commit, with the
  *  paragraph above rewritten — a floor raised without its ceiling would
  *  silently readmit the next unread minor. */
-const CEILING = '0.11.0';
+const CEILING = '0.12.0';
 
 type Semver = [number, number, number];
 
@@ -321,7 +347,7 @@ function readJson(file: string): Record<string, unknown> {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
 }
 
-test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.10.0 <0.11.0 (it carries all six sets of signed-surface fixes)', () => {
+test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.11.0 <0.12.0 (it carries all seven sets of signed-surface fixes)', () => {
   const pkgJson = path.join(HARNESS_DIR, 'package.json');
   assert.ok(fs.existsSync(pkgJson), `${HARNESS} is not installed at ${pkgJson} — run npm ci`);
 
@@ -331,7 +357,9 @@ test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.10.0 <0.11.0 
   const installed = parseSemver(version as string, `installed ${HARNESS}`);
   assert.ok(
     compareSemver(installed, parseSemver(FLOOR, 'floor')) >= 0,
-    `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release that states how a run's ` +
+    `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release that exports the ` +
+      'Producer Profile subtype this host declares (`CIVICAITOOLS_V1_PRODUCER_PROFILE`; hub ADR-0038; ' +
+      'civic-ai-tools#289 P5). 0.10.0 is the floor that states how a run\'s ' +
       'sources were chosen (`routing`, `definitionHash`) and what each `load_source` call did ' +
       '(`civic:loadOutcome`; hub ADR-0033 amendment 2; #644). 0.9.0 is the floor that states the reader\'s ' +
       'own states as reasons (`reader-off`, `not-consented`) and refers to the flows statement in force ' +
@@ -404,12 +432,21 @@ test('harness pin: exactly one copy of each core — no nested @typedstandards/p
   // RE-READ AT 0.10.0 (sprint R8 W1). 0.10.0 still declares produce-core
   // `^0.9.0` and nothing else, so neither core pin moves. The lockfile moved
   // exactly the harness and router entries and nested no copy.
+  //
+  // RE-READ AT 0.11.0 (sprint R10 P5). 0.11.0 still declares produce-core
+  // `^0.9.0` and nothing else. This repository's verify-core pin moved to
+  // `^0.15.0` (the subtype table), and produce-core 0.9.0 declares verify-core
+  // `^0.14.0`, so `npm install --package-lock-only` alone kept produce-core at
+  // 0.9.0 and nested verify-core 0.14.0 under it — measured, and the case the
+  // loop below exists for. `npm update @typedstandards/produce-core
+  // --package-lock-only` moved it, within its unchanged `^0.9.0`, to 0.9.1,
+  // which declares `^0.15.0`; the lockfile then holds one copy of each.
   const nested = path.join(HARNESS_DIR, 'node_modules', '@typedstandards', 'produce-core');
   assert.equal(
     fs.existsSync(nested),
     false,
     `a second produce-core is nested at ${nested}; the harness's dependency range must admit the ` +
-      "root copy (0.10.0 declares '^0.9.0'), so npm install resolves one.",
+      "root copy (0.11.0 declares '^0.9.0'), so npm install resolves one.",
   );
   const PRODUCE_DIR = path.join(REPO_ROOT, 'node_modules', '@typedstandards', 'produce-core');
   for (const owner of [HARNESS_DIR, PRODUCE_DIR]) {
@@ -418,7 +455,7 @@ test('harness pin: exactly one copy of each core — no nested @typedstandards/p
       fs.existsSync(nestedVerify),
       false,
       `a second verify-core is nested at ${nestedVerify}; this repository's verify-core range must admit ` +
-        "the one produce-core declares (produce-core 0.9.0 declares '^0.14.0'), so npm install resolves one.",
+        "the one produce-core declares (produce-core 0.9.1 declares '^0.15.0'), so npm install resolves one.",
     );
   }
 });
