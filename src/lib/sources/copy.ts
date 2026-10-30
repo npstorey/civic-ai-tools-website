@@ -93,6 +93,15 @@ export const PANEL_PRIVACY_LINK = 'Where a question can go, in full';
 export const PANEL_STATE_CHANGED = { middle: ' is now ', end: '. This applies from your next question.' } as const;
 
 /**
+ * Under the panel's lead, as a status line, on the one read that kept a
+ * consent given signed out on the account (R9 P4, #662; D5 = A of the UX
+ * pass). Ruled as written (reading A): the lead, the controls and the account
+ * block beside it say how to change the choice. Renders only for a consent
+ * kept on an account, which exists only with a database.
+ */
+export const PANEL_KEPT_ON_ACCOUNT = 'Your choice is now kept on your account.';
+
+/**
  * The just-in-time line under the question box while a consent is in force
  * (UX pass row 11), in its pieces: `lead` (`leadNotebook` when the form is in
  * notebook mode) + the On sources (or `noSource`) +

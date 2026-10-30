@@ -84,6 +84,8 @@ export interface ConsentStatus {
   consentedBaseVersion?: string;
   consentedFlowsDate?: string;
   notices?: ConsentNotice[];
+  /** True on the one read that kept a consent given signed out on the account (R9 P4, #662); absent otherwise. */
+  keptFromCookie?: boolean;
 }
 
 export interface ConsentSnapshot {
@@ -130,6 +132,13 @@ const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, w
 let snapshot: ConsentSnapshot = EMPTY;
 const listeners = new Set<() => void>();
 let inflight: Promise<void> | null = null;
+/**
+ * A read on this page kept a consent given signed out on the account (R9 P4,
+ * #662). Only that one read carries `keptFromCookie`, and a surface that
+ * mounts later (the panel's notices) reads again, so the page keeps the flag
+ * on a row in force until a write, or until the last surface leaves.
+ */
+let keptOnPage = false;
 
 function set(next: Partial<ConsentSnapshot>): void {
   snapshot = { ...snapshot, ...next };
@@ -144,6 +153,7 @@ function subscribe(listener: () => void): () => void {
     if (listeners.size === 0) {
       snapshot = EMPTY;
       inflight = null;
+      keptOnPage = false;
       clearPauseTimers();
     }
   };
@@ -176,7 +186,10 @@ export function refreshConsent(): Promise<void> {
         fetch('/api/flows', { method: 'GET', headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)),
         readRouting(),
       ]);
-      set({ loaded: true, status: status as ConsentStatus | null, statement: statement as FlowsStatement | null, routing, store });
+      const read = status as ConsentStatus | null;
+      if (read?.keptFromCookie === true) keptOnPage = true;
+      const shown = keptOnPage && read?.store === 'row' && read.inForce ? { ...read, keptFromCookie: true } : read;
+      set({ loaded: true, status: shown, statement: statement as FlowsStatement | null, routing, store });
     } catch {
       set({ loaded: true, status: null, statement: null, routing: null, store: null });
     } finally {
@@ -354,6 +367,8 @@ export function panelStates(
 }
 
 async function write(method: 'PUT' | 'PATCH' | 'DELETE', body?: unknown): Promise<boolean> {
+  // The reader has acted since the choice was kept: the line has said what it had to.
+  keptOnPage = false;
   set({ writing: true, failed: false });
   try {
     const response = await fetch('/api/sources/consent', {

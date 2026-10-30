@@ -18,6 +18,7 @@ import {
   type Reask,
   type SourceState,
 } from '@/lib/sources/consent';
+import { errorLogFacts } from '@/lib/streaming';
 
 /**
  * /api/sources/consent — the reader's consent to send a question onward
@@ -34,6 +35,8 @@ import {
  *           states a first consent gives (each configured source's manifest
  *           `consentDefault`, D6). For a row, `notices` are the changes since
  *           the statement it holds that ask nothing (D2 = A). Sets no cookie.
+ *           `keptFromCookie: true` on the one read that kept a consent given
+ *           signed out on the account (below); absent on every other read.
  *   PUT     `{ states: { <source id>: 'on' | 'ask-first' | 'off' }, flowsVersion }`
  *           stores the states for the sources this instance configures,
  *           against the flows statement the surface was shown. 400 names any
@@ -50,6 +53,19 @@ import {
  * PUT and DELETE without a `dbId` set the cookie, and nothing else in this
  * codebase does. The cookie is `Secure` when the request reached the site
  * over https (`isSecureRequest`), on the write and the revoke alike.
+ *
+ * WHY A READ WRITES (R9 P4, #662; D5 = A of the UX pass). A reader who
+ * answered the card signed out and then signed in has a session with a `dbId`
+ * and no row, so the row store alone would ask them again for a choice they
+ * have already made. So the first GET for such a session keeps the consent:
+ * when the request carries a consent cookie in force (`cookieConsentInForce`,
+ * the version check every cookie meets), the cookie's states are written to
+ * the account's row in the shape PUT writes, and the answer is the row's,
+ * with `keptFromCookie: true`. That GET is the first place that holds both
+ * the session and the request's cookies (the sign-in callbacks in `auth.ts`
+ * see no request cookies). A stale cookie writes nothing and is answered as
+ * no consent, as before; a session with a row never reads the cookie; the
+ * cookie itself is left as it is; a failed write is answered as no consent.
  */
 
 interface Session { user?: { id?: string; dbId?: string } | null }
@@ -81,7 +97,10 @@ export async function GET(request: Request): Promise<Response> {
   const { statement, hash, defaults } = await current();
   const dbId = session?.user?.dbId;
   if (dbId) {
-    const row = await readConsentRow(dbId);
+    let row = await readConsentRow(dbId);
+    // No row: keep a consent given signed out on the account (R9 P4; the header says why a read writes).
+    const kept = !row && (await keepCookieConsent(request, dbId, statement, hash));
+    if (kept) row = await readConsentRow(dbId);
     if (!row) return json({ inForce: false, store: 'row', flowsVersion: hash, defaults, accounts: accounts() }, 200);
     const reask = reaskOf(classifyFlowsChange(row.flowsStatement, statement));
     const inForce = !reask.base && reask.sources.length === 0;
@@ -99,6 +118,7 @@ export async function GET(request: Request): Promise<Response> {
       consentedFlowsDate: row.flowsStatement.date,
       notices: inForce ? noticesOf(row.flowsStatement, statement) : [],
       ...(inForce ? {} : { reask }),
+      ...(kept ? { keptFromCookie: true } : {}),
     }, 200);
   }
   const cookie = readConsentCookie(request);
@@ -114,6 +134,34 @@ export async function GET(request: Request): Promise<Response> {
     states,
     ...(verdict.inForce ? { consentedFlowsVersion: hash, consentedBaseVersion: statement.version, consentedFlowsDate: statement.date } : { reask: verdict.reask as Reask }),
   }, 200);
+}
+
+/**
+ * Write the request's consent cookie into the account's row, when it is in
+ * force against `statement`: each configured source's `{ state, since }`, as
+ * PUT stores it (a source this instance does not configure is dropped, as PUT
+ * refuses one), with the statement's hash and the statement. True when the
+ * row was written; false for no cookie, a stale one, or a failed write, so
+ * the read is answered as it was before this existed. The cookie is not
+ * touched.
+ */
+async function keepCookieConsent(request: Request, dbId: string, statement: FlowsStatement, hash: string): Promise<boolean> {
+  const cookie = readConsentCookie(request);
+  if (!cookie || !cookieConsentInForce(cookie, statement).inForce) return false;
+  const configured = new Set(statement.sources.map((s) => s.sourceId));
+  const states = Object.fromEntries(
+    Object.entries(cookie.states)
+      .filter(([id]) => configured.has(id))
+      .map(([id, s]) => [id, { state: s.state, since: s.since }]),
+  );
+  try {
+    await writeConsentRow(dbId, { states, flowsHash: hash, flowsStatement: statement });
+    return true;
+  } catch (err) {
+    // Bounded (#503 WF): the store's error message carries the bound parameters, the account key and the states among them.
+    console.error('[api/sources/consent] keeping a cookie consent on the account failed; answered as no consent', errorLogFacts(err));
+    return false;
+  }
 }
 
 export async function PUT(request: Request): Promise<Response> {

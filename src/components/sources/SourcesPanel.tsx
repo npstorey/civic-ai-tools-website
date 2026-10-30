@@ -12,6 +12,9 @@
  * consent was given and the control that withdraws it in place, for every
  * session (amendment 1, Q7); a session whose consent is kept on its account
  * also gets a link to the dashboard's Sources tab, and its notices (D2 = A).
+ * The read that kept a consent given signed out on the account (R9 P4,
+ * #662) shows one status line under the lead, on that page until the
+ * reader's next change; a later page's read finds the row and shows none.
  *
  * THE CONTROL is a radio group per source, named for it, of three native
  * radios: arrow keys move within it, the checked choice is what a screen
@@ -32,7 +35,7 @@
  */
 
 import { useState, type CSSProperties } from 'react';
-import { ASK_FIRST_MEANS, ASK_FIRST_MEANS_WITH_PAUSE, PANEL_HEADING, PANEL_LEAD, PANEL_PRIVACY_LINK, PANEL_ROW_MORE, PANEL_STATE_CHANGED, panelLeadBeforeConsent } from '@/lib/sources/copy';
+import { ASK_FIRST_MEANS, ASK_FIRST_MEANS_WITH_PAUSE, PANEL_HEADING, PANEL_KEPT_ON_ACCOUNT, PANEL_LEAD, PANEL_PRIVACY_LINK, PANEL_ROW_MORE, PANEL_STATE_CHANGED, panelLeadBeforeConsent } from '@/lib/sources/copy';
 import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
 import { panelStates, useSourceConsent, type SourceStateValue } from './useSourceConsent';
 import { KeptByLines } from './KeptByLine';
@@ -82,6 +85,12 @@ export default function SourcesPanel() {
         {PANEL_HEADING}
       </h2>
       {lead !== '' && <p style={{ margin: '0 0 8px' }}>{lead}</p>}
+      {/* R9 P4 (#662): the read that kept a consent given signed out on the account says so; the page keeps it until the reader's next change. */}
+      {onAccount && inForce && status?.keptFromCookie === true && (
+        <p role="status" style={{ margin: '0 0 8px', color: 'var(--text-primary)' }}>
+          {PANEL_KEPT_ON_ACCOUNT}
+        </p>
+      )}
       {onAccount && inForce && <ConsentNotices />}
       <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
         {(statement?.sources ?? []).map((source) => {
