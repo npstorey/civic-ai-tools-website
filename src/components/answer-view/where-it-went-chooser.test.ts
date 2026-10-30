@@ -301,3 +301,67 @@ test('criterion 1, the record: the routing on the root span is not read in place
   (pkg as { trace: Json }).trace = traceOf(IN_LOOP);
   assertNotRecorded(sectionOf({ whereItWent: whereItWentFromPackage(pkg, null) }).inside, 'the record');
 });
+
+// --- Criterion 2: the card ----------------------------------------------------------------------------
+
+const RECORD_ROW = { slug: 'r10-fixture', summary: 'A summary.', contentProfile: null, captureMethod: 'chat-flow-stream' };
+function recordPackage(routing: Routing): Json {
+  return {
+    ...packageOf(routing),
+    version: '0.1', prompt: { text: 'How many?', hash: 'h'.repeat(64) }, output: 'An answer.', queries: [], dataSources: [],
+    cost: { model: MODEL, promptTokens: 10, completionTokens: 5, totalTokens: 15, durationMs: 1000 },
+    metadata: { captureMethod: 'chat-flow-stream' },
+  };
+}
+const record = (routing: Routing) => adaptRecord({ stored: recordPackage(routing), resolution: null, row: RECORD_ROW, instance: null, servedStatement: null });
+
+const ADAPTERS: Array<[string, (routing: Routing) => Model]> = [
+  ['the executed run', (routing) => executed(traceOf(routing))],
+  ['the comparison', (routing) => comparison(traceOf(routing))],
+  ['the record', (routing) => record(routing)],
+];
+
+const item = (model: Model, label: string) => (model.disclosure?.environment ?? []).find((i: { label: string }) => i.label === label);
+
+for (const [name, adapt] of ADAPTERS) {
+  test(`criterion 2, ${name}, in-loop: "Sources chosen by" states the method in reader words with the router's version, and the hash as small print`, () => {
+    const model = adapt(IN_LOOP);
+    assert.deepEqual(item(model, CARD.label), { label: CARD.label, value: CARD.inLoop(ROUTER_VERSION) }, `${name}: ${JSON.stringify(model.disclosure?.environment)}`);
+    assert.deepEqual(item(model, CARD.definitionLabel), { label: CARD.definitionLabel, value: DEFINITION_HASH.slice(0, 12), mono: true });
+  });
+
+  test(`criterion 2, ${name}, no routing key: "Sources chosen by: not recorded", and no hash`, () => {
+    const model = adapt(null);
+    assert.deepEqual(item(model, CARD.label), { label: CARD.label, value: CARD.notRecorded }, `${name}: ${JSON.stringify(model.disclosure?.environment)}`);
+    assert.equal(item(model, CARD.definitionLabel), undefined);
+  });
+
+  test(`criterion 2, ${name}, a stated all-sources method: the card says so`, () => {
+    assert.deepEqual(item(adapt(ALL_SOURCES), CARD.label), { label: CARD.label, value: CARD.allSources });
+  });
+}
+
+test('criterion 2, the runs before their trace: no card (P-f)', () => {
+  for (const model of [executed(null), comparison(null)]) assert.equal(item(model, CARD.label), undefined);
+});
+
+test('criterion 2: "all portals" appears in no adapter\'s environment, with no portal and with the retired "__all__"', () => {
+  const models = [
+    executed(traceOf(IN_LOOP), ''), executed(traceOf(IN_LOOP), '__all__'),
+    comparison(traceOf(IN_LOOP), ''), comparison(traceOf(IN_LOOP), '__all__'),
+    record(IN_LOOP), record(null),
+  ];
+  for (const model of models) {
+    const text = JSON.stringify(model.disclosure?.environment ?? []);
+    assert.ok(!text.toLowerCase().includes('all portals'), `an environment says "all portals": ${text}`);
+    assert.equal(item(model, RUN_PORTAL_LABEL), undefined, `a run with no portal shows the portal card: ${text}`);
+    assert.equal(item(model, 'Data portal'), undefined, `the retired label is shown: ${text}`);
+  }
+});
+
+test('criterion 2: the renamed portal card shows only when the run holds a portal', () => {
+  for (const model of [executed(traceOf(IN_LOOP)), comparison(traceOf(IN_LOOP))]) {
+    assert.deepEqual(item(model, RUN_PORTAL_LABEL), { label: RUN_PORTAL_LABEL, value: PORTAL });
+    assert.equal(item(model, 'Data portal'), undefined);
+  }
+});
