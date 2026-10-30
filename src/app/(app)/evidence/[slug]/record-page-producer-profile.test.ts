@@ -259,3 +259,60 @@ test('4: a record with no producerProfile prints no label', async () => {
   assert.doesNotMatch(section, /Producer profile/);
   assert.equal(links(section).some((l) => l.text === DISPLAY_NAME), false);
 });
+
+// --- Criterion 5: section C's "Content shape" card ----------------------------------
+//
+// The owner's ruling (13:3xZ): section C's "Content profile" card becomes
+// "Content shape", on old and new records alike, in the reader's words, with
+// the raw value as small print in a separate item, the way the system prompt
+// hash is (the grid has no inline small print). The §8.7 link stays in the
+// status row. The words are hypotheses, read here from copy.ts.
+
+interface CItem { label: string; value: string; valueStyle: string }
+
+/** Section C's items, in order: label, value text, and the value's style. */
+function cItems(html: string): CItem[] {
+  const start = html.indexOf('C · Model + environment');
+  assert.ok(start >= 0, 'premise: the page rendered section C');
+  const body = html.slice(start, html.indexOf('</section>', start));
+  const items: CItem[] = [];
+  const re = /<div data-part="c-item"[^>]*><div[^>]*>([^<]*)<\/div><div style="([^"]*)">([\s\S]*?)<\/div><\/div>/g;
+  for (let m = re.exec(body); m !== null; m = re.exec(body)) items.push({ label: m[1], valueStyle: m[2], value: m[3].replace(/<[^>]*>/g, '') });
+  return items;
+}
+
+const { CONTENT_SHAPE } = (await import('@/lib/sources/copy')) as unknown as {
+  CONTENT_SHAPE?: { label: string; datHere: string; default: string; rawLabel: string };
+};
+
+for (const [rowProfile, pkgProfile, shape, raw, slug] of [
+  ['datHere', 'datHere', 'full record (A to G envelope)', 'datHere', 'shape-dathere'],
+  ['default', 'default', 'plain record', 'default', 'shape-default'],
+  [null, 'default', 'plain record', 'default', 'shape-absent'],
+] as const) {
+  test(`5: a record whose content profile is ${rowProfile ?? 'absent'}: "Content shape" reads "${shape}", the raw value "${raw}" as small print beside it`, async () => {
+    const items = cItems(await render(slug, rowProfile, build(pkgProfile, SUBTYPE)));
+    const at = items.findIndex((item) => item.label === 'Content shape');
+    assert.ok(at >= 0, `section C has no "Content shape" card: ${items.map((i) => `${i.label}: ${i.value}`).join(' | ')}`);
+    assert.equal(items[at].value, shape, 'the card does not read the shape in the reader\'s words');
+    assert.doesNotMatch(items[at].valueStyle, /monospace/, 'the card\'s value is small print');
+    assert.ok(CONTENT_SHAPE, 'copy.ts exports no CONTENT_SHAPE');
+    assert.deepEqual(
+      { label: CONTENT_SHAPE.label, datHere: CONTENT_SHAPE.datHere, default: CONTENT_SHAPE.default },
+      { label: 'Content shape', datHere: 'full record (A to G envelope)', default: 'plain record' },
+      'the page\'s words are not read from copy.ts',
+    );
+    const small = items[at + 1];
+    assert.equal(small?.label, CONTENT_SHAPE.rawLabel, 'the raw value is not the next item');
+    assert.equal(small.value, raw, 'the small print is not the raw value');
+    assert.match(small.valueStyle, /font-size:12px/, 'the raw value is not small print');
+    assert.match(small.valueStyle, /monospace/, 'the raw value is not set as a value');
+    assert.equal(items.filter((item) => item.value === raw && item.label !== CONTENT_SHAPE.rawLabel).length, 0, 'the raw value is still a card of its own');
+  });
+}
+
+test('5: the §8.7 link stays in the status row of a datHere record', async () => {
+  const html = await render('shape-link', 'datHere', build('datHere', SUBTYPE));
+  const status = /<div data-part="status-row"[\s\S]*?<\/div>/.exec(html)?.[0] ?? '';
+  assert.ok(links(status).some((l) => l.text === 'Typed Standards §8.7'), 'the §8.7 link is gone from the status row');
+});
