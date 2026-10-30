@@ -16,6 +16,13 @@
 // request's network address are distinctive strings, and the cookie's decoded
 // value is searched for both. A cookie that carried either would show it.
 //
+// R9 P4 (#680; #662, D5 = A of the UX pass): a signed-in GET with a `dbId`, no
+// row and a cookie in force keeps the cookie's states on the account. The row
+// store counts its writes, so "writes nothing" is a count of zero, and it can
+// be made to fail a write. The cookie in force names a source this instance
+// does not configure and dates one choice before today, so a write that kept
+// an unknown id, or dated the states by the read, is seen.
+//
 // Run with: npm test
 
 import { test } from 'node:test';
@@ -42,9 +49,9 @@ const SRC = path.resolve(HERE, '..', '..', '..', '..');
 const REPO = path.resolve(SRC, '..');
 
 interface Row { userId: string; states: Record<string, { state: string; since: string }>; flowsHash: string; flowsStatement: unknown; consentedAt: Date; updatedAt: Date }
-interface Globals { __r6w2Consent: { session: unknown; rows: Map<string, Row> } }
+interface Globals { __r6w2Consent: { session: unknown; rows: Map<string, Row>; writes: number; failWrite: boolean } }
 const globals = globalThis as unknown as Globals;
-globals.__r6w2Consent = { session: null, rows: new Map() };
+globals.__r6w2Consent = { session: null, rows: new Map(), writes: 0, failWrite: false };
 
 const STUB_PREFIX = 'file:///r6-w2-consent-route-stub/';
 const STUB_SOURCE: Record<string, string> = {
@@ -54,6 +61,8 @@ const STUB_SOURCE: Record<string, string> = {
     const rows = () => globalThis.__r6w2Consent.rows;
     export async function readConsentRow(userId) { return rows().get(userId) ?? null; }
     export async function writeConsentRow(userId, row) {
+      globalThis.__r6w2Consent.writes += 1;
+      if (globalThis.__r6w2Consent.failWrite) throw new Error('fixture: the row store is down');
       const prior = rows().get(userId);
       const now = row.now ?? new Date();
       rows().set(userId, { userId, states: row.states, flowsHash: row.flowsHash, flowsStatement: row.flowsStatement, consentedAt: prior?.consentedAt ?? now, updatedAt: now });
@@ -156,6 +165,8 @@ function cookieValue(setCookie: string): string {
 function reset(session: unknown): void {
   globals.__r6w2Consent.session = session;
   globals.__r6w2Consent.rows = new Map();
+  globals.__r6w2Consent.writes = 0;
+  globals.__r6w2Consent.failWrite = false;
 }
 
 // --- GET -----------------------------------------------------------------------
@@ -284,17 +295,169 @@ test('criterion 5: DELETE without a dbId clears the cookie; with one, it deletes
   assert.equal(setCookieOf(deleted), null);
 });
 
-test('D12: with a dbId the row is read and a cookie ignored — a cookie alone is no consent for such a session', async () => {
-  reset(null);
-  const { hash } = await current();
-  const put = await handler('PUT')(call('PUT', { states: { socrata: 'on' }, flowsVersion: hash }));
-  const cookie = `${consentExport<string>('CONSENT_COOKIE_NAME')}=${cookieValue(setCookieOf(put) ?? '')}`;
-  reset({ user: { id: 'gh-4', dbId: '44444444-4444-4444-8444-444444444444' } });
+// --- D12, and R9 P4: a consent given signed out, kept on the account ---------------------------
+
+const P4_DB_ID = '45454545-4545-4454-8454-454545454545';
+const P4_EARLIER = '2026-10-01';
+
+type StatementLike = { version: string; sources: Array<{ sourceId: string; version: string }> };
+
+/** The P4 states: the first configured source Off, the second Ask first, the rest On. */
+function p4States(built: Mod): Record<string, string> {
+  const statement = built as StatementLike;
+  const ids = statement.sources.map((s) => s.sourceId);
+  assert.ok(ids.length >= 2, `premise: two configured sources, got ${ids.join(', ')}`);
+  return Object.fromEntries(ids.map((id, i) => [id, i === 0 ? 'off' : i === 1 ? 'ask-first' : 'on']));
+}
+
+/**
+ * A `Cookie` header holding a consent built by the real encoder: `states` per
+ * configured source, each dated `since` (`earlier`'s dated `P4_EARLIER`), plus
+ * whatever `extra` adds; `flows` and a source's `version` default to the statement's.
+ */
+function p4Cookie(built: Mod, states: Record<string, string>, since: string, options: { flows?: string; staleSource?: string; earlier?: string; extra?: Record<string, unknown> } = {}): string {
+  const statement = built as StatementLike;
+  const encode = consentExport<(c: unknown) => string>('encodeConsentCookie');
+  const value = encode({
+    v: 1,
+    flows: options.flows ?? statement.version,
+    states: {
+      ...Object.fromEntries(statement.sources.map((s) => [s.sourceId, { state: states[s.sourceId], since: s.sourceId === options.earlier ? P4_EARLIER : since, version: s.sourceId === options.staleSource ? 'b'.repeat(64) : s.version }])),
+      ...(options.extra ?? {}),
+    },
+  });
+  return `${consentExport<string>('CONSENT_COOKIE_NAME')}=${value}`;
+}
+
+const RETIRED = { 'retired-source': { state: 'on', since: P4_EARLIER, version: 'c'.repeat(64) } };
+
+test('D12: with a dbId and a row, the row is answered and a cookie ignored — no write, no flag', async () => {
+  reset({ user: { id: 'gh-4', dbId: P4_DB_ID } });
+  const { statement, hash } = await current();
+  const rowStates = Object.fromEntries(statement.sources.map((s: { sourceId: string }) => [s.sourceId, { state: 'on', since: P4_EARLIER }]));
+  globals.__r6w2Consent.rows.set(P4_DB_ID, { userId: P4_DB_ID, states: rowStates, flowsHash: hash, flowsStatement: statement, consentedAt: new Date('2026-10-01T08:00:00Z'), updatedAt: new Date('2026-10-01T08:00:00Z') });
+  const cookie = p4Cookie(statement, p4States(statement), consentExport<() => string>('consentDate')());
   const response = await handler('GET')(call('GET', undefined, cookie));
-  const body = await response.json() as Record<string, unknown>;
-  assert.equal(body.inForce, false, 'a session with a dbId and no row was read as consenting through its cookie');
+  const body = await response.json() as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  assert.equal(body.inForce, true);
+  assert.equal(body.store, 'row');
+  assert.deepEqual(body.states, rowStates, 'a session with a row was answered from its cookie');
+  assert.equal(globals.__r6w2Consent.writes, 0, 'a GET with a row wrote');
+  assert.equal('keptFromCookie' in body, false, 'a GET with a row says the cookie was kept');
   assert.equal(setCookieOf(response), null);
 });
+
+test('R9 P4 criterion 1: a signed-in GET with a dbId, no row and a cookie in force keeps the cookie\'s states on the account, in the shape PUT writes', async () => {
+  reset({ user: { id: 'gh-p4', dbId: P4_DB_ID } });
+  const { statement, hash } = await current();
+  const states = p4States(statement);
+  const firstId = statement.sources[0].sourceId as string;
+  // One choice dated before today: the row keeps the date the reader gave it, not the read's.
+  const today = consentDate();
+  const cookie = p4Cookie(statement, states, today, { earlier: firstId, extra: RETIRED });
+  const response = await handler('GET')(call('GET', undefined, cookie));
+  assert.equal(response.status, 200, await response.clone().text());
+  const body = await response.json() as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const expected = Object.fromEntries(statement.sources.map((s: { sourceId: string }) => [s.sourceId, { state: states[s.sourceId], since: s.sourceId === firstId ? P4_EARLIER : today }]));
+  assert.equal(body.inForce, true, `the consent given signed out was not kept: ${JSON.stringify(body)}`);
+  assert.equal(body.store, 'row');
+  assert.equal(body.keptFromCookie, true, 'the answer does not say the choice was just kept on the account');
+  assert.deepEqual(body.states, expected, 'the answer\'s states are not the cookie\'s');
+  assert.equal(body.consentedFlowsVersion, hash);
+  assert.equal(globals.__r6w2Consent.writes, 1, 'the read did not write the row exactly once');
+  const row = globals.__r6w2Consent.rows.get(P4_DB_ID);
+  assert.ok(row, 'no row was written for the dbId');
+  assert.deepEqual(row!.states, expected, 'the row\'s states are not the cookie\'s');
+  assert.equal(Object.hasOwn(row!.states, 'retired-source'), false, 'the row keeps a source this instance does not configure');
+  assert.equal(row!.flowsHash, hash, 'the row does not hold the current statement\'s hash');
+  assert.deepEqual(row!.flowsStatement, statement, 'the row does not hold the current statement');
+
+  // A second read: the row is there, and nothing is kept again.
+  const again = await handler('GET')(call('GET', undefined, cookie));
+  const second = await again.json() as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  assert.equal(second.inForce, true);
+  assert.equal(second.store, 'row');
+  assert.equal('keptFromCookie' in second, false, 'the second read says the choice was just kept');
+  assert.deepEqual(second.states, expected);
+  assert.equal(globals.__r6w2Consent.writes, 1, 'the second read wrote');
+});
+
+test('R9 P4 criterion 1: the row the read writes is byte-equal to the row PUT writes for the same states from the same start', async () => {
+  const { statement } = await current();
+  const states = p4States(statement);
+  const today = consentDate();
+  reset({ user: { id: 'gh-p4', dbId: P4_DB_ID } });
+  await handler('GET')(call('GET', undefined, p4Cookie(statement, states, today)));
+  const kept = globals.__r6w2Consent.rows.get(P4_DB_ID);
+  assert.ok(kept, 'the read wrote no row');
+  reset({ user: { id: 'gh-p4', dbId: P4_DB_ID } });
+  const { hash } = await current();
+  const put = await handler('PUT')(call('PUT', { states, flowsVersion: hash }));
+  assert.equal(put.status, 200, await put.clone().text());
+  const written = globals.__r6w2Consent.rows.get(P4_DB_ID);
+  assert.ok(written, 'premise: PUT wrote a row');
+  assert.equal(JSON.stringify(kept!.states), JSON.stringify(written!.states), 'the states are not byte-equal to PUT\'s');
+  assert.equal(kept!.flowsHash, written!.flowsHash);
+  assert.equal(JSON.stringify(kept!.flowsStatement), JSON.stringify(written!.flowsStatement));
+});
+
+test('R9 P4 criterion 2: the response that kept the choice sets no cookie, so the cookie is not cleared', async () => {
+  reset({ user: { id: 'gh-p4', dbId: P4_DB_ID } });
+  const { statement } = await current();
+  const response = await handler('GET')(call('GET', undefined, p4Cookie(statement, p4States(statement), consentDate())));
+  assert.equal(globals.__r6w2Consent.writes, 1, 'premise: the read kept the choice');
+  assert.equal(setCookieOf(response), null, 'the read that kept the choice touched the cookie');
+});
+
+test('R9 P4 criterion 1: a stale cookie writes nothing and is answered as a session with no row is today, byte for byte', async () => {
+  const { statement } = await current();
+  const states = p4States(statement);
+  const today = consentDate();
+  for (const [why, options] of [
+    ['its flows is not the statement in force', { flows: 'a'.repeat(64) }],
+    ['a stored source version is not current', { staleSource: statement.sources[1].sourceId as string }],
+  ] as const) {
+    reset({ user: { id: 'gh-p4', dbId: P4_DB_ID } });
+    const today0 = await (await handler('GET')(call('GET'))).text();
+    const response = await handler('GET')(call('GET', undefined, p4Cookie(statement, states, today, options)));
+    const text = await response.text();
+    assert.equal(globals.__r6w2Consent.writes, 0, `a stale cookie (${why}) wrote`);
+    assert.equal(globals.__r6w2Consent.rows.size, 0, `a stale cookie (${why}) left a row`);
+    assert.equal(text, today0, `a stale cookie (${why}) is not answered as no consent is today`);
+    assert.equal(JSON.parse(text).inForce, false);
+    assert.equal(setCookieOf(response), null);
+  }
+});
+
+test('R9 P4: a failed write is answered as a session with no row is today, and sets no cookie', async () => {
+  reset({ user: { id: 'gh-p4', dbId: P4_DB_ID } });
+  const { statement } = await current();
+  const today0 = await (await handler('GET')(call('GET'))).text();
+  globals.__r6w2Consent.failWrite = true;
+  const response = await handler('GET')(call('GET', undefined, p4Cookie(statement, p4States(statement), consentDate())));
+  assert.equal(response.status, 200);
+  assert.equal(globals.__r6w2Consent.writes, 1, 'premise: the write was tried');
+  assert.equal(await response.text(), today0, 'a failed write is not answered as no consent is today');
+  assert.equal(setCookieOf(response), null);
+});
+
+test('R9 P4: a read without a dbId writes nothing — signed out, or signed in without a database account', async () => {
+  const { statement } = await current();
+  for (const session of [null, { user: { id: 'gh-no-db' } }]) {
+    reset(session);
+    const response = await handler('GET')(call('GET', undefined, p4Cookie(statement, p4States(statement), consentDate())));
+    const body = await response.json() as Record<string, unknown>;
+    assert.equal(body.store, 'cookie');
+    assert.equal(body.inForce, true);
+    assert.equal('keptFromCookie' in body, false);
+    assert.equal(globals.__r6w2Consent.writes, 0, `a read with session ${JSON.stringify(session)} wrote`);
+    assert.equal(setCookieOf(response), null);
+  }
+});
+
+function consentDate(): string {
+  return consentExport<() => string>('consentDate')();
+}
 
 // --- Only the consent write sets the cookie (criterion 2) ------------------------------------------
 
