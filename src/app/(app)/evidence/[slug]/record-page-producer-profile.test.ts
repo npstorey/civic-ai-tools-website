@@ -3,11 +3,14 @@
 // label reads the subtype's display name and links to its guidance bundle.
 //
 // THE LABEL. `page.tsx` prints the package's `producerProfile` in the
-// Verification Status section. On a record declaring the subtype it reads
-// "Civic AI Tools profile, v1" (D2's display name), and its href is the url in
-// verify-core's subtype table row (`PRODUCER_PROFILE_SUBTYPES[…].bundle.url`),
-// read here from the package, never written as a literal. Any other value
-// prints as before: "Producer profile: <value>", with no link.
+// Verification Status section. On a record declaring the subtype the line
+// keeps printing the record's own producer profile (fix round 1, W1): it reads
+// "Producer profile: ", then "Civic AI Tools profile, v1" (D2's display name)
+// as a link whose href is the url in verify-core's subtype table row
+// (`PRODUCER_PROFILE_SUBTYPES[…].bundle.url`, read here from the package,
+// never written as a literal) and whose title says what the file is, then the
+// raw value in monospace small print. Any other value prints as before:
+// "Producer profile: <value>", with no link.
 //
 // HOW IT IS DRIVEN. The page's default export rendered to static markup under
 // `node --test`, with the module hooks `record-page-data-sources.test.ts`
@@ -237,14 +240,21 @@ test('4: premise: verify-core\'s table row for the subtype names a bundle url, a
 });
 
 for (const [contentProfile, slug] of [['datHere', 'subtype-full-text'], ['default', 'subtype-hash-only']] as const) {
-  test(`4: a ${contentProfile} record declaring the subtype: the label reads "${DISPLAY_NAME}" and links to the bundle in verify-core's table`, async () => {
+  test(`4: a ${contentProfile} record declaring the subtype: "Producer profile: ", "${DISPLAY_NAME}" linked to the bundle in verify-core's table, then the raw value`, async () => {
     const section = verificationSection(await render(slug, contentProfile, build(contentProfile, SUBTYPE)));
     const label = links(section).filter((l) => l.text === DISPLAY_NAME);
     assert.equal(label.length, 1, `the label does not read "${DISPLAY_NAME}" as one link: ${textOf(section).slice(0, 400)}`);
     assert.equal(label[0].href, BUNDLE_URL, 'the label does not link to the bundle url of the subtype\'s table row');
     assert.match(label[0].tag, /target="_blank"/, 'the bundle opens in place of the record');
     assert.match(label[0].tag, /rel="noopener noreferrer"/);
-    assert.doesNotMatch(textOf(section), /Producer profile: ai-assisted-analysis\/civicaitools-v1/, 'the raw value still prints as the label');
+    assert.match(label[0].tag, /title="The published description of this profile&#x27;s fields \(JSON file\)"/, 'the link does not say what the file is');
+    const line = /<span style="font-size:13px;color:var\(--text-muted\)">([\s\S]*?<\/a>[\s\S]*?<\/span>)<\/span>/.exec(section)?.[1] ?? '';
+    assert.equal(
+      line.replace(/<!-- -->/g, '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim(),
+      `Producer profile: ${DISPLAY_NAME} ${SUBTYPE}`,
+      'the line does not read the prefix, the display name, then the raw value',
+    );
+    assert.match(line, new RegExp(`<span data-part="producer-profile-value" style="font-size:12px;font-family:monospace">${SUBTYPE}</span>`), 'the raw value is not monospace small print');
   });
 }
 

@@ -642,18 +642,23 @@ export default async function EvidencePage({ params }: PageProps) {
 }
 
 /**
- * The Producer Profile label (R10 P5, hub ADR-0038). The subtype this site
- * declares reads its display name, linked to its guidance bundle; any other
- * value prints as before.
+ * The Producer Profile label (R10 P5, hub ADR-0038). The line keeps printing
+ * the record's own producer profile. The subtype this site declares adds its
+ * display name, linked to its guidance bundle, and keeps the raw value as
+ * small print; any other value prints as before.
  */
 function ProducerProfileLabel({ producerProfile }: { producerProfile: string }) {
   const link = producerProfileLink(producerProfile);
   return (
     <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
       {link ? (
-        <a href={link.href} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
-          {link.text}
-        </a>
+        <>
+          Producer profile:{' '}
+          <a href={link.href} title={link.title} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+            {link.text}
+          </a>{' '}
+          <span data-part="producer-profile-value" style={{ fontSize: '12px', fontFamily: 'monospace' }}>{producerProfile}</span>
+        </>
       ) : (
         <>Producer profile: {producerProfile}</>
       )}

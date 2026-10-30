@@ -617,13 +617,17 @@ export const SYSTEM_PROMPT_TEXT = {
 
 /**
  * The record page's label for the Producer Profile subtype this site declares
- * (R10 P5, civic-ai-tools#289, hub ADR-0038): D2's display name, linked to the
- * subtype's guidance bundle. Any other `producerProfile` value prints as
- * before, "Producer profile: <value>". Hypothesis for the research check.
+ * (R10 P5, civic-ai-tools#289, hub ADR-0038). The line keeps printing the
+ * record's own producer profile: "Producer profile: ", then D2's display name
+ * linked to the subtype's guidance bundle, then the raw value as small print.
+ * Any other `producerProfile` value prints as before, "Producer profile:
+ * <value>". Hypotheses for the research check, except the display name (D2).
  */
 export const PRODUCER_PROFILE_LABEL = {
-  /** `ai-assisted-analysis/civicaitools-v1`: the whole label, as the link's text. */
+  /** `ai-assisted-analysis/civicaitools-v1`: the link's text (D2's display name). */
   civicaitoolsV1: 'Civic AI Tools profile, v1',
+  /** The link's `title`: what the bundle is. */
+  bundleTitle: "The published description of this profile's fields (JSON file)",
 } as const;
 
 /**
