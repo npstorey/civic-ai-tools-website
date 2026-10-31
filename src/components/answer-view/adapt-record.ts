@@ -71,6 +71,7 @@ import type { PublishedLayout } from '../../lib/answer-layout/published-line.ts'
 import type { FlowsStatement } from '../../lib/flows/statement.ts';
 import { whereItWentFromPackage } from '../../lib/flows/where-it-went.ts';
 import { chooserCardItems, chooserFromPackage } from '../../lib/flows/source-chooser.ts';
+import { CONTENT_SHAPE } from '../../lib/sources/copy.ts';
 
 /** What the page resolved before rendering (`resolvePackageForRender`). */
 export interface ResolvedPackageData {
@@ -138,9 +139,12 @@ export const OUTPUT_UNAVAILABLE =
 export const OUTPUT_DOES_NOT_MATCH =
   'The answer is not shown: the stored copy of this record’s output does not match the record’s reference to it. The package hash below identifies the record for audit.';
 
-/** The spec section the status row links an A-G-format record to. */
+/** The spec section the status row links an A-G-format record to: §8.7's heading,
+ *  "8.7 Profile requirements: datHere and scripted-recomputation"
+ *  (typed-standards-specification.md:780 at hub af8faa7). The fragment is
+ *  GitHub's anchor for that heading; `dathere-spec-link.test.ts` holds it. */
 export const DATHERE_SPEC_URL =
-  'https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/typed-standards-specification.md#87-content-profile-dathere';
+  'https://github.com/npstorey/civic-ai-tools/blob/main/docs/architecture/typed-standards-specification.md#87-profile-requirements-dathere-and-scripted-recomputation';
 
 /** The org.civicaitools.environment extension (spec §8.7.1 requirement 3), or null when absent or malformed. */
 function environmentExtension(pkg: EvidencePackage): {
@@ -291,7 +295,8 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
     ...(env?.temperature !== undefined ? [{ label: 'Temperature', value: String(env.temperature) }] : []),
     ...(env?.host ? [{ label: 'Publishing host', value: env.host }] : []),
     ...(envMcpHosts ? [{ label: SERVERS_LABEL, value: envMcpHosts }] : []),
-    { label: 'Content profile', value: row.contentProfile ?? 'default' },
+    // R10 P5: the content profile in the reader's words, then its raw value as small print.
+    ...contentShapeItems(row.contentProfile),
     { label: USED_SOURCES_LABEL, value: dataSourcesSummary ?? '—' },
     // The system prompt's hash, its first twelve characters, under the label
     // section B shows it by in full (R10 P1b fix round 1: one value, one name).
@@ -382,4 +387,24 @@ function compositionComponents(pkg: EvidencePackage): RecordPromptComponent[] {
       ...(typeof c.guidanceHash === 'string' && c.guidanceHash.length > 0 ? { guidanceHash: c.guidanceHash } : {}),
     }];
   });
+}
+
+/**
+ * Section C's "Content shape" card (R10 P5): `datHere` and `default` in the
+ * reader's words, each followed by its raw value as small print in an item of
+ * its own, the way the system prompt hash is shown. A record with no content
+ * profile (the column is nullable; records before ADR-0004 carry none) shows
+ * the `default` shape, because the specification treats absence as `default`
+ * (§8.7; ADR-0004; `docs/api/records-publish.md`), and its small print reads
+ * "not stated", never a value the record does not carry (Principle 3; fix
+ * round 1, W4). A value outside the two is shown as it is, with no small print.
+ */
+function contentShapeItems(contentProfile: string | null | undefined): EnvironmentItem[] {
+  const shapeOf = contentProfile ?? 'default';
+  const shape = shapeOf === 'datHere' ? CONTENT_SHAPE.datHere : shapeOf === 'default' ? CONTENT_SHAPE.default : null;
+  if (shape === null) return [{ label: CONTENT_SHAPE.label, value: shapeOf }];
+  return [
+    { label: CONTENT_SHAPE.label, value: shape },
+    { label: CONTENT_SHAPE.rawLabel, value: contentProfile ?? CONTENT_SHAPE.notStated, mono: true },
+  ];
 }

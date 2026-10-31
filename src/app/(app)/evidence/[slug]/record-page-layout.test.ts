@@ -783,7 +783,9 @@ test('P2 (5) C states the content profile, data sources, system prompt hash, tot
   const agf = cItems(HTML.agf);
   const old = cItems(HTML.old);
   assert.equal(agf.get('Content profile'), 'datHere');
-  assert.equal(old.get('Content profile'), 'default', 'a record with no profile reads default');
+  // R10 P5 fix round 1 (W4): the raw value's small print states no value the record does not carry.
+  assert.equal(old.get('Content profile'), 'not stated', 'a record with no profile states none');
+  assert.equal(old.get('Content shape'), 'not all seven parts required', 'a record with no profile shows the default shape (absence is default)');
   const { formatDataSourcesSummary } = await import('@/lib/evidence/data-sources');
   for (const [items, pkg] of [[agf, AGF_PACKAGE], [old, OLD_PACKAGE]] as const) {
     const expected = formatDataSourcesSummary(pkg.dataSources as never);
@@ -1961,6 +1963,20 @@ test('W4 P1 (9) the citation block reads "Record: <title> [Published: <date>] <u
 // sentence on what a hash is, the button row's top margin, and the button's
 // "Show full system prompt (N bytes)". And again for fix round 1 item 9: the
 // diff is section C's one label, "Skill hash" renamed "System prompt hash".
+// Re-captured again for R10 P5 (the owner's ruling on section C): the diff is
+// section C's "Content profile" card, now "Content shape" reading the shape
+// in the reader's words (the A-G record and the legacy record each), followed
+// by one inserted item, "Content profile", with the raw value as
+// small print. Neither record declares the subtype, so the Verification
+// Status label is unchanged.
+// Re-captured again for R10 P5 fix round 1 item 4: the A-G record's diff is
+// the §8.7 link's fragment alone, `#87-content-profile-dathere` to
+// `#87-profile-requirements-dathere-and-scripted-recomputation`.
+// And for fix round 1 W4: the legacy record (no content profile) diff is its
+// small-print value alone, `default` to `not stated`. And for the owner's
+// ruling on the card's two values (2026-10-30 21:55Z): the diff is the card's
+// value alone, "all seven parts (A to G) required" on the A-G record and "not
+// all seven parts required" on the legacy one.
 
 const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
 

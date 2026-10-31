@@ -10,7 +10,8 @@ import { buildEvidencePackage, type PackageInput, type CaptureMethod, type Conte
 import { modelIdentityForValue } from '@/lib/model-resolver';
 import { hash } from '@/lib/evidence/trace';
 import { signPackage, getRfc3161Timestamp, publishToRekor, getActiveSigner, type SignerIdentity } from '@/lib/evidence/signing';
-import { captureVocabForProfile } from '@/lib/evidence/profiles';
+import { captureVocabForProfile, isContentProfileConsistent } from '@/lib/evidence/profiles';
+import { CIVICAITOOLS_V1_PRODUCER_PROFILE } from '@typedstandards/civic-typed-harness';
 import { type BlobRef } from '@/lib/evidence/blob-ref';
 import { resolveRequestUser, hasPublishScope } from '@/lib/api-auth';
 import { MISSING_PUBLISH_SCOPE_ERROR } from '@/lib/publish-scope';
@@ -118,13 +119,37 @@ async function resolveSlug(title: string, packageHash: string): Promise<string> 
 
 // ADR-0004: contentProfile values. Orthogonal to captureMethod. Optional
 // at the route layer; absence is equivalent to `'default'`.
+/**
+ * The 400 for a producerProfile / contentProfile pair the §8.1.1 invariant
+ * refuses: the rule `isContentProfileConsistent` applies (verify-core 0.15.0,
+ * `dist/profiles.js`: a row admits what its `admits` lists; a subtype with no
+ * row admits "datHere" when it begins with "ai-assisted-analysis/datHere" and
+ * "default" when it does not), worded as `docs/api/records-publish.md` states
+ * it. The two values received follow it.
+ */
+const INCONSISTENT_PROFILES_ERROR =
+  'producerProfile and contentProfile are inconsistent (spec §8.1.1). contentProfile (absent is "default") must be one the producerProfile subtype admits: "ai-assisted-analysis/datHere" admits "datHere"; "ai-assisted-analysis/civicaitools-v1" admits "datHere" and "default"; any other subtype admits "datHere" if it begins with "ai-assisted-analysis/datHere", and "default" if it does not.';
+
+/** The longest received value an error quotes, after control characters are removed. */
+const RECEIVED_VALUE_MAX = 120;
+
+/**
+ * A value the client sent, quoted back in an error: control characters (C0,
+ * DEL and C1) removed, then bounded to 120 characters. `absent` when it was
+ * not sent. The values are the client's own input.
+ */
+function receivedValue(value: unknown): string {
+  if (value === undefined || value === null) return 'absent';
+  return `"${String(value).replace(/[\u0000-\u001f\u007f-\u009f]/g, '').slice(0, RECEIVED_VALUE_MAX)}"`;
+}
+
 const VALID_CONTENT_PROFILES: readonly ContentProfile[] = [
   'default',
   'datHere',
 ] as const;
 
 interface PublishRequest {
-  /** OTel trace OR a BlobRef. See `docs/api/evidence-publish.md` for the
+  /** OTel trace OR a BlobRef. See `docs/api/records-publish.md` for the
    *  blob-reference contract. */
   trace: Record<string, unknown> | BlobRef;
   prompt: string;
@@ -161,8 +186,10 @@ interface PublishRequest {
    *  `org.civicaitools.environment` extension. */
   contentProfile?: ContentProfile;
   /** Producer Profile label per ADR-0006 (spec §8.1.1). Optional; when
-   *  omitted the packager auto-derives it for the datHere content profile.
-   *  Must stay consistent with contentProfile (validated below). */
+   *  omitted on a `chat-flow-stream` publish the route sets
+   *  `ai-assisted-analysis/civicaitools-v1` (hub ADR-0038), and otherwise the
+   *  packager auto-derives it for the datHere content profile. Must stay
+   *  consistent with contentProfile (validated below). */
   producerProfile?: string;
   /** Node type per ADR-0009 (spec §8.1.1, §8.12). Optional; defaults to
    *  `content/analysis/v1`. This endpoint accepts only that value — other
@@ -238,19 +265,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate producerProfile consistency (ADR-0006, spec §8.1.1). When a
-    // producerProfile is supplied it MUST agree with contentProfile:
-    // contentProfile === 'datHere' iff producerProfile begins with
-    // 'ai-assisted-analysis/datHere'. When omitted, the packager
-    // auto-derives a consistent value for the datHere profile.
-    if (body.producerProfile) {
-      const ppIsDatHere = body.producerProfile.startsWith('ai-assisted-analysis/datHere');
-      const cpIsDatHere = body.contentProfile === 'datHere';
-      if (ppIsDatHere !== cpIsDatHere) {
+    // R10 P5 (hub ADR-0038 §1): every record this site's own runs publish
+    // (`chat-flow-stream`, which this site's publish dialog sends on both its
+    // paths) declares the Producer Profile subtype
+    // `ai-assisted-analysis/civicaitools-v1`, full-text (`datHere`) and
+    // hash-only (`default`) alike. Set here, server-side, in the one place
+    // P1b's system prompt is, so the dialog sends none. A posted
+    // producerProfile (the documented programmatic path) passes through
+    // unchanged and is checked below, and another capture method
+    // gets what it got before: the packager's auto-derivation for datHere,
+    // none otherwise. Records already published keep their bytes.
+    const producerProfile = body.producerProfile
+      ?? (body.captureMethod === 'chat-flow-stream' ? CIVICAITOOLS_V1_PRODUCER_PROFILE : undefined);
+
+    // Validate producerProfile consistency (ADR-0006 §2 as amended by hub
+    // ADR-0038 §3, spec §8.1.1). When a producerProfile is supplied, the
+    // content profile (absent is 'default') MUST be one its subtype's row in
+    // verify-core's table admits: `ai-assisted-analysis/datHere` admits
+    // 'datHere', and `ai-assisted-analysis/civicaitools-v1` admits both. A
+    // subtype with no row reads as before: 'datHere' iff it begins with
+    // 'ai-assisted-analysis/datHere'. The same predicate is verify check #16,
+    // so the route refuses exactly what a verifier would report inconsistent.
+    // When omitted, the packager auto-derives a consistent value for datHere.
+    if (producerProfile) {
+      if (!isContentProfileConsistent(producerProfile, body.contentProfile ?? 'default')) {
         return NextResponse.json(
           {
             error:
-              'producerProfile and contentProfile are inconsistent: contentProfile "datHere" iff producerProfile begins with "ai-assisted-analysis/datHere".',
+              `${INCONSISTENT_PROFILES_ERROR} Received: producerProfile ${receivedValue(producerProfile)}, contentProfile ${receivedValue(body.contentProfile)}.`,
           },
           { status: 400 },
         );
@@ -305,7 +347,7 @@ export async function POST(request: NextRequest) {
     // Producer Profile (spec §8.6), resolved via the shared hardcoded
     // PROFILE_CAPTURE_VOCAB table. Resolve once here, never re-derive
     // downstream.
-    const captureVocab = captureVocabForProfile(body.producerProfile, body.contentProfile);
+    const captureVocab = captureVocabForProfile(producerProfile, body.contentProfile);
     if (!body.captureMethod || !captureVocab || !captureVocab.includes(body.captureMethod)) {
       return NextResponse.json(
         {
@@ -409,8 +451,9 @@ export async function POST(request: NextRequest) {
       summary: body.summary,
       captureMethod: body.captureMethod,
       contentProfile: body.contentProfile,
-      // ADR-0006: pass through; the packager auto-derives for datHere when omitted.
-      producerProfile: body.producerProfile,
+      // ADR-0006: as posted, or this site's subtype for its own runs (above);
+      // the packager auto-derives for datHere when it is still omitted.
+      producerProfile,
       // ADR-0009: default-fill the standard content type + the envelope-side
       // signer identity (the active platform signing key) for every publish.
       type: body.type ?? DEFAULT_CONTENT_TYPE,
@@ -528,7 +571,7 @@ export async function POST(request: NextRequest) {
     );
     if (auth.method === 'cookie') {
       // Nudge toward programmatic device-flow tokens for non-browser
-      // clients. See docs/api/evidence-publish.md#authentication.
+      // clients. See docs/api/records-publish.md#authentication.
       response.headers.set('X-Auth-Deprecated', 'cookie');
       // #503: the header above already tells this caller which path it took.
       // The account id was the only thing this line added, and it is the one

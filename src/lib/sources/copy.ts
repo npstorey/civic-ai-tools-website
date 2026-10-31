@@ -614,3 +614,42 @@ export const SYSTEM_PROMPT_TEXT = {
   /** The intro beside the button, inline text. */
   introInline: 'The text of the system prompt the model was given, as the signed record includes it.',
 } as const;
+
+/**
+ * The record page's label for the Producer Profile subtype this site declares
+ * (R10 P5, civic-ai-tools#289, hub ADR-0038). The line keeps printing the
+ * record's own producer profile: "Producer profile: ", then D2's display name
+ * linked to the subtype's guidance bundle, then the raw value as small print.
+ * Any other `producerProfile` value prints as before, "Producer profile:
+ * <value>". Hypotheses for the research check, except the display name (D2).
+ */
+export const PRODUCER_PROFILE_LABEL = {
+  /** `ai-assisted-analysis/civicaitools-v1`: the link's text (D2's display name). */
+  civicaitoolsV1: 'Civic AI Tools profile, v1',
+  /** The link's `title`: what the bundle is. */
+  bundleTitle: "The published description of this profile's fields (JSON file)",
+} as const;
+
+/**
+ * Section C's "Content shape" card (R10 P5; the owner's ruling on section C):
+ * the record's content profile in the reader's words, on old and new records
+ * alike, with the raw value as small print in a separate item. A record with
+ * no content profile shows the `default` shape, as the specification reads
+ * absence, and its small print says the value is not stated. `label`,
+ * `datHere` and `default` are the owner's rulings (`datHere` and `default`
+ * ruled 2026-10-30 21:55Z, the research check's wording) and live only here;
+ * `rawLabel` and `notStated` are hypotheses for the research check.
+ */
+export const CONTENT_SHAPE = {
+  /** The card's label, in place of "Content profile". */
+  label: 'Content shape',
+  /** `metadata.contentProfile: "datHere"`. */
+  datHere: 'all seven parts (A to G) required',
+  /** `metadata.contentProfile: "default"`, or absent (spec: absence is treated as `default`). */
+  default: 'not all seven parts required',
+  /** The small-print item's label: the raw value, by the field's own name. */
+  rawLabel: 'Content profile',
+  /** The small-print item's value when the record states no content profile
+   *  (fix round 1, W4): the raw value is not recorded, so none is printed. */
+  notStated: 'not stated',
+} as const;
