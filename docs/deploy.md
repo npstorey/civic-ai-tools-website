@@ -2634,8 +2634,11 @@ injected, never in an agent session:
   `public/.well-known/layouts/<nodeId>.json` (the node document, which the
   published `@typedstandards/cli` verifies: `npx @typedstandards/cli verify
   --input <file>`), `public/.well-known/layouts/<nodeId>.proofs.json` (the
-  timestamp token and the log entry, which the cli's input does not take),
-  and `src/lib/answer-layout/committed-nodes.ts` (one import added, so the
+  timestamp token and the log entry. This file is not a cli input. From cli
+  0.3.0, `verify` checks a timestamp token and an inclusion proof that a
+  commitment view carries, but the node document carries neither, so
+  `verify` on the node document does not check them), and
+  `src/lib/answer-layout/committed-nodes.ts` (one import added, so the
   next build includes the node). Commit exactly those three paths and
   deploy: from that deploy on, every publication attestation names the node.
   Node files are never removed, so every id ever named stays resolvable.

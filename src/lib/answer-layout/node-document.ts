@@ -4,12 +4,17 @@
 // the published cli's `view` prints and its `verify` reads.
 //
 // Built with produce-core's `buildCommitmentView` from exactly the inputs the
-// cli's `view` passes (`@typedstandards/cli` 0.2.1, `view.ts:96-113`):
-// `visibility: "public"`, the node's own envelope claims, the signature, no
-// lifecycle nodes, the trust registry URL, no title, and no summary. It omits
-// `signerIdentity`, `trustRegistryUrlLegacy` and the four proof keys the
-// site's own commitment wrapper adds (`src/lib/evidence/commitment.ts`), since
-// the cli's `verify` refuses any key outside its list (`BUNDLE_KEYS`).
+// cli's `view` passes (`@typedstandards/cli` 0.2.1, `view.ts:96-113`,
+// unchanged in 0.3.0): `visibility: "public"`, the node's own envelope claims,
+// the signature, no lifecycle nodes, the trust registry URL, no title, and no
+// summary. It omits `signerIdentity`, `trustRegistryUrlLegacy` and the four
+// proof keys the site's own commitment wrapper adds
+// (`src/lib/evidence/commitment.ts`). The cli's `verify` refused them in 0.2.1
+// and 0.2.2 (`BUNDLE_KEYS`); from 0.3.0 it accepts them (`VIEW_KEYS`,
+// `verify.ts:168-195`) and checks the timestamp token and the inclusion proof
+// offline. This document's shape is unchanged: it stays inside 0.2.1's list,
+// so cli 0.2.1 and 0.3.0 both read it, and its proofs stay in the
+// `.proofs.json` file beside it.
 // `captureMethod` is null (ruling D5 = A: a layout node states none) and
 // `packageUrl` is not set: the package is inline, and no separate location
 // serves it.
@@ -27,7 +32,11 @@ export interface NodeSignature {
   kid: string;
 }
 
-/** The keys the published cli's `verify` accepts in a view (`@typedstandards/cli` 0.2.1, `verify.ts:139-158`, `BUNDLE_KEYS`). */
+/**
+ * The keys `@typedstandards/cli` 0.2.1's `verify` accepts in a view (`verify.ts:139-158`, `BUNDLE_KEYS`).
+ * 0.3.0's `VIEW_KEYS` (`verify.ts:168-195`) begins with the same eighteen and adds eight a host serves,
+ * so a document whose keys are all in this list reads under both.
+ */
 export const CLI_VIEW_KEYS: readonly string[] = [
   'protocolVersion', 'packageHash', 'packageUrl', 'visibility', 'captureMethod', 'contentProfile', 'producerProfile',
   'type', 'signer', 'contentHash', 'contentCanonicalization', 'signature', 'lifecycle', 'lifecycleAttestations',
