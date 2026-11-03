@@ -15,10 +15,10 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { h, mount, registerSurfaceHooks, type Surface } from '../sources/surface-test-harness.ts';
+import { NEXT_LINK_STUB, h, mount, registerSurfaceHooks, type Surface } from '../sources/surface-test-harness.ts';
 import { attr, byClass, byRole, classesOf, findAll, hasClass, one, readText, within } from './ui-test-helpers.ts';
 
-registerSurfaceHooks();
+registerSurfaceHooks({ 'next/link': NEXT_LINK_STUB });
 const { Menu } = await import('@/components/ui/Menu');
 
 const ITEMS = [
@@ -82,4 +82,17 @@ test('Menu trigger sizes and the disabled trigger', async () => {
   assert.equal(attr(trigger(icon), 'aria-label'), 'Fixture name', 'an icon trigger is named by triggerLabel');
   const off = await mount(h(Menu, { trigger: 'T', items: ITEMS, disabled: true }));
   assert.equal(attr(trigger(off), 'disabled'), '', 'disabled: the trigger carries disabled');
+});
+
+test('Menu link items render as links that keep the item role', async () => {
+  const s = await mount(h(Menu, { trigger: 'T', open: true, items: [
+    { id: 'go', label: 'Fixture link', href: '/fixture/path' },
+    { id: 'off', label: 'Fixture off', href: '/fixture/off', disabledReason: 'Fixture reason' },
+  ] }));
+  const items = byRole(s, 'menuitem');
+  assert.equal(items.length, 2, 'two menuitems');
+  assert.equal(items[0].type, 'a', 'an enabled href item is a link');
+  assert.equal(attr(items[0], 'href'), '/fixture/path');
+  assert.notEqual(items[1].type, 'a', 'a disabled href item is not a link');
+  assert.equal(attr(items[1], 'aria-disabled'), 'true');
 });

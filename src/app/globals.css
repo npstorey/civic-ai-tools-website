@@ -45,6 +45,13 @@
   --success: #008A02;
   --caution: #FFB320;
   --error: #EC131E;
+  /* The status colours' channel triplets (UX-1 P0), so a status wash is written
+     rgba(var(--success-rgb), α) -- the same sanctioned form as --accent-rgb and
+     --info-rgb above (P5 Card's tinted tones read them). Each pair MUST stay in
+     lockstep with its token; src/app/token-rgb-twins.test.ts holds all five. */
+  --success-rgb: 0, 138, 2;
+  --caution-rgb: 255, 179, 32;
+  --error-rgb: 236, 19, 30;
 
   /* Tool-operation roles (#405).
      One hue per operation type a record can carry, as `deriveOperationType`
@@ -83,6 +90,13 @@
   --space-md: 24px;
   --space-lg: 32px;
   --space-xl: 64px;
+
+  /* Shadows (UX-1 P0). The two the design names, each already written as a
+     literal at seven sites: the menu shadow on menus and pickers, the dialog
+     shadow on dialogs and sheets. The ui-* primitives read these names; the
+     existing literal sites are left as they are until a phase moves them. */
+  --shadow-menu: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-dialog: 0 20px 60px rgba(0, 0, 0, 0.3);
 
   /* Applied colors - Light mode only */
   --background: var(--white);
@@ -575,4 +589,801 @@ footer a:visited {
     grid-template-columns: 1fr;
     gap: 12px;
   }
+}
+
+/* ==========================================================================
+   The ui-* primitives (UX-1 P0): src/components/ui/, one block per primitive,
+   in the design's order (P1-P9). docs/ui-patterns.md is the pattern list.
+   Every class here is guarded by src/app/ui-class-names.test.ts, which reads
+   the primitives' class tables as well as literal className attributes.
+   Light mode only. 12 px paddings are literals until a token exists.
+   ========================================================================== */
+
+/* P1 Disclosure: a native <details>. The caret is the summary's ::before. */
+.ui-disclosure-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text-secondary);
+}
+
+.ui-disclosure-summary::-webkit-details-marker {
+  display: none;
+}
+
+.ui-disclosure-summary::before {
+  content: '\25B8';
+  flex-shrink: 0;
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+
+.ui-disclosure[open] > .ui-disclosure-summary::before {
+  transform: rotate(90deg);
+}
+
+.ui-disclosure-summary:focus-visible {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+.ui-disclosure[open] > .ui-disclosure-body {
+  margin-top: var(--space-xs);
+}
+
+.ui-disclosure--inline > .ui-disclosure-summary {
+  font-size: 13px;
+}
+
+.ui-disclosure--section {
+  border-top: 1px solid var(--border-color);
+}
+
+.ui-disclosure--section > .ui-disclosure-summary {
+  padding: 8px 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ui-disclosure--row > .ui-disclosure-summary {
+  font-size: 12px;
+}
+
+.ui-disclosure--destination > .ui-disclosure-summary {
+  color: var(--accent);
+}
+
+/* P2 Menu: a trigger and an anchored panel. */
+.ui-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.ui-menu--field {
+  display: block;
+  width: 100%;
+}
+
+.ui-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  background-color: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.ui-menu-trigger:hover {
+  border-color: var(--neutral-70);
+}
+
+.ui-menu-trigger[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+
+.ui-menu-trigger:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ui-menu-trigger--icon {
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+.ui-menu-trigger--label {
+  padding: 4px 8px;
+  border-color: transparent;
+}
+
+.ui-menu-trigger--field {
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.ui-menu-trigger-content {
+  min-width: 0;
+}
+
+.ui-menu-caret {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.ui-menu-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 220px;
+  max-width: 360px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 4px 0;
+  background-color: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: var(--shadow-menu);
+}
+
+.ui-menu-panel--end {
+  left: auto;
+  right: 0;
+}
+
+.ui-menu-panel--up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.ui-menu-item,
+.ui-menu-item:visited {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: left;
+  text-decoration: none;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.ui-menu-item:hover,
+.ui-menu-item:focus-visible {
+  color: var(--text-primary);
+  background-color: var(--card-background);
+  outline: none;
+}
+
+.ui-menu-item[aria-checked="true"] {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.ui-menu-item[aria-disabled="true"] {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.ui-menu-item[aria-disabled="true"]:hover {
+  background: none;
+}
+
+.ui-menu-item-label {
+  min-width: 0;
+}
+
+.ui-menu-item-reason {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* P3 Sheet and P4 Dialog share the backdrop, the close control, the footer
+   actions and the spinner. */
+.ui-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.ui-backdrop--center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-sm);
+}
+
+.ui-close {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.ui-close:hover {
+  color: var(--text-primary);
+  background-color: var(--card-background);
+}
+
+.ui-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ui-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  margin-left: auto;
+}
+
+.ui-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.ui-action--primary {
+  color: var(--white);
+  background-color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.ui-action--primary:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.ui-action--secondary {
+  color: var(--accent);
+  background-color: var(--white);
+  border: 1px solid var(--border-color);
+}
+
+.ui-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ui-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* P3 Sheet: a side panel at 900 px and wider, a bottom sheet below. */
+.ui-sheet {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--white);
+  box-shadow: var(--shadow-dialog);
+}
+
+@media (min-width: 900px) {
+  .ui-sheet {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 420px;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 899px) {
+  .ui-sheet {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 85vh;
+    border-radius: 6px 6px 0 0;
+  }
+}
+
+.ui-sheet-header,
+.ui-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding: 12px var(--space-sm);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ui-sheet-title,
+.ui-dialog-title {
+  margin: 0;
+  font-family: var(--font-space-grotesk), 'Space Grotesk', Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ui-sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-sm);
+}
+
+.ui-sheet-footer,
+.ui-dialog-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 12px var(--space-sm);
+  border-top: 1px solid var(--border-color);
+}
+
+.ui-sheet-footer-line,
+.ui-dialog-footer-line {
+  flex: 1 1 200px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* P4 Dialog: centred, at most 90vh; the body takes what the header and footer leave. */
+.ui-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 90vh;
+  background-color: var(--white);
+  border-radius: 6px;
+  box-shadow: var(--shadow-dialog);
+}
+
+.ui-dialog--short {
+  max-width: 480px;
+}
+
+.ui-dialog--form {
+  max-width: 520px;
+}
+
+.ui-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-sm);
+}
+
+/* P5 Card: one bordered surface. */
+.ui-card {
+  padding: var(--space-sm);
+  background-color: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.ui-card--plain {
+  background-color: var(--white);
+}
+
+.ui-card--compact {
+  padding: 12px;
+}
+
+.ui-card--tinted.ui-card--tone-accent {
+  background-color: rgba(var(--accent-rgb), 0.06);
+  border-color: rgba(var(--accent-rgb), 0.3);
+}
+
+.ui-card--tinted.ui-card--tone-info {
+  background-color: rgba(var(--info-rgb), 0.12);
+  border-color: rgba(var(--info-rgb), 0.5);
+}
+
+.ui-card--tinted.ui-card--tone-caution {
+  background-color: rgba(var(--caution-rgb), 0.12);
+  border-color: rgba(var(--caution-rgb), 0.5);
+}
+
+.ui-card--tinted.ui-card--tone-error {
+  background-color: rgba(var(--error-rgb), 0.06);
+  border-color: rgba(var(--error-rgb), 0.3);
+}
+
+.ui-card--tinted.ui-card--tone-success {
+  background-color: rgba(var(--success-rgb), 0.06);
+  border-color: rgba(var(--success-rgb), 0.3);
+}
+
+.ui-card--selectable {
+  border-width: 1.5px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.ui-card--selectable:hover {
+  border-color: var(--neutral-70);
+}
+
+.ui-card--selectable:focus-visible,
+.ui-card--selectable:focus-within {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+.ui-card--selectable.ui-card--selected.ui-card--tone-accent {
+  border-color: var(--accent);
+}
+
+.ui-card--selectable.ui-card--selected.ui-card--tone-info {
+  border-color: var(--info);
+}
+
+.ui-card--selectable.ui-card--selected.ui-card--tone-caution {
+  border-color: var(--caution);
+}
+
+.ui-card--selectable.ui-card--selected.ui-card--tone-error {
+  border-color: var(--error);
+}
+
+.ui-card--selectable.ui-card--selected.ui-card--tone-success {
+  border-color: var(--success);
+}
+
+.ui-card--disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.ui-card--disabled:hover {
+  border-color: var(--border-color);
+}
+
+.ui-card-reason {
+  margin: var(--space-xs) 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* P6 Signal: glyph and token, never colour alone. */
+.ui-signal {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  color: var(--text-primary);
+}
+
+.ui-signal-glyph {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ui-signal-text {
+  min-width: 0;
+}
+
+.ui-signal-label {
+  color: var(--text-primary);
+}
+
+.ui-signal--neutral .ui-signal-glyph {
+  color: var(--text-muted);
+}
+
+.ui-signal--ok .ui-signal-glyph {
+  color: var(--success);
+}
+
+.ui-signal--caution .ui-signal-glyph {
+  color: var(--caution);
+}
+
+.ui-signal--problem .ui-signal-glyph {
+  color: var(--error);
+}
+
+.ui-signal--info .ui-signal-glyph {
+  color: var(--info);
+}
+
+.ui-signal--line {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ui-signal--line .ui-signal-detail {
+  margin-left: 6px;
+  color: var(--text-muted);
+}
+
+.ui-signal--block {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ui-signal--block .ui-signal-detail {
+  display: block;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.ui-signal .ui-disclosure {
+  margin-top: 2px;
+}
+
+/* P7 Row: title, summary, meta, a trailing column; list or card. */
+.ui-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  transition: background-color 0.15s ease;
+}
+
+.ui-row:hover {
+  background-color: var(--card-background);
+}
+
+.ui-row--list {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ui-row.ui-row--card {
+  padding: var(--space-sm);
+}
+
+.ui-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ui-row-title {
+  font-family: var(--font-space-grotesk), 'Space Grotesk', Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+.ui-row-summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.ui-row-meta {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ui-row-meta-item + .ui-row-meta-item::before {
+  content: '\00B7';
+  margin: 0 6px;
+}
+
+.ui-row-trailing {
+  display: flex;
+  flex-shrink: 0;
+  align-items: flex-start;
+  gap: var(--space-xs);
+}
+
+.ui-row-signals {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ui-row-menu {
+  flex-shrink: 0;
+}
+
+.ui-row--withdrawn {
+  opacity: 0.65;
+}
+
+.ui-row--withdrawn .ui-row-title {
+  text-decoration: line-through;
+}
+
+.ui-row--selected {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+.ui-row .ui-disclosure {
+  margin-top: 4px;
+}
+
+@media (max-width: 639px) {
+  .ui-row {
+    flex-wrap: wrap;
+  }
+
+  .ui-row-trailing {
+    flex-basis: 100%;
+  }
+}
+
+/* P8 Tabs: a wrapping row; the selected tab underlined 2 px --accent. */
+.ui-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-xs);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ui-tab {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 8px 12px;
+  margin-bottom: -1px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.ui-tab:hover {
+  color: var(--text-primary);
+}
+
+.ui-tab-label {
+  white-space: nowrap;
+}
+
+.ui-tab[aria-selected="true"] {
+  font-weight: 600;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.ui-tab[aria-disabled="true"] {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.ui-tab-reason {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.ui-tabs-panel {
+  padding-top: var(--space-sm);
+}
+
+.ui-tabs-panel:focus-visible {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+/* P9 Page frame: three widths, one h1, one lede, one section heading. */
+.ui-page {
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.ui-page--reading {
+  max-width: 720px;
+}
+
+.ui-page--record {
+  max-width: 800px;
+}
+
+.ui-page--wide {
+  max-width: 1200px;
+}
+
+@media (max-width: 639px) {
+  .ui-page {
+    padding: 0 16px;
+  }
+}
+
+.ui-page-header {
+  margin-bottom: var(--space-lg);
+}
+
+.ui-page-title {
+  margin: 0;
+}
+
+.ui-page-lede {
+  margin: var(--space-xs) 0 0;
+  font-size: 20px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.ui-page-section + .ui-page-section {
+  margin-top: var(--space-lg);
+}
+
+.ui-page-section > * + * {
+  margin-top: var(--space-sm);
+}
+
+.ui-page-section-heading {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+/* The chip row: scrolls sideways, never wraps; no separators. */
+.ui-chip-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.ui-chip-row > button,
+.ui-chip-row > a {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  background-color: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.ui-chip-row > button:hover,
+.ui-chip-row > a:hover {
+  color: var(--text-primary);
+  border-color: var(--neutral-70);
 }
