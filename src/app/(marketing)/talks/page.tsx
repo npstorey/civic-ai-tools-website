@@ -1,6 +1,7 @@
 import { prose, sectionSpacing } from '@/styles/page-styles';
 import { pageTitle } from '@/lib/brand-config';
 import { TALKS } from './talks';
+import { Page } from '@/components/ui/Page';
 
 export const metadata = {
   title: pageTitle('Talks'),
@@ -20,9 +21,8 @@ export default function TalksPage() {
   const talks = [...TALKS].sort((a, b) => b.date.localeCompare(a.date));
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 24px' }}>
+    <Page width="reading" title="Talks">
       <section style={sectionSpacing}>
-        <h1 style={{ marginBottom: '16px' }}>Talks</h1>
         <p style={prose}>
           Talks about the project, newest first. Each deck is published as it was given, so its
           figures are as of the talk&apos;s date.
@@ -40,6 +40,6 @@ export default function TalksPage() {
           ))}
         </ul>
       </section>
-    </div>
+    </Page>
   );
 }

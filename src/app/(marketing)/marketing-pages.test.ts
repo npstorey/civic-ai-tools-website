@@ -8,13 +8,15 @@
 // returned promise as nothing, so every page function is called and AWAITED
 // first and the element it resolves to is what is mounted. Every request a page
 // makes is answered here (`installFetch`): the roadmap's Markdown (a fixture
-// with six h2s, an h3 and an h4 under it) and the directory index the about
-// page counts (the snapshot bundled with this codebase). `next/link` renders as
-// a plain anchor; `next/script` (imported, never rendered) as nothing. The portal counts the about page reads are checked-in JSON
-// outside `src/`, served by one load hook below as a module.
+// with seven h2s, one holding a link, an h3 and an h4 under it) and the
+// directory index the about page counts (the snapshot bundled with this
+// codebase). `next/link` renders as a plain anchor; `next/script` (imported,
+// never rendered) as nothing. The portal counts the about page reads are
+// checked-in JSON outside `src/`, served by one load hook below as a module.
 //
 // HOW IT IS READ. From the harness's host tree, by element identity, with the
-// shared readers P0 wrote (`../../components/ui/ui-test-helpers.ts`); a text is
+// shared readers P0 wrote (`../../components/ui/ui-test-helpers.ts`), except
+// an attribute, which is read by the local `attr` below (see `ownTag`); a text is
 // what a reader reads (tags removed, entities decoded, whitespace collapsed, a
 // curly apostrophe read as a straight one).
 //
@@ -60,7 +62,8 @@ import {
   type HostElement,
   type Surface,
 } from '../../components/sources/surface-test-harness.ts';
-import { attr, byClass, childrenOf, cssRules, hasClass, classesOf, one, readText, within } from '../../components/ui/ui-test-helpers.ts';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { childrenOf, cssRules, one, readText, within } from '../../components/ui/ui-test-helpers.ts';
 
 const REPO = path.resolve(SRC, '..');
 const DATA_DIR = path.join(REPO, 'data');
@@ -99,8 +102,10 @@ process.env.ROADMAP_RAW_URL = `${ROADMAP_ORIGIN}/p7/ROADMAP.md`;
 delete process.env.ROADMAP_GITHUB_URL;
 process.env.DIRECTORY_DATA_URL = `${DIRECTORY_ORIGIN}/p7/directory.json`;
 
-// Six h2s (more than five, so the page owes a jump list), one carrying inline
-// code and emphasis, an h3, and an h4 under that h3.
+// Seven h2s (more than five, so the page owes a jump list), one carrying inline
+// code and emphasis and one carrying a Markdown link (the shape on which an id
+// taken from the raw Markdown and an id taken from the rendered text part), an
+// h3, and an h4 under that h3.
 const ROADMAP_FIXTURE = `# Fixture roadmap
 
 **Last updated:** 2026-11-01
@@ -130,6 +135,10 @@ Further out.
 ## The \`cli\` and **host** work
 
 Tooling.
+
+## The [verifier](https://verifier.fixture.test/check) and its checks
+
+A heading whose text is a link: its id comes from the text it renders, not its Markdown.
 
 ## Funding
 
@@ -180,6 +189,38 @@ for (const [route, fn] of Object.entries(PAGE_FNS)) PAGES[route] = await renderP
 const BAND = await mount(h(PositioningBand));
 
 // --- Readers -----------------------------------------------------------------------
+
+// An element's own opening tag, as react-dom/server writes it. P0's
+// `openingTag` (ui-test-helpers.ts) takes the first tag of the element's markup,
+// and when the subtree holds an <img>, react-dom/server writes a
+// `<link rel="preload" as="image">` hint for it FIRST, so that reader returns
+// the hint's tag: the /project page's frame (it holds the consortium logos)
+// reads as having no class at all. These readers skip the hints.
+function ownTag(el: HostElement): string {
+  const markup = renderToStaticMarkup(el).replace(/^(?:<link [^>]*rel="preload"[^>]*\/>)+/, '');
+  const match = /^<[^>]*>/.exec(markup);
+  assert.ok(match, `no opening tag in the markup of a <${el.type}>`);
+  return match[0];
+}
+
+function attr(el: HostElement, name: string): string | null {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = new RegExp(`\\s${escaped}(?:="([^"]*)")?(?=[\\s/>])`).exec(ownTag(el));
+  if (!match) return null;
+  return match[1] ?? '';
+}
+
+function classesOf(el: HostElement): string[] {
+  return (attr(el, 'class') ?? '').split(/\s+/).filter(Boolean);
+}
+
+function hasClass(el: HostElement, name: string): boolean {
+  return classesOf(el).includes(name);
+}
+
+function byClass(s: Surface, name: string): HostElement[] {
+  return s.elements().filter((el) => hasClass(el, name));
+}
 
 /** What a reader reads: a curly apostrophe as a straight one, no space before punctuation. */
 function plain(text: string): string {
@@ -255,7 +296,7 @@ for (const route of Object.keys(PAGE_FNS)) {
 test('criterion 1: the roadmap fixture is rendered (its h4 sits under its h3), so the check reads Markdown headings too', () => {
   const texts = headingTexts(PAGES['/roadmap']);
   assert.ok(texts.includes('A detail under its h3'), `the fixture's h4 is rendered; headings: ${JSON.stringify(texts)}`);
-  assert.equal(PAGES['/roadmap'].elements().filter((el) => el.type === 'h2').length, 6, 'the fixture renders six h2s');
+  assert.equal(PAGES['/roadmap'].elements().filter((el) => el.type === 'h2').length, 7, 'the fixture renders seven h2s');
 });
 
 // --- Criterion 2: one jump list on /learn, /privacy and /roadmap ---------------------

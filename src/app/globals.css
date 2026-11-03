@@ -1401,3 +1401,11 @@ footer a:visited {
   line-height: 170%;
   color: var(--text-secondary);
 }
+
+/* The reading pages' vertical padding (UX-1 P7). P0's .ui-page sets the side
+   gutter only; the shells it replaces on these pages had 48px above and below.
+   Appended, so it follows the frame's narrow-screen gutter rule. */
+.ui-page--reading {
+  padding-top: 48px;
+  padding-bottom: 48px;
+}

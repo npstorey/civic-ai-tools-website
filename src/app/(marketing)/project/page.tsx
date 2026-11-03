@@ -5,6 +5,7 @@ import { TYPED_STANDARDS_URL } from '@/lib/site-config';
 import ContactCallToAction from '@/components/ContactCallToAction';
 import { CONSORTIUM_MEMBERS } from '@/lib/consortium';
 import { pageTitle } from '@/lib/brand-config';
+import { Page } from '@/components/ui/Page';
 
 export const metadata: Metadata = {
   title: pageTitle('Project'),
@@ -80,16 +81,20 @@ const cardMeta: React.CSSProperties = {
 
 export default function ProjectPage() {
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '48px 24px' }}>
-      {/* 1. Project description */}
-      <section style={sectionSpacing}>
-        <h1 style={{ marginBottom: '16px' }}>The project</h1>
-        <p style={{ fontSize: '20px', lineHeight: '150%', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+    <Page
+      width="reading"
+      title="The project"
+      lede={
+        <>
           A published analysis of open civic data should survive scrutiny. Six months after
           it&apos;s written, a reader should be able to tell what the AI was asked, which public
           data sources it queried, which figures came from which query &mdash; and verify all of
           it without trusting the site that hosts it.
-        </p>
+        </>
+      }
+    >
+      {/* 1. Project description */}
+      <section style={sectionSpacing}>
         <p style={prose}>
           Civic AI Tools is an open-source project built around that idea. AI mediates open civic
           data for humans: anyone &mdash; a journalist, a student, a researcher, a public servant
@@ -229,6 +234,6 @@ export default function ProjectPage() {
           ))}
         </div>
       </section>
-    </div>
+    </Page>
   );
 }

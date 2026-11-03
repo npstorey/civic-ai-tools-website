@@ -1,17 +1,16 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import ReactMarkdown, { type Components } from 'react-markdown';
+import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   linkIssueRefs,
-  extractH2Headings,
   slugify,
   resolveRoadmapHref,
   roadmapLinkBase,
   splitRoadmapPreamble,
   type SectionHeading,
 } from '@/lib/roadmap/format';
+import { PageToc } from '@/components/ui/PageToc';
 
 interface RoadmapBodyProps {
   markdown: string;
@@ -19,20 +18,60 @@ interface RoadmapBodyProps {
   sourceUrl: string;
 }
 
+/** The design's rule (§2 P9): a page with more than five h2s gets a jump list. */
+const JUMP_LIST_ABOVE = 5;
+
+/** The minimal shape of a parsed (hast) node this file reads. */
+interface HastNode {
+  type: string;
+  tagName?: string;
+  value?: string;
+  properties?: Record<string, unknown>;
+  children?: HastNode[];
+}
+
+function hastText(node: HastNode): string {
+  if (node.type === 'text') return node.value ?? '';
+  return (node.children ?? []).map(hastText).join('');
+}
+
+/**
+ * The ONE source of the roadmap's section ids (UX-1 P7). A rehype step over
+ * the parsed body: each h2 gets its id here, from the text it renders (a
+ * link, code or emphasis inside it contributes its text, never its syntax),
+ * de-duplicated in document order, and the same id goes into `headings`, which
+ * the jump list renders. The h2 renderer below writes the id it is given and
+ * computes none of its own.
+ */
+function sectionIds(headings: SectionHeading[]) {
+  return (tree: HastNode) => {
+    const seen = new Map<string, number>();
+    const visit = (node: HastNode) => {
+      if (node.type === 'element' && node.tagName === 'h2') {
+        const text = hastText(node).trim();
+        const base = slugify(text) || 'section';
+        const count = (seen.get(base) ?? 0) + 1;
+        seen.set(base, count);
+        const id = count === 1 ? base : `${base}-${count}`;
+        node.properties = { ...node.properties, id };
+        headings.push({ text, id });
+      }
+      for (const child of node.children ?? []) visit(child);
+    };
+    visit(tree);
+  };
+}
+
 export default function RoadmapBody({ markdown, sourceUrl }: RoadmapBodyProps) {
   const { preamble, body, lastUpdated } = splitRoadmapPreamble(linkIssueRefs(markdown));
-  const headings = extractH2Headings(markdown);
   const linkBase = roadmapLinkBase(sourceUrl);
 
   const components: Components = {
     // Swallow the source doc's H1 — the page already has a "Roadmap" header;
     // two H1s would be redundant and a11y-noisy.
     h1: () => null,
-    h2: ({ children }) => {
-      const text = extractHeadingText(children);
-      const id = slugify(text);
-      return <h2 id={id}>{children}</h2>;
-    },
+    // The id comes from `sectionIds`, the one source the jump list reads too.
+    h2: ({ id, children }) => <h2 id={id}>{children}</h2>,
     a: ({ href: written, children }) => {
       const href = resolveRoadmapHref(written, linkBase);
       const isExternal = href?.startsWith('http');
@@ -48,8 +87,17 @@ export default function RoadmapBody({ markdown, sourceUrl }: RoadmapBodyProps) {
     },
   };
 
+  // The body is rendered here, before the jump list, so the jump list reads
+  // the ids `sectionIds` wrote while rendering it.
+  const headings: SectionHeading[] = [];
+  const rehypePlugins = [[sectionIds, headings]] as unknown as NonNullable<Options['rehypePlugins']>;
+  const renderedBody = ReactMarkdown({ children: body, remarkPlugins: [remarkGfm], rehypePlugins, components });
+
   return (
     <div className="roadmap-layout">
+      {headings.length > JUMP_LIST_ABOVE && (
+        <PageToc label="On this page" items={headings.map((h) => ({ id: h.id, label: h.text }))} />
+      )}
       <article className="roadmap-body">
         {/* The status lines and framing above section 1 fold behind one line, so the
             first section is what a reader sees first. */}
@@ -73,25 +121,10 @@ export default function RoadmapBody({ markdown, sourceUrl }: RoadmapBodyProps) {
             </div>
           </details>
         )}
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-          {body}
-        </ReactMarkdown>
+        {renderedBody}
       </article>
 
-      <TocRail headings={headings} />
-
       <style jsx>{`
-        .roadmap-layout {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr);
-          gap: 32px;
-          align-items: start;
-        }
-        @media (min-width: 960px) {
-          .roadmap-layout {
-            grid-template-columns: minmax(0, 1fr) 220px;
-          }
-        }
         .roadmap-body {
           font-size: 16px;
           line-height: 1.7;
@@ -214,116 +247,4 @@ export default function RoadmapBody({ markdown, sourceUrl }: RoadmapBodyProps) {
       `}</style>
     </div>
   );
-}
-
-function TocRail({ headings }: { headings: SectionHeading[] }) {
-  if (headings.length === 0) return null;
-
-  return (
-    <>
-      <aside className="toc-rail-desktop" aria-label="On this page">
-        <div className="toc-inner">
-          <div className="toc-label">On this page</div>
-          <ul>
-            {headings.map((h) => (
-              <li key={h.id}>
-                <a href={`#${h.id}`}>{h.text}</a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </aside>
-
-      <details className="toc-rail-mobile">
-        <summary>On this page</summary>
-        <ul>
-          {headings.map((h) => (
-            <li key={h.id}>
-              <a href={`#${h.id}`}>{h.text}</a>
-            </li>
-          ))}
-        </ul>
-      </details>
-
-      <style jsx>{`
-        .toc-rail-desktop {
-          display: none;
-        }
-        @media (min-width: 960px) {
-          .toc-rail-desktop {
-            display: block;
-            position: sticky;
-            top: calc(var(--header-height, 72px) + 24px);
-            align-self: start;
-          }
-        }
-        .toc-inner {
-          border-left: 1px solid var(--border-color);
-          padding: 4px 0 4px 16px;
-        }
-        .toc-label {
-          font-size: 12px;
-          font-weight: 600;
-          color: var(--text-muted);
-          text-transform: uppercase;
-          letter-spacing: 0.06em;
-          margin-bottom: 12px;
-        }
-        .toc-rail-desktop ul,
-        .toc-rail-mobile ul {
-          list-style: none;
-          padding: 0;
-          margin: 0;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-        .toc-rail-desktop a,
-        .toc-rail-mobile a {
-          font-size: 13px;
-          color: var(--text-secondary);
-          text-decoration: none;
-          line-height: 1.4;
-        }
-        .toc-rail-desktop a:hover,
-        .toc-rail-mobile a:hover {
-          color: var(--accent);
-          text-decoration: underline;
-        }
-        .toc-rail-mobile {
-          order: -1;
-          margin-bottom: 8px;
-          border: 1px solid var(--border-color);
-          border-radius: 4px;
-          padding: 12px 16px;
-          font-size: 14px;
-        }
-        @media (min-width: 960px) {
-          .toc-rail-mobile {
-            display: none;
-          }
-        }
-        .toc-rail-mobile summary {
-          cursor: pointer;
-          font-weight: 500;
-          color: var(--text-primary);
-        }
-        .toc-rail-mobile ul {
-          margin-top: 12px;
-        }
-      `}</style>
-    </>
-  );
-}
-
-function extractHeadingText(children: ReactNode): string {
-  if (children == null) return '';
-  if (typeof children === 'string') return children;
-  if (typeof children === 'number') return String(children);
-  if (Array.isArray(children)) return children.map(extractHeadingText).join('');
-  if (typeof children === 'object' && 'props' in children) {
-    const props = (children as { props?: { children?: ReactNode } }).props;
-    return extractHeadingText(props?.children);
-  }
-  return '';
 }

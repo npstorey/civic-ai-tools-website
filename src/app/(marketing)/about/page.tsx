@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { prose, sectionHeading, sectionSpacing } from '@/styles/page-styles';
 import { EXPRESS_INTEREST_URL } from '@/lib/site-config';
-import SponsorLine from '@/components/SponsorLine';
+import { Page } from '@/components/ui/Page';
 import { pageTitle } from '@/lib/brand-config';
 import { getDirectoryData } from '@/lib/mcp/directory-data';
 import { getPortalCounts } from '@/lib/mcp/portal-data';
@@ -20,12 +20,11 @@ export default async function AboutPage() {
   const portalCount = portalCounts.total.toLocaleString('en-US');
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 24px' }}>
-
-      {/* Hero */}
-      <section style={sectionSpacing}>
-        <h1 style={{ marginBottom: '16px' }}>About</h1>
-        <p style={{ fontSize: '20px', lineHeight: '150%', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+    <Page
+      width="reading"
+      title="About"
+      lede={
+        <>
           Civic AI Tools is an open-source project that connects AI assistants to government open
           data. It uses the{' '}
           <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer">
@@ -35,8 +34,9 @@ export default async function AboutPage() {
           San Francisco, Seattle, and Los Angeles, plus US Census / ACS demographic and economic data
           via Google Data Commons &mdash; so you can ask plain-language questions and get answers
           grounded in actual public data, not training data.
-        </p>
-      </section>
+        </>
+      }
+    >
 
       {/* What's in the project */}
       <section id="whats-in-the-project" style={{ ...sectionSpacing, scrollMarginTop: '80px' }}>
@@ -172,7 +172,6 @@ export default async function AboutPage() {
           It is an independent, spare-time project motivated by a belief that public data should be
           easier &mdash; and safer &mdash; to access.
         </p>
-        <SponsorLine style={prose} />
         <p style={prose}>Contributions welcome.</p>
       </section>
 
@@ -247,6 +246,6 @@ export default async function AboutPage() {
           How it works &rarr;
         </Link>
       </div>
-    </div>
+    </Page>
   );
 }

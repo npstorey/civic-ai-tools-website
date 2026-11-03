@@ -4,6 +4,7 @@ import AudienceRoutingStrip from '@/components/roadmap/AudienceRoutingStrip';
 import RoadmapBody from '@/components/roadmap/RoadmapBody';
 import { getBrandName, pageTitle } from '@/lib/brand-config';
 import { getRoadmapSource, type RoadmapSource } from '@/lib/site-config';
+import { Page } from '@/components/ui/Page';
 
 // A roadmap is first-person content: "our plans". An instance that has not
 // published one renders the unpublished state below rather than another
@@ -75,12 +76,12 @@ export default async function RoadmapPage() {
   );
 }
 
+// The page frame at the reading width (UX-1 P7); the jump list sits in the body.
 function RoadmapShell({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '48px 24px' }}>
-      <h1 style={{ marginBottom: '8px' }}>Roadmap</h1>
+    <Page width="reading" title="Roadmap">
       {children}
-    </div>
+    </Page>
   );
 }
 
