@@ -65,6 +65,9 @@
   "overrides": {
     "@vercel/cli-config": {
       "zod": "^4.6.6"
+    },
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.25.0"
     }
   }
 }
