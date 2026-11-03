@@ -281,7 +281,14 @@ export async function mountPublishDialog(
     const { type, props } = node;
     if (typeof type === 'string') {
       const children = expand(props.children, `${at}>${type}`);
-      return createElement(type, { ...props, key: node.key ?? undefined }, ...(Array.isArray(children) ? children : [children]));
+      const rebuilt = createElement(type, { ...props, key: node.key ?? undefined }, ...(Array.isArray(children) ? children : [children]));
+      // React's development build marks an element written among static
+      // children as key-checked; the rebuilt element keeps that mark, so a
+      // list the original did not warn about does not warn now.
+      const from = (node as { _store?: { validated?: number } })._store;
+      const to = (rebuilt as { _store?: { validated?: number } })._store;
+      if (from && to) to.validated = from.validated;
+      return rebuilt;
     }
     if (typeof type === 'function') {
       const key = `${at}/${(type as { name?: string }).name ?? 'anonymous'}`;
