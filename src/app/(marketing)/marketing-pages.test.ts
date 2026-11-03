@@ -333,7 +333,8 @@ test('criterion 2 instrument: a fragment with no target, and two jump lists, are
   assert.deepEqual(jumpListProblems(two), ['expected exactly one <nav aria-label> jump list, found 2']);
 });
 
-for (const route of ['/learn', '/privacy', '/roadmap']) {
+// /project has four h2s; its jump list is the owner's ruling at the gate (G0-2 (ii)).
+for (const route of ['/learn', '/privacy', '/roadmap', '/project']) {
   test(`criterion 2: ${route} renders exactly one <nav aria-label> jump list whose fragments each name one element id`, () => {
     const problems = jumpListProblems(PAGES[route]);
     assert.deepEqual(problems, [], `${route}: ${problems.join('; ')}`);

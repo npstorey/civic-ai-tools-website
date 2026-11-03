@@ -6,6 +6,7 @@ import ContactCallToAction from '@/components/ContactCallToAction';
 import { CONSORTIUM_MEMBERS } from '@/lib/consortium';
 import { pageTitle } from '@/lib/brand-config';
 import { Page } from '@/components/ui/Page';
+import { PageToc } from '@/components/ui/PageToc';
 
 export const metadata: Metadata = {
   title: pageTitle('Project'),
@@ -79,6 +80,16 @@ const cardMeta: React.CSSProperties = {
   margin: 0,
 };
 
+// The page's sections: each id and h2 written once, read by the section and by
+// the jump list. Four h2s, under the design's five, so the jump list is the
+// owner's ruling (UX-1 G0-2 (ii)), in a commit of its own.
+const SECTIONS = {
+  pillars: { id: 'three-pillars', heading: 'Three pillars' },
+  consortium: { id: 'consortium', heading: 'Consortium' },
+  contact: { id: 'contact', heading: 'Contact us' },
+  cases: { id: 'cases', heading: 'Cases' },
+} as const;
+
 export default function ProjectPage() {
   return (
     <Page
@@ -93,6 +104,11 @@ export default function ProjectPage() {
         </>
       }
     >
+      <PageToc
+        label="Sections of this page"
+        items={Object.values(SECTIONS).map((section) => ({ id: section.id, label: section.heading }))}
+      />
+
       {/* 1. Project description */}
       <section style={sectionSpacing}>
         <p style={prose}>
@@ -115,8 +131,8 @@ export default function ProjectPage() {
       </section>
 
       {/* 2. Three pillars */}
-      <section style={sectionSpacing}>
-        <h2 style={sectionHeading}>Three pillars</h2>
+      <section id={SECTIONS.pillars.id} style={sectionSpacing}>
+        <h2 style={sectionHeading}>{SECTIONS.pillars.heading}</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <p style={pillarLabel}>Deliberative democracy &times; citizen science</p>
@@ -158,8 +174,8 @@ export default function ProjectPage() {
       </section>
 
       {/* 3. Consortium */}
-      <section style={sectionSpacing}>
-        <h2 style={sectionHeading}>Consortium</h2>
+      <section id={SECTIONS.consortium.id} style={sectionSpacing}>
+        <h2 style={sectionHeading}>{SECTIONS.consortium.heading}</h2>
         <p style={prose}>
           Founding members of the consortium supporting the Typed Standards ecosystem.
         </p>
@@ -202,14 +218,14 @@ export default function ProjectPage() {
       </section>
 
       {/* 4. Contact us */}
-      <section style={sectionSpacing}>
-        <h2 style={sectionHeading}>Contact us</h2>
+      <section id={SECTIONS.contact.id} style={sectionSpacing}>
+        <h2 style={sectionHeading}>{SECTIONS.contact.heading}</h2>
         <ContactCallToAction textStyle={prose} />
       </section>
 
       {/* 5. Cases */}
-      <section style={{ marginBottom: '48px' }}>
-        <h2 style={sectionHeading}>Cases</h2>
+      <section id={SECTIONS.cases.id} style={{ marginBottom: '48px' }}>
+        <h2 style={sectionHeading}>{SECTIONS.cases.heading}</h2>
         <p style={prose}>
           Real analyses published to this site&apos;s{' '}
           <Link href="/records">public registry of analyses</Link>. Each card links to the signed
