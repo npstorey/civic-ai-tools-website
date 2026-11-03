@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useId } from 'react';
 import { signIn, signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -13,6 +13,8 @@ import {
 } from '@/lib/auth-provider-options';
 import { useCrossHostSession } from '@/hooks/useCrossHostSession';
 import type { SessionAffordanceTarget } from '@/lib/allowed-origins';
+import { Menu, type MenuItem } from '@/components/ui/Menu';
+import { Sheet } from '@/components/ui/Sheet';
 
 const NAV_LINK_STYLE: React.CSSProperties = {
   color: 'var(--text-secondary)',
@@ -20,14 +22,76 @@ const NAV_LINK_STYLE: React.CSSProperties = {
   fontSize: '16px',
 };
 
-const DROPDOWN_ITEM_STYLE: React.CSSProperties = {
+const DRAWER_LINK_STYLE: React.CSSProperties = {
   display: 'block',
-  padding: '8px 16px',
-  fontSize: '15px',
+  padding: '6px 0',
   color: 'var(--text-secondary)',
-  textDecoration: 'none',
   fontWeight: 500,
+  fontSize: '16px',
+  textDecoration: 'none',
 };
+
+const DRAWER_ITEM_STYLE: React.CSSProperties = { ...DRAWER_LINK_STYLE, paddingLeft: '12px' };
+
+const DRAWER_GROUP_LABEL_STYLE: React.CSSProperties = {
+  margin: '12px 0 4px',
+  color: 'var(--text-muted)',
+  fontWeight: 600,
+  fontSize: '13px',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+};
+
+const ARROW_STYLE: React.CSSProperties = { fontSize: '11px', marginLeft: '4px', color: 'var(--text-muted)' };
+
+interface NavLink {
+  id: string;
+  label: string;
+  href: string;
+}
+
+/** One entry of the bar: a link, or a menu of links. The drawer renders the same list. */
+type NavEntry =
+  | ({ kind: 'link'; external?: boolean } & NavLink)
+  | { kind: 'menu'; id: string; label: string; items: NavLink[] };
+
+/** A bar or drawer link: an external one opens a new tab and carries the ↗ glyph. */
+function renderLink(entry: Extract<NavEntry, { kind: 'link' }>, style: React.CSSProperties, onClick?: () => void) {
+  if (entry.external) {
+    return (
+      <a
+        key={entry.id}
+        href={entry.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="no-link-style"
+        style={style}
+        onClick={onClick}
+      >
+        {entry.label}
+        <span aria-hidden="true" style={ARROW_STYLE}>&#8599;</span>
+      </a>
+    );
+  }
+  return (
+    <Link key={entry.id} href={entry.href} className="no-link-style" style={style} onClick={onClick}>
+      {entry.label}
+    </Link>
+  );
+}
+
+/*
+ * THE BAR (UX-1 P3a; R7 A, R13 A). Left to right: the wordmark; Ask;
+ * Analysis (`/records`, dual-served, so it stays relative on both hosts);
+ * Explore ▾ (Data Flow, Directory); About ▾ (About, Learn, Roadmap when
+ * shown, Talks); Project; Typed Standards ↗. Explore, About and Project are
+ * marketing routes, so an instance with no marketing surface
+ * (`marketingOrigin: null`) shows none of them — Explore would be a menu
+ * with no items. The two menus and the avatar menu are P0's `Menu`; the
+ * mobile drawer is P0's `Sheet`, built from the same `entries` list so it
+ * holds the bar's grouping in the bar's order. Account items stay in the
+ * avatar menu, which renders at every width.
+ */
 
 /**
  * Every cross-host target this header needs is env-derived and passed in by
@@ -36,6 +100,16 @@ const DROPDOWN_ITEM_STYLE: React.CSSProperties = {
  *
  * - `dashboardHref` (P3) — the marketing host withholds `/dashboard`, so on a
  *   split-host deployment the signed-in menu points at the app host.
+ * - `askHref` (UX-1 P3a; was `AppChrome`'s, #210) — `resolveAskHref`: `/ask`,
+ *   or the app origin's `/ask` on a split-host deployment, because `/ask` is
+ *   app-private and this header renders on the marketing host too. Signed
+ *   out on a split-host deployment, Ask links `/` instead: the header cannot
+ *   tell which host it is on, and `/` is right on both — the marketing host
+ *   serves its own query surface there, and the app host sends `/` to
+ *   `/ask` (`APP_ROOT_ACTION`, src/lib/host-routing.ts).
+ * - `publicSiteHref` (UX-1 P3a; was `AppChrome`'s exit link) —
+ *   `resolvePublicSiteHref`: the avatar menu's "Public site" item, hidden
+ *   when null (an instance that serves no marketing surface).
  * - `marketingOrigin` (P4c) — prefix for the nav's marketing routes, which
  *   the APP host withholds. `''` (the default, and unset topology) leaves
  *   every href exactly the relative one it is today; `null` means an
@@ -73,6 +147,8 @@ const DROPDOWN_ITEM_STYLE: React.CSSProperties = {
  */
 export default function Header({
   dashboardHref = '/dashboard',
+  askHref = '/ask',
+  publicSiteHref = null,
   marketingOrigin = '',
   signInHref = null,
   brandName,
@@ -81,6 +157,8 @@ export default function Header({
   sessionProbe = null,
 }: {
   dashboardHref?: string;
+  askHref?: string;
+  publicSiteHref?: string | null;
   marketingOrigin?: string | null;
   signInHref?: string | null;
   brandName: string | null;
@@ -100,12 +178,8 @@ export default function Header({
   );
   const headerRef = useRef<HTMLElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [exploreOpen, setExploreOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const exploreRef = useRef<HTMLDivElement>(null);
-  const aboutRef = useRef<HTMLDivElement>(null);
-  const userMenuRef = useRef<HTMLDivElement>(null);
+  const drawerId = useId();
+  const closeDrawer = () => setMobileMenuOpen(false);
 
   // Marketing-route href, prefixed with the marketing origin when one is
   // configured. With the default empty prefix this is the identity function
@@ -120,6 +194,64 @@ export default function Header({
   // resolveSignInAffordance.
   const signInAffordance = resolveSignInAffordance(signInOptions);
 
+  // A non-empty marketing origin means a split-host deployment. Signed out
+  // there, Ask is `/` (see `askHref` above).
+  const askLink = !session && marketingOrigin ? '/' : askHref;
+  const wordmark = brandName ?? UNNAMED_WORDMARK;
+
+  const entries: NavEntry[] = [
+    { kind: 'link', id: 'ask', label: 'Ask', href: askLink },
+    // Dual-served by design (P3): stays relative on both hosts.
+    { kind: 'link', id: 'analysis', label: 'Analysis', href: '/records' },
+  ];
+  if (showMarketingNav) {
+    entries.push(
+      {
+        kind: 'menu',
+        id: 'explore',
+        label: 'Explore',
+        items: [
+          { id: 'data-flow', label: 'Data Flow', href: mkt('/explore') },
+          { id: 'directory', label: 'Directory', href: mkt('/directory') },
+        ],
+      },
+      {
+        kind: 'menu',
+        id: 'about',
+        label: 'About',
+        items: [
+          { id: 'about', label: 'About', href: mkt('/about') },
+          { id: 'learn', label: 'Learn', href: mkt('/learn') },
+          // Roadmap: only for an instance that has one (#241).
+          ...(showRoadmap ? [{ id: 'roadmap', label: 'Roadmap', href: mkt('/roadmap') }] : []),
+          { id: 'talks', label: 'Talks', href: mkt('/talks') },
+        ],
+      },
+      { kind: 'link', id: 'project', label: 'Project', href: mkt('/project') },
+    );
+  }
+  entries.push({ kind: 'link', id: 'typed-standards', label: 'Typed Standards', href: TYPED_STANDARDS_URL, external: true });
+
+  // The account's identity, as the app surface's strip stated it before
+  // UX-1 P3a removed that strip: the name, else the email.
+  const identity = session?.user?.name || session?.user?.email || null;
+  const accountItems: MenuItem[] = [
+    { id: 'my-analyses', label: 'My analyses', href: dashboardHref },
+    ...(publicSiteHref !== null
+      ? [{
+          id: 'public-site',
+          label: (
+            <>
+              Public site
+              <span aria-hidden="true" style={ARROW_STYLE}>&#8599;</span>
+            </>
+          ),
+          href: publicSiteHref,
+        }]
+      : []),
+    { id: 'sign-out', label: 'Sign out' },
+  ];
+
   // Publish header height as a CSS variable so other components can offset below it
   useEffect(() => {
     const el = headerRef.current;
@@ -133,24 +265,6 @@ export default function Header({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-
-  // Close dropdowns on outside click
-  useEffect(() => {
-    if (!exploreOpen && !aboutOpen && !userMenuOpen) return;
-    const handleClick = (e: MouseEvent) => {
-      if (exploreOpen && exploreRef.current && !exploreRef.current.contains(e.target as Node)) {
-        setExploreOpen(false);
-      }
-      if (aboutOpen && aboutRef.current && !aboutRef.current.contains(e.target as Node)) {
-        setAboutOpen(false);
-      }
-      if (userMenuOpen && userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
-        setUserMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [exploreOpen, aboutOpen, userMenuOpen]);
 
   return (
     <header
@@ -176,184 +290,27 @@ export default function Header({
               color: 'var(--text-primary)',
             }}
           >
-            {brandName ?? UNNAMED_WORDMARK}
+            {wordmark}
           </Link>
           <nav className="hidden sm:flex items-center gap-6">
-            {/* Explore dropdown */}
-            <div ref={exploreRef} style={{ position: 'relative' }}>
-              <button
-                onClick={() => setExploreOpen(!exploreOpen)}
-                className="no-link-style"
-                style={{
-                  ...NAV_LINK_STYLE,
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontFamily: 'inherit',
-                }}
-              >
-                Explore
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>&#9662;</span>
-              </button>
-              {exploreOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 8px)',
-                    left: 0,
-                    minWidth: '160px',
-                    backgroundColor: 'var(--white)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '4px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                    zIndex: 10,
-                    padding: '4px 0',
-                  }}
-                >
-                  {showMarketingNav && (
-                    <>
-                  <Link
-                    href={mkt('/explore')}
-                    onClick={() => setExploreOpen(false)}
-                    style={DROPDOWN_ITEM_STYLE}
-                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
-                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                  >
-                    Data Flow
-                  </Link>
-                  <Link
-                    href={mkt('/directory')}
-                    onClick={() => setExploreOpen(false)}
-                    style={DROPDOWN_ITEM_STYLE}
-                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
-                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                  >
-                    Directory
-                  </Link>
-                    </>
-                  )}
-                  {/* Dual-served by design (P3): stays relative on both hosts. */}
-                  <Link
-                    href="/records"
-                    onClick={() => setExploreOpen(false)}
-                    style={DROPDOWN_ITEM_STYLE}
-                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
-                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                  >
-                    Analysis
-                  </Link>
-                </div>
-              )}
-            </div>
-            {showMarketingNav && (
-              <>
-            <Link
-              href={mkt('/learn')}
-              className="no-link-style"
-              style={NAV_LINK_STYLE}
-            >
-              Learn
-            </Link>
-            <Link
-              href={mkt('/project')}
-              className="no-link-style"
-              style={NAV_LINK_STYLE}
-            >
-              Project
-            </Link>
-            {/* About dropdown */}
-            <div ref={aboutRef} style={{ position: 'relative' }}>
-              <button
-                onClick={() => setAboutOpen(!aboutOpen)}
-                className="no-link-style"
-                style={{
-                  ...NAV_LINK_STYLE,
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontFamily: 'inherit',
-                }}
-              >
-                About
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>&#9662;</span>
-              </button>
-              {aboutOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 8px)',
-                    left: 0,
-                    minWidth: '160px',
-                    backgroundColor: 'var(--white)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '4px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                    zIndex: 10,
-                    padding: '4px 0',
-                  }}
-                >
-                  <Link
-                    href={mkt('/about')}
-                    onClick={() => setAboutOpen(false)}
-                    style={DROPDOWN_ITEM_STYLE}
-                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
-                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                  >
-                    About
-                  </Link>
-                  {/* Roadmap: only for an instance that has one (#241). */}
-                  {showRoadmap && (
-                  <Link
-                    href={mkt('/roadmap')}
-                    onClick={() => setAboutOpen(false)}
-                    style={DROPDOWN_ITEM_STYLE}
-                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
-                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                  >
-                    Roadmap
-                  </Link>
-                  )}
-                  <Link
-                    href={mkt('/talks')}
-                    onClick={() => setAboutOpen(false)}
-                    style={DROPDOWN_ITEM_STYLE}
-                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
-                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                  >
-                    Talks
-                  </Link>
-                </div>
-              )}
-            </div>
-              </>
+            {entries.map((entry) =>
+              entry.kind === 'menu' ? (
+                <Menu key={entry.id} trigger={entry.label} items={entry.items} />
+              ) : (
+                renderLink(entry, NAV_LINK_STYLE)
+              ),
             )}
-            <a
-              href={TYPED_STANDARDS_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="no-link-style"
-              style={NAV_LINK_STYLE}
-            >
-              Typed Standards
-              <span aria-hidden="true" style={{ fontSize: '11px', marginLeft: '4px', color: 'var(--text-muted)' }}>&#8599;</span>
-            </a>
           </nav>
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Mobile hamburger */}
+          {/* Mobile menu: opens the drawer */}
           <button
+            type="button"
             className="sm:hidden"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle menu"
+            aria-expanded={mobileMenuOpen}
             style={{
               background: 'none',
               border: 'none',
@@ -364,7 +321,7 @@ export default function Header({
               lineHeight: 1,
             }}
           >
-            {mobileMenuOpen ? '\u2715' : '\u2630'}
+            {mobileMenuOpen ? '✕' : '☰'}
           </button>
           {status === 'loading' ? (
             <div
@@ -372,83 +329,36 @@ export default function Header({
               style={{ backgroundColor: 'var(--skeleton-color)' }}
             />
           ) : session ? (
-            /* User menu dropdown */
-            <div ref={userMenuRef} style={{ position: 'relative' }}>
-              <button
-                onClick={() => setUserMenuOpen(!userMenuOpen)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                {session.user?.image && (
-                  <Image
-                    src={session.user.image}
-                    alt={session.user.name || 'User'}
-                    width={36}
-                    height={36}
-                    className="rounded-full"
-                  />
-                )}
-                <span
-                  className="hidden sm:inline"
-                  style={{
-                    color: 'var(--text-secondary)',
-                    fontSize: '16px',
-                  }}
-                >
-                  {session.user?.name}
-                </span>
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>&#9662;</span>
-              </button>
-              {userMenuOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 8px)',
-                    right: 0,
-                    minWidth: '160px',
-                    backgroundColor: 'var(--white)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '4px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                    zIndex: 10,
-                    padding: '4px 0',
-                  }}
-                >
-                  <Link
-                    href={dashboardHref}
-                    onClick={() => setUserMenuOpen(false)}
-                    style={DROPDOWN_ITEM_STYLE}
-                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
-                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                  >
-                    My analyses
-                  </Link>
-                  <button
-                    onClick={() => { setUserMenuOpen(false); signOut(); }}
+            <Menu
+              trigger={
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {session.user?.image && (
+                    <Image
+                      src={session.user.image}
+                      alt={identity || 'User'}
+                      width={36}
+                      height={36}
+                      className="rounded-full"
+                    />
+                  )}
+                  <span
+                    className="hidden sm:inline"
                     style={{
-                      ...DROPDOWN_ITEM_STYLE,
-                      width: '100%',
-                      textAlign: 'left',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
+                      color: 'var(--text-secondary)',
+                      fontSize: '16px',
                     }}
-                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
-                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                   >
-                    Sign out
-                  </button>
-                </div>
-              )}
-            </div>
+                    {identity}
+                  </span>
+                </span>
+              }
+              triggerLabel={identity ?? undefined}
+              items={accountItems}
+              align="end"
+              onSelect={(id) => {
+                if (id === 'sign-out') signOut();
+              }}
+            />
           ) : signInHref !== null && sessionProbe !== null ? (
             /* Full split topology (Q64): the same link as the plain branch
                below, but session-aware — when the cross-host probe finds a
@@ -520,228 +430,27 @@ export default function Header({
         </div>
       </div>
 
-      {/* Mobile menu dropdown */}
-      {mobileMenuOpen && (
-        <div
-          className="sm:hidden"
-          style={{
-            borderTop: '1px solid var(--border-color)',
-            padding: '12px 24px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-          }}
-        >
-          {/* Explore section */}
-          <span
-            style={{
-              color: 'var(--text-muted)',
-              fontWeight: 600,
-              fontSize: '13px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          >
-            Explore
-          </span>
-          {showMarketingNav && (
-            <>
-          <Link
-            href={mkt('/explore')}
-            onClick={() => setMobileMenuOpen(false)}
-            style={{
-              color: 'var(--text-secondary)',
-              fontWeight: 500,
-              fontSize: '16px',
-              textDecoration: 'none',
-              paddingLeft: '12px',
-            }}
-          >
-            Data Flow
-          </Link>
-          <Link
-            href={mkt('/directory')}
-            onClick={() => setMobileMenuOpen(false)}
-            style={{
-              color: 'var(--text-secondary)',
-              fontWeight: 500,
-              fontSize: '16px',
-              textDecoration: 'none',
-              paddingLeft: '12px',
-            }}
-          >
-            Directory
-          </Link>
-            </>
-          )}
-          <Link
-            href="/records"
-            onClick={() => setMobileMenuOpen(false)}
-            style={{
-              color: 'var(--text-secondary)',
-              fontWeight: 500,
-              fontSize: '16px',
-              textDecoration: 'none',
-              paddingLeft: '12px',
-            }}
-          >
-            Analysis
-          </Link>
-          {showMarketingNav && (
-            <>
-          {/* Divider */}
-          <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
-          <Link
-            href={mkt('/learn')}
-            onClick={() => setMobileMenuOpen(false)}
-            style={{
-              color: 'var(--text-secondary)',
-              fontWeight: 500,
-              fontSize: '16px',
-              textDecoration: 'none',
-            }}
-          >
-            Learn
-          </Link>
-          {/* Divider */}
-          <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
-          <Link
-            href={mkt('/project')}
-            onClick={() => setMobileMenuOpen(false)}
-            style={{
-              color: 'var(--text-secondary)',
-              fontWeight: 500,
-              fontSize: '16px',
-              textDecoration: 'none',
-            }}
-          >
-            Project
-          </Link>
-          {/* Divider */}
-          <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
-          {/* About section */}
-          <span
-            style={{
-              color: 'var(--text-muted)',
-              fontWeight: 600,
-              fontSize: '13px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          >
-            About
-          </span>
-          <Link
-            href={mkt('/about')}
-            onClick={() => setMobileMenuOpen(false)}
-            style={{
-              color: 'var(--text-secondary)',
-              fontWeight: 500,
-              fontSize: '16px',
-              textDecoration: 'none',
-              paddingLeft: '12px',
-            }}
-          >
-            About
-          </Link>
-          {/* Roadmap: only for an instance that has one (#241). */}
-          {showRoadmap && (
-          <Link
-            href={mkt('/roadmap')}
-            onClick={() => setMobileMenuOpen(false)}
-            style={{
-              color: 'var(--text-secondary)',
-              fontWeight: 500,
-              fontSize: '16px',
-              textDecoration: 'none',
-              paddingLeft: '12px',
-            }}
-          >
-            Roadmap
-          </Link>
-          )}
-          <Link
-            href={mkt('/talks')}
-            onClick={() => setMobileMenuOpen(false)}
-            style={{
-              color: 'var(--text-secondary)',
-              fontWeight: 500,
-              fontSize: '16px',
-              textDecoration: 'none',
-              paddingLeft: '12px',
-            }}
-          >
-            Talks
-          </Link>
-            </>
-          )}
-          {/* Divider */}
-          <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
-          <a
-            href={TYPED_STANDARDS_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => setMobileMenuOpen(false)}
-            style={{
-              color: 'var(--text-secondary)',
-              fontWeight: 500,
-              fontSize: '16px',
-              textDecoration: 'none',
-            }}
-          >
-            Typed Standards
-            <span aria-hidden="true" style={{ fontSize: '11px', marginLeft: '4px', color: 'var(--text-muted)' }}>&#8599;</span>
-          </a>
-          {/* Account section (logged in only) */}
-          {session && (
-            <>
-              <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
-              <span
-                style={{
-                  color: 'var(--text-muted)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}
-              >
-                Your account
-              </span>
-              <Link
-                href={dashboardHref}
-                onClick={() => setMobileMenuOpen(false)}
-                style={{
-                  color: 'var(--text-secondary)',
-                  fontWeight: 500,
-                  fontSize: '16px',
-                  textDecoration: 'none',
-                  paddingLeft: '12px',
-                }}
-              >
-                My analyses
-              </Link>
-              <button
-                onClick={() => { setMobileMenuOpen(false); signOut(); }}
-                style={{
-                  color: 'var(--text-secondary)',
-                  fontWeight: 500,
-                  fontSize: '16px',
-                  textDecoration: 'none',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  fontFamily: 'inherit',
-                  padding: 0,
-                  paddingLeft: '12px',
-                }}
-              >
-                Sign out
-              </button>
-            </>
+      {/* The mobile drawer: the bar's grouping, in the bar's order. */}
+      <Sheet open={mobileMenuOpen} onClose={closeDrawer} title={wordmark}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {entries.map((entry) =>
+            entry.kind === 'menu' ? (
+              <div key={entry.id} role="group" aria-labelledby={`${drawerId}-${entry.id}`}>
+                <p id={`${drawerId}-${entry.id}`} style={DRAWER_GROUP_LABEL_STYLE}>
+                  {entry.label}
+                </p>
+                {entry.items.map((item) => (
+                  <Link key={item.id} href={item.href} className="no-link-style" style={DRAWER_ITEM_STYLE} onClick={closeDrawer}>
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              renderLink(entry, DRAWER_LINK_STYLE, closeDrawer)
+            ),
           )}
         </div>
-      )}
+      </Sheet>
     </header>
   );
 }

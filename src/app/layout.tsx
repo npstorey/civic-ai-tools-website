@@ -5,7 +5,11 @@ import Link from 'next/link';
 import Providers from '@/components/Providers';
 import Header from '@/components/Header';
 import { HostLinksProvider } from '@/components/HostLinksProvider';
-import { resolveDashboardHref } from '@/lib/host-routing';
+import {
+  resolveAskHref,
+  resolveDashboardHref,
+  resolvePublicSiteHref,
+} from '@/lib/host-routing';
 import { resolveHostLinks } from '@/lib/host-links';
 import { resolveSessionAffordance } from '@/lib/allowed-origins';
 import RunningUnsignedBanner from '@/components/RunningUnsignedBanner';
@@ -290,9 +294,14 @@ export default function RootLayout({
                 `marketingOrigin`/`signInHref` are P4c's equivalents for the
                 nav links and the sign-in button — props here because the
                 layout renders Header directly; the components deeper inside
-                the page read the same values from HostLinksProvider. */}
+                the page read the same values from HostLinksProvider.
+                `askHref` and `publicSiteHref` were the `(app)` strip's
+                (`AppChrome`, removed in UX-1 P3a); the Header carries both
+                on every page now. */}
             <Header
               dashboardHref={resolveDashboardHref(process.env)}
+              askHref={resolveAskHref(process.env)}
+              publicSiteHref={resolvePublicSiteHref(process.env)}
               marketingOrigin={hostLinks.marketingOrigin}
               signInHref={hostLinks.signInHref}
               brandName={brandName}
