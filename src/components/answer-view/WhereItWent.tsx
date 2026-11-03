@@ -69,7 +69,7 @@ const dataSources = (n: number) => (n === 0 ? 'no data source' : n === 1 ? '1 da
  * Shown on a record whose statement this site does not serve, once, under the rows (Stage D, the seat's
  * finding 1): the record holds each call's arguments (section D), so only what each keeps is out of reach.
  */
-const CANNOT_SHOW_KEEPS = 'This site cannot show what each one keeps for this record.';
+const CANNOT_SHOW_KEEPS = 'This site cannot show what each one keeps for this analysis.';
 
 const ROWS: CSSProperties = { margin: '8px 0 0', paddingLeft: '18px' };
 const CHOOSER_GROUPS: CSSProperties = { margin: '2px 0 0', paddingLeft: '18px' };

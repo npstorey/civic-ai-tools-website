@@ -154,7 +154,7 @@ test('W4 P2 (5) one naming the shown layout’s node shows none: W4 P1’s line,
 
 test('W4 P2 (5) an id the site does not hold shows the not-held sentence, not the published-under form', () => {
   const line = footLine([publishesView(NOT_HELD_ID)]);
-  assert.equal(line, 'Shown under layout answer-first v1. This site does not hold the layout this record was published under.');
+  assert.equal(line, 'Shown under layout answer-first v1. This site does not hold the layout this analysis was published under.');
   assert.doesNotMatch(line, /Published under/);
 });
 

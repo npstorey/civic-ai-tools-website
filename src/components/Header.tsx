@@ -244,7 +244,7 @@ export default function Header({
                     onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
                     onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                   >
-                    Records
+                    Analysis
                   </Link>
                 </div>
               )}
@@ -428,7 +428,7 @@ export default function Header({
                     onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
                     onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                   >
-                    Dashboard
+                    My analyses
                   </Link>
                   <button
                     onClick={() => { setUserMenuOpen(false); signOut(); }}
@@ -585,7 +585,7 @@ export default function Header({
               paddingLeft: '12px',
             }}
           >
-            Records
+            Analysis
           </Link>
           {showMarketingNav && (
             <>
@@ -718,7 +718,7 @@ export default function Header({
                   paddingLeft: '12px',
                 }}
               >
-                Dashboard
+                My analyses
               </Link>
               <button
                 onClick={() => { setMobileMenuOpen(false); signOut(); }}

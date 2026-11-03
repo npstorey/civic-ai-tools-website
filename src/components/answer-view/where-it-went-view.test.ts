@@ -249,7 +249,7 @@ interface Holder { holder: string; keeps: string; retention?: string; statementU
 
 // Stage D (the seat's check of Stage C, finding 1): the record holds each call's arguments, so it does say what
 // a source received; only what each keeps is out of this site's reach.
-const RECORD_SENTENCE = 'This site cannot show what each one keeps for this record.';
+const RECORD_SENTENCE = 'This site cannot show what each one keeps for this analysis.';
 const OLD_RECORD_SENTENCE = 'This record does not say what each one received or keeps.';
 
 /** The summary line, for N reached sources. */

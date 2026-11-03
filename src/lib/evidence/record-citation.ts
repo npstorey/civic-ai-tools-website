@@ -58,11 +58,11 @@ export function buildRecordCitations(input: RecordCitationInput): RecordCitation
   return [
     {
       label: 'Plain text',
-      text: `${creatorName} (${year}). "${title}." ${brandName === null ? '' : `${brandName} `}Record Package. ${url}. Published: ${dateStr}.`,
+      text: `${creatorName} (${year}). "${title}." ${brandName === null ? '' : `${brandName} `}Analysis package. ${url}. Published: ${dateStr}.`,
     },
     {
       label: 'For deliberative process reference',
-      text: `Record: ${title} [Published: ${dateStr}] ${url}`,
+      text: `Analysis: ${title} [Published: ${dateStr}] ${url}`,
     },
   ];
 }

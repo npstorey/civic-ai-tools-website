@@ -116,14 +116,14 @@ export async function POST(
     .where(eq(evidenceRecords.slug, slug))
     .limit(1);
   if (records.length === 0) {
-    return NextResponse.json({ error: 'Record not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Analysis not found' }, { status: 404 });
   }
   const record = records[0];
 
   // Publisher-only (§8.12.3): only the creator can publish. 404 (not 403) for
   // non-creators so a sealed record's existence isn't confirmed by probing.
   if (record.creatorId !== auth.userId) {
-    return NextResponse.json({ error: 'Record not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Analysis not found' }, { status: 404 });
   }
 
   // Precondition, keyed on the canonical state so a row holding EITHER label
@@ -131,7 +131,7 @@ export async function POST(
   // mixed-state property in its sharpest form: between this deploy and the M2
   // backfill the table holds both spellings at once.
   if (fromDbValue(record.visibility) !== 'sealed') {
-    return NextResponse.json({ error: 'Record is already published' }, { status: 400 });
+    return NextResponse.json({ error: 'Analysis is already published' }, { status: 400 });
   }
 
   // Per-record form of the same gate: a historical row persisted WITHOUT a
@@ -154,14 +154,14 @@ export async function POST(
   const lifecycle = await resolveLifecycle(record);
   if (lifecycle.status === 'withdrawn') {
     return NextResponse.json(
-      { error: 'Record is withdrawn; reinstate it before publishing' },
+      { error: 'Analysis is withdrawn; reinstate it before publishing' },
       { status: 400 },
     );
   }
 
   if (!record.basePackageHash || !record.basePackageStorageKey) {
     return NextResponse.json(
-      { error: 'Record has no stored package to publish' },
+      { error: 'Analysis has no stored package to publish' },
       { status: 400 },
     );
   }
@@ -319,7 +319,7 @@ export async function POST(
     .returning({ id: evidenceRecords.id });
   if (won.length === 0) {
     return NextResponse.json(
-      { error: 'Record was published concurrently by another request' },
+      { error: 'Analysis was published concurrently by another request' },
       { status: 409 },
     );
   }
@@ -356,7 +356,7 @@ export async function POST(
     );
     console.error('[api/evidence/publish] pair emission failed:', errorLogFacts(err));
     return NextResponse.json(
-      { error: 'Publication failed; the record remains sealed' },
+      { error: 'Publication failed; the analysis remains sealed' },
       { status: 500 },
     );
   }

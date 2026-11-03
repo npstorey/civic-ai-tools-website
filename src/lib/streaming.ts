@@ -1933,7 +1933,7 @@ function describeToolNarrative(
         const id = tool.args.id as string | undefined;
         return id ? `looked up ${id}` : 'looked up one item';
       }
-      return tool.name ? `called ${upstreamToolName(tool.name)}` : 'ran a step the record does not name';
+      return tool.name ? `called ${upstreamToolName(tool.name)}` : 'ran a step the analysis does not name';
     }
   }
 }

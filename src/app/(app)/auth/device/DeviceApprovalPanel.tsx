@@ -263,7 +263,7 @@ export default function DeviceApprovalPanel({
           }}
         >
           Approving will mint a bearer token valid for 90 days that can publish
-          records on your behalf. You can revoke it anytime from the dashboard.
+          analyses on your behalf. You can revoke it anytime from the dashboard.
         </p>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button

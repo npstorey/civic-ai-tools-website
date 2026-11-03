@@ -141,7 +141,7 @@ const SLUG = 'noise-trends-in-nyc-last-week-d887c1';
 const HEADING = 'Where this question went';
 /** Stage C: the summary, the only closed-state text (d887c1 reached one source; Stage D names its runner). */
 const SUMMARY = 'Where this question went: the model, the notebook runner and 1 data source.';
-const RECORD_SENTENCE = 'This site cannot show what each one keeps for this record.';
+const RECORD_SENTENCE = 'This site cannot show what each one keeps for this analysis.';
 const D1_LINE = 'What each one keeps: where a question can go, as of 20 October 2026.';
 const DISCLOSURE_LABEL = 'Learn more about how this analysis was produced';
 

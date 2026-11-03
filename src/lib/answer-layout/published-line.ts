@@ -15,7 +15,7 @@ import { layoutId, layoutLine, type LayoutPayload } from './index.ts';
 export type PublishedLayout = { held: true; name: string; version: number } | { held: false };
 
 /** The sentence added when the site does not hold the layout a record was published under. */
-export const NOT_HELD_SENTENCE = 'This site does not hold the layout this record was published under.';
+export const NOT_HELD_SENTENCE = 'This site does not hold the layout this analysis was published under.';
 
 /**
  * The foot line under `shown`, given the layout the record was published

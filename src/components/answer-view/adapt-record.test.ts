@@ -340,7 +340,7 @@ test('W3 P2 fix 1 (3) a multi-turn record’s transcript reaches the model whole
 // (4) Nothing the site or the sandbox wrote sits under the model's line: the
 // record's `none` carries no author line.
 
-const OUTPUT_DOES_NOT_MATCH = 'The answer is not shown: the stored copy of this record’s output does not match the record’s reference to it. The package hash below identifies the record for audit.';
+const OUTPUT_DOES_NOT_MATCH = 'The answer is not shown: the stored copy of this analysis’s output does not match the analysis’s reference to it. The package hash below identifies the analysis for audit.';
 const BLOB_REF = { ref: `blob:sha256:${'a'.repeat(64)}`, url: 'https://blobs.example.test/x.md', contentType: 'text/markdown', size: 1234 };
 
 function blobInput(resolutionFields: Record<string, unknown>, resolvedOutput: string) {

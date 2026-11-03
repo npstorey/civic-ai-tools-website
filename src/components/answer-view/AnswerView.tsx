@@ -400,7 +400,7 @@ function Disclosure({ disclosure, answer, answerElement, extras, recordSections,
                 The system prompt is composed from the base civic-data skill
                 guidance plus the web overlay (and any portal-specific overlays).
                 The content hash below is captured at execution time and embedded
-                in the record package when this analysis is published.
+                in the package for this analysis when it is published.
               </p>
               {instructions.hash && (
                 <div style={{
@@ -419,7 +419,7 @@ function Disclosure({ disclosure, answer, answerElement, extras, recordSections,
                     {instructions.hash.slice(0, 16)}…
                   </code>
                   <span style={{ fontStyle: 'italic' }}>
-                    (truncated; full hash is what the record package will sign)
+                    (truncated; full hash is what the package for this analysis will sign)
                   </span>
                 </div>
               )}

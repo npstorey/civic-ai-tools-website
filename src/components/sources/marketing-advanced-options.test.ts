@@ -76,8 +76,8 @@ installFetch(ORIGIN, {
 const splitTopology = (child: ReactElement) => h(HostLinksProvider, { value: { marketingOrigin: '', signInHref: 'https://app.fixture.example/ask' } }, child);
 const askMount = () => h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode: 'notebook' });
 
-const LINE_SPLIT = 'Sign in to run the answer as a notebook in a signed sandbox and publish it as a record. Signed in, you can ask 20 questions a day.';
-const LINE_IN_PLACE = 'Sign in with GitHub to run the answer as a notebook in a signed sandbox and publish it as a record. Signed in, you can ask 20 questions a day.';
+const LINE_SPLIT = 'Sign in to run the answer as a notebook in a signed sandbox and publish it as a signed analysis. Signed in, you can ask 20 questions a day.';
+const LINE_IN_PLACE = 'Sign in with GitHub to run the answer as a notebook in a signed sandbox and publish it as a signed analysis. Signed in, you can ask 20 questions a day.';
 
 const ANON = () => { sessions.server = null; sessions.client = { status: 'unauthenticated', data: null }; };
 const SIGNED_IN = () => {

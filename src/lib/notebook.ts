@@ -195,7 +195,7 @@ type QueryStep =
 function notReproducedNote(toolName: string | undefined): string {
   // A record that carries no tool name (#384) is described as exactly that;
   // a name is never supplied for it.
-  const step = toolName === undefined ? 'This step, whose tool name the record does not carry,' : `This step called \`${toolName}\`,`;
+  const step = toolName === undefined ? 'This step, whose tool name the analysis does not carry,' : `This step called \`${toolName}\`,`;
   return (
     `*Not reproduced below.* ${step} and the cells in this ` +
     'notebook fetch Socrata datasets by URL. This call named no Socrata portal and ' +
@@ -239,7 +239,7 @@ function rejectedNote(tool: ToolCall, defaultPortal: string): string {
   // ruling 5 at G5). Every other kind was sent and refused.
   const tail = tool.failureKind === 'not_offered' ? '.' : ', and it was rejected.';
   const attempt = tool.name === undefined
-    ? 'This step, whose tool name the record does not carry, was rejected.'
+    ? 'This step, whose tool name the analysis does not carry, was rejected.'
     : `The original analysis tried to ${describeAttempt(
       { name: tool.name, args: tool.args, failed: true, failureKind: tool.failureKind },
       { dataFrameIndex: 0, defaultPortal },

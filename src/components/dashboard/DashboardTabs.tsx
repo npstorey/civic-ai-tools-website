@@ -157,7 +157,7 @@ export default function DashboardTabs({ initialTab = 'evidence', myEvidence, myE
     <>
       <div style={{ display: 'flex', borderBottom: '2px solid var(--border-color)', marginBottom: '24px' }}>
         <button onClick={() => setActiveTab('evidence')} style={tabStyle(activeTab === 'evidence')}>
-          My Records ({myEvidence.length})
+          My analyses ({myEvidence.length})
         </button>
         <button onClick={() => setActiveTab('evaluations')} style={tabStyle(activeTab === 'evaluations')}>
           My Evaluations ({myEvaluations.length})
@@ -288,7 +288,7 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
          definition, so the relative href is correct on all three shapes with
          no origin treatment needed. */
       <EmptyState
-        message="You haven't published any records yet. Ask a question, then click 'Publish as Record' to get started."
+        message="You haven't published any analyses yet. Ask a question, then click 'Publish' to get started."
         cta={{ text: 'Ask a question', href: '/ask' }}
       />
     );
@@ -449,7 +449,7 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
             margin: '16px', padding: '24px',
             boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
           }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Publish Record</h3>
+            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Publish this analysis</h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 12px' }}>
               Publishing makes the content of <strong>{publishTarget.title}</strong> publicly
               accessible, lists it in the registry, and emits signed publication
@@ -468,7 +468,7 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
                 Run an adversarial evaluation before publishing
                 <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)' }}>
                   An independent model critiques the analysis against a declared
-                  rubric; the signed result is attached to the record (adds ~30s).
+                  rubric; the signed result is attached to the analysis (adds ~30s).
                 </span>
               </span>
             </label>
@@ -524,10 +524,10 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
             margin: '16px', padding: '24px',
             boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
           }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Withdraw Record</h3>
+            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Withdraw this analysis</h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
-              Withdrawing a record is a public, permanent action. The record and its cryptographic
-              proofs remain accessible, but the record will be flagged as withdrawn.
+              Withdrawing an analysis is a public, permanent action. The analysis and its cryptographic
+              proofs remain accessible, but it will be flagged as withdrawn.
             </p>
             <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', color: 'var(--text-primary)' }}>
               &ldquo;{withdrawTarget.title}&rdquo;
@@ -595,9 +595,9 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
             margin: '16px', padding: '24px',
             boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
           }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Reinstate Record</h3>
+            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Reinstate this analysis</h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
-              Reinstating will make this record visible again in the public index. The prior
+              Reinstating will make this analysis visible again in the public index. The prior
               withdrawal record is preserved — both the withdrawal and reinstatement will appear
               in the status history for transparency.
             </p>
@@ -660,8 +660,8 @@ function MyEvaluationsTab({ rows }: { rows: EvaluationRow[] }) {
   if (rows.length === 0) {
     return (
       <EmptyState
-        message="You haven't run any evaluations yet. Visit any record page and click 'Add evaluation' to evaluate someone's analysis."
-        cta={{ text: 'Browse records', href: '/records' }}
+        message="You haven't run any evaluations yet. Visit any analysis page and click 'Add evaluation' to evaluate someone's analysis."
+        cta={{ text: 'Browse analyses', href: '/records' }}
       />
     );
   }
@@ -857,7 +857,7 @@ function ActivityTab({ rows }: { rows: ActivityRow[] }) {
   if (rows.length === 0) {
     return (
       <EmptyState
-        message="No activity yet. When others evaluate your records, you'll see it here."
+        message="No activity yet. When others evaluate your analyses, you'll see it here."
       />
     );
   }

@@ -194,7 +194,7 @@ export default function AttestationSection({ slug, analysisModel, promptVisibili
           <p style={{ margin: '0 0 8px', fontSize: '14px', color: 'var(--text-muted)' }}>No attestations yet.</p>
           <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
             Attestations are independent evaluations — consistency tests, adversarial reviews,
-            expert attestations, or corrections — that anyone can attach to this record.
+            expert attestations, or corrections — that anyone can attach to this analysis.
           </p>
         </>
       ) : (

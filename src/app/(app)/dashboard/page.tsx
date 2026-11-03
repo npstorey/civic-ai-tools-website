@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: pageTitle('Dashboard'),
-  description: 'Manage your records and evaluations.',
+  description: 'Manage your analyses and evaluations.',
 };
 
 interface DashboardPageProps {
@@ -41,7 +41,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const userId = dbUser.id;
   const displayName = dbUser.displayName;
 
-  // --- Tab 1: My Records ---
+  // --- Tab 1: My analyses ---
   const myEvidence = await db
     .select({
       id: evidenceRecords.id,

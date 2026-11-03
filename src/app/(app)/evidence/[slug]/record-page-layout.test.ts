@@ -613,7 +613,7 @@ function before(html: string, needle: string): void {
 test('P2 (2) the unsigned, sealed and withdrawal banners render before the disclosure', () => {
   before(HTML.skeleton, 'Unsigned package — no cryptographic commitment');
   before(HTML.skeleton, 'Sealed — not published');
-  before(HTML.old, 'This record was withdrawn by the author on');
+  before(HTML.old, 'This analysis was withdrawn by the author on');
 });
 
 test('P2 (2) each of the three notebook readings renders before the disclosure, in the status row', () => {
@@ -632,7 +632,7 @@ test('P2 (2) each of the three notebook readings renders before the disclosure, 
 test('P2 (2) the refused-request line and the unrecorded-outcomes sentence render before the disclosure, once', () => {
   before(HTML.agf, '1 of 3 requests did not complete.');
   assert.equal(occurrences(HTML.agf, 'requests did not complete.').length, 1, 'the refused-request line is rendered once');
-  const unrecorded = 'This record was created on May 2, 2026 and states no outcome for any of its 2 requests';
+  const unrecorded = 'This analysis was created on May 2, 2026 and states no outcome for any of its 2 requests';
   before(HTML.old, unrecorded);
   assert.equal(occurrences(HTML.old, unrecorded).length, 1, 'the unrecorded-outcomes sentence is rendered once, not again in D');
 });
@@ -709,7 +709,7 @@ test('P2 (3) read from the source: the block and the Cite modal both write their
       /import \{[^}]*\bbuildRecordCitations\b[^}]*\} from '@\/lib\/evidence\/record-citation'/,
       `${name} imports the builder from the one module that owns it`,
     );
-    assert.doesNotMatch(source, /Record Package\.|\[(Verified|Published): /, `${name} writes no citation format of its own`);
+    assert.doesNotMatch(source, /Analysis package\.|\[(Verified|Published): /, `${name} writes no citation format of its own`);
   }
   assert.match(PAGE_SOURCE, /<CitationBlock\b/, 'the page renders the block');
 });
@@ -1292,7 +1292,7 @@ test('W3 P2 (2) the citation block, the verify action and every banner sit outsi
   for (const [html, banner] of [
     [HTML.skeleton, 'Unsigned package — no cryptographic commitment'],
     [HTML.skeleton, 'Sealed — not published'],
-    [W3P2_HTML.old, 'This record was withdrawn by the author on'],
+    [W3P2_HTML.old, 'This analysis was withdrawn by the author on'],
   ] as const) {
     assert.ok(at(html, banner) < requirePart(html, 'status-row').start, `"${banner}" sits above the view`);
   }
@@ -1506,7 +1506,7 @@ const UNFETCHED_CASE: Case = (() => {
   return { ...OLD, record: { ...OLD.record, slug: 'unfetched-record-w3p2f1' }, pkg };
 })();
 const UNFETCHED_HTML = await renderWithInstance(UNFETCHED_CASE, INSTANCE);
-const OUTPUT_UNAVAILABLE = 'The answer is not shown: the stored copy of this record’s output could not be fetched. The package hash below identifies the record for audit.';
+const OUTPUT_UNAVAILABLE = 'The answer is not shown: the stored copy of this analysis’s output could not be fetched. The package hash below identifies the analysis for audit.';
 
 test('W3 P2 fix 1 (1) an output that could not be fetched: no line names the model, and the page says so in its own words', () => {
   const lines = authorLines(UNFETCHED_HTML);
@@ -1585,7 +1585,7 @@ test('W3 P2 fix 1 (3) a multi-turn record over 2000 characters renders its whole
 // under the model's line, and the cell stays in E.
 // (4) The record's `none` carries no author line, in the answer or in F.
 
-const OUTPUT_DOES_NOT_MATCH = 'The answer is not shown: the stored copy of this record’s output does not match the record’s reference to it. The package hash below identifies the record for audit.';
+const OUTPUT_DOES_NOT_MATCH = 'The answer is not shown: the stored copy of this analysis’s output does not match the analysis’s reference to it. The package hash below identifies the analysis for audit.';
 
 function blobCase(slug: string, url: string, bytes: Buffer, ref: { hash: string; size: number }): Case {
   BLOB_BYTES.set(url, bytes);
@@ -1826,7 +1826,7 @@ for (const [name, c] of W4_RECORDS) {
       const d = requireDisclosure(html);
       const sentences = c === AGF
         ? ['Executed in a signed sandbox', '1 of 3 requests did not complete.']
-        : ['Whether this notebook ran is not stated', 'This record was withdrawn by the author on'];
+        : ['Whether this notebook ran is not stated', 'This analysis was withdrawn by the author on'];
       for (const marker of ['data-part="status-row"', ...sentences]) {
         const i = at(html, marker);
         assert.ok(i < d.start || i > d.end, `${marker} sits outside the disclosure`);
@@ -1920,7 +1920,7 @@ test('W4 P2 the server markup with a publication attestation naming a node: the 
   } finally {
     delete globals.__p2PublishedLayoutNodeId;
   }
-  assert.ok(named.includes('<span data-part="layout-line">Shown under layout answer-first v1. This site does not hold the layout this record was published under.</span>'), named);
+  assert.ok(named.includes('<span data-part="layout-line">Shown under layout answer-first v1. This site does not hold the layout this analysis was published under.</span>'), named);
   const none = viewChildren(await renderWithInstance(AGF, INSTANCE)).at(-1)?.markup ?? '';
   assert.ok(none.includes('<span data-part="layout-line">Shown under layout answer-first v1</span>'), 'no id named: W4 P1’s line');
 });
@@ -1931,10 +1931,10 @@ test('W4 P2 the server markup with a publication attestation naming a node: the 
 // the plain text beside it uses for the same date. At the base it read
 // "[Verified: <date>]", which names no check the record passed.
 
-test('W4 P1 (9) the citation block reads "Record: <title> [Published: <date>] <url>", and says "Verified" nowhere', () => {
+test('W4 P1 (9) the citation block reads "Analysis: <title> [Published: <date>] <url>", and says "Verified" nowhere', () => {
   const citation = partOf(HTML.agf, 'citation');
   assert.ok(citation !== null, 'premise: the record renders its citation block');
-  const expected = `Record: ${AGF.record.title} [Published: May 2, 2026] https://${HOST}/records/${AGF.record.slug}`;
+  const expected = `Analysis: ${AGF.record.title} [Published: May 2, 2026] https://${HOST}/records/${AGF.record.slug}`;
   assert.ok(citation.markup.includes(escaped(expected)), `the block carries "${expected}"`);
   assert.ok(citation.markup.includes(escaped('Published: May 2, 2026.')), 'premise: the plain text uses the same word for the same date');
   assert.doesNotMatch(citation.markup, /Verified/, 'the block says "Verified"');

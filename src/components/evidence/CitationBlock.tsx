@@ -52,7 +52,7 @@ export default function CitationBlock(props: RecordCitationInput) {
           cursor: 'pointer', fontSize: '13px',
           color: 'var(--text-secondary)', padding: '8px 0',
         }}>
-          Show how to cite this record
+          Show how to cite this analysis
         </summary>
         <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {citations.map((c, i) => (

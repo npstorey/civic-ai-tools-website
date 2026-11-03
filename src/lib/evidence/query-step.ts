@@ -126,7 +126,7 @@ export function describeQueryOutcome(
       : '';
     return {
       kind: 'failed',
-      text: `This request did not complete. The record's trace marks it as refused, and no reason is stated.${elapsed}`,
+      text: `This request did not complete. The analysis's trace marks it as refused, and no reason is stated.${elapsed}`,
     };
   }
   return { kind: 'unrecorded', text: 'No result summary was recorded for this request.' };
@@ -334,7 +334,7 @@ export function describeUnrecordedOutcomes(pkg: RecordOutcomeInput & RecordTrace
       ? 'its one request is'
       : `${n} of its ${queries.length} requests ${n === 1 ? 'is' : 'are'}`;
     return (
-      `This record was created on ${date}. Its list of requests does not mark which requests were ` +
+      `This analysis was created on ${date}. Its list of requests does not mark which requests were ` +
       `refused, but its trace does: ${counted} marked there as refused, and stated so below. No ` +
       'reason is stated, and a request with no result summary is not stated as answered.'
     );
@@ -347,7 +347,7 @@ export function describeUnrecordedOutcomes(pkg: RecordOutcomeInput & RecordTrace
     ? 'for its one request: whether it'
     : `for any of its ${queries.length} requests: whether each`;
   return (
-    `This record was created on ${date} and states no outcome ${subject} returned data, ` +
+    `This analysis was created on ${date} and states no outcome ${subject} returned data, ` +
     'returned none, or was refused is not recorded. Its data sources state which datasets were ' +
     'reached, not what any request returned.'
   );

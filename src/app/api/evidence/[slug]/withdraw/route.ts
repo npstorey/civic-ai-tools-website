@@ -75,20 +75,20 @@ export async function POST(
     .where(eq(evidenceRecords.slug, slug))
     .limit(1);
   if (records.length === 0) {
-    return NextResponse.json({ error: 'Record not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Analysis not found' }, { status: 404 });
   }
   const record = records[0];
 
   // Publisher-only: only the creator can withdraw (§8.12.3 authorization rule).
   if (record.creatorId !== userId) {
-    return NextResponse.json({ error: 'Only the creator can withdraw a record' }, { status: 403 });
+    return NextResponse.json({ error: 'Only the creator can withdraw an analysis' }, { status: 403 });
   }
 
   // Single-cycle parity: reject if already withdrawn. The current status is read
   // from the legacy column mirror, which the dual-write keeps in sync with the
   // attestation chain.
   if (record.withdrawnAt) {
-    return NextResponse.json({ error: 'Record is already withdrawn' }, { status: 400 });
+    return NextResponse.json({ error: 'Analysis is already withdrawn' }, { status: 400 });
   }
 
   // An attestation MUST reference a content node by nodeId (§8.12.3). Published
@@ -96,7 +96,7 @@ export async function POST(
   // node.
   if (!record.basePackageHash) {
     return NextResponse.json(
-      { error: 'Cannot withdraw: record has no content node hash to reference' },
+      { error: 'Cannot withdraw: analysis has no content node hash to reference' },
       { status: 400 },
     );
   }

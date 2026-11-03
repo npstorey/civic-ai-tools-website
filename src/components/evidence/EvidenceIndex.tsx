@@ -138,7 +138,7 @@ export default function EvidenceIndex() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search records by title or summary..."
+          placeholder="Search analyses by title or summary..."
           style={{
             width: '100%', padding: '10px 14px',
             border: '1px solid var(--border-color)', borderRadius: '6px',
@@ -192,8 +192,8 @@ export default function EvidenceIndex() {
         }}>
           <p style={{ fontSize: '16px', margin: '0 0 8px' }}>
             {debouncedQuery || status || range !== 'all'
-              ? 'No records match your filters.'
-              : 'No record packages published yet.'}
+              ? 'No analyses match your filters.'
+              : 'No analyses published yet.'}
           </p>
           {!debouncedQuery && !status && range === 'all' && (
             <p style={{ fontSize: '14px', margin: 0 }}>
@@ -206,7 +206,7 @@ export default function EvidenceIndex() {
                   direct `/ask` would 404 on the marketing host. Only the
                   wording was wrong — the app host has no "home page". */}
               <Link href="/" style={{ color: 'var(--accent)' }}>Run a query</Link> and
-              click &ldquo;Publish as Record&rdquo; to create the first one.
+              click &ldquo;Publish&rdquo; to create the first one.
             </p>
           )}
         </div>
@@ -214,7 +214,7 @@ export default function EvidenceIndex() {
         <>
           {/* Count */}
           <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-            {data.total} record{data.total !== 1 ? 's' : ''}
+            {data.total} item{data.total !== 1 ? 's' : ''}
             {data.totalPages > 1 && ` \u00b7 page ${data.page} of ${data.totalPages}`}
           </div>
 

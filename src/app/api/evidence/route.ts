@@ -584,7 +584,7 @@ export async function POST(request: NextRequest) {
     // lists every bound parameter — the record's title, prompt and output.
     console.error('Evidence publish error:', errorLogFacts(error));
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to publish the record' },
+      { error: error instanceof Error ? error.message : 'Failed to publish the analysis' },
       { status: 500 },
     );
   }

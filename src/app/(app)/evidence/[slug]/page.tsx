@@ -142,13 +142,13 @@ async function getEvidenceData(slug: string) {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const data = await getEvidenceData(slug);
-  if (!data) return { title: 'Record Not Found' };
+  if (!data) return { title: 'Analysis Not Found' };
 
   // Sealed records (civic-ai-tools#71): title/summary are content-derived
   // and creator-only — emit generic metadata regardless of viewer so nothing
   // content-bearing lands in OG tags, caches, or link previews.
   if (fromDbValue(data.record.visibility) === 'sealed') {
-    return { title: 'Sealed record', robots: { index: false } };
+    return { title: 'Sealed analysis', robots: { index: false } };
   }
 
   const { record, creator } = data;
@@ -163,17 +163,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const description = record.summary.slice(0, 200);
 
   return {
-    title: `Record: ${record.title}`,
+    title: `Analysis: ${record.title}`,
     description,
     openGraph: {
-      title: `Record: ${record.title}`,
+      title: `Analysis: ${record.title}`,
       description,
       type: 'article',
       ...(url ? { url } : {}),
     },
     twitter: {
       card: 'summary',
-      title: `Record: ${record.title}`,
+      title: `Analysis: ${record.title}`,
       description,
     },
     // Highwire-Press citation tags — what Zotero and Google Scholar read.
@@ -412,7 +412,7 @@ export default async function EvidencePage({ params }: PageProps) {
             borderRadius: '6px',
           }}>
             <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--error)', marginBottom: '6px' }}>
-              This record was withdrawn by the author on{' '}
+              This analysis was withdrawn by the author on{' '}
               {fmtDate(lifecycle.withdrawnAt)}
             </div>
             {lifecycle.withdrawnReason && (
@@ -499,7 +499,7 @@ export default async function EvidencePage({ params }: PageProps) {
                     fontSize: '13px', color: 'var(--text-secondary)',
                   }}>
                     <p style={{ margin: '0 0 6px' }}>
-                      This record package contains artifacts from other extensions:
+                      The package for this analysis contains artifacts from other extensions:
                     </p>
                     <ul style={{ margin: 0, paddingLeft: '20px', fontFamily: 'monospace', fontSize: '12px' }}>
                       {unknown.map(k => <li key={k}>{k}</li>)}
