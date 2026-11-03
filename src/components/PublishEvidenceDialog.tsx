@@ -667,7 +667,10 @@ export default function PublishEvidenceDialog({
                   wordBreak: 'break-all',
                   color: 'var(--accent)',
                 }}>
-                  {typeof window !== 'undefined' ? window.location.origin : ''}{resultUrl}
+                  {/* The creator's own handle to the page: a link, same tab. */}
+                  <a href={resultUrl} style={{ color: 'inherit' }}>
+                    {typeof window !== 'undefined' ? window.location.origin : ''}{resultUrl}
+                  </a>
                 </code>
                 <button
                   onClick={async () => {
