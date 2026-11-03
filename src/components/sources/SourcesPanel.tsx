@@ -21,7 +21,8 @@
  * reader announces, and the group's label names the source. With a consent
  * in force a choice is written through the consent endpoint; while the write
  * is in flight every control and the question form's submit are held (the
- * guard's `held`).
+ * guard's `held`). The control and its confirmation are `SourceStateControl.tsx`'s,
+ * which the dashboard's Sources tab mounts too (UX-1 PC).
  *
  * BEFORE A CONSENT (R9 P2, #661) the radios take a choice too, and the store
  * keeps it on the page (`pending`) until Allow writes it with the rest of
@@ -35,19 +36,14 @@
  */
 
 import { useState, type CSSProperties } from 'react';
-import { ASK_FIRST_MEANS, ASK_FIRST_MEANS_WITH_PAUSE, PANEL_HEADING, PANEL_KEPT_ON_ACCOUNT, PANEL_LEAD, PANEL_PRIVACY_LINK, PANEL_ROW_MORE, PANEL_STATE_CHANGED, panelLeadBeforeConsent } from '@/lib/sources/copy';
+import { ASK_FIRST_MEANS, ASK_FIRST_MEANS_WITH_PAUSE, PANEL_HEADING, PANEL_KEPT_ON_ACCOUNT, PANEL_LEAD, PANEL_PRIVACY_LINK, PANEL_ROW_MORE, panelLeadBeforeConsent } from '@/lib/sources/copy';
 import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
 import { panelStates, useSourceConsent, type SourceStateValue } from './useSourceConsent';
 import { KeptByLines } from './KeptByLine';
 import LocalOnlyOffer from './LocalOnlyOffer';
 import ConsentNotices from './ConsentNotices';
+import { SourceStateConfirmation, SourceStateRadios, type ConfirmedChange, type SourceStateControlProps } from './SourceStateControl';
 import ConsentStep from '../answer-view/ConsentStep';
-
-const STATES: Array<{ value: SourceStateValue; label: string }> = [
-  { value: 'on', label: 'On' },
-  { value: 'ask-first', label: 'Ask first' },
-  { value: 'off', label: 'Off' },
-];
 
 /** The address of the dashboard's Sources tab (Q7). */
 export const DASHBOARD_SOURCES_TAB = '/dashboard?tab=sources';
@@ -77,7 +73,7 @@ export default function SourcesPanel() {
   const onAccount = status?.store === 'row';
   // The last change whose write succeeded (UX pass row 5): its row says so in a
   // status line. Cleared when another change starts; never set by a failed write.
-  const [confirmed, setConfirmed] = useState<{ sourceId: string; state: SourceStateValue } | null>(null);
+  const [confirmed, setConfirmed] = useState<ConfirmedChange>(null);
 
   return (
     <section aria-labelledby="sources-panel-heading" style={PANEL}>
@@ -98,41 +94,13 @@ export default function SourcesPanel() {
           const state = states[source.sourceId] ?? 'ask-first';
           const since = status?.states?.[source.sourceId]?.since;
           const lines = sourceRowLines(source);
+          const control: SourceStateControlProps = { sourceId: source.sourceId, name, state, since, inForce, writing: consent.writing, setState: consent.setState, confirmed, setConfirmed };
           return (
             <li key={source.sourceId} data-source={source.sourceId} style={{ padding: '8px 0', borderTop: '1px solid var(--border-color)' }}>
               <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{name}</div>
               {lines.what !== null && <div>{lines.what.charAt(0).toUpperCase() + lines.what.slice(1)}</div>}
-              <div role="radiogroup" aria-label={`${name}: On, Ask first or Off`} style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
-                {STATES.map((choice) => (
-                  <label key={choice.value} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--text-primary)' }}>
-                    <input
-                      type="radio"
-                      name={`source-state-${source.sourceId}`}
-                      value={choice.value}
-                      checked={state === choice.value}
-                      disabled={consent.writing}
-                      onChange={() => {
-                        setConfirmed(null);
-                        // Before a consent the choice is kept, not written: nothing to confirm (R9 P2).
-                        const writes = inForce;
-                        void consent.setState(source.sourceId, choice.value).then((ok) => {
-                          if (ok && writes) setConfirmed({ sourceId: source.sourceId, state: choice.value });
-                        });
-                      }}
-                    />
-                    {choice.label}
-                  </label>
-                ))}
-              </div>
-              {(() => {
-                const label = STATES.find((c) => c.value === state)?.label;
-                const sinceLine = inForce && since ? `Set ${label} since ${since}.` : null;
-                if (inForce && confirmed?.sourceId === source.sourceId && confirmed.state === state) {
-                  const changed = `${name}${PANEL_STATE_CHANGED.middle}${label}${PANEL_STATE_CHANGED.end}`;
-                  return <div role="status">{sinceLine ? `${changed} ${sinceLine}` : changed}</div>;
-                }
-                return sinceLine ? <div>{sinceLine}</div> : null;
-              })()}
+              <SourceStateRadios {...control} />
+              <SourceStateConfirmation {...control} />
               {/* A question stops to ask only in loop and with the decision store (R9 P1, #666): the pause words only then. */}
               {state === 'ask-first' && <div>{consent.routing === 'in-loop' && consent.store === true ? ASK_FIRST_MEANS_WITH_PAUSE : ASK_FIRST_MEANS}</div>}
               {/* R9 P2 (#661): the row's detail, closed by default (design principle 8). */}
