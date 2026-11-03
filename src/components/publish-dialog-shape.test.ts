@@ -45,6 +45,8 @@
 //       visibility; W15 "Back to
 //       your answer", which only closes the dialog; and "analysis" in the
 //       publishing and public success states.
+//   Order. The body reads Title, Summary, Visibility, then Question text
+//       (design §5.2, "Body, in order").
 //   C4. (no-change guard) Every ruled sentence is in the markup, byte for
 //       byte, under seal-only off and on, each visibility and each question
 //       choice, and on an unsigned instance and in the public success state
@@ -551,6 +553,29 @@ test('UX-1 P1 C3 W15: the public success state\'s button reads "Back to your ans
   assert.equal(closed(), 1, `"${W15_BACK}" did not close the dialog`);
   assert.deepEqual(dialog.pushed(), [], `"${W15_BACK}" navigated`);
   assert.equal(REQUESTS.length, before, `"${W15_BACK}" sent: ${REQUESTS.slice(before).map((r) => r.url).join(', ')}`);
+});
+
+// --- The body's order (design §5.2, "Body, in order"; ruled at the staging read) ------------------
+
+test('UX-1 P1 order: the body reads Title, Summary, Visibility, then Question text', async () => {
+  for (const selected of ['sealed', 'public'] as const) {
+    const { dialog } = await open();
+    if (selected === 'public') await choose(dialog, 'visibility', PUBLIC_CHOICE);
+    const { all, body } = regions(dialog);
+    const inBody = within(body);
+    const at = (el: Element, what: string) => {
+      assert.ok(inBody.includes(el), `${selected}: ${what} is not in the body`);
+      return all.indexOf(el);
+    };
+    const order = [
+      ['Title', at(one(all.filter((el) => el.type === 'input' && attr(el, 'type') === 'text'), 'title input'), 'the title field')],
+      ['Summary', at(one(all.filter((el) => el.type === 'textarea'), 'textarea'), 'the summary field')],
+      ['Visibility', at(section(dialog, 'Visibility', 'visibility'), 'the Visibility section')],
+      ['Question text', at(section(dialog, W1_SECTION, 'promptVisibility'), 'the Question text section')],
+    ] as const;
+    const read = [...order].sort((a, b) => a[1] - b[1]).map(([name]) => name);
+    assert.deepEqual(read, order.map(([name]) => name), `${selected}: the body's order`);
+  }
 });
 
 // --- C4. The ruled sentences (no-change guard) ------------------------------------------------
