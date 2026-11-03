@@ -1387,3 +1387,17 @@ footer a:visited {
   color: var(--text-primary);
   border-color: var(--neutral-70);
 }
+
+/* The page frame's jump list (UX-1 P7, PageToc): a list under the lede,
+   modelled on the privacy page's, spaced from what follows like a section. */
+.ui-page-toc {
+  margin: 0 0 var(--space-lg);
+}
+
+.ui-page-toc-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 16px;
+  line-height: 170%;
+  color: var(--text-secondary);
+}
