@@ -107,7 +107,7 @@ export default async function AboutPage() {
             </a>{' '}
             and{' '}
             <a href="https://github.com/npstorey/civic-ai-tools/issues/41" target="_blank" rel="noopener noreferrer">
-              using reviews of published records to improve it
+              using reviews of published analyses to improve it
             </a>
             .
           </li>

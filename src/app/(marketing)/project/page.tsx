@@ -1,14 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { prose, sectionHeading, sectionSpacing, card } from '@/styles/page-styles';
-import { EXPRESS_INTEREST_URL, TYPED_STANDARDS_URL } from '@/lib/site-config';
+import { TYPED_STANDARDS_URL } from '@/lib/site-config';
+import ContactCallToAction from '@/components/ContactCallToAction';
 import { CONSORTIUM_MEMBERS } from '@/lib/consortium';
 import { pageTitle } from '@/lib/brand-config';
 
 export const metadata: Metadata = {
   title: pageTitle('Project'),
   description:
-    'What the Civic AI Tools project is: verifiable AI-assisted analysis of open civic data, the pillars it works across, and real published records.',
+    'What the Civic AI Tools project is: verifiable AI-assisted analysis of open civic data, the pillars it works across, and real published analyses.',
 };
 
 // Case cards reference REAL records in this site's public record registry.
@@ -29,7 +30,7 @@ const CASES: CaseRecord[] = [
     slug: 'pedestrian-involved-traffic-crashes-in-zip-11217-and-a-comparison-of-those-n-f5f90d',
     question: 'Pedestrian-involved traffic crashes in ZIP 11217, and how many were near schools',
     finding:
-      'Examined pedestrian-involved crashes in ZIP code 11217 for April 21 – May 21, 2026, using the NYC Open Data Motor Vehicle Collisions dataset, and found two such incidents. The record also discloses what didn’t work: the planned near-schools comparison could not be completed.',
+      'Examined pedestrian-involved crashes in ZIP code 11217 for April 21 – May 21, 2026, using the NYC Open Data Motor Vehicle Collisions dataset, and found two such incidents. The analysis also discloses what didn’t work: the planned near-schools comparison could not be completed.',
     publisher: 'Nathan Storey',
     model: 'openai/gpt-5.4',
     published: 'May 21, 2026',
@@ -94,7 +95,7 @@ export default function ProjectPage() {
           data for humans: anyone &mdash; a journalist, a student, a researcher, a public servant
           &mdash; can ask a plain-language question against live public data portals (NYC Open
           Data and other Socrata portals, Google Data Commons, Boston 311), watch every query the
-          AI issues, and publish the result as a cryptographically signed record that
+          AI issues, and publish the result as a cryptographically signed analysis that
           others can verify independently.
         </p>
         <p style={prose}>
@@ -118,7 +119,7 @@ export default function ProjectPage() {
               Public data belongs to the public, and working with it shouldn&apos;t require a data
               science team. Anyone who can ask a question can run a real analysis against live
               portal data, see exactly how the answer was produced, and publish it as a signed
-              record others can check without taking their word for it &mdash; evidence that can
+              analysis others can check without taking their word for it &mdash; evidence that can
               hold up in public discussion, and a resource for building open-data and AI literacy.
             </p>
           </div>
@@ -198,33 +199,7 @@ export default function ProjectPage() {
       {/* 4. Contact us */}
       <section style={sectionSpacing}>
         <h2 style={sectionHeading}>Contact us</h2>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px',
-            flexWrap: 'wrap',
-          }}
-        >
-          <p style={{ ...prose, flex: '1 1 320px', marginBottom: 0 }}>
-            Interested in running this against your city&apos;s data, joining the work, or in the
-            verification standard behind it?
-          </p>
-          <a
-            href={EXPRESS_INTEREST_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ui-button ui-button-primary"
-            style={{
-              textDecoration: 'none',
-              fontSize: '14px',
-              padding: '10px 24px',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Get in touch
-          </a>
-        </div>
+        <ContactCallToAction textStyle={prose} />
       </section>
 
       {/* 5. Cases */}
@@ -232,7 +207,7 @@ export default function ProjectPage() {
         <h2 style={sectionHeading}>Cases</h2>
         <p style={prose}>
           Real analyses published to this site&apos;s{' '}
-          <Link href="/records">public record registry</Link>. Each card links to the signed
+          <Link href="/records">public registry of analyses</Link>. Each card links to the signed
           record, where everything stated here can be read and independently verified. A record
           documents how an answer was produced &mdash; it does not certify that the answer is
           correct. Each record page also shows a verification status: &ldquo;unverified&rdquo;

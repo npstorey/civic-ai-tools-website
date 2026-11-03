@@ -36,10 +36,10 @@ export default function LearnPage() {
           cares about trustworthy civic information.
         </p>
         <p style={prose}>
-          Responses can be published as <Link href="/records">signed record packages</Link> &mdash;
+          Responses can be published as <Link href="/records">signed analyses</Link> &mdash;
           cryptographically signed, timestamped, and independently verifiable records of the question,
           tool calls, data sources, and model output. Browse the{' '}
-          <Link href="/records">record index</Link> to see published analyses.
+          <Link href="/records">Analysis page</Link> to see published analyses.
         </p>
       </section>
 
@@ -96,7 +96,7 @@ export default function LearnPage() {
             }}
           >
             <h4 style={{ fontSize: '16px', color: 'var(--success)', marginBottom: '8px' }}>
-              With MCP
+              With data tools
             </h4>
             <ul
               style={{
@@ -144,10 +144,10 @@ export default function LearnPage() {
       </section>
 
       {/* ============================================================
-          Section 3: How MCP Connects AI to Data
+          Section 3: How data tools connect AI to data
           ============================================================ */}
       <section id="how-mcp-works" style={sectionSpacing}>
-        <h2 style={sectionHeading}>How MCP Connects AI to Data</h2>
+        <h2 style={sectionHeading}>How data tools connect AI to data</h2>
 
         <p style={prose}>
           <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer">
@@ -477,9 +477,9 @@ export default function LearnPage() {
         </div>
 
         <p style={prose}>
-          When an author publishes a record they had kept private, a second model first reviews the
+          When an author publishes an analysis they had kept private, a second model first reviews the
           analysis against a fixed checklist: Claude Sonnet 5.5, or Claude Opus 5.5 when Sonnet 5.5
-          wrote the analysis. Records published earlier with GPT-4o or GPT-5.4 keep those model
+          wrote the analysis. Analyses published earlier with GPT-4o or GPT-5.4 keep those model
           names.
         </p>
 
