@@ -43,12 +43,12 @@ test('record citation: the plain-text and deliberative formats, word for word', 
   const [plain, deliberative] = buildRecordCitations(BASE);
   assert.equal(
     plain?.text,
-    'A. Writer (2026). "Noise complaints by borough." Example Records Record Package. ' +
+    'A. Writer (2026). "Noise complaints by borough." Example Records Analysis package. ' +
       'https://records.example.test/records/noise-complaints-by-borough-abc123. Published: May 19, 2026.',
   );
   assert.equal(
     deliberative?.text,
-    'Record: Noise complaints by borough [Published: May 19, 2026] ' +
+    'Analysis: Noise complaints by borough [Published: May 19, 2026] ' +
       'https://records.example.test/records/noise-complaints-by-borough-abc123',
   );
 });
@@ -64,9 +64,9 @@ test('record citation: the date is the UTC date, whatever the local time zone', 
   assert.match(newYear?.text ?? '', /Published: January 1, 2026\.$/);
 });
 
-test('record citation: an instance with no name publishes a "Record Package" with no publisher', () => {
+test('record citation: an instance with no name publishes an "Analysis package" with no publisher', () => {
   const [plain] = buildRecordCitations({ ...BASE, brandName: null });
-  assert.match(plain?.text ?? '', /"Noise complaints by borough\." Record Package\. https:/);
+  assert.match(plain?.text ?? '', /"Noise complaints by borough\." Analysis package\. https:/);
   assert.doesNotMatch(plain?.text ?? '', /null/);
 });
 

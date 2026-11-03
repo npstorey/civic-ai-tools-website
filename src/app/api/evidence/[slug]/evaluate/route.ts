@@ -61,22 +61,22 @@ export async function POST(
     .where(eq(evidenceRecords.slug, slug))
     .limit(1);
   if (records.length === 0) {
-    return NextResponse.json({ error: 'Record not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Analysis not found' }, { status: 404 });
   }
   const record = records[0];
 
   // Sealed records are creator-only on this content-bearing surface
   // (civic-ai-tools#71).
   if (!(await canReadRecord(request, record))) {
-    return NextResponse.json({ error: 'Record not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Analysis not found' }, { status: 404 });
   }
 
   if (!record.basePackageStorageKey) {
-    return NextResponse.json({ error: 'No record package available' }, { status: 400 });
+    return NextResponse.json({ error: 'No analysis package available' }, { status: 400 });
   }
   const pkg = (await getPackage(record.basePackageStorageKey)) as EvidencePackage | null;
   if (!pkg) {
-    return NextResponse.json({ error: 'Record package not found in storage' }, { status: 404 });
+    return NextResponse.json({ error: 'Analysis package not found in storage' }, { status: 404 });
   }
 
   // website#30 P3, unchanged by P4. Resolved tolerantly: this preview runs on a

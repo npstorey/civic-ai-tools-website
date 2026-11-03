@@ -35,7 +35,7 @@ const TYPEDSTANDARDS_BADGE_SVG = 'https://typedstandards.org/badge/typed-standar
 // remote asset is only the <img> src. So it is ours to excise (settlement
 // ruling D5 defers only the text baked INTO the typedstandards.org SVG and
 // that site's own badge copy, tracked at typedstandards#52).
-const BADGE_ALT = 'Verify this record with Typed Standards';
+const BADGE_ALT = 'Verify with Typed Standards';
 const BADGE_WIDTH = 248;
 const BADGE_HEIGHT = 30;
 

@@ -59,13 +59,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 /**
  * The citation's publisher label. An instance that has not set
- * `SITE_BRAND_NAME` publishes a "Record Package" with no publisher named,
+ * `SITE_BRAND_NAME` publishes an "Analysis package" with no publisher named,
  * rather than a package credited to whatever deployment the code shipped
  * with (#259 P4, A3) — this string is copied to the clipboard, so a wrong
  * name here travels into somebody's document.
  */
 function brandLabel(brandName: string | null): string {
-  return brandName === null ? 'Record Package' : `${brandName} Record Package`;
+  return brandName === null ? 'Analysis package' : `${brandName} Analysis package`;
 }
 
 function deriveTitle(prompt: string, brandName: string | null): string {
@@ -115,10 +115,10 @@ export default function ChatCitationPreview({ prompt, executedAt, structuredSumm
     {
       label: 'For deliberative process reference',
       text: !statesExecution
-        ? `Record: ${title} ${placeholderUrl}${headlineSuffix}`
+        ? `Analysis: ${title} ${placeholderUrl}${headlineSuffix}`
         : dateStr !== null
-          ? `Record: ${title} [Executed: ${dateStr}] ${placeholderUrl}${headlineSuffix}`
-          : `Record: ${title} [Executed] ${placeholderUrl}${headlineSuffix}`,
+          ? `Analysis: ${title} [Executed: ${dateStr}] ${placeholderUrl}${headlineSuffix}`
+          : `Analysis: ${title} [Executed] ${placeholderUrl}${headlineSuffix}`,
     },
   ];
 

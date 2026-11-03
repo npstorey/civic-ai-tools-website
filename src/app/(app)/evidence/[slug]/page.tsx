@@ -163,17 +163,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const description = record.summary.slice(0, 200);
 
   return {
-    title: `Record: ${record.title}`,
+    title: `Analysis: ${record.title}`,
     description,
     openGraph: {
-      title: `Record: ${record.title}`,
+      title: `Analysis: ${record.title}`,
       description,
       type: 'article',
       ...(url ? { url } : {}),
     },
     twitter: {
       card: 'summary',
-      title: `Record: ${record.title}`,
+      title: `Analysis: ${record.title}`,
       description,
     },
     // Highwire-Press citation tags — what Zotero and Google Scholar read.
@@ -499,7 +499,7 @@ export default async function EvidencePage({ params }: PageProps) {
                     fontSize: '13px', color: 'var(--text-secondary)',
                   }}>
                     <p style={{ margin: '0 0 6px' }}>
-                      This record package contains artifacts from other extensions:
+                      The package for this analysis contains artifacts from other extensions:
                     </p>
                     <ul style={{ margin: 0, paddingLeft: '20px', fontFamily: 'monospace', fontSize: '12px' }}>
                       {unknown.map(k => <li key={k}>{k}</li>)}

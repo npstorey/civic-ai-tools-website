@@ -118,30 +118,21 @@ interface Allowed {
 
 const API_NOT_FOUND = 'Record not found';
 
+// The rulings that keep a row (UX-1, 2026-11-03): D4 B (the not-reversible sentence),
+// D5 (the unsigned and sealed sentences, verbatim this wave), C12 ("execution record"),
+// D6 (download file names), C22 (the API messages no dialog shows).
 const ALLOWLIST: readonly Allowed[] = [
   // DashboardTabs.tsx
-  { file: 'src/components/dashboard/DashboardTabs.tsx', rows: ':452', reason: 'pending', text: 'Publish Record', count: 1 },
-  { file: 'src/components/dashboard/DashboardTabs.tsx', rows: ':456-457', reason: 'pending', text: '— a later withdrawal flags the record but does not erase it.', count: 1 },
-  { file: 'src/components/dashboard/DashboardTabs.tsx', rows: ':527', reason: 'pending', text: 'Withdraw Record', count: 1 },
-  { file: 'src/components/dashboard/DashboardTabs.tsx', rows: ':529-530', reason: 'pending', text: 'Withdrawing a record is a public, permanent action. The record and its cryptographic proofs remain accessible, but the record will be flagged as withdrawn.', count: 1 },
-  { file: 'src/components/dashboard/DashboardTabs.tsx', rows: ':598', reason: 'pending', text: 'Reinstate Record', count: 1 },
+  { file: 'src/components/dashboard/DashboardTabs.tsx', rows: ':456-457 (D4 B)', reason: 'ruled copy', text: '— a later withdrawal flags the record but does not erase it.', count: 1 },
   { file: 'src/components/dashboard/DashboardTabs.tsx', rows: ':601', reason: 'keep', phrase: 'The prior withdrawal record is preserved', count: 1 },
 
-  // evidence/page.tsx: the lede's first sentence, in the metadata (:9) and the page (:17).
-  { file: 'src/app/(app)/evidence/page.tsx', rows: ':9, :17', reason: 'pending', phrase: 'Published record packages from AI-assisted civic data analyses.', count: 2 },
+  // NotebookOutput.tsx: "execution record" (C12).
+  { file: 'src/components/notebook/NotebookOutput.tsx', rows: ':241 (C12)', reason: 'keep', text: 'Publishes the executed notebook and its execution record — not a regenerated skeleton.', count: 1 },
 
-  // EvidenceIndex.tsx
-  { file: 'src/components/evidence/EvidenceIndex.tsx', rows: ':196', reason: 'pending', text: 'No record packages published yet.', count: 1 },
-
-  // NotebookOutput.tsx: "execution record", G0 to confirm.
-  { file: 'src/components/notebook/NotebookOutput.tsx', rows: ':241', reason: 'pending', text: 'Publishes the executed notebook and its execution record — not a regenerated skeleton.', count: 1 },
-
-  // evidence/[slug]/page.tsx
-  { file: 'src/app/(app)/evidence/[slug]/page.tsx', rows: ':166, :169, :176', reason: 'pending', text: 'Record:', count: 3 },
-  { file: 'src/app/(app)/evidence/[slug]/page.tsx', rows: ':358', reason: 'pending', text: 'This record was produced without a signing key (the unsigned dev tier). It carries no signature, no registered key, and no transparency-log entry, so its origin cannot be cryptographically confirmed. An unsigned package can reach neither the sealed nor the public state.', count: 1 },
-  { file: 'src/app/(app)/evidence/[slug]/page.tsx', rows: ':385', reason: 'pending', text: 'This record is unlisted: its content is not publicly accessible and it does not appear in the public registry. Only you can see this page. It was persisted without a signature, so no public commitment backs it and it cannot be published.', count: 1 },
-  { file: 'src/app/(app)/evidence/[slug]/page.tsx', rows: ':393', reason: 'pending', text: 'This record is signed, timestamped, and registered on the public transparency log, but its content is not publicly accessible and it does not appear in the public registry. Only you can see this page. Publishing is a separate, irreversible step that makes the content public and emits signed publication attestations.', count: 1 },
-  { file: 'src/app/(app)/evidence/[slug]/page.tsx', rows: ':502', reason: 'pending', text: 'This record package contains artifacts from other extensions:', count: 1 },
+  // evidence/[slug]/page.tsx: the unsigned and sealed sentences (D5).
+  { file: 'src/app/(app)/evidence/[slug]/page.tsx', rows: ':358 (D5)', reason: 'ruled copy', text: 'This record was produced without a signing key (the unsigned dev tier). It carries no signature, no registered key, and no transparency-log entry, so its origin cannot be cryptographically confirmed. An unsigned package can reach neither the sealed nor the public state.', count: 1 },
+  { file: 'src/app/(app)/evidence/[slug]/page.tsx', rows: ':385 (D5)', reason: 'ruled copy', text: 'This record is unlisted: its content is not publicly accessible and it does not appear in the public registry. Only you can see this page. It was persisted without a signature, so no public commitment backs it and it cannot be published.', count: 1 },
+  { file: 'src/app/(app)/evidence/[slug]/page.tsx', rows: ':393 (D5)', reason: 'ruled copy', text: 'This record is signed, timestamped, and registered on the public transparency log, but its content is not publicly accessible and it does not appear in the public registry. Only you can see this page. Publishing is a separate, irreversible step that makes the content public and emits signed publication attestations.', count: 1 },
 
   // streaming.ts: rows of a dataset (F18's sense 2).
   { file: 'src/lib/streaming.ts', rows: ':1064', reason: 'sense 2', text: 'bill, law or other legislative record', count: 1 },
@@ -155,61 +146,22 @@ const ALLOWLIST: readonly Allowed[] = [
   { file: 'src/lib/streaming.ts', rows: ':1905', reason: 'sense 2', text: 'queried records', count: 1 },
   { file: 'src/lib/streaming.ts', rows: ':2118', reason: 'sense 2', text: 'records analyzed', count: 1 },
 
-  // ask/page.tsx: the package phrase.
-  { file: 'src/app/(app)/ask/page.tsx', rows: ':89', reason: 'pending', text: 'Ask a question about public data and publish the answer as a signed record package.', count: 1 },
-  { file: 'src/app/(app)/ask/page.tsx', rows: ':123', reason: 'pending', text: 'This is the signed-in workspace: ask a question in plain language, get an answer built from live public data, and publish it as a signed record package anyone can verify independently.', count: 1 },
-  { file: 'src/app/(app)/ask/page.tsx', rows: ':168', reason: 'pending', text: 'Ask in plain language. The answer is built from live public data, and you can publish it as a signed record package anyone can verify independently.', count: 1 },
-  { file: 'src/app/(app)/ask/page.tsx', rows: ':191', reason: 'pending', text: 'Ask a question below and the answer is assembled from live public data, with every query it ran shown alongside the result. When an answer is worth keeping, publish it: publishing creates a signed record package — a permanent, independently verifiable account of the answer and how it was produced — listed on your dashboard. This note disappears after your first publish.', count: 1 },
+  // QueryForm.tsx: "execution record" (C12).
+  { file: 'src/components/QueryForm.tsx', rows: ':578 (C12)', reason: 'keep', text: 'Generates and executes a Jupyter notebook against live data. Typically 30 to 90 seconds. The notebook and a cryptographic execution record are signed by the platform.', count: 1 },
+  { file: 'src/components/QueryForm.tsx', rows: ':654, :655 (C12)', reason: 'keep', phrase: 'Executed-sandbox mode generates and runs a Jupyter notebook against live data, then signs the execution record.', count: 2 },
 
-  // QueryForm.tsx: the sign-in sentence (ruled copy, research check) and "execution record".
-  { file: 'src/components/QueryForm.tsx', rows: ':99', reason: 'pending', text: 'to run the answer as a notebook in a signed sandbox and publish it as a record. Signed in, you can ask', count: 1 },
-  { file: 'src/components/QueryForm.tsx', rows: ':578', reason: 'pending', text: 'Generates and executes a Jupyter notebook against live data. Typically 30 to 90 seconds. The notebook and a cryptographic execution record are signed by the platform.', count: 1 },
-  { file: 'src/components/QueryForm.tsx', rows: ':654, :655', reason: 'pending', phrase: 'Executed-sandbox mode generates and runs a Jupyter notebook against live data, then signs the execution record.', count: 2 },
-
-  // VerifyBadge.tsx, NotebookSection.tsx, package-download.ts
-  { file: 'src/components/evidence/VerifyBadge.tsx', rows: ':38', reason: 'pending', text: 'Verify this record with Typed Standards', count: 1 },
-  { file: 'src/components/evidence/NotebookSection.tsx', rows: ':96 (file name)', reason: 'pending', text: 'record-', count: 1 },
-  { file: 'src/lib/evidence/package-download.ts', rows: ':37 (file name)', reason: 'pending', text: 'record-', count: 1 },
-
-  // Citation text that leaves the site.
-  { file: 'src/lib/evidence/record-citation.ts', rows: ':61', reason: 'pending', text: 'Record Package.', count: 1 },
-  { file: 'src/lib/evidence/record-citation.ts', rows: ':65', reason: 'pending', text: 'Record:', count: 1 },
-  { file: 'src/components/notebook/ChatCitationPreview.tsx', rows: ':68 (twice)', reason: 'pending', text: 'Record Package', count: 2 },
-  { file: 'src/components/notebook/ChatCitationPreview.tsx', rows: ':118, :120, :121', reason: 'pending', text: 'Record:', count: 3 },
+  // Download file names (D6).
+  { file: 'src/components/evidence/NotebookSection.tsx', rows: ':96 (D6, file name)', reason: 'keep', text: 'record-', count: 1 },
+  { file: 'src/lib/evidence/package-download.ts', rows: ':37 (D6, file name)', reason: 'keep', text: 'record-', count: 1 },
 
   // AnswerView.tsx
-  { file: 'src/components/answer-view/AnswerView.tsx', rows: ':403', reason: 'pending', text: 'The system prompt is composed from the base civic-data skill guidance plus the web overlay (and any portal-specific overlays). The content hash below is captured at execution time and embedded in the record package when this analysis is published.', count: 1 },
-  { file: 'src/components/answer-view/AnswerView.tsx', rows: ':422', reason: 'pending', text: '(truncated; full hash is what the record package will sign)', count: 1 },
   { file: 'src/components/answer-view/AnswerView.tsx', rows: ':605', reason: 'verb', text: 'The notebook metadata records the sandbox runtime versions used at execution.', count: 1 },
 
-  // The API error strings (the census's API row, 31) and the bundle's heading: pending.
-  { file: 'src/app/api/evidence/[slug]/bundle/route.ts', rows: ':108', reason: 'pending', text: '## Record package', count: 1 },
-  { file: 'src/app/api/evidence/[slug]/bundle/route.ts', rows: ':162, :172', reason: 'pending', text: API_NOT_FOUND, count: 2 },
-  { file: 'src/app/api/evidence/[slug]/attestations/route.ts', rows: ':200, :206', reason: 'pending', text: API_NOT_FOUND, count: 2 },
-  { file: 'src/app/api/evidence/[slug]/commitment/route.ts', rows: ':113', reason: 'pending', text: API_NOT_FOUND, count: 1 },
-  { file: 'src/app/api/evidence/[slug]/evaluate/route.ts', rows: ':64, :71', reason: 'pending', text: API_NOT_FOUND, count: 2 },
-  { file: 'src/app/api/evidence/[slug]/evaluate/route.ts', rows: ':75', reason: 'pending', text: 'No record package available', count: 1 },
-  { file: 'src/app/api/evidence/[slug]/evaluate/route.ts', rows: ':79', reason: 'pending', text: 'Record package not found in storage', count: 1 },
-  { file: 'src/app/api/evidence/[slug]/publish/route.ts', rows: ':119, :126', reason: 'pending', text: API_NOT_FOUND, count: 2 },
-  { file: 'src/app/api/evidence/[slug]/publish/route.ts', rows: ':134', reason: 'pending', text: 'Record is already published', count: 1 },
-  { file: 'src/app/api/evidence/[slug]/publish/route.ts', rows: ':157', reason: 'pending', text: 'Record is withdrawn; reinstate it before publishing', count: 1 },
-  { file: 'src/app/api/evidence/[slug]/publish/route.ts', rows: ':164', reason: 'pending', text: 'Record has no stored package to publish', count: 1 },
-  { file: 'src/app/api/evidence/[slug]/publish/route.ts', rows: ':322', reason: 'pending', text: 'Record was published concurrently by another request', count: 1 },
-  { file: 'src/app/api/evidence/[slug]/publish/route.ts', rows: ':359', reason: 'pending', text: 'Publication failed; the record remains sealed', count: 1 },
-  { file: 'src/app/api/evidence/[slug]/reinstate/route.ts', rows: ':78', reason: 'pending', text: API_NOT_FOUND, count: 1 },
-  { file: 'src/app/api/evidence/[slug]/reinstate/route.ts', rows: ':84', reason: 'pending', text: 'Only the creator can reinstate a record', count: 1 },
-  { file: 'src/app/api/evidence/[slug]/reinstate/route.ts', rows: ':89', reason: 'pending', text: 'Record is not withdrawn', count: 1 },
-  { file: 'src/app/api/evidence/[slug]/reinstate/route.ts', rows: ':92', reason: 'pending', text: 'Record has already been reinstated', count: 1 },
-  { file: 'src/app/api/evidence/[slug]/replay/route.ts', rows: ':92, :99', reason: 'pending', text: API_NOT_FOUND, count: 2 },
-  { file: 'src/app/api/evidence/[slug]/replay/route.ts', rows: ':104', reason: 'pending', text: 'No record package available', count: 1 },
-  { file: 'src/app/api/evidence/[slug]/replay/route.ts', rows: ':108', reason: 'pending', text: 'Record package not found in storage', count: 1 },
-  { file: 'src/app/api/evidence/[slug]/withdraw/route.ts', rows: ':78', reason: 'pending', text: API_NOT_FOUND, count: 1 },
-  { file: 'src/app/api/evidence/[slug]/withdraw/route.ts', rows: ':84', reason: 'pending', text: 'Only the creator can withdraw a record', count: 1 },
-  { file: 'src/app/api/evidence/[slug]/withdraw/route.ts', rows: ':91', reason: 'pending', text: 'Record is already withdrawn', count: 1 },
-  { file: 'src/app/api/evidence/[slug]/withdraw/route.ts', rows: ':99', reason: 'pending', text: 'Cannot withdraw: record has no content node hash to reference', count: 1 },
-  { file: 'src/app/api/evidence/route.ts', rows: ':587', reason: 'pending', text: 'Failed to publish the record', count: 1 },
-  { file: 'src/lib/evidence/identifier.ts', rows: ':72', reason: 'pending', text: 'No published record package for this identifier', count: 1 },
-  { file: 'src/lib/evidence/identifier.ts', rows: ':77', reason: 'pending', text: API_NOT_FOUND, count: 1 },
+  // The API messages no dialog shows (C22).
+  { file: 'src/app/api/evidence/[slug]/bundle/route.ts', rows: ':162, :172 (C22)', reason: 'keep', text: API_NOT_FOUND, count: 2 },
+  { file: 'src/app/api/evidence/[slug]/commitment/route.ts', rows: ':113 (C22)', reason: 'keep', text: API_NOT_FOUND, count: 1 },
+  { file: 'src/lib/evidence/identifier.ts', rows: ':72 (C22)', reason: 'keep', text: 'No published record package for this identifier', count: 1 },
+  { file: 'src/lib/evidence/identifier.ts', rows: ':77 (C22)', reason: 'keep', text: API_NOT_FOUND, count: 1 },
 ];
 
 // --- The reader -------------------------------------------------------------------

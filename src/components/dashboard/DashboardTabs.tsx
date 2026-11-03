@@ -449,7 +449,7 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
             margin: '16px', padding: '24px',
             boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
           }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Publish Record</h3>
+            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Publish this analysis</h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 12px' }}>
               Publishing makes the content of <strong>{publishTarget.title}</strong> publicly
               accessible, lists it in the registry, and emits signed publication
@@ -524,10 +524,10 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
             margin: '16px', padding: '24px',
             boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
           }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Withdraw Record</h3>
+            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Withdraw this analysis</h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
-              Withdrawing a record is a public, permanent action. The record and its cryptographic
-              proofs remain accessible, but the record will be flagged as withdrawn.
+              Withdrawing an analysis is a public, permanent action. The analysis and its cryptographic
+              proofs remain accessible, but it will be flagged as withdrawn.
             </p>
             <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', color: 'var(--text-primary)' }}>
               &ldquo;{withdrawTarget.title}&rdquo;
@@ -595,7 +595,7 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
             margin: '16px', padding: '24px',
             boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
           }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Reinstate Record</h3>
+            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Reinstate this analysis</h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
               Reinstating will make this analysis visible again in the public index. The prior
               withdrawal record is preserved — both the withdrawal and reinstatement will appear

@@ -193,7 +193,7 @@ export default function EvidenceIndex() {
           <p style={{ fontSize: '16px', margin: '0 0 8px' }}>
             {debouncedQuery || status || range !== 'all'
               ? 'No analyses match your filters.'
-              : 'No record packages published yet.'}
+              : 'No analyses published yet.'}
           </p>
           {!debouncedQuery && !status && range === 'all' && (
             <p style={{ fontSize: '14px', margin: 0 }}>

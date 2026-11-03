@@ -96,7 +96,7 @@ interface QueryFormProps {
  * states a wrong number here until it is threaded through a provider.
  */
 const SIGNED_IN_DAILY_QUESTIONS = 20;
-const SIGN_IN_ADDS_REST = ` to run the answer as a notebook in a signed sandbox and publish it as a record. Signed in, you can ask ${SIGNED_IN_DAILY_QUESTIONS} questions a day.`;
+const SIGN_IN_ADDS_REST = ` to run the answer as a notebook in a signed sandbox and publish it as a signed analysis. Signed in, you can ask ${SIGNED_IN_DAILY_QUESTIONS} questions a day.`;
 
 /*
  * The suggested questions under the box live in `src/lib/query-presentation.ts`

@@ -222,7 +222,7 @@ export default function ChatSignersSection({ executedAt, signingKeyId, provenanc
           </div>
           Attestations from other parties — corroborations, contradictions,
           expert evaluations — would appear here once attached. Attestations
-          are added after publish; chat-time output never carries them.
+          are added after publish; output at the time of the answer never carries them.
         </div>
       </Section>
     </>

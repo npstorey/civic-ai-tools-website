@@ -105,7 +105,7 @@ function buildCellZero(
           : 'Unknown';
 
   const lines: string[] = [
-    '## Record package',
+    '## Package',
     '',
     '| Field | Value |',
     '| --- | --- |',

@@ -709,7 +709,7 @@ test('P2 (3) read from the source: the block and the Cite modal both write their
       /import \{[^}]*\bbuildRecordCitations\b[^}]*\} from '@\/lib\/evidence\/record-citation'/,
       `${name} imports the builder from the one module that owns it`,
     );
-    assert.doesNotMatch(source, /Record Package\.|\[(Verified|Published): /, `${name} writes no citation format of its own`);
+    assert.doesNotMatch(source, /Analysis package\.|\[(Verified|Published): /, `${name} writes no citation format of its own`);
   }
   assert.match(PAGE_SOURCE, /<CitationBlock\b/, 'the page renders the block');
 });
@@ -1931,10 +1931,10 @@ test('W4 P2 the server markup with a publication attestation naming a node: the 
 // the plain text beside it uses for the same date. At the base it read
 // "[Verified: <date>]", which names no check the record passed.
 
-test('W4 P1 (9) the citation block reads "Record: <title> [Published: <date>] <url>", and says "Verified" nowhere', () => {
+test('W4 P1 (9) the citation block reads "Analysis: <title> [Published: <date>] <url>", and says "Verified" nowhere', () => {
   const citation = partOf(HTML.agf, 'citation');
   assert.ok(citation !== null, 'premise: the record renders its citation block');
-  const expected = `Record: ${AGF.record.title} [Published: May 2, 2026] https://${HOST}/records/${AGF.record.slug}`;
+  const expected = `Analysis: ${AGF.record.title} [Published: May 2, 2026] https://${HOST}/records/${AGF.record.slug}`;
   assert.ok(citation.markup.includes(escaped(expected)), `the block carries "${expected}"`);
   assert.ok(citation.markup.includes(escaped('Published: May 2, 2026.')), 'premise: the plain text uses the same word for the same date');
   assert.doesNotMatch(citation.markup, /Verified/, 'the block says "Verified"');
