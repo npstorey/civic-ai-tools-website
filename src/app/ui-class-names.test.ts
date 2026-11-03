@@ -34,6 +34,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 const HERE = fileURLToPath(import.meta.url);
 const APP_ROOT = path.dirname(HERE);
@@ -117,5 +118,93 @@ test('every allowlist entry is still load-bearing', () => {
     [],
     'These classes are now defined in globals.css, so their DEFINED_ELSEWHERE ' +
       'entries are dead. Remove them.',
+  );
+});
+
+// --- The primitives' class tables (UX-1 P0, F1) -----------------------------
+//
+// The two tests above read `className="..."` attribute literals only. The ui-*
+// primitives under src/components/ui/ choose classes from tables (a variant
+// map, a size map) and join them, and a class written that way never appears
+// in a className attribute, so the scan above cannot see it.
+//
+// This test closes that gap by reading every string a primitive module holds.
+// It parses each non-test module under src/components/ui/ with the TypeScript
+// compiler and collects:
+//   - every ui-* word of every string literal and every template literal
+//     without substitutions, wherever it sits: an attribute, a table, an
+//     argument;
+//   - every template literal WITH substitutions that holds a ui- prefix.
+// A class built from a template cannot be checked (`ui-card--${tone}`), so it
+// fails here outright. A primitive writes each class it can emit in full.
+//
+// Scope, and its blind spot. The directory, not the class namespace: outside
+// src/components/ui/ only the attribute scan above applies, because a
+// string-literal scan of the whole tree would read `fontFamily: 'ui-monospace,
+// ...'` as a class. A ui- word inside a string that is not a class, in a
+// primitive, would be checked as one; none exists, and it would be a
+// false positive (loud), not a miss.
+
+const PRIMITIVES_DIR = path.join(SRC_ROOT, 'components', 'ui');
+const UI_WORD = /(?:^|\s)(ui-[a-zA-Z0-9-]+)/g;
+
+function primitiveModules(): string[] {
+  return sourceFiles(PRIMITIVES_DIR).filter((f) => !/\.test\.(c|m)?[jt]sx?$/.test(f));
+}
+
+/** Every ui-* word in the string literals of `file`, with its line; and every substituted template holding `ui-`. */
+function classWordsIn(file: string): { words: { cls: string; line: number }[]; dynamic: number[] } {
+  const text = fs.readFileSync(file, 'utf8');
+  const kind = file.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind);
+  const words: { cls: string; line: number }[] = [];
+  const dynamic: number[] = [];
+  const lineOf = (node: ts.Node) => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+  const visit = (node: ts.Node) => {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+      for (const m of node.text.matchAll(UI_WORD)) words.push({ cls: m[1], line: lineOf(node) });
+    } else if (ts.isTemplateExpression(node)) {
+      const parts = [node.head.text, ...node.templateSpans.map((span) => span.literal.text)];
+      if (parts.some((part) => /(?:^|\s)ui-/.test(part))) dynamic.push(lineOf(node));
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return { words, dynamic };
+}
+
+test('every ui-* class a primitive in src/components/ui/ can emit is defined in globals.css', () => {
+  const defined = definedUiClasses();
+  const allowed = new Set(Object.keys(DEFINED_ELSEWHERE));
+  const modules = primitiveModules();
+  assert.ok(modules.length > 0, 'no primitive modules found under src/components/ui/: the scan has stopped measuring');
+
+  const missing: string[] = [];
+  const dynamic: string[] = [];
+  let seen = 0;
+  for (const file of modules) {
+    const rel = path.relative(SRC_ROOT, file);
+    const found = classWordsIn(file);
+    seen += found.words.length;
+    for (const { cls, line } of found.words) {
+      if (!defined.has(cls) && !allowed.has(cls)) missing.push(`${rel}:${line}  ${cls}`);
+    }
+    for (const line of found.dynamic) dynamic.push(`${rel}:${line}`);
+  }
+
+  assert.ok(seen > 0, 'the primitives hold no ui-* class at all: the scan has stopped measuring');
+  assert.deepEqual(
+    [...new Set(missing)].sort(),
+    [],
+    'These ui-* classes, written in a primitive under src/components/ui/, match no selector in ' +
+      'src/app/globals.css. A primitive emits them from a class table, so the className scan above ' +
+      'cannot see them; an undefined one renders unstyled with no other failure. Add the selector, ' +
+      'or fix the name.',
+  );
+  assert.deepEqual(
+    dynamic.sort(),
+    [],
+    'These template literals build a ui-* class from a substitution, which no guard can check. ' +
+      'Write each class in full (a table of literal names), as the other primitives do.',
   );
 });
