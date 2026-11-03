@@ -36,9 +36,13 @@
 //   C3. The ruled words where the contract's tables put them: the heading
 //       "Publish"; W1 "Question text"; W2 "Include full text"; W3 on the "Hash
 //       only" option while "Include full text" is selected; W4 "What the other
-//       choice does", a closed disclosure in each section holding the
-//       unselected option's full ruled description, while the selected option
-//       shows its own; W5 the footer's line for each visibility; W15 "Back to
+//       choice does", a closed disclosure holding the unselected option's full
+//       ruled description, while the selected option shows its own: in
+//       Visibility (none under seal-only, where the public option carries its
+//       reason), and in Question text only while "Include full text" is
+//       selected ("Anyone can see exactly what you asked" stays on its option
+//       in both states; ORCH rulings 4 and 5); W5 the footer's line for each
+//       visibility; W15 "Back to
 //       your answer", which only closes the dialog; and "analysis" in the
 //       publishing and public success states.
 //   C4. (no-change guard) Every ruled sentence is in the markup, byte for
@@ -53,9 +57,7 @@
 //
 // BLIND SPOTS, stated. No layout: whether the action is visible without
 // scrolling at a given viewport is criterion 7, on staging. No focus, Escape
-// or backdrop events (non-goals here; staging). Under seal-only on, whether the
-// Visibility section carries a disclosure is not asserted: the public choice
-// is unavailable and its reason stands on the option itself.
+// or backdrop events (non-goals here; staging).
 //
 // Run with: npm test
 //   (or: node --test --experimental-strip-types src/components/publish-dialog-shape.test.ts)
@@ -343,11 +345,15 @@ function section(dialog: MountedDialog, heading: string, name: string): Element 
   return enclosing;
 }
 
+/** Every `ui-disclosure` in `container` whose summary reads W4. */
+function otherDisclosures(container: Element): Element[] {
+  return within(container).filter((el) => el.type === 'details' && hasClass(el, 'ui-disclosure')
+    && childrenOf(el).some((child) => child.type === 'summary' && textIn(child) === W4_OTHER));
+}
+
 /** The one `ui-disclosure` in `container` whose summary reads W4. */
 function otherChoice(container: Element, where: string): Element {
-  return one(within(container).filter((el) => el.type === 'details' && hasClass(el, 'ui-disclosure')
-    && childrenOf(el).some((child) => child.type === 'summary' && textIn(child) === W4_OTHER)),
-  `${where}: ui-disclosure reading "${W4_OTHER}"`);
+  return one(otherDisclosures(container), `${where}: ui-disclosure reading "${W4_OTHER}"`);
 }
 
 async function choose(dialog: MountedDialog, name: string, label: string): Promise<void> {
@@ -438,7 +444,10 @@ test('UX-1 P1 C3 W1, W2: the section reads "Question text" and its first choice 
   assert.ok(radios(dialog, 'visibility').every((radio) => !within(question).includes(radio)), 'the "Question text" section holds the visibility radios');
 });
 
-test('UX-1 P1 C3 W3, W4: Question text: the selected option shows its description; the other\'s is behind "What the other choice does"', async () => {
+test('UX-1 P1 C3 W3, W4: Question text: "Include full text" keeps its line; the hash-only paragraph shows on its option when selected, else behind "What the other choice does"', async () => {
+  // ORCH ruling 5 (Leg A item 5): the full-text option's one line stays on it
+  // in both states; the disclosure renders only while "Include full text" is
+  // selected, and holds the hash-only paragraph.
   for (const selected of ['full_text', 'hash_only'] as const) {
     const { dialog } = await open();
     if (selected === 'hash_only') await choose(dialog, 'promptVisibility', HASH_ONLY);
@@ -446,18 +455,17 @@ test('UX-1 P1 C3 W3, W4: Question text: the selected option shows its descriptio
     const question = section(dialog, W1_SECTION, 'promptVisibility');
     const full = textIn(option(dialog, 'promptVisibility', W2_FULL_TEXT).option);
     const hash = textIn(option(dialog, 'promptVisibility', HASH_ONLY).option);
-    const other = otherChoice(question, `${where}, Question text`);
-    assert.equal(attr(other, 'open'), null, `${where}: the disclosure starts open`);
+    includes(full, FULL_TEXT_WORDS, `${where}: the full-text option does not show its line`);
     if (selected === 'full_text') {
-      includes(full, FULL_TEXT_WORDS, `${where}: the full-text option does not show its description`);
+      const other = otherChoice(question, `${where}, Question text`);
+      assert.equal(attr(other, 'open'), null, `${where}: the disclosure starts open`);
       includes(hash, W3_HASH_SHORT, `${where}: the hash-only option does not show its short line`);
       excludes(hash, HASH_ONLY_WORDS, `${where}: the hash-only option still shows its full description`);
       includes(textIn(other), HASH_ONLY_WORDS, `${where}: the disclosure does not hold the hash-only description`);
     } else {
       includes(hash, HASH_ONLY_WORDS, `${where}: the hash-only option does not show its description`);
       excludes(hash, W3_HASH_SHORT, `${where}: the hash-only option still shows its short line`);
-      excludes(full, FULL_TEXT_WORDS, `${where}: the full-text option still shows its description`);
-      includes(textIn(other), FULL_TEXT_WORDS, `${where}: the disclosure does not hold the full-text description`);
+      assert.equal(otherDisclosures(question).length, 0, `${where}: the section still carries "${W4_OTHER}"`);
     }
   }
 });
@@ -483,6 +491,12 @@ test('UX-1 P1 C3 W4: Visibility: the selected option shows its description; the 
       includes(textIn(other), sealWords, `${where}: the disclosure does not hold the Seal description`);
     }
   }
+  // ORCH ruling 4: under seal-only, no disclosure; the public option carries its reason.
+  const { dialog } = await open({ sealOnly: true });
+  const visibility = section(dialog, 'Visibility', 'visibility');
+  assert.equal(otherDisclosures(visibility).length, 0, `seal-only: the Visibility section carries "${W4_OTHER}"`);
+  includes(textIn(option(dialog, 'visibility', SEAL_CHOICE).option), sealedStateCopy(true).sealChoice, 'seal-only: the Seal option');
+  includes(textIn(option(dialog, 'visibility', PUBLIC_CHOICE).option), SEAL_ONLY_UI_REASON, 'seal-only: the public option does not carry its reason');
 });
 
 test('UX-1 P1 C3 W5: the footer\'s line is the selected visibility\'s consequence', async () => {
