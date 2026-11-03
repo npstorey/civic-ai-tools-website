@@ -589,3 +589,28 @@ test('criterion 6 (guard): signed out and loading, the sign-in control renders a
 function readControl(el: HostElement): string {
   return renderToStaticMarkup(el).replace(/<!-- -->/g, '');
 }
+
+// --- The ORCH's Leg A rulings (items 7 and 9) ------------------------------------------------
+
+test('the avatar trigger names an account that has only an email by its email (AppChrome\'s identity fallback)', async () => {
+  const email = 'reader@fixture.example';
+  sessions.server = { user: { id: 'gh-fixture-account', dbId: '99999999-9999-4999-8999-999999999999' } };
+  sessions.client = { status: 'authenticated', data: { user: { email } } };
+  installFetch(PAGE_ORIGIN, {});
+  const s = await mount(h(Header, headerProps(MARKETING)));
+  const triggers = s.elements().filter((el) => el.type === 'button' && readText(el).includes(email));
+  const read = triggers.map((el) => attr(el, 'aria-haspopup'));
+  s.unmount();
+  assert.deepEqual(read, ['menu'], `menu triggers showing the account's email: ${JSON.stringify(read)}`);
+});
+
+test('with no marketing surface, the bar holds no Explore menu (it would have no items): Ask, Analysis, Typed Standards', async () => {
+  const read: Record<string, string[]> = {};
+  for (const name of ['unconfigured', 'appOnly'] as const) {
+    const s = await mountHeader(CONFIGS[name].env, 'out');
+    read[name] = topLevel(s).map((e) => (e.kind === 'link' ? `${e.label} -> ${e.href}` : `${e.label} (menu)`));
+    s.unmount();
+  }
+  const bar = ['Ask -> /ask', 'Analysis -> /records', `Typed Standards -> ${TYPED_STANDARDS_URL}`];
+  assert.deepEqual(read, { unconfigured: bar, appOnly: bar }, `the bar with marketingOrigin null: ${JSON.stringify(read)}`);
+});
