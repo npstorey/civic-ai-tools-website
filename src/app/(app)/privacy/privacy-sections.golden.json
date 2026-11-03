@@ -1,0 +1,584 @@
+{
+  "default": [
+    {
+      "id": "consent-1",
+      "heading": "How consent works",
+      "statements": [
+        {
+          "id": "consent-1",
+          "trace": "const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS",
+          "text": "Before your first question, we ask once whether this site may send questions onward. Your question is not sent beyond this site before you answer. \"Allow\" turns on the sources the panel shows as On and sends your question. \"Not now\" sends nothing. After you allow, you can set each data source to On, Ask first or Off beside the question box. After you withdraw consent, we send no questions until you agree again. Withdrawing cannot take back a question already sent."
+        },
+        {
+          "id": "consent-kept",
+          "trace": "env:DATABASE_URL const:src/lib/sources/copy.ts#KEPT_WITHOUT_ACCOUNTS",
+          "text": "We keep your answer in a cookie, named below, until this browser session ends."
+        },
+        {
+          "id": "consent-cookie",
+          "trace": "const:src/lib/sources/consent.ts#CONSENT_COOKIE_NAME const:src/lib/sources/copy.ts#COOKIE_HOLDS",
+          "text": "The consent cookie is named civic-source-consent . It holds your choices and the versions of this statement they refer to, never who you are."
+        },
+        {
+          "id": "consent-withdraw",
+          "trace": "env:DATABASE_URL const:src/lib/sources/copy.ts#WITHDRAW_WITHOUT_ACCOUNTS",
+          "text": "To withdraw consent, use the panel beside the question box."
+        }
+      ]
+    },
+    {
+      "id": "consent-2",
+      "heading": "When we ask again",
+      "statements": [
+        {
+          "id": "consent-2",
+          "trace": "const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS",
+          "text": "Your answer covers the list of recipients as it was when you answered. We ask again when a recipient changes in a way your answer may not cover. For example: a recipient is added, a recipient says it keeps more, or a source moves to a different host."
+        },
+        {
+          "id": "consent-notify",
+          "trace": "env:DATABASE_URL const:src/lib/sources/copy.ts#NOTIFY_WITHOUT_ACCOUNTS",
+          "text": "A recipient may also be removed, or say it keeps less. Your answer is kept in a cookie, so we may ask again instead."
+        }
+      ]
+    },
+    {
+      "id": "consent-3",
+      "heading": "What recipients keep",
+      "statements": [
+        {
+          "id": "consent-3",
+          "trace": "const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS",
+          "text": "For each recipient, we state what it says it keeps, and for how long when it gives a time. Where it says so on a page, we give that page and the date we read it. If a provider says nothing, we write \"not stated.\" Nobody, including this site, can check a hosted service's logging from outside. That is why there is another option. You can also run this whole system on your own computer, with your own model and data sources."
+        },
+        {
+          "id": "consent-guide",
+          "trace": "env:SITE_DEPLOYMENT_GUIDE_URL const:src/lib/sources/copy.ts#NO_GUIDE_SENTENCE",
+          "text": "This site does not name a deployment guide."
+        }
+      ]
+    },
+    {
+      "id": "use",
+      "heading": "Using the site",
+      "statements": [
+        {
+          "id": "sign-in",
+          "trace": "env:GITHUB_CLIENT_ID env:GITHUB_CLIENT_SECRET env:OIDC_ISSUER env:OIDC_CLIENT_ID env:OIDC_CLIENT_SECRET env:OIDC_PROVIDER_NAME",
+          "text": "This site offers no sign-in."
+        },
+        {
+          "id": "daily-limits",
+          "trace": "env:ANONYMOUS_RATE_LIMIT env:AUTHENTICATED_RATE_LIMIT env:APP_TIER_RATE_LIMIT env:SIGN_IN_ALLOWLIST const:src/lib/privacy-facts.ts#DEFAULT_ANONYMOUS_LIMIT const:src/lib/privacy-facts.ts#DEFAULT_AUTHENTICATED_LIMIT",
+          "text": "Without signing in you can ask 10 questions a day."
+        },
+        {
+          "id": "limit-reason",
+          "trace": "const:src/lib/privacy-facts.ts#LIMIT_REASON",
+          "text": "Each question is answered by an AI model working with live data sources, and every answer costs money. That is why the number of questions per day is limited."
+        }
+      ]
+    },
+    {
+      "id": "consent-4",
+      "heading": "Each data source",
+      "statements": [
+        {
+          "id": "consent-4",
+          "trace": "const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS",
+          "text": "Each source's row gives who publishes its connector, where it runs, who holds its logs and what they say they keep, and how current its data is. Where we read the holder's own page, the logs line gives that page and the date we read it."
+        },
+        {
+          "id": "source-row-data-commons",
+          "trace": "const:src/lib/flows/statement.ts#buildFlowsStatementFor const:src/lib/sources/copy.ts#SOURCE_DESCRIPTIONS const:src/lib/sources/copy.ts#REACH_SENTENCE env:SOCRATA_MCP_URL env:BOSTON_OPENCONTEXT_MCP_URL",
+          "text": "Data Commons: public statistics from government agencies and international organizations, gathered by Google. This site reaches it through an MCP server, a connector that Google publishes, running at api.datacommons.org. Who holds its logs: Google says it keeps what it receives (how long: varies by kind of data and use; the statement gives no period) ( its statement , read 2026-10-18). How current its data is: Live API over published statistical releases: a figure changes only when an agency publishes a new release, and each carries its release vintage (the ACS releases annually)."
+        }
+      ]
+    },
+    {
+      "id": "consent-5",
+      "heading": "Changes",
+      "statements": [
+        {
+          "id": "consent-5",
+          "trace": "const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS",
+          "text": "A dated log of every change to where a question can go is kept with the site's code. You can use it to check the version your consent refers to."
+        }
+      ]
+    },
+    {
+      "id": "links",
+      "heading": "What connects your activity to you",
+      "statements": [
+        {
+          "id": "daily-key",
+          "trace": "env:RATE_LIMIT_SECRET const:src/lib/rate-limit.ts#RATE_LIMIT_SECRET_VARIABLE env:GITHUB_CLIENT_ID env:GITHUB_CLIENT_SECRET env:OIDC_ISSUER env:OIDC_CLIENT_ID env:OIDC_CLIENT_SECRET env:OIDC_PROVIDER_NAME",
+          "text": "To count your questions, the site makes a code for each day. The code is made from your network address, the date and a secret only the operator holds. Your address is not stored with the count. The code changes every day, so counts from different days cannot be matched to each other without the secret. The operator, who holds the secret, could work out which code belongs to a given address on a given day."
+        },
+        {
+          "id": "browser-storage",
+          "trace": "const:src/lib/query-presentation.ts#MODE_STORAGE_KEY const:src/lib/query-presentation.ts#COMPARISON_STORAGE_KEY const:src/lib/query-presentation.ts#LAYOUT_STORAGE_KEY",
+          "text": "Your browser keeps three display choices for the current tab: notebook or standard mode, whether the comparison is shown, and which layout an answer is shown under. They are stored under civicaitools.notebookMode , civicaitools.showComparison and civicaitools.answerLayout ."
+        }
+      ]
+    },
+    {
+      "id": "stored",
+      "heading": "What the site keeps",
+      "statements": [
+        {
+          "id": "prompt-text",
+          "trace": "const:src/lib/privacy-facts.ts#HASH_ONLY_RECORD_WORDS const:src/lib/privacy-facts.ts#HASH_ONLY_CHOICE_LABEL const:src/lib/db/schema.ts#promptVisibilityEnum const:src/lib/notebook.ts#WITHHELD_QUESTION_TEXT const:src/app/api/evidence/route.ts#POST",
+          "text": "When you publish, you choose whether the record includes your question's text or only a fingerprint (a hash) of it. The publish dialog describes that choice, Hash only, in these words. The record keeps a fingerprint of your question instead of its text. Anyone who knows or guesses the exact wording can confirm it matches. The answer, summary and data queries may still contain its words."
+        },
+        {
+          "id": "record-title",
+          "trace": "const:src/lib/privacy-facts.ts#RECORD_TITLE_IS_PUBLIC const:src/app/api/evidence/route.ts#POST",
+          "text": "The title is public and becomes the record’s address."
+        },
+        {
+          "id": "seal-only",
+          "trace": "env:SITE_SEAL_ONLY const:src/lib/privacy-facts.ts#SEALED_FINGERPRINT_LOOKUP const:src/app/api/evidence/[slug]/commitment/route.ts#GET const:src/lib/evidence/commitment.ts#buildCommitmentView",
+          "text": "A record you publish publicly is listed on this site and anyone can read it. A record you seal is stored and signed, but not listed or shown publicly, though anyone who has its address can still look up its fingerprint."
+        },
+        {
+          "id": "upload-cleanup",
+          "trace": "env:CRON_SECRET",
+          "text": "This site has no cleanup configured. Parts of a record uploaded while it is being prepared are kept even if the record is never published."
+        }
+      ]
+    },
+    {
+      "id": "recipients",
+      "heading": "Who receives what",
+      "statements": [
+        {
+          "id": "recipient-model",
+          "trace": "env:MODEL_API_BASE_URL const:src/lib/model-client.ts#DEFAULT_BASE_URL",
+          "text": "Your question, and the data the sources return for it, are sent to the AI model service at openrouter.ai ."
+        },
+        {
+          "id": "recipient-source-data-commons",
+          "trace": "env:SOCRATA_MCP_URL env:DATA_COMMONS_MCP_URL env:BOSTON_OPENCONTEXT_MCP_URL const:@typedstandards/civic-typed-router#CIVIC_MANIFEST",
+          "text": "The data source Data Commons, at api.datacommons.org , receives the searches and queries the AI model writes to answer your question. These can include words from your question. How current its data is: Live API over published statistical releases: a figure changes only when an agency publishes a new release, and each carries its release vintage (the ACS releases annually)."
+        },
+        {
+          "id": "recipient-blob-vercel",
+          "trace": "env:BLOB_DRIVER const:src/lib/privacy-facts.ts#DEFAULT_BLOB_DRIVER",
+          "text": "Published records, and the parts of a record uploaded while it is being prepared, are stored with Vercel Blob, a file storage service."
+        },
+        {
+          "id": "recipient-timestamp",
+          "trace": "env:TIMESTAMP_AUTHORITY_URL const:src/lib/evidence/signing.ts#DEFAULT_TIMESTAMP_AUTHORITY_URL",
+          "text": "When a record is published, a fingerprint of it (a hash, not its contents) is sent to the timestamp service at freetsa.org . That service returns proof of when the record existed."
+        },
+        {
+          "id": "recipient-verification-read",
+          "trace": "env:BLOB_DRIVER",
+          "text": "When a record is checked, the site reads the record's stored parts back from where they are stored. Nothing you send goes with that read."
+        },
+        {
+          "id": "recipient-content-sources",
+          "trace": "env:DIRECTORY_DATA_URL env:ROADMAP_RAW_URL const:src/lib/site-config.ts#COMMUNITY_DIRECTORY_DATA_URL",
+          "text": "To show its directory of data sources, the site reads a list from raw.githubusercontent.com . Nothing you send goes with those reads."
+        },
+        {
+          "id": "recipient-counter-memory",
+          "trace": "env:KV_REST_API_URL env:KV_REST_API_TOKEN",
+          "text": "The daily question counts, kept under the codes described above, are held in the server's memory only."
+        },
+        {
+          "id": "recipient-executor-vercel-sandbox",
+          "trace": "env:EXECUTOR_DRIVER const:src/lib/sandbox/execute.ts#resolveExecutorDriverName const:src/lib/privacy-facts.ts#NOTEBOOK_PURPOSE const:src/lib/privacy-facts.ts#NOTEBOOK_CARRIES_QUESTION const:src/lib/notebook-author/synthesize.ts#synthesizeNotebook const:src/lib/notebook-author/prompt.ts#buildCell0Source",
+          "text": "In notebook mode, the AI model writes a notebook (a short program) to answer your question, and the site runs it. The notebook requests its data from the public data portals it names. The notebook sent to run includes your question's text. Each notebook runs in a Vercel Sandbox, a short-lived computer the site starts for the run."
+        },
+        {
+          "id": "held-function-logs-operator",
+          "trace": "env:VERCEL_ENV const:src/lib/privacy-facts.ts#PLATFORM_HELD_RECIPIENTS const:src/lib/privacy-facts.ts#LOGS_STATEMENT const:src/lib/flows/statement.ts#PLATFORM_HELD_KINDS",
+          "text": "This site's own logs are kept by whoever runs its server. The site's own logs record which steps ran, how long they took, how large their results were, and the kind of any error. They do not record your question, the queries sent to data sources, or what the sources returned. How long they are kept is the operator's to state."
+        }
+      ]
+    },
+    {
+      "id": "basis",
+      "heading": "How this page is written",
+      "statements": [
+        {
+          "id": "basis",
+          "trace": "const:src/lib/privacy-facts.ts#PAGE_BASIS",
+          "text": "What this site does with what you send it. Every line is read from the site's own settings or its code when the page is served, or from a named page with the date it was read."
+        }
+      ]
+    },
+    {
+      "id": "limits",
+      "heading": "What this page cannot tell you",
+      "statements": [
+        {
+          "id": "logs",
+          "trace": "const:src/lib/privacy-facts.ts#LOGS_STATEMENT const:src/lib/streaming.ts#errorLogFacts",
+          "text": "The site's own logs record which steps ran, how long they took, how large their results were, and the kind of any error. They do not record your question, the queries sent to data sources, or what the sources returned."
+        },
+        {
+          "id": "not-verifiable",
+          "trace": "const:src/lib/privacy-facts.ts#NOT_VERIFIABLE_FROM_OUTSIDE env:SITE_BRAND_REPO_URL",
+          "text": "Nobody, including this site, can check a hosted service's logging from outside."
+        },
+        {
+          "id": "operator-states",
+          "trace": "const:src/lib/privacy-facts.ts#OPERATOR_STATES const:src/lib/privacy-facts.ts#OPERATOR_STATES_ITEMS",
+          "text": "This site cannot read the following, so they are the operator's to state: how long the operator and each service named on this page keep what they receive the operator's account settings with the AI model service, including whether that service may keep or learn from what it receives which plan this site's hosting account is on, which sets how long its logs are kept any legal position"
+        }
+      ]
+    }
+  ],
+  "full": [
+    {
+      "id": "consent-1",
+      "heading": "How consent works",
+      "statements": [
+        {
+          "id": "consent-1",
+          "trace": "const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS",
+          "text": "Before your first question, we ask once whether this site may send questions onward. Your question is not sent beyond this site before you answer. \"Allow\" turns on the sources the panel shows as On and sends your question. \"Not now\" sends nothing. After you allow, you can set each data source to On, Ask first or Off beside the question box. After you withdraw consent, we send no questions until you agree again. Withdrawing cannot take back a question already sent."
+        },
+        {
+          "id": "consent-kept",
+          "trace": "env:DATABASE_URL const:src/lib/sources/copy.ts#KEPT_WITH_ACCOUNTS",
+          "text": "If you are signed in, we keep your answer on your account. If not, we keep it in a cookie, named below, until this browser session ends."
+        },
+        {
+          "id": "consent-cookie",
+          "trace": "const:src/lib/sources/consent.ts#CONSENT_COOKIE_NAME const:src/lib/sources/copy.ts#COOKIE_HOLDS",
+          "text": "The consent cookie is named civic-source-consent . It holds your choices and the versions of this statement they refer to, never who you are."
+        },
+        {
+          "id": "consent-withdraw",
+          "trace": "env:DATABASE_URL const:src/lib/sources/copy.ts#WITHDRAW_WITH_ACCOUNTS",
+          "text": "To withdraw consent, use the panel beside the question box, or the Sources tab on your dashboard if you are signed in."
+        }
+      ]
+    },
+    {
+      "id": "consent-2",
+      "heading": "When we ask again",
+      "statements": [
+        {
+          "id": "consent-2",
+          "trace": "const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS",
+          "text": "Your answer covers the list of recipients as it was when you answered. We ask again when a recipient changes in a way your answer may not cover. For example: a recipient is added, a recipient says it keeps more, or a source moves to a different host."
+        },
+        {
+          "id": "consent-notify",
+          "trace": "env:DATABASE_URL const:src/lib/sources/copy.ts#NOTIFY_WITH_ACCOUNTS",
+          "text": "A recipient may also be removed, or say it keeps less. If your answer is kept on your account, we tell you and do not ask again. If it is kept in a cookie, we may ask again instead. We tell you in the panel beside the question box and on the Sources tab of your dashboard, until you dismiss it."
+        }
+      ]
+    },
+    {
+      "id": "consent-3",
+      "heading": "What recipients keep",
+      "statements": [
+        {
+          "id": "consent-3",
+          "trace": "const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS",
+          "text": "For each recipient, we state what it says it keeps, and for how long when it gives a time. Where it says so on a page, we give that page and the date we read it. If a provider says nothing, we write \"not stated.\" Nobody, including this site, can check a hosted service's logging from outside. That is why there is another option. You can also run this whole system on your own computer, with your own model and data sources."
+        },
+        {
+          "id": "consent-guide",
+          "trace": "env:SITE_DEPLOYMENT_GUIDE_URL const:src/lib/sources/copy.ts#NO_GUIDE_SENTENCE",
+          "text": "This site does not name a deployment guide."
+        }
+      ]
+    },
+    {
+      "id": "who",
+      "heading": "Who runs this site",
+      "statements": [
+        {
+          "id": "operator",
+          "trace": "env:SITE_BRAND_ATTRIBUTION",
+          "text": "This site describes who runs it as: Run by a fixture operator"
+        },
+        {
+          "id": "source-code",
+          "trace": "env:SITE_BRAND_REPO_URL",
+          "text": "The code this site runs is open, and anyone can run it themselves: example.test/fixture/repo ."
+        }
+      ]
+    },
+    {
+      "id": "use",
+      "heading": "Using the site",
+      "statements": [
+        {
+          "id": "sign-in",
+          "trace": "env:GITHUB_CLIENT_ID env:GITHUB_CLIENT_SECRET env:OIDC_ISSUER env:OIDC_CLIENT_ID env:OIDC_CLIENT_SECRET env:OIDC_PROVIDER_NAME",
+          "text": "You can use this site without signing in, or sign in with GitHub and Fixture SSO."
+        },
+        {
+          "id": "sign-in-gate",
+          "trace": "env:SIGN_IN_ALLOWLIST",
+          "text": "Signing in is limited to accounts the operator has approved."
+        },
+        {
+          "id": "daily-limits",
+          "trace": "env:ANONYMOUS_RATE_LIMIT env:AUTHENTICATED_RATE_LIMIT env:APP_TIER_RATE_LIMIT env:SIGN_IN_ALLOWLIST const:src/lib/privacy-facts.ts#DEFAULT_ANONYMOUS_LIMIT const:src/lib/privacy-facts.ts#DEFAULT_AUTHENTICATED_LIMIT",
+          "text": "Without signing in you can ask 10 questions a day; signed in, 25."
+        },
+        {
+          "id": "limit-reason",
+          "trace": "const:src/lib/privacy-facts.ts#LIMIT_REASON",
+          "text": "Each question is answered by an AI model working with live data sources, and every answer costs money. That is why the number of questions per day is limited."
+        }
+      ]
+    },
+    {
+      "id": "consent-4",
+      "heading": "Each data source",
+      "statements": [
+        {
+          "id": "consent-4",
+          "trace": "const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS",
+          "text": "Each source's row gives who publishes its connector, where it runs, who holds its logs and what they say they keep, and how current its data is. Where we read the holder's own page, the logs line gives that page and the date we read it."
+        },
+        {
+          "id": "source-row-socrata",
+          "trace": "const:src/lib/flows/statement.ts#buildFlowsStatementFor const:src/lib/sources/copy.ts#SOURCE_DESCRIPTIONS const:src/lib/sources/copy.ts#REACH_SENTENCE env:SOCRATA_MCP_URL env:BOSTON_OPENCONTEXT_MCP_URL",
+          "text": "Socrata: an open-data portal platform from Tyler Technologies. Many cities and states publish their data on its portals. This site reaches it through an MCP server, a connector that npstorey publishes, running at socrata.example.test. Who holds its logs: the operator of socrata.example.test: what it keeps is for this site's operator to state; Tyler Technologies: not stated ( its statement , read 2026-10-19). How current its data is: Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule."
+        },
+        {
+          "id": "source-row-data-commons",
+          "trace": "const:src/lib/flows/statement.ts#buildFlowsStatementFor const:src/lib/sources/copy.ts#SOURCE_DESCRIPTIONS const:src/lib/sources/copy.ts#REACH_SENTENCE env:SOCRATA_MCP_URL env:BOSTON_OPENCONTEXT_MCP_URL",
+          "text": "Data Commons: public statistics from government agencies and international organizations, gathered by Google. This site reaches it through an MCP server, a connector that Google publishes, running at api.datacommons.org. Who holds its logs: Google says it keeps what it receives (how long: varies by kind of data and use; the statement gives no period) ( its statement , read 2026-10-18). How current its data is: Live API over published statistical releases: a figure changes only when an agency publishes a new release, and each carries its release vintage (the ACS releases annually)."
+        },
+        {
+          "id": "source-row-boston-opencontext",
+          "trace": "const:src/lib/flows/statement.ts#buildFlowsStatementFor const:src/lib/sources/copy.ts#SOURCE_DESCRIPTIONS const:src/lib/sources/copy.ts#REACH_SENTENCE env:SOCRATA_MCP_URL env:BOSTON_OPENCONTEXT_MCP_URL",
+          "text": "Boston OpenContext: the City of Boston's open data, from data.boston.gov. This site reaches it through an MCP server, a connector that the City of Boston publishes, running at boston.example.test. Who holds its logs: City of Boston says it keeps facts about each request (how long: under the City's records retention schedule; the statement gives no period for server logs) ( its statement , read 2026-10-18). How current its data is: Live: each call queries the CKAN data store behind data.boston.gov; each dataset updates on the City's schedule (311 daily, crime weekly, assessor annually)."
+        },
+        {
+          "id": "source-row-nyc-charter",
+          "trace": "const:src/lib/flows/statement.ts#buildFlowsStatementFor const:src/lib/sources/copy.ts#SOURCE_DESCRIPTIONS const:src/lib/sources/copy.ts#REACH_SENTENCE env:SOCRATA_MCP_URL env:BOSTON_OPENCONTEXT_MCP_URL env:NYC_CHARTER_HOSTING",
+          "text": "NYC Charter, Laws and Rules: the text of New York City's Charter, Administrative Code and Rules. This site reaches it through an MCP server, a connector that BetaNYC publishes, running at this site's sandbox. Who holds its logs: Vercel: not stated ( its statement , read 2026-10-20). How current its data is: Pinned to version 0.3.1 of the publisher's package and the index it bundles: the Charter and the Administrative Code are current through Local Law 2026/147, enacted September 12, 2026, and the Rules through rules effective October 4, 2026."
+        }
+      ]
+    },
+    {
+      "id": "consent-5",
+      "heading": "Changes",
+      "statements": [
+        {
+          "id": "consent-5",
+          "trace": "const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS",
+          "text": "A dated log of every change to where a question can go is kept with the site's code. You can use it to check the version your consent refers to."
+        },
+        {
+          "id": "consent-changelog",
+          "trace": "env:SITE_BRAND_REPO_URL const:src/lib/privacy-facts.ts#FLOWS_CHANGELOG_PATH",
+          "text": "The log: docs/flows-changelog.md ."
+        }
+      ]
+    },
+    {
+      "id": "links",
+      "heading": "What connects your activity to you",
+      "statements": [
+        {
+          "id": "daily-key",
+          "trace": "env:RATE_LIMIT_SECRET const:src/lib/rate-limit.ts#RATE_LIMIT_SECRET_VARIABLE env:GITHUB_CLIENT_ID env:GITHUB_CLIENT_SECRET env:OIDC_ISSUER env:OIDC_CLIENT_ID env:OIDC_CLIENT_SECRET env:OIDC_PROVIDER_NAME",
+          "text": "To count your questions, the site makes a code for each day. Signed in, the code is made from your account; not signed in, from your network address. Either way it also uses the date and a secret only the operator holds. Your address and account are not stored with the count. The code changes every day, so counts from different days cannot be matched to each other without the secret. The operator, who holds the secret, could work out which code belongs to a given address or account on a given day."
+        },
+        {
+          "id": "usage-count",
+          "trace": "env:DATABASE_URL env:VERCEL_ENV env:VERCEL_TARGET_ENV const:src/lib/privacy-facts.ts#USAGE_COUNT_COLUMNS const:src/lib/usage/count.ts#usageRow",
+          "text": "The site also counts questions, to see how it is used. Each count is a number of questions on one day. It records which part of the site took the question, which AI model answered, and whether you were signed in. It also records which data sources were offered, which were used, and whether an answer came back. A count keeps no account, no network address and no question text."
+        },
+        {
+          "id": "cookies",
+          "trace": "env:GITHUB_CLIENT_ID env:GITHUB_CLIENT_SECRET env:OIDC_ISSUER env:OIDC_CLIENT_ID env:OIDC_CLIENT_SECRET env:OIDC_PROVIDER_NAME const:src/lib/privacy-facts.ts#SIGN_IN_COOKIES const:src/lib/privacy-facts.ts#HOST_PREFIXED_COOKIE",
+          "text": "Signing in uses these cookies, set by the sign-in library this site uses: next-auth.session-token keeps you signed in next-auth.callback-url remembers where to return after signing in next-auth.csrf-token checks that a sign-in request came from this site next-auth.pkce.code_verifier checks that a sign-in reply is the one this site asked for next-auth.state checks that a sign-in reply is the one this site asked for next-auth.nonce checks that a sign-in reply is the one this site asked for Over a secure connection each name starts with __Secure- , except next-auth.csrf-token , which starts with __Host- ."
+        },
+        {
+          "id": "browser-storage",
+          "trace": "const:src/lib/query-presentation.ts#MODE_STORAGE_KEY const:src/lib/query-presentation.ts#COMPARISON_STORAGE_KEY const:src/lib/query-presentation.ts#LAYOUT_STORAGE_KEY",
+          "text": "Your browser keeps three display choices for the current tab: notebook or standard mode, whether the comparison is shown, and which layout an answer is shown under. They are stored under civicaitools.notebookMode , civicaitools.showComparison and civicaitools.answerLayout ."
+        }
+      ]
+    },
+    {
+      "id": "stored",
+      "heading": "What the site keeps",
+      "statements": [
+        {
+          "id": "account-row",
+          "trace": "env:DATABASE_URL const:src/lib/db/schema.ts#users const:src/lib/privacy-facts.ts#ACCOUNT_COLUMNS",
+          "text": "When you sign in, the site keeps an account. It holds: an internal account number the account key your sign-in provider gives this site the name that provider gives a link to your profile with that provider (for a single sign-on provider, its address) when the account was first created Every record you publish is stored with your account as its creator."
+        },
+        {
+          "id": "also-kept",
+          "trace": "env:DATABASE_URL const:src/lib/privacy-facts.ts#ALSO_KEPT const:src/lib/privacy-facts.ts#ALSO_KEPT_ITEMS const:src/lib/privacy-facts.ts#ATTESTATION_TEXT_IS_SERVED const:src/lib/db/schema.ts#deviceCodes const:src/lib/db/schema.ts#apiTokens const:src/lib/db/schema.ts#attestationNodes const:src/lib/db/schema.ts#sourceConsents const:src/lib/evidence/attestation.ts#buildAttestationNode const:src/lib/evidence/expert-attestation.ts#buildExpertAttestationPayload",
+          "text": "The site also keeps: the name a program gives itself when you approve it to sign in for you from another device, such as a command-line tool the name you give each API token (a key a program uses to publish for you), with what it is allowed to do and when it was last used the text you write when you withdraw or reinstate a record, or add a review to one your consent to send questions onward: each source's state (On, Ask first or Off), the flows statement it refers to, and the dates you gave it and last changed it That text becomes part of a signed attestation (a signed statement about the record) that this site serves publicly: a withdrawal or reinstatement reason with the record's public proof, which anyone can look up, and a review with the record."
+        },
+        {
+          "id": "prompt-text",
+          "trace": "const:src/lib/privacy-facts.ts#HASH_ONLY_RECORD_WORDS const:src/lib/privacy-facts.ts#HASH_ONLY_CHOICE_LABEL const:src/lib/db/schema.ts#promptVisibilityEnum const:src/lib/notebook.ts#WITHHELD_QUESTION_TEXT const:src/app/api/evidence/route.ts#POST",
+          "text": "When you publish, you choose whether the record includes your question's text or only a fingerprint (a hash) of it. The publish dialog describes that choice, Hash only, in these words. The record keeps a fingerprint of your question instead of its text. Anyone who knows or guesses the exact wording can confirm it matches. The answer, summary and data queries may still contain its words."
+        },
+        {
+          "id": "record-title",
+          "trace": "const:src/lib/privacy-facts.ts#RECORD_TITLE_IS_PUBLIC const:src/app/api/evidence/route.ts#POST",
+          "text": "The title is public and becomes the record’s address."
+        },
+        {
+          "id": "prompt-text-database",
+          "trace": "env:DATABASE_URL const:src/lib/db/schema.ts#promptVisibilityEnum const:src/app/api/evidence/route.ts#POST",
+          "text": "The site keeps your question's text in its database only if you chose to include it in the record."
+        },
+        {
+          "id": "seal-only",
+          "trace": "env:SITE_SEAL_ONLY const:src/lib/privacy-facts.ts#SEALED_FINGERPRINT_LOOKUP const:src/app/api/evidence/[slug]/commitment/route.ts#GET const:src/lib/evidence/commitment.ts#buildCommitmentView",
+          "text": "This site seals records only: a record you publish is stored and signed, but never listed or shown publicly, though anyone who has its address can still look up its fingerprint."
+        },
+        {
+          "id": "upload-cleanup",
+          "trace": "env:CRON_SECRET const:src/lib/evidence/blob-gc.ts#ORPHAN_GRACE_MS",
+          "text": "Parts of a record are uploaded while it is being prepared. If the record is never published, those parts are deleted by a daily cleanup once they are 24 hours old."
+        }
+      ]
+    },
+    {
+      "id": "recipients",
+      "heading": "Who receives what",
+      "statements": [
+        {
+          "id": "recipient-model",
+          "trace": "env:MODEL_API_BASE_URL const:src/lib/model-client.ts#DEFAULT_BASE_URL",
+          "text": "Your question, and the data the sources return for it, are sent to the AI model service at openrouter.ai ."
+        },
+        {
+          "id": "recipient-source-socrata",
+          "trace": "env:SOCRATA_MCP_URL env:DATA_COMMONS_MCP_URL env:BOSTON_OPENCONTEXT_MCP_URL const:@typedstandards/civic-typed-router#CIVIC_MANIFEST",
+          "text": "The data source Socrata, at socrata.example.test , receives the searches and queries the AI model writes to answer your question. These can include words from your question. How current its data is: Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule."
+        },
+        {
+          "id": "recipient-source-data-commons",
+          "trace": "env:SOCRATA_MCP_URL env:DATA_COMMONS_MCP_URL env:BOSTON_OPENCONTEXT_MCP_URL const:@typedstandards/civic-typed-router#CIVIC_MANIFEST",
+          "text": "The data source Data Commons, at api.datacommons.org , receives the searches and queries the AI model writes to answer your question. These can include words from your question. How current its data is: Live API over published statistical releases: a figure changes only when an agency publishes a new release, and each carries its release vintage (the ACS releases annually)."
+        },
+        {
+          "id": "recipient-source-boston-opencontext",
+          "trace": "env:SOCRATA_MCP_URL env:DATA_COMMONS_MCP_URL env:BOSTON_OPENCONTEXT_MCP_URL const:@typedstandards/civic-typed-router#CIVIC_MANIFEST",
+          "text": "The data source Boston OpenContext, at boston.example.test , receives the searches and queries the AI model writes to answer your question. These can include words from your question. How current its data is: Live: each call queries the CKAN data store behind data.boston.gov; each dataset updates on the City's schedule (311 daily, crime weekly, assessor annually)."
+        },
+        {
+          "id": "recipient-blob-vercel",
+          "trace": "env:BLOB_DRIVER const:src/lib/privacy-facts.ts#DEFAULT_BLOB_DRIVER",
+          "text": "Published records, and the parts of a record uploaded while it is being prepared, are stored with Vercel Blob, a file storage service."
+        },
+        {
+          "id": "recipient-timestamp",
+          "trace": "env:TIMESTAMP_AUTHORITY_URL const:src/lib/evidence/signing.ts#DEFAULT_TIMESTAMP_AUTHORITY_URL",
+          "text": "When a record is published, a fingerprint of it (a hash, not its contents) is sent to the timestamp service at freetsa.org . That service returns proof of when the record existed."
+        },
+        {
+          "id": "recipient-transparency-log",
+          "trace": "env:TRANSPARENCY_LOG_URL env:PUBLISHER_SIGNING_KEY env:PUBLISHER_KEY_ID const:src/lib/evidence/signing.ts#DEFAULT_TRANSPARENCY_LOG_URL const:src/lib/privacy-facts.ts#TRANSPARENCY_LOG_PERMANENCE",
+          "text": "The fingerprint and this site's signature over it are also entered in the transparency log at rekor.sigstore.dev . A transparency log is public and append-only: anyone can look an entry up, and entries are not removed."
+        },
+        {
+          "id": "recipient-verification-read",
+          "trace": "env:BLOB_DRIVER",
+          "text": "When a record is checked, the site reads the record's stored parts back from where they are stored. Nothing you send goes with that read."
+        },
+        {
+          "id": "recipient-content-sources",
+          "trace": "env:DIRECTORY_DATA_URL env:ROADMAP_RAW_URL const:src/lib/site-config.ts#COMMUNITY_DIRECTORY_DATA_URL",
+          "text": "To show its directory of data sources, the site reads a list from raw.githubusercontent.com ; to show its roadmap, it reads roadmap.example.test . Nothing you send goes with those reads."
+        },
+        {
+          "id": "recipient-counter-store",
+          "trace": "env:KV_REST_API_URL env:KV_REST_API_TOKEN",
+          "text": "The daily question counts, kept under the codes described above, are stored in a key-value store, a simple database of named values."
+        },
+        {
+          "id": "recipient-sign-in-github",
+          "trace": "env:GITHUB_CLIENT_ID env:GITHUB_CLIENT_SECRET env:OIDC_ISSUER env:OIDC_CLIENT_ID env:OIDC_CLIENT_SECRET env:OIDC_PROVIDER_NAME",
+          "text": "When you sign in with GitHub, the site asks github.com for your account key, name and profile."
+        },
+        {
+          "id": "recipient-sign-in-oidc",
+          "trace": "env:GITHUB_CLIENT_ID env:GITHUB_CLIENT_SECRET env:OIDC_ISSUER env:OIDC_CLIENT_ID env:OIDC_CLIENT_SECRET env:OIDC_PROVIDER_NAME",
+          "text": "When you sign in with Fixture SSO, the site asks sso.example.test for your account key, name and profile."
+        },
+        {
+          "id": "recipient-database-neon",
+          "trace": "env:DATABASE_URL env:DB_DRIVER const:src/lib/privacy-facts.ts#DEFAULT_DB_DRIVER",
+          "text": "Accounts and records are kept in a Postgres database run by a managed database service (Neon)."
+        },
+        {
+          "id": "recipient-executor-vercel-sandbox",
+          "trace": "env:EXECUTOR_DRIVER const:src/lib/sandbox/execute.ts#resolveExecutorDriverName const:src/lib/privacy-facts.ts#NOTEBOOK_PURPOSE const:src/lib/privacy-facts.ts#NOTEBOOK_CARRIES_QUESTION const:src/lib/notebook-author/synthesize.ts#synthesizeNotebook const:src/lib/notebook-author/prompt.ts#buildCell0Source",
+          "text": "In notebook mode, the AI model writes a notebook (a short program) to answer your question, and the site runs it. The notebook requests its data from the public data portals it names. The notebook sent to run includes your question's text. Each notebook runs in a Vercel Sandbox, a short-lived computer the site starts for the run."
+        },
+        {
+          "id": "recipient-hosted-nyc-charter",
+          "trace": "env:NYC_CHARTER_HOSTING const:@typedstandards/civic-typed-router#CIVIC_MANIFEST const:src/lib/mcp/registry.ts#HOSTED_SOURCE_KEY_VARIABLE",
+          "text": "The data source NYC Charter, Laws and Rules runs in a Vercel Sandbox this site starts, running version 0.3.1 of its publisher's software. How current its data is: Pinned to version 0.3.1 of the publisher's package and the index it bundles: the Charter and the Administrative Code are current through Local Law 2026/147, enacted September 12, 2026, and the Rules through rules effective October 4, 2026."
+        },
+        {
+          "id": "recipient-hosted-exchange-nyc-charter",
+          "trace": "env:NYC_CHARTER_HOSTING const:@typedstandards/civic-typed-router#CIVIC_MANIFEST",
+          "text": "The searches and queries the AI model writes for NYC Charter, Laws and Rules, which can include words from your question, reach it inside that sandbox."
+        },
+        {
+          "id": "held-function-logs-operator",
+          "trace": "env:VERCEL_ENV const:src/lib/privacy-facts.ts#PLATFORM_HELD_RECIPIENTS const:src/lib/privacy-facts.ts#LOGS_STATEMENT const:src/lib/flows/statement.ts#PLATFORM_HELD_KINDS",
+          "text": "This site's own logs are kept by whoever runs its server. The site's own logs record which steps ran, how long they took, how large their results were, and the kind of any error. They do not record your question, the queries sent to data sources, or what the sources returned. How long they are kept is the operator's to state."
+        },
+        {
+          "id": "held-sandbox-platform-nyc-charter",
+          "trace": "env:NYC_CHARTER_HOSTING const:src/lib/privacy-facts.ts#PLATFORM_HELD_RECIPIENTS const:src/lib/flows/statement.ts#PLATFORM_HELD_KINDS const:src/lib/mcp/hosting/lifecycle.ts#wakeHostedSource const:src/lib/flows/sandbox-snapshots.ts#HOSTED_SNAPSHOT_EXPIRATION_DAYS const:src/lib/mcp/hosting/bridge-source.ts#BRIDGE_SOURCE",
+          "text": "The data source NYC Charter, Laws and Rules runs in a Vercel Sandbox that this site keeps between uses. When the sandbox stops, it keeps a copy of its files, which this site sets to expire 30 days after its last use. Vercel says snapshots expire 30 days after their last use by default (its sandbox snapshots page, read 2026-10-20). Vercel's sandbox pages do not say what else it keeps of what runs there. The program this site runs beside the source writes no searches or queries to the sandbox's logs. What the source's own software writes there has not been checked."
+        },
+        {
+          "id": "recipient-analytics-plausible",
+          "trace": "env:NEXT_PUBLIC_ANALYTICS_SERVICE env:NEXT_PUBLIC_ANALYTICS_ID env:NEXT_PUBLIC_GA_MEASUREMENT_ID const:src/lib/privacy-facts.ts#ANALYTICS_RECIPIENTS const:src/lib/privacy-facts.ts#READER_INPUT_ADDRESSES",
+          "text": "Your browser loads Plausible from plausible.io , which records the pages you visit on this site. A published record's address includes its title, so the title of any record you open reaches Plausible too. Page addresses also carry what you type into some pages: a search on the directory page ( /directory?q=… ) and the code you enter to approve a sign-in from another device ( /auth/device?user_code=… ). Plausible says that of a page address it keeps the site name and the path, and discards the query part, which holds those words, except the parts it uses to tell where a visit came from, such as a campaign or a referring site (its data policy and query parameters pages, read 2026-10-18). Plausible says it sets no cookies and stores no raw network address (its data policy , read 2026-10-18). To object, use an ad blocker or other content blocker that blocks plausible.io, or set the browser flag Plausible describes at plausible.io/docs/excluding-localstorage . If your browser does not load that script, nothing is sent to plausible.io."
+        }
+      ]
+    },
+    {
+      "id": "basis",
+      "heading": "How this page is written",
+      "statements": [
+        {
+          "id": "basis",
+          "trace": "const:src/lib/privacy-facts.ts#PAGE_BASIS",
+          "text": "What this site does with what you send it. Every line is read from the site's own settings or its code when the page is served, or from a named page with the date it was read."
+        }
+      ]
+    },
+    {
+      "id": "limits",
+      "heading": "What this page cannot tell you",
+      "statements": [
+        {
+          "id": "logs",
+          "trace": "const:src/lib/privacy-facts.ts#LOGS_STATEMENT const:src/lib/streaming.ts#errorLogFacts",
+          "text": "The site's own logs record which steps ran, how long they took, how large their results were, and the kind of any error. They do not record your question, the queries sent to data sources, or what the sources returned."
+        },
+        {
+          "id": "not-verifiable",
+          "trace": "const:src/lib/privacy-facts.ts#NOT_VERIFIABLE_FROM_OUTSIDE const:src/lib/privacy-facts.ts#RUN_IT_YOURSELF env:SITE_BRAND_REPO_URL",
+          "text": "Nobody, including this site, can check a hosted service's logging from outside. That is why the code is open: you can run it yourself and see exactly what it does."
+        },
+        {
+          "id": "operator-states",
+          "trace": "const:src/lib/privacy-facts.ts#OPERATOR_STATES const:src/lib/privacy-facts.ts#OPERATOR_STATES_ITEMS",
+          "text": "This site cannot read the following, so they are the operator's to state: how long the operator and each service named on this page keep what they receive the operator's account settings with the AI model service, including whether that service may keep or learn from what it receives which plan this site's hosting account is on, which sets how long its logs are kept any legal position"
+        }
+      ]
+    }
+  ]
+}
