@@ -47,6 +47,8 @@
 //       publishing and public success states.
 //   Order. The body reads Title, Summary, Visibility, then Question text
 //       (design §5.2, "Body, in order").
+//   Sealed success. The page's address after the sealed sentence is a link
+//       to the page (same tab); the public success state carries no link.
 //   C4. (no-change guard) Every ruled sentence is in the markup, byte for
 //       byte, under seal-only off and on, each visibility and each question
 //       choice, and on an unsigned instance and in the public success state
@@ -553,6 +555,32 @@ test('UX-1 P1 C3 W15: the public success state\'s button reads "Back to your ans
   assert.equal(closed(), 1, `"${W15_BACK}" did not close the dialog`);
   assert.deepEqual(dialog.pushed(), [], `"${W15_BACK}" navigated`);
   assert.equal(REQUESTS.length, before, `"${W15_BACK}" sent: ${REQUESTS.slice(before).map((r) => r.url).join(', ')}`);
+});
+
+// --- The sealed success state's address (ruled at the staging read) ---------------------------------
+
+test('UX-1 P1 sealed success: the page\'s address after the sealed sentence is a link to it, in the same tab', async () => {
+  const { dialog } = await open({ resultVisibility: 'sealed' });
+  fire(buttonReading(dialog, 'Seal'), 'onClick');
+  await dialog.settle();
+  // The route omits `url` for a sealed record; the dialog builds the address from the slug.
+  const address = '/records/fixture-p1';
+  const text = dialogText(dialog);
+  const sentence = sealedStateCopy(false).sealedResult;
+  includes(text, sentence, 'premise: the sealed success state');
+  const links = hosts(dialog).filter((el) => el.type === 'a' && attr(el, 'href') === address);
+  assert.equal(links.length, 1, `expected one link to ${address} in the sealed success state, found ${links.length}`);
+  const link = links[0];
+  // Outside a browser `window.location.origin` is absent, so the address reads as the path alone.
+  assert.equal(textIn(link), address, 'the link\'s text is the address');
+  assert.equal(attr(link, 'target'), null, 'the link opens in a new tab or window');
+  assert.ok(text.indexOf(sentence) < text.indexOf(address), 'the address does not follow the sealed sentence');
+});
+
+test('UX-1 P1 public success: unchanged, the page is reached by "View your analysis page →", not a link', async () => {
+  const { dialog } = await publishPublic();
+  assert.equal(hosts(dialog).filter((el) => el.type === 'a').length, 0, 'the public success state carries a link');
+  buttonReading(dialog, VIEW_PAGE);
 });
 
 // --- The body's order (design §5.2, "Body, in order"; ruled at the staging read) ------------------
