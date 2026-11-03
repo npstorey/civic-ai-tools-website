@@ -25,8 +25,11 @@
  *       `verify` reads it; `packageUrl` is not set (the package is inline);
  *   public/.well-known/layouts/<nodeId>.proofs.json  the RFC 3161 token and the
  *       log entry's id, inclusion proof and body, under the names the site's
- *       commitment view uses; the cli's input refuses these keys, so they sit
- *       beside the view;
+ *       commitment view uses. They sit beside the view, not in it, so the view
+ *       stays inside cli 0.2.1's key list (`CLI_VIEW_KEYS`) and cli 0.2.1 and
+ *       0.3.0 both read it. 0.2.1 and 0.2.2 refused these keys; from 0.3.0 the
+ *       cli's `verify` accepts them in a view and checks the token and the
+ *       inclusion proof offline;
  *   src/lib/answer-layout/committed-nodes.ts          one import added for the
  *       new view, so the next build includes the node with no hand edit.
  * A node file that exists is never overwritten, and no node file is removed.
@@ -190,7 +193,9 @@ export async function main(argv: readonly string[]): Promise<number> {
 
     const document = buildLayoutNodeDocument(node, nodeId, signed, registryUrl);
     const outside = Object.keys(document).filter((k) => !CLI_VIEW_KEYS.includes(k));
-    if (outside.length > 0) stop(`The view carries keys the cli's verify refuses: ${outside.join(', ')}. Nothing was written.`);
+    // CLI_VIEW_KEYS is cli 0.2.1's list, which 0.3.0's begins with: a key
+    // outside it is one 0.2.1 refuses, whatever a later cli accepts.
+    if (outside.length > 0) stop(`The view carries keys outside cli 0.2.1's view list (CLI_VIEW_KEYS): ${outside.join(', ')}. Nothing was written.`);
 
     const result = await verifyRecord(
       { package: document.package as Record<string, unknown>, packageHash: nodeId, signature: document.signature as { signature: string; publicKey: string } },
