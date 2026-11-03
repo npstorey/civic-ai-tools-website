@@ -3,8 +3,8 @@
 **Scope:** the nine shared primitives under `src/components/ui/`, their classes in `src/app/globals.css`,
 and what each one replaces. This is the pattern list for the principles in
 [`design-principles.md`](design-principles.md); read that first for any AI-output or attestation surface.
-**Status:** the primitives exist (UX-1 P0). No page uses them yet; later phases convert the surfaces
-named under "Replaces", one phase at a time.
+**Status:** the primitives exist (UX-1 P0). The six reading pages use `Page`, with `PageToc` for their jump
+lists (UX-1 P7); later phases convert the other surfaces named under "Replaces", one phase at a time.
 
 ## Rules every primitive follows
 
@@ -221,8 +221,9 @@ named under "Replaces", one phase at a time.
 - **Rhythm:** sections (`ui-page-section`) `--space-lg` apart, blocks `--space-sm`.
 - **Chip row** (`ChipRow`, `ui-chip-row`): a named group of 13 px outlined buttons, 6 px apart, that
   scrolls sideways (`overflow-x: auto`) and never wraps, with no "·" separators.
-- **Not in this phase:** `PageToc`, the jump list rendered from the h2s when a page has more than five.
-  A later phase builds it on this frame.
+- **Jump list** (`PageToc`, `ui-page-toc`; UX-1 P7): a `<nav aria-label>` list of the page's h2s under the
+  lede, rendered when a page has more than five; each fragment names one element id, taken from the same
+  source as the heading's own id. The privacy page's list is the model.
 - **Replaces:** the seven page widths and the `h1` overrides on `/records`, `/auth/device` and the
   record page, and the example-chip row (`QueryForm.tsx`).
 
