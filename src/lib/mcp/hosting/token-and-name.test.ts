@@ -70,19 +70,52 @@ test('criterion 1: the name is the prefix, the environment, the alias and the pi
   assert.throws(() => hostedSandboxName(alias, '0.3.1+b784cb7', 'production'), /does not encode/, 'build metadata was folded into a name');
 });
 
-test('criterion 1: the environment is the platform\'s VERCEL_ENV, or local off it', () => {
-  const saved = process.env.VERCEL_ENV;
+/** Runs `body` with the two platform variables as given (undefined: unset), then restores them. */
+function underPlatform(env: { VERCEL_TARGET_ENV?: string; VERCEL_ENV?: string }, body: () => void): void {
+  const names = ['VERCEL_TARGET_ENV', 'VERCEL_ENV'] as const;
+  const saved = Object.fromEntries(names.map((n) => [n, process.env[n]]));
   try {
-    process.env.VERCEL_ENV = 'preview';
-    assert.equal(hostingEnvironment(), 'preview');
-    process.env.VERCEL_ENV = 'Production ';
-    assert.equal(hostingEnvironment(), 'production');
-    process.env.VERCEL_ENV = 'not a name!';
-    assert.equal(hostingEnvironment(), 'local');
-    delete process.env.VERCEL_ENV;
-    assert.equal(hostingEnvironment(), 'local');
+    for (const n of names) {
+      if (env[n] === undefined) delete process.env[n];
+      else process.env[n] = env[n];
+    }
+    body();
   } finally {
-    if (saved === undefined) delete process.env.VERCEL_ENV;
-    else process.env.VERCEL_ENV = saved;
+    for (const n of names) {
+      if (saved[n] === undefined) delete process.env[n];
+      else process.env[n] = saved[n];
+    }
+  }
+}
+
+test('criterion 1: with no VERCEL_TARGET_ENV, the environment is the platform\'s VERCEL_ENV, or local off it', () => {
+  for (const [value, expected] of [['preview', 'preview'], ['Production ', 'production'], ['not a name!', 'local'], [undefined, 'local']] as const) {
+    underPlatform({ VERCEL_ENV: value }, () => assert.equal(hostingEnvironment(), expected, `VERCEL_ENV=${JSON.stringify(value)}`));
+  }
+});
+
+// #717. On a custom environment the platform sets VERCEL_ENV to `preview` and
+// the environment's own name in VERCEL_TARGET_ENV, so staging was counted, and
+// would have named its sandboxes, as a preview.
+test('#717: a custom environment reads its own name from VERCEL_TARGET_ENV, not VERCEL_ENV\'s preview', () => {
+  underPlatform({ VERCEL_TARGET_ENV: 'staging', VERCEL_ENV: 'preview' }, () => {
+    assert.equal(hostingEnvironment(), 'staging');
+    assert.equal(hostedSandboxName('nyc_charter', '0.3.1'), 'civic-src-staging-nyc_charter__0_3_1');
+  });
+  underPlatform({ VERCEL_TARGET_ENV: ' Staging\n', VERCEL_ENV: 'preview' }, () => assert.equal(hostingEnvironment(), 'staging'));
+});
+
+test('#717: production and previews read as before, the platform setting both variables to the same value', () => {
+  for (const value of ['production', 'preview', 'development']) {
+    underPlatform({ VERCEL_TARGET_ENV: value, VERCEL_ENV: value }, () => assert.equal(hostingEnvironment(), value));
+  }
+});
+
+test('#717: a VERCEL_TARGET_ENV the guard refuses falls back to VERCEL_ENV, as before', () => {
+  for (const refused of ['qa-2', 'staging2', 'a'.repeat(17), '', '   ']) {
+    underPlatform({ VERCEL_TARGET_ENV: refused, VERCEL_ENV: 'preview' }, () =>
+      assert.equal(hostingEnvironment(), 'preview', `VERCEL_TARGET_ENV=${JSON.stringify(refused)}`),
+    );
+    underPlatform({ VERCEL_TARGET_ENV: refused }, () => assert.equal(hostingEnvironment(), 'local', `VERCEL_TARGET_ENV=${JSON.stringify(refused)}, no VERCEL_ENV`));
   }
 });
