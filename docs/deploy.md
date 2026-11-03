@@ -2165,7 +2165,8 @@ question, **Not now** sends nothing. The Sources panel, beside the question
 box on the home page, `/ask` and `/explore`, sets each source On, Ask first
 or Off and withdraws the consent; for a signed-in account kept in the
 database it also links the dashboard's Sources tab, which shows the states,
-the dates and the flows version, and withdraws too. The two settings these
+the dates and the flows version, sets each source's state with the panel's
+own control while a consent is in force, and withdraws too. The two settings these
 surfaces read are in the environment reference
 ([Consent surfaces](#consent-surfaces-optional)).
 
