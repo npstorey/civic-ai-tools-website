@@ -91,7 +91,7 @@ export default function LearnPage() {
             }}
           >
             <h3 style={{ fontSize: '16px', color: 'var(--error)', marginBottom: '8px' }}>
-              Without Data Tools
+              Without data tools
             </h3>
             <ul
               style={{

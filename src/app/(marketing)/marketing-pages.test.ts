@@ -397,11 +397,13 @@ test('criterion 6, W6: the /learn h2 reads "How data tools connect AI to data", 
   assert.ok(within(section).some((el) => el.type === 'a' && plain(readText(el)) === 'MCP (Model Context Protocol)'), 'the section defines MCP at its first use');
 });
 
-test('criterion 6, W7: the /learn card heading reads "With data tools"; "Without Data Tools" stays', () => {
+// W7's pair in sentence case (gate ruling D2): "Without data tools" beside "With data tools".
+test('criterion 6, W7: the /learn card headings read "Without data tools" and "With data tools"', () => {
   const texts = headingTexts(PAGES['/learn']);
   assert.ok(!texts.includes('With MCP'), `"With MCP" is no heading; headings: ${JSON.stringify(texts)}`);
   assert.equal(texts.filter((t) => t === W7).length, 1, `one heading reads "${W7}"`);
-  assert.equal(texts.filter((t) => t === 'Without Data Tools').length, 1, 'its pair "Without Data Tools" stays as it is');
+  assert.ok(!texts.includes('Without Data Tools'), `"Without Data Tools" is no heading; headings: ${JSON.stringify(texts)}`);
+  assert.equal(texts.filter((t) => t === 'Without data tools').length, 1, 'its pair reads "Without data tools" (D2, sentence case)');
 });
 
 function normalizeSource(text: string): string {
