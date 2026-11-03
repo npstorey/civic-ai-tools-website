@@ -51,6 +51,20 @@ function at(source: string, needle: string, where: string): number {
 
 const count = (source: string, needle: string) => source.split(needle).length - 1;
 
+/**
+ * The publish dialog's option enclosing the radio at `radio`: from the nearest
+ * `<Card` before it to the first `</Card>` after it (UX-1 P1: each option is a
+ * P5 selectable card rendered as a <label>). Both ends must exist, and no other
+ * card may open between them, so the block cannot run past its option.
+ */
+function optionBlock(source: string, radio: number, what: string): string {
+  const start = source.lastIndexOf('<Card', radio);
+  const end = source.indexOf('</Card>', radio);
+  assert.ok(start > 0 && end > radio, `PublishEvidenceDialog.tsx: ${what} is not inside a <Card>`);
+  assert.ok(!source.slice(radio, end).includes('<Card'), `PublishEvidenceDialog.tsx: ${what}'s card does not close before the next opens`);
+  return source.slice(start, end);
+}
+
 /** The refusal must return what the gate built, immediately after the call. */
 function assertReturnsRefusal(source: string, call: string, where: string): void {
   const start = at(source, call, where) + call.length;
@@ -158,12 +172,15 @@ test('#552 C3: the dialog learns the setting from signing-status and shows the p
   assert.match(dialog, /body: JSON\.stringify\(\{[\s\S]*?\n\s+visibility,\n/, `${where} no longer sends the visibility explicitly`);
 
   // The public radio is disabled with the reason beside it; the Seal radio is not.
+  // Each option is a selectable card rendered as a <label> (UX-1 P1): its block
+  // runs from the card's opening `<Card` to its `</Card>`, and the public
+  // card's reason is its `disabledReason`, rendered inside that <label>.
   const publicRadio = at(dialog, "checked={visibility === 'public'}", where);
-  const publicBlock = dialog.slice(dialog.lastIndexOf('<input', publicRadio), dialog.indexOf('</label>', publicRadio));
+  const publicBlock = optionBlock(dialog, publicRadio, 'the public radio');
   assert.ok(publicBlock.includes('disabled={!publicChoice.available}'), `${where}: the public radio is not disabled when unavailable`);
-  assert.ok(publicBlock.includes('publicChoice.explanation'), `${where}: the reason is not shown beside the public radio`);
+  assert.ok(publicBlock.includes('disabledReason={publicChoice.available ? undefined : publicChoice.explanation}'), `${where}: the reason is not shown beside the public radio`);
   const sealRadio = at(dialog, "checked={visibility === 'sealed'}", where);
-  const sealBlock = dialog.slice(dialog.lastIndexOf('<input', sealRadio), dialog.indexOf('</label>', sealRadio));
+  const sealBlock = optionBlock(dialog, sealRadio, 'the Seal radio');
   assert.ok(!sealBlock.includes('disabled'), `${where}: the Seal radio can be disabled`);
   assert.ok(sealRadio < publicRadio, `${where}: the radios moved`);
 });
@@ -177,9 +194,10 @@ test('#552 C3: the dialog\'s sealed-state sentences come from the module, on the
   // No sentence in the dialog promises publication from the dashboard on its own.
   assert.ok(!/from\s+your\s+dashboard/.test(dialog), `${where} still carries its own dashboard sentence`);
 
-  // The Seal choice's description.
+  // The Seal choice's description, inside the Seal option's card.
   const sealRadio = at(dialog, "checked={visibility === 'sealed'}", where);
-  const sealBlock = dialog.slice(sealRadio, dialog.indexOf('</label>', sealRadio));
+  optionBlock(dialog, sealRadio, 'the Seal radio');
+  const sealBlock = dialog.slice(sealRadio, dialog.indexOf('</Card>', sealRadio));
   assert.ok(sealBlock.includes('{sealedCopy.sealChoice}'), `${where}: the Seal choice does not render the module's wording`);
 
   // The sealed result's line above the address.

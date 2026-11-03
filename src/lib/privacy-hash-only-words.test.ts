@@ -75,7 +75,7 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
   throw new TypeError(`the dialog asked for ${url}, which this test does not answer`);
 }) as typeof fetch;
 
-const { mountPublishDialog, textOf } = await import(pathToFileURL(path.join(SRC, 'components', 'publish-dialog-test-harness.ts')).href);
+const { mountPublishDialog, textOf, fire } = await import(pathToFileURL(path.join(SRC, 'components', 'publish-dialog-test-harness.ts')).href);
 const facts = await import('./privacy-facts.ts');
 
 const PROPS = {
@@ -90,11 +90,36 @@ const PROPS = {
 const dialog = await mountPublishDialog(PROPS);
 await dialog.settle();
 
+// UX-1 P1: the hash-only words render on the hash-only choice only while it is
+// selected; while "Include full text" is selected (the default) they sit
+// behind the Question text section's disclosure. Both places are read.
+const hashSelected = await mountPublishDialog(PROPS);
+await hashSelected.settle();
+fire(hashSelected.inputLabelled('Hash only'), 'onChange');
+await hashSelected.settle();
+
+type Node = { type: unknown; props: { children?: unknown; name?: unknown; className?: unknown } };
+const isNode = (n: unknown): n is Node => n !== null && typeof n === 'object' && !Array.isArray(n) && 'props' in (n as object);
+/** Every element under `el`, in document order. */
+function descendants(el: Node): Node[] {
+  const out: Node[] = [];
+  const walk = (n: unknown) => {
+    if (Array.isArray(n)) { for (const c of n) walk(c); return; }
+    if (!isNode(n)) return;
+    out.push(n);
+    walk(n.props.children);
+  };
+  walk(el.props.children);
+  return out;
+}
+const classes = (el: Node) => String(el.props.className ?? '').split(/\s+/);
+
 /** Collapse runs of whitespace: JSX text broken across lines renders single-spaced. */
 const squash = (value: string) => value.replace(/\s+/g, ' ').trim();
 
+/** The words on the hash-only choice, read while it is selected. */
 function hashOnlyWords(): string {
-  const label = dialog.elements().find((el: { type: unknown }) => el.type === 'label' && textOf(el).includes('Hash only'));
+  const label = hashSelected.elements().find((el: { type: unknown }) => el.type === 'label' && textOf(el).includes('Hash only'));
   assert.ok(label, 'the dialog has no hash-only choice');
   const text = squash(textOf(label));
   assert.ok(text.startsWith(facts.HASH_ONLY_CHOICE_LABEL), `the hash-only choice's label reads: ${text.slice(0, 40)}`);
@@ -103,8 +128,21 @@ function hashOnlyWords(): string {
   return words;
 }
 
+/** The words behind the Question text section's disclosure, read while "Include full text" is selected. */
+function hashOnlyWordsBehindDisclosure(): string {
+  const section = (dialog.elements() as Node[]).find((el) => el.type === 'fieldset'
+    && descendants(el).some((d) => d.type === 'input' && d.props.name === 'promptVisibility'));
+  assert.ok(section, 'the dialog has no Question text section');
+  const disclosures = descendants(section!).filter((el) => el.type === 'details' && classes(el).includes('ui-disclosure'));
+  assert.equal(disclosures.length, 1, 'the Question text section does not carry one disclosure while full text is selected');
+  const body = descendants(disclosures[0]).find((el) => classes(el).includes('ui-disclosure-body'));
+  assert.ok(body, 'the disclosure has no body');
+  return squash(textOf(body));
+}
+
 test("the page's hash-only words are the dialog's, word for word", () => {
   assert.equal(facts.HASH_ONLY_RECORD_WORDS, hashOnlyWords());
+  assert.equal(facts.HASH_ONLY_RECORD_WORDS, hashOnlyWordsBehindDisclosure());
 });
 
 test("the page's title words are the dialog's, word for word", () => {
