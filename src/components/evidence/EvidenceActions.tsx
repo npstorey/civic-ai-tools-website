@@ -92,7 +92,7 @@ export function CitePopover({ title, creatorName, createdAt, slug, brandName, on
         margin: '16px', padding: '24px', boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Cite this record</h3>
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Cite this analysis</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-muted)' }}>&times;</button>
         </div>
         {citations.map((c, i) => (

@@ -232,7 +232,7 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
                   fontWeight: 500,
                 }}
               >
-                {session?.user ? 'Publish as Record' : 'Sign in to publish'}
+                {session?.user ? 'Publish' : 'Sign in to publish'}
               </button>
               )}
               {(session?.user || signInAffordance.kind !== 'none') && (

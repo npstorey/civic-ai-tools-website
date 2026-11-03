@@ -129,7 +129,7 @@ export interface RecordAdapterInput {
  * wrote sits under a label that names the model).
  */
 export const OUTPUT_UNAVAILABLE =
-  'The answer is not shown: the stored copy of this record’s output could not be fetched. The package hash below identifies the record for audit.';
+  'The answer is not shown: the stored copy of this analysis’s output could not be fetched. The package hash below identifies the analysis for audit.';
 
 /**
  * The answer part's words when the output blob was fetched and its bytes do
@@ -137,7 +137,7 @@ export const OUTPUT_UNAVAILABLE =
  * author line, as `OUTPUT_UNAVAILABLE` does.
  */
 export const OUTPUT_DOES_NOT_MATCH =
-  'The answer is not shown: the stored copy of this record’s output does not match the record’s reference to it. The package hash below identifies the record for audit.';
+  'The answer is not shown: the stored copy of this analysis’s output does not match the analysis’s reference to it. The package hash below identifies the analysis for audit.';
 
 /** The spec section the status row links an A-G-format record to: §8.7's heading,
  *  "8.7 Profile requirements: datHere and scripted-recomputation"

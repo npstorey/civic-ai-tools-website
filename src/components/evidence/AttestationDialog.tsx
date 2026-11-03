@@ -484,7 +484,7 @@ export default function AttestationDialog({
             />
           ) : (
             <div style={{ fontSize: '13px', color: 'var(--text-muted)', padding: '12px 0' }}>
-              Consistency testing requires full prompt text. This record was published with hash-only visibility.
+              Consistency testing requires full prompt text. This analysis was published with hash-only visibility.
             </div>
           )
         )}
@@ -765,7 +765,7 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
           )}
           {loadedUnstated.length > 0 && (
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>
-              {`The record shows ${loadedUnstated.length === 1 ? loadedUnstated[0] : `${loadedUnstated.slice(0, -1).join(', ')} and ${loadedUnstated[loadedUnstated.length - 1]}`} loaded but does not list ${loadedUnstated.length === 1 ? 'it' : 'them'} among the sources offered, so these replays ran without ${loadedUnstated.length === 1 ? 'it' : 'them'}.`}
+              {`The analysis shows ${loadedUnstated.length === 1 ? loadedUnstated[0] : `${loadedUnstated.slice(0, -1).join(', ')} and ${loadedUnstated[loadedUnstated.length - 1]}`} loaded but does not list ${loadedUnstated.length === 1 ? 'it' : 'them'} among the sources offered, so these replays ran without ${loadedUnstated.length === 1 ? 'it' : 'them'}.`}
             </p>
           )}
 
@@ -837,7 +837,7 @@ function ExpertTab({
   return (
     <>
       <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
-        A review from a domain expert, published as part of this record. Your GitHub identity,
+        A review from a domain expert, published as part of this analysis. Your GitHub identity,
         self-described expertise, and the review text are all published publicly. Each review
         shows its own signing status once submitted.
       </p>

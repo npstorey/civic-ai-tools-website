@@ -63,7 +63,7 @@ const ATTESTATIONS_PATH = `/api/records/${SLUG}/attestations`;
 /** The sentence `lacking` has carried since R6 W1, for one source. */
 const LACKING = (name: string) => `The original analysis could use ${name}. This site does not offer it, so these replays ran without it.`;
 /** The new sentence, for one source: what the record shows, and nothing the record does not carry (card B, ruled 2026-10-27). */
-const LOADED_UNSTATED = (name: string) => `The record shows ${name} loaded but does not list it among the sources offered, so these replays ran without it.`;
+const LOADED_UNSTATED = (name: string) => `The analysis shows ${name} loaded but does not list it among the sources offered, so these replays ran without it.`;
 
 let offeredSet: Record<string, unknown> = {};
 let posted: string[] = [];
@@ -123,7 +123,7 @@ test('[B]: a source the record shows loaded but not offered gets its own sentenc
   assert.ok(text.includes(LACKING(charter)), `lacking's sentence is not shown for ${charter}: ${text.slice(-800)}`);
   assert.ok(text.includes(LOADED_UNSTATED(boston)), `the new sentence is not shown for ${boston}: ${text.slice(-800)}`);
   const lackingLine = text.slice(text.indexOf('The original analysis could use'), text.indexOf('ran without it.', text.indexOf('The original analysis could use')));
-  const loadedLine = text.slice(text.indexOf('The record shows'), text.indexOf('ran without it.', text.indexOf('The record shows')));
+  const loadedLine = text.slice(text.indexOf('The analysis shows'), text.indexOf('ran without it.', text.indexOf('The analysis shows')));
   assert.ok(!lackingLine.includes(boston), 'lacking\'s sentence names the allowed source');
   assert.ok(!loadedLine.includes(charter), 'the new sentence names the source this site does not offer');
   dialog.unmount();
@@ -131,7 +131,7 @@ test('[B]: a source the record shows loaded but not offered gets its own sentenc
 
 test('[B]: with lacking alone the dialog reads as before: no new sentence', async () => {
   const dialog = await runConsistency(LACKING_ONLY);
-  assert.ok(!dialog.text().includes('The record shows'), 'the new sentence appears with no field');
+  assert.ok(!dialog.text().includes('The analysis shows'), 'the new sentence appears with no field');
   dialog.unmount();
 });
 
