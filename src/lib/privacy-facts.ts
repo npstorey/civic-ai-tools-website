@@ -1118,7 +1118,7 @@ function whatLinksActivity(): Statement[] {
             'A count keeps no account, no network address and no question text.' +
             (onPlatform ? ` Questions asked on test versions of this site are counted too, and ${words.environment}.` : ''),
         ],
-        ['env:DATABASE_URL', 'env:VERCEL_ENV', c('USAGE_COUNT_COLUMNS'), 'const:src/lib/usage/count.ts#usageRow'],
+        ['env:DATABASE_URL', 'env:VERCEL_ENV', 'env:VERCEL_TARGET_ENV', c('USAGE_COUNT_COLUMNS'), 'const:src/lib/usage/count.ts#usageRow'],
       ),
     );
   }

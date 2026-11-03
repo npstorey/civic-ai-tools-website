@@ -4,8 +4,9 @@
 // `usage_counts`, keyed on eight columns, every one from a closed set:
 //   day              the UTC date when the run ends (never the server's local date)
 //   environment      `hostingEnvironment()` read through a closed set
-//                    (`USAGE_ENVIRONMENTS`): production, preview, development, or
-//                    local off Vercel; any other value is recorded as `other`
+//                    (`USAGE_ENVIRONMENTS`): production, preview, development,
+//                    staging (a custom environment, #717), or local off Vercel;
+//                    any other value is recorded as `other`
 //   surface          the route: `compare-stream`, `query-notebook` or `compare`
 //   signed_in        whether the session carries an account id
 //   model            the model's declared id
@@ -61,6 +62,7 @@ registerHooks({
 // Four hours behind UTC in October, so 01:30Z is the previous local day.
 process.env.TZ = 'America/New_York';
 delete process.env.VERCEL_ENV;
+delete process.env.VERCEL_TARGET_ENV;
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(HERE, '..', '..');
@@ -226,12 +228,12 @@ test('criterion 1: signed_in is whether the session carries an account id, and n
 
 test('criterion 1: environment is hostingEnvironment() through the closed set: VERCEL_ENV, local off Vercel, other for anything else', async () => {
   const { usageRow, USAGE_ENVIRONMENTS } = await loadCount();
-  assert.deepEqual([...USAGE_ENVIRONMENTS], ['production', 'preview', 'development', 'local', 'other']);
+  assert.deepEqual([...USAGE_ENVIRONMENTS], ['production', 'preview', 'development', 'staging', 'local', 'other']);
   try {
     for (const [value, expected] of [
       [undefined, 'local'], ['production', 'production'], ['preview', 'preview'], ['development', 'development'], ['', 'local'],
-      // hostingEnvironment() passes any [a-z]{1,16} through, for the sandbox name; the count does not.
-      ['staging', 'other'], ['customenv', 'other'],
+      // hostingEnvironment() passes any [a-z]{1,16} through, for the sandbox name; the count names staging only.
+      ['staging', 'staging'], ['customenv', 'other'],
       // hostingEnvironment() reads this as `local`, so the count does too.
       ['Preview-2', 'local'],
     ] as const) {
@@ -241,6 +243,34 @@ test('criterion 1: environment is hostingEnvironment() through the closed set: V
     }
   } finally {
     delete process.env.VERCEL_ENV;
+  }
+});
+
+// #717. The platform sets VERCEL_ENV to `preview` on every custom environment
+// and the environment's own name in VERCEL_TARGET_ENV; staging's first row read
+// `preview`.
+test('#717: on a custom environment the count reads VERCEL_TARGET_ENV: staging is staging, another name is other', async () => {
+  const { usageRow } = await loadCount();
+  try {
+    process.env.VERCEL_ENV = 'preview';
+    for (const [target, expected] of [
+      ['staging', 'staging'], ['qa', 'other'],
+      // A name hostingEnvironment() refuses falls back to VERCEL_ENV, as before.
+      ['qa-2', 'preview'],
+      [undefined, 'preview'],
+    ] as const) {
+      if (target === undefined) delete process.env.VERCEL_TARGET_ENV;
+      else process.env.VERCEL_TARGET_ENV = target;
+      assert.equal(usageRow(input()).environment, expected, `VERCEL_TARGET_ENV=${String(target)}, VERCEL_ENV=preview`);
+    }
+    for (const value of ['production', 'preview']) {
+      process.env.VERCEL_ENV = value;
+      process.env.VERCEL_TARGET_ENV = value;
+      assert.equal(usageRow(input()).environment, value, `both ${value}`);
+    }
+  } finally {
+    delete process.env.VERCEL_ENV;
+    delete process.env.VERCEL_TARGET_ENV;
   }
 });
 
@@ -256,7 +286,7 @@ test('criterion 1: every column takes its value from a closed set', async () => 
   const idList = (v: unknown) => typeof v === 'string' && (v === '' || v.split(',').every((id) => SOURCE_IDS.has(id)));
   const VALUE_SETS: Record<string, (v: unknown) => boolean> = {
     day: (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v),
-    environment: (v) => v === 'local' || v === 'production' || v === 'preview' || v === 'development' || v === 'other',
+    environment: (v) => v === 'local' || v === 'production' || v === 'preview' || v === 'development' || v === 'staging' || v === 'other',
     surface: (v) => v === 'compare-stream' || v === 'query-notebook' || v === 'compare',
     signedIn: (v) => typeof v === 'boolean',
     model: (v) => v === 'vendor/model-fixture-1',

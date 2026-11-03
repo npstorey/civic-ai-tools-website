@@ -64,7 +64,7 @@ const facts = (await import('../privacy-facts.ts')) as unknown as {
 
 const text = (parts: Segment[] = []) => parts.map((p) => (typeof p === 'string' ? p : 'link' in p ? p.text : p.code)).join('');
 
-const ENV_NAMES = ['DATABASE_URL', 'VERCEL_ENV'] as const;
+const ENV_NAMES = ['DATABASE_URL', 'VERCEL_ENV', 'VERCEL_TARGET_ENV'] as const;
 
 function render(env: Partial<Record<(typeof ENV_NAMES)[number], string>>): Section[] {
   const saved = Object.fromEntries(ENV_NAMES.map((n) => [n, process.env[n]]));
@@ -113,6 +113,8 @@ test('criterion 4: with a database configured, the statement renders directly af
     assert.equal(found.section.statements[found.index - 1]?.id, 'daily-key', 'the statement does not follow the daily-key statement');
     assert.ok(found.statement.traces.includes('env:DATABASE_URL'), 'the statement does not trace DATABASE_URL');
     assert.ok(found.statement.traces.includes('env:VERCEL_ENV'), 'the statement does not trace VERCEL_ENV');
+    // #717: the environment column reads a custom environment's own name first.
+    assert.ok(found.statement.traces.includes('env:VERCEL_TARGET_ENV'), 'the statement does not trace VERCEL_TARGET_ENV');
   }
 });
 
@@ -186,10 +188,17 @@ test('criterion 4: the test-version sentence renders for every environment in US
   assert.ok(environments && environments.length > 0, 'count.ts exports no USAGE_ENVIRONMENTS');
   assert.ok(environments.includes('local'), 'premise: the set holds local');
   for (const environment of environments) {
-    // `local` is VERCEL_ENV unset; `other` is a value the platform could set
-    // that the count does not name.
-    const vercel = environment === 'local' ? undefined : environment === 'other' ? 'staging' : environment;
-    const found = usageStatement(render({ DATABASE_URL: DATABASE, VERCEL_ENV: vercel }));
+    // `local` is both variables unset. On a custom environment the platform
+    // sets VERCEL_ENV to `preview` and the environment's name in
+    // VERCEL_TARGET_ENV (#717): `staging` is one the count names, and `other`
+    // stands for one it does not (`qa`).
+    const platform =
+      environment === 'local'
+        ? {}
+        : environment === 'staging' || environment === 'other'
+          ? { VERCEL_ENV: 'preview', VERCEL_TARGET_ENV: environment === 'staging' ? 'staging' : 'qa' }
+          : { VERCEL_ENV: environment, VERCEL_TARGET_ENV: environment };
+    const found = usageStatement(render({ DATABASE_URL: DATABASE, ...platform }));
     assert.ok(found, `no usage-count statement (${environment})`);
     const says = /test versions of this site/.test(text(found.statement.parts));
     assert.equal(says, environment !== 'local', `${environment}: the test-version sentence ${says ? 'renders' : 'does not render'}`);

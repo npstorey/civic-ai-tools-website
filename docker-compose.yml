@@ -436,8 +436,10 @@ services:
       SITE_DEPLOYMENT_GUIDE_URL:
       SITE_OPERATOR_STATES_NO_TRAINING:
       # The hosting platform's environment name: a hosted source's sandbox name,
-      # and the usage table's environment column. Unset off the platform.
+      # and the usage table's environment column. VERCEL_TARGET_ENV, a custom
+      # environment's own name, is read first. Both unset off the platform.
       VERCEL_ENV:
+      VERCEL_TARGET_ENV:
       SITE_DEFAULT_PORTAL:
       SITE_PORTAL_LOCKED:
       ANSWER_LAYOUT:

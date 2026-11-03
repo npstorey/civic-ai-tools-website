@@ -1101,9 +1101,15 @@ switch is `sandbox`.
   source, pinned version and deployment environment. The sandbox is named
   `civic-src-<environment>-<alias>__<version>`, with each `.` in the version
   written as `_`, for example `civic-src-production-nyc_charter__0_3_1`. The
-  environment is `VERCEL_ENV` (`production`, `preview` or `development`), or
-  `local` off the platform. It is in the name because a project's preview and
-  production deployments share one sandbox scope and hold different secrets.
+  environment is `VERCEL_TARGET_ENV` when the platform sets it (`production`,
+  `preview`, `development`, or a custom environment's own name, such as
+  `staging`), else `VERCEL_ENV` (`production`, `preview` or `development`), or
+  `local` off the platform. On a custom environment the platform sets
+  `VERCEL_ENV` to `preview`, so without `VERCEL_TARGET_ENV` a staging
+  environment would share the previews' sandboxes. A custom environment whose
+  name is not one to sixteen lowercase letters falls back to `VERCEL_ENV`, and
+  so shares them. The environment is in the name because a project's
+  environments share one sandbox scope and hold different secrets.
   The name is an operator fact for the function log; no record carries it.
 - Inside the sandbox, a small bridge (`src/lib/mcp/hosting/bridge-source.ts`,
   written into the sandbox when it is created) runs the package's one command
@@ -1281,7 +1287,7 @@ the keys they had.
 | `NYC_CHARTER_HOSTING`, `NYC_CHECKBOOK_HOSTING`, `NYC_RECORD_HOSTING`, `NYS_LEGISLATION_HOSTING` | `src/lib/mcp/registry.ts` (`readMcpEnvFromProcess`) | `sandbox` offers that source; anything else leaves it off |
 | `NYS_LEGISLATION_API_KEY` | `src/lib/mcp/registry.ts` (`hostedSourceKeyEnv`) | State legislation's key, into its sandbox at creation; unset with the switch on, the source is not configured |
 | `SOURCE_BRIDGE_SECRET` | `src/lib/mcp/hosting/token.ts` | the instance secret each sandbox's token derives from |
-| `VERCEL_ENV` | `src/lib/hosting-environment.ts` (`hostingEnvironment`, which `lifecycle.ts` re-exports) | the environment in the sandbox's name, and the usage table's `environment` column; `local` when unset |
+| `VERCEL_TARGET_ENV`, `VERCEL_ENV` | `src/lib/hosting-environment.ts` (`hostingEnvironment`, which `lifecycle.ts` re-exports) | the environment in the sandbox's name, and the usage table's `environment` column: `VERCEL_TARGET_ENV` first (a custom environment's own name), then `VERCEL_ENV`; `local` when both are unset |
 | `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID` | `src/lib/sandbox/vercel-sandbox.ts` (`resolveSandboxAuthParams`) | off-platform sandbox authentication, all three or none; on the platform, OIDC |
 | `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` | `src/lib/sandbox/vercel-sandbox.ts` (`proxyAwareSandboxFetch`) | the sandbox API calls leave through the instance's proxy, as the executor's do |
 
@@ -2097,7 +2103,7 @@ row for its combination of the eight key columns; every column is
 | Column | Type | Holds |
 |---|---|---|
 | `day` | `date` | the UTC date when the run ended |
-| `environment` | `text` | where the run was counted: `production`, `preview` or `development` (the platform's `VERCEL_ENV`), `local` off the platform, `other` for any other value the platform sets |
+| `environment` | `text` | where the run was counted: `production`, `preview` or `development`, or `staging` for the custom environment of that name (the platform's `VERCEL_TARGET_ENV`, else its `VERCEL_ENV`), `local` off the platform, `other` for any other value the platform sets, another custom environment's name included |
 | `surface` | `text` | the route: `compare-stream`, `query-notebook` or `compare` |
 | `signed_in` | `boolean` | whether the reader was signed in |
 | `model` | `text` | the model's declared id, from this instance's catalog |
