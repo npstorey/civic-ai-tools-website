@@ -8,8 +8,10 @@
  * columns, every one from a closed set:
  *   day              the UTC date when the run ended
  *   environment      `USAGE_ENVIRONMENTS`: `hostingEnvironment()` when it is
- *                    `production`, `preview` or `development`, `local` off
- *                    the platform, `other` for anything else the platform sets
+ *                    `production`, `preview`, `development` or `staging` (a
+ *                    custom environment, read from `VERCEL_TARGET_ENV`, #717),
+ *                    `local` off the platform, `other` for anything else the
+ *                    platform sets, another custom environment's name included
  *   surface          `USAGE_SURFACES`: the route
  *   signed_in        whether the session carries an account id
  *   model            the model's declared id, which the route resolved from
@@ -57,8 +59,13 @@ export const USAGE_WRITE_TIMEOUT_MS = 10_000;
 export const USAGE_SURFACES = ['compare-stream', 'query-notebook', 'compare'] as const;
 export type UsageSurface = (typeof USAGE_SURFACES)[number];
 
-/** The `environment` column's values. */
-export const USAGE_ENVIRONMENTS = ['production', 'preview', 'development', 'local', 'other'] as const;
+/**
+ * The `environment` column's values. `staging` is the custom environment the
+ * reference deployment runs (#717, ruling a): the platform sets `VERCEL_ENV`
+ * to `preview` there, so it is named here to keep its rows apart from the
+ * previews'. A custom environment by any other name counts as `other`.
+ */
+export const USAGE_ENVIRONMENTS = ['production', 'preview', 'development', 'staging', 'local', 'other'] as const;
 export type UsageEnvironment = (typeof USAGE_ENVIRONMENTS)[number];
 
 /** The `outcome` column's values. */

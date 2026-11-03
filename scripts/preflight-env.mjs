@@ -586,7 +586,11 @@ export const ENV_SPEC = [
   // Two readers (R6 W5, then W3 #632 criterion 14): a hosted source's sandbox
   // name, and the usage table's `environment` column, which every instance
   // with a database writes. So it is not scoped to the sandbox executor.
-  { name: 'VERCEL_ENV', tier: 'optional', purpose: "Set by the hosting platform (production, preview or development) — read for two things: a hosted source's sandbox name, per environment, so two environments holding different bridge secrets never share one; and the usage table's environment column, on every instance with a database. Unset off the platform, both say local", hasFallback: true },
+  // VERCEL_TARGET_ENV comes first for both (#717): on a custom environment
+  // the platform sets VERCEL_ENV to preview and the environment's own name
+  // there; on production and previews it sets both to the same value.
+  { name: 'VERCEL_ENV', tier: 'optional', purpose: "Set by the hosting platform (production, preview or development; preview on every custom environment) — read for two things, when VERCEL_TARGET_ENV is unset or not a name: a hosted source's sandbox name, per environment, so two environments holding different bridge secrets never share one; and the usage table's environment column, on every instance with a database. Unset off the platform, both say local", hasFallback: true },
+  { name: 'VERCEL_TARGET_ENV', tier: 'optional', purpose: "Set by the hosting platform (production, preview, development, or a custom environment's own name, such as staging) — read before VERCEL_ENV for the same two things, so a custom environment's sandboxes and usage rows carry its own name rather than preview. A value that is not one to sixteen lowercase letters is passed over for VERCEL_ENV. Unset off the platform", hasFallback: true },
 
   // --- Instance identity (ADR-0020: config-not-code; #258: REQUIRED for
   //     signing, never defaulted; see docs/instance-setup.md and

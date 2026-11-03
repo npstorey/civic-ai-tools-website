@@ -125,10 +125,12 @@ export class HostedSourceUnavailableError extends Error {
 }
 
 /**
- * The deployment environment a sandbox name carries: `VERCEL_ENV` (set by the
- * platform: `production`, `preview` or `development`), or `local` off it. It
- * lives in a leaf module (`src/lib/hosting-environment.ts`, R6 W5) so the usage
- * counter can read it without loading this module and the sandbox SDK.
+ * The deployment environment a sandbox name carries: `VERCEL_TARGET_ENV` when
+ * the platform sets it (a custom environment's own name, such as `staging`,
+ * #717), else `VERCEL_ENV` (`production`, `preview` or `development`), or
+ * `local` off the platform. It lives in a leaf module
+ * (`src/lib/hosting-environment.ts`, R6 W5) so the usage counter can read it
+ * without loading this module and the sandbox SDK.
  */
 export { hostingEnvironment };
 
