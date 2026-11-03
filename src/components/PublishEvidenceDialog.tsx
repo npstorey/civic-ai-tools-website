@@ -489,60 +489,6 @@ export default function PublishEvidenceDialog({
             </p>
           </div>
 
-          {/* Question text: "Include full text" keeps its one line in both
-              states; the hash-only paragraph shows on its option while
-              selected, and otherwise behind the disclosure. */}
-          <fieldset style={SECTION}>
-            <legend style={SECTION_LABEL}>
-              Question text
-            </legend>
-            <div style={OPTIONS}>
-              <Card as="label" variant="selectable" compact selected={promptVisibility === 'full_text'}>
-                <span style={OPTION_ROW}>
-                  <input
-                    type="radio"
-                    name="promptVisibility"
-                    checked={promptVisibility === 'full_text'}
-                    onChange={() => choosePromptVisibility('full_text')}
-                    style={{ marginTop: '3px' }}
-                  />
-                  <span>
-                    Include full text
-                    <span style={OPTION_DETAIL}>
-                      Anyone can see exactly what you asked
-                    </span>
-                  </span>
-                </span>
-              </Card>
-              <Card as="label" variant="selectable" compact selected={promptVisibility === 'hash_only'}>
-                <span style={OPTION_ROW}>
-                  <input
-                    type="radio"
-                    name="promptVisibility"
-                    checked={promptVisibility === 'hash_only'}
-                    onChange={() => choosePromptVisibility('hash_only')}
-                    style={{ marginTop: '3px' }}
-                  />
-                  <span>
-                    Hash only
-                    <span style={OPTION_DETAIL}>
-                      {promptVisibility === 'hash_only'
-                        ? HASH_ONLY_WORDS
-                        : 'Keeps a fingerprint of the question, not its words.'}
-                    </span>
-                  </span>
-                </span>
-              </Card>
-            </div>
-            {promptVisibility === 'full_text' && (
-              <div style={OTHER_CHOICE}>
-                <Disclosure size="inline" summary="What the other choice does">
-                  <p style={OTHER_CHOICE_WORDS}>{HASH_ONLY_WORDS}</p>
-                </Disclosure>
-              </div>
-            )}
-          </fieldset>
-
           {/* Visibility: the selected option shows its description, the
               other's sits behind the disclosure. SITE_SEAL_ONLY (#552): the
               public option is shown disabled with the reason, not hidden,
@@ -604,6 +550,60 @@ export default function PublishEvidenceDialog({
                   <p style={OTHER_CHOICE_WORDS}>
                     {visibility === 'sealed' ? PUBLIC_STATE_WORDS : sealedCopy.sealChoice}
                   </p>
+                </Disclosure>
+              </div>
+            )}
+          </fieldset>
+
+          {/* Question text: "Include full text" keeps its one line in both
+              states; the hash-only paragraph shows on its option while
+              selected, and otherwise behind the disclosure. */}
+          <fieldset style={SECTION}>
+            <legend style={SECTION_LABEL}>
+              Question text
+            </legend>
+            <div style={OPTIONS}>
+              <Card as="label" variant="selectable" compact selected={promptVisibility === 'full_text'}>
+                <span style={OPTION_ROW}>
+                  <input
+                    type="radio"
+                    name="promptVisibility"
+                    checked={promptVisibility === 'full_text'}
+                    onChange={() => choosePromptVisibility('full_text')}
+                    style={{ marginTop: '3px' }}
+                  />
+                  <span>
+                    Include full text
+                    <span style={OPTION_DETAIL}>
+                      Anyone can see exactly what you asked
+                    </span>
+                  </span>
+                </span>
+              </Card>
+              <Card as="label" variant="selectable" compact selected={promptVisibility === 'hash_only'}>
+                <span style={OPTION_ROW}>
+                  <input
+                    type="radio"
+                    name="promptVisibility"
+                    checked={promptVisibility === 'hash_only'}
+                    onChange={() => choosePromptVisibility('hash_only')}
+                    style={{ marginTop: '3px' }}
+                  />
+                  <span>
+                    Hash only
+                    <span style={OPTION_DETAIL}>
+                      {promptVisibility === 'hash_only'
+                        ? HASH_ONLY_WORDS
+                        : 'Keeps a fingerprint of the question, not its words.'}
+                    </span>
+                  </span>
+                </span>
+              </Card>
+            </div>
+            {promptVisibility === 'full_text' && (
+              <div style={OTHER_CHOICE}>
+                <Disclosure size="inline" summary="What the other choice does">
+                  <p style={OTHER_CHOICE_WORDS}>{HASH_ONLY_WORDS}</p>
                 </Disclosure>
               </div>
             )}
