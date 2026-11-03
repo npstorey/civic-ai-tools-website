@@ -542,7 +542,7 @@ test('the topology cannot tell /records from /evidence, under any configuration'
   }
 });
 
-// --- URL helpers (AppChrome exit link, device-flow pairing origin) ---------------
+// --- URL helpers (the Header's Public site item, device-flow pairing origin) -----
 
 // --- instanceServesMarketing: the predicate the chrome branches on -----------
 
@@ -596,8 +596,8 @@ test('instanceServesMarketing agrees with what decideRoute actually serves', () 
 test('resolvePublicSiteHref: nothing configured now HIDES the exit link (#259 P3)', () => {
   // It used to return '/', and after the flip '/' is the path that redirects
   // to /ask — so the "Public site" exit out of the app would have led back
-  // into the app, past no error, to no public site. AppChrome guards on
-  // this exact null.
+  // into the app, past no error, to no public site. The Header's "Public
+  // site" item (AppChrome's, until UX-1 P3a) guards on this exact null.
   assert.equal(resolvePublicSiteHref({}), null);
   assert.equal(resolvePublicSiteHref({ APP_HOST: 'app.example.org' }), null);
 });
@@ -673,8 +673,8 @@ test('resolveDashboardHref: relative today and on app-only; app origin on a spli
 });
 
 test('resolveAskHref: relative today and on app-only; app origin on a split host (#210)', () => {
-  // The dual-served /evidence pages render the AppChrome strip on the
-  // MARKETING host, where /ask is withheld — hence the origin.
+  // The Header's Ask link (the AppChrome strip's, until UX-1 P3a) renders on
+  // the MARKETING host, where /ask is withheld — hence the origin.
   assert.equal(resolveAskHref({}), '/ask');
   assert.equal(resolveAskHref({ APP_ONLY: '1', APP_HOST: 'app.example.org' }), '/ask');
   assert.equal(resolveAskHref({ APP_HOST: 'app.example.org' }), 'https://app.example.org/ask');
