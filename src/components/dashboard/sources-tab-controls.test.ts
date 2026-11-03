@@ -175,7 +175,9 @@ test('PC criterion 1: a choice on the tab writes every configured source\'s stat
   const status = within(row).filter((el) => el.props.role === 'status');
   assert.equal(status.length, 1, `the row has no status line after the change: ${textOf(row)}`);
   const sentence = `${name}${PANEL_STATE_CHANGED.middle}${LABEL['ask-first']}${PANEL_STATE_CHANGED.end}`;
-  assert.ok(textOf(status[0]).startsWith(sentence), `the row's status line is not the panel's confirmation: ${textOf(status[0])}`);
+  // Ruled at Leg B: the tab omits the panel's "Set <State> since <date>." line, since its list line carries the date.
+  assert.equal(textOf(status[0]), sentence, 'the row\'s status line is not the panel\'s confirmation alone');
+  assert.ok(!textOf(row).includes(`Set ${LABEL['ask-first']} since`), `the row repeats the since date under the control: ${textOf(row)}`);
   assert.equal(tab.elements().filter((el) => el.props.role === 'status' && textOf(el).includes(PANEL_STATE_CHANGED.end)).length, 1, 'more than one row confirms a change');
   tab.unmount();
 });
