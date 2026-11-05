@@ -134,7 +134,8 @@ test('criterion 3: the Sources tab shows every source\'s state, the date given, 
     assert.equal(rows.length, 1, `the tab has no row for ${source.sourceId}`);
     const row = textOf(rows[0]);
     assert.ok(row.includes(name), `${source.sourceId}'s row does not name it`);
-    assert.ok(row.includes(i === 0 ? 'On' : 'Off'), `${source.sourceId}'s row does not show its state: ${row}`);
+    // UX-1 PC: the row also carries the control, whose labels name every state, so the state is read from the list's line.
+    assert.match(row, new RegExp(`${name}\\s*: ${i === 0 ? 'On' : 'Off'}\\b`), `${source.sourceId}'s row does not show its state: ${row}`);
   }
   // UX pass row 14(a): both dates in words, and the base version's first 8 hex.
   assert.ok(text.includes(`Given on ${inWords(new Date().toISOString())}.`), `the tab does not show the date the consent was given, in words: ${text.slice(0, 400)}`);
