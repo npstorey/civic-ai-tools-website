@@ -57,7 +57,13 @@ const PUBLIC_STATE_WORDS =
 
 // The two choice sections (UX-1 P1): a fieldset per choice, each option a P5
 // selectable card.
-const SECTION = { border: 'none', padding: 0, margin: '0 0 20px', minWidth: 0 } as const;
+// Small text in the dialog (its 11-14 px labels, hints and option lines) sets
+// its own line-height instead of inheriting body's 160% of 18 px (28.8 px).
+// 1.5 is the repository's small-text value: `.ui-signal--line` (13 px),
+// `.ui-signal--block` and `.ui-row-summary` in globals.css, and the commonest
+// inline `lineHeight` beside a 12-13 px `fontSize` in src/.
+const SMALL_TEXT_LINE_HEIGHT = 1.5;
+const SECTION = { border: 'none', padding: 0, margin: '0 0 20px', minWidth: 0, lineHeight: SMALL_TEXT_LINE_HEIGHT } as const;
 const SECTION_LABEL = { display: 'block', padding: 0, fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' } as const;
 const OPTIONS = { display: 'flex', flexDirection: 'column', gap: '6px' } as const;
 const OPTION_ROW = { display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '14px' } as const;
@@ -425,7 +431,7 @@ export default function PublishEvidenceDialog({
       {dialogState === 'form' && (
         <>
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-secondary)' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-secondary)', lineHeight: SMALL_TEXT_LINE_HEIGHT }}>
               Title
             </label>
             <input
@@ -442,13 +448,13 @@ export default function PublishEvidenceDialog({
                 boxSizing: 'border-box',
               }}
             />
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0', lineHeight: SMALL_TEXT_LINE_HEIGHT }}>
               The title is public and becomes the record’s address.
             </p>
           </div>
 
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-secondary)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-secondary)', lineHeight: SMALL_TEXT_LINE_HEIGHT }}>
               Summary
               {summaryLoading && (
                 <span style={{
@@ -484,7 +490,7 @@ export default function PublishEvidenceDialog({
                 opacity: summaryLoading && !userEditedSummary ? 0.6 : 1,
               }}
             />
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0', lineHeight: SMALL_TEXT_LINE_HEIGHT }}>
               A 2-4 sentence description for non-technical readers. Auto-generated on open — edit as needed.
             </p>
           </div>
