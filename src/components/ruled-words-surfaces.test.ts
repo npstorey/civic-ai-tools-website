@@ -7,17 +7,23 @@
 // "items" ("1 item", "3 items": today's plural rule, kept).
 //
 // WHAT IS DRIVEN. The real `DashboardTabs`, the real `Header` (signed in, its
-// avatar menu, its Explore menu and its mobile menu each opened by calling the
-// button's `onClick`, as the harness clicks), and the real `/records` page
+// avatar menu and its mobile drawer each opened by calling the button's
+// `onClick`, as the harness clicks), and the real `/records` page
 // (`src/app/(app)/records/page.tsx`, which re-exports the `/evidence` page)
 // with its list request answered by the test, on the surface harness.
+// UX-1 P3a moved two of the Header's items, and the two finders that read
+// them were restated so each keeps its property: the section item is now a
+// bar item (it was inside Explore's panel), and at the mobile layout the
+// account entry is reached through the avatar menu (the drawer holds the
+// bar's grouping only).
 //
 // WHAT MAKES IT ABLE TO FAIL. At the base each surface renders the old word:
 // "My Records (0)", "Dashboard", "Records", an h1 "Records", "3 records".
 //
-// BLIND SPOTS, stated. The harness has no layout: `sm:hidden` and
-// `hidden sm:flex` are class names here, so the desktop and mobile menus are
-// told apart by which button opened them, not by a viewport. `next/image` is
+// BLIND SPOTS, stated. The harness has no layout: `lg:hidden` and
+// `hidden lg:flex` are class names here, so "at the mobile layout" is read as
+// "no ancestor of the control carries `hidden`", the class that hides an
+// element below the `lg` width (1024 px), not by a viewport. `next/image` is
 // stubbed (the fixture account has no avatar image).
 //
 // Run with: npm test
@@ -39,6 +45,7 @@ import {
   type HostElement,
   type Surface,
 } from './sources/surface-test-harness.ts';
+import { byRole, classesOf, parentOf, within } from './ui/ui-test-helpers.ts';
 
 registerSurfaceHooks({
   ...CONSENT_SURFACE_STUBS,
@@ -104,24 +111,34 @@ test('the Header\'s avatar menu, opened signed in: "My analyses", linking /dashb
   header.unmount();
 });
 
-test('the Header\'s Explore menu (desktop): the registry\'s item reads "Analysis", linking /records', async () => {
+test('the Header\'s bar (desktop): the registry\'s item reads "Analysis", linking /records, with every menu closed', async () => {
   signedIn();
   installFetch(ORIGIN, {});
   const header = await mount(h(Header, { brandName: 'Fixture Site' }));
-  assert.deepEqual(anchorsTo(header, '/records'), [], 'premise: no /records link before the Explore menu opens');
-  await header.click(onlyButton(header, (el) => textOf(el).startsWith('Explore'), 'Explore'));
-  assert.deepEqual(linkWords(header, '/records'), ['Analysis'], `the Explore menu's /records link reads ${JSON.stringify(linkWords(header, '/records'))}`);
+  assert.equal(byRole(header, 'dialog').length, 0, 'premise: the mobile drawer is closed, so every link read is in the bar');
+  assert.equal(byRole(header, 'menu').length, 0, 'premise: every menu is closed');
+  assert.deepEqual(linkWords(header, '/records'), ['Analysis'], `the bar's /records link reads ${JSON.stringify(linkWords(header, '/records'))}`);
   header.unmount();
 });
 
-test('the Header\'s mobile menu, opened signed in: "Analysis" linking /records, "My analyses" linking /dashboard', async () => {
+test('the Header at the mobile layout, signed in: the account entry reads "My analyses", linking /dashboard, through the avatar menu; the drawer\'s section item reads "Analysis"', async () => {
   signedIn();
   installFetch(ORIGIN, {});
   const header = await mount(h(Header, { brandName: 'Fixture Site' }));
-  assert.deepEqual(anchorsTo(header, '/dashboard'), [], 'premise: the mobile menu renders only when opened');
+  assert.deepEqual(anchorsTo(header, '/dashboard'), [], 'premise: the account entry renders only when the avatar menu opens');
+  const avatar = onlyButton(header, (el) => textOf(el).includes('Fixture Reader'), 'avatar');
+  const hiders: string[] = [];
+  for (let at: HostElement | null = avatar; at; at = parentOf(header, at)) {
+    if (classesOf(at).includes('hidden')) hiders.push(`<${at.type} class="${classesOf(at).join(' ')}">`);
+  }
+  assert.deepEqual(hiders, [], 'premise: no ancestor of the avatar trigger hides it below the sm width');
+  await header.click(avatar);
+  assert.deepEqual(linkWords(header, '/dashboard'), ['My analyses'], `the avatar menu's /dashboard link reads ${JSON.stringify(linkWords(header, '/dashboard'))}`);
   await header.click(onlyButton(header, (el) => el.props['aria-label'] === 'Toggle menu', 'mobile menu'));
-  const read = { '/records': linkWords(header, '/records'), '/dashboard': linkWords(header, '/dashboard') };
-  assert.deepEqual(read, { '/records': ['Analysis'], '/dashboard': ['My analyses'] }, `the mobile menu's links read ${JSON.stringify(read)}`);
+  const drawer = byRole(header, 'dialog');
+  assert.equal(drawer.length, 1, 'premise: the toggle opens one drawer');
+  const inDrawer = within(drawer[0]).filter((el) => el.type === 'a' && el.props.href === '/records').map((el) => textOf(el));
+  assert.deepEqual(inDrawer, ['Analysis'], `the drawer's /records link reads ${JSON.stringify(inDrawer)}`);
   header.unmount();
 });
 

@@ -44,7 +44,8 @@ test('split host: marketing links carry the marketing origin, sign-in goes to th
 
 test('app-only: no marketing site to link to, sign-in is a relative path', () => {
   // marketingOrigin null is the instruction to HIDE the affordance, matching
-  // resolvePublicSiteHref's null for the AppChrome exit link.
+  // resolvePublicSiteHref's null for the Header's "Public site" item (the
+  // AppChrome exit link until UX-1 P3a).
   assert.deepEqual(resolveHostLinks({ APP_ONLY: '1' }), {
     marketingOrigin: null,
     signInHref: '/ask?signin=1',
