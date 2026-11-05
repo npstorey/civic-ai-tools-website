@@ -15,6 +15,9 @@ import type { Notebook } from '@/lib/notebook-author/cells';
 import { normalizeVisibility, type Visibility } from '@/lib/evidence/visibility';
 import { publicStateAvailability } from '@/lib/evidence/seal-only';
 import { sealedStateCopy } from '@/lib/evidence/seal-only';
+import { Dialog } from '@/components/ui/Dialog';
+import { Card } from '@/components/ui/Card';
+import { Disclosure } from '@/components/ui/Disclosure';
 
 interface PublishEvidenceDialogProps {
   isOpen: boolean;
@@ -40,6 +43,33 @@ interface PublishEvidenceDialogProps {
 }
 
 type DialogState = 'form' | 'publishing' | 'success' | 'error';
+
+// The two choices' long descriptions. Each renders in two places (on its
+// option while selected, behind "What the other choice does" otherwise), so
+// each is written once. Ruled copy: byte for byte what the dialog rendered
+// before UX-1 P1.
+const HASH_ONLY_WORDS =
+  'The record keeps a fingerprint of your question instead of its text. Anyone who knows or ' +
+  'guesses the exact wording can confirm it matches. The answer, summary and data queries may ' +
+  'still contain its words.';
+const PUBLIC_STATE_WORDS =
+  'Content becomes public and listed in the registry immediately. Publication is not reversible.';
+
+// The two choice sections (UX-1 P1): a fieldset per choice, each option a P5
+// selectable card.
+// Small text in the dialog (its 11-14 px labels, hints and option lines) sets
+// its own line-height instead of inheriting body's 160% of 18 px (28.8 px).
+// 1.5 is the repository's small-text value: `.ui-signal--line` (13 px),
+// `.ui-signal--block` and `.ui-row-summary` in globals.css, and the commonest
+// inline `lineHeight` beside a 12-13 px `fontSize` in src/.
+const SMALL_TEXT_LINE_HEIGHT = 1.5;
+const SECTION = { border: 'none', padding: 0, margin: '0 0 20px', minWidth: 0, lineHeight: SMALL_TEXT_LINE_HEIGHT } as const;
+const SECTION_LABEL = { display: 'block', padding: 0, fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' } as const;
+const OPTIONS = { display: 'flex', flexDirection: 'column', gap: '6px' } as const;
+const OPTION_ROW = { display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '14px' } as const;
+const OPTION_DETAIL = { display: 'block', fontSize: '12px', color: 'var(--text-muted)' } as const;
+const OTHER_CHOICE = { marginTop: '6px' } as const;
+const OTHER_CHOICE_WORDS = { margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted)' } as const;
 
 /**
  * The run's date (`YYYY-MM-DD`, UTC): the earliest span start its trace
@@ -361,243 +391,322 @@ export default function PublishEvidenceDialog({
     setTimeout(() => setUrlCopied(false), 2000);
   };
 
+  // The footer (UX-1 P1; design §5.2): outside the scroll, with the action,
+  // Cancel, and one line. While the form is open or publishing, the line is
+  // the selected visibility's consequence, or, on an unsigned instance, why
+  // the action is disabled.
+  const formFooter = dialogState === 'form' || dialogState === 'publishing';
+  const footerLine = signingConfigured === false ? (
+    <>
+      <strong style={{ color: 'var(--text-primary)' }}>
+        This instance is running unsigned.
+      </strong>{' '}
+      Signing is not configured, so records cannot be sealed or
+      published — an unsigned package can reach neither the sealed
+      nor the public state. The analysis itself still works; an
+      operator enables signing via the instance setup guide.
+    </>
+  ) : visibility === 'sealed'
+    ? 'Private to you; signed and registered'
+    : 'Public and listed; not reversible';
+
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+    <Dialog
+      open
+      onClose={handleClose}
+      title="Publish"
+      size="form"
+      state={dialogState === 'publishing' ? 'busy' : dialogState}
+      primaryAction={formFooter ? {
+        label: signingConfigured === false
+          ? 'Unavailable (running unsigned)'
+          : visibility === 'sealed' ? 'Seal' : 'Publish',
+        onClick: handlePublish,
+        disabled: !title.trim() || !summary.trim() || signingConfigured === false,
+      } : undefined}
+      secondaryAction={formFooter ? { label: 'Cancel', onClick: handleClose } : undefined}
+      footerLine={formFooter ? footerLine : undefined}
     >
-      <div
-        style={{
-          backgroundColor: 'white',
-          borderRadius: '8px',
-          width: '100%',
-          maxWidth: '520px',
-          maxHeight: '90vh',
-          overflow: 'auto',
-          margin: '16px',
-          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-        }}
-      >
-        {/* Header */}
-        <div style={{
-          padding: '20px 24px 16px',
-          borderBottom: '1px solid var(--border-color)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>
-            Publish as Record
-          </h2>
-          <button
-            onClick={handleClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '20px',
-              cursor: 'pointer',
-              color: 'var(--text-muted)',
-              padding: '4px',
-              lineHeight: 1,
-            }}
-            aria-label="Close"
-          >
-            &times;
-          </button>
-        </div>
+      {/* Form state */}
+      {dialogState === 'form' && (
+        <>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-secondary)', lineHeight: SMALL_TEXT_LINE_HEIGHT }}>
+              Title
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => { setTitle(e.target.value); setTitleEdited(true); }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                fontSize: '14px',
+                fontFamily: 'inherit',
+                boxSizing: 'border-box',
+              }}
+            />
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0', lineHeight: SMALL_TEXT_LINE_HEIGHT }}>
+              The title is public and becomes the record’s address.
+            </p>
+          </div>
 
-        <div style={{ padding: '20px 24px 24px' }}>
-          {/* Form state */}
-          {dialogState === 'form' && (
-            <>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-secondary)' }}>
-                  Title
-                </label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => { setTitle(e.target.value); setTitleEdited(true); }}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '4px',
-                    fontSize: '14px',
-                    fontFamily: 'inherit',
-                    boxSizing: 'border-box',
-                  }}
-                />
-                <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-                  The title is public and becomes the record’s address.
-                </p>
-              </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-secondary)', lineHeight: SMALL_TEXT_LINE_HEIGHT }}>
+              Summary
+              {summaryLoading && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  fontSize: '11px', fontWeight: 400, color: 'var(--text-muted)',
+                }}>
+                  <span style={{
+                    width: '10px', height: '10px',
+                    border: '1.5px solid var(--border-color)',
+                    borderTopColor: 'var(--accent)',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                  }} />
+                  Generating...
+                </span>
+              )}
+            </label>
+            <textarea
+              value={summary}
+              onChange={(e) => { setSummary(e.target.value); setUserEditedSummary(true); summaryEdited.current = true; }}
+              rows={4}
+              disabled={summaryLoading && !userEditedSummary}
+              placeholder={summaryLoading ? 'Generating summary...' : ''}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                fontSize: '14px',
+                fontFamily: 'inherit',
+                resize: 'vertical',
+                boxSizing: 'border-box',
+                opacity: summaryLoading && !userEditedSummary ? 0.6 : 1,
+              }}
+            />
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0', lineHeight: SMALL_TEXT_LINE_HEIGHT }}>
+              A 2-4 sentence description for non-technical readers. Auto-generated on open — edit as needed.
+            </p>
+          </div>
 
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-secondary)' }}>
-                  Summary
-                  {summaryLoading && (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: '4px',
-                      fontSize: '11px', fontWeight: 400, color: 'var(--text-muted)',
-                    }}>
-                      <span style={{
-                        width: '10px', height: '10px',
-                        border: '1.5px solid var(--border-color)',
-                        borderTopColor: 'var(--accent)',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite',
-                      }} />
-                      Generating...
-                    </span>
-                  )}
-                </label>
-                <textarea
-                  value={summary}
-                  onChange={(e) => { setSummary(e.target.value); setUserEditedSummary(true); summaryEdited.current = true; }}
-                  rows={4}
-                  disabled={summaryLoading && !userEditedSummary}
-                  placeholder={summaryLoading ? 'Generating summary...' : ''}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '4px',
-                    fontSize: '14px',
-                    fontFamily: 'inherit',
-                    resize: 'vertical',
-                    boxSizing: 'border-box',
-                    opacity: summaryLoading && !userEditedSummary ? 0.6 : 1,
-                  }}
-                />
-                <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-                  A 2-4 sentence description for non-technical readers. Auto-generated on open — edit as needed.
-                </p>
-              </div>
-
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
-                  Prompt visibility
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
-                    <input
-                      type="radio"
-                      name="promptVisibility"
-                      checked={promptVisibility === 'full_text'}
-                      onChange={() => choosePromptVisibility('full_text')}
-                      style={{ marginTop: '3px' }}
-                    />
-                    <span>
-                      Include full prompt text
-                      <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)' }}>
-                        Anyone can see exactly what you asked
-                      </span>
-                    </span>
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
-                    <input
-                      type="radio"
-                      name="promptVisibility"
-                      checked={promptVisibility === 'hash_only'}
-                      onChange={() => choosePromptVisibility('hash_only')}
-                      style={{ marginTop: '3px' }}
-                    />
-                    <span>
-                      Hash only
-                      <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)' }}>
-                        The record keeps a fingerprint of your question instead of its text. Anyone who knows or
-                        guesses the exact wording can confirm it matches. The answer, summary and data queries may
-                        still contain its words.
-                      </span>
-                    </span>
-                  </label>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
-                  Visibility
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
-                    <input
-                      type="radio"
-                      name="visibility"
-                      checked={visibility === 'sealed'}
-                      onChange={() => setVisibility('sealed')}
-                      style={{ marginTop: '3px' }}
-                    />
-                    <span>
-                      Seal (default)
-                      <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)' }}>
+          {/* Visibility: the selected option shows its description, the
+              other's sits behind the disclosure. SITE_SEAL_ONLY (#552): the
+              public option is shown disabled with the reason, not hidden,
+              and there is no disclosure. */}
+          <fieldset style={SECTION}>
+            <legend style={SECTION_LABEL}>
+              Visibility
+            </legend>
+            <div style={OPTIONS}>
+              <Card as="label" variant="selectable" compact selected={visibility === 'sealed'}>
+                <span style={OPTION_ROW}>
+                  <input
+                    type="radio"
+                    name="visibility"
+                    checked={visibility === 'sealed'}
+                    onChange={() => setVisibility('sealed')}
+                    style={{ marginTop: '3px' }}
+                  />
+                  <span>
+                    Seal (default)
+                    {visibility === 'sealed' && (
+                      <span style={OPTION_DETAIL}>
                         {sealedCopy.sealChoice}
                       </span>
-                    </span>
-                  </label>
-                  {/* SITE_SEAL_ONLY (#552): shown disabled with the reason,
-                      not hidden, when this instance seals records only. */}
-                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: publicChoice.available ? 'pointer' : 'not-allowed', fontSize: '14px' }}>
-                    <input
-                      type="radio"
-                      name="visibility"
-                      checked={visibility === 'public'}
-                      disabled={!publicChoice.available}
-                      onChange={() => setVisibility('public')}
-                      style={{ marginTop: '3px' }}
-                    />
-                    <span style={publicChoice.available ? undefined : { color: 'var(--text-muted)' }}>
-                      Publish now
-                      <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {publicChoice.available
-                          ? 'Content becomes public and listed in the registry immediately. Publication is not reversible.'
-                          : publicChoice.explanation}
+                    )}
+                  </span>
+                </span>
+              </Card>
+              <Card
+                as="label"
+                variant="selectable"
+                compact
+                selected={visibility === 'public'}
+                disabledReason={publicChoice.available ? undefined : publicChoice.explanation}
+              >
+                <span style={OPTION_ROW}>
+                  <input
+                    type="radio"
+                    name="visibility"
+                    checked={visibility === 'public'}
+                    disabled={!publicChoice.available}
+                    onChange={() => setVisibility('public')}
+                    style={{ marginTop: '3px' }}
+                  />
+                  <span>
+                    Publish now
+                    {visibility === 'public' && (
+                      <span style={OPTION_DETAIL}>
+                        {PUBLIC_STATE_WORDS}
                       </span>
+                    )}
+                  </span>
+                </span>
+              </Card>
+            </div>
+            {publicChoice.available && (
+              <div style={OTHER_CHOICE}>
+                <Disclosure size="inline" summary="What the other choice does">
+                  <p style={OTHER_CHOICE_WORDS}>
+                    {visibility === 'sealed' ? PUBLIC_STATE_WORDS : sealedCopy.sealChoice}
+                  </p>
+                </Disclosure>
+              </div>
+            )}
+          </fieldset>
+
+          {/* Question text: "Include full text" keeps its one line in both
+              states; the hash-only paragraph shows on its option while
+              selected, and otherwise behind the disclosure. */}
+          <fieldset style={SECTION}>
+            <legend style={SECTION_LABEL}>
+              Question text
+            </legend>
+            <div style={OPTIONS}>
+              <Card as="label" variant="selectable" compact selected={promptVisibility === 'full_text'}>
+                <span style={OPTION_ROW}>
+                  <input
+                    type="radio"
+                    name="promptVisibility"
+                    checked={promptVisibility === 'full_text'}
+                    onChange={() => choosePromptVisibility('full_text')}
+                    style={{ marginTop: '3px' }}
+                  />
+                  <span>
+                    Include full text
+                    <span style={OPTION_DETAIL}>
+                      Anyone can see exactly what you asked
                     </span>
-                  </label>
-                </div>
+                  </span>
+                </span>
+              </Card>
+              <Card as="label" variant="selectable" compact selected={promptVisibility === 'hash_only'}>
+                <span style={OPTION_ROW}>
+                  <input
+                    type="radio"
+                    name="promptVisibility"
+                    checked={promptVisibility === 'hash_only'}
+                    onChange={() => choosePromptVisibility('hash_only')}
+                    style={{ marginTop: '3px' }}
+                  />
+                  <span>
+                    Hash only
+                    <span style={OPTION_DETAIL}>
+                      {promptVisibility === 'hash_only'
+                        ? HASH_ONLY_WORDS
+                        : 'Keeps a fingerprint of the question, not its words.'}
+                    </span>
+                  </span>
+                </span>
+              </Card>
+            </div>
+            {promptVisibility === 'full_text' && (
+              <div style={OTHER_CHOICE}>
+                <Disclosure size="inline" summary="What the other choice does">
+                  <p style={OTHER_CHOICE_WORDS}>{HASH_ONLY_WORDS}</p>
+                </Disclosure>
+              </div>
+            )}
+          </fieldset>
+        </>
+      )}
+
+      {/* Publishing state: the footer's action carries the spinner. */}
+      {dialogState === 'publishing' && (
+        <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0, padding: '24px 0', textAlign: 'center' }}>
+          Packaging and storing the analysis...
+        </p>
+      )}
+
+      {/* Success state */}
+      {dialogState === 'success' && (
+        <div style={{ padding: '8px 0' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '16px',
+            color: 'var(--success)',
+          }}>
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+            </svg>
+            <span style={{ fontSize: '16px', fontWeight: 600 }}>
+              {resultVisibility === 'sealed' ? 'Sealed' : 'Public'}
+            </span>
+          </div>
+
+          {resultVisibility === 'sealed' ? (
+            /* SEALED — a private record. Preserve the creator-only copy +
+               the URL box (the creator's own handle to open / re-open it);
+               no public "Share" affordance, because the content is private
+               and a shared link is meaningless to anyone else (#86). */
+            <>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>
+                {sealedCopy.sealedResult}
+              </p>
+
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 12px',
+                /* Literal, not a token: --nyc-gray-50 was never defined
+                   anywhere, so #f5f5f5 is what has always rendered here.
+                   It is a one-off with no membership in the neutral scale
+                   (which runs 20/70/80/90), and inventing --neutral-95 for
+                   one call site, or rounding it to --neutral-90 (#EEEEEE),
+                   would each change the palette rather than rename it. */
+                backgroundColor: '#f5f5f5',
+                borderRadius: '4px',
+                marginBottom: '16px',
+              }}>
+                <code style={{
+                  flex: 1,
+                  fontSize: '13px',
+                  wordBreak: 'break-all',
+                  color: 'var(--accent)',
+                }}>
+                  {/* The creator's own handle to the page: a link, same tab. */}
+                  <a href={resultUrl} style={{ color: 'inherit' }}>
+                    {typeof window !== 'undefined' ? window.location.origin : ''}{resultUrl}
+                  </a>
+                </code>
+                <button
+                  onClick={async () => {
+                    const fullUrl = `${window.location.origin}${resultUrl}`;
+                    await navigator.clipboard.writeText(fullUrl);
+                    setUrlCopied(true);
+                    setTimeout(() => setUrlCopied(false), 2000);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '4px',
+                    padding: '4px 10px',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    color: urlCopied ? 'var(--success)' : 'var(--text-muted)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {urlCopied ? 'Copied' : 'Copy'}
+                </button>
               </div>
 
-              {/* Unsigned-tier gate-off (ADR-0020, S3a P3): unless this
-                  instance can sign — which takes BOTH a signing key and a
-                  declared key id — neither Seal (sealed) nor Publish (public)
-                  is reachable, and the action renders disabled with an
-                  explanation, mirroring the server-side gate. The copy names
-                  the state, not one particular missing variable: the
-                  operator-facing detail (which half is missing) is on the
-                  site-wide banner and in the server's refusal. */}
-              {signingConfigured === false && (
-                <div style={{
-                  padding: '12px',
-                  marginBottom: '12px',
-                  borderRadius: '4px',
-                  backgroundColor: 'rgba(255, 179, 32, 0.12)',
-                  border: '1px solid var(--caution)',
-                  fontSize: '13px',
-                  lineHeight: 1.5,
-                  color: 'var(--text-secondary)',
-                }}>
-                  <strong style={{ color: 'var(--text-primary)' }}>
-                    This instance is running unsigned.
-                  </strong>{' '}
-                  Signing is not configured, so records cannot be sealed or
-                  published — an unsigned package can reach neither the sealed
-                  nor the public state. The analysis itself still works; an
-                  operator enables signing via the instance setup guide.
-                </div>
-              )}
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 16px' }}>
+                The cryptographic commitment (hash, signature, timestamp, transparency-log
+                proof) is publicly verifiable; the content and this page are not.
+              </p>
 
               <button
-                onClick={handlePublish}
-                disabled={!title.trim() || !summary.trim() || signingConfigured === false}
+                onClick={handleClose}
                 style={{
                   width: '100%',
                   padding: '10px 20px',
@@ -607,253 +716,130 @@ export default function PublishEvidenceDialog({
                   borderRadius: '4px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  cursor: title.trim() && summary.trim() && signingConfigured !== false ? 'pointer' : 'not-allowed',
-                  opacity: title.trim() && summary.trim() && signingConfigured !== false ? 1 : 0.5,
+                  cursor: 'pointer',
                 }}
               >
-                {signingConfigured === false
-                  ? 'Unavailable (running unsigned)'
-                  : visibility === 'sealed' ? 'Seal' : 'Publish'}
+                Done
+              </button>
+            </>
+          ) : (
+            /* PUBLIC — a public record. Two distinct affordances instead
+               of a raw URL to parse (#86): primary "View" (navigates) +
+               secondary "Share" (copy / native share). The raw URL stays
+               reachable via Share and the destination URL bar; closing the
+               dialog (header ×, backdrop, or "Back to your answer") returns
+               to the chat to continue. */
+            <>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 16px' }}>
+                Your analysis page is live.
+              </p>
+
+              <button
+                onClick={handleView}
+                style={{
+                  width: '100%',
+                  padding: '10px 20px',
+                  backgroundColor: 'var(--accent)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  marginBottom: '8px',
+                }}
+              >
+                View your analysis page →
+              </button>
+
+              <button
+                onClick={handleShare}
+                style={{
+                  width: '100%',
+                  padding: '10px 20px',
+                  backgroundColor: 'white',
+                  color: urlCopied ? 'var(--success)' : 'var(--text-secondary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {urlCopied ? 'Link copied' : 'Share'}
+              </button>
+
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '16px 0 0' }}>
+                The record is signed, timestamped, and registered on the public transparency log.
+              </p>
+
+              <button
+                onClick={handleClose}
+                style={{
+                  width: '100%',
+                  marginTop: '12px',
+                  padding: '6px',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Back to your answer
               </button>
             </>
           )}
-
-          {/* Publishing state */}
-          {dialogState === 'publishing' && (
-            <div style={{ textAlign: 'center', padding: '24px 0' }}>
-              <div style={{
-                width: '24px',
-                height: '24px',
-                border: '3px solid var(--border-color)',
-                borderTopColor: 'var(--accent)',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-                margin: '0 auto 12px',
-              }} />
-              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0 }}>
-                Packaging and storing the record...
-              </p>
-              <style jsx>{`
-                @keyframes spin { to { transform: rotate(360deg); } }
-              `}</style>
-            </div>
-          )}
-
-          {/* Success state */}
-          {dialogState === 'success' && (
-            <div style={{ padding: '8px 0' }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginBottom: '16px',
-                color: 'var(--success)',
-              }}>
-                <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
-                </svg>
-                <span style={{ fontSize: '16px', fontWeight: 600 }}>
-                  {resultVisibility === 'sealed' ? 'Sealed' : 'Public'}
-                </span>
-              </div>
-
-              {resultVisibility === 'sealed' ? (
-                /* SEALED — a private record. Preserve the creator-only copy +
-                   the URL box (the creator's own handle to open / re-open it);
-                   no public "Share" affordance, because the content is private
-                   and a shared link is meaningless to anyone else (#86). */
-                <>
-                  <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>
-                    {sealedCopy.sealedResult}
-                  </p>
-
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '10px 12px',
-                    /* Literal, not a token: --nyc-gray-50 was never defined
-                       anywhere, so #f5f5f5 is what has always rendered here.
-                       It is a one-off with no membership in the neutral scale
-                       (which runs 20/70/80/90), and inventing --neutral-95 for
-                       one call site, or rounding it to --neutral-90 (#EEEEEE),
-                       would each change the palette rather than rename it. */
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '4px',
-                    marginBottom: '16px',
-                  }}>
-                    <code style={{
-                      flex: 1,
-                      fontSize: '13px',
-                      wordBreak: 'break-all',
-                      color: 'var(--accent)',
-                    }}>
-                      {typeof window !== 'undefined' ? window.location.origin : ''}{resultUrl}
-                    </code>
-                    <button
-                      onClick={async () => {
-                        const fullUrl = `${window.location.origin}${resultUrl}`;
-                        await navigator.clipboard.writeText(fullUrl);
-                        setUrlCopied(true);
-                        setTimeout(() => setUrlCopied(false), 2000);
-                      }}
-                      style={{
-                        background: 'none',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '4px',
-                        padding: '4px 10px',
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                        color: urlCopied ? 'var(--success)' : 'var(--text-muted)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {urlCopied ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
-
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 16px' }}>
-                    The cryptographic commitment (hash, signature, timestamp, transparency-log
-                    proof) is publicly verifiable; the content and this page are not.
-                  </p>
-
-                  <button
-                    onClick={handleClose}
-                    style={{
-                      width: '100%',
-                      padding: '10px 20px',
-                      backgroundColor: 'var(--accent)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Done
-                  </button>
-                </>
-              ) : (
-                /* PUBLIC — a public record. Two distinct affordances instead
-                   of a raw URL to parse (#86): primary "View" (navigates) +
-                   secondary "Share" (copy / native share). The raw URL stays
-                   reachable via Share and the destination URL bar; closing the
-                   dialog (header ×, backdrop, or "Keep chatting") returns to the
-                   chat to continue. */
-                <>
-                  <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 16px' }}>
-                    Your record page is live.
-                  </p>
-
-                  <button
-                    onClick={handleView}
-                    style={{
-                      width: '100%',
-                      padding: '10px 20px',
-                      backgroundColor: 'var(--accent)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      marginBottom: '8px',
-                    }}
-                  >
-                    View your record page →
-                  </button>
-
-                  <button
-                    onClick={handleShare}
-                    style={{
-                      width: '100%',
-                      padding: '10px 20px',
-                      backgroundColor: 'white',
-                      color: urlCopied ? 'var(--success)' : 'var(--text-secondary)',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '4px',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {urlCopied ? 'Link copied' : 'Share'}
-                  </button>
-
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '16px 0 0' }}>
-                    The record is signed, timestamped, and registered on the public transparency log.
-                  </p>
-
-                  <button
-                    onClick={handleClose}
-                    style={{
-                      width: '100%',
-                      marginTop: '12px',
-                      padding: '6px',
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--text-muted)',
-                      fontSize: '13px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Keep chatting
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Error state */}
-          {dialogState === 'error' && (
-            <div style={{ padding: '8px 0' }}>
-              <div style={{
-                padding: '12px',
-                backgroundColor: 'rgba(236, 19, 30, 0.08)',
-                borderRadius: '4px',
-                marginBottom: '16px',
-                fontSize: '14px',
-                color: 'var(--error)',
-              }}>
-                {errorMessage}
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={() => setDialogState('form')}
-                  style={{
-                    flex: 1,
-                    padding: '10px 20px',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '4px',
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    backgroundColor: 'white',
-                  }}
-                >
-                  Back
-                </button>
-                <button
-                  onClick={handlePublish}
-                  style={{
-                    flex: 1,
-                    padding: '10px 20px',
-                    backgroundColor: 'var(--accent)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Retry
-                </button>
-              </div>
-            </div>
-          )}
         </div>
-      </div>
-    </div>
+      )}
+
+      {/* Error state */}
+      {dialogState === 'error' && (
+        <div style={{ padding: '8px 0' }}>
+          <div style={{
+            padding: '12px',
+            backgroundColor: 'rgba(236, 19, 30, 0.08)',
+            borderRadius: '4px',
+            marginBottom: '16px',
+            fontSize: '14px',
+            color: 'var(--error)',
+          }}>
+            {errorMessage}
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => setDialogState('form')}
+              style={{
+                flex: 1,
+                padding: '10px 20px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                fontSize: '14px',
+                cursor: 'pointer',
+                backgroundColor: 'white',
+              }}
+            >
+              Back
+            </button>
+            <button
+              onClick={handlePublish}
+              style={{
+                flex: 1,
+                padding: '10px 20px',
+                backgroundColor: 'var(--accent)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+    </Dialog>
   );
 }

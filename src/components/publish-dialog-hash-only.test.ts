@@ -131,7 +131,7 @@ async function open(props: Record<string, unknown> = PROPS): Promise<Mounted> {
   return dialog;
 }
 
-async function choose(dialog: Mounted, label: 'Hash only' | 'Include full prompt text'): Promise<void> {
+async function choose(dialog: Mounted, label: 'Hash only' | 'Include full text'): Promise<void> {
   fire(dialog.inputLabelled(label), 'onChange');
   await dialog.settle();
 }
@@ -166,7 +166,7 @@ test('5: switching the visibility updates a default the reader has not edited, b
   await choose(dialog, 'Hash only');
   const neutral = title(dialog);
   assert.notEqual(neutral, QUESTION);
-  await choose(dialog, 'Include full prompt text');
+  await choose(dialog, 'Include full text');
   assert.equal(title(dialog), QUESTION);
   await choose(dialog, 'Hash only');
   assert.equal(title(dialog), neutral);
@@ -179,7 +179,7 @@ test('5: a title the reader typed is kept as typed, under either visibility', as
   await dialog.settle();
   await choose(dialog, 'Hash only');
   assert.equal(title(dialog), typed);
-  await choose(dialog, 'Include full prompt text');
+  await choose(dialog, 'Include full text');
   assert.equal(title(dialog), typed);
   await choose(dialog, 'Hash only');
   await fire(dialog.button('Seal'), 'onClick');
@@ -216,7 +216,16 @@ test('5: the published title under hash-only visibility is the neutral default',
 // --- 6. The words, and the summary request ------------------------------------------
 
 test('6: the hash-only choice says what the record keeps and what may still carry the question’s words', async () => {
+  // UX-1 P1: the words render on the hash-only choice while it is selected,
+  // and while "Include full text" is selected they sit behind the Question
+  // text section's disclosure ("What the other choice does"). Either way they
+  // are in the markup, byte for byte.
   const dialog = await open();
+  const behind = dialog.elements().filter((el) => el.type === 'details'
+    && String(el.props.className ?? '').split(/\s+/).includes('ui-disclosure') && textOf(el).includes(HASH_ONLY_WORDS));
+  assert.equal(behind.length, 1, 'full text selected: the words are not behind one ui-disclosure');
+  assert.ok(textOf(behind[0]).startsWith('What the other choice does'), `the disclosure reads: ${JSON.stringify(textOf(behind[0]))}`);
+  await choose(dialog, 'Hash only');
   const label = dialog.elements().find((el) => el.type === 'label' && textOf(el).includes('Hash only'));
   assert.ok(label, 'no hash-only choice');
   assert.ok(textOf(label!).includes(HASH_ONLY_WORDS), `the hash-only choice says: ${JSON.stringify(textOf(label!))}`);
