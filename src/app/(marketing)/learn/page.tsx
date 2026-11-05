@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { prose, sectionHeading, sectionSpacing, calloutBox, excerptBlock, card } from '@/styles/page-styles';
 import { pageTitle } from '@/lib/brand-config';
+import { Page } from '@/components/ui/Page';
+import { PageToc } from '@/components/ui/PageToc';
 
 export const metadata = {
   title: pageTitle('Learn'),
@@ -10,21 +12,43 @@ export const metadata = {
 const GITHUB_SKILL_URL = 'https://github.com/npstorey/civic-ai-tools/tree/main/packages/civic-typed-router/src/civic';
 const GITHUB_STREAMING_BASE = 'https://github.com/npstorey/civic-ai-tools-website/blob/08dfa4c/src/lib/streaming.ts';
 
+// The page's sections: each id and h2 written once, read by the section and by
+// the jump list (UX-1 P7: nine h2s, so the page has one). The ids are linked
+// from elsewhere on the site (`/learn#try-it`, `#narration`, ...) and stay.
+const SECTIONS = {
+  whyDifferent: { id: 'why-different', heading: 'Why the Answers Are Different' },
+  howItConnects: { id: 'how-mcp-works', heading: 'How data tools connect AI to data' },
+  systemPrompt: { id: 'system-prompt', heading: 'What the AI Was Told Before You Asked' },
+  narration: { id: 'narration', heading: 'How We Describe What the AI Does' },
+  qualityFactors: { id: 'quality-factors', heading: 'What Affects Response Quality' },
+  modelSelection: { id: 'model-selection', heading: 'Model Selection' },
+  aiLimitations: { id: 'ai-limitations', heading: 'Understanding AI Limitations' },
+  tryIt: { id: 'try-it', heading: 'See It in Action' },
+  learnMore: { id: 'learn-more', heading: 'Learn More' },
+} as const;
+
 export default function LearnPage() {
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 24px' }}>
+    <Page
+      width="reading"
+      title="What You Just Saw"
+      lede={
+        <>
+          This demo runs the same question through the same AI model twice &mdash; once
+          with only its training knowledge, once with live access to open data
+          portals through a protocol called MCP (Model Context Protocol).
+        </>
+      }
+    >
+      <PageToc
+        label="Sections of this page"
+        items={Object.values(SECTIONS).map((section) => ({ id: section.id, label: section.heading }))}
+      />
 
       {/* ============================================================
           Section 1: What You Just Saw
           ============================================================ */}
       <section id="intro" style={sectionSpacing}>
-        <h1 style={{ marginBottom: '16px' }}>What You Just Saw</h1>
-
-        <p style={{ fontSize: '20px', lineHeight: '150%', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-          This demo runs the same question through the same AI model twice &mdash; once
-          with only its training knowledge, once with live access to open data
-          portals through a protocol called MCP (Model Context Protocol).
-        </p>
         <p style={prose}>
           The side-by-side comparison reveals something important: for factual
           questions about civic data, an AI without access to current open data portals
@@ -36,18 +60,18 @@ export default function LearnPage() {
           cares about trustworthy civic information.
         </p>
         <p style={prose}>
-          Responses can be published as <Link href="/records">signed record packages</Link> &mdash;
+          Responses can be published as <Link href="/records">signed analyses</Link> &mdash;
           cryptographically signed, timestamped, and independently verifiable records of the question,
           tool calls, data sources, and model output. Browse the{' '}
-          <Link href="/records">record index</Link> to see published analyses.
+          <Link href="/records">Analysis page</Link> to see published analyses.
         </p>
       </section>
 
       {/* ============================================================
           Section 2: Why the Answers Are Different
           ============================================================ */}
-      <section id="why-different" style={sectionSpacing}>
-        <h2 style={sectionHeading}>Why the Answers Are Different</h2>
+      <section id={SECTIONS.whyDifferent.id} style={sectionSpacing}>
+        <h2 style={sectionHeading}>{SECTIONS.whyDifferent.heading}</h2>
 
         {/* Comparison cards — keep existing red/green design */}
         <div
@@ -66,9 +90,9 @@ export default function LearnPage() {
               border: '1px solid var(--error)',
             }}
           >
-            <h4 style={{ fontSize: '16px', color: 'var(--error)', marginBottom: '8px' }}>
-              Without Data Tools
-            </h4>
+            <h3 style={{ fontSize: '16px', color: 'var(--error)', marginBottom: '8px' }}>
+              Without data tools
+            </h3>
             <ul
               style={{
                 listStyle: 'none',
@@ -95,9 +119,9 @@ export default function LearnPage() {
               border: '1px solid var(--success)',
             }}
           >
-            <h4 style={{ fontSize: '16px', color: 'var(--success)', marginBottom: '8px' }}>
-              With MCP
-            </h4>
+            <h3 style={{ fontSize: '16px', color: 'var(--success)', marginBottom: '8px' }}>
+              With data tools
+            </h3>
             <ul
               style={{
                 listStyle: 'none',
@@ -144,10 +168,10 @@ export default function LearnPage() {
       </section>
 
       {/* ============================================================
-          Section 3: How MCP Connects AI to Data
+          Section 3: How data tools connect AI to data
           ============================================================ */}
-      <section id="how-mcp-works" style={sectionSpacing}>
-        <h2 style={sectionHeading}>How MCP Connects AI to Data</h2>
+      <section id={SECTIONS.howItConnects.id} style={sectionSpacing}>
+        <h2 style={sectionHeading}>{SECTIONS.howItConnects.heading}</h2>
 
         <p style={prose}>
           <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer">
@@ -193,8 +217,8 @@ export default function LearnPage() {
       {/* ============================================================
           Section 4: What the AI Was Told Before You Asked
           ============================================================ */}
-      <section id="system-prompt" style={sectionSpacing}>
-        <h2 style={sectionHeading}>What the AI Was Told Before You Asked</h2>
+      <section id={SECTIONS.systemPrompt.id} style={sectionSpacing}>
+        <h2 style={sectionHeading}>{SECTIONS.systemPrompt.heading}</h2>
 
         <p style={prose}>
           Every AI response is shaped by instructions most users never see.
@@ -283,8 +307,8 @@ export default function LearnPage() {
       {/* ============================================================
           Section 5: How Step Descriptions Are Generated
           ============================================================ */}
-      <section id="narration" style={sectionSpacing}>
-        <h2 style={sectionHeading}>How We Describe What the AI Does</h2>
+      <section id={SECTIONS.narration.id} style={sectionSpacing}>
+        <h2 style={sectionHeading}>{SECTIONS.narration.heading}</h2>
 
         <p style={prose}>
           The step-by-step narration you see during the AI&apos;s data retrieval process
@@ -348,8 +372,8 @@ export default function LearnPage() {
       {/* ============================================================
           Section 6: What Affects Response Quality
           ============================================================ */}
-      <section id="quality-factors" style={sectionSpacing}>
-        <h2 style={sectionHeading}>What Affects Response Quality</h2>
+      <section id={SECTIONS.qualityFactors.id} style={sectionSpacing}>
+        <h2 style={sectionHeading}>{SECTIONS.qualityFactors.heading}</h2>
 
         <p style={prose}>
           Several additional factors affect the quality of AI responses beyond data access.
@@ -438,8 +462,8 @@ export default function LearnPage() {
       {/* ============================================================
           Section 6b: Model Selection
           ============================================================ */}
-      <section id="model-selection" style={sectionSpacing}>
-        <h2 style={sectionHeading}>Model Selection</h2>
+      <section id={SECTIONS.modelSelection.id} style={sectionSpacing}>
+        <h2 style={sectionHeading}>{SECTIONS.modelSelection.heading}</h2>
 
         <p style={prose}>
           In October 2026 we ran nine AI models on 14 of the civic data questions first used in
@@ -449,7 +473,7 @@ export default function LearnPage() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
           <div style={card}>
-            <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>Claude Haiku 5.5 (recommended)</h4>
+            <h3 style={{ fontSize: '16px', marginBottom: '6px' }}>Claude Haiku 5.5 (recommended)</h3>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
               The model the demo starts on. In the October 2026 run it got the main answer right on 8
               of 11 questions, and partly right on the other three, at about half a cent a question in
@@ -459,7 +483,7 @@ export default function LearnPage() {
           </div>
 
           <div style={card}>
-            <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>Claude Sonnet 5.5 (balanced)</h4>
+            <h3 style={{ fontSize: '16px', marginBottom: '6px' }}>Claude Sonnet 5.5 (balanced)</h3>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
               Stronger analysis at moderate cost: the main answer right on 9 of 11 questions, with
               careful caveats, at about 11 cents a question and a median of 21 seconds.
@@ -467,7 +491,7 @@ export default function LearnPage() {
           </div>
 
           <div style={card}>
-            <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>Claude Opus 5.5 (premium)</h4>
+            <h3 style={{ fontSize: '16px', marginBottom: '6px' }}>Claude Opus 5.5 (premium)</h3>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
               The highest quality score in the October 2026 run, with the main answer right on all 11
               questions. It is the slowest of the three (a median of 27 seconds) and costs about 21
@@ -477,9 +501,9 @@ export default function LearnPage() {
         </div>
 
         <p style={prose}>
-          When an author publishes a record they had kept private, a second model first reviews the
+          When an author publishes an analysis they had kept private, a second model first reviews the
           analysis against a fixed checklist: Claude Sonnet 5.5, or Claude Opus 5.5 when Sonnet 5.5
-          wrote the analysis. Records published earlier with GPT-4o or GPT-5.4 keep those model
+          wrote the analysis. Analyses published earlier with GPT-4o or GPT-5.4 keep those model
           names.
         </p>
 
@@ -506,8 +530,8 @@ export default function LearnPage() {
       {/* ============================================================
           Section 7: Understanding AI Limitations
           ============================================================ */}
-      <section id="ai-limitations" style={sectionSpacing}>
-        <h2 style={sectionHeading}>Understanding AI Limitations</h2>
+      <section id={SECTIONS.aiLimitations.id} style={sectionSpacing}>
+        <h2 style={sectionHeading}>{SECTIONS.aiLimitations.heading}</h2>
 
         <p style={prose}>
           Even with live data access, AI responses can contain errors. This is inherent
@@ -574,8 +598,8 @@ export default function LearnPage() {
       {/* ============================================================
           Section 8: See It in Action
           ============================================================ */}
-      <section id="try-it" style={sectionSpacing}>
-        <h2 style={sectionHeading}>See It in Action</h2>
+      <section id={SECTIONS.tryIt.id} style={sectionSpacing}>
+        <h2 style={sectionHeading}>{SECTIONS.tryIt.heading}</h2>
 
         <p style={prose}>
           Try these queries in the demo to see different capabilities:
@@ -751,8 +775,8 @@ export default function LearnPage() {
       {/* ============================================================
           Section 8: Learn More
           ============================================================ */}
-      <section id="learn-more">
-        <h2 style={sectionHeading}>Learn More</h2>
+      <section id={SECTIONS.learnMore.id}>
+        <h2 style={sectionHeading}>{SECTIONS.learnMore.heading}</h2>
 
         <ul
           style={{
@@ -803,7 +827,7 @@ export default function LearnPage() {
           </Link>
         </div>
       </section>
-    </div>
+    </Page>
   );
 }
 
@@ -822,7 +846,7 @@ function SkillCategory({
 }) {
   return (
     <div>
-      <h4 style={{ fontSize: '16px', marginBottom: '6px' }}>{title}</h4>
+      <h3 style={{ fontSize: '16px', marginBottom: '6px' }}>{title}</h3>
       <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: '0 0 4px 0', lineHeight: '1.6' }}>
         {explanation}
       </p>

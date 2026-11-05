@@ -1,4 +1,5 @@
-import { EXPRESS_INTEREST_URL, TYPED_STANDARDS_URL } from '@/lib/site-config';
+import { TYPED_STANDARDS_URL } from '@/lib/site-config';
+import ContactCallToAction from '@/components/ContactCallToAction';
 
 // Legend statuses shared with the Typed Standards architecture docs
 // (end-state-vision.md) and typedstandards.org: exactly these three labels.
@@ -199,8 +200,8 @@ export default function PositioningBand() {
               AI-assisted answers about public data should come with receipts.
               Every analysis published here permanently records which datasets
               were used, what was asked of them, and which model did the work
-              &mdash; and the record is signed, so a third party can confirm it
-              hasn&apos;t been altered. The record shows how an answer was
+              &mdash; and the analysis is signed, so a third party can confirm it
+              hasn&apos;t been altered. The analysis shows how an answer was
               produced; it does not claim the answer is correct.
             </p>
           </div>
@@ -220,7 +221,7 @@ export default function PositioningBand() {
               Ask a real question against live portal data and watch the work:
               every query the AI issues is visible as actual SoQL, exportable
               as a Jupyter notebook you can re-run yourself, and publishable as
-              a signed record others can verify without taking your
+              a signed analysis others can verify without taking your
               word for it.
             </p>
           </div>
@@ -335,36 +336,11 @@ export default function PositioningBand() {
           </p>
         </div>
 
-        {/* Express interest */}
-        <div
-          style={{
-            borderTop: '1px solid var(--border-color)',
-            paddingTop: '24px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px',
-            flexWrap: 'wrap',
-          }}
-        >
-          <p style={{ ...bodyText, flex: '1 1 320px' }}>
-            Interested in running this against your city&apos;s data, or in the
-            verification standard behind it?
-          </p>
-          <a
-            href={EXPRESS_INTEREST_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ui-button ui-button-primary"
-            style={{
-              textDecoration: 'none',
-              fontSize: '14px',
-              padding: '10px 24px',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Get in touch
-          </a>
-        </div>
+        {/* Express interest: the shared contact call to action (UX-1 G0-2 (i)). */}
+        <ContactCallToAction
+          style={{ borderTop: '1px solid var(--border-color)', paddingTop: '24px' }}
+          textStyle={bodyText}
+        />
       </div>
     </section>
   );

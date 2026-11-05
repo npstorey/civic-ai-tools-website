@@ -2,6 +2,8 @@ import { prose, sectionHeading, sectionSpacing } from '@/styles/page-styles';
 import { pageTitle } from '@/lib/brand-config';
 import { resolveAnalytics } from '@/lib/analytics';
 import { buildPrivacySections, type PrivacySection, type Segment, type Statement } from '@/lib/privacy-facts';
+import { Page } from '@/components/ui/Page';
+import { PageToc } from '@/components/ui/PageToc';
 
 /**
  * `/privacy` (#516 P7): what this instance does with what a reader sends,
@@ -95,20 +97,16 @@ export default function PrivacyPage() {
   const sections = inReadingOrder(buildPrivacySections(analytics));
 
   return (
-    <div style={{ maxWidth: '760px', margin: '0 auto', padding: '48px 24px' }}>
-      <h1 style={{ marginBottom: '32px' }}>Privacy</h1>
-      {/* The jump list (UX pass row 6): traced like every statement, to the function that names the headings. */}
-      <nav aria-label="Sections of this page" style={{ marginBottom: '40px' }}>
-        <div data-statement="jump-list" data-trace="const:src/lib/privacy-facts.ts#buildPrivacySections const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS">
-          <ul style={{ ...prose, paddingLeft: '20px', margin: 0 }}>
-            {sections.map((section) => (
-              <li key={section.id}>
-                <a href={`#${section.id}`}>{section.heading}</a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </nav>
+    <Page width="reading" title="Privacy">
+      {/* The jump list (UX pass row 6), the frame's PageToc: traced like every statement, to the function that names the headings. */}
+      <PageToc
+        label="Sections of this page"
+        items={sections.map((section) => ({ id: section.id, label: section.heading }))}
+        data={{
+          'data-statement': 'jump-list',
+          'data-trace': 'const:src/lib/privacy-facts.ts#buildPrivacySections const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS',
+        }}
+      />
       {sections.map((section) => (
         <section key={section.id} id={section.id} style={{ ...sectionSpacing, marginBottom: '40px' }}>
           <h2 style={sectionHeading}>{section.heading}</h2>
@@ -117,6 +115,6 @@ export default function PrivacyPage() {
           ))}
         </section>
       ))}
-    </div>
+    </Page>
   );
 }

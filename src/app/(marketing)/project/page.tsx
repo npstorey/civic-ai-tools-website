@@ -1,14 +1,17 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { prose, sectionHeading, sectionSpacing, card } from '@/styles/page-styles';
-import { EXPRESS_INTEREST_URL, TYPED_STANDARDS_URL } from '@/lib/site-config';
+import { TYPED_STANDARDS_URL } from '@/lib/site-config';
+import ContactCallToAction from '@/components/ContactCallToAction';
 import { CONSORTIUM_MEMBERS } from '@/lib/consortium';
 import { pageTitle } from '@/lib/brand-config';
+import { Page } from '@/components/ui/Page';
+import { PageToc } from '@/components/ui/PageToc';
 
 export const metadata: Metadata = {
   title: pageTitle('Project'),
   description:
-    'What the Civic AI Tools project is: verifiable AI-assisted analysis of open civic data, the pillars it works across, and real published records.',
+    'What the Civic AI Tools project is: verifiable AI-assisted analysis of open civic data, the pillars it works across, and real published analyses.',
 };
 
 // Case cards reference REAL records in this site's public record registry.
@@ -29,7 +32,7 @@ const CASES: CaseRecord[] = [
     slug: 'pedestrian-involved-traffic-crashes-in-zip-11217-and-a-comparison-of-those-n-f5f90d',
     question: 'Pedestrian-involved traffic crashes in ZIP 11217, and how many were near schools',
     finding:
-      'Examined pedestrian-involved crashes in ZIP code 11217 for April 21 – May 21, 2026, using the NYC Open Data Motor Vehicle Collisions dataset, and found two such incidents. The record also discloses what didn’t work: the planned near-schools comparison could not be completed.',
+      'Examined pedestrian-involved crashes in ZIP code 11217 for April 21 – May 21, 2026, using the NYC Open Data Motor Vehicle Collisions dataset, and found two such incidents. The analysis also discloses what didn’t work: the planned near-schools comparison could not be completed.',
     publisher: 'Nathan Storey',
     model: 'openai/gpt-5.4',
     published: 'May 21, 2026',
@@ -77,24 +80,43 @@ const cardMeta: React.CSSProperties = {
   margin: 0,
 };
 
+// The page's sections: each id and h2 written once, read by the section and by
+// the jump list. Four h2s, under the design's five, so the jump list is the
+// owner's ruling (UX-1 G0-2 (ii)), in a commit of its own.
+const SECTIONS = {
+  pillars: { id: 'three-pillars', heading: 'Three pillars' },
+  consortium: { id: 'consortium', heading: 'Consortium' },
+  contact: { id: 'contact', heading: 'Contact us' },
+  cases: { id: 'cases', heading: 'Cases' },
+} as const;
+
 export default function ProjectPage() {
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '48px 24px' }}>
-      {/* 1. Project description */}
-      <section style={sectionSpacing}>
-        <h1 style={{ marginBottom: '16px' }}>The project</h1>
-        <p style={{ fontSize: '20px', lineHeight: '150%', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+    <Page
+      width="reading"
+      title="The project"
+      lede={
+        <>
           A published analysis of open civic data should survive scrutiny. Six months after
           it&apos;s written, a reader should be able to tell what the AI was asked, which public
           data sources it queried, which figures came from which query &mdash; and verify all of
           it without trusting the site that hosts it.
-        </p>
+        </>
+      }
+    >
+      <PageToc
+        label="Sections of this page"
+        items={Object.values(SECTIONS).map((section) => ({ id: section.id, label: section.heading }))}
+      />
+
+      {/* 1. Project description */}
+      <section style={sectionSpacing}>
         <p style={prose}>
           Civic AI Tools is an open-source project built around that idea. AI mediates open civic
           data for humans: anyone &mdash; a journalist, a student, a researcher, a public servant
           &mdash; can ask a plain-language question against live public data portals (NYC Open
           Data and other Socrata portals, Google Data Commons, Boston 311), watch every query the
-          AI issues, and publish the result as a cryptographically signed record that
+          AI issues, and publish the result as a cryptographically signed analysis that
           others can verify independently.
         </p>
         <p style={prose}>
@@ -109,8 +131,8 @@ export default function ProjectPage() {
       </section>
 
       {/* 2. Three pillars */}
-      <section style={sectionSpacing}>
-        <h2 style={sectionHeading}>Three pillars</h2>
+      <section id={SECTIONS.pillars.id} style={sectionSpacing}>
+        <h2 style={sectionHeading}>{SECTIONS.pillars.heading}</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <p style={pillarLabel}>Deliberative democracy &times; citizen science</p>
@@ -118,7 +140,7 @@ export default function ProjectPage() {
               Public data belongs to the public, and working with it shouldn&apos;t require a data
               science team. Anyone who can ask a question can run a real analysis against live
               portal data, see exactly how the answer was produced, and publish it as a signed
-              record others can check without taking their word for it &mdash; evidence that can
+              analysis others can check without taking their word for it &mdash; evidence that can
               hold up in public discussion, and a resource for building open-data and AI literacy.
             </p>
           </div>
@@ -152,8 +174,8 @@ export default function ProjectPage() {
       </section>
 
       {/* 3. Consortium */}
-      <section style={sectionSpacing}>
-        <h2 style={sectionHeading}>Consortium</h2>
+      <section id={SECTIONS.consortium.id} style={sectionSpacing}>
+        <h2 style={sectionHeading}>{SECTIONS.consortium.heading}</h2>
         <p style={prose}>
           Founding members of the consortium supporting the Typed Standards ecosystem.
         </p>
@@ -196,43 +218,17 @@ export default function ProjectPage() {
       </section>
 
       {/* 4. Contact us */}
-      <section style={sectionSpacing}>
-        <h2 style={sectionHeading}>Contact us</h2>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px',
-            flexWrap: 'wrap',
-          }}
-        >
-          <p style={{ ...prose, flex: '1 1 320px', marginBottom: 0 }}>
-            Interested in running this against your city&apos;s data, joining the work, or in the
-            verification standard behind it?
-          </p>
-          <a
-            href={EXPRESS_INTEREST_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ui-button ui-button-primary"
-            style={{
-              textDecoration: 'none',
-              fontSize: '14px',
-              padding: '10px 24px',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Get in touch
-          </a>
-        </div>
+      <section id={SECTIONS.contact.id} style={sectionSpacing}>
+        <h2 style={sectionHeading}>{SECTIONS.contact.heading}</h2>
+        <ContactCallToAction textStyle={prose} />
       </section>
 
       {/* 5. Cases */}
-      <section style={{ marginBottom: '48px' }}>
-        <h2 style={sectionHeading}>Cases</h2>
+      <section id={SECTIONS.cases.id} style={{ marginBottom: '48px' }}>
+        <h2 style={sectionHeading}>{SECTIONS.cases.heading}</h2>
         <p style={prose}>
           Real analyses published to this site&apos;s{' '}
-          <Link href="/records">public record registry</Link>. Each card links to the signed
+          <Link href="/records">public registry of analyses</Link>. Each card links to the signed
           record, where everything stated here can be read and independently verified. A record
           documents how an answer was produced &mdash; it does not certify that the answer is
           correct. Each record page also shows a verification status: &ldquo;unverified&rdquo;
@@ -254,6 +250,6 @@ export default function ProjectPage() {
           ))}
         </div>
       </section>
-    </div>
+    </Page>
   );
 }
