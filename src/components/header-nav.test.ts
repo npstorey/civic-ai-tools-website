@@ -29,9 +29,9 @@
 // before their green was trusted (the phase report lists the mutations).
 //
 // BLIND SPOTS, stated. The harness has no layout, focus or browser events:
-// `sm:hidden` and `hidden sm:flex` are class names here, so the desktop bar
-// and the drawer are told apart by structure (the `<nav>` outside any dialog,
-// and the `role="dialog"` sheet), not by a viewport. Escape, an outside tap,
+// `lg:hidden` and `hidden lg:flex` (`lg` is 1024 px) are class names here, so
+// the desktop bar and the drawer are told apart by structure (the `<nav>`
+// outside any dialog, and the `role="dialog"` sheet), not by a viewport. Escape, an outside tap,
 // focus return and the drawer drawn over the page are the owner's staging
 // read (criterion 7). `next/image` is stubbed. Criterion 4 reads the files
 // `git ls-files` tracks: a new importer is invisible until it is added.

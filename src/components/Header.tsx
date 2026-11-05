@@ -292,7 +292,7 @@ export default function Header({
           >
             {wordmark}
           </Link>
-          <nav className="hidden sm:flex items-center gap-6">
+          <nav className="hidden lg:flex items-center gap-6">
             {entries.map((entry) =>
               entry.kind === 'menu' ? (
                 <Menu key={entry.id} trigger={entry.label} items={entry.items} />
@@ -307,7 +307,7 @@ export default function Header({
           {/* Mobile menu: opens the drawer */}
           <button
             type="button"
-            className="sm:hidden"
+            className="lg:hidden"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle menu"
             aria-expanded={mobileMenuOpen}

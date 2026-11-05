@@ -20,11 +20,11 @@
 // WHAT MAKES IT ABLE TO FAIL. At the base each surface renders the old word:
 // "My Records (0)", "Dashboard", "Records", an h1 "Records", "3 records".
 //
-// BLIND SPOTS, stated. The harness has no layout: `sm:hidden` and
-// `hidden sm:flex` are class names here, so "at the mobile layout" is read as
+// BLIND SPOTS, stated. The harness has no layout: `lg:hidden` and
+// `hidden lg:flex` are class names here, so "at the mobile layout" is read as
 // "no ancestor of the control carries `hidden`", the class that hides an
-// element below the `sm` width, not by a viewport. `next/image` is stubbed
-// (the fixture account has no avatar image).
+// element below the `lg` width (1024 px), not by a viewport. `next/image` is
+// stubbed (the fixture account has no avatar image).
 //
 // Run with: npm test
 
