@@ -614,3 +614,44 @@ test('with no marketing surface, the bar holds no Explore menu (it would have no
   const bar = ['Ask -> /ask', 'Analysis -> /records', `Typed Standards -> ${TYPED_STANDARDS_URL}`];
   assert.deepEqual(read, { unconfigured: bar, appOnly: bar }, `the bar with marketingOrigin null: ${JSON.stringify(read)}`);
 });
+
+// --- The breakpoint (the owner's ruling A at G5) ---------------------------------------
+//
+// The full bar shows from 1024 px and the drawer's toggle below it. The harness
+// has no layout, so this pins the class names; the headless-Chrome measurement
+// in the phase report is the evidence that the bar fits from 1024 px. `lg` is
+// Tailwind's default 64rem (1024 px) only while `globals.css` declares no
+// `--breakpoint-*` of its own.
+
+/** Display utilities, bare or behind a variant (`lg:flex`, `max-md:hidden`). */
+const DISPLAY = /^(?:.+:)?(?:hidden|block|inline|inline-block|flex|inline-flex|grid|inline-grid|contents|flow-root|table|list-item)$/;
+const displayClasses = (el: HostElement): string[] => classesOf(el).filter((c) => DISPLAY.test(c));
+
+/** The display classes `find` reads, signed out and signed in, on a split topology (as production runs). */
+async function displayClassesOf(find: Finder): Promise<Record<string, string[]>> {
+  const read: Record<string, string[]> = {};
+  for (const state of ['out', 'in'] as const) {
+    const s = await mountHeader(CONFIGS.split.env, state);
+    read[state] = displayClasses(find(s));
+    s.unmount();
+  }
+  return read;
+}
+
+test('the bar\'s <nav> is hidden below the lg width (1024 px) and a flex row from it: `hidden lg:flex`, no other display class', async () => {
+  const read = await displayClassesOf(desktopNav);
+  const expected = ['hidden', 'lg:flex'];
+  assert.deepEqual(read, { out: expected, in: expected }, `the display classes of the bar's <nav>: ${JSON.stringify(read)}`);
+});
+
+test('the drawer\'s toggle shows below the lg width (1024 px) and is hidden from it: `lg:hidden`, no other display class', async () => {
+  const read = await displayClassesOf(mobileToggle);
+  const expected = ['lg:hidden'];
+  assert.deepEqual(read, { out: expected, in: expected }, `the display classes of the toggle: ${JSON.stringify(read)}`);
+});
+
+test('globals.css declares no --breakpoint-*, so lg stays Tailwind\'s default 1024 px', () => {
+  const css = fs.readFileSync(path.join(SRC, 'app', 'globals.css'), 'utf8');
+  const declared = css.split('\n').map((line, i) => [i + 1, line] as const).filter(([, line]) => line.includes('--breakpoint-'));
+  assert.deepEqual(declared, [], `globals.css lines naming --breakpoint-: ${JSON.stringify(declared)}`);
+});
