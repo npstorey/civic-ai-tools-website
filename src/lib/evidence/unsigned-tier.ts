@@ -205,7 +205,7 @@ export function evaluateSealCommitGate(
     body: {
       error:
         'This instance is running unsigned — no signing key is configured. ' +
-        'Sealing or publishing a record requires a signature: an unsigned ' +
+        'Sealing or publishing an analysis requires a signature: an unsigned ' +
         'package can reach neither the sealed nor the public state (ADR-0020). ' +
         'Analyses still run and can be inspected locally; an operator enables ' +
         `signing (${canonicalEnvName('SIGNING_KEY')} and ` +
@@ -234,7 +234,7 @@ export function evaluateUnsignedRecordPublishGate(
     status: 409,
     body: {
       error:
-        'This record was persisted without a signature; an unsigned package ' +
+        'This analysis was persisted without a signature; an unsigned package ' +
         'cannot be published — it can reach neither the sealed nor the public ' +
         'state (ADR-0020).',
       code: 'unsigned_package',

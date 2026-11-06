@@ -194,14 +194,14 @@ export const OPERATOR_STATES_ITEMS: readonly string[] = [
  * `WITHHELD_QUESTION_TEXT` (`src/lib/notebook.ts`) in the publish handler.
  */
 export const HASH_ONLY_RECORD_WORDS =
-  'The record keeps a fingerprint of your question instead of its text. Anyone who knows or guesses the exact ' +
+  'The analysis keeps a fingerprint of your question instead of its text. Anyone who knows or guesses the exact ' +
   'wording can confirm it matches. The answer, summary and data queries may still contain its words.';
 
 /** The publish dialog's label for the hash-only choice (pinned by the same test). */
 export const HASH_ONLY_CHOICE_LABEL = 'Hash only';
 
 /** A record's title, in the words the publish dialog states beside the title field (pinned by the same test). */
-export const RECORD_TITLE_IS_PUBLIC = 'The title is public and becomes the record’s address.';
+export const RECORD_TITLE_IS_PUBLIC = 'The title is public and becomes the address of the analysis.';
 
 /**
  * What a published record shows about its creator. The record page renders

@@ -49,27 +49,27 @@ export interface SealOnlyRefusal {
 }
 
 const SEAL_ONLY_REASON =
-  'This instance seals records only: its operator has turned off the public ' +
-  'state (SITE_SEAL_ONLY), so a record cannot be made public here.';
+  'This instance seals analyses only: its operator has turned off the public ' +
+  'state (SITE_SEAL_ONLY), so an analysis cannot be made public here.';
 
-const ALREADY_PUBLIC = 'Records that are already public stay public.';
+const ALREADY_PUBLIC = 'Analyses that are already public stay public.';
 
 /** The stated reason `POST /api/records` refuses a request for the public state with. */
 export const SEAL_ONLY_RECORDS_MESSAGE =
   `${SEAL_ONLY_REASON} This request asks for the public state, and so does a ` +
   'request that omits visibility, because "public" is the default. Send ' +
-  'visibility "sealed" instead: the record is signed, timestamped and ' +
+  'visibility "sealed" instead: the analysis is signed, timestamped and ' +
   'registered on the transparency log, and its content stays private to you. ' +
   ALREADY_PUBLIC;
 
 /** The stated reason `POST /api/records/:slug/publish` is refused with. */
 export const SEAL_ONLY_PUBLISH_MESSAGE =
-  `${SEAL_ONLY_REASON} A sealed record stays sealed. ${ALREADY_PUBLIC}`;
+  `${SEAL_ONLY_REASON} A sealed analysis stays sealed. ${ALREADY_PUBLIC}`;
 
 /** What the publish dialog and the dashboard say beside the unavailable option. */
 export const SEAL_ONLY_UI_REASON =
-  'This instance seals records only: its operator has turned off making ' +
-  'records public. Records that are already public stay public.';
+  'This instance seals analyses only: its operator has turned off making ' +
+  'analyses public. Analyses that are already public stay public.';
 
 /** The dashboard's label for the Publish action it shows disabled. */
 export const SEAL_ONLY_DASHBOARD_LABEL = 'Publish unavailable (sealed only)';
@@ -172,7 +172,7 @@ const SEALED_SUMMARY =
   'Signed, timestamped, and registered on the public transparency log — but the ' +
   'content stays private to you.';
 const SEALED_RESULT_SUMMARY =
-  'Your record is sealed — signed and registered, content private to you.';
+  'Your analysis is sealed — signed and registered, content private to you.';
 
 /**
  * The dialog's sealed-state wording under this instance's setting. Off, the
@@ -183,9 +183,9 @@ const SEALED_RESULT_SUMMARY =
 export function sealedStateCopy(sealOnly: boolean): SealedStateCopy {
   if (sealOnly) {
     return {
-      sealChoice: `${SEALED_SUMMARY} This instance seals records only, so the record stays sealed.`,
+      sealChoice: `${SEALED_SUMMARY} This instance seals analyses only, so the analysis stays sealed.`,
       sealedResult:
-        `${SEALED_RESULT_SUMMARY} This instance seals records only, so it stays sealed. ` +
+        `${SEALED_RESULT_SUMMARY} This instance seals analyses only, so it stays sealed. ` +
         'Only you can open this page:',
     };
   }

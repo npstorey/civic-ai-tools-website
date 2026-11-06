@@ -117,7 +117,7 @@ export default function ComparisonDisplay({
 
   const withMcpPanel = (
     <ResponsePanel
-      title="With Data Tools"
+      title="With data tools"
       subtitle={
         <>
           {modelName} + live civic data via{' '}

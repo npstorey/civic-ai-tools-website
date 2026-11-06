@@ -14,7 +14,8 @@
 //
 // CRITERION 2 (the parts this file asserts). The flows statement, its base version and its hash, and
 // the privacy page's statements, are byte-identical to the base's (`607d101`), pinned below by
-// SHA-256 at the configurations this file drives; the re-ask notice's words for the model
+// SHA-256 at the configurations this file drives (the privacy page's two values re-captured in
+// UX-2 PW2, where G0-4 B moved two of its sentences; see `BASE`); the re-ask notice's words for the model
 // (`consent.ts`) and the privacy page's endpoint heading stay "The model endpoint". "Where this
 // question went" is asserted in `src/lib/flows/where-it-went.test.ts`.
 //
@@ -346,19 +347,24 @@ test('the sandbox definition\'s figures are the hosting module\'s: 10 minutes id
 
 const sha = (value: unknown) => createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
 
-/** Captured at the base (`607d101`) by this file's own computation, before any change. */
+/**
+ * Captured at the base (`607d101`) by this file's own computation, before any change.
+ * The two `privacy` values were re-captured by the same computation in UX-2 PW2
+ * (#729, G0-4 B), whose S4 and S6 move two privacy-page sentences to "analysis";
+ * with only those two lines of `privacy-facts.ts` reverted, the base values return.
+ */
 const BASE: Record<'six' | 'three', { statement: string; version: string; hash: string; privacy: string }> = {
   six: {
     statement: 'df07040107fbcf939d9ad594cbdb8f21b22e538c90022b474483f0c2853f4669',
     version: '2489d0dda25a79b3286c380379c6d2c8202e66a77fe5b4f493f558a7ce190f9c',
     hash: '7683b5d59e2b39df3f941420a5ce44ad14539992d2b6850df60f7aa64fe4bc60',
-    privacy: '04d555fa05c0d5f1155176a13be2a018025e7b4097011d56bde82884d803e9c6',
+    privacy: '90ed3e53d6a89174c22a486cfccb0f8fabaefad679c3f6f7ab55f3f267487050',
   },
   three: {
     statement: '522fc92cad73b13f15ede0acaf16ce32b139d4b1438a5ee84dbe0d414c88813a',
     version: 'ce0f4f09dff9d9d998a00cca59b12ee92486752ce9d94ed1eb310eae01c69325',
     hash: '159e0475172c58c49d51f654dec0b74e75d24639452c7b1ff73eaf0558242696',
-    privacy: '1c0e14ad571f74d380f3ecc4f93d9a60b049185583756122e23883cf61f6fe6c',
+    privacy: '416c8106d41d2a896dab22d2123bd573f6c4a8c0130319cc4e89712445e9a135',
   },
 };
 const BASE_PRIVACY_CONSENT_SECTIONS = 'a33e19a6d21aa7c3ff2e5d806a635fbd5ea5067995057d08b622e4906b1d18d1';

@@ -129,12 +129,12 @@
         {
           "id": "prompt-text",
           "trace": "const:src/lib/privacy-facts.ts#HASH_ONLY_RECORD_WORDS const:src/lib/privacy-facts.ts#HASH_ONLY_CHOICE_LABEL const:src/lib/db/schema.ts#promptVisibilityEnum const:src/lib/notebook.ts#WITHHELD_QUESTION_TEXT const:src/app/api/evidence/route.ts#POST",
-          "text": "When you publish, you choose whether the record includes your question's text or only a fingerprint (a hash) of it. The publish dialog describes that choice, Hash only, in these words. The record keeps a fingerprint of your question instead of its text. Anyone who knows or guesses the exact wording can confirm it matches. The answer, summary and data queries may still contain its words."
+          "text": "When you publish, you choose whether the record includes your question's text or only a fingerprint (a hash) of it. The publish dialog describes that choice, Hash only, in these words. The analysis keeps a fingerprint of your question instead of its text. Anyone who knows or guesses the exact wording can confirm it matches. The answer, summary and data queries may still contain its words."
         },
         {
           "id": "record-title",
           "trace": "const:src/lib/privacy-facts.ts#RECORD_TITLE_IS_PUBLIC const:src/app/api/evidence/route.ts#POST",
-          "text": "The title is public and becomes the record’s address."
+          "text": "The title is public and becomes the address of the analysis."
         },
         {
           "id": "seal-only",
@@ -423,12 +423,12 @@
         {
           "id": "prompt-text",
           "trace": "const:src/lib/privacy-facts.ts#HASH_ONLY_RECORD_WORDS const:src/lib/privacy-facts.ts#HASH_ONLY_CHOICE_LABEL const:src/lib/db/schema.ts#promptVisibilityEnum const:src/lib/notebook.ts#WITHHELD_QUESTION_TEXT const:src/app/api/evidence/route.ts#POST",
-          "text": "When you publish, you choose whether the record includes your question's text or only a fingerprint (a hash) of it. The publish dialog describes that choice, Hash only, in these words. The record keeps a fingerprint of your question instead of its text. Anyone who knows or guesses the exact wording can confirm it matches. The answer, summary and data queries may still contain its words."
+          "text": "When you publish, you choose whether the record includes your question's text or only a fingerprint (a hash) of it. The publish dialog describes that choice, Hash only, in these words. The analysis keeps a fingerprint of your question instead of its text. Anyone who knows or guesses the exact wording can confirm it matches. The answer, summary and data queries may still contain its words."
         },
         {
           "id": "record-title",
           "trace": "const:src/lib/privacy-facts.ts#RECORD_TITLE_IS_PUBLIC const:src/app/api/evidence/route.ts#POST",
-          "text": "The title is public and becomes the record’s address."
+          "text": "The title is public and becomes the address of the analysis."
         },
         {
           "id": "prompt-text-database",

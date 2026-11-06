@@ -700,7 +700,7 @@ test('W3 P1 (9) the executed run: no text the site writes names a tool by its ex
 test('W3 P1 item 2: side by side, the without-data panel keeps its own panel and the view renders once, in the with-data panel', () => {
   const html = renderComparison(COMPARISON_STATE, { answerFirst: false });
   const without = at(html, '>Without data tools</h3>');
-  const withData = at(html, '>With Data Tools</h3>');
+  const withData = at(html, '>With data tools</h3>');
   assert.ok(without < withData, 'premise: the without-data panel renders first');
   for (const name of SEVEN.filter((n) => n !== 'disclosure')) {
     const all = occurrences(html, `data-part="${name}"`);

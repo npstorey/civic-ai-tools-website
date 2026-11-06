@@ -118,21 +118,16 @@ interface Allowed {
 
 const API_NOT_FOUND = 'Record not found';
 
-// The rulings that keep a row (UX-1, 2026-11-03): D4 B (the not-reversible sentence),
-// D5 (the unsigned and sealed sentences, verbatim this wave), C12 ("execution record"),
-// D6 (download file names), C22 (the API messages no dialog shows).
+// The rulings that keep a row (UX-1, 2026-11-03): C12 ("execution record"),
+// D6 (download file names), C22 (the API messages no dialog shows). D4 B's
+// not-reversible sentence and D5's unsigned and sealed sentences left the list
+// in UX-2 PW2: G0-4 B moved their noun to "analysis" (#729, S1-S3, S8).
 const ALLOWLIST: readonly Allowed[] = [
   // DashboardTabs.tsx
-  { file: 'src/components/dashboard/DashboardTabs.tsx', rows: ':456-457 (D4 B)', reason: 'ruled copy', text: '— a later withdrawal flags the record but does not erase it.', count: 1 },
   { file: 'src/components/dashboard/DashboardTabs.tsx', rows: ':601', reason: 'keep', phrase: 'The prior withdrawal record is preserved', count: 1 },
 
   // NotebookOutput.tsx: "execution record" (C12).
   { file: 'src/components/notebook/NotebookOutput.tsx', rows: ':241 (C12)', reason: 'keep', text: 'Publishes the executed notebook and its execution record — not a regenerated skeleton.', count: 1 },
-
-  // evidence/[slug]/page.tsx: the unsigned and sealed sentences (D5).
-  { file: 'src/app/(app)/evidence/[slug]/page.tsx', rows: ':358 (D5)', reason: 'ruled copy', text: 'This record was produced without a signing key (the unsigned dev tier). It carries no signature, no registered key, and no transparency-log entry, so its origin cannot be cryptographically confirmed. An unsigned package can reach neither the sealed nor the public state.', count: 1 },
-  { file: 'src/app/(app)/evidence/[slug]/page.tsx', rows: ':385 (D5)', reason: 'ruled copy', text: 'This record is unlisted: its content is not publicly accessible and it does not appear in the public registry. Only you can see this page. It was persisted without a signature, so no public commitment backs it and it cannot be published.', count: 1 },
-  { file: 'src/app/(app)/evidence/[slug]/page.tsx', rows: ':393 (D5)', reason: 'ruled copy', text: 'This record is signed, timestamped, and registered on the public transparency log, but its content is not publicly accessible and it does not appear in the public registry. Only you can see this page. Publishing is a separate, irreversible step that makes the content public and emits signed publication attestations.', count: 1 },
 
   // streaming.ts: rows of a dataset (F18's sense 2).
   { file: 'src/lib/streaming.ts', rows: ':1064', reason: 'sense 2', text: 'bill, law or other legislative record', count: 1 },
