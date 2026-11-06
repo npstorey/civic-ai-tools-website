@@ -355,7 +355,7 @@ export default async function EvidencePage({ params }: PageProps) {
               Unsigned package — no cryptographic commitment
             </div>
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              This record was produced without a signing key (the unsigned dev
+              This analysis was produced without a signing key (the unsigned dev
               tier). It carries no signature, no registered key, and no
               transparency-log entry, so its origin cannot be cryptographically
               confirmed. An unsigned package can reach neither the sealed nor
@@ -382,7 +382,7 @@ export default async function EvidencePage({ params }: PageProps) {
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
               {isUnsignedRecord ? (
                 <>
-                  This record is unlisted: its content is not publicly
+                  This analysis is unlisted: its content is not publicly
                   accessible and it does not appear in the public registry.
                   Only you can see this page. It was persisted without a
                   signature, so no public commitment backs it and it cannot be
@@ -390,7 +390,7 @@ export default async function EvidencePage({ params }: PageProps) {
                 </>
               ) : (
                 <>
-                  This record is signed, timestamped, and registered on the public
+                  This analysis is signed, timestamped, and registered on the public
                   transparency log, but its content is not publicly accessible and
                   it does not appear in the public registry. Only you can see this
                   page. Publishing is a separate, irreversible step that makes the

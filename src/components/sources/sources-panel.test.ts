@@ -231,7 +231,8 @@ test('criterion 1: for a session without a dbId, the panel shows the date given 
 
 // Amendment 1, correction 3 (Q7, chosen): the panel withdraws in place for
 // every session, and a session whose consent is on its account also gets the
-// link to the dashboard's Sources tab, which withdraws too. Stage A asserted
+// link to the dashboard's Sources tab, which withdraws too and, since PC, sets
+// each source's state (`SourcesTab.tsx`). Stage A asserted
 // no in-place withdraw for such a session; the ruling replaced that.
 test('criterion 15 (Q7): for a session with a dbId, the footer links to the dashboard\'s Sources tab, and the panel withdraws in place too', async () => {
   SIGNED_IN_DB();

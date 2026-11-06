@@ -667,10 +667,11 @@ export function resolveDashboardHref(env: Record<string, string | undefined>): s
 }
 
 /**
- * Where an "Ask" affordance should point (#210 — the `AppChrome` strip).
+ * Where an "Ask" affordance should point (#210 — the Header's Ask item; the
+ * `AppChrome` strip's until UX-1 P3a).
  *
  * Exactly `resolveDashboardHref`'s shape, and for exactly its reason: the
- * strip renders on the DUAL-SERVED published-record pages — `/records` and its
+ * Header renders on the DUAL-SERVED published-record pages — `/records` and its
  * permanent prior-era alias `/evidence` — which serve on the marketing host
  * too, where `/ask` is app-private and withheld. A relative href there is a
  * 404, so a split-host instance must carry the app origin.
@@ -691,10 +692,10 @@ export function resolveAskHref(env: Record<string, string | undefined>): string 
 
 /**
  * Where the app surface's "Public site" affordances should point (the
- * `AppChrome` exit link):
+ * Header's "Public site" item, once the `AppChrome` exit link):
  * - instance serves no marketing surface → null: there IS no public site —
  *   hide the affordance rather than link a gated user to a 404 or back to
- *   the dashboard. `AppChrome` guards on exactly this null.
+ *   the dashboard. The Header hides the item on exactly this null.
  * - split-host → the marketing origin.
  * - unnamed hosts passing through (`SERVE_MARKETING`) → `/`, the relative
  *   link this has always emitted for a single-host instance.

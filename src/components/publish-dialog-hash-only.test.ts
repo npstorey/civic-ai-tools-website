@@ -12,10 +12,10 @@
 //      built from the run (its portal and the date). Switching the visibility
 //      updates a default the reader has not edited; a title the reader typed is
 //      kept as typed. The field says the title is public and becomes the
-//      record's address. Under full-text visibility the default is the
+//      address of the analysis. Under full-text visibility the default is the
 //      question, as before.
 //   6. The words and the summary request. The hash-only choice says what the
-//      record keeps instead of the question and what may still carry its
+//      analysis keeps instead of the question and what may still carry its
 //      words. A summary request made while hash-only visibility is selected
 //      carries no form of the question, and the summary standing under it is
 //      the one that request returned, whichever reply arrives last. The
@@ -84,10 +84,12 @@ const LONG_QUESTION = `${QUESTION} And how did the counts change between the fir
 const ANSWER = 'Nine reports were recorded across three blocks.\n\nOne request returned the figure.';
 const SUMMARY_WITH_QUESTION_REQUEST = 'Model summary drafted from a request that carried the question.';
 const SUMMARY_WITHOUT_QUESTION_REQUEST = 'Model summary drafted from a request that carried no question.';
+// UX-2 PW2 (G0-4 B; the research check's S4 and S6, ruled by G0-10 R1): the
+// two sentences name the saved item "analysis".
 const HASH_ONLY_WORDS =
-  'The record keeps a fingerprint of your question instead of its text. Anyone who knows or guesses the exact ' +
+  'The analysis keeps a fingerprint of your question instead of its text. Anyone who knows or guesses the exact ' +
   'wording can confirm it matches. The answer, summary and data queries may still contain its words.';
-const TITLE_NOTE = 'The title is public and becomes the record’s address.';
+const TITLE_NOTE = 'The title is public and becomes the address of the analysis.';
 
 const FORMS = [QUESTION, encodeURIComponent(QUESTION), JSON.stringify(QUESTION).slice(1, -1)];
 const carriesQuestion = (value: unknown) => FORMS.some((form) => JSON.stringify(value ?? null).includes(JSON.stringify(form).slice(1, -1)));
@@ -192,7 +194,7 @@ test('5: under full-text visibility the default title is the question, as before
   assert.equal(title(await open({ ...PROPS, queryText: LONG_QUESTION })), `${LONG_QUESTION.slice(0, 77)}...`);
 });
 
-test('5: the title field says the title is public and becomes the record’s address', async () => {
+test('5: the title field says the title is public and becomes the address of the analysis', async () => {
   const text = (await open()).text();
   const field = text.indexOf('Title');
   const next = text.indexOf('Summary');
@@ -215,7 +217,7 @@ test('5: the published title under hash-only visibility is the neutral default',
 
 // --- 6. The words, and the summary request ------------------------------------------
 
-test('6: the hash-only choice says what the record keeps and what may still carry the question’s words', async () => {
+test('6: the hash-only choice says what the analysis keeps and what may still carry the question’s words', async () => {
   // UX-1 P1: the words render on the hash-only choice while it is selected,
   // and while "Include full text" is selected they sit behind the Question
   // text section's disclosure ("What the other choice does"). Either way they

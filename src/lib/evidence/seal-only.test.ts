@@ -86,7 +86,7 @@ test('#552 C1: on, POST /api/records refuses "public", "published" and an absent
         // The stated reason: what is off, the value this instance accepts
         // (ruling G0-3), why an absent value is caught, and what it does not
         // change.
-        assert.match(refusal.body.error, /seals records only/);
+        assert.match(refusal.body.error, /seals analyses only/);
         assert.match(refusal.body.error, /SITE_SEAL_ONLY/);
         assert.match(refusal.body.error, /visibility "sealed"/);
         assert.match(refusal.body.error, /omits visibility/);
@@ -131,7 +131,7 @@ test('#552 C1: on, POST /api/records/:slug/publish is refused with the stated re
       assert.ok(refusal, `SITE_SEAL_ONLY=${JSON.stringify(on)} let a publish through`);
       assert.equal(refusal.status, 403);
       assert.equal(refusal.body.code, 'seal_only');
-      assert.match(refusal.body.error, /seals records only/);
+      assert.match(refusal.body.error, /seals analyses only/);
       assert.match(refusal.body.error, /SITE_SEAL_ONLY/);
       assert.match(refusal.body.error, /stays sealed/);
       assert.match(refusal.body.error, /already public stay public/);
@@ -164,7 +164,7 @@ test('#552 C3: on, the dialog\'s public choice is unavailable, with the reason; 
       const choice = publicStateAvailability(isSealOnly());
       assert.equal(choice.available, false, `SITE_SEAL_ONLY=${JSON.stringify(on)} offered the public choice`);
       assert.ok(choice.explanation, 'no reason is given');
-      assert.match(choice.explanation, /seals records only/);
+      assert.match(choice.explanation, /seals analyses only/);
       assert.match(choice.explanation, /already public stay public/);
       // Reader-facing copy speaks the reader's language, not the operator's.
       assert.doesNotMatch(choice.explanation, /SITE_SEAL_ONLY/);
@@ -184,7 +184,7 @@ test('#552 C3: the dashboard shows Publish disabled with the reason when on, unc
       assert.equal(affordance.kind, 'seal_only', `SITE_SEAL_ONLY=${JSON.stringify(on)} offered Publish`);
       if (affordance.kind !== 'seal_only') return;
       assert.match(affordance.label, /^Publish unavailable/);
-      assert.match(affordance.explanation, /seals records only/);
+      assert.match(affordance.explanation, /seals analyses only/);
       assert.match(affordance.explanation, /already public stay public/);
       // The server refuses an unsigned instance with `unsigned_tier` first;
       // the dashboard says the same.
@@ -201,11 +201,12 @@ test('#552 C3: the dashboard shows Publish disabled with the reason when on, unc
 
 // The dialog's two sentences about the sealed state, as it rendered them at
 // 111fb99 (JSX joins the source lines with one space). Off, they must come
-// back byte for byte.
+// back byte for byte, except the noun UX-2 PW2 moved (G0-4 B, S16: "Your
+// record is sealed" reads "Your analysis is sealed").
 const SEAL_CHOICE_BEFORE =
   'Signed, timestamped, and registered on the public transparency log — but the content stays private to you. Publish later from your dashboard.';
 const SEALED_RESULT_BEFORE =
-  'Your record is sealed — signed and registered, content private to you. Only you can open this page; publish it anytime from your dashboard:';
+  'Your analysis is sealed — signed and registered, content private to you. Only you can open this page; publish it anytime from your dashboard:';
 
 test('#552 C3: on, the dialog\'s sealed-state sentences promise no later publication', () => {
   for (const on of ON) {
@@ -214,8 +215,8 @@ test('#552 C3: on, the dialog\'s sealed-state sentences promise no later publica
       for (const [where, text] of Object.entries(copy)) {
         assert.doesNotMatch(text, /dashboard/i, `SITE_SEAL_ONLY=${JSON.stringify(on)}: ${where} still points at the dashboard`);
         assert.doesNotMatch(text, /\bpublish/i, `SITE_SEAL_ONLY=${JSON.stringify(on)}: ${where} still promises publication`);
-        assert.match(text, /seals records only/, `SITE_SEAL_ONLY=${JSON.stringify(on)}: ${where} does not say why`);
-        assert.match(text, /stays sealed/, `SITE_SEAL_ONLY=${JSON.stringify(on)}: ${where} does not say the record stays sealed`);
+        assert.match(text, /seals analyses only/, `SITE_SEAL_ONLY=${JSON.stringify(on)}: ${where} does not say why`);
+        assert.match(text, /stays sealed/, `SITE_SEAL_ONLY=${JSON.stringify(on)}: ${where} does not say the analysis stays sealed`);
         assert.doesNotMatch(text, /SITE_SEAL_ONLY/, `${where}: reader-facing copy names the operator's setting`);
       }
       // The result line still introduces the record's address.
@@ -234,4 +235,43 @@ test('#552 C3: off, the dialog\'s sealed-state sentences are unchanged', () => {
       );
     });
   }
+});
+
+// --- UX-2 PW2, criterion 5 (G0-4 B): every seal-only sentence, in its ruled words ----------
+//
+// The research check's S11-S18, ruled by G0-10 R1 (#729 comment 6690939748):
+// "analysis" for the saved item, each sentence otherwise byte for byte. Read
+// through the calls the routes, the dialog and the dashboard make, whole, so
+// a word moved anywhere in a message fails here. At the base each says
+// "record(s)".
+const S11_REASON =
+  'This instance seals analyses only: its operator has turned off the public state (SITE_SEAL_ONLY), so an analysis cannot be made public here.';
+const S12_ALREADY_PUBLIC = 'Analyses that are already public stay public.';
+const RULED_RECORDS_MESSAGE =
+  `${S11_REASON} This request asks for the public state, and so does a request that omits visibility, because "public" is the default. ` +
+  'Send visibility "sealed" instead: the analysis is signed, timestamped and registered on the transparency log, and its content stays private to you. ' +
+  S12_ALREADY_PUBLIC;
+const RULED_PUBLISH_MESSAGE = `${S11_REASON} A sealed analysis stays sealed. ${S12_ALREADY_PUBLIC}`;
+const RULED_UI_REASON =
+  'This instance seals analyses only: its operator has turned off making analyses public. Analyses that are already public stay public.';
+const SEALED_SUMMARY_KEPT =
+  'Signed, timestamped, and registered on the public transparency log — but the content stays private to you.';
+
+test('PW2 criterion 5 (S11-S18): each seal-only sentence reads its ruled words, where each caller reads it', () => {
+  withSetting('1', () => {
+    assert.deepEqual(recordsGate('public'), { status: SEAL_ONLY_STATUS, body: { error: RULED_RECORDS_MESSAGE, code: SEAL_ONLY_CODE } }, 'POST /api/records (S11, S13, S12)');
+    assert.deepEqual(evaluateSealOnlyPublishGate(isSealOnly()), { status: SEAL_ONLY_STATUS, body: { error: RULED_PUBLISH_MESSAGE, code: SEAL_ONLY_CODE } }, 'POST /api/records/:slug/publish (S11, S14, S12)');
+    assert.deepEqual(publicStateAvailability(isSealOnly()), { available: false, explanation: RULED_UI_REASON }, 'the dialog\'s public option (S15)');
+    const affordance = sealedRecordPublishAffordance({ signingConfigured: true, sealOnly: isSealOnly() });
+    assert.equal(affordance.kind === 'seal_only' ? affordance.explanation : null, RULED_UI_REASON, 'the dashboard\'s disabled Publish (S15)');
+    assert.deepEqual(sealedStateCopy(isSealOnly()), {
+      sealChoice: `${SEALED_SUMMARY_KEPT} This instance seals analyses only, so the analysis stays sealed.`,
+      sealedResult: 'Your analysis is sealed — signed and registered, content private to you. This instance seals analyses only, so it stays sealed. Only you can open this page:',
+    }, 'the dialog under seal-only (S17; S16, S18)');
+  });
+  withSetting(undefined, () => {
+    assert.equal(sealedStateCopy(isSealOnly()).sealedResult,
+      'Your analysis is sealed — signed and registered, content private to you. Only you can open this page; publish it anytime from your dashboard:',
+      'the dialog, seal-only off (S16)');
+  });
 });

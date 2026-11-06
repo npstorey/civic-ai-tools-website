@@ -454,7 +454,7 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
               Publishing makes the content of <strong>{publishTarget.title}</strong> publicly
               accessible, lists it in the registry, and emits signed publication
               attestations. Publication is <strong>not reversible</strong> — a later
-              withdrawal flags the record but does not erase it.
+              withdrawal flags the analysis but does not erase it.
             </p>
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px', cursor: 'pointer', marginBottom: '12px' }}>
               <input

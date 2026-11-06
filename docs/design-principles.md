@@ -68,7 +68,7 @@ These govern what the UI *shows at each moment*.
 
 The first visual question every reader should answer in a 90-second skim is **AI synthesis vs. data from civic source.** Did the AI write this from training data alone, or did it fetch real records and cite them? Every other distinction — which model, which MCP server, which tool, which dataset, what attestation state — is secondary and should read as secondary.
 
-This is the discipline that the homepage's "Without Data Tools" / "With Data Tools" split makes immediately visible. The evidence detail page should preserve the same dominant split: an analysis backed by tool-fetched civic data is materially different from a model-only response, and the page should make that visible at first glance, not buried under a flat list of metadata fields.
+This is the discipline that the homepage's "Without data tools" / "With data tools" split makes immediately visible. The evidence detail page should preserve the same dominant split: an analysis backed by tool-fetched civic data is materially different from a model-only response, and the page should make that visible at first glance, not buried under a flat list of metadata fields.
 
 The trade is worth it because it eliminates the most dangerous misread — that an AI-only output and a tool-grounded analysis look interchangeable on first glance.
 
@@ -144,7 +144,7 @@ The *evidence package detail page's verification card* is Principle 3 (no false 
 
 The *provenance chain redesign* (issue #84) is Principle 5 (narrative bridge needed between step names and trustable answers) + Principle 8 (uniform collapse-expose pattern, not the current selective expansion) + Principle 9 (step labels should read as user language, not implementation tool names where avoidable).
 
-The *homepage with-vs-without comparison* is Principle 4 (one dominant split — AI alone vs AI with civic data, made the hero of the page) + Principle 5 (per-step narration that bridges raw tool calls to plain-English summary) + Principle 9 ("With Data Tools" / "Without Data Tools" reads as user language, not "RAG vs zero-shot").
+The *homepage with-vs-without comparison* is Principle 4 (one dominant split — AI alone vs AI with civic data, made the hero of the page) + Principle 5 (per-step narration that bridges raw tool calls to plain-English summary) + Principle 9 ("With data tools" / "Without data tools" reads as user language, not "RAG vs zero-shot").
 
 The *attestation type names* (`consistency`, `evaluation`, `expert_attestation`) are Principle 1 (each name describes the process performed, not the truth verdict reached) + Principle 9 (`expert_attestation` was deliberately chosen over options that implied authority or final judgment).
 

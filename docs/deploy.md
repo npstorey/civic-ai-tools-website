@@ -130,7 +130,7 @@ reaches it too.
 What you will see, and why it is correct:
 
 - A **"Running unsigned" banner** on every page: *"Running unsigned — no
-  signing key is configured, so record seal and publish are disabled
+  signing key is configured, so seal and publish are disabled
   and any output produced here carries no cryptographic commitment.
   Signing is the go-to-production step; see the instance setup guide."*
 - **Seal and publish actions are gated off**, server-side and

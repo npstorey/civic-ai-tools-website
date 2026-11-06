@@ -117,7 +117,7 @@ export default function ComparisonDisplay({
 
   const withMcpPanel = (
     <ResponsePanel
-      title="With Data Tools"
+      title="With data tools"
       subtitle={
         <>
           {modelName} + live civic data via{' '}
@@ -152,7 +152,7 @@ export default function ComparisonDisplay({
 
   const withoutMcpPanel = (
     <ResponsePanel
-      title="Without Data Tools"
+      title="Without data tools"
       subtitle={`${modelName} using only training data`}
       content={withoutMcpContent}
       duration_ms={isStreaming ? streamingWithoutMcp?.duration_ms : withoutMcp?.duration_ms}
@@ -211,7 +211,7 @@ export default function ComparisonDisplay({
               color: 'var(--text-primary)',
             }}
           >
-            Without Data Tools
+            Without data tools
           </h3>
           <p
             style={{
@@ -335,7 +335,7 @@ export default function ComparisonDisplay({
               color: 'var(--text-primary)',
             }}
           >
-            Without Data Tools
+            Without data tools
           </h3>
           <p
             style={{

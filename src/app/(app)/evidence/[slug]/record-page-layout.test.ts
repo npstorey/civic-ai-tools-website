@@ -886,12 +886,84 @@ test('P2 (5) the blob note sits under the answer in F', () => {
   assert.equal(occurrences(HTML.agf, 'Output stored as blob').length, 0, 'no note when the output is inline');
 });
 
+// UX-2 PW2, criterion 3 (#729 X3; #728 line 18): section A's line on a
+// hash-only record says what was kept in the words the publish dialog uses
+// (its short line "Keeps a fingerprint of the question, not its words."), not
+// "Prompt visibility". RULED: the research check's X3, under G0-10 R1 (#729
+// comment 6690939748).
+const X3_HASH_ONLY_LINE = 'This analysis keeps a fingerprint of the question, not its words.';
+
 test('P2 (5) a hash-only prompt shows its hash in A', () => {
   const html = HTML.skeleton;
   const d = requireDisclosure(html);
   const a = sectionBody(html, 'A · Initial prompt', d.end);
-  assert.ok(a.includes('Prompt visibility was hash-only; verbatim text not captured.'), "today's sentence");
+  assert.ok(a.includes(X3_HASH_ONLY_LINE), "the hash-only line (X3; PW2 criterion 3)");
   assert.ok(a.includes(SKELETON_PACKAGE.prompt.hash), 'the prompt hash');
+});
+
+test('PW2 criterion 3 (X3): on a hash-only record, section A\'s line is X3\'s sentence, and the hash still follows it', () => {
+  const html = HTML.skeleton;
+  assert.equal(SKELETON_PACKAGE.prompt.visibility, 'hash_only', 'premise: the fixture is a hash-only record');
+  const d = requireDisclosure(html);
+  const a = sectionBody(html, 'A · Initial prompt', d.end);
+  assert.ok(a.includes(SKELETON_PACKAGE.prompt.hash), 'premise: section A renders the hash-only branch, with the prompt hash');
+  /** Every element in A whose whole text is one sentence, in order. */
+  const lines = [...a.matchAll(/>([^<>]+\.)<\//g)].map((m) => m[1]);
+  assert.deepEqual(lines, [escaped(X3_HASH_ONLY_LINE)], `section A's sentence lines read ${JSON.stringify(lines)}`);
+  assert.ok(at(a, `>${escaped(X3_HASH_ONLY_LINE)}<`) < at(a, SKELETON_PACKAGE.prompt.hash), 'the line, then the hash');
+  assert.equal(occurrences(html, 'Prompt visibility').length, 0, 'no text reads "Prompt visibility"');
+});
+
+// UX-2 PW2, criterion 5 (G0-4 B): the three banners say "analysis" for the
+// saved item. The research check's S1-S3, ruled by G0-10 R1 (#729 comment
+// 6690939748): each changes its noun and nothing else. Read where each
+// renders: the banner's body, the element after its title. The skeleton
+// fixture is sealed and unsigned (S1, S2); the same record with a signature is
+// the sealed, signed one (S3). At the base each body begins "This record".
+const S1_UNSIGNED =
+  'This analysis was produced without a signing key (the unsigned dev tier). It carries no signature, no registered ' +
+  'key, and no transparency-log entry, so its origin cannot be cryptographically confirmed. An unsigned package can ' +
+  'reach neither the sealed nor the public state.';
+const S2_SEALED_UNSIGNED =
+  'This analysis is unlisted: its content is not publicly accessible and it does not appear in the public registry. ' +
+  'Only you can see this page. It was persisted without a signature, so no public commitment backs it and it cannot ' +
+  'be published.';
+const S3_SEALED_SIGNED =
+  'This analysis is signed, timestamped, and registered on the public transparency log, but its content is not ' +
+  'publicly accessible and it does not appear in the public registry. Only you can see this page. Publishing is a ' +
+  'separate, irreversible step that makes the content public and emits signed publication attestations.';
+
+const SEALED_SIGNED: Case = {
+  ...SKELETON,
+  record: row({
+    slug: 'sealed-signed-pw2', title: 'SEALEDSIGNEDTITLE-pw2', summary: 'SEALEDSIGNEDDBSUMMARY-pw2', contentProfile: 'default',
+    visibility: 'sealed', basePackageSignature: 'sig', basePackageHash: 'c'.repeat(64), basePackageStorageKey: 'k-skel',
+  }),
+};
+
+/** A banner's body as a reader reads it: the element after the one whose whole text is `title`. */
+function bannerBody(html: string, title: string): string {
+  const titleAt = at(html, `>${title}</div>`);
+  const open = html.indexOf('<div', titleAt);
+  assert.ok(open > titleAt, `no element follows the banner title "${title}"`);
+  const markup = html.slice(open, elementEnd(html, open, 'div'));
+  return markup.replace(/<[^>]+>/g, '').replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+}
+
+test('PW2 criterion 5 (S1-S3): the unsigned, sealed-unsigned and sealed-signed banners read their ruled words', async () => {
+  const signed = await render(SEALED_SIGNED);
+  assert.equal(occurrences(signed, 'Unsigned package — no cryptographic commitment').length, 0, 'premise: the signed fixture renders no unsigned banner');
+  const bodies = {
+    unsigned: bannerBody(HTML.skeleton, 'Unsigned package — no cryptographic commitment'),
+    sealedUnsigned: bannerBody(HTML.skeleton, 'Sealed — not published'),
+    sealedSigned: bannerBody(signed, 'Sealed — not published'),
+  };
+  assert.deepEqual(bodies, { unsigned: S1_UNSIGNED, sealedUnsigned: S2_SEALED_UNSIGNED, sealedSigned: S3_SEALED_SIGNED });
+  for (const html of [HTML.skeleton, signed]) {
+    for (const old of ['This record was produced', 'This record is unlisted', 'This record is signed']) {
+      assert.equal(occurrences(html, old).length, 0, `the page still reads "${old}"`);
+    }
+  }
 });
 
 test('P2 (5) the notebook download (/bundle) renders for the A-G record only', () => {

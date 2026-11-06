@@ -49,7 +49,7 @@ type DialogState = 'form' | 'publishing' | 'success' | 'error';
 // each is written once. Ruled copy: byte for byte what the dialog rendered
 // before UX-1 P1.
 const HASH_ONLY_WORDS =
-  'The record keeps a fingerprint of your question instead of its text. Anyone who knows or ' +
+  'The analysis keeps a fingerprint of your question instead of its text. Anyone who knows or ' +
   'guesses the exact wording can confirm it matches. The answer, summary and data queries may ' +
   'still contain its words.';
 const PUBLIC_STATE_WORDS =
@@ -401,7 +401,7 @@ export default function PublishEvidenceDialog({
       <strong style={{ color: 'var(--text-primary)' }}>
         This instance is running unsigned.
       </strong>{' '}
-      Signing is not configured, so records cannot be sealed or
+      Signing is not configured, so analyses cannot be sealed or
       published — an unsigned package can reach neither the sealed
       nor the public state. The analysis itself still works; an
       operator enables signing via the instance setup guide.
@@ -449,7 +449,7 @@ export default function PublishEvidenceDialog({
               }}
             />
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0', lineHeight: SMALL_TEXT_LINE_HEIGHT }}>
-              The title is public and becomes the record’s address.
+              The title is public and becomes the address of the analysis.
             </p>
           </div>
 
@@ -770,7 +770,7 @@ export default function PublishEvidenceDialog({
               </button>
 
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '16px 0 0' }}>
-                The record is signed, timestamped, and registered on the public transparency log.
+                Your analysis is signed, timestamped, and registered on the public transparency log.
               </p>
 
               <button
