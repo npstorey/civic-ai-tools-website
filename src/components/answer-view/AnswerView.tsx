@@ -364,7 +364,7 @@ function Disclosure({ disclosure, answer, answerElement, extras, recordSections,
         ) : (
           <>
             <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-              Prompt visibility was hash-only; verbatim text not captured.
+              The question text was kept as a fingerprint, not as text.
             </div>
             {/* The hash identifies the prompt that was used (W1 ruling D7). */}
             {question.hash && (

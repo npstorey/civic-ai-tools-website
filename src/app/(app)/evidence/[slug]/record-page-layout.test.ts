@@ -886,20 +886,20 @@ test('P2 (5) the blob note sits under the answer in F', () => {
   assert.equal(occurrences(HTML.agf, 'Output stored as blob').length, 0, 'no note when the output is inline');
 });
 
-test('P2 (5) a hash-only prompt shows its hash in A', () => {
-  const html = HTML.skeleton;
-  const d = requireDisclosure(html);
-  const a = sectionBody(html, 'A · Initial prompt', d.end);
-  assert.ok(a.includes('Prompt visibility was hash-only; verbatim text not captured.'), "today's sentence");
-  assert.ok(a.includes(SKELETON_PACKAGE.prompt.hash), 'the prompt hash');
-});
-
 // UX-2 PW2, criterion 3 (#729 X3; #728 line 18): section A's line on a
 // hash-only record says what was kept in the words the publish dialog uses
 // ("Question text"), not "Prompt visibility". X3_HASH_ONLY_LINE is PENDING the
 // research ruling: the anchor's direction, held here in one place, swapped for
 // the ruled words in PW2's leg C.
 const X3_HASH_ONLY_LINE = 'The question text was kept as a fingerprint, not as text.';
+
+test('P2 (5) a hash-only prompt shows its hash in A', () => {
+  const html = HTML.skeleton;
+  const d = requireDisclosure(html);
+  const a = sectionBody(html, 'A · Initial prompt', d.end);
+  assert.ok(a.includes(X3_HASH_ONLY_LINE), "the hash-only line (X3; PW2 criterion 3)");
+  assert.ok(a.includes(SKELETON_PACKAGE.prompt.hash), 'the prompt hash');
+});
 
 test('PW2 criterion 3 (X3): on a hash-only record, section A\'s line is X3\'s sentence, and the hash still follows it', () => {
   const html = HTML.skeleton;
