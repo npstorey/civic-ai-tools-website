@@ -26,6 +26,9 @@
 // element below the `lg` width (1024 px), not by a viewport. `next/image` is
 // stubbed (the fixture account has no avatar image).
 //
+// UX-2 PW2 (#729) adds the home comparison's heading (X1) at the end of this
+// file, under its own header.
+//
 // Run with: npm test
 
 import { test } from 'node:test';
@@ -53,16 +56,24 @@ registerSurfaceHooks({
 });
 
 const ORIGIN = 'https://app.fixture.example';
+/** `ComparisonDisplay`'s narrow-layout query (`useMediaQuery('(max-width: 640px)')`). */
+const NARROW_QUERY = '(max-width: 640px)';
+let narrow = false;
 
 const target = { addEventListener() {}, removeEventListener() {} };
+// The answer view reads the reader's layout choice from session storage (`useSessionChoice`).
+const storage = new Map<string, string>();
 Object.assign(globalThis as Record<string, unknown>, {
   window: {
     ...target,
+    sessionStorage: { getItem: (k: string) => storage.get(k) ?? null, setItem: (k: string, v: string) => { storage.set(k, String(v)); }, removeItem: (k: string) => { storage.delete(k); } },
     location: { href: `${ORIGIN}/`, origin: ORIGIN, pathname: '/' },
     scrollTo() {},
     setTimeout,
     clearTimeout,
-    matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }),
+    // Every query answers false unless a test sets `narrow` (UX-2 PW2, below):
+    // then the comparison's own query, `(max-width: 640px)`, answers true.
+    matchMedia: (query: string) => ({ matches: narrow && query === NARROW_QUERY, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }),
   },
   document: { ...target },
 });
@@ -72,6 +83,7 @@ const load = async (rel: string): Promise<Mod> => (await import(pathToFileURL(pa
 const DashboardTabs = (await load('components/dashboard/DashboardTabs.tsx')).default as ComponentType<Record<string, unknown>>;
 const Header = (await load('components/Header.tsx')).default as ComponentType<Record<string, unknown>>;
 const RecordsPage = (await load('app/(app)/records/page.tsx')).default as ComponentType<Record<string, unknown>>;
+const ComparisonDisplay = (await load('components/ComparisonDisplay.tsx')).default as ComponentType<Record<string, unknown>>;
 
 function signedIn(): void {
   sessions.server = { user: { id: 'gh-fixture-account', dbId: '99999999-9999-4999-8999-999999999999' } };
@@ -182,4 +194,82 @@ test('/records: the registry\'s count line counts items ("3 items", "1 item")', 
   lines[1] = countLine(one);
   one.unmount();
   assert.deepEqual(lines, { 3: ['3 items'], 1: ['1 item'] }, `the count lines read ${JSON.stringify(lines)}`);
+});
+
+// --- UX-2 PW2, criterion 1 (#729 X1; #728 line 8): the home comparison's heading ---------
+//
+// X1, RULED (the word memo's D1 / W7 for `/learn`, sentence case by its D2;
+// OA-185 A for the home page): the comparison's without-data heading reads
+// "Without data tools". `ComparisonDisplay` writes it at three sites, each
+// reached here in the state that renders it:
+//   - side by side (`answerFirst` false, wide): the without-data panel's title;
+//   - narrow (`answerFirst` false, `(max-width: 640px)` matching): the
+//     collapsed panel's heading, then, after the collapsed panel is clicked,
+//     the expanded panel's title (the same panel as side by side);
+//   - answer-first (`answerFirst` true): the run-the-comparison button's heading.
+//
+// WHAT IS DRIVEN. The real `ComparisonDisplay`, the component the home page's
+// `QuerySurface` mounts, with a finished run's two answers as props. The
+// harness has no layout: "narrow" is the component's own `matchMedia` query
+// answered true by this file's `window` stub, not a viewport.
+//
+// WHAT MAKES IT ABLE TO FAIL. At the base each site reads "Without Data Tools".
+// Each state's premise names a part only that state renders, so a state that
+// fell back to another's markup fails its premise, not the words.
+
+const X1_WITHOUT = 'Without data tools';
+const COMPARISON_PROPS = {
+  withoutMcp: { content: 'WITHOUTANSWER-pw2: about four thousand complaints.', duration_ms: 1200 },
+  withMcp: { content: 'WITHANSWER-pw2: **4,812** complaints.', duration_ms: 2400 },
+  isLoading: false,
+  modelName: 'Fixture model',
+  isStreaming: false,
+  queryText: 'How many complaints were filed?',
+};
+
+/** The comparison's headings that name the without-data arm, as a reader reads each. */
+const withoutHeadings = (surface: Surface): string[] =>
+  surface.elements().filter((el) => el.type === 'h3' && /^without\b/i.test(textOf(el))).map((el) => textOf(el));
+
+test('PW2 criterion 1 (X1): side by side, the without-data panel\'s title reads "Without data tools"', async () => {
+  narrow = false;
+  installFetch(ORIGIN, {});
+  const view = await mount(h(ComparisonDisplay, { ...COMPARISON_PROPS, answerFirst: false }));
+  assert.ok(view.text().includes('Fixture model using only training data') && view.text().includes('WITHOUTANSWER-pw2'), `premise: the without-data panel renders with its answer: ${view.text().slice(0, 400)}`);
+  assert.equal(view.elements().filter((el) => (el.type === 'div' && typeof el.props.onClick === 'function') || el.props['aria-label'] === 'Collapse panel').length, 0, 'premise: side by side, no collapsed or expanded narrow panel');
+  assert.deepEqual(withoutHeadings(view), [X1_WITHOUT], `the without-data headings read ${JSON.stringify(withoutHeadings(view))}`);
+  assert.ok(!view.text().includes('Without Data Tools'), 'no text reads "Without Data Tools"');
+  view.unmount();
+});
+
+test('PW2 criterion 1 (X1): narrow, the collapsed panel\'s heading and, once expanded, the panel\'s title read "Without data tools"', async () => {
+  narrow = true;
+  try {
+    installFetch(ORIGIN, {});
+    const view = await mount(h(ComparisonDisplay, { ...COMPARISON_PROPS, answerFirst: false }));
+    const collapsed = view.elements().filter((el) => el.type === 'div' && typeof el.props.onClick === 'function');
+    assert.equal(collapsed.length, 1, `premise: narrow, one collapsed panel to click; the surface reads: ${view.text().slice(0, 400)}`);
+    assert.ok(textOf(collapsed[0]).includes('WITHOUTANSWER-pw2'), 'premise: the collapsed panel previews the without-data answer');
+    assert.deepEqual(withoutHeadings(view), [X1_WITHOUT], `collapsed, the without-data headings read ${JSON.stringify(withoutHeadings(view))}`);
+    await view.click(collapsed[0]);
+    assert.equal(view.elements().filter((el) => el.type === 'button' && el.props['aria-label'] === 'Collapse panel').length, 1, 'premise: the click expanded the panel');
+    assert.deepEqual(withoutHeadings(view), [X1_WITHOUT], `expanded, the without-data headings read ${JSON.stringify(withoutHeadings(view))}`);
+    assert.ok(!view.text().includes('Without Data Tools'), 'no text reads "Without Data Tools"');
+    view.unmount();
+  } finally {
+    narrow = false;
+  }
+});
+
+test('PW2 criterion 1 (X1): answer-first, the run-the-comparison button\'s heading reads "Without data tools"', async () => {
+  narrow = false;
+  installFetch(ORIGIN, {});
+  const view = await mount(h(ComparisonDisplay, { ...COMPARISON_PROPS, answerFirst: true, onRunComparison: () => {} }));
+  const run = view.elements().filter((el) => el.type === 'button' && textOf(el).includes('Run the side-by-side comparison'));
+  assert.equal(run.length, 1, `premise: answer-first, one run-the-comparison button; the surface reads: ${view.text().slice(0, 400)}`);
+  assert.ok(!view.text().includes('using only training data'), 'premise: answer-first renders no without-data panel');
+  assert.deepEqual(withoutHeadings(view), [X1_WITHOUT], `the without-data headings read ${JSON.stringify(withoutHeadings(view))}`);
+  assert.equal(within(run[0]).filter((el) => el.type === 'h3').map((el) => textOf(el)).join('|'), X1_WITHOUT, 'the heading is the run-the-comparison button\'s own');
+  assert.ok(!view.text().includes('Without Data Tools'), 'no text reads "Without Data Tools"');
+  view.unmount();
 });
