@@ -75,7 +75,8 @@ export interface HostLinks {
    *   marketing host from wherever they are rendered.
    * - `null` — the instance serves NO marketing surface: the affordances
    *   are hidden rather than pointed somewhere. Same treatment
-   *   `resolvePublicSiteHref` gives the `AppChrome` exit link (P3), and
+   *   `resolvePublicSiteHref` gives the Header's "Public site" item (the
+   *   `AppChrome` exit link until UX-1 P3a), and
    *   every consumer already guards on this exact null — the root layout's
    *   footer funnels, `Header`'s `showMarketingNav`, and the two
    *   `McpResponseDisplay` `/learn` deep links.

@@ -143,7 +143,7 @@ test('the Header at the mobile layout, signed in: the account entry reads "My an
   for (let at: HostElement | null = avatar; at; at = parentOf(header, at)) {
     if (classesOf(at).includes('hidden')) hiders.push(`<${at.type} class="${classesOf(at).join(' ')}">`);
   }
-  assert.deepEqual(hiders, [], 'premise: no ancestor of the avatar trigger hides it below the sm width');
+  assert.deepEqual(hiders, [], 'premise: no ancestor of the avatar trigger hides it below the lg width');
   await header.click(avatar);
   assert.deepEqual(linkWords(header, '/dashboard'), ['My analyses'], `the avatar menu's /dashboard link reads ${JSON.stringify(linkWords(header, '/dashboard'))}`);
   await header.click(onlyButton(header, (el) => el.props['aria-label'] === 'Toggle menu', 'mobile menu'));

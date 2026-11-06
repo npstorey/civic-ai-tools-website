@@ -209,7 +209,7 @@ lists (UX-1 P7); later phases convert the other surfaces named under "Replaces",
 ### P9 · Page frame (`ui-page`)
 
 - **Widths:**
-  - `reading` (`ui-page--reading`, 720 px): about, learn, project, privacy, the roadmap body, device;
+  - `reading` (`ui-page--reading`, 720 px): about, learn, project, privacy, talks, the roadmap body;
   - `record` (`ui-page--record`, 800 px): the records index, the record page, ask, dashboard;
   - `wide` (`ui-page--wide`, 1200 px): directory, explore, an answer with the comparison.
 
