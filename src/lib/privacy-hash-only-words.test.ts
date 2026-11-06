@@ -152,6 +152,22 @@ test("the page's title words are the dialog's, word for word", () => {
   );
 });
 
+// UX-2 PW2, criterion 5 (G0-4 B; the research check's S4 and S6, ruled by
+// G0-10 R1, #729 comment 6690939748): both shared sentences name the saved
+// item "analysis", on the page and in the dialog alike. Written out here, so
+// the two sides moving together to other words still fails.
+const S4_HASH_ONLY_RULED =
+  'The analysis keeps a fingerprint of your question instead of its text. Anyone who knows or guesses the exact ' +
+  'wording can confirm it matches. The answer, summary and data queries may still contain its words.';
+const S6_TITLE_RULED = 'The title is public and becomes the address of the analysis.';
+
+test('PW2 criterion 5 (S4, S6): the two shared sentences read their ruled words on the page and in the dialog', () => {
+  assert.equal(facts.HASH_ONLY_RECORD_WORDS, S4_HASH_ONLY_RULED, 'the page\'s hash-only words');
+  assert.equal(facts.RECORD_TITLE_IS_PUBLIC, S6_TITLE_RULED, 'the page\'s title words');
+  assert.equal(hashOnlyWords(), S4_HASH_ONLY_RULED, 'the dialog\'s hash-only words');
+  assert.ok(squash(dialog.text()).includes(S6_TITLE_RULED), `the dialog does not say: ${S6_TITLE_RULED}`);
+});
+
 test('the page states both, with nothing configured', () => {
   const statements = facts.buildPrivacySections(null).flatMap((section: { statements: { id: string; parts: unknown[] }[] }) => section.statements);
   const said = (id: string) => statements.find((s) => s.id === id)?.parts.filter((p): p is string => typeof p === 'string').join('') ?? '';

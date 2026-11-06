@@ -59,6 +59,12 @@
 // RED ON THE BASE d691a7f (the merge of P0): C1, C2 and C3 fail at their
 // assertions; C4 and C6 pass there and must keep passing.
 //
+// UX-2 PW2 (#729, G0-4 B; the research check's S4-S7 and S15-S18, ruled by
+// G0-10 R1, comment 6690939748): the ruled sentences below that named the
+// saved item "record" now name it "analysis", and the C4 guard reads them in
+// their new words. The PW2 criterion 5 test at the end reads the seal-only
+// sentences the dialog renders, byte for byte, in each state that renders them.
+//
 // BLIND SPOTS, stated. No layout: whether the action is visible without
 // scrolling at a given viewport is criterion 7, on staging. No focus, Escape
 // or backdrop events (non-goals here; staging).
@@ -143,22 +149,23 @@ const VIEW_PAGE = 'View your analysis page →';
 const OLD = ['Publish as Record', 'Prompt visibility', 'Include full prompt text', 'Keep chatting',
   'Packaging and storing the record...', 'Your record page is live.', 'View your record page →'];
 
-// Kept verbatim (criterion 4; `PublishEvidenceDialog.tsx` at the base).
+// Kept verbatim (criterion 4; `PublishEvidenceDialog.tsx` at the base), except
+// the four G0-4 B moved to "analysis" (UX-2 PW2: S4, S5, S6, S7).
 const HASH_ONLY = 'Hash only';
 const FULL_TEXT_WORDS = 'Anyone can see exactly what you asked';
 const HASH_ONLY_WORDS =
-  'The record keeps a fingerprint of your question instead of its text. Anyone who knows or guesses the exact ' +
+  'The analysis keeps a fingerprint of your question instead of its text. Anyone who knows or guesses the exact ' +
   'wording can confirm it matches. The answer, summary and data queries may still contain its words.';
 const SEAL_CHOICE = 'Seal (default)';
 const PUBLIC_CHOICE = 'Publish now';
 const PUBLIC_WORDS = 'Content becomes public and listed in the registry immediately. Publication is not reversible.';
-const TITLE_NOTE = 'The title is public and becomes the record’s address.';
+const TITLE_NOTE = 'The title is public and becomes the address of the analysis.';
 const UNSIGNED_WORDS =
-  'This instance is running unsigned. Signing is not configured, so records cannot be sealed or published — ' +
+  'This instance is running unsigned. Signing is not configured, so analyses cannot be sealed or published — ' +
   'an unsigned package can reach neither the sealed nor the public state. The analysis itself still works; an ' +
   'operator enables signing via the instance setup guide.';
 const UNSIGNED_ACTION = 'Unavailable (running unsigned)';
-const SIGNED_LINE = 'The record is signed, timestamped, and registered on the public transparency log.';
+const SIGNED_LINE = 'Your analysis is signed, timestamped, and registered on the public transparency log.';
 
 // --- The dialog's requests, answered here ---------------------------------------------
 
@@ -668,5 +675,41 @@ test('UX-1 P1 C6 (guard): the publish request carries the same keys, and the vis
     assert.equal(body.captureMethod, 'chat-flow-stream', `${what}: the capture method sent`);
     assert.deepEqual(body.tokenUsage, { promptTokens: 11, completionTokens: 7 }, `${what}: the token usage sent`);
     assert.equal(body.duration_ms, 1234, `${what}: the duration sent`);
+  }
+});
+
+// --- UX-2 PW2, criterion 5: the seal-only sentences the dialog renders -----------------------
+//
+// S15 (the public option's reason under seal-only), S17 (the Seal option's
+// description under seal-only), S16 with S18 (the sealed success line), in the
+// research check's words, byte for byte; the strings are written out here, so
+// a change in `seal-only.ts` alone fails. At the base each says "record(s)".
+
+const SEAL_ONLY_REASON_RULED =
+  'This instance seals analyses only: its operator has turned off making analyses public. Analyses that are already public stay public.';
+const SEAL_CHOICE_RULED = {
+  off: 'Signed, timestamped, and registered on the public transparency log — but the content stays private to you. Publish later from your dashboard.',
+  on: 'Signed, timestamped, and registered on the public transparency log — but the content stays private to you. This instance seals analyses only, so the analysis stays sealed.',
+};
+const SEALED_RESULT_RULED = {
+  off: 'Your analysis is sealed — signed and registered, content private to you. Only you can open this page; publish it anytime from your dashboard:',
+  on: 'Your analysis is sealed — signed and registered, content private to you. This instance seals analyses only, so it stays sealed. Only you can open this page:',
+};
+
+test('PW2 criterion 5 (S15-S18): the dialog renders the seal-only sentences in their ruled words, in each state', async () => {
+  for (const sealOnly of [false, true]) {
+    const mode = sealOnly ? 'on' : 'off';
+    const { dialog } = await open({ sealOnly, resultVisibility: 'sealed' });
+    const form = dialogText(dialog);
+    includes(form, SEAL_CHOICE_RULED[mode], `seal-only ${mode}: the Seal option's description`);
+    if (sealOnly) includes(form, SEAL_ONLY_REASON_RULED, 'seal-only on: the public option\'s reason');
+    fire(buttonReading(dialog, 'Seal'), 'onClick');
+    await dialog.settle();
+    const done = dialogText(dialog);
+    includes(done, SEALED_RESULT_RULED[mode], `seal-only ${mode}: the sealed success line`);
+    for (const text of [form, done]) {
+      excludes(text, 'seals records only', `seal-only ${mode}: a seal-only sentence still says "records"`);
+      excludes(text, 'Your record is sealed', `seal-only ${mode}: the sealed success line still says "record"`);
+    }
   }
 });

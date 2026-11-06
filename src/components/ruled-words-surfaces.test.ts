@@ -26,8 +26,9 @@
 // element below the `lg` width (1024 px), not by a viewport. `next/image` is
 // stubbed (the fixture account has no avatar image).
 //
-// UX-2 PW2 (#729) adds the home comparison's heading (X1) at the end of this
-// file, under its own header.
+// UX-2 PW2 (#729) adds the home comparison's two headings (X1, R4) and the
+// dashboard's not-reversible sentence (G0-4 B, S8) at the end of this file,
+// under their own headers.
 //
 // Run with: npm test
 
@@ -213,11 +214,17 @@ test('/records: the registry\'s count line counts items ("3 items", "1 item")', 
 // harness has no layout: "narrow" is the component's own `matchMedia` query
 // answered true by this file's `window` stub, not a viewport.
 //
-// WHAT MAKES IT ABLE TO FAIL. At the base each site reads "Without Data Tools".
-// Each state's premise names a part only that state renders, so a state that
-// fell back to another's markup fails its premise, not the words.
+// R4 (G0-10, #729 comment 6690939748), RULED: the with-data panel's title
+// (`ComparisonDisplay.tsx:120`) reads "With data tools"; it renders in all
+// three states, and each test reads it too.
+//
+// WHAT MAKES IT ABLE TO FAIL. At the base each site reads "Without Data Tools"
+// and the with-data title "With Data Tools". Each state's premise names a part
+// only that state renders, so a state that fell back to another's markup fails
+// its premise, not the words.
 
 const X1_WITHOUT = 'Without data tools';
+const R4_WITH = 'With data tools';
 const COMPARISON_PROPS = {
   withoutMcp: { content: 'WITHOUTANSWER-pw2: about four thousand complaints.', duration_ms: 1200 },
   withMcp: { content: 'WITHANSWER-pw2: **4,812** complaints.', duration_ms: 2400 },
@@ -230,8 +237,11 @@ const COMPARISON_PROPS = {
 /** The comparison's headings that name the without-data arm, as a reader reads each. */
 const withoutHeadings = (surface: Surface): string[] =>
   surface.elements().filter((el) => el.type === 'h3' && /^without\b/i.test(textOf(el))).map((el) => textOf(el));
+/** The comparison's headings that name the with-data arm ("With …", never "Without …"). */
+const withHeadings = (surface: Surface): string[] =>
+  surface.elements().filter((el) => el.type === 'h3' && /^with\b/i.test(textOf(el))).map((el) => textOf(el));
 
-test('PW2 criterion 1 (X1): side by side, the without-data panel\'s title reads "Without data tools"', async () => {
+test('PW2 criterion 1 (X1, R4): side by side, the without-data panel\'s title reads "Without data tools"', async () => {
   narrow = false;
   installFetch(ORIGIN, {});
   const view = await mount(h(ComparisonDisplay, { ...COMPARISON_PROPS, answerFirst: false }));
@@ -239,10 +249,11 @@ test('PW2 criterion 1 (X1): side by side, the without-data panel\'s title reads 
   assert.equal(view.elements().filter((el) => (el.type === 'div' && typeof el.props.onClick === 'function') || el.props['aria-label'] === 'Collapse panel').length, 0, 'premise: side by side, no collapsed or expanded narrow panel');
   assert.deepEqual(withoutHeadings(view), [X1_WITHOUT], `the without-data headings read ${JSON.stringify(withoutHeadings(view))}`);
   assert.ok(!view.text().includes('Without Data Tools'), 'no text reads "Without Data Tools"');
+  assert.deepEqual(withHeadings(view), [R4_WITH], `R4: the with-data headings read ${JSON.stringify(withHeadings(view))}`);
   view.unmount();
 });
 
-test('PW2 criterion 1 (X1): narrow, the collapsed panel\'s heading and, once expanded, the panel\'s title read "Without data tools"', async () => {
+test('PW2 criterion 1 (X1, R4): narrow, the collapsed panel\'s heading and, once expanded, the panel\'s title read "Without data tools"', async () => {
   narrow = true;
   try {
     installFetch(ORIGIN, {});
@@ -255,13 +266,14 @@ test('PW2 criterion 1 (X1): narrow, the collapsed panel\'s heading and, once exp
     assert.equal(view.elements().filter((el) => el.type === 'button' && el.props['aria-label'] === 'Collapse panel').length, 1, 'premise: the click expanded the panel');
     assert.deepEqual(withoutHeadings(view), [X1_WITHOUT], `expanded, the without-data headings read ${JSON.stringify(withoutHeadings(view))}`);
     assert.ok(!view.text().includes('Without Data Tools'), 'no text reads "Without Data Tools"');
+    assert.deepEqual(withHeadings(view), [R4_WITH], `R4, narrow: the with-data headings read ${JSON.stringify(withHeadings(view))}`);
     view.unmount();
   } finally {
     narrow = false;
   }
 });
 
-test('PW2 criterion 1 (X1): answer-first, the run-the-comparison button\'s heading reads "Without data tools"', async () => {
+test('PW2 criterion 1 (X1, R4): answer-first, the run-the-comparison button\'s heading reads "Without data tools"', async () => {
   narrow = false;
   installFetch(ORIGIN, {});
   const view = await mount(h(ComparisonDisplay, { ...COMPARISON_PROPS, answerFirst: true, onRunComparison: () => {} }));
@@ -271,5 +283,39 @@ test('PW2 criterion 1 (X1): answer-first, the run-the-comparison button\'s headi
   assert.deepEqual(withoutHeadings(view), [X1_WITHOUT], `the without-data headings read ${JSON.stringify(withoutHeadings(view))}`);
   assert.equal(within(run[0]).filter((el) => el.type === 'h3').map((el) => textOf(el)).join('|'), X1_WITHOUT, 'the heading is the run-the-comparison button\'s own');
   assert.ok(!view.text().includes('Without Data Tools'), 'no text reads "Without Data Tools"');
+  assert.deepEqual(withHeadings(view), [R4_WITH], `R4, answer-first: the with-data headings read ${JSON.stringify(withHeadings(view))}`);
   view.unmount();
+});
+
+// --- UX-2 PW2, criterion 5 (G0-4 B, S8): the dashboard's not-reversible sentence -----------
+//
+// The research check's S8, ruled by G0-10 R1 (#729 comment 6690939748): in
+// the dialog headed "Publish this analysis", the not-reversible sentence says
+// a withdrawal flags the analysis, not the record.
+//
+// WHAT IS DRIVEN. The real `DashboardTabs` with one sealed analysis, its
+// Publish action clicked as the harness clicks, and the dialog's paragraph
+// read whole. At the base it ends "a later withdrawal flags the record but
+// does not erase it."
+
+const S8_PARAGRAPH =
+  'Publishing makes the content of Fixture sealed analysis publicly accessible, lists it in the registry, and emits ' +
+  'signed publication attestations. Publication is not reversible — a later withdrawal flags the analysis but does ' +
+  'not erase it.';
+
+test('PW2 criterion 5 (S8): the dashboard\'s Publish dialog says a withdrawal flags the analysis', async () => {
+  signedIn();
+  installFetch(ORIGIN, {});
+  const sealed = {
+    id: 'fixture-sealed', slug: 'fixture-sealed', title: 'Fixture sealed analysis', summary: 'Fixture summary.', model: 'fixture/model',
+    verificationStatus: 'unverified', consistencyClassification: null, withdrawnAt: null, reinstatedAt: null,
+    createdAt: '2026-11-01T00:00:00.000Z', attestationCount: 0, visibility: 'sealed',
+  };
+  const tabs = await mount(h(DashboardTabs, { myEvidence: [sealed], myEvaluations: [], activity: [], tokens: [], signingConfigured: true, sealOnly: false }));
+  await tabs.click(onlyButton(tabs, (el) => textOf(el) === 'Publish', 'Publish'));
+  const heading = tabs.elements().filter((el) => el.type === 'h3' && textOf(el) === 'Publish this analysis');
+  assert.equal(heading.length, 1, `premise: the click opened the dialog; the surface reads: ${tabs.text().slice(0, 400)}`);
+  const paragraph = tabs.elements().filter((el) => el.type === 'p' && textOf(el).startsWith('Publishing makes the content of')).map((el) => textOf(el));
+  assert.deepEqual(paragraph, [S8_PARAGRAPH], `the dialog's paragraph reads ${JSON.stringify(paragraph)}`);
+  tabs.unmount();
 });

@@ -291,3 +291,22 @@ test('KEY WITHOUT KID: the indicator shows even in dev — it is not an intended
     );
   }
 });
+
+// --- UX-2 PW2, criterion 5 (G0-4 B): the two refusals, in their ruled words -----------------
+//
+// The research check's S19 and S20, ruled by G0-10 R1 (#729 comment
+// 6690939748): "analysis" for the saved item, the rest byte for byte. At the
+// base each says "a record" / "This record".
+const S19_SENTENCE =
+  'Sealing or publishing an analysis requires a signature: an unsigned package can reach neither the sealed nor the public state (ADR-0020).';
+const S20_REFUSAL =
+  'This analysis was persisted without a signature; an unsigned package cannot be published — it can reach neither the sealed nor the public state (ADR-0020).';
+
+test('PW2 criterion 5 (S19, S20): the unsigned-tier and unsigned-record refusals read their ruled words', () => {
+  const tier = evaluateSealCommitGate({});
+  assert.ok(tier, 'premise: an instance with no signing key is refused');
+  assert.ok(tier.body.error.startsWith('This instance is running unsigned — no signing key is configured. '), `premise: the unsigned-tier refusal: ${tier.body.error}`);
+  assert.ok(tier.body.error.includes(S19_SENTENCE), `the unsigned-tier refusal reads: ${tier.body.error}`);
+  const record = evaluateUnsignedRecordPublishGate(null);
+  assert.equal(record?.body.error, S20_REFUSAL);
+});
