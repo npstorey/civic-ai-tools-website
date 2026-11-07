@@ -78,7 +78,8 @@ export interface TierMeta {
  * other three tokens predate this change.
  */
 export const TIER_META: Record<TrustTier, TierMeta> = {
-  verified: { icon: 'check', colorVar: 'var(--success)', ariaLabel: 'Verified' },
+  // UX-2 P5 (X11, RULED): "Verified" is reserved for the act of verifying.
+  verified: { icon: 'check', colorVar: 'var(--success)', ariaLabel: 'Passed' },
   normal: { icon: 'info', colorVar: 'var(--text-muted)', ariaLabel: 'Informational' },
   attention: { icon: 'warning', colorVar: 'var(--warning)', ariaLabel: 'Attention' },
   alarm: { icon: 'error', colorVar: 'var(--error)', ariaLabel: 'Alarm' },
