@@ -39,6 +39,9 @@ import { dataReadLine } from '@/lib/evidence/data-read-date';
 import { SIGNED_BY, TIMESTAMPED } from '@/lib/evidence/trust-words';
 import CitationBlock from '@/components/evidence/CitationBlock';
 import AttestationSection from '@/components/evidence/AttestationSection';
+import { RecordReviewsProvider } from '@/components/evidence/RecordReviewsProvider';
+import ReviewsSummaryRow from '@/components/evidence/ReviewsSummaryRow';
+import { REVIEWS_SECTION_ID } from '@/lib/evidence/record-reviews';
 import DashboardLink from '@/components/evidence/DashboardLink';
 import ProvenanceGraphSection from '@/components/evidence/ProvenanceGraphSection';
 // Machine-readable metadata shapes (JSON-LD + Highwire citation tags). Pure
@@ -194,9 +197,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
   return (
-    <section style={{ marginBottom: '32px' }}>
+    <section id={id} style={{ marginBottom: '32px' }}>
       <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-primary)' }}>
         {title}
       </h2>
@@ -322,7 +325,7 @@ export default async function EvidencePage({ params }: PageProps) {
     !!record.basePackageRfc3161Timestamp && !!record.basePackageRekorEntryId && <Signal key="timestamped" tier="neutral" label={TIMESTAMPED} />,
   ].filter(Boolean);
   const trustRows = trustSignals.length > 0 ? (
-    <div data-part="trust-rows" style={{ display: 'flex', flexDirection: 'column', gap: '4px', margin: '0 0 24px' }}>
+    <div data-part="trust-rows" style={{ display: 'flex', flexDirection: 'column', gap: '4px', margin: '0 0 12px' }}>
       {trustSignals}
     </div>
   ) : null;
@@ -482,9 +485,14 @@ export default async function EvidencePage({ params }: PageProps) {
             the refused-request lines, and the verify action in Actions. The
             parts W1 placed after the envelope go to the view by name, so a
             layout's `disclosure.order` can place each (LAYOUT-WEB W4 P1). */}
+        {/* UX-2 P2: the page's one review store, around the view, so the status
+            area's summary row and the "Reviews" part read one list and open
+            one sheet. */}
+        <RecordReviewsProvider slug={slug} analysisModel={record.model} promptVisibility={record.promptVisibility}>
         <AnswerView
           model={viewModel}
-          statusArea={trustRows}
+          // UX-2 P2 (X12): the reviews summary row, after P5's trust rows.
+          statusArea={<>{trustRows}<ReviewsSummaryRow /></>}
           sectionHeading="h2"
           citationBlock={
             // Citation (ruling D3) — beneath the answer, collapsed; the same
@@ -542,8 +550,10 @@ export default async function EvidencePage({ params }: PageProps) {
               </Section>
             ),
 
+            // UX-2 P2: the reviews, a page part after the steps (answer-view/2),
+            // headed "Reviews" (R3 B); "See them" links to this section's id.
             attestations: (
-              <Section title="Attestations">
+              <Section title="Reviews" id={REVIEWS_SECTION_ID}>
                 <AttestationSection
                   slug={slug}
                   analysisModel={record.model}
@@ -628,6 +638,7 @@ export default async function EvidencePage({ params }: PageProps) {
             </Section>
           }
         />
+        </RecordReviewsProvider>
       </Page>
     </>
   );

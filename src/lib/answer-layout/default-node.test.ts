@@ -7,8 +7,8 @@
 // nothing at all fails here rather than passing every "none".
 //
 // Keys are throwaway Ed25519 keys generated for this run (fixtures). The
-// committed nodes are handed in as data: the repository commits one node
-// (`770ed52e…`, under the instance's key), and these tests use their own
+// committed nodes are handed in as data: the repository commits two nodes
+// (`770ed52e…` and `c1ed3951…`, under the instance's key), and these tests use their own
 // fixtures rather than it. The URL node is served by an injected fetcher,
 // with the fixture registry handed in as the instance's.
 //
@@ -163,7 +163,7 @@ test('W4 P3 (F4) a verified URL node that reuses a built-in’s name and version
   const reading = await readLayoutUrlOnce(twinUrl, twin.urlDeps);
   assert.equal(reading.ok, true, 'the twin verifies: what refuses it is the twin rule, not its signature');
   assert.equal(await defaultLayoutNodeId({ ...ENV, ANSWER_LAYOUT_URL: twinUrl }, { committed: [good.node], urlDeps: twin.urlDeps }), undefined, 'the twin is not named, and nothing throws');
-  assert.throws(() => resolveAnswerLayouts({ url: twinUrl }, { committed: [good.node] }), /the layout is named answer-first v1, a built-in's name and version, with different fields/, 'the pages refuse it, as they did');
+  assert.throws(() => resolveAnswerLayouts({ url: twinUrl }, { committed: [good.node] }), new RegExp(`the layout is named answer-first v${ENVELOPE_ORDER.version}, a built-in's name and version, with different fields`), 'the pages refuse it, as they did');
 });
 
 test('W4 P3 (F4) a verified URL node that reuses a committed node’s name and version with other fields names nothing', async () => {
@@ -175,5 +175,35 @@ test('W4 P3 (F4) a verified URL node that reuses a committed node’s name and v
 
   assert.equal(await defaultLayoutNodeId({ ...ENV, ANSWER_LAYOUT_URL: controlUrl }, { committed: [held.node], urlDeps: control.urlDeps }), control.nodeId, 'the control is named');
   assert.equal(await defaultLayoutNodeId({ ...ENV, ANSWER_LAYOUT_URL: twinUrl }, { committed: [held.node], urlDeps: twin.urlDeps }), undefined, 'the twin of the committed node is not named');
-  assert.throws(() => resolveAnswerLayouts({ url: twinUrl }, { committed: [held.node] }), /the layout is named w4p3-held v1, the name and version of the committed layout node/, 'the pages refuse it');
+  assert.throws(() => resolveAnswerLayouts({ url: twinUrl }, { committed: [held.node] }), new RegExp(`the layout is named w4p3-held v${ENVELOPE_ORDER.version}, the name and version of the committed layout node`), 'the pages refuse it');
+});
+
+// --- UX-2 P2 (5): the first measurement (leg A), kept as a test ---------------------------------
+//
+// With the built-ins at v2 and only the repository's answer-first v1 node
+// committed, the instance names no layout node until the owner's `--apply`
+// commits a v2 one. The repository's own node is signed under the production
+// key, so a keyless test over it could only ever read "none" (at the key
+// check, before the layout comparison); its seven fields are re-signed here
+// under the fixture instance key, so the comparison is what decides. The
+// decoy is a node equal to the built-in as it now is, which is named. A
+// `console.warn` spy tells the no-match return from the catch.
+
+test('UX-2 P2 (5) with only an answer-first v1 node committed, the built-in names none, by the no-match return; a node equal to the built-in is named', async () => {
+  // By its id, not its place: `--apply` writes the module sorted by id, so a v2 node may come first.
+  const repoNode = committedLayoutNodes().find((n) => n.nodeId === '770ed52e2abfc0c7d4626953c9f715c11a50e63bd911fa2bed56b77a76fe0ee7');
+  assert.ok(repoNode, 'premise: the repository commits the v1 node');
+  assert.equal(repoNode.layout.version, 1, 'premise: answer-first v1');
+  const v1 = committed(repoNode.layout, INSTANCE.priv, KID, 'ux2-p2-v1');
+  const decoy = committed(ANSWER_FIRST, INSTANCE.priv, KID, 'ux2-p2-built-in');
+  assert.equal(await defaultLayoutNodeId(ENV, { committed: [decoy.node] }), decoy.nodeId, 'the decoy: a node equal to the built-in is named');
+  const warned: unknown[] = [];
+  const warn = console.warn;
+  console.warn = (...args: unknown[]) => { warned.push(args); };
+  try {
+    assert.equal(await defaultLayoutNodeId(ENV, { committed: [v1.node] }), undefined, 'only the v1 node committed: no layout node is named');
+  } finally {
+    console.warn = warn;
+  }
+  assert.deepEqual(warned, [], 'by the no-match return, not the catch (which logs)');
 });

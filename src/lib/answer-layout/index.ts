@@ -19,45 +19,51 @@ export type { LayoutPayload };
 // --- The two built-ins -------------------------------------------------------------
 
 /**
- * `answer-first` v1: the seven fields of the §8.14.1 example payload, as the
- * site ships it (hub `docs/architecture/typed-standards-specification.md`,
- * spec v0.1.12). Its order is the order every surface rendered at the base of
- * this phase, so with no setting nothing moves.
+ * `answer-first` v2 (UX-2 P2): the seven fields of the §8.14.1 example payload
+ * (hub `docs/architecture/typed-standards-specification.md`, spec v0.1.12;
+ * the example is informative, §8.14.4), with the reviews a page part after
+ * the steps instead of a disclosure section. v1 was the example as written;
+ * the site shipped it until UX-2 P2, and its committed node (`770ed52e…`)
+ * stays held. The version moved because a built-in may not share a held
+ * node's name and version with other fields (`checkNoTwins`), and
+ * `rendererVersion` moved because the renderer's part vocabulary changed
+ * (spec §8.14.4): `attestations` is a page part in `answer-view/2`.
  */
 export const ANSWER_FIRST: LayoutPayload = {
   name: 'answer-first',
-  version: 1,
+  version: 2,
   appliesTo: ['default', 'datHere'],
-  order: ['status', 'answer', 'citation', 'steps', 'sources', 'disclosure', 'actions'],
+  order: ['status', 'answer', 'citation', 'steps', 'attestations', 'sources', 'disclosure', 'actions'],
   disclosure: {
     label: 'Learn more about how this analysis was produced',
-    order: ['A', 'B', 'C', 'D', 'E', 'G', 'signers', 'attestations', 'verification'],
+    order: ['A', 'B', 'C', 'D', 'E', 'G', 'signers', 'verification'],
     openByDefault: false,
   },
   steps: { placement: 'beside', openByDefault: true },
-  rendererVersion: 'answer-view/1',
+  rendererVersion: 'answer-view/2',
 };
 
 /**
- * `envelope-order` v1: the order the surfaces had before the answer moved
+ * `envelope-order` v2: the order the surfaces had before the answer moved
  * first (design §2), with the same disclosure as `answer-first`. The envelope
  * comes first, so the answer follows A to E as it did when it was section F
- * (§2.2); the steps sit directly above the answer and the sources line
- * directly under it (§2.1); the citation follows the signers (§2.2); the
- * actions close the view (§2.1, §2.2, §2.3).
+ * (§2.2); the steps sit above the answer and the sources line directly under
+ * it (§2.1); the citation follows the signers (§2.2); the actions close the
+ * view (§2.1, §2.2, §2.3). v2 (UX-2 P2), as `answer-first` v2: the reviews
+ * are a page part after the steps.
  */
 export const ENVELOPE_ORDER: LayoutPayload = {
   name: 'envelope-order',
-  version: 1,
+  version: 2,
   appliesTo: ['default', 'datHere'],
-  order: ['status', 'disclosure', 'steps', 'answer', 'sources', 'citation', 'actions'],
+  order: ['status', 'disclosure', 'steps', 'attestations', 'answer', 'sources', 'citation', 'actions'],
   disclosure: {
     label: 'Learn more about how this analysis was produced',
-    order: ['A', 'B', 'C', 'D', 'E', 'G', 'signers', 'attestations', 'verification'],
+    order: ['A', 'B', 'C', 'D', 'E', 'G', 'signers', 'verification'],
     openByDefault: false,
   },
   steps: { placement: 'beside', openByDefault: true },
-  rendererVersion: 'answer-view/1',
+  rendererVersion: 'answer-view/2',
 };
 
 /** The built-ins, the default first. */
@@ -89,6 +95,8 @@ export const PAGE_PARTS = [
   { name: 'answer', view: 'answer' },
   { name: 'citation', view: 'citation' },
   { name: 'steps', view: 'steps' },
+  // UX-2 P2: the reviews, a page part since answer-view/2 (a disclosure section before it).
+  { name: 'attestations', view: 'attestations' },
   { name: 'sources', view: 'sources' },
   // R6 W4: "Where this question went". No layout names it; it renders after the sources line.
   { name: null, view: 'where-it-went' },
@@ -123,7 +131,6 @@ export const DISCLOSURE_SECTIONS = [
   { name: 'provenance-graph', view: 'provenance-graph' },
   { name: 'additional-artifacts', view: 'additional-artifacts' },
   { name: 'evaluations', view: 'evaluations' },
-  { name: 'attestations', view: 'attestations' },
   { name: 'verification', view: 'verification' },
   { name: null, view: 'surface-extras' },
 ] as const;
@@ -131,7 +138,10 @@ export const DISCLOSURE_SECTIONS = [
 /** The view's name for a disclosure section. */
 export type DisclosureSectionView = (typeof DISCLOSURE_SECTIONS)[number]['view'];
 
-/** The record's own disclosure sections, which the record page hands the view by name. */
+/**
+ * The record's own sections, which the record page hands the view by name:
+ * four disclosure sections, and the reviews, a page part since UX-2 P2.
+ */
 export type RecordSectionView = 'provenance-graph' | 'additional-artifacts' | 'evaluations' | 'attestations' | 'verification';
 
 // --- The placement rule ---------------------------------------------------------------
@@ -202,16 +212,32 @@ export function layoutId(layout: Pick<LayoutPayload, 'name' | 'version'>): strin
   return `${layout.name}@${layout.version}`;
 }
 
-/** A stored choice, read against what the instance offers; anything else is "no choice". */
-export function parseStoredLayoutChoice(raw: string | null, offered: readonly LayoutPayload[]): string | null {
-  if (raw === null) return null;
-  return offered.some((l) => layoutId(l) === raw) ? raw : null;
+/**
+ * The offered layout a stored choice names (UX-2 P2, Q3, ruled in relay 25):
+ * the one with its exact `name@version`, else the one the instance offers now
+ * under the same name, so a reader's choice survives a version bump; none when
+ * the instance offers no layout of that name, or the value is not a
+ * `name@version`.
+ */
+function offeredFor(raw: string, offered: readonly LayoutPayload[]): LayoutPayload | undefined {
+  const exact = offered.find((l) => layoutId(l) === raw);
+  if (exact !== undefined) return exact;
+  const m = /^(.+)@(\d+)$/.exec(raw);
+  if (m === null) return undefined;
+  return offered.find((l) => l.name === m[1]);
 }
 
-/** The layout a view renders with: the reader's choice when the instance offers it, else the instance's default. */
+/** A stored choice, read against what the instance offers: the offered layout's id it resolves to, or "no choice". */
+export function parseStoredLayoutChoice(raw: string | null, offered: readonly LayoutPayload[]): string | null {
+  if (raw === null) return null;
+  const found = offeredFor(raw, offered);
+  return found === undefined ? null : layoutId(found);
+}
+
+/** The layout a view renders with: the reader's choice when the instance offers it (by name, Q3), else the instance's default. */
 export function selectLayout(layouts: InstanceLayouts, chosen: string | null): LayoutPayload {
   if (chosen !== null) {
-    const found = layouts.offered.find((l) => layoutId(l) === chosen);
+    const found = offeredFor(chosen, layouts.offered);
     if (found !== undefined) return found;
   }
   return layouts.default;

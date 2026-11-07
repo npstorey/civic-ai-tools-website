@@ -115,6 +115,8 @@ test('emissions: first-party client fetches use the canonical API segment', () =
     'src/components/evidence/EvidenceIndex.tsx',
     'src/components/evidence/AttestationDialog.tsx',
     'src/components/evidence/AttestationSection.tsx',
+    // UX-2 P2: the review list's fetch moves into the page's one review store.
+    'src/components/evidence/RecordReviewsProvider.tsx',
   ]) {
     const body = code(read(rel));
     const stale = body.match(/fetch\(\s*['"`]\/api\/evidence/g) ?? [];

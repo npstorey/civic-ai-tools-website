@@ -131,7 +131,7 @@ test('W4 P2 item 3: the URL form names the instance’s layout: the node is the 
   assert.ok(reading.ok && reading.nodeId === nodeId);
   const layouts = resolveAnswerLayouts({ url: 'https://layouts.w4p2-fixture.invalid/node.json' }, { urlReading: reading, committed: [] });
   assert.deepEqual(layouts.default, CUSTOM);
-  assert.deepEqual(layouts.offered.map(layoutId), ['w4p2-custom@2', 'answer-first@1', 'envelope-order@1']);
+  assert.deepEqual(layouts.offered.map(layoutId), ['w4p2-custom@2', layoutId(ANSWER_FIRST), layoutId(ENVELOPE_ORDER)]);
 });
 
 test('W4 P2 item 3: a URL node that was refused refuses every page with the verifier’s status, never the built-ins', () => {
@@ -153,10 +153,10 @@ test('W4 P2 item 3: a URL node that was refused refuses every page with the veri
 test('W4 P2 the amendment’s (b): a held name and version with other fields is refused, for the URL node and every committed node', async () => {
   const twinOfBuiltIn = { ...structuredClone(ANSWER_FIRST), order: [...ANSWER_FIRST.order].reverse() };
   const urlTwin = await verifyLayoutDocument(signedDocument(twinOfBuiltIn).doc, { registry: REGISTRY });
-  assert.throws(() => resolveAnswerLayouts({ url: 'https://x.w4p2-fixture.invalid/n.json' }, { urlReading: urlTwin, committed: [] }), /named answer-first v1, a built-in's name and version, with different fields/);
+  assert.throws(() => resolveAnswerLayouts({ url: 'https://x.w4p2-fixture.invalid/n.json' }, { urlReading: urlTwin, committed: [] }), new RegExp(`named answer-first v${ANSWER_FIRST.version}, a built-in's name and version, with different fields`));
 
   const committedTwin = committedLayoutNodes([signedDocument(twinOfBuiltIn).doc]);
-  assert.throws(() => resolveAnswerLayouts({}, { committed: committedTwin }), /the committed layout node [0-9a-f]{64}: the layout is named answer-first v1, a built-in's name and version, with different fields/);
+  assert.throws(() => resolveAnswerLayouts({}, { committed: committedTwin }), new RegExp(`the committed layout node [0-9a-f]{64}: the layout is named answer-first v${ANSWER_FIRST.version}, a built-in's name and version, with different fields`));
 
   // A committed node and the URL node under one name and version, with different fields.
   const committedCustom = committedLayoutNodes([signedDocument(CUSTOM).doc]);

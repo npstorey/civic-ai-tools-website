@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -9,10 +8,13 @@ import { resolveSignInProse } from '@/lib/auth-provider-options';
 import type { ReviewSignatureStatus } from '@/lib/evidence/trust-signal';
 import type { TrustTier } from '@/lib/evidence/trust-signal';
 import { describeToolCallKeyPolicy } from '@/lib/evidence/tool-call-identity';
-import { loadAttestationPackage } from '@/lib/evidence/attestation-content';
 import { EXPERT_RATING_LABELS } from '@/lib/evidence/expert-attestation';
+import { REVIEWS_LOAD_FAILED } from '@/lib/evidence/record-reviews';
+import { NO_REVIEWS } from '@/lib/evidence/review-summary';
+import { Row } from '@/components/ui/Row';
+import { Signal } from '@/components/ui/Signal';
 import TrustSignal from './TrustSignal';
-import AttestationDialog from './AttestationDialog';
+import { useRecordReviews } from './RecordReviewsProvider';
 
 type AttestationType = 'consistency' | 'evaluation' | 'expert_attestation';
 type ExpertRating = 'endorse' | 'concerns' | 'dispute' | 'neutral';
@@ -89,7 +91,17 @@ interface AttestationSectionProps {
   promptVisibility: string;
 }
 
-export default function AttestationSection({ slug, analysisModel, promptVisibility }: AttestationSectionProps) {
+/**
+ * The "Reviews" section's list (UX-2 P2): the page's one review store
+ * (`RecordReviewsProvider`) read as P7 rows. Each row: the attester (the
+ * title), the review's first line (an expert review's body; the summary), the
+ * date and the rating word (the meta line), the kind as a P6 signal (X13), and
+ * the review itself in a closed P1 `row` disclosure, "Read the review" (X14,
+ * all three kinds under R3 B: the L3 reading). The signing line sits under its
+ * row, unchanged. A failed read says so (Q2), never the empty state.
+ */
+export default function AttestationSection(props: AttestationSectionProps) {
+  void props; // The store carries the record; the props stay for the page's call.
   const { data: session } = useSession();
   // #235 — the provider-literal class (#229 P1), prose instance: the
   // signed-out sentence below derives its wording from the providers this
@@ -98,89 +110,9 @@ export default function AttestationSection({ slug, analysisModel, promptVisibili
   // the hardcoded name was wrong on every non-GitHub instance's public face.
   // Null (nothing configured) drops the sentence entirely.
   const signInProse = resolveSignInProse(useSignInOptions());
-  const [attestations, setAttestations] = useState<Attestation[]>([]);
-  const [expandedPkgs, setExpandedPkgs] = useState<Record<string, AttestationPackageData | null>>({});
-  // Expert attestations render their body inline rather than behind a "Show
-  // details" toggle, so we fetch their blobs once on list load.
-  const [expertPayloads, setExpertPayloads] = useState<Record<string, AttestationPackageData | null>>({});
-  const [loading, setLoading] = useState(true);
-
-  // State is set only in the promise callbacks, so the effect below sets none
-  // synchronously (react-hooks/set-state-in-effect).
-  const fetchAttestations = useCallback(() => {
-    fetch(`/api/records/${slug}/attestations`)
-      .then(async (res) => {
-        if (res.ok) {
-          const data = await res.json();
-          setAttestations(data.attestations || []);
-        }
-      })
-      .catch(() => {
-        // Silently fail — attestation list is non-critical
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [slug]);
-
-  useEffect(() => {
-    fetchAttestations();
-  }, [fetchAttestations]);
-
-  // Eagerly load the packages of expert attestations so the body is visible
-  // immediately, through the app's attestation package route (#559): the
-  // record's read gate applies, and a private bucket still serves it.
-  // Per-attestation cost is ~1 round trip and responses are small. A failed
-  // read comes back as null, which the card shows as unavailable.
-  useEffect(() => {
-    const expertToLoad = attestations.filter(
-      (a) => a.type === 'expert_attestation' && !(a.id in expertPayloads),
-    );
-    if (expertToLoad.length === 0) return;
-
-    let cancelled = false;
-    (async () => {
-      const results = await Promise.all(
-        expertToLoad.map(async (a) => {
-          const data = await loadAttestationPackage(slug, a.id, {
-            fetch: (input, init) => fetch(input, init),
-          });
-          return [a.id, data as AttestationPackageData | null] as const;
-        }),
-      );
-      if (cancelled) return;
-      setExpertPayloads((prev) => {
-        const next = { ...prev };
-        for (const [id, data] of results) next[id] = data;
-        return next;
-      });
-    })();
-    return () => { cancelled = true; };
-  }, [slug, attestations, expertPayloads]);
-
-  const handleAttestationCreated = useCallback(() => {
-    fetchAttestations();
-  }, [fetchAttestations]);
-
-  const toggleExpand = async (attestation: Attestation) => {
-    if (expandedPkgs[attestation.id] !== undefined) {
-      // Toggle off
-      setExpandedPkgs(prev => {
-        const next = { ...prev };
-        delete next[attestation.id];
-        return next;
-      });
-      return;
-    }
-    // Read the package through the app's attestation package route (#559). A
-    // failed read is null, which the card shows as unavailable; an error body
-    // is never stored as the attestation's content.
-    const data = await loadAttestationPackage(slug, attestation.id, {
-      fetch: (input, init) => fetch(input, init),
-    });
-    setExpandedPkgs(prev => ({ ...prev, [attestation.id]: data as AttestationPackageData | null }));
-  };
-
+  const { state, attestations, expertPayloads, openSheet } = useRecordReviews();
+  const rows = attestations as unknown as Attestation[];
+  const packages = expertPayloads as Record<string, AttestationPackageData | null | undefined>;
   const isLoggedIn = !!session?.user?.id;
 
   return (
@@ -188,55 +120,63 @@ export default function AttestationSection({ slug, analysisModel, promptVisibili
       padding: '16px 20px', border: '1px solid var(--border-color)',
       borderRadius: '6px', backgroundColor: 'white',
     }}>
-      {loading ? (
-        <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>Loading attestations...</p>
-      ) : attestations.length === 0 ? (
-        <>
-          <p style={{ margin: '0 0 8px', fontSize: '14px', color: 'var(--text-muted)' }}>No attestations yet.</p>
-          <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            Attestations are independent evaluations — consistency tests, adversarial reviews,
-            expert attestations, or corrections — that anyone can attach to this analysis.
-          </p>
-        </>
+      {state === 'loading' ? (
+        <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--text-muted)' }}>{LOADING_REVIEWS}</p>
+      ) : state === 'failed' ? (
+        <p style={{ margin: '0 0 12px', fontSize: '14px', color: 'var(--text-muted)' }}>{REVIEWS_LOAD_FAILED}</p>
+      ) : rows.length === 0 ? (
+        <p style={{ margin: '0 0 12px', fontSize: '14px', color: 'var(--text-muted)' }}>{NO_REVIEWS}</p>
       ) : (
         <div style={{ marginBottom: '16px' }}>
-          {attestations.map((att) => {
-            if (att.type === 'expert_attestation') {
-              return (
-                <ExpertAttestationCard
-                  key={att.id}
-                  attestation={att}
-                  payload={expertPayloads[att.id]}
-                />
-              );
-            }
-            return (
-              <AttestationCard
-                key={att.id}
-                attestation={att}
-                expanded={expandedPkgs[att.id]}
-                isExpanded={att.id in expandedPkgs}
-                onToggle={() => toggleExpand(att)}
-              />
-            );
-          })}
+          {rows.map((att) => (
+            <ReviewRow key={att.id} attestation={att} payload={packages[att.id]} />
+          ))}
         </div>
       )}
 
       {isLoggedIn ? (
-        <AttestationDialog
-          slug={slug}
-          analysisModel={analysisModel}
-          promptVisibility={promptVisibility}
-          onAttestationCreated={handleAttestationCreated}
-        />
+        <button
+          type="button"
+          onClick={(event) => openSheet(event.currentTarget)}
+          style={{
+            padding: '6px 14px',
+            border: '1px solid var(--accent)',
+            borderRadius: '4px',
+            fontSize: '13px',
+            color: 'var(--accent)',
+            backgroundColor: 'white',
+            cursor: 'pointer',
+            fontWeight: 500,
+          }}
+        >
+          {ADD_REVIEW}
+        </button>
       ) : signInProse !== null ? (
         <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
-          {signInProse} to add an attestation.
+          {signInProse} {SIGN_IN_TO_ADD}
         </p>
       ) : null}
     </div>
   );
+}
+
+// R3 B's renames (M1).
+const LOADING_REVIEWS = 'Loading reviews...'; // was "Loading attestations..."
+const SIGN_IN_TO_ADD = 'to add a review.'; // was "to add an attestation."
+const ADD_REVIEW = '+ Add review'; // was "+ Add attestation"
+
+// X13: each kind's words, as P6 signals.
+const KIND_WORDS: Record<AttestationType, string> = {
+  expert_attestation: 'Expert review',
+  evaluation: 'Evaluation',
+  consistency: 'Consistency test',
+};
+const READ_THE_REVIEW = 'Read the review'; // X14
+
+/** The first line of a review's text, without its leading markdown marks; empty when there is none. */
+function firstLine(text: string): string {
+  const line = text.split('\n').map((l) => l.trim()).find((l) => l !== '') ?? '';
+  return line.replace(/^(#{1,6}\s+|>\s*|[-*+]\s+|\d+\.\s+)/, '').replace(/[*_`]/g, '').trim();
 }
 
 /**
@@ -319,64 +259,79 @@ function formatReviewDate(iso: string): string {
   });
 }
 
-// --- Machine attestation card (consistency / evaluation) ---
+// --- One review, as a P7 row ---
 
-function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
+function ReviewRow({ attestation, payload }: {
   attestation: Attestation;
-  expanded: AttestationPackageData | null | undefined;
-  isExpanded: boolean;
-  onToggle: () => void;
+  payload: AttestationPackageData | null | undefined;
 }) {
   const date = new Date(attestation.createdAt).toLocaleDateString('en-US', {
     year: 'numeric', month: 'short', day: 'numeric',
   });
-
-  const typeBadge = attestation.type === 'consistency'
-    ? { label: 'Consistency Test', bg: 'rgba(var(--accent-rgb), 0.1)', color: 'var(--accent)' }
-    : { label: 'Evaluation', bg: 'rgba(0, 183, 3, 0.1)', color: 'var(--success)' };
-
+  const expert = attestation.type === 'expert_attestation';
+  const rating = expert && payload?.rating && payload.rating in EXPERT_RATING_LABELS ? EXPERT_RATING_LABELS[payload.rating] : null;
+  const summary = expert && payload?.body ? firstLine(payload.body) : null;
   return (
-    <div style={{
-      padding: '12px 0',
-      borderBottom: '1px solid rgba(0,0,0,0.06)',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-        <span style={{
-          display: 'inline-block', padding: '2px 8px', borderRadius: '10px',
-          fontSize: '11px', fontWeight: 600, backgroundColor: typeBadge.bg, color: typeBadge.color,
-        }}>
-          {typeBadge.label}
-        </span>
-        <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-          by{' '}
-          <a href={attestation.creatorGithubUrl} target="_blank" rel="noopener noreferrer"
-            style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+    <div className="ui-review">
+      <Row
+        title={
+          <a href={attestation.creatorGithubUrl} target="_blank" rel="noopener noreferrer">
             {attestation.creatorDisplayName}
           </a>
-        </span>
-        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{date}</span>
-        <button
-          onClick={onToggle}
-          style={{
-            marginLeft: 'auto', background: 'none', border: 'none',
-            fontSize: '12px', color: 'var(--accent)', cursor: 'pointer',
-          }}
-        >
-          {isExpanded ? 'Hide details' : 'Show details'}
-        </button>
+        }
+        summary={summary}
+        meta={[date, rating, expert ? payload?.expertise : null]}
+        signals={<Signal tier="neutral" label={KIND_WORDS[attestation.type]} />}
+        disclosure={{
+          summary: READ_THE_REVIEW,
+          children: expert ? <ExpertReviewBody payload={payload} /> : <AutomatedReviewDetails attestation={attestation} expanded={payload} />,
+        }}
+      />
+      <ReviewSignatureLine signature={attestation.signature} createdAt={attestation.createdAt} />
+    </div>
+  );
+}
+
+/** An expert review's text, as markdown; said once when it could not be read. */
+function ExpertReviewBody({ payload }: { payload: AttestationPackageData | null | undefined }) {
+  if (payload === undefined) {
+    return <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>Loading review...</p>;
+  }
+  if (!payload?.body) {
+    return (
+      <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+        [Review body could not be loaded; the stored package may be unavailable.]
+      </p>
+    );
+  }
+  return (
+    <div className="response-markdown" style={{ fontSize: '14px' }}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{payload.body}</ReactMarkdown>
+    </div>
+  );
+}
+
+/** An evaluation's or a consistency test's details, from its stored package. */
+function AutomatedReviewDetails({ attestation, expanded }: {
+  attestation: Attestation;
+  expanded: AttestationPackageData | null | undefined;
+}) {
+  if (expanded === undefined) {
+    return <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>Loading review...</p>;
+  }
+  if (expanded === null) {
+    // A failed read (#559): the details are unavailable, said once, never an error body.
+    return (
+      <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+        [Details could not be loaded; the stored package may be unavailable.]
       </div>
-
-      {/* A failed read (#559): the details are unavailable, said once, never an error body */}
-      {isExpanded && expanded === null && (
-        <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-          [Details could not be loaded; the stored package may be unavailable.]
-        </div>
-      )}
-
-      {/* Summary metrics inline */}
-      {attestation.type === 'consistency' && isExpanded && expanded && expanded.metrics && (
+    );
+  }
+  return (
+    <>
+      {attestation.type === 'consistency' && expanded.metrics && (
         <>
-        <div style={{ marginTop: '10px', display: 'flex', gap: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
           <span>
             {expanded.config?.numRuns || '?'} runs
           </span>
@@ -411,8 +366,8 @@ function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
         </>
       )}
 
-      {attestation.type === 'evaluation' && isExpanded && expanded && expanded.rubric && (
-        <div style={{ marginTop: '10px' }}>
+      {attestation.type === 'evaluation' && expanded.rubric && (
+        <div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px', fontSize: '13px' }}>
             <span style={{ fontWeight: 600 }}>Overall:</span>
             <span style={{
@@ -449,9 +404,7 @@ function AttestationCard({ attestation, expanded, isExpanded, onToggle }: {
           )}
         </div>
       )}
-
-      <ReviewSignatureLine signature={attestation.signature} createdAt={attestation.createdAt} />
-    </div>
+    </>
   );
 }
 
@@ -465,136 +418,4 @@ function formatCriterionLabel(key: string): string {
     contradictoryConclusion: 'Alt. Conclusions',
   };
   return labels[key] || key.replace(/([A-Z])/g, ' $1').trim();
-}
-
-// --- Expert attestation card (human-submitted review) ---
-
-const RATING_STYLES: Record<ExpertRating, { label: string; bg: string; color: string }> = {
-  endorse: { label: EXPERT_RATING_LABELS.endorse, bg: 'rgba(0, 183, 3, 0.10)', color: 'var(--success)' },
-  concerns: { label: EXPERT_RATING_LABELS.concerns, bg: 'rgba(255, 183, 0, 0.15)', color: '#8a5a00' },
-  dispute: { label: EXPERT_RATING_LABELS.dispute, bg: 'rgba(236, 19, 30, 0.08)', color: 'var(--error)' },
-  neutral: { label: EXPERT_RATING_LABELS.neutral, bg: 'rgba(0, 0, 0, 0.06)', color: 'var(--text-secondary)' },
-};
-
-function ExpertAttestationCard({ attestation, payload }: {
-  attestation: Attestation;
-  payload: AttestationPackageData | null | undefined;
-}) {
-  const date = new Date(attestation.createdAt).toLocaleDateString('en-US', {
-    year: 'numeric', month: 'short', day: 'numeric',
-  });
-
-  const loaded = payload !== undefined;
-  const rating = payload?.rating && RATING_STYLES[payload.rating]
-    ? payload.rating
-    : 'neutral';
-  const ratingStyle = RATING_STYLES[rating];
-
-  return (
-    <div style={{
-      padding: '14px 16px',
-      marginBottom: '10px',
-      borderLeft: `3px solid ${ratingStyle.color}`,
-      borderRadius: '0 4px 4px 0',
-      backgroundColor: 'rgba(0, 0, 0, 0.015)',
-    }}>
-      {/* Header: type badge + attester + expertise + rating */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
-        <span style={{
-          display: 'inline-block', padding: '2px 8px', borderRadius: '10px',
-          fontSize: '11px', fontWeight: 600,
-          backgroundColor: 'rgba(83, 49, 156, 0.10)', color: '#53319c',
-        }}>
-          Expert Attestation
-        </span>
-        <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-          by{' '}
-          <a href={attestation.creatorGithubUrl} target="_blank" rel="noopener noreferrer"
-            style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>
-            {attestation.creatorDisplayName}
-          </a>
-        </span>
-        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{date}</span>
-        <span style={{
-          marginLeft: 'auto',
-          display: 'inline-block', padding: '2px 10px', borderRadius: '10px',
-          fontSize: '11px', fontWeight: 600,
-          backgroundColor: ratingStyle.bg, color: ratingStyle.color,
-        }}>
-          {ratingStyle.label}
-        </span>
-      </div>
-
-      {/* Expertise line */}
-      {payload?.expertise && (
-        <div style={{
-          fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px',
-          fontStyle: 'italic',
-        }}>
-          {payload.expertise}
-        </div>
-      )}
-
-      {/* Body — markdown */}
-      {loaded && payload?.body ? (
-        <div className="expert-attestation-body" style={{
-          fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.6,
-        }}>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {payload.body}
-          </ReactMarkdown>
-        </div>
-      ) : loaded ? (
-        <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-          [Review body could not be loaded; the stored package may be unavailable.]
-        </div>
-      ) : (
-        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-          Loading review...
-        </div>
-      )}
-
-      <ReviewSignatureLine signature={attestation.signature} createdAt={attestation.createdAt} />
-
-      <style jsx>{`
-        .expert-attestation-body :global(p) {
-          margin: 0 0 10px 0;
-        }
-        .expert-attestation-body :global(p:last-child) {
-          margin-bottom: 0;
-        }
-        .expert-attestation-body :global(h1),
-        .expert-attestation-body :global(h2),
-        .expert-attestation-body :global(h3) {
-          font-size: 14px;
-          font-weight: 600;
-          margin: 12px 0 6px;
-        }
-        .expert-attestation-body :global(ul),
-        .expert-attestation-body :global(ol) {
-          margin: 0 0 10px 0;
-          padding-left: 22px;
-        }
-        .expert-attestation-body :global(li) {
-          margin-bottom: 4px;
-        }
-        .expert-attestation-body :global(a) {
-          color: var(--accent);
-        }
-        .expert-attestation-body :global(code) {
-          font-family: monospace;
-          font-size: 12px;
-          background: rgba(0, 0, 0, 0.04);
-          padding: 1px 4px;
-          border-radius: 3px;
-        }
-        .expert-attestation-body :global(blockquote) {
-          margin: 0 0 10px 0;
-          padding: 6px 12px;
-          border-left: 2px solid var(--border-color);
-          color: var(--text-secondary);
-        }
-      `}</style>
-    </div>
-  );
 }

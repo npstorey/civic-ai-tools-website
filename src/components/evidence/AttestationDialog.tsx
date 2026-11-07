@@ -1,6 +1,15 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+// The analysis page's add-review sheet (UX-2 P2): a P3 Sheet that opens on the
+// review path (an expert review: rating, body, expertise), with the automated
+// checks behind one disclosure, "Run an automated check instead" (X17). Its
+// open state belongs to the page's review store (`RecordReviewsProvider`),
+// which mounts this sheet once, so both "Add one" and "+ Add review" open it.
+
+import { useState, useCallback, useEffect, useId } from 'react';
+import { Sheet } from '@/components/ui/Sheet';
+import { Disclosure } from '@/components/ui/Disclosure';
+import { Card } from '@/components/ui/Card';
 import { parseModelsResponse, type Model } from '@/lib/model-list';
 // The tool-call identity key, in ONE place. It used to be a private function
 // here with a verbatim copy in `replay-loop.test.ts`, because no `.test.ts` in
@@ -65,8 +74,22 @@ interface AttestationDialogProps {
   slug: string;
   analysisModel: string;
   promptVisibility: string;
+  /** Whether the sheet is open: the page's review store holds it. */
+  open: boolean;
+  /** Escape, the close control, a backdrop click, or a saved review (unless busy). */
+  onClose: () => void;
   onAttestationCreated: () => void;
 }
+
+// The ruled words (contract v5, "Words: RULED"; R3 B's renames, M1).
+const SHEET_TITLE = 'Add a review'; // X18
+const PUBLISH_REVIEW = 'Publish review'; // X15
+const EXPERTISE_LABEL = 'Expertise or affiliation (published)'; // X16
+const AUTOMATED_LABEL = 'Run an automated check instead'; // X17
+const EVALUATION_CHOICE = 'Evaluation: a second model reviews the answer against a fixed checklist.'; // X17
+const CONSISTENCY_CHOICE = 'Consistency test: re-runs the analysis to see whether it can be reproduced.'; // X17
+const SAVE_REVIEW = 'Save review'; // R3 B
+const SAVE_FAILED = 'Failed to save review'; // R3 B
 
 // --- Component ---
 
@@ -74,10 +97,16 @@ export default function AttestationDialog({
   slug,
   analysisModel,
   promptVisibility,
+  open,
+  onClose,
   onAttestationCreated,
 }: AttestationDialogProps) {
-  const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<'consistency' | 'evaluation' | 'expert'>('evaluation');
+  // The review path first (UX-2 P2): the automated checks are behind X17's
+  // disclosure, and the key field renders only once it is chosen.
+  const [path, setPath] = useState<'review' | 'automated'>('review');
+  const [check, setCheck] = useState<'evaluation' | 'consistency'>('evaluation');
+  const tab: 'consistency' | 'evaluation' | 'expert' = path === 'review' ? 'expert' : check;
+  const checkName = useId();
   const [apiKey, setApiKey] = useState('');
 
   // Consistency test state
@@ -101,8 +130,9 @@ export default function AttestationDialog({
   const [expertRating, setExpertRating] = useState<ExpertRating | ''>('');
   const [expertError, setExpertError] = useState('');
 
-  // Submit state
+  // Submit state. A failed save on a check path is the sheet's error line (it was an alert()).
   const [submitting, setSubmitting] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   // The replayer's consent (R6 W3): read when the dialog opens.
   const { guard: guardQuestion, refresh: refreshConsent } = useSourceConsent({ load: open });
@@ -118,7 +148,7 @@ export default function AttestationDialog({
   // `/api/models` instead would change a response shape pinned by
   // `parseModelsResponse` (#283) and by a frozen-body test.
   const filteredModels = evaluatorModels.filter(m => m.id !== analysisModel);
-  const requiresApiKey = tab === 'consistency' || tab === 'evaluation';
+  const requiresApiKey = path === 'automated';
 
   // The evaluator list comes from `/api/models` — the models THIS instance
   // offers, served from its catalog (website#30 P2). It used to be a hardcoded
@@ -162,9 +192,12 @@ export default function AttestationDialog({
     return () => { isMounted = false; };
   }, [open]);
 
+  const busy = consistencyStatus === 'running' || evalStatus === 'running' || submitting;
+  const canPublishReview = expertBody.trim().length > 0 && expertExpertise.trim().length > 0 && !!expertRating && !submitting;
+
   const handleClose = () => {
-    if (consistencyStatus === 'running' || evalStatus === 'running' || submitting) return;
-    setOpen(false);
+    if (busy) return;
+    onClose();
   };
 
   // --- Consistency Test ---
@@ -256,6 +289,7 @@ export default function AttestationDialog({
 
   const submitAttestation = useCallback(async () => {
     setSubmitting(true);
+    setSaveError('');
     try {
       let attestationData;
       if (tab === 'consistency' && consistencyMetrics && completedRuns.length > 0) {
@@ -334,199 +368,163 @@ export default function AttestationDialog({
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Submit failed' }));
-        throw new Error(err.error || 'Failed to save attestation');
+        throw new Error(err.error || SAVE_FAILED);
       }
 
-      setOpen(false);
+      if (tab === 'expert') {
+        setExpertBody('');
+        setExpertExpertise('');
+        setExpertRating('');
+      }
+      onClose();
       onAttestationCreated();
     } catch (err) {
       if (tab === 'expert') {
-        setExpertError(err instanceof Error ? err.message : 'Failed to save attestation');
+        setExpertError(err instanceof Error ? err.message : SAVE_FAILED);
       } else {
-        alert(err instanceof Error ? err.message : 'Failed to save attestation');
+        setSaveError(err instanceof Error ? err.message : SAVE_FAILED);
       }
     } finally {
       setSubmitting(false);
     }
-  }, [tab, consistencyMetrics, completedRuns, evalResult, expertBody, expertExpertise, expertRating, slug, analysisModel, onAttestationCreated]);
+  }, [tab, consistencyMetrics, completedRuns, evalResult, expertBody, expertExpertise, expertRating, slug, analysisModel, onClose, onAttestationCreated]);
 
   // --- Render ---
 
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        style={{
-          padding: '6px 14px',
-          border: '1px solid var(--accent)',
-          borderRadius: '4px',
-          fontSize: '13px',
-          color: 'var(--accent)',
-          backgroundColor: 'white',
-          cursor: 'pointer',
-          fontWeight: 500,
-        }}
-      >
-        + Add attestation
-      </button>
-    );
-  }
-
   return (
-    <div
-      style={{
-        position: 'fixed', inset: 0, zIndex: 1000,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+    <Sheet
+      open={open}
+      onClose={handleClose}
+      title={SHEET_TITLE}
+      busy={busy}
+      primaryAction={path === 'review' ? { label: PUBLISH_REVIEW, onClick: submitAttestation, disabled: !canPublishReview } : undefined}
     >
-      <div style={{
-        backgroundColor: 'white', borderRadius: '8px', width: '100%', maxWidth: '600px',
-        maxHeight: '85vh', overflow: 'auto', margin: '16px', padding: '24px',
-        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-      }}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Add Attestation</h3>
-          <button onClick={handleClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-muted)' }}>&times;</button>
-        </div>
+      {path === 'review' && (
+        <ExpertTab
+          body={expertBody}
+          setBody={setExpertBody}
+          expertise={expertExpertise}
+          setExpertise={setExpertExpertise}
+          rating={expertRating}
+          setRating={setExpertRating}
+          error={expertError}
+        />
+      )}
 
-        {/* API Key notice + input — only machine attestations need an LLM call */}
-        {requiresApiKey && (
+      <Disclosure
+        summary={AUTOMATED_LABEL}
+        open={path === 'automated'}
+        onToggle={(isOpen) => setPath(isOpen ? 'automated' : 'review')}
+      >
+        {path === 'automated' && (
           <>
-            <div style={{
-              padding: '10px 14px', backgroundColor: 'rgba(var(--accent-rgb), 0.04)',
-              borderRadius: '4px', fontSize: '12px', color: 'var(--text-secondary)',
-              marginBottom: '16px', lineHeight: 1.5,
-            }}>
-              Your API key is used for this request only and is never stored. It is sent to our server to make AI model calls on your behalf, then discarded.
+            <div role="radiogroup" aria-label={AUTOMATED_LABEL} style={{ display: 'grid', gap: '8px', margin: '8px 0 16px' }}>
+              {([['evaluation', EVALUATION_CHOICE], ['consistency', CONSISTENCY_CHOICE]] as const).map(([value, words]) => (
+                <Card key={value} variant="selectable" compact selected={check === value} as="label">
+                  <input
+                    type="radio"
+                    name={checkName}
+                    value={value}
+                    checked={check === value}
+                    onChange={() => setCheck(value)}
+                    style={{ marginRight: '8px' }}
+                  />
+                  <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{words}</span>
+                </Card>
+              ))}
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label htmlFor="attestation-model-api-key" style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }}>
-                Model API key
-              </label>
-              <p id="attestation-model-api-key-hint" style={{ margin: '0 0 6px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                The key for the AI model endpoint this site is configured to use. Which service that is depends on how this instance is set up.
-              </p>
-              <input
-                id="attestation-model-api-key"
-                aria-describedby="attestation-model-api-key-hint"
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Paste your key"
-                style={{
-                  width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)',
-                  borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
-                }}
+            {requiresApiKey && (
+              <>
+                <div style={{
+                  padding: '10px 14px', backgroundColor: 'var(--card-background)',
+                  borderRadius: '4px', fontSize: '12px', color: 'var(--text-secondary)',
+                  marginBottom: '16px', lineHeight: 1.5,
+                }}>
+                  Your API key is used for this request only and is never stored. It is sent to our server to make AI model calls on your behalf, then discarded.
+                </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <label htmlFor="attestation-model-api-key" style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }}>
+                    Model API key
+                  </label>
+                  <p id="attestation-model-api-key-hint" style={{ margin: '0 0 6px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    The key for the AI model endpoint this site is configured to use. Which service that is depends on how this instance is set up.
+                  </p>
+                  <input
+                    id="attestation-model-api-key"
+                    aria-describedby="attestation-model-api-key-hint"
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Paste your key"
+                    style={{
+                      width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)',
+                      borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </>
+            )}
+
+            {tab === 'evaluation' && (
+              <EvaluationTab
+                apiKey={apiKey}
+                evaluatorModel={evaluatorModel}
+                setEvaluatorModel={setEvaluatorModel}
+                filteredModels={filteredModels}
+                modelsUnavailable={modelsUnavailable}
+                status={evalStatus}
+                result={evalResult}
+                error={evalError}
+                onRun={runEvaluation}
+                onSubmit={submitAttestation}
+                submitting={submitting}
               />
-            </div>
+            )}
+
+            {tab === 'consistency' && canReplay && consentNeeded && (
+              <div style={{ marginBottom: '16px' }}>
+                <ConsentCard
+                  onAllow={() => {
+                    setConsentNeeded(false);
+                    runConsistencyTest();
+                  }}
+                  onNotNow={() => setConsentNeeded(false)}
+                />
+              </div>
+            )}
+
+            {tab === 'consistency' && (
+              canReplay ? (
+                <ConsistencyTab
+                  apiKey={apiKey}
+                  numRuns={numRuns}
+                  setNumRuns={setNumRuns}
+                  status={consistencyStatus}
+                  progress={consistencyProgress}
+                  completedRuns={completedRuns}
+                  metrics={consistencyMetrics}
+                  onRun={runConsistencyTest}
+                  onSubmit={submitAttestation}
+                  submitting={submitting}
+                />
+              ) : (
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)', padding: '12px 0' }}>
+                  Consistency testing requires full prompt text. This analysis was published with hash-only visibility.
+                </div>
+              )
+            )}
+
+            {saveError && <ErrorLine text={saveError} />}
           </>
         )}
-
-        {/* Tab selector */}
-        <div style={{ display: 'flex', gap: '0', marginBottom: '20px', borderBottom: '1px solid var(--border-color)' }}>
-          <TabButton active={tab === 'evaluation'} onClick={() => setTab('evaluation')}>
-            Adversarial Evaluation
-          </TabButton>
-          <TabButton active={tab === 'consistency'} onClick={() => setTab('consistency')} disabled={!canReplay}>
-            Consistency Test
-          </TabButton>
-          <TabButton active={tab === 'expert'} onClick={() => setTab('expert')}>
-            Expert Attestation
-          </TabButton>
-        </div>
-
-        {/* Tab content */}
-        {tab === 'evaluation' && (
-          <EvaluationTab
-            apiKey={apiKey}
-            evaluatorModel={evaluatorModel}
-            setEvaluatorModel={setEvaluatorModel}
-            filteredModels={filteredModels}
-            modelsUnavailable={modelsUnavailable}
-            status={evalStatus}
-            result={evalResult}
-            error={evalError}
-            onRun={runEvaluation}
-            onSubmit={submitAttestation}
-            submitting={submitting}
-          />
-        )}
-
-        {tab === 'consistency' && canReplay && consentNeeded && (
-          <div style={{ marginBottom: '16px' }}>
-            <ConsentCard
-              onAllow={() => {
-                setConsentNeeded(false);
-                runConsistencyTest();
-              }}
-              onNotNow={() => setConsentNeeded(false)}
-            />
-          </div>
-        )}
-
-        {tab === 'consistency' && (
-          canReplay ? (
-            <ConsistencyTab
-              apiKey={apiKey}
-              numRuns={numRuns}
-              setNumRuns={setNumRuns}
-              status={consistencyStatus}
-              progress={consistencyProgress}
-              completedRuns={completedRuns}
-              metrics={consistencyMetrics}
-              onRun={runConsistencyTest}
-              onSubmit={submitAttestation}
-              submitting={submitting}
-            />
-          ) : (
-            <div style={{ fontSize: '13px', color: 'var(--text-muted)', padding: '12px 0' }}>
-              Consistency testing requires full prompt text. This analysis was published with hash-only visibility.
-            </div>
-          )
-        )}
-
-        {tab === 'expert' && (
-          <ExpertTab
-            body={expertBody}
-            setBody={setExpertBody}
-            expertise={expertExpertise}
-            setExpertise={setExpertExpertise}
-            rating={expertRating}
-            setRating={setExpertRating}
-            error={expertError}
-            onSubmit={submitAttestation}
-            submitting={submitting}
-          />
-        )}
-      </div>
-    </div>
+      </Disclosure>
+    </Sheet>
   );
 }
 
 // --- Sub-components ---
-
-function TabButton({ active, onClick, disabled, children }: {
-  active: boolean; onClick: () => void; disabled?: boolean; children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        padding: '8px 16px', border: 'none', borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
-        background: 'none', fontSize: '13px', fontWeight: active ? 600 : 400,
-        color: disabled ? 'var(--text-muted)' : active ? 'var(--accent)' : 'var(--text-secondary)',
-        cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
-      }}
-    >
-      {children}
-    </button>
-  );
-}
 
 function EvaluationTab({ apiKey, evaluatorModel, setEvaluatorModel, filteredModels, modelsUnavailable, status, result, error, onRun, onSubmit, submitting }: {
   apiKey: string;
@@ -617,7 +615,7 @@ function EvaluationTab({ apiKey, evaluatorModel, setEvaluatorModel, filteredMode
               opacity: submitting ? 0.7 : 1,
             }}
           >
-            {submitting ? 'Saving...' : 'Save Attestation'}
+            {submitting ? 'Saving...' : SAVE_REVIEW}
           </button>
         </div>
       )}
@@ -779,7 +777,7 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
               opacity: submitting ? 0.7 : 1,
             }}
           >
-            {submitting ? 'Saving...' : 'Save Attestation'}
+            {submitting ? 'Saving...' : SAVE_REVIEW}
           </button>
         </div>
       )}
@@ -787,39 +785,34 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
   );
 }
 
-const EXPERT_RATING_OPTIONS: { value: ExpertRating; label: string; hint: string; bg: string; color: string }[] = [
-  {
-    value: 'endorse',
-    label: 'Endorse',
-    hint: 'The analysis is sound given the available data.',
-    bg: 'rgba(0, 183, 3, 0.08)',
-    color: 'var(--success)',
-  },
-  {
-    value: 'concerns',
-    label: 'Concerns',
-    hint: 'Partially supported — see notes for caveats or missing context.',
-    bg: 'rgba(255, 183, 0, 0.10)',
-    color: '#a07000',
-  },
-  {
-    value: 'dispute',
-    label: 'Dispute',
-    hint: 'The conclusion is not supported by the data or method.',
-    bg: 'rgba(236, 19, 30, 0.08)',
-    color: 'var(--error)',
-  },
-  {
-    value: 'neutral',
-    label: 'Neutral',
-    hint: 'Observation or methodology note without endorsement or dispute.',
-    bg: 'rgba(0, 0, 0, 0.05)',
-    color: 'var(--text-secondary)',
-  },
+// The rating cards' own words and hints (UX-2 P2, contract v5): the choice's
+// words, not the display labels, which the rows and the summary read from
+// `EXPERT_RATING_LABELS`.
+const EXPERT_RATING_OPTIONS: { value: ExpertRating; label: string; hint: string }[] = [
+  { value: 'endorse', label: 'Endorse', hint: 'The analysis is sound given the available data.' },
+  { value: 'concerns', label: 'Concerns', hint: 'Partially supported — see notes for caveats or missing context.' },
+  { value: 'dispute', label: 'Dispute', hint: 'The conclusion is not supported by the data or method.' },
+  { value: 'neutral', label: 'Neutral', hint: 'Observation or methodology note without endorsement or dispute.' },
 ];
 
+/** The sheet's error line: what a failed save says, where the action was taken (it was an alert()). */
+function ErrorLine({ text }: { text: string }) {
+  return (
+    <p role="alert" style={{ margin: '12px 0 0', fontSize: '13px', color: 'var(--error)', lineHeight: 1.5 }}>
+      {text}
+    </p>
+  );
+}
+
+// A field's label row: the label, and its character count at the right (in the
+// row, not under the field, so the review path fits a phone's bottom sheet: P2's
+// layout instrument, criterion 10).
+const FIELD_HEAD = { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' } as const;
+const FIELD_LABEL = { fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' } as const;
+
+/** The review path: the lead, the body, the expertise, and the rating as P5 selectable cards. Its action is the sheet's footer. */
 function ExpertTab({
-  body, setBody, expertise, setExpertise, rating, setRating, error, onSubmit, submitting,
+  body, setBody, expertise, setExpertise, rating, setRating, error,
 }: {
   body: string;
   setBody: (v: string) => void;
@@ -828,50 +821,88 @@ function ExpertTab({
   rating: ExpertRating | '';
   setRating: (r: ExpertRating) => void;
   error: string;
-  onSubmit: () => void;
-  submitting: boolean;
 }) {
+  const ids = useId();
+  const bodyId = `${ids}-body`;
+  const expertiseId = `${ids}-expertise`;
+  const ratingName = `${ids}-rating`;
   const bodyCharCount = body.length;
   const expertiseCharCount = expertise.length;
-  const canSubmit = body.trim().length > 0 && expertise.trim().length > 0 && !!rating && !submitting;
   return (
     <>
-      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
+      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>
         A review from a domain expert, published as part of this analysis. Your GitHub identity,
         self-described expertise, and the review text are all published publicly. Each review
         shows its own signing status once submitted.
       </p>
 
+      {/* Rating */}
+      <fieldset style={{ border: 'none', margin: '0 0 12px', padding: 0 }}>
+        <legend style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-primary)', padding: 0 }}>
+          Rating
+        </legend>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          {EXPERT_RATING_OPTIONS.map((opt) => (
+            <Card key={opt.value} variant="selectable" compact selected={rating === opt.value} as="label">
+              <span style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                <input
+                  type="radio"
+                  name={ratingName}
+                  value={opt.value}
+                  checked={rating === opt.value}
+                  onChange={() => setRating(opt.value)}
+                  style={{ marginTop: '2px' }}
+                />
+                <span>
+                  <span style={{ display: 'block', fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)', marginBottom: '2px' }}>
+                    {opt.label}
+                  </span>
+                  <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                    {opt.hint}
+                  </span>
+                </span>
+              </span>
+            </Card>
+          ))}
+        </div>
+      </fieldset>
+
       {/* Body */}
-      <div style={{ marginBottom: '16px' }}>
-        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }}>
-          Review
-        </label>
+      <div style={{ marginBottom: '12px' }}>
+        <div style={FIELD_HEAD}>
+          <label htmlFor={bodyId} style={FIELD_LABEL}>
+            Review
+          </label>
+          <span style={{ fontSize: '11px', color: bodyCharCount > EXPERT_BODY_MAX_CHARS ? 'var(--error)' : 'var(--text-muted)' }}>
+            {bodyCharCount.toLocaleString()} / {EXPERT_BODY_MAX_CHARS.toLocaleString()}
+          </span>
+        </div>
         <textarea
+          id={bodyId}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="Your assessment, context, or correction. Markdown supported."
-          rows={8}
+          rows={3}
           style={{
             width: '100%', padding: '10px 12px', border: '1px solid var(--border-color)',
             borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
             fontFamily: 'inherit', lineHeight: 1.5, resize: 'vertical',
           }}
         />
-        <div style={{
-          fontSize: '11px', color: bodyCharCount > EXPERT_BODY_MAX_CHARS ? 'var(--error)' : 'var(--text-muted)',
-          textAlign: 'right', marginTop: '2px',
-        }}>
-          {bodyCharCount.toLocaleString()} / {EXPERT_BODY_MAX_CHARS.toLocaleString()}
-        </div>
       </div>
 
       {/* Expertise */}
-      <div style={{ marginBottom: '16px' }}>
-        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }}>
-          Your expertise or affiliation
-        </label>
+      <div style={{ marginBottom: '12px' }}>
+        <div style={FIELD_HEAD}>
+          <label htmlFor={expertiseId} style={FIELD_LABEL}>
+            {EXPERTISE_LABEL}
+          </label>
+          <span style={{ fontSize: '11px', color: expertiseCharCount > EXPERT_EXPERTISE_MAX_CHARS ? 'var(--error)' : 'var(--text-muted)' }}>
+            {expertiseCharCount} / {EXPERT_EXPERTISE_MAX_CHARS}
+          </span>
+        </div>
         <input
+          id={expertiseId}
           type="text"
           value={expertise}
           onChange={(e) => setExpertise(e.target.value)}
@@ -882,68 +913,9 @@ function ExpertTab({
             borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
           }}
         />
-        <div style={{
-          fontSize: '11px', color: expertiseCharCount > EXPERT_EXPERTISE_MAX_CHARS ? 'var(--error)' : 'var(--text-muted)',
-          textAlign: 'right', marginTop: '2px',
-        }}>
-          {expertiseCharCount} / {EXPERT_EXPERTISE_MAX_CHARS}
-        </div>
       </div>
 
-      {/* Rating */}
-      <div style={{ marginBottom: '16px' }}>
-        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-primary)' }}>
-          Rating
-        </label>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          {EXPERT_RATING_OPTIONS.map((opt) => {
-            const selected = rating === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setRating(opt.value)}
-                style={{
-                  textAlign: 'left',
-                  padding: '10px 12px',
-                  border: `1.5px solid ${selected ? opt.color : 'var(--border-color)'}`,
-                  borderRadius: '4px',
-                  backgroundColor: selected ? opt.bg : 'white',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                }}
-              >
-                <div style={{ fontWeight: 600, color: opt.color, marginBottom: '2px' }}>
-                  {opt.label}
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                  {opt.hint}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {error && (
-        <div style={{ marginBottom: '12px', padding: '10px', fontSize: '13px', color: 'var(--error)', backgroundColor: 'rgba(236, 19, 30, 0.06)', borderRadius: '4px' }}>
-          {error}
-        </div>
-      )}
-
-      <button
-        onClick={onSubmit}
-        disabled={!canSubmit}
-        style={{
-          padding: '8px 20px', border: 'none', borderRadius: '4px',
-          fontSize: '13px', fontWeight: 600, cursor: canSubmit ? 'pointer' : 'not-allowed',
-          backgroundColor: canSubmit ? 'var(--success)' : '#e0e0e0',
-          color: canSubmit ? 'white' : 'var(--text-muted)',
-          opacity: submitting ? 0.7 : 1,
-        }}
-      >
-        {submitting ? 'Publishing...' : 'Publish attestation'}
-      </button>
+      {error && <ErrorLine text={error} />}
     </>
   );
 }

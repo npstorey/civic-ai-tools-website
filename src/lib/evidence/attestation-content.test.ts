@@ -103,59 +103,56 @@ test('#559 C3: a dropped connection, a non-JSON body and a non-object body come 
 // --- The component's use of the module -------------------------------------------
 
 const SECTION = code(read('src/components/evidence/AttestationSection.tsx'));
+// UX-2 P2: the page's one review store reads the list and every review's
+// package; the section renders what the store read.
+const STORE = code(read('src/components/evidence/RecordReviewsProvider.tsx'));
 
-test('#559 C3: AttestationSection reads attestation content only through the module', () => {
-  assert.doesNotMatch(SECTION, /storageKey/, 'the component still names a storage address');
+test('#559 C3, as UX-2 P2 moves it: the review store reads attestation content only through the module; the section reads none', () => {
+  for (const [name, src] of [['the store', STORE], ['the section', SECTION]] as const) {
+    assert.doesNotMatch(src, /storageKey/, `${name} names a storage address`);
+  }
   assert.match(
-    SECTION,
+    STORE,
     /import\s*\{[^}]*\bloadAttestationPackage\b[^}]*\}\s*from\s*'@\/lib\/evidence\/attestation-content'/,
-    'the component imports the read module',
+    'the store imports the read module',
   );
   // Every `fetch(` is either the list route, which carries no content, or the
   // browser fetch handed to the module unbound.
-  const fetches = [...SECTION.matchAll(/\bfetch\(([^)]*)\)/g)].map((m) => m[1]);
+  const fetches = [...STORE.matchAll(/\bfetch\(([^)]*)\)/g)].map((m) => m[1]);
   assert.deepEqual(
     fetches,
-    ['`/api/records/${slug}/attestations`', 'input, init', 'input, init'],
-    'the only direct fetch is the list; the others are the module\'s injected fetch',
+    ['`/api/records/${slug}/attestations`', 'input, init'],
+    'the only direct fetch is the list; the other is the module\'s injected fetch',
   );
   assert.equal(
-    (SECTION.match(/fetch: \(input, init\) => fetch\(input, init\)/g) ?? []).length,
-    2,
-    'both injected fetches are the unbound browser fetch',
+    (STORE.match(/fetch: \(input, init\) => fetch\(input, init\)/g) ?? []).length,
+    1,
+    'the injected fetch is the unbound browser fetch',
   );
+  assert.deepEqual([...SECTION.matchAll(/\bfetch\(/g)], [], 'the section makes no request of its own');
 });
 
-test('#559 C3: the expert reviews load eagerly through the module, and a failed read is unavailable', () => {
-  const effect = SECTION.indexOf("(a) => a.type === 'expert_attestation' && !(a.id in expertPayloads)");
-  assert.ok(effect > 0, 'the eager expert load is present');
-  const end = SECTION.indexOf('}, [slug, attestations, expertPayloads]);', effect);
+test('#559 C3, as UX-2 P2 moves it: every review loads eagerly through the module, and a failed read is unavailable', () => {
+  const effect = STORE.indexOf('(a) => !(a.id in payloads)');
+  assert.ok(effect > 0, 'the eager load is present');
+  const end = STORE.indexOf('}, [slug, attestations, payloads]);', effect);
   assert.ok(end > effect, 'the eager load\'s effect closes');
-  const body = SECTION.slice(effect, end);
-  assert.match(body, /loadAttestationPackage\(slug, a\.id, \{/, 'each expert review is read by slug and id');
+  const body = STORE.slice(effect, end);
+  assert.match(body, /loadAttestationPackage\(slug, a\.id, \{/, 'each review is read by slug and id');
   assert.match(body, /fetch: \(input, init\) => fetch\(input, init\)/, 'through the browser fetch, unbound');
   assert.doesNotMatch(body, /res\.json\(\)|\.ok\b/, 'the effect does not read a response itself');
-  // The expert card's unavailable line, as before.
+  // The expert row's unavailable line, as before.
   assert.ok(SECTION.includes('[Review body could not be loaded; the stored package may be unavailable.]'));
 });
 
-test('#559 C3: a non-expert card\'s details load on expand through the module, and a failed read is unavailable', () => {
-  const toggle = SECTION.indexOf('const toggleExpand = async (attestation: Attestation) => {');
-  assert.ok(toggle > 0, 'toggleExpand is present');
-  const end = SECTION.indexOf('\n  };', toggle);
-  const body = SECTION.slice(toggle, end);
-  assert.match(body, /loadAttestationPackage\(slug, attestation\.id, \{/, 'the details are read by slug and id');
-  assert.match(body, /fetch: \(input, init\) => fetch\(input, init\)/, 'through the browser fetch, unbound');
-  assert.match(body, /setExpandedPkgs\(prev => \(\{ \.\.\.prev, \[attestation\.id\]: data as AttestationPackageData \| null \}\)\)/, 'the result, null on failure, is stored');
-  assert.doesNotMatch(body, /res\.json\(\)|\.ok\b/, 'the toggle does not read a response itself');
-
-  const card = SECTION.indexOf('function AttestationCard(');
-  assert.ok(card > 0, 'the card is present');
-  const cardEnd = SECTION.indexOf('\nfunction ', card + 1);
-  const cardBody = SECTION.slice(card, cardEnd);
-  const unavailable = cardBody.indexOf('{isExpanded && expanded === null && (');
-  assert.ok(unavailable > 0, 'an expanded card with a failed read renders a state');
-  assert.ok(cardBody.indexOf('[Details could not be loaded; the stored package may be unavailable.]', unavailable) > unavailable,
+test('#559 C3, as UX-2 P2 moves it: an automated review\'s details render the store\'s read, and a failed read is unavailable', () => {
+  const details = SECTION.indexOf('function AutomatedReviewDetails(');
+  assert.ok(details > 0, 'the details are present');
+  const detailsEnd = SECTION.indexOf('\nfunction ', details + 1);
+  const body = SECTION.slice(details, detailsEnd);
+  const unavailable = body.indexOf('if (expanded === null) {');
+  assert.ok(unavailable > 0, 'a failed read renders a state');
+  assert.ok(body.indexOf('[Details could not be loaded; the stored package may be unavailable.]', unavailable) > unavailable,
     'and that state says the details are unavailable');
 });
 

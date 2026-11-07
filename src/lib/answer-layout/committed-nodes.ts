@@ -12,7 +12,9 @@
 // reads them; they are for verifiers outside it.
 
 import node0 from '../../../public/.well-known/layouts/770ed52e2abfc0c7d4626953c9f715c11a50e63bd911fa2bed56b77a76fe0ee7.json' with { type: 'json' };
+import node1 from '../../../public/.well-known/layouts/c1ed395142ed4c8be33f39608d2c89ca42c95f7f57db676727892ea5bf06c4b2.json' with { type: 'json' };
 
 export const COMMITTED_LAYOUT_DOCUMENTS: readonly unknown[] = [
   node0,
+  node1,
 ];

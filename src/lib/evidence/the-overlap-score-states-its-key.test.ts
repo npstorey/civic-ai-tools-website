@@ -53,6 +53,7 @@ import {
 
 const DIALOG = 'src/components/evidence/AttestationDialog.tsx';
 const SECTION = 'src/components/evidence/AttestationSection.tsx';
+const STORE = 'src/components/evidence/RecordReviewsProvider.tsx';
 const ROUTE = 'src/app/api/evidence/[slug]/attestations/route.ts';
 
 function read(path: string): string {
@@ -94,9 +95,10 @@ test('PREMISE: the section reads the package it renders from that same blob', ()
   // Through the app's attestation package route since #559, which serves the
   // stored object's bytes unchanged (driven in
   // `src/app/api/evidence/attestation-package-route.test.ts`).
-  const section = read(SECTION);
-  assert.match(section, /loadAttestationPackage\(slug, attestation\.id, \{/);
-  assert.match(section, /toolCallOverlap/);
+  // UX-2 P2: the page's one review store reads every review's package; the
+  // section renders what it read.
+  assert.match(read(STORE), /loadAttestationPackage\(slug, a\.id, \{/);
+  assert.match(read(SECTION), /toolCallOverlap/);
 });
 
 // --- 2. Behaviour, driven ---------------------------------------------------

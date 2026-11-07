@@ -537,12 +537,13 @@ const ENVELOPE = [
 ];
 // UX-2 P5 (R18 C): "Verification Status" left the disclosure; the layout's
 // `verification` slot (`answer-layout/index.ts:34`, `:56`, `:127`, a signed
-// layout node's vocabulary) is kept and renders nothing.
+// layout node's vocabulary) is kept and renders nothing. UX-2 P2 (criterion 4):
+// the reviews left the disclosure too, for a page part of their own, headed
+// "Reviews" (`REVIEWS`, at the end of this file).
 const AFTER_ENVELOPE = [
   'Provenance Graph',
   'Additional Artifacts',
   'Adversarial evaluations',
-  'Attestations',
 ];
 
 // --- Criterion 1: the order, on both formats -----------------------------------
@@ -601,7 +602,12 @@ test('P2 (1) a record whose package cannot be loaded keeps the parts that need n
   // (The JSON-LD block at the top of the page carries the summary too; G is read by its own section.)
   assert.ok(sectionBody(html, 'G · Summary', d.end).includes('NOPKGDBSUMMARY-p2'), 'the database summary renders, as G');
   assert.equal(html.slice(0, d.start).includes(heading('A · Initial prompt')), false, 'no envelope part renders above');
-  for (const t of ['Attestations']) assert.ok(at(html, heading(t)) < d.end, `${t} renders inside`);
+  // UX-2 P2 (4): the reviews need no package; they render as their own part,
+  // outside the disclosure, which "the record whose package cannot be loaded
+  // keeps its reviews" asserts at the end of this file. Not here: a test that
+  // fails this early, while the module's top-level renders are still running,
+  // lets later async tests interleave with them on the stubs' shared globals.
+  // Measured on the red: two unrelated tests (R7 P4 a2, W3 P2 (5)) then failed.
   assert.ok(at(html, heading('Actions')) > d.end, 'Actions renders after the disclosure');
   assert.ok(at(html, 'Package hash: ') > d.end, 'the package hash renders after the disclosure (in "About this package", UX-2 P5)');
 });
@@ -1833,8 +1839,10 @@ const instanceWith = (layout: Layout) => ({
 const VIEW_ROOT = '<div style="max-width:900px;margin:0 auto">';
 
 function partOfChild(markup: string): string {
-  // UX-2 P5: the trust rows travel with the status row's part.
-  if (/^<div data-part="(status-row|refused-requests|trust-rows)"/.test(markup)) return 'status';
+  // UX-2 P5: the trust rows travel with the status row's part; UX-2 P2: so does the reviews summary row.
+  if (/^<div data-part="(status-row|refused-requests|trust-rows|reviews-summary)"/.test(markup)) return 'status';
+  // UX-2 P2 (4): the reviews, a page part of their own.
+  if (/^<\w+ data-part="attestations"/.test(markup)) return 'attestations';
   if (markup.startsWith('<div style="margin-bottom:24px">') || markup.startsWith('<h2')) return 'answer';
   if (markup.startsWith('<div data-part="citation"')) return 'citation';
   if (markup.startsWith('<div data-part="steps"')) return 'steps';
@@ -1879,8 +1887,9 @@ function sectionTitles(html: string): string[] {
 }
 
 // A record has no sources line: the part is empty, so it is absent from both sequences.
-const RECORD_ANSWER_FIRST = ['status', 'answer', 'citation', 'steps', 'disclosure', 'actions', 'foot'];
-const RECORD_ENVELOPE_ORDER = ['status', 'disclosure', 'steps', 'answer', 'citation', 'actions', 'foot'];
+// UX-2 P2 (4): the reviews are a page part after the steps, in both built-ins.
+const RECORD_ANSWER_FIRST = ['status', 'answer', 'citation', 'steps', 'attestations', 'disclosure', 'actions', 'foot'];
+const RECORD_ENVELOPE_ORDER = ['status', 'disclosure', 'steps', 'attestations', 'answer', 'citation', 'actions', 'foot'];
 
 const W4_RECORDS: Array<[string, Case]> = [['A-G record', AGF], ['legacy record', OLD]];
 
@@ -1939,7 +1948,7 @@ for (const [name, c] of W4_RECORDS) {
       // actions; the foot now closes the view and the page.
       assert.ok(at(html, line) > at(html, 'Package hash: '), 'after the package hash, which sits in the actions');
     }
-    assert.ok((await renderWithInstance(c, INSTANCE)).includes('Shown under layout answer-first v1'), 'with no setting, the default’s line');
+    assert.ok((await renderWithInstance(c, INSTANCE)).includes('Shown under layout answer-first v2'), 'with no setting, the default’s line (UX-2 P2: v2)');
   });
 }
 
@@ -1962,7 +1971,7 @@ const FIXTURE_UNKNOWN_PART: Layout = {
 test('W4 P1 (8) a record under a layout that omits a part renders it at its default place, every part present', async () => {
   const byDefault = viewChildren(await renderWithInstance(AGF, INSTANCE));
   const omits = viewChildren(await renderWithInstance(AGF, INSTANCE, instanceWith(FIXTURE_OMITS_CITATION)));
-  assert.deepEqual(sequence(omits), ['status', 'disclosure', 'steps', 'answer', 'citation', 'actions', 'foot'], 'the citation directly after the answer, its default place');
+  assert.deepEqual(sequence(omits), ['status', 'disclosure', 'steps', 'attestations', 'answer', 'citation', 'actions', 'foot'], 'the citation directly after the answer, its default place');
   assert.deepEqual(elements(omits), elements(byDefault), 'the same elements: none dropped');
 });
 
@@ -1978,12 +1987,13 @@ test('W4 P1 (8) the record’s own sections are placed by name: one moved first,
   const layout: Layout = {
     ...ANSWER_FIRST,
     name: 'fixture-record-sections',
-    // UX-2 P5: `verification` renders nothing now, so `attestations` is the
-    // section moved first; the three the order omits keep their default place.
-    disclosure: { ...ANSWER_FIRST.disclosure, order: ['attestations', 'A', 'B', 'C', 'D', 'E', 'G', 'signers'] },
+    // UX-2 P5: `verification` renders nothing now; UX-2 P2: `attestations` is
+    // a page part, so `evaluations` is the section moved first; the ones the
+    // order omits keep their default place.
+    disclosure: { ...ANSWER_FIRST.disclosure, order: ['evaluations', 'A', 'B', 'C', 'D', 'E', 'G', 'signers'] },
   };
   const titles = sectionTitles(await renderWithInstance(AGF, INSTANCE, instanceWith(layout)));
-  assert.deepEqual(titles, ['Attestations', ...ENVELOPE, ...AFTER_ENVELOPE.filter((t) => t !== 'Attestations')]);
+  assert.deepEqual(titles, ['Adversarial evaluations', ...ENVELOPE, ...AFTER_ENVELOPE.filter((t) => t !== 'Adversarial evaluations')]);
 });
 
 test('W4 P1 fix 1 (F7) appliesTo and rendererVersion change nothing yet: a layout for another profile still applies to the record', async () => {
@@ -1996,16 +2006,16 @@ test('W4 P1 fix 1 (F7) appliesTo and rendererVersion change nothing yet: a layou
 
 test('W4 P1 the server markup is the instance’s default: its line, and the toggle with the default chosen', async () => {
   const foot = viewChildren(await renderWithInstance(AGF, INSTANCE)).at(-1)?.markup ?? '';
-  assert.ok(foot.includes('<span data-part="layout-line">Shown under layout answer-first v1</span>'), foot);
+  assert.ok(foot.includes('<span data-part="layout-line">Shown under layout answer-first v2</span>'), foot);
   const options = [...foot.matchAll(/<option value="([^"]+)"( selected="")?>([^<]*)<\/option>/g)];
-  assert.deepEqual(options.map((m) => [m[1], m[2] !== undefined]), [['answer-first@1', true], ['envelope-order@1', false]]);
+  assert.deepEqual(options.map((m) => [m[1], m[2] !== undefined]), [['answer-first@2', true], ['envelope-order@2', false]]);
 });
 
 test('W4 P2 the server markup with a publication attestation naming a node: the page looks it up among the nodes it holds', async () => {
   // The page reads the id from `resolveRecordAttestations` (stubbed above) and
-  // looks it up among the nodes this site holds: the one committed node
-  // (`770ed52e…`), and no URL node, since none is set here. This test's id is
-  // its own fixture, not the committed node's, so it is one the site does not hold.
+  // looks it up among the nodes this site holds: the two committed nodes
+  // (`770ed52e…` and `c1ed3951…`), and no URL node, since none is set here. This test's id is
+  // its own fixture, not a committed node's, so it is one the site does not hold.
   globals.__p2PublishedLayoutNodeId = '9'.repeat(64);
   let named: string;
   try {
@@ -2013,9 +2023,9 @@ test('W4 P2 the server markup with a publication attestation naming a node: the 
   } finally {
     delete globals.__p2PublishedLayoutNodeId;
   }
-  assert.ok(named.includes('<span data-part="layout-line">Shown under layout answer-first v1. This site does not hold the layout this analysis was published under.</span>'), named);
+  assert.ok(named.includes('<span data-part="layout-line">Shown under layout answer-first v2. This site does not hold the layout this analysis was published under.</span>'), named);
   const none = viewChildren(await renderWithInstance(AGF, INSTANCE)).at(-1)?.markup ?? '';
-  assert.ok(none.includes('<span data-part="layout-line">Shown under layout answer-first v1</span>'), 'no id named: W4 P1’s line');
+  assert.ok(none.includes('<span data-part="layout-line">Shown under layout answer-first v2</span>'), 'no id named: W4 P1’s line');
 });
 
 // --- W4 P1 (9): the record citation's word ---------------------------------------------
@@ -2070,6 +2080,14 @@ test('W4 P1 (9) the citation block reads "Analysis: <title> [Published: <date>] 
 // ruling on the card's two values (2026-10-30 21:55Z): the diff is the card's
 // value alone, "all seven parts (A to G) required" on the A-G record and "not
 // all seven parts required" on the legacy one.
+// Re-captured for UX-2 P2 (the reviews on the analysis page): on both records
+// the diff is the trust rows' bottom margin (24 px to 12 px), one inserted
+// empty `data-part="reviews-summary"` row after them (the list is unread on
+// the server's pass, so it states nothing), and the section moved out of the
+// disclosure into its own `data-part="attestations"` part after the steps,
+// `id="reviews"`, headed "Reviews", reading "Loading reviews..." and "Sign in
+// with GitHub to add a review." (R3 B), its loading line's margin 0 to
+// 0 0 12px. The comparison and executed-run goldens are unchanged.
 
 const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
 
@@ -2342,3 +2360,93 @@ test('UX-2 P5 (casing): the actions read "Copy link", in sentence case, as X21 h
 test('UX-2 P5 (record frame): the analysis page sits in the ui-page--record frame', () => {
   assert.match(HTML.agf, /<div class="ui-page ui-page--record"/);
 });
+
+// --- UX-2 P2: the reviews on the analysis page ---------------------------------------------
+//
+// Criterion 4: the reviews render as a page part (`data-part="attestations"`)
+// after the steps and before the sources line (a record has none) and the
+// disclosure, headed "Reviews", under both built-ins and under the v1 layout
+// read from the committed node file (the reading's log of its unknown
+// disclosure name is asserted in `answer-layout/index.test.ts`). Criterion 1,
+// placement: the summary row (`data-part="reviews-summary"`) sits in the
+// status area, after P5's trust rows and outside the disclosure; on the
+// server's first pass the review list has not been read, so it states no
+// count and no "No reviews yet". The row's words and the list are driven in
+// `src/components/evidence/record-reviews-surface.test.ts`.
+
+// No top-level await here: this file's earlier top-level renders share the
+// stubs' globals with tests already running, and an await at module level
+// moves where those renders interleave. The three modules load in the tests.
+const p2Modules = async () => ({
+  REVIEWS_SECTION_ID: ((await import('@/lib/evidence/record-reviews')) as { REVIEWS_SECTION_ID: string }).REVIEWS_SECTION_ID,
+  NO_REVIEWS: ((await import('@/lib/evidence/review-summary')) as { NO_REVIEWS: string }).NO_REVIEWS,
+  layoutFieldsOf: ((await import('@/lib/answer-layout/node-reading')) as { layoutFieldsOf: (pkg: Record<string, unknown>) => Record<string, unknown> }).layoutFieldsOf,
+});
+
+const REVIEWS = 'Reviews';
+
+function reviewsPart(html: string): { start: number; end: number; markup: string } {
+  const parts = partsNamed(html, 'attestations');
+  assert.equal(parts.length, 1, `the page renders ${parts.length} data-part="attestations" parts`);
+  return parts[0];
+}
+
+async function assertReviewsPart(html: string, where: string): Promise<void> {
+  const { REVIEWS_SECTION_ID } = await p2Modules();
+  const part = reviewsPart(html);
+  const d = requireDisclosure(html);
+  assert.ok(part.end <= d.start || part.start >= d.end, `${where}: the reviews sit outside the disclosure`);
+  assert.equal(occurrences(part.markup, heading(REVIEWS)).length, 1, `${where}: headed "${REVIEWS}", once`);
+  assert.equal(occurrences(html, heading(REVIEWS)).length, 1, `${where}: one "${REVIEWS}" heading on the page`);
+  assert.equal(occurrences(html, heading('Attestations')).length, 0, `${where}: no "Attestations" heading`);
+  assert.ok(part.markup.includes(`id="${REVIEWS_SECTION_ID}"`), `${where}: the section carries the id "See them" links to`);
+  assert.ok(!sectionTitles(html).includes(REVIEWS), `${where}: not among the disclosure's sections`);
+  const steps = partOf(html, 'steps');
+  if (steps !== null) assert.ok(steps.end <= part.start, `${where}: after the steps`);
+}
+
+for (const [name, c] of W4_RECORDS) {
+  test(`UX-2 P2 (4, 8) ${name}: the reviews are a page part after the steps, headed "Reviews", outside the disclosure, under both built-ins`, async () => {
+    await assertReviewsPart(await renderWithInstance(c, INSTANCE), `${name}, answer-first`);
+    const envelope = await renderWithInstance(c, INSTANCE, instanceWith(ENVELOPE_ORDER));
+    await assertReviewsPart(envelope, `${name}, envelope-order`);
+    // By the view's own children: under envelope-order the disclosure (and F, the answer again) comes first.
+    const order = sequence(viewChildren(envelope));
+    assert.ok(order.indexOf('attestations') >= 0 && order.indexOf('attestations') < order.indexOf('answer'), `envelope-order: before the answer (${order.join(', ')})`);
+  });
+
+  test(`UX-2 P2 (4) ${name}: under the v1 layout read from the committed node file, the reviews still render after the steps, outside the disclosure`, async () => {
+    const { layoutFieldsOf } = await p2Modules();
+    const file = path.join(REPO, 'public', '.well-known', 'layouts', '770ed52e2abfc0c7d4626953c9f715c11a50e63bd911fa2bed56b77a76fe0ee7.json');
+    const doc = JSON.parse(fs.readFileSync(file, 'utf8')) as { package: Record<string, unknown> };
+    const v1 = layoutFieldsOf(doc.package) as unknown as Layout;
+    assert.equal(v1.version, 1, 'premise: the committed node is answer-first v1');
+    assert.ok((v1.disclosure.order as string[]).includes('attestations'), 'premise: v1 names the reviews inside its disclosure');
+    const html = await renderWithInstance(c, INSTANCE, instanceWith(v1));
+    assert.deepEqual(sequence(viewChildren(html)), RECORD_ANSWER_FIRST, 'the reviews at their default place: after the steps');
+    await assertReviewsPart(html, `${name}, the v1 layout`);
+  });
+}
+
+test('UX-2 P2 (4) the record whose package cannot be loaded keeps its reviews, as their own part', async () => {
+  await assertReviewsPart(HTML.noPackage, 'no package');
+});
+
+for (const [name, key] of [['signed A-G record', 'agf'], ['unsigned record', 'skeleton']] as const) {
+  test(`UX-2 P2 (1) ${name}: the summary row sits in the status area, after the trust rows, outside the disclosure, and the server's first pass states no count`, async () => {
+    const { NO_REVIEWS } = await p2Modules();
+    const html = HTML[key];
+    const rows = partsNamed(html, 'reviews-summary');
+    assert.equal(rows.length, 1, `the page renders ${rows.length} reviews-summary rows`);
+    const row = rows[0];
+    const status = partsNamed(html, 'status-row')[0];
+    assert.ok(status !== undefined && status.end <= row.start, 'after the status row');
+    const trust = partsNamed(html, 'trust-rows')[0];
+    if (trust !== undefined) assert.ok(trust.end <= row.start, 'after the trust rows');
+    assert.ok(row.end <= requireDisclosure(html).start, 'outside, and before, the disclosure');
+    assert.ok(row.end <= reviewsPart(html).start, 'before the reviews section');
+    const text = readable(row.markup);
+    assert.doesNotMatch(text, /\d/, `no count before the list is read: "${text}"`);
+    assert.ok(!text.includes(NO_REVIEWS), 'no "No reviews yet" before the list is read');
+  });
+}
