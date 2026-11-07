@@ -39,6 +39,7 @@
 // passing an empty map.
 
 import type { evidenceRecords, users } from '../db/schema.ts';
+import type { RecordReviews } from './review-summary.ts';
 
 /** The columns `GET /api/evidence/list` selects off each record row. */
 export type RecordListRow = Pick<
@@ -72,6 +73,12 @@ export type RecordListItem = {
   creatorName: string;
   /** Present only when the count was actually computed — see the header. */
   attestationCount?: number;
+  /**
+   * The record's reviews by kind, with each expert review's rating word (UX-2
+   * P5, G0-13 a). Present only when the route read them, by the same rule as
+   * `attestationCount`: a record absent from a computed map has none.
+   */
+  reviews?: RecordReviews;
 };
 
 /** Characters of `summary` the index preview carries before it is elided. */
@@ -88,6 +95,8 @@ export type RecordListContext = {
    * run the count query. `null` omits the field; it never becomes `0`.
    */
   attestationCounts: ReadonlyMap<string, number> | null;
+  /** Reviews keyed by record id, or `null`/absent when the caller did not read them; absent omits the field. */
+  reviews?: ReadonlyMap<string, RecordReviews> | null;
 };
 
 /** Project one selected record row onto its public index entry. */
@@ -116,6 +125,9 @@ export function buildRecordListItem(
   // and "the field is absent" is the property under test.
   if (context.attestationCounts) {
     item.attestationCount = context.attestationCounts.get(row.id) ?? 0;
+  }
+  if (context.reviews) {
+    item.reviews = context.reviews.get(row.id) ?? { expertRatings: [], evaluations: 0, consistencyTests: 0 };
   }
 
   return item;
