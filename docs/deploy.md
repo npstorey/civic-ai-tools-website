@@ -1625,15 +1625,15 @@ a signed record package.
 
 ### Consent surfaces (optional)
 
-Two settings the consent card, the Sources panel, the dashboard's Sources tab,
+Two settings the Sources panel, the Settings overlay, the pause's card,
 `/api/flows` and the privacy page read (#632 W3; see
 [Consent and the flows statement](#consent-and-the-flows-statement)). Both
 are this instance's own: a fork fills in its own, or leaves them unset.
 
 | Variable | Meaning | Unset |
 | --- | --- | --- |
-| `SITE_DEPLOYMENT_GUIDE_URL` | The public address of the guide a reader follows to run this whole system on their own computer, with their own model and data sources. Each consent surface links it after the local-only offer, and `/api/flows` carries it as `links.deploymentGuide`. | Each surface says "This site does not name a deployment guide.", and `/api/flows` carries that sentence as `links.deploymentGuideOmitted`. The preflight lists it absent under OPTIONAL and refuses nothing. |
-| `SITE_OPERATOR_STATES_NO_TRAINING` | `1` or `true`: this operator states that the model endpoint is set to send questions only to providers that do not train on them. The card's endpoint row and the privacy page's "The model endpoint" section then say so, as the operator's statement, and say the site cannot read that setting. It covers training only, never retention. Set it only if your endpoint account is set that way. | Nothing is said about the endpoint's providers: the card's endpoint row stays as derived ("for this site's operator to state"), and the privacy page has no "The model endpoint" section. |
+| `SITE_DEPLOYMENT_GUIDE_URL` | The public address of the guide a reader follows to run this whole system on their own computer, with their own model and data sources. Each surface that makes the local-only offer (the Sources panel, the Settings overlay, the pause's card, and the line after the consent card's "Don't allow") links it after the offer, and `/api/flows` carries it as `links.deploymentGuide`. | Each surface says "This site does not name a deployment guide.", and `/api/flows` carries that sentence as `links.deploymentGuideOmitted`. The preflight lists it absent under OPTIONAL and refuses nothing. |
+| `SITE_OPERATOR_STATES_NO_TRAINING` | `1` or `true`: this operator states that the model endpoint is set to send questions only to providers that do not train on them. The privacy page's "The model endpoint" section then says so, as the operator's statement, and says the site cannot read that setting. It covers training only, never retention. Set it only if your endpoint account is set that way. | Nothing is said about the endpoint's providers: the privacy page's endpoint row stays as derived ("for this site's operator to state"), and it has no "The model endpoint" section. |
 
 ### Analytics (optional)
 
@@ -2160,18 +2160,25 @@ the other three answer HTTP 403 with
 `{ error, code: "consent_required", flowsVersion, reask }`. A consent in
 force whose reader has no source On (every configured source Off or Ask
 first) is refused the same way with `code: "no_sources_on"`, before the
-model is called, and its reader text points to the Sources panel.
+model is called, and its reader text points to Data source settings (the
+Settings overlay at `/settings`), with "Data source settings" as a link where
+the surface can carry one.
 
-**The surfaces.** The consent card lists every recipient from `/api/flows`
-with what it says it keeps; **Allow** stores each configured source's
-manifest default (`consentDefault`, On for every source today) and sends the
-question, **Not now** sends nothing. The Sources panel, beside the question
-box on the home page, `/ask` and `/explore`, sets each source On, Ask first
-or Off and withdraws the consent; for a signed-in account kept in the
-database it also links the dashboard's Sources tab, which shows the states,
-the dates and the flows version, sets each source's state with the panel's
-own control while a consent is in force, and withdraws too. The two settings these
-surfaces read are in the environment reference
+**The surfaces.** The consent card says what each answer does and links the
+privacy page, which lists every recipient from `/api/flows` with what it says
+it keeps. **Allow** stores the states shown: every source Ask first where the
+instance can ask (`SOURCE_ROUTING=in-loop` with the decision store set), the
+router's defaults (`consentDefault`) elsewhere; then it sends the question.
+**Don't allow** sends nothing and stores nothing, and the next question shows
+the card again. The card links Data source settings: the Settings overlay at
+`/settings`, served on both hosts, signed in and signed out. The overlay sets
+each source On, Ask first or Off, shows a signed-in account's notices and the
+date and flows version its consent refers to, and withdraws whenever a
+consent is in force. The Sources panel, beside the question box on the home
+page, `/ask` and `/explore`, sets each source and withdraws too; for a
+signed-in account kept in the database it links Data source settings. The
+dashboard's Sources tab links Data source settings and holds no control. The
+two settings these surfaces read are in the environment reference
 ([Consent surfaces](#consent-surfaces-optional)).
 
 **What a reader consents to: `/api/flows`.** `GET /api/flows` serves the
@@ -2207,8 +2214,9 @@ same way. The cookie
 holds a format version, the statement's base version, and per source its
 state, the calendar date it was given and that source's own version; never an
 account id, a network address or anything else that identifies a reader.
-Only the consent endpoint below writes either store; the consent card, the
-Sources panel and the dashboard's Sources tab call it.
+Only the consent endpoint below writes either store, with one exception: the
+decision route moves the states a pause's answer names (below). The consent
+card, the Sources panel and the Settings overlay call the endpoint.
 
 **The consent endpoint: `/api/sources/consent`.** `GET` reports the consent
 in force and the current flows version, and sets no cookie. `PUT` with
@@ -2235,7 +2243,7 @@ that keeps less, notifies and does not re-ask; a newly configured source
 re-asks nothing. A notice is shown to a reader whose consent is kept on an
 account: `GET /api/sources/consent` returns the row's `notices` (one line per
 change since the statement the row holds, dated by the row's `updatedAt`),
-the Sources panel and the dashboard's Sources tab show them, and dismissing
+the Sources panel and the Settings overlay show them, and dismissing
 (`PATCH`) saves the statement in force on the row. Changes are not announced
 ahead; they take effect when deployed, and the dated change log records
 them. A change to or from a posture that cannot be ranked ("not
@@ -3013,10 +3021,10 @@ This site's catalog lists no Google model. An operator who adds one with `MODEL_
 When the model loads a source the reader set to Ask first, a run on `/api/compare-stream` or `/api/query-notebook` stops to ask the reader. This happens only under `SOURCE_ROUTING=in-loop`. Under `all-sources`, the default, no question stops.
 
 - **The entry.** The server writes `consent-decision:<key>` to the key-value store that `KV_REST_API_URL` and `KV_REST_API_TOKEN` name, through the same client the rate limiter uses (`src/lib/sources/decision.ts`). The key is 128 random bits. The entry holds the source's id. For a signed-in reader on an instance with a database, it also holds a reader code: HMAC-SHA256 of the account's database id, keyed by `RATE_LIMIT_SECRET` under the pause's own label, never the limiter's. The id itself is never stored. The entry expires 600 seconds (10 minutes) after it is written, and an answer does not extend it (`SET … XX KEEPTTL`).
-- **The event.** Only once that write has succeeded, the stream carries a `consent_pause` progress event with the key, the source's entry in the flows statement, the hosts it may reach and the statement's links. The reader's card shows it in the run's steps and in the Sources panel's row for that source.
-- **The hold.** The run reads the entry every 500 ms for at most 60 seconds, and holds at most 120 seconds per run and once per source. The card posts the answer to `POST /api/sources/consent/decision` as `{ key, decision }`. `allow` turns that one source On in the reader's consent (the account's row, or the session cookie), and the load goes on as an On source's does. `not-now` changes nothing, and the load records `declined`. No answer in time records `no-answer`.
+- **The event.** Only once that write has succeeded, the stream carries a `consent_pause` progress event with the key, the source's entry in the flows statement, the hosts it may reach and the statement's links. The reader's card shows it in the run's steps, at the top of the results, and in the source's row in the Sources panel and the Settings overlay.
+- **The hold.** The run reads the entry every 500 ms for at most 60 seconds, and holds at most 120 seconds per run and once per source. The card posts the answer to `POST /api/sources/consent/decision` as `{ key, decision }`. `allow` turns that one source On in the reader's consent (the account's row, or the session cookie), and the load goes on as an On source's does. `off` ("Don't allow") turns that one source Off, and the load records `declined`. `allow-all` ("Allow all data sources") turns every configured source On, the load goes on, and no later load in that run stops to ask. `not-now` changes nothing and records `declined`; no surface sends it since the Settings overlay shipped, and it is kept for a page loaded before that. No answer in time records `no-answer`.
 - **The decision route** answers 404 for a key the store does not hold, 409 for one already answered, 403 for a key minted under another account, and 503 when the store fails or `RATE_LIMIT_SECRET` is unset. An anonymous reader's key is the only check.
-- **With no store**, because either variable is unset or a store write fails, the run does not stop: the event says so (`holds: false`), the load records `no-answer` at once, and the card says the source can be turned On in the panel for the next question. There is no in-memory fallback: a pause and its answer can reach different server instances.
+- **With no store**, because either variable is unset or a store write fails, the run does not stop: the event says so (`holds: false`), the load records `no-answer` at once, and the card says the source can be turned On in Data source settings for the next question. There is no in-memory fallback: a pause and its answer can reach different server instances.
 - **Who never stops.** `/api/compare`, the JSON route, holds no stream: an Ask-first load there records `declined`. Replay asks no reader and loads every source it offers, so no pause and no `declined` arise there.
 - **The record.** The key, the reader code and the answer reach no span and no record. A record states the load's outcome, and the load span's duration includes the time the run waited.
 
