@@ -92,6 +92,9 @@ const DUAL_SAMPLES = [
   '/records/some-published-slug',
   // The privacy page (#516 P7, ruling G0-4): served on both hosts.
   '/privacy',
+  // The Settings overlay (UX-2 P4b, S1): it opens from the consent card,
+  // which mounts on the marketing host too, so it is served on both.
+  '/settings',
 ];
 const OTHER_SAMPLES = [
   '/api/rate-limit', // matcher-excluded in prod, but the function must serve it regardless
@@ -1014,4 +1017,13 @@ test('canonicalize: APP_HOST precedence is the same one resolveHostRole uses', (
     kind: 'redirect',
     destination: 'https://www.x.example.org/evidence',
   });
+});
+
+// UX-2 P4b, criterion 2 (S1, L3): `/settings` is dual-served by decision, not
+// by falling through to 'other' (which also serves on both roles, so serving
+// alone cannot tell the two apart; the class can).
+test('UX-2 P4b: /settings classifies dual-served, on its own address and below it', () => {
+  assert.equal(classifyPath('/settings'), 'dual-served');
+  assert.equal(classifyPath('/settings/data-sources'), 'dual-served');
+  assert.equal(classifyPath('/settingsx'), 'other', 'prefix-collision guard: not /settings');
 });

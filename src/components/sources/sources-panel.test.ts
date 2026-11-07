@@ -234,12 +234,17 @@ test('criterion 1: for a session without a dbId, the panel shows the date given 
 // link to the dashboard's Sources tab, which withdraws too and, since PC, sets
 // each source's state (`SourcesTab.tsx`). Stage A asserted
 // no in-place withdraw for such a session; the ruling replaced that.
-test('criterion 15 (Q7): for a session with a dbId, the footer links to the dashboard\'s Sources tab, and the panel withdraws in place too', async () => {
+// UX-2 P4b, criterion 7 (L13): the footer's link reads "Data source settings" and opens the Settings overlay at
+// `/settings`, where the dashboard's Sources tab now points too; it no longer links the tab.
+test('criterion 15 (Q7; UX-2 P4b criterion 7): for a session with a dbId, the footer links to Data source settings at /settings, and the panel withdraws in place too', async () => {
   SIGNED_IN_DB();
   sessions.rows.clear();
   const { panel } = await panelWith(Object.fromEntries(CONFIGURED.map((id) => [id, 'on'])));
-  const links = panel.elements().filter((el) => el.type === 'a' && typeof el.props.href === 'string' && /^\/dashboard\b/.test(el.props.href as string) && /sources/i.test(el.props.href as string));
-  assert.equal(links.length, 1, `the panel does not link to the dashboard's Sources tab: ${panel.text().slice(0, 400)}`);
+  const toTab = panel.elements().filter((el) => el.type === 'a' && typeof el.props.href === 'string' && /^\/dashboard\b/.test(el.props.href as string));
+  assert.deepEqual(toTab.map((el) => el.props.href), [], 'the panel still links to the dashboard\'s Sources tab');
+  const links = panel.elements().filter((el) => el.type === 'a' && el.props.href === '/settings');
+  assert.equal(links.length, 1, `the panel does not link to /settings: ${panel.text().slice(0, 400)}`);
+  assert.equal(textOf(links[0]), 'Data source settings', 'the panel\'s link does not read "Data source settings"');
   assert.equal(panel.elements().filter((el) => el.type === 'button' && /withdraw/i.test(textOf(el))).length, 1, 'the panel does not withdraw in place for a session whose consent is on its account');
   panel.unmount();
   ANON();

@@ -385,8 +385,11 @@ test('criterion 3: for each topology, signed in and out, the drawer\'s items equ
       const drawer = byRole(s, 'dialog').length === 1 ? drawerGrouping(s) : 'no role="dialog"';
       s.unmount();
       assert.ok(desktop.length > 0, `premise (${key}): the desktop bar has items`);
-      expected[key] = desktop;
-      actual[key] = drawer;
+      // UX-2 P4b, criterion 2: the drawer adds "Settings" signed in, and only then; the rest is the desktop grouping.
+      expected[key] = { grouping: desktop, settings: state === 'in' ? 1 : 0 };
+      actual[key] = Array.isArray(drawer)
+        ? { grouping: drawer.filter((item) => !(item.label === 'Settings' && item.href === SETTINGS_HREF)), settings: drawer.filter((item) => item.label === 'Settings' && item.href === SETTINGS_HREF).length }
+        : drawer;
     }
   }
   assert.deepEqual(actual, expected, `the drawer, by case: ${JSON.stringify(actual, null, 1)}`);
@@ -504,7 +507,10 @@ test('criterion 5 (guard): signed in, the avatar trigger shows the account\'s na
   assert.deepEqual(read, want, `the avatar, by topology: ${JSON.stringify(read)}`);
 });
 
-test('criterion 5: the avatar menu reads My analyses, Public site exactly when resolvePublicSiteHref is not null, then Sign out', async () => {
+/** The Settings overlay's address (UX-2 P4b): relative, since `/settings` is served on both hosts (S1). */
+const SETTINGS_HREF = '/settings';
+
+test('criterion 5 (and UX-2 P4b criterion 2): the avatar menu reads My analyses, Settings, Public site exactly when resolvePublicSiteHref is not null, then Sign out', async () => {
   const read: Record<string, unknown> = {};
   const want: Record<string, unknown> = {};
   for (const [name, { env }] of Object.entries(CONFIGS)) {
@@ -514,12 +520,14 @@ test('criterion 5: the avatar menu reads My analyses, Public site exactly when r
     const publicSite = resolvePublicSiteHref(env);
     want[name] = [
       { label: 'My analyses', href: resolveDashboardHref(env) },
+      // UX-2 P4b, criterion 2: "Settings" after "My analyses", at the dual-served overlay's address.
+      { label: 'Settings', href: SETTINGS_HREF },
       ...(publicSite !== null ? [{ label: 'Public site', href: publicSite }] : []),
       { label: 'Sign out', href: null },
     ];
   }
-  assert.ok(Object.values(want).some((items) => (items as Item[]).length === 3), 'premise: a case where the resolver is not null');
-  assert.ok(Object.values(want).some((items) => (items as Item[]).length === 2), 'premise: a case where the resolver is null');
+  assert.ok(Object.values(want).some((items) => (items as Item[]).length === 4), 'premise: a case where the resolver is not null');
+  assert.ok(Object.values(want).some((items) => (items as Item[]).length === 3), 'premise: a case where the resolver is null');
   assert.deepEqual(read, want, `the avatar menu, by topology: ${JSON.stringify(read, null, 1)}`);
 });
 
@@ -654,4 +662,35 @@ test('globals.css declares no --breakpoint-*, so lg stays Tailwind\'s default 10
   const css = fs.readFileSync(path.join(SRC, 'app', 'globals.css'), 'utf8');
   const declared = css.split('\n').map((line, i) => [i + 1, line] as const).filter(([, line]) => line.includes('--breakpoint-'));
   assert.deepEqual(declared, [], `globals.css lines naming --breakpoint-: ${JSON.stringify(declared)}`);
+});
+
+// --- UX-2 P4b, criterion 2: the Settings entry points in the Header ------------------------------
+
+test('UX-2 P4b criterion 2: the avatar menu\'s "Settings" is a text item with no icon, right after "My analyses"', async () => {
+  const s = await mountHeader(CONFIGS.split.env, 'in');
+  await s.click(avatarTrigger(s));
+  const trigger = avatarTrigger(s);
+  const holder = parentOf(s, trigger);
+  assert.ok(holder, 'premise: the trigger has a parent element');
+  const inTrigger = new Set(within(trigger));
+  const items = within(holder!).filter((el) => el !== trigger && !inTrigger.has(el) && (el.type === 'a' || el.type === 'button'));
+  const labels = items.map((el) => norm(readText(el)));
+  const at = labels.indexOf('Settings');
+  assert.ok(at > 0, `the avatar menu has no "Settings" item: ${JSON.stringify(labels)}`);
+  assert.equal(labels[at - 1], 'My analyses', `"Settings" does not follow "My analyses": ${JSON.stringify(labels)}`);
+  const item = items[at];
+  assert.equal(hrefOf(item), SETTINGS_HREF, '"Settings" does not open /settings');
+  assert.deepEqual(within(item).filter((el) => el.type === 'svg' || el.type === 'img' || attr(el, 'aria-hidden') === 'true').map((el) => el.type), [], '"Settings" carries an icon');
+  s.unmount();
+});
+
+test('UX-2 P4b criterion 2: the drawer carries "Settings" signed in, and not signed out', async () => {
+  const read: Record<string, number> = {};
+  for (const state of ['in', 'out'] as const) {
+    const s = await mountHeader(CONFIGS.serveMarketing.env, state);
+    await s.click(mobileToggle(s));
+    read[state] = drawerGrouping(s).filter((item) => item.label === 'Settings' && item.href === SETTINGS_HREF).length;
+    s.unmount();
+  }
+  assert.deepEqual(read, { in: 1, out: 0 }, `the drawer's "Settings" links, signed in and out: ${JSON.stringify(read)}`);
 });

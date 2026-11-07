@@ -68,8 +68,8 @@ const consentRoute = await load('app/api/sources/consent/route.ts');
 const decisionRoute = await load('app/api/sources/consent/decision/route.ts');
 const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.ts');
 
-/** The owner's ruled words for Ask first, card F = A (2026-10-22), pinned here byte for byte. */
-const F_RULED = 'Ask first: nothing is sent to this source until you turn it On, here or when the site asks you during a question. If you choose Allow then, it stays On for later questions.';
+/** The owner's ruled words for Ask first, card F = A (2026-10-22), as UX-2's item 54 re-words them under D7 C, pinned here byte for byte. */
+const F_RULED = "Ask first: nothing is sent to this source until you turn it On, here or when the site asks you during a question. If you choose Allow then, it stays On for later questions. If you choose Don't allow, it is turned Off.";
 /** The words true on every instance (R6's T6, `consent-texts-ruled.test.ts`). */
 const T6 = 'Ask first: nothing is sent to this source until you turn it On.';
 

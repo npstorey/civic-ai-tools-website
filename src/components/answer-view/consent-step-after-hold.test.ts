@@ -29,6 +29,11 @@
 // hold's end and the entry's end, where today's card already shows no
 // buttons; the entry's-end leg is read one millisecond either side of 600 s.
 //
+// UX-2 P4b: the buttons are "Allow", "Don't allow" and "Allow all data
+// sources" (items 8, 9; ASK2 = B), during the hold and after it (the third
+// button after the hold is this test's reading of "on both renderings"); the
+// after-hold words are item 39's; "Don't allow" turns the source Off (D7 C).
+//
 // Run with: npm test
 
 import { afterEach, mock, test } from 'node:test';
@@ -100,9 +105,12 @@ const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.t
 
 const ENDED = 'The question went on without your answer, so it did not use this source.';
 const STILL = 'You can still answer for later questions.';
-const AFTER_CHOICES = 'Allow: it is turned On for later questions. Not now: nothing changes.';
+// UX-2 P4b (item 39 under D7 C): the after-hold choices and the decline's outcome.
+const AFTER_CHOICES = "Allow: it is turned On for later questions. Don't allow: it is turned Off for later questions.";
 const ALLOWED_AFTER = 'You chose Allow. It is On for later questions.';
-const DECLINED_AFTER = 'You chose Not now. It is still set to Ask first.';
+const DECLINED_AFTER = "You chose Don't allow. It is Off for later questions.";
+/** The pause's buttons (UX-2 P4b, items 8 and 9; ASK2 = B): the pair, then the lighter third. */
+const PAUSE_BUTTONS = ['Allow', "Don't allow", 'Allow all data sources'];
 const GONE = 'This question is no longer waiting for an answer.';
 const DECIDED = 'An answer was already given for this question.';
 const WAIT = 'The question waits up to a minute for your answer.';
@@ -208,7 +216,7 @@ async function pausedOnClock(): Promise<{ page: Surface; key: string; tick: (ms:
   mounted.push(page);
   await page.settle();
   assert.equal(bostonState(page), 'ask-first', 'premise: Boston is Ask first');
-  assert.deepEqual(labels(stepsCard(page)), ['Allow', 'Not now'], `premise: the card offers both during the hold: ${summary(page)}`);
+  assert.deepEqual(labels(stepsCard(page)), PAUSE_BUTTONS, `premise: the card offers both during the hold: ${summary(page)}`);
   const tick = async (ms: number) => {
     mock.timers.tick(ms);
     await page.settle();
@@ -222,13 +230,13 @@ test('criterion 2: after the hold\'s end the card says the run went on without t
   const { page, tick } = await pausedOnClock();
   await tick(60_000);
   const card = stepsCard(page);
-  assert.deepEqual(labels(card), ['Allow', 'Not now'], `the card after the hold's end: ${card.text}`);
+  assert.deepEqual(labels(card), PAUSE_BUTTONS, `the card after the hold's end: ${card.text}`);
   for (const sentence of [ENDED, STILL, AFTER_CHOICES]) assert.ok(card.text.includes(sentence), `the card after the hold lacks "${sentence}": ${card.text}`);
   assert.ok(!card.text.includes(WAIT), 'the card still says the question waits');
   assert.equal(card.outcome, null, `the card shows an outcome before any answer: ${card.outcome}`);
   const row = rowCards(page);
   assert.equal(row.length, 1, `the row shows ${row.length} cards after the hold's end: ${summary(page)}`);
-  assert.deepEqual(labels(row[0]), ['Allow', 'Not now'], 'the row\'s card lost its buttons at the hold\'s end');
+  assert.deepEqual(labels(row[0]), PAUSE_BUTTONS, 'the row\'s card lost its buttons at the hold\'s end');
   for (const sentence of [ENDED, STILL, AFTER_CHOICES]) assert.ok(row[0].text.includes(sentence), `the row's card lacks "${sentence}"`);
   // The two buttons stay equal (fix round 1).
   assert.deepEqual(card.buttons[0].props.style, card.buttons[1].props.style, 'the two buttons are styled differently after the hold');
@@ -250,15 +258,16 @@ test('criterion 2: Allow after the hold posts to the decision route (200), the c
   assert.ok(row.every((c) => c.outcome === ALLOWED_AFTER && c.buttons.length === 0), `the row's card after Allow: ${summary(page)}`);
 });
 
-test('criterion 2: Not now after the hold says it is still set to Ask first, and the source stays Ask first', async () => {
+// UX-2 P4b, criterion 5 (D7 C, L11): "Don't allow" after the hold turns the source Off, and says so (item 39).
+test('criterion 2 (UX-2 P4b criterion 5): Don\'t allow after the hold says it is Off for later questions, and the source reads Off', async () => {
   const { page, key, tick } = await pausedOnClock();
   await tick(120_000);
-  await page.click(buttonOf(stepsCard(page), 'Not now'));
+  await page.click(buttonOf(stepsCard(page), "Don't allow"));
   await page.settle();
   const stored = JSON.parse(kv.entries.get(`consent-decision:${key}`)?.value ?? '{}') as Json;
-  assert.equal(stored.decision, 'not-now', 'the decision route did not save the answer');
-  assert.equal(stepsCard(page).outcome, DECLINED_AFTER, `the card after Not now: ${stepsCard(page).text}`);
-  assert.equal(bostonState(page), 'ask-first', 'Not now moved the source');
+  assert.equal(stored.decision, 'off', 'the decision route did not save the Off decline');
+  assert.ok(stepsCard(page).outcome?.startsWith(DECLINED_AFTER), `the card after Don't allow: ${stepsCard(page).text}`);
+  assert.equal(bostonState(page), 'off', 'Don\'t allow did not turn the source Off');
 });
 
 // --- The entry's end, a 404 and a 409 ----------------------------------------------------------
@@ -266,7 +275,7 @@ test('criterion 2: Not now after the hold says it is still set to Ask first, and
 test('criterion 2: the buttons stay until the entry\'s end, 600 s from the pause\'s start; then they go, the card says the question is no longer waiting, and the row\'s card goes', async () => {
   const { page, key, tick } = await pausedOnClock();
   await tick(599_999);
-  assert.deepEqual(labels(stepsCard(page)), ['Allow', 'Not now'], `the buttons went before the entry's end: ${stepsCard(page).text}`);
+  assert.deepEqual(labels(stepsCard(page)), PAUSE_BUTTONS, `the buttons went before the entry's end: ${stepsCard(page).text}`);
   assert.equal(rowCards(page).length, 1, `the row's card went before the entry's end: ${summary(page)}`);
   await tick(1);
   const card = stepsCard(page);
@@ -367,14 +376,14 @@ test('note 4, ProgressLog (the home page): the run moves on and completes with t
   stream.push({ type: 'progress', panel: 'withMcp', message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, args: { alias: 'boston' }, toolName: 'load_source', operationType: 'load_source' });
   stream.push({ type: 'progress', panel: 'withMcp', message: 'Waiting for your answer about Boston OpenContext, which is set to Ask first', phase: 'consent_pause', pause });
   await settle(page);
-  assert.deepEqual(labels(stepsCard(page)), ['Allow', 'Not now'], `premise: the card offers both during the hold: ${summary(page)}`);
+  assert.deepEqual(labels(stepsCard(page)), PAUSE_BUTTONS, `premise: the card offers both during the hold: ${summary(page)}`);
   stream.push({ type: 'progress', panel: 'withMcp', message: 'Loaded the Boston OpenContext source', phase: 'tool_complete', iteration: 1, duration_ms: 60_000, toolName: 'load_source', operationType: 'load_source' });
   stream.push({ type: 'complete', panel: 'withMcp', data: { content: 'An answer.', duration_ms: 1, tools_called: [] } });
   stream.push({ type: 'complete', panel: 'withoutMcp', data: { content: 'An answer.', duration_ms: 1 } });
   stream.close();
   await settle(page);
   const card = stepsCard(page);
-  assert.deepEqual(labels(card), ['Allow', 'Not now'], `the card in the steps lost its buttons when the run moved on: ${card.text}`);
+  assert.deepEqual(labels(card), PAUSE_BUTTONS, `the card in the steps lost its buttons when the run moved on: ${card.text}`);
   assert.ok(card.text.includes(ENDED) && card.text.includes(STILL), `the card after the run moved on: ${card.text}`);
 });
 
@@ -395,12 +404,12 @@ test('note 4, AnswerView (/ask, notebook mode): the run moves on with the questi
   stream.push({ type: 'phase_a_progress', message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, args: { alias: 'boston' }, toolName: 'load_source', operationType: 'load_source' });
   stream.push({ type: 'phase_a_progress', message: 'Waiting for your answer about Boston OpenContext, which is set to Ask first', phase: 'consent_pause', pause });
   await settle(page);
-  assert.deepEqual(labels(stepsCard(page)), ['Allow', 'Not now'], `premise: the card offers both during the hold: ${summary(page)}`);
+  assert.deepEqual(labels(stepsCard(page)), PAUSE_BUTTONS, `premise: the card offers both during the hold: ${summary(page)}`);
   // The run goes on (its step view stays: the notebook has not arrived, #667 is not this test's).
   stream.push({ type: 'phase_a_progress', message: 'Loaded the Boston OpenContext source', phase: 'tool_complete', iteration: 1, duration_ms: 60_000, toolName: 'load_source', operationType: 'load_source' });
   stream.push({ type: 'phase_a_progress', message: 'Searching for datasets about service requests', phase: 'tool_start', iteration: 2, args: { query: 'service requests' }, toolName: 'search', operationType: 'search' });
   await settle(page);
   const card = stepsCard(page);
-  assert.deepEqual(labels(card), ['Allow', 'Not now'], `the card in the step view lost its buttons when the run moved on: ${card.text}`);
+  assert.deepEqual(labels(card), PAUSE_BUTTONS, `the card in the step view lost its buttons when the run moved on: ${card.text}`);
   assert.ok(card.text.includes(ENDED) && card.text.includes(STILL), `the card after the run moved on: ${card.text}`);
 });

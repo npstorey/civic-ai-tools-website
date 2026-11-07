@@ -16,6 +16,17 @@
 //
 // WHAT MAKES IT ABLE TO FAIL. At the base the dashboard has no Sources tab.
 //
+// UX-2 P4b (criterion 2, M7; the v2 check's M1). The tab's states, dates,
+// withdrawal and guide link move to the Settings overlay's "Data sources"
+// sub-page (`src/components/settings/SettingsOverlay.tsx`), so the assertions
+// below are re-pointed at the overlay, unchanged, except:
+//   - each row's state is read from its checked radio, since the overlay's rows
+//     draw no "Name: State" line (the tab's, `SourcesTab.tsx:77-79`);
+//   - the card shown after the withdrawal offers "Don't allow" (item 8), not
+//     "Not now".
+// The tab itself now renders X22d's sentence and its link (item 41) and
+// nothing else (criterion 1, the first test).
+//
 // Run with: npm test
 
 import { test } from 'node:test';
@@ -65,6 +76,7 @@ Object.assign(globalThis as Record<string, unknown>, {
 type Mod = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const load = async (rel: string): Promise<Mod> => (await import(pathToFileURL(path.join(SRC, rel)).href)) as Mod;
 const DashboardTabs = (await load('components/dashboard/DashboardTabs.tsx')).default as ComponentType<Record<string, unknown>>;
+const SettingsOverlay = (await load('components/settings/SettingsOverlay.tsx')).default as ComponentType<Record<string, unknown>>;
 const QuerySurface = (await load('components/shared/QuerySurface.tsx')).default as ComponentType<Record<string, unknown>>;
 const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
@@ -96,8 +108,8 @@ function signedIn(): void {
   sessions.client = { status: 'authenticated', data: { user: { name: 'Fixture' } } };
 }
 
-/** A consent on the account, written through the real endpoint; then the dashboard, on its Sources tab. */
-async function sourcesTab(): Promise<{ tab: Surface; net: ReturnType<typeof answers>; statement: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
+/** A consent on the account, written through the real endpoint. */
+async function consentOnAccount(): Promise<{ net: ReturnType<typeof answers>; statement: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
   signedIn();
   sessions.rows.clear();
   const net = answers();
@@ -107,12 +119,47 @@ async function sourcesTab(): Promise<{ tab: Surface; net: ReturnType<typeof answ
   assert.equal(written.status, 200, `premise: the consent write was refused: ${await written.text()}`);
   assert.ok(sessions.rows.has(DB_ID), 'premise: the consent is kept on the account');
   net.clear();
-  const tab = await mount(h(DashboardTabs, { myEvidence: [], myEvaluations: [], activity: [], tokens: [], signingConfigured: true, sealOnly: false }));
-  const buttons = tab.buttons('Sources');
-  assert.equal(buttons.length, 1, `the dashboard has no Sources tab: ${tab.text().slice(0, 300)}`);
-  await tab.click(buttons[0]);
+  return { net, statement };
+}
+
+/** The consent on the account; then the Settings overlay, on its Data sources sub-page (UX-2 P4b, M7). */
+async function sourcesTab(): Promise<{ tab: Surface; net: ReturnType<typeof answers>; statement: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { net, statement } = await consentOnAccount();
+  const tab = await mount(h(SettingsOverlay, {}));
   return { tab, net, statement };
 }
+
+/** The value of the checked radio in a row, or undefined. */
+function checkedIn(row: HostElement): unknown {
+  const walk = (node: unknown): unknown => {
+    if (Array.isArray(node)) { for (const c of node) { const v = walk(c); if (v !== undefined) return v; } return undefined; }
+    if (node === null || typeof node !== 'object' || !('props' in (node as object))) return undefined;
+    const el = node as HostElement;
+    if (el.type === 'input' && el.props.type === 'radio' && el.props.checked === true) return el.props.value;
+    return walk((el.props as { children?: unknown }).children);
+  };
+  return walk(row.props.children);
+}
+
+// --- UX-2 P4b, criterion 1: the dashboard's Sources tab is a pointer -----------------------------
+
+test('UX-2 P4b criterion 1: the Sources tab renders X22d\'s sentence and its link to /settings, and no control, no dates, no "Withdraw consent" and no notice', async () => {
+  await consentOnAccount();
+  const tab = await mount(h(DashboardTabs, { myEvidence: [], myEvaluations: [], activity: [], tokens: [], signingConfigured: true, sealOnly: false }));
+  const buttons = tab.buttons('Sources');
+  assert.equal(buttons.length, 1, `premise: the dashboard has a Sources tab: ${tab.text().slice(0, 300)}`);
+  await tab.click(buttons[0]);
+  const text = tab.text();
+  assert.ok(text.includes('Your data sources are set in Data source settings.'), `the tab does not read item 41's sentence: ${text.slice(0, 400)}`);
+  const links = tab.elements().filter((el) => el.type === 'a' && el.props.href === '/settings');
+  assert.equal(links.length, 1, 'the tab has no one link to /settings');
+  assert.equal(textOf(links[0]), 'Data source settings', 'the tab\'s link does not read "Data source settings"');
+  assert.deepEqual(tab.elements().filter((el) => el.props.role === 'radiogroup' || (el.type === 'input' && el.props.type === 'radio')).map((el) => el.type), [], 'the tab still renders a control');
+  assert.ok(!text.includes('Given on') && !text.includes('as it stood on'), 'the tab still renders the dates');
+  assert.equal(tab.elements().filter((el) => el.type === 'button' && /withdraw/i.test(textOf(el))).length, 0, 'the tab still offers "Withdraw consent"');
+  assert.equal(tab.elements().filter((el) => typeof el.props['data-notice'] === 'string').length, 0, 'the tab still renders a notice');
+  tab.unmount();
+});
 
 /** T13 (#632 G7): each source's one reader name, written out. */
 const READER_NAME: Record<string, string> = { socrata: 'Socrata', 'data-commons': 'Data Commons', 'boston-opencontext': 'Boston OpenContext', 'nyc-charter': 'NYC Charter, Laws and Rules' };
@@ -125,7 +172,7 @@ const inWords = (iso: string): string => {
   return `${d} ${MONTHS[m - 1]} ${y}`;
 };
 
-test('criterion 3: the Sources tab shows every source\'s state, the date given, and the base version with its statement\'s date', async () => {
+test('criterion 3 (the Settings overlay): Data sources shows every source\'s state, the date given, and the base version with its statement\'s date', async () => {
   const { tab, statement } = await sourcesTab();
   const text = tab.text();
   for (const [i, source] of (statement.sources as Array<{ sourceId: string; displayName: string }>).entries()) {
@@ -134,8 +181,8 @@ test('criterion 3: the Sources tab shows every source\'s state, the date given, 
     assert.equal(rows.length, 1, `the tab has no row for ${source.sourceId}`);
     const row = textOf(rows[0]);
     assert.ok(row.includes(name), `${source.sourceId}'s row does not name it`);
-    // UX-1 PC: the row also carries the control, whose labels name every state, so the state is read from the list's line.
-    assert.match(row, new RegExp(`${name}\\s*: ${i === 0 ? 'On' : 'Off'}\\b`), `${source.sourceId}'s row does not show its state: ${row}`);
+    // UX-2 P4b (M7): the overlay's row draws no "Name: State" line, so the state is read from its checked radio.
+    assert.equal(checkedIn(rows[0]), i === 0 ? 'on' : 'off', `${source.sourceId}'s row does not show its state: ${row}`);
   }
   // UX pass row 14(a): both dates in words, and the base version's first 8 hex.
   assert.ok(text.includes(`Given on ${inWords(new Date().toISOString())}.`), `the tab does not show the date the consent was given, in words: ${text.slice(0, 400)}`);
@@ -146,10 +193,10 @@ test('criterion 3: the Sources tab shows every source\'s state, the date given, 
   tab.unmount();
 });
 
-test('criterion 3: after the tab\'s revoke, /ask shows the card again', async () => {
+test('criterion 3 (the Settings overlay): after its revoke, /ask shows the card again', async () => {
   const { tab, net } = await sourcesTab();
   const withdraw = tab.elements().filter((el) => el.type === 'button' && /withdraw/i.test(textOf(el)));
-  assert.equal(withdraw.length, 1, 'the Sources tab has no withdraw control');
+  assert.equal(withdraw.length, 1, 'the Settings overlay has no withdraw control');
   await tab.click(withdraw[0]);
   assert.equal(net.sent.filter((r) => r.path === '/api/sources/consent' && r.method === 'DELETE').length, 1, 'the revoke did not call DELETE');
   assert.ok(!sessions.rows.has(DB_ID), 'the account still holds a consent after the revoke');
@@ -162,11 +209,11 @@ test('criterion 3: after the tab\'s revoke, /ask shows the card again', async ()
   await ask.type(box[0], 'What was the median household income in the Bronx?');
   await ask.submit(ask.elements().filter((el) => el.type === 'form')[0]);
   assert.deepEqual(net.sent.filter((r) => QUERY_ROUTES.includes(r.path)).map((r) => r.path), [], '/ask sent the question after the consent was withdrawn');
-  assert.ok(ask.buttons('Allow').length === 1 && ask.buttons('Not now').length === 1, `/ask shows no card after the revoke: ${ask.text().slice(0, 300)}`);
+  assert.ok(ask.buttons('Allow').length === 1 && ask.buttons("Don't allow").length === 1, `/ask shows no card after the revoke: ${ask.text().slice(0, 300)}`);
   ask.unmount();
 });
 
-test('criterion 5: unset, the tab omits the guide link and says this site names no guide', async () => {
+test('criterion 5 (the Settings overlay): unset, Data sources omits the guide link and says this site names no guide', async () => {
   const { tab } = await sourcesTab();
   assert.ok(copy?.NO_GUIDE_SENTENCE, `${COPY} exports no NO_GUIDE_SENTENCE`);
   assert.ok(tab.text().includes(copy!.NO_GUIDE_SENTENCE), 'with no guide address, the tab does not say so');
@@ -174,7 +221,7 @@ test('criterion 5: unset, the tab omits the guide link and says this site names 
   tab.unmount();
 });
 
-test('criterion 5: set, the tab links to the deployment guide', async () => {
+test('criterion 5 (the Settings overlay): set, Data sources links to the deployment guide', async () => {
   process.env.SITE_DEPLOYMENT_GUIDE_URL = GUIDE;
   try {
     const { tab } = await sourcesTab();

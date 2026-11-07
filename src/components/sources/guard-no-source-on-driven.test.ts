@@ -40,6 +40,7 @@ import {
   mount,
   registerSurfaceHooks,
   sessions,
+  textOf,
   type HostElement,
   type Surface,
 } from './surface-test-harness.ts';
@@ -301,6 +302,20 @@ for (const surface of SURFACES) {
       await surface.ask(page);
       assert.deepEqual(queryRequests(net.sent), [], `${surface.name} sent a question no source could answer`);
       assert.ok(page.text().includes(NO_SOURCES_ON_TEXT), `${surface.name} does not show the no_sources_on words: ${page.text().slice(0, 400)}`);
+      page.unmount();
+    });
+  });
+
+  // UX-2 P4b, criterion 4 (items 42/50): "Data source settings" is a link where the surface can carry one.
+  test(`UX-2 P4b criterion 4 (${surface.name}): the no_sources_on refusal links "Data source settings" to /settings`, async () => {
+    await onInstance(IN_LOOP_NO_STORE, async () => {
+      await consentWith(ALL_ASK_FIRST, 'real');
+      await bus.refreshConsent();
+      const page = await mount(surface.element());
+      await surface.ask(page);
+      assert.ok(page.text().includes(NO_SOURCES_ON_TEXT), `premise: ${surface.name} shows the refusal`);
+      const links = page.elements().filter((el) => el.type === 'a' && el.props.href === '/settings' && textOf(el) === 'Data source settings');
+      assert.equal(links.length, 1, `${surface.name}'s refusal does not link Data source settings: ${page.text().slice(0, 400)}`);
       page.unmount();
     });
   });

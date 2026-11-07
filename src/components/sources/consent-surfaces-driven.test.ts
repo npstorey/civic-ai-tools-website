@@ -8,7 +8,9 @@
 // the defaults of D6 (every configured source On, the manifest's
 // `consentDefault`) and then sends the question; **Not now** sends nothing,
 // and the form stays disabled with the local-only line. Nothing is stored on
-// Not now, so a new session shows the card again (Q2).
+// Not now, so a new session shows the card again (Q2). UX-2 P4b (item 8): the
+// decline reads "Don't allow"; what it does is unchanged on the card (D7 = C
+// changes the pause's decline only).
 //
 // WHAT IS DRIVEN. The home page component (`src/app/(marketing)/page.tsx`),
 // `/explore`'s diagram (`McpFlowDiagram`, with only its BPMN canvas replaced:
@@ -193,9 +195,19 @@ async function askOnExplore(surface: Surface): Promise<void> {
   await surface.settle();
 }
 
-/** The card is on the page: its two answers, Allow and Not now, each one button. */
+/** The card's decline (UX-2 P4b, item 8: "Don't allow"; it was "Not now"). */
+const DECLINE = "Don't allow";
+
+/** The card's one decline button, asserted before it is pressed. */
+function declineOf(page: Surface): HostElement {
+  const found = page.buttons(DECLINE);
+  assert.equal(found.length, 1, `the card has no one "${DECLINE}": ${page.text().slice(0, 300)}`);
+  return found[0];
+}
+
+/** The card is on the page: its two answers, Allow and Don't allow, each one button. */
 function assertCardShown(page: Surface, where: string): void {
-  assert.ok(page.buttons('Allow').length === 1 && page.buttons('Not now').length === 1, `${where} shows no consent card (no Allow and Not now): ${page.text().slice(0, 400)}`);
+  assert.ok(page.buttons('Allow').length === 1 && page.buttons(DECLINE).length === 1, `${where} shows no consent card (no Allow and ${DECLINE}): ${page.text().slice(0, 400)}`);
   assert.ok(page.text().includes(cardHeading()), `${where} shows the buttons without the card's heading`);
 }
 
@@ -259,14 +271,14 @@ for (const surface of SURFACES) {
   });
 }
 
-test('criterion 2 (home) and Q2: Not now sends nothing; the form stays disabled and shows the local-only line', async () => {
+test('criterion 2 (home) and Q2; UX-2 P4b criterion 5: Don\'t allow sends nothing; the form stays disabled and shows the local-only line', async () => {
   ANON();
   const net = answers();
   const page = await mount(h(Home));
   await askOnQueryForm(page);
   assert.deepEqual(queryRequests(net.sent), [], 'the question was sent before the reader answered the card');
   assertCardShown(page, 'the home page');
-  await page.click(page.button('Not now'));
+  await page.click(declineOf(page));
   assert.deepEqual(queryRequests(net.sent), [], 'Not now sent the question');
   assert.deepEqual(net.sent.filter((r) => r.method !== 'GET').map((r) => `${r.method} ${r.path}`), [], 'Not now wrote something');
   assert.ok(copy?.LOCAL_ONLY_OFFER && copy?.NO_GUIDE_SENTENCE, `${COPY} exports no LOCAL_ONLY_OFFER / NO_GUIDE_SENTENCE`);
@@ -280,13 +292,13 @@ test('criterion 2 (home) and Q2: Not now sends nothing; the form stays disabled 
   page.unmount();
 });
 
-test('criterion 15 (Q2): nothing is stored after Not now, so a new session shows the card again', async () => {
+test('criterion 15 (Q2); UX-2 P4b criterion 5: nothing is stored after Don\'t allow, so a new session shows the card again', async () => {
   ANON();
   const first = answers();
   const page = await mount(h(Home));
   await askOnQueryForm(page);
   assertCardShown(page, 'the first session');
-  await page.click(page.button('Not now'));
+  await page.click(declineOf(page));
   assert.equal(first.jar.size, 0, 'Not now left a cookie');
   page.unmount();
   // A new browser session: a fresh jar and a fresh page.
@@ -414,13 +426,13 @@ for (const surface of SURFACES) {
 
 // --- Amendment 1, correction 2 (Q2): the card returns at the next question --------------------
 
-test('criterion 15 (Q2): after Not now, the next question in the same session shows the card again, and sends nothing', async () => {
+test('criterion 15 (Q2); UX-2 P4b criterion 5: after Don\'t allow, the next question in the same session shows the card again, and sends nothing', async () => {
   ANON();
   const net = answers();
   const page = await mount(h(Home));
   await askOnQueryForm(page);
   assertCardShown(page, 'the home page');
-  await page.click(page.button('Not now'));
+  await page.click(declineOf(page));
   const box = one(page, 'question box', (el) => el.type === 'textarea' && el.props['aria-label'] === 'Ask a question about open data');
   await page.type(box, 'How many 311 complaints were there in Brooklyn in 2024?');
   await page.submit(one(page, 'form', (el) => el.type === 'form'));
