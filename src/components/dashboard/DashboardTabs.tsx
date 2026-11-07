@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { normalizeVisibility } from '@/lib/evidence/visibility';
 import { sealedRecordPublishAffordance } from '@/lib/evidence/seal-only';
 import SourcesTab from './SourcesTab';
+import { Signal } from '@/components/ui/Signal';
 
 // --- Types ---
 
@@ -91,27 +92,6 @@ const tabStyle = (isActive: boolean): CSSProperties => ({
   cursor: 'pointer',
   fontFamily: 'inherit',
 });
-
-function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, { bg: string; text: string }> = {
-    unverified: { bg: 'rgba(0,0,0,0.06)', text: 'var(--text-muted)' },
-    consistency_tested: { bg: 'rgba(var(--accent-rgb), 0.1)', text: 'var(--accent)' },
-    evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--success)' },
-    fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--success)' },
-    withdrawn: { bg: 'rgba(236, 19, 30, 0.08)', text: 'var(--error)' },
-    sealed: { bg: 'rgba(var(--accent-rgb), 0.08)', text: 'var(--accent)' },
-  };
-  const c = colors[status] || colors.unverified;
-  return (
-    <span style={{
-      display: 'inline-block', padding: '2px 8px', borderRadius: '10px',
-      fontSize: '11px', fontWeight: 600, backgroundColor: c.bg, color: c.text,
-      textTransform: 'capitalize',
-    }}>
-      {status.replace(/_/g, ' ')}
-    </span>
-  );
-}
 
 function TypeBadge({ type }: { type: string }) {
   const isConsistency = type === 'consistency';
@@ -320,11 +300,11 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
                   {r.title}
                 </Link>
                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center' }}>
-                  {normalizeVisibility(r.visibility) === 'sealed' && <StatusBadge status="sealed" />}
-                  {isCurrentlyWithdrawn
-                    ? <StatusBadge status="withdrawn" />
-                    : <StatusBadge status={r.verificationStatus} />
-                  }
+                  {/* UX-2 P5 (R18 C): the verification-status verdict is gone; the
+                      two lifecycle facts the badge carried stay, as P6 signals
+                      in the words the badge rendered. The row itself is P4's. */}
+                  {normalizeVisibility(r.visibility) === 'sealed' && <Signal tier="neutral" label="Sealed" />}
+                  {isCurrentlyWithdrawn && <Signal tier="neutral" label="Withdrawn" />}
                 </div>
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
