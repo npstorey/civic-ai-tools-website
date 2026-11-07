@@ -14,7 +14,8 @@
 // it or `SETTINGS_HREF`. The positive half names each surface that opens the
 // overlay in P4b and requires a `<Link>` there whose `href` names it: the
 // dashboard's Sources tab, the consent card, the pause's step card, the
-// Sources panel, and the two refusal surfaces (item 42). The Header's
+// Sources panel, and the refusal's line (item 42, `NoSourcesOnLine`, which the two refusal surfaces
+// mount). The Header's
 // "Settings" is a `Menu` item, and `Menu` renders its items as `Link`s
 // (`src/components/ui/Menu.tsx`); `header-nav.test.ts` reads it.
 //
@@ -89,8 +90,8 @@ const SURFACES = [
   'src/components/sources/ConsentCard.tsx',
   'src/components/answer-view/ConsentStep.tsx',
   'src/components/sources/SourcesPanel.tsx',
-  'src/components/QueryForm.tsx',
-  'src/components/explore/TraceControls.tsx',
+  // The refusal's link (item 42) lives in one component, which both refusal surfaces mount (below).
+  'src/components/sources/NoSourcesOnLine.tsx',
 ];
 
 for (const file of SURFACES) {
@@ -98,5 +99,12 @@ for (const file of SURFACES) {
     const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
     assert.ok(/from ['"]next\/link['"]/.test(source), `${file} does not import next/link`);
     assert.ok(linksTo(file, source, ['Link']).length >= 1, `${file} has no <Link> to /settings`);
+  });
+}
+
+for (const file of ['src/components/QueryForm.tsx', 'src/components/explore/TraceControls.tsx']) {
+  test(`UX-2 P4b: ${file} renders the refusal through NoSourcesOnLine, whose link is a next/link`, () => {
+    const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    assert.match(source, /<NoSourcesOnLine \/>/, `${file} does not render NoSourcesOnLine`);
   });
 }

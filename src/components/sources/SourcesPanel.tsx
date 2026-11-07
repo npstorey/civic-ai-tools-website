@@ -36,17 +36,14 @@
  */
 
 import { useState, type CSSProperties } from 'react';
-import { ASK_FIRST_MEANS, ASK_FIRST_MEANS_WITH_PAUSE, PANEL_HEADING, PANEL_KEPT_ON_ACCOUNT, PANEL_LEAD, PANEL_PRIVACY_LINK, PANEL_ROW_MORE, panelLeadBeforeConsent } from '@/lib/sources/copy';
-import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
+import Link from 'next/link';
+import { PANEL_HEADING, PANEL_KEPT_ON_ACCOUNT, PANEL_LEAD, PANEL_PRIVACY_LINK, SETTINGS_HREF, SETTINGS_TEXT, panelLeadBeforeConsent } from '@/lib/sources/copy';
+import { readerSourceName } from '@/lib/sources/source-name';
 import { panelStates, useSourceConsent, type SourceStateValue } from './useSourceConsent';
-import { KeptByLines } from './KeptByLine';
 import LocalOnlyOffer from './LocalOnlyOffer';
 import ConsentNotices from './ConsentNotices';
-import { SourceStateConfirmation, SourceStateRadios, type ConfirmedChange, type SourceStateControlProps } from './SourceStateControl';
-import ConsentStep from '../answer-view/ConsentStep';
-
-/** The address of the dashboard's Sources tab (Q7). */
-export const DASHBOARD_SOURCES_TAB = '/dashboard?tab=sources';
+import { type ConfirmedChange, type SourceStateControlProps } from './SourceStateControl';
+import SourceRow from './SourceRow';
 
 const PANEL: CSSProperties = {
   border: '1px solid var(--border-color)',
@@ -93,47 +90,8 @@ export default function SourcesPanel() {
           const name = readerSourceName(source);
           const state = states[source.sourceId] ?? 'ask-first';
           const since = status?.states?.[source.sourceId]?.since;
-          const lines = sourceRowLines(source);
           const control: SourceStateControlProps = { sourceId: source.sourceId, name, state, since, inForce, writing: consent.writing, setState: consent.setState, confirmed, setConfirmed };
-          return (
-            <li key={source.sourceId} data-source={source.sourceId} style={{ padding: '8px 0', borderTop: '1px solid var(--border-color)' }}>
-              <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{name}</div>
-              {lines.what !== null && <div>{lines.what.charAt(0).toUpperCase() + lines.what.slice(1)}</div>}
-              <SourceStateRadios {...control} />
-              <SourceStateConfirmation {...control} />
-              {/* A question stops to ask only in loop and with the decision store (R9 P1, #666): the pause words only then. */}
-              {state === 'ask-first' && <div>{consent.routing === 'in-loop' && consent.store === true ? ASK_FIRST_MEANS_WITH_PAUSE : ASK_FIRST_MEANS}</div>}
-              {/* R9 P2 (#661): the row's detail, closed by default (design principle 8). */}
-              <details style={{ marginTop: '4px' }}>
-                <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}>{PANEL_ROW_MORE}</summary>
-                <div>
-                  {lines.reach.map((part, i) =>
-                    typeof part === 'string' ? (
-                      part
-                    ) : (
-                      <a key={i} href={part.link} target="_blank" rel="noopener noreferrer">
-                        {part.text}
-                      </a>
-                    ),
-                  )}
-                </div>
-                <div>
-                  Who holds its logs: <KeptByLines keptBy={source.recipients.flatMap((r) => r.keptBy)} retention />.
-                </div>
-                <div>How current its data is: {source.freshness}</div>
-              </details>
-              {/* R8 W2 (#644): a question is waiting for an answer about this source; the run's own card is the same. */}
-              {(() => {
-                // R9 P1 (#669 D2): the latest pause about this source, for its entry's life, not only its hold's:
-                // unanswered, or answered after the hold (its confirmation stays here). An answer given during the
-                // hold leaves with the hold. An earlier question's pause never comes back in its place.
-                const latest = Object.values(consent.pauses).reverse().find((p) => p.payload.source.sourceId === source.sourceId);
-                const shown = latest && !latest.expired
-                  && (!latest.holdEnded || latest.afterHold === true || (latest.decision === undefined && latest.failure === undefined));
-                return latest && shown ? <ConsentStep pause={latest.payload} place="row" /> : null;
-              })()}
-            </li>
-          );
+          return <SourceRow key={source.sourceId} source={source} control={control} consent={consent} />;
         })}
       </ul>
       <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', marginTop: '4px' }}>
@@ -142,7 +100,8 @@ export default function SourcesPanel() {
           {onAccount ? (
             <>
               {' · '}
-              <a href={DASHBOARD_SOURCES_TAB}>The Sources tab on your dashboard</a>
+              {/* UX-2 P4b (L13): Data source settings, the Settings overlay; a client-side link keeps the page mounted. */}
+              <Link href={SETTINGS_HREF}>{SETTINGS_TEXT.link}</Link>
             </>
           ) : null}
         </p>

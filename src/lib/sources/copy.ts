@@ -126,11 +126,6 @@ export const JUST_IN_TIME_LINE = {
   change: 'Change sources',
 } as const;
 
-// --- The dashboard's Sources tab ---
-
-/** The tab when no consent is in force (T9). */
-export const SOURCES_TAB_NO_CONSENT = 'This site asks before your next question.';
-
 // --- The Settings overlay (UX-2 P4b) ---
 
 /**

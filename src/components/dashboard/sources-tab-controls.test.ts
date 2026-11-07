@@ -75,7 +75,7 @@ const SettingsOverlay = (await load('components/settings/SettingsOverlay.tsx')).
 const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
 const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.ts');
-const { PANEL_STATE_CHANGED, SOURCES_TAB_NO_CONSENT } = await load('lib/sources/copy.ts');
+const { PANEL_STATE_CHANGED } = await load('lib/sources/copy.ts');
 const { readerSourceName } = await load('lib/sources/source-name.ts');
 
 function answers() {
@@ -127,7 +127,6 @@ async function tabInForce(): Promise<{ tab: Surface; net: ReturnType<typeof answ
   assert.ok(sessions.rows.has(DB_ID), 'premise: the consent is kept on the account');
   net.clear();
   const tab = await openTab();
-  assert.ok(!tab.text().includes(SOURCES_TAB_NO_CONSENT), `premise: the tab reads the consent as in force: ${tab.text().slice(0, 300)}`);
   return { tab, net, statement, stored };
 }
 

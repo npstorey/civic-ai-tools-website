@@ -1,7 +1,8 @@
 /**
  * The Settings overlay's search over the configured data sources (UX-2 P4b,
  * item 17): a source matches when its reader name or its "what" line holds
- * the query. A typed stub for the red commit: it matches every source.
+ * the query, case-insensitive, the query's surrounding spaces ignored. An
+ * empty query matches every source. The order is the sources' own.
  */
 
 export interface SearchableSource {
@@ -13,6 +14,7 @@ export interface SearchableSource {
 }
 
 export function matchingSources<T extends SearchableSource>(sources: readonly T[], query: string): T[] {
-  void query;
-  return [...sources];
+  const needle = query.trim().toLowerCase();
+  if (needle === '') return [...sources];
+  return sources.filter((s) => s.name.toLowerCase().includes(needle) || (s.what ?? '').toLowerCase().includes(needle));
 }

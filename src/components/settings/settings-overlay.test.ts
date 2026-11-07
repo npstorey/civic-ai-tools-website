@@ -195,15 +195,17 @@ test('UX-2 P4b criterion 2: the arrow keys, Home and End move between the two ta
   const s = await overlay();
   const selected = () => tabsOf(s).filter((t) => t.props['aria-selected'] === true).map((t) => textOf(t));
   assert.deepEqual(selected(), [TAB_DATA_SOURCES], 'premise: Data sources is selected first');
-  await s.key(tabsOf(s)[0], 'ArrowRight');
+  // P8 Tabs handles the keys on its tablist (`Tabs.tsx`), where a key pressed on a focused tab arrives.
+  const list = () => s.elements().find((el) => el.props.role === 'tablist')!;
+  await s.key(list(), 'ArrowRight');
   assert.deepEqual(selected(), [TAB_ABOUT], 'ArrowRight did not move to About these settings');
-  await s.key(tabsOf(s)[1], 'ArrowRight');
+  await s.key(list(), 'ArrowRight');
   assert.deepEqual(selected(), [TAB_DATA_SOURCES], 'ArrowRight from the last tab did not wrap to the first');
-  await s.key(tabsOf(s)[0], 'End');
+  await s.key(list(), 'End');
   assert.deepEqual(selected(), [TAB_ABOUT], 'End did not move to the last tab');
-  await s.key(tabsOf(s)[1], 'Home');
+  await s.key(list(), 'Home');
   assert.deepEqual(selected(), [TAB_DATA_SOURCES], 'Home did not move to the first tab');
-  await s.key(tabsOf(s)[0], 'ArrowLeft');
+  await s.key(list(), 'ArrowLeft');
   assert.deepEqual(selected(), [TAB_ABOUT], 'ArrowLeft from the first tab did not wrap to the last');
   s.unmount();
 });

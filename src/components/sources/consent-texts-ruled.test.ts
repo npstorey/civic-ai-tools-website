@@ -124,7 +124,7 @@ type Mod = Record<string, any>; // eslint-disable-line @typescript-eslint/no-exp
 const load = async (rel: string): Promise<Mod> => (await import(pathToFileURL(path.join(SRC, rel)).href)) as Mod;
 const Card = (await load('components/sources/ConsentCard.tsx')).default as ComponentType<Record<string, unknown>>;
 const Panel = (await load('components/sources/SourcesPanel.tsx')).default as ComponentType;
-const DashboardTabs = (await load('components/dashboard/DashboardTabs.tsx')).default as ComponentType<Record<string, unknown>>;
+const SettingsOverlay = (await load('components/settings/SettingsOverlay.tsx')).default as ComponentType<Record<string, unknown>>;
 const Home = (await load('app/(marketing)/page.tsx')).default as ComponentType;
 const PrivacyPage = (await load('app/(app)/privacy/page.tsx')).default as ComponentType;
 const flowsRoute = await load('app/api/flows/route.ts');
@@ -462,15 +462,12 @@ test('criterion 1, the notices on the panel: T12\'s two recipient lines, "This s
   });
 });
 
+/** UX-2 P4b (M7): the tab's states, notices and version line live in the Settings overlay's Data sources sub-page. */
 async function sourcesTab(): Promise<Surface> {
-  const tabs = await mount(h(DashboardTabs, { myEvidence: [], myEvaluations: [], activity: [], tokens: [], signingConfigured: true, sealOnly: false }));
-  const buttons = tabs.buttons('Sources');
-  assert.equal(buttons.length, 1, `premise: the dashboard has a Sources tab: ${tabs.text().slice(0, 300)}`);
-  await tabs.click(buttons[0]);
-  return tabs;
+  return mount(h(SettingsOverlay, {}));
 }
 
-test('criterion 1, the Sources tab with notices: the same lines, and T12\'s version sentence with the held statement\'s base version', async () => {
+test('criterion 1, Data sources in the Settings overlay (UX-2 P4b), with notices: the same lines, and T12\'s version sentence with the held statement\'s base version', async () => {
   await under({}, async () => {
     const { held, statement } = await rowWithNotices();
     answers();
@@ -483,7 +480,7 @@ test('criterion 1, the Sources tab with notices: the same lines, and T12\'s vers
   });
 });
 
-test('criterion 1, the Sources tab in force: T12\'s version sentence and T13\'s names', async () => {
+test('criterion 1, Data sources in the Settings overlay (UX-2 P4b), in force: T12\'s version sentence and T13\'s names', async () => {
   await under({}, async () => {
     SIGNED_IN_DB();
     sessions.rows.clear();
@@ -498,14 +495,17 @@ test('criterion 1, the Sources tab in force: T12\'s version sentence and T13\'s 
   });
 });
 
-test('criterion 1, the Sources tab with no consent: T9\'s line', async () => {
+// UX-2 P4b (M1 of the v2 check): the overlay opens from the card before any consent and behaves as the panel does
+// there, so with no consent it reads the panel's T9 lead, not the tab's T9 line.
+test('criterion 1, Data sources in the Settings overlay with no consent: the panel\'s T9 lead, not the tab\'s T9 line', async () => {
   await under({}, async () => {
     SIGNED_IN_DB();
     sessions.rows.clear();
     answers();
     const tab = await sourcesTab();
-    assert.ok(tab.text().includes(T9_TAB), `the tab with no consent does not read "${T9_TAB}": ${tab.text().slice(0, 400)}`);
-    assertNoneReplaced(readWithLinks(tab), 'the Sources tab (no consent)');
+    assert.ok(tab.text().includes(T9_PANEL), `the overlay with no consent does not read "${T9_PANEL}": ${tab.text().slice(0, 400)}`);
+    assert.ok(!tab.text().includes(T9_TAB), 'the overlay reads the retired tab line');
+    assertNoneReplaced(readWithLinks(tab), 'the Settings overlay (no consent)');
     tab.unmount();
   });
 });
