@@ -804,6 +804,12 @@ function ErrorLine({ text }: { text: string }) {
   );
 }
 
+// A field's label row: the label, and its character count at the right (in the
+// row, not under the field, so the review path fits a phone's bottom sheet: P2's
+// layout instrument, criterion 10).
+const FIELD_HEAD = { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' } as const;
+const FIELD_LABEL = { fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' } as const;
+
 /** The review path: the lead, the body, the expertise, and the rating as P5 selectable cards. Its action is the sheet's footer. */
 function ExpertTab({
   body, setBody, expertise, setExpertise, rating, setRating, error,
@@ -824,14 +830,14 @@ function ExpertTab({
   const expertiseCharCount = expertise.length;
   return (
     <>
-      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
+      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>
         A review from a domain expert, published as part of this analysis. Your GitHub identity,
         self-described expertise, and the review text are all published publicly. Each review
         shows its own signing status once submitted.
       </p>
 
       {/* Rating */}
-      <fieldset style={{ border: 'none', margin: '0 0 16px', padding: 0 }}>
+      <fieldset style={{ border: 'none', margin: '0 0 12px', padding: 0 }}>
         <legend style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-primary)', padding: 0 }}>
           Rating
         </legend>
@@ -862,35 +868,39 @@ function ExpertTab({
       </fieldset>
 
       {/* Body */}
-      <div style={{ marginBottom: '16px' }}>
-        <label htmlFor={bodyId} style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }}>
-          Review
-        </label>
+      <div style={{ marginBottom: '12px' }}>
+        <div style={FIELD_HEAD}>
+          <label htmlFor={bodyId} style={FIELD_LABEL}>
+            Review
+          </label>
+          <span style={{ fontSize: '11px', color: bodyCharCount > EXPERT_BODY_MAX_CHARS ? 'var(--error)' : 'var(--text-muted)' }}>
+            {bodyCharCount.toLocaleString()} / {EXPERT_BODY_MAX_CHARS.toLocaleString()}
+          </span>
+        </div>
         <textarea
           id={bodyId}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="Your assessment, context, or correction. Markdown supported."
-          rows={6}
+          rows={3}
           style={{
             width: '100%', padding: '10px 12px', border: '1px solid var(--border-color)',
             borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
             fontFamily: 'inherit', lineHeight: 1.5, resize: 'vertical',
           }}
         />
-        <div style={{
-          fontSize: '11px', color: bodyCharCount > EXPERT_BODY_MAX_CHARS ? 'var(--error)' : 'var(--text-muted)',
-          textAlign: 'right', marginTop: '2px',
-        }}>
-          {bodyCharCount.toLocaleString()} / {EXPERT_BODY_MAX_CHARS.toLocaleString()}
-        </div>
       </div>
 
       {/* Expertise */}
-      <div style={{ marginBottom: '16px' }}>
-        <label htmlFor={expertiseId} style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }}>
-          {EXPERTISE_LABEL}
-        </label>
+      <div style={{ marginBottom: '12px' }}>
+        <div style={FIELD_HEAD}>
+          <label htmlFor={expertiseId} style={FIELD_LABEL}>
+            {EXPERTISE_LABEL}
+          </label>
+          <span style={{ fontSize: '11px', color: expertiseCharCount > EXPERT_EXPERTISE_MAX_CHARS ? 'var(--error)' : 'var(--text-muted)' }}>
+            {expertiseCharCount} / {EXPERT_EXPERTISE_MAX_CHARS}
+          </span>
+        </div>
         <input
           id={expertiseId}
           type="text"
@@ -903,12 +913,6 @@ function ExpertTab({
             borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
           }}
         />
-        <div style={{
-          fontSize: '11px', color: expertiseCharCount > EXPERT_EXPERTISE_MAX_CHARS ? 'var(--error)' : 'var(--text-muted)',
-          textAlign: 'right', marginTop: '2px',
-        }}>
-          {expertiseCharCount} / {EXPERT_EXPERTISE_MAX_CHARS}
-        </div>
       </div>
 
       {error && <ErrorLine text={error} />}
